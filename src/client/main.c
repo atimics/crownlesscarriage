@@ -3304,7 +3304,7 @@ static void DrawDungeonPanel(const CcSim *sim)
         DrawTwoLineText(sign, x, detail_y + 28, 42, 9, MUTED);
     }
     CcOverlayDrawText(
-        "Each move or search spends a turn. Six turns consume Food and a day.",
+        "Each move or search spends a turn. Six turns consume Bread or Meat and a day.",
         66, 569, 9, MUTED);
 }
 
@@ -3981,7 +3981,7 @@ static ContextActionSet BuildContextActions(
                     AddCargoContextAction(
                         &set, (CcGood)cargo_good,
                         (CcGood)cargo_good == CC_GOOD_FOOD ?
-                            TextFormat("Food boxes %dc · %d local · %d aboard",
+                            TextFormat("Bread boxes %dc · %d local · %d aboard",
                                        place->price[cargo_good],
                                        place->stock[cargo_good],
                                        sim->player.cargo[cargo_good]) :
@@ -5139,7 +5139,7 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
             CcOverlayDrawText("COMMITTED LOAD", 444, 462, 8, MUTED);
             CcOverlayDrawText(
                 quest->good == CC_GOOD_FOOD ?
-                    TextFormat("%d / %d food boxes aboard",
+                    TextFormat("%d / %d Bread boxes aboard",
                                aboard, remaining) :
                     TextFormat("%d / %d %s aboard", aboard, remaining,
                                CcGoodName(quest->good)),
@@ -5158,9 +5158,9 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
         const char *food_state = food.stock < food.weekly_consumption * 2 ?
             "SHORTAGE" : food.stock < food.reserve_target ? "TIGHT" :
             "SURPLUS";
-        CcOverlayDrawText("LOCAL FOOD ECONOMY", 444, 526, 8, MUTED);
+        CcOverlayDrawText("LOCAL NOURISHMENT", 444, 526, 8, MUTED);
         CcOverlayDrawText(
-            TextFormat("%s  %d boxes  +%d/-%d weekly  %dc each",
+            TextFormat("%s  %d rations  +%d/-%d weekly  Bread %dc",
                        food_state, food.stock, food.weekly_production,
                        food.weekly_consumption, food.unit_price),
             444, 549, 9,

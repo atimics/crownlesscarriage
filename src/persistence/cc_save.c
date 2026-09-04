@@ -4917,9 +4917,9 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
-    if (legacy_version == CC_SIM_SCHEMA_VERSION &&
-        sim->generator_version == 21U) {
+    if (legacy_version == 28U && sim->generator_version == 22U) {
         CcSimUpgradeGrainEconomy(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
     }
@@ -4935,9 +4935,10 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 21U && legacy_version != 22U &&
         legacy_version != 23U && legacy_version != 24U &&
         legacy_version != 25U && legacy_version != 26U &&
-        legacy_version != 27U) return true;
+        legacy_version != 27U && legacy_version != 28U) return true;
     if (legacy_version == 27U) {
         CcSimInitializeWoodEconomy(sim);
+        CcSimUpgradeGrainEconomy(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;

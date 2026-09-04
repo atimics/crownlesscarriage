@@ -60,16 +60,19 @@ int main(void)
     survivors->population = 299;
     survivors->hunger = 0;
     survivors->stock[CC_GOOD_FOOD] = 7;
+    survivors->stock[CC_GOOD_WHEAT] = 0;
+    survivors->stock[CC_GOOD_MEAT] = 0;
     survivors->production[CC_GOOD_FOOD] = 0;
+    survivors->production[CC_GOOD_WHEAT] = 0;
     survivors->consumption[CC_GOOD_FOOD] = 7;
     CcSimAdvanceDays(&contracted, 7);
 
-    CC_CHECK(survivors->stock[CC_GOOD_FOOD] == 5);
+    CC_CHECK(survivors->stock[CC_GOOD_FOOD] == 6);
 
     survivors->hunger = 20;
     survivors->stock[CC_GOOD_FOOD] = 0;
     CcSimAdvanceDays(&contracted, 7);
-    CC_CHECK(survivors->hunger < 20);
+    CC_CHECK(survivors->hunger > 20);
     CC_CHECK(survivors->stock[CC_GOOD_FOOD] == 0);
 
     CcSim shared_granary;

@@ -98,10 +98,10 @@ int main(void)
     market->service_mask &= ~Service(CC_SERVICE_BAKERY);
     CcSimUpgradeGrainEconomy(&migration);
     CC_CHECK(farmstead->production[CC_GOOD_BREAD] == 0);
-    CC_CHECK(farmstead->production[CC_GOOD_WHEAT] == 23);
+    CC_CHECK(farmstead->production[CC_GOOD_WHEAT] == 28);
     CC_CHECK(market->stock[CC_GOOD_BREAD] == old_bread);
     CC_CHECK(CcSettlementHasService(market, CC_SERVICE_BAKERY));
-    CC_CHECK(market->production[CC_GOOD_BREAD] == 18);
+    CC_CHECK(market->production[CC_GOOD_BREAD] == 35);
 
     CC_CHECK(CcSimHash(&migration) != CcSimHash(&farm));
     printf("grain economy tests passed\n");

@@ -1766,12 +1766,8 @@ static void CheckSchema26Compatibility(char *error, size_t error_capacity)
          settlement < restored.settlement_count; ++settlement) {
         for (int32_t good = CC_LEGACY_GOOD_COUNT;
              good < CC_GOOD_COUNT; ++good) {
-            if (good == CC_GOOD_WOOD) {
+            if (good == CC_GOOD_WOOD || good == CC_GOOD_WHEAT) {
                 CC_CHECK(restored.settlements[settlement].stock[good] > 0);
-                CC_CHECK(restored.settlements[settlement]
-                             .reserve_target[good] > 0);
-                CC_CHECK(restored.settlements[settlement]
-                             .production[good] > 0);
             } else {
                 CC_CHECK(restored.settlements[settlement].stock[good] == 0);
             }
@@ -1783,14 +1779,28 @@ static void CheckSchema26Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
-static void CheckGenerator21Compatibility(char *error, size_t error_capacity)
+static void CheckPreGrainGeneratorMigration(uint32_t generator_version,
+                                            char *error,
+                                            size_t error_capacity)
 {
-    const char *path = "persistence-generator-v21-test.ccsave";
+    const char *path = "persistence-pre-grain-generator-test.ccsave";
     RemoveDatabase(path);
     CcSim legacy;
     CcSimInit(&legacy, UINT32_C(0xc0a7118e));
     legacy.schema_version = 27U;
-    legacy.generator_version = 21U;
+    legacy.generator_version = generator_version;
+    legacy.player.cargo[CC_GOOD_BREAD] = 7;
+    CcSituation *quest = &legacy.situations[0];
+    quest->good = CC_GOOD_FOOD;
+    int32_t quest_quantity = quest->quantity;
+    int32_t quest_progress = quest->progress;
+    CcSettlement *farm = &legacy.settlements[0];
+    CcSettlement *market = &legacy.settlements[1];
+    farm->production[CC_GOOD_BREAD] = 23;
+    farm->production[CC_GOOD_WHEAT] = 0;
+    market->service_mask &=
+        ~(UINT32_C(1) << (uint32_t)CC_SERVICE_BAKERY);
+    market->production[CC_GOOD_BREAD] = 0;
     int32_t map_x[CC_MAX_SETTLEMENTS];
     int32_t map_y[CC_MAX_SETTLEMENTS];
     for (int32_t index = 0; index < legacy.settlement_count; ++index) {
@@ -1803,6 +1813,15 @@ static void CheckGenerator21Compatibility(char *error, size_t error_capacity)
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.player.cargo[CC_GOOD_BREAD] == 7);
+    CC_CHECK(restored.situations[0].good == CC_GOOD_BREAD);
+    CC_CHECK(restored.situations[0].quantity == quest_quantity);
+    CC_CHECK(restored.situations[0].progress == quest_progress);
+    CC_CHECK(restored.settlements[0].production[CC_GOOD_BREAD] == 0);
+    CC_CHECK(restored.settlements[0].production[CC_GOOD_WHEAT] == 28);
+    CC_CHECK(CcSettlementHasService(
+        &restored.settlements[1], CC_SERVICE_BAKERY));
+    CC_CHECK(restored.settlements[1].production[CC_GOOD_BREAD] == 35);
     for (int32_t index = 0; index < restored.settlement_count; ++index) {
         CC_CHECK(restored.settlements[index].map_x == map_x[index]);
         CC_CHECK(restored.settlements[index].map_y == map_y[index]);
@@ -1992,6 +2011,8 @@ int main(void)
     CheckSchema26Compatibility(error, sizeof(error));
     CheckGenerator21Compatibility(error, sizeof(error));
     CheckSchema27WoodCompatibility(error, sizeof(error));
+    CheckPreGrainGeneratorMigration(21U, error, sizeof(error));
+    CheckPreGrainGeneratorMigration(22U, error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));

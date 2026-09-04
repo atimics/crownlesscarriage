@@ -42,6 +42,12 @@ static void AdvanceUntilStop(CcSim *sim)
 static void TravelAndArrive(CcSim *sim, CcId destination, char *error,
                             size_t error_capacity)
 {
+    CcSettlement *origin = CcSimSettlementMutable(
+        sim, sim->player.location_id);
+    CC_CHECK(origin != NULL);
+    if (origin->stock[CC_GOOD_WHEAT] < 16) {
+        origin->stock[CC_GOOD_WHEAT] = 16;
+    }
     CcCommand travel = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = destination
