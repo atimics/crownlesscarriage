@@ -96,6 +96,9 @@ typedef struct LocalState {
     CcLocalWorldCarriageState world_carriage;
     CcClientDepartureTransition departure;
     CcClientArrivalTransition arrival;
+    float travel_time_blend;
+    bool travel_fast_forward;
+    bool travel_attention;
     CcLocalMovementPreview movement_preview;
     CcLocalSiteKind site_kind;
     Vector2 movement_reticle;
@@ -1005,6 +1008,10 @@ static void ResetLocalState(LocalState *local)
     local->site_returning = false;
     local->road_choice_active = false;
     local->journey_travel_active = false;
+    local->travel_time_blend = 0.0f;
+    local->travel_fast_forward = false;
+    local->travel_attention = false;
+    local->world_carriage.storybook_travel = false;
     local->journey_combat_active = false;
     local->journey_parley_active = false;
     local->departure = (CcClientDepartureTransition){
@@ -1564,6 +1571,16 @@ static void UpdateOpenWorldCamera(const CcSim *sim, LocalState *local,
                                   float delta_time)
 {
     if (local == NULL || !local->open_world) return;
+    if (local->world_carriage.storybook_travel &&
+        !RoadBookArrivalInProgress(local)) {
+        local->world_carriage.camera_weight = local->travel_time_blend;
+        local->world_carriage.camera_target = local->travel_time_blend;
+        float turn = remainderf(local->world_carriage.heading_yaw -
+            local->world_carriage.camera_heading_yaw, 2.0f * PI);
+        local->world_carriage.camera_heading_yaw +=
+            turn * (1.0f - expf(-4.0f * fmaxf(0.0f, delta_time)));
+        return;
+    }
     if (RoadBookDepartureInProgress(local)) {
         CcClientDepartureAdvance(
             &local->departure, local->convoy.pace, delta_time);
@@ -1664,7 +1681,7 @@ static bool EnterOpenWorldJourney(const CcSim *sim, LocalState *local)
     local->open_world = true;
     CcLocalBindOpenWorld(&local->world_stream);
     PositionOpenWorldJourney(sim, local);
-    local->world_carriage.camera_target = 1.0f;
+    local->world_carriage.camera_target = 0.0f;
     return local->world_carriage.visible;
 }
 
@@ -1697,8 +1714,9 @@ static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local)
     const CcWorldRoutePlacement *route = CcWorldRoutePlacementForId(
         &local->world_stream.manifest, sim->journey.route_id);
     if (route == NULL) return;
-    float progress = ClampUnit(
-        (float)sim->carriage.progress_milli / 1000.0f);
+    float progress = sim->journey.total_subticks > 0 ? ClampUnit(
+        (float)sim->journey.elapsed_subticks /
+        (float)sim->journey.total_subticks) : 0.0f;
     float amount = CcWorldRouteJourneyAmount(
         route, sim->journey.origin_id, progress);
     CcWorldPoint point;
@@ -1717,11 +1735,14 @@ static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local)
     local->world_carriage.heading_yaw = heading;
     local->world_carriage.route_amount =
         route->from_id == sim->journey.origin_id ? amount : 1.0f - amount;
-    local->world_carriage.pace = local->convoy.pace;
-    local->world_carriage.camera_target = 1.0f;
+    local->world_carriage.pace =
+        sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ?
+            local->convoy.pace : 0.0f;
+    local->world_carriage.camera_target = local->travel_time_blend;
     local->world_carriage.route_id = sim->journey.route_id;
     local->world_carriage.visible = true;
     local->world_carriage.hero_embarked = true;
+    local->world_carriage.storybook_travel = true;
 }
 
 static float OpenWorldSettlementDistance(const CcSim *sim,
@@ -2307,9 +2328,42 @@ static void BeginRoadTravelState(const CcSim *sim, LocalState *local)
     local->course.alarm_countdown = 1000.0f;
     if (local->open_world) {
         local->world_carriage.hero_embarked = true;
-        local->world_carriage.camera_target = 1.0f;
+        local->world_carriage.camera_weight = 0.0f;
+        local->world_carriage.camera_target = 0.0f;
+        local->world_carriage.camera_heading_yaw =
+            local->world_carriage.heading_yaw;
     }
     local->journey_travel_active = true;
+}
+
+/* Advance one tick at a time so a warning remains a visible travel beat. */
+static bool AdvanceStorybookTravel(CcJournal *journal, CcSim *sim,
+                                   LocalState *local, int32_t ticks,
+                                   char *error, size_t error_capacity)
+{
+    bool warned = sim->journey.ambush_warned;
+    bool resolved = sim->journey.ambush_resolved;
+    for (int32_t tick = 0; tick < ticks; ++tick) {
+        if (!CcJournalAdvanceRuntimeTicks(journal, sim, 1,
+                                          error, error_capacity)) {
+            local->travel_fast_forward = false;
+            local->travel_attention = true;
+            return false;
+        }
+        if (!sim->journey.active ||
+            sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
+            sim->journey.ambush_warned != warned ||
+            sim->journey.ambush_resolved != resolved) {
+            local->travel_fast_forward = false;
+            local->travel_attention = true;
+            local->convoy.runtime_tick_accumulator = 0.0f;
+            break;
+        }
+    }
+    if (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) {
+        local->world_carriage.pace = 0.0f;
+    }
+    return true;
 }
 
 static void BeginRoadChoiceApproachState(LocalState *local, bool from_town)
@@ -2370,6 +2424,9 @@ static void BeginTownArrivalState(LocalState *local)
 static void BeginRoadBookArrivalState(const CcSim *sim, LocalState *local)
 {
     if (local == NULL) return;
+    local->world_carriage.arrival_travel_weight = local->travel_time_blend;
+    local->travel_fast_forward = false;
+    local->travel_time_blend = 0.0f;
     if (sim == NULL || !local->open_world || sim->journey.route_id == 0U) {
         BeginTownArrivalState(local);
         return;
@@ -4142,7 +4199,6 @@ static ContextActionSet BuildContextActions(
             }
             return set;
         }
-        bool safe_journey = sim->journey.active && sim->journey.danger <= 30;
         bool parking = !sim->journey.active &&
             (RoadBookArrivalInProgress(local) ||
              local->convoy.phase == CC_LOCAL_CONVOY_ARRIVING);
@@ -4150,12 +4206,12 @@ static ContextActionSet BuildContextActions(
             AddDetailedContextAction(
                 &set, CONTEXT_ACTION_SKIP_TRAVEL,
                 parking ? "Park carriage" :
-                safe_journey ? "Finish safe trip" : "Advance to next event",
+                local->travel_fast_forward ? "Normal time" : "Let time pass",
                 "ENTER",
                 parking ? "END ARRIVAL" :
-                safe_journey ? "COMPLETE ROUTINE ROAD" :
-                               "STOP AT THE NEXT DECISION",
-                true, false);
+                local->travel_fast_forward ? "RETURN TO THE CARAVAN" :
+                                            "WATCH THE JOURNEY / 8X TIME",
+                true, local->travel_fast_forward && !parking);
         }
         return set;
     }
@@ -6395,6 +6451,105 @@ static bool HandleTownArrivalAction(
 }
 
 #if defined(CC_CLIENT_SELF_TESTS)
+static int RunStorybookTravelRegression(void)
+{
+    static CcSim sim;
+    static CcSim expected;
+    static CcSim restored;
+    static LocalState local;
+    for (int scenario = 0; scenario < 4; ++scenario) {
+        char path[96];
+        char error[256] = "";
+        (void)snprintf(path, sizeof(path), "storybook-travel-%d.sqlite", scenario);
+        (void)remove(path);
+        CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+        CcRoute *route = &sim.routes[0];
+        route->closed = false;
+        route->security = 100;
+        sim.player.location_id = route->from_id;
+        sim.carriage.location_id = route->from_id;
+        CcCommand travel = {.kind = CC_COMMAND_TRAVEL, .target_id = route->to_id};
+        if (!CcSimApply(&sim, &travel, error, sizeof(error))) {
+            (void)fprintf(stderr, "Storybook setup: %s\n", error);
+            return 1;
+        }
+        sim.journey.situation_id = 0U;
+        sim.journey.encounter_subticks = 0;
+        sim.journey.encounter_triggered = true;
+        sim.journey.ambush_pending = scenario == 1;
+        sim.journey.ambush_warned = false;
+        sim.journey.ambush_resolved = false;
+        sim.journey.total_subticks = CC_WORLD_WATCH_SUBTICKS * 2;
+        sim.journey.elapsed_subticks = scenario == 1 ?
+            sim.journey.total_subticks * 45 / 100 - 1 :
+            scenario == 2 ? CC_WORLD_WATCH_SUBTICKS - 1 :
+            scenario == 3 ? sim.journey.total_subticks - 1 : 0;
+        sim.carriage.progress_milli = (int32_t)(
+            (int64_t)sim.journey.elapsed_subticks * 1000 /
+            sim.journey.total_subticks);
+        CcCommand pace = {.kind = CC_COMMAND_SET_JOURNEY_PACE,
+                           .amount = (int32_t)sim.journey.pace};
+        if (!CcSimApply(&sim, &pace, error, sizeof(error))) return 1;
+        expected = sim;
+        CcSimAdvanceRuntimeTicks(&expected, scenario == 0 ? 120 : 1);
+        CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+        if (journal == NULL) {
+            (void)fprintf(stderr, "Storybook journal: %s\n", error);
+            return 1;
+        }
+        local = (LocalState){0};
+        ResetLocalState(&local);
+        if (scenario == 3) {
+            if (!InitializeOpenWorld(&sim, &local, false)) return 1;
+            BeginRoadTravelState(&sim, &local);
+        }
+        local.travel_fast_forward = true;
+        local.travel_time_blend = 1.0f;
+        local.convoy.runtime_tick_accumulator = 0.75f;
+        bool passed = AdvanceStorybookTravel(journal, &sim, &local,
+                                             120, error, sizeof(error));
+        passed = passed && CcSimHash(&sim) == CcSimHash(&expected);
+        if (scenario > 0) {
+            passed = passed && !local.travel_fast_forward &&
+                local.travel_attention && local.convoy.runtime_tick_accumulator == 0.0f;
+        }
+        if (scenario == 3) {
+            Vector3 before_arrival = local.world_carriage.position;
+            BeginRoadBookArrivalState(&sim, &local);
+            float arrival_distance = hypotf(
+                before_arrival.x - local.world_carriage.position.x,
+                before_arrival.z - local.world_carriage.position.z);
+            passed = passed && local.world_carriage.storybook_travel &&
+                local.world_carriage.town_arrival &&
+                local.world_carriage.arrival_travel_weight == 1.0f &&
+                arrival_distance < 0.1f;
+            for (int frame = 0; frame < 180 && RoadBookArrivalInProgress(&local); ++frame) {
+                UpdateOpenWorldCamera(&sim, &local, 1.0f / 60.0f);
+            }
+            passed = passed && local.arrival.phase == CC_CLIENT_ARRIVAL_TOWN;
+            LeaveOpenWorld(&local);
+        }
+        if (!CcJournalClose(&journal, &sim, error, sizeof(error))) passed = false;
+        journal = CcJournalResume(path, &restored, error, sizeof(error));
+        passed = passed && journal != NULL &&
+            CcSimHash(&sim) == CcSimHash(&restored);
+        if (journal != NULL &&
+            !CcJournalClose(&journal, &restored, error, sizeof(error))) passed = false;
+        (void)remove(path);
+        char sidecar[104];
+        (void)snprintf(sidecar, sizeof(sidecar), "%s-wal", path);
+        (void)remove(sidecar);
+        (void)snprintf(sidecar, sizeof(sidecar), "%s-shm", path);
+        (void)remove(sidecar);
+        if (!passed) {
+            (void)fprintf(stderr, "Storybook scenario %d failed: %s\n", scenario, error);
+            return 1;
+        }
+    }
+    (void)puts("Storybook travel: time, warning, rest, arrival and journal replay passed");
+    return 0;
+}
+
 static int RunTownArrivalParkingRegression(void)
 {
     CcSim sim;
@@ -8206,6 +8361,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         if (local->journey_travel_active) {
+            local->travel_time_blend = CcClientTravelBlendStep(
+                local->travel_time_blend, local->travel_fast_forward,
+                delta_time);
             if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
                 int32_t pace_direction =
@@ -8283,56 +8441,50 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             if (sim->journey.active &&
                 (context_action == CONTEXT_ACTION_SKIP_TRAVEL ||
                  enter_pressed)) {
-                char error[256];
-                bool advanced = true;
-                bool warning_reached = false;
                 if (CcCoopClientActive()) {
-                    advanced = CcCoopClientSkip(sim, error, sizeof(error));
-                }
-                while (!CcCoopClientActive() && advanced && sim->journey.active &&
-                       sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-                    bool warned_before = sim->journey.ambush_warned;
-                    advanced = CcJournalAdvanceRuntimeTicks(
-                        *journal, sim, CC_WORLD_TICKS_PER_SECOND,
-                        error, sizeof(error));
-                    if (!warned_before && sim->journey.ambush_warned) {
-                        warning_reached = true;
-                        break;
+                    char error[256];
+                    bool warning_reached = !sim->journey.ambush_warned;
+                    bool advanced = CcCoopClientSkip(sim, error, sizeof(error));
+                    warning_reached = warning_reached && sim->journey.ambush_warned;
+                    if (!advanced) {
+                        (void)snprintf(message, message_capacity, "%s", error);
+                        return;
                     }
-                }
-                if (!advanced) {
-                    (void)snprintf(message, message_capacity, "%s", error);
+                    if (sim->journey.active &&
+                        sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
+                        BeginRoadLocalState(sim, local, false);
+                        *view = VIEW_LOCAL;
+                        (void)snprintf(message, message_capacity,
+                                       "The road is blocked. Walk to the captain or return to the carriage.");
+                    } else if (sim->journey.active &&
+                               sim->journey.phase ==
+                                   CC_JOURNEY_PHASE_RESTING) {
+                        (void)snprintf(
+                            message, message_capacity, "%s",
+                            CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
+                                "The morning watch ends. Water the team or press on." :
+                            CcSimJourneyRoadHouseAvailable(sim) ?
+                                "The afternoon watch ends at the road house. Lodge or make camp." :
+                                "The afternoon watch ends. Make camp and set a watch.");
+                    } else if (sim->journey.active && warning_reached) {
+                        const CcEvent *event = CcSimRecentEvent(sim, 0);
+                        (void)snprintf(message, message_capacity, "%s",
+                                       event != NULL ? event->text :
+                                       "Scouts spot riders shadowing the road.");
+                    } else if (sim->journey.active) {
+                        (void)snprintf(message, message_capacity,
+                                       "The company advances along the road.");
+                    } else {
+                        *selected = FirstOutgoingRouteIndex(sim);
+                        CcLocalBindPlace(sim);
+                        BeginRoadBookArrivalState(sim, local);
+                        (void)snprintf(message, message_capacity,
+                                       "The road book closes on the destination gate.");
+                    }
                     return;
                 }
-                if (sim->journey.active &&
-                    sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
-                    BeginRoadLocalState(sim, local, false);
-                    *view = VIEW_LOCAL;
-                    (void)snprintf(message, message_capacity,
-                                   "The road is blocked. Walk to the captain or return to the carriage.");
-                } else if (sim->journey.active &&
-                           sim->journey.phase ==
-                               CC_JOURNEY_PHASE_RESTING) {
-                    (void)snprintf(
-                        message, message_capacity, "%s",
-                        CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
-                            "The morning watch ends. Water the team or press on." :
-                        CcSimJourneyRoadHouseAvailable(sim) ?
-                            "The afternoon watch ends at the road house. Lodge or make camp." :
-                            "The afternoon watch ends. Make camp and set a watch.");
-                } else if (sim->journey.active && warning_reached) {
-                    const CcEvent *event = CcSimRecentEvent(sim, 0);
-                    (void)snprintf(message, message_capacity, "%s",
-                                   event != NULL ? event->text :
-                                   "Scouts spot riders shadowing the road.");
-                } else {
-                    *selected = FirstOutgoingRouteIndex(sim);
-                    CcLocalBindPlace(sim);
-                    BeginRoadBookArrivalState(sim, local);
-                    (void)snprintf(message, message_capacity,
-                                   "The road book closes on the destination gate.");
-                }
-                return;
+                local->travel_fast_forward = !local->travel_fast_forward;
+                local->travel_attention = false;
             }
             ConvoyUpdateResult convoy_update = UpdateDrivenConvoy(
                 local, sim, delta_time);
@@ -8352,15 +8504,17 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 fmaxf(0.0f, fminf(1.0f,
                     local->convoy.pace / posture_pace)) : 0.0f;
             local->convoy.runtime_tick_accumulator +=
-                (float)fixed_steps * road_motion;
+                (float)fixed_steps * road_motion *
+                (local->travel_attention ? 1.0f :
+                    CcClientTravelTimeScale(local->travel_time_blend));
             int32_t ticks = (int32_t)floorf(
                 local->convoy.runtime_tick_accumulator);
             local->convoy.runtime_tick_accumulator -= (float)ticks;
             bool warned_before = sim->journey.ambush_warned;
             bool ambush_resolved_before = sim->journey.ambush_resolved;
             char error[256];
-            bool advanced = CcCoopClientActive() || CcJournalAdvanceRuntimeTicks(
-                *journal, sim, ticks, error, sizeof(error));
+            bool advanced = CcCoopClientActive() || AdvanceStorybookTravel(
+                *journal, sim, local, ticks, error, sizeof(error));
             if (!advanced) {
                 (void)snprintf(message, message_capacity, "%s", error);
                 return;
@@ -9255,6 +9409,9 @@ static int RunMapSaleInputRegression(void)
 int main(int argc, char **argv)
 {
 #if defined(CC_CLIENT_SELF_TESTS)
+    if (argc == 2 && strcmp(argv[1], "--test-storybook-travel") == 0) {
+        return RunStorybookTravelRegression();
+    }
     if (argc == 2 && strcmp(argv[1], "--test-map-sale-input") == 0) {
         return RunMapSaleInputRegression();
     }
@@ -9363,8 +9520,10 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-road-fork") == 0;
     bool capture_road_departure = argc >= 2 &&
         strcmp(argv[1], "--capture-road-departure") == 0;
-    bool capture_road_arrival = argc >= 2 &&
-        strcmp(argv[1], "--capture-road-arrival") == 0;
+    bool capture_storybook_arrival = argc >= 2 &&
+        strcmp(argv[1], "--capture-storybook-arrival") == 0;
+    bool capture_road_arrival = capture_storybook_arrival || (argc >= 2 &&
+        strcmp(argv[1], "--capture-road-arrival") == 0);
     bool capture_road_zoom = capture_road_departure || capture_road_arrival;
     float capture_road_zoom_weight = 0.5f;
     if (capture_road_zoom) {
@@ -9404,8 +9563,28 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-witness") == 0;
     bool capture_character = argc >= 2 &&
         strcmp(argv[1], "--capture-character") == 0;
-    bool capture_travel = argc >= 2 &&
-        strcmp(argv[1], "--capture-travel") == 0;
+    bool capture_storybook = argc >= 2 &&
+        strcmp(argv[1], "--capture-storybook") == 0;
+    float storybook_progress = 0.25f;
+    float storybook_blend = 0.0f;
+    if (capture_storybook) {
+        char *progress_end = NULL;
+        char *blend_end = NULL;
+        if (argc == 5) {
+            storybook_progress = strtof(argv[2], &progress_end);
+            storybook_blend = strtof(argv[3], &blend_end);
+        }
+        if (argc != 5 || progress_end == argv[2] || *progress_end != '\0' ||
+            blend_end == argv[3] || *blend_end != '\0' ||
+            !isfinite(storybook_progress) || !isfinite(storybook_blend) ||
+            storybook_progress < 0.0f || storybook_progress >= 1.0f ||
+            storybook_blend < 0.0f || storybook_blend > 1.0f) {
+            (void)fprintf(stderr, "Use --capture-storybook progress[0,1) zoom[0,1] path.\n");
+            return 1;
+        }
+    }
+    bool capture_travel = capture_storybook || (argc >= 2 &&
+        strcmp(argv[1], "--capture-travel") == 0);
     bool capture_route_sight = argc >= 2 &&
         strcmp(argv[1], "--capture-route-sight") == 0;
     float capture_route_sight_progress = 0.0f;
@@ -9651,7 +9830,8 @@ int main(int argc, char **argv)
                     capture_atmosphere || capture_face ||
                     capture_room || capture_npc_review || capture_heraldry ||
                     capture_creature_media);
-    const char *capture_path = capture_creature_media ? argv[3] :
+    const char *capture_path = capture_storybook ? argv[4] :
+                               capture_creature_media ? argv[3] :
                                capture_room ? argv[4] :
                                capture_face ? argv[3] :
                                capture_atmosphere ? argv[3] :
@@ -9910,6 +10090,7 @@ int main(int argc, char **argv)
                 render_benchmark_roadbook) {
                 int32_t target_progress = capture_road_arrival ? 850 :
                     render_benchmark_roadbook ? 420 :
+                    capture_storybook ? (int32_t)(storybook_progress * 1000.0f + 0.5f) :
                     capture_route_sight ? (int32_t)(
                         capture_route_sight_progress * 1000.0f + 0.5f) :
                     200;
@@ -10208,8 +10389,12 @@ int main(int argc, char **argv)
     }
     if (capture_travel || capture_route_sight) {
         BeginRoadTravelState(&sim, &local);
-        local.world_carriage.camera_weight = 1.0f;
-        local.world_carriage.camera_target = 1.0f;
+        local.travel_time_blend = capture_storybook ? storybook_blend :
+                                   capture_route_sight ? 1.0f : 0.0f;
+        local.travel_fast_forward = local.travel_time_blend > 0.5f;
+        local.world_carriage.storybook_travel = !capture_route_sight;
+        local.world_carriage.camera_weight = local.travel_time_blend;
+        local.world_carriage.camera_target = local.travel_time_blend;
     }
     if (capture_road_arrival) {
         if (EnterOpenWorldAtRoadGate(
@@ -10222,6 +10407,9 @@ int main(int argc, char **argv)
             local.world_carriage.camera_weight = capture_road_zoom_weight;
             local.world_carriage.camera_target = capture_road_zoom_weight;
             (void)PositionOpenWorldArrival(&sim, &local);
+            local.world_carriage.storybook_travel = capture_storybook_arrival;
+            local.world_carriage.arrival_travel_weight = 1.0f;
+            local.world_carriage.camera_heading_yaw = local.world_carriage.heading_yaw;
         }
     }
     if (capture && !capture_world && !capture_interior &&
@@ -10419,6 +10607,8 @@ int main(int argc, char **argv)
             local.world_carriage.pace = 0.0f;
             local.world_carriage.camera_weight = 1.0f;
             local.world_carriage.camera_target = 1.0f;
+            local.world_carriage.storybook_travel = !render_benchmark_roadbook_network;
+            local.travel_time_blend = 1.0f;
         } else if (strcmp(render_benchmark_scene, "combat") == 0) {
             PrepareRoadCombatReel(&sim, &local);
         } else {
@@ -10610,7 +10800,7 @@ int main(int argc, char **argv)
                         &save_feedback_age);
             ClientInputClearPressed();
         }
-        if (!capture_road_arrival) {
+        if (!capture_road_arrival && !capture_storybook) {
             UpdateOpenWorldCamera(&sim, &local, frame_delta_time);
         }
         bool persistence_blocked = CcClientCampaignAccessFor(
@@ -10636,6 +10826,10 @@ int main(int argc, char **argv)
             (float)gameplay_reel.captured_frames / 15.0f :
             capture_creature_reel ? (float)capture_frames / 15.0f :
             (float)GetTime();
+        if (local.world_carriage.storybook_travel) {
+            clock = (float)fmod((double)sim.clock.tick /
+                                (double)CC_WORLD_TICKS_PER_SECOND, 3600.0);
+        }
 
         bool map_visible = view == VIEW_MAP ||
             ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
