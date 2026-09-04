@@ -195,6 +195,14 @@ assert.deepEqual(storedFiles.get(sessionPath), oldSession);
 
 owner.files.set(campaignPath, ownerCampaign);
 owner.files.set(sessionPath, oldSession);
+failNextWrite = true;
+await assert.rejects(
+  owner.Module.persistCrownlessSave(campaignPath, sessionPath),
+  /injected transaction failure/);
+assert.deepEqual(storedFiles.get(campaignPath), oldCampaign);
+assert.deepEqual(storedFiles.get(sessionPath), oldSession);
+assert.equal(storedFiles.get(revisionPath), 0);
+
 await owner.Module.persistCrownlessSave(campaignPath, sessionPath);
 assert.deepEqual(storedFiles.get(campaignPath), ownerCampaign);
 assert.equal(storedFiles.get(revisionPath), 1);

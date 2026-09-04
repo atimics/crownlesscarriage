@@ -4618,6 +4618,33 @@ static void DrawCombatStatusLine(const LocalState *local,
     CcOverlayDrawText(shown, (int)x + 15, (int)y + 8, 9, INK);
 }
 
+static const float SAVE_FEEDBACK_VISIBLE_SECONDS = 5.0f;
+
+static void DrawSaveFeedbackToast(const char *message, float message_age)
+{
+    const float fade_seconds = 0.8f;
+    if (message == NULL || message[0] == '\0' ||
+        message_age >= SAVE_FEEDBACK_VISIBLE_SECONDS) {
+        return;
+    }
+    const char *toast = TextFormat("%.96s", message);
+    int width = CcOverlayMeasureText(toast, 10) + 30;
+    if (width > 760) width = 760;
+    float opacity =
+        message_age > SAVE_FEEDBACK_VISIBLE_SECONDS - fade_seconds ?
+            (SAVE_FEEDBACK_VISIBLE_SECONDS - message_age) /
+                fade_seconds : 1.0f;
+    float x = ((float)GetScreenWidth() - (float)width) * 0.5f;
+    float y = (float)GetScreenHeight() - 107.0f;
+    DrawRectangleRounded((Rectangle){x, y, (float)width, 30.0f},
+                         0.22f, 5, Fade(PANEL_DEEP, opacity));
+    DrawRectangleRoundedLinesEx(
+        (Rectangle){x, y, (float)width, 30.0f},
+        0.22f, 5, 1.0f, Fade(TEAL, opacity * 0.72f));
+    CcOverlayDrawText(toast, (int)x + 15, (int)y + 9, 10,
+                      Fade(INK, opacity));
+}
+
 static Rectangle CommandActionBounds(CommandActionKind action)
 {
     const float width = 104.0f;
@@ -7494,7 +7521,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         RenderTexture2D local_target, Rectangle local_bounds,
                         float delta_time,
                         const char *save_path, const char *session_path,
-                        char *message, size_t message_capacity)
+                        char *message, size_t message_capacity,
+                        char *save_feedback,
+                        size_t save_feedback_capacity,
+                        float *save_feedback_age)
 {
     if (journal == NULL || *journal == NULL) {
         if (message[0] == '\0') {
@@ -7511,11 +7541,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                    IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
     if (command_action == COMMAND_ACTION_SAVE || ClientKeyPressed(KEY_F5) ||
         queued_save_shortcut || (control && ClientKeyPressed(KEY_S))) {
+        *save_feedback_age = 0.0f;
 #if defined(PLATFORM_WEB)
         int32_t browser_access = ClientBrowserCampaignAccess();
         if (browser_access != 0) {
             (void)snprintf(
-                message, message_capacity, "%s",
+                save_feedback, save_feedback_capacity, "Save blocked. %s",
                 ClientBrowserCampaignAccessMessage(browser_access));
             return;
         }
@@ -7523,37 +7554,58 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (local->road_choice_active &&
             !StableWorldRoadChoice(local)) {
             (void)snprintf(
-                message, message_capacity,
-                "Choose a road or turn back before saving.");
+                save_feedback, save_feedback_capacity,
+                "Save paused. Choose a road or turn back first.");
             return;
         }
         if (!LocalSessionEligible(local)) {
             (void)snprintf(
-                message, message_capacity,
-                "Finish the current movement before saving.");
+                save_feedback, save_feedback_capacity,
+                "Save paused. Finish the current movement first.");
             return;
         }
         char error[256];
-        bool saved = CcJournalCheckpoint(*journal, sim,
-                                         error, sizeof(error));
-        if (saved) {
-            saved = SaveLocalSession(session_path, sim, local,
-                                     error, sizeof(error));
+        if (!CcJournalCheckpoint(*journal, sim, error, sizeof(error))) {
+            (void)snprintf(save_feedback, save_feedback_capacity,
+                           "Journal save failed: %.72s", error);
+            return;
+        }
+        if (!SaveLocalSession(session_path, sim, local,
+                              error, sizeof(error))) {
+#if defined(PLATFORM_WEB)
+            (void)snprintf(
+                save_feedback, save_feedback_capacity,
+                "Journal is ready in this tab. "
+                "Local scene checkpoint failed: %.44s",
+                error);
+#else
+            (void)snprintf(
+                save_feedback, save_feedback_capacity,
+                "Journal saved. Local scene checkpoint failed: %.52s",
+                error);
+#endif
+            return;
         }
 #if defined(PLATFORM_WEB)
-        if (saved &&
-            ClientFlushBrowserSaves(save_path, session_path) == 0) {
-            saved = false;
+        if (ClientFlushBrowserSaves(save_path, session_path) == 0) {
             int32_t save_access = ClientBrowserCampaignAccess();
-            (void)snprintf(
-                error, sizeof(error), "%s",
-                save_access == 0 ?
-                    "The browser could not store this campaign." :
+            if (save_access == 0) {
+                (void)snprintf(
+                    save_feedback, save_feedback_capacity,
+                    "Browser storage failed. Journal and local scene "
+                    "remain in this tab.");
+            } else {
+                (void)snprintf(
+                    save_feedback, save_feedback_capacity,
+                    "Save blocked. %s",
                     ClientBrowserCampaignAccessMessage(save_access));
+            }
+            return;
         }
 #endif
-        (void)snprintf(message, message_capacity, "%s",
-                       saved ? "Game saved." : error);
+        (void)snprintf(
+            save_feedback, save_feedback_capacity,
+            "Journal saved. Local scene checkpoint saved.");
         return;
     }
     if (*view == VIEW_ENCOUNTER) {
@@ -10261,6 +10313,7 @@ int main(int argc, char **argv)
         return 1;
     }
     char message[256] = "";
+    char save_feedback[128] = "";
     if (!capture && !render_benchmark && startup_message[0] != '\0') {
         (void)snprintf(message, sizeof(message), "%s", startup_message);
     }
@@ -10296,6 +10349,7 @@ int main(int argc, char **argv)
     double render_benchmark_started = 0.0;
     bool performance_overlay = false;
     float message_age = 0.0f;
+    float save_feedback_age = SAVE_FEEDBACK_VISIBLE_SECONDS;
 #if defined(PLATFORM_WEB)
     bool browser_memory_reported = false;
 #endif
@@ -10312,6 +10366,9 @@ int main(int argc, char **argv)
 #endif
         local_bounds = LocalViewportBounds();
         float frame_delta_time = GetFrameTime();
+        save_feedback_age = fminf(
+            SAVE_FEEDBACK_VISIBLE_SECONDS,
+            save_feedback_age + frame_delta_time);
         CcLocalRendererSetOpeningStep(local.opening_step);
         if (view == VIEW_ROADS) {
             local.fork_turn_progress = fminf(
@@ -10356,7 +10413,9 @@ int main(int argc, char **argv)
                         &view, &return_view, &local,
                         local_target, local_bounds,
                         frame_delta_time,
-                        save_path, session_path, message, sizeof(message));
+                        save_path, session_path, message, sizeof(message),
+                        save_feedback, sizeof(save_feedback),
+                        &save_feedback_age);
             ClientInputClearPressed();
         }
         if (!capture_road_arrival) {
@@ -10529,6 +10588,10 @@ int main(int argc, char **argv)
             DrawDragonCavePanel(&sim);
         }
         CcOverlayFlush();
+        if (!persistence_blocked && !capture_gameplay_reel &&
+            !capture_npc_review) {
+            DrawSaveFeedbackToast(save_feedback, save_feedback_age);
+        }
         if (!persistence_blocked && !capture_npc_review &&
             (!capture_gameplay_reel ||
             gameplay_reel.stage != GAMEPLAY_REEL_QUEST_COMPLETE)) {
