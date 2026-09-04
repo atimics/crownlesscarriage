@@ -597,6 +597,26 @@ CcNpcAppearance CcNpcCrownlessAppearance(void)
     return result;
 }
 
+CcNpcAppearance CcNpcPlayerAppearance(uint32_t choices)
+{
+    CcNpcAppearance result = CcNpcCrownlessAppearance();
+    const Color skins[] = {CC_STYLE_HERO_SKIN, {232,194,160,255},
+        {207,170,128,255}, {171,117,86,255}, {121,81,63,255}, {77,53,46,255}};
+    const Color hairs[] = {CC_STYLE_HERO_HAIR, {96,66,50,255},
+        {136,75,53,255}, {186,154,91,255}, {184,181,170,255}, {226,217,198,255}};
+    const Color coats[] = {CC_STYLE_HERO_OUTER, {87,100,71,255},
+        {150,83,64,255}, {64,95,114,255}, {171,137,80,255}, {66,68,74,255}};
+    uint32_t skin = choices & 7U, hair = (choices >> 3U) & 7U;
+    uint32_t style = (choices >> 6U) & 7U, face = (choices >> 9U) & 7U;
+    uint32_t coat = (choices >> 12U) & 7U;
+    result.skin = skins[skin < 6U ? skin : 0U];
+    result.hair = hairs[hair < 6U ? hair : 0U];
+    result.outer = coats[coat < 6U ? coat : 0U];
+    result.hair_family = (uint8_t)(style < CC_NPC_HAIR_FAMILY_COUNT ? style : 0U);
+    result.head_family = (uint8_t)(face < CC_NPC_HEAD_FAMILY_COUNT ? face : 0U);
+    return result;
+}
+
 CcNpcAppearance CcNpcMaraAppearance(void)
 {
     CcNpcAppearance result = CcNpcAppearanceGenerate(

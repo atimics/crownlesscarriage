@@ -118,6 +118,12 @@
         header { align-items: start; }
         header p { display: none; }
       }
+      body.avatar-preview {min-height:100vh;background:#1a2823;overflow:hidden}
+      .avatar-preview main {padding:0;width:100%;height:100vh}
+      .avatar-preview header,.avatar-preview #hint,.avatar-preview footer {display:none}
+      .avatar-preview #stage {border:0;border-radius:0;box-shadow:none;height:100vh;display:grid;place-items:center;background:#1a2823}
+      .avatar-preview canvas {width:100%;height:auto;background:#1a2823}
+      .avatar-preview #loading {background:#1a2823}
     </style>
   </head>
   <body>

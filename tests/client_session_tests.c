@@ -39,7 +39,7 @@ static bool AthleticProfileIsDefault(
     return AthleticProfilesMatch(profile, &expected);
 }
 
-static bool RewriteSessionAsVersionFive(const char *path)
+static bool RewriteSessionAsLegacy(const char *path, int version)
 {
     const char *temporary = "client-session-version-five.tmp";
     FILE *source = fopen(path, "rb");
@@ -47,11 +47,12 @@ static bool RewriteSessionAsVersionFive(const char *path)
     char line[2048];
     bool ok = source != NULL && target != NULL &&
         fgets(line, sizeof(line), source) != NULL &&
-        fputs("CROWNLESS_SESSION 5\n", target) >= 0 &&
+        fprintf(target, "CROWNLESS_SESSION %d\n", version) >= 0 &&
         fgets(line, sizeof(line), source) != NULL &&
         fputs(line, target) >= 0 &&
         fgets(line, sizeof(line), source) != NULL &&
         strncmp(line, "ATHLETICS ", 10U) == 0;
+    if (ok && version == 6) ok = fputs(line, target) >= 0;
     while (ok && fgets(line, sizeof(line), source) != NULL) {
         ok = fputs(line, target) >= 0;
     }
@@ -107,7 +108,13 @@ int main(void)
     CC_CHECK(AthleticProfilesMatch(&restored.athletics,
                                    &original.athletics));
 
-    CC_CHECK(RewriteSessionAsVersionFive(session_path));
+    CC_CHECK(RewriteSessionAsLegacy(session_path, 6));
+    CC_CHECK(CcClientSessionRead(session_path, &restored,
+                                 error, sizeof(error)));
+    CC_CHECK(restored.version == CC_CLIENT_SESSION_VERSION);
+    CC_CHECK(AthleticProfilesMatch(&restored.athletics,
+                                   &original.athletics));
+    CC_CHECK(RewriteSessionAsLegacy(session_path, 5));
     CC_CHECK(CcClientSessionRead(session_path, &restored,
                                  error, sizeof(error)));
     CC_CHECK(restored.version == CC_CLIENT_SESSION_VERSION);

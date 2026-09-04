@@ -3,16 +3,20 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
 const source = await readFile(new URL('../web/coop_game.js', import.meta.url), 'utf8');
+const avatar = await readFile(new URL('../web/coop/avatar.js', import.meta.url), 'utf8');
 const persistence = await readFile(new URL('../web/persistence.js', import.meta.url), 'utf8');
 const world = '1'.repeat(32), key = `cc-coop-pending-${world}`;
 const storage = new Map([['cc-coop-token', 'a'.repeat(64)]]);
 const requests = [], responses = [];
+const files = new Map();
 function client() {
-  const files = new Map();
+  files.clear();
   const context = vm.createContext({
     Module: {}, console,
     FS: { mkdirTree() {}, readFile: path => files.get(path), writeFile: (path, text) => files.set(path, text) },
     location: { search: `?world=${world}` }, URLSearchParams, AbortSignal,
+    document: {readyState:'loading', addEventListener() {}, body:{dataset:{}}},
+    window: {addEventListener() {}},
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
     navigator: { locks: { request: (_key, callback) => callback() } },
     performance: { now: () => 2000 },
@@ -24,6 +28,7 @@ function client() {
       return { ok: !response.error, status: response.error ? 409 : 200, json: async () => response };
     }
   });
+  vm.runInContext(avatar, context);
   vm.runInContext(source, context);
   vm.runInContext(persistence, context);
   assert.equal(context.Module.crownlessCampaignAccess, 0);
@@ -89,5 +94,35 @@ await new Promise(resolve => setImmediate(resolve));
 finishCommand({accepted:true, world:state(2)});
 await applying;
 assert.equal(coop.take(), 'snapshot-3', 'A late action response preserves the newer C campaign');
+
+const sessionKey = `cc-coop-session-${world}`;
+const session = sequence => ({sequence, context:'town', session:`CROWNLESS_SESSION 7\n1 2 0 0 0 ${sequence} 29 0 1 3\n`});
+storage.set(sessionKey, JSON.stringify(session(8)));
+coop = client();
+responses.push({...state(4), session_context:'town', session:session(7)});
+await coop.connect();
+assert.equal(coop.hasSession(), true);
+assert.equal(files.get('/tmp/crownless-coop.ccsave.session'), session(8).session,
+  'The newest local checkpoint wins when a page closes before its host request finishes');
+responses.push({}, {...state(4), session_context:'town'});
+coop.poll();
+await new Promise(resolve => setImmediate(resolve));
+assert.deepEqual(JSON.parse(requests.at(-2).body), session(8));
+coop.checkpoint(session(9).session);
+assert.equal(JSON.parse(storage.get(sessionKey)).sequence, 9);
+assert.equal(JSON.parse(storage.get(sessionKey)).session, session(9).session,
+  'Movement is saved in the browser before its next host request');
+
+coop = client();
+responses.push({...state(4), session_context:'town', session:session(10)});
+await coop.connect();
+assert.equal(files.get('/tmp/crownless-coop.ccsave.session'), session(10).session,
+  'A newer host checkpoint restores the place saved by another browser');
+files.clear();
+coop = client();
+responses.push({...state(5), session_context:'road', session:session(10)});
+await coop.connect();
+assert.equal(coop.hasSession(), false);
+assert.equal(files.has('/tmp/crownless-coop.ccsave.session'), false, 'A shared carriage move starts in the current scene');
 assert.equal(responses.length, 0);
 console.log('Shared browser recovery, ordering, and save ownership passed.');

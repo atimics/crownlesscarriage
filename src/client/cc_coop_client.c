@@ -14,6 +14,16 @@
 #endif
 
 EM_JS(int, CoopEnabled, (), { return Module.ccCoop && Module.ccCoop.enabled ? 1 : 0; });
+EM_JS(int, CoopPreview, (), { return Module.ccCoop && Module.ccCoop.preview ? 1 : 0; });
+EM_JS(int, CoopHasSession, (), { return Module.ccCoop && Module.ccCoop.hasSession() ? 1 : 0; });
+EM_JS(void, CoopCheckpoint, (const char *path), {
+    Module.ccCoop.checkpoint(FS.readFile(UTF8ToString(path), {encoding:'utf8'}));
+});
+EM_JS(int, CoopAppearance, (), {
+    const value = Module.ccCoop ? Module.ccCoop.avatar() : 0;
+    document.body.dataset.avatar = String(value);
+    return value;
+});
 EM_JS(void, CoopReady, (const char *error), { Module.ccCoop.ready(UTF8ToString(error)); });
 EM_JS(void, CoopSynced, (const char *hash), { document.body.dataset.companyHash = UTF8ToString(hash); });
 EM_ASYNC_JS(int, CoopConnect, (char *error, int capacity), {
@@ -47,6 +57,10 @@ EM_JS(unsigned char *, CoopTake, (int *length), {
 #endif
 
 bool CcCoopClientActive(void) { return CoopEnabled() != 0; }
+bool CcCoopClientPreview(void) { return CoopPreview() != 0; }
+uint32_t CcCoopClientAppearance(void) { return (uint32_t)CoopAppearance(); }
+bool CcCoopClientHasSession(void) { return CoopHasSession() != 0; }
+void CcCoopClientCheckpoint(const char *path) { CoopCheckpoint(path); }
 void CcCoopClientReady(const char *error) { CoopReady(error); }
 
 bool CcCoopClientPoll(CcSim *sim, char *error, size_t capacity)
@@ -97,6 +111,10 @@ bool CcCoopClientSkip(CcSim *sim, char *error, size_t capacity)
     (void)sim; (void)error; (void)capacity; return false;
 }
 bool CcCoopClientActive(void) { return false; }
+bool CcCoopClientPreview(void) { return false; }
+uint32_t CcCoopClientAppearance(void) { return 0U; }
+bool CcCoopClientHasSession(void) { return false; }
+void CcCoopClientCheckpoint(const char *path) { (void)path; }
 void CcCoopClientReady(const char *error) { (void)error; }
 bool CcCoopClientConnect(CcSim *sim, char *error, size_t capacity)
 {

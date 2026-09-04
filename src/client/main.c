@@ -1839,11 +1839,8 @@ static bool LocalSessionEligible(const LocalState *local)
     return
            (!local->road_choice_active || StableWorldRoadChoice(local)) &&
            !local->journey_travel_active &&
-           !local->site_travel_active &&
            !local->journey_combat_active && !local->journey_parley_active &&
-           !CcLocalCourseHasNearbyHostile(&local->course, &local->agent) &&
-           (!local->open_world || !local->market_interior) &&
-           local->agent.combat.life_state == CC_LIFE_ALIVE;
+           (!local->open_world || !local->market_interior);
 }
 
 static void CaptureEncounterActor(CcClientEncounterActor *saved,
@@ -1887,7 +1884,8 @@ static void CaptureRoadEncounter(CcClientRoadEncounter *saved,
                                  const LocalState *local)
 {
     saved->mode = RoadEncounterMode(local);
-    if (saved->mode == CC_CLIENT_ROAD_ENCOUNTER_NONE) return;
+    if (saved->mode == CC_CLIENT_ROAD_ENCOUNTER_NONE)
+        saved->mode = CC_CLIENT_ROAD_ENCOUNTER_LOCAL;
     CaptureEncounterActor(&saved->player, &local->agent);
     saved->engagement_time = local->course.engagement_time;
     saved->alarm_countdown = local->course.alarm_countdown;
@@ -1968,11 +1966,32 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
         .position_x = local->agent.position.x,
         .position_z = local->agent.position.z,
         .facing_yaw = local->agent.facing_yaw,
-        .opening_step = (uint32_t)local->opening_step
+        .opening_step = (uint32_t)local->opening_step,
+        .site_travel_progress = local->site_travel_progress,
+        .site_travel_active = local->site_travel_active,
+        .site_returning = local->site_returning
     };
     CaptureAthleticProfile(&session.athletics, &local->agent.athletics);
     CaptureRoadEncounter(&session.road_encounter, local);
     return CcClientSessionWrite(path, &session, error, error_capacity);
+}
+
+static const CcSim *coop_checkpoint_sim = NULL;
+static const LocalState *coop_checkpoint_local = NULL;
+static const char *coop_checkpoint_path = NULL;
+
+#if defined(PLATFORM_WEB)
+EMSCRIPTEN_KEEPALIVE
+#endif
+void CcCoopCheckpointNow(void)
+{
+    if (!CcCoopClientActive() || coop_checkpoint_sim == NULL ||
+        coop_checkpoint_local == NULL || coop_checkpoint_path == NULL) return;
+    char error[192];
+    if (SaveLocalSession(coop_checkpoint_path, coop_checkpoint_sim,
+                         coop_checkpoint_local, error, sizeof(error))) {
+        CcCoopClientCheckpoint(coop_checkpoint_path);
+    }
 }
 
 static bool WorldStreamCanRestoreSession(
@@ -2185,7 +2204,8 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
         session.location_id != sim->player.location_id) {
         return false;
     }
-    if (session.road_encounter.mode != CC_CLIENT_ROAD_ENCOUNTER_NONE) {
+    if (session.road_encounter.mode == CC_CLIENT_ROAD_ENCOUNTER_FIGHT ||
+        session.road_encounter.mode == CC_CLIENT_ROAD_ENCOUNTER_PARLEY) {
         if (!sim->journey.active ||
             sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED) {
             return false;
@@ -2203,6 +2223,8 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
         if (restored) {
             RestoreAthleticProfile(&local->agent.athletics,
                                    &session.athletics);
+            if (session.road_encounter.mode == CC_CLIENT_ROAD_ENCOUNTER_LOCAL)
+                RestoreRoadEncounter(local, &session.road_encounter);
         }
         return restored;
     }
@@ -2231,6 +2253,11 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
     }
     local->agent.facing_yaw = session.facing_yaw;
     local->opening_step = (CcLocalOpeningStep)session.opening_step;
+    local->site_travel_progress = session.site_travel_progress;
+    local->site_travel_active = session.site_travel_active;
+    local->site_returning = session.site_returning;
+    if (session.road_encounter.mode == CC_CLIENT_ROAD_ENCOUNTER_LOCAL)
+        RestoreRoadEncounter(local, &session.road_encounter);
     if (sim->player.accepted_situation_id != 0U ||
         sim->player.reputation != 0) {
         local->opening_step = CC_LOCAL_OPENING_COMPLETE;
@@ -7616,17 +7643,19 @@ static int RunRoadEncounterSessionRegression(void)
 {
     const char *session_path = "road-encounter-session-test.state";
     (void)remove(session_path);
-    for (int32_t path = 0; path < 2; ++path) {
-        bool hostile = path == 0;
+    for (int32_t path = 0; path < 4; ++path) {
+        bool town = path >= 2;
+        bool hostile = path % 2 == 0;
         CcSim sim;
         CcSimInit(&sim, UINT32_C(0xc0a71360) + (uint32_t)path);
-        sim.journey.active = true;
+        sim.journey.active = !town;
         sim.journey.phase = CC_JOURNEY_PHASE_BLOCKED;
         sim.journey.origin_id = sim.player.location_id;
 
         LocalState saved = {0};
         ResetLocalState(&saved);
-        BeginRoadLocalState(&sim, &saved, hostile);
+        if (!town) BeginRoadLocalState(&sim, &saved, hostile);
+        else saved.course.alarm_active = true;
         CcAthleticProfile expected_athletics = NonDefaultAthleticProfile();
         saved.agent.athletics = expected_athletics;
         saved.agent.position.x += 0.75f;
@@ -7654,6 +7683,13 @@ static int RunRoadEncounterSessionRegression(void)
         saved.course.raiders[1].combat.life_state = CC_LIFE_DEAD;
         saved.course.raiders[1].combat.weapon_mode =
             CC_WEAPON_RAGDOLL_ATTACHED;
+        if (path == 3) {
+            saved.agent.combat.health = 0.0f;
+            saved.agent.combat.life_state = CC_LIFE_DEAD;
+            saved.site_travel_active = true;
+            saved.site_travel_progress = 0.42f;
+            saved.site_returning = true;
+        }
 
         CcClientRoadEncounter expected = {0};
         CaptureRoadEncounter(&expected, &saved);
@@ -7675,9 +7711,11 @@ static int RunRoadEncounterSessionRegression(void)
         CcClientRoadEncounter actual = {0};
         CaptureRoadEncounter(&actual, &restored);
         if (view != VIEW_LOCAL || restored.open_world ||
-            !restored.course.road_encounter ||
-            restored.journey_combat_active != hostile ||
-            restored.journey_parley_active == hostile ||
+            restored.course.road_encounter != !town ||
+            restored.journey_combat_active != (!town && hostile) ||
+            restored.journey_parley_active != (!town && !hostile) ||
+            restored.site_travel_active != saved.site_travel_active ||
+            !SessionTestFloatMatches(restored.site_travel_progress, saved.site_travel_progress) ||
             !AthleticProfilesMatch(&restored.agent.athletics,
                                    &expected_athletics) ||
             !RoadEncounterTestMatches(&expected, &actual)) {
@@ -9979,7 +10017,8 @@ int main(int argc, char **argv)
                                "architecture-proof.png";
     char save_path[640];
     CampaignSavePath(save_path, sizeof(save_path));
-    if (CcCoopClientActive()) (void)snprintf(save_path, sizeof(save_path), "/tmp/crownless-coop.ccsave");
+    if (CcCoopClientActive() || CcCoopClientPreview())
+        (void)snprintf(save_path, sizeof(save_path), "/tmp/crownless-coop.ccsave");
     char session_path[704];
     char lock_path[704];
     char preferences_path[704];
@@ -9992,7 +10031,7 @@ int main(int argc, char **argv)
         (void)fprintf(stderr, "Campaign companion path is too long.\n");
         return 1;
     }
-    bool normal_play = !capture && !render_benchmark;
+    bool normal_play = !capture && !render_benchmark && !CcCoopClientPreview();
     CcClientPreferences preferences;
     CcClientPreferencesDefault(&preferences);
     if (normal_play) {
@@ -10087,6 +10126,8 @@ int main(int argc, char **argv)
         (void)snprintf(startup_message, sizeof(startup_message), "%s",
                        journal != NULL ? "The company shares this carriage and clock." : error);
         CcCoopClientReady(journal != NULL ? "" : error);
+    } else if (CcCoopClientPreview()) {
+        (void)snprintf(startup_message, sizeof(startup_message), "Your traveller.");
     } else if (capture || render_benchmark) {
         CcSimAdvanceDays(&sim, 28);
     } else {
@@ -10404,7 +10445,12 @@ int main(int argc, char **argv)
         }
         local.fork_turn_progress = 1.0f;
     }
-    if (normal_play && sim.journey.active) {
+    bool restored_local_session = resuming_campaign && journal != NULL &&
+        RestoreClientStartupSession(session_path, &sim, &local, &view, &selected);
+    if (restored_local_session) {
+        (void)snprintf(startup_message, sizeof(startup_message),
+                       "Campaign resumed where you left off.");
+    } else if (normal_play && sim.journey.active) {
         if (sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
             BeginRoadLocalState(&sim, &local, false);
             view = VIEW_LOCAL;
@@ -10423,6 +10469,13 @@ int main(int argc, char **argv)
             }
             view = VIEW_LOCAL;
         }
+    }
+    if (CcCoopClientHasSession() && !restored_local_session) {
+        char close_error[192];
+        (void)CcJournalClose(&journal, &sim, close_error, sizeof(close_error));
+        (void)snprintf(startup_message, sizeof(startup_message),
+            "Your saved place needs recovery. Reconnect after the host recovers it.");
+        CcCoopClientReady(startup_message);
     }
     if (!capture && sim.dungeon_expedition.active) {
         local.site_kind = CC_LOCAL_SITE_DUNGEON;
@@ -10856,10 +10909,28 @@ int main(int argc, char **argv)
     CcSoundscape soundscape = {0};
     CcAudioSetMode(preferences.audio_mode);
     Rectangle local_bounds;
+    double coop_checkpoint_time = 0.0;
+    if (CcCoopClientActive() && journal != NULL) {
+        coop_checkpoint_sim = &sim;
+        coop_checkpoint_local = &local;
+        coop_checkpoint_path = session_path;
+    }
     while (render_benchmark || !WindowShouldClose()) {
 #if defined(PLATFORM_WEB)
         ClientWaitForAnimationFrame();
 #endif
+        if (CcCoopClientActive() || CcCoopClientPreview()) {
+            local.agent.appearance = CcNpcPlayerAppearance(CcCoopClientAppearance());
+        }
+        if (CcCoopClientPreview()) {
+            CcLocalAgentUpdate(&local.agent, fminf(GetFrameTime(), 0.05f), false);
+            CcLocalRendererBeginFrame(GetFrameTime());
+            BeginDrawing();
+            CcLocalDrawAvatarPreview3D(&local.agent, local_target,
+                (Rectangle){0, 0, (float)GetScreenWidth(), (float)GetScreenHeight()});
+            EndDrawing();
+            continue;
+        }
         if (CcCoopClientActive()) {
             CcId old_location = sim.player.location_id;
             CcId old_route = sim.journey.route_id;
@@ -10983,6 +11054,10 @@ int main(int argc, char **argv)
                         save_feedback, sizeof(save_feedback),
                         &save_feedback_age);
             ClientInputClearPressed();
+        }
+        if (CcCoopClientActive() && GetTime() - coop_checkpoint_time >= 0.25) {
+            CcCoopCheckpointNow();
+            coop_checkpoint_time = GetTime();
         }
         if (!capture_road_arrival && !capture_storybook) {
             UpdateOpenWorldCamera(&sim, &local, frame_delta_time);
