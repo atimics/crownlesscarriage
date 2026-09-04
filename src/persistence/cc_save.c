@@ -1517,6 +1517,7 @@ static bool SaveGoods(sqlite3 *database, const CcSim *sim,
                       char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
+    int32_t good_count = CcGoodCountForSchema(sim->schema_version);
     if (!Prepare(database,
                  "INSERT INTO settlement_good "
                  "(settlement_slot,good,stock,reserve_target,production,"
@@ -1525,7 +1526,7 @@ static bool SaveGoods(sqlite3 *database, const CcSim *sim,
     for (int32_t settlement = 0;
          settlement < sim->settlement_count; ++settlement) {
         const CcSettlement *place = &sim->settlements[settlement];
-        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = 0; good < good_count; ++good) {
             BindInt(statement, 1, settlement);
             BindInt(statement, 2, good);
             BindInt(statement, 3, place->stock[good]);
@@ -1544,7 +1545,7 @@ static bool SaveGoods(sqlite3 *database, const CcSim *sim,
 
     if (!Prepare(database, "INSERT INTO player_good VALUES(?,?);",
                  &statement, error, error_capacity)) return false;
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+    for (int32_t good = 0; good < good_count; ++good) {
         BindInt(statement, 1, good);
         BindInt(statement, 2, sim->player.cargo[good]);
         if (!StepDone(database, statement, error, error_capacity) ||
@@ -1557,7 +1558,7 @@ static bool SaveGoods(sqlite3 *database, const CcSim *sim,
 
     if (!Prepare(database, "INSERT INTO goblin_good VALUES(?,?,?);",
                  &statement, error, error_capacity)) return false;
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+    for (int32_t good = 0; good < good_count; ++good) {
         BindInt(statement, 1, good);
         BindInt(statement, 2, sim->goblins.carried_goods[good]);
         BindInt(statement, 3, sim->goblins.lair_stock[good]);
@@ -1571,7 +1572,7 @@ static bool SaveGoods(sqlite3 *database, const CcSim *sim,
 
     if (!Prepare(database, "INSERT INTO dragon_good VALUES(?,?);",
                  &statement, error, error_capacity)) return false;
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+    for (int32_t good = 0; good < good_count; ++good) {
         BindInt(statement, 1, good);
         BindInt(statement, 2, sim->dragon.hoard_goods[good]);
         if (!StepDone(database, statement, error, error_capacity) ||
@@ -1585,7 +1586,7 @@ static bool SaveGoods(sqlite3 *database, const CcSim *sim,
     if (!Prepare(database,
                  "INSERT INTO dragon_campaign_good VALUES(?,?);",
                  &statement, error, error_capacity)) return false;
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+    for (int32_t good = 0; good < good_count; ++good) {
         BindInt(statement, 1, good);
         BindInt(statement, 2, sim->dragon_campaign.supplies[good]);
         if (!StepDone(database, statement, error, error_capacity) ||
@@ -3180,6 +3181,7 @@ static bool ReadGoods(sqlite3 *database, CcSim *sim,
 {
     if (sim->schema_version < 27U) return true;
     sqlite3_stmt *statement = NULL;
+    int32_t good_count = CcGoodCountForSchema(sim->schema_version);
     if (!Prepare(database,
                  "SELECT settlement_slot,good,stock,reserve_target,production,"
                  "consumption,price FROM settlement_good "
@@ -3189,8 +3191,8 @@ static bool ReadGoods(sqlite3 *database, CcSim *sim,
     while (sqlite3_step(statement) == SQLITE_ROW) {
         int32_t settlement = sqlite3_column_int(statement, 0);
         int32_t good = sqlite3_column_int(statement, 1);
-        if (settlement != rows / CC_GOOD_COUNT ||
-            good != rows % CC_GOOD_COUNT ||
+        if (settlement != rows / good_count ||
+            good != rows % good_count ||
             settlement >= sim->settlement_count) {
             sqlite3_finalize(statement);
             SetError(error, error_capacity,
@@ -3206,7 +3208,7 @@ static bool ReadGoods(sqlite3 *database, CcSim *sim,
         rows += 1;
     }
     sqlite3_finalize(statement);
-    if (rows != sim->settlement_count * CC_GOOD_COUNT) {
+    if (rows != sim->settlement_count * good_count) {
         SetError(error, error_capacity,
                  "Settlement good rows are incomplete.");
         return false;
@@ -3218,7 +3220,7 @@ static bool ReadGoods(sqlite3 *database, CcSim *sim,
     rows = 0;
     while (sqlite3_step(statement) == SQLITE_ROW) {
         int32_t good = sqlite3_column_int(statement, 0);
-        if (good != rows || good >= CC_GOOD_COUNT) {
+        if (good != rows || good >= good_count) {
             sqlite3_finalize(statement);
             SetError(error, error_capacity, "Player good rows are invalid.");
             return false;
@@ -3227,7 +3229,7 @@ static bool ReadGoods(sqlite3 *database, CcSim *sim,
         rows += 1;
     }
     sqlite3_finalize(statement);
-    if (rows != CC_GOOD_COUNT) {
+    if (rows != good_count) {
         SetError(error, error_capacity, "Player good rows are incomplete.");
         return false;
     }
@@ -3238,7 +3240,7 @@ static bool ReadGoods(sqlite3 *database, CcSim *sim,
     rows = 0;
     while (sqlite3_step(statement) == SQLITE_ROW) {
         int32_t good = sqlite3_column_int(statement, 0);
-        if (good != rows || good >= CC_GOOD_COUNT) {
+        if (good != rows || good >= good_count) {
             sqlite3_finalize(statement);
             SetError(error, error_capacity, "Goblin good rows are invalid.");
             return false;
@@ -3248,7 +3250,7 @@ static bool ReadGoods(sqlite3 *database, CcSim *sim,
         rows += 1;
     }
     sqlite3_finalize(statement);
-    if (rows != CC_GOOD_COUNT) {
+    if (rows != good_count) {
         SetError(error, error_capacity, "Goblin good rows are incomplete.");
         return false;
     }
@@ -3259,7 +3261,7 @@ static bool ReadGoods(sqlite3 *database, CcSim *sim,
     rows = 0;
     while (sqlite3_step(statement) == SQLITE_ROW) {
         int32_t good = sqlite3_column_int(statement, 0);
-        if (good != rows || good >= CC_GOOD_COUNT) {
+        if (good != rows || good >= good_count) {
             sqlite3_finalize(statement);
             SetError(error, error_capacity, "Dragon good rows are invalid.");
             return false;
@@ -3268,7 +3270,7 @@ static bool ReadGoods(sqlite3 *database, CcSim *sim,
         rows += 1;
     }
     sqlite3_finalize(statement);
-    if (rows != CC_GOOD_COUNT) {
+    if (rows != good_count) {
         SetError(error, error_capacity, "Dragon good rows are incomplete.");
         return false;
     }
@@ -3280,7 +3282,7 @@ static bool ReadGoods(sqlite3 *database, CcSim *sim,
     rows = 0;
     while (sqlite3_step(statement) == SQLITE_ROW) {
         int32_t good = sqlite3_column_int(statement, 0);
-        if (good != rows || good >= CC_GOOD_COUNT) {
+        if (good != rows || good >= good_count) {
             sqlite3_finalize(statement);
             SetError(error, error_capacity,
                      "Dragon campaign good rows are invalid.");
@@ -3291,7 +3293,7 @@ static bool ReadGoods(sqlite3 *database, CcSim *sim,
         rows += 1;
     }
     sqlite3_finalize(statement);
-    if (rows != CC_GOOD_COUNT) {
+    if (rows != good_count) {
         SetError(error, error_capacity,
                  "Dragon campaign good rows are incomplete.");
         return false;
@@ -4910,6 +4912,7 @@ static void InitializeExtendedGoods(CcSim *sim)
         }
     }
     CcSimInitializeWoodEconomy(sim);
+    CcSimInitializePaperEconomy(sim);
 }
 
 static bool UpgradeLegacyRuntime(CcSim *sim,
@@ -4928,9 +4931,16 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 21U && legacy_version != 22U &&
         legacy_version != 23U && legacy_version != 24U &&
         legacy_version != 25U && legacy_version != 26U &&
-        legacy_version != 27U) return true;
+        legacy_version != 27U && legacy_version != 28U) return true;
+    if (legacy_version == 28U) {
+        CcSimInitializePaperEconomy(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     if (legacy_version == 27U) {
         CcSimInitializeWoodEconomy(sim);
+        CcSimInitializePaperEconomy(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;

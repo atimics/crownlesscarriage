@@ -701,12 +701,16 @@ static const CcGoodDefinition GOOD_DEFINITIONS[CC_GOOD_COUNT] = {
     [CC_GOOD_WHEAT] = {"Wheat", 3, 10, 1, 4, 20},
     [CC_GOOD_MEAT] = {"Meat", 7, 6, 1, 4, 12},
     [CC_GOOD_WOOL] = {"Wool", 9, 8, 1, 4, 16},
-    [CC_GOOD_STONE] = {"Stone", 7, 4, 1, 4, 8}
+    [CC_GOOD_STONE] = {"Stone", 7, 4, 1, 4, 8},
+    [CC_GOOD_PAPER] = {"Paper", 12, 8, 1, 4, 16},
+    [CC_GOOD_ROTTEN_MEAT] = {"Rotten Meat", 1, 6, 1, 4, 12},
+    [CC_GOOD_ROTTEN_GRAIN] = {"Rotten Grain", 1, 10, 1, 4, 20}
 };
 
-static int32_t GoodCountForSchema(uint32_t schema_version)
+int32_t CcGoodCountForSchema(uint32_t schema_version)
 {
-    if (schema_version >= 27U) return CC_GOOD_COUNT;
+    if (schema_version >= 29U) return CC_GOOD_COUNT;
+    if (schema_version >= 27U) return 11;
     if (schema_version >= 9U) return CC_LEGACY_GOOD_COUNT;
     return 3;
 }
@@ -3213,6 +3217,68 @@ void CcSimInitializeWoodEconomy(CcSim *sim)
     }
 }
 
+void CcSimInitializePaperEconomy(CcSim *sim)
+{
+    if (sim == NULL) return;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        int32_t stock = 0;
+        int32_t reserve = 0;
+        int32_t production = 0;
+        int32_t consumption = 0;
+        switch (place->function) {
+            case CC_SETTLEMENT_FARMING:
+                stock = 4;
+                reserve = 6;
+                production = 2;
+                consumption = 1;
+                break;
+            case CC_SETTLEMENT_MARKET:
+                stock = 14;
+                reserve = 12;
+                production = 6;
+                consumption = 3;
+                break;
+            case CC_SETTLEMENT_FORTRESS:
+                stock = 4;
+                reserve = 6;
+                consumption = 1;
+                break;
+            case CC_SETTLEMENT_MINING:
+                stock = 2;
+                reserve = 4;
+                consumption = 1;
+                break;
+            case CC_SETTLEMENT_CAPITAL:
+                stock = 18;
+                reserve = 16;
+                production = 8;
+                consumption = 4;
+                break;
+            case CC_SETTLEMENT_DUNGEON_TOWN:
+                stock = 1;
+                reserve = 3;
+                break;
+        }
+        place->stock[CC_GOOD_PAPER] = stock;
+        place->reserve_target[CC_GOOD_PAPER] = reserve;
+        place->production[CC_GOOD_PAPER] = production;
+        place->consumption[CC_GOOD_PAPER] = consumption;
+        place->price[CC_GOOD_PAPER] =
+            CcGoodDefinitionFor(CC_GOOD_PAPER)->base_price;
+        for (CcGood spoiled = CC_GOOD_ROTTEN_MEAT;
+             spoiled <= CC_GOOD_ROTTEN_GRAIN;
+             spoiled = (CcGood)(spoiled + 1)) {
+            place->stock[spoiled] = 0;
+            place->reserve_target[spoiled] = 0;
+            place->production[spoiled] = 0;
+            place->consumption[spoiled] = 0;
+            place->price[spoiled] =
+                CcGoodDefinitionFor(spoiled)->base_price;
+        }
+    }
+}
+
 void CcSimInit(CcSim *sim, uint32_t seed)
 {
     if (sim == NULL) return;
@@ -3298,6 +3364,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     sim->settlement_count = CC_MAX_SETTLEMENTS;
     ConfigureSettlementEconomies(sim);
     CcSimInitializeWoodEconomy(sim);
+    CcSimInitializePaperEconomy(sim);
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         SeedSettlementServices(&sim->settlements[i]);
     }
@@ -3724,6 +3791,26 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement)
     }
 }
 
+static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
+{
+    int32_t capacity = MaximumI32(
+        0, settlement->production[CC_GOOD_PAPER]);
+    int32_t gap = MaximumI32(
+        0, settlement->reserve_target[CC_GOOD_PAPER] * 2 -
+           settlement->stock[CC_GOOD_PAPER]);
+    int32_t wood_available = MaximumI32(
+        0, settlement->stock[CC_GOOD_WOOD] -
+           settlement->reserve_target[CC_GOOD_WOOD]);
+    int32_t paper_made = MinimumI32(
+        capacity, MinimumI32(gap, wood_available * 4));
+    if (paper_made <= 0) return;
+    int32_t wood_used = (paper_made + 3) / 4;
+    settlement->stock[CC_GOOD_WOOD] -= wood_used;
+    settlement->stock[CC_GOOD_PAPER] += paper_made;
+    RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_WOOD);
+    RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
+}
+
 static void AdvanceRareMineWork(CcSim *sim, CcSettlement *settlement,
                                 int32_t iron_mined)
 {
@@ -3904,6 +3991,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
             produced[CC_GOOD_WOOD], text);
     }
     RunSmithy(sim, settlement);
+    RunPaperMill(sim, settlement);
     int32_t war_burden = CcSimWarBurdenAtSettlement(sim, settlement->id);
     if (IsWarSeat(settlement) && war_burden >= 50 &&
         sim->current_day % 14 == 0 &&
@@ -11548,6 +11636,21 @@ static int32_t HorseFeedRequired(int32_t travel_days)
     return MaximumI32(1, (travel_days + 1) / 2);
 }
 
+static bool JourneyCrossesRain(const CcSim *sim, const CcRoute *route,
+                               int32_t departure_day)
+{
+    if (sim == NULL || route == NULL) return false;
+    uint32_t value = sim->world_seed ^ (uint32_t)route->id ^
+        (uint32_t)(route->id >> 32U) ^
+        ((uint32_t)departure_day * UINT32_C(0x9e3779b9));
+    value ^= value >> 16U;
+    value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15U;
+    value *= UINT32_C(0x846ca68b);
+    value ^= value >> 16U;
+    return value % 100U < 35U;
+}
+
 bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
                         CcTravelPreview *preview, char *error,
                         size_t error_capacity)
@@ -11585,6 +11688,10 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
         MaximumI32(3, days * 2);
     int32_t base_fare = days + (route->smuggler_route ? 3 : 0);
     int32_t shadow_danger = DragonRouteShadowDanger(sim, route);
+    bool waits_for_morning = !opening_half_day &&
+        sim->clock.minute_subticks > 0;
+    int32_t departure_day = sim->current_day +
+        (waits_for_morning ? 1 : 0);
     *preview = (CcTravelPreview){
         .route_id = route->id,
         .destination_id = destination->id,
@@ -11598,14 +11705,15 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
         .horse_readiness = readiness,
         .travel_watches = travel_watches,
         .overnight_stops = (travel_watches - 1) / 2,
-        .departure_wait_minutes = !opening_half_day &&
-                sim->clock.minute_subticks > 0 ?
+        .departure_wait_minutes = waits_for_morning ?
             (CC_WORLD_DAY_SUBTICKS - sim->clock.minute_subticks) /
                 CC_WORLD_MINUTE_SUBTICKS : 0,
         .road_house_distance_miles = CcSimRoadHouseDistanceMiles(
             sim, route->id),
         .road_house_cost = CcSimRoadHouseCost(sim, route->id),
         .road_house_name = CcSimRoadHouseName(sim, route->id),
+        .rain_expected = JourneyCrossesRain(
+            sim, route, departure_day),
         .opening_half_day = opening_half_day,
         .charted = map != NULL,
         .destination_known = !route->smuggler_route || map != NULL ||
@@ -11613,6 +11721,30 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
         .sponsored_guide = sponsored_night_passage
     };
     return true;
+}
+
+static void SpoilPlayerJourneyCargo(CcSim *sim, bool rain_expected,
+                                    int32_t *meat_spoiled,
+                                    int32_t *grain_spoiled)
+{
+    *meat_spoiled = sim->player.cargo[CC_GOOD_MEAT];
+    *grain_spoiled = rain_expected ?
+        sim->player.cargo[CC_GOOD_WHEAT] : 0;
+    sim->player.cargo[CC_GOOD_MEAT] = 0;
+    int64_t rotten_meat =
+        (int64_t)sim->player.cargo[CC_GOOD_ROTTEN_MEAT] + *meat_spoiled;
+    sim->player.cargo[CC_GOOD_ROTTEN_MEAT] =
+        rotten_meat > CC_SIM_MAX_UNITS ? CC_SIM_MAX_UNITS :
+                                         (int32_t)rotten_meat;
+    if (*grain_spoiled > 0) {
+        sim->player.cargo[CC_GOOD_WHEAT] = 0;
+        int64_t rotten_grain =
+            (int64_t)sim->player.cargo[CC_GOOD_ROTTEN_GRAIN] +
+            *grain_spoiled;
+        sim->player.cargo[CC_GOOD_ROTTEN_GRAIN] =
+            rotten_grain > CC_SIM_MAX_UNITS ? CC_SIM_MAX_UNITS :
+                                              (int32_t)rotten_grain;
+    }
 }
 
 static bool ApplyTravel(CcSim *sim, const CcCommand *command,
@@ -11735,6 +11867,10 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         sim->clock.minute_subticks = 0;
         CcSimAdvanceDays(sim, 1);
     }
+    int32_t meat_spoiled = 0;
+    int32_t grain_spoiled = 0;
+    SpoilPlayerJourneyCargo(
+        sim, preview.rain_expected, &meat_spoiled, &grain_spoiled);
     CcId parent_event_id = LatestLocalCause(sim, destination->id);
     sim->journey = (CcJourneyEncounter){
         .active = true,
@@ -11791,6 +11927,27 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         sim, CC_EVENT_JOURNEY_DEPARTED, sim->player.id, route->id,
         parent_event_id, days, text);
     sim->journey.parent_event_id = departure->id;
+    if (meat_spoiled > 0 || grain_spoiled > 0) {
+        if (meat_spoiled > 0 && grain_spoiled > 0) {
+            (void)snprintf(
+                text, sizeof(text),
+                "Before the first mile, %d Meat becomes Rotten Meat; rain changes %d Wheat into Rotten Grain.",
+                meat_spoiled, grain_spoiled);
+        } else if (meat_spoiled > 0) {
+            (void)snprintf(
+                text, sizeof(text),
+                "Before the first mile, %d Meat becomes Rotten Meat.",
+                meat_spoiled);
+        } else {
+            (void)snprintf(
+                text, sizeof(text),
+                "Rain changes %d Wheat into Rotten Grain.", grain_spoiled);
+        }
+        CcEvent *spoilage = PushEvent(
+            sim, CC_EVENT_PLAYER_TRAVEL, sim->player.id, route->id,
+            departure->id, meat_spoiled + grain_spoiled, text);
+        sim->journey.parent_event_id = spoilage->id;
+    }
     SetError(error, error_capacity, "");
     return true;
 }
@@ -13590,7 +13747,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 24U ||
                          sim->schema_version == 25U ||
                          sim->schema_version == 26U ||
-                         sim->schema_version == 27U;
+                         sim->schema_version == 27U ||
+                         sim->schema_version == 28U;
     /* Schema 27 generator 21 saves carry their authoritative settlement
        coordinates. Keep them valid without rebuilding their road layout. */
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
@@ -13793,7 +13951,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             SetError(error, error_capacity, "Settlement state is invalid.");
             return false;
         }
-        int32_t saved_good_count = GoodCountForSchema(sim->schema_version);
+        int32_t saved_good_count = CcGoodCountForSchema(sim->schema_version);
         for (int32_t good = 0; good < saved_good_count; ++good) {
             if (settlement->stock[good] < 0 ||
                 settlement->stock[good] > CC_SIM_MAX_UNITS ||
@@ -15277,7 +15435,7 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->service_project);
             HASH_VALUE(item->service_project_days);
         }
-        int32_t good_count = GoodCountForSchema(sim->schema_version);
+        int32_t good_count = CcGoodCountForSchema(sim->schema_version);
         for (int32_t good = 0; good < good_count; ++good) {
             HASH_VALUE(item->stock[good]); HASH_VALUE(item->reserve_target[good]);
             HASH_VALUE(item->production[good]); HASH_VALUE(item->consumption[good]);
@@ -15401,7 +15559,7 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(goblins->raid_motive);
             HASH_VALUE(goblins->lair_coins);
             HASH_VALUE(goblins->carried_treasure_id);
-            int32_t good_count = GoodCountForSchema(sim->schema_version);
+            int32_t good_count = CcGoodCountForSchema(sim->schema_version);
             for (int32_t good = 0; good < good_count; ++good) {
                 HASH_VALUE(goblins->carried_goods[good]);
                 HASH_VALUE(goblins->lair_stock[good]);
@@ -15446,7 +15604,7 @@ uint64_t CcSimHash(const CcSim *sim)
         }
         if (sim->schema_version >= 9U) {
             HASH_VALUE(dragon->stolen_treasure_id);
-            int32_t good_count = GoodCountForSchema(sim->schema_version);
+            int32_t good_count = CcGoodCountForSchema(sim->schema_version);
             for (int32_t good = 0; good < good_count; ++good) {
                 HASH_VALUE(dragon->hoard_goods[good]);
             }
@@ -15478,7 +15636,7 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(campaign->cause_event_id);
         HASH_VALUE(campaign->days_remaining);
         HASH_VALUE(campaign->cooldown_days);
-        int32_t good_count = GoodCountForSchema(sim->schema_version);
+        int32_t good_count = CcGoodCountForSchema(sim->schema_version);
         for (int32_t good = 0; good < good_count; ++good) {
             HASH_VALUE(campaign->supplies[good]);
         }
@@ -15849,7 +16007,7 @@ uint64_t CcSimHash(const CcSim *sim)
             }
         }
     }
-    int32_t player_good_count = GoodCountForSchema(sim->schema_version);
+    int32_t player_good_count = CcGoodCountForSchema(sim->schema_version);
     for (int32_t good = 0; good < player_good_count; ++good) {
         HASH_VALUE(sim->player.cargo[good]);
     }
