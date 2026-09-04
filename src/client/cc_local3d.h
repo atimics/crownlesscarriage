@@ -408,6 +408,8 @@ typedef struct CcLocalRendererStats {
     int32_t npc_skinned_meshes;
     int32_t creature_skin_updates;
     int32_t creature_skinned_meshes;
+    int32_t static_batch_draws;
+    int32_t static_batch_instances;
 } CcLocalRendererStats;
 
 

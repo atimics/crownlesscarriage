@@ -3585,7 +3585,7 @@ static Model BuildTreeCrownModel(TreeCrownShape shape)
     }
     UploadMesh(&mesh, false);
     Model model = LoadModelFromMesh(mesh);
-    ReleaseUploadedModelCpuData(&model);
+    /* Tree batches rebuild from these small CPU meshes when scenery changes. */
     return model;
 }
 
@@ -3629,7 +3629,7 @@ void CcLocalRendererInit(void)
     sphere_models.small = LoadModelFromMesh(GenMeshSphere(1.0f, 6, 8));
     sphere_models.character = LoadModelFromMesh(GenMeshSphere(1.0f, 8, 8));
     sphere_models.scenery = LoadModelFromMesh(GenMeshSphere(1.0f, 10, 12));
-    ReleaseUploadedModelCpuData(&sphere_models.small);
+    /* The small sphere also supplies tree shadows to the static batch. */
     ReleaseUploadedModelCpuData(&sphere_models.character);
     ReleaseUploadedModelCpuData(&sphere_models.scenery);
     sphere_models.ready = true;
@@ -3680,6 +3680,7 @@ void CcLocalRendererShutdown(void)
     OpenWorldRenderCacheClear();
     TerrainRenderCacheClear();
     TerrainDetailRenderCacheClear();
+    TreeSceneryBatchClear();
     UnloadModel(sphere_models.small);
     UnloadModel(sphere_models.character);
     UnloadModel(sphere_models.scenery);

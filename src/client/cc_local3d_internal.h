@@ -75,5 +75,7 @@ void CcLocalRendererRecordSkinUpdate(int32_t mesh_count);
 void CcLocalRendererRecordHeroSkinUpdate(int32_t mesh_count);
 void CcLocalRendererRecordNpcSkinUpdate(int32_t mesh_count);
 void CcLocalRendererRecordCreatureSkinUpdate(int32_t mesh_count);
+void CcLocalRendererRecordStaticBatch(int32_t draw_count,
+                                      int32_t instance_count);
 
 #endif
