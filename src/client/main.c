@@ -9233,6 +9233,7 @@ int main(int argc, char **argv)
         }
         sim.player.map_catalogue_mask = catalogue_mask;
         sim.player.map_archive_mask = 0U;
+        CcSimInitializePlayerRouteKnowledge(&sim);
     }
     if (capture_underroad && sim.dungeon_count > 0) {
         sim.player.location_id = sim.dungeons[0].settlement_id;

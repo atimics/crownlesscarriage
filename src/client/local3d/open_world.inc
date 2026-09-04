@@ -283,7 +283,15 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
     const CcLocalPlaceProfile *profile =
         CcLocalPlaceProfileForSettlement(settlement);
     if (profile == NULL) return;
-    Color kingdom = KingdomColor3D(sim, settlement->kingdom_id);
+    CcId visible_kingdom_id = settlement->kingdom_id;
+    if (kingdom_view) {
+        CcId recorded_kingdom_id =
+            CcRoadBookSettlementKingdom(sim, settlement->id);
+        if (recorded_kingdom_id != 0U) {
+            visible_kingdom_id = recorded_kingdom_id;
+        }
+    }
+    Color kingdom = KingdomColor3D(sim, visible_kingdom_id);
     if (kingdom_view) {
         float ground = CcWorldTerrainHeight(
             active_world_stream != NULL ? &active_world_stream->manifest : NULL,
@@ -312,7 +320,7 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
                 (Vector3){1.95f * scale, 2.25f * scale, 0.24f * scale},
                 WORLD_ROAD_SHADOW);
         DrawHeraldryBanner3D(
-            CcHeraldryForKingdom(sim, settlement->kingdom_id), center,
+            CcHeraldryForKingdom(sim, visible_kingdom_id), center,
             0.0f, 1.48f * scale, 0.0f);
         return;
     }
@@ -599,12 +607,13 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
         if (route == NULL ||
             !OpenWorldReadRouteView(
                 sim, placement, carriage, &visibility)) continue;
-        Color road = route->closed ? WORLD_DANGER :
-                     route->smuggler_route ? WORLD_VIOLET :
-                                             WORLD_ROAD_LIGHT;
+        Color road = visibility.recorded_closed ? WORLD_DANGER :
+                     visibility.recorded_smuggler_route ? WORLD_VIOLET :
+                                                               WORLD_ROAD_LIGHT;
         for (int32_t sample = CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE;
              sample < CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE; ++sample) {
-            if (route->smuggler_route && (sample & 1) != 0) continue;
+            if (visibility.recorded_smuggler_route &&
+                (sample & 1) != 0) continue;
             float segment_from =
                 CcWorldRouteSampleAmount(placement, sample);
             float segment_to =
@@ -806,7 +815,8 @@ static void DrawOpenWorldSites(const CcSim *sim,
 {
     for (int32_t i = 0; i < manifest->site_count; ++i) {
         const CcWorldSitePlacement *site = &manifest->sites[i];
-        if (!OpenWorldSettlementRevealed(sim, site->settlement_id)) continue;
+        if (!CcSimPlayerKnowsRoadBookSite(
+                sim, (CcRoadBookSiteKind)site->kind)) continue;
         float dx = site->position.x - focus.x;
         float dz = site->position.z - focus.z;
         if (!kingdom_view && dx * dx + dz * dz > 74.0f * 74.0f) continue;

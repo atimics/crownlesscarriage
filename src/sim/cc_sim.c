@@ -701,10 +701,13 @@ static void CompactEventLedger(CcSim *sim, CcId incoming_parent)
     sim->event_write_index = sim->event_count;
 }
 
+static void LearnPlayerKnowledgeFromEvent(
+    CcSim *sim, const CcEvent *event, CcPlayerKnowledgeSource source);
+
 /* The fixed event ledger always has a writable slot. Insertion returns it. */
-static CcEvent *PushEvent(CcSim *sim, CcEventKind kind, CcId subject,
-                          CcId location, CcId parent, int32_t magnitude,
-                          const char *text)
+static CcEvent *PushEventRecord(CcSim *sim, CcEventKind kind, CcId subject,
+                                CcId location, CcId parent,
+                                int32_t magnitude, const char *text)
 {
     CompactEventLedger(sim, parent);
     if (parent != 0U && CcSimEvent(sim, parent) == NULL) parent = 0U;
@@ -724,18 +727,34 @@ static CcEvent *PushEvent(CcSim *sim, CcEventKind kind, CcId subject,
     return event;
 }
 
+static CcEvent *PushEvent(CcSim *sim, CcEventKind kind, CcId subject,
+                          CcId location, CcId parent, int32_t magnitude,
+                          const char *text)
+{
+    CcEvent *event = PushEventRecord(
+        sim, kind, subject, location, parent, magnitude, text);
+    LearnPlayerKnowledgeFromEvent(
+        sim, event, CC_PLAYER_KNOWLEDGE_EVENT);
+    return event;
+}
+
 static CcEvent *PushSocialEvent(CcSim *sim, CcEventKind kind, CcId subject,
                                 CcId location, CcId parent,
                                 CcId actor, CcId target,
                                 CcId beneficiary, CcId witness,
                                 int32_t magnitude, const char *text)
 {
-    CcEvent *event = PushEvent(sim, kind, subject, location, parent,
-                               magnitude, text);
+    CcEvent *event = PushEventRecord(
+        sim, kind, subject, location, parent, magnitude, text);
     event->actor_id = actor;
     event->target_id = target;
     event->beneficiary_id = beneficiary;
     event->witness_id = witness;
+    LearnPlayerKnowledgeFromEvent(
+        sim, event,
+        kind == CC_EVENT_RUMOR_SHARED ? CC_PLAYER_KNOWLEDGE_RUMOR :
+        witness == sim->player.id ? CC_PLAYER_KNOWLEDGE_WITNESS :
+                                    CC_PLAYER_KNOWLEDGE_EVENT);
     return event;
 }
 
@@ -2477,6 +2496,154 @@ const CcRouteKnowledge *CcSimPlayerRouteKnowledge(const CcSim *sim,
     return NULL;
 }
 
+const CcSettlementKnowledge *CcSimPlayerSettlementKnowledge(
+    const CcSim *sim, CcId settlement_id)
+{
+    if (sim == NULL || settlement_id == 0U) return NULL;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlementKnowledge *knowledge =
+            &sim->player.settlement_knowledge[i];
+        if (sim->settlements[i].id == settlement_id &&
+            knowledge->settlement_id == settlement_id &&
+            knowledge->source != CC_PLAYER_KNOWLEDGE_NONE) {
+            return knowledge;
+        }
+    }
+    return NULL;
+}
+
+static int32_t PlayerKnowledgeSourceRank(CcPlayerKnowledgeSource source)
+{
+    switch (source) {
+        case CC_PLAYER_KNOWLEDGE_TRAVEL: return 6;
+        case CC_PLAYER_KNOWLEDGE_WITNESS: return 5;
+        case CC_PLAYER_KNOWLEDGE_EVENT: return 4;
+        case CC_PLAYER_KNOWLEDGE_RUMOR: return 3;
+        case CC_PLAYER_KNOWLEDGE_CHART: return 2;
+        case CC_PLAYER_KNOWLEDGE_LEGACY: return 1;
+        case CC_PLAYER_KNOWLEDGE_NONE: return 0;
+    }
+    return 0;
+}
+
+static bool PlayerKnowledgeIsNewer(
+    int32_t day, CcPlayerKnowledgeSource source,
+    int32_t known_day, CcPlayerKnowledgeSource known_source)
+{
+    return known_source == CC_PLAYER_KNOWLEDGE_NONE ||
+        day > known_day ||
+        (day == known_day &&
+         PlayerKnowledgeSourceRank(source) >=
+             PlayerKnowledgeSourceRank(known_source));
+}
+
+static void LearnSettlementKnowledge(CcSim *sim, CcId settlement_id,
+                                     CcId kingdom_id, int32_t day,
+                                     CcPlayerKnowledgeSource source)
+{
+    if (sim == NULL || source == CC_PLAYER_KNOWLEDGE_NONE ||
+        CcIdKind(kingdom_id) != CC_ENTITY_KINGDOM) return;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        if (sim->settlements[i].id != settlement_id) continue;
+        CcSettlementKnowledge *knowledge =
+            &sim->player.settlement_knowledge[i];
+        if (knowledge->settlement_id == 0U) {
+            knowledge->settlement_id = settlement_id;
+        }
+        if (!PlayerKnowledgeIsNewer(
+                day, source, knowledge->learned_day, knowledge->source)) {
+            return;
+        }
+        knowledge->kingdom_id = kingdom_id;
+        knowledge->learned_day = day;
+        knowledge->source = source;
+        return;
+    }
+}
+
+static void LearnCurrentSettlementKnowledge(
+    CcSim *sim, CcId settlement_id, CcPlayerKnowledgeSource source)
+{
+    const CcSettlement *settlement = CcSimSettlement(sim, settlement_id);
+    if (settlement == NULL) return;
+    LearnSettlementKnowledge(sim, settlement->id, settlement->kingdom_id,
+                             sim->current_day, source);
+}
+
+static void LearnRouteKnowledgeFacts(CcSim *sim, CcId route_id,
+                                     CcPlayerKnowledgeSource source)
+{
+    const CcRoute *route = CcSimRoute(sim, route_id);
+    CcRouteKnowledge *knowledge = PlayerRouteKnowledgeMutable(sim, route_id);
+    if (route == NULL || knowledge == NULL ||
+        source == CC_PLAYER_KNOWLEDGE_NONE ||
+        !PlayerKnowledgeIsNewer(
+            sim->current_day, source,
+            knowledge->learned_day, knowledge->source)) return;
+    knowledge->learned_day = sim->current_day;
+    knowledge->recorded_condition = route->condition;
+    knowledge->recorded_danger = CcSimRouteDanger(sim, route->id);
+    knowledge->source = source;
+    knowledge->recorded_closed = route->closed;
+    knowledge->recorded_smuggler_route = route->smuggler_route;
+}
+
+static void SnapshotMapWorldFacts(CcSim *sim, CcMap *map)
+{
+    const CcRoute *route = map != NULL ?
+        CcSimRoute(sim, map->route_id) : NULL;
+    const CcSettlement *from = route != NULL ?
+        CcSimSettlement(sim, route->from_id) : NULL;
+    const CcSettlement *to = route != NULL ?
+        CcSimSettlement(sim, route->to_id) : NULL;
+    if (route == NULL || from == NULL || to == NULL) return;
+    map->recorded_from_kingdom_id = from->kingdom_id;
+    map->recorded_to_kingdom_id = to->kingdom_id;
+    map->recorded_closed = route->closed;
+    map->recorded_smuggler_route = route->smuggler_route;
+}
+
+static void LearnMapKnowledge(CcSim *sim, const CcMap *map)
+{
+    const CcRoute *route = map != NULL ?
+        CcSimRoute(sim, map->route_id) : NULL;
+    if (route == NULL) return;
+    LearnSettlementKnowledge(
+        sim, route->from_id, map->recorded_from_kingdom_id,
+        map->surveyed_day, CC_PLAYER_KNOWLEDGE_CHART);
+    LearnSettlementKnowledge(
+        sim, route->to_id, map->recorded_to_kingdom_id,
+        map->surveyed_day, CC_PLAYER_KNOWLEDGE_CHART);
+}
+
+static void DiscoverRoadBookSitesAtSettlement(CcSim *sim,
+                                               CcId settlement_id)
+{
+    if (sim == NULL || settlement_id == 0U) return;
+    if (sim->dungeon_count > 0 &&
+        sim->dungeons[0].settlement_id == settlement_id) {
+        sim->player.road_book_site_discovery_mask |=
+            UINT32_C(1) << CC_ROAD_BOOK_SITE_UNDERROAD;
+    }
+    if (sim->goblins.lair_settlement_id == settlement_id) {
+        sim->player.road_book_site_discovery_mask |=
+            UINT32_C(1) << CC_ROAD_BOOK_SITE_GOBLIN_TRAIL;
+    }
+    if (sim->dragon.lair_settlement_id == settlement_id) {
+        sim->player.road_book_site_discovery_mask |=
+            UINT32_C(1) << CC_ROAD_BOOK_SITE_DRAGON_ROOST;
+    }
+}
+
+bool CcSimPlayerKnowsRoadBookSite(const CcSim *sim,
+                                  CcRoadBookSiteKind kind)
+{
+    return sim != NULL && kind >= CC_ROAD_BOOK_SITE_UNDERROAD &&
+        kind < CC_ROAD_BOOK_SITE_COUNT &&
+        (sim->player.road_book_site_discovery_mask &
+         (UINT32_C(1) << (uint32_t)kind)) != 0U;
+}
+
 static void NormalizeRouteKnowledge(CcRouteKnowledge *knowledge)
 {
     if (knowledge == NULL) return;
@@ -2507,11 +2674,18 @@ static void RevealRouteFromAnchor(CcSim *sim, const CcRoute *route,
             knowledge->to_reveal_milli, amount_milli);
     }
     NormalizeRouteKnowledge(knowledge);
+    LearnRouteKnowledgeFacts(
+        sim, route->id, CC_PLAYER_KNOWLEDGE_TRAVEL);
+    LearnCurrentSettlementKnowledge(
+        sim, anchor_id, CC_PLAYER_KNOWLEDGE_TRAVEL);
 }
 
 static void RevealSettlementRoadAnchors(CcSim *sim, CcId settlement_id)
 {
     if (sim == NULL || settlement_id == 0U) return;
+    LearnCurrentSettlementKnowledge(
+        sim, settlement_id, CC_PLAYER_KNOWLEDGE_TRAVEL);
+    DiscoverRoadBookSitesAtSettlement(sim, settlement_id);
     for (int32_t i = 0; i < sim->route_count; ++i) {
         CcRoute *route = &sim->routes[i];
         if (route->from_id == settlement_id ||
@@ -2541,6 +2715,8 @@ static void RevealCompleteRoute(CcSim *sim, CcId route_id)
     if (knowledge == NULL) return;
     knowledge->from_reveal_milli = CC_ROUTE_FULL_REVEAL_MILLI;
     knowledge->to_reveal_milli = CC_ROUTE_FULL_REVEAL_MILLI;
+    LearnRouteKnowledgeFacts(
+        sim, route_id, CC_PLAYER_KNOWLEDGE_TRAVEL);
 }
 
 static bool PlayerOwnsCataloguedRouteMap(const CcSim *sim, CcId route_id)
@@ -2590,19 +2766,8 @@ bool CcSimPlayerRouteReveal(const CcSim *sim, CcId route_id,
 bool CcSimPlayerKnowsSettlement(const CcSim *sim, CcId settlement_id)
 {
     if (CcSimSettlement(sim, settlement_id) == NULL) return false;
-    if (settlement_id == sim->player.location_id) return true;
-    for (int32_t i = 0; i < sim->route_count; ++i) {
-        const CcRoute *route = &sim->routes[i];
-        int32_t from = 0;
-        int32_t to = 0;
-        if (!CcSimPlayerRouteReveal(
-                sim, route->id, &from, &to, NULL)) continue;
-        if (route->from_id == settlement_id &&
-            (from > 0 || to >= CC_ROUTE_FULL_REVEAL_MILLI)) return true;
-        if (route->to_id == settlement_id &&
-            (to > 0 || from >= CC_ROUTE_FULL_REVEAL_MILLI)) return true;
-    }
-    return false;
+    return settlement_id == sim->player.location_id ||
+        CcSimPlayerSettlementKnowledge(sim, settlement_id) != NULL;
 }
 
 void CcSimInitializePlayerRouteKnowledge(CcSim *sim)
@@ -2610,13 +2775,126 @@ void CcSimInitializePlayerRouteKnowledge(CcSim *sim)
     if (sim == NULL) return;
     (void)memset(sim->player.route_knowledge, 0,
                  sizeof(sim->player.route_knowledge));
+    (void)memset(sim->player.settlement_knowledge, 0,
+                 sizeof(sim->player.settlement_knowledge));
+    sim->player.road_book_site_discovery_mask = 0U;
     for (int32_t i = 0; i < sim->route_count; ++i) {
         sim->player.route_knowledge[i].route_id = sim->routes[i].id;
+    }
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        sim->player.settlement_knowledge[i].settlement_id =
+            sim->settlements[i].id;
+    }
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        CcMap *map = &sim->maps[i];
+        if (map->recorded_from_kingdom_id == 0U ||
+            map->recorded_to_kingdom_id == 0U) {
+            SnapshotMapWorldFacts(sim, map);
+        }
+        if (map->owner_id == sim->player.id &&
+            CcSimMapIsCatalogued(sim, map)) {
+            LearnMapKnowledge(sim, map);
+        }
     }
     RevealSettlementRoadAnchors(sim, sim->player.location_id);
     if (sim->journey.active) {
         RevealSettlementRoadAnchors(sim, sim->journey.origin_id);
         RevealJourneyRoad(sim);
+    }
+}
+
+void CcSimUpgradePlayerKnowledge(CcSim *sim)
+{
+    if (sim == NULL) return;
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        CcMap *map = &sim->maps[i];
+        if (map->recorded_from_kingdom_id == 0U ||
+            map->recorded_to_kingdom_id == 0U) {
+            SnapshotMapWorldFacts(sim, map);
+        }
+    }
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        CcRouteKnowledge *knowledge = &sim->player.route_knowledge[i];
+        if (knowledge->route_id == 0U) {
+            knowledge->route_id = sim->routes[i].id;
+        }
+        if (knowledge->source == CC_PLAYER_KNOWLEDGE_NONE &&
+            (knowledge->from_reveal_milli > 0 ||
+             knowledge->to_reveal_milli > 0)) {
+            LearnRouteKnowledgeFacts(
+                sim, knowledge->route_id, CC_PLAYER_KNOWLEDGE_LEGACY);
+        }
+    }
+    (void)memset(sim->player.settlement_knowledge, 0,
+                 sizeof(sim->player.settlement_knowledge));
+    sim->player.road_book_site_discovery_mask = 0U;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        sim->player.settlement_knowledge[i].settlement_id =
+            sim->settlements[i].id;
+    }
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        const CcMap *map = &sim->maps[i];
+        if (map->owner_id == sim->player.id &&
+            CcSimMapIsCatalogued(sim, map)) {
+            LearnMapKnowledge(sim, map);
+        }
+    }
+    LearnCurrentSettlementKnowledge(
+        sim, sim->player.location_id, CC_PLAYER_KNOWLEDGE_LEGACY);
+    DiscoverRoadBookSitesAtSettlement(sim, sim->player.location_id);
+    if (sim->journey.active) {
+        LearnCurrentSettlementKnowledge(
+            sim, sim->journey.origin_id, CC_PLAYER_KNOWLEDGE_LEGACY);
+        DiscoverRoadBookSitesAtSettlement(sim, sim->journey.origin_id);
+    }
+}
+
+static bool RouteTouchesSettlement(const CcSim *sim, CcId route_id,
+                                   CcId settlement_id)
+{
+    const CcRoute *route = CcSimRoute(sim, route_id);
+    return route != NULL && (route->from_id == settlement_id ||
+                             route->to_id == settlement_id);
+}
+
+static void LearnPlayerKnowledgeFromEvent(
+    CcSim *sim, const CcEvent *event, CcPlayerKnowledgeSource source)
+{
+    if (sim == NULL || event == NULL || sim->player.id == 0U) return;
+    bool participant = event->actor_id == sim->player.id ||
+        event->target_id == sim->player.id ||
+        event->beneficiary_id == sim->player.id ||
+        event->witness_id == sim->player.id;
+    bool local = event->location_id == sim->player.location_id ||
+        (CcIdKind(event->location_id) == CC_ENTITY_ROUTE &&
+         RouteTouchesSettlement(
+             sim, event->location_id, sim->player.location_id)) ||
+        (CcIdKind(event->subject_id) == CC_ENTITY_ROUTE &&
+         RouteTouchesSettlement(
+             sim, event->subject_id, sim->player.location_id));
+    if (!participant && !local) return;
+
+    if (CcIdKind(event->subject_id) == CC_ENTITY_ROUTE) {
+        LearnRouteKnowledgeFacts(sim, event->subject_id, source);
+    }
+    if (CcIdKind(event->location_id) == CC_ENTITY_ROUTE) {
+        LearnRouteKnowledgeFacts(sim, event->location_id, source);
+    }
+    if (CcIdKind(event->subject_id) == CC_ENTITY_SETTLEMENT) {
+        LearnCurrentSettlementKnowledge(sim, event->subject_id, source);
+    }
+    if (CcIdKind(event->location_id) == CC_ENTITY_SETTLEMENT) {
+        LearnCurrentSettlementKnowledge(sim, event->location_id, source);
+    }
+    if (event->subject_id == sim->goblins.id) {
+        sim->player.road_book_site_discovery_mask |=
+            UINT32_C(1) << CC_ROAD_BOOK_SITE_GOBLIN_TRAIL;
+    } else if (event->subject_id == sim->dragon.id) {
+        sim->player.road_book_site_discovery_mask |=
+            UINT32_C(1) << CC_ROAD_BOOK_SITE_DRAGON_ROOST;
+    } else if (CcIdKind(event->subject_id) == CC_ENTITY_DUNGEON) {
+        sim->player.road_book_site_discovery_mask |=
+            UINT32_C(1) << CC_ROAD_BOOK_SITE_UNDERROAD;
     }
 }
 
@@ -3268,6 +3546,10 @@ void CcSimUpgradeMapCollection(CcSim *sim)
             map->contraband = seed->contraband;
         }
         map->route_id = route->id;
+        if (map->recorded_from_kingdom_id == 0U ||
+            map->recorded_to_kingdom_id == 0U) {
+            SnapshotMapWorldFacts(sim, map);
+        }
         map->maker_settlement_id = sim->settlements[seed->maker_slot].id;
         (void)snprintf(map->name, sizeof(map->name), "%s", seed->name);
     }
@@ -11335,6 +11617,7 @@ static void UnlockCrownlessAtlas(CcSim *sim)
     atlas->owner_id = sim->player.id;
     sim->player.map_catalogue_mask |= atlas_bit;
     sim->player.map_archive_mask |= atlas_bit;
+    LearnMapKnowledge(sim, atlas);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
                    "The Gloamgate archive binds twelve collected charts into %s.",
@@ -11368,6 +11651,7 @@ static bool ApplyBuyMap(CcSim *sim, const CcCommand *command,
     int32_t slot = MapSlot(sim, map);
     sim->player.map_catalogue_mask |= MapSlotBit(slot);
     sim->player.map_archive_mask &= ~MapSlotBit(slot);
+    LearnMapKnowledge(sim, map);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
                    "The Crownless company buys %s at %s for %d crowns.",
@@ -14825,7 +15109,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 29U ||
                          sim->schema_version == 30U ||
                          sim->schema_version == 31U ||
-                         sim->schema_version == 32U;
+                         sim->schema_version == 32U ||
+                         sim->schema_version == 33U;
     /* Older saves carry authoritative settlement coordinates while their
        economies and road districts are upgraded. */
     bool supported_generator =
@@ -14833,6 +15118,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 33U && sim->generator_version == 25U) ||
         (sim->schema_version == 32U && sim->generator_version == 25U) ||
         (sim->schema_version == 31U && sim->generator_version == 24U) ||
         (sim->schema_version == 27U && sim->generator_version == 21U) ||
@@ -15162,7 +15448,20 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 knowledge->to_reveal_milli < 0 ||
                 knowledge->to_reveal_milli >
                     CC_ROUTE_FULL_REVEAL_MILLI ||
-                overlapping_fragments) {
+                overlapping_fragments ||
+                knowledge->source < CC_PLAYER_KNOWLEDGE_NONE ||
+                knowledge->source > CC_PLAYER_KNOWLEDGE_LEGACY ||
+                (knowledge->source == CC_PLAYER_KNOWLEDGE_NONE &&
+                 (knowledge->learned_day != 0 ||
+                  knowledge->recorded_condition != 0 ||
+                  knowledge->recorded_danger != 0)) ||
+                (knowledge->source != CC_PLAYER_KNOWLEDGE_NONE &&
+                 (knowledge->learned_day < 1 ||
+                  knowledge->learned_day > sim->current_day ||
+                  knowledge->recorded_condition < 0 ||
+                  knowledge->recorded_condition > 100 ||
+                  knowledge->recorded_danger < 0 ||
+                  knowledge->recorded_danger > 100))) {
                 SetError(error, error_capacity,
                          "Player route knowledge is invalid.");
                 return false;
@@ -15232,8 +15531,40 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             SetError(error, error_capacity, "Physical map data is invalid.");
             return false;
         }
+        if (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+            (KingdomSlotById(sim, map->recorded_from_kingdom_id) < 0 ||
+             KingdomSlotById(sim, map->recorded_to_kingdom_id) < 0)) {
+            SetError(error, error_capacity,
+                     "Physical map knowledge is invalid.");
+            return false;
+        }
     }
     if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+        uint32_t known_sites =
+            (UINT32_C(1) << CC_ROAD_BOOK_SITE_COUNT) - 1U;
+        if ((sim->player.road_book_site_discovery_mask & ~known_sites) != 0U) {
+            SetError(error, error_capacity,
+                     "Road-book site knowledge is invalid.");
+            return false;
+        }
+        for (int32_t i = 0; i < sim->settlement_count; ++i) {
+            const CcSettlementKnowledge *knowledge =
+                &sim->player.settlement_knowledge[i];
+            bool unknown = knowledge->source == CC_PLAYER_KNOWLEDGE_NONE;
+            if (knowledge->settlement_id != sim->settlements[i].id ||
+                knowledge->source < CC_PLAYER_KNOWLEDGE_NONE ||
+                knowledge->source > CC_PLAYER_KNOWLEDGE_LEGACY ||
+                (unknown && (knowledge->kingdom_id != 0U ||
+                             knowledge->learned_day != 0)) ||
+                (!unknown &&
+                 (KingdomSlotById(sim, knowledge->kingdom_id) < 0 ||
+                  knowledge->learned_day < -CC_SIM_MAX_DAY ||
+                  knowledge->learned_day > sim->current_day))) {
+                SetError(error, error_capacity,
+                         "Settlement knowledge is invalid.");
+                return false;
+            }
+        }
         uint32_t known_maps =
             (UINT32_C(1) << CC_MAP_COLLECTION_COUNT) - 1U;
         if ((sim->player.map_catalogue_mask & ~known_maps) != 0U ||
@@ -16648,6 +16979,12 @@ uint64_t CcSimHash(const CcSim *sim)
         hash = HashString(hash, item->name);
         HASH_VALUE(item->surveyed_day); HASH_VALUE(item->accuracy);
         HASH_VALUE(item->recorded_condition); HASH_VALUE(item->recorded_danger);
+        if (sim->schema_version >= 34U) {
+            HASH_VALUE(item->recorded_from_kingdom_id);
+            HASH_VALUE(item->recorded_to_kingdom_id);
+            HASH_VALUE(item->recorded_closed);
+            HASH_VALUE(item->recorded_smuggler_route);
+        }
         HASH_VALUE(item->ask_price); HASH_VALUE(item->contraband);
     }
     if (sim->schema_version >= 9U) {
@@ -17041,6 +17378,25 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(knowledge->route_id);
             HASH_VALUE(knowledge->from_reveal_milli);
             HASH_VALUE(knowledge->to_reveal_milli);
+            if (sim->schema_version >= 34U) {
+                HASH_VALUE(knowledge->learned_day);
+                HASH_VALUE(knowledge->recorded_condition);
+                HASH_VALUE(knowledge->recorded_danger);
+                HASH_VALUE(knowledge->source);
+                HASH_VALUE(knowledge->recorded_closed);
+                HASH_VALUE(knowledge->recorded_smuggler_route);
+            }
+        }
+    }
+    if (sim->schema_version >= 34U) {
+        HASH_VALUE(sim->player.road_book_site_discovery_mask);
+        for (int32_t i = 0; i < sim->settlement_count; ++i) {
+            const CcSettlementKnowledge *knowledge =
+                &sim->player.settlement_knowledge[i];
+            HASH_VALUE(knowledge->settlement_id);
+            HASH_VALUE(knowledge->kingdom_id);
+            HASH_VALUE(knowledge->learned_day);
+            HASH_VALUE(knowledge->source);
         }
     }
     if (sim->schema_version >= 14U) {

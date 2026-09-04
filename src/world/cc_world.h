@@ -31,9 +31,9 @@ typedef struct CcWorldPoint {
 } CcWorldPoint;
 
 typedef enum CcWorldSiteKind {
-    CC_WORLD_SITE_UNDERROAD = 0,
-    CC_WORLD_SITE_GOBLIN_TRAIL,
-    CC_WORLD_SITE_DRAGON_ROOST
+    CC_WORLD_SITE_UNDERROAD = CC_ROAD_BOOK_SITE_UNDERROAD,
+    CC_WORLD_SITE_GOBLIN_TRAIL = CC_ROAD_BOOK_SITE_GOBLIN_TRAIL,
+    CC_WORLD_SITE_DRAGON_ROOST = CC_ROAD_BOOK_SITE_DRAGON_ROOST
 } CcWorldSiteKind;
 
 typedef struct CcWorldSettlementPlacement {
