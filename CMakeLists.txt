@@ -265,7 +265,9 @@ if(CC_BUILD_CLIENT)
     )
     cc_strict_warnings(crownless_local_renderer)
 
-    add_executable(crownless_carriage src/client/main.c)
+    add_executable(crownless_carriage src/client/main.c src/client/cc_music_player.c)
+    target_compile_definitions(crownless_carriage PRIVATE
+        CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
     if(APPLE)
         set_target_properties(crownless_carriage PROPERTIES
             MACOSX_BUNDLE TRUE
@@ -280,7 +282,7 @@ if(CC_BUILD_CLIENT)
         crownless_persistence crownless_locomotion
         crownless_creature_catalog crownless_local_place
         crownless_client_session crownless_client_policy crownless_story
-        crownless_world
+        crownless_world crownless_music
         raylib
     )
     if(NOT EMSCRIPTEN)
@@ -933,6 +935,9 @@ if(BUILD_TESTING)
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
     if(CC_PYTHON3_EXECUTABLE)
+        add_test(NAME music_catalog_metadata
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/music_catalog.py --check)
         add_test(NAME webgl2_skinning_uniform_budget
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_uniform_budget_tests.py)

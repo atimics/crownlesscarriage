@@ -57,6 +57,8 @@ int main(void)
     CcMusicContext named = context;
     CcMusicAttractPlace(&named, "Stag's Mill", 1.0f);
     CHECK(CcMusicScore(&named, 8) > CcMusicScore(&context, 8));
+    CcMusicAttractPlace(&named, "Flooded Turntable", 1.0f);
+    CHECK(named.cue[39] == 1.0f);
     CHECK(CcMusicScore(&context, 52) == 0.0f); /* Dragon combat waits for its context. */
     CHECK(CcMusicScore(&context, 62) == 0.0f);
     context.theme[CC_MUSIC_TRAVEL] = NAN;
@@ -123,6 +125,59 @@ int main(void)
     CHECK(memcmp(&before, &director, sizeof(director)) == 0);
     CcMusicUpdate(&director, &context, 0.0f);
     CHECK(memcmp(&before, &director, sizeof(director)) == 0);
+
+    /* Regional draw probabilities follow travel position. */
+    sim.journey.origin_id = from_id; sim.journey.destination_id = to_id;
+    for (int stage = 0; stage < 3; ++stage) {
+        sim.carriage.progress_milli = stage * 500;
+        CcMusicContext travel = CcMusicContextFor(&sim, road);
+        CcMusicDirector sample;
+        CcMusicInit(&sample, 91);
+        sample.available[TakeFor(7, 1)] = true;
+        sample.available[TakeFor(11, 1)] = true;
+        int farming = 0;
+        for (int draw = 0; draw < 2000; ++draw) {
+            int choice = CcMusicChoose(&sample, &travel);
+            CHECK(choice >= 0);
+            if (cc_music_takes[choice].cue == 6) farming += 1;
+        }
+        if (stage == 0) CHECK(farming > 1950);
+        if (stage == 1) CHECK(farming > 900 && farming < 1100);
+        if (stage == 2) CHECK(farming < 50);
+    }
+
+    /* Extra alternates keep the title's probability stable. */
+    CcMusicDirector few, many;
+    CcMusicInit(&few, 212); CcMusicInit(&many, 212);
+    few.available[TakeFor(2, 1)] = many.available[TakeFor(2, 1)] = true;
+    few.available[TakeFor(3, 1)] = true;
+    for (int variant = 1; variant <= 6; ++variant)
+        many.available[TakeFor(3, variant)] = true;
+    for (int draw = 0; draw < 2000; ++draw) {
+        int first_choice = CcMusicChoose(&few, &context);
+        int second_choice = CcMusicChoose(&many, &context);
+        CHECK(first_choice >= 0 && second_choice >= 0);
+        CHECK(cc_music_takes[first_choice].cue == cc_music_takes[second_choice].cue);
+    }
+
+    CcMusicInit(&director, 17);
+    director.available[calm_a] = true;
+    Advance(&director, &context, 300);
+    CcMusicContext battle_with_travel = battle;
+    battle_with_travel.theme[CC_MUSIC_TRAVEL] = 1.0f;
+    Advance(&director, &battle_with_travel, 300);
+    CHECK(director.voice[director.target_voice].take == calm_a);
+    CHECK(director.voice[director.target_voice].age > 9.0f);
+    director.available[calm_a] = false;
+    Advance(&director, &battle_with_travel, 300);
+    for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i) CHECK(director.voice[i].take == -1);
+
+    sim.dungeon_expedition = (CcDungeonExpedition){.active = true,
+        .dungeon_id = sim.dungeons[0].id, .current_room = 6};
+    uint64_t sim_hash = CcSimHash(&sim);
+    CcMusicContext room = CcMusicContextFor(&sim, (CcMusicScene){0});
+    CHECK(room.cue[39] == 1.0f && room.theme[CC_MUSIC_FLOOD] > 0.8f);
+    CHECK(CcSimHash(&sim) == sim_hash);
 
     puts("Music: regional blends, named places, shuffle, combat and interrupted fades passed.");
     return 0;

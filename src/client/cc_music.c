@@ -1,6 +1,7 @@
 #include "client/cc_music.h"
 
 #include <math.h>
+#include <ctype.h>
 #include <string.h>
 
 #include "client/cc_music_catalog.inc"
@@ -10,12 +11,23 @@ static float Unit(float value)
     return isfinite(value) ? fminf(1.0f, fmaxf(0.0f, value)) : 0.0f;
 }
 
+static bool SamePlace(const char *left, const char *right)
+{
+    if (strncmp(left, "The ", 4) == 0) left += 4;
+    if (strncmp(right, "The ", 4) == 0) right += 4;
+    while (*left != '\0' && *right != '\0') {
+        if (tolower((unsigned char)*left++) != tolower((unsigned char)*right++))
+            return false;
+    }
+    return *left == *right;
+}
+
 void CcMusicAttractPlace(CcMusicContext *context, const char *name, float weight)
 {
     if (context == NULL || name == NULL || name[0] == '\0') return;
     for (int i = 0; i < CC_MUSIC_CUE_COUNT; ++i) {
         const char *place = cc_music_cues[i].place;
-        if (place[0] != '\0' && strcmp(place, name) == 0) {
+        if (place[0] != '\0' && SamePlace(place, name)) {
             context->cue[i] = fmaxf(context->cue[i], Unit(weight));
         }
     }
@@ -99,6 +111,12 @@ CcMusicContext CcMusicContextFor(const CcSim *sim, CcMusicScene scene)
         context.theme[CC_MUSIC_TOWN] = 0.0f;
         context.theme[CC_MUSIC_TRAVEL] = 0.0f;
         context.theme[scene.goblin_cave ? CC_MUSIC_GOBLIN : CC_MUSIC_DRAGON] = 1.0f;
+        if (scene.goblin_cave) CcMusicAttractPlace(&context, sim->goblins.name, 0.5f);
+        if (scene.dragon_cave && !sim->dragon.slain &&
+            sim->dragon.activity == CC_DRAGON_ACTIVITY_RETALIATING) {
+            context.combat = true;
+            context.theme[CC_MUSIC_COMBAT] = 1.0f;
+        }
     }
     if ((int)scene.nearby_theme > CC_MUSIC_NONE &&
         scene.nearby_theme < CC_MUSIC_THEME_COUNT) {
@@ -270,12 +288,19 @@ void CcMusicUpdate(CcMusicDirector *director, const CcMusicContext *context,
     float fade = 12.0f;
     if (current != NULL && current->take >= 0) {
         int cue = cc_music_takes[current->take].cue;
-        bool combat_change = effective.combat != cc_music_cues[cue].combat;
         float score = CcMusicScore(&effective, cue);
         float best = 0.0f;
-        for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i)
-            if (director->available[i])
-                best = fmaxf(best, CcMusicScore(&effective, cc_music_takes[i].cue));
+        bool combat_available = false;
+        for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i) {
+            if (!director->available[i]) continue;
+            int candidate = cc_music_takes[i].cue;
+            float candidate_score = CcMusicScore(&effective, candidate);
+            best = fmaxf(best, candidate_score);
+            if (cc_music_cues[candidate].combat && candidate_score > 0.0f)
+                combat_available = true;
+        }
+        bool combat_change = (effective.combat && combat_available) !=
+            cc_music_cues[cue].combat;
         bool near_end = current->age >= director->duration[current->take] - 8.0f;
         change = combat_change || !director->available[current->take] ||
             near_end || (current->age >= 25.0f && score < best * 0.55f);
@@ -285,7 +310,19 @@ void CcMusicUpdate(CcMusicDirector *director, const CcMusicContext *context,
     }
     if (!change) return;
     int take = CcMusicChoose(director, &effective);
-    if (take < 0) return;
+    if (take < 0) {
+        if (current != NULL) {
+            for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i) {
+                CcMusicVoice *voice = &director->voice[i];
+                voice->from_power = voice->gain * voice->gain;
+                voice->target_power = 0.0f;
+            }
+            director->target_voice = -1;
+            director->fade_age = 0.0f;
+            director->fade_seconds = 4.0f;
+        }
+        return;
+    }
     if (current != NULL && current->take == take) {
         if (current->age >= director->duration[take] - 8.0f)
             current->age = 0.0f; /* A single installed take can loop. */
