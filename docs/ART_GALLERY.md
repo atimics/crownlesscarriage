@@ -22,3 +22,12 @@ request or release when they help review an art change.
 ## World kit
 
 ![Current world-kit silhouettes](images/world-kit-silhouettes.png)
+
+## Economic props
+
+![Economic world sources and carried goods](images/economic-props-concept-v01.png)
+
+![Trade good icon concepts](images/economic-icons-concept-v01.png)
+
+See [the economic visual language](production/economic-visual-language.md) for
+the 3D, icon, palette, and world-state rules.
