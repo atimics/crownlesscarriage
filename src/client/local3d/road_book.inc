@@ -707,13 +707,9 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
             break;
         }
     }
-    bool crossing_gate = convoy != NULL &&
-        convoy->phase == CC_LOCAL_CONVOY_GATE;
     bool authored_checkpoint = !travelling &&
         runtime_assets[RUNTIME_ASSET_BRIDGE].ready;
-    float carriage_x = crossing_gate ?
-        15.50f + convoy->phase_progress * 4.65f :
-        CcLocalRoadCarriageX(sim->carriage.progress_milli);
+    float carriage_x = CcLocalRoadCarriageX(sim->carriage.progress_milli);
     float lateral_offset = convoy != NULL ? convoy->lateral_offset : 0.0f;
     float carriage_pace = travelling && convoy != NULL ?
         convoy->pace : travelling ? 0.72f : 0.0f;
@@ -936,15 +932,12 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                    route != NULL ? route->security : 0),
         destination, 18, 18, 10, parley ? WORLD_TEAL : WORLD_DANGER);
     DrawViewportText(
-        travelling ? crossing_gate ?
-        TextFormat("GATE TO ROAD / PACE %d%% / KEEP THE TEAM CENTERED",
-                   convoy != NULL ? (int32_t)lroundf(convoy->pace * 100.0f) :
-                                      100) :
-        TextFormat("%s / %d%% COMPLETE / %s PACE / ETA %dH",
-                   RoadJourneyBeatName(sim->carriage.progress_milli),
-                   sim->carriage.progress_milli / 10,
-                   CcJourneyPaceName(sim->journey.pace),
-                   (CcSimJourneyEtaMinutes(sim) + 59) / 60) : parley ?
+        travelling ?
+            TextFormat("%s / %d%% COMPLETE / %s PACE / ETA %dH",
+                       RoadJourneyBeatName(sim->carriage.progress_milli),
+                       sim->carriage.progress_milli / 10,
+                       CcJourneyPaceName(sim->journey.pace),
+                       (CcSimJourneyEtaMinutes(sim) + 59) / 60) : parley ?
         "PARLEY / approach the captain, then choose coin or needed supplies" :
         TextFormat("BREAK THE CORDON / YOU %d HP / COMPANY %d%% NERVE",
                    (int32_t)lroundf(agent->combat.health),
