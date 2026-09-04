@@ -924,6 +924,11 @@ if(BUILD_TESTING)
         add_test(NAME webgl2_skinning_uniform_budget
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_uniform_budget_tests.py)
+        add_test(NAME simulation_runner_resume
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/sim_runner_tests.py
+                         $<TARGET_FILE:crownless_sim_runner>)
+        set_tests_properties(simulation_runner_resume PROPERTIES TIMEOUT 60)
     endif()
 
     add_executable(client_policy_tests tests/client_policy_tests.c)
