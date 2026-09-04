@@ -176,7 +176,7 @@ int main(void)
     place->hunger = 50;
     CcSimAdvanceDays(&fed, 7);
     CC_CHECK(place->stock[CC_GOOD_FOOD] == 0);
-    CC_CHECK(place->hunger == 49);
+    CC_CHECK(place->hunger == 48);
 
     CcSim starving;
     place = IsolatedSettlement(&starving);

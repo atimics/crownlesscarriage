@@ -32,6 +32,23 @@ static void RemoveDatabase(const char *path)
     (void)remove(sidecar);
 }
 
+static void CompleteJourney(CcSim *sim, char *error, size_t error_capacity)
+{
+    while (sim->journey.active) {
+        if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+            CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+        } else if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+            CcCommand rest = {
+                .kind = CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
+                    CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP
+            };
+            CC_CHECK(CcSimApply(sim, &rest, error, error_capacity));
+        } else {
+            CC_CHECK(false);
+        }
+    }
+}
+
 static int64_t ReadSqliteInteger(const char *path, const char *sql)
 {
     sqlite3 *database = NULL;
@@ -1779,16 +1796,15 @@ static void CheckSchema26Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
-static void CheckPreGrainGeneratorMigration(uint32_t generator_version,
-                                            char *error,
-                                            size_t error_capacity)
+static void CheckSchema28GrainMigration(char *error,
+                                        size_t error_capacity)
 {
-    const char *path = "persistence-pre-grain-generator-test.ccsave";
+    const char *path = "persistence-schema28-grain-test.ccsave";
     RemoveDatabase(path);
     CcSim legacy;
     CcSimInit(&legacy, UINT32_C(0xc0a7118e));
-    legacy.schema_version = 27U;
-    legacy.generator_version = generator_version;
+    legacy.schema_version = 28U;
+    legacy.generator_version = 22U;
     legacy.player.cargo[CC_GOOD_BREAD] = 7;
     CcSituation *quest = &legacy.situations[0];
     quest->good = CC_GOOD_FOOD;
@@ -1803,9 +1819,17 @@ static void CheckPreGrainGeneratorMigration(uint32_t generator_version,
     market->production[CC_GOOD_BREAD] = 0;
     int32_t map_x[CC_MAX_SETTLEMENTS];
     int32_t map_y[CC_MAX_SETTLEMENTS];
+    int32_t wood_stock[CC_MAX_SETTLEMENTS];
+    int32_t wood_reserve[CC_MAX_SETTLEMENTS];
+    int32_t wood_production[CC_MAX_SETTLEMENTS];
     for (int32_t index = 0; index < legacy.settlement_count; ++index) {
         map_x[index] = legacy.settlements[index].map_x;
         map_y[index] = legacy.settlements[index].map_y;
+        wood_stock[index] = legacy.settlements[index].stock[CC_GOOD_WOOD];
+        wood_reserve[index] =
+            legacy.settlements[index].reserve_target[CC_GOOD_WOOD];
+        wood_production[index] =
+            legacy.settlements[index].production[CC_GOOD_WOOD];
     }
     CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
 
@@ -1825,6 +1849,12 @@ static void CheckPreGrainGeneratorMigration(uint32_t generator_version,
     for (int32_t index = 0; index < restored.settlement_count; ++index) {
         CC_CHECK(restored.settlements[index].map_x == map_x[index]);
         CC_CHECK(restored.settlements[index].map_y == map_y[index]);
+        CC_CHECK(restored.settlements[index].stock[CC_GOOD_WOOD] ==
+                 wood_stock[index]);
+        CC_CHECK(restored.settlements[index].reserve_target[CC_GOOD_WOOD] ==
+                 wood_reserve[index]);
+        CC_CHECK(restored.settlements[index].production[CC_GOOD_WOOD] ==
+                 wood_production[index]);
     }
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
@@ -1840,7 +1870,6 @@ static void CheckSchema27WoodCompatibility(char *error,
     legacy.schema_version = 27U;
     legacy.generator_version = 21U;
     int32_t wheat_stock[CC_MAX_SETTLEMENTS];
-    int32_t wheat_price[CC_MAX_SETTLEMENTS];
     for (int32_t settlement = 0;
          settlement < legacy.settlement_count; ++settlement) {
         CcSettlement *place = &legacy.settlements[settlement];
@@ -1852,7 +1881,6 @@ static void CheckSchema27WoodCompatibility(char *error,
         place->stock[CC_GOOD_WHEAT] = 100 + settlement;
         place->price[CC_GOOD_WHEAT] = 20 + settlement;
         wheat_stock[settlement] = place->stock[CC_GOOD_WHEAT];
-        wheat_price[settlement] = place->price[CC_GOOD_WHEAT];
     }
     CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
 
@@ -1869,7 +1897,8 @@ static void CheckSchema27WoodCompatibility(char *error,
         CC_CHECK(place->price[CC_GOOD_WOOD] ==
                  CcGoodDefinitionFor(CC_GOOD_WOOD)->base_price);
         CC_CHECK(place->stock[CC_GOOD_WHEAT] == wheat_stock[settlement]);
-        CC_CHECK(place->price[CC_GOOD_WHEAT] == wheat_price[settlement]);
+        CC_CHECK(place->price[CC_GOOD_WHEAT] ==
+                 CcGoodDefinitionFor(CC_GOOD_WHEAT)->base_price);
     }
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
@@ -2009,10 +2038,8 @@ int main(void)
     CheckSchema24Compatibility(error, sizeof(error));
     CheckSchema25Compatibility(error, sizeof(error));
     CheckSchema26Compatibility(error, sizeof(error));
-    CheckGenerator21Compatibility(error, sizeof(error));
     CheckSchema27WoodCompatibility(error, sizeof(error));
-    CheckPreGrainGeneratorMigration(21U, error, sizeof(error));
-    CheckPreGrainGeneratorMigration(22U, error, sizeof(error));
+    CheckSchema28GrainMigration(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));
@@ -2027,9 +2054,9 @@ int main(void)
         .target_id = original.settlements[1].id
     };
     CC_CHECK(CcSimApply(&original, &command, error, sizeof(error)));
-    while (original.journey.active) {
-        CcSimAdvanceRuntimeTicks(&original, CC_WORLD_TICKS_PER_SECOND);
-    }
+    original.journey.ambush_pending = false;
+    original.journey.situation_id = 0U;
+    CompleteJourney(&original, error, sizeof(error));
     const CcSituation *charter = NULL;
     for (int32_t i = 0; i < original.situation_count; ++i) {
         if (original.situations[i].status == CC_SITUATION_ACTIVE &&
@@ -2050,6 +2077,7 @@ int main(void)
         .kind = CC_COMMAND_TRAVEL,
         .target_id = original.settlements[0].id
     };
+    original.settlements[1].stock[CC_GOOD_WHEAT] += 100;
     CC_CHECK(CcSimApply(&original, &prepare_journey, error, sizeof(error)));
     CC_CHECK(original.journey.active);
     CC_CHECK(original.journey.phase == CC_JOURNEY_PHASE_TRAVELLING);

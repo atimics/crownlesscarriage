@@ -764,12 +764,13 @@ int32_t CcNutritionConsume(int32_t goods[CC_GOOD_COUNT],
         CC_GOOD_BREAD, CC_GOOD_MEAT, CC_GOOD_WHEAT
     };
     int32_t delivered = 0;
-    for (size_t i = 0; i < sizeof(order) / sizeof(order[0]); ++i) {
+    for (size_t i = 0;
+         i < sizeof(order) / sizeof(order[0]) &&
+         delivered < requested_nutrition; ++i) {
         CcGood good = order[i];
         int32_t value = CcGoodNutritionValue(good, purpose);
         if (value <= 0 || goods[good] <= 0) continue;
         int32_t remaining = requested_nutrition - delivered;
-        if (remaining <= 0) break;
         int32_t needed_units = (remaining + value - 1) / value;
         int32_t used = MinimumI32(goods[good], needed_units);
         goods[good] -= used;
@@ -3447,15 +3448,18 @@ void CcSimInit(CcSim *sim, uint32_t seed)
         {"Moss Compact", "Rose Dominion", "Silver Covenant"}
     };
     uint32_t name_set = NextRandom(sim) % 3U;
+    CcMoney treasury = 470 + (CcMoney)(NextRandom(sim) % 151U);
+    int32_t legitimacy = 55 + (int32_t)(NextRandom(sim) % 17U);
     InitKingdom(sim, 0, kingdom_sets[name_set][0], 54U, 173U, 146U,
-                470 + (CcMoney)(NextRandom(sim) % 151U),
-                55 + (int32_t)(NextRandom(sim) % 17U));
+                treasury, legitimacy);
+    treasury = 470 + (CcMoney)(NextRandom(sim) % 151U);
+    legitimacy = 48 + (int32_t)(NextRandom(sim) % 17U);
     InitKingdom(sim, 1, kingdom_sets[name_set][1], 210U, 101U, 71U,
-                470 + (CcMoney)(NextRandom(sim) % 151U),
-                48 + (int32_t)(NextRandom(sim) % 17U));
+                treasury, legitimacy);
+    treasury = 470 + (CcMoney)(NextRandom(sim) % 151U);
+    legitimacy = 58 + (int32_t)(NextRandom(sim) % 17U);
     InitKingdom(sim, 2, kingdom_sets[name_set][2], 102U, 123U, 205U,
-                470 + (CcMoney)(NextRandom(sim) % 151U),
-                58 + (int32_t)(NextRandom(sim) % 17U));
+                treasury, legitimacy);
     sim->kingdom_count = CC_MAX_KINGDOMS;
     for (int32_t first = 0; first < sim->kingdom_count; ++first) {
         for (int32_t second = 0; second < sim->kingdom_count; ++second) {
@@ -3535,10 +3539,10 @@ void CcSimInit(CcSim *sim, uint32_t seed)
                                  local == 1 ? " Factors" : " Commons";
             (void)snprintf(faction_name, sizeof(faction_name), "%.21s%s",
                            sim->kingdoms[kingdom].name, suffix);
+            int32_t power = 54 + (int32_t)(NextRandom(sim) % 25U);
+            int32_t support = 42 + (int32_t)(NextRandom(sim) % 31U);
             InitFaction(sim, slot, kingdom, (CcFactionKind)local,
-                        faction_name,
-                        54 + (int32_t)(NextRandom(sim) % 25U),
-                        42 + (int32_t)(NextRandom(sim) % 31U));
+                        faction_name, power, support);
         }
     }
     sim->faction_count = CC_MAX_FACTIONS;
@@ -4167,7 +4171,8 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
     int32_t food_unmet = MaximumI32(0, food_required - food_eaten);
     int32_t hunger_delta = food_unmet > 0 ?
         2 + food_unmet * 4 / food_required :
-        coverage >= 8 ? -4 : coverage >= 5 ? -2 : -1;
+        coverage >= 8 ? -6 : coverage >= 5 ? -4 : -2;
+    if (food_unmet == 0 && settlement->hunger < 50) hunger_delta -= 1;
     settlement->hunger = ClampI32(settlement->hunger + hunger_delta, 0, 100);
     if (CcSettlementHasService(settlement, CC_SERVICE_HEALER)) {
         settlement->hunger = ClampI32(settlement->hunger - 1, 0, 100);
