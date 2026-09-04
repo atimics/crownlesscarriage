@@ -1646,6 +1646,8 @@ static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
             colors[3] = (Color){72, 48, 38, 255};
             colors[4] = (Color){50, 37, 32, 255};
             colors[7] = (Color){128, 88, 52, 255};
+            colors[5] = (Color){224, 208, 172, 255};
+            colors[8] = (Color){12, 10, 9, 255};
             break;
         }
         case CC_CREATURE_COW: {
@@ -1657,6 +1659,7 @@ static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
             colors[3] = (Color){88, 70, 59, 255};
             colors[5] = (Color){205, 186, 143, 255};
             colors[7] = (Color){137, 85, 61, 255};
+            colors[8] = (Color){12, 10, 9, 255};
             break;
         }
         case CC_CREATURE_SHEEP:
