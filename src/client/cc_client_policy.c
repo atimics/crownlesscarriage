@@ -1,7 +1,114 @@
 #include "client/cc_client_policy.h"
 
+#include <errno.h>
 #include <math.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <string.h>
+
+#define CC_CLIENT_PREFERENCES_VERSION 1U
+
+static void SetPreferencesError(char *error, size_t capacity,
+                                const char *message)
+{
+    if (error == NULL || capacity == 0U) return;
+    (void)snprintf(error, capacity, "%s", message != NULL ? message : "");
+}
+
+void CcClientPreferencesDefault(CcClientPreferences *preferences)
+{
+    if (preferences == NULL) return;
+    *preferences = (CcClientPreferences){0};
+}
+
+bool CcClientPreferencesLoad(const char *path,
+                             CcClientPreferences *preferences,
+                             char *error, size_t error_capacity)
+{
+    if (path == NULL || path[0] == '\0' || preferences == NULL) {
+        SetPreferencesError(error, error_capacity,
+                            "Preferences path or output is missing.");
+        return false;
+    }
+    CcClientPreferencesDefault(preferences);
+    errno = 0;
+    FILE *file = fopen(path, "rb");
+    if (file == NULL) {
+        if (errno == ENOENT) {
+            SetPreferencesError(error, error_capacity, "");
+            return true;
+        }
+        SetPreferencesError(error, error_capacity,
+                            "Could not read client preferences.");
+        return false;
+    }
+    char marker[32] = "";
+    char setting[32] = "";
+    unsigned int version = 0U;
+    int reduced_motion = -1;
+    bool valid = fscanf(file, "%31s %u", marker, &version) == 2 &&
+        strcmp(marker, "CROWNLESS_PREFERENCES") == 0 &&
+        version == CC_CLIENT_PREFERENCES_VERSION &&
+        fscanf(file, "%31s %d", setting, &reduced_motion) == 2 &&
+        strcmp(setting, "reduced_motion") == 0 &&
+        (reduced_motion == 0 || reduced_motion == 1);
+    if (fclose(file) != 0) valid = false;
+    if (!valid) {
+        CcClientPreferencesDefault(preferences);
+        SetPreferencesError(error, error_capacity,
+                            "Client preferences are invalid.");
+        return false;
+    }
+    preferences->reduced_motion = reduced_motion != 0;
+    SetPreferencesError(error, error_capacity, "");
+    return true;
+}
+
+bool CcClientPreferencesSave(const char *path,
+                             const CcClientPreferences *preferences,
+                             char *error, size_t error_capacity)
+{
+    if (path == NULL || path[0] == '\0' || preferences == NULL) {
+        SetPreferencesError(error, error_capacity,
+                            "Preferences path or state is missing.");
+        return false;
+    }
+    char temporary[768];
+    int length = snprintf(temporary, sizeof(temporary), "%s.tmp", path);
+    if (length < 0 || (size_t)length >= sizeof(temporary)) {
+        SetPreferencesError(error, error_capacity,
+                            "Preferences path is too long.");
+        return false;
+    }
+    FILE *file = fopen(temporary, "wb");
+    if (file == NULL) {
+        SetPreferencesError(error, error_capacity,
+                            "Could not open client preferences for writing.");
+        return false;
+    }
+    bool saved = fprintf(file, "CROWNLESS_PREFERENCES %u\n"
+                               "reduced_motion %d\n",
+                         CC_CLIENT_PREFERENCES_VERSION,
+                         preferences->reduced_motion ? 1 : 0) > 0;
+    saved = saved && fflush(file) == 0;
+    if (fclose(file) != 0) saved = false;
+    if (saved && rename(temporary, path) != 0) saved = false;
+    if (!saved) {
+        (void)remove(temporary);
+        SetPreferencesError(error, error_capacity,
+                            "Could not commit client preferences.");
+        return false;
+    }
+    SetPreferencesError(error, error_capacity, "");
+    return true;
+}
+
+bool CcClientHitEffectVisible(bool reduced_motion,
+                              float hit_flash_seconds)
+{
+    return !reduced_motion && isfinite(hit_flash_seconds) &&
+           hit_flash_seconds > 0.0f;
+}
 
 static float ClampPace(float pace)
 {

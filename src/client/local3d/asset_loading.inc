@@ -3750,6 +3750,11 @@ void CcLocalRendererSetScreenFirstHero(bool enabled)
     screen_first_hero_requested = enabled;
 }
 
+void CcLocalRendererSetReducedMotion(bool enabled)
+{
+    reduced_motion_enabled = enabled;
+}
+
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step)
 {
     active_opening_step = step >= CC_LOCAL_OPENING_LEGACY &&
