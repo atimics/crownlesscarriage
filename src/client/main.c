@@ -9000,25 +9000,7 @@ static CcLocalAtmospherePreset LocalAtmosphereForSimulation(
 
 static Rectangle LocalViewportBounds(void)
 {
-    const float art_width = 630.0f;
-    const float art_height = 320.0f;
-    const float side_margin = 10.0f;
-    const float top_margin = 54.0f;
-    const float bottom_margin = 66.0f;
-    float available_width = (float)GetScreenWidth() - side_margin * 2.0f;
-    float available_height =
-        (float)GetScreenHeight() - top_margin - bottom_margin;
-    float available_scale = fminf(available_width / art_width,
-                                  available_height / art_height);
-    float scale = floorf(available_scale);
-
-    if (scale < 2.0f) scale = available_scale;
-    if (scale < 0.50f) scale = 0.50f;
-    float width = art_width * scale;
-    float height = art_height * scale;
-    return (Rectangle){((float)GetScreenWidth() - width) * 0.5f,
-                       top_margin + (available_height - height) * 0.5f,
-                       width, height};
+    return CcLocalViewportBounds(GetScreenWidth(), GetScreenHeight());
 }
 
 int main(int argc, char **argv)
@@ -9479,7 +9461,7 @@ int main(int argc, char **argv)
     if (map_textures.economic_goods.id != 0U) {
         SetTextureFilter(map_textures.economic_goods, TEXTURE_FILTER_POINT);
     }
-    RenderTexture2D local_target = LoadRenderTexture(630, 320);
+    RenderTexture2D local_target = LoadRenderTexture(CC_LOCAL_ART_WIDTH, CC_LOCAL_ART_HEIGHT);
     SetTextureFilter(local_target.texture, TEXTURE_FILTER_POINT);
     CcLocalRendererSetScreenFirstHero(screen_first_hero);
     CcLocalRendererInit();

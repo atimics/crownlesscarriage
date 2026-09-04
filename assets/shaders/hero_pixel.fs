@@ -14,6 +14,7 @@ uniform vec3 fogColor;
 uniform float fogNear;
 uniform float fogFar;
 uniform float inkStrength;
+uniform float vertexColorsAreAlbedo;
 uniform vec3 characterRimTint;
 uniform float characterRimStrength;
 
@@ -22,6 +23,7 @@ out vec4 finalColor;
 void main()
 {
     vec4 albedo = texture(texture0, fragTexCoord) * colDiffuse;
+    albedo *= mix(vec4(1.0), fragColor, vertexColorsAreAlbedo);
     vec3 normal = normalize(fragNormal);
     vec3 toLight = normalize(lightDirection);
     vec3 toCamera = normalize(cameraPosition - fragPosition);
@@ -30,7 +32,8 @@ void main()
     float wrapped = clamp((facing + 0.30) / 1.30, 0.0, 1.0);
     float lightBand = step(0.47, wrapped);
     float shade = mix(0.70, 1.03, lightBand);
-    float authoredPaint = 1.0 - step(0.98, fragColor.r);
+    float authoredPaint = (1.0 - step(0.98, fragColor.r)) *
+                          (1.0 - vertexColorsAreAlbedo);
     float authoredValue = fragColor.g < 0.375 ? 0.68 :
                           fragColor.g < 0.625 ? 0.86 : 1.05;
     float skinMask = smoothstep(0.40, 0.52, albedo.r) *

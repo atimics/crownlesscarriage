@@ -918,6 +918,20 @@ if(BUILD_TESTING)
         add_test(NAME road_encounter_session_restore
                  COMMAND crownless_carriage --test-road-encounter-session)
 
+        add_executable(renderer_regression_tests tests/renderer_regression_tests.c)
+        target_link_libraries(renderer_regression_tests PRIVATE crownless_local_renderer)
+        target_compile_definitions(renderer_regression_tests PRIVATE
+            CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+        cc_strict_warnings(renderer_regression_tests)
+        add_test(NAME renderer_skin_rotation COMMAND renderer_regression_tests)
+        add_custom_target(run_renderer_graphics_tests
+            COMMAND renderer_regression_tests --graphics
+                "${CMAKE_CURRENT_BINARY_DIR}/renderer-viewport.png"
+            DEPENDS renderer_regression_tests
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            USES_TERMINAL
+        )
+
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c
         )

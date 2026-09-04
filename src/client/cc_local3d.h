@@ -2,6 +2,7 @@
 #define CROWNLESS_LOCAL3D_H
 
 #include "client/cc_npc_appearance.h"
+#include "client/cc_local_viewport.h"
 #include "locomotion/cc_limb.h"
 #include "locomotion/cc_humanoid.h"
 #include "locomotion/cc_multileg.h"

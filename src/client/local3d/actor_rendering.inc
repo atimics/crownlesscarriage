@@ -583,10 +583,10 @@ static bool DrawNpcArchetypePose3D(
                       silhouette_gain,
                   &face, expression, false);
     RestoreWorldLighting();
-    if (visual_style.hero_ready) {
+    if (visual_style.hero.ready) {
         float ink_strength = CC_HERO_INK_STRENGTH;
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_ink_strength_location,
+        SetShaderValue(visual_style.hero.shader,
+                       visual_style.hero.ink_strength_location,
                        &ink_strength, SHADER_UNIFORM_FLOAT);
     }
     return true;
@@ -1005,6 +1005,7 @@ static Matrix NpcModuleTransform(Vector3 origin, Vector3 right, Vector3 up,
 static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
 {
     if (skin == NULL || !skin->valid) return;
+    UseCharacterLighting();
     Vector3 up = PhysicsNormalizeOr(FromLimbVector(skin->body_up),
                                     (Vector3){0.0f, 1.0f, 0.0f});
     Vector3 right = PhysicsNormalizeOr(FromLimbVector(skin->body_right),
@@ -4328,32 +4329,37 @@ static void BeginWorldLighting(Camera3D camera,
                        visual_style.foliage_depth_strength_location,
                        &depth_strength, SHADER_UNIFORM_FLOAT);
     }
-    if (visual_style.hero_ready) {
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_light_direction_location, direction,
+    CharacterLightingStyle *character_styles[] = {
+        &visual_style.hero, &visual_style.character,
+    };
+    for (int32_t index = 0; index < 2; ++index) {
+        const CharacterLightingStyle *style = character_styles[index];
+        if (!style->ready) continue;
+        SetShaderValue(style->shader,
+                       style->light_direction_location, direction,
                        SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_camera_position_location,
+        SetShaderValue(style->shader,
+                       style->camera_position_location,
                        camera_position, SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_shadow_color_location,
+        SetShaderValue(style->shader,
+                       style->shadow_color_location,
                        shadow_color, SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_fog_color_location, fog_color,
+        SetShaderValue(style->shader,
+                       style->fog_color_location, fog_color,
                        SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_fog_near_location,
+        SetShaderValue(style->shader,
+                       style->fog_near_location,
                        &fog_near,
                        SHADER_UNIFORM_FLOAT);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_fog_far_location,
+        SetShaderValue(style->shader,
+                       style->fog_far_location,
                        &fog_far,
                        SHADER_UNIFORM_FLOAT);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_rim_tint_location,
+        SetShaderValue(style->shader,
+                       style->rim_tint_location,
                        character_rim_tint, SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_rim_strength_location,
+        SetShaderValue(style->shader,
+                       style->rim_strength_location,
                        &character_rim_strength, SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.npc_ready) {
