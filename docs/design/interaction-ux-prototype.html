@@ -1,0 +1,178 @@
+<div id="crownless-ux" aria-label="Crownless interaction design">
+  <style>
+    #crownless-ux { --paper:light-dark(#f1e6ce,#262822); --ink:light-dark(#302e27,#f4e8cc); --edge:light-dark(#b8a47d,#706448); --accent:light-dark(#32675c,#97c7a9); color:var(--ink); font:400 16px/1.5 Georgia,serif; }
+    #crownless-ux * { box-sizing:border-box; }
+    #crownless-ux button, #crownless-ux input { font:inherit; }
+    #crownless-ux button { border:1px solid var(--edge); background:var(--paper); color:var(--ink); padding:8px 14px; border-radius:3px; cursor:pointer; min-height:44px; }
+    #crownless-ux button:hover { border-color:var(--accent); }
+    #crownless-ux button:disabled { cursor:default; opacity:.6; }
+    #crownless-ux button[data-primary] { background:var(--accent); color:light-dark(#fffaf0,#172b22); border-color:var(--accent); }
+    #crownless-ux .shell { background:var(--paper); border:1px solid var(--edge); }
+    #crownless-ux .top, #crownless-ux .bottom, #crownless-ux .choices, #crownless-ux .booktabs { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    #crownless-ux .top { padding:14px 20px; border-bottom:1px solid var(--edge); }
+    #crownless-ux .place { flex:1 1 220px; }
+    #crownless-ux .place b { font-size:21px; font-weight:500; }
+    #crownless-ux .place span { display:block; }
+    #crownless-ux .wallet { white-space:nowrap; }
+    #crownless-ux .stage { position:relative; height:340px; overflow:hidden; background:#96ad99; color:#f6e7c9; }
+    #crownless-ux .land { position:absolute; inset:0; transform-origin:50% 75%; transition:transform 1.2s; background:linear-gradient(#88a39a 0 28%,#6c8570 28% 56%,#807d58 56% 100%); }
+    #crownless-ux .hill { position:absolute; left:-15%; width:135%; height:150px; top:60px; background:#466851; border-radius:50% 70% 0 0; transform:rotate(-7deg); }
+    #crownless-ux .lane { position:absolute; width:160%; height:105px; left:-25%; bottom:6px; transform:rotate(-10deg); background:#bca375; border-top:6px solid #d6bc8a; }
+    #crownless-ux .house { position:absolute; left:62%; width:27%; height:183px; bottom:78px; background:#9b8970; border:9px solid #514f41; }
+    #crownless-ux .roof { position:absolute; left:-20%; width:140%; height:70px; top:-65px; background:#394e45; clip-path:polygon(50% 0,100% 100%,0 100%); }
+    #crownless-ux .window { position:absolute; left:12%; top:34px; width:35px; height:42px; background:#e3bb73; border:5px solid #514f41; }
+    #crownless-ux .sign { position:absolute; left:10%; top:-19px; background:#3e493b; border:2px solid #b4a06f; padding:3px 8px; font-size:14px; white-space:nowrap; }
+    #crownless-ux .world { position:absolute; padding:0; background:transparent; border:0; min-height:44px; }
+    #crownless-ux .world:hover, #crownless-ux .world.chosen { filter:drop-shadow(0 0 5px #f4d38d); }
+    #crownless-ux .door { width:54px; height:90px; left:76%; bottom:78px; background:#34392f; border:5px solid #c8b07e; border-radius:28px 28px 0 0; }
+    #crownless-ux .door:after { content:''; position:absolute; width:5px; height:5px; background:#e5c979; right:8px; top:48px; border-radius:50%; }
+    #crownless-ux .person { left:40%; bottom:74px; width:50px; height:100px; }
+    #crownless-ux .head { position:absolute; left:16px; top:1px; width:21px; height:23px; background:#d2a57d; border-radius:45%; border-top:6px solid #534139; }
+    #crownless-ux .coat { position:absolute; left:9px; top:24px; width:34px; height:48px; background:#714638; clip-path:polygon(18% 0,78% 0,100% 100%,0 100%); }
+    #crownless-ux .legs { position:absolute; left:15px; top:70px; width:24px; height:28px; border-left:9px solid #343e36; border-right:9px solid #343e36; }
+    #crownless-ux .hero { position:absolute; left:20%; bottom:28px; width:50px; height:100px; transition:left .85s,bottom .85s; pointer-events:none; }
+    #crownless-ux .hero .coat { background:#285d58; }
+    #crownless-ux .hero .head { border-color:#2d3431; }
+    #crownless-ux .board { left:54%; bottom:78px; width:57px; height:85px; border-radius:0; border-bottom:30px solid #554735; }
+    #crownless-ux .board:before { content:''; position:absolute; inset:0 0 -4px; background:#d2bd8e; border:7px solid #60523b; }
+    #crownless-ux .board:after { content:'•  •  •'; position:absolute; left:12px; top:5px; color:#665d46; writing-mode:vertical-lr; }
+    #crownless-ux .carriage { left:5%; bottom:112px; width:135px; height:75px; border-radius:27px 27px 0 0; background:#d3bd8d; border-bottom:19px solid #64533e; }
+    #crownless-ux .carriage:before, #crownless-ux .carriage:after { content:''; position:absolute; width:32px; height:32px; border:7px solid #343d34; background:#aa9166; border-radius:50%; bottom:-30px; }
+    #crownless-ux .carriage:before { left:8px; } #crownless-ux .carriage:after { right:8px; }
+    #crownless-ux .speech { position:absolute; left:23%; right:15%; top:18px; padding:14px 18px; color:#f6ead1; background:#293d34; border:1px solid #c9b582; z-index:2; }
+    #crownless-ux .speech:after { content:''; position:absolute; bottom:-11px; left:27%; border-top:11px solid #293d34; border-right:13px solid transparent; }
+    #crownless-ux .caption { position:absolute; right:15px; bottom:12px; background:#283c32; padding:3px 9px; font-size:14px; }
+    #crownless-ux .objective { padding:12px 20px; border-bottom:1px solid var(--edge); }
+    #crownless-ux .work { padding:18px 20px; min-height:180px; }
+    #crownless-ux .work h3 { margin:0 0 8px; font-size:21px; font-weight:500; }
+    #crownless-ux .work p { margin:0 0 12px; }
+    #crownless-ux .bottom { padding:10px 20px; border-top:1px solid var(--edge); }
+    #crownless-ux .bottom span { flex:1; }
+    #crownless-ux .receipt { margin-top:12px; padding:10px 0 0; border-top:1px solid var(--edge); }
+    #crownless-ux .quote { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:16px 0; }
+    #crownless-ux .quote span { display:block; }
+    #crownless-ux input { width:80px; padding:6px; color:var(--ink); background:var(--paper); border:1px solid var(--edge); }
+    #crownless-ux .booktabs { margin-bottom:14px; }
+    #crownless-ux .booktabs [aria-pressed=true] { border-bottom:3px solid var(--accent); }
+    #crownless-ux .road .house, #crownless-ux .road .door, #crownless-ux .road .person, #crownless-ux .road .board, #crownless-ux .road .hero { display:none; }
+    #crownless-ux .road .carriage { left:43%; bottom:55px; }
+    #crownless-ux .road .lane { transform:rotate(-7deg); }
+    #crownless-ux .inside .land { background:linear-gradient(#3d493b 0 68%,#8a7958 68%); }
+    #crownless-ux .inside .hill, #crownless-ux .inside .lane, #crownless-ux .inside .house, #crownless-ux .inside .board, #crownless-ux .inside .carriage { display:none; }
+    #crownless-ux .inside .door { left:9%; bottom:45px; }
+    #crownless-ux .inside .person { left:65%; bottom:92px; }
+    #crownless-ux .assisted .world { filter:drop-shadow(0 0 5px #f4d38d); }
+    #crownless-ux .still * { transition:none; }
+    @media (max-width:600px) { #crownless-ux .top { padding:12px; gap:8px; } #crownless-ux .place { flex-basis:100%; } #crownless-ux .stage { height:285px; } #crownless-ux .carriage { transform:scale(.7); transform-origin:left bottom; } #crownless-ux .house { left:65%; width:32%; } #crownless-ux .door { left:80%; width:46px; } #crownless-ux .board { left:57%; width:44px; } #crownless-ux .person { left:37%; } #crownless-ux .speech { left:5%; right:5%; } #crownless-ux .sign { left:-2%; padding:2px 4px; } #crownless-ux .work, #crownless-ux .objective, #crownless-ux .bottom { padding:12px; } }
+    @media(prefers-reduced-motion:reduce) { #crownless-ux * { transition:none !important; } }
+  </style>
+  <div class="shell">
+    <div class="top"><div class="place"><b>Crownless Carriage</b><span data-place>Gloamgate · Crossroads Bazaar</span></div><span class="wallet" data-wallet>40 crowns · 0 / 12 cargo</span><button data-action="book">Company Book</button><button data-action="menu">Menu</button></div>
+    <div class="stage" aria-label="Illustrated town with a person, contract board, shop door, and carriage">
+      <div class="land"><div class="hill"></div><div class="lane"></div><div class="house"><div class="roof"></div><div class="window"></div><div class="sign">Provisions</div></div>
+        <button class="world carriage" data-target="carriage" aria-label="Carriage, prepare departure"></button>
+        <button class="world person" data-target="person" aria-label="Ilyra Senn, talk"><span class="head"></span><span class="coat"></span><span class="legs"></span></button>
+        <button class="world board" data-target="board" aria-label="Contract board, read"></button>
+        <button class="world door" data-target="door" aria-label="Provisions shop, enter"></button>
+        <div class="hero" aria-hidden="true"><span class="head"></span><span class="coat"></span><span class="legs"></span></div>
+      </div>
+      <div class="speech" hidden></div><span class="caption" data-clock>Day 1 · In town</span>
+    </div>
+    <div class="objective" data-objective>Meet the people of Gloamgate.</div>
+    <div class="work" aria-live="polite"></div>
+    <div class="bottom"><span data-status>Click a person, door, board, or carriage.</span><button data-action="back">Back</button></div>
+  </div>
+  <script>
+  (() => {
+    const root = document.getElementById('crownless-ux');
+    const $ = selector => root.querySelector(selector);
+    const state = {mode:'explore',scene:'town',focus:'person',pending:null,coins:40,cargo:0,stock:20,promised:false,delivered:false,arrived:false,quantity:8,trade:'buy',line:0,book:'Promises',receipt:'',history:[],progress:0,fast:false,warned:false,returnMode:'explore',returnFocus:'person'};
+    const design = {focusAssist:false,reducedMotion:false};
+    let walking = null;
+    const person = () => state.arrived ? 'Jory Fen' : 'Ilyra Senn';
+    const names = () => ({person:state.scene==='inside'?'Shopkeeper':person(),door:state.scene==='inside'?'Bazaar exit':'Provisions shop',board:'Contract board',carriage:'Your carriage'});
+    const verbs = () => ({person:state.scene==='inside'?'Trade':'Talk',door:state.scene==='inside'?'Leave shop':'Enter',board:'Read',carriage:'Prepare departure'});
+    const button = (action,label,primary=false) => `<button data-action="${action}" ${primary?'data-primary':''}>${label}</button>`;
+    const record = text => {state.receipt=text;state.history.unshift(text);};
+    const paused = () => ['book','menu','talk','offer','trade','departure','warning','arrival'].includes(state.mode);
+    function render() {
+      root.classList.toggle('assisted',design.focusAssist);root.classList.toggle('still',design.reducedMotion);
+      $('.stage').className='stage '+(state.scene==='road'?'road':state.scene==='inside'?'inside':'');
+      $('.land').style.transform=state.fast?'scale(.8)':'scale(1)';
+      $('[data-place]').textContent=state.scene==='road'?'Gloamgate → Silverwick':state.arrived?'Silverwick · Market square':state.scene==='inside'?'Gloamgate · Provisions':'Gloamgate · Crossroads Bazaar';
+      $('[data-wallet]').textContent=`${state.coins} crowns · ${state.cargo} / 12 cargo`;
+      $('[data-clock]').textContent=paused()?'Reading · Time paused':state.scene==='road'?(state.fast?'Letting time pass':'Normal time'):'Day 1 · In town';
+      $('[data-objective]').textContent=state.delivered?'Completed · Jory received eight boxes of bread.':state.promised?(state.cargo<8?`Promise to Jory · Buy ${8-state.cargo} more boxes of bread.`:state.arrived?'Promise to Jory · Deliver eight boxes at the shop.':'Promise to Jory · Bring eight boxes of bread to Silverwick.'):'Meet the people of Gloamgate.';
+      root.querySelectorAll('[data-target]').forEach(el=>{el.classList.toggle('chosen',el.dataset.target===state.focus);el.disabled=!['explore','walking'].includes(state.mode);el.setAttribute('aria-label',names()[el.dataset.target]+', '+verbs()[el.dataset.target]);});
+      $('.speech').hidden=state.mode!=='talk';
+      $('.speech').textContent=state.arrived?'You brought the bread. This will keep our ovens working.':state.line?'Eight boxes for Jory at Silverwick. The reward is eighteen crowns.':'Jory needs bread in Silverwick. Will you hear what happened?';
+      const rows=[];
+      if(state.mode==='explore') rows.push(`<h3>${names()[state.focus]}</h3><p>${state.scene==='inside'?'The keeper is ready. The door leads back to the square.':'Choose a useful object. The hero will walk beside it.'}</p><div class="choices">${button('act',verbs()[state.focus],true)}</div>`);
+      if(state.mode==='walking') rows.push(`<h3>Walking to ${names()[state.pending]}</h3><p>${verbs()[state.pending]} when you arrive.</p>${button('cancel','Cancel approach')}`);
+      if(state.mode==='talk') rows.push(`<h3>${person()}</h3><div class="choices">${state.arrived?button('leave','Good to see you',true):!state.line?button('listen','Tell me about Jory',true):!state.promised?button('offer','What does the delivery involve?',true):button('leave','I will be on my way',true)}${button('leave','Leave')}</div>`);
+      if(state.mode==='offer') rows.push(`<h3>Offer · Bread for Silverwick</h3><p>Bring Jory eight boxes of bread. Reward: 18 crowns. Due: day 35.</p><p>${state.promised?'Your promise is recorded.':'Accept here with Ilyra or at the board. Then choose how to prepare.'}</p><div class="choices">${state.promised?button('leave','Return to the square',true):button('pledge','I will deliver the bread',true)}${button('leave','Leave')}</div>`);
+      if(state.mode==='trade') {
+        const max=state.trade==='buy'?Math.min(state.stock,12-state.cargo,Math.floor(state.coins/2)):state.cargo;
+        state.quantity=Math.min(Math.max(1,state.quantity),Math.max(1,max));
+        const total=state.quantity*2, after=state.coins+(state.trade==='buy'?-total:total), aboard=state.cargo+(state.trade==='buy'?state.quantity:-state.quantity);
+        rows.push(`<h3>Provisions · Bread boxes</h3><div class="choices">${button('buy','Buy')}${button('sell','Sell')}${state.arrived&&state.promised&&!state.delivered?button('deliver','Deliver 8 for Jory',state.cargo>=8):''}</div><div class="quote"><label>Quantity <input data-quantity type="number" min="1" max="${Math.max(1,max)}" value="${state.quantity}" aria-label="Bread quantity"></label><span>2 crowns each<br>${state.trade==='buy'?'Cost':'Receive'}: ${total} crowns</span><span>Purse after: ${max?after:state.coins}<br>Cargo after: ${max?aboard:state.cargo} / 12</span></div><div class="choices"><button data-action="commit" data-primary ${max?'':'disabled'}>${state.trade==='buy'?'Buy':'Sell'} ${state.quantity} for ${total} crowns</button>${button('leave','Leave counter')}</div>${max?'':'<p>Choose Buy to restock, or return to the square.</p>'}`);
+      }
+      if(state.mode==='departure') rows.push(`<h3>Road to Silverwick</h3><p>The first stretch follows the old trade road. Your bread aboard: ${state.cargo} / 8.</p><div class="choices">${button('depart','Take the road',true)}${button('leave','Step away')}</div>`);
+      if(state.mode==='travel') rows.push(`<h3>On the road</h3><p>The carriage crests the hill. Journey: ${Math.round(state.progress*100)}%.</p>${button('fast',state.fast?'Normal time':'Let time pass',true)}`);
+      if(state.mode==='warning') rows.push(`<h3>A sign beside the road</h3><p>Stag’s Mill lies beyond the next turning. The carriage waits while you read.</p><div class="choices">${button('continue','Continue to Silverwick',true)}${button('book','Read your promise')}</div>`);
+      if(state.mode==='arrival') rows.push(`<h3>Silverwick</h3><p>The carriage settles beside the market. Jory is waiting in the square.</p>${button('arrive','Step into town',true)}`);
+      if(state.mode==='book') {
+        const content={Promises:state.delivered?'Completed · Bread for Silverwick. Reward received: 18 crowns.':state.promised?`Accepted · Bread for Silverwick. ${state.cargo} / 8 boxes aboard. Jory Fen · Due day 35.`:'Offer · Bread for Silverwick. Speak to Ilyra or read the board to accept.',People:`${person()} · ${state.line?'You spoke about the bread delivery.':'A person in the town square.'}`,Cargo:`Bread: ${state.cargo} boxes. Cargo space: ${12-state.cargo} free. Purse: ${state.coins} crowns.`,Journal:state.history.length?state.history.join('<br>'):'Your journey begins in Gloamgate.'};
+        rows.push(`<h3>Company Book</h3><div class="booktabs">${Object.keys(content).map(name=>`<button data-page="${name}" aria-pressed="${name===state.book}">${name}</button>`).join('')}</div><p>${content[state.book]}</p>${button('back','Return to play')}`);
+      }
+      if(state.mode==='menu') rows.push(`<h3>Paused</h3><div class="choices">${button('back','Resume',true)}${button('motion',design.reducedMotion?'Reduced motion: on':'Reduced motion: off')}${button('assist',design.focusAssist?'Focus assistance: on':'Focus assistance: off')}</div>`);
+      if(state.receipt&&state.mode!=='book') rows.push(`<div class="receipt" role="status">${state.receipt}</div>`);
+      $('.work').innerHTML=rows.join('');
+      $('[data-status]').textContent=state.mode==='walking'?'Escape cancels this approach.':state.mode==='explore'?'Click a target · F acts · Escape opens the menu':paused()?'Read at your pace. Back returns to the scene.':'The road pauses at choices and arrival.';
+    }
+    function cancel() { clearTimeout(walking);state.pending=null;state.mode='explore'; }
+    function activate() {
+      const target=state.focus;state.pending=null;state.receipt='';
+      if(target==='person'){state.mode=state.scene==='inside'?'trade':'talk';}
+      if(target==='board')state.mode='offer';
+      if(target==='carriage')state.mode='departure';
+      if(target==='door'){state.scene=state.scene==='inside'?'town':'inside';state.mode='explore';state.focus='person';$('.hero').style.left=state.scene==='inside'?'45%':'68%';$('.hero').style.bottom='35px';}
+      render();
+    }
+    function approach(target) {
+      clearTimeout(walking);state.focus=target;state.pending=target;state.mode='walking';state.receipt='';
+      $('.hero').style.left=({person:state.scene==='inside'?'54%':'32%',board:'46%',door:state.scene==='inside'?'22%':'68%',carriage:'22%'})[target];
+      $('.hero').style.bottom=target==='carriage'?'80px':'50px';render();
+      walking=setTimeout(activate,design.reducedMotion?150:950);
+    }
+    function action(name) {
+      if(name==='act')return approach(state.focus);
+      if(name==='cancel'){cancel();render();return;}
+      if(name==='book'||name==='menu') {if(state.mode==='walking')cancel();if(!['book','menu'].includes(state.mode)){state.returnMode=state.mode;state.returnFocus=state.focus;}state.mode=name;render();return;}
+      if(name==='back'){if(state.mode==='walking')cancel();else if(['book','menu'].includes(state.mode)){state.mode=state.returnMode;state.focus=state.returnFocus;}else if(state.mode==='explore')return action('menu');else if(['travel','warning','arrival'].includes(state.mode))return action('menu');else state.mode='explore';}
+      if(name==='leave'){state.mode='explore';state.receipt='';}
+      if(name==='listen')state.line=1;
+      if(name==='offer')state.mode='offer';
+      if(name==='pledge'){state.promised=true;state.mode='explore';record('Promise accepted · Bring 8 bread boxes to Jory in Silverwick.');}
+      if(name==='buy'||name==='sell'){state.trade=name;state.quantity=name==='buy'?Math.max(1,8-state.cargo):1;}
+      if(name==='commit') {const q=state.quantity;if(state.trade==='buy'&&q<=state.stock&&state.cargo+q<=12&&state.coins>=q*2){state.coins-=q*2;state.cargo+=q;state.stock-=q;record(`Bought ${q} bread boxes · Paid ${q*2} crowns.`);}else if(state.trade==='sell'&&q<=state.cargo){state.coins+=q*2;state.cargo-=q;state.stock+=q;record(`Sold ${q} bread boxes · Received ${q*2} crowns.`);}else record('Review the available stock, purse, and cargo space.');}
+      if(name==='deliver'){if(state.cargo>=8&&state.promised&&!state.delivered&&state.arrived){state.cargo-=8;state.coins+=18;state.delivered=true;record('Delivered 8 bread boxes to Jory · Reward: 18 crowns · Promise completed.');}else record('Jory needs 8 boxes of bread to complete this delivery.');}
+      if(name==='depart'){state.scene='road';state.mode='travel';state.fast=false;state.progress=0;state.warned=false;}
+      if(name==='fast')state.fast=!state.fast;
+      if(name==='continue'){state.mode='travel';state.fast=false;}
+      if(name==='arrive'){state.scene='town';state.mode='explore';state.arrived=true;state.focus='door';state.progress=1;}
+      if(name==='motion')design.reducedMotion=!design.reducedMotion;
+      if(name==='assist')design.focusAssist=!design.focusAssist;
+      render();
+    }
+    root.addEventListener('click',event=>{const target=event.target.closest('[data-target]');if(target&&!target.disabled)return approach(target.dataset.target);const page=event.target.closest('[data-page]');if(page){state.book=page.dataset.page;render();return;}const control=event.target.closest('[data-action]');if(control&&!control.disabled)action(control.dataset.action);});
+    root.addEventListener('pointerover',event=>{const target=event.target.closest('[data-target]');if(target&&state.mode==='explore'&&state.focus!==target.dataset.target){state.focus=target.dataset.target;render();}});
+    root.addEventListener('focusin',event=>{const target=event.target.closest('[data-target]');if(target&&state.mode==='explore'){state.focus=target.dataset.target;render();}});
+    root.addEventListener('change',event=>{if(event.target.matches('[data-quantity]')){state.quantity=Number.isFinite(event.target.valueAsNumber)?Math.max(1,Math.floor(event.target.valueAsNumber)):1;render();}});
+    root.addEventListener('keydown',event=>{if(event.target.tagName==='INPUT')return;if(event.key==='Escape'){event.preventDefault();action('back');}if(event.key.toLowerCase()==='f'&&state.mode==='explore'){event.preventDefault();action('act');}});
+    const travelTimer=setInterval(()=>{if(!root.isConnected){clearInterval(travelTimer);clearTimeout(walking);return;}if(state.mode!=='travel')return;state.progress=Math.min(1,state.progress+(state.fast?.08:.02));if(state.progress>=.48&&!state.warned){state.warned=true;state.progress=.48;state.fast=false;state.mode='warning';}else if(state.progress>=1){state.fast=false;state.mode='arrival';}render();},500);
+    render();
+    if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:render});tweak.addToggle(design,'focusAssist',{label:'Show useful objects'});tweak.addToggle(design,'reducedMotion',{label:'Reduce approach and camera motion'});}
+  })();
+  </script>
+</div>
