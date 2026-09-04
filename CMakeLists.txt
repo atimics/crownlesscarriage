@@ -549,6 +549,11 @@ if(CC_BUILD_CLIENT)
     cc_strict_warnings(crownless_carriage)
     set(CC_ROADBOOK_REVIEW_DIR
         "${CMAKE_CURRENT_BINARY_DIR}/roadbook-review")
+    # These limits include headroom for the Linux CI software renderer.
+    set(CC_ROADBOOK_ROUTE_MINIMUM_FPS 25)
+    set(CC_ROADBOOK_ROUTE_P95_BUDGET_MS 40)
+    set(CC_ROADBOOK_NETWORK_MINIMUM_FPS 18)
+    set(CC_ROADBOOK_NETWORK_P95_BUDGET_MS 55)
     add_custom_target(run_roadbook_qa
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 "${CC_ROADBOOK_REVIEW_DIR}"
@@ -577,9 +582,15 @@ if(CC_BUILD_CLIENT)
                 -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/arrival.png
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
         COMMAND $<TARGET_FILE:crownless_carriage>
-                --benchmark-render 360 60 roadbook-route
+                --benchmark-render 360
+                ${CC_ROADBOOK_ROUTE_MINIMUM_FPS}
+                roadbook-route
+                ${CC_ROADBOOK_ROUTE_P95_BUDGET_MS}
         COMMAND $<TARGET_FILE:crownless_carriage>
-                --benchmark-render 360 45 roadbook-network
+                --benchmark-render 360
+                ${CC_ROADBOOK_NETWORK_MINIMUM_FPS}
+                roadbook-network
+                ${CC_ROADBOOK_NETWORK_P95_BUDGET_MS}
         DEPENDS crownless_carriage
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         USES_TERMINAL

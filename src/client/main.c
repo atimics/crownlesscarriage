@@ -6809,6 +6809,7 @@ int main(int argc, char **argv)
                             strcmp(argv[1], "--benchmark-render") == 0;
     int32_t render_benchmark_frames = 600;
     double render_benchmark_minimum_fps = 0.0;
+    double render_benchmark_p95_budget = 0.0;
     const char *render_benchmark_scene = "street";
     if (render_benchmark && argc >= 3) {
         char *end = NULL;
@@ -6841,6 +6842,17 @@ int main(int argc, char **argv)
                           "Render benchmark scene must be street, market, road, roadbook-route, roadbook-network, or combat.\n");
             return 1;
         }
+    }
+    if (render_benchmark && argc >= 6 && argv[5][0] != '-') {
+        char *end = NULL;
+        double parsed = strtod(argv[5], &end);
+        if (end == argv[5] || *end != '\0' || !isfinite(parsed) ||
+            parsed <= 0.0) {
+            (void)fprintf(stderr,
+                          "Render benchmark p95 budget is invalid.\n");
+            return 1;
+        }
+        render_benchmark_p95_budget = parsed;
     }
     bool render_benchmark_roadbook_route = render_benchmark &&
         strcmp(render_benchmark_scene, "roadbook-route") == 0;
@@ -8187,13 +8199,18 @@ int main(int argc, char **argv)
     if (render_benchmark) {
         double frames_per_second =
             (double)render_benchmark_count / render_benchmark_elapsed;
-        (void)printf("render: scene=%s frames=%d seconds=%.6f ms/frame=%.3f fps=%.1f p95=%.3f p99=%.3f max=%.3f hitches=%d skin_updates=%d skinned_meshes=%d hero_skin_updates=%d hero_skinned_meshes=%d npc_skin_updates=%d npc_skinned_meshes=%d creature_skin_updates=%d creature_skinned_meshes=%d high_detail=%d lod=%d\n",
+        double p95_budget = render_benchmark_p95_budget > 0.0 ?
+            render_benchmark_p95_budget :
+            (render_benchmark_minimum_fps > 0.0 ?
+                1500.0 / render_benchmark_minimum_fps : 0.0);
+        (void)printf("render: scene=%s frames=%d seconds=%.6f ms/frame=%.3f fps=%.1f p95=%.3f p95_budget=%.3f p99=%.3f max=%.3f hitches=%d skin_updates=%d skinned_meshes=%d hero_skin_updates=%d hero_skinned_meshes=%d npc_skin_updates=%d npc_skinned_meshes=%d creature_skin_updates=%d creature_skinned_meshes=%d high_detail=%d lod=%d\n",
                      render_benchmark_scene, render_benchmark_count,
                      render_benchmark_elapsed,
                      render_benchmark_elapsed * 1000.0 /
                          (double)render_benchmark_count,
                      frames_per_second,
                      final_renderer_stats.p95_frame_milliseconds,
+                     p95_budget,
                      final_renderer_stats.p99_frame_milliseconds,
                      final_renderer_stats.maximum_frame_milliseconds,
                      final_renderer_stats.hitch_count,
@@ -8210,8 +8227,6 @@ int main(int argc, char **argv)
         bool performance_failed = render_benchmark_minimum_fps > 0.0 &&
                                   frames_per_second <
                                       render_benchmark_minimum_fps;
-        double p95_budget = render_benchmark_minimum_fps > 0.0 ?
-            1500.0 / render_benchmark_minimum_fps : 0.0;
         bool frame_time_failed = p95_budget > 0.0 &&
             final_renderer_stats.p95_frame_milliseconds > p95_budget;
         bool scene_expects_lod =
