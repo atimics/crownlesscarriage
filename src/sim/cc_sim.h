@@ -50,7 +50,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 34
+#define CC_SIM_SCHEMA_VERSION 35
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -318,7 +318,11 @@ typedef enum CcEventKind {
     CC_EVENT_SHEEP_SLAUGHTERED = 122,
     CC_EVENT_PAPER_MILLED = 123,
     CC_EVENT_KING_ANOINTED = 124,
-    CC_EVENT_PRETENDER_CRISIS = 125
+    CC_EVENT_PRETENDER_CRISIS = 125,
+    CC_EVENT_MONASTIC_SUCCESSION = 126,
+    CC_EVENT_ROYAL_SUCCESSION = 127,
+    CC_EVENT_DRAGON_PATRON_NAMED = 128,
+    CC_EVENT_DRAGON_TERRITORY_LOST = 129
 } CcEventKind;
 
 typedef struct CcArchives {
@@ -328,6 +332,8 @@ typedef struct CcArchives {
     int32_t last_recorded_day;  /* day of the most recent archive write */
     int32_t lore_ceiling;       /* sustained trust ceiling from remembered lore */
     int32_t kit_tool_wear;      /* one Tools bundle per eight writing weeks */
+    CcId abbot_character_id;    /* named steward of the scriptorium */
+    int32_t stewardship_rank;   /* 0..100, earned by keeping memory alive */
 } CcArchives;
 
 typedef enum CcMaterialChainBlocker {
@@ -433,6 +439,9 @@ typedef struct CcKingdom {
     int32_t unsanctioned_weeks;
     int32_t pretender_crises;
     bool anointed;
+    CcId ruler_character_id;
+    CcId monastery_patron_id;
+    CcId anointed_by_character_id;
 } CcKingdom;
 
 typedef enum CcDiplomaticState {
@@ -805,6 +814,7 @@ typedef struct CcDragon {
     int32_t crown_strength;
     int32_t memory_integrity;
     int32_t territory_stability;
+    int32_t territoryless_days;
     int32_t regional_influence;
     int32_t crown_continuity_days;
     int32_t hunt_cooldown_days;
@@ -830,6 +840,8 @@ typedef struct CcDragonCampaign {
     uint32_t alliance_kingdom_mask;
     CcId origin_settlement_id;
     CcId cause_event_id;
+    CcId patron_character_id;
+    CcId hero_character_id;
     int32_t days_remaining;
     int32_t cooldown_days;
     int32_t supplies[CC_GOOD_COUNT];
@@ -1499,6 +1511,7 @@ void CcSimInitializeMaterialChain(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimInitializeCharacters(CcSim *sim);
 void CcSimUpgradeCharacterLifecycles(CcSim *sim);
+void CcSimUpgradeHistoryOffices(CcSim *sim);
 void CcSimUpgradeQuestArchitecture(CcSim *sim);
 void CcSimInitializeUnderroad(CcSim *sim);
 void CcSimUpgradeGrainEconomy(CcSim *sim);

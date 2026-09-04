@@ -20,10 +20,17 @@ static void PrintSummary(const CcSim *sim, bool detail)
     int32_t abandoned_settlements = 0;
     int32_t maximum_generation = 0;
     int32_t sanction = 0;
-    int32_t anointed = 0;
+    int32_t anointed_count = 0;
     int32_t unsanctioned_weeks = 0;
     int32_t pretender_crises = 0;
     CcMoney debt = 0;
+    const CcCharacter *abbot = CcSimCharacter(
+        sim, sim->archives.abbot_character_id);
+    const CcCharacter *campaign_patron = CcSimCharacter(
+        sim, sim->dragon_campaign.patron_character_id);
+    const CcCharacter *campaign_hero = CcSimCharacter(
+        sim, sim->dragon_campaign.hero_character_id);
+    const CcKingdom *anointed_kingdom = NULL;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         if (CcSettlementIsAbandoned(&sim->settlements[i])) {
             abandoned_settlements += 1;
@@ -43,12 +50,15 @@ static void PrintSummary(const CcSim *sim, bool detail)
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         legitimacy += sim->kingdoms[i].legitimacy;
         sanction += sim->kingdoms[i].sanction;
-        if (sim->kingdoms[i].anointed) anointed += 1;
+        if (sim->kingdoms[i].anointed) anointed_count += 1;
         if (sim->kingdoms[i].unsanctioned_weeks > unsanctioned_weeks) {
             unsanctioned_weeks = sim->kingdoms[i].unsanctioned_weeks;
         }
         pretender_crises += sim->kingdoms[i].pretender_crises;
         debt += sim->kingdoms[i].iron_ledger_debt;
+        if (sim->kingdoms[i].anointed_by_character_id != 0U) {
+            anointed_kingdom = &sim->kingdoms[i];
+        }
         for (int32_t second = i + 1;
              second < sim->kingdom_count; ++second) {
             if (sim->diplomacy[i][second] == CC_DIPLOMACY_WAR) wars += 1;
@@ -89,7 +99,10 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  " inbound_tools=%d inbound_iron=%d"
                  " sanction=%d anointed=%d/%d unsanctioned_weeks=%d"
                  " pretender_crises=%d"
-                 " people=%d births=%d deaths=%d generation=%d\n",
+                 " people=%d births=%d deaths=%d generation=%d"
+                 " abbot=\"%s\" stewardship=%d anointed=\"%s\""
+                 " dragon_patron=\"%s\" dragon_hero=\"%s\""
+                 " landless_days=%d\n",
                  sim->current_day, CcSimHash(sim),
                  total_hunger / sim->settlement_count, maximum_hunger,
                  travelling, sim->event_count,
@@ -128,11 +141,17 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  chain.wheat, chain.paper, chain.tools, chain.iron,
                  chain.gold, chain.gems,
                  chain.incoming_tools, chain.incoming_iron,
-                 sanction / sim->kingdom_count, anointed,
+                 sanction / sim->kingdom_count, anointed_count,
                  sim->kingdom_count, unsanctioned_weeks,
                  pretender_crises,
                  sim->character_count, sim->character_births,
-                 sim->character_deaths, maximum_generation);
+                 sim->character_deaths, maximum_generation,
+                 abbot != NULL ? abbot->name : "vacant",
+                 sim->archives.stewardship_rank,
+                 anointed_kingdom != NULL ? anointed_kingdom->name : "none",
+                 campaign_patron != NULL ? campaign_patron->name : "none",
+                 campaign_hero != NULL ? campaign_hero->name : "none",
+                 sim->dragon.territoryless_days);
     if (detail) {
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             const CcSettlement *place = &sim->settlements[i];
@@ -176,6 +195,9 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[argument], "--years") == 0 && argument + 1 < argc) {
             years = (int32_t)strtol(argv[++argument], NULL, 10);
         } else if (strcmp(argv[argument], "--report-every") == 0 &&
+                   argument + 1 < argc) {
+            report_every = (int32_t)strtol(argv[++argument], NULL, 10);
+        } else if (strcmp(argv[argument], "--interval") == 0 &&
                    argument + 1 < argc) {
             report_every = (int32_t)strtol(argv[++argument], NULL, 10);
         } else if (strcmp(argv[argument], "--save") == 0 && argument + 1 < argc) {

@@ -555,6 +555,7 @@ int main(void)
     dragon_host.dragon.crown_strength = 0;
     dragon_host.dragon.territory_stability = 0;
     dragon_host.dragon.memory_integrity = 0;
+    dragon_host.dragon.age_days = 500 * 365;
     for (int32_t i = 0; i < dragon_host.settlement_count; ++i) {
         dragon_host.settlements[i].stock[CC_GOOD_FOOD] += 32;
         dragon_host.settlements[i].stock[CC_GOOD_TOOLS] += 8;
@@ -746,6 +747,7 @@ int main(void)
     crisis_alliance.current_day = 30 * 112 - 1;
     crisis_alliance.dragon.hoard =
         CcSimTrackedGold(&crisis_alliance) * 2;
+    crisis_alliance.dragon.age_days = 500 * 365;
     crisis_alliance.dragon_campaign.defeats = 1;
     crisis_alliance.diplomacy[0][1] = CC_DIPLOMACY_ALLIANCE;
     crisis_alliance.diplomacy[1][0] = CC_DIPLOMACY_ALLIANCE;

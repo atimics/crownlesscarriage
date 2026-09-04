@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 24
+#define CC_SQLITE_USER_VERSION 25
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -837,6 +837,44 @@ static bool EnsureJournalMetaColumns(sqlite3 *database,
             error, error_capacity);
 }
 
+static bool EnsureHistoryOfficeColumns(sqlite3 *database,
+                                       char *error,
+                                       size_t error_capacity)
+{
+    return EnsureColumn(database, "meta", "archive_abbot_character_id",
+            "ALTER TABLE meta ADD COLUMN archive_abbot_character_id "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "meta", "archive_stewardship_rank",
+            "ALTER TABLE meta ADD COLUMN archive_stewardship_rank "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "kingdom", "ruler_character_id",
+            "ALTER TABLE kingdom ADD COLUMN ruler_character_id "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "kingdom", "monastery_patron_id",
+            "ALTER TABLE kingdom ADD COLUMN monastery_patron_id "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "kingdom", "anointed_by_character_id",
+            "ALTER TABLE kingdom ADD COLUMN anointed_by_character_id "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "territoryless_days",
+            "ALTER TABLE dragon_state ADD COLUMN territoryless_days "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_campaign", "patron_character_id",
+            "ALTER TABLE dragon_campaign ADD COLUMN patron_character_id "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_campaign", "hero_character_id",
+            "ALTER TABLE dragon_campaign ADD COLUMN hero_character_id "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity);
+}
+
 static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
 {
     const char *schema =
@@ -1146,7 +1184,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " stolen_outstanding INTEGER NOT NULL, theft_actor_id INTEGER NOT NULL,"
         " retaliation_target_id INTEGER NOT NULL,"
         " hoard_event_id INTEGER NOT NULL, omen_event_id INTEGER NOT NULL,"
-        " omen_days_remaining INTEGER NOT NULL, retaliations INTEGER NOT NULL);"
+        " omen_days_remaining INTEGER NOT NULL, retaliations INTEGER NOT NULL,"
+        " territoryless_days INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS dragon_campaign ("
         " id INTEGER PRIMARY KEY CHECK(id=1), phase INTEGER NOT NULL,"
         " pledged_mask INTEGER NOT NULL, alliance_mask INTEGER NOT NULL,"
@@ -1155,7 +1194,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " food INTEGER NOT NULL, iron INTEGER NOT NULL, tools INTEGER NOT NULL,"
         " weapons INTEGER NOT NULL, gold INTEGER NOT NULL, gems INTEGER NOT NULL,"
         " recovered_coins INTEGER NOT NULL, attempts INTEGER NOT NULL,"
-        " victories INTEGER NOT NULL, defeats INTEGER NOT NULL);"
+        " victories INTEGER NOT NULL, defeats INTEGER NOT NULL,"
+        " patron_character_id INTEGER NOT NULL DEFAULT 0,"
+        " hero_character_id INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS hoard_raiders ("
         " slot INTEGER PRIMARY KEY CHECK(slot=1), id INTEGER NOT NULL UNIQUE,"
         " name TEXT NOT NULL, phase INTEGER NOT NULL, motive INTEGER NOT NULL,"
@@ -1307,7 +1348,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            EnsureSocialColumns(database, error, error_capacity) &&
            EnsureJournalMetaColumns(database, error, error_capacity) &&
            EnsureCharacterLifecycleColumns(database, error, error_capacity) &&
-           EnsureMaterialChainColumns(database, error, error_capacity);
+           EnsureMaterialChainColumns(database, error, error_capacity) &&
+           EnsureHistoryOfficeColumns(database, error, error_capacity);
 }
 
 static bool SaveMeta(sqlite3 *database, const CcSim *sim,
@@ -1323,8 +1365,9 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
         "event_write_index,state_hash,journal_generation,journal_cursor,"
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
         "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling,"
-        "character_births,character_deaths,archive_kit_tool_wear) "
-        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+        "character_births,character_deaths,archive_kit_tool_wear,"
+        "archive_abbot_character_id,archive_stewardship_rank) "
+        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
     char hash[24];
     (void)snprintf(hash, sizeof(hash), "%016" PRIx64, CcSimHash(sim));
@@ -1356,6 +1399,8 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
     BindInt(statement, 26, sim->character_births);
     BindInt(statement, 27, sim->character_deaths);
     BindInt(statement, 28, sim->archives.kit_tool_wear);
+    BindId(statement, 29, sim->archives.abbot_character_id);
+    BindInt(statement, 30, sim->archives.stewardship_rank);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
@@ -1369,8 +1414,9 @@ static bool SaveKingdoms(sqlite3 *database, const CcSim *sim,
                  "INSERT INTO kingdom "
                  "(slot,id,name,color_r,color_g,color_b,treasury,legitimacy,"
                  "iron_ledger_debt,sanction,unsanctioned_weeks,"
-                 "pretender_crises,anointed) "
-                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "pretender_crises,anointed,ruler_character_id,"
+                 "monastery_patron_id,anointed_by_character_id) "
+                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         const CcKingdom *item = &sim->kingdoms[i];
@@ -1383,6 +1429,9 @@ static bool SaveKingdoms(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 11, item->unsanctioned_weeks);
         BindInt(statement, 12, item->pretender_crises);
         BindInt(statement, 13, item->anointed ? 1 : 0);
+        BindId(statement, 14, item->ruler_character_id);
+        BindId(statement, 15, item->monastery_patron_id);
+        BindId(statement, 16, item->anointed_by_character_id);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -2199,8 +2248,9 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                  "crown_strength,memory_integrity,territory_stability,"
                  "regional_influence,crown_continuity_days,hunt_cooldown_days,"
                  "hunts,egg_count,brood_days_remaining,brood_cooldown_days,"
-                 "broods_laid,whelps_dispersed,afterdeath_days,lifecycle_event_id) "
-                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "broods_laid,whelps_dispersed,afterdeath_days,lifecycle_event_id,"
+                 "territoryless_days) "
+                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     const CcDragon *dragon = &sim->dragon;
     column = 1;
@@ -2235,6 +2285,7 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
     BindInt(statement, column++, dragon->whelps_dispersed);
     BindInt(statement, column++, dragon->afterdeath_days);
     BindId(statement, column++, dragon->lifecycle_event_id);
+    BindInt(statement, column++, dragon->territoryless_days);
     result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!result) return false;
@@ -2244,8 +2295,9 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                      "INSERT INTO dragon_campaign "
                      "(id,phase,pledged_mask,alliance_mask,origin_settlement_id,"
                      "cause_event_id,days_remaining,cooldown_days,food,iron,tools,"
-                     "weapons,gold,gems,recovered_coins,attempts,victories,defeats) "
-                     "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                     "weapons,gold,gems,recovered_coins,attempts,victories,defeats,"
+                     "patron_character_id,hero_character_id) "
+                     "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                      &statement, error, error_capacity)) return false;
         const CcDragonCampaign *campaign = &sim->dragon_campaign;
         column = 1;
@@ -2265,6 +2317,8 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
         BindInt(statement, column++, campaign->attempts);
         BindInt(statement, column++, campaign->victories);
         BindInt(statement, column++, campaign->defeats);
+        BindId(statement, column++, campaign->patron_character_id);
+        BindId(statement, column++, campaign->hero_character_id);
         result = StepDone(database, statement, error, error_capacity);
         sqlite3_finalize(statement);
         if (!result) return false;
@@ -2890,6 +2944,7 @@ static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
         EnsureCharacterLifecycleColumns(database, error, error_capacity) &&
         EnsurePlayerKnowledgeColumns(database, error, error_capacity) &&
         EnsureMaterialChainColumns(database, error, error_capacity) &&
+        EnsureHistoryOfficeColumns(database, error, error_capacity) &&
         Execute(database, "BEGIN IMMEDIATE;", error, error_capacity);
     if (ok) {
         ok = SaveSnapshotContents(database, sim, journal_generation,
@@ -2935,7 +2990,8 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
         "event_write_index,state_hash,journal_generation,journal_cursor,"
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
         "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling,"
-        "character_births,character_deaths,archive_kit_tool_wear "
+        "character_births,character_deaths,archive_kit_tool_wear,"
+        "archive_abbot_character_id,archive_stewardship_rank "
         "FROM meta WHERE id=1;", &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
         SetError(error, error_capacity, "Campaign metadata is missing.");
@@ -2974,6 +3030,9 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
     sim->character_births = sqlite3_column_int(statement, 25);
     sim->character_deaths = sqlite3_column_int(statement, 26);
     sim->archives.kit_tool_wear = sqlite3_column_int(statement, 27);
+    sim->archives.abbot_character_id =
+        (CcId)sqlite3_column_int64(statement, 28);
+    sim->archives.stewardship_rank = sqlite3_column_int(statement, 29);
     sqlite3_finalize(statement);
     return true;
 }
@@ -2985,7 +3044,9 @@ static bool ReadKingdoms(sqlite3 *database, CcSim *sim,
     if (!Prepare(database,
                  "SELECT slot,id,name,color_r,color_g,color_b,treasury,"
                  "legitimacy,iron_ledger_debt,sanction,unsanctioned_weeks,"
-                 "pretender_crises,anointed FROM kingdom ORDER BY slot;",
+                 "pretender_crises,anointed,ruler_character_id,"
+                 "monastery_patron_id,anointed_by_character_id "
+                 "FROM kingdom ORDER BY slot;",
                  &statement, error, error_capacity)) return false;
     int32_t rows = 0;
     while (sqlite3_step(statement) == SQLITE_ROW) {
@@ -3009,6 +3070,12 @@ static bool ReadKingdoms(sqlite3 *database, CcSim *sim,
         k->unsanctioned_weeks = sqlite3_column_int(statement, 10);
         k->pretender_crises = sqlite3_column_int(statement, 11);
         k->anointed = sqlite3_column_int(statement, 12) != 0;
+        k->ruler_character_id =
+            (CcId)sqlite3_column_int64(statement, 13);
+        k->monastery_patron_id =
+            (CcId)sqlite3_column_int64(statement, 14);
+        k->anointed_by_character_id =
+            (CcId)sqlite3_column_int64(statement, 15);
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -4138,7 +4205,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
                  "territory_stability,regional_influence,crown_continuity_days,"
                  "hunt_cooldown_days,hunts,egg_count,brood_days_remaining,"
                  "brood_cooldown_days,broods_laid,whelps_dispersed,afterdeath_days,"
-                 "lifecycle_event_id "
+                 "lifecycle_event_id,territoryless_days "
                  "FROM dragon_state WHERE slot=1;",
                  &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
@@ -4195,6 +4262,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     dragon->afterdeath_days = sqlite3_column_int(statement, column++);
     dragon->lifecycle_event_id =
         (CcId)sqlite3_column_int64(statement, column++);
+    dragon->territoryless_days = sqlite3_column_int(statement, column++);
     sqlite3_finalize(statement);
 
     if (sim->schema_version >= 11U) {
@@ -4202,7 +4270,8 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
                      "SELECT phase,pledged_mask,alliance_mask,"
                      "origin_settlement_id,cause_event_id,days_remaining,"
                      "cooldown_days,food,iron,tools,weapons,gold,gems,"
-                     "recovered_coins,attempts,victories,defeats "
+                     "recovered_coins,attempts,victories,defeats,"
+                     "patron_character_id,hero_character_id "
                      "FROM dragon_campaign WHERE id=1;",
                      &statement, error, error_capacity)) return false;
         if (sqlite3_step(statement) != SQLITE_ROW) {
@@ -4234,6 +4303,10 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
         campaign->attempts = sqlite3_column_int(statement, column++);
         campaign->victories = sqlite3_column_int(statement, column++);
         campaign->defeats = sqlite3_column_int(statement, column++);
+        campaign->patron_character_id =
+            (CcId)sqlite3_column_int64(statement, column++);
+        campaign->hero_character_id =
+            (CcId)sqlite3_column_int64(statement, column++);
         sqlite3_finalize(statement);
     }
     if (sim->schema_version < 7U) return true;
@@ -5297,6 +5370,7 @@ static void MakeLegacyCharacterNamesUnique(CcSim *sim)
 static void FinishMaterialChainUpgrade(CcSim *sim)
 {
     CcSimInitializeMaterialChain(sim);
+    CcSimUpgradeHistoryOffices(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
 }
@@ -5336,6 +5410,12 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     uint32_t legacy_version = sim->schema_version;
     ClearMissingLegacyEventReferences(sim);
     MakeLegacyCharacterNamesUnique(sim);
+    if (legacy_version == 34U && sim->generator_version == 25U) {
+        CcSimUpgradeHistoryOffices(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     if (legacy_version == 33U && sim->generator_version == 25U) {
         FinishMaterialChainUpgrade(sim);
         return true;
@@ -5391,7 +5471,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 27U && legacy_version != 28U &&
         legacy_version != 29U && legacy_version != 30U &&
         legacy_version != 31U && legacy_version != 32U &&
-        legacy_version != 33U) return true;
+        legacy_version != 33U && legacy_version != 34U) return true;
     if (legacy_version == 27U) {
         CcSimInitializeWoodEconomy(sim);
         if (sim->generator_version != 23U) {
@@ -5780,6 +5860,8 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               EnsurePlayerKnowledgeColumns(database,
                                            error, error_capacity) &&
               EnsureMaterialChainColumns(database,
+                                         error, error_capacity) &&
+              EnsureHistoryOfficeColumns(database,
                                          error, error_capacity) &&
               ReadMeta(database, sim, &expected_hash,
                        &journal_generation, &journal_cursor,

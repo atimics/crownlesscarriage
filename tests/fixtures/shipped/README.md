@@ -36,6 +36,7 @@ the current reader and checks the migrated state.
 | 31 | 24 | `f060e1467c70` |
 | 32 | 25 | `3b55661` |
 | 33 | 25 | `e18ce0a` |
+| 34 | 25 | `cf027f3` |
 
 The two schema 21 journal files were written by commit `8c34d1b`. One records
 `ADVANCE_DAYS` from day 1 through day 7. The other records
