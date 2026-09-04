@@ -3379,6 +3379,16 @@ static Color BuildingRoofColor(int32_t style, Color kingdom,
     return roof;
 }
 
+bool CcLocalRayMissesBoxParallelSlabInternal(Ray ray, BoundingBox box)
+{
+    return (fabsf(ray.direction.x) <= FLT_EPSILON &&
+            (ray.position.x < box.min.x || ray.position.x > box.max.x)) ||
+           (fabsf(ray.direction.y) <= FLT_EPSILON &&
+            (ray.position.y < box.min.y || ray.position.y > box.max.y)) ||
+           (fabsf(ray.direction.z) <= FLT_EPSILON &&
+            (ray.position.z < box.min.z || ray.position.z > box.max.z));
+}
+
 bool CcLocalBuildingObscuresHeroInternal(Rectangle footprint, float height,
                                          Camera3D camera,
                                          Vector3 hero_center,
@@ -3417,6 +3427,9 @@ bool CcLocalBuildingObscuresHeroInternal(Rectangle footprint, float height,
             samples[sample], camera, render_width, render_height);
         Ray ray = GetScreenToWorldRayEx(screen, camera,
                                         render_width, render_height);
+        if (CcLocalRayMissesBoxParallelSlabInternal(ray, visible_walls)) {
+            continue;
+        }
         RayCollision collision = GetRayCollisionBox(ray, visible_walls);
         if (!collision.hit) continue;
         float hero_depth = Vector3DotProduct(
