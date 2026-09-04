@@ -13,6 +13,11 @@ typedef struct CcRoadBookRouteView {
     bool charted;
 } CcRoadBookRouteView;
 
+typedef struct CcRoadBookRouteSpan {
+    float from_amount;
+    float to_amount;
+} CcRoadBookRouteSpan;
+
 bool CcRoadBookReadRoute(const CcSim *sim, CcId route_id,
                          CcRoadBookRouteView *view);
 /* The carriage amount runs from the route's from end at 0 to its to end at 1.
@@ -24,5 +29,8 @@ bool CcRoadBookReadRouteAtCarriage(const CcSim *sim, CcId route_id,
 bool CcRoadBookShowsRouteAmount(const CcRoadBookRouteView *view,
                                 float amount);
 bool CcRoadBookShowsWholeRoute(const CcRoadBookRouteView *view);
+int32_t CcRoadBookVisibleRouteSpans(
+    const CcRoadBookRouteView *view, float segment_from, float segment_to,
+    CcRoadBookRouteSpan spans[2]);
 
 #endif

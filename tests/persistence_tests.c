@@ -326,6 +326,46 @@ static void AddLegacyJournalSuffix(const char *path,
     sqlite3_close(database);
 }
 
+static void AddSchema23RuntimeJournalSuffix(const char *path,
+                                            const CcSim *before,
+                                            const CcSim *after,
+                                            int32_t ticks)
+{
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database,
+                                  SQLITE_OPEN_READWRITE, NULL),
+                  database, "could not open schema 23 journal fixture");
+    char pre_hash[24];
+    char post_hash[24];
+    (void)snprintf(pre_hash, sizeof(pre_hash), "%016" PRIx64,
+                   CcSimHash(before));
+    (void)snprintf(post_hash, sizeof(post_hash), "%016" PRIx64,
+                   CcSimHash(after));
+    char *sql = sqlite3_mprintf(
+        "BEGIN IMMEDIATE;"
+        "INSERT INTO journal_epoch "
+        "(record_version,world_seed,initial_state_hash,created_tick) "
+        "VALUES(1,%u,%Q,%llu);"
+        "INSERT INTO action_journal "
+        "(generation,ordinal,record_version,operation_kind,command_kind,"
+        "target_id,good,amount,dungeon_state,step_count,sim_schema_version,"
+        "generator_version,pre_state_hash,post_state_hash,committed_tick) "
+        "VALUES(last_insert_rowid(),1,1,3,0,0,0,0,0,%d,23,20,%Q,%Q,%llu);"
+        "UPDATE meta SET journal_generation="
+        "(SELECT MAX(generation) FROM journal_epoch),"
+        "journal_cursor=0 WHERE id=1;"
+        "COMMIT;",
+        before->world_seed, pre_hash,
+        (unsigned long long)before->clock.tick,
+        ticks, pre_hash, post_hash,
+        (unsigned long long)after->clock.tick);
+    CC_CHECK(sql != NULL);
+    ExecuteFixtureSql(database, sql,
+                      "could not create schema 23 journal suffix");
+    sqlite3_free(sql);
+    sqlite3_close(database);
+}
+
 static void AddSchema12NamedTreasureJournalSuffix(
     const char *path, const CcSim *before, const CcSim *after_steal,
     const CcSim *after_return, CcId treasure_id)
@@ -1431,15 +1471,19 @@ static void CheckSchema23Compatibility(char *error, size_t error_capacity)
     };
     CC_CHECK(CcSimApply(&legacy, &travel, error, error_capacity));
     legacy.journey.ambush_pending = false;
-    CcSimAdvanceRuntimeTicks(&legacy, 2400);
+    CcSim suffix = legacy;
+    CcSimAdvanceRuntimeTicks(&suffix, 2400);
     const CcRouteKnowledge *knowledge = CcSimPlayerRouteKnowledge(
-        &legacy, route->id);
+        &suffix, route->id);
     CC_CHECK(knowledge != NULL);
-    int32_t expected_reveal = legacy.carriage.progress_milli + 140;
+    int32_t expected_reveal = suffix.carriage.progress_milli + 140;
     if (expected_reveal < 280) expected_reveal = 280;
     if (expected_reveal > 1000) expected_reveal = 1000;
     CC_CHECK(knowledge->from_reveal_milli == expected_reveal);
     CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    AddSchema23RuntimeJournalSuffix(path, &legacy, &suffix, 2400);
+    int64_t legacy_generation = ReadSqliteInteger(
+        path, "SELECT journal_generation FROM meta WHERE id=1;");
 
     CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
@@ -1448,8 +1492,23 @@ static void CheckSchema23Compatibility(char *error, size_t error_capacity)
     knowledge = CcSimPlayerRouteKnowledge(&restored, route->id);
     CC_CHECK(knowledge != NULL);
     CC_CHECK(knowledge->from_reveal_milli == expected_reveal);
+    CC_CHECK(restored.carriage.progress_milli ==
+             suffix.carriage.progress_milli);
     CC_CHECK(restored.journey.active);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    uint64_t migrated_hash = CcSimHash(&restored);
+
+    CcSim resumed;
+    CcJournal *journal = CcJournalResume(
+        path, &resumed, error, error_capacity);
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcSimHash(&resumed) == migrated_hash);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT journal_generation FROM meta WHERE id=1;") !=
+             legacy_generation);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT COUNT(*) FROM action_journal;") == 0);
+    CC_CHECK(CcJournalClose(&journal, &resumed, error, error_capacity));
     RemoveDatabase(path);
 }
 

@@ -14,6 +14,11 @@ static float Maximum(float first, float second)
     return first > second ? first : second;
 }
 
+static float Minimum(float first, float second)
+{
+    return first < second ? first : second;
+}
+
 bool CcRoadBookReadRoute(const CcSim *sim, CcId route_id,
                          CcRoadBookRouteView *view)
 {
@@ -74,4 +79,36 @@ bool CcRoadBookShowsWholeRoute(const CcRoadBookRouteView *view)
     if (view == NULL) return false;
     return view->from_reveal >= 1.0f || view->to_reveal >= 1.0f ||
            view->from_reveal + view->to_reveal >= 1.0f;
+}
+
+int32_t CcRoadBookVisibleRouteSpans(
+    const CcRoadBookRouteView *view, float segment_from, float segment_to,
+    CcRoadBookRouteSpan spans[2])
+{
+    if (view == NULL || spans == NULL ||
+        !(segment_from >= -FLT_MAX && segment_from <= FLT_MAX) ||
+        !(segment_to >= -FLT_MAX && segment_to <= FLT_MAX)) {
+        return 0;
+    }
+    float start = ClampUnit(Minimum(segment_from, segment_to));
+    float end = ClampUnit(Maximum(segment_from, segment_to));
+    if (end <= start) return 0;
+
+    int32_t count = 0;
+    float from_end = ClampUnit(view->from_reveal);
+    float first_end = Minimum(end, from_end);
+    if (first_end > start) {
+        spans[count++] = (CcRoadBookRouteSpan){start, first_end};
+    }
+
+    float to_start = ClampUnit(1.0f - view->to_reveal);
+    float second_start = Maximum(start, to_start);
+    if (end > second_start) {
+        if (count > 0 && second_start <= spans[0].to_amount) {
+            spans[0].to_amount = end;
+        } else {
+            spans[count++] = (CcRoadBookRouteSpan){second_start, end};
+        }
+    }
+    return count;
 }

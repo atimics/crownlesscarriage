@@ -59,6 +59,33 @@ static void CheckForwardSight(const CcRoadBookRouteView *view,
     CC_CHECK(fabsf(revealed_distance - expected_distance) < 0.001f);
 }
 
+static void CheckRouteSpanClipping(void)
+{
+    CcRoadBookRouteSpan spans[2];
+    CcRoadBookRouteView from_view = {.from_reveal = 0.425f};
+    CC_CHECK(CcRoadBookVisibleRouteSpans(
+        &from_view, 0.40f, 0.50f, spans) == 1);
+    CC_CHECK(fabsf(spans[0].from_amount - 0.40f) < 0.0001f);
+    CC_CHECK(fabsf(spans[0].to_amount - 0.425f) < 0.0001f);
+
+    CcRoadBookRouteView to_view = {.to_reveal = 0.575f};
+    CC_CHECK(CcRoadBookVisibleRouteSpans(
+        &to_view, 0.40f, 0.50f, spans) == 1);
+    CC_CHECK(fabsf(spans[0].from_amount - 0.425f) < 0.0001f);
+    CC_CHECK(fabsf(spans[0].to_amount - 0.50f) < 0.0001f);
+
+    CcRoadBookRouteView split_view = {
+        .from_reveal = 0.42f,
+        .to_reveal = 0.55f,
+    };
+    CC_CHECK(CcRoadBookVisibleRouteSpans(
+        &split_view, 0.40f, 0.50f, spans) == 2);
+    CC_CHECK(fabsf(spans[0].from_amount - 0.40f) < 0.0001f);
+    CC_CHECK(fabsf(spans[0].to_amount - 0.42f) < 0.0001f);
+    CC_CHECK(fabsf(spans[1].from_amount - 0.45f) < 0.0001f);
+    CC_CHECK(fabsf(spans[1].to_amount - 0.50f) < 0.0001f);
+}
+
 static void CheckCarriageSightForRouteLengths(void)
 {
     const float short_route_length = 40.0f;
@@ -248,6 +275,26 @@ static void CheckRealJourneySight(bool reverse)
         &sim, sim.journey.route_id, carriage_amount, route_length, &view));
     CheckForwardSight(&view, !reverse, carriage_amount, route_length,
                       CC_ROAD_BOOK_FORWARD_SIGHT_DISTANCE);
+
+    const char *path = reverse ? "route-knowledge-reverse-test.ccsave" :
+                                 "route-knowledge-forward-test.ccsave";
+    RemoveDatabase(path);
+    uint64_t saved_hash = CcSimHash(&sim);
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&restored) == saved_hash);
+    knowledge = CcSimPlayerRouteKnowledge(
+        &restored, restored.journey.route_id);
+    CC_CHECK(knowledge != NULL);
+    CC_CHECK((reverse ? knowledge->to_reveal_milli :
+                        knowledge->from_reveal_milli) == 350);
+    CC_CHECK(CcRoadBookReadRouteAtCarriage(
+        &restored, restored.journey.route_id,
+        carriage_amount, route_length, &view));
+    CheckForwardSight(&view, !reverse, carriage_amount, route_length,
+                      CC_ROAD_BOOK_FORWARD_SIGHT_DISTANCE);
+    RemoveDatabase(path);
 }
 
 int main(void)
@@ -294,9 +341,15 @@ int main(void)
         &sim, road->id);
     CC_CHECK(partial != NULL);
     CC_CHECK(partial->from_reveal_milli == 280);
-    CC_CHECK(CcJournalAdvanceRuntimeTicks(
-        journal, &sim, 2400, error, sizeof(error)));
+    int32_t midpoint_ticks = sim.journey.total_subticks / 60;
+    while (midpoint_ticks > 0) {
+        int32_t batch = midpoint_ticks > 3600 ? 3600 : midpoint_ticks;
+        CC_CHECK(CcJournalAdvanceRuntimeTicks(
+            journal, &sim, batch, error, sizeof(error)));
+        midpoint_ticks -= batch;
+    }
     CC_CHECK(sim.journey.active);
+    CC_CHECK(sim.carriage.progress_milli == 500);
     partial = CcSimPlayerRouteKnowledge(&sim, road->id);
     CC_CHECK(partial != NULL);
     int32_t expected_partial_reveal = sim.carriage.progress_milli > 280 ?
@@ -384,6 +437,7 @@ int main(void)
     CC_CHECK(complete->to_reveal_milli == 1000);
     CC_CHECK(CcSimValidate(&completed_restore, error, sizeof(error)));
 
+    CheckRouteSpanClipping();
     CheckCarriageSightForRouteLengths();
     CheckRealJourneySight(false);
     CheckRealJourneySight(true);

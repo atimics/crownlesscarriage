@@ -557,52 +557,64 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
                                              WORLD_ROAD_LIGHT;
         for (int32_t sample = CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE;
              sample < CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE; ++sample) {
-            float midpoint = 0.5f * (
-                CcWorldRouteSampleAmount(placement, sample) +
-                CcWorldRouteSampleAmount(placement, sample + 1));
-            if (!CcRoadBookShowsRouteAmount(&visibility, midpoint)) {
-                continue;
-            }
             if (route->smuggler_route && (sample & 1) != 0) continue;
-            CcWorldPoint first = placement->samples[sample];
-            CcWorldPoint second = placement->samples[sample + 1];
-            Vector3 along = {second.x - first.x, 0.0f,
-                             second.z - first.z};
-            float length = sqrtf(along.x * along.x + along.z * along.z);
-            Vector3 center = {
-                (first.x + second.x) * 0.5f,
-                (CcWorldTerrainHeight(manifest, first.x, first.z) +
-                 CcWorldTerrainHeight(manifest, second.x, second.z)) * 0.5f +
-                    0.08f,
-                (first.z + second.z) * 0.5f,
-            };
+            float segment_from =
+                CcWorldRouteSampleAmount(placement, sample);
+            float segment_to =
+                CcWorldRouteSampleAmount(placement, sample + 1);
+            CcRoadBookRouteSpan spans[2];
+            int32_t span_count = CcRoadBookVisibleRouteSpans(
+                &visibility, segment_from, segment_to, spans);
+            if (span_count <= 0) continue;
             float variation = 1.0f +
                 0.08f * sinf((float)sample * 1.7f +
                               (float)(placement->seed & 31U));
             bool corridor = sample >=
                                 CC_WORLD_ROUTE_FROM_CORRIDOR_SAMPLE &&
                             sample < CC_WORLD_ROUTE_TO_CORRIDOR_SAMPLE;
-            if (corridor) {
+            for (int32_t span_index = 0;
+                 span_index < span_count; ++span_index) {
+                CcWorldPoint first = CcWorldRoutePoint(
+                    placement, spans[span_index].from_amount);
+                CcWorldPoint second = CcWorldRoutePoint(
+                    placement, spans[span_index].to_amount);
+                if (corridor) {
+                    DrawOpenWorldRibbonSegment(
+                        manifest, first, second, 30.0f * variation, 0.04f,
+                        Fade(WORLD_EARTH_LIGHT, 0.96f));
+                    DrawOpenWorldRibbonSegment(
+                        manifest, first, second, 22.0f * variation, 0.08f,
+                        Fade(WORLD_GRASS_LIGHT, 0.98f));
+                } else {
+                    DrawOpenWorldRibbonSegment(
+                        manifest, first, second, 9.0f, 0.08f,
+                        Fade(WORLD_GRASS_LIGHT, 0.98f));
+                }
                 DrawOpenWorldRibbonSegment(
-                    manifest, first, second, 30.0f * variation, 0.04f,
-                    Fade(WORLD_EARTH_LIGHT, 0.96f));
-                DrawOpenWorldRibbonSegment(
-                    manifest, first, second, 22.0f * variation, 0.08f,
-                    Fade(WORLD_GRASS_LIGHT, 0.98f));
-            } else {
-                DrawOpenWorldRibbonSegment(
-                    manifest, first, second, 9.0f, 0.08f,
-                    Fade(WORLD_GRASS_LIGHT, 0.98f));
+                    manifest, first, second,
+                    (visibility.charted ? 6.2f : 5.2f) * variation,
+                    0.13f, road);
             }
-            DrawOpenWorldRibbonSegment(
-                manifest, first, second,
-                (visibility.charted ? 6.2f : 5.2f) * variation,
-                0.13f, road);
-            if (corridor && (sample & 1) == 0 && length > 0.01f) {
+
+            float midpoint = 0.5f * (segment_from + segment_to);
+            CcWorldPoint first = placement->samples[sample];
+            CcWorldPoint second = placement->samples[sample + 1];
+            Vector3 along = {second.x - first.x, 0.0f,
+                             second.z - first.z};
+            float length = sqrtf(along.x * along.x + along.z * along.z);
+            if (corridor && (sample & 1) == 0 && length > 0.01f &&
+                CcRoadBookShowsRouteAmount(&visibility, midpoint)) {
                 float inverse = 1.0f / length;
                 Vector3 side = {-along.z * inverse, 0.0f,
                                  along.x * inverse};
                 float side_amount = (sample & 2) == 0 ? 12.5f : -12.5f;
+                Vector3 center = {
+                    (first.x + second.x) * 0.5f,
+                    (CcWorldTerrainHeight(manifest, first.x, first.z) +
+                     CcWorldTerrainHeight(manifest, second.x, second.z)) *
+                        0.5f + 0.08f,
+                    (first.z + second.z) * 0.5f,
+                };
                 Vector3 tree = Vector3Add(
                     center, Vector3Scale(side, side_amount));
                 if (!OpenWorldPointClearsSettlements(
