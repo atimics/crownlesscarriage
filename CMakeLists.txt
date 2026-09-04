@@ -552,8 +552,8 @@ if(CC_BUILD_CLIENT)
     # These limits include headroom for the Linux CI software renderer.
     set(CC_ROADBOOK_ROUTE_MINIMUM_FPS 25)
     set(CC_ROADBOOK_ROUTE_P95_BUDGET_MS 40)
-    set(CC_ROADBOOK_NETWORK_MINIMUM_FPS 18)
-    set(CC_ROADBOOK_NETWORK_P95_BUDGET_MS 55)
+    set(CC_ROADBOOK_NETWORK_MINIMUM_FPS 21)
+    set(CC_ROADBOOK_NETWORK_P95_BUDGET_MS 45)
     add_custom_target(run_roadbook_qa
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 "${CC_ROADBOOK_REVIEW_DIR}"

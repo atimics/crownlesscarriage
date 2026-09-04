@@ -57,7 +57,7 @@ The `run_roadbook_qa` build target captures active carriage travel, a road
 fork, departure zoom, and arrival zoom. It also checks frame-rate and p95
 frame-time budgets for one known route and the whole known road network.
 The software-render budgets are 25 FPS and 40 ms p95 for one route, then
-18 FPS and 55 ms p95 for the full network.
+21 FPS and 45 ms p95 for the full network.
 Review images are written to `roadbook-review` inside the build directory.
 
 ## Agent courier protocol
