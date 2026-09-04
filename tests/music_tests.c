@@ -1,0 +1,129 @@
+#include "client/cc_music.h"
+
+#include <math.h>
+#include <stdio.h>
+#include <string.h>
+
+#define CHECK(test) do { if (!(test)) { \
+    fprintf(stderr, "line %d: %s\n", __LINE__, #test); return 1; \
+} } while (0)
+
+static CcSim sim;
+
+static int TakeFor(int number, int variant)
+{
+    for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i)
+        if (cc_music_takes[i].cue == number - 1 && cc_music_takes[i].variant == variant)
+            return i;
+    return -1;
+}
+
+static void Advance(CcMusicDirector *director, const CcMusicContext *context, int frames)
+{
+    for (int i = 0; i < frames; ++i) CcMusicUpdate(director, context, 1.0f / 60.0f);
+}
+
+int main(void)
+{
+    CcSimInit(&sim, 17);
+    CcId from_id = sim.settlements[0].id;
+    CcId to_id = sim.settlements[1].id;
+    sim.player.location_id = from_id;
+    sim.journey = (CcJourneyEncounter){.active = true, .origin_id = from_id,
+        .destination_id = to_id, .phase = CC_JOURNEY_PHASE_TRAVELLING};
+    CcMusicScene road = {.road = true};
+    float previous_from = 10.0f;
+    float previous_to = -1.0f;
+    for (int progress = 0; progress <= 1000; progress += 100) {
+        sim.carriage.progress_milli = progress;
+        CcMusicContext context = CcMusicContextFor(&sim, road);
+        float from = CcMusicScore(&context, 6);
+        float to = CcMusicScore(&context, 10);
+        CHECK(from <= previous_from && to >= previous_to);
+        CHECK(fabsf(context.region[0] + context.region[2] - 1.0f) < 0.00001f);
+        previous_from = from; previous_to = to;
+    }
+    sim.journey.origin_id = to_id; sim.journey.destination_id = from_id;
+    sim.carriage.progress_milli = 250;
+    CcMusicContext reversed = CcMusicContextFor(&sim, road);
+    CHECK(fabsf(reversed.region[2] - 0.75f) < 0.00001f);
+    CHECK(fabsf(reversed.region[0] - 0.25f) < 0.00001f);
+    sim.carriage.progress_milli = -200;
+    CHECK(CcMusicContextFor(&sim, road).region[2] == 1.0f);
+    sim.carriage.progress_milli = 1200;
+    CHECK(CcMusicContextFor(&sim, road).region[0] == 1.0f);
+
+    CcMusicContext context = {.theme = {[CC_MUSIC_TRAVEL] = 1.0f}};
+    CcMusicContext named = context;
+    CcMusicAttractPlace(&named, "Stag's Mill", 1.0f);
+    CHECK(CcMusicScore(&named, 8) > CcMusicScore(&context, 8));
+    CHECK(CcMusicScore(&context, 52) == 0.0f); /* Dragon combat waits for its context. */
+    CHECK(CcMusicScore(&context, 62) == 0.0f);
+    context.theme[CC_MUSIC_TRAVEL] = NAN;
+    CHECK(isfinite(CcMusicScore(&context, 2)));
+    context.theme[CC_MUSIC_TRAVEL] = 1.0f;
+
+    CcMusicDirector director;
+    CcMusicInit(&director, 17);
+    CHECK(CcMusicChoose(&director, &context) == -1);
+    int calm_a = TakeFor(3, 1), calm_b = TakeFor(3, 2), attack = TakeFor(59, 1);
+    CHECK(calm_a >= 0 && calm_b >= 0 && attack >= 0);
+    director.available[calm_a] = true;
+    director.available[calm_b] = true;
+    director.available[attack] = true;
+    Advance(&director, &context, 300);
+    CHECK(director.target_voice >= 0);
+    int first = director.voice[director.target_voice].take;
+    CHECK(first == calm_a || first == calm_b);
+    for (int i = 0; i < 100; ++i) CHECK(CcMusicChoose(&director, &context) != first);
+
+    CcMusicContext battle = {.combat = true, .theme = {
+        [CC_MUSIC_BANDIT] = 1.0f, [CC_MUSIC_COMBAT] = 1.0f}};
+    for (int i = 0; i < 100; ++i) CHECK(CcMusicChoose(&director, &battle) == attack);
+    CcMusicUpdate(&director, &battle, 1.0f / 60.0f);
+    CHECK(director.voice[director.target_voice].take == attack);
+    CHECK(director.fade_seconds == 1.2f);
+    for (int i = 0; i < 90; ++i) {
+        CcMusicUpdate(&director, &battle, 1.0f / 60.0f);
+        float power = 0.0f;
+        for (int voice = 0; voice < CC_MUSIC_VOICE_COUNT; ++voice) {
+            CHECK(isfinite(director.voice[voice].gain));
+            CHECK(director.voice[voice].gain >= 0.0f && director.voice[voice].gain <= 1.0f);
+            power += director.voice[voice].gain * director.voice[voice].gain;
+        }
+        CHECK(fabsf(power - 1.0f) < 0.0001f);
+    }
+    Advance(&director, &context, 300);
+    CHECK(director.voice[director.target_voice].take == attack);
+    Advance(&director, &context, 190);
+    CHECK(director.voice[director.target_voice].take != attack);
+    CHECK(director.fade_seconds == 8.0f);
+    Advance(&director, &context, 500);
+    int voices = 0;
+    for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i)
+        if (director.voice[i].take >= 0) voices += 1;
+    CHECK(voices == 1);
+
+    /* A fight can interrupt a regional fade while every gain stays continuous. */
+    int region_take = TakeFor(11, 1);
+    director.available[region_take] = true;
+    director.voice[director.target_voice].age = 40.0f;
+    CcMusicContext arrival = context;
+    arrival.cue[10] = 1.0f; arrival.region[2] = 1.0f;
+    CcMusicUpdate(&director, &arrival, 1.0f / 60.0f);
+    Advance(&director, &arrival, 120);
+    float gains[CC_MUSIC_VOICE_COUNT];
+    for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i) gains[i] = director.voice[i].gain;
+    CcMusicUpdate(&director, &battle, 1.0f / 60.0f);
+    CHECK(director.voice[director.target_voice].take == attack);
+    for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i)
+        CHECK(fabsf(gains[i] - director.voice[i].gain) < 0.02f);
+    CcMusicDirector before = director;
+    CcMusicUpdate(&director, &context, NAN);
+    CHECK(memcmp(&before, &director, sizeof(director)) == 0);
+    CcMusicUpdate(&director, &context, 0.0f);
+    CHECK(memcmp(&before, &director, sizeof(director)) == 0);
+
+    puts("Music: regional blends, named places, shuffle, combat and interrupted fades passed.");
+    return 0;
+}

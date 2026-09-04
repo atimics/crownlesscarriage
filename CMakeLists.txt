@@ -94,6 +94,14 @@ target_include_directories(crownless_story PUBLIC src)
 target_link_libraries(crownless_story PUBLIC crownless_sim)
 cc_strict_warnings(crownless_story)
 
+add_library(crownless_music src/client/cc_music.c)
+target_include_directories(crownless_music PUBLIC src)
+target_link_libraries(crownless_music PUBLIC crownless_sim)
+if(NOT MSVC)
+    target_link_libraries(crownless_music PUBLIC m)
+endif()
+cc_strict_warnings(crownless_music)
+
 add_library(crownless_creature_catalog
     src/client/cc_creature_catalog.c
 )
@@ -856,6 +864,10 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(music_tests tests/music_tests.c)
+    target_link_libraries(music_tests PRIVATE crownless_music)
+    cc_strict_warnings(music_tests)
+    add_test(NAME situation_music_and_fades COMMAND music_tests)
     add_test(
         NAME license_page_contract
         COMMAND ${CMAKE_COMMAND}
