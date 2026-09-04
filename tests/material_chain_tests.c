@@ -191,6 +191,24 @@ static void CheckPaperMillGates(void)
     CC_CHECK(place->stock[CC_GOOD_WOOD] == 6);
 
     PrepareMill(&sim, &place);
+    place->stock[CC_GOOD_BREAD] = 4;
+    place->stock[CC_GOOD_WHEAT] = 0;
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(place->stock[CC_GOOD_PAPER] == 0);
+    CC_CHECK(place->stock[CC_GOOD_WOOD] == 8);
+    CC_CHECK(place->stock[CC_GOOD_BREAD] == 3);
+    CC_CHECK(place->paper_tool_wear == 0);
+    CC_CHECK(CountEvents(&sim, CC_EVENT_PAPER_MILLED) == 0);
+
+    PrepareMill(&sim, &place);
+    place->stock[CC_GOOD_BREAD] = 5;
+    place->stock[CC_GOOD_WHEAT] = 0;
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(place->stock[CC_GOOD_PAPER] == 8);
+    CC_CHECK(place->stock[CC_GOOD_WOOD] == 6);
+    CC_CHECK(place->stock[CC_GOOD_BREAD] == 4);
+
+    PrepareMill(&sim, &place);
     place->stock[CC_GOOD_WOOD] = place->reserve_target[CC_GOOD_WOOD] + 1;
     CcSimAdvanceDays(&sim, 1);
     CC_CHECK(place->stock[CC_GOOD_PAPER] == 4);

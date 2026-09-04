@@ -134,6 +134,7 @@ static void CheckWeakestRouteUpkeep(void)
         sim.settlements[i].stock[CC_GOOD_STONE] = 0;
         sim.settlements[i].production[CC_GOOD_WOOD] = 0;
         sim.settlements[i].production[CC_GOOD_STONE] = 0;
+        sim.settlements[i].production[CC_GOOD_PAPER] = 0;
     }
     sim.settlements[1].stock[CC_GOOD_WOOD] = 1000;
     sim.settlements[1].stock[CC_GOOD_STONE] = 1000;
@@ -212,12 +213,15 @@ int main(void)
     place->stock[CC_GOOD_BREAD] = 10;
     place->stock[CC_GOOD_WHEAT] = 7;
     place->reserve_target[CC_GOOD_WHEAT] = 1;
+    place->stock[CC_GOOD_WOOD] = 7;
+    place->reserve_target[CC_GOOD_WOOD] = 1;
     place->stock[CC_GOOD_TOOLS] = 1;
     place->reserve_target[CC_GOOD_PAPER] = 10;
     place->production[CC_GOOD_PAPER] = 8;
     CcSimAdvanceDays(&paper_mill, 6);
     CC_CHECK(place->stock[CC_GOOD_PAPER] == 8);
-    CC_CHECK(place->stock[CC_GOOD_WHEAT] == 5);
+    CC_CHECK(place->stock[CC_GOOD_WHEAT] == 7);
+    CC_CHECK(place->stock[CC_GOOD_WOOD] == 5);
     CC_CHECK(place->paper_tool_wear == 1);
 
     CcSim wet_journey;

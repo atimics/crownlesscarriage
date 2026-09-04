@@ -4775,6 +4775,10 @@ static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
     if (!CcSettlementHasService(settlement, CC_SERVICE_MILL) ||
         settlement->hunger > 0 ||
         settlement->stock[CC_GOOD_TOOLS] <= 0) return;
+    /* Keep mill work behind the town's food buffer, across all edible goods. */
+    if (sim->schema_version >= 37U &&
+        NutritionRations(settlement->stock, CC_NUTRITION_CIVILIAN) <
+            WeeklyFoodUse(sim, settlement) * 4) return;
     int32_t capacity = MaximumI32(
         0, settlement->production[CC_GOOD_PAPER]);
     int32_t gap = MaximumI32(
