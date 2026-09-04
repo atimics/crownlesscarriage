@@ -360,8 +360,9 @@ EM_ASYNC_JS(int, ClientFlushBrowserPreferences,
         return 0;
     }
 });
-EM_JS(void, ClientBrowserFrontend, (const char *screen), {
+EM_JS(void, ClientBrowserFrontend, (const char *screen, int focus), {
     Module.crownlessScreen = UTF8ToString(screen);
+    Module.crownlessMenuFocus = focus;
 });
 EM_JS(int, ClientBrowserCampaignAccess, (), {
     return Number.isInteger(Module.crownlessCampaignAccess)
@@ -11148,7 +11149,7 @@ int main(int argc, char **argv)
 #if defined(PLATFORM_WEB)
         ClientBrowserFrontend(frontend.screen == FRONTEND_TITLE ? "title" :
             frontend.screen == FRONTEND_PAUSED ? "paused" :
-            frontend.screen == FRONTEND_DELETE ? "delete" : "playing");
+            frontend.screen == FRONTEND_DELETE ? "delete" : "playing", frontend.focus);
 #endif
         EndDrawing();
 #if defined(PLATFORM_WEB)

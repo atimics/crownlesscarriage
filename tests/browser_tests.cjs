@@ -22,6 +22,15 @@ async function main() {
   const browser = await chromium.launch({args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
   const context = await browser.newContext({viewport: {width: 1280, height: 900}});
   const page = await context.newPage();
+  async function selectMenuItem(index) {
+    await page.locator('#canvas').focus();
+    while (await page.evaluate(() => Module.crownlessMenuFocus) !== index) {
+      const previous = await page.evaluate(() => Module.crownlessMenuFocus);
+      await page.keyboard.press('ArrowDown');
+      await page.waitForFunction(value => Module.crownlessMenuFocus !== value, previous);
+    }
+    await page.keyboard.press('Enter');
+  }
   const errors = [];
   let rejectedWrite = false;
   page.on('pageerror', error => errors.push(error.message));
@@ -157,22 +166,16 @@ async function main() {
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => Module.crownlessScreen === 'paused');
     await page.screenshot({path: path.join(output, 'pause-menu.png')});
-    for (let i = 0; i < 5; i++) { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(80); }
-    await page.locator('#canvas').focus();
-    await page.keyboard.press('Enter');
+    await selectMenuItem(5);
     await page.waitForFunction(() => Module.crownlessScreen === 'delete');
     await page.screenshot({path: path.join(output, 'delete-confirmation.png')});
     await page.locator('#canvas').focus();
     await page.keyboard.press('Enter'); // Keep world is selected first.
     await page.waitForFunction(() => Module.crownlessScreen === 'paused');
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision);
-    for (let i = 0; i < 5; i++) { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(80); }
-    await page.locator('#canvas').focus();
-    await page.keyboard.press('Enter');
+    await selectMenuItem(5);
     await page.waitForFunction(() => Module.crownlessScreen === 'delete');
-    await page.keyboard.press('ArrowDown');
-    await page.locator('#canvas').focus();
-    await page.keyboard.press('Enter');
+    await selectMenuItem(1);
     await page.waitForFunction(() => Module.crownlessScreen === 'title' && Module.crownlessSaveRevision > 0);
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision + 1);
     await page.reload();
