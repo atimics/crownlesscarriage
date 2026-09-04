@@ -418,37 +418,6 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
     active_place_function = previous_function;
 }
 
-static bool OpenWorldRouteReveal(const CcSim *sim, const CcRoute *route,
-                                 float *from_reveal, float *to_reveal,
-                                 bool *charted)
-{
-    int32_t from_milli = 0;
-    int32_t to_milli = 0;
-    bool visible = route != NULL && CcSimPlayerRouteReveal(
-        sim, route->id, &from_milli, &to_milli, charted);
-    if (from_reveal != NULL) {
-        *from_reveal = (float)from_milli / 1000.0f;
-    }
-    if (to_reveal != NULL) {
-        *to_reveal = (float)to_milli / 1000.0f;
-    }
-    return visible;
-}
-
-static bool OpenWorldRouteAmountRevealed(float amount,
-                                         float from_reveal,
-                                         float to_reveal)
-{
-    return amount <= from_reveal || amount >= 1.0f - to_reveal;
-}
-
-static bool OpenWorldRouteFullyRevealed(float from_reveal,
-                                        float to_reveal)
-{
-    return from_reveal >= 1.0f || to_reveal >= 1.0f ||
-           from_reveal + to_reveal >= 1.0f;
-}
-
 static bool OpenWorldSettlementRevealed(const CcSim *sim, CcId settlement_id)
 {
     return CcSimPlayerKnowsSettlement(sim, settlement_id);
@@ -563,11 +532,9 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
         const CcWorldRoutePlacement *placement =
             &manifest->routes[route_index];
         const CcRoute *route = CcSimRoute(sim, placement->route_id);
-        float from_reveal = 0.0f;
-        float to_reveal = 0.0f;
-        bool charted = false;
-        if (!OpenWorldRouteReveal(sim, route, &from_reveal,
-                                  &to_reveal, &charted)) continue;
+        CcRoadBookRouteView visibility = {0};
+        if (route == NULL ||
+            !CcRoadBookReadRoute(sim, route->id, &visibility)) continue;
         Color road = route != NULL && route->closed ? WORLD_DANGER :
                      route != NULL && route->smuggler_route ? WORLD_VIOLET :
                                                               WORLD_ROAD_LIGHT;
@@ -576,8 +543,7 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
             float midpoint = 0.5f * (
                 CcWorldRouteSampleAmount(placement, sample) +
                 CcWorldRouteSampleAmount(placement, sample + 1));
-            if (!OpenWorldRouteAmountRevealed(
-                    midpoint, from_reveal, to_reveal)) {
+            if (!CcRoadBookShowsRouteAmount(&visibility, midpoint)) {
                 continue;
             }
             if (route != NULL && route->smuggler_route &&
@@ -614,7 +580,8 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
             }
             DrawOpenWorldRibbonSegment(
                 manifest, first, second,
-                (charted ? 6.2f : 5.2f) * variation, 0.13f, road);
+                (visibility.charted ? 6.2f : 5.2f) * variation,
+                0.13f, road);
             if (corridor && (sample & 1) == 0 && length > 0.01f) {
                 float inverse = 1.0f / length;
                 Vector3 side = {-along.z * inverse, 0.0f,
@@ -633,15 +600,16 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
                                 2.25f, WORLD_FOLIAGE_LIGHT);
             }
         }
-        if (!charted &&
-            !OpenWorldRouteFullyRevealed(from_reveal, to_reveal)) {
-            if (from_reveal > 0.0f) {
-                DrawOpenWorldFogEdge(manifest, placement, from_reveal,
+        if (!visibility.charted &&
+            !CcRoadBookShowsWholeRoute(&visibility)) {
+            if (visibility.from_reveal > 0.0f) {
+                DrawOpenWorldFogEdge(manifest, placement,
+                                     visibility.from_reveal,
                                      placement->seed);
             }
-            if (to_reveal > 0.0f) {
+            if (visibility.to_reveal > 0.0f) {
                 DrawOpenWorldFogEdge(manifest, placement,
-                                     1.0f - to_reveal,
+                                     1.0f - visibility.to_reveal,
                                      placement->seed ^ UINT32_C(0x5bd1e995));
             }
         }
@@ -694,32 +662,31 @@ static void OpenWorldRevealedBounds(const CcSim *sim,
         const CcWorldRoutePlacement *placement =
             &manifest->routes[route_index];
         const CcRoute *route = CcSimRoute(sim, placement->route_id);
-        float from_reveal = 0.0f;
-        float to_reveal = 0.0f;
-        if (!OpenWorldRouteReveal(sim, route, &from_reveal,
-                                  &to_reveal, NULL)) continue;
+        CcRoadBookRouteView visibility = {0};
+        if (route == NULL ||
+            !CcRoadBookReadRoute(sim, route->id, &visibility)) continue;
         for (int32_t sample = 0;
              sample < CC_WORLD_ROUTE_SAMPLE_COUNT; ++sample) {
             float amount = CcWorldRouteSampleAmount(placement, sample);
-            if (!OpenWorldRouteAmountRevealed(
-                    amount, from_reveal, to_reveal)) continue;
+            if (!CcRoadBookShowsRouteAmount(
+                    &visibility, amount)) continue;
             CcWorldPoint point = placement->samples[sample];
             left = fminf(left, point.x);
             near = fminf(near, point.z);
             right = fmaxf(right, point.x);
             far = fmaxf(far, point.z);
         }
-        if (from_reveal > 0.0f) {
+        if (visibility.from_reveal > 0.0f) {
             CcWorldPoint edge = CcWorldRoutePoint(
-                placement, from_reveal);
+                placement, visibility.from_reveal);
             left = fminf(left, edge.x);
             near = fminf(near, edge.z);
             right = fmaxf(right, edge.x);
             far = fmaxf(far, edge.z);
         }
-        if (to_reveal > 0.0f) {
+        if (visibility.to_reveal > 0.0f) {
             CcWorldPoint edge = CcWorldRoutePoint(
-                placement, 1.0f - to_reveal);
+                placement, 1.0f - visibility.to_reveal);
             left = fminf(left, edge.x);
             near = fminf(near, edge.z);
             right = fmaxf(right, edge.x);

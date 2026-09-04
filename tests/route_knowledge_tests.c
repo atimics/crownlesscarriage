@@ -1,3 +1,4 @@
+#include "client/cc_road_book.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
 
@@ -122,6 +123,18 @@ int main(void)
     CC_CHECK(from_reveal == 0 || to_reveal == 0);
     CC_CHECK(!CcSimPlayerKnowsSettlement(
         &restored, restored.settlements[2].id));
+    CcRoadBookRouteView next_road_view;
+    CC_CHECK(CcRoadBookReadRoute(
+        &restored, next_road->id, &next_road_view));
+    CC_CHECK(!CcRoadBookShowsWholeRoute(&next_road_view));
+    CC_CHECK(!CcRoadBookShowsRouteAmount(&next_road_view, 0.50f));
+    if (next_road->from_id == destination_id) {
+        CC_CHECK(CcRoadBookShowsRouteAmount(&next_road_view, 0.05f));
+        CC_CHECK(!CcRoadBookShowsRouteAmount(&next_road_view, 0.95f));
+    } else {
+        CC_CHECK(!CcRoadBookShowsRouteAmount(&next_road_view, 0.05f));
+        CC_CHECK(CcRoadBookShowsRouteAmount(&next_road_view, 0.95f));
+    }
 
     CcCommand return_home = {
         .kind = CC_COMMAND_TRAVEL,
