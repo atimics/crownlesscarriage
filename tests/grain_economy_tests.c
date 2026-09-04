@@ -90,6 +90,18 @@ int main(void)
 
     CcSim migration;
     CcSimInit(&migration, UINT32_C(0x9a41e002));
+    CC_CHECK(migration.kingdoms[0].treasury == 410);
+    CC_CHECK(migration.kingdoms[0].legitimacy == 71);
+    CC_CHECK(migration.kingdoms[1].treasury == 423);
+    CC_CHECK(migration.kingdoms[1].legitimacy == 64);
+    CC_CHECK(migration.kingdoms[2].treasury == 324);
+    CC_CHECK(migration.kingdoms[2].legitimacy == 68);
+    CC_CHECK(migration.factions[0].power == 60);
+    CC_CHECK(migration.factions[0].support == 47);
+    CC_CHECK(migration.factions[1].power == 66);
+    CC_CHECK(migration.factions[1].support == 56);
+    CC_CHECK(migration.factions[8].power == 69);
+    CC_CHECK(migration.factions[8].support == 69);
     CcSettlement *farmstead = &migration.settlements[0];
     CcSettlement *market = &migration.settlements[1];
     int32_t old_bread = market->stock[CC_GOOD_BREAD];
