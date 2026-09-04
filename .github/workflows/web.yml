@@ -113,7 +113,7 @@ jobs:
 
   deploy-shared-world:
     name: Deploy shared world to Fly
-    if: github.event_name != 'pull_request' && vars.CROWNLESS_FLY_APP != ''
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.CROWNLESS_FLY_APP != ''
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -133,9 +133,10 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os, urllib.request
-          with urllib.request.urlopen('https://crownless-ratimics.fly.dev/healthz', timeout=30) as response:
-              health = json.load(response)
-          assert health['status'] == 'ready', health
-          assert health['revision'] == os.environ['EXPECTED_REVISION'], health
-          print('Shared world is healthy at the deployed revision.')
+          for origin in ('https://crownless-ratimics.fly.dev', 'https://crownless.ratimics.com'):
+              with urllib.request.urlopen(origin + '/healthz', timeout=30) as response:
+                  health = json.load(response)
+              assert health['status'] == 'ready', health
+              assert health['revision'] == os.environ['EXPECTED_REVISION'], health
+              print(origin + ' is healthy at the deployed revision.')
           PY
