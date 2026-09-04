@@ -3941,22 +3941,25 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcEvent *harvest = PushEvent(sim, CC_EVENT_HARVEST_FAILED,
                                  sim->settlements[0].id,
                                  sim->settlements[0].id, 0, drought, text);
+    CcId harvest_event_id = harvest->id;
     (void)snprintf(text, sizeof(text),
                    "%s closes the treaty bridge and delays the relief convoy.",
                    sim->settlements[2].name);
     CcEvent *bridge = PushEvent(sim, CC_EVENT_ROUTE_CLOSED, sim->routes[1].id,
-                                sim->settlements[2].id, harvest->id, 54, text);
+                                sim->settlements[2].id, harvest_event_id,
+                                54, text);
+    CcId bridge_event_id = bridge->id;
     (void)snprintf(text, sizeof(text),
                    "Displaced workers reinforce %s on the old road.",
                    sim->bandits[0].name);
     (void)PushEvent(sim, CC_EVENT_BANDIT_PRESSURE, sim->bandits[0].id,
-                    sim->routes[6].id, bridge->id,
+                    sim->routes[6].id, bridge_event_id,
                     sim->bandits[0].influence, text);
     (void)snprintf(text, sizeof(text),
                    "%s opens a sealed tunnel and disturbs the %s.",
                    sim->settlements[3].name, sim->monsters[0].name);
     (void)PushEvent(sim, CC_EVENT_MONSTER_PRESSURE, sim->monsters[0].id,
-                    sim->dungeons[0].id, bridge->id,
+                    sim->dungeons[0].id, bridge_event_id,
                     sim->monsters[0].pressure, text);
     GenerateSituations(sim);
     CcSimInitializeCharacters(sim);
@@ -5383,14 +5386,14 @@ static CcSettlement *RichestDragonTarget(CcSim *sim)
     return best;
 }
 
-static CcEvent *StartDragonTheft(CcSim *sim, CcId thief_id,
-                                 CcSettlement *target, int32_t amount,
-                                 CcId parent_event_id,
-                                 const char *theft_text)
+static CcId StartDragonTheft(CcSim *sim, CcId thief_id,
+                             CcSettlement *target, int32_t amount,
+                             CcId parent_event_id,
+                             const char *theft_text)
 {
     if (sim == NULL || target == NULL || amount <= 0 || sim->dragon.slain ||
         sim->dragon.stolen_outstanding > 0 ||
-        (CcMoney)amount > sim->dragon.hoard) return NULL;
+        (CcMoney)amount > sim->dragon.hoard) return 0U;
     CcMoney hoard_before = sim->dragon.hoard;
     sim->dragon.hoard -= amount;
     sim->dragon.stolen_outstanding = amount;
@@ -5408,16 +5411,17 @@ static CcEvent *StartDragonTheft(CcSim *sim, CcId thief_id,
         sim, CC_EVENT_DRAGON_HOARD_STOLEN, thief_id,
         sim->dragon.lair_settlement_id, parent_event_id,
         amount, theft_text);
-    sim->dragon.hoard_event_id = theft->id;
+    CcId theft_event_id = theft->id;
+    sim->dragon.hoard_event_id = theft_event_id;
     char omen_text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(omen_text, sizeof(omen_text),
                    "Smoke falls into %s's chimneys; old readers count 14 nights until %s comes.",
                    target->name, sim->dragon.name);
     CcEvent *omen = PushEvent(
         sim, CC_EVENT_DRAGON_OMEN, sim->dragon.id, target->id,
-        theft->id, 14, omen_text);
+        theft_event_id, 14, omen_text);
     sim->dragon.omen_event_id = omen->id;
-    return theft;
+    return theft_event_id;
 }
 
 static void PlanGoblinTribute(CcSim *sim)
@@ -5952,11 +5956,11 @@ static void AdvanceHoardRaid(CcSim *sim)
                            "%.16s steals %d crowns from %.16s for relief in %.16s.",
                            raiders->name, stolen, sim->dragon.name, origin->name);
         }
-        CcEvent *theft = StartDragonTheft(
+        CcId theft_event_id = StartDragonTheft(
             sim, raiders->id, origin, stolen, theft_parent_id, text);
-        if (theft == NULL) return;
+        if (theft_event_id == 0U) return;
         raiders->phase = CC_HOARD_RAIDERS_RETURNING;
-        raiders->cause_event_id = theft->id;
+        raiders->cause_event_id = theft_event_id;
         raiders->carried_treasure = stolen;
         raiders->days_remaining = GoblinTravelDays(sim, origin->id);
         return;
@@ -6724,6 +6728,7 @@ static void AdvanceDragonRetaliation(CcSim *sim)
     CcEvent *fire = PushEvent(
         sim, CC_EVENT_DRAGON_RETALIATION, dragon->id, target->id,
         dragon->omen_event_id, 28, text);
+    CcId fire_event_id = fire->id;
     dragon->retaliations += 1;
 
     if (dragon->theft_actor_id == sim->hoard_raiders.id &&
@@ -6781,7 +6786,7 @@ static void AdvanceDragonRetaliation(CcSim *sim)
         CcEvent *restitution = PushEvent(
             sim, CC_EVENT_DRAGON_TREASURE_RETURNED, kingdom->id,
             dragon->lair_settlement_id,
-            fire->id, (int32_t)payment, text);
+            fire_event_id, (int32_t)payment, text);
         dragon->hoard_event_id = restitution->id;
         if (dragon->stolen_outstanding == 0) {
             dragon->memory_integrity = MaximumI32(
@@ -6803,7 +6808,7 @@ static void AdvanceDragonRetaliation(CcSim *sim)
                        target->name, dragon->name);
         CcEvent *omen = PushEvent(
             sim, CC_EVENT_DRAGON_OMEN, dragon->id, target->id,
-            fire->id, 28, text);
+            fire_event_id, 28, text);
         dragon->omen_event_id = omen->id;
     }
 }
@@ -9558,7 +9563,6 @@ static void AdvanceDragonCampaign(CcSim *sim)
         campaign->supplies[good] = 0;
     }
     char text[CC_EVENT_TEXT_CAPACITY];
-    CcEvent *battle;
     if (attack < defense) {
         campaign->defeats += 1;
         campaign->phase = CC_DRAGON_CAMPAIGN_IDLE;
@@ -9587,7 +9591,7 @@ static void AdvanceDragonCampaign(CcSim *sim)
             text, sizeof(text),
             "The allied dragon host breaks at the cave: strength %d against %d, but survivors carry hard-won knowledge home.",
             attack, defense);
-        battle = PushEvent(
+        CcEvent *battle = PushEvent(
             sim, CC_EVENT_DRAGON_BATTLE, sim->dragon.id,
             campaign->origin_settlement_id, campaign->cause_event_id,
             attack - defense, text);
@@ -9646,10 +9650,11 @@ static void AdvanceDragonCampaign(CcSim *sim)
         text, sizeof(text),
         "The allied host slays %s: strength %d against %d; the real hoard begins its journey home.",
         sim->dragon.name, attack, defense);
-    battle = PushEvent(
+    CcEvent *battle = PushEvent(
         sim, CC_EVENT_DRAGON_SLAIN, sim->dragon.id,
         sim->dragon.lair_settlement_id, campaign->cause_event_id,
         attack - defense, text);
+    CcId battle_event_id = battle->id;
     /* Relic law: a world-historical deed leaves a named artifact whose
        provenance IS the event that made it. The bane-blade is forged in
        the moment of the slaying, held at the campaign's origin - the
@@ -9677,12 +9682,12 @@ static void AdvanceDragonCampaign(CcSim *sim)
                            relic->name, sim->dragon.name,
                            sim->current_day);
             (void)PushEvent(sim, CC_EVENT_TREASURE_CRAFTED,
-                            relic->id, origin->id, battle->id,
+                            relic->id, origin->id, battle_event_id,
                             relic->appraised_value, relic_text);
         }
     }
-    campaign->cause_event_id = battle->id;
-    sim->dragon.lifecycle_event_id = battle->id;
+    campaign->cause_event_id = battle_event_id;
+    sim->dragon.lifecycle_event_id = battle_event_id;
     campaign->phase = CC_DRAGON_CAMPAIGN_RETURNING;
     campaign->days_remaining = DragonCampaignTravelDays(
         sim, campaign->origin_settlement_id);
@@ -12830,7 +12835,7 @@ static int32_t RollD6(CcSim *sim)
 
 static void RollEncounterLoot(CcSim *sim, CcBanditGroup *bandits,
                               const CcJourneyEncounter *journey,
-                              const CcEvent *combat_event)
+                              CcId combat_event_id)
 {
     const int32_t roll = RollD6(sim) + RollD6(sim);
     if (bandits == NULL || roll < 4) return;
@@ -12907,8 +12912,7 @@ static void RollEncounterLoot(CcSim *sim, CcBanditGroup *bandits,
     if (length > 0) {
         (void)snprintf(text + length, sizeof(text) - length, ".");
         (void)PushEvent(sim, CC_EVENT_ENCOUNTER_LOOT, journey->situation_id,
-                        journey->route_id,
-                        combat_event != NULL ? combat_event->id : 0U,
+                        journey->route_id, combat_event_id,
                         magnitude, text);
     }
 }
@@ -13020,10 +13024,11 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
     CcEvent *outcome_event = PushEvent(
         sim, event_kind, journey.situation_id, journey.route_id,
         journey.parent_event_id, magnitude, text);
+    CcId outcome_event_id = outcome_event->id;
     sim->journey.phase = CC_JOURNEY_PHASE_TRAVELLING;
-    sim->journey.parent_event_id = outcome_event->id;
+    sim->journey.parent_event_id = outcome_event_id;
     if (outcome == CC_JOURNEY_OUTCOME_COMBAT) {
-        RollEncounterLoot(sim, bandits, &journey, outcome_event);
+        RollEncounterLoot(sim, bandits, &journey, outcome_event_id);
     }
     sim->resolved_journey_situation_id = journey.situation_id;
     sim->resolved_journey_outcome = outcome;
@@ -13033,7 +13038,7 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
     sim->carriage.speed_milli_per_second =
         JourneyCarriageSpeedForPace(
             sim->journey.total_subticks, sim->journey.pace);
-    CreateJourneyTraffic(sim, &journey, outcome_event->id);
+    CreateJourneyTraffic(sim, &journey, outcome_event_id);
     SetError(error, error_capacity, "");
     return true;
 }
@@ -14400,7 +14405,7 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
                            command->amount, sim->dragon.name);
             if (StartDragonTheft(
                     sim, sim->player.id, target, command->amount,
-                    sim->dragon.hoard_event_id, text) == NULL) {
+                    sim->dragon.hoard_event_id, text) == 0U) {
                 SetError(error, error_capacity,
                          "The hoard theft could not be recorded.");
                 return false;
