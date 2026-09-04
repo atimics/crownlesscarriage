@@ -355,7 +355,8 @@ bool CcLocalOpenWorldUsesKingdomMarkers(float camera_weight)
 
 static void DrawOpenWorldSettlement(const CcSim *sim,
                                     const CcWorldSettlementPlacement *place,
-                                    Vector3 focus, bool kingdom_view)
+                                    Vector3 focus, bool kingdom_view,
+                                    bool distant_view)
 {
     float dx = place->center.x - focus.x;
     float dz = place->center.z - focus.z;
@@ -410,6 +411,8 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
     float rotation = place->entrance_heading_yaw - 0.5f * PI;
     CcSettlementFunction previous_function = active_place_function;
     active_place_function = profile->function;
+    bool previous_distant_view = distant_building_view;
+    distant_building_view = distant_view;
 
     rlPushMatrix();
     rlTranslatef(place->center.x, place->plateau_height + 0.03f,
@@ -501,6 +504,7 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
             PlaceIdentityAccent(profile, kingdom));
     rlPopMatrix();
     active_place_function = previous_function;
+    distant_building_view = previous_distant_view;
 }
 
 static bool OpenWorldSettlementRevealed(const CcSim *sim, CcId settlement_id)
@@ -1378,8 +1382,12 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
                 sim, stream->manifest.settlements[i].settlement_id)) {
             continue;
         }
-        DrawOpenWorldSettlement(sim, &stream->manifest.settlements[i], focus,
-                                kingdom_view);
+        const CcWorldSettlementPlacement *place = &stream->manifest.settlements[i];
+        Vector3 town_center = {place->center.x, place->plateau_height,
+                                place->center.z};
+        bool distant_view = storybook &&
+            Vector3Distance(camera.position, town_center) > 55.0f;
+        DrawOpenWorldSettlement(sim, place, focus, kingdom_view, distant_view);
     }
     DrawOpenWorldSites(sim, &stream->manifest, focus, clock, kingdom_view);
     bool hero_embarked = carriage != NULL && carriage->hero_embarked;

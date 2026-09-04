@@ -470,6 +470,12 @@ static void DrawBuilding(float x, float z, float width, float depth,
                          int32_t style)
 {
     Vector3 center = {x + width * 0.5f, height * 0.5f, z + depth * 0.5f};
+    if (distant_building_view) {
+        // Keep the authored walls and roofline legible from the road.
+        DrawCubeV(center, (Vector3){width, height, depth}, wall);
+        (void)DrawPitchedRoof(x, z, width, depth, height, wall, roof);
+        return;
+    }
     Color trim = style == 2 ? WORLD_GOLD : ShadeColor(wall, 0.60f);
     Color glass = style == 1 ? (Color){148, 103, 55, 255} :
                   style == 3 ? Fade(WORLD_VIOLET, 0.84f) :
