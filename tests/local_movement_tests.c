@@ -2576,6 +2576,38 @@ static void TestOpenWorldTownNavigation(void)
     CcLocalBindOpenWorld(NULL);
 }
 
+static void TestOpenWorldSettlementPresentationTransition(void)
+{
+    if (CcLocalOpenWorldUsesKingdomMarkers(0.0f) ||
+        CcLocalOpenWorldUsesKingdomMarkers(0.50f) ||
+        !CcLocalOpenWorldUsesKingdomMarkers(0.60f) ||
+        !CcLocalOpenWorldUsesKingdomMarkers(1.0f)) {
+        (void)fprintf(stderr,
+                      "open world settlement presentation boundary changed\n");
+        exit(1);
+    }
+
+    bool previous = CcLocalOpenWorldUsesKingdomMarkers(0.0f);
+    int32_t transitions = 0;
+    for (int32_t step = 1; step <= 1000; ++step) {
+        float weight = (float)step / 1000.0f;
+        bool current = CcLocalOpenWorldUsesKingdomMarkers(weight);
+        if (current != previous) transitions += 1;
+        if (previous && !current) {
+            (void)fprintf(stderr,
+                          "open world settlement presentation reversed\n");
+            exit(1);
+        }
+        previous = current;
+    }
+    if (transitions != 1) {
+        (void)fprintf(stderr,
+                      "open world settlement presentation changed %d times\n",
+                      transitions);
+        exit(1);
+    }
+}
+
 int main(void)
 {
     for (int32_t frame = 0; frame < 239; ++frame) {
@@ -2611,6 +2643,7 @@ int main(void)
 
     TestBuildingCutawaySelection();
     TestOpenWorldTownNavigation();
+    TestOpenWorldSettlementPresentationTransition();
     if (fabsf(CcLocalRoadCarriageX(0) - 20.15f) > 0.001f ||
         fabsf(CcLocalRoadCarriageX(350) - 38.35f) > 0.001f ||
         fabsf(CcLocalRoadCarriageX(1000) - 72.15f) > 0.001f) {

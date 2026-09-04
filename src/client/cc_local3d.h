@@ -50,6 +50,7 @@
 #define CC_LOCAL_COMBAT_MAX_HEALTH 100.0f
 #define CC_LOCAL_COMBAT_MAX_POSTURE 100.0f
 #define CC_LOCAL_CAPE_POINT_COUNT 5
+#define CC_LOCAL_OPEN_WORLD_KINGDOM_VIEW_START 0.55f
 
 typedef enum CcTraversalMode {
     CC_TRAVERSAL_IDLE,
@@ -560,6 +561,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
                             const CcLocalWorldCarriageState *carriage,
                             float clock, RenderTexture2D target,
                             Rectangle destination);
+bool CcLocalOpenWorldUsesKingdomMarkers(float camera_weight);
 void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                        const CcLocalCourse *course, bool travelling,
                        bool parley, const CcLocalConvoyState *convoy,
