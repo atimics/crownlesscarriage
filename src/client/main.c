@@ -339,6 +339,17 @@ EM_ASYNC_JS(int, ClientFlushNewBrowserCampaign,
         return 0;
     }
 });
+EM_JS(int, ClientBrowserCampaignAccess, (), {
+    return Number.isInteger(Module.crownlessCampaignAccess)
+        ? Module.crownlessCampaignAccess : 1;
+});
+
+static const char *ClientBrowserCampaignAccessMessage(int32_t access)
+{
+    return access == 1 ?
+        "This campaign is open in another tab. This tab is read-only." :
+        "Another tab changed this campaign. Reload before saving.";
+}
 EM_JS(int, ClientReleaseBrowserAssets, (), {
     let releasedBytes = 0;
     const removeTree = (path) => {
@@ -7068,6 +7079,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                    IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
     if (command_action == COMMAND_ACTION_SAVE || ClientKeyPressed(KEY_F5) ||
         queued_save_shortcut || (control && ClientKeyPressed(KEY_S))) {
+#if defined(PLATFORM_WEB)
+        int32_t browser_access = ClientBrowserCampaignAccess();
+        if (browser_access != 0) {
+            (void)snprintf(
+                message, message_capacity, "%s",
+                ClientBrowserCampaignAccessMessage(browser_access));
+            return;
+        }
+#endif
         if (local->road_choice_active &&
             !StableWorldRoadChoice(local)) {
             (void)snprintf(
@@ -7086,8 +7106,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (saved &&
             ClientFlushBrowserSaves(save_path, session_path) == 0) {
             saved = false;
-            (void)snprintf(error, sizeof(error),
-                           "The browser could not store this campaign.");
+            int32_t save_access = ClientBrowserCampaignAccess();
+            (void)snprintf(
+                error, sizeof(error), "%s",
+                save_access == 0 ?
+                    "The browser could not store this campaign." :
+                    ClientBrowserCampaignAccessMessage(save_access));
         }
 #endif
         (void)snprintf(message, message_capacity, "%s",
@@ -7505,6 +7529,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (ClientKeyPressed(KEY_N)) {
+#if defined(PLATFORM_WEB)
+        int32_t browser_access = ClientBrowserCampaignAccess();
+        if (browser_access != 0) {
+            (void)snprintf(
+                message, message_capacity, "%s",
+                ClientBrowserCampaignAccessMessage(browser_access));
+            return;
+        }
+#endif
         static double confirmation_deadline = 0.0;
         double now = GetTime();
         if (now > confirmation_deadline) {
@@ -7559,10 +7592,18 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
             *journal = restored_journal;
             *view = VIEW_LOCAL;
-            (void)snprintf(
-                message, message_capacity,
-                "The browser could not store the new campaign. "
-                "Your previous campaign is still active.");
+            int32_t failure_access = ClientBrowserCampaignAccess();
+            if (failure_access == 0) {
+                (void)snprintf(
+                    message, message_capacity,
+                    "The browser could not store the new campaign. "
+                    "Your previous campaign is still active.");
+            } else {
+                (void)snprintf(
+                    message, message_capacity,
+                    "Browser ownership changed. Reload before saving. "
+                    "Your previous campaign is still active.");
+            }
             return;
         }
 #endif
@@ -9114,6 +9155,14 @@ int main(int argc, char **argv)
                            journal != NULL ? "New campaign started." : error);
         }
     }
+#if defined(PLATFORM_WEB)
+    if (normal_play && ClientBrowserCampaignAccess() != 0) {
+        (void)snprintf(
+            startup_message, sizeof(startup_message), "%s",
+            ClientBrowserCampaignAccessMessage(
+                ClientBrowserCampaignAccess()));
+    }
+#endif
     CcLocalTerrainSetSeed(sim.world_seed);
     if (capture_creature_media &&
         strcmp(capture_creature_family, "goblins") == 0) {
