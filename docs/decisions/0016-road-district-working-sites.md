@@ -31,7 +31,7 @@ road. A nearby label gives the site name. The barrier marks the current play
 boundary. The location beyond it receives an authored local map in a later
 change.
 
-Schema 30 saves the road sites. Schema 29 campaigns receive the same stable
+Schema 31 saves the road sites. Schema 30 campaigns receive the same stable
 site set during load. The generated side-road geometry remains derived data.
 
 ## Consequences
@@ -41,4 +41,3 @@ site set during load. The generated side-road geometry remains derived data.
 - Road houses have one shared saved position for travel and the world view.
 - New local maps can open one side road at a time.
 - Existing town maps and main road geometry keep their current authority.
-
