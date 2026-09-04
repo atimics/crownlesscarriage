@@ -547,6 +547,54 @@ if(CC_BUILD_CLIENT)
         add_dependencies(crownless_carriage crownless_hero_assets)
     endif()
     cc_strict_warnings(crownless_carriage)
+    set(CC_ROADBOOK_REVIEW_DIR
+        "${CMAKE_CURRENT_BINARY_DIR}/roadbook-review")
+    # These limits include headroom for the Linux CI software renderer.
+    set(CC_ROADBOOK_ROUTE_MINIMUM_FPS 25)
+    set(CC_ROADBOOK_ROUTE_P95_BUDGET_MS 40)
+    set(CC_ROADBOOK_NETWORK_MINIMUM_FPS 21)
+    set(CC_ROADBOOK_NETWORK_P95_BUDGET_MS 45)
+    add_custom_target(run_roadbook_qa
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${CC_ROADBOOK_REVIEW_DIR}"
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-travel
+                "roadbook-review/travel.png"
+        COMMAND ${CMAKE_COMMAND}
+                -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/travel.png
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-road-fork
+                "roadbook-review/fork.png"
+        COMMAND ${CMAKE_COMMAND}
+                -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/fork.png
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-road-departure 0.50
+                "roadbook-review/departure.png"
+        COMMAND ${CMAKE_COMMAND}
+                -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/departure.png
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-road-arrival 0.50
+                "roadbook-review/arrival.png"
+        COMMAND ${CMAKE_COMMAND}
+                -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/arrival.png
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --benchmark-render 360
+                ${CC_ROADBOOK_ROUTE_MINIMUM_FPS}
+                roadbook-route
+                ${CC_ROADBOOK_ROUTE_P95_BUDGET_MS}
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --benchmark-render 360
+                ${CC_ROADBOOK_NETWORK_MINIMUM_FPS}
+                roadbook-network
+                ${CC_ROADBOOK_NETWORK_P95_BUDGET_MS}
+        DEPENDS crownless_carriage
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        USES_TERMINAL
+    )
     add_custom_target(run_render_benchmark
         COMMAND $<TARGET_FILE:crownless_carriage>
                 --benchmark-render 600 90 street
@@ -554,6 +602,10 @@ if(CC_BUILD_CLIENT)
                 --benchmark-render 600 60 market
         COMMAND $<TARGET_FILE:crownless_carriage>
                 --benchmark-render 600 60 road
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --benchmark-render 600 60 roadbook-route
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --benchmark-render 600 45 roadbook-network
         COMMAND $<TARGET_FILE:crownless_carriage>
                 --benchmark-render 600 60 combat
         DEPENDS crownless_carriage
