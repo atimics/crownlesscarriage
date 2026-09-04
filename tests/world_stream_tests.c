@@ -11,6 +11,30 @@
     } \
 } while (0)
 
+static float PointDistance(CcWorldPoint first, CcWorldPoint second)
+{
+    float dx = first.x - second.x;
+    float dz = first.z - second.z;
+    return sqrtf(dx * dx + dz * dz);
+}
+
+static float DistanceToSegment(CcWorldPoint point, CcWorldPoint first,
+                               CcWorldPoint second)
+{
+    float dx = second.x - first.x;
+    float dz = second.z - first.z;
+    float length_squared = dx * dx + dz * dz;
+    float amount = length_squared > 0.0001f ?
+        ((point.x - first.x) * dx + (point.z - first.z) * dz) /
+            length_squared : 0.0f;
+    amount = fmaxf(0.0f, fminf(1.0f, amount));
+    CcWorldPoint nearest = {
+        first.x + dx * amount,
+        first.z + dz * amount,
+    };
+    return PointDistance(point, nearest);
+}
+
 static int TestManifestIsStableAndFinite(void)
 {
     CcSim first_sim;
@@ -34,6 +58,12 @@ static int TestManifestIsStableAndFinite(void)
               second.settlements[i].settlement_id);
         CHECK(first.settlements[i].center.x == second.settlements[i].center.x);
         CHECK(first.settlements[i].center.z == second.settlements[i].center.z);
+        CHECK(first.settlements[i].gate.x == second.settlements[i].gate.x);
+        CHECK(first.settlements[i].gate.z == second.settlements[i].gate.z);
+        CHECK(first.settlements[i].junction.x ==
+              second.settlements[i].junction.x);
+        CHECK(first.settlements[i].junction.z ==
+              second.settlements[i].junction.z);
         CHECK(first.settlements[i].profile_scale ==
               second.settlements[i].profile_scale);
         CHECK(first.settlements[i].entrance_heading_yaw ==
@@ -41,12 +71,191 @@ static int TestManifestIsStableAndFinite(void)
         CHECK(CcWorldManifestContains(
             &first, first.settlements[i].center.x,
             first.settlements[i].center.z));
+        CHECK(CcWorldManifestContains(
+            &first, first.settlements[i].gate.x,
+            first.settlements[i].gate.z));
+        CHECK(CcWorldManifestContains(
+            &first, first.settlements[i].junction.x,
+            first.settlements[i].junction.z));
+    }
+    for (int32_t i = 0; i < first.route_count; ++i) {
+        CHECK(first.routes[i].route_id == second.routes[i].route_id);
+        for (int32_t sample = 0;
+             sample < CC_WORLD_ROUTE_SAMPLE_COUNT; ++sample) {
+            CHECK(first.routes[i].samples[sample].x ==
+                  second.routes[i].samples[sample].x);
+            CHECK(first.routes[i].samples[sample].z ==
+                  second.routes[i].samples[sample].z);
+        }
     }
     bool changed = first.settlements[0].center.x != other.settlements[0].center.x ||
                    first.settlements[0].center.z != other.settlements[0].center.z ||
                    first.settlements[0].plateau_height !=
                        other.settlements[0].plateau_height;
     CHECK(changed);
+    return 0;
+}
+
+static int TestRoutesShareAuthoredGateConnectors(void)
+{
+    CcSim sim;
+    CcWorldManifest manifest;
+    CcSimInit(&sim, UINT32_C(42));
+    CHECK(CcWorldManifestBuild(&manifest, &sim));
+    bool found_multi_route_town = false;
+    for (int32_t settlement_index = 0;
+         settlement_index < manifest.settlement_count; ++settlement_index) {
+        const CcWorldSettlementPlacement *settlement =
+            &manifest.settlements[settlement_index];
+        CcWorldPoint authored_gate = CcWorldSettlementLocalPoint(
+            &manifest, settlement->settlement_id, 96.0f, 36.0f);
+        CHECK(PointDistance(authored_gate, settlement->gate) < 0.0001f);
+        CHECK(PointDistance(settlement->center, settlement->junction) >
+              settlement->radius);
+        float connector_dx = settlement->junction.x - settlement->gate.x;
+        float connector_dz = settlement->junction.z - settlement->gate.z;
+        float connector_length = sqrtf(
+            connector_dx * connector_dx + connector_dz * connector_dz);
+        CHECK(connector_length > 1.0f);
+        connector_dx /= connector_length;
+        connector_dz /= connector_length;
+        CHECK(connector_dx * sinf(settlement->entrance_heading_yaw) +
+              connector_dz * cosf(settlement->entrance_heading_yaw) >
+              0.999f);
+
+        int32_t incident_count = 0;
+        CcWorldPoint branch_gate = {0};
+        float branch_heading = 0.0f;
+        for (int32_t route_index = 0;
+             route_index < sim.route_count; ++route_index) {
+            const CcRoute *route = &sim.routes[route_index];
+            if (route->from_id != settlement->settlement_id &&
+                route->to_id != settlement->settlement_id) continue;
+            const CcWorldRoutePlacement *placement =
+                CcWorldRoutePlacementForId(&manifest, route->id);
+            CHECK(placement != NULL);
+            bool from = placement->from_id == settlement->settlement_id;
+            int32_t gate_sample = from ? 0 :
+                CC_WORLD_ROUTE_SAMPLE_COUNT - 1;
+            int32_t junction_sample = from ?
+                CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE :
+                CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE;
+            CHECK(PointDistance(placement->samples[gate_sample],
+                                settlement->gate) < 0.0001f);
+            CHECK(PointDistance(placement->samples[junction_sample],
+                                settlement->junction) < 0.0001f);
+            CcWorldPoint pose;
+            float heading = 0.0f;
+            CHECK(CcWorldRoutePose(placement, settlement->settlement_id,
+                                   0.0f, &pose, &heading));
+            CHECK(PointDistance(pose, settlement->gate) < 0.0001f);
+            CHECK(fabsf(sinf(heading) -
+                        sinf(settlement->entrance_heading_yaw)) < 0.0001f);
+            CHECK(fabsf(cosf(heading) -
+                        cosf(settlement->entrance_heading_yaw)) < 0.0001f);
+            if (incident_count == 0) {
+                branch_gate = pose;
+                branch_heading = heading;
+            } else {
+                CHECK(PointDistance(branch_gate, pose) < 0.0001f);
+                CHECK(fabsf(sinf(branch_heading) - sinf(heading)) < 0.0001f);
+                CHECK(fabsf(cosf(branch_heading) - cosf(heading)) < 0.0001f);
+            }
+            incident_count += 1;
+        }
+        CHECK(incident_count > 0);
+        if (incident_count > 1) found_multi_route_town = true;
+    }
+    CHECK(found_multi_route_town);
+
+    for (int32_t route_index = 0;
+         route_index < manifest.route_count; ++route_index) {
+        const CcWorldRoutePlacement *route = &manifest.routes[route_index];
+        float previous_amount = 0.0f;
+        for (int32_t sample = 1;
+             sample < CC_WORLD_ROUTE_SAMPLE_COUNT; ++sample) {
+            float amount = CcWorldRouteSampleAmount(route, sample);
+            CHECK(amount > previous_amount);
+            CcWorldPoint point = CcWorldRoutePoint(route, amount);
+            CHECK(PointDistance(point, route->samples[sample]) < 0.001f);
+            previous_amount = amount;
+        }
+    }
+    return 0;
+}
+
+static bool RouteCorridorsClearTownFootprints(
+    const CcWorldManifest *manifest)
+{
+    if (manifest == NULL) return false;
+    for (int32_t route_index = 0;
+         route_index < manifest->route_count; ++route_index) {
+        const CcWorldRoutePlacement *route = &manifest->routes[route_index];
+        for (int32_t sample = 0;
+             sample < CC_WORLD_ROUTE_SAMPLE_COUNT; ++sample) {
+            if (!CcWorldManifestContains(
+                    manifest, route->samples[sample].x,
+                    route->samples[sample].z)) return false;
+        }
+        for (int32_t sample = CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE;
+             sample < CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE; ++sample) {
+            for (int32_t settlement_index = 0;
+                 settlement_index < manifest->settlement_count;
+                 ++settlement_index) {
+                const CcWorldSettlementPlacement *settlement =
+                    &manifest->settlements[settlement_index];
+                float distance = DistanceToSegment(
+                    settlement->center, route->samples[sample],
+                    route->samples[sample + 1]);
+                bool corridor = sample >=
+                                    CC_WORLD_ROUTE_FROM_CORRIDOR_SAMPLE &&
+                                sample <
+                                    CC_WORLD_ROUTE_TO_CORRIDOR_SAMPLE;
+                float minimum = settlement->radius +
+                    (corridor ? 15.0f : 0.0f);
+                if (distance < minimum) {
+                    (void)fprintf(
+                        stderr,
+                        "route %d segment %d crossed town %d: %.2f/%.2f\n",
+                        route_index, sample, settlement_index, distance,
+                        minimum);
+                    (void)fprintf(
+                        stderr,
+                        "segment %.2f,%.2f to %.2f,%.2f; town %.2f,%.2f\n",
+                        route->samples[sample].x,
+                        route->samples[sample].z,
+                        route->samples[sample + 1].x,
+                        route->samples[sample + 1].z,
+                        settlement->center.x, settlement->center.z);
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+static int TestRouteTopologyAcrossSeeds(void)
+{
+    for (uint32_t seed = 0U; seed < 4096U; ++seed) {
+        CcSim sim;
+        CcWorldManifest manifest;
+        CcSimInit(&sim, seed * UINT32_C(0x9e3779b9));
+        CHECK(CcWorldManifestBuild(&manifest, &sim));
+        for (int32_t settlement_index = 0;
+             settlement_index < manifest.settlement_count;
+             ++settlement_index) {
+            const CcWorldSettlementPlacement *settlement =
+                &manifest.settlements[settlement_index];
+            CHECK(CcWorldManifestContains(
+                &manifest, settlement->junction.x, settlement->junction.z));
+        }
+        if (!RouteCorridorsClearTownFootprints(&manifest)) {
+            (void)fprintf(stderr, "seed %u crossed a town footprint\n",
+                          seed);
+            return 1;
+        }
+    }
     return 0;
 }
 
@@ -176,6 +385,8 @@ int main(void)
     if (TestStreamingEvictsOldChunks() != 0) return 1;
     if (TestRoadAndSettlementSurface() != 0) return 1;
     if (TestCarriagePoseFollowsRouteDirection() != 0) return 1;
+    if (TestRoutesShareAuthoredGateConnectors() != 0) return 1;
+    if (TestRouteTopologyAcrossSeeds() != 0) return 1;
     puts("Finite world streaming tests passed");
     return 0;
 }

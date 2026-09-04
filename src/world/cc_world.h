@@ -16,7 +16,13 @@
 #define CC_WORLD_STREAM_DIAMETER (CC_WORLD_STREAM_RADIUS * 2 + 1)
 #define CC_WORLD_STREAM_CAPACITY \
     (CC_WORLD_STREAM_DIAMETER * CC_WORLD_STREAM_DIAMETER)
-#define CC_WORLD_ROUTE_SAMPLE_COUNT 17
+#define CC_WORLD_ROUTE_SAMPLE_COUNT 33
+#define CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE 1
+#define CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE \
+    (CC_WORLD_ROUTE_SAMPLE_COUNT - 2)
+#define CC_WORLD_ROUTE_FROM_CORRIDOR_SAMPLE 8
+#define CC_WORLD_ROUTE_TO_CORRIDOR_SAMPLE \
+    (CC_WORLD_ROUTE_SAMPLE_COUNT - 9)
 #define CC_WORLD_SITE_COUNT 3
 
 typedef struct CcWorldPoint {
@@ -34,6 +40,8 @@ typedef struct CcWorldSettlementPlacement {
     CcId settlement_id;
     CcSettlementFunction function;
     CcWorldPoint center;
+    CcWorldPoint gate;
+    CcWorldPoint junction;
     float plateau_height;
     float radius;
     float profile_scale;
@@ -119,6 +127,8 @@ bool CcWorldRoutePose(const CcWorldRoutePlacement *route, CcId origin_id,
                       float journey_amount, CcWorldPoint *position,
                       float *heading_yaw);
 float CcWorldRouteLength(const CcWorldRoutePlacement *route);
+float CcWorldRouteSampleAmount(const CcWorldRoutePlacement *route,
+                               int32_t sample_index);
 CcWorldPoint CcWorldSettlementLocalPoint(
     const CcWorldManifest *manifest, CcId settlement_id,
     float local_x, float local_z);

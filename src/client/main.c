@@ -1061,7 +1061,7 @@ static void SetOpenWorldCarriageAtSettlement(const CcSim *sim,
     }
     if (route != NULL && SetOpenWorldCarriageOnRoute(
             sim, local, route->id, sim->player.location_id,
-            11.0f, 0.0f, false)) {
+            0.0f, 0.0f, false)) {
         return;
     }
     local->world_carriage.position = (Vector3){
@@ -1080,13 +1080,9 @@ static void SetOpenWorldCarriageAtRoadGate(const CcSim *sim,
                                            CcId route_id)
 {
     if (sim == NULL || local == NULL || !local->open_world) return;
-    const CcWorldSettlementPlacement *place =
-        CcWorldSettlementPlacementForId(
-            &local->world_stream.manifest, sim->player.location_id);
-    float distance = place != NULL ? place->radius + 5.0f : 43.0f;
     if (SetOpenWorldCarriageOnRoute(
             sim, local, route_id, sim->player.location_id,
-            distance, 0.0f, true)) {
+            0.0f, 0.0f, true)) {
         local->world_carriage.camera_target = 1.0f;
     }
 }

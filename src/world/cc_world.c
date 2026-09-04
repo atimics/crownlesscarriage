@@ -9,6 +9,8 @@
 #define CC_WORLD_MARGIN 64.0f
 #define CC_WORLD_SETTLEMENT_RADIUS 38.0f
 #define CC_WORLD_ROAD_HALF_WIDTH 3.2f
+#define CC_WORLD_JUNCTION_CLEARANCE 18.0f
+#define CC_WORLD_ROUTE_FANOUT_LENGTH 4.0f
 
 static float ClampUnit(float value)
 {
@@ -127,20 +129,69 @@ static float AlignUp(float value)
     return ceilf(value / CC_WORLD_CHUNK_SIZE) * CC_WORLD_CHUNK_SIZE;
 }
 
+float CcWorldRouteLength(const CcWorldRoutePlacement *route)
+{
+    if (route == NULL) return 0.0f;
+    float length = 0.0f;
+    for (int32_t sample = 0;
+         sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
+        length += PointDistance(route->samples[sample],
+                                route->samples[sample + 1]);
+    }
+    return length;
+}
+
+float CcWorldRouteSampleAmount(const CcWorldRoutePlacement *route,
+                               int32_t sample_index)
+{
+    if (route == NULL || sample_index <= 0) return 0.0f;
+    if (sample_index >= CC_WORLD_ROUTE_SAMPLE_COUNT - 1) return 1.0f;
+    float total = CcWorldRouteLength(route);
+    if (total <= 0.0001f) return 0.0f;
+    float length = 0.0f;
+    for (int32_t sample = 0; sample < sample_index; ++sample) {
+        length += PointDistance(route->samples[sample],
+                                route->samples[sample + 1]);
+    }
+    return ClampUnit(length / total);
+}
+
+static int32_t RouteSegmentAtAmount(const CcWorldRoutePlacement *route,
+                                    float amount, float *segment_amount)
+{
+    if (segment_amount != NULL) *segment_amount = 0.0f;
+    if (route == NULL) return 0;
+    float total = CcWorldRouteLength(route);
+    if (total <= 0.0001f) return 0;
+    float target = ClampUnit(amount) * total;
+    float travelled = 0.0f;
+    for (int32_t sample = 0;
+         sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
+        float segment = PointDistance(route->samples[sample],
+                                      route->samples[sample + 1]);
+        if (target <= travelled + segment ||
+            sample == CC_WORLD_ROUTE_SAMPLE_COUNT - 2) {
+            if (segment_amount != NULL && segment > 0.0001f) {
+                *segment_amount = ClampUnit((target - travelled) / segment);
+            }
+            return sample;
+        }
+        travelled += segment;
+    }
+    return CC_WORLD_ROUTE_SAMPLE_COUNT - 2;
+}
+
 CcWorldPoint CcWorldRoutePoint(const CcWorldRoutePlacement *route, float amount)
 {
     if (route == NULL) return (CcWorldPoint){0};
-    amount = ClampUnit(amount);
-    CcWorldPoint first = route->samples[0];
-    CcWorldPoint last = route->samples[CC_WORLD_ROUTE_SAMPLE_COUNT - 1];
-    float inverse = 1.0f - amount;
+    float segment_amount = 0.0f;
+    int32_t segment = RouteSegmentAtAmount(
+        route, amount, &segment_amount);
+    CcWorldPoint first = route->samples[segment];
+    CcWorldPoint second = route->samples[segment + 1];
     return (CcWorldPoint){
-        inverse * inverse * first.x +
-            2.0f * inverse * amount * route->control.x +
-            amount * amount * last.x,
-        inverse * inverse * first.z +
-            2.0f * inverse * amount * route->control.z +
-            amount * amount * last.z,
+        first.x + (second.x - first.x) * segment_amount,
+        first.z + (second.z - first.z) * segment_amount,
     };
 }
 
@@ -157,36 +208,30 @@ bool CcWorldRoutePose(const CcWorldRoutePlacement *route, CcId origin_id,
     float route_amount = reverse ? 1.0f - journey_amount : journey_amount;
     *position = CcWorldRoutePoint(route, route_amount);
 
-    CcWorldPoint first = route->samples[0];
-    CcWorldPoint last = route->samples[CC_WORLD_ROUTE_SAMPLE_COUNT - 1];
-    float dx = 2.0f * (1.0f - route_amount) *
-                   (route->control.x - first.x) +
-               2.0f * route_amount * (last.x - route->control.x);
-    float dz = 2.0f * (1.0f - route_amount) *
-                   (route->control.z - first.z) +
-               2.0f * route_amount * (last.z - route->control.z);
+    float length = CcWorldRouteLength(route);
+    float heading_window = length > 0.001f ?
+        fminf(0.02f, 1.5f / length) : 0.0f;
+    float before = fmaxf(0.0f, route_amount - heading_window);
+    float after = fminf(1.0f, route_amount + heading_window);
+    CcWorldPoint first = CcWorldRoutePoint(route, before);
+    CcWorldPoint last = CcWorldRoutePoint(route, after);
+    float dx = last.x - first.x;
+    float dz = last.z - first.z;
     if (reverse) {
         dx = -dx;
         dz = -dz;
     }
     if (dx * dx + dz * dz < 0.000001f) {
-        dx = reverse ? first.x - last.x : last.x - first.x;
-        dz = reverse ? first.z - last.z : last.z - first.z;
+        CcWorldPoint route_first = route->samples[0];
+        CcWorldPoint route_last =
+            route->samples[CC_WORLD_ROUTE_SAMPLE_COUNT - 1];
+        dx = reverse ? route_first.x - route_last.x :
+                       route_last.x - route_first.x;
+        dz = reverse ? route_first.z - route_last.z :
+                       route_last.z - route_first.z;
     }
     *heading_yaw = atan2f(dx, dz);
     return true;
-}
-
-float CcWorldRouteLength(const CcWorldRoutePlacement *route)
-{
-    if (route == NULL) return 0.0f;
-    float length = 0.0f;
-    for (int32_t sample = 0;
-         sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
-        length += PointDistance(route->samples[sample],
-                                route->samples[sample + 1]);
-    }
-    return length;
 }
 
 const CcWorldSettlementPlacement *CcWorldSettlementPlacementForId(
@@ -284,6 +329,139 @@ CcWorldPoint CcWorldSettlementFeaturePoint(
                               cosine * offset_z};
 }
 
+static float SettlementEntranceHeading(const CcWorldManifest *manifest,
+                                        const CcSim *sim,
+                                        CcId settlement_id)
+{
+    const CcWorldSettlementPlacement *settlement =
+        CcWorldSettlementPlacementForId(manifest, settlement_id);
+    if (settlement == NULL || sim == NULL) return 0.5f * 3.14159265359f;
+    float direction_x = 0.0f;
+    float direction_z = 0.0f;
+    float fallback_x = 1.0f;
+    float fallback_z = 0.0f;
+    bool found = false;
+    for (int32_t route_index = 0;
+         route_index < sim->route_count; ++route_index) {
+        const CcRoute *route = &sim->routes[route_index];
+        CcId other_id = route->from_id == settlement_id ? route->to_id :
+                        route->to_id == settlement_id ? route->from_id : 0U;
+        if (other_id == 0U) continue;
+        const CcWorldSettlementPlacement *other =
+            CcWorldSettlementPlacementForId(manifest, other_id);
+        if (other == NULL) continue;
+        float dx = other->center.x - settlement->center.x;
+        float dz = other->center.z - settlement->center.z;
+        float length = sqrtf(dx * dx + dz * dz);
+        if (length <= 0.001f) continue;
+        dx /= length;
+        dz /= length;
+        if (!found) {
+            fallback_x = dx;
+            fallback_z = dz;
+            found = true;
+        }
+        direction_x += dx;
+        direction_z += dz;
+    }
+    if (direction_x * direction_x + direction_z * direction_z < 0.01f) {
+        direction_x = fallback_x;
+        direction_z = fallback_z;
+    }
+    return atan2f(direction_x, direction_z);
+}
+
+static CcWorldPoint QuadraticPoint(CcWorldPoint first, CcWorldPoint control,
+                                   CcWorldPoint last, float amount)
+{
+    float inverse = 1.0f - amount;
+    return (CcWorldPoint){
+        inverse * inverse * first.x +
+            2.0f * inverse * amount * control.x + amount * amount * last.x,
+        inverse * inverse * first.z +
+            2.0f * inverse * amount * control.z + amount * amount * last.z,
+    };
+}
+
+static float WrapAngle(float angle)
+{
+    while (angle > 3.14159265359f) angle -= 6.28318530718f;
+    while (angle < -3.14159265359f) angle += 6.28318530718f;
+    return angle;
+}
+
+static CcWorldPoint SettlementRingPoint(
+    const CcWorldSettlementPlacement *settlement, float heading_yaw,
+    float extra_distance)
+{
+    if (settlement == NULL) return (CcWorldPoint){0};
+    float distance = settlement->radius + CC_WORLD_JUNCTION_CLEARANCE +
+                     fmaxf(0.0f, extra_distance);
+    return (CcWorldPoint){
+        settlement->center.x + sinf(heading_yaw) * distance,
+        settlement->center.z + cosf(heading_yaw) * distance,
+    };
+}
+
+static void BuildRouteSamples(CcWorldRoutePlacement *route,
+                              const CcWorldSettlementPlacement *from,
+                              const CcWorldSettlementPlacement *to)
+{
+    if (route == NULL || from == NULL || to == NULL) {
+        return;
+    }
+    route->samples[0] = from->gate;
+    route->samples[CC_WORLD_ROUTE_SAMPLE_COUNT - 1] = to->gate;
+
+    float center_dx = to->center.x - from->center.x;
+    float center_dz = to->center.z - from->center.z;
+    float route_heading = atan2f(center_dx, center_dz);
+    float reverse_heading = WrapAngle(route_heading + 3.14159265359f);
+    float from_turn = WrapAngle(
+        route_heading - from->entrance_heading_yaw);
+    for (int32_t sample = CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE;
+         sample <= CC_WORLD_ROUTE_FROM_CORRIDOR_SAMPLE; ++sample) {
+        float amount = (float)(sample - CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE) /
+            (float)(CC_WORLD_ROUTE_FROM_CORRIDOR_SAMPLE -
+                    CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE);
+        route->samples[sample] = SettlementRingPoint(
+            from, from->entrance_heading_yaw + from_turn * amount,
+            CC_WORLD_ROUTE_FANOUT_LENGTH * amount);
+    }
+    float to_turn = WrapAngle(
+        to->entrance_heading_yaw - reverse_heading);
+    for (int32_t sample = CC_WORLD_ROUTE_TO_CORRIDOR_SAMPLE;
+         sample <= CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE; ++sample) {
+        float amount = (float)(sample - CC_WORLD_ROUTE_TO_CORRIDOR_SAMPLE) /
+            (float)(CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE -
+                    CC_WORLD_ROUTE_TO_CORRIDOR_SAMPLE);
+        route->samples[sample] = SettlementRingPoint(
+            to, reverse_heading + to_turn * amount,
+            CC_WORLD_ROUTE_FANOUT_LENGTH * (1.0f - amount));
+    }
+
+    CcWorldPoint first = route->samples[CC_WORLD_ROUTE_FROM_CORRIDOR_SAMPLE];
+    CcWorldPoint last = route->samples[CC_WORLD_ROUTE_TO_CORRIDOR_SAMPLE];
+    float dx = last.x - first.x;
+    float dz = last.z - first.z;
+    float length = sqrtf(dx * dx + dz * dz);
+    float inverse_length = length > 0.001f ? 1.0f / length : 0.0f;
+    float bend = HashSigned(route->seed) * fminf(18.0f, length * 0.10f);
+    route->control = (CcWorldPoint){
+        (first.x + last.x) * 0.5f - dz * inverse_length * bend,
+        (first.z + last.z) * 0.5f + dx * inverse_length * bend,
+    };
+    int32_t middle_segments = CC_WORLD_ROUTE_TO_CORRIDOR_SAMPLE -
+                              CC_WORLD_ROUTE_FROM_CORRIDOR_SAMPLE;
+    for (int32_t sample = CC_WORLD_ROUTE_FROM_CORRIDOR_SAMPLE + 1;
+         sample < CC_WORLD_ROUTE_TO_CORRIDOR_SAMPLE; ++sample) {
+        float amount = (float)(sample - CC_WORLD_ROUTE_FROM_CORRIDOR_SAMPLE) /
+            (float)middle_segments;
+        route->samples[sample] = QuadraticPoint(
+            first, route->control, last, amount);
+    }
+}
+
 bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
 {
     if (manifest == NULL || sim == NULL || sim->settlement_count <= 0 ||
@@ -333,6 +511,25 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
             manifest, placement->center.x, placement->center.z);
     }
 
+    for (int32_t i = 0; i < manifest->settlement_count; ++i) {
+        CcWorldSettlementPlacement *placement = &manifest->settlements[i];
+        placement->entrance_heading_yaw = SettlementEntranceHeading(
+            manifest, sim, placement->settlement_id);
+        float forward_x = sinf(placement->entrance_heading_yaw);
+        float forward_z = cosf(placement->entrance_heading_yaw);
+        float gate_distance = 48.0f * placement->profile_scale;
+        float junction_distance = placement->radius +
+                                  CC_WORLD_JUNCTION_CLEARANCE;
+        placement->gate = (CcWorldPoint){
+            placement->center.x + forward_x * gate_distance,
+            placement->center.z + forward_z * gate_distance,
+        };
+        placement->junction = (CcWorldPoint){
+            placement->center.x + forward_x * junction_distance,
+            placement->center.z + forward_z * junction_distance,
+        };
+    }
+
     manifest->route_count = sim->route_count;
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRoute *route = &sim->routes[i];
@@ -348,44 +545,7 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
         placement->seed = MixBits(
             sim->world_seed ^ (uint32_t)route->id ^
             (uint32_t)(route->id >> 32U));
-        float dx = to->center.x - from->center.x;
-        float dz = to->center.z - from->center.z;
-        float length = sqrtf(dx * dx + dz * dz);
-        float bend = HashSigned(placement->seed) * fminf(32.0f, length * 0.14f);
-        float inverse_length = length > 0.001f ? 1.0f / length : 0.0f;
-        placement->control = (CcWorldPoint){
-            (from->center.x + to->center.x) * 0.5f - dz * inverse_length * bend,
-            (from->center.z + to->center.z) * 0.5f + dx * inverse_length * bend,
-        };
-        placement->samples[0] = from->center;
-        placement->samples[CC_WORLD_ROUTE_SAMPLE_COUNT - 1] = to->center;
-        for (int32_t sample = 1;
-             sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
-            float amount = (float)sample /
-                (float)(CC_WORLD_ROUTE_SAMPLE_COUNT - 1);
-            placement->samples[sample] = CcWorldRoutePoint(placement, amount);
-        }
-    }
-
-    for (int32_t settlement_index = 0;
-         settlement_index < manifest->settlement_count; ++settlement_index) {
-        CcWorldSettlementPlacement *settlement =
-            &manifest->settlements[settlement_index];
-        settlement->entrance_heading_yaw = 0.5f * 3.14159265359f;
-        for (int32_t route_index = 0;
-             route_index < manifest->route_count; ++route_index) {
-            const CcWorldRoutePlacement *route =
-                &manifest->routes[route_index];
-            if (route->from_id != settlement->settlement_id &&
-                route->to_id != settlement->settlement_id) continue;
-            CcWorldPoint position;
-            float heading = 0.0f;
-            if (CcWorldRoutePose(route, settlement->settlement_id, 0.0f,
-                                 &position, &heading)) {
-                settlement->entrance_heading_yaw = heading;
-            }
-            break;
-        }
+        BuildRouteSamples(placement, from, to);
     }
 
     const CcWorldSettlementPlacement *underroad =
@@ -449,10 +609,10 @@ static float TerrainWithoutRoads(const CcWorldManifest *manifest,
 static float NearestRoadDistance(const CcWorldManifest *manifest,
                                  CcWorldPoint point,
                                  const CcWorldRoutePlacement **nearest_route,
-                                 float *nearest_amount)
+                                 CcWorldPoint *nearest_point)
 {
     if (nearest_route != NULL) *nearest_route = NULL;
-    if (nearest_amount != NULL) *nearest_amount = 0.0f;
+    if (nearest_point != NULL) *nearest_point = (CcWorldPoint){0};
     if (manifest == NULL) return FLT_MAX;
     float nearest = FLT_MAX;
     for (int32_t route_index = 0;
@@ -467,9 +627,13 @@ static float NearestRoadDistance(const CcWorldManifest *manifest,
             if (distance >= nearest) continue;
             nearest = distance;
             if (nearest_route != NULL) *nearest_route = route;
-            if (nearest_amount != NULL) {
-                *nearest_amount = ((float)sample + segment_amount) /
-                    (float)(CC_WORLD_ROUTE_SAMPLE_COUNT - 1);
+            if (nearest_point != NULL) {
+                CcWorldPoint first = route->samples[sample];
+                CcWorldPoint second = route->samples[sample + 1];
+                *nearest_point = (CcWorldPoint){
+                    first.x + (second.x - first.x) * segment_amount,
+                    first.z + (second.z - first.z) * segment_amount,
+                };
             }
         }
     }
@@ -481,11 +645,10 @@ float CcWorldTerrainHeight(const CcWorldManifest *manifest, float x, float z)
     if (manifest == NULL || !isfinite(x) || !isfinite(z)) return 0.0f;
     float height = TerrainWithoutRoads(manifest, x, z);
     const CcWorldRoutePlacement *route = NULL;
-    float amount = 0.0f;
+    CcWorldPoint center = {0};
     float distance = NearestRoadDistance(
-        manifest, (CcWorldPoint){x, z}, &route, &amount);
+        manifest, (CcWorldPoint){x, z}, &route, &center);
     if (route != NULL && distance < CC_WORLD_ROAD_HALF_WIDTH + 3.5f) {
-        CcWorldPoint center = CcWorldRoutePoint(route, amount);
         float road_height = TerrainWithoutRoads(manifest, center.x, center.z);
         float weight = 1.0f - SmoothStep(
             (distance - CC_WORLD_ROAD_HALF_WIDTH) / 3.5f);

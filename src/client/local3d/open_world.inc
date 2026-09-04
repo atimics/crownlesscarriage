@@ -535,12 +535,51 @@ static void DrawOpenWorldRibbonSegment(const CcWorldManifest *manifest,
     DrawTriangle3D(points[0], points[3], points[2], color);
 }
 
+static bool OpenWorldPointClearsSettlements(
+    const CcWorldManifest *manifest, CcWorldPoint point, float clearance)
+{
+    if (manifest == NULL) return false;
+    for (int32_t i = 0; i < manifest->settlement_count; ++i) {
+        const CcWorldSettlementPlacement *settlement =
+            &manifest->settlements[i];
+        float dx = point.x - settlement->center.x;
+        float dz = point.z - settlement->center.z;
+        float minimum = settlement->radius + clearance;
+        if (dx * dx + dz * dz < minimum * minimum) return false;
+    }
+    return true;
+}
+
+static void DrawOpenWorldGateConnectors(const CcSim *sim,
+                                        const CcWorldManifest *manifest,
+                                        bool kingdom_view)
+{
+    if (sim == NULL || manifest == NULL) return;
+    for (int32_t i = 0; i < manifest->settlement_count; ++i) {
+        const CcWorldSettlementPlacement *settlement =
+            &manifest->settlements[i];
+        if (!OpenWorldSettlementRevealed(
+                sim, settlement->settlement_id)) continue;
+        CcWorldPoint gate = kingdom_view ? settlement->center :
+                                           settlement->gate;
+        DrawOpenWorldRibbonSegment(
+            manifest, gate, settlement->junction,
+            11.0f, 0.04f, Fade(WORLD_EARTH_LIGHT, 0.96f));
+        DrawOpenWorldRibbonSegment(
+            manifest, gate, settlement->junction,
+            7.5f, 0.08f, Fade(WORLD_GRASS_LIGHT, 0.98f));
+        DrawOpenWorldRibbonSegment(
+            manifest, gate, settlement->junction,
+            5.6f, 0.13f, WORLD_ROAD_LIGHT);
+    }
+}
+
 static void DrawOpenWorldRouteNetwork(const CcSim *sim,
                                       const CcWorldManifest *manifest,
                                       bool kingdom_view)
 {
     if (sim == NULL || manifest == NULL) return;
-    (void)kingdom_view;
+    DrawOpenWorldGateConnectors(sim, manifest, kingdom_view);
     for (int32_t route_index = 0;
          route_index < manifest->route_count; ++route_index) {
         const CcWorldRoutePlacement *placement =
@@ -554,10 +593,11 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
         Color road = route != NULL && route->closed ? WORLD_DANGER :
                      route != NULL && route->smuggler_route ? WORLD_VIOLET :
                                                               WORLD_ROAD_LIGHT;
-        for (int32_t sample = 0;
-             sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
-            float midpoint = ((float)sample + 0.5f) /
-                (float)(CC_WORLD_ROUTE_SAMPLE_COUNT - 1);
+        for (int32_t sample = CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE;
+             sample < CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE; ++sample) {
+            float midpoint = 0.5f * (
+                CcWorldRouteSampleAmount(placement, sample) +
+                CcWorldRouteSampleAmount(placement, sample + 1));
             if (midpoint < reveal_minimum || midpoint > reveal_maximum) {
                 continue;
             }
@@ -578,22 +618,35 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
             float variation = 1.0f +
                 0.08f * sinf((float)sample * 1.7f +
                               (float)(placement->seed & 31U));
-            DrawOpenWorldRibbonSegment(
-                manifest, first, second, 30.0f * variation, 0.04f,
-                Fade(WORLD_EARTH_LIGHT, 0.96f));
-            DrawOpenWorldRibbonSegment(
-                manifest, first, second, 22.0f * variation, 0.08f,
-                Fade(WORLD_GRASS_LIGHT, 0.98f));
+            bool corridor = sample >=
+                                CC_WORLD_ROUTE_FROM_CORRIDOR_SAMPLE &&
+                            sample < CC_WORLD_ROUTE_TO_CORRIDOR_SAMPLE;
+            if (corridor) {
+                DrawOpenWorldRibbonSegment(
+                    manifest, first, second, 30.0f * variation, 0.04f,
+                    Fade(WORLD_EARTH_LIGHT, 0.96f));
+                DrawOpenWorldRibbonSegment(
+                    manifest, first, second, 22.0f * variation, 0.08f,
+                    Fade(WORLD_GRASS_LIGHT, 0.98f));
+            } else {
+                DrawOpenWorldRibbonSegment(
+                    manifest, first, second, 9.0f, 0.08f,
+                    Fade(WORLD_GRASS_LIGHT, 0.98f));
+            }
             DrawOpenWorldRibbonSegment(
                 manifest, first, second,
                 (charted ? 6.2f : 5.2f) * variation, 0.13f, road);
-            if ((sample & 1) == 0 && length > 0.01f) {
+            if (corridor && (sample & 1) == 0 && length > 0.01f) {
                 float inverse = 1.0f / length;
                 Vector3 side = {-along.z * inverse, 0.0f,
                                  along.x * inverse};
                 float side_amount = (sample & 2) == 0 ? 12.5f : -12.5f;
                 Vector3 tree = Vector3Add(
                     center, Vector3Scale(side, side_amount));
+                if (!OpenWorldPointClearsSettlements(
+                        manifest, (CcWorldPoint){tree.x, tree.z}, 2.5f)) {
+                    continue;
+                }
                 tree.y = CcWorldTerrainHeight(manifest, tree.x, tree.z);
                 DrawBox((Vector3){tree.x, tree.y + 1.05f, tree.z},
                         (Vector3){0.34f, 2.1f, 0.34f}, WORLD_WOOD_SHADOW);
@@ -662,8 +715,7 @@ static void OpenWorldRevealedBounds(const CcSim *sim,
                                   &reveal_maximum, NULL)) continue;
         for (int32_t sample = 0;
              sample < CC_WORLD_ROUTE_SAMPLE_COUNT; ++sample) {
-            float amount = (float)sample /
-                (float)(CC_WORLD_ROUTE_SAMPLE_COUNT - 1);
+            float amount = CcWorldRouteSampleAmount(placement, sample);
             if (amount < reveal_minimum || amount > reveal_maximum) continue;
             CcWorldPoint point = placement->samples[sample];
             left = fminf(left, point.x);
