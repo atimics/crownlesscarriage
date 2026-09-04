@@ -762,6 +762,13 @@ if(BUILD_TESTING)
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_persistence_tests.mjs)
     endif()
 
+    find_program(CC_PYTHON3_EXECUTABLE python3)
+    if(CC_PYTHON3_EXECUTABLE)
+        add_test(NAME webgl2_skinning_uniform_budget
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_uniform_budget_tests.py)
+    endif()
+
     add_executable(client_policy_tests tests/client_policy_tests.c)
     target_link_libraries(client_policy_tests PRIVATE crownless_client_policy)
     cc_strict_warnings(client_policy_tests)
