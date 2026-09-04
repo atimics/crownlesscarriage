@@ -4,6 +4,8 @@ build-*/
 out/
 .worktrees/
 *.tmp
+*.ccsave-shm
+*.ccsave-wal
 assets/previews/
 /.merge_file_*
 

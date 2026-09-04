@@ -5009,6 +5009,59 @@ static void UpgradeLegacyJourneyRhythm(CcSim *sim)
     }
 }
 
+static void ClearMissingLegacyEventReferences(CcSim *sim)
+{
+    for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
+        CcEvent *event = &sim->events[i];
+        if (event->id != 0U && event->parent_id != 0U &&
+            CcSimEvent(sim, event->parent_id) == NULL) {
+            event->parent_id = 0U;
+        }
+    }
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        CcSituation *situation = &sim->situations[i];
+        if (situation->cause_event_id != 0U &&
+            CcSimEvent(sim, situation->cause_event_id) == NULL) {
+            situation->cause_event_id = 0U;
+        }
+    }
+}
+
+static bool LegacyCharacterNameExists(const CcSim *sim, int32_t except,
+                                      const char *name)
+{
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        if (i != except && strcmp(sim->characters[i].name, name) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void MakeLegacyCharacterNamesUnique(CcSim *sim)
+{
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        CcCharacter *character = &sim->characters[i];
+        bool duplicate = false;
+        for (int32_t earlier = 0; earlier < i; ++earlier) {
+            if (strcmp(sim->characters[earlier].name, character->name) == 0) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (!duplicate) continue;
+
+        char name[CC_NAME_CAPACITY];
+        uint32_t ordinal = (uint32_t)i;
+        do {
+            CcGenerateCharacterName(
+                sim->world_seed, character->home_settlement_id,
+                character->generation, ordinal++, name);
+        } while (LegacyCharacterNameExists(sim, i, name) && ordinal < 2048U);
+        (void)snprintf(character->name, sizeof(character->name), "%s", name);
+    }
+}
+
 static void FinishLegacyRuntimeUpgrade(CcSim *sim)
 {
     if (!HasQuestArchitecture(sim)) CcSimUpgradeQuestArchitecture(sim);
@@ -5018,6 +5071,7 @@ static void FinishLegacyRuntimeUpgrade(CcSim *sim)
     CcSimUpgradeGrainEconomy(sim);
     CcSimInitializeRoadSites(sim);
     CcSimUpgradeFlockEconomy(sim);
+    ClearMissingLegacyEventReferences(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
 }
@@ -5042,6 +5096,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
+    ClearMissingLegacyEventReferences(sim);
+    MakeLegacyCharacterNamesUnique(sim);
     if (legacy_version == 32U && sim->generator_version == 25U) {
         CcSimInitializePaperEconomy(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
@@ -5082,7 +5138,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
     }
-    if (legacy_version != 3U && legacy_version != 4U &&
+    if (legacy_version != 2U && legacy_version != 3U &&
+        legacy_version != 4U &&
         legacy_version != 5U && legacy_version != 6U &&
         legacy_version != 7U && legacy_version != 8U &&
         legacy_version != 9U && legacy_version != 10U &&
@@ -5193,6 +5250,9 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         return true;
     }
     if (legacy_version == 18U) {
+        if (sim->generator_version == 16U) {
+            CcSimUpgradeMapCollection(sim);
+        }
         CcSimInitializeCharacters(sim);
         FinishLegacyRuntimeUpgrade(sim);
         return true;
@@ -5233,7 +5293,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         FinishLegacyRuntimeUpgrade(sim);
         return true;
     }
-    if (legacy_version == 3U) {
+    if (legacy_version <= 3U) {
         sim->clock = (CcWorldClock){
             .game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND
         };
