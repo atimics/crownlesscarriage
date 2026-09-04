@@ -132,10 +132,13 @@ typedef struct CcLocalWorldCarriageState {
     float pace;
     float camera_weight;
     float camera_target;
+    float camera_heading_yaw;
+    float arrival_travel_weight;
     CcId route_id;
     bool visible;
     bool hero_embarked;
     bool town_arrival;
+    bool storybook_travel;
 } CcLocalWorldCarriageState;
 
 typedef enum CcLocalAtmospherePreset {

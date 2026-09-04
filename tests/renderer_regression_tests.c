@@ -137,6 +137,7 @@ static void WriteViewportFixture(const char *path)
 
 #include "character_material_captures.inc"
 #include "character_surface_tests.inc"
+#include "animal_captures.inc"
 
 int main(int argc, char **argv)
 {
@@ -150,6 +151,7 @@ int main(int argc, char **argv)
         if (strcmp(argv[1], "--graphics") == 0) {
             TestCharacterPrimitives();
             TestCharacterSurfaces();
+            TestAnimalModels(argv[2]);
             WriteViewportFixture(argv[2]);
         } else {
             CaptureCharacterMaterials(argv[2]);

@@ -79,15 +79,15 @@ FAMILY_PALETTES = {
         "eye": (0.88, 0.66, 0.13, 1.0),
     },
     "horse": {
-        "skin": (0.36, 0.17, 0.075, 1.0),
-        "secondary": (0.075, 0.050, 0.035, 1.0),
-        "hide": (0.64, 0.39, 0.18, 1.0),
-        "cloth": (0.12, 0.30, 0.29, 1.0),
-        "leather": (0.14, 0.070, 0.035, 1.0),
-        "horn": (0.62, 0.55, 0.39, 1.0),
-        "metal": (0.31, 0.36, 0.36, 1.0),
-        "accent": (0.62, 0.20, 0.18, 1.0),
-        "eye": (0.018, 0.016, 0.013, 1.0),
+        "skin": (0.965, 0.592, 0.808, 1.0),
+        "secondary": (0.729, 0.188, 0.545, 1.0),
+        "hide": (0.976, 0.710, 0.863, 1.0),
+        "cloth": (0.443, 0.906, 0.886, 1.0),
+        "leather": (0.227, 0.145, 0.318, 1.0),
+        "horn": (1.0, 0.984, 0.957, 1.0),
+        "metal": (0.318, 0.545, 0.847, 1.0),
+        "accent": (0.443, 0.906, 0.886, 1.0),
+        "eye": (0.090, 0.067, 0.176, 1.0),
     },
     "cow": {
         "skin": (0.68, 0.61, 0.47, 1.0),
@@ -156,7 +156,7 @@ CREATURES = (
                  "broad burdened carrier framing a bright offering",
                  "biped", "npc_stepped", ("offering", "harness")),
     CreatureSpec("horse", "horse", 3,
-                 "short sturdy pony with a round body and heavy hair",
+                 "colorful storybook pony with big eyes and a ribbon mane",
                  "quadruped", "quadruped_runtime_skin",
                  ("thick_mane", "bushy_tail", "feathered_hooves")),
     CreatureSpec("cow", "cow", 4,
@@ -565,6 +565,36 @@ def quadruped_stride(spec: CreatureSpec) -> dict[str, float]:
     return result
 
 
+def paint_coat_patch(obj: bpy.types.Object, spec: CreatureSpec) -> None:
+    """Put broad markings on the coat itself so they follow the skin exactly."""
+    obj.data.materials.append(PREVIEW_MATERIALS[(spec.family, "secondary")])
+    for face in obj.data.polygons:
+        center = sum((obj.data.vertices[i].co for i in face.vertices), Vector()) / len(face.vertices)
+        # Two offset patches on each flank, with a clear light band between.
+        if abs(center.x) > 0.28 and (
+            ((center.y + 0.38) / 0.32) ** 2 + ((center.z - 0.08) / 0.36) ** 2 < 1.0
+            or ((center.y - 0.44) / 0.29) ** 2 + ((center.z + 0.02) / 0.32) ** 2 < 1.0
+        ):
+            face.material_index = len(obj.data.materials) - 1
+
+
+def add_animal_ear(spec: CreatureSpec, collection: bpy.types.Collection,
+                   head: Vector, sign: float, side: str) -> None:
+    upright = spec.family == "horse"
+    center = head + Vector((0.15 * sign, 0.015, 0.33)) if upright else head + Vector((0.34 * sign, 0.0, 0.10))
+    size = (0.095, 0.065, 0.19) if upright else (0.22, 0.095, 0.085)
+    ear = add_ellipsoid(f"{spec.family}_Ear_{side}", center, size,
+                       "skin" if upright else "secondary", collection, spec,
+                       f"ear_{side.lower()}")
+    # One curious ear and one relaxed ear give the pony an alert expression.
+    ear.rotation_euler.y = (-0.12 if sign < 0.0 else 0.52) if upright else sign * -0.20
+    inner = add_ellipsoid(f"{spec.family}_InnerEar_{side}",
+                         center + Vector((0.0, -0.052, 0.0)),
+                         (size[0] * 0.66, 0.022, size[2] * 0.66),
+                         "accent", collection, spec, f"ear_{side.lower()}")
+    inner.rotation_euler.y = ear.rotation_euler.y
+
+
 def build_quadruped(spec: CreatureSpec,
                     collection: bpy.types.Collection) -> None:
     cow = spec.family == "cow"
@@ -577,10 +607,12 @@ def build_quadruped(spec: CreatureSpec,
     hind_y = 0.43 if sheep else 0.57 if cow else 0.52
     body_scale = ((0.50, 0.69, 0.43) if sheep else
                   (0.62, 0.93, 0.45) if cow else
-                  (0.56, 0.78, 0.45))
+                  (0.49, 0.70, 0.44))
     body_semantic = "cloth" if sheep else "hide" if cow else "skin"
-    add_ellipsoid("CREATURE_Barrel", (0.0, 0.0, body_z), body_scale,
+    barrel = add_ellipsoid("CREATURE_Barrel", (0.0, 0.0, body_z), body_scale,
                   body_semantic, collection, spec, "barrel", subdivisions=2)
+    if cow:
+        paint_coat_patch(barrel, spec)
     chest_y = -0.38 if sheep else -0.53 if cow else -0.44
     add_ellipsoid("CREATURE_Chest", (0.0, chest_y, body_z + 0.06),
                   (body_scale[0] * 0.91,
@@ -597,12 +629,18 @@ def build_quadruped(spec: CreatureSpec,
             add_ellipsoid(f"SHEEP_Fleece_{index}", (x, y, z),
                           (sx, sy, sz), "cloth", collection, spec, part,
                           subdivisions=1)
+        for side in (-1.0, 1.0):
+            for index, y in enumerate((-0.40, -0.08, 0.25, 0.49)):
+                add_ellipsoid(f"SHEEP_FleeceFlank_{side}_{index}",
+                              (side * 0.37, y, body_z + 0.13),
+                              (0.23, 0.26, 0.28), "cloth", collection, spec,
+                              "chest" if index == 0 else "barrel")
     elif pony:
         add_ellipsoid("PONY_RoundRump", (0.0, 0.38, body_z + 0.02),
-                      (0.57, 0.48, 0.46), "skin", collection, spec,
+                      (0.49, 0.42, 0.44), "skin", collection, spec,
                       "barrel", subdivisions=1)
         add_ellipsoid("PONY_RoundShoulder", (0.0, -0.38, body_z + 0.12),
-                      (0.54, 0.46, 0.49), "skin", collection, spec,
+                      (0.47, 0.40, 0.45), "skin", collection, spec,
                       "chest", subdivisions=1)
 
     leg_roots = {
@@ -655,11 +693,7 @@ def build_quadruped(spec: CreatureSpec,
                       (0.22, 0.18, 0.16), "cloth", collection, spec,
                       "head", subdivisions=1)
         for side, sign in (("L", -1.0), ("R", 1.0)):
-            add_cone(f"SHEEP_Ear_{side}",
-                     head + Vector((0.24 * sign, -0.01, 0.10)),
-                     0.070, 0.31, "secondary", collection, spec,
-                     f"ear_{side.lower()}",
-                     rotation=(0.0, math.pi * 0.5 * sign, 0.0), vertices=5)
+            add_animal_ear(spec, collection, head, sign, side)
             add_ellipsoid(f"SHEEP_Eye_{side}",
                           head + Vector((0.20 * sign, -0.22, 0.08)),
                           (0.044, 0.025, 0.050), "eye", collection, spec,
@@ -679,32 +713,25 @@ def build_quadruped(spec: CreatureSpec,
             eye = head + Vector((0.25 * sign, -0.20, 0.085))
             add_ellipsoid(f"COW_Eye_{side}", eye, (0.050, 0.027, 0.056),
                           "eye", collection, spec, f"eye_{side.lower()}")
-            add_cone(f"COW_Ear_{side}",
-                     head + Vector((0.31 * sign, 0.0, 0.08)),
-                     0.080, 0.30, "secondary", collection, spec,
-                     f"ear_{side.lower()}",
-                     rotation=(0.0, math.pi * 0.5 * sign, 0.0), vertices=5)
+            add_animal_ear(spec, collection, head, sign, side)
             horn_base = head + Vector((0.26 * sign, -0.02, 0.22))
-            add_cone(f"COW_Horn_{side}",
-                     horn_base + Vector((0.17 * sign, 0.0, 0.07)),
-                     0.082, 0.43, "horn", collection, spec,
-                     f"horn_{side.lower()}",
-                     rotation=(0.0, math.pi * 0.5 * sign, 0.0), vertices=6)
+            horn_mid = horn_base + Vector((0.19 * sign, 0.015, 0.045))
+            horn_tip = horn_base + Vector((0.26 * sign, 0.045, 0.25))
+            add_segment(f"COW_HornBase_{side}", horn_base, horn_mid,
+                        0.082, 0.055, "horn", collection, spec,
+                        f"horn_{side.lower()}", sides=6)
+            add_segment(f"COW_HornTip_{side}", horn_mid, horn_tip,
+                        0.055, 0.008, "horn", collection, spec,
+                        f"horn_{side.lower()}", sides=6)
+            add_ellipsoid(f"COW_Nostril_{side}",
+                          head + Vector((0.16 * sign, -0.505, -0.025)),
+                          (0.060, 0.026, 0.037), "eye", collection, spec, "muzzle")
         add_ellipsoid("COW_Udder", (0.0, 0.26, body_z - 0.47),
                       (0.24, 0.28, 0.16), "accent", collection, spec, "udder")
         for x in (-0.12, 0.12):
             add_segment("COW_Teat", (x, 0.18, body_z - 0.54),
                         (x, 0.18, body_z - 0.70), 0.035, 0.025, "accent",
                         collection, spec, "teat", sides=6)
-        add_prism("COW_ShoulderPatch",
-                  ((-0.42, -0.46, body_z + 0.12),
-                   (-0.45, -0.10, body_z + 0.35),
-                   (-0.43, 0.20, body_z + 0.12),
-                   (-0.41, -0.02, body_z - 0.25)),
-                  0.035, "secondary", collection, spec, "hide_patch")
-        add_ellipsoid("COW_RumpPatch", (-0.60, 0.38, body_z + 0.03),
-                      (0.035, 0.40, 0.32), "secondary", collection, spec,
-                      "barrel", subdivisions=2)
     else:
         neck_start = Vector((0.0, -0.42, body_z + 0.22))
         neck_end = Vector((0.0, -0.70, body_z + 0.43))
@@ -714,20 +741,30 @@ def build_quadruped(spec: CreatureSpec,
         add_ellipsoid("HORSE_Head", head, (0.34, 0.36, 0.35), "skin",
                       collection, spec, "head", subdivisions=2)
         add_ellipsoid("HORSE_Muzzle", head + Vector((0.0, -0.25, -0.08)),
-                      (0.25, 0.17, 0.18), "secondary", collection, spec,
+                      (0.25, 0.17, 0.18), "hide", collection, spec,
                       "muzzle")
+        add_ellipsoid("HORSE_Blaze", head + Vector((0.0, -0.328, 0.10)),
+                      (0.075, 0.045, 0.19), "horn", collection, spec, "head")
         for side, sign in (("L", -1.0), ("R", 1.0)):
-            add_cone(f"HORSE_Ear_{side}",
-                     head + Vector((0.14 * sign, 0.01, 0.31)),
-                     0.085, 0.25, "skin", collection, spec,
-                     f"ear_{side.lower()}", vertices=5)
-            add_ellipsoid(f"HORSE_Eye_{side}",
-                          head + Vector((0.25 * sign, -0.17, 0.10)),
-                          (0.078, 0.032, 0.086), "eye", collection, spec,
+            add_animal_ear(spec, collection, head, sign, side)
+            add_ellipsoid(f"HORSE_Nostril_{side}",
+                          head + Vector((0.13 * sign, -0.402, -0.065)),
+                          (0.044, 0.022, 0.032), "eye", collection, spec, "muzzle")
+            add_ellipsoid(f"PONY_EyeWhite_{side}",
+                          head + Vector((0.27 * sign, -0.20, 0.115)),
+                          (0.116, 0.067, 0.145), "horn", collection, spec,
+                          f"eye_{side.lower()}", subdivisions=2)
+            add_ellipsoid(f"PONY_Iris_{side}",
+                          head + Vector((0.315 * sign, -0.252, 0.115)),
+                          (0.070, 0.026, 0.103), "metal", collection, spec,
+                          f"eye_{side.lower()}", subdivisions=2)
+            add_ellipsoid(f"PONY_Pupil_{side}",
+                          head + Vector((0.321 * sign, -0.273, 0.12)),
+                          (0.036, 0.014, 0.073), "eye", collection, spec,
                           f"eye_{side.lower()}")
             add_ellipsoid(f"PONY_EyeGlint_{side}",
-                          head + Vector((0.286 * sign, -0.199, 0.132)),
-                          (0.018, 0.009, 0.021), "horn", collection, spec,
+                          head + Vector((0.31 * sign, -0.285, 0.163)),
+                          (0.020, 0.011, 0.025), "horn", collection, spec,
                           f"eye_{side.lower()}")
             add_ellipsoid(
                 f"PONY_Cheek_{side}",
@@ -746,13 +783,14 @@ def build_quadruped(spec: CreatureSpec,
               (-0.03, -0.86, body_z + 0.78),
               (-0.03, -1.02, body_z + 0.59),
               (-0.03, -0.91, body_z + 0.42)), 0.28, "head"),
-            (((0.0, -0.92, body_z + 0.56),
-              (0.0, -1.06, body_z + 0.76),
-              (0.0, -1.18, body_z + 0.58)), 0.24, "head"),
+            (((0.06, -0.92, body_z + 0.56),
+              (0.06, -1.06, body_z + 0.76),
+              (0.06, -1.25, body_z + 0.46)), 0.28, "head"),
         )
         for index, (points, thickness, part) in enumerate(mane_wedges):
             add_lateral_prism(f"PONY_ManeWedge_{index}", points, thickness,
-                              "secondary", collection, spec, part)
+                              "secondary" if index % 2 == 0 else "cloth",
+                              collection, spec, part)
 
     if sheep:
         tail_base = Vector((0.0, 0.60, body_z + 0.14))
@@ -791,8 +829,16 @@ def build_quadruped(spec: CreatureSpec,
             add_segment(f"PONY_TailFlow_{index}",
                         plume_points[index], plume_points[index + 1],
                         plume_radii[index], plume_radii[index + 1],
-                        "secondary", collection, spec,
+                        "secondary" if index % 2 == 0 else "cloth", collection, spec,
                         "tail_root" if index == 0 else "tail", sides=7)
+        # Enlarge the whole face together, including its eyes and markings.
+        # The head bone stays at the shared gait pivot.
+        head_parts = {"head", "muzzle", "ear_l", "ear_r", "eye_l", "eye_r"}
+        head_scale = Matrix.Diagonal((1.18, 1.12, 1.10, 1.0))
+        exaggerate = Matrix.Translation(head) @ head_scale @ Matrix.Translation(-head)
+        for obj in collection.objects:
+            if obj.type == "MESH" and obj.get("cc_part") in head_parts:
+                obj.matrix_world = exaggerate @ obj.matrix_world
 
 
 def add_dragon_leg(spec: CreatureSpec, collection: bpy.types.Collection,

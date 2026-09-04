@@ -7,6 +7,7 @@
 
 typedef struct CcClientPreferences {
     bool reduced_motion;
+    int32_t audio_mode; /* 0: full, 1: effects, 2: muted */
 } CcClientPreferences;
 
 typedef enum CcClientConvoyGait {
@@ -50,6 +51,8 @@ typedef struct CcClientArrivalTransition {
 float CcClientConvoyPaceStep(float pace, bool road_phase,
                              bool urge, bool rein_in, bool stopped,
                              float delta_time);
+float CcClientTravelBlendStep(float blend, bool fast_forward, float delta_time);
+float CcClientTravelTimeScale(float blend);
 float CcClientRoadApproachStep(float progress, float pace, float delta_time);
 float CcClientConvoyPosturePace(int32_t posture);
 int32_t CcClientStepConvoyPosture(int32_t posture, int32_t direction);
