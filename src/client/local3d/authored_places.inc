@@ -844,6 +844,16 @@ static void DrawTerrainPatchAtTop(float x, float z, float width, float depth,
 static bool SceneryFootprintVisibleWithin(Rectangle footprint, Vector3 focus,
                                           float visibility_radius)
 {
+    if (scenery_view.valid) {
+        float ground = TerrainFootprintHeight(footprint);
+        Vector3 center = {footprint.x + footprint.width * 0.5f,
+                           ground + 12.0f,
+                           footprint.y + footprint.height * 0.5f};
+        Vector3 half = {footprint.width * 0.5f + 3.0f, 16.0f,
+                        footprint.height * 0.5f + 3.0f};
+        return CameraBoundsVisible(scenery_view.camera, center, half,
+            (float)scenery_view.width / (float)scenery_view.height, 512.0f);
+    }
     float nearest_x = fmaxf(footprint.x,
                             fminf(focus.x, footprint.x + footprint.width));
     float nearest_z = fmaxf(footprint.y,
@@ -3702,6 +3712,7 @@ static bool DrawAuthoredMarket(const CcSettlement *place)
 
 static WorldBuildingRevealState castle_structure_reveals[
     CC_LOCAL_PLACE_COMPOUND_CAPACITY];
+static uint32_t castle_reveal_seed;
 static float castle_reveal_clock = 0.0f;
 static bool castle_reveals_initialized = false;
 static CcSettlementFunction castle_reveal_function = CC_SETTLEMENT_MARKET;
@@ -3713,10 +3724,12 @@ static void UpdateCastleStructureReveals(Camera3D camera,
                                          float clock)
 {
     bool reset = !castle_reveals_initialized || clock < castle_reveal_clock ||
+                 castle_reveal_seed != street_terrain_seed ||
                  castle_reveal_function != active_place_function;
     float delta_time = reset ? 0.0f :
         fmaxf(0.0f, fminf(clock - castle_reveal_clock, 0.05f));
     castle_reveal_clock = clock;
+    castle_reveal_seed = street_terrain_seed;
     castle_reveals_initialized = true;
     castle_reveal_function = active_place_function;
     for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {

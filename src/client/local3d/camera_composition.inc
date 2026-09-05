@@ -67,8 +67,8 @@ static Camera3D KeepHeroInsideStreetFrame(Camera3D camera, Vector3 hero,
     float subject_depth = Vector3DotProduct(
         Vector3Subtract(hero, camera.position), forward);
     float focus_depth = Vector3Distance(camera.position, camera.target);
-    if (camera.projection == CAMERA_PERSPECTIVE && subject_depth < focus_depth * 0.2f) {
-        Vector3 retreat = Vector3Scale(forward, subject_depth - focus_depth);
+    if (camera.projection == CAMERA_PERSPECTIVE && subject_depth < focus_depth * 0.8f) {
+        Vector3 retreat = Vector3Scale(forward, subject_depth - focus_depth * 0.8f);
         camera.position = Vector3Add(camera.position, retreat);
         camera.target = Vector3Add(camera.target, retreat);
     }
@@ -108,6 +108,33 @@ static Camera3D SnapCameraToArtPixels(Camera3D camera, int32_t art_height)
     camera.target = Vector3Add(camera.target, adjustment);
     camera.position = Vector3Add(camera.position, adjustment);
     return camera;
+}
+
+static bool CameraBoundsVisible(Camera3D camera, Vector3 center, Vector3 half,
+                                 float aspect, float far_distance)
+{
+    Vector3 forward = Vector3Normalize(Vector3Subtract(camera.target, camera.position));
+    Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, camera.up));
+    Vector3 up = Vector3CrossProduct(right, forward);
+    Vector3 relative = Vector3Subtract(center, camera.position);
+    bool perspective = camera.projection == CAMERA_PERSPECTIVE;
+    float slope = perspective ? tanf(camera.fovy * DEG2RAD * 0.5f) : 0.0f;
+    Vector3 planes[] = {
+        forward, Vector3Negate(forward),
+        Vector3Add(Vector3Scale(forward, slope * aspect), right),
+        Vector3Subtract(Vector3Scale(forward, slope * aspect), right),
+        Vector3Add(Vector3Scale(forward, slope), up),
+        Vector3Subtract(Vector3Scale(forward, slope), up),
+    };
+    for (int i = 0; i < 6; ++i) {
+        Vector3 normal = planes[i];
+        float extent = fabsf(normal.x) * half.x + fabsf(normal.y) * half.y +
+                       fabsf(normal.z) * half.z;
+        float margin = i == 1 ? far_distance : 0.0f;
+        if (!perspective && i >= 2) margin = camera.fovy * 0.5f * (i < 4 ? aspect : 1.0f);
+        if (Vector3DotProduct(relative, normal) + extent + margin < 0.0f) return false;
+    }
+    return true;
 }
 
 typedef struct CameraProjectedVolume {
@@ -1018,9 +1045,14 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
         camera = FixedCameraRigFrameHero(
             &street_camera_rig, camera, hero, art_height,
             composition->art.quiet_area, advance);
+        Vector3 before_guard = camera.target;
         camera = KeepHeroInsideStreetFrame(
             camera, hero, art_height,
             (Rectangle){0.10f, 0.12f, 0.80f, 0.76f});
+        Vector3 guard = Vector3Subtract(camera.target, before_guard);
+        street_camera_rig.framing_offset = Vector3Add(street_camera_rig.framing_offset, guard);
+        street_camera_rig.framing_from = Vector3Add(street_camera_rig.framing_from, guard);
+        street_camera_rig.framing_destination = Vector3Add(street_camera_rig.framing_destination, guard);
     }
     return SnapCameraToArtPixels(camera, art_height);
 }
@@ -1519,6 +1551,9 @@ Camera3D CcLocalConversationCameraInternal(
     Vector3 base_offset = Vector3Subtract(base.position, base.target);
     float base_fovy = PerspectiveFovyForOrthographic(base);
     if (!conversation_camera_rig.initialized) {
+        conversation_camera_rig.close_target = base.target;
+        conversation_camera_rig.close_offset = base_offset;
+        conversation_camera_rig.close_fovy = base_fovy;
         conversation_camera_rig.displayed_target = base.target;
         conversation_camera_rig.displayed_offset = base_offset;
         conversation_camera_rig.displayed_fovy = base_fovy;
@@ -1542,9 +1577,9 @@ Camera3D CcLocalConversationCameraInternal(
             conversation_camera_rig.focus_weight + delta_time * direction,
             0.0f, 1.0f);
 
-        Vector3 close_target = base.target;
-        Vector3 close_offset = base_offset;
-        float close_fovy = base_fovy;
+        Vector3 close_target = conversation_camera_rig.close_target;
+        Vector3 close_offset = conversation_camera_rig.close_offset;
+        float close_fovy = conversation_camera_rig.close_fovy;
         if (available) {
             Vector3 first = Vector3Add(
                 player->position, (Vector3){0.0f, 1.02f, 0.0f});
@@ -1578,6 +1613,9 @@ Camera3D CcLocalConversationCameraInternal(
                 close, first, second, conversation_camera_rig.tree_clear_angle,
                 &conversation_camera_rig.tree_clear_angle);
             close_offset = Vector3Subtract(close.position, close.target);
+            conversation_camera_rig.close_target = close_target;
+            conversation_camera_rig.close_offset = close_offset;
+            conversation_camera_rig.close_fovy = close_fovy;
         }
 
         float weight = SmoothStep01(conversation_camera_rig.focus_weight);

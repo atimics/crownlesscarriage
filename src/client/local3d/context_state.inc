@@ -699,6 +699,9 @@ typedef struct CombatCameraRig {
 } CombatCameraRig;
 
 typedef struct ConversationCameraRig {
+    Vector3 close_target;
+    Vector3 close_offset;
+    float close_fovy;
     Vector3 displayed_target;
     Vector3 displayed_offset;
     float displayed_fovy;
@@ -767,6 +770,7 @@ static FixedCameraRig road_camera_rig = {0};
 static CombatCameraRig combat_camera_rig = {0};
 static ConversationCameraRig conversation_camera_rig = {0};
 static PresentedCameraState presented_camera[3] = {0};
+static PresentedCameraState scenery_view = {0};
 static CcLocalPresentedPerson presented_people[64];
 static int32_t presented_people_count;
 static bool interaction_ui_enabled;
@@ -817,6 +821,7 @@ static void RememberPresentedCamera(CcLocalSceneKind scene, Camera3D camera,
     state->width = width;
     state->height = height;
     state->valid = true;
+    scenery_view = *state;
 }
 
 static bool PresentedCameraForInput(CcLocalSceneKind scene,

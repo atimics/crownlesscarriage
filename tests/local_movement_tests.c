@@ -2957,6 +2957,7 @@ int main(void)
     int32_t camera_moving_frames = 0;
     int32_t current_motion_frames = 0;
     int32_t longest_motion_run = 0;
+    float largest_camera_step = 0.0f;
     for (int32_t frame = 0; frame < 720; ++frame) {
         float amount = (float)frame / 719.0f;
         miller_camera_agent.position.x = 54.6f + 17.0f * amount;
@@ -2981,9 +2982,9 @@ int main(void)
                           frame, hero_screen.x, hero_screen.y);
             return 1;
         }
-        bool camera_moving =
-            VectorDistance3(previous_camera_target, miller_camera.target) >
-                0.002f;
+        float camera_step = VectorDistance3(previous_camera_target, miller_camera.target);
+        largest_camera_step = fmaxf(largest_camera_step, camera_step);
+        bool camera_moving = camera_step > 0.002f;
         if (camera_moving && !camera_was_moving) camera_motion_runs += 1;
         if (camera_moving) camera_moving_frames += 1;
         current_motion_frames = camera_moving ? current_motion_frames + 1 : 0;
@@ -2993,11 +2994,11 @@ int main(void)
         camera_was_moving = camera_moving;
         previous_camera_target = miller_camera.target;
     }
-    if (longest_motion_run > 75 || camera_moving_frames > 320) {
+    if (largest_camera_step > 0.60f || camera_moving_frames == 0) {
         (void)fprintf(stderr,
-                      "Miller's Row camera followed continuously: %d runs, %d moving frames, longest %d frames\n",
+                      "Miller's Row camera motion: %d runs, %d moving frames, longest %d frames, largest step %.3f\n",
                       camera_motion_runs, camera_moving_frames,
-                      longest_motion_run);
+                      longest_motion_run, largest_camera_step);
         return 1;
     }
 

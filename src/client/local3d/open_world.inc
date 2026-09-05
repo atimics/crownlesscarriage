@@ -1309,31 +1309,10 @@ static bool BuildStorybookForest(TreeSceneryBatchCache *batch,
 static bool StorybookCellVisible(Camera3D camera, int32_t x, int32_t z,
                                  float ground)
 {
-    Vector3 forward = Vector3Normalize(Vector3Subtract(camera.target, camera.position));
-    Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, camera.up));
-    Vector3 up = Vector3CrossProduct(right, forward);
     Vector3 center = {(float)x * 80.0f + 40.0f, ground + 8.0f,
                        (float)z * 80.0f + 40.0f};
-    Vector3 relative = Vector3Subtract(center, camera.position);
-    /* Includes the largest crown and the terrain variation within a cell. */
-    Vector3 half = {49.0f, 60.0f, 49.0f};
-    float slope = tanf(camera.fovy * DEG2RAD * 0.5f);
-    float aspect = (float)CC_LOCAL_ART_WIDTH / (float)CC_LOCAL_ART_HEIGHT;
-    Vector3 planes[] = {
-        forward, Vector3Negate(forward),
-        Vector3Add(Vector3Scale(forward, slope * aspect), right),
-        Vector3Subtract(Vector3Scale(forward, slope * aspect), right),
-        Vector3Add(Vector3Scale(forward, slope), up),
-        Vector3Subtract(Vector3Scale(forward, slope), up),
-    };
-    for (int i = 0; i < 6; ++i) {
-        Vector3 normal = planes[i];
-        float extent = fabsf(normal.x) * half.x + fabsf(normal.y) * half.y +
-                       fabsf(normal.z) * half.z;
-        float margin = i == 1 ? 240.0f : 0.0f;
-        if (Vector3DotProduct(relative, normal) + extent + margin < 0.0f) return false;
-    }
-    return true;
+    return CameraBoundsVisible(camera, center, (Vector3){49.0f, 60.0f, 49.0f},
+        (float)CC_LOCAL_ART_WIDTH / (float)CC_LOCAL_ART_HEIGHT, 240.0f);
 }
 
 static int StorybookCellTrees(const CcWorldManifest *manifest,
