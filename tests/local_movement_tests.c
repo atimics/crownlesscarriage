@@ -742,6 +742,8 @@ static void RunTowerFallScenario(const char *name, Vector2 start,
     int32_t maximum_particle_frame = -1;
     int32_t maximum_particle_index = -1;
     CcBiomechVec3 maximum_particle_position = {0};
+    int32_t maximum_particle_supports = 0;
+    CcBiomechVec3 maximum_particle_support_normal = {0};
     int32_t contact_gap = 0;
     int32_t maximum_contact_gap = 0;
     float previous_visual_blend = agent.ragdoll_visual_blend;
@@ -807,6 +809,20 @@ static void RunTowerFallScenario(const char *name, Vector2 start,
                         maximum_particle_index = particle;
                         maximum_particle_position =
                             agent.humanoid.ragdoll.particles[particle].position;
+                        maximum_particle_supports = 0;
+                        maximum_particle_support_normal = (CcBiomechVec3){0};
+                        for (int32_t contact = 0;
+                             contact < agent.humanoid.ragdoll.particle_count;
+                             ++contact) {
+                            const CcBiomechRagdollParticle *body =
+                                &agent.humanoid.ragdoll.particles[contact];
+                            if (!body->collided || body->contact_normal.y <= 0.35f)
+                                continue;
+                            maximum_particle_supports += 1;
+                            maximum_particle_support_normal.x += body->contact_normal.x;
+                            maximum_particle_support_normal.y += body->contact_normal.y;
+                            maximum_particle_support_normal.z += body->contact_normal.z;
+                        }
                     }
                 }
                 contact_gap = street_contact ? 0 : contact_gap + 1;
@@ -851,6 +867,9 @@ static void RunTowerFallScenario(const char *name, Vector2 start,
                       agent.exact_target_valid,
                       agent.position.x, agent.position.y, agent.position.z,
                       street_error);
+        (void)fprintf(stderr, "peak support contacts %d normal %.3f %.3f %.3f\n",
+                      maximum_particle_supports, maximum_particle_support_normal.x,
+                      maximum_particle_support_normal.y, maximum_particle_support_normal.z);
         exit(1);
     }
 }
