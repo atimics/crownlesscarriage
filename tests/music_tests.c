@@ -124,6 +124,26 @@ int main(void)
 
     CcMusicContext battle = {.combat = true, .theme = {
         [CC_MUSIC_BANDIT] = 1.0f, [CC_MUSIC_COMBAT] = 1.0f}};
+    /* Prepare the next song while the current song still has minutes to play. */
+    CcMusicDirector ahead;
+    CcMusicInit(&ahead, 22);
+    ahead.available[calm_a] = true;
+    ahead.duration[calm_a] = 180.0f;
+    Advance(&ahead, &context, 240);
+    ahead.available[calm_b] = true;
+    ahead.ready[calm_b] = false;
+    Advance(&ahead, &context, 120);
+    CHECK(ahead.requested_take == calm_b);
+    CHECK(ahead.voice[ahead.target_voice].take == calm_a);
+    uint32_t ahead_random = ahead.random_state;
+    ahead.ready[calm_b] = true;
+    Advance(&ahead, &context, 600);
+    CHECK(ahead.requested_take == calm_b && ahead.random_state == ahead_random);
+    CHECK(ahead.voice[ahead.target_voice].take == calm_a);
+    ahead.voice[ahead.target_voice].age = 172.0f;
+    CcMusicUpdate(&ahead, &context, 1.0f / 60.0f);
+    CHECK(ahead.voice[ahead.target_voice].take == calm_b);
+
     /* A selected download holds the existing score until its bytes are ready. */
     CcMusicDirector waiting;
     CcMusicInit(&waiting, 22);

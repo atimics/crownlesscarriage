@@ -10,23 +10,40 @@ or after one minute when the host is unavailable. It chooses music by the curren
 place, road progress, and situation. Each published take can join that shuffle.
 
 Desktop releases contain the 27 MP3s in `assets/audio/music`. The macOS app keeps
-them inside `Contents/Resources/assets/audio/music`. A matching bundled copy plays
-straight away. A selected take from the online catalog loads on demand in a
-background worker. The current score keeps playing until the whole MP3 is ready,
-then the usual crossfade starts. Bandit attacks can use a ready combat take.
-Failed downloads return selection to available local music and retry later.
+them inside `Contents/Resources/assets/audio/music`. The player chooses its next
+song after five seconds of stable play. It downloads, opens and buffers that
+choice while the current song continues. A change in place or combat can replace
+the prepared choice. The current score keeps its gain until the replacement is
+ready. Failed files retry after a minute; other catalog entries remain available.
 
-The player buffers at most the three active fades and one pending track.
-Each download has a 16 MiB limit, a three-second connection timeout on desktop,
-and a 30-second transfer timeout. Published filenames use known track stems and
-SHA-256 names. HTTPS protects the catalog and downloads in transit.
+The player keeps at most three active fades and one prepared song. Each download
+has a 16 MiB limit, a three-second connection timeout on desktop, and a 30-second
+transfer timeout. Cancelling an old choice releases the download slot for its
+replacement. Catalog refresh failures retain the last good catalog.
 
-The browser package also contains the 27 MP3s as separate static files. They stay
-outside the startup data pack. After music starts, the browser saves those files
-one at a time in its music cache. Once this background copy finishes, all 27 are
-available during an offline game session. Browser storage must have room for the
-122 MB set. Clearing site storage removes that copy. Downloading a selected song
-can use the Cloudflare host or the packaged file. The same mixer handles fades.
+Native music uses two 48,000-frame buffers (two seconds at 48 kHz). Speech uses
+two 24,000-frame buffers. Each stream fills before its first audible frame. The
+music director reads playback position from the audio source, so transition
+choices follow the song through a slow game frame.
+
+The browser package contains the 27 MP3s as separate static files outside the
+startup data pack. Bundled songs use that local URL first. The browser saves
+these files one at a time during spare download time. A selected song takes
+priority over offline warming. A matching background transfer becomes the
+selected transfer. Playback can use completed bytes while storage writes its
+copy. Once warming finishes, all 27 files are available offline; the set needs
+122 MB of browser storage. Clearing site storage removes that copy.
+
+Browser music plays from downloaded MP3 blobs through native media elements.
+The browser handles decoding and playback separately from the game frame. A
+prepared element starts silently, fills, then pauses at the beginning until its
+fade is due. The C director still chooses songs, controls gains and handles
+combat. Page visibility pauses active music. Closing a stream releases its
+media element and blob URL. The four-element limit matches the player memory
+limit. Speech and sound effects continue through the existing raylib mixer.
+
+Published filenames use known track stems and SHA-256 names. HTTPS protects the
+catalog and downloads in transit.
 
 ## Add later exports
 
