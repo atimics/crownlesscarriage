@@ -165,6 +165,7 @@ int main(int argc, char **argv)
         CcLocalRendererInit();
         if (strcmp(argv[1], "--graphics") == 0) {
             TestRaisedBuildingCutaway(argv[2]);
+            TestPhysicalGoodsGraphics(argv[2]);
             TestUploadedMeshRelease();
             TestCharacterPrimitives();
             TestBoxBatchParity();

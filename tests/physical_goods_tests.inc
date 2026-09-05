@@ -50,3 +50,58 @@ static void TestPhysicalGoods(void)
         "missing stock and invalid slots must produce an empty display");
     (void)puts("PASS physical goods: all goods transfer between warehouse and carriage");
 }
+
+static Image RenderCargoQuantity(RenderTexture2D target, int32_t quantity)
+{
+    CcPlayerCompany player = {0};
+    player.cargo[CC_GOOD_FOOD] = quantity;
+    Camera3D camera = {.position = {4, 6, 5}, .target = {-0.30f, 2.70f, 0},
+        .up = {0, 1, 0}, .fovy = 4.2f, .projection = CAMERA_ORTHOGRAPHIC};
+    BeginTextureMode(target);
+    ClearBackground(BLACK);
+    BeginMode3D(camera);
+    BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
+    DrawCarriedCargoBoxes(&player, (Vector3){0}, 0.0f);
+    EndWorldLighting();
+    EndMode3D();
+    EndTextureMode();
+    return LoadImageFromTexture(target.texture);
+}
+
+static void TestPhysicalGoodsGraphics(const char *path)
+{
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        EconomicCargoAsset *asset = &economic_cargo_assets[good];
+        RequireRenderer(asset->ready && asset->bounds.max.x > asset->bounds.min.x &&
+            asset->bounds.max.y > asset->bounds.min.y && asset->bounds.max.z > asset->bounds.min.z,
+            "every good needs a loaded model with usable rack bounds");
+    }
+    RenderTexture2D target = LoadRenderTexture(512, 512);
+    RequireRenderer(IsRenderTextureValid(target), "cargo comparison target must load");
+    for (int32_t fallback = 0; fallback < 2; ++fallback) {
+        economic_cargo_assets[CC_GOOD_FOOD].ready = fallback == 0;
+        Image two = RenderCargoQuantity(target, 2);
+        Image eight = RenderCargoQuantity(target, 8);
+        Color *before = LoadImageColors(two), *after = LoadImageColors(eight);
+        RequireRenderer(before != NULL && after != NULL, "cargo pixels must be readable");
+        int32_t changed = 0;
+        for (int32_t pixel = 0; pixel < two.width * two.height; ++pixel) {
+            if (abs((int)before[pixel].r - (int)after[pixel].r) > 8 ||
+                abs((int)before[pixel].g - (int)after[pixel].g) > 8 ||
+                abs((int)before[pixel].b - (int)after[pixel].b) > 8) changed++;
+        }
+        RequireRenderer(changed > 1000, "adding six cargo units must visibly fill the rack");
+        ImageFlipVertical(&two);
+        ImageFlipVertical(&eight);
+        RequireRenderer(ExportImage(two, TextFormat("%s-cargo-2-%d.png", path, fallback)) &&
+            ExportImage(eight, TextFormat("%s-cargo-8-%d.png", path, fallback)),
+            "cargo comparison captures must be written");
+        UnloadImageColors(before);
+        UnloadImageColors(after);
+        UnloadImage(two);
+        UnloadImage(eight);
+        economic_cargo_assets[CC_GOOD_FOOD].ready = true;
+        (void)printf("PASS cargo pixels: %d changed, fallback %d\n", changed, fallback);
+    }
+    UnloadRenderTexture(target);
+}
