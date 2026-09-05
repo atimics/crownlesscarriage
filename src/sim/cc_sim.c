@@ -5583,12 +5583,15 @@ static void GatherGossip(CcSim *sim)
         uint32_t bit = UINT32_C(1) << (uint32_t)slot;
         for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
             sim->gossip_carriers[i].stories &= ~bit;
+            sim->gossip_carriers[i].versions[slot] = (CcGossipVersion){0};
         }
         sim->gossip[slot] = (CcGossip){
             .event_id = event->id, .origin_id = sim->settlements[origin].id,
             .day = event->day,
+            .kind = event->kind,
             .settlement_mask = UINT32_C(1) << (uint32_t)origin
         };
+        sim->gossip[slot].local[origin].confidence = 100;
         (void)snprintf(sim->gossip[slot].text,
                        sizeof(sim->gossip[slot].text), "%s", event->text);
     }
@@ -5617,21 +5620,106 @@ static bool GossipCarrierExists(const CcSim *sim, CcId id)
     return false;
 }
 
+static const CcCharacter *GossipTellerAt(const CcSim *sim, CcId place_id,
+                                        CcId story_id)
+{
+    if (sim->character_count == 0) return NULL;
+    int32_t first = (int32_t)(story_id % (uint64_t)sim->character_count);
+    for (int32_t offset = 0; offset < sim->character_count; ++offset) {
+        const CcCharacter *person = &sim->characters[(first + offset) % sim->character_count];
+        if (person->current_settlement_id == place_id &&
+            CcCharacterAgeYears(sim, person) >= 16 &&
+            person->activity != CC_CHARACTER_ACTIVITY_TRAVELLING) return person;
+    }
+    return NULL;
+}
+
+static CcGossipVersion RetellGossip(const CcSim *sim, const CcGossip *story,
+                                    CcGossipVersion version,
+                                    const CcCharacter *person, CcId carrier_id)
+{
+    int32_t loyalty = 0;
+    int32_t stress = 0;
+    int32_t courage = 50;
+    if (person != NULL) {
+        version.source_character_id = person->id;
+        stress = person->stress;
+        courage = person->courage;
+        loyalty = person->role == CC_CHARACTER_OFFICIAL ||
+                  person->role == CC_CHARACTER_COURIER ? 20 :
+                  person->role == CC_CHARACTER_REFUGEE ? -20 : 0;
+        for (int32_t i = 0; i < sim->faction_count; ++i) {
+            if (person->faction_id != sim->factions[i].id) continue;
+            if (sim->factions[i].kind == CC_FACTION_CROWN) loyalty = 20;
+            if (sim->factions[i].kind == CC_FACTION_COMMONS) loyalty = -20;
+        }
+    } else if (CcIdKind(carrier_id) == CC_ENTITY_COURIER ||
+               CcIdKind(carrier_id) == CC_ENTITY_ROYAL_CARRIAGE) {
+        loyalty = 12;
+    }
+    version.retellings = MinimumI32(255, version.retellings + 1);
+    version.court_bias = ClampI32(version.court_bias + loyalty, -100, 100);
+    version.alarm = ClampI32(version.alarm + 4 + stress / 4 - courage / 20, 0, 100);
+    int32_t age = MinimumI32(12, (sim->current_day - story->day) / 7);
+    version.confidence = MaximumI32(10, version.confidence - 7 - stress / 10 - age);
+    return version;
+}
+
+void CcGossipText(const CcSim *sim, const CcGossip *story,
+                  const CcGossipVersion *version, char *text, size_t capacity)
+{
+    if (text == NULL || capacity == 0U) return;
+    if (sim == NULL || story == NULL || version == NULL) { text[0] = '\0'; return; }
+    if (version->retellings == 0) {
+        (void)snprintf(text, capacity, "%s", story->text);
+        return;
+    }
+    char account[CC_EVENT_TEXT_CAPACITY];
+    if (version->retellings == 1) {
+        (void)snprintf(account, sizeof(account), "%.85s", story->text);
+    } else {
+        const char *claim = "a ruler has changed things";
+        switch (story->kind) {
+            case CC_EVENT_WAR_DECLARED: claim = "war is spreading"; break;
+            case CC_EVENT_PEACE_DECLARED: claim = "the courts have made peace"; break;
+            case CC_EVENT_DRAGON_SLAIN: claim = "a great dragon has fallen"; break;
+            case CC_EVENT_DRAGON_CROWNED: claim = "a dragon commands the realm"; break;
+            case CC_EVENT_DRAGON_BROOD: claim = "dragons are multiplying"; break;
+            case CC_EVENT_TREASURE_CRAFTED: claim = "a remarkable treasure has appeared"; break;
+            case CC_EVENT_SETTLEMENT_RAIDED:
+                claim = version->alarm >= 30 ? "raids are spreading" : "raiders have struck";
+                break;
+            case CC_EVENT_CHARACTER_DIED: claim = "a familiar face has died"; break;
+            default: break;
+        }
+        const CcSettlement *origin = CcSimSettlement(sim, story->origin_id);
+        (void)snprintf(account, sizeof(account), "Word from %.24s: %s.",
+                       origin != NULL ? origin->name : "the road", claim);
+    }
+    const char *bias = version->court_bias >= 15 ? " Loyal voices credit the crown." :
+                       version->court_bias <= -15 ? " Some blame the court." : "";
+    const char *alarm = version->alarm >= 30 ? " They fear worse is coming." : "";
+    (void)snprintf(text, capacity, "%s%s%s", account, bias, alarm);
+}
+
 static void HearGossip(CcSim *sim, CcGossip *story, CcId place_id,
-                        const char *speaker)
+                        CcId parent_id, const char *speaker, CcGossipVersion version)
 {
     const CcSettlement *scriptorium = Scriptorium(sim);
     if (story->heard_day > 0 || story->recorded ||
         sim->archives.scribes <= 0 || scriptorium == NULL ||
         scriptorium->id != place_id) return;
     story->heard_day = sim->current_day;
+    story->heard = version;
     (void)snprintf(story->heard_from, sizeof(story->heard_from), "%s", speaker);
+    char account[CC_EVENT_TEXT_CAPACITY];
+    CcGossipText(sim, story, &version, account, sizeof(account));
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text), "%.31s tell the scribes: %.85s",
-                   speaker, story->text);
+                   speaker, account);
     story->heard_event_id = PushEvent(
         sim, CC_EVENT_RUMOR_SHARED, story->event_id, place_id,
-        story->event_id, 1, text)->id;
+        parent_id, 1, text)->id;
 }
 
 static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
@@ -5666,14 +5754,24 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
         if ((carrier->stories & bit) != 0U &&
             (story->settlement_mask & town) == 0U) {
             story->settlement_mask |= town;
+            story->local[place] = RetellGossip(sim, story, carrier->versions[i],
+                                               NULL, carrier_id);
+            carrier->versions[i] = story->local[place];
+            char account[CC_EVENT_TEXT_CAPACITY];
+            CcGossipText(sim, story, &story->local[place], account, sizeof(account));
             char text[CC_EVENT_TEXT_CAPACITY];
             (void)snprintf(text, sizeof(text), "%.31s share gossip: %.90s",
-                           speaker, story->text);
-            (void)PushEvent(sim, CC_EVENT_RUMOR_SHARED, carrier_id,
-                            place_id, story->event_id, 1, text);
-            HearGossip(sim, story, place_id, speaker);
+                           speaker, account);
+            CcId shared = PushEvent(sim, CC_EVENT_RUMOR_SHARED, carrier_id,
+                                     place_id, story->event_id, 1, text)->id;
+            HearGossip(sim, story, place_id, shared, speaker, story->local[place]);
         }
-        if ((story->settlement_mask & town) != 0U) carrier->stories |= bit;
+        if ((story->settlement_mask & town) != 0U &&
+            (carrier->stories & bit) == 0U) {
+            carrier->stories |= bit;
+            carrier->versions[i] = RetellGossip(sim, story, story->local[place],
+                GossipTellerAt(sim, place_id, story->event_id), 0U);
+        }
     }
 }
 
@@ -5687,7 +5785,11 @@ static void HearLocalGossip(CcSim *sim)
     uint32_t town = UINT32_C(1) << (uint32_t)slot;
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
         if ((sim->gossip[i].settlement_mask & town) != 0U) {
-            HearGossip(sim, &sim->gossip[i], place->id, "Town residents");
+            CcGossip *story = &sim->gossip[i];
+            CcGossipVersion version = RetellGossip(sim, story, story->local[slot],
+                GossipTellerAt(sim, place->id, story->event_id), 0U);
+            HearGossip(sim, &sim->gossip[i], place->id,
+                        sim->gossip[i].event_id, "Town residents", version);
         }
     }
 }
@@ -5960,17 +6062,31 @@ static void AdvanceArchives(CcSim *sim)
     int32_t noted_count = 0;
     HearLocalGossip(sim);
     if (sim->schema_version >= 42U) {
-        for (int32_t i = 0; i < CC_MAX_GOSSIP && noted_count < active_scribes; ++i) {
-            const CcGossip *story = &sim->gossip[i];
-            if (story->heard_day == 0 || story->recorded) continue;
+        while (noted_count < active_scribes) {
+            int32_t oldest = -1;
+            for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+                const CcGossip *candidate = &sim->gossip[i];
+                if (candidate->heard_day == 0 || candidate->recorded) continue;
+                bool selected = false;
+                for (int32_t j = 0; j < noted_count; ++j) {
+                    if (noted_gossip[j] == i) selected = true;
+                }
+                if (selected) continue;
+                if (oldest < 0 || candidate->heard_day < sim->gossip[oldest].heard_day ||
+                    (candidate->heard_day == sim->gossip[oldest].heard_day &&
+                     candidate->event_id < sim->gossip[oldest].event_id)) oldest = i;
+            }
+            if (oldest < 0) break;
+            const CcGossip *story = &sim->gossip[oldest];
             noted[noted_count] = story->heard_event_id != 0U ?
                 story->heard_event_id : story->event_id;
             noted_location[noted_count] = scriptorium != NULL ? scriptorium->id : 0U;
-            noted_gossip[noted_count] = i;
+            noted_gossip[noted_count] = oldest;
+            char account[CC_EVENT_TEXT_CAPACITY];
+            CcGossipText(sim, story, &story->heard, account, sizeof(account));
             (void)snprintf(noted_text[noted_count],
                            sizeof(noted_text[noted_count]),
-                           "The scribes record an account from %.31s: %.65s",
-                           story->heard_from, story->text);
+                           "%s", account);
             noted_count += 1;
         }
     }
@@ -5983,17 +6099,7 @@ static void AdvanceArchives(CcSim *sim)
         if (event == NULL || event->day < first_day ||
             event->day > sim->current_day || event->magnitude < 20 ||
             EventWasArchived(sim, event->id)) continue;
-        bool notable =
-            event->kind == CC_EVENT_WAR_DECLARED ||
-            event->kind == CC_EVENT_PEACE_DECLARED ||
-            event->kind == CC_EVENT_DRAGON_SLAIN ||
-            event->kind == CC_EVENT_DRAGON_CROWNED ||
-            event->kind == CC_EVENT_DRAGON_BROOD ||
-            event->kind == CC_EVENT_TREASURE_CRAFTED ||
-            event->kind == CC_EVENT_KINGDOM_ACTION ||
-            event->kind == CC_EVENT_SETTLEMENT_RAIDED ||
-            event->kind == CC_EVENT_CHARACTER_DIED;
-        if (!notable) continue;
+        if (!IsNotableGossip(event)) continue;
         noted[noted_count] = event->id;
         noted_location[noted_count] = event->location_id;
         (void)snprintf(noted_text[noted_count],
@@ -17399,6 +17505,22 @@ static bool ValidateIdentityState(const CcSim *sim,
     return true;
 }
 
+static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
+                                bool known)
+{
+    if (!known) {
+        return version->source_character_id == 0U && version->retellings == 0 &&
+            version->court_bias == 0 && version->alarm == 0 && version->confidence == 0;
+    }
+    return version->retellings >= 0 && version->retellings <= 255 &&
+        version->court_bias >= -100 && version->court_bias <= 100 &&
+        version->alarm >= 0 && version->alarm <= 100 &&
+        version->confidence >= 10 && version->confidence <= 100 &&
+        (version->source_character_id == 0U ||
+         (CcIdKind(version->source_character_id) == CC_ENTITY_CHARACTER &&
+          (version->source_character_id & CC_ID_SERIAL_MASK) < sim->next_entity_serial));
+}
+
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim == NULL) {
@@ -17583,6 +17705,17 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         }
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
             const CcGossip *story = &sim->gossip[i];
+            for (int32_t town = 0; town < CC_MAX_SETTLEMENTS; ++town) {
+                bool known = (story->settlement_mask & (UINT32_C(1) << (uint32_t)town)) != 0U;
+                if (!ValidGossipVersion(sim, &story->local[town], known)) {
+                    SetError(error, error_capacity, "A town's gossip version is invalid.");
+                    return false;
+                }
+            }
+            if (!ValidGossipVersion(sim, &story->heard, story->heard_day > 0)) {
+                SetError(error, error_capacity, "The scribes' gossip version is invalid.");
+                return false;
+            }
             if (story->event_id == 0U) {
                 if (story->settlement_mask != 0U || story->heard_day != 0 ||
                     story->recorded || story->heard_event_id != 0U ||
@@ -17594,7 +17727,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 continue;
             }
             stories |= UINT32_C(1) << (uint32_t)i;
-            if (CcIdKind(story->event_id) != CC_ENTITY_EVENT ||
+            CcEvent source = {.kind = story->kind, .magnitude = 20};
+            if (!IsNotableGossip(&source) || CcIdKind(story->event_id) != CC_ENTITY_EVENT ||
                 story->event_id > sim->gossip_last_event_id ||
                 CcSimSettlement(sim, story->origin_id) == NULL ||
                 story->day < 1 || story->day > sim->current_day ||
@@ -17620,6 +17754,13 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         }
         for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
             const CcGossipCarrier *carrier = &sim->gossip_carriers[i];
+            for (int32_t slot = 0; slot < CC_MAX_GOSSIP; ++slot) {
+                bool known = (carrier->stories & (UINT32_C(1) << (uint32_t)slot)) != 0U;
+                if (!ValidGossipVersion(sim, &carrier->versions[slot], known)) {
+                    SetError(error, error_capacity, "A traveler's gossip version is invalid.");
+                    return false;
+                }
+            }
             CcEntityKind kind = CcIdKind(carrier->id);
             if ((carrier->stories & ~stories) != 0U ||
                 (carrier->id == 0U && carrier->stories != 0U) ||
@@ -19437,6 +19578,15 @@ static uint64_t HashString(uint64_t hash, const char *text)
     return HashU64(hash, 0U);
 }
 
+static uint64_t HashGossipVersion(uint64_t hash, const CcGossipVersion *version)
+{
+    hash = HashU64(hash, version->source_character_id);
+    hash = HashU64(hash, (uint64_t)version->retellings);
+    hash = HashU64(hash, (uint64_t)version->court_bias);
+    hash = HashU64(hash, (uint64_t)version->alarm);
+    return HashU64(hash, (uint64_t)version->confidence);
+}
+
 uint64_t CcSimHash(const CcSim *sim)
 {
     if (sim == NULL) return 0U;
@@ -20205,12 +20355,24 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(story->heard_event_id); HASH_VALUE(story->day);
             HASH_VALUE(story->heard_day); HASH_VALUE(story->settlement_mask);
             HASH_VALUE(story->recorded);
+            HASH_VALUE(story->kind);
             hash = HashString(hash, story->text);
             hash = HashString(hash, story->heard_from);
+            for (int32_t town = 0; town < CC_MAX_SETTLEMENTS; ++town) {
+                if ((story->settlement_mask & (UINT32_C(1) << (uint32_t)town)) != 0U) {
+                    hash = HashGossipVersion(hash, &story->local[town]);
+                }
+            }
+            if (story->heard_day > 0) hash = HashGossipVersion(hash, &story->heard);
         }
         for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
             HASH_VALUE(sim->gossip_carriers[i].id);
             HASH_VALUE(sim->gossip_carriers[i].stories);
+            for (int32_t slot = 0; slot < CC_MAX_GOSSIP; ++slot) {
+                if ((sim->gossip_carriers[i].stories & (UINT32_C(1) << (uint32_t)slot)) != 0U) {
+                    hash = HashGossipVersion(hash, &sim->gossip_carriers[i].versions[slot]);
+                }
+            }
         }
     }
     if (sim->schema_version >= 40U) {

@@ -1358,9 +1358,14 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " slot INTEGER PRIMARY KEY, event_id INTEGER NOT NULL, origin_id INTEGER NOT NULL,"
         " heard_event_id INTEGER NOT NULL, day INTEGER NOT NULL, heard_day INTEGER NOT NULL,"
         " settlement_mask INTEGER NOT NULL, recorded INTEGER NOT NULL,"
-        " text TEXT NOT NULL, heard_from TEXT NOT NULL);"
+        " text TEXT NOT NULL, heard_from TEXT NOT NULL, kind INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS gossip_carrier ("
-        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL, stories INTEGER NOT NULL);";
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL, stories INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS gossip_version ("
+        " holder_kind INTEGER NOT NULL, holder_slot INTEGER NOT NULL, gossip_slot INTEGER NOT NULL,"
+        " source_character_id INTEGER NOT NULL, retellings INTEGER NOT NULL,"
+        " court_bias INTEGER NOT NULL, alarm INTEGER NOT NULL, confidence INTEGER NOT NULL,"
+        " PRIMARY KEY(holder_kind,holder_slot,gossip_slot));";
     return Execute(database, gossip_schema, error, error_capacity) &&
            Execute(database, pony_schema, error, error_capacity) &&
            Execute(database, schema, error, error_capacity) &&
@@ -3043,7 +3048,7 @@ static bool SaveGossip(sqlite3 *database, const CcSim *sim,
     bool ok = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!ok || !Prepare(database,
-            "INSERT INTO gossip_account VALUES(?,?,?,?,?,?,?,?,?,?);",
+            "INSERT INTO gossip_account VALUES(?,?,?,?,?,?,?,?,?,?,?);",
             &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < CC_MAX_GOSSIP && ok; ++i) {
         const CcGossip *story = &sim->gossip[i];
@@ -3057,6 +3062,7 @@ static bool SaveGossip(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 8, story->recorded ? 1 : 0);
         BindText(statement, 9, story->text);
         BindText(statement, 10, story->heard_from);
+        BindInt(statement, 11, (int32_t)story->kind);
         ok = StepDone(database, statement, error, error_capacity) &&
              ResetStatement(database, statement, error, error_capacity);
     }
@@ -3070,6 +3076,30 @@ static bool SaveGossip(sqlite3 *database, const CcSim *sim,
         BindId(statement, 3, sim->gossip_carriers[i].stories);
         ok = StepDone(database, statement, error, error_capacity) &&
              ResetStatement(database, statement, error, error_capacity);
+    }
+    sqlite3_finalize(statement);
+    if (!ok || !Prepare(database, "INSERT INTO gossip_version VALUES(?,?,?,?,?,?,?,?);",
+                         &statement, error, error_capacity)) return false;
+    for (int32_t kind = 0; kind < 3 && ok; ++kind) {
+        int32_t holders = kind == 0 ? CC_MAX_SETTLEMENTS :
+                          kind == 1 ? CC_MAX_GOSSIP_CARRIERS : 1;
+        for (int32_t holder = 0; holder < holders && ok; ++holder) {
+            for (int32_t i = 0; i < CC_MAX_GOSSIP && ok; ++i) {
+                const CcGossipVersion *version = kind == 0 ? &sim->gossip[i].local[holder] :
+                    kind == 1 ? &sim->gossip_carriers[holder].versions[i] : &sim->gossip[i].heard;
+                if (version->confidence == 0) continue;
+                BindInt(statement, 1, kind);
+                BindInt(statement, 2, holder);
+                BindInt(statement, 3, i);
+                BindId(statement, 4, version->source_character_id);
+                BindInt(statement, 5, version->retellings);
+                BindInt(statement, 6, version->court_bias);
+                BindInt(statement, 7, version->alarm);
+                BindInt(statement, 8, version->confidence);
+                ok = StepDone(database, statement, error, error_capacity) &&
+                     ResetStatement(database, statement, error, error_capacity);
+            }
+        }
     }
     sqlite3_finalize(statement);
     return ok;
@@ -3088,7 +3118,7 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
     sqlite3_finalize(statement);
     if (!Prepare(database,
             "SELECT slot,event_id,origin_id,heard_event_id,day,heard_day,"
-            "settlement_mask,recorded,text,heard_from FROM gossip_account ORDER BY slot;",
+            "settlement_mask,recorded,text,heard_from,kind FROM gossip_account ORDER BY slot;",
             &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
         if (sqlite3_step(statement) != SQLITE_ROW ||
@@ -3104,6 +3134,7 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
         story->heard_day = sqlite3_column_int(statement, 5);
         story->settlement_mask = (uint32_t)mask;
         story->recorded = recorded != 0;
+        story->kind = (CcEventKind)sqlite3_column_int(statement, 10);
         if (!ReadTextColumn(statement, 8, story->text, sizeof(story->text),
                              "gossip account", error, error_capacity) ||
             !ReadTextColumn(statement, 9, story->heard_from, sizeof(story->heard_from),
@@ -3126,6 +3157,30 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
     }
     if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
     sqlite3_finalize(statement);
+    if (!Prepare(database, "SELECT holder_kind,holder_slot,gossip_slot,source_character_id,"
+                  "retellings,court_bias,alarm,confidence FROM gossip_version;",
+                  &statement, error, error_capacity)) return false;
+    int result;
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        sqlite3_int64 kind = sqlite3_column_int64(statement, 0);
+        sqlite3_int64 holder = sqlite3_column_int64(statement, 1);
+        sqlite3_int64 slot = sqlite3_column_int64(statement, 2);
+        if (kind < 0 || kind > 2 || holder < 0 || slot < 0 || slot >= CC_MAX_GOSSIP ||
+            (kind == 0 && holder >= CC_MAX_SETTLEMENTS) ||
+            (kind == 1 && holder >= CC_MAX_GOSSIP_CARRIERS) ||
+            (kind == 2 && holder != 0)) goto invalid;
+        CcGossipVersion *version = kind == 0 ? &sim->gossip[slot].local[holder] :
+            kind == 1 ? &sim->gossip_carriers[holder].versions[slot] : &sim->gossip[slot].heard;
+        if (version->confidence != 0) goto invalid;
+        version->source_character_id = (CcId)sqlite3_column_int64(statement, 3);
+        version->retellings = sqlite3_column_int(statement, 4);
+        version->court_bias = sqlite3_column_int(statement, 5);
+        version->alarm = sqlite3_column_int(statement, 6);
+        version->confidence = sqlite3_column_int(statement, 7);
+        if (version->confidence == 0) goto invalid;
+    }
+    if (result != SQLITE_DONE) goto invalid;
+    sqlite3_finalize(statement);
     return true;
 invalid:
     sqlite3_finalize(statement);
@@ -3147,6 +3202,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
     }
     return Execute(database,
             "DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
+            "DELETE FROM gossip_version;"
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
             "DELETE FROM horse_team; DELETE FROM stable_horse;"
             "DELETE FROM pony_company; DELETE FROM rainbow_pony;"

@@ -529,8 +529,11 @@ static void DescribeRumors(const CcMetagame *metagame,
                 const CcGossip *story = &sim->gossip[i];
                 if ((story->settlement_mask & bit) == 0U) continue;
                 const CcSettlement *origin = CcSimSettlement(sim, story->origin_id);
-                Append(output, capacity, "  Word from %s, day %d: %s\n",
-                       origin != NULL ? origin->name : "the road", story->day, story->text);
+                char account[CC_EVENT_TEXT_CAPACITY];
+                CcGossipText(sim, story, &story->local[town], account, sizeof(account));
+                Append(output, capacity, "  From %s, day %d (%d tellings, %d%% confidence): %s\n",
+                       origin != NULL ? origin->name : "the road", story->day,
+                       story->local[town].retellings, story->local[town].confidence, account);
             }
         }
     }
@@ -2023,8 +2026,10 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
             const CcGossip *story = &metagame->sim.gossip[i];
             if (story->heard_day == 0 || story->recorded) continue;
-            Append(output, output_capacity, "  Heard from %s on day %d: %s\n",
-                   story->heard_from, story->heard_day, story->text);
+            char account[CC_EVENT_TEXT_CAPACITY];
+            CcGossipText(&metagame->sim, story, &story->heard, account, sizeof(account));
+            Append(output, output_capacity, "  Heard from %s on day %d (%d%% confidence): %s\n",
+                   story->heard_from, story->heard_day, story->heard.confidence, account);
         }
         for (int32_t i = 0; i < metagame->sim.kingdom_count; ++i) {
             const CcKingdom *kingdom = &metagame->sim.kingdoms[i];

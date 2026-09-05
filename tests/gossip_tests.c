@@ -3,6 +3,7 @@
 #include "test_support.h"
 
 #include <stdio.h>
+#include <sqlite3.h>
 #include <string.h>
 
 static CcSim sim;
@@ -124,7 +125,10 @@ static void CheckArrivalAndLateRecording(void)
     CC_CHECK(strstr(Account(remote)->heard_from, "travelers") != NULL);
     CcId heard = Account(remote)->heard_event_id;
     const CcEvent *receipt = CcSimEvent(&sim, heard);
-    CC_CHECK(receipt != NULL && receipt->parent_id == remote);
+    CC_CHECK(receipt != NULL);
+    const CcEvent *shared = CcSimEvent(&sim, receipt->parent_id);
+    CC_CHECK(shared != NULL && shared->parent_id == remote);
+    CC_CHECK(shared->subject_id == sim.player.id);
     CC_CHECK(receipt->location_id == sim.settlements[1].id);
     sim.settlements[1].stock[CC_GOOD_PAPER] = 0;
     sim.settlements[1].production[CC_GOOD_PAPER] = 0;
@@ -220,6 +224,215 @@ static void CheckJournalAndLegacyReplay(void)
     (void)remove(path);
 }
 
+static void CheckRelayAndBlockedRoad(void)
+{
+    Prepare();
+    CcId report = AddAccount(sim.settlements[3].id, "The mine town opens a new market.");
+    CcRoyalCarriage *carriage = &sim.royal_carriages[0];
+    carriage->location_id = sim.settlements[2].id;
+    carriage->route_id = sim.routes[2].id;
+    carriage->destination_id = sim.settlements[3].id;
+    carriage->target_id = sim.settlements[1].id;
+    carriage->mode = CC_ROYAL_CARRIAGE_REPOSITIONING;
+    carriage->departure_day = sim.current_day;
+    carriage->arrival_day = sim.current_day + 1;
+    carriage->condition = 100;
+    for (int32_t i = 0; i < sim.kingdom_count; ++i) {
+        for (int32_t j = i + 1; j < sim.kingdom_count; ++j) {
+            sim.diplomacy[i][j] = sim.diplomacy[j][i] = CC_DIPLOMACY_ALLIANCE;
+        }
+    }
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(carriage->location_id == sim.settlements[3].id);
+    CC_CHECK(Account(report)->heard_day == 0);
+    for (int32_t i = 0; i < sim.kingdom_count; ++i) {
+        for (int32_t j = i + 1; j < sim.kingdom_count; ++j) {
+            sim.diplomacy[i][j] = sim.diplomacy[j][i] = CC_DIPLOMACY_WAR;
+        }
+    }
+    CcSimAdvanceDays(&sim, carriage->arrival_day - sim.current_day);
+    CC_CHECK(carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED);
+    CC_CHECK(Account(report)->heard_day == 0);
+    for (int32_t i = 0; i < sim.kingdom_count; ++i) {
+        for (int32_t j = i + 1; j < sim.kingdom_count; ++j) {
+            sim.diplomacy[i][j] = sim.diplomacy[j][i] = CC_DIPLOMACY_ALLIANCE;
+        }
+    }
+    for (int32_t day = 0; day < 12 && Account(report)->heard_day == 0; ++day) {
+        CcSimAdvanceDays(&sim, 1);
+    }
+    CC_CHECK(Account(report)->heard_day > 0);
+    CC_CHECK(strcmp(Account(report)->heard_from, "Carriage travelers") == 0);
+    CC_CHECK((Account(report)->settlement_mask & (UINT32_C(1) << 2U)) != 0U);
+}
+
+static void CheckStorySlotReuse(void)
+{
+    Prepare();
+    sim.archives.scribes = 0;
+    sim.iron_ledger_reserve = 0;
+    CcId first = AddAccount(sim.settlements[0].id, "The western town lights a beacon.");
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(Account(first)->heard_day == 0);
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        AddAccount(sim.settlements[2].id, "A fresh eastern account.");
+    }
+    CcSimAdvanceDays(&sim, 1);
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        CC_CHECK(sim.gossip[i].event_id != first);
+    }
+    for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
+        if (sim.gossip_carriers[i].id == sim.player.id) {
+            CC_CHECK(sim.gossip_carriers[i].stories == 0U);
+        }
+    }
+    Depart(sim.settlements[1].id);
+    Arrive();
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        CC_CHECK((sim.gossip[i].settlement_mask & 2U) == 0U);
+    }
+    CheckValid();
+}
+
+static void CheckHearingOrder(void)
+{
+    Prepare();
+    CcId first = AddAccount(sim.settlements[1].id, "The oldest local account.");
+    CcId second = AddAccount(sim.settlements[1].id, "The second local account.");
+    CcSimAdvanceDays(&sim, 1);
+    CcGossip swap = sim.gossip[0];
+    sim.gossip[0] = sim.gossip[1];
+    sim.gossip[1] = swap;
+    CcSimAdvanceDays(&sim, 5);
+    CC_CHECK(Account(first)->recorded);
+    CC_CHECK(!Account(second)->recorded);
+}
+
+static void CheckLocalRumorText(void)
+{
+    static CcMetagame game;
+    char output[8192];
+    Prepare();
+    const char *account = "The eastern guild offers silver bells.";
+    AddAccount(sim.settlements[2].id, account);
+    CcSimAdvanceDays(&sim, 1);
+    CcMetagameInit(&game, 42U);
+    game.sim = sim;
+    CC_CHECK(CcMetagameExecute(&game, "rumors", output, sizeof(output)));
+    CC_CHECK(strstr(output, account) == NULL);
+    game.sim.player.location_id = sim.settlements[2].id;
+    game.sim.carriage.location_id = game.sim.player.location_id;
+    CC_CHECK(CcMetagameExecute(&game, "rumors", output, sizeof(output)));
+    CC_CHECK(strstr(output, account) != NULL);
+
+    CcId local = AddAccount(sim.settlements[1].id, "The local guild paints its hall.");
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(Account(local)->heard_day > 0);
+    game.sim = sim;
+    CC_CHECK(CcMetagameExecute(&game, "archives", output, sizeof(output)));
+    CC_CHECK(strstr(output, "Accounts heard and awaiting ink: 1") != NULL);
+    CC_CHECK(strstr(output, "Heard from Town residents") != NULL);
+    CC_CHECK(strstr(output, "The local guild paints its hall.") != NULL);
+}
+
+static void CheckIncompleteSave(void)
+{
+    Prepare();
+    AddAccount(sim.settlements[0].id, "A story waiting for a ride.");
+    CcSimAdvanceDays(&sim, 1);
+    const char *path = "gossip-incomplete.ccsave";
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    CC_CHECK(sqlite3_exec(database, "DELETE FROM gossip_account WHERE slot=0;",
+                          NULL, NULL, NULL) == SQLITE_OK);
+    CC_CHECK(sqlite3_close(database) == SQLITE_OK);
+    CC_CHECK(!CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(strstr(error, "Gossip rows") != NULL);
+    (void)remove(path);
+}
+
+static void SetTellerBias(bool loyal)
+{
+    CcId faction_id = 0U;
+    for (int32_t i = 0; i < sim.faction_count; ++i) {
+        if (sim.factions[i].kingdom_id == sim.settlements[0].kingdom_id &&
+            sim.factions[i].kind == (loyal ? CC_FACTION_CROWN : CC_FACTION_COMMONS)) {
+            faction_id = sim.factions[i].id;
+        }
+    }
+    CC_CHECK(faction_id != 0U);
+    for (int32_t i = 0; i < sim.character_count; ++i) {
+        CcCharacter *person = &sim.characters[i];
+        if (person->current_settlement_id != sim.settlements[0].id) continue;
+        person->role = loyal ? CC_CHARACTER_OFFICIAL : CC_CHARACTER_REFUGEE;
+        person->faction_id = faction_id;
+        person->stress = loyal ? 0 : 100;
+        person->courage = loyal ? 100 : 0;
+    }
+}
+
+static void CheckBiasAndDecay(void)
+{
+    char loyal_text[CC_EVENT_TEXT_CAPACITY];
+    char fearful_text[CC_EVENT_TEXT_CAPACITY];
+    const char *witness = "Raiders took three sacks from the western granary.";
+    Prepare();
+    SetTellerBias(true);
+    CcId report = AddAccount(sim.settlements[0].id, witness);
+    sim.events[sim.event_count - 1].kind = CC_EVENT_SETTLEMENT_RAIDED;
+    Depart(sim.settlements[1].id);
+    Arrive();
+    CcGossipVersion loyal = Account(report)->heard;
+    CcGossipText(&sim, Account(report), &loyal, loyal_text, sizeof(loyal_text));
+    CC_CHECK(loyal.court_bias > 0 && loyal.source_character_id != 0U);
+    CC_CHECK(strstr(loyal_text, "credit the crown") != NULL);
+    CC_CHECK(Account(report)->local[0].confidence == 100);
+    CC_CHECK(Account(report)->local[0].court_bias == 0);
+
+    Prepare();
+    SetTellerBias(false);
+    report = AddAccount(sim.settlements[0].id, witness);
+    sim.events[sim.event_count - 1].kind = CC_EVENT_SETTLEMENT_RAIDED;
+    Depart(sim.settlements[1].id);
+    Arrive();
+    CcGossipVersion heard = Account(report)->heard;
+    CcGossipText(&sim, Account(report), &heard, fearful_text, sizeof(fearful_text));
+    CC_CHECK(heard.court_bias < 0);
+    CC_CHECK(heard.confidence < loyal.confidence);
+    CC_CHECK(heard.alarm > loyal.alarm);
+    CC_CHECK(strcmp(fearful_text, loyal_text) != 0);
+    CC_CHECK(strstr(fearful_text, "blame the court") != NULL);
+    CC_CHECK(strstr(fearful_text, "raids are spreading") != NULL);
+    CC_CHECK(strcmp(Account(report)->text, witness) == 0);
+    CC_CHECK(Account(report)->local[0].retellings == 0);
+
+    Depart(sim.settlements[2].id);
+    Arrive();
+    CC_CHECK(Account(report)->local[2].retellings > heard.retellings);
+    CC_CHECK(Account(report)->local[2].confidence < heard.confidence);
+    CC_CHECK(Account(report)->heard.confidence == heard.confidence);
+    CcSimAdvanceDays(&sim, 7);
+    CC_CHECK(Account(report)->recorded);
+    bool found = false;
+    for (int32_t i = 0; i < sim.event_count; ++i) {
+        const CcEvent *event = CcSimRecentEvent(&sim, i);
+        if (event->kind == CC_EVENT_LORE_RECORDED &&
+            event->parent_id == Account(report)->heard_event_id) {
+            CC_CHECK(strcmp(event->text, fearful_text) == 0);
+            found = true;
+        }
+    }
+    CC_CHECK(found);
+    const char *path = "gossip-biased.ccsave";
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&sim));
+    (void)remove(path);
+    CheckValid();
+    printf("Loyal account: %s\nFearful account: %s\n", loyal_text, fearful_text);
+}
+
 int main(void)
 {
     CheckLocalAndRemoteAccounts();
@@ -227,6 +440,12 @@ int main(void)
     CheckCourierRelay();
     CheckLostCourier();
     CheckJournalAndLegacyReplay();
+    CheckRelayAndBlockedRoad();
+    CheckStorySlotReuse();
+    CheckHearingOrder();
+    CheckLocalRumorText();
+    CheckIncompleteSave();
+    CheckBiasAndDecay();
     puts("Traveler gossip network passed.");
     return 0;
 }

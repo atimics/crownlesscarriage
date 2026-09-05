@@ -340,21 +340,34 @@ typedef struct CcArchives {
     int32_t stewardship_rank;
 } CcArchives;
 
+typedef struct CcGossipVersion {
+    CcId source_character_id;
+    int32_t retellings;
+    int32_t court_bias;
+    int32_t alarm;
+    int32_t confidence;
+} CcGossipVersion;
+
+/* Towns and travelers keep their own telling; scribes preserve the one they heard. */
 typedef struct CcGossip {
     CcId event_id;
     CcId origin_id;
     CcId heard_event_id;
     int32_t day;
     int32_t heard_day;
+    CcEventKind kind;
     uint32_t settlement_mask;
     bool recorded;
     char text[CC_EVENT_TEXT_CAPACITY];
     char heard_from[CC_NAME_CAPACITY];
+    CcGossipVersion local[CC_MAX_SETTLEMENTS];
+    CcGossipVersion heard;
 } CcGossip;
 
 typedef struct CcGossipCarrier {
     CcId id;
     uint32_t stories;
+    CcGossipVersion versions[CC_MAX_GOSSIP];
 } CcGossipCarrier;
 
 typedef enum CcMaterialChainBlocker {
@@ -1613,6 +1626,8 @@ void CcSimUpgradeQuestArchitecture(CcSim *sim);
 void CcSimInitializeUnderroad(CcSim *sim);
 void CcSimUpgradeGrainEconomy(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
+void CcGossipText(const CcSim *sim, const CcGossip *story,
+                  const CcGossipVersion *version, char *text, size_t capacity);
 bool CcSettlementIsAbandoned(const CcSettlement *settlement);
 int32_t CcSimClimateFactor(const CcSim *sim);
 int32_t CcSimArchivePhysicalLore(const CcSim *sim);

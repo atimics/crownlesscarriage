@@ -2408,6 +2408,43 @@ static void CheckWoodPaperJournalMigration(char *error,
     RemoveDatabase(path);
 }
 
+static void CheckPreGossipJournalMigration(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-schema41-gossip-journal.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0xa4c417e));
+    legacy.schema_version = 41U;
+    legacy.current_day = 6;
+    legacy.iron_ledger_reserve = 50;
+    legacy.archives.scribes = 1;
+    legacy.settlements[1].stock[CC_GOOD_WHEAT] = 100;
+    legacy.settlements[1].stock[CC_GOOD_PAPER] = 1;
+    legacy.settlements[1].stock[CC_GOOD_TOOLS] = 1;
+    legacy.events[0].day = 6;
+    legacy.events[0].kind = CC_EVENT_KINGDOM_ACTION;
+    legacy.events[0].magnitude = 40;
+    CcSim suffix = legacy;
+    CcSimAdvanceDays(&suffix, 1);
+    CC_CHECK(suffix.archives.lore_stored == 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    AddLegacyDayJournalSuffix(path, &legacy, &suffix, 41U, 25U);
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    ExecuteFixtureSql(database,
+        "DROP TABLE gossip_state; DROP TABLE gossip_account; DROP TABLE gossip_carrier;"
+        "PRAGMA user_version=26;", "could not prepare the schema 41 gossip fixture");
+    sqlite3_close(database);
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.archives.lore_stored == 1);
+    CC_CHECK(restored.gossip_last_event_id == 0U);
+    restored.schema_version = 41U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&suffix));
+    RemoveDatabase(path);
+}
+
 static void CheckJourneyStopPersistence(char *error, size_t error_capacity)
 {
     const char *path = "persistence-journey-stop-test.ccsave";
@@ -2668,6 +2705,7 @@ int main(void)
                             error, sizeof(error));
     CheckMaterialChainMigration(error, sizeof(error));
     CheckArchivePhysicalLoreMigration(error, sizeof(error));
+    CheckPreGossipJournalMigration(error, sizeof(error));
     CheckWoodPaperJournalMigration(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
