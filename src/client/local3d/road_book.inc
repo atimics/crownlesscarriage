@@ -374,6 +374,8 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
         (Vector3){54.0f, 1.15f, 40.0f},
         (Vector3){-24.0f, 7.2f, 8.5f}, 44.0f);
     camera = SnapCameraToArtPixels(camera, target.texture.height);
+    RememberPresentedCamera(CC_LOCAL_SCENE_ROAD, camera, agent,
+        target.texture.width, target.texture.height);
     ArtComposition fork_art = ROAD_ART_COMPOSITION;
     fork_art.focal_point = camera.target;
     fork_art.foreground_anchor = (Vector3){29.0f, 0.0f, 41.0f};

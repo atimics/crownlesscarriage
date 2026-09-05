@@ -131,6 +131,9 @@ static void ClientTouchAdd(Rectangle bounds, const char *label, bool enabled, bo
 
 static Vector2 ClientPointerPosition(void)
 {
+#if defined(CC_CLIENT_SELF_TESTS)
+    if (client_test_pointer_active) return client_test_pointer;
+#endif
 #if defined(PLATFORM_WEB)
     if (touch_pointer_pending) return touch_pointer;
 #endif

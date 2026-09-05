@@ -229,6 +229,17 @@ async function main() {
       assert.equal(taps.length, 1);
       assert(Math.abs(taps[0][0] - 640) < 5 && Math.abs(taps[0][1] - 394) < 5, JSON.stringify(taps));
       const buttons = mobile.locator('#touch-actions');
+      const moreObjects = buttons.getByRole('button', {name: 'More objects', exact: true});
+      await moreObjects.waitFor();
+      const firstObjects = await buttons.getByRole('button').allTextContents();
+      await moreObjects.tap();
+      await mobile.waitForFunction(first => {
+        const current = Array.from(document.querySelectorAll('#touch-actions button'), button => button.textContent);
+        return JSON.stringify(current) !== JSON.stringify(first);
+      }, firstObjects);
+      await buttons.getByRole('button', {name: 'Previous objects', exact: true}).tap();
+      await mobile.screenshot({path: path.join(output, 'mobile-nearby-cards.png')});
+
       const oldControl = await buttons.getByRole('button', {name: 'Menu', exact: true}).evaluate(button => ({
         index: Array.from(button.parentElement.children).indexOf(button), revision: Number(button.dataset.revision)
       }));
