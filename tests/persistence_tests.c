@@ -526,7 +526,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 26);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 27);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -2592,6 +2592,42 @@ static void CheckShippedSaveCompatibility(char *error,
     CC_CHECK(CcSimValidate(&replayed, error, error_capacity));
 }
 
+static void CheckDragonHairPersistence(void)
+{
+    const char *path = "dragon-hair-colours.ccsave";
+    CcSim court, restored;
+    char error[256];
+    CcSimInit(&court, 42U);
+    CC_CHECK(court.dragon.hair_color == CC_DRAGON_HAIR_PURPLE);
+    uint64_t previous = CcSimHash(&court);
+    for (int32_t hair = CC_DRAGON_HAIR_RED; hair <= CC_DRAGON_HAIR_BLUE; ++hair) {
+        court.dragon.hair_color = (CcDragonHairColor)hair;
+        CC_CHECK(CcSimHash(&court) != previous);
+        previous = CcSimHash(&court);
+        CC_CHECK(CcSaveWrite(path, &court, error, sizeof(error)));
+        CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+        CC_CHECK(restored.dragon.hair_color == court.dragon.hair_color);
+        CC_CHECK(CcSimHash(&restored) == previous);
+    }
+    court.dragon.hair_color = CC_DRAGON_HAIR_COLOR_COUNT;
+    CC_CHECK(!CcSimValidate(&court, error, sizeof(error)));
+    court.dragon.hair_color = CC_DRAGON_HAIR_PURPLE;
+    court.schema_version = 42U;
+    CC_CHECK(CcSaveWrite(path, &court, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open(path, &database), database, "open old court save");
+    RequireSqlite(sqlite3_exec(database,
+        "ALTER TABLE dragon_state DROP COLUMN hair_color; PRAGMA user_version=26;",
+        NULL, NULL, NULL), database, "restore old dragon table");
+    CC_CHECK(sqlite3_close(database) == SQLITE_OK);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.dragon.hair_color == CC_DRAGON_HAIR_PURPLE);
+    court.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSimHash(&court) == CcSimHash(&restored));
+    RemoveDatabase(path);
+}
+
 static void CheckSchema41Upgrade(void)
 {
     const char *path = "schema41-upgrade.ccsave";
@@ -2610,6 +2646,7 @@ static void CheckSchema41Upgrade(void)
 
 int main(void)
 {
+    CheckDragonHairPersistence();
     CheckSchema41Upgrade();
     const char *path = "persistence-test.ccsave";
     RemoveDatabase(path);

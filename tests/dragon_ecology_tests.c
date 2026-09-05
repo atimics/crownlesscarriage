@@ -311,11 +311,13 @@ int main(void)
     CC_CHECK(heir->ancestor_id == first_bearer);
 
     const char *path = "/tmp/crownless-dragon-ecology-tests.ccsave";
+    brood.dragon.hair_color = CC_DRAGON_HAIR_BLUE;
     (void)remove(path);
     CC_CHECK(CcSaveWrite(path, &brood, error, sizeof(error)));
     CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&brood));
+    CC_CHECK(restored.dragon.hair_color == CC_DRAGON_HAIR_BLUE);
     CC_CHECK(restored.dragon.egg_count == brood.dragon.egg_count);
     CC_CHECK(restored.dragon.brood_days_remaining ==
              brood.dragon.brood_days_remaining);
@@ -352,6 +354,7 @@ int main(void)
     CcSimAdvanceDays(&restored, 1);
     CC_CHECK(!restored.dragon.slain);
     CC_CHECK(restored.dragon.id != dead_dragon_id);
+    CC_CHECK(restored.dragon.hair_color == CC_DRAGON_HAIR_BLUE);
     CC_CHECK(restored.dragon.life_stage == CC_DRAGON_STAGE_WHELP);
     CC_CHECK(restored.treasures[0].owner_id == restored.dragon.id);
     CC_CHECK(restored.dragon.egg_count == 0);
