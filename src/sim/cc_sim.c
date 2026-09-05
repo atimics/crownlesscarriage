@@ -26,6 +26,9 @@ static void AdvanceRuins(CcSim *sim);
 static void PlanTrade(CcSim *sim);
 static int32_t SettlementSlotById(const CcSim *sim, CcId id);
 static int32_t CalculateDragonCrownStrength(const CcSim *sim);
+static bool DragonIsAliveAndUncrowned(const CcSim *sim);
+static int32_t TakeAllianceGood(CcSim *sim, uint32_t mask, CcGood good,
+                                int32_t quantity);
 static CcId LatestLocalCause(const CcSim *sim, CcId location);
 static uint32_t RoadHouseSeed(const CcSim *sim, CcId route_id);
 static const char *GeneratedRoadHouseName(const CcSim *sim, CcId route_id);
@@ -5647,18 +5650,51 @@ static void AdvanceCoronationLaw(CcSim *sim, bool scriptorium_ready,
         if (sim->schema_version >= 35U) {
             kingdom->anointed_by_character_id = 0U;
         }
-        kingdom->legitimacy = MaximumI32(0, kingdom->legitimacy - 15);
+        bool live_uncrowned_dragon = sim->schema_version >= 42U &&
+                                     DragonIsAliveAndUncrowned(sim);
+        int32_t legitimacy_loss = live_uncrowned_dragon ? 8 : 15;
+        kingdom->legitimacy = MaximumI32(0, kingdom->legitimacy - legitimacy_loss);
         kingdom->pretender_crises += 1;
         char text[CC_EVENT_TEXT_CAPACITY];
-        (void)snprintf(
-            text, sizeof(text),
-            "A year of abbey silence breeds a pretender in %.72s.",
-            kingdom->name);
+        if (live_uncrowned_dragon) {
+            (void)snprintf(
+                text, sizeof(text),
+                "A pretender rises in %.60s, vowing to slay %.30s.",
+                kingdom->name, sim->dragon.name);
+            if (sim->dragon_campaign.phase == CC_DRAGON_CAMPAIGN_OUTBOUND &&
+                ((sim->dragon_campaign.alliance_kingdom_mask >> i) & 1U) != 0) {
+                int32_t room = CC_SIM_MAX_UNITS -
+                    sim->dragon_campaign.supplies[CC_GOOD_TOOLS];
+                sim->dragon_campaign.supplies[CC_GOOD_TOOLS] +=
+                    TakeAllianceGood(sim, UINT32_C(1) << (uint32_t)i,
+                                     CC_GOOD_TOOLS, MinimumI32(3, room));
+            }
+            if (sim->dragon_campaign.phase == CC_DRAGON_CAMPAIGN_IDLE &&
+                sim->dragon_campaign.cooldown_days > 0) {
+                sim->dragon_campaign.cooldown_days =
+                    MaximumI32(0, sim->dragon_campaign.cooldown_days - 60);
+            }
+        } else {
+            (void)snprintf(
+                text, sizeof(text),
+                "A year of abbey silence breeds a pretender in %.72s.",
+                kingdom->name);
+        }
         (void)PushEvent(
             sim, CC_EVENT_PRETENDER_CRISIS, kingdom->id,
             scriptorium_id, LatestLocalCause(sim, scriptorium_id),
-            -15, text);
+            -legitimacy_loss, text);
     }
+}
+
+static bool DragonIsAliveAndUncrowned(const CcSim *sim)
+{
+    if (sim == NULL || sim->dragon.id == 0U || sim->dragon.slain) return false;
+    return sim->dragon.life_stage == CC_DRAGON_STAGE_EGG ||
+           sim->dragon.life_stage == CC_DRAGON_STAGE_WHELP ||
+           sim->dragon.life_stage == CC_DRAGON_STAGE_WANDERER ||
+           sim->dragon.life_stage == CC_DRAGON_STAGE_UNCROWNED ||
+           sim->dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM;
 }
 
 static int32_t CharacterKingdomSlot(const CcSim *sim,
@@ -11910,6 +11946,10 @@ static void AdvanceDragonCampaign(CcSim *sim)
         campaign->supplies[good] = sim->dragon.hoard_goods[good];
         sim->dragon.hoard_goods[good] = 0;
     }
+    /* Relic law: capture the victim's age and stage before the stage flip,
+       so the bane can be priced by the dragon it killed. */
+    int32_t slain_age_years = sim->dragon.age_days / 365;
+    CcDragonLifeStage slain_stage = sim->dragon.life_stage;
     sim->dragon.slain = true;
     sim->dragon.slain_day = sim->current_day;
     sim->dragon.life_stage = CC_DRAGON_STAGE_AFTERDRAGON;
@@ -11967,23 +12007,41 @@ static void AdvanceDragonCampaign(CcSim *sim)
             sim, campaign->origin_settlement_id);
         CcTreasure *relic = origin != NULL ? AllocateTreasure(sim) : NULL;
         if (relic != NULL) {
+            const char *epithet = sim->schema_version < 42U ? "" :
+                slain_stage == CC_DRAGON_STAGE_DEEP_WYRM ? ", Wyrmsbane" :
+                slain_stage == CC_DRAGON_STAGE_CROWNED ?
+                    ", the Crown's End" : "";
+            int name_limit = (int)sizeof(relic->name) - 9 - (int)strlen(epithet);
+            if (name_limit > 24) name_limit = 24;
             (void)snprintf(relic->name, sizeof(relic->name),
-                           "Bane of %.24s", sim->dragon.name);
+                           "Bane of %.*s%s", name_limit, sim->dragon.name, epithet);
             relic->maker_settlement_id = origin->id;
             relic->owner_id = hero != NULL ? hero->id : origin->id;
             relic->location_id = origin->id;
             relic->gold_content = 3;
             relic->gem_content = 2;
             relic->craft_work = MaximumI32(1, attack - defense);
+            /* The older the victim, the greater the trophy: one age step
+               per decade of the slain dragon's life, capped at a
+               millennium. A whelp's bane is trinket; a wyrm's bane
+               outranks the Wyrmheart it was taken from. */
             relic->appraised_value = relic->gold_content * 40 +
-                relic->gem_content * 70 + relic->craft_work * 10;
+                relic->gem_content * 70 + relic->craft_work * 10 +
+                (sim->schema_version >= 42U ?
+                    MinimumI32(slain_age_years / 10, 100) * 15 : 0);
             relic->created_day = sim->current_day;
             char relic_text[CC_EVENT_TEXT_CAPACITY];
-            (void)snprintf(relic_text, sizeof(relic_text),
-                           "From the hoard-fire %.20s raises %.20s, bane of %.20s, day %d.",
-                           hero != NULL ? hero->name : "the host",
-                           relic->name, sim->dragon.name,
-                           sim->current_day);
+            if (sim->schema_version >= 42U) {
+                (void)snprintf(relic_text, sizeof(relic_text),
+                    "From the hoard-fire %.20s raises %.20s, bane of %.20s, slain at %d years, day %d.",
+                    hero != NULL ? hero->name : "the host",
+                    relic->name, sim->dragon.name, slain_age_years, sim->current_day);
+            } else {
+                (void)snprintf(relic_text, sizeof(relic_text),
+                    "From the hoard-fire %.20s raises %.20s, bane of %.20s, day %d.",
+                    hero != NULL ? hero->name : "the host",
+                    relic->name, sim->dragon.name, sim->current_day);
+            }
             (void)PushEvent(sim, CC_EVENT_TREASURE_CRAFTED,
                             relic->id, origin->id, battle_event_id,
                             relic->appraised_value, relic_text);
@@ -17239,12 +17297,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 37U ||
                          sim->schema_version == 38U ||
                          sim->schema_version == 39U ||
-                         sim->schema_version == 40U;
+                         sim->schema_version == 40U ||
+                         sim->schema_version == 41U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 41U && sim->generator_version == 25U) ||
         (sim->schema_version == 40U && sim->generator_version == 25U) ||
         (sim->schema_version == 39U && sim->generator_version == 25U) ||
         (sim->schema_version == 38U && sim->generator_version == 25U) ||

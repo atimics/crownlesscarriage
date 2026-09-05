@@ -263,6 +263,21 @@ int main(void)
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         bane.dragon_campaign.supplies[good] = 400;
     }
+    memset(bane.dragon.name, 'A', sizeof(bane.dragon.name) - 1);
+    bane.dragon.name[sizeof(bane.dragon.name) - 1] = '\0';
+    CcSim legacy_bane = bane;
+    legacy_bane.schema_version = 41U;
+    CcSimAdvanceDays(&legacy_bane, 1);
+    bool legacy_relic = false;
+    for (int32_t i = 0; i < legacy_bane.treasure_count; ++i) {
+        const CcTreasure *t = &legacy_bane.treasures[i];
+        if (strncmp(t->name, "Bane of ", 8) != 0 || t->destroyed) continue;
+        legacy_relic = true;
+        CC_CHECK(strstr(t->name, "the Crown's End") == NULL);
+        CC_CHECK(t->appraised_value == t->gold_content * 40 +
+            t->gem_content * 70 + t->craft_work * 10);
+    }
+    CC_CHECK(legacy_relic);
     CcSimAdvanceDays(&bane, 1);
     CC_CHECK(bane.dragon.slain);
     bool bane_found = false;
@@ -275,6 +290,12 @@ int main(void)
             CC_CHECK(t->gold_content == 3);
             CC_CHECK(t->owner_id ==
                      bane.dragon_campaign.hero_character_id);
+            /* Issue #200: the bane carries its victim's stage in its name
+               and its victim's age in its price. */
+            CC_CHECK(strstr(t->name, "the Crown's End") != NULL);
+            int32_t material_value = t->gold_content * 40 +
+                t->gem_content * 70 + t->craft_work * 10;
+            CC_CHECK(t->appraised_value > material_value);
         }
     }
     CC_CHECK(bane_found);

@@ -495,8 +495,14 @@ bool CcStoryCharacterText(
                                    situation->quantity);
                     return true;
                 case CC_STORY_BEAT_PROMISED:
-                    (void)snprintf(text, text_capacity,
-                                   "Bring the food to %s.", target_name);
+                    if (sim->player.location_id == situation->target_id) {
+                        (void)snprintf(
+                            text, text_capacity,
+                            "Take the food to the market hall. We can unload it there.");
+                    } else {
+                        (void)snprintf(text, text_capacity,
+                                       "Bring the food to %s.", target_name);
+                    }
                     return true;
                 case CC_STORY_BEAT_HELPED:
                 case CC_STORY_BEAT_RESOLVED:
