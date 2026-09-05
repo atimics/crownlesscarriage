@@ -2238,6 +2238,7 @@ int32_t CcLocalCargoBoxCountInternal(const CcPlayerCompany *player)
     if (player == NULL) return 0;
     int32_t count = 0;
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        if (player->cargo[good] >= 24 - count) return 24;
         if (player->cargo[good] > 0) count += player->cargo[good];
         if (count >= 24) return 24;
     }
@@ -2275,39 +2276,40 @@ static Color CargoBoxBandColor(CcGood good)
     return WORLD_INK;
 }
 
-static void DrawFallbackCargoBoxes(const CcPlayerCompany *player,
-                                   Vector3 base, float yaw, int32_t limit)
+/* Each model fits a real rack cell, including tall weapon and tool bundles. */
+static void DrawEconomicCargoUnit(CcGood good, Vector3 base, Vector3 floor,
+                                  Vector3 cell, float yaw)
 {
-    int32_t drawn = 0;
-    for (int32_t good = 0;
-         good < CC_GOOD_COUNT && drawn < limit; ++good) {
-        int32_t quantity = player != NULL ? player->cargo[good] : 0;
-        for (int32_t unit = 0; unit < quantity && drawn < limit;
-             ++unit, ++drawn) {
-            int32_t layer = drawn / 8;
-            int32_t spot = drawn % 8;
-            int32_t column = spot % 4;
-            int32_t row = spot / 4;
-            Vector3 center = {
-                -1.26f + (float)column * 0.64f,
-                2.49f + (float)layer * 0.49f,
-                -0.34f + (float)row * 0.68f
-            };
-            Color box = CargoBoxColor((CcGood)good);
-            Color band = CargoBoxBandColor((CcGood)good);
-            DrawOrientedBox(base, center,
-                            (Vector3){0.58f, 0.44f, 0.59f}, yaw, box);
-            DrawOrientedBox(
-                base,
-                (Vector3){center.x, center.y + 0.23f, center.z},
-                (Vector3){0.60f, 0.055f, 0.61f}, yaw, band);
-            DrawOrientedBox(
-                base,
-                (Vector3){center.x, center.y, center.z - 0.302f},
-                (Vector3){0.15f, 0.32f, 0.022f}, yaw,
-                Fade(band, 0.92f));
+    EconomicCargoAsset *asset = &economic_cargo_assets[good];
+    if (asset->ready) {
+        Vector3 size = Vector3Subtract(asset->bounds.max, asset->bounds.min);
+        float scale = fminf(cell.x / fmaxf(size.x, 0.01f),
+            fminf(cell.y / fmaxf(size.y, 0.01f), cell.z / fmaxf(size.z, 0.01f)));
+        Vector3 center = Vector3Scale(Vector3Add(asset->bounds.min, asset->bounds.max), 0.5f);
+        Vector3 position = LocalPoint(base, floor.x - center.x * scale,
+            floor.y - asset->bounds.min.y * scale, floor.z - center.z * scale, yaw);
+        DrawModelEx(asset->model, position, (Vector3){0, 1, 0}, yaw * RAD2DEG,
+            (Vector3){scale, scale, scale}, WHITE);
+        return;
+    }
+    Vector3 center = {floor.x, floor.y + cell.y * 0.5f, floor.z};
+    DrawOrientedBox(base, center, cell, yaw, CargoBoxColor(good));
+    DrawOrientedBox(base, (Vector3){floor.x, floor.y + cell.y, floor.z},
+        (Vector3){cell.x, 0.04f, cell.z}, yaw, CargoBoxBandColor(good));
+}
+
+/* Fill one unit of every good first so a full rack still shows mixed cargo. */
+CcGood CcLocalCargoBoxGoodInternal(const CcPlayerCompany *player, int32_t slot)
+{
+    if (slot < 0 || slot >= CcLocalCargoBoxCountInternal(player)) return CC_GOOD_COUNT;
+    int32_t shown = 0;
+    for (int32_t unit = 0; unit < 24; ++unit) {
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            if (player->cargo[good] <= unit) continue;
+            if (shown++ == slot) return (CcGood)good;
         }
     }
+    return CC_GOOD_COUNT;
 }
 
 static void DrawCarriedCargoBoxes(const CcPlayerCompany *player,
@@ -2331,36 +2333,12 @@ static void DrawCarriedCargoBoxes(const CcPlayerCompany *player,
     DrawOrientedBox(base, (Vector3){1.18f, 2.42f, 0.0f},
                     (Vector3){0.07f, 0.42f, 1.52f}, yaw,
                     WORLD_WOOD_SHADOW);
-
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        if (player != NULL && player->cargo[good] > 0 &&
-            !economic_cargo_assets[good].ready) {
-            DrawFallbackCargoBoxes(player, base, yaw, limit);
-            return;
-        }
-    }
-
-    static const float scales[CC_GOOD_COUNT] = {
-        0.46f, 0.52f, 0.44f, 0.40f, 0.54f, 0.49f,
-        0.46f, 0.43f, 0.48f, 0.46f, 0.48f,
-        0.47f, 0.48f, 0.47f,
-    };
-    int32_t shown = 0;
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        if (player == NULL || player->cargo[good] <= 0) continue;
-        int32_t column = shown % 5;
-        int32_t row = shown / 5;
-        Vector3 position = LocalPoint(
-            base,
-            -1.42f + (float)column * 0.60f,
-            2.25f,
-            -0.46f + (float)row * 0.46f,
-            yaw);
-        float scale = scales[good];
-        DrawModelEx(economic_cargo_assets[good].model, position,
-                    (Vector3){0.0f, 1.0f, 0.0f}, yaw * RAD2DEG,
-                    (Vector3){scale, scale, scale}, WHITE);
-        shown += 1;
+    for (int32_t slot = 0; slot < limit; ++slot) {
+        Vector3 floor = {-1.26f + (float)(slot % 4) * 0.64f,
+            2.27f + (float)(slot / 8) * 0.49f,
+            -0.34f + (float)((slot % 8) / 4) * 0.68f};
+        DrawEconomicCargoUnit(CcLocalCargoBoxGoodInternal(player, slot), base,
+            floor, (Vector3){0.58f, 0.44f, 0.59f}, yaw);
     }
 }
 

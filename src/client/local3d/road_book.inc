@@ -2337,6 +2337,37 @@ static void DrawInteriorServiceMark(const CcLocalPlaceProfile *profile,
     }
 }
 
+Vector3 CcLocalWarehouseGoodPosition(CcGood good)
+{
+    if (good < 0 || good >= CC_GOOD_COUNT) return (Vector3){0};
+    return (Vector3){MARKET_SHELF_FOOTPRINT.x + 0.40f + (float)((int32_t)good % 7) * 0.57f,
+        0.23f + (float)((int32_t)good / 7) * 0.82f,
+        (int32_t)good < 7 ? 1.65f : 1.02f};
+}
+
+int32_t CcLocalWarehousePileCountInternal(const CcSettlement *place, CcGood good)
+{
+    if (place == NULL || good < 0 || good >= CC_GOOD_COUNT || place->stock[good] <= 0) return 0;
+    return place->stock[good] < 3 ? place->stock[good] : 3;
+}
+
+static void DrawWarehouseStock(const CcSettlement *place)
+{
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        Vector3 bay = CcLocalWarehouseGoodPosition((CcGood)good);
+        int32_t piles = CcLocalWarehousePileCountInternal(place, (CcGood)good);
+        for (int32_t pile = 0; pile < piles; ++pile) {
+            Vector3 floor = {bay.x, bay.y + (float)(pile / 2) * 0.34f,
+                bay.z - 0.17f + (float)(pile % 2) * 0.34f};
+            DrawEconomicCargoUnit((CcGood)good, (Vector3){0}, floor,
+                (Vector3){0.49f, 0.32f, 0.30f}, 0.0f);
+        }
+        /* A fixed tag keeps a sold-out bay available for restocking. */
+        DrawBox((Vector3){bay.x, bay.y - 0.03f, bay.z + 0.34f},
+            (Vector3){0.26f, 0.09f, 0.025f}, CargoBoxColor((CcGood)good));
+    }
+}
+
 void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
                            float clock, RenderTexture2D target,
                            Rectangle destination)
@@ -2441,25 +2472,17 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
                       MARKET_COUNTER_FOOTPRINT.height + 0.12f},
             BlendColor(WORLD_WOOD_LIGHT, identity, 0.18f));
 
-    float shelf_x = MARKET_SHELF_FOOTPRINT.x +
-                    MARKET_SHELF_FOOTPRINT.width * 0.5f;
-    float shelf_z = MARKET_SHELF_FOOTPRINT.y +
-                    MARKET_SHELF_FOOTPRINT.height * 0.5f;
-    for (int32_t end = 0; end < 2; ++end) {
-        float post_z = MARKET_SHELF_FOOTPRINT.y +
-                       (end == 0 ? 0.11f :
-                                   MARKET_SHELF_FOOTPRINT.height - 0.11f);
-        for (int32_t side = -1; side <= 1; side += 2) {
-            DrawBox((Vector3){shelf_x + (float)side * 0.25f, 0.96f, post_z},
-                    (Vector3){0.13f, 1.92f, 0.13f}, interior_timber);
-        }
+    float shelf_x = MARKET_SHELF_FOOTPRINT.x + MARKET_SHELF_FOOTPRINT.width * 0.5f;
+    for (int32_t side = 0; side < 2; ++side) {
+        float post_x = MARKET_SHELF_FOOTPRINT.x + 0.08f +
+            (float)side * (MARKET_SHELF_FOOTPRINT.width - 0.16f);
+        DrawBox((Vector3){post_x, 0.92f, 0.73f},
+            (Vector3){0.12f, 1.84f, 0.12f}, interior_timber);
     }
-    for (int32_t shelf = 0; shelf < 4; ++shelf) {
-        float shelf_y = 0.18f + (float)shelf * 0.55f;
-        DrawBox((Vector3){shelf_x, shelf_y, shelf_z},
-                (Vector3){MARKET_SHELF_FOOTPRINT.width + 0.08f, 0.10f,
-                          MARKET_SHELF_FOOTPRINT.height + 0.06f},
-                shelf == 3 ? interior_trim : (Color){102, 67, 47, 255});
+    for (int32_t shelf = 0; shelf < 2; ++shelf) {
+        DrawBox((Vector3){shelf_x, 0.18f + (float)shelf * 0.82f,
+            shelf == 0 ? 1.65f : 1.02f},
+            (Vector3){MARKET_SHELF_FOOTPRINT.width, 0.10f, 0.70f}, interior_trim);
     }
     DrawBox((Vector3){1.55f, 1.05f, 6.54f}, (Vector3){0.82f, 2.10f, 0.08f},
             (Color){37, 28, 30, 255});
@@ -2480,70 +2503,7 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawBox((Vector3){4.48f, 0.050f, 2.36f},
             (Vector3){1.84f, 0.045f, 0.11f}, identity);
 
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        float stock = fminf((float)place->stock[good] / 54.0f, 1.0f);
-        if (stock <= 0.01f) continue;
-        Color color = good == CC_GOOD_FOOD ? (Color){158, 116, 62, 255} :
-                      good == CC_GOOD_MATERIAL ?
-                        (Color){170, 139, 112, 255} : WORLD_TEAL;
-        float display_x = 2.55f + (float)good * 1.08f;
-        if (good == CC_GOOD_FOOD) {
-            int32_t boxes = stock > 0.66f ? 3 : stock > 0.30f ? 2 : 1;
-            for (int32_t box = 0; box < boxes; ++box) {
-                float side = (float)box - (float)(boxes - 1) * 0.5f;
-                float box_y = 0.20f + (box == 2 ? 0.19f : 0.0f);
-                DrawBox(
-                    (Vector3){display_x + side * 0.28f,
-                              box_y, 1.18f},
-                    (Vector3){0.24f, 0.34f, 0.26f}, color);
-                DrawBox(
-                    (Vector3){display_x + side * 0.28f,
-                              box_y + 0.18f, 1.18f},
-                    (Vector3){0.26f, 0.04f, 0.28f}, WORLD_CROP_LIGHT);
-            }
-            DrawBox((Vector3){display_x, 0.55f, 1.18f},
-                    (Vector3){0.48f, 0.07f, 0.28f},
-                    ShadeColor(color, 0.76f));
-        } else if (good == CC_GOOD_MATERIAL) {
-            int32_t planks = stock > 0.60f ? 4 : stock > 0.28f ? 3 : 2;
-            for (int32_t plank = 0; plank < planks; ++plank) {
-                DrawBox((Vector3){display_x,
-                                  0.10f + (float)plank * 0.15f,
-                                  1.18f + (float)(plank & 1) * 0.06f},
-                        (Vector3){0.82f, 0.11f, 0.24f},
-                        ShadeColor(color,
-                                   0.88f + (float)plank * 0.04f));
-            }
-        } else {
-            int32_t tools = stock > 0.55f ? 3 : stock > 0.20f ? 2 : 1;
-            DrawBox((Vector3){display_x, 0.28f, 1.18f},
-                    (Vector3){0.76f, 0.56f, 0.16f},
-                    ShadeColor(interior_timber, 0.86f));
-            for (int32_t tool = 0; tool < tools; ++tool) {
-                float tool_x = display_x - 0.24f + (float)tool * 0.24f;
-                DrawCylinder((Vector3){tool_x, 0.18f, 1.08f},
-                             0.045f, 0.045f, 0.72f, 7,
-                             (Color){99, 67, 45, 255});
-                DrawBox((Vector3){tool_x, 0.88f, 1.08f},
-                        (Vector3){0.24f, 0.12f, 0.13f}, color);
-            }
-        }
-    }
-    for (int32_t shelf_good = 0; shelf_good < 5; ++shelf_good) {
-        float y = 0.42f + (float)(shelf_good % 3) * 0.55f;
-        float z = MARKET_SHELF_FOOTPRINT.y + 0.48f +
-                  (float)shelf_good * 0.58f;
-        Color stock_color = shelf_good % 3 == 0 ? WORLD_GOLD :
-                            shelf_good % 3 == 1 ?
-                                (Color){136, 100, 67, 255} : WORLD_TEAL;
-        DrawBox((Vector3){MARKET_SHELF_FOOTPRINT.x +
-                              MARKET_SHELF_FOOTPRINT.width + 0.05f,
-                          y, z},
-                (Vector3){0.42f,
-                          0.25f + (float)(shelf_good & 1) * 0.12f,
-                          0.30f},
-                ShadeColor(stock_color, 0.82f));
-    }
+    DrawWarehouseStock(place);
     CcNpcAppearance keeper = profile->function == CC_SETTLEMENT_MARKET ?
         CcNpcMaraAppearance() :
         CcNpcAppearanceGenerate(profile->keeper_seed,
@@ -2563,6 +2523,8 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     EndTextureMode();
     PresentTarget(target, destination);
     DrawCrewLabels(camera, destination);
+    WorldLabel warehouse_label = {{3.22f, 2.07f, 0.73f}, "Warehouse", WORLD_GOLD};
+    DrawLabels(&warehouse_label, 1, camera, destination);
     WorldLabel labels[3];
     int32_t label_count = 0;
     if (AgentNearLabel(agent, MARKET_PEOPLE[0].x,

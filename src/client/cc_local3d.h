@@ -626,6 +626,9 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
                        CcLocalSiteKind site, bool travelling,
                        bool returning, float progress, float clock,
                        RenderTexture2D target, Rectangle destination);
+/* Warehouse bays share their positions with scene interaction targets. */
+Vector3 CcLocalWarehouseGoodPosition(CcGood good);
+
 void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float clock,
                          RenderTexture2D target, Rectangle destination);
 void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,

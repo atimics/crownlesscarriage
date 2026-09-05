@@ -135,6 +135,7 @@ static void WriteViewportFixture(const char *path)
     UnloadImage(shot);
 }
 
+#include "physical_goods_tests.inc"
 #include "building_cutaway_tests.inc"
 #include "box_batch_tests.inc"
 #include "character_material_captures.inc"
@@ -146,6 +147,10 @@ static void WriteViewportFixture(const char *path)
 
 int main(int argc, char **argv)
 {
+    if (argc == 2 && strcmp(argv[1], "--physical-goods") == 0) {
+        TestPhysicalGoods();
+        return 0;
+    }
     TestBuildingRevealTiming();
     TestSkinTurns();
     TestPonyHarnessAttachment();
