@@ -10,7 +10,8 @@ typedef enum FrontendScreen {
     FRONTEND_CREATE_WORLD,
     FRONTEND_JOIN_WORLD,
     FRONTEND_COMPANY,
-    FRONTEND_REMOVE_MEMBER
+    FRONTEND_REMOVE_MEMBER,
+    FRONTEND_INVITATION
 } FrontendScreen;
 
 typedef enum FrontendAction {
@@ -120,7 +121,8 @@ typedef struct FrontendItem {
 static Rectangle FrontendPanel(FrontendScreen screen)
 {
     float width = screen == FRONTEND_PAUSED || screen == FRONTEND_AVATAR || screen == FRONTEND_COMPANY ||
-        screen == FRONTEND_WORLDS || screen == FRONTEND_CREATE_WORLD || screen == FRONTEND_JOIN_WORLD ? 920.0f : 440.0f;
+        screen == FRONTEND_WORLDS || screen == FRONTEND_CREATE_WORLD || screen == FRONTEND_JOIN_WORLD ||
+        screen == FRONTEND_INVITATION ? 920.0f : 440.0f;
     return (Rectangle){((float)GetScreenWidth() - width) * 0.5f,
                        ((float)GetScreenHeight() - 556.0f) * 0.5f,
                        width, 556.0f};
@@ -131,6 +133,12 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
     Rectangle panel = FrontendPanel(state->screen);
     float x = panel.x + 36.0f;
     float y = panel.y + 148.0f;
+    if (state->screen == FRONTEND_INVITATION) {
+        items[0] = (FrontendItem){FRONTEND_ACTION_FIELD_INVITATION, {x, y + 32, 848, 46}, "Invitation", true};
+        items[1] = (FrontendItem){FRONTEND_ACTION_INVITE_COPY, {x, y + 150, 412, 46}, "Copy invitation", true};
+        items[2] = (FrontendItem){FRONTEND_ACTION_CANCEL, {x + 436, y + 150, 412, 46}, "Back", true};
+        return 3;
+    }
     if (state->screen == FRONTEND_REMOVE_MEMBER) {
         items[0] = (FrontendItem){FRONTEND_ACTION_CANCEL, {x, y + 120, 368, 44}, "Keep traveller", true};
         items[1] = (FrontendItem){FRONTEND_ACTION_CONFIRM_REMOVE, {x, y + 180, 368, 44}, "Remove from company", true};
@@ -573,6 +581,7 @@ static void DrawFrontend(const FrontendState *state,
         state->screen == FRONTEND_JOIN_WORLD ? "Join a company" :
         state->screen == FRONTEND_COMPANY ? state->company.name :
         state->screen == FRONTEND_REMOVE_MEMBER ? "Remove this traveller?" :
+        state->screen == FRONTEND_INVITATION ? "Invite your company" :
         state->screen == FRONTEND_DELETE ? "Delete this world?" :
         CcCoopClientActive() ? "Company menu" : "Journey paused";
     ClientTouchHeading(title, state->feedback[0] != '\0' ? state->feedback :
@@ -605,6 +614,7 @@ static void DrawFrontend(const FrontendState *state,
         FrontendCenteredText("This traveller will leave the company.", top + 209, 14, MUTED);
     } else if (state->screen >= FRONTEND_WORLDS) {
         FrontendCenteredText(state->screen == FRONTEND_CREATE_WORLD ? "Use the world pass from this host." :
+            state->screen == FRONTEND_INVITATION ? "Share this invitation with your fellow travellers." :
             state->screen == FRONTEND_JOIN_WORLD ? "Paste an invitation and choose your traveller's name." :
             state->screen == FRONTEND_COMPANY ? "Your company and its shared road." :
             state->company.world_count == 0 ? "Create a world or join with an invitation." : "Choose a saved journey.", top + 120, 14, MUTED);

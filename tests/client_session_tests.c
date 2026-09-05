@@ -8,6 +8,7 @@
 #if defined(__APPLE__) || defined(__linux__) || defined(__unix__)
 #include <sys/wait.h>
 #include <unistd.h>
+#include <fcntl.h>
 #endif
 
 static bool AthleticProfilesMatch(const CcClientAthleticProfile *first,
@@ -266,6 +267,7 @@ int main(void)
     CC_CHECK(CcClientInstanceLockAcquire(lock_path, &lock,
                                          error, sizeof(error)));
 #if defined(__APPLE__) || defined(__linux__) || defined(__unix__)
+    CC_CHECK((fcntl(lock.descriptor, F_GETFD) & FD_CLOEXEC) != 0);
     pid_t child = fork();
     CC_CHECK(child >= 0);
     if (child == 0) {

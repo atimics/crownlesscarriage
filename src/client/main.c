@@ -12164,6 +12164,7 @@ int main(int argc, char **argv)
             frontend.screen == FRONTEND_CREATE_WORLD ? "create" :
             frontend.screen == FRONTEND_JOIN_WORLD ? "join" :
             frontend.screen == FRONTEND_COMPANY ? "company" :
+            frontend.screen == FRONTEND_INVITATION ? "invitation" :
             frontend.screen == FRONTEND_REMOVE_MEMBER ? "remove" : "playing", frontend.focus, (int)frontend.avatar);
 #endif
         ClientTouchEnd();

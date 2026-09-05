@@ -21,7 +21,7 @@
 
 EM_JS(int, CoopEnabled, (), { return Module.ccCoop && Module.ccCoop.enabled ? 1 : 0; });
 EM_JS(void, CoopWorldId, (char *world, int capacity), {
-    stringToUTF8(new URLSearchParams(location.search).get('world') || '', world, capacity);
+    stringToUTF8(new URLSearchParams(location.search).get('world') || "", world, capacity);
 });
 EM_JS(void, CoopEnterWorld, (const char *world), {
     location.assign(location.pathname + '?world=' + UTF8ToString(world));

@@ -1104,6 +1104,14 @@ if(BUILD_TESTING)
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
     if(CC_PYTHON3_EXECUTABLE)
+        if(CC_BUILD_CLIENT AND NOT EMSCRIPTEN)
+            add_executable(native_coop_tests tests/native_coop_tests.c src/client/cc_coop_client.c src/client/cc_company.c)
+            target_link_libraries(native_coop_tests PRIVATE crownless_persistence crownless_client_session raylib CURL::libcurl Threads::Threads)
+            cc_strict_warnings(native_coop_tests)
+            add_test(NAME native_shared_company COMMAND ${CC_PYTHON3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/native_coop_tests.py $<TARGET_FILE:native_coop_tests> $<TARGET_FILE:crownless_coop>)
+            set_tests_properties(native_shared_company PROPERTIES TIMEOUT 60)
+        endif()
         add_test(NAME music_catalog_metadata
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tools/music_catalog.py --check)

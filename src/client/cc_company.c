@@ -99,15 +99,15 @@ void CcCompanyConfigure(const char *identity_path)
 #pragma clang diagnostic ignored "-Wstrict-prototypes"
 #pragma clang diagnostic ignored "-Wextra-semi"
 EM_JS(int, CompanyRandom, (char *text, int bytes), {
-    const value = Array.from(crypto.getRandomValues(new Uint8Array(bytes)), n => n.toString(16).padStart(2, '0')).join('');
+    const value = Array.from(crypto.getRandomValues(new Uint8Array(bytes)), n => n.toString(16).padStart(2, '0')).join("");
     stringToUTF8(value, text, bytes * 2 + 1);
     return 1;
 });
 EM_ASYNC_JS(int, CompanyRequest, (const char *path, const char *body, char **result, int *status, char *error, int capacity), {
     try {
         let token = localStorage.getItem('cc-coop-token');
-        if (!/^[a-f0-9]{64}$/.test(token || '')) {
-            token = Array.from(crypto.getRandomValues(new Uint8Array(32)), n => n.toString(16).padStart(2, '0')).join('');
+        if (!new RegExp("^[a-f0-9]{64}$").test(token || "")) {
+            token = Array.from(crypto.getRandomValues(new Uint8Array(32)), n => n.toString(16).padStart(2, '0')).join("");
             localStorage.setItem('cc-coop-token', token);
         }
         const response = await fetch(UTF8ToString(path), {method: body ? 'POST' : 'GET',

@@ -27,7 +27,7 @@ function gameControls(page, touch = false) {
       const x = bounds.x + (item.x + item.width / 2) * bounds.width / size[0];
       const y = bounds.y + (item.y + item.height / 2) * bounds.height / size[1];
       if (touch) await page.touchscreen.tap(x, y);
-      else await page.mouse.click(x, y);
+      else await page.mouse.click(x, y, {delay:80});
       await page.waitForTimeout(120);
     }
     return {click, tap: click, waitFor, read, isDisabled: async () => !(await read()).enabled};

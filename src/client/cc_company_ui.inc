@@ -33,7 +33,7 @@ EM_JS(void, CompanyField, (int action, const char *label, const char *value, int
 });
 EM_JS(void, CompanyFieldsEnd, (), { Module.renderCrownlessFields?.(Module.crownlessFields); });
 EM_JS(void, CompanyInvitation, (char *invitation, int capacity), {
-    stringToUTF8(new URLSearchParams(location.hash.slice(1)).get('join') || '', invitation, capacity);
+    stringToUTF8(new URLSearchParams(location.hash.slice(1)).get('join') || "", invitation, capacity);
 });
 EM_JS(int, CompanySharedHost, (), {
     if (location.hostname.endsWith('.github.io')) {
@@ -42,17 +42,27 @@ EM_JS(int, CompanySharedHost, (), {
     }
     return 1;
 });
-EM_JS(void, CompanyCopyInvitation, (const char *invitation), {
-    const text = location.origin + '/#join=' + UTF8ToString(invitation);
-    if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+EM_ASYNC_JS(int, CompanyCopyInvitation, (const char *invitation), {
+    try { await navigator.clipboard.writeText(UTF8ToString(invitation)); return 1; }
+    catch { return 0; }
+});
+EM_JS(void, CompanyInvitationLink, (const char *code, char *link, int capacity), {
+    stringToUTF8(location.origin + '/#join=' + UTF8ToString(code), link, capacity);
 });
 #pragma clang diagnostic pop
 #else
 static int CompanySharedHost(void) { return 1; }
 static void CompanyInvitation(char *invitation, int capacity) { (void)capacity; invitation[0] = '\0'; }
-static void CompanyCopyInvitation(const char *invitation)
+static int CompanyCopyInvitation(const char *invitation)
 {
-    SetClipboardText(TextFormat("https://crownless.ratimics.com/#join=%s", invitation));
+    SetClipboardText(invitation);
+    return 1;
+}
+static void CompanyInvitationLink(const char *code, char *link, int capacity)
+{
+    const char *origin = getenv("CC_COOP_ORIGIN");
+    (void)snprintf(link, (size_t)capacity, "%s/#join=%.97s",
+        origin != NULL ? origin : "https://crownless.ratimics.com", code);
 }
 #endif
 
@@ -109,6 +119,14 @@ static bool FrontendCompanyTextInput(FrontendState *state)
 
 static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
 {
+    if (state->screen == FRONTEND_INVITATION) {
+        if (action == FRONTEND_ACTION_INVITE_COPY) {
+            (void)snprintf(state->feedback, sizeof(state->feedback), "%s", CompanyCopyInvitation(state->invitation) ?
+                "Invitation copied." : "Select the invitation field to copy the link.");
+            return true;
+        }
+        if (action == FRONTEND_ACTION_CANCEL) { FrontendOpen(state, FRONTEND_COMPANY); return true; }
+    }
     if (state->screen == FRONTEND_DELETE && state->deleting_company) {
         if (action == FRONTEND_ACTION_CONFIRM_DELETE) {
             if (CcCompanyHost(&state->company, "delete", NULL, state->feedback, sizeof(state->feedback))) {
@@ -198,8 +216,8 @@ static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
         if (action == FRONTEND_ACTION_INVITE_COPY || action == FRONTEND_ACTION_INVITE_ROTATE) {
             if (CcCompanyInvite(&state->company, action == FRONTEND_ACTION_INVITE_ROTATE,
                 state->feedback, sizeof(state->feedback))) {
-                CompanyCopyInvitation(state->company.invitation);
-                (void)snprintf(state->feedback, sizeof(state->feedback), "Invitation ready: %.97s", state->company.invitation);
+                CompanyInvitationLink(state->company.invitation, state->invitation, sizeof(state->invitation));
+                FrontendOpen(state, FRONTEND_INVITATION);
             }
             return true;
         }

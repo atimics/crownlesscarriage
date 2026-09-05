@@ -3,6 +3,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 const {spawn, execFileSync} = require('node:child_process');
+const {gameControls} = require('./game_controls.cjs');
 const {chromium} = require(process.env.CC_PLAYWRIGHT_MODULE || 'playwright');
 
 async function main() {
@@ -24,27 +25,41 @@ async function main() {
     const a = await browser.newContext(), b = await browser.newContext({
       viewport: {width: 390, height: 844}, hasTouch: true, isMobile: true});
     owner = await a.newPage(); crew = await b.newPage();
+    const ownerControls = gameControls(owner), crewControls = gameControls(crew, true);
     await owner.goto(origin);
-    await owner.getByRole('textbox', {name:'Your name'}).fill('Mara');
-    await owner.getByRole('textbox', {name:'World name'}).fill('Shared test road');
+    assert.equal(await owner.getByRole('link').count(), 1);
+    await owner.getByRole('link', {name:'Start', exact:true}).click();
+    await owner.waitForFunction(() => window.Module?.crownlessScreen === 'title', undefined, {timeout:120000});
+    await ownerControls.button('Online').click();
+    await owner.waitForFunction(() => Module.crownlessTouchFrame.buttons.some(button => button.label === 'Online' && button.active));
+    await ownerControls.button('Play').click();
+    await owner.waitForFunction(() => Module.crownlessScreen === 'worlds');
+    await ownerControls.button('Create world').click();
+    await owner.getByRole('textbox', {name:'Your name', exact:true}).fill('Mara');
+    await owner.getByRole('textbox', {name:'World name', exact:true}).fill('Shared test road');
     await owner.getByLabel('World pass', {exact:true}).fill('0'.repeat(64));
-    await owner.getByRole('button', {name:'Ready the carriage'}).click();
-    await owner.getByRole('status').waitFor();
-    assert.match(await owner.getByRole('status').innerText(), /fresh world pass/);
+    await ownerControls.button('Create world').click();
+    await owner.waitForFunction(() => Module.crownlessTouchFrame.detail.includes('fresh world pass'));
     const worldPass = execFileSync(process.env.CC_COOP_PYTHON || 'python3', [
       'tools/coop/server.py', '--database', path.join(temp, 'worlds.sqlite3'), '--issue-world-pass'
     ], {encoding:'utf8'}).trim();
     await owner.getByLabel('World pass', {exact:true}).fill(worldPass);
-    await owner.getByRole('button', {name:'Ready the carriage'}).click();
-    await owner.getByRole('button', {name:'Invite crew', exact:true}).click();
-    assert.equal(await owner.getByRole('status').isVisible(), false);
-    await crew.goto(await owner.getByRole('textbox', {name:'Invitation link'}).inputValue());
-    await crew.getByRole('textbox', {name:'Your name'}).fill('Bren');
-    await crew.getByRole('button', {name:'Join the company'}).click();
-    await crew.waitForURL(/#world=[a-f0-9]{32}$/);
-    await owner.getByRole('button', {name:'Close', exact:true}).click();
-    assert.equal(await crew.getByRole('button', {name:/Buy|Sell|Depart|Rest|Pause/}).count(), 0);
-    const worldId = new URL(await crew.url()).hash.slice('#world='.length);
+    await ownerControls.button('Create world').click();
+    await owner.waitForFunction(() => Module.crownlessScreen === 'company');
+    assert.equal(await owner.locator('input').count(), 0);
+    await ownerControls.button('Copy invitation').click();
+    const invitation = await owner.getByRole('textbox', {name:'Invitation', exact:true}).inputValue();
+    const worldId = new URL(invitation).hash.slice('#join='.length).split('.')[0];
+    await fs.mkdir('browser-results', {recursive:true});
+    await owner.screenshot({path:'browser-results/in-game-invitation.png'});
+    await crew.goto(invitation);
+    await crew.getByRole('link', {name:'Start', exact:true}).click();
+    await crew.waitForFunction(() => window.Module?.crownlessScreen === 'join', undefined, {timeout:120000});
+    await crew.getByRole('textbox', {name:'Your name', exact:true}).fill('Bren');
+    await crewControls.button('Join company').tap();
+    await crew.waitForFunction(() => Module.crownlessScreen === 'company');
+    await ownerControls.button('Back').click();
+    await owner.screenshot({path:'browser-results/in-game-company.png'});
     const token = await crew.evaluate(() => localStorage.getItem('cc-coop-token'));
     async function state() {
       const response = await fetch(`${origin}/api/worlds/${worldId}/state?campaign=1`, {headers:{Authorization:`Bearer ${token}`}});
@@ -53,8 +68,8 @@ async function main() {
     }
     const game = crew, errors = [];
     game.on('pageerror', error => errors.push(error.message));
-    await owner.getByRole('link', {name:'Enter the world'}).click();
-    await game.getByRole('link', {name:'Enter the world'}).click();
+    await ownerControls.button('Enter world').click();
+    await crewControls.button('Enter world').tap();
     for (const page of [owner, game]) {
       await page.waitForFunction(() => document.body.dataset.companyReady === 'ready' && document.body.dataset.playerPosition, undefined, {timeout:120000});
     }
@@ -92,14 +107,8 @@ async function main() {
     await selectMenuItem(game, 0);
     await game.waitForFunction(() => Module.crownlessScreen === 'playing');
     assert.equal(await game.locator('body').getAttribute('data-avatar'), '12576');
-    assert.equal(await game.locator('#touch-panel').isVisible(), true);
-    const mobileLayout = await game.evaluate(() => ({
-      overflow: document.documentElement.scrollWidth > innerWidth,
-      canvasBottom: document.querySelector('#canvas').getBoundingClientRect().bottom,
-      controlsTop: document.querySelector('#touch-panel').getBoundingClientRect().top
-    }));
-    assert.equal(mobileLayout.overflow, false);
-    assert(mobileLayout.canvasBottom <= mobileLayout.controlsTop, JSON.stringify(mobileLayout));
+    assert.equal(await game.locator('#touch-panel').count(), 0);
+    assert(await game.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     assert.equal(await owner.locator('body').getAttribute('data-avatar'), '0');
     for (const [page, name, appearance] of [[owner, 'Bren', 12576], [game, 'Mara', 0]]) {
       await page.waitForFunction(({name, appearance}) => {
@@ -133,10 +142,10 @@ async function main() {
     await game.keyboard.press('Escape');
     await game.waitForFunction(() => Module.crownlessScreen === 'paused');
     await selectMenuItem(game, 11);
-    await game.getByRole('link', {name:'Enter the world'}).waitFor();
-    await owner.waitForFunction(() => JSON.parse(document.body.dataset.crewDrawn || '[]').length === 0);
-    await game.getByRole('link', {name:'Enter the world'}).click();
-    await game.waitForFunction(() => document.body.dataset.companyReady === 'ready', undefined, {timeout:120000});
+    await game.waitForFunction(() => Module.crownlessScreen === 'company');
+    assert(await crewControls.button('Pause shared world').isDisabled());
+    await crewControls.button('Return to the road').tap();
+    await game.waitForFunction(() => Module.crownlessScreen === 'playing');
     await owner.waitForFunction(() => JSON.parse(document.body.dataset.crewDrawn || '[]')[0]?.name === 'Bren');
     const destination = (await state()).state.travel[0].id;
     const departed = await game.evaluate(target => Module.ccCoop.apply('travel', target, 0, 0), destination);
@@ -156,39 +165,38 @@ async function main() {
     for (const page of [owner, game]) await page.waitForFunction(() => !Module.ccCoop.paused());
     const firstStop = await owner.evaluate(() => Module.ccCoop.apply('skip_watch', '0', 0, 0));
     assert.equal(firstStop.accepted, true);
-    assert(firstStop.world.state.journey.road_site, 'Travel must stop at the first road site');
+    assert(firstStop.world.state.journey.road_site, 'A nearby stop is offered');
     const firstJourney = firstStop.world.state.journey;
-    for (const page of [owner, game]) await page.waitForFunction(hash => document.body.dataset.companyHash === hash, firstStop.world.state.hash);
-    const held = await game.evaluate(() => Module.ccCoop.apply('skip_watch', '0', 0, 0));
-    assert.equal(held.accepted, true);
-    assert.equal(held.world.state.hash, firstStop.world.state.hash);
-    for (const page of [owner, game]) await page.waitForFunction(hash => document.body.dataset.companyHash === hash, held.world.state.hash);
-    const camped = await game.evaluate(target => Module.ccCoop.apply('camp_road_site', target, 0, 0), firstJourney.road_site.id);
-    assert.equal(camped.accepted, true);
-    assert.equal(camped.world.state.journey.progress, firstJourney.progress);
-    assert.equal(camped.world.state.minute, firstStop.world.state.minute + 480);
-    assert.equal(camped.world.state.journey.road_site, null);
-    await owner.waitForFunction(hash => document.body.dataset.companyHash !== hash, held.world.state.hash);
-    const nextStop = await owner.evaluate(() => Module.ccCoop.apply('skip_watch', '0', 0, 0));
-    assert.equal(nextStop.accepted, true);
-    assert(nextStop.world.state.journey.progress > firstJourney.progress);
-    assert(nextStop.world.state.journey.road_site);
-    assert.notEqual(nextStop.world.state.journey.road_site.id, firstJourney.road_site.id);
-    for (const page of [owner, game]) await page.waitForFunction(hash => document.body.dataset.companyHash === hash, nextStop.world.state.hash);
+    // Leaving the option alone keeps the shared carriage moving.
+    await game.waitForFunction(progress => {
+      const reading = Module.crownlessTouchFrame?.reading || '';
+      return !reading.includes('Press on') && !reading.includes('Fast forward') &&
+        document.body.dataset.companyHash;
+    }, firstJourney.progress);
+    await game.waitForTimeout(1800);
+    const moving = (await state()).state.journey;
+    assert(moving.progress > firstJourney.progress || !moving.active, JSON.stringify({firstJourney,moving}));
+    assert((await crewControls.buttons()).every(button => !/Press on|Fast forward|Continue on the road/.test(button.label)));
+    // Pause for a stable reload check; the company keeps the same route and pace.
+    await owner.evaluate(() => Module.ccCoop.togglePause());
+    for (const page of [owner, game]) await page.waitForFunction(() => Module.ccCoop.paused());
+    const savedRoad = await state();
     await game.reload();
     await game.waitForFunction(() => document.body.dataset.companyReady === 'ready', undefined, {timeout:120000});
-    await game.waitForFunction(hash => document.body.dataset.companyHash === hash, nextStop.world.state.hash);
-    const continued = await game.evaluate(target => Module.ccCoop.apply('pass_road_site', target, 0, 0), nextStop.world.state.journey.road_site.id);
-    assert.equal(continued.accepted, true);
-    assert.equal(continued.world.state.journey.road_site, null);
-    assert.equal(continued.world.state.journey.route, firstJourney.route);
+    await game.waitForFunction(hash => document.body.dataset.companyHash === hash, savedRoad.state.hash);
+    await owner.evaluate(() => Module.ccCoop.togglePause());
+    for (const page of [owner, game]) await page.waitForFunction(() => !Module.ccCoop.paused());
     // The C client reports each death and resets both players after one jump.
+    await owner.evaluate(() => Module.ccCoop.togglePause());
+    for (const page of [owner, game]) await page.waitForFunction(() => Module.ccCoop.paused());
     const beforeDeath = await state();
     await owner.evaluate(() => Module.ccCoop.life(true));
     await owner.waitForFunction(() => Module.ccCoop.dead());
     await game.waitForTimeout(1000);
     assert.equal((await state()).state.day, beforeDeath.state.day);
     await game.evaluate(() => Module.ccCoop.life(true));
+    await owner.evaluate(() => Module.ccCoop.togglePause());
+    for (const page of [owner, game]) await page.waitForFunction(() => !Module.ccCoop.paused());
     for (const page of [owner, game]) {
       await page.waitForFunction(() => Module.ccCoop.partyWipes() === 1 &&
         !Module.ccCoop.dead(), undefined, {timeout:30000});
@@ -205,7 +213,7 @@ async function main() {
       Module.ccCoop.partyWipes() === 1 && !Module.ccCoop.dead(), undefined, {timeout:120000});
     assert.equal((await state()).state.day, nextCompany.state.day);
     assert.deepEqual(errors, []);
-    console.log('Desktop and phone players draw each other with their chosen appearance and moving poses; touch walking, leaving, rejoining, reload, shared road stops, camping, continuing, and the twenty-year party death jump pass.');
+    console.log('Desktop and phone players draw each other with their chosen appearance and moving poses; touch walking, leaving, rejoining, reload, continuous shared travel, optional stops, and the twenty-year party death jump pass.');
   } catch (error) {
     await fs.mkdir('browser-results', {recursive:true});
     for (const [name, page] of [['owner', owner], ['crew', crew]]) {
