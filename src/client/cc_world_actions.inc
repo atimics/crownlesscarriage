@@ -12,7 +12,7 @@ static ContextAction WorldContextActionAt(const CcSim *sim, const LocalState *lo
         target->key.place != sim->player.location_id) return none;
     for (int32_t i = 0; i < actions->count; ++i) {
         const ContextAction *action = &actions->items[i];
-        if (action->enabled && (int32_t)action->kind == target->action &&
+        if ((int32_t)action->kind == target->action &&
             action->amount == target->amount &&
             (action->target.kind == CC_INTERACTION_NONE ||
              action->target.object == target->subject_id)) return *action;

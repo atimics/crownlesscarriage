@@ -271,14 +271,15 @@
   }
 
   Module.persistCrownlessSave = async function (campaignFile, sessionFile) {
-    const campaign = FS.readFile(campaignFile).slice();
+    // FS.readFile returns an owned snapshot before the first await.
+    const campaign = FS.readFile(campaignFile);
     const hasSession = FS.analyzePath(sessionFile).exists;
-    const session = hasSession ? FS.readFile(sessionFile).slice() : null;
+    const session = hasSession ? FS.readFile(sessionFile) : null;
     await persistCampaign(campaign, session, false);
   };
 
   Module.persistCrownlessNewCampaign = async function (campaignFile) {
-    const campaign = FS.readFile(campaignFile).slice();
+    const campaign = FS.readFile(campaignFile);
     await persistCampaign(campaign, null, true);
   };
 
@@ -288,7 +289,7 @@
   };
 
   Module.persistCrownlessPreferences = async function (preferencesFile) {
-    const preferences = FS.readFile(preferencesFile).slice();
+    const preferences = FS.readFile(preferencesFile);
     const database = await openDatabase();
     await new Promise(function (resolve, reject) {
       const transaction = database.transaction(storeName, "readwrite");

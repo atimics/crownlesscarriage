@@ -1,4 +1,36 @@
 /* Capture the shipped skins through the game lighting and final screen pass. */
+static void TestPonyHarnessAttachment(void)
+{
+    CreatureModelCache *pony =
+        &creature_models[CC_CREATURE_HORSE][CC_CREATURE_POSE_IDLE];
+    CreatureModelCache saved = *pony;
+    Transform bind[2] = {
+        {.translation = {0, 1, 0}, .rotation = {0, 0, 0, 1}, .scale = {1, 1, 1}},
+        {.translation = {0, 2, 1}, .rotation = {0, 0, 0, 1}, .scale = {1, 1, 1}},
+    };
+    *pony = (CreatureModelCache){0};
+    pony->ready = true;
+    pony->model.skeleton.boneCount = 2;
+    pony->model.skeleton.bindPose = bind;
+    pony->quadruped_bone[0] = CC_QUADRUPED_CHEST;
+    pony->quadruped_bone[1] = CC_QUADRUPED_HEAD;
+    pony->pose[0] = bind[0];
+    pony->pose[1] = bind[1];
+    /* A lifted head turns the muzzle from forward to right in model space. */
+    pony->pose[1].translation = (Vector3){0, 3, 1};
+    pony->pose[1].rotation = QuaternionFromAxisAngle((Vector3){0, 1, 0}, PI * 0.5f);
+    Vector3 nose = RoadPonySkinPoint((Vector3){4, 5, 6}, PI * 0.5f,
+                                    (Vector3){0, 2, 2}, CC_QUADRUPED_HEAD);
+    RequireRenderer(Vector3Distance(nose, (Vector3){4.96f, 7.88f, 5.04f}) < 0.001f,
+                    "bridle must follow head lift, head turn, body turn, and pony scale");
+    Vector3 chest = RoadPonySkinPoint((Vector3){4, 5, 6}, PI * 0.5f,
+                                     (Vector3){0, 1, 0}, CC_QUADRUPED_CHEST);
+    RequireRenderer(Vector3Distance(chest, (Vector3){4, 5.96f, 6}) < 0.001f,
+                    "collar must follow the chest while the head turns");
+    *pony = saved;
+    (void)puts("PASS pony harness: head and chest attachments follow the skin");
+}
+
 static void TestAnimalModels(const char *path)
 {
     const CcCreatureVariant animals[] = {
@@ -76,8 +108,9 @@ static void TestAnimalModels(const char *path)
     (void)puts("PASS animal skins: seven pony colors and two farm species, four turns, two walking poses");
 }
 
-static void TestPonyPortraits(void)
+static void TestPonyPortraits(const char *path)
 {
+    Image sheet = GenImageColor(64 * (CC_PONY_COUNT + 1), 64, BLACK);
     for (int32_t known = 0; known < 2; ++known) {
         for (int32_t pony = 0; pony < CC_PONY_COUNT; ++pony) {
             BeginDrawing();
@@ -101,8 +134,60 @@ static void TestPonyPortraits(void)
             RequireRenderer(visible > 100, "pony portrait must contain visible face geometry");
             if (known) RequireRenderer(colorful > 100, "met pony face must show its color");
             UnloadImageColors(pixels);
+            ImageFlipVertical(&face);
+            ImageDraw(&sheet, face, (Rectangle){0, 0, 64, 64},
+                      (Rectangle){(float)index * 64, 0, 64, 64}, WHITE);
             UnloadImage(face);
         }
     }
+    char output[1024];
+    (void)snprintf(output, sizeof(output), "%s-portraits.png", path);
+    RequireRenderer(ExportImage(sheet, output), "pony portraits must be written");
+    UnloadImage(sheet);
     (void)puts("PASS pony portraits: seven colored faces and a shared gray mystery face");
+}
+
+static void CapturePonies(const char *path)
+{
+    const int size = 192;
+    RenderTexture2D scene = LoadRenderTexture(size, size);
+    RequireRenderer(IsRenderTextureValid(scene), "pony review target must load");
+    Image sheet = GenImageColor(size * CC_PONY_COUNT, size * 3, BLACK);
+    Camera3D camera = {
+        .position = {3.0f, 2.4f, 4.0f}, .target = {0.0f, 0.85f, 0.0f},
+        .up = {0.0f, 1.0f, 0.0f}, .fovy = 3.2f,
+        .projection = CAMERA_ORTHOGRAPHIC,
+    };
+    const float turns[] = {0.0f, PI * 0.5f, PI};
+    for (int32_t turn = 0; turn < 3; ++turn) {
+        for (int32_t pony = 0; pony < CC_PONY_COUNT; ++pony) {
+            BeginTextureMode(scene);
+            ClearBackground((Color){24, 28, 34, 255});
+            BeginMode3D(camera);
+            BeginWorldLighting(camera, &ROAD_ART_COMPOSITION);
+            RequireRenderer(DrawCreatureGait3D(
+                CC_CREATURE_HORSE, CC_CREATURE_POSE_IDLE, (Vector3){0},
+                turns[turn], 0.96f, PONY_COLORS[pony][0], 0.0f, false, NULL),
+                "pony review must draw the shipped skin");
+            if (turn == 2) DrawRoadHorseHarness((Vector3){0}, turns[turn]);
+            EndWorldLighting();
+            EndMode3D();
+            EndTextureMode();
+            BeginDrawing();
+            ClearBackground(BLACK);
+            PresentTarget(scene, (Rectangle){0, 0, (float)size, (float)size});
+            rlDrawRenderBatchActive();
+            Image shot = LoadImageFromScreen();
+            EndDrawing();
+            ImageCrop(&shot, (Rectangle){0, 0, (float)size, (float)size});
+            ImageDraw(&sheet, shot, (Rectangle){0, 0, (float)size, (float)size},
+                      (Rectangle){(float)(pony * size), (float)(turn * size),
+                                  (float)size, (float)size}, WHITE);
+            UnloadImage(shot);
+        }
+    }
+    RequireRenderer(ExportImage(sheet, path), "pony review sheet must be written");
+    UnloadImage(sheet);
+    UnloadRenderTexture(scene);
+    TestPonyPortraits(path);
 }

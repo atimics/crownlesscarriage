@@ -135,6 +135,7 @@ static void WriteViewportFixture(const char *path)
     UnloadImage(shot);
 }
 
+#include "building_cutaway_tests.inc"
 #include "box_batch_tests.inc"
 #include "character_material_captures.inc"
 #include "humanoid_animation_captures.inc"
@@ -144,8 +145,11 @@ static void WriteViewportFixture(const char *path)
 
 int main(int argc, char **argv)
 {
+    TestBuildingRevealTiming();
     TestSkinTurns();
+    TestPonyHarnessAttachment();
     if (argc == 3 && (strcmp(argv[1], "--graphics") == 0 ||
+                      strcmp(argv[1], "--pony-captures") == 0 ||
                       strcmp(argv[1], "--material-captures") == 0 ||
                       strcmp(argv[1], "--animation-captures") == 0)) {
         SetConfigFlags(FLAG_WINDOW_HIDDEN);
@@ -153,6 +157,7 @@ int main(int argc, char **argv)
         SetTraceLogLevel(LOG_WARNING);
         CcLocalRendererInit();
         if (strcmp(argv[1], "--graphics") == 0) {
+            TestRaisedBuildingCutaway(argv[2]);
             TestUploadedMeshRelease();
             TestCharacterPrimitives();
             TestBoxBatchParity();
@@ -160,10 +165,12 @@ int main(int argc, char **argv)
             ReportBoxDrawPerformance();
             TestCharacterSurfaces();
             TestAnimalModels(argv[2]);
-            TestPonyPortraits();
+            TestPonyPortraits(argv[2]);
             WriteViewportFixture(argv[2]);
         } else if (strcmp(argv[1], "--animation-captures") == 0) {
             CaptureHumanoidAnimation(argv[2]);
+        } else if (strcmp(argv[1], "--pony-captures") == 0) {
+            CapturePonies(argv[2]);
         } else {
             CaptureCharacterMaterials(argv[2]);
         }

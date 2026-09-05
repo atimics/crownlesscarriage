@@ -90,6 +90,7 @@ cc_strict_warnings(crownless_sim)
 
 add_library(crownless_story
     src/story/cc_story.c
+    src/story/cc_speech.c
 )
 target_include_directories(crownless_story PUBLIC src)
 target_link_libraries(crownless_story PUBLIC crownless_sim)
@@ -519,12 +520,35 @@ if(CC_BUILD_CLIENT)
         )
         add_dependencies(crownless_web_lazy_assets crownless_web_assets)
         add_dependencies(crownless_carriage crownless_web_lazy_assets)
+        # Asset edits only run the packager; the optimized game links on code edits.
+        find_package(Python3 REQUIRED COMPONENTS Interpreter)
+        set(CC_WEB_PACKAGER "${EMSCRIPTEN_ROOT_PATH}/tools/file_packager.py")
+        add_custom_command(
+            OUTPUT
+                "${CMAKE_CURRENT_BINARY_DIR}/site/index.data"
+                "${CMAKE_CURRENT_BINARY_DIR}/site/assets.js"
+            COMMAND ${Python3_EXECUTABLE} "${CC_WEB_PACKAGER}"
+                "${CMAKE_CURRENT_BINARY_DIR}/site/index.data"
+                --preload "${CC_WEB_ASSET_DIR}/assets@/assets"
+                --js-output=${CMAKE_CURRENT_BINARY_DIR}/site/assets.js
+            DEPENDS
+                "${CC_WEB_PACKAGER}"
+                "${CC_WEB_STARTUP_ASSET_STAMP}"
+                ${CC_WEB_STARTUP_ASSET_OUTPUTS}
+            VERBATIM
+        )
+        add_custom_target(crownless_web_startup_package ALL DEPENDS
+            "${CMAKE_CURRENT_BINARY_DIR}/site/index.data"
+            "${CMAKE_CURRENT_BINARY_DIR}/site/assets.js"
+        )
+        add_dependencies(crownless_web_startup_package crownless_web_assets)
+        add_dependencies(crownless_carriage crownless_web_startup_package)
         set_target_properties(crownless_carriage PROPERTIES
             OUTPUT_NAME index
             SUFFIX ".html"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/site"
             LINK_DEPENDS
-                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CMAKE_CURRENT_SOURCE_DIR}/web/music.js;${CC_WEB_STARTUP_ASSET_STAMP};${CC_WEB_STARTUP_ASSET_OUTPUTS}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CMAKE_CURRENT_SOURCE_DIR}/web/music.js"
         )
         target_compile_definitions(crownless_carriage PRIVATE PLATFORM_WEB)
         set_property(TARGET crownless_carriage PROPERTY C_EXTENSIONS ON)
@@ -536,6 +560,7 @@ if(CC_BUILD_CLIENT)
             "-sMEMORY_GROWTH_LINEAR_STEP=16777216"
             "-sSTACK_SIZE=4194304"
             "-sFORCE_FILESYSTEM=1"
+            "-sEXPORTED_RUNTIME_METHODS=FS_createPath,FS_createDataFile,addRunDependency,removeRunDependency"
             "-sMIN_WEBGL_VERSION=2"
             "-sMAX_WEBGL_VERSION=2"
             "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
@@ -544,7 +569,6 @@ if(CC_BUILD_CLIENT)
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/music.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js"
-            "SHELL:--preload-file ${CC_WEB_ASSET_DIR}/assets@/assets"
         )
     elseif(APPLE)
         set(CC_HERO_ENGINE_ASSET
@@ -978,6 +1002,7 @@ if(BUILD_TESTING)
         endif()
         add_test(NAME headless_performance_budget
                  COMMAND crownless_benchmark ${CC_BENCHMARK_TEST_ARGUMENTS})
+        set_tests_properties(headless_performance_budget PROPERTIES RUN_SERIAL TRUE)
         unset(CC_BENCHMARK_TEST_ARGUMENTS)
         add_test(NAME benchmark_rejects_day_overflow
                  COMMAND crownless_benchmark --sim-years 5883517)
@@ -994,6 +1019,11 @@ if(BUILD_TESTING)
     target_link_libraries(story_tests PRIVATE crownless_story)
     cc_strict_warnings(story_tests)
     add_test(NAME authored_story_beats COMMAND story_tests)
+
+    add_executable(speech_tests tests/speech_tests.c)
+    target_link_libraries(speech_tests PRIVATE crownless_story)
+    cc_strict_warnings(speech_tests)
+    add_test(NAME speech_identity_and_words COMMAND speech_tests)
 
     add_executable(quest_system_tests tests/quest_system_tests.c)
     target_link_libraries(quest_system_tests PRIVATE crownless_persistence)
@@ -1256,6 +1286,8 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-world-session-startup)
         add_test(NAME town_session_startup_restore
                  COMMAND crownless_carriage --test-town-session-startup)
+        add_test(NAME solo_party_wipe
+                 COMMAND crownless_carriage --test-party-wipe)
         add_test(NAME road_encounter_session_restore
                  COMMAND crownless_carriage --test-road-encounter-session)
 

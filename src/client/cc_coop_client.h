@@ -4,6 +4,9 @@
 #include "client/cc_crew.h"
 
 bool CcCoopClientActive(void);
+bool CcCoopClientDead(void);
+int32_t CcCoopClientPartyWipes(void);
+void CcCoopClientLife(bool dead);
 bool CcCoopClientOwner(void);
 bool CcCoopClientDelete(char *error, size_t capacity);
 void CcCoopClientOpenLobby(void);

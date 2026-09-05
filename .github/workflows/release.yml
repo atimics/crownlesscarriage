@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  CTEST_PARALLEL_LEVEL: 4
+
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -93,6 +96,8 @@ jobs:
         run: >-
           test -f out/build/web/site/index.html &&
           test -f out/build/web/site/index.wasm &&
+          test -f out/build/web/site/index.data &&
+          test -f out/build/web/site/assets.js &&
           test -f out/build/web/site/licenses.html &&
           test -f out/build/web/site/LICENSE.txt &&
           test -f out/build/web/site/THIRD_PARTY_NOTICES.txt

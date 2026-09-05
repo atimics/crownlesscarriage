@@ -62,6 +62,12 @@ typedef enum ClientView {
     VIEW_PAUSE
 } ClientView;
 
+typedef enum CarriageTab {
+    CARRIAGE_OVERVIEW,
+    CARRIAGE_PONIES,
+    CARRIAGE_TAB_COUNT
+} CarriageTab;
+
 typedef struct ClientMapTextures {
     Texture2D illustrated;
     Texture2D collectible_atlas;
@@ -120,6 +126,7 @@ typedef struct LocalState {
     uint32_t receipt_serial;
     ClientView pause_return_view;
     bool request_save;
+    double caravan_tap_deadline;
     CcWorldStream world_stream;
     CcLocalAgent agent;
     CcLocalCourse course;
@@ -129,7 +136,7 @@ typedef struct LocalState {
     CcClientArrivalTransition arrival;
     float travel_time_blend;
     bool travel_fast_forward;
-    bool pony_book_open;
+    CarriageTab carriage_tab;
     bool travel_attention;
     CcLocalMovementPreview movement_preview;
     CcLocalSiteKind site_kind;
@@ -164,6 +171,8 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local);
 static Rectangle AdventureNavBounds(int index);
 static void DrawAdventurePromises(const CcSim *sim, const LocalState *local, int32_t selected);
 static void DrawAdventureFeedback(const char *message);
+static void AdventureButton(Rectangle bounds, const char *label, bool enabled, bool active);
+static void DrawCarriagePonies(const CcSim *sim);
 
 typedef struct ActionReelState {
     int32_t stage;
@@ -440,15 +449,20 @@ static const char *ClientBrowserCampaignAccessMessage(int32_t access)
 }
 EM_JS(int, ClientReleaseBrowserAssets, (), {
     let releasedBytes = 0;
-    const removeTree = (path) => {
+    const removeTree = (path, keep = false) => {
         for (const name of FS.readdir(path)) {
             if (name === "." || name === "..") continue;
             const child = path + "/" + name;
-            if (child === "/assets/audio") continue;
+            const keepChild = keep || child === "/assets/audio";
             const stat = FS.stat(child);
             if (FS.isDir(stat.mode)) {
-                removeTree(child);
-                FS.rmdir(child);
+                removeTree(child, keepChild);
+                if (!keepChild) FS.rmdir(child);
+            } else if (keepChild) {
+                // Preloaded files share one pack buffer. Give retained audio
+                // its own bytes so the browser can collect the startup pack.
+                const bytes = FS.readFile(child);
+                FS.writeFile(child, bytes, {canOwn: true});
             } else {
                 releasedBytes += stat.size;
                 FS.unlink(child);
@@ -1077,8 +1091,10 @@ static void ResetLocalState(LocalState *local)
     local->trade_quote_presented = false;
     local->book_offset = 0;
     local->book_page = 0;
+    local->carriage_tab = CARRIAGE_OVERVIEW;
     local->receipt[0] = '\0';
     local->request_save = false;
+    local->caravan_tap_deadline = 0.0;
     local->movement_preview = (CcLocalMovementPreview){0};
     local->movement_preview_cooldown = 0.0f;
     local->movement_reticle = (Vector2){0};
@@ -4012,7 +4028,7 @@ static ContextActionSet BuildContextActions(
     int32_t selected, int32_t selected_situation)
 {
     ContextActionSet set = {0};
-    if (sim == NULL || local == NULL || local->pony_book_open) return set;
+    if (sim == NULL || local == NULL) return set;
     if (local->adventure_ui && (view == VIEW_TRADE || view == VIEW_PAUSE || view == VIEW_LEDGER)) return set;
     int32_t pony = CcPonyOnRoad(sim);
     if (view == VIEW_LOCAL && pony >= 0 && !LocalCombatActive(local)) {
@@ -4899,7 +4915,7 @@ static ContextAction PressedContextAction(
     for (int32_t i = first; i < first + shown; ++i) {
         if (CheckCollisionPointRec(mouse, ContextActionBounds(i - first, shown))) {
             ContextAction pressed = actions.items[i];
-            if (!pressed.enabled || (right && pressed.kind != CONTEXT_ACTION_BUY_CARGO)) return none;
+            if (right && pressed.kind != CONTEXT_ACTION_BUY_CARGO) return none;
             if (right) pressed.amount = -1;
             return pressed;
         }
@@ -5639,6 +5655,12 @@ static bool DrawEconomicGoodIcon(Texture2D atlas, CcGood good,
     return true;
 }
 
+static Rectangle CarriageTabBounds(int32_t tab)
+{
+    return (Rectangle){(float)ContextViewportWidth() - 340.0f + (float)tab * 144.0f,
+        94.0f, 136.0f, 40.0f};
+}
+
 static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
                                Texture2D economic_goods)
 {
@@ -5648,7 +5670,10 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
     const CcSituation *quest = CcSimAcceptedSituation(sim);
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                   Fade(BACKGROUND, 0.78f));
-    DrawPanel((Rectangle){24.0f, 78.0f, 1232.0f, 666.0f}, PANEL_DEEP);
+    ClientTouchBegin();
+    ClientTouchHeading("The Crownless Carriage", "Choose Overview or Ponies.");
+    DrawPanel((Rectangle){24.0f, 78.0f, (float)GetScreenWidth() - 48.0f,
+        (float)GetScreenHeight() - 94.0f}, PANEL_DEEP);
     CcOverlayDrawText("THE CROWNLESS CARRIAGE", 52, 102, 23, INK);
     CcOverlayDrawText(
         TextFormat("%s / %s",
@@ -5661,8 +5686,17 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
     CcOverlayDrawText(
         TextFormat("DAY %d / %" PRId64 " CROWNS",
                    sim->current_day, sim->player.coins),
-        1026, 112, 9, CC_GOLD);
-    DrawRectangle(52, 156, 1176, 1, Fade(CC_GOLD, 0.42f));
+        GetScreenWidth() - 254, 142, 9, CC_GOLD);
+    const char *tabs[CARRIAGE_TAB_COUNT] = {"Overview", "Ponies"};
+    for (int32_t tab = 0; tab < CARRIAGE_TAB_COUNT; ++tab) {
+        AdventureButton(CarriageTabBounds(tab), tabs[tab], true,
+            local->carriage_tab == (CarriageTab)tab);
+    }
+    DrawRectangle(52, 156, GetScreenWidth() - 104, 1, Fade(CC_GOLD, 0.42f));
+    if (local->carriage_tab == CARRIAGE_PONIES) {
+        DrawCarriagePonies(sim);
+        return;
+    }
 
     DrawPanel((Rectangle){52.0f, 174.0f, 350.0f, 454.0f},
               Fade(BACKGROUND, 0.76f));
@@ -8119,6 +8153,114 @@ static bool SaveClientWorld(CcJournal *journal, CcSim *sim,
 #include "client/cc_frontend.inc"
 #include "pony_ui.inc"
 
+static bool HandleCaravanRecovery(LocalState *local, ClientView *view,
+                                   ClientView *return_view, double now,
+                                   char *message, size_t capacity)
+{
+    if (now >= local->caravan_tap_deadline)
+        local->caravan_tap_deadline = 0.0;
+    if (*view != VIEW_LOCAL && *view != VIEW_ROADS && *view != VIEW_CARRIAGE) {
+        local->caravan_tap_deadline = 0.0;
+        return false;
+    }
+    if (!ClientKeyPressed(KEY_N)) return false;
+    if (local->caravan_tap_deadline <= 0.0) {
+        local->caravan_tap_deadline = now + 0.45;
+        (void)snprintf(message, capacity,
+                       "Tap [N] again to return to the caravan.");
+        return true;
+    }
+    local->caravan_tap_deadline = 0.0;
+    Vector2 position = LOCAL_CARRIAGE_BAY;
+    float heading = atan2f(LOCAL_CARRIAGE.x - position.x,
+                           LOCAL_CARRIAGE.y - position.y);
+    CcLocalSceneKind scene = CC_LOCAL_SCENE_STREET;
+    if (local->open_world && local->world_carriage.visible) {
+        heading = local->world_carriage.heading_yaw;
+        position = (Vector2){
+            local->world_carriage.position.x + 3.0f * cosf(heading),
+            local->world_carriage.position.z - 3.0f * sinf(heading)};
+    } else if (local->site_travel_active) {
+        Vector3 caravan = WorldActionCarriagePosition(local);
+        position = (Vector2){caravan.x + 3.0f, caravan.z};
+        scene = CC_LOCAL_SCENE_ROAD;
+    } else if (local->site_kind != CC_LOCAL_SITE_NONE) {
+        position = (Vector2){CC_LOCAL_SITE_CARRIAGE_X + 3.0f,
+                             CC_LOCAL_SITE_CARRIAGE_Z};
+        scene = CC_LOCAL_SCENE_ROAD;
+    } else if (local->journey_combat_active || local->journey_parley_active ||
+               local->journey_travel_active) {
+        position = (Vector2){CC_LOCAL_ROAD_START_X, CC_LOCAL_ROAD_START_Z};
+        scene = CC_LOCAL_SCENE_ROAD;
+    } else if (local->convoy.phase != CC_LOCAL_CONVOY_PARKED) {
+        heading = local->convoy.town_heading_yaw;
+        position = (Vector2){local->convoy.town_position.x + 3.0f * cosf(heading),
+                             local->convoy.town_position.z - 3.0f * sinf(heading)};
+    }
+    RepositionHero(local, position, false);
+    CcLocalAgentSetScene(&local->agent, scene);
+    local->agent.facing_yaw = heading;
+    local->course.scene = scene;
+    local->market_interior = false;
+    local->open_world_market = false;
+    local->movement_preview = (CcLocalMovementPreview){0};
+    local->movement_reticle_valid = false;
+    CcInteractionCancel(&local->interaction, "");
+    local->interactions = (CcInteractionPlan){0};
+    local->request_save = true;
+    *view = VIEW_LOCAL;
+    *return_view = VIEW_LOCAL;
+    (void)snprintf(message, capacity, "Back at the caravan.");
+    return true;
+}
+
+static bool ResolveSoloPartyWipe(CcJournal *journal, CcSim *sim,
+                                  LocalState *local, ClientView *view,
+                                  char *message, size_t capacity)
+{
+    if (local->agent.combat.life_state != CC_LIFE_DEAD) return false;
+    CcCommand wipe = {
+        .kind = CC_COMMAND_PARTY_WIPE,
+        .target_id = (CcId)sim->current_day
+    };
+    if (!ApplyCommand(journal, sim, wipe, message, capacity)) return false;
+    LeaveOpenWorld(local);
+    ResetLocalStatePreservingAthletics(local);
+    CcLocalBindPlace(sim);
+    (void)InitializeOpenWorld(sim, local, false);
+    *view = VIEW_LOCAL;
+    (void)snprintf(message, capacity,
+                   "Twenty years later. A new company takes up the carriage.");
+    return true;
+}
+
+#if defined(CC_CLIENT_SELF_TESTS)
+static int RunSoloPartyWipeRegression(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, 42U);
+    LocalState local = {0};
+    ResetLocalState(&local);
+    ClientView view = VIEW_LOCAL;
+    char message[256];
+    int32_t day = sim.current_day;
+    local.agent.combat.life_state = CC_LIFE_KNOCKED_DOWN;
+    if (ResolveSoloPartyWipe(NULL, &sim, &local, &view, message, sizeof(message)) ||
+        sim.current_day != day) return 1;
+    CcLocalAgentDie(&local.agent);
+    if (!ResolveSoloPartyWipe(NULL, &sim, &local, &view, message, sizeof(message)) ||
+        sim.current_day != day + CC_PARTY_WIPE_DAYS || view != VIEW_LOCAL ||
+        local.agent.combat.life_state != CC_LIFE_ALIVE ||
+        !CcSimValidate(&sim, message, sizeof(message))) return 1;
+    uint64_t hash = CcSimHash(&sim);
+    if (ResolveSoloPartyWipe(NULL, &sim, &local, &view, message, sizeof(message)) ||
+        CcSimHash(&sim) != hash) return 1;
+    LeaveOpenWorld(&local);
+    (void)puts("Solo death advances the world once and starts the next company.");
+    return 0;
+}
+#endif
+
 static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         int32_t *selected_situation, ClientView *view,
                         ClientView *return_view, LocalState *local,
@@ -8137,6 +8279,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
+    if (HandleCaravanRecovery(local, view, return_view, GetTime(),
+                               message, message_capacity)) return;
     if (local->adventure_ui) {
         if (local->interaction.approaching &&
             (ClientKeyPressed(KEY_Q) || ClientKeyPressed(KEY_M) || ClientKeyPressed(KEY_TAB))) {
@@ -8188,6 +8332,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     if (*view != VIEW_MAP) local->pending_map_sale_id = 0U;
     ContextAction pressed_action = PressedContextAction(
         sim, local, *view, *selected, *selected_situation);
+    if (pressed_action.kind != CONTEXT_ACTION_NONE && !pressed_action.enabled) {
+        (void)snprintf(message, message_capacity,
+            "%s Double-tap [N] to return to the caravan.", pressed_action.detail);
+        return;
+    }
     ContextActionKind context_action = pressed_action.kind;
     if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) && context_action == CONTEXT_ACTION_NONE &&
         PointerOverContextAction(sim, local, *view, *selected, *selected_situation, ClientPointerPosition())) return;
@@ -8207,6 +8356,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
 
+    if (HandleCarriageTabs(local, *view)) return;
     if (HandlePonyInput(*journal, sim, local, *view, pressed_action, message, message_capacity)) return;
     if (context_action == CONTEXT_ACTION_STOP_APPROACH) {
         CcInteractionCancel(&local->interaction, "");
@@ -8601,21 +8751,22 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (*view == VIEW_LEDGER) return;
+    if (local->site_kind != CC_LOCAL_SITE_NONE &&
+        (*view == VIEW_LOCAL || *view == VIEW_CARRIAGE) &&
+        (context_action == CONTEXT_ACTION_RETURN_FROM_SITE ||
+         (*view == VIEW_CARRIAGE && ClientKeyPressed(KEY_ENTER)))) {
+        CcLocalSiteKind site = local->site_kind;
+        BeginSiteTravelState(local, site, true);
+        *view = VIEW_LOCAL;
+        (void)snprintf(message, message_capacity,
+                       "The carriage turns back toward town.");
+        return;
+    }
     if (*view == VIEW_CARRIAGE) {
-        if (ClientKeyPressed(KEY_BACKSPACE) ||
+        if (ClientKeyPressed(KEY_BACKSPACE) || ClientKeyPressed(KEY_ESCAPE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
             CcLocalAgentClearWorldTarget(&local->agent);
             *view = VIEW_LOCAL;
-            return;
-        }
-        if (local->site_kind != CC_LOCAL_SITE_NONE &&
-            (ClientKeyPressed(KEY_ENTER) ||
-             context_action == CONTEXT_ACTION_RETURN_FROM_SITE)) {
-            CcLocalSiteKind site = local->site_kind;
-            BeginSiteTravelState(local, site, true);
-            *view = VIEW_LOCAL;
-            (void)snprintf(message, message_capacity,
-                           "The carriage turns back toward town.");
             return;
         }
         if (local->site_kind == CC_LOCAL_SITE_NONE &&
@@ -8646,7 +8797,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
 
     if (CcCoopClientActive() &&
-        (ClientKeyPressed(KEY_F9) || ClientKeyPressed(KEY_N) ||
+        (ClientKeyPressed(KEY_F9) ||
          ClientKeyPressed(KEY_PERIOD) || ClientKeyPressed(KEY_K))) {
         (void)snprintf(message, message_capacity,
                        "Use the company road book to manage the shared world.");
@@ -9174,7 +9325,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     } else if (in_local_view) {
                         (void)snprintf(
                             message, message_capacity,
-                            "Can't walk there.");
+                            "Choose clear ground. Double-tap [N] to return to the caravan.");
                     }
                 }
             }
@@ -9200,23 +9351,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 "That road is for the carriage. Return to the yard to drive out.");
             return;
         }
-        if (local->journey_combat_active &&
-            local->agent.combat.life_state == CC_LIFE_DEAD &&
-            sim->journey.active) {
-            CcCommand defeated = {
-                .kind = CC_COMMAND_WITHDRAW_ENCOUNTER,
-                .amount = 1
-            };
-            if (ApplyCommand(*journal, sim, defeated, message,
-                             message_capacity)) {
-                ResetLocalStatePreservingAthletics(local);
-                *selected = FirstVisibleMapIndex(sim);
-                *view = VIEW_LOCAL;
-                (void)snprintf(message, message_capacity,
-                               "Defeated. The carriage withdrew under fire.");
-            }
-            return;
-        }
+        if (local->agent.combat.life_state == CC_LIFE_DEAD) return;
         if (local->journey_parley_active) {
             Vector2 collector = {CC_LOCAL_ROAD_PARLEY_X,
                                  CC_LOCAL_ROAD_PARLEY_Z};
@@ -9988,6 +10123,9 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--test-road-encounter-session") == 0) {
         return RunRoadEncounterSessionRegression();
     }
+    if (argc == 2 && strcmp(argv[1], "--test-party-wipe") == 0) {
+        return RunSoloPartyWipeRegression();
+    }
 #endif
     bool capture_ux = argc >= 4 && strcmp(argv[1], "--capture-ux") == 0;
     int32_t capture_ux_view = capture_ux ? atoi(argv[2]) : 0;
@@ -10461,7 +10599,7 @@ int main(int argc, char **argv)
     initial_width = 1280;
     initial_height = 720;
 #endif
-    if (capture_road_fork && argc >= 4) {
+    if ((capture_road_fork || capture_pony_book) && argc >= 4) {
         char *end = NULL;
         long width = strtol(argv[3], &end, 10);
         if (*end != '\0' || (width != 1040 && width != 1200 && width != 1280)) {
@@ -10469,7 +10607,7 @@ int main(int argc, char **argv)
             return 1;
         }
         initial_width = (int32_t)width;
-        initial_height = 700;
+        initial_height = capture_pony_book && initial_width == 1040 ? 620 : 700;
     }
     if (capture_ux && argc >= 5) {
         initial_width = atoi(argv[4]);
@@ -10491,8 +10629,8 @@ int main(int argc, char **argv)
 #endif
     SetExitKey(KEY_NULL);
 
-    SetWindowMinSize(normal_play || capture_road_fork || capture_ux ? 1040 : 1280,
-                     normal_play || capture_road_fork || capture_ux ? 620 : 760);
+    SetWindowMinSize(normal_play || capture_road_fork || capture_pony_book || capture_ux ? 1040 : 1280,
+                     normal_play || capture_road_fork || capture_pony_book || capture_ux ? 620 : 760);
     SetTargetFPS(render_benchmark || capture_action_reel ||
                  capture_gameplay_reel || capture_creature_reel ? 0 : 60);
     ClientMapTextures map_textures = {0};
@@ -11005,7 +11143,10 @@ int main(int argc, char **argv)
                                      pony_error, sizeof(pony_error))) return 1;
             }
         }
-        local.pony_book_open = capture_pony_book;
+        if (capture_pony_book) {
+            view = VIEW_CARRIAGE;
+            local.carriage_tab = CARRIAGE_PONIES;
+        }
         local.convoy.pace = 0.0f;
         local.world_carriage.pace = 0.0f;
     }
@@ -11374,6 +11515,7 @@ int main(int argc, char **argv)
     CcAudioSetMode(preferences.audio_mode);
     Rectangle local_bounds;
     double coop_checkpoint_time = 0.0;
+    int32_t coop_party_wipes = CcCoopClientPartyWipes();
     if (CcCoopClientActive() && journal != NULL) {
         coop_checkpoint_sim = &sim;
         coop_checkpoint_local = &local;
@@ -11403,7 +11545,8 @@ int main(int argc, char **argv)
             bool old_dungeon = sim.dungeon_expedition.active;
             char sync_error[256] = "";
             if (CcCoopClientPoll(&sim, sync_error, sizeof(sync_error)) &&
-                (old_location != sim.player.location_id || old_journey != sim.journey.active ||
+                (coop_party_wipes != CcCoopClientPartyWipes() ||
+                 old_location != sim.player.location_id || old_journey != sim.journey.active ||
                  old_route != sim.journey.route_id || old_phase != sim.journey.phase ||
                  old_dungeon != sim.dungeon_expedition.active)) {
                 LeaveOpenWorld(&local);
@@ -11418,7 +11561,13 @@ int main(int argc, char **argv)
                 selected = FirstOutgoingRouteIndex(&sim);
                 selected_situation = FirstActiveSituationIndex(&sim);
                 view = sim.dungeon_expedition.active ? VIEW_DUNGEON : VIEW_LOCAL;
+                if (coop_party_wipes != CcCoopClientPartyWipes()) {
+                    coop_party_wipes = CcCoopClientPartyWipes();
+                    (void)snprintf(message, sizeof(message),
+                        "Twenty years later. A new company takes up the carriage.");
+                }
             }
+            if (CcCoopClientDead()) CcLocalAgentDie(&local.agent);
         }
         local.adventure_ui = normal_play || capture_ux || capture_road_fork;
         if (normal_play && AdventureScene(&local)) local.course.automatic_alarm = false;
@@ -11433,7 +11582,7 @@ int main(int argc, char **argv)
         bool music_play_input = false;
         bool menu_frame = frontend.screen != FRONTEND_PLAYING;
         FrontendAction menu_action = FRONTEND_ACTION_NONE;
-        bool scene_owns_escape = local.interaction.approaching || local.pony_book_open || view == VIEW_CHARACTER ||
+        bool scene_owns_escape = local.interaction.approaching || view == VIEW_CARRIAGE || view == VIEW_CHARACTER ||
             view == VIEW_TRADE || view == VIEW_LEDGER || view == VIEW_SITUATIONS;
         if (normal_play && (frontend.screen != FRONTEND_PLAYING || !scene_owns_escape)) {
             menu_action = FrontendInput(&frontend);
@@ -11531,7 +11680,11 @@ int main(int argc, char **argv)
         } else if (render_benchmark || capture_ux || capture_road_fork) {
             ClientInputClearPressed();
         } else {
-            if (!menu_frame && !audio_clicked) HandleInput(&journal, &sim, &selected, &selected_situation,
+            if (local.agent.combat.life_state == CC_LIFE_DEAD) {
+                (void)CcLocalWorldUpdate(&local.course, &local.agent, &sim,
+                    world_delta_time, local.market_interior,
+                    !local.market_interior && local.site_kind == CC_LOCAL_SITE_NONE);
+            } else if (!menu_frame && !audio_clicked) HandleInput(&journal, &sim, &selected, &selected_situation,
                         &view, &return_view, &local,
                         local_target, local_bounds,
                         frame_delta_time,
@@ -11539,6 +11692,18 @@ int main(int argc, char **argv)
                         save_feedback, sizeof(save_feedback),
                         &save_feedback_age);
             ClientInputClearPressed();
+        }
+        if (normal_play && journal != NULL) {
+            if (CcCoopClientActive()) {
+                CcCoopClientLife(local.agent.combat.life_state == CC_LIFE_DEAD);
+            } else if (ResolveSoloPartyWipe(journal, &sim, &local, &view,
+                                           message, sizeof(message))) {
+                selected = FirstOutgoingRouteIndex(&sim);
+                selected_situation = FirstActiveSituationIndex(&sim);
+                return_view = VIEW_LOCAL;
+                (void)SaveClientWorld(journal, &sim, &local, save_path,
+                    session_path, save_feedback, sizeof(save_feedback));
+            }
         }
         if (normal_play && view == VIEW_PAUSE && frontend.screen == FRONTEND_PLAYING) {
             FrontendReturnFromBook(&frontend, &local, &view);
@@ -11771,9 +11936,9 @@ int main(int argc, char **argv)
             view != VIEW_CARRIAGE && view != VIEW_CHARACTER) {
             if (!local.adventure_ui) DrawCommandBar(view, &local);
         }
-        if (view == VIEW_LOCAL || local.pony_book_open || sim.pony_company.encounter >= 0) {
+        if (view == VIEW_LOCAL && sim.pony_company.encounter >= 0) {
             CcOverlayFlush();
-            DrawPonyInterface(&sim, &local);
+            DrawPonyEncounter(&sim);
         }
         if (performance_overlay) {
             CcOverlayFlush();

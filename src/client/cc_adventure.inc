@@ -220,7 +220,8 @@ static bool HandleAdventureScene(CcSim *sim, LocalState *local,
     if (chosen != NULL) {
         (void)CcInteractionStart(&local->interaction, chosen, position.x, position.y);
         if (!local->interaction.approaching) {
-            (void)snprintf(message, capacity, "%s", local->interaction.feedback);
+            (void)snprintf(message, capacity, "%s Double-tap [N] to return to the caravan.",
+                           local->interaction.feedback);
             return true;
         }
     } else if (click || IsKeyDown(KEY_W) || IsKeyDown(KEY_A) || IsKeyDown(KEY_S) ||
@@ -238,7 +239,8 @@ static bool HandleAdventureScene(CcSim *sim, LocalState *local,
     }
     if (!local->interaction.approaching) {
         CcLocalAgentStop(&local->agent);
-        (void)snprintf(message, capacity, "%s", local->interaction.feedback);
+        (void)snprintf(message, capacity, "%s Double-tap [N] to return to the caravan.",
+                           local->interaction.feedback);
         return true;
     }
     if (target != NULL && local->interaction.repath_seconds <= 0.0f &&
@@ -248,7 +250,8 @@ static bool HandleAdventureScene(CcSim *sim, LocalState *local,
         local->interaction.repath_seconds = target->key.kind == CC_INTERACTION_PERSON ? 0.5f : 1.5f;
         if (!walking) {
             CcInteractionCancel(&local->interaction, "Choose a clear path closer to this target.");
-            (void)snprintf(message, capacity, "%s", local->interaction.feedback);
+            (void)snprintf(message, capacity, "%s Double-tap [N] to return to the caravan.",
+                           local->interaction.feedback);
         }
     }
     (void)CcLocalWorldUpdate(&local->course, &local->agent, sim, dt,

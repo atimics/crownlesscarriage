@@ -2630,8 +2630,25 @@ static void CheckShippedSaveCompatibility(char *error,
     CC_CHECK(CcSimValidate(&replayed, error, error_capacity));
 }
 
+static void CheckSchema41Upgrade(void)
+{
+    const char *path = "schema41-upgrade.ccsave";
+    CcSim legacy, restored;
+    char error[256];
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 41U;
+    CcSimAdvanceDays(&legacy, 7);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    legacy.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&legacy));
+    RemoveDatabase(path);
+}
+
 int main(void)
 {
+    CheckSchema41Upgrade();
     const char *path = "persistence-test.ccsave";
     RemoveDatabase(path);
 

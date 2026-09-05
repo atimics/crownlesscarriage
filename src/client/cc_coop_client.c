@@ -16,6 +16,9 @@
 #endif
 
 EM_JS(int, CoopEnabled, (), { return Module.ccCoop && Module.ccCoop.enabled ? 1 : 0; });
+EM_JS(int, CoopDead, (), { return Module.ccCoop.dead() ? 1 : 0; });
+EM_JS(int, CoopPartyWipes, (), { return Module.ccCoop.partyWipes(); });
+EM_JS(void, CoopLife, (int dead), { Module.ccCoop.life(Boolean(dead)); });
 EM_JS(int, CoopOwner, (), { return Module.ccCoop.owner() ? 1 : 0; });
 EM_JS(void, CoopLobby, (), { Module.ccCoop.openLobby(); });
 EM_JS(void, CoopTitle, (), { location.assign(location.pathname); });
@@ -82,6 +85,9 @@ EM_JS(unsigned char *, CoopTake, (int *length), {
 #endif
 
 bool CcCoopClientActive(void) { return CoopEnabled() != 0; }
+bool CcCoopClientDead(void) { return CoopDead() != 0; }
+int32_t CcCoopClientPartyWipes(void) { return CoopPartyWipes(); }
+void CcCoopClientLife(bool dead) { CoopLife(dead ? 1 : 0); }
 bool CcCoopClientOwner(void) { return CoopOwner() != 0; }
 bool CcCoopClientDelete(char *error, size_t capacity) { return CoopDelete(error, (int)capacity) != 0; }
 void CcCoopClientOpenLobby(void) { CoopLobby(); }
@@ -160,6 +166,9 @@ bool CcCoopClientSkip(CcSim *sim, char *error, size_t capacity)
     (void)sim; (void)error; (void)capacity; return false;
 }
 bool CcCoopClientActive(void) { return false; }
+bool CcCoopClientDead(void) { return false; }
+int32_t CcCoopClientPartyWipes(void) { return 0; }
+void CcCoopClientLife(bool dead) { (void)dead; }
 bool CcCoopClientOwner(void) { return false; }
 bool CcCoopClientDelete(char *error, size_t capacity) { (void)error; (void)capacity; return false; }
 void CcCoopClientOpenLobby(void) { OpenURL("https://crownless.ratimics.com/"); }

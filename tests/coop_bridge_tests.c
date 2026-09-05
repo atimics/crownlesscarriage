@@ -1,7 +1,74 @@
 #include "multiplayer/cc_coop.h"
 #include "test_support.h"
+#include "persistence/cc_save.h"
 #include <stdlib.h>
 #include <string.h>
+
+static void CheckPartyWipe(void)
+{
+    char error[256];
+    CcSim *sim = CcCoopCreate(42U);
+    CcSim *replayed = CcCoopCreate(42U);
+    CC_CHECK(sim != NULL && replayed != NULL);
+    int32_t day = sim->current_day;
+    CcId ancestor = sim->characters[0].id;
+    sim->characters[0].death_day = day + 1;
+    CcCommand wipe = {.kind = CC_COMMAND_PARTY_WIPE, .target_id = (CcId)day};
+    (void)remove("party-wipe-test.ccsave");
+    CcJournal *journal = CcJournalStart("party-wipe-test.ccsave", sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalApply(journal, sim, &wipe, error, sizeof(error)));
+    CC_CHECK(sim->current_day == day + CC_PARTY_WIPE_DAYS);
+    CC_CHECK(sim->characters[0].id != ancestor && sim->character_deaths > 0);
+    CC_CHECK(sim->world_seed == 42U);
+    CC_CHECK(CcSimValidate(sim, error, sizeof(error)));
+    uint64_t hash = CcSimHash(sim);
+    CC_CHECK(!CcSimApply(sim, &wipe, error, sizeof(error)));
+    CC_CHECK(CcSimHash(sim) == hash);
+    CcJournalAbandon(&journal);
+    journal = CcJournalResume("party-wipe-test.ccsave", replayed, error, sizeof(error));
+    CC_CHECK(journal != NULL && CcSimHash(replayed) == hash);
+    CC_CHECK(CcJournalClose(&journal, replayed, error, sizeof(error)));
+    (void)remove("party-wipe-test.ccsave");
+
+    // Each active trip returns to the carriage before the world advances.
+    for (int32_t trip = 0; trip < 3; ++trip) {
+        CcSimInit(sim, 42U);
+        if (trip == 0) {
+            CC_CHECK(CcCoopApply(sim, "travel", sim->settlements[1].id,
+                                0, 0, error, sizeof(error)));
+        } else if (trip == 1) {
+            sim->player.location_id = sim->dungeons[0].settlement_id;
+            sim->carriage.location_id = sim->player.location_id;
+            sim->player.cargo[CC_GOOD_BREAD] = 4;
+            CC_CHECK(CcCoopApply(sim, "enter_dungeon", sim->dungeons[0].id,
+                                0, 0, error, sizeof(error)));
+        } else {
+            sim->pony_company.encounter = 0;
+        }
+        day = sim->current_day;
+        CC_CHECK(CcCoopApply(sim, "party_wipe", (CcId)day, 0, 0,
+                            error, sizeof(error)));
+        CC_CHECK(sim->current_day == day + CC_PARTY_WIPE_DAYS);
+        CC_CHECK(!sim->journey.active && !sim->dungeon_expedition.active);
+        CC_CHECK(sim->pony_company.encounter == -1);
+        CC_CHECK(sim->carriage.mode == CC_CARRIAGE_PARKED);
+        CC_CHECK(sim->carriage.location_id == sim->player.location_id);
+        unsigned char *bytes = NULL;
+        size_t length = 0;
+        CC_CHECK(CcCoopEncode(sim, &bytes, &length, error, sizeof(error)));
+        CC_CHECK(CcCoopDecode(replayed, bytes, length, error, sizeof(error)));
+        CcCoopFree(bytes);
+        CC_CHECK(CcSimHash(sim) == CcSimHash(replayed));
+    }
+    sim->current_day = CC_SIM_MAX_DAY - CC_PARTY_WIPE_DAYS + 1;
+    wipe.target_id = (CcId)sim->current_day;
+    hash = CcSimHash(sim);
+    CC_CHECK(!CcSimApply(sim, &wipe, error, sizeof(error)));
+    CC_CHECK(CcSimHash(sim) == hash);
+    CcCoopDestroy(sim);
+    CcCoopDestroy(replayed);
+}
 
 static void CheckSharedPonies(void)
 {
@@ -86,6 +153,7 @@ static void CheckSharedDepartureAndRoadStop(void)
 
 int main(void)
 {
+    CheckPartyWipe();
     CheckSharedDepartureAndRoadStop();
     CheckSharedPonies();
     char error[256];

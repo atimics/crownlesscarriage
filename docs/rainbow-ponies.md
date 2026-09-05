@@ -16,7 +16,9 @@ condition. They move to another road with a fresh request. **Keep travelling**
 or **Backspace** leaves the meeting; a completed request remains ready for a later visit.
 Ponies greet the carriage at most once per game day.
 
-Open the **Pony book** with its button or **F7**. Met ponies show their faces, names,
+Open the carriage interface and choose the **Ponies** tab. Press **2** or **F7**
+to select it, or **1** to return to **Overview**. **Esc** or **Backspace** steps
+away from the carriage. Met ponies show their faces, names,
 personalities, bonds, completed quests, releases, and last seen roads.
 Unmet ponies show a shared gray face and **??** until you meet them. The carriage and stable show the colors of your current companions.
 
@@ -48,4 +50,5 @@ The client review commands use the real interface and renderer:
 ```
 
 The swap and book captures also exercise quest completion, both swap keys, and
-opening and closing the book. CI saves these images as `pony-companion-review`.
+switching the carriage tabs. The book capture shows the **Ponies** tab inside
+the carriage interface. CI saves these images as `pony-companion-review`.

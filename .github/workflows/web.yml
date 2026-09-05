@@ -39,6 +39,7 @@ jobs:
           test -f out/build/web/site/index.html &&
           test -f out/build/web/site/index.wasm &&
           test -f out/build/web/site/index.data &&
+          test -f out/build/web/site/assets.js &&
           test -f out/build/web/site/licenses.html &&
           test -f out/build/web/site/LICENSE.txt &&
           test -f out/build/web/site/THIRD_PARTY_NOTICES.txt &&
@@ -52,15 +53,43 @@ jobs:
           test -f out/build/web/site/assets/exports/glb/state_market_recovery_v01.glb &&
           test -f out/build/web/site/assets/maps/gloamgate_to_alderwatch.png &&
           test -f out/build/web/site/assets/maps/collectible_map_atlas.png
+      - name: Upload the shared world game
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-world-game
+          path: out/build/web/site
+          include-hidden-files: true
+      - name: Upload Pages site
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: out/build/web/site
+
+  browser:
+    name: Browser checks / ${{ matrix.suite }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [single-player, shared-world]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared-world-game
+          path: out/build/web/site
       - name: Install browser test runtime
         run: |
           npm install --prefix "$RUNNER_TEMP/crownless-browser" --no-package-lock playwright@1.62.1
           node "$RUNNER_TEMP/crownless-browser/node_modules/playwright/cli.js" install --with-deps chromium
       - name: Test the built game in Chromium
+        if: matrix.suite == 'single-player'
         env:
           CC_PLAYWRIGHT_MODULE: ${{ runner.temp }}/crownless-browser/node_modules/playwright
         run: node tests/browser_tests.cjs out/build/web/site browser-results
       - name: Build the shared carriage host
+        if: matrix.suite == 'shared-world'
         run: |
           sudo apt-get update && sudo apt-get install -y libsqlite3-dev
           cmake -S . -B out/build/coop -DCC_BUILD_CLIENT=OFF -DCMAKE_BUILD_TYPE=Release
@@ -68,38 +97,39 @@ jobs:
           python3 -m venv out/build/coop/venv
           out/build/coop/venv/bin/python -m pip install -r tools/coop/requirements.txt
       - name: Test shared browser players
+        if: matrix.suite == 'shared-world'
         env:
           CC_PLAYWRIGHT_MODULE: ${{ runner.temp }}/crownless-browser/node_modules/playwright
           CC_COOP_PYTHON: out/build/coop/venv/bin/python
         run: node tests/coop_browser_tests.cjs out/build/coop/libcrownless_coop.so out/build/web/site
+      - name: Upload browser checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-results-${{ matrix.suite }}
+          path: browser-results
+          if-no-files-found: ignore
+
+  host:
+    name: Shared world release container
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared-world-game
+          path: out/build/web/site
       - name: Test the shared world release container
         run: |
           node tests/coop_edge_tests.mjs
           docker build --file tools/coop/Dockerfile --build-arg CROWNLESS_REVISION="$GITHUB_SHA" --tag crownless-host-check .
           node tests/coop_host_tests.mjs crownless-host-check
-      - name: Upload the shared world game
-        uses: actions/upload-artifact@v4
-        with:
-          name: shared-world-game
-          path: out/build/web/site
-          include-hidden-files: true
-      - name: Upload browser checks
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: browser-results
-          path: browser-results
-          if-no-files-found: ignore
-      - name: Upload Pages site
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: out/build/web/site
 
   deploy:
     name: Deploy GitHub Pages
     if: github.event_name != 'pull_request'
-    needs: build
+    needs: [build, browser, host]
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -115,7 +145,7 @@ jobs:
   deploy-shared-world:
     name: Deploy shared world to Fly
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.CROWNLESS_FLY_APP != ''
-    needs: build
+    needs: [build, browser, host]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
