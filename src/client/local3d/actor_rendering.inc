@@ -4727,8 +4727,12 @@ void CcLocalDrawAvatarPreview3D(const CcLocalAgent *agent,
     EndMode3D();
     EndTextureMode();
     face_render_context = previous;
+    float crop_width = fminf((float)target.texture.width,
+        (float)target.texture.height * bounds.width / bounds.height);
+    float crop_height = crop_width * bounds.height / bounds.width;
     DrawTexturePro(target.texture,
-        (Rectangle){0, 0, (float)target.texture.width, -(float)target.texture.height},
+        (Rectangle){((float)target.texture.width - crop_width) * 0.5f,
+                    ((float)target.texture.height - crop_height) * 0.5f, crop_width, -crop_height},
         bounds, (Vector2){0, 0}, 0, WHITE);
 }
 

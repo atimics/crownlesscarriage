@@ -418,10 +418,15 @@ EM_ASYNC_JS(int, ClientFlushBrowserPreferences,
         return 0;
     }
 });
-EM_JS(void, ClientBrowserFrontend, (const char *screen, int focus), {
+EM_JS(void, ClientBrowserFrontend, (const char *screen, int focus, int avatar), {
     Module.crownlessScreen = UTF8ToString(screen);
     Module.crownlessMenuFocus = focus;
+    Module.crownlessAvatarDraft = avatar;
 });
+EM_JS(void, ClientBrowserFullscreen, (), {
+    Module.toggleCrownlessFullscreen();
+});
+EM_JS(void, ClientBrowserTouchControls, (), { Module.toggleCrownlessTouch(); });
 EM_JS(int, ClientBrowserCampaignAccess, (), {
     return Number.isInteger(Module.crownlessCampaignAccess)
         ? Module.crownlessCampaignAccess : 1;
@@ -10407,7 +10412,7 @@ int main(int argc, char **argv)
         }
     }
 #endif
-    if (CcCoopClientActive() || CcCoopClientPreview())
+    if (CcCoopClientActive())
         (void)snprintf(save_path, sizeof(save_path), "/tmp/crownless-coop.ccsave");
     char session_path[704];
     char lock_path[704];
@@ -10421,7 +10426,7 @@ int main(int argc, char **argv)
         (void)fprintf(stderr, "Campaign companion path is too long.\n");
         return 1;
     }
-    bool normal_play = !capture && !render_benchmark && !CcCoopClientPreview();
+    bool normal_play = !capture && !render_benchmark;
     CcClientPreferences preferences;
     CcClientPreferencesDefault(&preferences);
     if (normal_play) {
@@ -10526,8 +10531,6 @@ int main(int argc, char **argv)
         (void)snprintf(startup_message, sizeof(startup_message), "%s",
                        journal != NULL ? "The company shares this carriage and clock." : error);
         CcCoopClientReady(journal != NULL ? "" : error);
-    } else if (CcCoopClientPreview()) {
-        (void)snprintf(startup_message, sizeof(startup_message), "Your traveller.");
     } else if (capture || render_benchmark) {
         CcSimAdvanceDays(&sim, 28);
     } else {
@@ -11388,17 +11391,9 @@ int main(int argc, char **argv)
 #if defined(PLATFORM_WEB)
         ClientWaitForAnimationFrame();
 #endif
-        if (CcCoopClientActive() || CcCoopClientPreview()) {
-            local.agent.appearance = CcNpcPlayerAppearance(CcCoopClientAppearance());
-        }
-        if (CcCoopClientPreview()) {
-            CcLocalAgentUpdate(&local.agent, fminf(GetFrameTime(), 0.05f), false);
-            CcLocalRendererBeginFrame(GetFrameTime());
-            BeginDrawing();
-            CcLocalDrawAvatarPreview3D(&local.agent, local_target,
-                (Rectangle){0, 0, (float)GetScreenWidth(), (float)GetScreenHeight()});
-            EndDrawing();
-            continue;
+        if (normal_play) {
+            local.agent.appearance = CcNpcPlayerAppearance(CcCoopClientActive() ?
+                CcCoopClientAppearance() : preferences.avatar);
         }
         if (CcCoopClientActive()) {
             CcId old_location = sim.player.location_id;
@@ -11446,7 +11441,7 @@ int main(int argc, char **argv)
             if (menu_action != FRONTEND_ACTION_NONE) menu_frame = true;
             HandleFrontendAction(&frontend, menu_action, &journal, &sim,
                                  &local, &view, &return_view, &selected,
-                                 &selected_situation, save_path, session_path);
+                                 &selected_situation, save_path, session_path, preferences_path);
         }
         float world_delta_time = menu_frame ? 0.0f : frame_delta_time;
         save_feedback_age = fminf(
@@ -11812,12 +11807,13 @@ int main(int argc, char **argv)
             CcCoopClientDrawn(crew, crew_count);
         }
         if (frontend.screen != FRONTEND_PLAYING) {
-            DrawFrontend(&frontend, &preferences, &sim);
+            DrawFrontend(&frontend, &preferences, &sim, local_target);
         }
 #if defined(PLATFORM_WEB)
         ClientBrowserFrontend(frontend.screen == FRONTEND_TITLE ? "title" :
             frontend.screen == FRONTEND_PAUSED ? "paused" :
-            frontend.screen == FRONTEND_DELETE ? "delete" : "playing", frontend.focus);
+            frontend.screen == FRONTEND_DELETE ? "delete" :
+            frontend.screen == FRONTEND_AVATAR ? "avatar" : "playing", frontend.focus, (int)frontend.avatar);
 #endif
         ClientTouchEnd();
         EndDrawing();

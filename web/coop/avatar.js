@@ -15,5 +15,8 @@ var CcAvatar = (function () {
     const checked = normalize(value);
     return fields.reduce((packed, key, i) => packed | (checked[key] << (i * 3)), 0);
   }
-  return {options, fields, normalize, pack};
+  function unpack(value) {
+    return normalize(Object.fromEntries(fields.map((key, i) => [key, (value >>> (i * 3)) & 7])));
+  }
+  return {options, fields, normalize, pack, unpack};
 })();

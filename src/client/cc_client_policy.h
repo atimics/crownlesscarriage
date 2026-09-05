@@ -10,6 +10,7 @@ typedef struct CcClientPreferences {
     int32_t text_size; /* 0: standard, 1: large, 2: largest */
     bool focus_hints;
     int32_t audio_mode; /* 0: full, 1: effects, 2: muted */
+    uint32_t avatar; /* Five appearance choices, three bits per choice. */
 } CcClientPreferences;
 
 typedef enum CcClientConvoyGait {

@@ -3,14 +3,12 @@
   const canvas = document.querySelector('#canvas');
   const panel = document.querySelector('#touch-panel');
   if (!canvas || !panel) return;
-  if (Module.ccCoop?.preview) return;
   const actions = document.querySelector('#touch-actions');
   const title = document.querySelector('#touch-title');
   const detail = document.querySelector('#touch-detail');
   const shortcuts = document.querySelector('#touch-shortcuts');
   const reading = document.querySelector('#touch-reading');
   const readingPanel = document.querySelector('#touch-reading-panel');
-  const toggle = document.querySelector('#touch-toggle');
   const smallScreen = window.matchMedia('(max-width: 680px)');
   const coarsePointer = window.matchMedia('(any-pointer: coarse)');
   let preference = null;
@@ -22,15 +20,7 @@
       (coarsePointer.matches || (smallScreen.matches && navigator.maxTouchPoints > 0));
     document.body.classList.toggle('touch-mode', Module.crownlessTouchEnabled);
     panel.hidden = !Module.crownlessTouchEnabled;
-    toggle.setAttribute('aria-pressed', String(Module.crownlessTouchEnabled));
-    if (Module.crownlessTouchEnabled) {
-      document.querySelector('#hint').textContent =
-        'Tap the scene to walk or approach. Use the buttons for actions. Turn your phone for a wider view.';
-      if (frame) Module.renderCrownlessTouch(frame);
-    } else {
-      document.querySelector('#hint').textContent =
-        'Choose Offline and Play. Esc opens the game menu. Saves stay in this browser.';
-    }
+    if (Module.crownlessTouchEnabled && frame) Module.renderCrownlessTouch(frame);
   }
 
   Module.renderCrownlessTouch = function (next) {
@@ -68,10 +58,10 @@
     while (actions.children.length > next.buttons.length) actions.lastElementChild.remove();
   };
 
-  toggle.addEventListener('click', () => {
+  Module.toggleCrownlessTouch = () => {
     preference = !Module.crownlessTouchEnabled;
     updateMode();
-  });
+  };
   smallScreen.addEventListener('change', updateMode);
   coarsePointer.addEventListener('change', updateMode);
   panel.addEventListener('keydown', event => event.stopPropagation());

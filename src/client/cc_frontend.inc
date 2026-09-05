@@ -3,7 +3,8 @@ typedef enum FrontendScreen {
     FRONTEND_TITLE,
     FRONTEND_PLAYING,
     FRONTEND_PAUSED,
-    FRONTEND_DELETE
+    FRONTEND_DELETE,
+    FRONTEND_AVATAR
 } FrontendScreen;
 
 typedef enum FrontendAction {
@@ -22,7 +23,20 @@ typedef enum FrontendAction {
     FRONTEND_ACTION_QUIT,
     FRONTEND_ACTION_BOOK,
     FRONTEND_ACTION_TEXT,
-    FRONTEND_ACTION_HINTS
+    FRONTEND_ACTION_HINTS,
+    FRONTEND_ACTION_AVATAR,
+    FRONTEND_ACTION_SKIN,
+    FRONTEND_ACTION_HAIR,
+    FRONTEND_ACTION_STYLE,
+    FRONTEND_ACTION_FACE,
+    FRONTEND_ACTION_COAT,
+    FRONTEND_ACTION_SAVE_AVATAR,
+    FRONTEND_ACTION_CANCEL_AVATAR,
+    FRONTEND_ACTION_FULLSCREEN,
+    FRONTEND_ACTION_COMPANY,
+    FRONTEND_ACTION_HOST_PAUSE,
+    FRONTEND_ACTION_CREDITS,
+    FRONTEND_ACTION_TOUCH
 } FrontendAction;
 
 typedef struct FrontendState {
@@ -32,8 +46,30 @@ typedef struct FrontendState {
     bool needs_initial_save;
     bool quit;
     int focus;
+    FrontendScreen avatar_return;
+    uint32_t avatar;
     char feedback[256];
 } FrontendState;
+
+static CcLocalAgent frontend_avatar_preview;
+static const int frontend_avatar_counts[] = {6, 6, 6, 4, 6};
+static const char *frontend_avatar_labels[] = {"Skin", "Hair colour", "Hair style", "Face", "Coat"};
+static const char *frontend_avatar_options[5][6] = {
+    {"Warm", "Fair", "Sand", "Copper", "Umber", "Deep"},
+    {"Ink", "Chestnut", "Auburn", "Gold", "Silver", "Chalk"},
+    {"Cropped", "Swept", "Bob", "Crest", "Braided", "Long"},
+    {"Square", "Long", "Broad", "Weathered", NULL, NULL},
+    {"Plum", "Moss", "Rust", "Ocean", "Ochre", "Charcoal"}
+};
+
+static void FrontendChangeAvatar(FrontendState *state, int field, int direction)
+{
+    unsigned int shift = (unsigned int)field * 3U;
+    int value = (int)((state->avatar >> shift) & 7U);
+    value = (value + direction + frontend_avatar_counts[field]) % frontend_avatar_counts[field];
+    state->avatar = (state->avatar & ~(7U << shift)) | ((uint32_t)value << shift);
+    state->feedback[0] = '\0';
+}
 
 typedef struct FrontendItem {
     FrontendAction action;
@@ -44,7 +80,7 @@ typedef struct FrontendItem {
 
 static Rectangle FrontendPanel(FrontendScreen screen)
 {
-    float width = screen == FRONTEND_PAUSED ? 920.0f : 440.0f;
+    float width = screen == FRONTEND_PAUSED || screen == FRONTEND_AVATAR ? 920.0f : 440.0f;
     return (Rectangle){((float)GetScreenWidth() - width) * 0.5f,
                        ((float)GetScreenHeight() - 556.0f) * 0.5f,
                        width, 556.0f};
@@ -62,13 +98,26 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
             {x + 189.0f, y + 20.0f, 179.0f, 44.0f}, "Online", true};
         items[2] = (FrontendItem){FRONTEND_ACTION_PLAY,
             {x, y + 138.0f, 368.0f, 52.0f}, "Play", true};
-        items[3] = (FrontendItem){FRONTEND_ACTION_QUIT,
-            {x, y + 246.0f, 368.0f, 40.0f}, "Quit game", true};
+        items[3] = (FrontendItem){FRONTEND_ACTION_AVATAR,
+            {x, y + 234.0f, 368.0f, 40.0f}, "Your traveller", true};
+        items[4] = (FrontendItem){FRONTEND_ACTION_QUIT,
+            {x, y + 282.0f, 368.0f, 36.0f}, "Quit game", true};
 #if defined(PLATFORM_WEB)
-        return 3;
-#else
         return 4;
+#else
+        return 5;
 #endif
+    }
+    if (state->screen == FRONTEND_AVATAR) {
+        for (int i = 0; i < 5; ++i) {
+            items[i] = (FrontendItem){(FrontendAction)(FRONTEND_ACTION_SKIN + i),
+                {panel.x + 496.0f, y + (float)i * 52.0f, 388, 42}, frontend_avatar_labels[i], true};
+        }
+        items[5] = (FrontendItem){FRONTEND_ACTION_SAVE_AVATAR,
+            {panel.x + 496.0f, y + 274, 236, 44}, "Save appearance", true};
+        items[6] = (FrontendItem){FRONTEND_ACTION_CANCEL_AVATAR,
+            {panel.x + 744.0f, y + 274, 140, 44}, "Cancel", true};
+        return 7;
     }
     if (state->screen == FRONTEND_DELETE) {
         items[0] = (FrontendItem){FRONTEND_ACTION_CANCEL,
@@ -101,8 +150,23 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
     }
     float right = panel.x + 496.0f;
     items[count++] = (FrontendItem){FRONTEND_ACTION_BOOK, {right, y, 388, 44}, "Company Book  B", true};
-    items[count++] = (FrontendItem){FRONTEND_ACTION_TEXT, {right, y + 56, 388, 44}, "Text size  T", true};
-    items[count++] = (FrontendItem){FRONTEND_ACTION_HINTS, {right, y + 112, 388, 44}, "Target hints  H", true};
+    items[count++] = (FrontendItem){FRONTEND_ACTION_TEXT, {right, y + 48, 388, 40}, "Text size  T", true};
+    items[count++] = (FrontendItem){FRONTEND_ACTION_HINTS, {right, y + 96, 388, 40}, "Target hints  H", true};
+    items[count++] = (FrontendItem){FRONTEND_ACTION_AVATAR, {right, y + 144, 388, 40}, "Your traveller", true};
+    items[count++] = (FrontendItem){FRONTEND_ACTION_FULLSCREEN, {right, y + 192, 388, 40}, "Full screen", true};
+    float credits_y = y + 240;
+    if (CcCoopClientActive()) {
+        items[count++] = (FrontendItem){FRONTEND_ACTION_COMPANY, {right, y + 240, 388, 40}, "Company & invitations", true};
+        if (CcCoopClientOwner()) {
+            items[count++] = (FrontendItem){FRONTEND_ACTION_HOST_PAUSE, {right, y + 288, 388, 40},
+                CcCoopClientPaused() ? "Resume shared world" : "Pause shared world", true};
+        }
+        credits_y = y + 336;
+    }
+    items[count++] = (FrontendItem){FRONTEND_ACTION_CREDITS, {right, credits_y, 388, 36}, "Licenses & credits", true};
+#if defined(PLATFORM_WEB)
+    items[count++] = (FrontendItem){FRONTEND_ACTION_TOUCH, {x, y + 270, 368, 36}, "Touch controls", true};
+#endif
     return count;
 }
 
@@ -131,6 +195,8 @@ static FrontendAction FrontendInput(FrontendState *state)
             return FRONTEND_ACTION_RESUME;
         } else if (state->screen == FRONTEND_DELETE) {
             return FRONTEND_ACTION_CANCEL;
+        } else if (state->screen == FRONTEND_AVATAR) {
+            return FRONTEND_ACTION_CANCEL_AVATAR;
         }
         return FRONTEND_ACTION_NONE;
     }
@@ -141,7 +207,7 @@ static FrontendAction FrontendInput(FrontendState *state)
         if (ClientKeyPressed(KEY_H)) return FRONTEND_ACTION_HINTS;
         if (ClientKeyPressed(KEY_F5)) return FRONTEND_ACTION_SAVE;
     }
-    FrontendItem items[10];
+    FrontendItem items[16];
     int count = FrontendItems(state, items);
     if (state->focus < 0 || state->focus >= count) state->focus = 0;
     int direction = ClientKeyPressed(KEY_UP) ? -1 :
@@ -154,6 +220,11 @@ static FrontendAction FrontendInput(FrontendState *state)
     if (state->screen == FRONTEND_TITLE &&
         (ClientKeyPressed(KEY_LEFT) || ClientKeyPressed(KEY_RIGHT))) {
         return state->online ? FRONTEND_ACTION_OFFLINE : FRONTEND_ACTION_ONLINE;
+    }
+    if (state->screen == FRONTEND_AVATAR && state->focus < 5 &&
+        (ClientKeyPressed(KEY_LEFT) || ClientKeyPressed(KEY_RIGHT))) {
+        FrontendChangeAvatar(state, state->focus, ClientKeyPressed(KEY_LEFT) ? -1 : 1);
+        return FRONTEND_ACTION_NONE;
     }
     if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         for (int i = 0; i < count; ++i) {
@@ -209,9 +280,64 @@ static bool DeleteClientWorld(CcJournal **journal, CcSim *sim,
 static void HandleFrontendAction(FrontendState *state, FrontendAction action,
     CcJournal **journal, CcSim *sim, LocalState *local,
     ClientView *view, ClientView *return_view, int32_t *selected,
-    int32_t *selected_situation, const char *save_path, const char *session_path)
+    int32_t *selected_situation, const char *save_path, const char *session_path,
+    const char *preferences_path)
 {
-    if (action == FRONTEND_ACTION_BOOK) {
+    if (action == FRONTEND_ACTION_AVATAR) {
+        state->avatar_return = state->screen;
+        state->avatar = CcCoopClientActive() ? CcCoopClientAppearance() :
+            adventure_preferences != NULL ? adventure_preferences->avatar : 0U;
+        CcLocalAgentInit(&frontend_avatar_preview, (Vector2){0, 0}, false);
+        FrontendOpen(state, FRONTEND_AVATAR);
+    } else if (action >= FRONTEND_ACTION_SKIN && action <= FRONTEND_ACTION_COAT) {
+        FrontendChangeAvatar(state, (int)(action - FRONTEND_ACTION_SKIN), 1);
+    } else if (action == FRONTEND_ACTION_CANCEL_AVATAR) {
+        FrontendOpen(state, state->avatar_return);
+    } else if (action == FRONTEND_ACTION_SAVE_AVATAR) {
+        bool saved = false;
+        if (CcCoopClientActive()) {
+            saved = CcCoopClientSetAppearance(state->avatar, state->feedback, sizeof(state->feedback));
+        } else if (adventure_preferences != NULL) {
+            CcClientPreferences next = *adventure_preferences;
+            next.avatar = state->avatar;
+            saved = CcClientPreferencesSave(preferences_path, &next, state->feedback, sizeof(state->feedback));
+#if defined(PLATFORM_WEB)
+            if (saved && ClientFlushBrowserPreferences(preferences_path) == 0) {
+                saved = false;
+                (void)snprintf(state->feedback, sizeof(state->feedback), "Check browser storage, then save your appearance again.");
+                (void)CcClientPreferencesSave(preferences_path, adventure_preferences, NULL, 0U);
+            }
+#endif
+            if (saved) *adventure_preferences = next;
+        }
+        if (saved) {
+            local->agent.appearance = CcNpcPlayerAppearance(state->avatar);
+            FrontendOpen(state, state->avatar_return);
+            (void)snprintf(state->feedback, sizeof(state->feedback), "Appearance saved.");
+        }
+    } else if (action == FRONTEND_ACTION_FULLSCREEN) {
+#if defined(PLATFORM_WEB)
+        ClientBrowserFullscreen();
+#else
+        ToggleFullscreen();
+#endif
+    } else if (action == FRONTEND_ACTION_TOUCH) {
+#if defined(PLATFORM_WEB)
+        ClientBrowserTouchControls();
+#endif
+    } else if (action == FRONTEND_ACTION_CREDITS) {
+#if defined(PLATFORM_WEB)
+        OpenURL("licenses.html");
+#else
+        OpenURL("https://atimics.github.io/crownlesscarriage/licenses.html");
+#endif
+    } else if (action == FRONTEND_ACTION_COMPANY) {
+        CcCoopClientOpenCompany();
+    } else if (action == FRONTEND_ACTION_HOST_PAUSE) {
+        if (CcCoopClientTogglePause(state->feedback, sizeof(state->feedback)))
+            (void)snprintf(state->feedback, sizeof(state->feedback), "%s",
+                CcCoopClientPaused() ? "Shared world paused." : "Shared world resumed.");
+    } else if (action == FRONTEND_ACTION_BOOK) {
         local->pause_return_view = *view;
         *return_view = VIEW_PAUSE;
         *view = VIEW_LEDGER;
@@ -318,7 +444,8 @@ static void FrontendCenteredText(const char *text, int y, int size, Color color)
 }
 
 static void DrawFrontend(const FrontendState *state,
-                         const CcClientPreferences *preferences, const CcSim *sim)
+                         const CcClientPreferences *preferences, const CcSim *sim,
+                         RenderTexture2D preview_target)
 {
     ClientTouchBegin();
     Rectangle panel = FrontendPanel(state->screen);
@@ -328,6 +455,7 @@ static void DrawFrontend(const FrontendState *state,
     int top = (int)panel.y;
     FrontendCenteredText("CROWNLESS CARRIAGE", top + 38, 14, CC_GOLD);
     const char *title = state->screen == FRONTEND_TITLE ? "The road awaits" :
+        state->screen == FRONTEND_AVATAR ? "Your traveller" :
         state->screen == FRONTEND_DELETE ? "Delete this world?" :
         CcCoopClientActive() ? "Company menu" : "Journey paused";
     ClientTouchHeading(title, state->feedback[0] != '\0' ? state->feedback :
@@ -350,12 +478,17 @@ static void DrawFrontend(const FrontendState *state,
         FrontendCenteredText(CcCoopClientActive() ? "for everyone in the company." :
             "from this device.", top + 189, 16, INK);
         FrontendCenteredText("Your next Play begins a new world.", top + 224, 14, MUTED);
+    } else if (state->screen == FRONTEND_AVATAR) {
+        FrontendCenteredText("Choose a look for the road", top + 120, 14, MUTED);
+        frontend_avatar_preview.appearance = CcNpcPlayerAppearance(state->avatar);
+        CcLocalDrawAvatarPreview3D(&frontend_avatar_preview, preview_target,
+            (Rectangle){panel.x + 36, panel.y + 148, 424, 318});
     } else {
         FrontendCenteredText(CcCoopClientActive() ? "ONLINE  /  THE COMPANY KEEPS PLAYING" :
             TextFormat("OFFLINE  /  DAY %d", sim->current_day),
                              top + 120, 12, MUTED);
     }
-    FrontendItem items[10];
+    FrontendItem items[16];
     int count = FrontendItems(state, items);
     for (int i = 0; i < count; ++i) {
         FrontendItem item = items[i];
@@ -364,6 +497,7 @@ static void DrawFrontend(const FrontendState *state,
         bool danger = item.action == FRONTEND_ACTION_DELETE ||
                       item.action == FRONTEND_ACTION_CONFIRM_DELETE;
         bool primary = item.action == FRONTEND_ACTION_PLAY ||
+                       item.action == FRONTEND_ACTION_SAVE_AVATAR ||
                        item.action == FRONTEND_ACTION_RESUME;
         bool hover = CheckCollisionPointRec(ClientPointerPosition(), item.bounds);
         Color accent = danger ? DANGER : selected || primary ? TEAL : CC_GOLD;
@@ -374,6 +508,12 @@ static void DrawFrontend(const FrontendState *state,
             i == state->focus ? 2.0f : 1.0f,
             Fade(accent, item.enabled ? (i == state->focus || selected ? 1.0f : 0.45f) : 0.18f));
         const char *label = item.label;
+        if (item.action >= FRONTEND_ACTION_SKIN && item.action <= FRONTEND_ACTION_COAT) {
+            int field = (int)(item.action - FRONTEND_ACTION_SKIN);
+            unsigned int choice = (state->avatar >> ((unsigned int)field * 3U)) & 7U;
+            label = TextFormat("%s: %s  >", frontend_avatar_labels[field],
+                frontend_avatar_options[field][choice < (unsigned int)frontend_avatar_counts[field] ? choice : 0]);
+        }
         if (item.action == FRONTEND_ACTION_SOUND) {
             label = preferences->audio_mode == 0 ? "Sound: full" :
                     preferences->audio_mode == 1 ? "Sound: effects" : "Sound: muted";
@@ -391,12 +531,6 @@ static void DrawFrontend(const FrontendState *state,
             (int)(item.bounds.y + (item.bounds.height - (float)size) * 0.5f),
             size, Fade(danger ? DANGER : INK, item.enabled ? 1.0f : 0.35f));
     }
-    if (state->screen == FRONTEND_PAUSED) {
-        const char *help[] = {"Click people and doors to approach.", "E selects a target. F acts.",
-            "B opens the book. Q reads promises.", "Esc returns or opens this menu."};
-        for (int i = 0; i < 4; ++i) DrawText(help[i], (int)panel.x + 496,
-            top + 345 + i * 25, 14 + preferences->text_size * 2, MUTED);
-    }
     if (state->feedback[0] != '\0') {
         /* Wrap long save errors inside the panel. */
         char line[64];
@@ -408,6 +542,7 @@ static void DrawFrontend(const FrontendState *state,
     }
     FrontendCenteredText(state->screen == FRONTEND_TITLE ?
         "ARROWS / TAB  Choose     ENTER  Select" :
+        state->screen == FRONTEND_AVATAR ? "UP / DOWN  Choose     LEFT / RIGHT  Change     ESC  Cancel" :
         "ESC  Back     ARROWS / TAB  Choose     ENTER  Select", top + 531, 10, MUTED);
 }
 
@@ -437,14 +572,42 @@ static int RunFrontendRegression(void)
     } \
 } while (0)
 #define FRONTEND_ACT(action) HandleFrontendAction(&state, action, &journal, &sim, \
-    &local, &view, &return_view, &selected, &selected_situation, save_path, session_path)
+    &local, &view, &return_view, &selected, &selected_situation, save_path, session_path, preferences_path)
     FRONTEND_CHECK(!CampaignSaveExists(save_path));
     FRONTEND_ACT(FRONTEND_ACTION_ONLINE);
-    FrontendItem items[10];
+    FrontendItem items[16];
     (void)FrontendItems(&state, items);
     FRONTEND_CHECK(items[2].enabled && items[2].action == FRONTEND_ACTION_PLAY);
     FRONTEND_CHECK(state.screen == FRONTEND_TITLE && journal == NULL);
     FRONTEND_CHECK(!CampaignSaveExists(save_path));
+    CcClientPreferences avatar_preferences = {0};
+    adventure_preferences = &avatar_preferences;
+    FRONTEND_ACT(FRONTEND_ACTION_AVATAR);
+    FRONTEND_CHECK(state.screen == FRONTEND_AVATAR && state.avatar_return == FRONTEND_TITLE);
+    FRONTEND_ACT(FRONTEND_ACTION_COAT);
+    FRONTEND_ACT(FRONTEND_ACTION_CANCEL_AVATAR);
+    FRONTEND_CHECK(state.screen == FRONTEND_TITLE && avatar_preferences.avatar == 0U);
+    FRONTEND_ACT(FRONTEND_ACTION_AVATAR);
+    FrontendChangeAvatar(&state, 3, -1);
+    FRONTEND_CHECK(state.avatar == (3U << 9U));
+    FRONTEND_ACT(FRONTEND_ACTION_FACE);
+    FRONTEND_CHECK(state.avatar == 0U);
+    FRONTEND_ACT(FRONTEND_ACTION_COAT);
+    FRONTEND_ACT(FRONTEND_ACTION_SAVE_AVATAR);
+    FRONTEND_CHECK(state.screen == FRONTEND_TITLE && avatar_preferences.avatar == (1U << 12U));
+    FRONTEND_CHECK(!CampaignSaveExists(save_path));
+    CcClientPreferences restored_avatar;
+    FRONTEND_CHECK(CcClientPreferencesLoad(preferences_path, &restored_avatar, state.feedback, sizeof(state.feedback)));
+    FRONTEND_CHECK(restored_avatar.avatar == avatar_preferences.avatar);
+    FRONTEND_ACT(FRONTEND_ACTION_AVATAR);
+    FRONTEND_ACT(FRONTEND_ACTION_SKIN);
+    HandleFrontendAction(&state, FRONTEND_ACTION_SAVE_AVATAR, &journal, &sim,
+        &local, &view, &return_view, &selected, &selected_situation,
+        save_path, session_path, "missing-avatar-directory/settings");
+    FRONTEND_CHECK(state.screen == FRONTEND_AVATAR && state.feedback[0] != '\0');
+    FRONTEND_CHECK(avatar_preferences.avatar == restored_avatar.avatar);
+    FRONTEND_ACT(FRONTEND_ACTION_CANCEL_AVATAR);
+    adventure_preferences = NULL;
     FRONTEND_ACT(FRONTEND_ACTION_OFFLINE);
     FRONTEND_ACT(FRONTEND_ACTION_PLAY);
     FRONTEND_CHECK(state.screen == FRONTEND_PLAYING && state.has_world && journal != NULL);
@@ -456,6 +619,10 @@ static int RunFrontendRegression(void)
     FRONTEND_CHECK(FrontendInput(&state) == FRONTEND_ACTION_NONE);
     ClientInputClearPressed();
     FRONTEND_CHECK(state.screen == FRONTEND_PAUSED && view == VIEW_MAP);
+    FRONTEND_ACT(FRONTEND_ACTION_AVATAR);
+    FRONTEND_CHECK(state.avatar_return == FRONTEND_PAUSED);
+    FRONTEND_ACT(FRONTEND_ACTION_CANCEL_AVATAR);
+    FRONTEND_CHECK(state.screen == FRONTEND_PAUSED && view == VIEW_MAP && sim.clock.tick == first_tick);
     FRONTEND_ACT(FRONTEND_ACTION_DELETE);
     FRONTEND_CHECK(state.screen == FRONTEND_DELETE && state.focus == 0);
     FRONTEND_ACT(FRONTEND_ACTION_CANCEL);
