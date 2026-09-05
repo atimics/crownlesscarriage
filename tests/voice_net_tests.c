@@ -1,3 +1,7 @@
+#if !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "client/cc_voice_net.h"
 #include "test_support.h"
 #include <stdlib.h>
