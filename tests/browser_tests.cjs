@@ -65,7 +65,7 @@ async function main() {
   });
   try {
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
-    await page.waitForFunction(() => window.Module && Module.crownlessCampaignAccess === 0 && document.querySelector('#loading').hidden && window.shaderLinks.some(link => link.skinned), {timeout: 120000});
+    await page.waitForFunction(() => window.Module && Module.crownlessCampaignAccess === 0 && document.querySelector('#loading').hidden && window.shaderLinks.some(link => link.skinned), undefined, {timeout: 120000});
     await page.waitForFunction(() => Module.crownlessScreen === 'title');
     const startupMemory = await page.evaluate(() => {
       const buffers = new Set();

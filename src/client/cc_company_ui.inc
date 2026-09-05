@@ -51,12 +51,12 @@ EM_JS(void, CompanyInvitationLink, (const char *code, char *link, int capacity),
 });
 #pragma clang diagnostic pop
 #else
-static int CompanySharedHost(void) { return 1; }
 static void CompanyInvitation(char *invitation, int capacity) { (void)capacity; invitation[0] = '\0'; }
 static int CompanyCopyInvitation(const char *invitation)
 {
     SetClipboardText(invitation);
-    return 1;
+    const char *copied = GetClipboardText();
+    return copied != NULL && strcmp(copied, invitation) == 0;
 }
 static void CompanyInvitationLink(const char *code, char *link, int capacity)
 {
@@ -152,7 +152,9 @@ static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
     }
     if (FrontendIsCompanyField(action)) { state->text_field = action; return true; }
     if (action == FRONTEND_ACTION_WORLD_LIST) {
+#if defined(PLATFORM_WEB)
         if (!CompanySharedHost()) return true;
+#endif
         FrontendOpen(state, FRONTEND_WORLDS);
         state->world_page = 0;
         (void)CcCompanyList(&state->company, state->feedback, sizeof(state->feedback));

@@ -83,7 +83,7 @@ static uint32_t NativeAppearance(const char *json, const char *path)
     const char *fields[] = {"skin", "hair", "style", "face", "coat"};
     uint32_t packed = 0;
     for (int i = 0; i < 5; ++i) {
-        char key[96];
+        char key[128];
         (void)snprintf(key, sizeof(key), "%s.%s", path, fields[i]);
         long long value = CcCompanyJsonNumber(json, key);
         if (value >= 0 && value < (i == 3 ? 4 : 6)) packed |= (uint32_t)value << (i * 3);
