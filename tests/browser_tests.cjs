@@ -293,7 +293,8 @@ async function main() {
       assert.deepEqual(bookPages.map(button => button.label), ['Promises', 'People', 'Cargo', 'Journal']);
       for (const name of ['Promises', 'People', 'Cargo', 'Journal']) {
         await controls.button(name).tap();
-        assert((await controls.button(name).read()).active);
+        await mobile.waitForFunction(label => Module.crownlessTouchFrame.buttons.some(
+          button => button.label === label && button.active), name);
       }
       assert((await controls.reading()).includes('1-4 pages'));
       await controls.button('Back').tap();
