@@ -2914,6 +2914,14 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
     int summary_width = CcOverlayMeasureText(summary, 10);
     CcOverlayDrawText(summary, GetScreenWidth() - summary_width - 22,
                       22, 10, road ? TEAL : CC_GOLD);
+    if (!road && !site && place != NULL && !local->market_interior) {
+        char condition_text[96];
+        CcLocalTownConditionText(CcSimTownConditions(sim, place->id),
+                                 condition_text, sizeof(condition_text));
+        int condition_width = CcOverlayMeasureText(condition_text, 8);
+        CcOverlayDrawText(condition_text, GetScreenWidth() - condition_width - 22,
+                          40, 8, MUTED);
+    }
     const CcRoadSite *road_stop = CcSimJourneyRoadSiteStop(sim);
     if (local->journey_travel_active && road_stop != NULL) {
         DrawPanel((Rectangle){22.0f, 86.0f, 460.0f, 68.0f}, PANEL_DEEP);
@@ -10600,13 +10608,24 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-aftermath") == 0;
     bool capture_golden = argc >= 2 &&
         strcmp(argv[1], "--capture-golden") == 0;
-    bool capture_town = argc >= 2 &&
-        strcmp(argv[1], "--capture-town") == 0;
+    bool capture_town_state = argc >= 2 &&
+        strcmp(argv[1], "--capture-town-state") == 0;
+    bool capture_town = capture_town_state || (argc >= 2 &&
+        strcmp(argv[1], "--capture-town") == 0);
     bool capture_town_arrival = argc >= 2 &&
         strcmp(argv[1], "--capture-town-arrival") == 0;
     int32_t capture_town_index = 0;
     float capture_town_x = 44.25f;
     float capture_town_z = 28.85f;
+    if (capture_town_state) {
+        if (argc != 7 || (strcmp(argv[6], "burnt") != 0 &&
+            strcmp(argv[6], "rebuilding") != 0 && strcmp(argv[6], "lawless") != 0 &&
+            strcmp(argv[6], "peaceful") != 0 && strcmp(argv[6], "thriving") != 0)) {
+            (void)fprintf(stderr,
+                "capture town state: INDEX X Z FRAME burnt|rebuilding|lawless|peaceful|thriving\n");
+            return 1;
+        }
+    }
     if (capture_town) {
         if (argc < 4) {
             (void)fprintf(stderr,
@@ -11019,6 +11038,30 @@ int main(int argc, char **argv)
     }
     if (capture_town || capture_town_arrival) {
         sim.player.location_id = sim.settlements[capture_town_index].id;
+    }
+    if (capture_town_state) {
+        CcSettlement *town = &sim.settlements[capture_town_index];
+        town->security = 75;
+        town->prosperity = strcmp(argv[6], "thriving") == 0 ? 85 : 45;
+        town->hunger = 10;
+        town->fire_damage = 0;
+        town->last_fire_day = 0;
+        town->service_project = CC_SERVICE_NONE;
+        town->service_project_days = 0;
+        if (strcmp(argv[6], "burnt") == 0 || strcmp(argv[6], "rebuilding") == 0) {
+            town->fire_damage = 60;
+            town->last_fire_day = sim.current_day;
+            town->stock[CC_GOOD_WOOD] = strcmp(argv[6], "rebuilding") == 0 ? 12 : 0;
+            town->stock[CC_GOOD_STONE] = 12;
+            town->stock[CC_GOOD_TOOLS] = 12;
+            town->prosperity = 25;
+        }
+        if (strcmp(argv[6], "lawless") == 0) town->security = 15;
+        for (int32_t a = 0; a < sim.kingdom_count; ++a) {
+            for (int32_t b = 0; b < sim.kingdom_count; ++b) {
+                sim.diplomacy[a][b] = CC_DIPLOMACY_PEACE;
+            }
+        }
     }
     if (capture_witness || capture_character) {
         for (int32_t situation = 0; situation < sim.situation_count;

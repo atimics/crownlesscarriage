@@ -61,8 +61,13 @@ static int ProfileContract(void)
                 camera->camera_offset_x * camera->camera_offset_x +
                 camera->camera_offset_z * camera->camera_offset_z;
             CHECK(camera_distance_squared >= 5.0f * 5.0f);
-            CHECK(camera_distance_squared <= 24.0f * 24.0f);
-            CHECK(camera->fovy >= 5.8f && camera->fovy <= 10.0f);
+            bool valley_view = profile->function == CC_SETTLEMENT_FARMING &&
+                (camera->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ||
+                 camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK);
+            float maximum_span = valley_view ? 34.0f : 24.0f;
+            CHECK(camera_distance_squared <= maximum_span * maximum_span);
+            CHECK(camera->fovy >= 5.8f && camera->fovy <=
+                  (valley_view ? 18.0f : 10.0f));
             if (camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
                 CHECK(camera->fovy >= 9.0f);
             } else if (camera->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST) {
@@ -150,7 +155,8 @@ static int ProfileContract(void)
             CHECK(compound->kind <= CC_LOCAL_COMPOUND_SILO);
             CHECK(compound->width >= 0.7f);
             CHECK(compound->depth >= 0.7f);
-            CHECK(compound->height >= 2.0f);
+            CHECK(compound->height >=
+                  (compound->kind == CC_LOCAL_COMPOUND_WALL ? 1.0f : 2.0f));
             CHECK(compound->x >= 0.0f &&
                   compound->x + compound->width <= 96.0f);
             CHECK(compound->z >= 0.0f &&

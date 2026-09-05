@@ -1759,7 +1759,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     BeginMode3D(camera);
     BeginWorldLighting(camera, &street_art);
 
-    DrawExteriorTerrain(place, scenery_focus);
+    uint32_t town_conditions = CcSimTownConditions(sim, place->id);
+    DrawExteriorTerrain(place, town_conditions, scenery_focus, clock);
     DrawTownRaidStaging(course, scenery_focus);
     const CcLocalAgent *sightline_opponent = conversation_partner != NULL ?
         conversation_partner : CombatCameraOpponent(course, agent);
@@ -1815,7 +1816,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         camera_subject->position.x, camera_subject->position.y + 1.05f,
         camera_subject->position.z,
     };
-    DrawWorldBuildings(kingdom, scenery_focus, profile, camera,
+    DrawWorldBuildings(place, town_conditions, kingdom, scenery_focus, profile, camera,
                        foreground_reveal_world,
                        target.texture.width, target.texture.height, clock);
     WorldBuilding primary_building = ActivePrimaryBuilding();
