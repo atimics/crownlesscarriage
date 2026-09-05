@@ -860,6 +860,13 @@ typedef enum CcDragonActivity {
     CC_DRAGON_ACTIVITY_AFTERMATH
 } CcDragonActivity;
 
+typedef enum CcDragonHairColor {
+    CC_DRAGON_HAIR_PURPLE,
+    CC_DRAGON_HAIR_RED,
+    CC_DRAGON_HAIR_BLUE,
+    CC_DRAGON_HAIR_COLOR_COUNT
+} CcDragonHairColor;
+
 typedef struct CcDragon {
     CcId id;
     char name[CC_NAME_CAPACITY];
@@ -895,6 +902,8 @@ typedef struct CcDragon {
     int32_t whelps_dispersed;
     int32_t afterdeath_days;
     CcId lifecycle_event_id;
+    /* The dragon and its goblin court share this colour. */
+    CcDragonHairColor hair_color;
 } CcDragon;
 
 typedef enum CcDragonCampaignPhase {

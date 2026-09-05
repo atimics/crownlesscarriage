@@ -438,6 +438,9 @@ static bool EnsureLegendColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "dragon_state", "lifecycle_event_id",
             "ALTER TABLE dragon_state ADD COLUMN lifecycle_event_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "hair_color",
+            "ALTER TABLE dragon_state ADD COLUMN hair_color INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity);
 }
 
@@ -2432,8 +2435,8 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                  "regional_influence,crown_continuity_days,hunt_cooldown_days,"
                  "hunts,egg_count,brood_days_remaining,brood_cooldown_days,"
                  "broods_laid,whelps_dispersed,afterdeath_days,lifecycle_event_id,"
-                 "territoryless_days) "
-                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "territoryless_days,hair_color) "
+                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     const CcDragon *dragon = &sim->dragon;
     column = 1;
@@ -2469,6 +2472,7 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
     BindInt(statement, column++, dragon->afterdeath_days);
     BindId(statement, column++, dragon->lifecycle_event_id);
     BindInt(statement, column++, dragon->territoryless_days);
+    BindInt(statement, column++, (int32_t)dragon->hair_color);
     result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!result) return false;
@@ -4641,7 +4645,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
                  "territory_stability,regional_influence,crown_continuity_days,"
                  "hunt_cooldown_days,hunts,egg_count,brood_days_remaining,"
                  "brood_cooldown_days,broods_laid,whelps_dispersed,afterdeath_days,"
-                 "lifecycle_event_id,territoryless_days "
+                 "lifecycle_event_id,territoryless_days,hair_color "
                  "FROM dragon_state WHERE slot=1;",
                  &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
@@ -4699,6 +4703,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     dragon->lifecycle_event_id =
         (CcId)sqlite3_column_int64(statement, column++);
     dragon->territoryless_days = sqlite3_column_int(statement, column++);
+    dragon->hair_color = (CcDragonHairColor)sqlite3_column_int(statement, column++);
     sqlite3_finalize(statement);
 
     if (sim->schema_version >= 11U) {
@@ -6407,15 +6412,21 @@ bool CcSaveRead(const char *path, CcSim *sim,
     }
     sqlite3 *database = NULL;
     if (!OpenReadSnapshot(path, &database, error, error_capacity)) return false;
-    CcSim recovered;
-    bool ok = LoadDatabase(database, &recovered, NULL,
+    CcSim *recovered = malloc(sizeof(*recovered));
+    if (recovered == NULL) {
+        SetError(error, error_capacity, "Could not allocate campaign load state.");
+        sqlite3_close(database);
+        return false;
+    }
+    bool ok = LoadDatabase(database, recovered, NULL,
                            error, error_capacity);
     if (sqlite3_close(database) != SQLITE_OK) {
         SetError(error, error_capacity, "Could not close campaign database.");
-        return false;
+        ok = false;
     }
+    if (ok) *sim = *recovered;
+    free(recovered);
     if (!ok) return false;
-    *sim = recovered;
     SetError(error, error_capacity, "");
     return true;
 }
@@ -6823,17 +6834,26 @@ CcJournal *CcJournalResume(const char *path, CcSim *sim,
                  "Journal path or simulation is missing.");
         return NULL;
     }
-    CcSim preflight;
-    if (!CcSaveRead(path, &preflight, error, error_capacity)) return NULL;
+    CcSim *recovered = malloc(sizeof(*recovered));
+    if (recovered == NULL) {
+        SetError(error, error_capacity, "Could not allocate journal load state.");
+        return NULL;
+    }
+    if (!CcSaveRead(path, recovered, error, error_capacity)) {
+        free(recovered);
+        return NULL;
+    }
     CcJournal *journal = AllocateJournal(path, WRITABLE_OPEN_EXISTING, NULL,
                                          error, error_capacity);
-    if (journal == NULL) return NULL;
+    if (journal == NULL) {
+        free(recovered);
+        return NULL;
+    }
     bool ok = Execute(journal->database, "BEGIN IMMEDIATE;",
                       error, error_capacity);
-    CcSim recovered;
     bool upgraded = false;
     if (ok) {
-        ok = LoadDatabase(journal->database, &recovered, &upgraded,
+        ok = LoadDatabase(journal->database, recovered, &upgraded,
                           error, error_capacity);
     }
     uint64_t checkpoint_cursor = 0U;
@@ -6845,9 +6865,9 @@ CcJournal *CcJournalResume(const char *path, CcSim *sim,
                                        error, error_capacity);
     }
     if (ok && (upgraded || journal->generation == 0U)) {
-        ok = InsertJournalEpoch(journal, &recovered,
+        ok = InsertJournalEpoch(journal, recovered,
                                 error, error_capacity) &&
-             SaveSnapshotContents(journal->database, &recovered,
+             SaveSnapshotContents(journal->database, recovered,
                                   journal->generation, 0U,
                                   error, error_capacity) &&
              PruneJournalHistory(journal->database, journal->generation,
@@ -6868,19 +6888,22 @@ CcJournal *CcJournalResume(const char *path, CcSim *sim,
     if (!ok) {
         sqlite3_close(journal->database);
         free(journal);
+        free(recovered);
         return NULL;
     }
     if (compacted) {
         (void)Execute(journal->database,
                       "PRAGMA wal_checkpoint(TRUNCATE); VACUUM;", NULL, 0U);
     } else if (journal->last_ordinal >= CC_JOURNAL_COMPACT_RECORDS &&
-               !CompactJournal(journal, &recovered, true,
+               !CompactJournal(journal, recovered, true,
                                error, error_capacity)) {
         sqlite3_close(journal->database);
         free(journal);
+        free(recovered);
         return NULL;
     }
-    *sim = recovered;
+    *sim = *recovered;
+    free(recovered);
     SetError(error, error_capacity, "");
     return journal;
 }

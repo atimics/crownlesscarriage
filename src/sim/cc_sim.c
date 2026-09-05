@@ -210,6 +210,7 @@ void CcSimInitializeDragonCycle(CcSim *sim)
     sim->goblins.lair_stock[CC_GOOD_WEAPONS] = 3;
 
     sim->dragon.id = NextId(sim, CC_ENTITY_DRAGON);
+    sim->dragon.hair_color = CC_DRAGON_HAIR_PURPLE;
     CopyName(sim->dragon.name, "Varkesh the Unappeased");
     sim->dragon.lair_settlement_id =
         sim->settlements[sim->settlement_count - 1].id;
@@ -18807,6 +18808,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
              dragon->theft_actor_id == sim->player.id &&
              dragon->stolen_outstanding == stolen_named->appraised_value);
         if (CcIdKind(dragon->id) != CC_ENTITY_DRAGON ||
+            dragon->hair_color < CC_DRAGON_HAIR_PURPLE ||
+            dragon->hair_color >= CC_DRAGON_HAIR_COLOR_COUNT ||
             !ValidBoundedText(dragon->name, sizeof(dragon->name)) ||
             CcSimSettlement(sim, dragon->lair_settlement_id) == NULL ||
             dragon->hoard < 0 || dragon->hoard > CC_SIM_MAX_MONEY ||
@@ -19943,6 +19946,7 @@ uint64_t CcSimHash(const CcSim *sim)
         }
         const CcDragon *dragon = &sim->dragon;
         HASH_VALUE(dragon->id); hash = HashString(hash, dragon->name);
+        if (sim->schema_version >= 43U) HASH_VALUE(dragon->hair_color);
         HASH_VALUE(dragon->lair_settlement_id);
         HASH_VALUE(dragon->hoard);
         HASH_VALUE(dragon->stolen_outstanding);
