@@ -105,6 +105,41 @@ Let practical facts anchor inquiry: a payment's custody, a dated journey,
 scorch marks, an occupied gate. Let meaning remain open: whether an act was
 rightful, whether obedience was freely given, and which reign a year belongs to.
 
+### Town guards and faction affinity
+
+The town guard is a good first place to make this model playable. Existing
+Court, Guild, and Commons factions, character disposition, and relationships
+provide a base. A local guard command and its recognition of claimants would
+be additions to this reviewed version.
+
+For a guard's decision, bring together their knowledge of the traveller,
+relationship with their captain, ties to local families, duty, current orders,
+and material conditions. A faction's opinion supplies context; a guard's own
+experience can carry special weight.
+
+| Influence | Example | Visible choice |
+| --- | --- | --- |
+| Personal trust | You brought medicine for the guard's child. | They explain a new search order and tell you where to appeal. |
+| Local memory | Thornford remembers your grain delivery. | A townsman vouches for your cart at the gate. |
+| Command loyalty | The captain publicly serves Mara. | Guards honour her travel seal and collect her dues. |
+| Material dependence | A rival merchant has kept the garrison fed. | The captain considers that merchant's terms during a dispute. |
+| Received history | A court sends a warrant citing an old account of treason. | A guard who has received the order questions your family name. |
+| Belief about other guards | Several sergeants openly back a rival. | Their public stand makes a change of command possible. |
+
+Keep each influence tied to a source or event. A new chronicle affects a guard
+when an order, reading, conversation, or teaching brings its interpretation to
+them. A town can keep its own telling. Repeated copies from one source share
+that origin. Show reasons through a warning, a quoted order, a changed banner,
+or a familiar person speaking up.
+
+Add a small guard experiment to the succession prototype: cross trusted versus
+unfamiliar traveller with warrant delivered versus delayed, keeping the
+captain's orders and supplies fixed. Record admission, search, warning, appeal,
+and arrest decisions. Test that personal trust changes the options available,
+while public duty still has weight. Check that knowledge changes follow actual
+delivery. Human players should be able to explain the guard's concern and find
+at least one way to act on it.
+
 ## Thornford as a playable example
 
 The following is a proposed scenario, with invented names.
