@@ -4,6 +4,10 @@
 #include "client/cc_crew.h"
 
 bool CcCoopClientActive(void);
+bool CcCoopClientOwner(void);
+bool CcCoopClientDelete(char *error, size_t capacity);
+void CcCoopClientOpenLobby(void);
+void CcCoopClientReturnToTitle(void);
 bool CcCoopClientPreview(void);
 uint32_t CcCoopClientAppearance(void);
 bool CcCoopClientHasSession(void);

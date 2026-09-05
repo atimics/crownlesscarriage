@@ -244,6 +244,33 @@ assert.deepEqual(reloaded.files.get(campaignPath), replacementCampaign);
 assert.deepEqual(reloaded.files.get(preferencesPath),
   new Uint8Array([19, 20, 21]));
 assert.equal(reloaded.files.has(sessionPath), false);
+// Deletion is atomic, owns the save lock, and advances its revision.
+reloaded.files.set(sessionPath, oldSession);
+await reloaded.Module.persistCrownlessSave(campaignPath, sessionPath);
+const deletionRevision = storedFiles.get(revisionPath);
+const deletionObserver = await createPage();
+await assert.rejects(deletionObserver.Module.deleteCrownlessCampaign(), /read-only/);
+failNextWrite = true;
+await assert.rejects(reloaded.Module.deleteCrownlessCampaign(), /injected transaction failure/);
+assert.deepEqual(storedFiles.get(campaignPath), replacementCampaign);
+assert.deepEqual(storedFiles.get(sessionPath), oldSession);
+assert.equal(storedFiles.get(revisionPath), deletionRevision);
+await reloaded.Module.deleteCrownlessCampaign();
+assert.equal(storedFiles.has(campaignPath), false);
+assert.equal(storedFiles.has(sessionPath), false);
+assert.equal(storedFiles.get(revisionPath), deletionRevision + 1);
+assert.deepEqual(storedFiles.get(preferencesPath), new Uint8Array([19, 20, 21]));
 await reloaded.close();
+assert.equal(await deletionObserver.Module.acquireCrownlessCampaignLock(), true);
+await assert.rejects(deletionObserver.Module.deleteCrownlessCampaign(), /Another tab changed/);
+await deletionObserver.close();
+const empty = await createPage();
+assert.equal(empty.Module.crownlessCampaignRestored, false);
+assert.equal(empty.files.has(campaignPath), false);
+assert.equal(empty.files.has(sessionPath), false);
+empty.files.set(campaignPath, oldCampaign);
+await empty.Module.persistCrownlessNewCampaign(campaignPath);
+assert.deepEqual(storedFiles.get(campaignPath), oldCampaign);
+await empty.close();
 
 console.log("Web persistence tests passed in two page contexts");

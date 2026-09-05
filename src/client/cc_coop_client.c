@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include "raylib.h"
 
 #if defined(PLATFORM_WEB)
 #include <emscripten.h>
@@ -15,6 +16,13 @@
 #endif
 
 EM_JS(int, CoopEnabled, (), { return Module.ccCoop && Module.ccCoop.enabled ? 1 : 0; });
+EM_JS(int, CoopOwner, (), { return Module.ccCoop.owner() ? 1 : 0; });
+EM_JS(void, CoopLobby, (), { Module.ccCoop.openLobby(); });
+EM_JS(void, CoopTitle, (), { location.assign(location.pathname); });
+EM_ASYNC_JS(int, CoopDelete, (char *error, int capacity), {
+    try { await Module.ccCoop.deleteWorld(); return 1; }
+    catch (failure) { stringToUTF8(failure.message, error, capacity); return 0; }
+});
 EM_JS(int, CoopPreview, (), { return Module.ccCoop && Module.ccCoop.preview ? 1 : 0; });
 EM_JS(int, CoopHasSession, (), { return Module.ccCoop && Module.ccCoop.hasSession() ? 1 : 0; });
 EM_JS(int, CoopSeat, (), { return Module.ccCoop ? Module.ccCoop.seat() : 0; });
@@ -81,6 +89,10 @@ EM_JS(unsigned char *, CoopTake, (int *length), {
 #endif
 
 bool CcCoopClientActive(void) { return CoopEnabled() != 0; }
+bool CcCoopClientOwner(void) { return CoopOwner() != 0; }
+bool CcCoopClientDelete(char *error, size_t capacity) { return CoopDelete(error, (int)capacity) != 0; }
+void CcCoopClientOpenLobby(void) { CoopLobby(); }
+void CcCoopClientReturnToTitle(void) { CoopTitle(); }
 bool CcCoopClientPreview(void) { return CoopPreview() != 0; }
 uint32_t CcCoopClientAppearance(void) { return (uint32_t)CoopAppearance(); }
 bool CcCoopClientHasSession(void) { return CoopHasSession() != 0; }
@@ -151,6 +163,10 @@ bool CcCoopClientSkip(CcSim *sim, char *error, size_t capacity)
     (void)sim; (void)error; (void)capacity; return false;
 }
 bool CcCoopClientActive(void) { return false; }
+bool CcCoopClientOwner(void) { return false; }
+bool CcCoopClientDelete(char *error, size_t capacity) { (void)error; (void)capacity; return false; }
+void CcCoopClientOpenLobby(void) { OpenURL("https://crownless.ratimics.com/"); }
+void CcCoopClientReturnToTitle(void) {}
 bool CcCoopClientPreview(void) { return false; }
 uint32_t CcCoopClientAppearance(void) { return 0U; }
 bool CcCoopClientHasSession(void) { return false; }

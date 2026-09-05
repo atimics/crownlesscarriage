@@ -7,15 +7,15 @@ const avatar = await readFile(new URL('../web/coop/avatar.js', import.meta.url),
 const persistence = await readFile(new URL('../web/persistence.js', import.meta.url), 'utf8');
 const world = '1'.repeat(32), key = `cc-coop-pending-${world}`;
 const storage = new Map([['cc-coop-token', 'a'.repeat(64)]]);
-const requests = [], responses = [];
+const requests = [], responses = [], navigations = [];
 const files = new Map();
 let now = 2000;
-function client() {
+function client(pathname = "/game/index.html") {
   files.clear();
   const context = vm.createContext({
     Module: {}, console,
     FS: { mkdirTree() {}, readFile: path => files.get(path), writeFile: (path, text) => files.set(path, text) },
-    location: { search: `?world=${world}` }, URLSearchParams, AbortSignal,
+    location: { search: `?world=${world}`, pathname, assign: path => navigations.push(path) }, URLSearchParams, AbortSignal,
     document: {readyState:'loading', addEventListener() {}, body:{dataset:{}}},
     window: {addEventListener() {}},
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
@@ -162,3 +162,33 @@ assert.equal(requests.at(-1).keepalive, true);
 assert.equal(coop.exchange(1, () => pose).length, 0);
 assert.equal(responses.length, 0);
 console.log('Crew movement, room changes, expiry, reconnect, and leave passed.');
+coop = client();
+responses.push({...state(4), owner:false});
+await coop.connect();
+assert.equal(coop.owner(), false);
+await assert.rejects(coop.deleteWorld(), /host can delete/);
+responses.push({...state(5), owner:true, session_context:'town', session:session(10)});
+await coop.connect();
+assert.equal(coop.owner(), true);
+storage.set(key, saved);
+await assert.rejects(coop.deleteWorld(), /pending company action/);
+storage.delete(key);
+responses.push(new Error('Deletion interrupted'));
+await assert.rejects(coop.deleteWorld(), /Deletion interrupted/);
+responses.push({deleted:true});
+await coop.deleteWorld();
+assert.equal(requests.at(-1).path, `/api/worlds/${world}/host`);
+assert.deepEqual(JSON.parse(requests.at(-1).body), {action:'delete'});
+assert.equal(coop.take(), null);
+assert.equal(storage.has(sessionKey), false);
+coop.checkpoint(session(11).session);
+assert.equal(storage.has(sessionKey), false);
+const requestCount = requests.length;
+coop.poll();
+assert.equal(requests.length, requestCount);
+coop.openLobby();
+assert.equal(navigations.at(-1), '/');
+client('/index.html').openLobby();
+assert.equal(navigations.at(-1), 'https://crownless.ratimics.com/');
+assert.equal(responses.length, 0);
+console.log('Shared browser recovery, ordering, menus, and save ownership passed.');
