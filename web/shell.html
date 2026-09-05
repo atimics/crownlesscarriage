@@ -118,6 +118,12 @@
         header { align-items: start; }
         header p { display: none; }
       }
+      body.avatar-preview {min-height:100vh;background:#1a2823;overflow:hidden}
+      .avatar-preview main {padding:0;width:100%;height:100vh}
+      .avatar-preview header,.avatar-preview #hint,.avatar-preview footer {display:none}
+      .avatar-preview #stage {border:0;border-radius:0;box-shadow:none;height:100vh;display:grid;place-items:center;background:#1a2823}
+      .avatar-preview canvas {width:100%;height:auto;background:#1a2823}
+      .avatar-preview #loading {background:#1a2823}
     </style>
   </head>
   <body>
@@ -138,7 +144,7 @@
           </div>
         </div>
       </div>
-      <p id="hint">Click the game, then use the mouse and keyboard. Saves stay in this browser.</p>
+      <p id="hint">Choose Offline and Play. Esc opens the game menu. Saves stay in this browser.</p>
       <footer aria-label="Project information">
         <a href="licenses.html">Licenses &amp; credits</a>
         <a href="https://github.com/atimics/crownlesscarriage">Source</a>
@@ -156,7 +162,7 @@
           loading.hidden = true;
           if (Module.crownlessCampaignRestored) {
             document.querySelector("#hint").textContent =
-              "Saved campaign restored from this browser.";
+              "Saved world ready. Choose Play to continue.";
           }
           canvas.focus();
         }],

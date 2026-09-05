@@ -20,7 +20,7 @@ This PR builds the town interaction flow from [the design](interaction-ux-redesi
 
 Conversation replies use the numbered buttons. Trade has separate Buy, Sell, and Deliver tabs. Choose a good, set its quantity, and check the full price before confirming with Enter. The arrow keys choose goods; minus and plus change quantity. Hold Shift to change ten units at a time. The Deliver tab uses the full remaining promise load. A receipt shows the actual purse change.
 
-The Company Book has Promises, People, Cargo, and Journal pages. The menu offers save, motion, text size, target hints, and sound settings. Solo play pauses while the menu is open. Shared play shows that the host keeps company time.
+The Company Book has Promises, People, Cargo, and Journal pages. It returns to the conversation, trade screen, or menu it came from. The combined title menu offers save, motion, text size, target hints, sound, return to title, and world controls. Solo play pauses while the menu is open. Shared play shows that the host keeps company time.
 
 ## How actions work
 
@@ -32,7 +32,7 @@ Trade checks stock, purse, cargo space, the keeper's coins, and delivery proof. 
 
 ## Review captures
 
-These images use a fixed native game fixture. The trade, book, and menu images use 1040 × 620 with the largest text setting. The conversation uses 1200 × 700.
+These images show the interaction panels before the latest graphics and title-menu merge. They use a fixed native game fixture. Trade and book use 1040 × 620 with the largest text setting. Conversation uses 1200 × 700. The CI artifact `interaction-screen-review` captures the final combined build, including the menu.
 
 ![Conversation](interaction-ux-captures/conversation.png)
 
@@ -40,11 +40,9 @@ These images use a fixed native game fixture. The trade, book, and menu images u
 
 ![Company Book with larger text](interaction-ux-captures/book-small.png)
 
-![Menu with larger text](interaction-ux-captures/menu-small.png)
-
 ## Checks
 
-The native play build passes 67 tests. The new input check exercises both pointer and F conversation, a distant alarm, the full walk from the carriage yard into a shop, trade, exit, pause, book return, and journal reload. A separate route check reaches the service door and keeper in each of the six town types.
+The native play build passes 72 tests. The new input check exercises both pointer and F conversation, a distant alarm, the full walk from the carriage yard into a shop, trade, exit, pause, book return, and journal reload. A separate route check reaches the service door and keeper in each of the six town types.
 
 Trade checks cover purse, stock, cargo space, market funds, a changed quote, full delivery quantity, journey proof, reward, and repeated confirmation. Planner tests cover identity, moving targets, overlap, availability, cancellation, and a blocked route. Preferences tests cover saved settings and older preference files.
 

@@ -112,10 +112,11 @@ static bool RoadEncounterValidate(const CcClientSession *session)
     const CcClientRoadEncounter *encounter = &session->road_encounter;
     if (encounter->mode == CC_CLIENT_ROAD_ENCOUNTER_NONE) return true;
     if (encounter->mode < CC_CLIENT_ROAD_ENCOUNTER_FIGHT ||
-        encounter->mode > CC_CLIENT_ROAD_ENCOUNTER_PARLEY ||
-        session->scene != CC_CLIENT_SESSION_STREET ||
-        session->coordinate_space != CC_CLIENT_SESSION_LEGACY_LOCAL ||
-        session->route_id != 0U ||
+        encounter->mode > CC_CLIENT_ROAD_ENCOUNTER_LOCAL ||
+        (encounter->mode != CC_CLIENT_ROAD_ENCOUNTER_LOCAL &&
+         (session->scene != CC_CLIENT_SESSION_STREET ||
+          session->coordinate_space != CC_CLIENT_SESSION_LEGACY_LOCAL ||
+          session->route_id != 0U)) ||
         !EncounterActorValidate(&encounter->player) ||
         !SessionFloatInRange(encounter->engagement_time,
                              0.0f, 100000.0f) ||
@@ -172,7 +173,8 @@ static bool ClientSessionValidateBase(const CcClientSession *session)
            fabsf(session->position_x) <= 100000.0f &&
            fabsf(session->position_z) <= 100000.0f &&
            fabsf(session->facing_yaw) <= 100000.0f &&
-           session->opening_step <= 2U;
+           session->opening_step <= 2U &&
+           SessionFloatInRange(session->site_travel_progress, 0.0f, 1.0f);
 }
 
 bool CcClientSessionValidate(const CcClientSession *session)
@@ -291,6 +293,9 @@ bool CcClientSessionWrite(const char *path, const CcClientSession *session,
          ok && raider < CC_CLIENT_SESSION_RAIDER_COUNT; ++raider) {
         ok = WriteEncounterActor(file, &encounter->raiders[raider]);
     }
+    ok = ok && fprintf(file, "TRAVEL %d %d %.9g\n",
+        session->site_travel_active ? 1 : 0, session->site_returning ? 1 : 0,
+        (double)session->site_travel_progress) > 0;
     ok = ok && fflush(file) == 0;
 #if !defined(__EMSCRIPTEN__) && \
     (defined(__APPLE__) || defined(__linux__) || defined(__unix__))
@@ -440,7 +445,7 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
     int header_fields = fscanf(file, "%31s %u", marker, &version);
     int body_fields = 0;
     if (header_fields == 2 &&
-        (version == CC_CLIENT_SESSION_VERSION || version == 5U)) {
+        (version == CC_CLIENT_SESSION_VERSION || version == 6U || version == 5U)) {
         body_fields = fscanf(file, "%u %llu %d %d %llu %f %f %f %u %d",
                              &world_seed, &location_id, &scene,
                              &coordinate_space, &route_id, &position_x,
@@ -476,10 +481,21 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
         .road_encounter.mode =
             (CcClientRoadEncounterMode)road_encounter_mode
     };
-    bool current_payload = version == CC_CLIENT_SESSION_VERSION &&
+    bool current_payload = (version == CC_CLIENT_SESSION_VERSION || version == 6U) &&
                            body_fields == 10 &&
                            ReadAthleticProfile(file, &loaded.athletics) &&
                            ReadRoadEncounter(file, &loaded.road_encounter);
+    if (current_payload && version == CC_CLIENT_SESSION_VERSION) {
+        char travel_marker[16] = "";
+        int active = 0, returning = 0;
+        current_payload = fscanf(file, "%15s %d %d %f", travel_marker,
+            &active, &returning, &loaded.site_travel_progress) == 4 &&
+            strcmp(travel_marker, "TRAVEL") == 0 &&
+            (active == 0 || active == 1) && (returning == 0 || returning == 1);
+        loaded.site_travel_active = active == 1;
+        loaded.site_returning = returning == 1;
+    }
+    if (current_payload) loaded.version = CC_CLIENT_SESSION_VERSION;
     bool version_five_payload = version == 5U && body_fields == 10 &&
         ReadRoadEncounter(file, &loaded.road_encounter);
     bool closed = fclose(file) == 0;

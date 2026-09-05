@@ -51,7 +51,7 @@ bool CcCoopApply(CcSim *sim, const char *action, CcId target,
     }
     CcCommand command = { .target_id = target, .good = (CcGood)good, .amount = amount };
     if (action != NULL) {
-        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_LODGE_ROAD_HOUSE; ++i) {
+        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_LEAVE_PONY; ++i) {
             if (strcmp(action, CcCoopActionName((CcCommandKind)i)) == 0) command.kind = (CcCommandKind)i;
         }
     }
@@ -67,6 +67,20 @@ bool CcCoopApply(CcSim *sim, const char *action, CcId target,
     *candidate = *sim;
     bool ok = CcSimApply(candidate, &command, error, capacity) &&
               CcSimValidate(candidate, error, capacity);
+    if (ok) *sim = *candidate;
+    free(candidate);
+    return ok;
+}
+
+bool CcCoopAdvanceAway(CcSim *sim, int32_t days, char *error, size_t capacity)
+{
+    if (sim == NULL || days < 0 || days > 365 ||
+        days > CC_SIM_MAX_DAY - sim->current_day) return false;
+    CcSim *candidate = malloc(sizeof(*candidate));
+    if (candidate == NULL) return false;
+    *candidate = *sim;
+    CcSimAdvanceDays(candidate, days);
+    bool ok = CcSimValidate(candidate, error, capacity);
     if (ok) *sim = *candidate;
     free(candidate);
     return ok;

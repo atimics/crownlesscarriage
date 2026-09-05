@@ -4695,6 +4695,40 @@ void CcLocalDrawNpcPortrait3D(const CcNpcAppearance *appearance,
     PresentCharacterPortrait(bounds, appearance->accent);
 }
 
+void CcLocalDrawAvatarPreview3D(const CcLocalAgent *agent,
+                               RenderTexture2D target, Rectangle bounds)
+{
+    Vector3 center = Vector3Add(agent->position, (Vector3){0.0f, 0.85f, 0.0f});
+    CcHumanoidSkinPose skin;
+    CcHumanoidSkinPoseResolve(AgentRenderPose(agent), &skin);
+    Vector3 forward = skin.valid ? FromLimbVector(skin.bones[CC_HUMANOID_SKIN_HEAD].forward) :
+        (Vector3){sinf(agent->facing_yaw), 0.0f, cosf(agent->facing_yaw)};
+    Vector3 right = Vector3CrossProduct((Vector3){0, 1, 0}, forward);
+    Camera3D camera = {
+        .position = Vector3Add(center, Vector3Add(Vector3Scale(forward, 4.0f),
+            Vector3Add(Vector3Scale(right, 1.0f), (Vector3){0, 0.20f, 0}))),
+        .target = center, .up = {0.0f, 1.0f, 0.0f},
+        .fovy = 2.65f, .projection = CAMERA_ORTHOGRAPHIC
+    };
+    FaceRenderContext previous = face_render_context;
+    BeginTextureMode(target);
+    ClearBackground((Color){26, 40, 35, 255});
+    SetFaceRenderContext(camera, target.texture.width, target.texture.height);
+    BeginMode3D(camera);
+    BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
+    DrawCylinder((Vector3){agent->position.x, agent->position.y - 0.05f,
+                           agent->position.z}, 0.65f, 0.70f, 0.08f, 24,
+                 (Color){55, 66, 51, 255});
+    DrawBiomechanicalBiped(agent);
+    EndWorldLighting();
+    EndMode3D();
+    EndTextureMode();
+    face_render_context = previous;
+    DrawTexturePro(target.texture,
+        (Rectangle){0, 0, (float)target.texture.width, -(float)target.texture.height},
+        bounds, (Vector2){0, 0}, 0, WHITE);
+}
+
 void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
                                 Rectangle bounds)
 {
@@ -5043,4 +5077,53 @@ static void DrawCourseRunners(const CcLocalCourse *course, Vector3 focus)
                       runner->agent.position.z},
             0.085f, runner->marker_color);
     }
+}
+
+void CcLocalDrawPonyPortrait(int32_t pony, bool known, Rectangle bounds)
+{
+    if (pony < 0 || pony >= CC_PONY_COUNT) return;
+    int32_t index = known ? pony : CC_PONY_COUNT;
+    RenderTexture2D *portrait = &pony_portraits[index];
+    if (!IsRenderTextureValid(*portrait)) {
+        CreatureModelCache *creature = &creature_models[CC_CREATURE_HORSE][CC_CREATURE_POSE_IDLE];
+        if (!creature->ready || !PoseQuadrupedCreature(creature, CC_CREATURE_HORSE, 0.0f, false, NULL)) return;
+        *portrait = LoadRenderTexture(64, 64);
+        if (!IsRenderTextureValid(*portrait)) return;
+        Camera3D camera = {
+            .position = {2.8f, 2.1f, 5.0f}, .target = {0.0f, 1.53f, 0.96f},
+            .up = {0.0f, 1.0f, 0.0f}, .fovy = 1.14f,
+            .projection = CAMERA_ORTHOGRAPHIC,
+        };
+        CreatureRenderPalette palette = CreaturePalette(CC_CREATURE_HORSE, PONY_COLORS[known ? pony : 0][0]);
+        Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
+            palette.skin, palette.secondary, palette.hide, palette.cloth,
+            palette.leather, palette.horn, palette.metal, palette.accent, palette.eye,
+        };
+        if (!known) {
+            for (int32_t i = 0; i < CC_NPC_ARCHETYPE_MATERIAL_COUNT; ++i)
+                colors[i] = (Color){114, 114, 114, 255};
+        }
+        BeginTextureMode(*portrait);
+        ClearBackground((Color){24, 28, 37, 255});
+        BeginMode3D(camera);
+        BeginWorldLighting(camera, &ROAD_ART_COMPOSITION);
+        SetIndexedPalette(colors, 0.38f, false, (Vector3){0}, false);
+        float remap = 0.0f;
+        SetShaderValue(visual_style.npc_skinned,
+            visual_style.npc_skinned_body_skin_remap_location, &remap, SHADER_UNIFORM_FLOAT);
+        DrawModel(creature->model, (Vector3){0}, 1.0f, WHITE);
+        EndWorldLighting();
+        EndMode3D();
+        EndTextureMode();
+        if (!known) {
+            Image gray = LoadImageFromTexture(portrait->texture);
+            ImageColorGrayscale(&gray);
+            ImageFormat(&gray, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+            UpdateTexture(portrait->texture, gray.data);
+            UnloadImage(gray);
+        }
+        SetTextureFilter(portrait->texture, TEXTURE_FILTER_POINT);
+    }
+    DrawTexturePro(portrait->texture, (Rectangle){0, 0, 64, -64},
+                   bounds, (Vector2){0}, 0.0f, WHITE);
 }

@@ -555,6 +555,7 @@ float CcLocalCombatSkillCooldown(const CcLocalAgent *player,
 float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
 void CcLocalRendererInit(void);
+void CcLocalDrawPonyPortrait(int32_t pony, bool known, Rectangle bounds);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
 void CcLocalRendererSetReducedMotion(bool enabled);
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step);
@@ -573,6 +574,8 @@ void CcLocalDrawNpcPortrait3D(const CcNpcAppearance *appearance,
                               CcNpcPortraitExpression expression);
 void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
                                 Rectangle bounds);
+void CcLocalDrawAvatarPreview3D(const CcLocalAgent *agent,
+                               RenderTexture2D target, Rectangle bounds);
 void CcLocalDrawNpcReview3D(int32_t view, float clock,
                             RenderTexture2D target, Rectangle destination);
 void CcLocalDrawHeraldryReview3D(const CcSim *sim, float clock,
