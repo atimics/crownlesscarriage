@@ -202,7 +202,7 @@ static bool HandleAdventureScene(CcSim *sim, LocalState *local,
     if (ClientKeyPressed(KEY_E))
         CcInteractionCycle(&local->interaction, &local->interactions,
             IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? -1 : 1);
-    Vector2 mouse = GetMousePosition();
+    Vector2 mouse = ClientPointerPosition();
     const CcInteractionTarget *hover = CcInteractionPick(&local->interactions, mouse.x, mouse.y);
     bool click = ClientMouseButtonPressed(MOUSE_BUTTON_LEFT);
     const CcInteractionTarget *focus = AdventureFocus(local);
@@ -313,12 +313,13 @@ static Rectangle AdventurePanel(void)
 
 static bool AdventureHit(Rectangle bounds)
 {
-    return ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), bounds);
+    return ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(ClientPointerPosition(), bounds);
 }
 
 static void AdventureButton(Rectangle bounds, const char *label, bool enabled, bool active)
 {
-    bool hover = CheckCollisionPointRec(GetMousePosition(), bounds);
+    ClientTouchAdd(bounds, label, enabled, active);
+    bool hover = CheckCollisionPointRec(ClientPointerPosition(), bounds);
     DrawRectangleRounded(bounds, 0.12f, 4, active || (hover && enabled) ? PANEL_HOVER : PANEL_DEEP);
     DrawRectangleRoundedLinesEx(bounds, 0.12f, 4, active ? 2.0f : 1.0f,
         enabled ? active ? CC_GOLD : TEAL : MUTED);
@@ -340,6 +341,8 @@ static Rectangle AdventureClose(Rectangle panel)
 
 static void AdventurePanelTitle(Rectangle panel, const char *title)
 {
+    ClientTouchBegin();
+    ClientTouchHeading(title, "Choose an action below.");
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BACKGROUND, 0.65f));
     DrawPanel(panel, PANEL_DEEP);
     CcOverlayDrawText(title, (int)panel.x + 24, (int)panel.y + 22, AdventureTextSize(23), CC_GOLD);
@@ -437,10 +440,17 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local)
     local->trade_presented_command = quote.command;
     AdventurePanelTitle(panel, CcLocalPlaceProfileForSettlement(place)->interior_service);
     const char *modes[] = {"Buy", "Sell", "Deliver promise"};
+    ClientTouchHeading(CcLocalPlaceProfileForSettlement(place)->interior_service,
+        TextFormat("%s %d %s. %s: %" PRId64 " crowns. Purse: %" PRId64 ". %s",
+            modes[local->trade_mode], abs(quote.command.amount), CcGoodName(quote.command.good),
+            local->trade_mode == 0 ? "Total cost" : "Sale value", quote.total,
+            sim->player.coins, quote.reason));
     for (int i = 0; i < 3; ++i) AdventureButton(AdventureTab(panel, i, 3), modes[i], true, i == local->trade_mode);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         Rectangle bounds = AdventureGoodBounds(panel, good);
         bool active = good == (int32_t)quote.command.good;
+        ClientTouchAdd(bounds, TextFormat("%s: %d", CcGoodName((CcGood)good),
+            local->trade_mode == 0 ? place->stock[good] : sim->player.cargo[good]), true, active);
         if (active) DrawRectangleRec(bounds, PANEL_HOVER);
         CcOverlayDrawText(TextFormat("%s  %d", CcGoodName((CcGood)good),
             local->trade_mode == 0 ? place->stock[good] : sim->player.cargo[good]),
@@ -735,7 +745,7 @@ static void DrawAdventureFocus(const CcSim *sim, const LocalState *local, Client
     int32_t selected_route, int32_t selected_situation)
 {
     const CcInteractionTarget *focus = AdventureFocus(local);
-    Vector2 mouse = GetMousePosition();
+    Vector2 mouse = ClientPointerPosition();
     const CcInteractionTarget *hover = WorldActionPointerTarget(local, mouse);
     ContextActionSet cards = BuildContextActions(sim, local, view, selected_route, selected_situation);
     int32_t first = ContextCardFirst(local, cards.count);
@@ -779,6 +789,7 @@ static void DrawAdventureConversation(const CcSim *sim, const LocalState *local)
     bool authored = situation != NULL && person != NULL &&
         CcStoryCharacterText(sim, situation, person, spoken, sizeof(spoken));
     const char *line = authored ? spoken : local->conversation_line;
+    ClientTouchHeading(name, line);
     float width = fminf(720.0f, (float)GetScreenWidth() - 80.0f);
     float height = 68.0f + (float)AdventureText(line, 0, 0, (int)width - 44,
         AdventureTextSize(17), INK, false);
@@ -820,6 +831,7 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
         local->road_choice_active ? "Choose a road card or tap its sign" :
         local->site_travel_active ? "Tap the carriage to stop or drive" :
         local->market_interior ? profile->interior_service : profile->identity;
+    ClientTouchHeading(title, detail);
     CcOverlayDrawText(detail, 24, 67, AdventureTextSize(12), MUTED);
 }
 

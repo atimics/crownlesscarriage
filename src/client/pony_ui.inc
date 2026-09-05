@@ -6,11 +6,12 @@ static Rectangle PonyBookButton(void)
 static bool PonyClicked(Rectangle bounds)
 {
     return ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-           CheckCollisionPointRec(GetMousePosition(), bounds);
+           CheckCollisionPointRec(ClientPointerPosition(), bounds);
 }
 
 static void DrawPonyButton(Rectangle bounds, const char *label)
 {
+    ClientTouchAdd(bounds, label, true, false);
     DrawRectangleRec(bounds, (Color){32, 37, 50, 255});
     DrawRectangleLinesEx(bounds, 1, TEAL);
     CcOverlayDrawText(label, (int)bounds.x + 10, (int)bounds.y + 10, 9, INK);

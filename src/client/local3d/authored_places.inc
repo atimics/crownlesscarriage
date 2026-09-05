@@ -1762,6 +1762,40 @@ static float TerrainRoadAmount(float x, float z)
     return fmaxf(amount, TerrainCarriageRoadAmount(x, z));
 }
 
+CcSoundCue CcLocalFootstepSurfaceAt(CcLocalSceneKind scene, float x, float z)
+{
+    if (scene == CC_LOCAL_SCENE_MARKET) return CC_SOUND_STEP_WOOD;
+    if (active_world_stream != NULL) {
+        CcWorldSurfaceKind surface = CcWorldSurfaceAt(
+            &active_world_stream->manifest, x, z);
+        return surface == CC_WORLD_SURFACE_WILDERNESS ? CC_SOUND_STEP_GRASS :
+               surface == CC_WORLD_SURFACE_ROAD ? CC_SOUND_STEP_DIRT : CC_SOUND_STEP_STONE;
+    }
+    if (scene == CC_LOCAL_SCENE_ROAD) {
+        if (RoadUsesAuthoredCheckpoint() &&
+            CcLocalRoadCheckpointSurfaceYInternal(x, z) > 0.0f)
+            return CC_SOUND_STEP_STONE;
+        return x >= 15.0f && x <= 81.0f && z >= 36.30f && z <= 43.70f ?
+               CC_SOUND_STEP_DIRT : CC_SOUND_STEP_GRASS;
+    }
+    if (scene != CC_LOCAL_SCENE_STREET) return CC_SOUND_STEP_STONE;
+    if (CourseWaterContains(scene, x, z)) return CC_SOUND_SPLASH;
+    float terrain = CcLocalTerrainHeightAt(x, z);
+    for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
+        const NavPlatform *platform = StreetPhysicsPlatformAt(i);
+        if (platform != NULL && x >= platform->x && x <= platform->x + platform->width &&
+            z >= platform->z && z <= platform->z + platform->depth &&
+            PlatformTopHeight(platform) > terrain) {
+            return platform->style == 0 ? CC_SOUND_STEP_STONE : CC_SOUND_STEP_WOOD;
+        }
+    }
+    /* Use the same road edges and seed as the ground colors. */
+    if (TerrainRoadAmount(x, z) < 0.5f) return CC_SOUND_STEP_GRASS;
+    CcLocalRoadSurface surface = ActiveTownRoadSurface();
+    return surface == CC_LOCAL_ROAD_FARM_TRACK || surface == CC_LOCAL_ROAD_EXPEDITION ?
+           CC_SOUND_STEP_DIRT : CC_SOUND_STEP_STONE;
+}
+
 static Color TerrainPlaceRoadColor(CcLocalRoadSurface surface)
 {
     switch (surface) {
