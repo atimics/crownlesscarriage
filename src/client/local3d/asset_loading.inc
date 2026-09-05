@@ -2861,7 +2861,11 @@ static void SetWorldForegroundReveal(float amount, float cut_height)
         (active == 0.0f || visual_style.foreground_cut_height == cut_height)) {
         return;
     }
+    // Queued walls already use world coordinates, including their terrain lift.
+    rlPushMatrix();
+    rlLoadIdentity();
     rlDrawRenderBatchActive();
+    rlPopMatrix();
     visual_style.foreground_reveal_valid = true;
     visual_style.foreground_reveal = active;
     visual_style.foreground_cut_height = cut_height;
