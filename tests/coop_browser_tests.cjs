@@ -152,8 +152,37 @@ async function main() {
     await game.reload();
     await game.waitForFunction(() => document.body.dataset.companyReady === 'ready', undefined, {timeout:120000});
     await game.waitForFunction(hash => document.body.dataset.companyHash === hash, travelling.state.hash);
-    // The C client reports each death and resets both players after one jump.
     await owner.evaluate(() => Module.ccCoop.togglePause());
+    for (const page of [owner, game]) await page.waitForFunction(() => !Module.ccCoop.paused());
+    const firstStop = await owner.evaluate(() => Module.ccCoop.apply('skip_watch', '0', 0, 0));
+    assert.equal(firstStop.accepted, true);
+    assert(firstStop.world.state.journey.road_site, 'Travel must stop at the first road site');
+    const firstJourney = firstStop.world.state.journey;
+    for (const page of [owner, game]) await page.waitForFunction(hash => document.body.dataset.companyHash === hash, firstStop.world.state.hash);
+    const held = await game.evaluate(() => Module.ccCoop.apply('skip_watch', '0', 0, 0));
+    assert.equal(held.accepted, true);
+    assert.equal(held.world.state.hash, firstStop.world.state.hash);
+    for (const page of [owner, game]) await page.waitForFunction(hash => document.body.dataset.companyHash === hash, held.world.state.hash);
+    const camped = await game.evaluate(target => Module.ccCoop.apply('camp_road_site', target, 0, 0), firstJourney.road_site.id);
+    assert.equal(camped.accepted, true);
+    assert.equal(camped.world.state.journey.progress, firstJourney.progress);
+    assert.equal(camped.world.state.minute, firstStop.world.state.minute + 480);
+    assert.equal(camped.world.state.journey.road_site, null);
+    await owner.waitForFunction(hash => document.body.dataset.companyHash !== hash, held.world.state.hash);
+    const nextStop = await owner.evaluate(() => Module.ccCoop.apply('skip_watch', '0', 0, 0));
+    assert.equal(nextStop.accepted, true);
+    assert(nextStop.world.state.journey.progress > firstJourney.progress);
+    assert(nextStop.world.state.journey.road_site);
+    assert.notEqual(nextStop.world.state.journey.road_site.id, firstJourney.road_site.id);
+    for (const page of [owner, game]) await page.waitForFunction(hash => document.body.dataset.companyHash === hash, nextStop.world.state.hash);
+    await game.reload();
+    await game.waitForFunction(() => document.body.dataset.companyReady === 'ready', undefined, {timeout:120000});
+    await game.waitForFunction(hash => document.body.dataset.companyHash === hash, nextStop.world.state.hash);
+    const continued = await game.evaluate(target => Module.ccCoop.apply('pass_road_site', target, 0, 0), nextStop.world.state.journey.road_site.id);
+    assert.equal(continued.accepted, true);
+    assert.equal(continued.world.state.journey.road_site, null);
+    assert.equal(continued.world.state.journey.route, firstJourney.route);
+    // The C client reports each death and resets both players after one jump.
     const beforeDeath = await state();
     await owner.evaluate(() => Module.ccCoop.life(true));
     await owner.waitForFunction(() => Module.ccCoop.dead());
@@ -176,7 +205,7 @@ async function main() {
       Module.ccCoop.partyWipes() === 1 && !Module.ccCoop.dead(), undefined, {timeout:120000});
     assert.equal((await state()).state.day, nextCompany.state.day);
     assert.deepEqual(errors, []);
-    console.log('Desktop and phone players draw each other with their chosen appearance and moving poses; touch walking, leaving, rejoining, reload, shared travel, and the twenty-year party death jump pass.');
+    console.log('Desktop and phone players draw each other with their chosen appearance and moving poses; touch walking, leaving, rejoining, reload, shared road stops, camping, continuing, and the twenty-year party death jump pass.');
   } catch (error) {
     await fs.mkdir('browser-results', {recursive:true});
     for (const [name, page] of [['owner', owner], ['crew', crew]]) {
