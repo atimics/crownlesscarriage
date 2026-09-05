@@ -43,8 +43,50 @@ static void CheckSharedPonies(void)
     CcCoopDestroy(guest);
 }
 
+static void CheckSharedDepartureAndRoadStop(void)
+{
+    char error[256];
+    CcSim *host = CcCoopCreate(42U);
+    CcSim *guest = CcCoopCreate(42U);
+    CC_CHECK(host != NULL && guest != NULL);
+    host->player.coins = 0;
+    CC_CHECK(CcCoopApply(host, "travel", host->settlements[1].id, 0, 0, error, sizeof(error)));
+    CC_CHECK(host->journey.active && host->player.coins == 0);
+    const CcRoadSite *site = NULL;
+    for (int32_t i = 0; i < host->road_site_count; ++i) {
+        if (host->road_sites[i].route_id == host->journey.route_id) {
+            site = &host->road_sites[i];
+            break;
+        }
+    }
+    CC_CHECK(site != NULL);
+    host->journey.ambush_pending = false;
+    host->journey.encounter_triggered = true;
+    host->carriage.progress_milli = site->progress_milli;
+    host->journey.elapsed_subticks = (int32_t)(
+        ((int64_t)host->journey.total_subticks * site->progress_milli + 999) / 1000);
+    CC_CHECK(CcSimJourneyRoadSiteStop(host) == site);
+    uint64_t stopped = CcSimHash(host);
+    CC_CHECK(CcCoopAdvance(host, 3600, error, sizeof(error)));
+    CC_CHECK(CcSimHash(host) == stopped);
+    unsigned char *bytes = NULL;
+    size_t length = 0;
+    CC_CHECK(CcCoopEncode(host, &bytes, &length, error, sizeof(error)));
+    CC_CHECK(CcCoopDecode(guest, bytes, length, error, sizeof(error)));
+    CcCoopFree(bytes);
+    CC_CHECK(CcSimHash(guest) == stopped && CcSimJourneyRoadSiteStop(guest) != NULL);
+    CC_CHECK(CcCoopApply(host, "pass_road_site", site->id, 0, 0, error, sizeof(error)));
+    int32_t before = host->carriage.progress_milli;
+    CC_CHECK(CcCoopAdvance(host, 60, error, sizeof(error)));
+    CC_CHECK(host->carriage.progress_milli > before);
+    CC_CHECK(CcSimJourneyRoadSiteStop(host) != site);
+    CcCoopDestroy(host);
+    CcCoopDestroy(guest);
+}
+
 int main(void)
 {
+    CheckSharedDepartureAndRoadStop();
     CheckSharedPonies();
     char error[256];
     CcSim *first = CcCoopCreate(UINT32_C(0xc0a71a9e));

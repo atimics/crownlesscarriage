@@ -1015,6 +1015,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(road_stop_tests)
     add_test(NAME roadside_camp_choices COMMAND road_stop_tests)
 
+    add_executable(travel_departure_tests tests/travel_departure_tests.c)
+    target_link_libraries(travel_departure_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(travel_departure_tests)
+    add_test(NAME free_road_departures COMMAND travel_departure_tests)
+
     find_program(CC_NODE_EXECUTABLE node)
     if(CC_NODE_EXECUTABLE)
         add_test(NAME browser_persistence_contract
@@ -1264,6 +1269,13 @@ if(BUILD_TESTING)
         add_custom_target(run_character_material_captures
             COMMAND renderer_regression_tests --material-captures
                 "${CMAKE_CURRENT_BINARY_DIR}/character-materials"
+            DEPENDS renderer_regression_tests
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            USES_TERMINAL
+        )
+        add_custom_target(run_humanoid_animation_captures
+            COMMAND renderer_regression_tests --animation-captures
+                "${CMAKE_CURRENT_BINARY_DIR}/humanoid-animation"
             DEPENDS renderer_regression_tests
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             USES_TERMINAL

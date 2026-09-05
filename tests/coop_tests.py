@@ -39,6 +39,43 @@ class CoopTests(unittest.TestCase):
         return {'protocol': 1, 'sequence': view['next_sequence'],
                 'action_revision': view['action_revision'], 'action': action, **values}
 
+    def check_cached_view_upgrade(self, travelling=False, paused=False):
+        self.worlds.command(self.id, self.a, self.command(self.a, good=0, amount=1))
+        if travelling:
+            target = self.worlds.view(self.id, self.a)['state']['travel'][0]['id']
+            result = self.worlds.command(self.id, self.a, self.command(self.a, 'travel', target=target))
+            self.assertTrue(result['accepted'])
+        if paused:
+            self.worlds.owner_action(self.id, self.a, 'pause')
+        before = self.worlds.view(self.id, self.a)
+        receipts = [tuple(row) for row in self.worlds.db.execute('SELECT * FROM receipts')]
+        stale = dict(before['state'], hash='older-engine-view', travel=[])
+        self.worlds.db.execute('UPDATE worlds SET view=? WHERE id=?', (json.dumps(stale), self.id))
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        after = self.worlds.view(self.id, self.a)
+        self.assertEqual(after['state'], before['state'])
+        self.assertEqual(after['revision'], before['revision'] + 1)
+        self.assertEqual(after['action_revision'], before['action_revision'] + 1)
+        self.assertEqual(after['next_sequence'], before['next_sequence'])
+        self.assertEqual(after['paused'], paused)
+        self.assertEqual([tuple(row) for row in self.worlds.db.execute('SELECT * FROM receipts')], receipts)
+        saved = self.worlds.db.execute('SELECT state FROM worlds WHERE id=?', (self.id,)).fetchone()[0]
+        with self.engine.open(saved=saved) as sim:
+            self.assertEqual(sim.snapshot(), after['state'])
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.assertEqual(self.worlds.view(self.id, self.a)['revision'], after['revision'])
+
+    def test_idle_cached_view_refreshes_on_restart(self):
+        self.check_cached_view_upgrade()
+
+    def test_paused_cached_view_refreshes_on_restart(self):
+        self.check_cached_view_upgrade(paused=True)
+
+    def test_travelling_cached_view_refreshes_on_restart(self):
+        self.check_cached_view_upgrade(travelling=True)
+
     def enter(self, token):
         state = self.worlds.view(self.id, token, campaign=True, enter=True)
         return dict(visit=state['visit'], context=state['session_context'], scene=0, pose=[0.0] * 83)

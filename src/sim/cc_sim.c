@@ -14586,6 +14586,21 @@ static void CreateJourneyTraffic(CcSim *sim,
     const CcRoute *route = CcSimRoute(sim, journey->route_id);
     if (origin == NULL || destination == NULL || route == NULL ||
         CcSimRouteCrossesKingdomBorder(sim, route->id)) return;
+    CcRoyalCarriage *carriage = NULL;
+    if (sim->schema_version >= 41U) {
+        for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+            CcRoyalCarriage *candidate = &sim->royal_carriages[i];
+            if (candidate->kingdom_id == destination->kingdom_id &&
+                candidate->location_id == origin->id &&
+                candidate->mode == CC_ROYAL_CARRIAGE_IDLE &&
+                candidate->active_shipment_id == 0U) {
+                carriage = candidate;
+                break;
+            }
+        }
+        /* The daily trade planner can dispatch when a carriage returns. */
+        if (carriage == NULL) return;
+    }
     CcGood good = CC_GOOD_FOOD;
     for (int32_t candidate = 1; candidate < CC_GOOD_COUNT; ++candidate) {
         if (origin->stock[candidate] > origin->stock[good]) {
@@ -14609,6 +14624,17 @@ static void CreateJourneyTraffic(CcSim *sim,
         .arrival_day = sim->current_day + route->travel_days,
         .status = CC_SHIPMENT_TRAVELLING
     };
+    if (carriage != NULL) {
+        carriage->route_id = route->id;
+        carriage->destination_id = destination->id;
+        carriage->target_id = destination->id;
+        carriage->active_shipment_id = shipment->id;
+        carriage->mode = CC_ROYAL_CARRIAGE_DELIVERING;
+        carriage->departure_day = shipment->departure_day;
+        carriage->arrival_day = shipment->arrival_day;
+        carriage->blocked_since_day = 0;
+        carriage->next_dispatch_day = sim->current_day + 7;
+    }
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
                    "%.24s sends %d %.16s toward %.24s after the Crownless intervention.",
@@ -15035,7 +15061,8 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
     *preview = (CcTravelPreview){
         .route_id = route->id,
         .destination_id = destination->id,
-        .provision_cost = base_fare + TradeRouteToll(sim, route),
+        .provision_cost = sim->schema_version >= 41U ? 0 :
+            base_fare + TradeRouteToll(sim, route),
         .travel_days = days,
         .claimed_condition = map != NULL ? map->recorded_condition : -1,
         .claimed_danger = map != NULL ?
@@ -15120,8 +15147,11 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         full_contract_load;
     bool uncharted = !preview.charted && !sponsored_night_passage;
     int32_t days = preview.travel_days;
-    int32_t base_fare = days + (route->smuggler_route ? 3 : 0);
-    CcMoney toll = TradeRouteToll(sim, route);
+    /* Replay older journals with their original departure transfers. */
+    int32_t base_fare = sim->schema_version >= 41U ? 0 :
+        days + (route->smuggler_route ? 3 : 0);
+    CcMoney toll = sim->schema_version >= 41U ? 0 :
+        TradeRouteToll(sim, route);
     CcMoney fare = preview.provision_cost;
     const CcSettlement *origin = CcSimSettlement(
         sim, sim->player.location_id);
@@ -17208,12 +17238,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 36U ||
                          sim->schema_version == 37U ||
                          sim->schema_version == 38U ||
-                         sim->schema_version == 39U;
+                         sim->schema_version == 39U ||
+                         sim->schema_version == 40U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 40U && sim->generator_version == 25U) ||
         (sim->schema_version == 39U && sim->generator_version == 25U) ||
         (sim->schema_version == 38U && sim->generator_version == 25U) ||
         (sim->schema_version == 37U && sim->generator_version == 25U) ||
@@ -19001,7 +19033,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 sim->journey.encounter_subticks < 0 ||
                 sim->journey.encounter_subticks >
                     sim->journey.total_subticks ||
-                sim->journey.fare_reserved < 1 ||
+                sim->journey.fare_reserved < 0 ||
                 sim->journey.pace < CC_JOURNEY_PACE_CAREFUL ||
                 sim->journey.pace > CC_JOURNEY_PACE_PUSH ||
                 (sim->journey.ambush_warned &&

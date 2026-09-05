@@ -5678,7 +5678,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
-    if ((legacy_version == 38U || legacy_version == 39U) && sim->generator_version == 25U) {
+    if ((legacy_version == 38U || legacy_version == 39U ||
+         legacy_version == 40U) && sim->generator_version == 25U) {
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }
