@@ -14,6 +14,18 @@ static void Require(bool condition, const char *name)
     exit(EXIT_FAILURE);
 }
 
+static CcWorldPoint RotatedBuildingPoint(const CcWorldManifest *manifest,
+    const CcWorldSettlementPlacement *town, const CcLocalPlaceBuilding *building,
+    float degrees, float x, float z)
+{
+    float cx = building->x + building->width * 0.5f;
+    float cz = building->z + building->depth * 0.5f;
+    float angle = degrees * DEG2RAD;
+    return CcWorldSettlementLocalPoint(manifest, town->settlement_id,
+        cx + cosf(angle) * (x - cx) + sinf(angle) * (z - cz),
+        cz - sinf(angle) * (x - cx) + cosf(angle) * (z - cz));
+}
+
 static void TestStreamedTownContacts(void)
 {
     static CcSim sim;
@@ -26,20 +38,21 @@ static void TestStreamedTownContacts(void)
         const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForFunction(town->function);
         const CcLocalPlaceBuilding *building = &profile->building[0];
         float z = building->z + building->depth * 0.5f;
-        CcWorldPoint a = CcWorldSettlementLocalPoint(&stream.manifest, town->settlement_id,
+        CcWorldPoint a = RotatedBuildingPoint(&stream.manifest, town, building, profile->building_yaw_degrees[0],
             building->x - 1.0f / town->profile_scale, z);
-        CcWorldPoint b = CcWorldSettlementLocalPoint(&stream.manifest, town->settlement_id,
+        CcWorldPoint b = RotatedBuildingPoint(&stream.manifest, town, building, profile->building_yaw_degrees[0],
             building->x + 0.5f / town->profile_scale, z);
-        CcWorldPoint wall = CcWorldSettlementLocalPoint(&stream.manifest, town->settlement_id,
+        CcWorldPoint wall = RotatedBuildingPoint(&stream.manifest, town, building, profile->building_yaw_degrees[0],
             building->x, z);
-        float yaw = town->entrance_heading_yaw - PI * 0.5f;
+        float yaw = town->entrance_heading_yaw - PI * 0.5f +
+            profile->building_yaw_degrees[0] * DEG2RAD;
         Vector3 inward = {cosf(yaw), 0, -sinf(yaw)};
         Vector3 start = {a.x, town->plateau_height + 0.8f, a.z};
         Vector3 end = {b.x, start.y, b.z};
         Vector3 corrected, normal;
         Require(CcLocalProbePhysicsSphereInternal(CC_LOCAL_SCENE_STREET, start, end,
             0.16f, &corrected, &normal), "ragdoll sphere hits a streamed building");
-        Require(Vector3DotProduct(normal, inward) < -0.90f &&
+        Require(Vector3DotProduct(normal, inward) < -0.99f &&
             (corrected.x - wall.x) * inward.x + (corrected.z - wall.z) * inward.z < -0.154f,
             "sphere uses the visible town rotation and scale");
         start.y = end.y = town->plateau_height;
@@ -47,7 +60,7 @@ static void TestStreamedTownContacts(void)
             0.22f, &corrected, &normal), "whole character hits a streamed building");
         Require((corrected.x - wall.x) * inward.x + (corrected.z - wall.z) * inward.z < -0.219f,
             "character remains outside the town wall");
-        CcWorldPoint center = CcWorldSettlementLocalPoint(&stream.manifest, town->settlement_id,
+        CcWorldPoint center = RotatedBuildingPoint(&stream.manifest, town, building, profile->building_yaw_degrees[0],
             building->x + building->width * 0.5f, z);
         float roof = town->plateau_height + 0.03f + building->height * town->profile_scale;
         start = (Vector3){center.x, roof + 2, center.z};

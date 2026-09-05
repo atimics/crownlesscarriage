@@ -15,13 +15,32 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .keeper_name = "Edda — Granary keeper",
         .interior_service = "Provisions, seed, and harvest accounts",
         .map_form = "Dispersed crofts around a threshing green",
+        .lane_count = 9,
+        .lane = {
+            {"Ford road", 4.8f, 10, {{96,34}, {84,34}, {77,38}, {66,40},
+                {57,35}, {49,33}, {41,32}, {32,28.5f}, {24,29.4f}, {7,27}}},
+            {"Cartwright lane", 3.8f, 6, {{41,32}, {38.5f,39}, {42,46},
+                {42,51.2f}, {42,54}, {46,63}}},
+            {"Granary rise", 3.2f, 7, {{57,35}, {62,32}, {65,29}, {70,29},
+                {75,30}, {78.5f,27}, {78.5f,22}}},
+            {"Mill approach", 2.4f, 3, {{78.5f,27}, {82,30.5f}, {86,30}}},
+            {"North crofts", 2.0f, 5, {{32,28.5f}, {36.8f,25.5f}, {40,20},
+                {38,12}, {32,9}}},
+            {"Orchard lane", 2.0f, 5, {{42,54}, {49,52}, {60,52}, {66,59}, {61,68}}},
+            {"Barn lane", 1.8f, 4, {{24,29.4f}, {16,28.5f}, {13,23}, {10.5f,21}}},
+            {"West pasture", 1.8f, 5, {{16,28.5f}, {14,38}, {13,47}, {11,48}, {8,48}}},
+            {"Cart yard", 3.4f, 3, {{42,51.2f}, {40,51.4f}, {37.4f,51.2f}}},
+        },
+        .carriage_lane_count = 3,
+        .carriage_lane = {{0,6}, {1,3}, {8,2}},
+        .building_yaw_degrees = {-12, 14, -7, 19, -14, -18, 0, 23},
         .scene = {
             {CC_LOCAL_TOWN_SCENE_ARRIVAL, "RIVERFORD ARRIVAL",
-             82.0f, 34.0f, 79.0f, 0.16f, 23.0f,
-             -18.0f, 0.64f, 26.0f, 22.0f},
+             82.0f, 34.0f, 65.0f, 0.16f, 30.0f,
+             -28.0f, 0.64f, 34.0f, 37.0f},
             {CC_LOCAL_TOWN_SCENE_HEART, "THRESHING GREEN",
-             44.0f, 29.0f, 46.0f, 0.14f, 24.0f,
-             -12.0f, 0.64f, 16.0f, 16.0f},
+             44.0f, 29.0f, 46.0f, 0.14f, 29.0f,
+             -20.0f, 0.64f, 26.0f, 26.0f},
             {CC_LOCAL_TOWN_SCENE_LANDMARK, "HILL GRANARIES",
              78.0f, 19.0f, 78.0f, 0.16f, 19.0f,
              -16.0f, 0.64f, 22.0f, 13.0f},
@@ -788,4 +807,29 @@ void CcLocalTownConditionText(uint32_t conditions, char *text, size_t capacity)
         (void)snprintf(text + used, capacity - used, "%s%s",
                        used > 0U ? " / " : "", labels[i].name);
     }
+}
+
+CcLocalLanePoint CcLocalLaneSample(const CcLocalLane *lane, float progress)
+{
+    if (lane == NULL || lane->point_count < 2 ||
+        lane->point_count > CC_LOCAL_LANE_POINT_CAPACITY) return (CcLocalLanePoint){0};
+    if (progress <= 0.0f) return lane->point[0];
+    if (progress >= 1.0f) return lane->point[lane->point_count - 1];
+    float along = progress * (float)(lane->point_count - 1);
+    int32_t index = (int32_t)along;
+    float t = along - (float)index;
+    CcLocalLanePoint a = lane->point[index > 0 ? index - 1 : index];
+    CcLocalLanePoint b = lane->point[index];
+    CcLocalLanePoint c = lane->point[index + 1];
+    CcLocalLanePoint d = lane->point[index + 2 < lane->point_count ? index + 2 : index + 1];
+    float t2 = t * t;
+    float t3 = t2 * t;
+    return (CcLocalLanePoint){
+        0.5f * (2.0f * b.x + (c.x - a.x) * t +
+            (2.0f * a.x - 5.0f * b.x + 4.0f * c.x - d.x) * t2 +
+            (3.0f * b.x - a.x - 3.0f * c.x + d.x) * t3),
+        0.5f * (2.0f * b.z + (c.z - a.z) * t +
+            (2.0f * a.z - 5.0f * b.z + 4.0f * c.z - d.z) * t2 +
+            (3.0f * b.z - a.z - 3.0f * c.z + d.z) * t3),
+    };
 }

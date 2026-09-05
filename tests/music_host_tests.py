@@ -11,6 +11,7 @@ host = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(host)
 folder = root / 'assets/audio/music'
 offline = json.loads((folder / 'offline.json').read_text())['tracks']
+catalog = json.loads((folder / 'catalog.json').read_text())
 assert len(offline) == 27
 assert {p.stem for p in folder.glob('*.mp3')} == {t['stem'] for t in offline}
 for track in offline:
@@ -24,19 +25,24 @@ with tempfile.TemporaryDirectory() as tmp:
     audio = directory / 'source'
     audio.mkdir()
     # A later export grows the online library independently of the bundled set.
-    for stem in ['03-01', '03-03']:
+    for stem in ['03-01', '03-03', '65-01', '66-02', '82-02']:
         (audio / (stem + '.mp3')).write_bytes(b'A' * 2048)
     output = directory / 'public'
     manifest = host.build(audio, output, folder / 'catalog.json')
-    assert manifest['total_takes'] == 149
-    assert manifest['available_takes'] == 2
+    assert manifest['total_takes'] == len(catalog['takes']) == 185
+    assert manifest['available_takes'] == 5
     for track in manifest['tracks']:
         assert (output / track['file']).is_file()
         assert track['sha256'] in track['file']
     assert 'Access-Control-Allow-Origin: *' in (output / '_headers').read_text()
     assert 'immutable' in (output / '_headers').read_text()
     assert (output / '404.html').exists()
-    assert len((output / 'catalog.txt').read_text().splitlines()) == 3
+    assert len((output / 'catalog.txt').read_text().splitlines()) == 6
+    assert {t['title'] for t in manifest['tracks']} >= {
+        'Thornford - Flour on the Windowsill',
+        'Thornford - Flour on the Windowsill - Shortage',
+        'Hollowbarrow - One Lantern Left - Recovery',
+    }
     public = json.dumps(manifest)
     assert 'suno.com' not in public and '/Users/' not in public
     (audio / '99-99.mp3').write_bytes(b'A' * 2048)

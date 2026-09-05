@@ -1639,6 +1639,19 @@ static const Rectangle TERRAIN_FIELDS[] = {
     {76.0f, 43.0f, 15.0f, 10.0f},
 };
 
+static Vector2 TerrainFieldPoint(int32_t index, float x, float z, bool inverse)
+{
+    if (active_place_function != CC_SETTLEMENT_FARMING) return (Vector2){x, z};
+    static const float angles[] = {-8, 11, -16, 16, -12};
+    Rectangle field = TERRAIN_FIELDS[index];
+    float cx = field.x + field.width * 0.5f;
+    float cz = field.y + field.height * 0.5f;
+    float angle = angles[index] * DEG2RAD * (inverse ? -1.0f : 1.0f);
+    float c = cosf(angle), s = sinf(angle);
+    return (Vector2){cx + c * (x - cx) + s * (z - cz),
+                     cz - s * (x - cx) + c * (z - cz)};
+}
+
 static float TerrainRectangleInset(float x, float z, Rectangle rectangle)
 {
     if (!TerrainPointInRectangle(x, z, rectangle)) return 0.0f;
@@ -1727,6 +1740,7 @@ static int32_t TerrainVisibleRoadCount(void)
 
 static float TerrainPlaceRoadAmount(float x, float z)
 {
+    if (ActivePlaceProfile()->lane_count > 0) return 0.0f;
     float amount = 0.0f;
     int32_t index_offset =
         (int32_t)(sizeof(TERRAIN_ROADS) / sizeof(TERRAIN_ROADS[0]));
@@ -1745,6 +1759,7 @@ static float TerrainPlaceRoadAmount(float x, float z)
 
 static float TerrainCarriageRoadAmount(float x, float z)
 {
+    if (ActivePlaceProfile()->lane_count > 0) return 0.0f;
     float amount = 0.0f;
     int32_t index_offset = TerrainCarriageRoadIndexOffset();
     for (int32_t i = 0; i < CC_LOCAL_CARRIAGE_ROUTE_COUNT; ++i) {
@@ -1763,6 +1778,12 @@ static float TerrainCarriageRoadAmount(float x, float z)
 
 static float TerrainRoadAmount(float x, float z)
 {
+    if (ActivePlaceProfile()->lane_count > 0) {
+        TerrainEnsureReady();
+        float inset = TerrainLaneInset(x, z, NULL);
+        float edge = TerrainValueNoise(x, z, 3.6f, 72U) * 0.12f;
+        return TerrainSmooth01((inset + edge) / 0.55f);
+    }
     float amount = 0.0f;
     for (int32_t i = 0; i < TerrainVisibleRoadCount(); ++i) {
         float inset = TerrainRoadSignedInset(&TERRAIN_ROADS[i], i, x, z);
@@ -1869,11 +1890,15 @@ static Color TerrainRoadRutColor(CcLocalRoadSurface surface,
 
 static float TerrainFieldAmount(float x, float z)
 {
+    if (ActivePlaceProfile()->lane_count > 0 &&
+        (TerrainLaneInset(x, z, NULL) > -0.55f || x > TerrainFarmRiverCenter(z) - 5.4f ||
+         TerrainPointInsideMajorFoundation(x, z))) return 0.0f;
     float amount = 0.0f;
     for (int32_t i = 0; i < (int32_t)(sizeof(TERRAIN_FIELDS) /
                                       sizeof(TERRAIN_FIELDS[0])); ++i) {
         Rectangle field = TERRAIN_FIELDS[i];
-        float inset = TerrainRectangleSignedInset(x, z, field);
+        Vector2 local = TerrainFieldPoint(i, x, z, true);
+        float inset = TerrainRectangleSignedInset(local.x, local.y, field);
         float broad = TerrainValueNoise(
             x + (float)i * 8.2f, z - (float)i * 5.3f, 6.4f, 73U);
         float scallop = sinf((x - field.x) * 0.48f + (float)i) * 0.16f +
@@ -1894,6 +1919,12 @@ static bool TerrainPointInPlayableWorld(float x, float z)
 
 static float TerrainVisualHeightAt(float x, float z)
 {
+    if (ActivePlaceProfile()->lane_count > 0 &&
+        x >= 84.5f && x <= 97.5f && fabsf(z - 34.0f) < 2.7f) {
+        TerrainEnsureReady();
+        return TerrainSampleGrid(street_terrain_natural, x, z);
+    }
+
     if (TerrainPointInPlayableWorld(x, z)) {
         return CcLocalTerrainHeightAt(x, z);
     }
@@ -1927,8 +1958,10 @@ static Color TerrainSurfaceColor(const CcSettlement *place,
     float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
     float prosperity = place != NULL ?
                        (float)place->prosperity / 100.0f : 0.5f;
-    Color grass = BlendColor(WORLD_GRASS,
-                             WORLD_EARTH, hunger * 0.72f);
+    Color grass_base = active_place_function == CC_SETTLEMENT_FARMING ?
+        BlendColor(BlendColor(WORLD_GRASS, WORLD_GRASS_LIGHT, 0.36f),
+                   WORLD_CROP_LIGHT, 0.12f) : WORLD_GRASS;
+    Color grass = BlendColor(grass_base, WORLD_EARTH, hunger * 0.72f);
     float height = TerrainVisualHeightAt(x, z);
     float lowland = TerrainSmooth01((1.35f - height) / 2.40f);
     float highland = TerrainSmooth01((height - 4.20f) / 3.20f);
@@ -1938,10 +1971,15 @@ static Color TerrainSurfaceColor(const CcSettlement *place,
     float field_amount = TerrainFieldAmount(x, z);
     Color field = BlendColor(WORLD_CROP,
                              WORLD_CROP_LIGHT, prosperity * 0.26f);
+    if (active_place_function == CC_SETTLEMENT_FARMING) {
+        field = BlendColor(WORLD_EARTH, WORLD_CROP_SHADOW, 0.25f);
+    }
     field = BlendColor(field, grass, hunger * 0.28f);
     color = BlendColor(color, field, field_amount * 0.84f);
 
     float road_amount = TerrainRoadAmount(x, z);
+    if (ActivePlaceProfile()->lane_count > 0 &&
+        x >= 84.5f && fabsf(z - 34.0f) < 2.7f) road_amount = 0.0f;
     CcLocalRoadSurface road_surface = ActiveTownRoadSurface();
     Color road = TerrainBrightRoadColor(road_surface, prosperity);
     color = BlendColor(color, road, road_amount);
@@ -1973,8 +2011,8 @@ static Color TerrainSurfaceColor(const CcSettlement *place,
     if (active_place_function == CC_SETTLEMENT_FARMING) {
         float green_x = (x - 46.0f) / 8.4f;
         float green_z = (z - 29.7f) / 4.0f;
-        plaza_amount *= TerrainSmooth01(1.7f - green_x * green_x - green_z * green_z);
-        plaza_color = BlendColor(WORLD_EARTH_LIGHT, WORLD_CROP_SHADOW, 0.22f);
+        plaza_amount = TerrainSmooth01(1.0f - green_x * green_x - green_z * green_z) * 0.58f;
+        plaza_color = BlendColor(WORLD_GRASS_LIGHT, WORLD_EARTH_LIGHT, 0.25f);
     }
     color = BlendColor(color, plaza_color, plaza_amount);
 
@@ -2488,8 +2526,39 @@ static void DrawTerrainRoadIdentityMotif(const TerrainRoad *road,
     }
 }
 
+static void DrawCurvedLaneRuts(const CcSettlement *place)
+{
+    float prosperity = place != NULL ? (float)place->prosperity / 100.0f : 0.5f;
+    Color rut = BlendColor(TerrainRoadRutColor(CC_LOCAL_ROAD_FARM_TRACK, prosperity),
+                           WORLD_ROAD, 0.44f);
+    for (int32_t lane = 0; lane < ActivePlaceProfile()->lane_count; ++lane) {
+        const TerrainLanePath *path = &terrain_lanes[lane];
+        if (path->half_width < 1.5f) continue;
+        for (int32_t i = 1; i < path->count; ++i) {
+            Vector2 a = path->point[i - 1], b = path->point[i];
+            Vector2 middle = Vector2Scale(Vector2Add(a, b), 0.5f);
+            /* Junctions and the bridge have one continuous worn surface. */
+            if (TerrainLaneInset(middle.x, middle.y, NULL) > path->half_width + 0.1f ||
+                (middle.x > 83.5f && fabsf(middle.y - 34.0f) < 2.8f)) continue;
+            Vector2 tangent = Vector2Normalize(Vector2Subtract(b, a));
+            for (int32_t side = -1; side <= 1; side += 2) {
+                Vector2 offset = {tangent.y * (float)side * 0.86f,
+                                   -tangent.x * (float)side * 0.86f};
+                TerrainRibbonSegment(Vector2Add(a, offset), Vector2Add(b, offset),
+                                     0.11f, 0.045f, rut);
+            }
+        }
+    }
+}
+
 static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
 {
+    if (ActivePlaceProfile()->lane_count > 0) {
+        TerrainDetailBegin();
+        DrawCurvedLaneRuts(place);
+        TerrainDetailEnd();
+        return;
+    }
     float prosperity = place != NULL ?
                        (float)place->prosperity / 100.0f : 0.5f;
     CcLocalRoadSurface active_surface = ActiveTownRoadSurface();
@@ -2680,12 +2749,12 @@ static void DrawTerrainFieldRows(const CcSettlement *place, Vector3 focus)
                     (x - field.x) * 0.36f + (float)i * 1.2f) * 0.10f;
                 float next_bend = sinf(
                     (next - field.x) * 0.36f + (float)i * 1.2f) * 0.10f;
-                float middle_x = (x + next) * 0.5f;
-                float middle_z = z + (row_bend + next_bend) * 0.5f;
-                if (TerrainFieldAmount(middle_x, middle_z) < 0.30f) continue;
-                TerrainRibbonSegment((Vector2){x, z + row_bend},
-                                     (Vector2){next, z + next_bend},
-                                     0.080f, 0.055f, color);
+                Vector2 a = TerrainFieldPoint(i, x, z + row_bend, false);
+                Vector2 b = TerrainFieldPoint(i, next, z + next_bend, false);
+                if (TerrainFieldAmount((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f) < 0.30f) continue;
+                TerrainRibbonSegment(a, b,
+                                     active_place_function == CC_SETTLEMENT_FARMING ? 0.20f : 0.080f,
+                                     0.055f, color);
             }
         }
     }
@@ -2816,9 +2885,9 @@ static void DrawTerrainPlantCover(const CcSettlement *place, Vector3 focus)
                 float scale = 0.82f + TerrainScatter01(
                     field_index * 37 + column_index,
                     row_index, 42U) * 0.38f;
-                float crop_x = x + jitter * 0.22f;
-                if (TerrainFieldAmount(crop_x, z) < 0.22f) continue;
-                TerrainTuft(crop_x, z,
+                Vector2 crop = TerrainFieldPoint(field_index, x + jitter * 0.22f, z, false);
+                if (TerrainFieldAmount(crop.x, crop.y) < 0.22f) continue;
+                TerrainTuft(crop.x, crop.y,
                              0.31f * scale, 0.070f * scale,
                              jitter * 0.55f, crop_bottom, crop_top);
             }
@@ -2984,7 +3053,25 @@ static void DrawTerrainStageBox(float x, float z, float width, float depth,
 static void DrawArrivalBridge(bool fortified)
 {
     float ground = CcLocalTerrainHeightAt(91.0f, 34.0f);
-    Color stone = fortified ? WORLD_STONE : WORLD_WOOD_LIGHT;
+    bool stone_ford = active_place_function == CC_SETTLEMENT_FARMING;
+    Color stone = stone_ford ? BlendColor(WORLD_STONE_LIGHT, WORLD_EARTH_LIGHT, 0.42f) :
+                              fortified ? WORLD_STONE : WORLD_WOOD_LIGHT;
+    if (stone_ford) {
+        for (int32_t pier = 0; pier < 3; ++pier) {
+            DrawBox((Vector3){85.1f + (float)pier * 5.9f, ground - 1.7f, 34.0f},
+                (Vector3){1.05f, 3.05f, 4.7f}, ShadeColor(stone, 0.78f));
+        }
+        for (int32_t arch = 0; arch < 2; ++arch) {
+            float center = 88.05f + (float)arch * 5.9f;
+            for (int32_t block = 0; block < 12; ++block) {
+                float angle = ((float)block + 0.5f) * PI / 12.0f;
+                DrawTiltedBox((Vector3){center + cosf(angle) * 2.4f,
+                        ground - 2.7f + sinf(angle) * 2.4f, 34.0f},
+                    (Vector3){0.70f, 0.64f, 4.65f}, (Vector3){0,0,1},
+                    angle * RAD2DEG - 90.0f, ShadeColor(stone, block % 3 == 0 ? 0.90f : 1.0f));
+            }
+        }
+    }
     Color shadow = ShadeColor(stone, 0.58f);
     DrawBox((Vector3){91.0f, ground - 0.10f, 34.0f},
             (Vector3){12.5f, 0.32f, 4.75f}, shadow);
@@ -3036,19 +3123,21 @@ static void DrawThornfordMill(const CcSettlement *place, float clock)
 static void DrawFarmTerrainStage(const CcSettlement *place, uint32_t conditions,
                                   Vector3 focus, float clock)
 {
-    Color water = BlendColor(WORLD_TEAL, WORLD_INK, 0.42f);
-    for (float z = 2.0f; z < 72.0f; z += 4.0f) {
-        float river_x = 91.0f + sinf(z * 0.082f) * 1.7f;
+    Color water = BlendColor(WORLD_TEAL, CC_STYLE_TEAL_SHADOW, 0.18f);
+    for (float z = -24.0f; z < CC_LOCAL_WORLD_DEPTH + 32.0f; z += 4.0f) {
+        float river_x = TerrainFarmRiverCenter(z);
         if (!SceneryPointVisible(river_x, z, focus)) continue;
-        float next_x = 91.0f + sinf((z + 4.0f) * 0.082f) * 1.7f;
-        float angle = -atan2f(next_x - river_x, 4.0f) * RAD2DEG;
-
-        float ground = TerrainSampleGrid(street_terrain_natural,
-                                         river_x, z);
-        DrawTiltedBox((Vector3){(river_x + next_x) * 0.5f,
-                                ground + 0.045f, z + 2.0f},
-                      (Vector3){7.2f, 0.07f, 4.5f},
-                      (Vector3){0.0f, 1.0f, 0.0f}, angle, water);
+        float next_x = TerrainFarmRiverCenter(z + 4.0f);
+        float ground = TerrainPointInPlayableWorld(river_x, z) ?
+            TerrainNaturalHeight(river_x, z) : TerrainVisualHeightAt(river_x, z);
+        float next_ground = TerrainPointInPlayableWorld(next_x, z + 4.0f) ?
+            TerrainNaturalHeight(next_x, z + 4.0f) : TerrainVisualHeightAt(next_x, z + 4.0f);
+        Vector3 a = {river_x - 3.6f, ground + 0.12f, z};
+        Vector3 b = {next_x - 3.6f, next_ground + 0.12f, z + 4.0f};
+        Vector3 c = {next_x + 3.6f, next_ground + 0.12f, z + 4.0f};
+        Vector3 d = {river_x + 3.6f, ground + 0.12f, z};
+        DrawTriangle3D(a, b, c, water);
+        DrawTriangle3D(a, c, d, water);
     }
     if (SceneryPointVisible(91.0f, 34.0f, focus)) {
         DrawArrivalBridge(false);
@@ -3600,12 +3689,18 @@ static Vector3 secondary_reveal_subject;
 static bool secondary_reveal_valid;
 
 static bool WorldBuildingObscuresReveal(const WorldBuilding *building,
-                                        Camera3D camera,
+                                        int32_t index, Camera3D camera,
                                         Vector3 reveal_world,
                                         int32_t render_width,
                                         int32_t render_height)
 {
     if (building == NULL) return false;
+    Vector2 position = BuildingUnrotatedPoint(index, camera.position.x, camera.position.z);
+    Vector2 target = BuildingUnrotatedPoint(index, camera.target.x, camera.target.z);
+    Vector2 hero = BuildingUnrotatedPoint(index, reveal_world.x, reveal_world.z);
+    camera.position.x = position.x; camera.position.z = position.y;
+    camera.target.x = target.x; camera.target.z = target.y;
+    reveal_world.x = hero.x; reveal_world.z = hero.y;
     return CcLocalBuildingObscuresHeroInternal(
         building->footprint, building->height, camera, reveal_world,
         render_width, render_height) ||
@@ -3682,7 +3777,7 @@ static void UpdateWorldBuildingReveals(Camera3D camera,
         WorldBuilding building = ActiveWorldBuildingAt(i);
         WorldBuildingRevealState *state = &world_building_reveals[i];
         bool occluded = WorldBuildingObscuresReveal(
-            &building, camera, reveal_world,
+            &building, i, camera, reveal_world,
             render_width, render_height);
         UpdateBuildingReveal(state, occluded, reset, delta_time, 0.14f, 5.0f);
     }
@@ -3754,6 +3849,15 @@ static void DrawThornfordBuildingLife(const WorldBuilding *building,
     }
 }
 
+static void RotateBuildingPlot(Rectangle footprint, float degrees)
+{
+    float x = footprint.x + footprint.width * 0.5f;
+    float z = footprint.y + footprint.height * 0.5f;
+    rlTranslatef(x, 0.0f, z);
+    rlRotatef(degrees, 0.0f, 1.0f, 0.0f);
+    rlTranslatef(-x, 0.0f, -z);
+}
+
 static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
                                Color kingdom, Vector3 focus,
                                const CcLocalPlaceProfile *profile,
@@ -3773,6 +3877,7 @@ static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
         Color wall = BuildingWallColor(building.style, profile);
         rlPushMatrix();
         rlTranslatef(0.0f, TerrainFootprintHeight(building.footprint), 0.0f);
+        RotateBuildingPlot(building.footprint, profile->building_yaw_degrees[i]);
         DrawBuildingFoundation(
             building.footprint.x, building.footprint.y,
             building.footprint.width, building.footprint.height,
@@ -3793,6 +3898,7 @@ static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
             building_base + building.height + 3.5f);
         rlPushMatrix();
         rlTranslatef(0.0f, building_base, 0.0f);
+        RotateBuildingPlot(building.footprint, profile->building_yaw_degrees[i]);
         bool farming = profile->function == CC_SETTLEMENT_FARMING;
         static const int32_t fire_rank[] = {4, 2, 0, 1, 6, 5, 3, 7};
         bool burnt = farming && i < 8 &&
@@ -3884,7 +3990,7 @@ static void UpdateCastleStructureReveals(Camera3D camera,
         };
         WorldBuildingRevealState *state = &castle_structure_reveals[i];
         bool occluded = WorldBuildingObscuresReveal(
-            &proxy, camera, reveal_world,
+            &proxy, -1, camera, reveal_world,
             render_width, render_height);
         UpdateBuildingReveal(state, occluded, reset, delta_time, 0.16f, 4.6f);
     }

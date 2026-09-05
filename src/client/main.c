@@ -999,6 +999,14 @@ static void SetConvoyTownPose(CcLocalConvoyState *convoy, float delta_time)
         arrival_path : departure_path;
     int32_t count = (int32_t)(sizeof(departure_path) /
                               sizeof(departure_path[0]));
+    Vector2 town_path[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+    int32_t town_count = CcLocalTownCarriagePath(
+        convoy->phase == CC_LOCAL_CONVOY_ARRIVING, town_path,
+        CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY);
+    if (town_count >= 2) {
+        path = town_path;
+        count = town_count;
+    }
     Vector2 position = {0};
     float heading = convoy->town_heading_yaw;
     SampleConvoyPath(path, count, convoy->phase_progress,

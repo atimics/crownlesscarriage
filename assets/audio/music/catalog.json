@@ -576,6 +576,186 @@
       "region": -1,
       "combat": false,
       "place": ""
+    },
+    {
+      "number": 65,
+      "title": "Thornford - Flour on the Windowsill",
+      "theme": "town",
+      "secondary": "farm",
+      "region": 0,
+      "combat": false,
+      "place": "Thornford",
+      "mood": "everyday"
+    },
+    {
+      "number": 66,
+      "title": "Thornford - Flour on the Windowsill - Shortage",
+      "theme": "town",
+      "secondary": "hunger",
+      "region": 0,
+      "combat": false,
+      "place": "Thornford",
+      "mood": "shortage"
+    },
+    {
+      "number": 67,
+      "title": "Thornford - Flour on the Windowsill - Recovery",
+      "theme": "town",
+      "secondary": "relief",
+      "region": 0,
+      "combat": false,
+      "place": "Thornford",
+      "mood": "recovery"
+    },
+    {
+      "number": 68,
+      "title": "Gloamgate - Small Change, Tall Stories",
+      "theme": "town",
+      "secondary": "market",
+      "region": 2,
+      "combat": false,
+      "place": "Gloamgate",
+      "mood": "everyday"
+    },
+    {
+      "number": 69,
+      "title": "Gloamgate - Small Change, Tall Stories - Shortage",
+      "theme": "town",
+      "secondary": "hunger",
+      "region": 2,
+      "combat": false,
+      "place": "Gloamgate",
+      "mood": "shortage"
+    },
+    {
+      "number": 70,
+      "title": "Gloamgate - Small Change, Tall Stories - Recovery",
+      "theme": "town",
+      "secondary": "relief",
+      "region": 2,
+      "combat": false,
+      "place": "Gloamgate",
+      "mood": "recovery"
+    },
+    {
+      "number": 71,
+      "title": "Alderwatch - Boots on the Old Bridge",
+      "theme": "town",
+      "secondary": "bridge",
+      "region": 3,
+      "combat": false,
+      "place": "Alderwatch",
+      "mood": "everyday"
+    },
+    {
+      "number": 72,
+      "title": "Alderwatch - Boots on the Old Bridge - Shortage",
+      "theme": "town",
+      "secondary": "hunger",
+      "region": 3,
+      "combat": false,
+      "place": "Alderwatch",
+      "mood": "shortage"
+    },
+    {
+      "number": 73,
+      "title": "Alderwatch - Boots on the Old Bridge - Recovery",
+      "theme": "town",
+      "secondary": "relief",
+      "region": 3,
+      "combat": false,
+      "place": "Alderwatch",
+      "mood": "recovery"
+    },
+    {
+      "number": 74,
+      "title": "Silverwick - Shift Change in Blue",
+      "theme": "town",
+      "secondary": "mine",
+      "region": 1,
+      "combat": false,
+      "place": "Silverwick",
+      "mood": "everyday"
+    },
+    {
+      "number": 75,
+      "title": "Silverwick - Shift Change in Blue - Shortage",
+      "theme": "town",
+      "secondary": "hunger",
+      "region": 1,
+      "combat": false,
+      "place": "Silverwick",
+      "mood": "shortage"
+    },
+    {
+      "number": 76,
+      "title": "Silverwick - Shift Change in Blue - Recovery",
+      "theme": "town",
+      "secondary": "relief",
+      "region": 1,
+      "combat": false,
+      "place": "Silverwick",
+      "mood": "recovery"
+    },
+    {
+      "number": 77,
+      "title": "Rosespire - Petals in the Clockwork",
+      "theme": "town",
+      "secondary": "court",
+      "region": 4,
+      "combat": false,
+      "place": "Rosespire",
+      "mood": "everyday"
+    },
+    {
+      "number": 78,
+      "title": "Rosespire - Petals in the Clockwork - Shortage",
+      "theme": "town",
+      "secondary": "hunger",
+      "region": 4,
+      "combat": false,
+      "place": "Rosespire",
+      "mood": "shortage"
+    },
+    {
+      "number": 79,
+      "title": "Rosespire - Petals in the Clockwork - Recovery",
+      "theme": "town",
+      "secondary": "relief",
+      "region": 4,
+      "combat": false,
+      "place": "Rosespire",
+      "mood": "recovery"
+    },
+    {
+      "number": 80,
+      "title": "Hollowbarrow - One Lantern Left",
+      "theme": "town",
+      "secondary": "dungeon",
+      "region": 5,
+      "combat": false,
+      "place": "Hollowbarrow",
+      "mood": "everyday"
+    },
+    {
+      "number": 81,
+      "title": "Hollowbarrow - One Lantern Left - Shortage",
+      "theme": "town",
+      "secondary": "hunger",
+      "region": 5,
+      "combat": false,
+      "place": "Hollowbarrow",
+      "mood": "shortage"
+    },
+    {
+      "number": 82,
+      "title": "Hollowbarrow - One Lantern Left - Recovery",
+      "theme": "town",
+      "secondary": "relief",
+      "region": 5,
+      "combat": false,
+      "place": "Hollowbarrow",
+      "mood": "recovery"
     }
   ],
   "takes": [
@@ -1620,6 +1800,258 @@
       "variant": 2,
       "stem": "64-02",
       "duration": 269,
+      "weight": 1.0
+    },
+    {
+      "track": 65,
+      "variant": 1,
+      "stem": "65-01",
+      "duration": 106,
+      "weight": 1.0
+    },
+    {
+      "track": 65,
+      "variant": 2,
+      "stem": "65-02",
+      "duration": 118,
+      "weight": 1.0
+    },
+    {
+      "track": 66,
+      "variant": 1,
+      "stem": "66-01",
+      "duration": 111,
+      "weight": 1.0
+    },
+    {
+      "track": 66,
+      "variant": 2,
+      "stem": "66-02",
+      "duration": 103,
+      "weight": 1.0
+    },
+    {
+      "track": 67,
+      "variant": 1,
+      "stem": "67-01",
+      "duration": 113,
+      "weight": 1.0
+    },
+    {
+      "track": 67,
+      "variant": 2,
+      "stem": "67-02",
+      "duration": 129,
+      "weight": 1.0
+    },
+    {
+      "track": 68,
+      "variant": 1,
+      "stem": "68-01",
+      "duration": 151,
+      "weight": 1.0
+    },
+    {
+      "track": 68,
+      "variant": 2,
+      "stem": "68-02",
+      "duration": 134,
+      "weight": 1.0
+    },
+    {
+      "track": 69,
+      "variant": 1,
+      "stem": "69-01",
+      "duration": 161,
+      "weight": 1.0
+    },
+    {
+      "track": 69,
+      "variant": 2,
+      "stem": "69-02",
+      "duration": 167,
+      "weight": 1.0
+    },
+    {
+      "track": 70,
+      "variant": 1,
+      "stem": "70-01",
+      "duration": 134,
+      "weight": 1.0
+    },
+    {
+      "track": 70,
+      "variant": 2,
+      "stem": "70-02",
+      "duration": 158,
+      "weight": 1.0
+    },
+    {
+      "track": 71,
+      "variant": 1,
+      "stem": "71-01",
+      "duration": 119,
+      "weight": 1.0
+    },
+    {
+      "track": 71,
+      "variant": 2,
+      "stem": "71-02",
+      "duration": 137,
+      "weight": 1.0
+    },
+    {
+      "track": 72,
+      "variant": 1,
+      "stem": "72-01",
+      "duration": 131,
+      "weight": 1.0
+    },
+    {
+      "track": 72,
+      "variant": 2,
+      "stem": "72-02",
+      "duration": 118,
+      "weight": 1.0
+    },
+    {
+      "track": 73,
+      "variant": 1,
+      "stem": "73-01",
+      "duration": 129,
+      "weight": 1.0
+    },
+    {
+      "track": 73,
+      "variant": 2,
+      "stem": "73-02",
+      "duration": 149,
+      "weight": 1.0
+    },
+    {
+      "track": 74,
+      "variant": 1,
+      "stem": "74-01",
+      "duration": 167,
+      "weight": 1.0
+    },
+    {
+      "track": 74,
+      "variant": 2,
+      "stem": "74-02",
+      "duration": 157,
+      "weight": 1.0
+    },
+    {
+      "track": 75,
+      "variant": 1,
+      "stem": "75-01",
+      "duration": 164,
+      "weight": 1.0
+    },
+    {
+      "track": 75,
+      "variant": 2,
+      "stem": "75-02",
+      "duration": 169,
+      "weight": 1.0
+    },
+    {
+      "track": 76,
+      "variant": 1,
+      "stem": "76-01",
+      "duration": 153,
+      "weight": 1.0
+    },
+    {
+      "track": 76,
+      "variant": 2,
+      "stem": "76-02",
+      "duration": 168,
+      "weight": 1.0
+    },
+    {
+      "track": 77,
+      "variant": 1,
+      "stem": "77-01",
+      "duration": 101,
+      "weight": 1.0
+    },
+    {
+      "track": 77,
+      "variant": 2,
+      "stem": "77-02",
+      "duration": 128,
+      "weight": 1.0
+    },
+    {
+      "track": 78,
+      "variant": 1,
+      "stem": "78-01",
+      "duration": 131,
+      "weight": 1.0
+    },
+    {
+      "track": 78,
+      "variant": 2,
+      "stem": "78-02",
+      "duration": 129,
+      "weight": 1.0
+    },
+    {
+      "track": 79,
+      "variant": 1,
+      "stem": "79-01",
+      "duration": 142,
+      "weight": 1.0
+    },
+    {
+      "track": 79,
+      "variant": 2,
+      "stem": "79-02",
+      "duration": 137,
+      "weight": 1.0
+    },
+    {
+      "track": 80,
+      "variant": 1,
+      "stem": "80-01",
+      "duration": 193,
+      "weight": 1.0
+    },
+    {
+      "track": 80,
+      "variant": 2,
+      "stem": "80-02",
+      "duration": 172,
+      "weight": 1.0
+    },
+    {
+      "track": 81,
+      "variant": 1,
+      "stem": "81-01",
+      "duration": 198,
+      "weight": 1.0
+    },
+    {
+      "track": 81,
+      "variant": 2,
+      "stem": "81-02",
+      "duration": 197,
+      "weight": 1.0
+    },
+    {
+      "track": 82,
+      "variant": 1,
+      "stem": "82-01",
+      "duration": 218,
+      "weight": 1.0
+    },
+    {
+      "track": 82,
+      "variant": 2,
+      "stem": "82-02",
+      "duration": 195,
       "weight": 1.0
     }
   ]
