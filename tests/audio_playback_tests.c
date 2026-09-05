@@ -14,6 +14,10 @@ static float volumes[CC_SOUND_COUNT * 3];
 static float pitches[CC_SOUND_COUNT * 3];
 static int allocated, freed, device_opens, device_closes, voices_loaded, voices_freed;
 static double clock_seconds = 1.0;
+static int stream_buffer_frames;
+static bool voice_primed;
+
+void SetAudioStreamBufferSizeDefault(int size) { stream_buffer_frames = size; }
 
 static bool net_busy;
 static int net_result, net_starts;
@@ -39,6 +43,7 @@ int CcVoiceNetPoll(unsigned char **data, size_t *size)
 Music LoadMusicStreamFromMemory(const char *type, const unsigned char *bytes, int size)
 {
     CC_CHECK(strcmp(type, ".wav") == 0 && bytes != NULL && size == 44);
+    CC_CHECK(stream_buffer_frames == 24000);
     ++voices_loaded;
     return (Music){.frameCount = 24000U};
 }
@@ -69,16 +74,19 @@ bool FileExists(const char *path) { return strcmp(path, "missing.wav") != 0; }
 Music LoadMusicStream(const char *path)
 {
     CC_CHECK(path != NULL);
+    CC_CHECK(stream_buffer_frames == 24000);
     ++voices_loaded;
     return (Music){.frameCount = 24000U};
 }
 bool IsMusicValid(Music music) { return music.frameCount > 0U; }
-bool IsMusicStreamPlaying(Music music) { (void)music; return voice_playing; }
-void PlayMusicStream(Music music) { CC_CHECK(!music.looping); voice_playing = true; }
+bool IsMusicStreamPlaying(Music music) {
+    (void)music; CC_CHECK(!voice_playing || voice_primed); return voice_playing;
+}
+void PlayMusicStream(Music music) { CC_CHECK(!music.looping); voice_playing = true; voice_primed = false; }
 void StopMusicStream(Music music) { (void)music; voice_playing = false; }
 void UnloadMusicStream(Music music) { (void)music; ++voices_freed; }
 void SetMusicVolume(Music music, float volume) { (void)music; CC_CHECK(volume > 0.0f && volume <= 1.0f); }
-void UpdateMusicStream(Music music) { CC_CHECK(IsMusicValid(music)); }
+void UpdateMusicStream(Music music) { CC_CHECK(IsMusicValid(music)); voice_primed = true; }
 
 static int PlayingCount(void)
 {

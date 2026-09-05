@@ -87,7 +87,9 @@ jobs:
         if: matrix.suite == 'single-player'
         env:
           CC_PLAYWRIGHT_MODULE: ${{ runner.temp }}/crownless-browser/node_modules/playwright
-        run: node tests/browser_tests.cjs out/build/web/site browser-results
+        run: |
+          node tests/music_browser_tests.cjs browser-results
+          node tests/browser_tests.cjs out/build/web/site browser-results
       - name: Build the shared carriage host
         if: matrix.suite == 'shared-world'
         run: |
