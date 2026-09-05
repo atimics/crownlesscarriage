@@ -457,6 +457,46 @@ static void TestRagdollAnatomyAndVolume(void)
     }
 }
 
+static void TestHingeSplayPreservesLength(void)
+{
+    const float splay_limits[] = {0.10f, 1.30f};
+    for (size_t limit = 0; limit < sizeof(splay_limits) / sizeof(splay_limits[0]);
+         ++limit) {
+        for (int32_t direction = -1; direction <= 1; direction += 2) {
+            for (int32_t aligned = 0; aligned <= 1; ++aligned) {
+                CcBiomechRagdoll ragdoll;
+                CcBiomechRagdollInit(&ragdoll);
+                ragdoll.active = true;
+                ragdoll.gravity = (CcBiomechVec3){0};
+                int32_t joint = CcBiomechRagdollAddParticle(
+                    &ragdoll, (CcBiomechVec3){0}, 0.0f, 0.0f);
+                int32_t axis = CcBiomechRagdollAddParticle(
+                    &ragdoll, (CcBiomechVec3){1.0f, 0.0f, 0.0f}, 0.0f, 0.0f);
+                int32_t parent = CcBiomechRagdollAddParticle(
+                    &ragdoll, (CcBiomechVec3){0.0f, 1.0f, 0.0f}, 0.0f, 0.0f);
+                int32_t child = CcBiomechRagdollAddParticle(
+                    &ragdoll, (CcBiomechVec3){0.0f, -1.0f, 0.0f}, 1.0f, 0.0f);
+                Require(CcBiomechRagdollAddHingeConstraint(
+                    &ragdoll, parent, joint, child, joint, axis,
+                    0.0f, 3.14159265f, splay_limits[limit], 0.0f) >= 0,
+                    "splay fixture must initialize");
+                float y = aligned ? 0.0f : -0.005f;
+                ragdoll.particles[child].position = (CcBiomechVec3){
+                    (float)direction * sqrtf(1.0f - y * y), y, 0.0f};
+                ragdoll.particles[child].previous_position =
+                    ragdoll.particles[child].position;
+                CcBiomechRagdollStep(&ragdoll, 1.0f / 60.0f, 1, NULL, NULL);
+                CcBiomechVec3 arm = ragdoll.particles[child].position;
+                Require(fabsf(BiomechDistance(arm, (CcBiomechVec3){0}) - 1.0f)
+                            < 0.00001f,
+                        "hinge splay correction must preserve bone length");
+                Require(fabsf(arm.x) <= sinf(splay_limits[limit]) + 0.00001f,
+                        "an aligned limb must rotate within its splay limit");
+            }
+        }
+    }
+}
+
 static bool SegmentLedge(void *context, CcBiomechVec3 previous_position,
                          CcBiomechVec3 position, float radius,
                          CcBiomechVec3 *corrected_position,
@@ -1349,6 +1389,7 @@ int main(void)
     TestGenericTissues();
     TestGenericRagdoll();
     TestRagdollAnatomyAndVolume();
+    TestHingeSplayPreservesLength();
     TestSegmentContactProjection();
     TestRagdollSupportPlane();
     TestBiomechanicalClimb();

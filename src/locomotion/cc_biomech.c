@@ -636,13 +636,38 @@ static void SolveRagdollHingeConstraint(
         constraint->rest_lateral_offset + allowed);
     float error = lateral - target;
     if (fabsf(error) <= 0.00001f) return;
+    CcBiomechVec3 tangent = SubtractVec3(child_arm, ScaleVec3(axis, lateral));
+    float tangent_length = LengthVec3(tangent);
+    if (tangent_length <= 0.00001f) {
+        CcBiomechVec3 parent_arm = SubtractVec3(
+            ragdoll->particles[constraint->particle_a].position,
+            joint->position);
+        tangent = SubtractVec3(parent_arm,
+                               ScaleVec3(axis, DotVec3(parent_arm, axis)));
+        tangent_length = LengthVec3(tangent);
+        if (tangent_length <= 0.00001f) {
+            CcBiomechVec3 reference = fabsf(axis.y) < 0.82f ?
+                (CcBiomechVec3){0.0f, 1.0f, 0.0f} :
+                (CcBiomechVec3){1.0f, 0.0f, 0.0f};
+            tangent = SubtractVec3(reference,
+                                   ScaleVec3(axis, DotVec3(reference, axis)));
+            tangent_length = LengthVec3(tangent);
+        }
+    }
+    target = Clamp(target, -child_length, child_length);
+    float target_tangent = sqrtf(fmaxf(
+        child_length * child_length - target * target, 0.0f));
+    CcBiomechVec3 target_arm = AddVec3(
+        ScaleVec3(axis, target),
+        ScaleVec3(tangent, target_tangent / tangent_length));
+    // Rotate the arm to its splay limit while preserving its bone length.
+    CcBiomechVec3 correction = SubtractVec3(target_arm, child_arm);
     float softness = constraint->compliance /
         fmaxf(delta_time * delta_time, 0.000001f);
-    float lambda = -error / (weight + softness);
     CcBiomechVec3 child_correction =
-        ScaleVec3(axis, lambda * child->inverse_mass);
+        ScaleVec3(correction, child->inverse_mass / (weight + softness));
     CcBiomechVec3 joint_correction =
-        ScaleVec3(axis, -lambda * joint->inverse_mass);
+        ScaleVec3(correction, -joint->inverse_mass / (weight + softness));
     child->position = AddVec3(child->position, child_correction);
     joint->position = AddVec3(joint->position, joint_correction);
 }

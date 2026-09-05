@@ -118,14 +118,14 @@ static void TestAvoidanceClearance(void)
         CcLimbVec3 velocity;
         bool avoid;
     } cases[] = {
-        {{0.8f, 0.0f, 0.0f}, {0}, false},
-        {{0.79f, 0.0f, 0.0f}, {0}, true},
+        {{0.8f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, false},
+        {{0.79f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, true},
         {{0.79f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, true},
         {{2.0f, 0.0f, 0.0f}, {-4.0f, 0.0f, 0.0f}, true},
         {{2.0f, 0.0f, 0.0f}, {-0.1f, 0.0f, 0.0f}, false},
         {{2.0f, 0.0f, 0.81f}, {-4.0f, 0.0f, 0.0f}, false},
-        {{0}, {0}, true},
-        {{0}, {1.0f, 0.0f, 0.0f}, true},
+        {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, true},
+        {{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, true},
     };
     for (size_t index = 0; index < sizeof(cases) / sizeof(cases[0]); ++index) {
         CcLimbVec3 first = {5.0f, 5.0f, 5.0f};
