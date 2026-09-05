@@ -45,7 +45,7 @@ static int RunWorldCardRegression(void)
     char error[192] = "", message[256] = "", feedback[256] = "";
     float feedback_age = 0;
     CcJournal *journal = NULL;
-    ClientView view = VIEW_LOCAL, return_view = VIEW_LOCAL;
+    ClientView view, return_view = VIEW_LOCAL;
     int32_t selected = 0, selected_situation = 0;
 #define CARD_CHECK(test, reason) do { if (!(test)) { \
     client_test_pointer_active = false; ClientInputClearPressed(); \

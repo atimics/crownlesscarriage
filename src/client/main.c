@@ -4009,7 +4009,7 @@ static ContextActionSet BuildContextActions(
     int32_t selected, int32_t selected_situation)
 {
     ContextActionSet set = {0};
-    if (sim == NULL || local == NULL) return set;
+    if (sim == NULL || local == NULL || local->pony_book_open) return set;
     if (local->adventure_ui && (view == VIEW_TRADE || view == VIEW_PAUSE || view == VIEW_LEDGER)) return set;
     int32_t pony = CcPonyOnRoad(sim);
     if (view == VIEW_LOCAL && pony >= 0 && !LocalCombatActive(local)) {
@@ -4348,6 +4348,7 @@ static ContextActionSet BuildContextActions(
                 label, i == selected ? "ENTER" : "", detail, true,
                 i == selected);
             set.items[set.count - 1].amount = i;
+            set.items[set.count - 1].target = (CcInteractionKey){sim->player.location_id, route->id, CC_INTERACTION_ACTION};
         }
         AddDetailedContextAction(
             &set, CONTEXT_ACTION_CLOSE_VIEW, "Turn back to town", "BKSP",
@@ -4370,9 +4371,11 @@ static ContextActionSet BuildContextActions(
             AddDetailedContextAction(
                 &set, CONTEXT_ACTION_CAMP_ROAD_SITE, "Camp here", "C",
                 "1 WATCH / REST TEAM / +3 RISK", true, false);
+            set.items[set.count - 1].target = (CcInteractionKey){sim->player.location_id, road_stop->id, CC_INTERACTION_ACTION};
             AddDetailedContextAction(
                 &set, CONTEXT_ACTION_PASS_ROAD_SITE, "Continue on the road",
                 "ENTER", "FOLLOW THE MAIN ROAD", true, false);
+            set.items[set.count - 1].target = (CcInteractionKey){sim->player.location_id, road_stop->id, CC_INTERACTION_ACTION};
             return set;
         }
         if (sim->journey.active &&
@@ -7041,9 +7044,9 @@ static int RunTownDepartureRegression(void)
     }
     ContextActionSet rising_actions = BuildContextActions(
         &sim, &local, VIEW_ROADS, selected, -1);
-    if (rising_actions.count != 0) {
+    if (rising_actions.count != 1 || rising_actions.items[0].kind != CONTEXT_ACTION_TOGGLE_DRIVE) {
         (void)fprintf(stderr,
-                      "Road controls opened before the camera reached the junction.\n");
+                      "The departure needs its carriage stop control until the junction.\n");
         return 1;
     }
 
@@ -8122,6 +8125,23 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     ContextActionKind context_action = pressed_action.kind;
     if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) && context_action == CONTEXT_ACTION_NONE &&
         PointerOverContextAction(sim, local, *view, *selected, *selected_situation, GetMousePosition())) return;
+    CommandActionKind command_action = local->adventure_ui ? COMMAND_ACTION_NONE : PressedCommandAction(local, *view);
+    if (local->adventure_ui && *view == VIEW_LOCAL) {
+        if (AdventureHit(AdventureNavBounds(1))) command_action = COMMAND_ACTION_MAP;
+        if (AdventureHit(AdventureNavBounds(2))) command_action = COMMAND_ACTION_SAVE;
+    }
+    bool control = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ||
+                   IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
+    if (local->request_save || command_action == COMMAND_ACTION_SAVE || ClientKeyPressed(KEY_F5) ||
+        queued_save_shortcut || (control && ClientKeyPressed(KEY_S))) {
+        local->request_save = false;
+        *save_feedback_age = 0.0f;
+        (void)SaveClientWorld(*journal, sim, local, save_path, session_path,
+                              save_feedback, save_feedback_capacity);
+        return;
+    }
+
+    if (HandlePonyInput(*journal, sim, local, *view, pressed_action, message, message_capacity)) return;
     if (context_action == CONTEXT_ACTION_STOP_APPROACH) {
         CcInteractionCancel(&local->interaction, "");
         CcLocalAgentStop(&local->agent);
@@ -8148,23 +8168,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             (Vector3){CC_LOCAL_SITE_ENTRANCE_X, 0, CC_LOCAL_SITE_ENTRANCE_Z}, false);
         return;
     }
-    CommandActionKind command_action = local->adventure_ui ? COMMAND_ACTION_NONE : PressedCommandAction(local, *view);
-    if (local->adventure_ui && *view == VIEW_LOCAL) {
-        if (AdventureHit(AdventureNavBounds(1))) command_action = COMMAND_ACTION_MAP;
-        if (AdventureHit(AdventureNavBounds(2))) command_action = COMMAND_ACTION_SAVE;
-    }
-    bool control = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ||
-                   IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
-    if (local->request_save || command_action == COMMAND_ACTION_SAVE || ClientKeyPressed(KEY_F5) ||
-        queued_save_shortcut || (control && ClientKeyPressed(KEY_S))) {
-        local->request_save = false;
-        *save_feedback_age = 0.0f;
-        (void)SaveClientWorld(*journal, sim, local, save_path, session_path,
-                              save_feedback, save_feedback_capacity);
-        return;
-    }
 
-    if (HandlePonyInput(*journal, sim, local, *view, pressed_action, message, message_capacity)) return;
     if (*view == VIEW_ENCOUNTER) {
         if (!sim->journey.active ||
             sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED) {

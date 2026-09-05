@@ -4,7 +4,8 @@ static ContextAction WorldContextActionAt(const CcSim *sim, const LocalState *lo
     ClientView view, const ContextActionSet *actions, Vector2 mouse)
 {
     ContextAction none = {.kind = CONTEXT_ACTION_NONE};
-    if ((view != VIEW_LOCAL && view != VIEW_ROADS) ||
+    if (mouse.y < 88 || mouse.y >= (float)ContextViewportHeight() - 116 ||
+        (view != VIEW_LOCAL && view != VIEW_ROADS) ||
         view != local->interaction_view || AdventureScene(local)) return none;
     const CcInteractionTarget *target = WorldActionPointerTarget(local, mouse);
     if (target == NULL || target->key.kind != CC_INTERACTION_ACTION ||
@@ -12,7 +13,9 @@ static ContextAction WorldContextActionAt(const CcSim *sim, const LocalState *lo
     for (int32_t i = 0; i < actions->count; ++i) {
         const ContextAction *action = &actions->items[i];
         if (action->enabled && (int32_t)action->kind == target->action &&
-            action->amount == target->amount) return *action;
+            action->amount == target->amount &&
+            (action->target.kind == CC_INTERACTION_NONE ||
+             CcInteractionKeyEqual(action->target, target->key))) return *action;
     }
     return none;
 }
@@ -126,6 +129,7 @@ static void BuildWorldActionTargets(const CcSim *sim, LocalState *local, ClientV
             action->label, action->label, position, width, height, depth,
             (Vector2){position.x, position.z}, 1.0f);
         if (target == NULL) break;
+        if (action->target.kind != CC_INTERACTION_NONE) target->key = action->target;
         target->action = (int32_t)action->kind;
         target->amount = action->amount;
         target->available = action->enabled;

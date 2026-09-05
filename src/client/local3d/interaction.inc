@@ -65,8 +65,10 @@ void CcLocalProjectInteraction(const CcLocalAgent *agent,
         left = fminf(left, x); right = fmaxf(right, x);
         top = fminf(top, y); bottom = fmaxf(bottom, y);
     }
-    float pad = fmaxf(0.0f, (28.0f - (right - left)) * 0.5f);
+    float pad = fmaxf(0.0f, (40.0f - (right - left)) * 0.5f);
     left -= pad; right += pad;
+    float vertical_pad = fmaxf(0.0f, (40.0f - (bottom - top)) * 0.5f);
+    top -= vertical_pad; bottom += vertical_pad;
     if (right < destination.x || left > destination.x + destination.width ||
         bottom < destination.y || top > destination.y + destination.height) return;
     target->left = fmaxf(left, destination.x);

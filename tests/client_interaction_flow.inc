@@ -64,8 +64,8 @@ static int RunAdventureInputRegression(void)
     if (!local.market_interior) {
         fprintf(stderr, "nav active=%d index=%d count=%d target=(%.2f,%.2f) radius=%.2f grounded=%d health=%.1f\n", local.agent.navigation_active, local.agent.navigation_point_index, local.agent.navigation_point_count, local.agent.target_point.x, local.agent.target_point.z, local.agent.radius, local.agent.grounded, local.agent.combat.health);
         for (int n = 0; n < local.agent.navigation_point_count; ++n) fprintf(stderr, "node %d %.2f %.2f\n", n, local.agent.navigation_point[n].x, local.agent.navigation_point[n].z);
+        fprintf(stderr, "approach: x=%.2f z=%.2f pending=%d elapsed=%.2f message=%s feedback=%s\n", local.agent.position.x, local.agent.position.z, local.interaction.approaching, local.interaction.elapsed_seconds, message, local.interaction.feedback);
     }
-    if (!local.market_interior) fprintf(stderr, "approach: x=%.2f z=%.2f pending=%d elapsed=%.2f message=%s feedback=%s\n", local.agent.position.x, local.agent.position.z, local.interaction.approaching, local.interaction.elapsed_seconds, message, local.interaction.feedback);
     UX_CHECK(local.market_interior && view == VIEW_LOCAL, "Walking to the door must finish by entering its interior.");
     local.interactions.count = 0;
     target = AdventureTarget(&local, &sim, CC_INTERACTION_COUNTER, 1,
