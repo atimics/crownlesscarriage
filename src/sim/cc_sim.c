@@ -5611,6 +5611,8 @@ static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
 static void GatherGossip(CcSim *sim)
 {
     if (sim->schema_version < 44U) return;
+    const CcEvent *newest = CcSimRecentEvent(sim, 0);
+    if (newest == NULL || newest->id <= sim->gossip_last_event_id) return;
     CcId latest = sim->gossip_last_event_id;
     for (int32_t offset = sim->event_count - 1; offset >= 0; --offset) {
         const CcEvent *event = CcSimRecentEvent(sim, offset);
