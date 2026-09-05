@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "e8ad2dd213b2e72b",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "warm",
+  "text": "Silverwick received all 8 food boxes.",
+  "id": "empty_granary.mara.helped",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 3903663570,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "3e39f375e87034d68bfe5284c6be77384bbfd584e05481fd6141b6e959683bdb",
+  "wav_sha256": "839d69e41a977dbcab1bfdf398f7e41d1c3c15d7324e2cc0e2e9a1ae5097090f",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

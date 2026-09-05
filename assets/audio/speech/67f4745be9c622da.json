@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "67f4745be9c622da",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "warm",
+  "text": "I received the report this morning. You did what you promised.",
+  "id": "character.helped.sponsor",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 1744073819,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "e9573e9048faac07cd637a50226fa36416955672c4f25b52fa6463acb72a4216",
+  "wav_sha256": "ada10ae67041c9b519df9743f17a8503313ce89d4cbacfb28a9d10d50ef7bbc1",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

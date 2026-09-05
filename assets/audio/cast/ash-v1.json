@@ -1,0 +1,10 @@
+{
+  "id": "ash-v1",
+  "name": "Ash",
+  "description": "A man with a grainy baritone, a light Welsh accent, and deliberate, unhurried speech.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 4018505057,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "a9dc5b0974a91d67767110d28192a3176cd6bbed9b62e1d9b223cfa69787ca82"
+}

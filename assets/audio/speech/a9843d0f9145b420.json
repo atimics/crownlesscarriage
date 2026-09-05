@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "a9843d0f9145b420",
+  "voice": "hearth-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "I will tell Ilyra Senn.",
+  "id": "player.choice.1.2",
+  "speaker": "You",
+  "model": "chatterbox",
+  "seed": 2844015887,
+  "reference_sha256": "b1279b4f8fd7d39cae4dd391c7e1d7c5d21ec70214ee78ef471aacb4d670c2c7",
+  "sample_rate": 24000,
+  "master_sha256": "fd710ae1652dbdad6ac54dc81da028c8f76a2e68fda0fc62a4dc7091d9192bcd",
+  "wav_sha256": "f9ff42d97d787297015fe1b78b90a421e295c14f8a449071aab6b91b7220a75c",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

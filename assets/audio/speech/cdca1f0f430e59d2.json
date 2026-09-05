@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "cdca1f0f430e59d2",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "firm",
+  "text": "The food never came.",
+  "id": "character.withdrew.affected",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 3452575503,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "9d1404ef1b6d9f2946abd8cfb01a8b3c993ba4a7d58416c8d4881f1c33ded051",
+  "wav_sha256": "71a5e7d4a9780843c48b42545bee8316bddc52795a5e00d302026c7bcb2f12b1",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "e98695c9fe41ab05",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "warm",
+  "text": "The food arrived. Thank you.",
+  "id": "empty_granary.jory.helped",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 3917911497,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "ada1a471b8dedfa29b920d995d095896e0a3f1dddd37e59a959c2e5236383bb2",
+  "wav_sha256": "5735bdfcd0c48fda90d68f501f92fa99f473c4bf3a667543db8f72bd2b593b23",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "a03a94a14031ddb8",
+  "voice": "ilyra-v1",
+  "language": "en",
+  "delivery": "warm",
+  "text": "I cut the gate chain myself. My report says the bridge machinery failed.",
+  "id": "treaty_bridge.ilyra.helped",
+  "speaker": "Ilyra Senn",
+  "model": "chatterbox",
+  "seed": 2688193697,
+  "reference_sha256": "4f872149b489921a727c3d7607ff6de790cac9ee4d7bb9af3c5e999d8752bd84",
+  "sample_rate": 24000,
+  "master_sha256": "20f412b79ecbceeecb2f1fd91dd7837e207fcdbb10522a184099594990bbf652",
+  "wav_sha256": "c3d956e4d44901028c643ab8e6e71100b13bacf5d331a8d0ec1e71348951949a",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

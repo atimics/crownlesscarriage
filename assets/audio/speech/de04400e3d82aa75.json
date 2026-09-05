@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "de04400e3d82aa75",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "urgent",
+  "text": "There is seed grain left. If they eat it, spring becomes the next famine.",
+  "id": "empty_granary.mara.breaking",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 3724820494,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "df9616ffad1a4a20b0223f09e579dbd145aebbc4ff1adb187fbab47accd1f0c9",
+  "wav_sha256": "67870a7ac4baf1a8555ead612fce8cee43ad0e95cdd023363d28ca4881ff93f2",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

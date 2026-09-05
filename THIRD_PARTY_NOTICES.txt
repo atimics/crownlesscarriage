@@ -49,6 +49,15 @@ Chatterbox source and model terms are available at
 https://github.com/resemble-ai/chatterbox and
 https://huggingface.co/ResembleAI/chatterbox.
 
+The procedural cast in `assets/audio/cast` was generated locally from the
+project's written descriptions using Qwen3-TTS 1.7B VoiceDesign. The campaign
+recordings in `assets/audio/speech` use these references with Chatterbox and
+the same retro voice texture. Cast receipts record the description, model,
+seed, and WAV fingerprint. Speech receipts link the recording to its cast
+reference and exact script. Qwen source and model terms are available at
+https://github.com/QwenLM/Qwen3-TTS and
+https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign.
+
 `assets/video/introduction/the-predator-clause.mp3` has embedded metadata that
 credits **The Predator Clause** to **ratimics** and says it was made with
 [Suno](https://suno.com/song/2542d5c2-8755-4000-8764-ba8ad055d591) on

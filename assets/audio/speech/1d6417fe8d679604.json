@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "1d6417fe8d679604",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "I will pay you to find Cera. Do not open the old wall until she is safe.",
+  "id": "lower_silverworks.mara.offer",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 493099006,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "31e15d52b5d7b3b3c199bd2bb3f5351978014adb8f66a27061bd675274fb3c0d",
+  "wav_sha256": "00460cc118fbc6d2c4554140b4fa75381b4d8ece55fd30141b520f85fe627d41",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

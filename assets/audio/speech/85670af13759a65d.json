@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "85670af13759a65d",
+  "voice": "brook-v1",
+  "language": "en",
+  "delivery": "warm",
+  "text": "They settled it without us. I do not know yet if that is good news.",
+  "id": "character.resolved.affected",
+  "speaker": "Cera Mott",
+  "model": "chatterbox",
+  "seed": 2238122737,
+  "reference_sha256": "e9ff04762f3cbb959c4f5bbc7e337a6c074b12b127c15b4f9958545fd826d0dc",
+  "sample_rate": 24000,
+  "master_sha256": "2f8b108a34a38b48a8eba1d141df406ee6d1bb6f46a048e0da4e0188f79ebd71",
+  "wav_sha256": "ae589f8fa0c7ffeacc228dab66a6690c3cf80d66afc13e3ce244ab171afc89e8",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

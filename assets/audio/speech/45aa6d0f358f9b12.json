@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "45aa6d0f358f9b12",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "All 8 food boxes are aboard. Jory Fen will meet you in Silverwick.",
+  "id": "empty_granary.mara.promised",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 1168796943,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "7d4e1ee0e38db00b83d628746381cefc7a6d19e733b9c5965cfdee96fdebd428",
+  "wav_sha256": "01806f0d3db2188528981e6c6616b1b56ea4249aaa0b9cbba9757ca18070daae",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

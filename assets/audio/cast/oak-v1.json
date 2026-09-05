@@ -1,0 +1,10 @@
+{
+  "id": "oak-v1",
+  "name": "Oak",
+  "description": "A man with a deep warm bass, a soft Scottish accent, and patient, evenly paced speech.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 2938259689,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "995b33486a4822e20f666e91ecc52074d8b0331d11e549e055e9b0c3317a5656"
+}

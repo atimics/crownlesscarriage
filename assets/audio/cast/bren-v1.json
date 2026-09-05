@@ -1,0 +1,10 @@
+{
+  "id": "bren-v1",
+  "name": "Bren Alder",
+  "description": "A man with a soft tenor and a northern English accent. Hesitant starts, clear words, and a close, intimate sound.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 943115664,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "a5ff8538b7bbda3767abf645b3eae480bc892bee973077a919361a7c05f43c59"
+}

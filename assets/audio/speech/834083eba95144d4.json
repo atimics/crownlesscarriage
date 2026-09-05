@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "key": "834083eba95144d4",
+  "voice": "ilyra-v1",
+  "language": "en",
+  "delivery": "urgent",
+  "text": "Open the bridge now, or the road will belong to whoever feeds it at night.",
+  "id": "treaty_bridge.ilyra.breaking",
+  "speaker": "Ilyra Senn",
+  "model": "chatterbox",
+  "seed": 2202043372,
+  "take": 1,
+  "reference_sha256": "4f872149b489921a727c3d7607ff6de790cac9ee4d7bb9af3c5e999d8752bd84",
+  "sample_rate": 24000,
+  "master_sha256": "05d6189a75b1019a75847458f17f14a340abd8cb47d8b26590ba6baa67984417",
+  "wav_sha256": "62787a9ab1620280941671162132009d64403ccdc40d6cdc13ed3efecb141bba",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

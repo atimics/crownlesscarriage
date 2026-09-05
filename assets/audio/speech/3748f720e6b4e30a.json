@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "3748f720e6b4e30a",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Bring the food here. People are waiting.",
+  "id": "empty_granary.jory.promised",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 927528736,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "1c5fb00cd9379868749f30c077093b5dcebd573aded1810c2b087bf3b0c77e5f",
+  "wav_sha256": "c795d40461e0ec63f1324ff522e8c92a58638446fc84c659c3756f9cc66919ce",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

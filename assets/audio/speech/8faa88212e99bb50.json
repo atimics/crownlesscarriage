@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "8faa88212e99bb50",
+  "voice": "brook-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "That is what happened. I do not know what else to tell you.",
+  "id": "character.heard.affected",
+  "speaker": "Cera Mott",
+  "model": "chatterbox",
+  "seed": 2410317857,
+  "reference_sha256": "e9ff04762f3cbb959c4f5bbc7e337a6c074b12b127c15b4f9958545fd826d0dc",
+  "sample_rate": 24000,
+  "master_sha256": "7602e4c00c853ee9246566b08684f975154c547c374dd094eb5ea3fc9368a2ad",
+  "wav_sha256": "f77b597f46497ec4ada2041f6080b40d368c7ec6faa1742056cabf3b4990c8f2",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

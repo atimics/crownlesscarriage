@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "a9f8f77a0a74ee3f",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Bren ran out of the west gallery and left his lamp behind. He will not tell me why.",
+  "id": "lower_silverworks.jory.lead",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 2851665786,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "83b5693647ee0e96be7a775001e50b653783ebb39e0531ec72104439f85ff93f",
+  "wav_sha256": "9e0ce42a442ea3825f3ce7570855f6d875bdcd64179c3576806c84a8fe1bb7a5",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

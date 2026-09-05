@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "60be7beb9c88113f",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "warm",
+  "text": "You came back. Thank you.",
+  "id": "character.helped.affected",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 1623096299,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "b9ae5c3b58563fca6e6436187cc2ec5168e5860a5e34e7a4fa80000e622da220",
+  "wav_sha256": "16715c1db4ccfcb1269b329ba53ae70472d261f381542377b9d78f7d8f428ebc",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

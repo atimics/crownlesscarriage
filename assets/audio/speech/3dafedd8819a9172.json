@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "3dafedd8819a9172",
+  "voice": "tomas-v1",
+  "language": "en",
+  "delivery": "warm",
+  "text": "Another crew finished it this morning. The offer is closed.",
+  "id": "character.resolved.sponsor",
+  "speaker": "Tomas Rill",
+  "model": "chatterbox",
+  "seed": 1034939864,
+  "reference_sha256": "09bbb99862b976d7355261eac3929cc3648ea40a04b8d0682e322bb4b31f9980",
+  "sample_rate": 24000,
+  "master_sha256": "417f4ee0a3c00c30fffaa7992a00f0a296d14ffde4b91d20bcdaf71d4f24a868",
+  "wav_sha256": "a1679ddd0a471aff6113edcb09442fc6abc671df19c3a4012364858a847d6358",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

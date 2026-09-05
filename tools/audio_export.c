@@ -122,6 +122,82 @@ static bool ExportSpeech(FILE *file)
     return !ferror(file) && !first;
 }
 
+/* Representative render states are copied into an export-only simulation. */
+static uint64_t campaign_keys[2048];
+static size_t campaign_count;
+static bool WriteSpeech(FILE *file, const CcSpeech *speech)
+{
+    for (size_t i = 0; i < campaign_count; ++i) if (campaign_keys[i] == speech->audio_key) return true;
+    if (campaign_count >= sizeof(campaign_keys) / sizeof(campaign_keys[0])) return false;
+    char json[CC_SPEECH_JSON_CAPACITY];
+    if (!CcSpeechJson(speech, json, sizeof(json))) return false;
+    if (campaign_count > 0) (void)fputs(",\n", file);
+    (void)fputs(json, file);
+    campaign_keys[campaign_count++] = speech->audio_key;
+    return !ferror(file);
+}
+
+static bool ExportCampaign(FILE *file)
+{
+    static CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    campaign_count = 0;
+    (void)fputs("[\n", file);
+    for (int32_t i = 0; i < sim.situation_count; ++i) {
+        CcSituation *situation = &sim.situations[i];
+        CcSituation original = *situation;
+        for (int32_t person = 0; person < sim.character_count; ++person) {
+            CcCharacter *character = &sim.characters[person];
+            if (character->id != situation->sponsor_character_id &&
+                character->id != situation->affected_character_id &&
+                character->id != situation->witness_character_id) continue;
+            CcCharacter saved = *character;
+            for (int state = 0; state < 12; ++state) {
+                *situation = original;
+                *character = saved;
+                CcId player_place = sim.player.location_id;
+                if (state == 11) {
+                    sim.player.location_id = situation->target_id;
+                    character->memory_count = 1;
+                    character->memories[0] = (CcCharacterMemory){.kind = CC_CHARACTER_MEMORY_PLAYER_PROMISED,
+                        .subject_id = situation->id};
+                } else if (state >= 1 && state <= 4) {
+                    character->memory_count = 1;
+                    character->memories[0] = (CcCharacterMemory){.kind = (CcCharacterMemoryKind)state,
+                        .subject_id = situation->id};
+                } else if (state == 5) situation->status = CC_SITUATION_RESOLVED;
+                else if (state == 6) situation->status = CC_SITUATION_FAILED;
+                else if (state >= 7) situation->discovery_stage = (CcSituationDiscoveryStage)(state - 7);
+                CcSpeech speech;
+                if (CcSpeechCharacter(&sim, situation, character, &speech) && !WriteSpeech(file, &speech)) return false;
+                sim.player.location_id = player_place;
+            }
+            *character = saved;
+        }
+        *situation = original;
+        for (int choice = CC_STORY_PLAYER_ASK; choice <= CC_STORY_PLAYER_LEAVE; ++choice) {
+            CcSpeech speech;
+            if (CcSpeechPlayerChoice(&sim, situation, (CcStoryPlayerChoice)choice, 5, &speech) &&
+                !WriteSpeech(file, &speech)) return false;
+        }
+    }
+    /* Include all named performances, including every relationship branch. */
+    for (size_t i = 0; i < CcStoryAuthoredLineCount(); ++i) {
+        const CcStoryLine *line = CcStoryAuthoredLineAt(i);
+        const char *speaker = CcStoryAuthoredSpeakerAt(i);
+        if (speaker == NULL || line == NULL) continue;
+        for (uint32_t voice = 0; voice < 5; ++voice) {
+            if (strcmp(speaker, CcSpeechVoiceAt(voice)->name) != 0) continue;
+            CcSpeech speech;
+            if (!CcSpeechCompose(&speech, line->id, 0, speaker, voice, line->text,
+                CcSpeechDeliveryForBeat(line->beat), CC_SPEECH_CONVERSATION, 0) ||
+                !WriteSpeech(file, &speech)) return false;
+        }
+    }
+    (void)fputs("\n]\n", file);
+    return !ferror(file) && campaign_count > 0;
+}
+
 static void LittleEndian(FILE *file, uint32_t value, unsigned int bytes)
 {
     for (unsigned int i = 0U; i < bytes; ++i) {
@@ -158,15 +234,16 @@ static bool ExportPreview(FILE *file)
 
 int main(int argc, char **argv)
 {
-    if (argc != 3 || (strcmp(argv[1], "--cast") != 0 && strcmp(argv[1], "--speech") != 0 &&
+    if (argc != 3 || (strcmp(argv[1], "--campaign") != 0 && strcmp(argv[1], "--cast") != 0 && strcmp(argv[1], "--speech") != 0 &&
                       strcmp(argv[1], "--script") != 0 && strcmp(argv[1], "--opening") != 0 &&
                       strcmp(argv[1], "--preview") != 0)) {
-        (void)fprintf(stderr, "Usage: crownless_audio_export --script script.json | --opening opening.json | --preview preview.wav\n");
+        (void)fprintf(stderr, "Usage: crownless_audio_export --cast cast.json | --speech speech.json | --campaign campaign.json | --script script.json | --opening opening.json | --preview preview.wav\n");
         return 1;
     }
     FILE *file = fopen(argv[2], "wb");
     if (file == NULL) return 1;
-    bool ok = strcmp(argv[1], "--cast") == 0 ? ExportCast(file) :
+    bool ok = strcmp(argv[1], "--campaign") == 0 ? ExportCampaign(file) :
+              strcmp(argv[1], "--cast") == 0 ? ExportCast(file) :
               strcmp(argv[1], "--speech") == 0 ? ExportSpeech(file) :
               strcmp(argv[1], "--script") == 0 ? ExportScript(file) :
               strcmp(argv[1], "--opening") == 0 ? ExportOpening(file) : ExportPreview(file);

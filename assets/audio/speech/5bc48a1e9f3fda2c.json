@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "5bc48a1e9f3fda2c",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "warm",
+  "text": "They settled it without us. I do not know yet if that is good news.",
+  "id": "character.resolved.affected",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 1539607070,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "fb7623a0e07f5971a27b78362c4bc8c4d93d602e2f3cf9cc177b77ab5bad1149",
+  "wav_sha256": "345409cb73e2da13d044636ca5dea8a32d6f0ba47c7e73d3afe41fcf8024a4f7",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

@@ -103,6 +103,20 @@ bool CcSpeechCompose(CcSpeech *speech, const char *line_id, CcId speaker_id,
     return true;
 }
 
+CcSpeechDelivery CcSpeechDeliveryForBeat(CcStoryBeat beat)
+{
+    switch (beat) {
+        case CC_STORY_BEAT_HELPED:
+        case CC_STORY_BEAT_RESOLVED: return CC_SPEECH_WARM;
+        case CC_STORY_BEAT_FAILED:
+        case CC_STORY_BEAT_PRESSING: return CC_SPEECH_WORRIED;
+        case CC_STORY_BEAT_BREAKING: return CC_SPEECH_URGENT;
+        case CC_STORY_BEAT_WITNESS: return CC_SPEECH_QUIET;
+        case CC_STORY_BEAT_WITHDREW: return CC_SPEECH_FIRM;
+        default: return CC_SPEECH_PLAIN;
+    }
+}
+
 bool CcSpeechCharacter(const CcSim *sim, const CcSituation *situation,
                         const CcCharacter *character, CcSpeech *speech)
 {
@@ -116,16 +130,7 @@ bool CcSpeechCharacter(const CcSim *sim, const CcSituation *situation,
                    (int)situation->kind, (int)situation->discovery_stage);
     CcSpeechDelivery delivery = CC_SPEECH_PLAIN;
     if (line != NULL) {
-        switch (line->beat) {
-            case CC_STORY_BEAT_HELPED:
-            case CC_STORY_BEAT_RESOLVED: delivery = CC_SPEECH_WARM; break;
-            case CC_STORY_BEAT_FAILED:
-            case CC_STORY_BEAT_PRESSING: delivery = CC_SPEECH_WORRIED; break;
-            case CC_STORY_BEAT_BREAKING: delivery = CC_SPEECH_URGENT; break;
-            case CC_STORY_BEAT_WITNESS: delivery = CC_SPEECH_QUIET; break;
-            case CC_STORY_BEAT_WITHDREW: delivery = CC_SPEECH_FIRM; break;
-            default: break;
-        }
+        delivery = CcSpeechDeliveryForBeat(line->beat);
     } else if (character->stress >= 70) delivery = CC_SPEECH_WORRIED;
     return CcSpeechCompose(speech, line != NULL ? line->id : fallback,
         character->id, character->name, CcSpeechCharacterVoice(sim, character), text,

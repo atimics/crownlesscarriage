@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "fee65044dc317b4a",
+  "voice": "hearth-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "I'll take the job.",
+  "id": "player.choice.0.1",
+  "speaker": "You",
+  "model": "chatterbox",
+  "seed": 4276506692,
+  "reference_sha256": "b1279b4f8fd7d39cae4dd391c7e1d7c5d21ec70214ee78ef471aacb4d670c2c7",
+  "sample_rate": 24000,
+  "master_sha256": "877514f25ecd12c71180e389b095315d1c92d99971318badf2ff6fa177395c46",
+  "wav_sha256": "10fc5b47026661561951805975433b91dcf55c0352a2bca1bcfdd712289f8226",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

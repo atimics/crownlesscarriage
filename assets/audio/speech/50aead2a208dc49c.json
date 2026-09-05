@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "50aead2a208dc49c",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "firm",
+  "text": "We waited until dark. No one came.",
+  "id": "character.withdrew.affected",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 1353624874,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "72040fb08f829e19dab8f68e7df2b99b1c18d906fc659912198298c25b8b19dd",
+  "wav_sha256": "48d4f19201368f5ad1c9d7a392ee6e5ce3f6f510a268ce99621d5958f5972e41",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

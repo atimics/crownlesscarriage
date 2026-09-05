@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "671c6c6fcbe54f57",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Silverwick is running out of food.",
+  "id": "empty_granary.mara.offer",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 1729916015,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "0196ad909bb933856eb2bad6ce829d1edcf6341e6f361794c19432907757dc0b",
+  "wav_sha256": "d7de7910d9bdd62b2bc408c1a5f68287d5dbdef40092c75f49343514d2e1ab2f",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

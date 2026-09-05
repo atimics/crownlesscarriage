@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "79d72802085ab2a4",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Thank you. I will tell the others you are coming.",
+  "id": "character.promised.affected",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 2044143618,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "8262f52f1ca037c0a4bf60badadab3df5aef86a1af710f2a3f6477649bcb5a99",
+  "wav_sha256": "a53139d3b3815299a169b9ac0b313ac84623f58e5d84d68e168e88462cb726ea",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

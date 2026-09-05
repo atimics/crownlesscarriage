@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "be72f10ec79fcb81",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "worried",
+  "text": "The deadline passed. I cannot hold the offer open.",
+  "id": "character.failed.sponsor",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 3195203854,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "b1c8e45ff94252fbb0165a19103556f4b1eeaf7b7be6b42f4a54f375b310fe7e",
+  "wav_sha256": "4dc0b0d97135c9413004268a55d7fa93331b3b950ca0d4267522d2894e0bd71f",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

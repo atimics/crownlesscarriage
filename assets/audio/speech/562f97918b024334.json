@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "562f97918b024334",
+  "voice": "hearth-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Why is the bridge closed?",
+  "id": "player.choice.1.0",
+  "speaker": "You",
+  "model": "chatterbox",
+  "seed": 1445959569,
+  "reference_sha256": "b1279b4f8fd7d39cae4dd391c7e1d7c5d21ec70214ee78ef471aacb4d670c2c7",
+  "sample_rate": 24000,
+  "master_sha256": "557fb3eefea4effbb8896c2792bc04a46c38b64a5b2f9f742871d75a8352f9e2",
+  "wav_sha256": "8a4ee1e3d9278a76677380cac2837cd70731fcfc0fd7ca0216d7f7d915f9e534",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

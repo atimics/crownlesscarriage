@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "cc1d8f2d0ffdcc10",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "The food boxes are loaded. Take my carriage.",
+  "id": "empty_granary.mara.promised",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 3424489261,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "8074dbd966c785e1d73cce6cbdecda15935e1e0d9eec82db8dae29fc641fb3ac",
+  "wav_sha256": "3b1cc74780d8b3892ea25ff4246445768aaa69245952d083ae29ace1536ac653",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

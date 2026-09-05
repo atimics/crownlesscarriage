@@ -1,0 +1,10 @@
+{
+  "id": "reed-v1",
+  "name": "Reed",
+  "description": "A man with a bright tenor, a light Irish accent, and quick, precise speech.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 2595196712,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "6dc743cfa294c2f910e306f7c909c05bd8fcb38b123049dc25a5c72a235f43ab"
+}

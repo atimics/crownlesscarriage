@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "09dc01a3da1a3e6a",
+  "voice": "tomas-v1",
+  "language": "en",
+  "delivery": "firm",
+  "text": "I put your name on the job. Now I have to find another carrier.",
+  "id": "character.withdrew.sponsor",
+  "speaker": "Tomas Rill",
+  "model": "chatterbox",
+  "seed": 165413283,
+  "reference_sha256": "09bbb99862b976d7355261eac3929cc3648ea40a04b8d0682e322bb4b31f9980",
+  "sample_rate": 24000,
+  "master_sha256": "8caf12a76451774efc3b5ddca2760c1f6fad3bdf89254b4cf480cdc20d933a9b",
+  "wav_sha256": "ca35b95b793711fc1f54c5411d29ff46d78a3855b616d6d443b58ca92ef63139",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "05711942ff93d202",
+  "voice": "brook-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "We used to get two carts a week on that road. We have had none since it closed.",
+  "id": "situation.repair.offer.affected",
+  "speaker": "Cera Mott",
+  "model": "chatterbox",
+  "seed": 91298114,
+  "reference_sha256": "e9ff04762f3cbb959c4f5bbc7e337a6c074b12b127c15b4f9958545fd826d0dc",
+  "sample_rate": 24000,
+  "master_sha256": "b9c8c6adf9c1e3c364c55de2724900dab587d116e56fd1ce60ff29a7e56e0b6f",
+  "wav_sha256": "f46220114a3086ed2b95a9fe65f9e627f07f43504140f1d98b3a621897bc7a8d",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

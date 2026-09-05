@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "56f6debc203e88e6",
+  "voice": "ilyra-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Bring two crates each of tools, wood, and stone. My crew will call it bridge repair.",
+  "id": "treaty_bridge.ilyra.promised",
+  "speaker": "Ilyra Senn",
+  "model": "chatterbox",
+  "seed": 1459019452,
+  "reference_sha256": "4f872149b489921a727c3d7607ff6de790cac9ee4d7bb9af3c5e999d8752bd84",
+  "sample_rate": 24000,
+  "master_sha256": "84c510d04a3a9b5a92021a22396229a9758339f44bfe4acdca4ef333f93d5a13",
+  "wav_sha256": "3bbe54f621e40169b1ddc6722b7c80e173fcc2e7e3f06d2b0192c6b366636825",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

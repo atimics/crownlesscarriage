@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "ffaccc3830b07b03",
+  "voice": "ilyra-v1",
+  "language": "en",
+  "delivery": "worried",
+  "text": "The deadline passed. I cannot hold the offer open.",
+  "id": "character.failed.sponsor",
+  "speaker": "Ilyra Senn",
+  "model": "chatterbox",
+  "seed": 4289514552,
+  "reference_sha256": "4f872149b489921a727c3d7607ff6de790cac9ee4d7bb9af3c5e999d8752bd84",
+  "sample_rate": 24000,
+  "master_sha256": "b2f0b5110cf63bcdafba2bd0ec8979d106d87d23b6fce6fc30ffc8a079611757",
+  "wav_sha256": "813b5ef3ef357a715a540ff04801559ab0002d015496e5b13e4b57f1bb901db8",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

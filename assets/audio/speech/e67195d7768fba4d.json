@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "key": "e67195d7768fba4d",
+  "voice": "hearth-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "I will tell Mara Venn.",
+  "id": "player.choice.0.2",
+  "speaker": "You",
+  "model": "chatterbox",
+  "seed": 3866203608,
+  "take": 1,
+  "reference_sha256": "b1279b4f8fd7d39cae4dd391c7e1d7c5d21ec70214ee78ef471aacb4d670c2c7",
+  "sample_rate": 24000,
+  "master_sha256": "72f49d70ea195a4222ea1d1f713dd2856b8b1d4d634f6adf60e8fa2e19190fea",
+  "wav_sha256": "6d337c3041b4ee7ee2173ff450db27a6fba2bd605d38ae65f00f2e53a76bde64",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "7c680e93b1abd0c2",
+  "voice": "hearth-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Who gets the food?",
+  "id": "player.choice.3.0",
+  "speaker": "You",
+  "model": "chatterbox",
+  "seed": 2087194259,
+  "reference_sha256": "b1279b4f8fd7d39cae4dd391c7e1d7c5d21ec70214ee78ef471aacb4d670c2c7",
+  "sample_rate": 24000,
+  "master_sha256": "a9f8cf9ecac8d52e2b966f3cf1a407046aa614a4189708cee15c5ffc1a032be1",
+  "wav_sha256": "e9ccb3d7e176a258a32407add7e0e6cbb37a2fe07c8372c6f0691042db35612c",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

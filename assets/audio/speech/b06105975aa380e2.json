@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "key": "b06105975aa380e2",
+  "voice": "hearth-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "I will tell Tomas Rill.",
+  "id": "player.choice.3.2",
+  "speaker": "You",
+  "model": "chatterbox",
+  "seed": 2959148440,
+  "take": 1,
+  "reference_sha256": "b1279b4f8fd7d39cae4dd391c7e1d7c5d21ec70214ee78ef471aacb4d670c2c7",
+  "sample_rate": 24000,
+  "master_sha256": "6c2d6550a4eb89544605879ed0fdb13fc3909b5bafbe11d484f7e80abfc7d724",
+  "wav_sha256": "669f20ae7e370e27157d63de3a4a02c6f55e446ed4c102df9148240888efd56d",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

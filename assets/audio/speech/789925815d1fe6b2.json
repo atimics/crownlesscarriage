@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "789925815d1fe6b2",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Take the food to the market hall. We can unload it there.",
+  "id": "empty_granary.jory.promised",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 2023302529,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "af73fd435e4f0d3a42da37e4ce5338565070007e0d1d1d44d8b976fefc036231",
+  "wav_sha256": "14388607444c3a9d0f06db6849b5ae115bfdad8dedc61e3d0b00048ab0aa746e",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

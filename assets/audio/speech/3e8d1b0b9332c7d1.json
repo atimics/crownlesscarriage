@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "3e8d1b0b9332c7d1",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "warm",
+  "text": "Another crew finished it this morning. The offer is closed.",
+  "id": "character.resolved.sponsor",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 1049434891,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "a7073b05fd4efe871724a5e33367625a8ebb116ed29c7afcfabc6970d4b31017",
+  "wav_sha256": "01f58dda69ef2d7e731e7bef215f6af4f3a69e7598bb59a3c5c3fa15f20134e0",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

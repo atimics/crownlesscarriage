@@ -327,6 +327,20 @@ if(CC_BUILD_CLIENT)
         find_package(Threads REQUIRED)
         target_link_libraries(crownless_carriage PRIVATE glfw CURL::libcurl Threads::Threads)
     endif()
+    file(GLOB CC_SPEECH_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/speech/*")
+    if(EMSCRIPTEN)
+        set(CC_SPEECH_BUNDLE_DIR "${CMAKE_CURRENT_BINARY_DIR}/site/speech")
+    elseif(APPLE)
+        set(CC_SPEECH_BUNDLE_DIR "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/audio/speech")
+    else()
+        set(CC_SPEECH_BUNDLE_DIR "$<TARGET_FILE_DIR:crownless_carriage>/assets/audio/speech")
+    endif()
+    add_custom_target(crownless_speech_assets ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/speech" "${CC_SPEECH_BUNDLE_DIR}"
+        DEPENDS ${CC_SPEECH_ASSETS}
+        VERBATIM)
+    add_dependencies(crownless_speech_assets crownless_carriage)
     file(GLOB CC_MUSIC_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/music/*.mp3")
     if(EMSCRIPTEN)
         set(CC_MUSIC_BUNDLE_DIR "${CMAKE_CURRENT_BINARY_DIR}/site/assets/audio/music")
@@ -987,6 +1001,9 @@ if(BUILD_TESTING)
             endif()
             add_test(NAME audio_exports_and_voice_assets
                 COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/audio_export_tests.py
+                    $<TARGET_FILE:crownless_audio_export>)
+            add_test(NAME campaign_speech_pack
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/speech_pack_tests.py
                     $<TARGET_FILE:crownless_audio_export>)
             add_test(NAME speech_worker_and_cache
                 COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/speech_worker_tests.py

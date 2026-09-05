@@ -1,0 +1,10 @@
+{
+  "id": "brook-v1",
+  "name": "Brook",
+  "description": "A woman with a soft middle register, a light Irish accent, and calm, direct speech.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 3580304693,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "e9ff04762f3cbb959c4f5bbc7e337a6c074b12b127c15b4f9958545fd826d0dc"
+}

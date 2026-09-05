@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "159f0734f8af27fe",
+  "voice": "tomas-v1",
+  "language": "en",
+  "delivery": "warm",
+  "text": "The flour arrived. My sister says you drive like a thief. She meant it kindly.",
+  "id": "empty_granary.tomas.helped",
+  "speaker": "Tomas Rill",
+  "model": "chatterbox",
+  "seed": 362743604,
+  "reference_sha256": "09bbb99862b976d7355261eac3929cc3648ea40a04b8d0682e322bb4b31f9980",
+  "sample_rate": 24000,
+  "master_sha256": "e91defbc8adc90bef3cd7b920e69ab0e4200b775f2ae6c1d802c079be91efc11",
+  "wav_sha256": "d658c6aa313f021e464ec38dc89fec19b2e6cfcd45b10c9199839e3f28602475",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}
