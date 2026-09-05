@@ -120,6 +120,7 @@ typedef struct LocalState {
     uint32_t receipt_serial;
     ClientView pause_return_view;
     bool request_save;
+    double caravan_tap_deadline;
     CcWorldStream world_stream;
     CcLocalAgent agent;
     CcLocalCourse course;
@@ -1079,6 +1080,7 @@ static void ResetLocalState(LocalState *local)
     local->book_page = 0;
     local->receipt[0] = '\0';
     local->request_save = false;
+    local->caravan_tap_deadline = 0.0;
     local->movement_preview = (CcLocalMovementPreview){0};
     local->movement_preview_cooldown = 0.0f;
     local->movement_reticle = (Vector2){0};
@@ -4899,7 +4901,7 @@ static ContextAction PressedContextAction(
     for (int32_t i = first; i < first + shown; ++i) {
         if (CheckCollisionPointRec(mouse, ContextActionBounds(i - first, shown))) {
             ContextAction pressed = actions.items[i];
-            if (!pressed.enabled || (right && pressed.kind != CONTEXT_ACTION_BUY_CARGO)) return none;
+            if (right && pressed.kind != CONTEXT_ACTION_BUY_CARGO) return none;
             if (right) pressed.amount = -1;
             return pressed;
         }
@@ -8119,6 +8121,67 @@ static bool SaveClientWorld(CcJournal *journal, CcSim *sim,
 #include "client/cc_frontend.inc"
 #include "pony_ui.inc"
 
+static bool HandleCaravanRecovery(LocalState *local, ClientView *view,
+                                   ClientView *return_view, double now,
+                                   char *message, size_t capacity)
+{
+    if (now >= local->caravan_tap_deadline)
+        local->caravan_tap_deadline = 0.0;
+    if (*view != VIEW_LOCAL && *view != VIEW_ROADS && *view != VIEW_CARRIAGE) {
+        local->caravan_tap_deadline = 0.0;
+        return false;
+    }
+    if (!ClientKeyPressed(KEY_N)) return false;
+    if (local->caravan_tap_deadline <= 0.0) {
+        local->caravan_tap_deadline = now + 0.45;
+        (void)snprintf(message, capacity,
+                       "Tap [N] again to return to the caravan.");
+        return true;
+    }
+    local->caravan_tap_deadline = 0.0;
+    Vector2 position = LOCAL_CARRIAGE_BAY;
+    float heading = atan2f(LOCAL_CARRIAGE.x - position.x,
+                           LOCAL_CARRIAGE.y - position.y);
+    CcLocalSceneKind scene = CC_LOCAL_SCENE_STREET;
+    if (local->open_world && local->world_carriage.visible) {
+        heading = local->world_carriage.heading_yaw;
+        position = (Vector2){
+            local->world_carriage.position.x + 3.0f * cosf(heading),
+            local->world_carriage.position.z - 3.0f * sinf(heading)};
+    } else if (local->site_travel_active) {
+        Vector3 caravan = WorldActionCarriagePosition(local);
+        position = (Vector2){caravan.x + 3.0f, caravan.z};
+        scene = CC_LOCAL_SCENE_ROAD;
+    } else if (local->site_kind != CC_LOCAL_SITE_NONE) {
+        position = (Vector2){CC_LOCAL_SITE_CARRIAGE_X + 3.0f,
+                             CC_LOCAL_SITE_CARRIAGE_Z};
+        scene = CC_LOCAL_SCENE_ROAD;
+    } else if (local->journey_combat_active || local->journey_parley_active ||
+               local->journey_travel_active) {
+        position = (Vector2){CC_LOCAL_ROAD_START_X, CC_LOCAL_ROAD_START_Z};
+        scene = CC_LOCAL_SCENE_ROAD;
+    } else if (local->convoy.phase != CC_LOCAL_CONVOY_PARKED) {
+        heading = local->convoy.town_heading_yaw;
+        position = (Vector2){local->convoy.town_position.x + 3.0f * cosf(heading),
+                             local->convoy.town_position.z - 3.0f * sinf(heading)};
+    }
+    RepositionHero(local, position, false);
+    CcLocalAgentSetScene(&local->agent, scene);
+    local->agent.facing_yaw = heading;
+    local->course.scene = scene;
+    local->market_interior = false;
+    local->open_world_market = false;
+    local->movement_preview = (CcLocalMovementPreview){0};
+    local->movement_reticle_valid = false;
+    CcInteractionCancel(&local->interaction, "");
+    local->interactions = (CcInteractionPlan){0};
+    local->request_save = true;
+    *view = VIEW_LOCAL;
+    *return_view = VIEW_LOCAL;
+    (void)snprintf(message, capacity, "Back at the caravan.");
+    return true;
+}
+
 static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         int32_t *selected_situation, ClientView *view,
                         ClientView *return_view, LocalState *local,
@@ -8137,6 +8200,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
+    if (HandleCaravanRecovery(local, view, return_view, GetTime(),
+                               message, message_capacity)) return;
     if (local->adventure_ui) {
         if (local->interaction.approaching &&
             (ClientKeyPressed(KEY_Q) || ClientKeyPressed(KEY_M) || ClientKeyPressed(KEY_TAB))) {
@@ -8188,6 +8253,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     if (*view != VIEW_MAP) local->pending_map_sale_id = 0U;
     ContextAction pressed_action = PressedContextAction(
         sim, local, *view, *selected, *selected_situation);
+    if (pressed_action.kind != CONTEXT_ACTION_NONE && !pressed_action.enabled) {
+        (void)snprintf(message, message_capacity,
+            "%s Double-tap [N] to return to the caravan.", pressed_action.detail);
+        return;
+    }
     ContextActionKind context_action = pressed_action.kind;
     if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) && context_action == CONTEXT_ACTION_NONE &&
         PointerOverContextAction(sim, local, *view, *selected, *selected_situation, ClientPointerPosition())) return;
@@ -8646,7 +8716,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
 
     if (CcCoopClientActive() &&
-        (ClientKeyPressed(KEY_F9) || ClientKeyPressed(KEY_N) ||
+        (ClientKeyPressed(KEY_F9) ||
          ClientKeyPressed(KEY_PERIOD) || ClientKeyPressed(KEY_K))) {
         (void)snprintf(message, message_capacity,
                        "Use the company road book to manage the shared world.");
@@ -9174,7 +9244,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     } else if (in_local_view) {
                         (void)snprintf(
                             message, message_capacity,
-                            "Can't walk there.");
+                            "Choose clear ground. Double-tap [N] to return to the caravan.");
                     }
                 }
             }
