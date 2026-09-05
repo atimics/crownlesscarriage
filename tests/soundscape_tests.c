@@ -1,4 +1,5 @@
 #include "client/cc_soundscape.h"
+#include "locomotion/cc_humanoid.h"
 #include "test_support.h"
 
 #include <math.h>
@@ -7,18 +8,81 @@
 
 #define CUE(cue) (UINT32_C(1) << (unsigned int)(cue))
 
+static bool PlaneProbe(void *context, CcLimbVec3 origin, float distance,
+                        CcLimbVec3 *point, CcLimbVec3 *normal)
+{
+    (void)context;
+    if (origin.y < 0.0f || origin.y > distance) return false;
+    *point = (CcLimbVec3){origin.x, 0.0f, origin.z};
+    *normal = (CcLimbVec3){0.0f, 1.0f, 0.0f};
+    return true;
+}
+
+static int CheckGaitTiming(int render_rate, float cadence)
+{
+    CcHumanoidGait gait;
+    CcLimbVec3 body = {0};
+    CcHumanoidGaitInit(&gait, body, 0.0f, PlaneProbe, NULL);
+    CcHumanoidGaitSetWalkingProfile(&gait, cadence, 1.0f);
+    CcSoundscape soundscape = {0};
+    CcSoundFrame frame = {.walking = true, .grounded = true,
+        .foot_surface = {CC_SOUND_STEP_STONE, CC_SOUND_STEP_GRASS}};
+    float dt = 1.0f / (float)render_rate;
+    CC_CHECK(CcSoundscapeStep(&soundscape, frame, dt) == 0U);
+    int contacts = 0, sounds = 0, ticks = 0;
+    for (int render = 0; render < render_rate * 8; ++render) {
+        /* Match the client's fixed physics step and variable render rate. */
+        int target_ticks = (render + 1) * 60 / render_rate;
+        for (; ticks < target_ticks; ++ticks) {
+            CcLimbVec3 velocity = {0.0f, 0.0f, ticks < 300 ? 1.0f : 0.0f};
+            CcHumanoidContact before[2] = {gait.feet[0].contact, gait.feet[1].contact};
+            CcHumanoidGaitAdvance(&gait, body, 0.0f, velocity, true,
+                                  1.0f / 60.0f, PlaneProbe, NULL);
+            body.x += gait.root_velocity.x / 60.0f;
+            body.z += gait.root_velocity.z / 60.0f;
+            for (int foot = 0; foot < 2; ++foot) {
+                if (before[foot] == CC_HUMANOID_CONTACT_SWING &&
+                    gait.feet[foot].contact == CC_HUMANOID_CONTACT_HEEL) ++contacts;
+            }
+        }
+        uint32_t markers = CcHumanoidGaitConsumeMotionMarkers(&gait);
+        frame.x = body.x;
+        frame.z = body.z;
+        frame.footfall[0] = (markers & CC_MOTION_MARKER_LEFT_CONTACT) != 0U;
+        frame.footfall[1] = (markers & CC_MOTION_MARKER_RIGHT_CONTACT) != 0U;
+        uint32_t cues = CcSoundscapeStep(&soundscape, frame, dt);
+        CC_CHECK(cues == ((frame.footfall[0] ? CUE(CC_SOUND_STEP_STONE) : 0U) |
+                          (frame.footfall[1] ? CUE(CC_SOUND_STEP_GRASS) : 0U)));
+        if ((cues & CUE(CC_SOUND_STEP_STONE)) != 0U) ++sounds;
+        if ((cues & CUE(CC_SOUND_STEP_GRASS)) != 0U) ++sounds;
+        if (render >= render_rate * 7) CC_CHECK(cues == 0U);
+    }
+    CC_CHECK(sounds == contacts && sounds >= 8);
+    return sounds;
+}
+
 int main(void)
 {
+    int slow = CheckGaitTiming(60, 0.78f);
+    int fast = CheckGaitTiming(60, 1.22f);
+    CC_CHECK(fast > slow);
+    CC_CHECK(CheckGaitTiming(30, 1.22f) == fast);
+    CC_CHECK(CheckGaitTiming(120, 1.22f) == fast);
     CcSoundscape state = {0};
     CcSoundFrame frame = {.grounded = true, .walking = true,
-                          .surface = CC_SOUND_STEP_STONE};
+                          .foot_surface = {CC_SOUND_STEP_STONE, CC_SOUND_STEP_WOOD}};
     CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == 0U);
     for (int i = 0; i < 120; ++i) CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == 0U);
     frame.x = 0.9f;
+    CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == 0U);
+    frame.footfall[0] = true;
     CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == CUE(CC_SOUND_STEP_STONE));
-    frame.surface = CC_SOUND_STEP_WOOD;
-    frame.x += 0.9f;
+    frame.footfall[0] = false;
+    CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == 0U);
+    frame.footfall[1] = true;
     CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == CUE(CC_SOUND_STEP_WOOD));
+    frame.foot_surface[1] = CC_SOUND_STEP_GRASS;
+    CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == CUE(CC_SOUND_STEP_GRASS));
     frame.grounded = false;
     frame.jumping = true;
     CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == CUE(CC_SOUND_JUMP));
@@ -28,6 +92,7 @@ int main(void)
     frame.grounded = true;
     frame.jumping = false;
     CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == CUE(CC_SOUND_LAND));
+    frame.footfall[1] = false;
     frame.striking = true;
     frame.strike_time = 0.1f;
     CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == CUE(CC_SOUND_SWING));
@@ -42,6 +107,8 @@ int main(void)
     frame.x += 0.9f;
     CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == 0U);
     frame.walking = true;
+    frame.footfall[0] = true;
+    CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == 0U);
     frame.place = UINT64_C(1) << 40U;
     frame.grounded = false;
     CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == 0U);
@@ -52,6 +119,15 @@ int main(void)
     CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == 0U);
     CC_CHECK(CcSoundscapeStep(&state, frame, NAN) == 0U);
     CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == 0U);
+    frame.footfall[0] = false;
+    frame.swimming = true;
+    CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == 0U);
+    frame.x += 0.9f;
+    CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == CUE(CC_SOUND_SPLASH));
+    frame.swimming = false;
+    frame.footfall[0] = true;
+    CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == 0U);
+    frame.footfall[0] = false;
     frame.travel_pace = 8.0f;
     int hooves = 0, wheels = 0;
     for (int i = 0; i < 600; ++i) {
@@ -64,6 +140,7 @@ int main(void)
     frame.travel_pace = 0.0f;
     for (int i = 0; i < 600; ++i) CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == 0U);
 
+    double mean_energy[CC_SOUND_COUNT] = {0};
     for (int cue = 0; cue < CC_SOUND_COUNT; ++cue) {
         size_t count = CcSoundSampleCount((CcSoundCue)cue);
         CC_CHECK(count > 1000U && count < CC_SOUND_SAMPLE_RATE);
@@ -84,9 +161,13 @@ int main(void)
         }
         CC_CHECK(energy / (double)count > 0.00001);
         CC_CHECK(energy / (double)count < 0.12);
+        mean_energy[cue] = energy / (double)count;
         free(samples);
         free(repeat);
     }
+    CC_CHECK(mean_energy[CC_SOUND_STEP_GRASS] < mean_energy[CC_SOUND_STEP_DIRT] * 0.6);
+    CC_CHECK(mean_energy[CC_SOUND_STEP_DIRT] < mean_energy[CC_SOUND_STEP_STONE]);
+    CC_CHECK(mean_energy[CC_SOUND_STEP_STONE] < mean_energy[CC_SOUND_HIT] * 0.2);
     char path[256], changed[256];
     CC_CHECK(CcSoundVoicePath("test.line", "Mara", "hello", path, sizeof(path)));
     CC_CHECK(strcmp(path, "assets/audio/voice/test.line-32f1dd9c.wav") == 0);

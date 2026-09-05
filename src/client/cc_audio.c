@@ -102,6 +102,10 @@ float CcAudioMusicGain(void)
 static float CueVolume(CcSoundCue cue)
 {
     float volume = cue <= CC_SOUND_WHEEL ? 0.32f : 0.48f;
+    if (cue <= CC_SOUND_SPLASH) volume = 0.22f;
+    if (cue == CC_SOUND_STEP_WOOD || cue == CC_SOUND_STEP_DIRT) volume = 0.20f;
+    if (cue == CC_SOUND_STEP_GRASS) volume = 0.18f;
+    if (cue == CC_SOUND_LAND) volume = 0.28f;
     if (audio.voice_loaded && IsMusicStreamPlaying(audio.voice)) volume *= 0.36f;
     return volume;
 }

@@ -69,6 +69,9 @@ int main(void)
     CcAudioInit();
     CC_CHECK(allocated == CC_SOUND_COUNT * 3);
     CC_CHECK(CcAudioMusicGain() == 1.0f);
+    CcAudioUpdate();
+    CC_CHECK(volumes[CC_SOUND_STEP_GRASS * 3] < volumes[CC_SOUND_STEP_DIRT * 3]);
+    CC_CHECK(volumes[CC_SOUND_STEP_STONE * 3] < volumes[CC_SOUND_HIT * 3] * 0.5f);
     CcAudioPlay(CC_SOUND_HOOF);
     CC_CHECK(PlayingCount() == 1);
     CcAudioPlay(CC_SOUND_HOOF);

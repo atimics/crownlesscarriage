@@ -11,6 +11,7 @@ typedef enum CcSoundCue {
     CC_SOUND_STEP_STONE,
     CC_SOUND_STEP_WOOD,
     CC_SOUND_STEP_DIRT,
+    CC_SOUND_STEP_GRASS,
     CC_SOUND_SPLASH,
     CC_SOUND_HOOF,
     CC_SOUND_WHEEL,
@@ -32,13 +33,14 @@ typedef struct CcSoundFrame {
     float impact_time;
     uint64_t place;
     int scene;
-    CcSoundCue surface;
-    bool walking, grounded, jumping, striking, blocked;
+    CcSoundCue foot_surface[2];
+    bool footfall[2]; /* Heel-strike events consumed from the walk cycle. */
+    bool walking, grounded, swimming, jumping, striking, blocked;
 } CcSoundFrame;
 
 typedef struct CcSoundscape {
     CcSoundFrame previous;
-    float step_distance, hoof_time, wheel_time;
+    float swim_distance, hoof_time, wheel_time;
     bool initialized;
 } CcSoundscape;
 

@@ -3,6 +3,7 @@
 
 #include "client/cc_npc_appearance.h"
 #include "client/cc_local_viewport.h"
+#include "client/cc_soundscape.h"
 #include "locomotion/cc_limb.h"
 #include "locomotion/cc_humanoid.h"
 #include "locomotion/cc_multileg.h"
@@ -449,6 +450,7 @@ void CcLocalBindPlace(const CcSim *sim);
 void CcLocalBindOpenWorld(const CcWorldStream *stream);
 float CcLocalTerrainHeightAt(float x, float z);
 Vector3 CcLocalTerrainNormalAt(float x, float z);
+CcSoundCue CcLocalFootstepSurfaceAt(CcLocalSceneKind scene, float x, float z);
 
 void CcLocalAgentInit(CcLocalAgent *agent, Vector2 position, bool market_interior);
 void CcLocalAgentSetNpcAppearance(CcLocalAgent *agent, uint32_t seed,
