@@ -649,6 +649,11 @@ static const StreetBoundaryExit STREET_BOUNDARY_EXITS[] = {
 };
 
 typedef struct FixedCameraRig {
+    Camera3D output_camera;
+    bool output_valid;
+    float tree_angle;
+    float tree_goal;
+    float tree_hold;
     Vector3 target_velocity;
     Vector3 target_velocity_from;
     Vector3 offset_velocity;

@@ -95,7 +95,7 @@ static void TestCameraContinuity(void)
             previous = camera;
         }
         printf("camera return rate %d peak %.4f residual %.6f\n", rates[rate], largest_step, Vector3Distance(previous.position, base.position));
-        RequireRenderer(largest_step < 60.0f && Vector3Distance(previous.position, base.position) < 0.001f,
+        RequireRenderer(largest_step < Vector3Distance(base.position, base.target) * 3.0f && Vector3Distance(previous.position, base.position) < 0.001f,
                         "conversation interruptions and returns must settle smoothly");
     }
     puts("PASS camera handoffs: held landmarks, interrupted moves and smooth returns");

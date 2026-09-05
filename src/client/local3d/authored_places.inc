@@ -3652,17 +3652,16 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
             i == profile->primary_building &&
             runtime_assets[RUNTIME_ASSET_MARKET].ready) continue;
         float reveal = world_building_reveals[i].amount;
-        SetWorldForegroundReveal(reveal, reveal_cut_height);
-        rlPushMatrix();
         float building_base = TerrainFootprintHeight(building.footprint);
+        float active_cut_world = SetObjectForegroundReveal(reveal, reveal_cut_height,
+            building_base + building.height + 3.5f);
+        rlPushMatrix();
         rlTranslatef(0.0f, building_base, 0.0f);
         DrawSettlementBuilding(
             &building, BuildingWallColor(building.style, profile),
             BuildingRoofColor(building.style, kingdom, profile),
             profile, i);
         if (reveal > 0.05f) {
-            float active_cut_world = reveal_cut_height +
-                                     (1.0f - reveal) * 8.0f;
             DrawBuildingRevealCap(
                 building.footprint.x, building.footprint.y,
                 building.footprint.width, building.footprint.height,
@@ -3983,7 +3982,8 @@ static void DrawCastle(const CcSim *sim, const CcSettlement *place,
         WorldStructure structure = ActiveCompoundStructureAt(i);
         Color stone = CompoundStoneColor(profile, kingdom, structure.kind);
         float reveal = castle_structure_reveals[i].amount;
-        SetWorldForegroundReveal(reveal, reveal_cut_height);
+        (void)SetObjectForegroundReveal(reveal, reveal_cut_height,
+            castle_base + structure.height + 3.5f);
         DrawConstructedCompoundStructure(&structure, stone, kingdom, profile);
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);

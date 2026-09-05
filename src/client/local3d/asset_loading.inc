@@ -555,6 +555,7 @@ typedef struct VisualStyleCache {
     int32_t foliage_fog_color_location;
     int32_t foliage_fog_near_location;
     int32_t foliage_fog_far_location;
+    int32_t foliage_horizon_fog_location;
     int32_t foliage_depth_splits_location;
     int32_t foliage_depth_strength_location;
     bool foliage_ready;
@@ -2887,6 +2888,14 @@ static void SetWorldForegroundReveal(float amount, float cut_height)
     }
 }
 
+static float SetObjectForegroundReveal(float amount, float cut_height, float top_height)
+{
+    float active_cut = top_height + (cut_height - top_height) * amount;
+    /* Map the object's own height to the shared shader's reveal interval. */
+    SetWorldForegroundReveal(amount, active_cut - (1.0f - amount) * 8.0f);
+    return active_cut;
+}
+
 static void SetWorldTerrainSurface(bool enabled)
 {
     if (!visual_style.world_ready || visual_style.terrain_surface == enabled) {
@@ -3251,6 +3260,8 @@ static void LoadVisualStyle(void)
                 GetShaderLocation(visual_style.foliage, "fogNear");
             visual_style.foliage_fog_far_location =
                 GetShaderLocation(visual_style.foliage, "fogFar");
+            visual_style.foliage_horizon_fog_location =
+                GetShaderLocation(visual_style.foliage, "horizonFog");
             visual_style.foliage_depth_splits_location =
                 GetShaderLocation(visual_style.foliage, "depthSplits");
             visual_style.foliage_depth_strength_location =

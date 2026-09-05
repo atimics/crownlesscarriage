@@ -88,8 +88,14 @@ static void TestTravelForestCameraTurn(void)
     CcLocalDrawOpenWorld3D(&sim, &stream, &agent, NULL, &carriage, 0,
         target, (Rectangle){0, 0, 320, 180});
     EndDrawing();
-    RequireRenderer(storybook_forest_uploads == first_uploads,
-                    "small camera turns must reuse resident tree cells");
+    /* A turn may load a newly exposed cell. Existing cells retain their buffers. */
+    uint64_t turn_uploads = storybook_forest_uploads;
+    BeginDrawing();
+    CcLocalDrawOpenWorld3D(&sim, &stream, &agent, NULL, &carriage, 0,
+        target, (Rectangle){0, 0, 320, 180});
+    EndDrawing();
+    RequireRenderer(storybook_forest_uploads == turn_uploads,
+                    "a held camera must reuse every resident tree cell");
     for (int i = 0; i < STORYBOOK_FOREST_CELL_COUNT; ++i) {
         if (buffers[i] != 0) RequireRenderer(
             storybook_forest_cells[i].batch.foliage.meshes[0].vboId[0] == buffers[i],

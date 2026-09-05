@@ -4220,8 +4220,13 @@ static void BeginWorldLighting(Camera3D camera,
     float fog_color[3] = {(float)atmosphere_fog.r / 255.0f,
                           (float)atmosphere_fog.g / 255.0f,
                           (float)atmosphere_fog.b / 255.0f};
-    float fog_near = profile->fog_near * atmosphere.fog_distance_scale;
-    float fog_far = profile->fog_far * atmosphere.fog_distance_scale;
+    /* A long lens keeps the town's haze at its authored visual depth. */
+    float camera_distance = Vector3Distance(camera.position, camera.target);
+    float lens_depth_offset = camera.projection == CAMERA_PERSPECTIVE ?
+        fmaxf(0.0f, camera_distance * (1.0f -
+            tanf(camera.fovy * DEG2RAD * 0.5f) / tanf(12.0f * DEG2RAD))) : 0.0f;
+    float fog_near = profile->fog_near * atmosphere.fog_distance_scale + lens_depth_offset;
+    float fog_far = profile->fog_far * atmosphere.fog_distance_scale + lens_depth_offset;
     float horizon_fog = profile_id == ART_LIGHT_STORYBOOK ? 1.0f : 0.0f;
     SetShaderValue(visual_style.world, visual_style.horizon_fog_location,
                    &horizon_fog, SHADER_UNIFORM_FLOAT);
@@ -4241,9 +4246,9 @@ static void BeginWorldLighting(Camera3D camera,
     float foreground_anchor[3] = {composition->foreground_anchor.x,
                                   composition->foreground_anchor.y,
                                   composition->foreground_anchor.z};
-    float depth_splits[3] = {composition->depth_splits.x,
-                             composition->depth_splits.y,
-                             composition->depth_splits.z};
+    float depth_splits[3] = {composition->depth_splits.x + lens_depth_offset,
+                             composition->depth_splits.y + lens_depth_offset,
+                             composition->depth_splits.z + lens_depth_offset};
     SetShaderValue(visual_style.world,
                    visual_style.light_direction_location, direction,
                    SHADER_UNIFORM_VEC3);
@@ -4360,6 +4365,9 @@ static void BeginWorldLighting(Camera3D camera,
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_fog_far_location,
                        &fog_far, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_horizon_fog_location,
+                       &horizon_fog, SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_depth_splits_location,
                        depth_splits, SHADER_UNIFORM_VEC3);

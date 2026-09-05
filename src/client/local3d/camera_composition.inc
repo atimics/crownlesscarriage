@@ -12,6 +12,7 @@ static Camera3D ExteriorCameraComposed(Vector3 target, Vector3 offset,
     Camera3D camera = {0};
     camera.target = target;
 
+    offset = Vector3Scale(offset, 2.5f);
     camera.position = Vector3Add(target, offset);
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
     camera.fovy = 2.0f * atanf(fovy * 0.5f /
@@ -33,6 +34,7 @@ static Camera3D PerspectiveCameraComposed(Vector3 target, Vector3 offset,
                                           float fovy)
 {
     Camera3D camera = ExteriorCameraComposed(target, offset, fovy);
+    camera.position = Vector3Add(target, offset);
     camera.fovy = fovy;
     camera.projection = CAMERA_PERSPECTIVE;
     return camera;
@@ -889,6 +891,8 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
     }
     if (rig->transition_elapsed >= rig->transition_duration ||
         rig->transition_duration <= 0.0f) {
+        rig->target_velocity = (Vector3){0};
+        rig->offset_velocity = (Vector3){0};
         rig->displayed_target = rig->destination;
         rig->displayed_offset = rig->offset_destination;
         rig->displayed_fovy = rig->fovy_destination;
@@ -1014,6 +1018,10 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
 Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
                                      bool advance, int32_t art_height)
 {
+    if (!advance && street_camera_rig.initialized && street_camera_rig.output_valid) {
+        return street_camera_rig.output_camera;
+    }
+    bool fresh_view = !street_camera_rig.initialized;
     Vector3 focus = agent != NULL ? agent->position : (Vector3){0};
     int32_t shot = TownCameraSceneFor(focus, street_camera_rig.shot);
     const StreetCameraShot *composition = StreetCameraShotAt(shot);
@@ -1045,6 +1053,30 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
         camera = FixedCameraRigFrameHero(
             &street_camera_rig, camera, hero, art_height,
             composition->art.quiet_area, advance);
+        Camera3D authored_camera = camera;
+        Vector3 authored_offset = Vector3Subtract(camera.position, camera.target);
+        float angle = street_camera_rig.tree_angle;
+        camera.position = Vector3Add(camera.target, Vector3RotateByAxisAngle(
+            authored_offset, (Vector3){0, 1, 0}, angle));
+        if (advance) {
+            street_camera_rig.tree_hold = fmaxf(0.0f,
+                street_camera_rig.tree_hold - street_camera_rig.delta_time);
+            if (fresh_view || (street_camera_rig.tree_hold <= 0.0f &&
+                CcLocalCameraTreeOcclusionScoreInternal(camera, hero, hero) > 0.06f)) {
+                float chosen = 0.0f;
+                (void)CcLocalCameraClearSightlinesInternal(authored_camera, hero, hero,
+                    street_camera_rig.tree_goal, &chosen);
+                street_camera_rig.tree_goal = chosen;
+                street_camera_rig.tree_hold = 0.50f;
+                if (fresh_view) street_camera_rig.tree_angle = chosen;
+            }
+            street_camera_rig.tree_angle += WrapAngle(
+                street_camera_rig.tree_goal - street_camera_rig.tree_angle) *
+                (1.0f - expf(-street_camera_rig.delta_time * 3.5f));
+            camera.position = Vector3Add(camera.target, Vector3RotateByAxisAngle(
+                authored_offset, (Vector3){0, 1, 0}, street_camera_rig.tree_angle));
+        }
+        camera = StreetCameraClearVolume(camera);
         Vector3 before_guard = camera.target;
         camera = KeepHeroInsideStreetFrame(
             camera, hero, art_height,
@@ -1054,7 +1086,9 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
         street_camera_rig.framing_from = Vector3Add(street_camera_rig.framing_from, guard);
         street_camera_rig.framing_destination = Vector3Add(street_camera_rig.framing_destination, guard);
     }
-    return SnapCameraToArtPixels(camera, art_height);
+    street_camera_rig.output_camera = camera;
+    street_camera_rig.output_valid = true;
+    return camera;
 }
 
 static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
@@ -1133,7 +1167,7 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
         tanf(camera.fovy * DEG2RAD * 0.5f);
     street_camera_rig = (FixedCameraRig){
         .displayed_target = camera.target,
-        .displayed_offset = arrival_offset,
+        .displayed_offset = Vector3Scale(arrival_offset, 1.0f / 2.5f),
         .displayed_fovy = arrival_span,
         .shot = -1,
         .initialized = true,
@@ -1503,16 +1537,22 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
             base.target, combat_camera_rig.locked_target, weight);
         Vector3 desired_offset = Vector3Lerp(
             base_offset, combat_camera_rig.locked_offset, weight);
-        float desired_fovy = base_perspective_fovy +
-            (combat_camera_rig.locked_fovy - base_perspective_fovy) * weight;
+        float base_span = 2.0f * Vector3Length(base_offset) *
+            tanf(base_perspective_fovy * DEG2RAD * 0.5f);
+        float close_span = 2.0f * Vector3Length(combat_camera_rig.locked_offset) *
+            tanf(combat_camera_rig.locked_fovy * DEG2RAD * 0.5f);
+        float desired_span = base_span + (close_span - base_span) * weight;
+        float displayed_span = 2.0f * Vector3Length(combat_camera_rig.displayed_offset) *
+            tanf(combat_camera_rig.displayed_fovy * DEG2RAD * 0.5f);
         float response = quick_road_entry ? 8.0f : 4.5f;
         float ease = 1.0f - expf(-delta_time * response);
         combat_camera_rig.displayed_target = Vector3Lerp(
             combat_camera_rig.displayed_target, desired_target, ease);
         combat_camera_rig.displayed_offset = Vector3Lerp(
             combat_camera_rig.displayed_offset, desired_offset, ease);
-        combat_camera_rig.displayed_fovy +=
-            (desired_fovy - combat_camera_rig.displayed_fovy) * ease;
+        displayed_span += (desired_span - displayed_span) * ease;
+        combat_camera_rig.displayed_fovy = 2.0f * atanf(displayed_span * 0.5f /
+            fmaxf(0.25f, Vector3Length(combat_camera_rig.displayed_offset))) * RAD2DEG;
         if (!active && combat_camera_rig.combat_weight <= 0.0001f &&
             Vector3Distance(combat_camera_rig.displayed_target, base.target) < 0.0001f &&
             Vector3Distance(combat_camera_rig.displayed_offset, base_offset) < 0.0001f &&
@@ -1621,14 +1661,19 @@ Camera3D CcLocalConversationCameraInternal(
         float weight = SmoothStep01(conversation_camera_rig.focus_weight);
         Vector3 desired_target = Vector3Lerp(base.target, close_target, weight);
         Vector3 desired_offset = Vector3Lerp(base_offset, close_offset, weight);
-        float desired_fovy = base_fovy + (close_fovy - base_fovy) * weight;
+        float base_span = 2.0f * Vector3Length(base_offset) * tanf(base_fovy * DEG2RAD * 0.5f);
+        float close_span = 2.0f * Vector3Length(close_offset) * tanf(close_fovy * DEG2RAD * 0.5f);
+        float desired_span = base_span + (close_span - base_span) * weight;
+        float displayed_span = 2.0f * Vector3Length(conversation_camera_rig.displayed_offset) *
+            tanf(conversation_camera_rig.displayed_fovy * DEG2RAD * 0.5f);
         float ease = 1.0f - expf(-delta_time * 5.2f);
         conversation_camera_rig.displayed_target = Vector3Lerp(
             conversation_camera_rig.displayed_target, desired_target, ease);
         conversation_camera_rig.displayed_offset = Vector3Lerp(
             conversation_camera_rig.displayed_offset, desired_offset, ease);
-        conversation_camera_rig.displayed_fovy +=
-            (desired_fovy - conversation_camera_rig.displayed_fovy) * ease;
+        displayed_span += (desired_span - displayed_span) * ease;
+        conversation_camera_rig.displayed_fovy = 2.0f * atanf(displayed_span * 0.5f /
+            fmaxf(0.25f, Vector3Length(conversation_camera_rig.displayed_offset))) * RAD2DEG;
 
     }
 
