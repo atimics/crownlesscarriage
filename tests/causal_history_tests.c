@@ -32,12 +32,28 @@ static int32_t CountEvents(const CcSim *sim, CcEventKind kind)
 
 /* The named cast must turn over on its own: the initial age pyramid spans
  * working age to elders, so a long chronicle sees deaths, heirs, and
- * generational change even without a player. */
+ * generational change even without a player. The event ring only holds the
+ * last 256 entries, so the scan runs in monthly chunks: any birth or death
+ * event stays in the window far longer than a chunk. */
 static void CheckPopulationTurnover(void)
 {
     CcSim sim;
     CcSimInit(&sim, UINT32_C(2));
-    CcSimAdvanceDays(&sim, 25 * 365);
+    bool birth_event = false, death_event = false;
+    int32_t last_seen_day = 0;
+    for (int32_t month = 0; month < 25 * 12; ++month) {
+        CcSimAdvanceDays(&sim, 30);
+        for (int32_t i = 0; i < sim.event_count; ++i) {
+            const CcEvent *event = CcSimRecentEvent(&sim, i);
+            if (event == NULL || event->day <= last_seen_day) continue;
+            if (event->kind == CC_EVENT_CHARACTER_BORN) birth_event = true;
+            if (event->kind == CC_EVENT_CHARACTER_DIED) death_event = true;
+        }
+        const CcEvent *newest = CcSimRecentEvent(&sim, 0);
+        if (newest != NULL && newest->day > last_seen_day) {
+            last_seen_day = newest->day;
+        }
+    }
     CC_CHECK(sim.character_deaths > 0);
     CC_CHECK(sim.character_births == sim.character_deaths);
     CC_CHECK(sim.character_count == CC_MAX_CHARACTERS);
@@ -46,8 +62,8 @@ static void CheckPopulationTurnover(void)
         if (sim.characters[i].generation > 0) heir_exists = true;
     }
     CC_CHECK(heir_exists);
-    CC_CHECK(CountEvents(&sim, CC_EVENT_CHARACTER_DIED) > 0);
-    CC_CHECK(CountEvents(&sim, CC_EVENT_CHARACTER_BORN) > 0);
+    CC_CHECK(death_event);
+    CC_CHECK(birth_event);
     CheckReferences(&sim);
 }
 
