@@ -712,7 +712,7 @@ static float NearestRoadDistance(const CcWorldManifest *manifest,
          route_index < manifest->route_count; ++route_index) {
         const CcWorldRoutePlacement *route = &manifest->routes[route_index];
         for (int32_t sample = 0;
-         sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
+             sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
             CcWorldPoint first = route->samples[sample];
             CcWorldPoint second = route->samples[sample + 1];
             /* Terrain and surface queries only need roads within their reach. */

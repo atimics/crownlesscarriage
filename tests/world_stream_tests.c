@@ -1,7 +1,7 @@
 #include "world/cc_world.h"
 
-#include <math.h>
 #include <float.h>
+#include <math.h>
 #include <stdio.h>
 
 #define CHECK(condition) do { \

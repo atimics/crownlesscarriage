@@ -84,9 +84,9 @@ int main(int argc, char **argv)
 
     uint64_t checksum = 0U;
     char validation[192];
+    CcSim sim;
     clock_t started = clock();
     for (int32_t seed = 0; seed < sim_seeds; ++seed) {
-        CcSim sim;
         CcSimInit(&sim, (uint32_t)seed * UINT32_C(0x9e3779b9) + 1U);
         CcSimAdvanceDays(&sim, simulation_days_per_seed);
         if (!CcSimValidate(&sim, validation, sizeof(validation))) {
@@ -103,7 +103,6 @@ int main(int argc, char **argv)
     enum { TERRAIN_SIDE = 64 };
     started = clock();
     for (int32_t seed = 0; seed < sim_seeds; ++seed) {
-        CcSim sim;
         CcWorldManifest manifest;
         CcSimInit(&sim, (uint32_t)seed * UINT32_C(0x9e3779b9) + 1U);
         if (!CcWorldManifestBuild(&manifest, &sim)) return EXIT_FAILURE;
