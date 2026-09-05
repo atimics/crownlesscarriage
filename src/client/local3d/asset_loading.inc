@@ -918,6 +918,16 @@ static Rectangle RoadObstacleAt(int32_t index)
                                           ROAD_FALLBACK_OBSTACLES[index];
 }
 
+static void UnloadLocalModel(Model model)
+{
+    /* Release the runtime pose arrays owned by the pinned raylib model. */
+    MemFree(model.currentPose);
+    MemFree(model.boneMatrices);
+    model.currentPose = NULL;
+    model.boneMatrices = NULL;
+    UnloadModel(model);
+}
+
 static void ReleaseUploadedModelCpuData(Model *model)
 {
     if (model == NULL || model->meshes == NULL) return;
@@ -1004,7 +1014,7 @@ static bool LoadRuntimeAsset(RuntimeAssetId id)
         TraceLog(LOG_WARNING,
                  "ASSET: invalid %s (%d meshes, budget %d); using fallback",
                  asset->label, mesh_count, asset->mesh_budget);
-        if (mesh_count > 0) UnloadModel(asset->model);
+        if (mesh_count > 0) UnloadLocalModel(asset->model);
         asset->model = (Model){0};
         return false;
     }
@@ -1021,7 +1031,7 @@ static void UnloadRuntimeAsset(RuntimeAssetId id)
 {
     if (id < 0 || id >= RUNTIME_ASSET_COUNT) return;
     RuntimeAsset *asset = &runtime_assets[id];
-    if (asset->ready) UnloadModel(asset->model);
+    if (asset->ready) UnloadLocalModel(asset->model);
     asset->model = (Model){0};
     asset->ready = false;
     asset->attempted = false;
@@ -1046,7 +1056,7 @@ static void LoadEconomicCargoAssets(void)
             TraceLog(LOG_WARNING,
                      "ASSET: invalid %s (%d meshes)",
                      asset->label, mesh_count);
-            if (mesh_count > 0) UnloadModel(asset->model);
+            if (mesh_count > 0) UnloadLocalModel(asset->model);
             asset->model = (Model){0};
             continue;
         }
@@ -1061,7 +1071,7 @@ static void UnloadEconomicCargoAssets(void)
 {
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         EconomicCargoAsset *asset = &economic_cargo_assets[good];
-        if (asset->ready) UnloadModel(asset->model);
+        if (asset->ready) UnloadLocalModel(asset->model);
         asset->model = (Model){0};
         asset->ready = false;
     }
@@ -1132,7 +1142,7 @@ static void LoadNpcArchetypes(void)
                          "NPC: invalid %s pose %d (%d meshes, %d materials)",
                          CcNpcRoleName((CcNpcRole)role), pose,
                          model.meshCount, model.materialCount);
-                if (model.meshCount > 0) UnloadModel(model);
+                if (model.meshCount > 0) UnloadLocalModel(model);
                 continue;
             }
             ReleaseUploadedModelCpuData(&model);
@@ -1173,7 +1183,7 @@ static void LoadCreatureModels(void)
                          "CREATURE: invalid %s (%d meshes, %d materials, %d bones)",
                          path, model.meshCount, model.materialCount,
                          model.skeleton.boneCount);
-                if (model.meshCount > 0) UnloadModel(model);
+                if (model.meshCount > 0) UnloadLocalModel(model);
                 continue;
             }
             CreatureModelCache *cached = &creature_models[variant][pose];
@@ -1197,7 +1207,7 @@ static void LoadCreatureModels(void)
                 TraceLog(LOG_WARNING,
                          "CREATURE: %s has the wrong quadruped bones",
                          path);
-                UnloadModel(cached->model);
+                UnloadLocalModel(cached->model);
                 *cached = (CreatureModelCache){0};
                 continue;
             }
@@ -1235,7 +1245,7 @@ static void LoadNpcDynamicModules(void)
                      "NPC MODULE: invalid %s (%d meshes, %d materials, %d bones)",
                      module->label, model.meshCount, model.materialCount,
                      model.skeleton.boneCount);
-            if (model.meshCount > 0) UnloadModel(model);
+            if (model.meshCount > 0) UnloadLocalModel(model);
             continue;
         }
         ReleaseUploadedModelCpuData(&model);
@@ -1281,7 +1291,7 @@ static void LoadNpcBodySkins(void)
                     TraceLog(LOG_WARNING,
                              "NPC BODY: invalid %s (%d meshes, %d bones)",
                              path, body->model.meshCount, bone_count);
-                    if (body->model.meshCount > 0) UnloadModel(body->model);
+                    if (body->model.meshCount > 0) UnloadLocalModel(body->model);
                     *body = (NpcBodySkinCache){0};
                     continue;
                 }
@@ -1303,7 +1313,7 @@ static void LoadNpcBodySkins(void)
                     complete = false;
                 }
                 if (!complete) {
-                    UnloadModel(body->model);
+                    UnloadLocalModel(body->model);
                     *body = (NpcBodySkinCache){0};
                     continue;
                 }
@@ -1343,7 +1353,7 @@ static void LoadNpcHeadFamilies(void)
             TraceLog(LOG_WARNING,
                      "NPC HEAD: invalid %s (%d meshes, %d bones)",
                      path, model.meshCount, model.skeleton.boneCount);
-            if (model.meshCount > 0) UnloadModel(model);
+            if (model.meshCount > 0) UnloadLocalModel(model);
             continue;
         }
         ReleaseUploadedModelCpuData(&model);
@@ -1374,7 +1384,7 @@ static void LoadNpcHairFamilies(void)
             TraceLog(LOG_WARNING,
                      "NPC HAIR: invalid %s (%d meshes, %d bones)", path,
                      model.meshCount, model.skeleton.boneCount);
-            if (model.meshCount > 0) UnloadModel(model);
+            if (model.meshCount > 0) UnloadLocalModel(model);
             continue;
         }
         ReleaseUploadedModelCpuData(&model);
@@ -3444,7 +3454,7 @@ static void LoadHeroSkin(void)
         bone_count > CC_HERO_SKIN_MAX_BONES) {
         TraceLog(LOG_WARNING, "HERO: invalid engine skin (%d meshes, %d bones)",
                  hero_skin.model.meshCount, bone_count);
-        UnloadModel(hero_skin.model);
+        UnloadLocalModel(hero_skin.model);
         hero_skin = (HeroSkinCache){0};
         return;
     }
@@ -3469,7 +3479,7 @@ static void LoadHeroSkin(void)
         if (found[bone]) continue;
         TraceLog(LOG_WARNING, "HERO: engine skin is missing bone %s",
                  CcHumanoidSkinBoneName((CcHumanoidSkinBone)bone));
-        UnloadModel(hero_skin.model);
+        UnloadLocalModel(hero_skin.model);
         hero_skin = (HeroSkinCache){0};
         return;
     }
@@ -3477,7 +3487,7 @@ static void LoadHeroSkin(void)
         if (found_cape[bone]) continue;
         TraceLog(LOG_WARNING, "HERO: engine skin is missing cloth bone %s",
                  HERO_CAPE_BONE_NAMES[bone]);
-        UnloadModel(hero_skin.model);
+        UnloadLocalModel(hero_skin.model);
         hero_skin = (HeroSkinCache){0};
         return;
     }
@@ -3486,7 +3496,7 @@ static void LoadHeroSkin(void)
             if (found_hair[bone]) continue;
             TraceLog(LOG_WARNING, "HERO: screen-first skin is missing hair bone %s",
                      HERO_HAIR_BONE_NAMES[bone]);
-            UnloadModel(hero_skin.model);
+            UnloadLocalModel(hero_skin.model);
             hero_skin = (HeroSkinCache){0};
             return;
         }
@@ -3839,13 +3849,13 @@ static void LoadTreeCrownModels(void)
                               IsModelValid(tree_crown_models.pollard);
     if (tree_crown_models.ready) return;
     if (IsModelValid(tree_crown_models.alder)) {
-        UnloadModel(tree_crown_models.alder);
+        UnloadLocalModel(tree_crown_models.alder);
     }
     if (IsModelValid(tree_crown_models.oak)) {
-        UnloadModel(tree_crown_models.oak);
+        UnloadLocalModel(tree_crown_models.oak);
     }
     if (IsModelValid(tree_crown_models.pollard)) {
-        UnloadModel(tree_crown_models.pollard);
+        UnloadLocalModel(tree_crown_models.pollard);
     }
     tree_crown_models = (TreeCrownModelCache){0};
     TraceLog(LOG_WARNING, "TREE: falling back to rounded foliage masses");
@@ -3930,19 +3940,19 @@ void CcLocalRendererShutdown(void)
     TerrainRenderCacheClear();
     TerrainDetailRenderCacheClear();
     TreeSceneryBatchClear();
-    UnloadModel(sphere_models.small);
-    UnloadModel(sphere_models.character);
-    UnloadModel(sphere_models.scenery);
+    UnloadLocalModel(sphere_models.small);
+    UnloadLocalModel(sphere_models.character);
+    UnloadLocalModel(sphere_models.scenery);
     if (tree_crown_models.ready) {
-        UnloadModel(tree_crown_models.alder);
-        UnloadModel(tree_crown_models.oak);
-        UnloadModel(tree_crown_models.pollard);
+        UnloadLocalModel(tree_crown_models.alder);
+        UnloadLocalModel(tree_crown_models.oak);
+        UnloadLocalModel(tree_crown_models.pollard);
     }
-    if (hero_skin.ready) UnloadModel(hero_skin.model);
+    if (hero_skin.ready) UnloadLocalModel(hero_skin.model);
     for (int32_t role = 0; role < CC_NPC_ROLE_COUNT; ++role) {
         for (int32_t pose = 0; pose < CC_NPC_ARCHETYPE_POSE_COUNT; ++pose) {
             if (npc_archetypes[role][pose].ready) {
-                UnloadModel(npc_archetypes[role][pose].model);
+                UnloadLocalModel(npc_archetypes[role][pose].model);
             }
             npc_archetypes[role][pose] = (NpcArchetypeCache){0};
         }
@@ -3951,14 +3961,14 @@ void CcLocalRendererShutdown(void)
          ++variant) {
         for (int32_t pose = 0; pose < CC_CREATURE_POSE_COUNT; ++pose) {
             CreatureModelCache *creature = &creature_models[variant][pose];
-            if (creature->ready) UnloadModel(creature->model);
+            if (creature->ready) UnloadLocalModel(creature->model);
             *creature = (CreatureModelCache){0};
         }
     }
     (void)memset(creature_gaits, 0, sizeof(creature_gaits));
     for (int32_t id = 0; id < NPC_DYNAMIC_MODULE_COUNT; ++id) {
         if (npc_dynamic_modules[id].ready) {
-            UnloadModel(npc_dynamic_modules[id].model);
+            UnloadLocalModel(npc_dynamic_modules[id].model);
         }
         npc_dynamic_modules[id].model = (Model){0};
         npc_dynamic_modules[id].ready = false;
@@ -3969,20 +3979,20 @@ void CcLocalRendererShutdown(void)
                  ++tissue) {
                 NpcBodySkinCache *body =
                     &npc_body_skins[frame][muscle][tissue];
-                if (body->ready) UnloadModel(body->model);
+                if (body->ready) UnloadLocalModel(body->model);
                 *body = (NpcBodySkinCache){0};
             }
         }
     }
     for (int32_t family = 0; family < CC_NPC_HEAD_FAMILY_COUNT; ++family) {
         if (npc_head_families[family].ready) {
-            UnloadModel(npc_head_families[family].model);
+            UnloadLocalModel(npc_head_families[family].model);
         }
         npc_head_families[family] = (NpcHeadFamilyCache){0};
     }
     for (int32_t family = 0; family < CC_NPC_HAIR_FAMILY_COUNT; ++family) {
         if (npc_hair_families[family].ready) {
-            UnloadModel(npc_hair_families[family].model);
+            UnloadLocalModel(npc_hair_families[family].model);
         }
         npc_hair_families[family] = (NpcHairFamilyCache){0};
     }

@@ -41,6 +41,7 @@
 #define CC_ROYAL_CARRIAGE_CARGO_SLOTS CC_CARGO_CAPACITY
 #define CC_MAP_CAPACITY 3
 #define CC_MAP_COLLECTION_COUNT 13
+#define CC_PARTY_WIPE_DAYS (20 * 365)
 #define CC_SIM_MAX_DAY INT32_C(2147000000)
 #define CC_SIM_MAX_UNITS INT32_C(1000000)
 #define CC_SIM_MAX_MONEY INT64_C(1000000000000)
@@ -52,7 +53,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 41
+#define CC_SIM_SCHEMA_VERSION 42
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -324,7 +325,8 @@ typedef enum CcEventKind {
     CC_EVENT_DRAGON_PATRON_NAMED = 128,
     CC_EVENT_DRAGON_TERRITORY_LOST = 129,
     CC_EVENT_ROYAL_CARRIAGE_BLOCKED = 130,
-    CC_EVENT_ROYAL_CARRIAGE_REROUTED = 131
+    CC_EVENT_ROYAL_CARRIAGE_REROUTED = 131,
+    CC_EVENT_PARTY_WIPED = 132
 } CcEventKind;
 
 typedef struct CcArchives {
@@ -408,7 +410,8 @@ typedef enum CcCommandKind {
     CC_COMMAND_MEET_PONY = 43,
     CC_COMMAND_HELP_PONY = 44,
     CC_COMMAND_SWAP_PONY = 45,
-    CC_COMMAND_LEAVE_PONY = 46
+    CC_COMMAND_LEAVE_PONY = 46,
+    CC_COMMAND_PARTY_WIPE = 47
 } CcCommandKind;
 
 typedef enum CcHorseSex {
