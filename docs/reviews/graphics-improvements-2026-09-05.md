@@ -17,7 +17,7 @@ now share a perspective camera family with a long lens for the wider town views.
 | Town trees disappearing between shots | Authored town trees stay in a stable mesh batch. The camera eases around obstructing canopies. |
 | Travel turns rebuilding the whole forest | Trees and rocks stay in fixed 80-unit cells. A spare ring keeps recently visible cells ready for a reversed move. A held camera reuses its GPU buffers. |
 | Fine paint and face details changing abruptly with scale | Paint edges use the pixel footprint. Face features grow and shrink gradually as their projected size changes. |
-| Very wide depth range in close scenes | Town and road rendering use a 0.10–512 range. Storybook travel uses 0.10–240 with horizon haze. |
+| Very wide depth range in close scenes | Town, road, and storybook rendering use a 0.10–512 range. Travel trees use a 240-unit visibility range with horizon haze. |
 
 Town lighting stays consistent across a camera move. A lens adjustment preserves
 the authored haze depth as the wider camera moves farther from the scene.
@@ -40,7 +40,7 @@ residency.
 The Chromium gameplay suite passes for desktop and mobile layout, touch,
 menus, saves, shaders, fullscreen, and reloads. A WebGL capture fixture renders
 every frame on the same four-second path through each town. It also verifies
-that a slight camera turn preserves resident tree buffers. The distant leaf
+that camera turns and ground cache movement preserve resident tree buffers. The distant leaf
 test measures **0.000 mean channel change** during a subpixel camera move.
 That number describes the isolated leaf test.
 

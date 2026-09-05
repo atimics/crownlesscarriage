@@ -341,7 +341,9 @@ static void DrawStorybookGround(const CcWorldManifest *manifest, Vector3 focus)
     if (!storybook_ground_ready || storybook_seed != manifest->world_seed ||
         storybook_generator != manifest->generator_version ||
         center.x != storybook_center.x || center.y != storybook_center.y) {
-        OpenWorldRenderCacheClear();
+        if (storybook_ground_ready) UnloadModel(storybook_ground);
+        storybook_ground = (Model){0};
+        storybook_ground_ready = false;
         enum { CELLS = 80, COVER_CELLS = CELLS / 2, TUFT_VERTICES = 18 };
         const float step = 4.0f;
         TerrainMeshWriter writer;
@@ -1537,7 +1539,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
             DrawEllipse((int)x + 25, (int)y + 3, 34.0f, 5.0f, mist);
         }
     }
-    rlSetClipPlanes(0.10, storybook ? 240.0 : 4000.0);
+    rlSetClipPlanes(0.10, storybook ? 512.0 : 4000.0);
     BeginMode3D(camera);
     BeginWorldLighting(camera, &art);
     if (storybook) {
