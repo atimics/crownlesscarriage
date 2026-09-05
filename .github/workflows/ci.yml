@@ -252,6 +252,9 @@ jobs:
   sanitizers:
     name: Address and undefined behavior sanitizers
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
@@ -284,10 +287,9 @@ jobs:
             -o "$RUNNER_TEMP/sanitizer_ub_fixture"
           set +e
           "$RUNNER_TEMP/sanitizer_ub_fixture" \
-            > sanitizer-self-check.log 2>&1
+            2>&1 | tee sanitizer-self-check.log
           fixture_status=$?
           set -e
-          cat sanitizer-self-check.log
           test "$fixture_status" -ne 0
           grep -q "runtime error: signed integer overflow" \
             sanitizer-self-check.log
