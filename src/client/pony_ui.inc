@@ -1,34 +1,20 @@
-static Rectangle PonyBookButton(void)
+static bool HandleCarriageTabs(LocalState *local, ClientView view)
 {
-    return (Rectangle){12, (float)GetScreenHeight() - 145, 142, 28};
-}
-
-static bool PonyClicked(Rectangle bounds)
-{
-    return ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-           CheckCollisionPointRec(ClientPointerPosition(), bounds);
-}
-
-static void DrawPonyButton(Rectangle bounds, const char *label)
-{
-    ClientTouchAdd(bounds, label, true, false);
-    DrawRectangleRec(bounds, (Color){32, 37, 50, 255});
-    DrawRectangleLinesEx(bounds, 1, TEAL);
-    CcOverlayDrawText(label, (int)bounds.x + 10, (int)bounds.y + 10, 9, INK);
+    if (view != VIEW_CARRIAGE) return false;
+    for (int32_t tab = 0; tab < CARRIAGE_TAB_COUNT; ++tab) {
+        if (AdventureHit(CarriageTabBounds(tab)) || ClientKeyPressed(KEY_ONE + tab) ||
+            (tab == CARRIAGE_PONIES && ClientKeyPressed(KEY_F7))) {
+            local->carriage_tab = (CarriageTab)tab;
+            return true;
+        }
+    }
+    return false;
 }
 
 static bool HandlePonyInput(CcJournal *journal, CcSim *sim, LocalState *local,
                             ClientView view, ContextAction action, char *message, size_t capacity)
 {
-    if (view != VIEW_LOCAL && !local->pony_book_open) return false;
-    if (ClientKeyPressed(KEY_F7) || PonyClicked(PonyBookButton())) {
-        local->pony_book_open = !local->pony_book_open;
-        return true;
-    }
-    if (local->pony_book_open) {
-        if (ClientKeyPressed(KEY_BACKSPACE) || ClientKeyPressed(KEY_ESCAPE)) local->pony_book_open = false;
-        return true;
-    }
+    if (view != VIEW_LOCAL) return false;
     int32_t pony = CcPonyOnRoad(sim);
     if (pony < 0 || LocalCombatActive(local)) return false;
     if (sim->pony_company.encounter < 0) {
@@ -70,22 +56,22 @@ static bool HandlePonyInput(CcJournal *journal, CcSim *sim, LocalState *local,
     return true;
 }
 
-static void DrawPonyInterface(const CcSim *sim, const LocalState *local)
+static const Color PONY_COLORS[CC_PONY_COUNT] = {
+    {244,104,115,255}, {255,169,84,255}, {255,229,110,255},
+    {124,224,137,255}, {114,195,246,255}, {135,139,224,255}, {208,153,245,255}
+};
+
+static void DrawPonyEncounter(const CcSim *sim)
 {
-    static const Color colors[CC_PONY_COUNT] = {
-        {244,104,115,255}, {255,169,84,255}, {255,229,110,255},
-        {124,224,137,255}, {114,195,246,255}, {135,139,224,255}, {208,153,245,255}
-    };
-    DrawPonyButton(PonyBookButton(), "Pony book [F7]");
     int32_t pony = sim->pony_company.encounter;
-    if (pony >= 0 && !local->pony_book_open) {
+    if (pony >= 0) {
         float x = (float)GetScreenWidth() * 0.5f - 330;
         float y = (float)GetScreenHeight() - 274;
         DrawPanel((Rectangle){x, y, 660, 148}, (Color){13, 18, 28, 250});
         const CcPony *p = &sim->pony_company.ponies[pony];
         CcOverlayDrawText(TextFormat("%s / %s", CcPonyName(pony),
             p->releases > 0 ? "A familiar face" : "A rainbow traveller"),
-            (int)x + 16, (int)y + 16, 15, colors[pony]);
+            (int)x + 16, (int)y + 16, 15, PONY_COLORS[pony]);
         CcOverlayDrawText(CcPonyPersonality(pony), (int)x + 16, (int)y + 40, 10, MUTED);
         char quest[256] = {0};
         CcPonyQuestText(sim, pony, quest, sizeof(quest));
@@ -101,34 +87,42 @@ static void DrawPonyInterface(const CcSim *sim, const LocalState *local)
                 (int)x + 16, (int)y + 106, 10, TEAL);
         }
     }
-    if (!local->pony_book_open) return;
-    int x = GetScreenWidth() / 2 - 330;
-    int y = 106;
-    DrawPanel((Rectangle){(float)x, (float)y, 660, 466}, (Color){13,18,28,252});
+}
+
+static void DrawCarriagePonies(const CcSim *sim)
+{
+    int x = 52;
+    int y = 174;
+    int width = GetScreenWidth() - 104;
+    int height = (int)fminf(454.0f, (float)GetScreenHeight() - 284.0f);
+    int row_height = (height - 72) / CC_PONY_COUNT;
+    DrawPanel((Rectangle){(float)x, (float)y, (float)width, (float)height},
+        Fade(BACKGROUND, 0.76f));
     CcOverlayDrawText("PONIES", x + 20, y + 18, 17, INK);
-    CcOverlayDrawText("Meet them on the roads. Help them. Travel together. [F7 / Esc to close]",
+    CcOverlayDrawText("Meet them on the roads. Help them. Travel together.",
                       x + 20, y + 47, 9, MUTED);
     for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
         const CcPony *p = &sim->pony_company.ponies[i];
         bool team = i == sim->pony_company.team[0] || i == sim->pony_company.team[1];
-        int row = y + 83 + i * 51;
+        int row = y + 77 + i * row_height;
+        float portrait_size = fminf(42.0f, (float)row_height - 4.0f);
         CcLocalDrawPonyPortrait(i, p->seen,
-            (Rectangle){(float)x + 18, (float)row - 5, 42, 42});
+            (Rectangle){(float)x + 18, (float)row - 5, portrait_size, portrait_size});
         if (!p->seen) {
             CcOverlayDrawText("??", x + 73, row, 13, MUTED);
-            CcOverlayDrawText("Yet to meet", x + 532, row, 9, MUTED);
+            CcOverlayDrawText("Yet to meet", x + width - 120, row, 9, MUTED);
             continue;
         }
-        CcOverlayDrawText(CcPonyName(i), x + 73, row, 13, colors[i]);
+        CcOverlayDrawText(CcPonyName(i), x + 73, row, 13, PONY_COLORS[i]);
         CcOverlayDrawText(CcPonyPersonality(i), x + 210, row, 10, INK);
-        CcOverlayDrawText(team ? "With you" : p->seen ? "Roaming" : "Yet to meet", x + 532, row, 9, colors[i]);
+        CcOverlayDrawText(team ? "With you" : "Roaming", x + width - 120, row, 9, PONY_COLORS[i]);
         const CcRoute *road = CcSimRoute(sim, p->last_seen_route);
         const CcSettlement *from = road ? CcSimSettlement(sim, road->from_id) : NULL;
         const CcSettlement *to = road ? CcSimSettlement(sim, road->to_id) : NULL;
         CcOverlayDrawText(TextFormat("Bond %d / Quests %d / Released %d / %s",
             p->bond, p->quests_completed, p->releases,
             from && to ? TextFormat("Seen: %s - %s", from->name, to->name) : "New adventures await"),
-            x + 73, row + 23, 8, MUTED);
+            x + 73, row + 20, 8, MUTED);
     }
 }
 
@@ -157,13 +151,13 @@ static bool CheckPonyInterface(CcSim *sim, LocalState *local, int32_t pony)
     }
     ClientInputClearPressed();
     queued_key_press[KEY_F7] = true;
-    if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, (ContextAction){0}, message, sizeof(message)) ||
-        !local->pony_book_open) return false;
+    if (!HandleCarriageTabs(local, VIEW_CARRIAGE) ||
+        local->carriage_tab != CARRIAGE_PONIES) return false;
     ClientInputClearPressed();
-    queued_key_press[KEY_BACKSPACE] = true;
-    if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, (ContextAction){0}, message, sizeof(message)) ||
-        local->pony_book_open) return false;
+    queued_key_press[KEY_ONE] = true;
+    if (!HandleCarriageTabs(local, VIEW_CARRIAGE) ||
+        local->carriage_tab != CARRIAGE_OVERVIEW) return false;
     ClientInputClearPressed();
-    (void)puts("PASS pony interface: quest, both swap slots, book open and close");
+    (void)puts("PASS pony interface: quest, both swap slots, carriage tabs");
     return true;
 }

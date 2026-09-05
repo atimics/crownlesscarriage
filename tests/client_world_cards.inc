@@ -65,6 +65,49 @@ static int RunWorldCardRegression(void)
         local.course.alarm_active = false;
         journal = CcJournalStart(path, &sim, error, sizeof(error));
         CARD_CHECK(journal != NULL, error);
+        view = VIEW_CARRIAGE;
+        uint64_t carriage_hash = CcSimHash(&sim);
+        for (int32_t tab = CARRIAGE_PONIES; tab >= CARRIAGE_OVERVIEW; --tab) {
+            if (mode == 0) {
+                Rectangle bounds = CarriageTabBounds(tab);
+                client_test_pointer_active = true;
+                client_test_pointer = (Vector2){bounds.x + bounds.width * 0.5f,
+                    bounds.y + bounds.height * 0.5f};
+                queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+            } else {
+                queued_key_press[KEY_ONE + tab] = true;
+            }
+            CARD_INPUT();
+            CARD_CHECK(view == VIEW_CARRIAGE && local.carriage_tab == (CarriageTab)tab &&
+                CcSimHash(&sim) == carriage_hash,
+                "Pointer and keyboard tab selection must preserve the carriage and campaign.");
+        }
+        queued_key_press[KEY_F7] = true;
+        CARD_INPUT();
+        CARD_CHECK(view == VIEW_CARRIAGE && local.carriage_tab == CARRIAGE_PONIES,
+            "F7 must select the carriage's Ponies tab.");
+        queued_key_press[KEY_M] = true;
+        CARD_INPUT();
+        CARD_CHECK(view == VIEW_MAP && return_view == VIEW_CARRIAGE,
+            "The map case must open from the Ponies tab.");
+        queued_key_press[KEY_M] = true;
+        CARD_INPUT();
+        CARD_CHECK(view == VIEW_CARRIAGE && local.carriage_tab == CARRIAGE_PONIES,
+            "Closing the map must restore the Ponies tab.");
+        ContextActionSet carriage_cards = BuildContextActions(&sim, &local, view, selected, 0);
+        CARD_CHECK(WorldCardIndex(&carriage_cards, CONTEXT_ACTION_CHOOSE_ROAD, 0) >= 0 &&
+            WorldCardIndex(&carriage_cards, CONTEXT_ACTION_CLOSE_VIEW, 0) >= 0,
+            "The Ponies tab must offer departure and step-away actions.");
+        queued_key_press[mode == 0 ? KEY_ESCAPE : KEY_BACKSPACE] = true;
+        CARD_INPUT();
+        CARD_CHECK(view == VIEW_LOCAL && CcSimHash(&sim) == carriage_hash,
+            "Escape and Backspace must leave the carriage and preserve the campaign.");
+        local.carriage_tab = CARRIAGE_OVERVIEW;
+        queued_key_press[KEY_F7] = true;
+        CARD_INPUT();
+        CARD_CHECK(view == VIEW_LOCAL && local.carriage_tab == CARRIAGE_OVERVIEW,
+            "The Ponies shortcut belongs to the carriage interface.");
+        client_test_pointer_active = false;
         view = VIEW_LOCAL;
         BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
         ContextActionSet cards = BuildContextActions(&sim, &local, view, selected, 0);
