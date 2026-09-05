@@ -9,7 +9,8 @@
     "library": "Retain the existing music library and welcome familiar repeats.",
     "location_anchors": "A few recognisable location themes lead arrivals and return during longer stays. The existing region and situation tracks play between those returns.",
     "weighting": "Apply anchor preference when choosing a title. Keep take selection for alternate performances. Tune the balance by listening for place identity.",
-    "supernatural_encounters": "Wyrm, Lich and dragon encounters each have a distinct motif, palette, rhythm and space. Direct encounter identity leads cue selection, followed by encounter phase."
+    "supernatural_encounters": "Wyrm, Dracolich and living dragon encounters each have a distinct motif, palette, rhythm and space. Direct encounter identity leads cue selection, followed by encounter phase.",
+    "lich_identity": "Dracolich: an undead dragon. Cold pipe organ, spectral tones and bone-like percussion express vast intelligence held together after death."
   },
   "towns": [
     {

@@ -219,15 +219,18 @@ can reach far beyond the town score's relaxed feel.
 | Identity | Musical direction | Recognisable signature |
 | --- | --- | --- |
 | Deep Wyrm | Primordial ritual doom; immense bass, bowed metal and stone-like percussion | A vast low note, a grinding half-step rise, then a long fall; slow uneven breaths |
-| Lich | Cold ritual counterpoint; pipe organ, brittle keys and a precise skeletal pulse | A clipped high figure that answers itself in another register; uncanny precision |
+| Dracolich | Cold funeral counterpoint; pipe organ, spectral tones and bone-like percussion | A clipped high figure that answers itself in another register; uncanny precision |
 | Dragon | Predatory grandeur; raw brass, rushing strings and heavy wingbeat drums | A sudden wide upward leap and a commanding descending answer; force and movement |
 
 The Deep Wyrm direction follows the existing stage in `CcDragonLifeStage`:
 centuries bind the creature, hoard and mountain. The music context can use that
 stage together with a direct encounter and its phase. Dragon signs during travel
 can keep their current supporting cues; an audience or fight earns the full
-encounter identity. Lich activation will bind to the intended encounter state
-when its creature identity is specified.
+encounter identity. The Lich is a dracolich: an undead dragon. Its music should
+suggest vast intelligence held together after death. A precise, unnatural pulse
+and cold organ counterpoint give it its own identity. Its cue will bind to a
+dedicated dracolich encounter state when that encounter is added to the music
+context.
 
 Each named creature can own its own motif within its encounter family. A later
 fight arrangement should retain that creature's motif so recognition survives
