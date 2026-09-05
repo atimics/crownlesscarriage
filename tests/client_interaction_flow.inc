@@ -125,6 +125,76 @@ static int RunAdventureInputRegression(void)
     UX_CHECK(view == VIEW_PAUSE, "Book back must return to pause.");
     UX_KEY(KEY_ESCAPE);
     UX_CHECK(view == VIEW_LOCAL, "Pause back must restore the scene.");
+    RepositionHero(&local, (Vector2){28.9274921f, 0.340259194f}, false);
+    local.agent.athletics = NonDefaultAthleticProfile();
+    local.agent.combat.health = 37.0f;
+    local.agent.appearance = CcNpcPlayerAppearance(4096);
+    CcAthleticProfile recovery_athletics = local.agent.athletics;
+    CcNpcAppearance recovery_appearance = local.agent.appearance;
+    uint64_t before_recovery = CcSimHash(&sim);
+    UX_KEY(KEY_N);
+    UX_CHECK(SessionTestFloatMatches(local.agent.position.z, 0.340259194f) &&
+        strstr(message, "again") != NULL, "First N tap must show the recovery prompt.");
+    (void)HandleCaravanRecovery(&local, &view, &return_view, local.caravan_tap_deadline + 0.5, message, sizeof(message));
+    UX_KEY(KEY_N);
+    UX_CHECK(SessionTestFloatMatches(local.agent.position.z, 0.340259194f),
+        "An expired tap must start a fresh recovery prompt.");
+    local.interaction.approaching = true;
+    local.agent.target_valid = true;
+    local.course.raiders[0].combat.health = 19.0f;
+    UX_KEY(KEY_N);
+    UX_CHECK(GridDistance(LocalPosition(&local), LOCAL_CARRIAGE_BAY) < 0.001f &&
+        !local.interaction.approaching && !local.agent.target_valid && local.request_save,
+        "Double N must return to the caravan, clear the approach, and request a save.");
+    UX_CHECK(local.agent.combat.health == 37.0f &&
+        AthleticProfilesMatch(&local.agent.athletics, &recovery_athletics) &&
+        memcmp(&local.agent.appearance, &recovery_appearance, sizeof(recovery_appearance)) == 0 &&
+        local.course.raiders[0].combat.health == 19.0f && CcSimHash(&sim) == before_recovery,
+        "Recovery must preserve health, skills, appearance, encounters, and campaign state.");
+    local.request_save = false;
+    RepositionHero(&local, (Vector2){4.0f, 3.0f}, true);
+    local.market_interior = true;
+    UX_KEY(KEY_N); UX_KEY(KEY_N);
+    UX_CHECK(!local.market_interior && local.agent.scene == CC_LOCAL_SCENE_STREET &&
+        GridDistance(LocalPosition(&local), LOCAL_CARRIAGE_BAY) < 0.001f,
+        "Shop recovery must return to the town caravan.");
+    local.request_save = false;
+    local.site_kind = CC_LOCAL_SITE_DUNGEON;
+    UX_KEY(KEY_N); UX_KEY(KEY_N);
+    UX_CHECK(local.agent.scene == CC_LOCAL_SCENE_ROAD &&
+        SessionTestFloatMatches(local.agent.position.x, CC_LOCAL_SITE_CARRIAGE_X + 3.0f),
+        "Site recovery must use the site's caravan.");
+    local.request_save = false;
+    local.site_kind = CC_LOCAL_SITE_NONE;
+    UX_CHECK(InitializeOpenWorld(&sim, &local, false), "Recovery needs an open-road stream.");
+    const CcRoute *recovery_route = OpenWorldRouteFromSettlement(&sim, sim.player.location_id);
+    UX_CHECK(recovery_route != NULL && EnterOpenWorldAtRoadGate(&sim, &local, recovery_route->id),
+        "Recovery needs a road caravan.");
+    view = VIEW_ROADS;
+    Vector3 caravan_position = local.world_carriage.position;
+    UX_KEY(KEY_N); UX_KEY(KEY_N);
+    UX_CHECK(local.open_world && view == VIEW_LOCAL &&
+        fabsf(GridDistance(LocalPosition(&local),
+            (Vector2){caravan_position.x, caravan_position.z}) - 3.0f) < 0.01f &&
+        CcSimHash(&sim) == before_recovery,
+        "Road recovery must return beside the current caravan.");
+    local.request_save = false;
+    LeaveOpenWorld(&local);
+    RepositionHero(&local, LOCAL_CARRIAGE_BAY, false);
+    local.interactions.count = 0;
+    target = AdventureTarget(&local, &sim, CC_INTERACTION_PERSON, 1,
+        "Test neighbour", "Talk", local.agent.position, 1, 2, 1, LocalPosition(&local), 1.8f);
+    target->visible = true; target->available = false;
+    (void)snprintf(target->reason, sizeof(target->reason), "Choose a clear approach.");
+    target->left = pointer.x - 10; target->right = pointer.x + 10;
+    target->top = pointer.y - 10; target->bottom = pointer.y + 10;
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+    HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view, &local,
+        (RenderTexture2D){0}, (Rectangle){0}, 1.0f / 60.0f, path, "", message, sizeof(message),
+        feedback, sizeof(feedback), &feedback_age);
+    ClientInputClearPressed();
+    UX_CHECK(strstr(message, "Double-tap [N]") != NULL && strstr(message, target->reason) != NULL,
+        "A denied scene click must show its reason and the caravan recovery tip.");
     UX_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)), "Checkpoint must save the traded campaign.");
     uint64_t saved = CcSimHash(&sim);
     (void)CcJournalClose(&journal, &sim, error, sizeof(error));
