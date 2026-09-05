@@ -9,10 +9,12 @@
   const sessionKey = `cc-coop-session-${worldId}`;
   let checkpoint = null, sessionSequence = 0, sessionSaved = 0, sessionFlight = false, lastSessionSave = 0, restoredSession = false;
   let status, pauseControl, startupError = '';
+  let visit = '', poseFlight = false, poseScene = -1, lastPose = -Infinity, peersAt = 0, peers = [], leaving = false;
   function say(message) { if (status) status.textContent = startupError || message; }
   function accept(next, forceSnapshot = false) {
     if (state && next.revision < state.revision) return;
     if (!state || next.revision !== state.revision || forceSnapshot) pending = next.campaign;
+    if (state && state.session_context !== next.session_context) peers = [];
     state = next;
     if (checkpoint && checkpoint.context !== next.session_context) checkpoint = null;
     avatar = CcAvatar.normalize(next.appearance);
@@ -30,13 +32,14 @@
   }
   async function connect() {
     if (!/^[a-f0-9]{64}$/.test(token || '')) throw new Error('Join the company from the shared road book.');
-    let next = await request('state?campaign=1');
+    let next = await request('state?campaign=1&enter=1');
     while (next.catching_up) {
       say(`The world is catching up · ${next.away_clock.days_pending} days to settle…`);
       await new Promise(resolve => setTimeout(resolve, 500));
-      next = await request('state?campaign=1');
+      next = await request('state?campaign=1&enter=1');
     }
     accept(next, true);
+    visit = next.visit || '';
     if (next.session !== undefined) {
       let cached = null;
       try { cached = JSON.parse(localStorage.getItem(sessionKey) || 'null'); } catch {}
@@ -104,7 +107,37 @@
     lastPoll = performance.now(); inFlight = true;
     request(`state?campaign=1&after=${state ? state.revision : -1}`).then(accept).catch(error => say(error.message)).finally(() => { inFlight = false; });
   }
+  function exchange(scene, readPose) {
+    if (!enabled || !state || !visit || leaving || startupError) return [];
+    if (poseScene !== scene) { peers = []; poseScene = scene; }
+    const now = performance.now();
+    if (!poseFlight && now - lastPose >= 100) {
+      const context = state.session_context, activeVisit = visit;
+      lastPose = now; poseFlight = true;
+      request('pose', {visit:activeVisit, context, scene, pose:readPose()}).then(next => {
+        if (!leaving && activeVisit === visit && next.context === state.session_context && next.scene === poseScene) {
+          peers = next.peers.slice(0, 7).map(peer => ({...peer, appearance:CcAvatar.pack(CcAvatar.normalize(peer.appearance))})); peersAt = performance.now();
+        }
+      }).catch(async error => {
+        peers = [];
+        if (error.status === 428 && !leaving && activeVisit === visit) {
+          const fresh = await request('state?campaign=1&enter=1');
+          if (!leaving) { accept(fresh, true); visit = fresh.visit; }
+        }
+        if (error.status === 409) lastPose = performance.now() + 900;
+      }).catch(error => say(error.message)).finally(() => { poseFlight = false; });
+    }
+    return now - peersAt <= 3000 ? peers : [];
+  }
+  function leave() {
+    if (leaving || !visit || !state) return;
+    leaving = true; peers = [];
+    fetch(`/api/worlds/${worldId}/pose`, {method:'POST', keepalive:true,
+      headers:{Authorization:`Bearer ${token}`, 'Content-Type':'application/json'},
+      body:JSON.stringify({visit, context:state.session_context, scene:Math.max(0, poseScene), pose:null})}).catch(() => {});
+  }
   Module.ccCoop = { enabled, preview, connect, apply, poll, avatar:() => CcAvatar.pack(avatar),
+    exchange, leave, seat:() => Math.max(0, state?.crew.findIndex(member => member.id === state.member) || 0),
     checkpoint:captureSession, hasSession:() => restoredSession,
     ready(error) { startupError = error; document.body.dataset.companyReady = error ? 'error' : 'ready'; if (error) say(error); },
     take() { const value = pending; pending = null; return value; } };
@@ -126,11 +159,11 @@
         finally { pauseControl.disabled = false; }
       };
       const link = document.createElement('a'); link.href = `/#world=${worldId}`; link.textContent = 'Your avatar & company ↗'; link.style.color = 'inherit';
-      link.onclick = async event => { event.preventDefault(); Module._CcCoopCheckpointNow(); await saveSession(true); location.assign(link.href); };
+      link.onclick = async event => { event.preventDefault(); Module._CcCoopCheckpointNow(); await saveSession(true); leave(); location.assign(link.href); };
       bar.append(status, pauseControl, link); document.body.append(bar);
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-    window.addEventListener('pagehide', () => { Module._CcCoopCheckpointNow?.(); saveSession(true); });
+    window.addEventListener('pagehide', () => { Module._CcCoopCheckpointNow?.(); saveSession(true); leave(); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { Module._CcCoopCheckpointNow?.(); saveSession(true); } });
   }
   if (preview && typeof window !== 'undefined') {

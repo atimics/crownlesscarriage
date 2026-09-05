@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 import mimetypes
+import math
 import os
 from pathlib import Path
 import re
@@ -23,6 +24,8 @@ PROTOCOL = 1
 MAX_MEMBERS = 8
 MAX_WORLDS = 16
 MAX_BODY = 8192
+POSE_FLOATS = 83
+POSE_TTL = 3.0
 AWAY_GRACE = 15.0
 AWAY_RAMP = 6 * 3600.0
 AWAY_BASE_RATE = 30 / 1440.0
@@ -122,6 +125,8 @@ class Worlds:
         PRAGMA user_version=1;
         """)
         self.seen, self.last_tick, self.failed = {}, {}, set()
+        self.visits, self.poses = {}, {}
+        self.pose_sequence = 0
 
     def close(self):
         with self.lock:
@@ -156,7 +161,7 @@ class Worlds:
         self.db.execute("UPDATE away_clocks SET last_human=?,accounted_at=?,owed_days=? WHERE world=?", (last_human, wall, owed, world))
         return owed, max(0.0, wall - last_human - AWAY_GRACE)
 
-    def view(self, world, token, campaign=False, after=None, present=True):
+    def view(self, world, token, campaign=False, after=None, present=True, enter=False):
         with self.lock:
             member = self.member(world, token)
             row = self.db.execute("SELECT * FROM worlds WHERE id=?", (world,)).fetchone()
@@ -180,11 +185,56 @@ class Worlds:
             result["appearance"] = next(m["appearance"] for m in result["crew"] if m["id"] == member["id"])
             result["session_context"] = self.session_context(world, row)
             if campaign and after is None:
+                if enter:
+                    visit = secrets.token_hex(16)
+                    self.visits[(world, member["id"])] = visit
+                    self.poses.pop((world, member["id"]), None)
+                    result["visit"] = visit
                 saved = self.db.execute("SELECT sequence,context,session FROM sessions WHERE world=? AND member=?", (world, member["id"])).fetchone()
                 result["session"] = dict(saved) if saved else None
             if campaign and after != str(row["revision"]):
                 result["campaign"] = base64.b64encode(row["state"]).decode("ascii")
             return result
+
+    def pose(self, world, token, body):
+        require(set(body) == {"visit", "context", "scene", "pose"}, "Send your current traveller pose.")
+        scene = number(body["scene"], 0, 7, "scene")
+        pose = body["pose"]
+        if pose is not None:
+            require(isinstance(pose, list) and len(pose) == POSE_FLOATS and
+                    all(type(v) in (int, float) and math.isfinite(v) and abs(v) <= 1000000 for v in pose),
+                    "Send a finite traveller pose.")
+            require(-128 <= pose[1] <= 4096 and abs(pose[3]) <= 1000 and
+                    all(abs(pose[i] - pose[(i - 4) % 3]) <= 16 for i in range(4, 73)) and
+                    all(abs(v) <= 1000 for v in pose[73:]), "Keep the pose near your traveller.")
+        with self.lock:
+            member = self.member(world, token)
+            key = (world, member["id"])
+            require(key in self.visits, "Reconnect your traveller to the host.", 428)
+            require(isinstance(body["visit"], str) and self.visits.get(key) == body["visit"],
+                    "Enter the world to share your traveller.", 409)
+            if pose is None:
+                self.poses.pop(key, None)
+                self.visits.pop(key, None)
+                self.seen.pop(key, None)
+                return {"peers": []}
+            row = self.db.execute("SELECT * FROM worlds WHERE id=?", (world,)).fetchone()
+            context = self.session_context(world, row)
+            require(body["context"] == context, "The company has moved. Refresh the carriage.", 409)
+            now = time.monotonic()
+            self.pose_sequence += 1
+            self.poses[key] = dict(context=context, scene=scene, pose=pose,
+                                   sequence=self.pose_sequence, seen=now)
+            self.seen[key] = now
+            peers = []
+            for crew in self.db.execute("SELECT m.id,m.name,a.appearance FROM members m LEFT JOIN appearances a ON a.world=m.world AND a.member=m.id WHERE m.world=? AND m.revoked=0 ORDER BY m.rowid", (world,)):
+                other = self.poses.get((world, crew["id"]))
+                if crew["id"] == member["id"] or other is None or now - other["seen"] > POSE_TTL:
+                    continue
+                if other["context"] == context and other["scene"] == scene:
+                    peers.append(dict(id=crew["id"], name=crew["name"], pose=other["pose"], sequence=other["sequence"],
+                        appearance=json.loads(crew["appearance"]) if crew["appearance"] else {}))
+            return {"context": context, "scene": scene, "peers": peers}
 
     def create(self, token, body):
         world, name, player = body.get("id"), body.get("name"), body.get("player")
@@ -376,6 +426,8 @@ class Worlds:
                 require(member != self.member(world, token)["id"], "The host keeps their place in the carriage.")
                 self.db.execute("UPDATE members SET revoked=1 WHERE world=? AND id=?", (world, member))
                 self.seen.pop((world, member), None)
+                self.visits.pop((world, member), None)
+                self.poses.pop((world, member), None)
             else:
                 raise ApiError(400, "Choose a host action.")
         return self.view(world, token)
@@ -441,13 +493,14 @@ class Application:
             with self.worlds.lock:
                 rows = self.worlds.db.execute("SELECT w.id,w.name FROM worlds w JOIN members m ON w.id=m.world WHERE m.token_hash=? AND m.revoked=0", (identity,))
                 return 200, {"worlds": [dict(row) for row in rows], "game_available": self.game_dir is not None}, None
-        match = re.fullmatch(r"/api/worlds/([0-9a-f]{32})(?:/(state|join|command|invite|host|appearance|session))?", path)
+        match = re.fullmatch(r"/api/worlds/([0-9a-f]{32})(?:/(state|join|command|invite|host|appearance|session|pose))?", path)
         require(match is not None, "Choose a world on this host.", 404)
         world, operation = match.group(1), match.group(2) or "state"
         if operation == "state" and method == "GET":
             query = parse_qs(env.get("QUERY_STRING", ""))
             campaign = query.get("campaign") == ["1"]
-            return 200, self.worlds.view(world, token, campaign, query.get("after", [None])[0], present=campaign), None
+            return 200, self.worlds.view(world, token, campaign, query.get("after", [None])[0], present=campaign,
+                                        enter=campaign and query.get("enter") == ["1"]), None
         if operation == "join" and method == "POST":
             return 200, self.worlds.join(world, token, body), None
         if operation == "command" and method == "POST":
@@ -456,6 +509,8 @@ class Application:
             return 200, self.worlds.appearance(world, token, body), None
         if operation == "session" and method == "POST":
             return 200, self.worlds.save_session(world, token, body), None
+        if operation == "pose" and method == "POST":
+            return 200, self.worlds.pose(world, token, body), None
         if operation == "invite" and method in ("GET", "POST"):
             return 200, self.worlds.invite(world, token, method == "POST"), None
         if operation == "host" and method == "POST":
