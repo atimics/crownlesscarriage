@@ -130,6 +130,24 @@ static int RunWorldCardRegression(void)
         CARD_INPUT();
         CARD_CHECK(local.market_interior && !local.interaction.approaching,
             "The door card and world tap must both enter the shop.");
+        for (int32_t site_kind = CC_LOCAL_SITE_DUNGEON;
+             site_kind <= CC_LOCAL_SITE_GOBLIN_CAVE; ++site_kind) {
+            EnterSiteFromGoblinTunnel(&local, (CcLocalSiteKind)site_kind,
+                (Vector2){CC_LOCAL_SITE_ENTRANCE_X, CC_LOCAL_SITE_ENTRANCE_Z});
+            before = CcSimHash(&sim);
+            CARD_CHECK(WorldCardPoint(&sim, &local, view, selected,
+                CONTEXT_ACTION_RETURN_FROM_SITE, 0, mode != 0),
+                "Each site needs a return card and a carriage tap at its entrance.");
+            CARD_INPUT();
+            CARD_CHECK(view == VIEW_LOCAL && local.site_travel_active && local.site_returning,
+                "The return card and carriage tap must start the drive back from the site entrance.");
+            for (int32_t frame = 0; frame < 1200 && local.site_travel_active; ++frame) CARD_INPUT();
+            CARD_CHECK(!local.site_travel_active && local.site_kind == CC_LOCAL_SITE_NONE &&
+                local.agent.scene == CC_LOCAL_SCENE_STREET && AdventureScene(&local),
+                "Returning from a site must restore the playable town.");
+            CARD_CHECK(CcSimHash(&sim) == before,
+                "A local site return must preserve the campaign and cargo.");
+        }
         ResetLocalState(&local);
         local.adventure_ui = true;
         CARD_CHECK(InitializeOpenWorld(&sim, &local, false), "World must initialize.");
@@ -205,6 +223,6 @@ static int RunWorldCardRegression(void)
     (void)remove(path);
 #undef CARD_CHECK
 #undef CARD_INPUT
-    puts("World cards: nearest four, paging, doors, roads, stop, drive, pace, camp and reload passed");
+    puts("World cards: nearest four, paging, doors, site returns, roads, stop, drive, pace, camp and reload passed");
     return 0;
 }
