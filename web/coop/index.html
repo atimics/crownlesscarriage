@@ -18,6 +18,8 @@
           <h2>Start a shared world</h2>
           <label>Your name<input name="player" required maxlength="31" autocomplete="nickname" placeholder="Mara"></label>
           <label>World name<input name="name" required maxlength="31" placeholder="The Lantern Road"></label>
+          <label>World pass<input name="world_pass" type="password" required minlength="64" maxlength="64" pattern="[a-f0-9]{64}" autocomplete="off" aria-describedby="world-pass-help"></label>
+          <p id="world-pass-help" class="quiet">Use the pass from this host to start a world. Your crew can join with an invitation.</p>
           <button type="submit">Ready the carriage <span>↗</span></button>
         </form>
         <form id="join-form" class="paper" hidden>

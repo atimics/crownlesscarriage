@@ -2,6 +2,7 @@ import io
 import json
 from pathlib import Path
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import time
@@ -11,7 +12,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools' / 'coop'))
 from engine import Engine
-from server import ApiError, Application, Worlds, away_days, AWAY_GRACE, AWAY_RAMP
+from server import ApiError, Application, Worlds, away_days, AWAY_GRACE, AWAY_RAMP, issue_world_pass
 
 LIBRARY = sys.argv.pop(1)
 
@@ -26,13 +27,17 @@ class CoopTests(unittest.TestCase):
         self.path = Path(self.temp.name) / 'worlds.sqlite3'
         self.worlds = Worlds(self.path, self.engine)
         self.a, self.b, self.id = 'a' * 64, 'b' * 64, '1' * 32
-        self.worlds.create(self.a, {'id': self.id, 'name': 'Lantern Road', 'player': 'Mara', 'seed': 0xc0a71a9e})
+        self.create_world(self.id, seed=0xc0a71a9e)
         self.invite = self.worlds.invite(self.id, self.a)['invite']
         self.worlds.join(self.id, self.b, {'player': 'Bren', 'invite': self.invite})
 
     def tearDown(self):
         self.worlds.close()
         self.temp.cleanup()
+
+    def create_world(self, world, seed=42):
+        return self.worlds.create(self.a, {'id': world, 'name': 'Lantern Road',
+            'player': 'Mara', 'seed': seed, 'world_pass': issue_world_pass(self.path)})
 
     def command(self, token, action='trade', **values):
         view = self.worlds.view(self.id, token)
@@ -174,7 +179,7 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(self.worlds.pose(self.id, self.a, a)['peers'], [])
         self.assertEqual(self.worlds.view(self.id, self.a)['state'], before)
         other = '2' * 32
-        self.worlds.create(self.a, {'id':other, 'name':'Other road', 'player':'Mara'})
+        self.create_world(other)
         other_state = self.worlds.view(other, self.a, campaign=True, enter=True)
         self.assertEqual(self.worlds.pose(other, self.a, dict(a, visit=other_state['visit'], context=other_state['session_context']))['peers'], [])
         with self.assertRaises(ApiError):
@@ -428,7 +433,7 @@ class CoopTests(unittest.TestCase):
 
     def test_world_isolation_revocation_and_invite_rotation(self):
         other = '2' * 32
-        self.worlds.create(self.a, {'id': other, 'name': 'Other Road', 'player': 'Mara'})
+        self.create_world(other)
         with self.assertRaises(ApiError):
             self.worlds.view(other, self.b)
         self.worlds.invite(self.id, self.a, rotate=True)
@@ -451,7 +456,7 @@ class CoopTests(unittest.TestCase):
             tiny = ctypes.create_string_buffer(5)
             self.assertFalse(sim.lib.CcCoopSnapshot(sim.handle, tiny, len(tiny)))
 
-    def request(self, path, body=None, token=None, origin='http://localhost:8787'):
+    def request(self, path, body=None, token=None, origin='http://localhost:8787', application=None):
         raw = json.dumps(body).encode() if body is not None else b''
         env = {'REQUEST_METHOD': 'POST' if body is not None else 'GET', 'PATH_INFO': path,
                'CONTENT_TYPE': 'application/json', 'CONTENT_LENGTH': str(len(raw)),
@@ -459,8 +464,87 @@ class CoopTests(unittest.TestCase):
                'HTTP_HOST': 'localhost:8787', 'HTTP_ORIGIN': origin,
                'HTTP_AUTHORIZATION': 'Bearer ' + (token or self.a)}
         statuses = []
-        data = b''.join(Application(self.worlds)(env, lambda status, headers: statuses.append(status)))
+        data = b''.join((application or Application(self.worlds))(env, lambda status, headers: statuses.append(status)))
         return int(statuses[0].split()[0]), json.loads(data)
+
+    def test_creation_permission_survives_session_changes_and_restart(self):
+        app = Application(self.worlds)
+        body = {'id': '2' * 32, 'name': 'New Road', 'player': 'Jory'}
+        for index in range(32):
+            attempt = dict(body, id=f'{index + 32:032x}', world_pass=f'{index + 32:064x}')
+            self.assertEqual(self.request('/api/worlds', attempt,
+                token=f'{index + 64:064x}', application=app)[0], 403)
+        self.assertEqual(self.request('/api/worlds', body)[0], 403)
+        self.assertEqual(self.worlds.db.execute('SELECT count(*) FROM worlds').fetchone()[0], 1)
+        permission = issue_world_pass(self.path)
+        body['world_pass'] = permission
+        status, created = self.request('/api/worlds', body)
+        self.assertEqual(status, 200)
+        self.assertEqual(created['id'], body['id'])
+        self.assertNotIn(permission, json.dumps(created))
+        stored = self.worlds.db.execute('SELECT pass_hash FROM world_passes WHERE claimed_world=?',
+                                       (body['id'],)).fetchone()[0]
+        self.assertNotEqual(stored, permission)
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.assertEqual(self.request('/api/worlds', body)[0], 200)
+        self.assertEqual(self.request('/api/worlds', {k: v for k, v in body.items() if k != 'world_pass'})[0], 200)
+        self.assertEqual(self.request('/api/worlds', body, token='c' * 64)[0], 409)
+        self.assertEqual(self.request('/api/worlds', dict(body, id='3' * 32), token='c' * 64)[0], 403)
+        self.worlds.owner_action(body['id'], self.a, 'delete')
+        self.assertEqual(self.request('/api/worlds', body)[0], 403)
+
+    def test_one_world_pass_has_one_concurrent_winner(self):
+        permission = issue_world_pass(self.path)
+        app = Application(self.worlds)
+        def create(index):
+            return self.request('/api/worlds', {'id': str(index) * 32,
+                'name': 'Contested Road', 'player': 'Jory', 'world_pass': permission},
+                token=str(index) * 64, application=app)[0]
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            self.assertEqual(sorted(pool.map(create, (2, 3))), [200, 403])
+        self.assertEqual(self.worlds.db.execute('SELECT count(*) FROM worlds').fetchone()[0], 2)
+        self.assertEqual(len(list(self.worlds.db.execute('PRAGMA foreign_key_check'))), 0)
+
+    def test_full_host_preserves_pass_until_slot_is_recovered(self):
+        self.create_world('2' * 32)
+        body = {'id': '3' * 32, 'name': 'Fresh Road', 'player': 'Jory',
+                'world_pass': issue_world_pass(self.path)}
+        with patch('server.MAX_WORLDS', 2):
+            self.assertEqual(self.request('/api/worlds', body)[0], 409)
+            self.worlds.owner_action('2' * 32, self.a, 'delete')
+            self.worlds.close()
+            self.worlds = Worlds(self.path, self.engine)
+            self.assertEqual(self.request('/api/worlds', body)[0], 200)
+
+    def test_failed_creation_preserves_pass_and_has_one_retry_result(self):
+        body = {'id': '2' * 32, 'name': 'Retry Road', 'player': 'Jory',
+                'world_pass': issue_world_pass(self.path)}
+        with patch.object(self.engine, 'open', side_effect=RuntimeError('test save failure')):
+            with self.assertLogs(level='ERROR'):
+                self.assertEqual(self.request('/api/worlds', body)[0], 503)
+        self.assertEqual(self.request('/api/worlds', body)[0], 200)
+        self.assertEqual(self.request('/api/worlds', body)[0], 200)
+        self.assertEqual(self.worlds.db.execute('SELECT count(*) FROM worlds').fetchone()[0], 2)
+
+    def test_operator_can_issue_pass_live_and_recover_world_with_exclusive_access(self):
+        command = [sys.executable, str(Path(__file__).resolve().parents[1] / 'tools/coop/server.py'),
+                   '--database', str(self.path)]
+        permission = subprocess.check_output(command + ['--issue-world-pass'], text=True).strip()
+        self.assertEqual(len(permission), 64)
+        self.assertEqual(self.request('/api/worlds', {'id': '2' * 32, 'name': 'Operator Road',
+            'player': 'Jory', 'world_pass': permission})[0], 200)
+        listing = json.loads(subprocess.check_output(command + ['--list-worlds'], text=True))
+        self.assertEqual({world['id'] for world in listing}, {self.id, '2' * 32})
+        remove = command + ['--library', LIBRARY, '--delete-world', '2' * 32]
+        busy = subprocess.run(remove, capture_output=True, text=True)
+        self.assertNotEqual(busy.returncode, 0)
+        self.worlds.close()
+        try:
+            self.assertEqual(json.loads(subprocess.check_output(remove, text=True)), {'deleted': True})
+        finally:
+            self.worlds = Worlds(self.path, self.engine)
+        self.assertEqual(self.worlds.db.execute('SELECT count(*) FROM worlds').fetchone()[0], 1)
 
     def test_owner_deletes_only_their_world(self):
         self.worlds.pose(self.id, self.a, self.enter(self.a))
@@ -470,7 +554,7 @@ class CoopTests(unittest.TestCase):
         self.worlds.save_session(self.id, self.a, dict(sequence=1,
             context=view['session_context'], session='CROWNLESS_SESSION 7\nlaunch test\n'))
         other = '2' * 32
-        self.worlds.create(self.a, {'id': other, 'name': 'Other Road', 'player': 'Mara'})
+        self.create_world(other)
         path = f'/api/worlds/{self.id}/host'
         self.assertEqual(self.request(path, {'action': 'delete'}, token=self.b)[0], 403)
         self.assertEqual(self.request(path, {'action': 'delete'}, token='c' * 64)[0], 403)
