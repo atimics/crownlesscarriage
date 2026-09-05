@@ -1310,6 +1310,8 @@ if(BUILD_TESTING)
         )
         add_test(NAME storybook_travel_boundaries
                  COMMAND crownless_carriage --test-storybook-travel)
+        add_test(NAME travel_audio_presentation
+                 COMMAND crownless_carriage --test-travel-audio)
         add_test(NAME adventure_town_routes
                  COMMAND crownless_carriage --test-adventure-town-routes)
         add_test(NAME adventure_trade_terms
