@@ -1449,16 +1449,18 @@ static void TestSharedCombat(void)
         exit(1);
     }
 
-    InitCombatant(&attacker, (Vector2){0.75f, 3.00f}, 0.5f * PI,
+    /* Strike across the front-left corner of the back-wall warehouse rack. */
+    float rack_attack_yaw = atan2f(0.85f, 1.10f);
+    InitCombatant(&attacker, (Vector2){0.75f, 1.30f}, rack_attack_yaw,
                   CC_COMBAT_PLAYER);
-    InitCombatant(&defender, (Vector2){2.17f, 3.00f}, -0.5f * PI,
+    InitCombatant(&defender, (Vector2){1.60f, 2.40f}, rack_attack_yaw + PI,
                   CC_COMBAT_RAIDER);
     outcome = RunCombatStrike(&attacker, &defender);
     if (outcome != CC_COMBAT_OUTCOME_MISS || defender.combat.health !=
             CC_LOCAL_COMBAT_MAX_HEALTH ||
         !attacker.combat.impact_valid) {
         (void)fprintf(stderr,
-                      "shared world collision let a strike pass through the market shelf: outcome %d health %.1f impact %d\n",
+                      "shared world collision let a strike pass through the warehouse rack: outcome %d health %.1f impact %d\n",
                       outcome, defender.combat.health,
                       attacker.combat.impact_valid);
         exit(1);

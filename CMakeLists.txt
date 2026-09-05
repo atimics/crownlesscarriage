@@ -1345,6 +1345,7 @@ if(BUILD_TESTING)
             CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
         cc_strict_warnings(renderer_regression_tests)
         add_test(NAME renderer_skin_rotation COMMAND renderer_regression_tests)
+        add_test(NAME physical_goods_displays COMMAND renderer_regression_tests --physical-goods)
         add_custom_target(run_renderer_graphics_tests
             COMMAND renderer_regression_tests --graphics
                 "${CMAKE_CURRENT_BINARY_DIR}/renderer-viewport.png"

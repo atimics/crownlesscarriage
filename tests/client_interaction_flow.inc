@@ -67,6 +67,20 @@ static int RunAdventureInputRegression(void)
         fprintf(stderr, "approach: x=%.2f z=%.2f pending=%d elapsed=%.2f message=%s feedback=%s\n", local.agent.position.x, local.agent.position.z, local.interaction.approaching, local.interaction.elapsed_seconds, message, local.interaction.feedback);
     }
     UX_CHECK(local.market_interior && view == VIEW_LOCAL, "Walking to the door must finish by entering its interior.");
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        Vector3 bay = CcLocalWarehouseGoodPosition((CcGood)good);
+        CcLocalAgent shopper;
+        CcLocalAgentInit(&shopper, (Vector2){4.5f, 4.2f}, true);
+        UX_CHECK(CcLocalAgentSetExactTarget(&shopper, (Vector3){bay.x, 0, 2.85f}, true),
+            "Every warehouse bay needs an open approach path.");
+        CcInteractionTarget stock_target = {.key = {sim.player.location_id, (uint64_t)good + 1U,
+            CC_INTERACTION_STOCK}, .amount = good};
+        AdventureActivate(&sim, &local, &stock_target, &view, &return_view, &selected_situation);
+        UX_CHECK(view == VIEW_TRADE && local.trade_good == (CcGood)good &&
+            local.trade_quantity == 1 && !local.trade_confirmed && !local.trade_quote_presented,
+            "A warehouse bay must open a fresh quote for its own good.");
+        view = VIEW_LOCAL;
+    }
     local.interactions.count = 0;
     target = AdventureTarget(&local, &sim, CC_INTERACTION_COUNTER, 1,
         "Keeper", "Trade", local.agent.position, 2, 2, 1, LocalPosition(&local), 1);
@@ -84,6 +98,7 @@ static int RunAdventureInputRegression(void)
     UX_CHECK(quote.available, "Initial market must quote one food unit.");
     CcMoney before = sim.player.coins;
     int32_t cargo = sim.player.cargo[CC_GOOD_FOOD];
+    int32_t warehouse_stock = CcSimSettlement(&sim, sim.player.location_id)->stock[CC_GOOD_FOOD];
     local.trade_quote_presented = true;
     local.trade_presented_command = quote.command;
     local.trade_presented_total = quote.total + 1;
@@ -96,6 +111,8 @@ static int RunAdventureInputRegression(void)
     UX_KEY(KEY_ENTER);
     UX_CHECK(sim.player.coins == before - quote.total && sim.player.cargo[CC_GOOD_FOOD] == cargo + 1,
         "Confirmed purchase must match its quote.");
+    UX_CHECK(CcSimSettlement(&sim, sim.player.location_id)->stock[CC_GOOD_FOOD] == warehouse_stock - 1,
+        "A purchase must remove its load from this warehouse.");
     uint64_t purchased = CcSimHash(&sim);
     UX_KEY(KEY_ENTER);
     UX_CHECK(CcSimHash(&sim) == purchased, "Repeated confirmation must preserve the receipt and purse.");
@@ -107,6 +124,8 @@ static int RunAdventureInputRegression(void)
     UX_KEY(KEY_ENTER);
     UX_CHECK(sim.player.coins == before + quote.total && strstr(local.receipt, "Sold") != NULL,
         "Sale must show its actual proceeds.");
+    UX_CHECK(CcSimSettlement(&sim, sim.player.location_id)->stock[CC_GOOD_FOOD] == warehouse_stock &&
+        sim.player.cargo[CC_GOOD_FOOD] == cargo, "A sale must return the load to this warehouse.");
     UX_KEY(KEY_ESCAPE);
     local.interactions.count = 0;
     target = AdventureTarget(&local, &sim, CC_INTERACTION_EXIT, 1,

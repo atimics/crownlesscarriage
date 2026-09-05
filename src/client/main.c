@@ -12213,7 +12213,7 @@ int main(int argc, char **argv)
             if (local.adventure_ui) DrawAdventureBook(&sim, &local);
             else DrawLedger(&sim);
         }
-        if (view == VIEW_TRADE) { CcOverlayFlush(); DrawAdventureTrade(&sim, &local); }
+        if (view == VIEW_TRADE) { CcOverlayFlush(); DrawAdventureTrade(&sim, &local, map_textures.economic_goods); }
         if (view == VIEW_PAUSE) { CcOverlayFlush(); DrawAdventurePause(&local); }
         if (view == VIEW_CARRIAGE) {
             CcOverlayFlush();

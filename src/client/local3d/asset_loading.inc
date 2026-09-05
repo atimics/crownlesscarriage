@@ -137,6 +137,7 @@ typedef struct EconomicCargoAsset {
     const char *path;
     const char *label;
     Model model;
+    BoundingBox bounds;
     bool ready;
 } EconomicCargoAsset;
 
@@ -1060,6 +1061,7 @@ static void LoadEconomicCargoAssets(void)
             asset->model = (Model){0};
             continue;
         }
+        asset->bounds = GetModelBoundingBox(asset->model);
         ReleaseUploadedModelCpuData(&asset->model);
         asset->ready = true;
         TraceLog(LOG_INFO, "ASSET: loaded %s (%d meshes)",
