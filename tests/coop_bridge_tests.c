@@ -151,8 +151,115 @@ static void CheckSharedDepartureAndRoadStop(void)
     CcCoopDestroy(guest);
 }
 
+static void CheckJourneyQuestRetirement(void)
+{
+    for (int stage = 0; stage < 3; ++stage) {
+        char error[256];
+        CcSim *sim = CcCoopCreate(42U);
+        CcSim *restored = CcCoopCreate(42U);
+        CC_CHECK(sim != NULL && restored != NULL);
+        CcSituation *offer = NULL;
+        for (int32_t i = 0; i < sim->situation_count; ++i) {
+            if (sim->situations[i].kind == CC_SITUATION_RELIEF_DELIVERY &&
+                sim->situations[i].status == CC_SITUATION_ACTIVE) {
+                offer = &sim->situations[i];
+                break;
+            }
+        }
+        CC_CHECK(offer != NULL);
+        CcId situation_id = offer->id;
+        offer->target_id = sim->settlements[1].id;
+        if (!CcCoopApply(sim, "accept", situation_id,
+                         0, 0, error, sizeof(error))) {
+            fprintf(stderr, "Journey retirement fixture: %s\n", error);
+            CC_CHECK(false);
+        }
+        sim->routes[0].closed = true;
+        CC_CHECK(CcCoopApply(sim, "travel", offer->target_id,
+                            0, 0, error, sizeof(error)));
+        for (int tick = 0; tick < 2000 &&
+             sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING; ++tick) {
+            const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+            if (site != NULL) {
+                CC_CHECK(CcCoopApply(sim, "pass_road_site", site->id,
+                                    0, 0, error, sizeof(error)));
+            } else {
+                CC_CHECK(CcCoopAdvance(sim, 1, error, sizeof(error)));
+            }
+        }
+        CC_CHECK(sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED);
+        if (stage > 0) {
+            CC_CHECK(CcCoopApply(sim, "negotiate", 0U,
+                                0, 0, error, sizeof(error)));
+            CC_CHECK(sim->resolved_journey_situation_id == situation_id);
+            CC_CHECK(sim->resolved_journey_outcome ==
+                     CC_JOURNEY_OUTCOME_NEGOTIATED);
+        }
+        if (stage == 2) {
+            for (int step = 0; step < 10000 && sim->journey.active; ++step) {
+                const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+                if (site != NULL) {
+                    CC_CHECK(CcCoopApply(sim, "pass_road_site", site->id,
+                                        0, 0, error, sizeof(error)));
+                } else if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+                    const char *action = CcSimJourneyStop(sim) ==
+                        CC_JOURNEY_STOP_MIDDAY ? "break" : "camp";
+                    CC_CHECK(CcCoopApply(sim, action, 0U,
+                                        0, 0, error, sizeof(error)));
+                } else {
+                    CC_CHECK(CcCoopAdvance(sim, 60, error, sizeof(error)));
+                }
+            }
+            CC_CHECK(!sim->journey.active);
+            CC_CHECK(sim->resolved_journey_situation_id == situation_id);
+            CC_CHECK(CcCoopApply(sim, "trade", 0U, (int32_t)offer->good,
+                                -offer->quantity, error, sizeof(error)));
+            CC_CHECK(offer->status == CC_SITUATION_RESOLVED);
+        }
+        CcJourneyEncounter journey = sim->journey;
+        CcCarriageState carriage = sim->carriage;
+        unsigned char *bytes = NULL;
+        size_t length = 0;
+        CC_CHECK(CcCoopEncode(sim, &bytes, &length, error, sizeof(error)));
+        CC_CHECK(CcCoopDecode(restored, bytes, length, error, sizeof(error)));
+        CcCoopFree(bytes);
+        CC_CHECK(CcSimHash(sim) == CcSimHash(restored));
+        for (int day = 0; day < 8 * 365 &&
+             CcSimSituation(sim, situation_id) != NULL; ++day) {
+            CC_CHECK(CcCoopAdvanceAway(sim, 1, error, sizeof(error)));
+        }
+        CC_CHECK(CcSimSituation(sim, situation_id) == NULL);
+        CC_CHECK(CcSimQuestOutcome(sim, situation_id) != NULL);
+        CC_CHECK(sim->journey.situation_id == 0U);
+        CC_CHECK(sim->resolved_journey_situation_id == 0U);
+        CC_CHECK(sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_NONE);
+        CC_CHECK(sim->journey.active == journey.active);
+        CC_CHECK(sim->journey.phase == journey.phase);
+        CC_CHECK(sim->journey.route_id == journey.route_id);
+        CC_CHECK(sim->journey.destination_id == journey.destination_id);
+        CC_CHECK(sim->journey.elapsed_subticks == journey.elapsed_subticks);
+        CC_CHECK(sim->carriage.mode == carriage.mode);
+        CC_CHECK(sim->carriage.location_id == carriage.location_id);
+        CC_CHECK(sim->carriage.progress_milli == carriage.progress_milli);
+        int32_t elapsed = sim->current_day - restored->current_day;
+        while (elapsed > 0) {
+            int32_t days = elapsed < 365 ? elapsed : 365;
+            CC_CHECK(CcCoopAdvanceAway(restored, days, error, sizeof(error)));
+            elapsed -= days;
+        }
+        CC_CHECK(CcSimHash(sim) == CcSimHash(restored));
+        CC_CHECK(CcCoopEncode(sim, &bytes, &length, error, sizeof(error)));
+        CC_CHECK(CcCoopDecode(restored, bytes, length, error, sizeof(error)));
+        CcCoopFree(bytes);
+        CC_CHECK(CcSimHash(sim) == CcSimHash(restored));
+        CcCoopDestroy(sim);
+        CcCoopDestroy(restored);
+    }
+}
+
 int main(void)
 {
+    CheckJourneyQuestRetirement();
     CheckPartyWipe();
     CheckSharedDepartureAndRoadStop();
     CheckSharedPonies();

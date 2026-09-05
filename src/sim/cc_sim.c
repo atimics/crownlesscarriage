@@ -10774,6 +10774,15 @@ void CcSimUpgradeQuestArchitecture(CcSim *sim)
 static void ForgetRetiredSituation(CcSim *sim, CcId situation_id)
 {
     if (sim == NULL || situation_id == 0U) return;
+    /* Quest history lives in the outcome archive. Journey references belong
+       to the situation slot and expire when that slot is reused. */
+    if (sim->journey.situation_id == situation_id) {
+        sim->journey.situation_id = 0U;
+    }
+    if (sim->resolved_journey_situation_id == situation_id) {
+        sim->resolved_journey_situation_id = 0U;
+        sim->resolved_journey_outcome = CC_JOURNEY_OUTCOME_NONE;
+    }
     for (int32_t i = 0; i < sim->character_count; ++i) {
         CcCharacter *character = &sim->characters[i];
         CcCharacterMemory kept_memories[CC_CHARACTER_MEMORY_CAPACITY] = {0};
