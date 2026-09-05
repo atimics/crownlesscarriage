@@ -31,12 +31,16 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
 void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
                                     CcLocalAgent *player,
                                     const CcSim *sim, float delta_time);
+void CcLocalCourseResolveContactsInternal(CcLocalCourse *course, CcLocalAgent *player);
 void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount);
 void CcLocalCourseInterpolateInternal(CcLocalCourse *course, float amount);
 void CcLocalSetStreetMarketCratesInternal(int32_t count);
 bool CcLocalProbePhysicsSphereInternal(
     CcLocalSceneKind scene, Vector3 previous, Vector3 proposed, float radius,
     Vector3 *corrected, Vector3 *normal);
+bool CcLocalMoveCapsuleInternal(CcLocalSceneKind scene, Vector3 previous,
+                                Vector3 proposed, float radius,
+                                Vector3 *resolved, Vector3 *normal);
 float CcLocalRoomArtRayDistanceInternal(Ray ray, Vector3 focus);
 bool CcLocalAgentPointSpaceBlockedInternal(const CcLocalAgent *agent,
                                             Vector3 proposed);
