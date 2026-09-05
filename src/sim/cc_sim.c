@@ -6903,6 +6903,14 @@ static void PlanGoblinTribute(CcSim *sim)
     } else {
         goblins->raid_motive = CC_GOBLIN_RAID_DRAGON_TRIBUTE;
     }
+    /* A quarrelling cult cannot organize anything beyond a food raid;
+     * it reconvenes in two weeks rather than muster while divided. */
+    if (goblins->raid_motive != CC_GOBLIN_RAID_HUNGER &&
+        goblins->cohesion < 25) {
+        goblins->raid_motive = CC_GOBLIN_RAID_NONE;
+        goblins->tribute_cooldown_days = 14;
+        return;
+    }
     CcSettlement *target = NULL;
     int64_t best_score = INT64_MIN;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
@@ -6974,6 +6982,11 @@ static void AdvanceGoblinTribute(CcSim *sim)
                 goblins->cohesion = ClampI32(
                     goblins->cohesion - hunger_loss * 3, 0, 100);
             }
+            /* A cult too divided to muster also cannot hold its members:
+             * the quarrel itself drives ash-sworn away every week. */
+            if (goblins->cohesion < 25 && goblins->members > 12) {
+                goblins->members -= 1;
+            }
         }
         if (sim->schema_version >= 36U && sim->current_day % 28 == 0 &&
             NutritionRations(goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 4 &&
@@ -7041,6 +7054,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
         }
         int32_t capacity = CcGoodDefinitionFor(chosen)->raid_capacity;
         if (goblins->target_warned) capacity = MaximumI32(1, capacity / 2);
+        if (goblins->cohesion < 50) capacity = MaximumI32(1, capacity / 2);
         int32_t taken_goods = MinimumI32(target->stock[chosen], capacity);
         target->stock[chosen] -= taken_goods;
         goblins->carried_goods[chosen] = taken_goods;
@@ -7048,6 +7062,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
         if (goblins->raid_motive == CC_GOBLIN_RAID_DRAGON_TRIBUTE) {
             CcMoney wanted = 8 + goblins->members / 6;
             if (goblins->target_warned) wanted = wanted > 1 ? wanted / 2 : 1;
+            if (goblins->cohesion < 50) wanted = wanted > 1 ? wanted / 2 : 1;
             taken_coins = MinimumI32(
                 target->market_coins > INT32_MAX ? INT32_MAX :
                     (int32_t)target->market_coins,
@@ -10040,7 +10055,7 @@ static CcCharacter *PromoteCharacter(CcSim *sim, const char *name,
         UINT32_C(0x9e3779b9));
     InitializeCharacterLife(
         sim, character, 0U, 0,
-        22 + (int32_t)(MixCharacterSeed(character->appearance_seed) % 33U));
+        16 + (int32_t)(MixCharacterSeed(character->appearance_seed) % 58U));
     character->player_disposition = 0;
     character->stress = activity == CC_CHARACTER_ACTIVITY_SEEKING_AID ?
         68 : 28;
@@ -10429,8 +10444,8 @@ void CcSimUpgradeCharacterLifecycles(CcSim *sim)
         CcCharacter *character = &sim->characters[i];
         if (character->death_day > sim->current_day &&
             character->birth_day <= sim->current_day) continue;
-        int32_t age = 22 + (int32_t)(
-            MixCharacterSeed(character->appearance_seed) % 33U);
+        int32_t age = 16 + (int32_t)(
+            MixCharacterSeed(character->appearance_seed) % 58U);
         InitializeCharacterLife(sim, character, 0U, 0, age);
     }
     FillSettlementResidents(sim);
@@ -10557,6 +10572,9 @@ static void TransferHistoricalTitles(CcSim *sim,
         if (kingdom->ruler_character_id == dead->id) {
             kingdom->ruler_character_id = successor->id;
             kingdom->anointed_by_character_id = 0U;
+            /* A new ruler is not anointed; the abbey must sanction the
+             * succession before the crown becomes lawful again. */
+            kingdom->anointed = false;
             char text[CC_EVENT_TEXT_CAPACITY];
             (void)snprintf(text, sizeof(text),
                            "%.20s succeeds %.20s as ruler of %.20s.",
@@ -10591,11 +10609,12 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
 {
     CcCharacter dead = sim->characters[slot];
     int32_t age = CcCharacterAgeYears(sim, &dead);
+    const CcSettlement *home = CcSimSettlement(sim, dead.home_settlement_id);
     char death_text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(death_text, sizeof(death_text),
                    "%s died at age %d after a life in %s.",
                    dead.name, age,
-                   CcSimSettlement(sim, dead.home_settlement_id)->name);
+                   home != NULL ? home->name : "a forgotten place");
     (void)PushEvent(sim, CC_EVENT_CHARACTER_DIED, dead.id,
                     dead.home_settlement_id, 0U, 30, death_text);
     sim->character_deaths += 1;
@@ -10628,7 +10647,7 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     (void)snprintf(birth_text, sizeof(birth_text),
                    "%s was born into the family of %s in %s.",
                    successor.name, dead.name,
-                   CcSimSettlement(sim, successor.home_settlement_id)->name);
+                   home != NULL ? home->name : "a forgotten place");
     (void)PushEvent(sim, CC_EVENT_CHARACTER_BORN, successor.id,
                     successor.home_settlement_id, 0U, 12, birth_text);
     RecastSituationsAfterDeath(sim, dead.id);

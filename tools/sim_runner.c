@@ -231,6 +231,32 @@ static void PrintSummary(const CcSim *sim, bool detail)
         }
     }
 }
+static bool chronicle = false;
+static int32_t chronicle_last_day = -1;
+
+static void PrintChronicleNewEvents(const CcSim *sim)
+{
+    int32_t count = sim->event_count;
+    if (count > CC_MAX_EVENTS) count = CC_MAX_EVENTS;
+    int32_t oldest_new = count;
+    for (int32_t offset = count - 1; offset >= 0; --offset) {
+        const CcEvent *event = CcSimRecentEvent(sim, offset);
+        if (event == NULL) { oldest_new = offset; continue; }
+        if (event->day <= chronicle_last_day) break;
+        oldest_new = offset;
+    }
+    for (int32_t offset = oldest_new; offset >= 0; --offset) {
+        const CcEvent *event = CcSimRecentEvent(sim, offset);
+        if (event == NULL || event->day <= chronicle_last_day) continue;
+        (void)printf("  day=%-5d %-14s | %s\n",
+                     event->day, CcEventKindName(event->kind), event->text);
+    }
+    const CcEvent *newest = CcSimRecentEvent(sim, 0);
+    if (newest != NULL && newest->day > chronicle_last_day) {
+        chronicle_last_day = newest->day;
+    }
+}
+
 int main(int argc, char **argv)
 {
     uint32_t seed = UINT32_C(0xc0a71a9e);
@@ -260,6 +286,8 @@ int main(int argc, char **argv)
             checkpoint_every = (int32_t)strtol(argv[++argument], NULL, 10);
         } else if (strcmp(argv[argument], "--detail") == 0) {
             detail = true;
+        } else if (strcmp(argv[argument], "--chronicle") == 0) {
+            chronicle = true;
         }
     }
 
@@ -283,6 +311,16 @@ int main(int argc, char **argv)
         return 1;
     }
     if (report_every < 1) report_every = 1;
+    if (chronicle) {
+        (void)printf("== world seed=%" PRIu32 " ==\n", seed);
+        for (int32_t i = 0; i < sim.kingdom_count; ++i) {
+            (void)printf("kingdom: %s\n", sim.kingdoms[i].name);
+        }
+        for (int32_t i = 0; i < sim.settlement_count; ++i) {
+            (void)printf("settlement: %s\n", sim.settlements[i].name);
+        }
+        PrintChronicleNewEvents(&sim);
+    }
     for (int32_t year = 0; year < years; ++year) {
         CcSimAdvanceDays(&sim, 365);
         if (!CcSimValidate(&sim, error, sizeof(error))) {
@@ -295,7 +333,11 @@ int main(int argc, char **argv)
             (void)fprintf(stderr, "checkpoint failed: %s\n", error);
             return 1;
         }
-        if (year == 0 || year + 1 == years ||
+        if (chronicle) {
+            (void)printf("== year %d (day %d) ==\n", year + 1, sim.current_day);
+            PrintChronicleNewEvents(&sim);
+            PrintSummary(&sim, detail);
+        } else if (year == 0 || year + 1 == years ||
             (year + 1) % report_every == 0) {
             PrintSummary(&sim, detail);
             (void)fflush(stdout);

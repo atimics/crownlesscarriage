@@ -408,7 +408,7 @@ static void CheckCharacterLifecycles(void)
     for (int32_t i = 0; i < first.character_count; ++i) {
         CC_CHECK(first.characters[i].birth_day <= first.current_day);
         CC_CHECK(first.characters[i].death_day > first.current_day);
-        CC_CHECK(CcCharacterAgeYears(&first, &first.characters[i]) >= 22);
+        CC_CHECK(CcCharacterAgeYears(&first, &first.characters[i]) >= 16);
     }
 
     int32_t slot = first.character_count - 1;
