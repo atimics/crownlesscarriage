@@ -284,6 +284,8 @@ int main(void)
     CC_CHECK(restored.dragon.retaliations == 1);
     CC_CHECK(CountEvents(&restored, CC_EVENT_DRAGON_RETALIATION) == 1);
     CC_CHECK(target->population < population_before);
+    CC_CHECK(target->fire_damage == 60);
+    CC_CHECK(target->last_fire_day == restored.current_day);
     const CcEvent *fire = LatestKind(
         &restored, CC_EVENT_DRAGON_RETALIATION);
     CC_CHECK(fire != NULL && fire->parent_id != 0U);

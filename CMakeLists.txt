@@ -1271,6 +1271,12 @@ if(BUILD_TESTING)
     cc_strict_warnings(local_place_tests)
     add_test(NAME distinct_local_places COMMAND local_place_tests)
 
+    add_executable(town_evolution_tests tests/town_evolution_tests.c)
+    target_link_libraries(town_evolution_tests PRIVATE
+        crownless_local_place crownless_persistence)
+    cc_strict_warnings(town_evolution_tests)
+    add_test(NAME town_evolution COMMAND town_evolution_tests)
+
     add_executable(world_stream_tests tests/world_stream_tests.c)
     target_link_libraries(world_stream_tests PRIVATE crownless_world)
     cc_strict_warnings(world_stream_tests)

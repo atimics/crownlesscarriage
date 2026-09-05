@@ -1,5 +1,8 @@
 #include "client/cc_local_place.h"
 
+#include <stdio.h>
+#include <string.h>
+
 static const CcLocalPlaceProfile PLACE_PROFILES[] = {
     {
         .function = CC_SETTLEMENT_FARMING,
@@ -14,14 +17,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .map_form = "Dispersed crofts around a threshing green",
         .scene = {
             {CC_LOCAL_TOWN_SCENE_ARRIVAL, "RIVERFORD ARRIVAL",
-             82.0f, 34.0f, 81.0f, 0.12f, 34.0f,
-             -11.0f, 0.62f, 16.0f, 8.4f},
+             82.0f, 34.0f, 79.0f, 0.16f, 23.0f,
+             -18.0f, 0.64f, 26.0f, 22.0f},
             {CC_LOCAL_TOWN_SCENE_HEART, "THRESHING GREEN",
-             44.0f, 29.0f, 45.0f, 0.14f, 29.5f,
-             -9.0f, 0.64f, 11.0f, 7.2f},
+             44.0f, 29.0f, 46.0f, 0.14f, 24.0f,
+             -12.0f, 0.64f, 16.0f, 16.0f},
             {CC_LOCAL_TOWN_SCENE_LANDMARK, "HILL GRANARIES",
              78.0f, 19.0f, 78.0f, 0.16f, 19.0f,
-             -11.0f, 0.62f, 17.0f, 9.0f},
+             -16.0f, 0.64f, 22.0f, 13.0f},
             {CC_LOCAL_TOWN_SCENE_CLOSE_FIRST, "DROVERS' CLOSE",
              32.0f, 38.0f, 31.0f, 0.12f, 39.5f,
              -6.0f, 0.62f, 8.0f, 6.3f},
@@ -62,45 +65,45 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
              CC_LOCAL_ROAD_FARM_TRACK},
         },
         .carriage_route = {
-            {"River gate ramp", 75.80f, 27.00f, 5.20f, 11.50f, false,
+            {"Granary rise", 75.80f, 23.00f, 5.20f, 15.50f, false,
              CC_LOCAL_ROAD_FARM_TRACK},
             {"Drovers' road", 39.00f, 33.20f, 57.00f, 5.20f, true,
              CC_LOCAL_ROAD_FARM_TRACK},
             {"Granary spine", 39.00f, 33.20f, 5.80f, 24.80f, false,
              CC_LOCAL_ROAD_FARM_TRACK},
-            {"Drovers' turn", 35.80f, 30.00f, 12.00f, 12.00f, true,
+            {"Green turning bay", 36.80f, 30.00f, 13.00f, 12.00f, true,
              CC_LOCAL_ROAD_FARM_TRACK},
             {"Cartwright yard", 35.20f, 44.00f, 13.40f, 14.00f, true,
              CC_LOCAL_ROAD_FARM_TRACK},
         },
         .building = {
-            {"Long threshing barn", 19.00f, 15.00f, 10.00f, 9.50f,
-             6.40f, CC_LOCAL_BUILDING_WORKSHOP, true},
-            {"Crofter cottages", 32.00f, 15.00f, 6.20f, 8.00f,
-             5.10f, CC_LOCAL_BUILDING_DOMESTIC, true},
+            {"Long threshing barn", 17.00f, 15.00f, 11.00f, 8.50f,
+             5.60f, CC_LOCAL_BUILDING_WORKSHOP, true},
+            {"Crofter cottages", 30.00f, 17.00f, 6.20f, 6.50f,
+             4.60f, CC_LOCAL_BUILDING_DOMESTIC, true},
             {"Provision hall", 44.00f, 16.00f, 12.00f, 10.00f,
-             7.40f, CC_LOCAL_BUILDING_WORKSHOP, true},
-            {"Drovers' longhouse", 19.50f, 34.00f, 11.50f, 7.20f,
-             5.40f, CC_LOCAL_BUILDING_DOMESTIC, true},
-            {"Dairy cottage", 31.00f, 35.50f, 4.50f, 7.20f,
+             6.20f, CC_LOCAL_BUILDING_WORKSHOP, true},
+            {"Drovers' longhouse", 18.00f, 35.00f, 10.50f, 6.50f,
              4.80f, CC_LOCAL_BUILDING_DOMESTIC, true},
+            {"Dairy cottage", 30.00f, 38.50f, 4.50f, 6.00f,
+             4.60f, CC_LOCAL_BUILDING_DOMESTIC, true},
             {"Cartwright sheds", 55.00f, 42.00f, 9.00f, 6.20f,
              5.20f, CC_LOCAL_BUILDING_WORKSHOP, true},
-            {"Miller's house", 57.00f, 15.00f, 8.00f, 8.20f,
-             5.80f, CC_LOCAL_BUILDING_DOMESTIC, true},
-            {"Orchard bunkhouse", 49.50f, 58.00f, 9.50f, 7.00f,
-             5.10f, CC_LOCAL_BUILDING_DOMESTIC, true},
+            {"Ford watermill", 84.00f, 21.00f, 5.50f, 8.00f,
+             4.80f, CC_LOCAL_BUILDING_DOMESTIC, true},
+            {"Orchard bunkhouse", 53.00f, 60.00f, 8.00f, 6.00f,
+             4.80f, CC_LOCAL_BUILDING_DOMESTIC, true},
         },
         .compound_structure = {
-            {CC_LOCAL_COMPOUND_WALL, 67.50f, 10.00f, 0.70f, 20.00f, 2.40f},
-            {CC_LOCAL_COMPOUND_WALL, 89.00f, 10.00f, 0.70f, 20.00f, 2.40f},
-            {CC_LOCAL_COMPOUND_WALL, 67.50f, 10.00f, 22.20f, 0.70f, 2.40f},
-            {CC_LOCAL_COMPOUND_WALL, 67.50f, 29.30f, 8.30f, 0.70f, 2.40f},
-            {CC_LOCAL_COMPOUND_WALL, 81.00f, 29.30f, 8.70f, 0.70f, 2.40f},
-            {CC_LOCAL_COMPOUND_HALL, 71.00f, 13.00f, 12.00f, 8.00f, 7.20f},
-            {CC_LOCAL_COMPOUND_SILO, 85.00f, 13.00f, 3.00f, 3.00f, 7.40f},
-            {CC_LOCAL_COMPOUND_SILO, 85.00f, 18.00f, 3.00f, 3.00f, 6.60f},
-            {CC_LOCAL_COMPOUND_STOREHOUSE, 70.00f, 23.00f,
+            {CC_LOCAL_COMPOUND_WALL, 67.50f, 8.00f, 0.70f, 18.00f, 1.10f},
+            {CC_LOCAL_COMPOUND_WALL, 83.20f, 8.00f, 0.70f, 18.00f, 1.10f},
+            {CC_LOCAL_COMPOUND_WALL, 67.50f, 8.00f, 16.40f, 0.70f, 1.10f},
+            {CC_LOCAL_COMPOUND_WALL, 67.50f, 25.30f, 8.30f, 0.70f, 1.10f},
+            {CC_LOCAL_COMPOUND_WALL, 81.00f, 25.30f, 2.90f, 0.70f, 1.10f},
+            {CC_LOCAL_COMPOUND_HALL, 71.00f, 10.00f, 11.00f, 8.00f, 6.40f},
+            {CC_LOCAL_COMPOUND_SILO, 67.80f, 10.00f, 3.00f, 3.00f, 5.60f},
+            {CC_LOCAL_COMPOUND_SILO, 67.80f, 15.00f, 3.00f, 3.00f, 5.00f},
+            {CC_LOCAL_COMPOUND_STOREHOUSE, 70.00f, 20.00f,
              5.50f, 4.80f, 4.40f},
         },
     },
@@ -767,4 +770,22 @@ uint32_t CcLocalPlaceTerrainSeed(uint32_t world_seed,
     uint32_t folded_id = (uint32_t)id ^ (uint32_t)(id >> 32U);
     uint32_t seed = MixSeed(world_seed ^ folded_id ^ profile->terrain_salt);
     return seed != 0U ? seed : profile->terrain_salt;
+}
+
+void CcLocalTownConditionText(uint32_t conditions, char *text, size_t capacity)
+{
+    if (text == NULL || capacity == 0U) return;
+    static const struct { CcTownCondition flag; const char *name; } labels[] = {
+        {CC_TOWN_BURNT, "BURNT"}, {CC_TOWN_REBUILDING, "REBUILDING"},
+        {CC_TOWN_LAWLESS, "LAWLESS"}, {CC_TOWN_PEACEFUL, "PEACEFUL"},
+        {CC_TOWN_THRIVING, "THRIVING"}, {CC_TOWN_HUNGRY, "HUNGRY"},
+        {CC_TOWN_ABANDONED, "ABANDONED"},
+    };
+    text[0] = '\0';
+    for (size_t i = 0; i < sizeof(labels) / sizeof(labels[0]); ++i) {
+        if ((conditions & (uint32_t)labels[i].flag) == 0U) continue;
+        size_t used = strlen(text);
+        (void)snprintf(text + used, capacity - used, "%s%s",
+                       used > 0U ? " / " : "", labels[i].name);
+    }
 }
