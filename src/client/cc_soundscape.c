@@ -25,18 +25,25 @@ uint32_t CcSoundscapeStep(CcSoundscape *state, CcSoundFrame frame, float dt)
         return 0U;
     }
     uint32_t cues = 0U;
-    if (frame.walking && frame.grounded && distance > 0.002f) {
-        state->step_distance += distance;
-        if (state->step_distance >= 0.85f) {
-            CcSoundCue surface = frame.surface;
-            if (surface < CC_SOUND_STEP_STONE || surface > CC_SOUND_SPLASH) {
+    if (frame.walking && state->previous.walking &&
+        frame.grounded && state->previous.grounded &&
+        !frame.swimming && !state->previous.swimming) {
+        for (int foot = 0; foot < 2; ++foot) {
+            if (!frame.footfall[foot]) continue;
+            CcSoundCue surface = frame.foot_surface[foot];
+            if (surface < CC_SOUND_STEP_STONE || surface > CC_SOUND_SPLASH)
                 surface = CC_SOUND_STEP_DIRT;
-            }
             cues |= CUE(surface);
-            state->step_distance = fmodf(state->step_distance, 0.85f);
+        }
+    }
+    if (frame.walking && frame.swimming && state->previous.swimming) {
+        state->swim_distance += distance;
+        if (state->swim_distance >= 0.85f) {
+            cues |= CUE(CC_SOUND_SPLASH);
+            state->swim_distance = fmodf(state->swim_distance, 0.85f);
         }
     } else {
-        state->step_distance = 0.0f;
+        state->swim_distance = 0.0f;
     }
     if (frame.walking && state->previous.walking) {
         if (frame.jumping && !state->previous.jumping) cues |= CUE(CC_SOUND_JUMP);
@@ -70,7 +77,7 @@ uint32_t CcSoundscapeStep(CcSoundscape *state, CcSoundFrame frame, float dt)
 size_t CcSoundSampleCount(CcSoundCue cue)
 {
     static const float seconds[CC_SOUND_COUNT] = {
-        0.13f, 0.15f, 0.15f, 0.24f, 0.20f, 0.38f, 0.16f,
+        0.13f, 0.15f, 0.15f, 0.18f, 0.24f, 0.20f, 0.38f, 0.16f,
         0.21f, 0.18f, 0.18f, 0.28f, 0.14f, 0.32f, 0.48f
     };
     if (cue < 0 || cue >= CC_SOUND_COUNT) return 0U;
@@ -106,24 +113,30 @@ bool CcSoundSynthesize(CcSoundCue cue, uint32_t variation,
     uint32_t seed = UINT32_C(0x7193ac51) ^ variation ^ (uint32_t)cue;
     float pitch = 0.94f + (float)(variation % 13U) * 0.01f;
     float low = 0.0f;
+    float soft = 0.0f;
     float held = 0.0f;
+    double energy = 0.0;
     for (size_t i = 0; i < count; ++i) {
         float time = (float)i / (float)CC_SOUND_SAMPLE_RATE;
         float noise = Noise(&seed);
         low += 0.13f * (noise - low);
+        soft += 0.045f * (noise - soft);
         float sample = 0.0f;
         switch (cue) {
             case CC_SOUND_STEP_STONE:
-                sample = 0.48f * Ring(time, 185.0f * pitch, 42.0f) +
-                         0.30f * noise * expf(-65.0f * time); break;
+                sample = 0.23f * (noise - low) * expf(-200.0f * time) +
+                         0.08f * Ring(time, 1350.0f * pitch, 180.0f); break;
             case CC_SOUND_STEP_WOOD:
-                sample = 0.46f * Ring(time, 115.0f * pitch, 32.0f) +
-                         0.22f * Ring(time, 310.0f * pitch, 55.0f) +
-                         0.16f * low * expf(-28.0f * time); break;
+                sample = 0.18f * Ring(time, 115.0f * pitch, 48.0f) +
+                         0.07f * Ring(time, 310.0f * pitch, 75.0f) +
+                         0.20f * low * expf(-32.0f * time); break;
             case CC_SOUND_STEP_DIRT:
-                sample = 0.40f * low * expf(-24.0f * time) +
-                         0.24f * Ring(time, 90.0f * pitch, 48.0f) +
-                         0.10f * noise * expf(-35.0f * time); break;
+                sample = 0.16f * Ring(time, 78.0f * pitch, 48.0f) +
+                         0.18f * soft * expf(-36.0f * time); break;
+            case CC_SOUND_STEP_GRASS:
+                sample = (0.42f * soft + 0.07f * (low - soft)) *
+                         expf(-22.0f * time) +
+                         0.025f * Ring(time, 70.0f * pitch, 65.0f); break;
             case CC_SOUND_SPLASH:
                 sample = 0.48f * low * expf(-13.0f * time) +
                          0.16f * sinf(TAU * (420.0f * time - 380.0f * time * time)) *
@@ -149,8 +162,10 @@ bool CcSoundSynthesize(CcSoundCue cue, uint32_t variation,
                          sinf(3.14159265f * (float)i / (float)count) *
                          expf(-8.0f * time); break;
             case CC_SOUND_LAND:
+                sample = 0.25f * Ring(time, 72.0f * pitch, 35.0f) +
+                         0.24f * low * expf(-25.0f * time); break;
             case CC_SOUND_HIT:
-                sample = 0.50f * Ring(time, (cue == CC_SOUND_HIT ? 135.0f : 72.0f) * pitch, 25.0f) +
+                sample = 0.50f * Ring(time, 135.0f * pitch, 25.0f) +
                          0.26f * low * expf(-18.0f * time) +
                          0.18f * noise * expf(-80.0f * time); break;
             case CC_SOUND_BLOCK:
@@ -166,14 +181,26 @@ bool CcSoundSynthesize(CcSoundCue cue, uint32_t variation,
                          0.19f * ChipNote(time - 0.10f, 587.33f, 10.0f); break;
             default: break;
         }
-        /* Mix a quiet 8-bit, 7.35 kHz layer into each material or note. */
-        if (i % 3U == 0U) held = roundf(sample * 127.0f) / 127.0f;
-        sample = 0.65f * sample + 0.35f * held;
+        /* Keep foot contacts soft; retain the chip texture for action cues. */
+        if (cue > CC_SOUND_SPLASH && cue != CC_SOUND_LAND) {
+            if (i % 3U == 0U) held = roundf(sample * 127.0f) / 127.0f;
+            sample = 0.65f * sample + 0.35f * held;
+        }
         /* A short fade at both ends keeps each cue smooth at its boundary. */
-        float fade = fminf(1.0f, (float)i / 44.0f) *
+        float attack = cue == CC_SOUND_STEP_GRASS ? 154.0f :
+                       cue == CC_SOUND_STEP_STONE ? 11.0f : 44.0f;
+        float fade = fminf(1.0f, (float)i / attack) *
                      fminf(1.0f, (float)(count - 1U - i) / 440.0f);
         sample = fmaxf(-0.9f, fminf(0.9f, sample * fade));
         samples[i] = (int16_t)lroundf(sample * 32767.0f);
+        energy += (double)samples[i] * (double)samples[i];
+    }
+    if (cue <= CC_SOUND_SPLASH && energy > 0.0) {
+        /* Match every surface and variation to the quiet grass sample level. */
+        double gain = 0.014 * 32767.0 / sqrt(energy / (double)count);
+        for (size_t i = 0; i < count; ++i) {
+            samples[i] = (int16_t)lround((double)samples[i] * gain);
+        }
     }
     return true;
 }

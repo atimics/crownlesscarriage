@@ -9,6 +9,7 @@
 static unsigned char buffers[CC_SOUND_COUNT * 3];
 static bool device_available, playing[CC_SOUND_COUNT * 3], voice_playing;
 static float volumes[CC_SOUND_COUNT * 3];
+static float pitches[CC_SOUND_COUNT * 3];
 static int allocated, freed, device_opens, device_closes, voices_loaded, voices_freed;
 static double clock_seconds = 1.0;
 
@@ -32,6 +33,7 @@ void UnloadSound(Sound sound) { CC_CHECK(IsSoundValid(sound)); ++freed; }
 void StopSound(Sound sound) { playing[SoundIndex(sound)] = false; }
 void PlaySound(Sound sound) { playing[SoundIndex(sound)] = true; }
 void SetSoundVolume(Sound sound, float volume) { volumes[SoundIndex(sound)] = volume; }
+void SetSoundPitch(Sound sound, float pitch) { pitches[SoundIndex(sound)] = pitch; }
 double GetTime(void) { return clock_seconds; }
 bool FileExists(const char *path) { return strcmp(path, "missing.wav") != 0; }
 Music LoadMusicStream(const char *path)
@@ -69,8 +71,15 @@ int main(void)
     CcAudioInit();
     CC_CHECK(allocated == CC_SOUND_COUNT * 3);
     CC_CHECK(CcAudioMusicGain() == 1.0f);
+    CcAudioUpdate();
+    for (int cue = CC_SOUND_STEP_STONE; cue <= CC_SOUND_SPLASH; ++cue) {
+        CC_CHECK(volumes[cue * 3] == volumes[CC_SOUND_STEP_GRASS * 3]);
+        CC_CHECK(volumes[cue * 3] == 0.18f);
+    }
+    CC_CHECK(volumes[CC_SOUND_STEP_STONE * 3] < volumes[CC_SOUND_HIT * 3] * 0.5f);
     CcAudioPlay(CC_SOUND_HOOF);
     CC_CHECK(PlayingCount() == 1);
+    CC_CHECK(pitches[CC_SOUND_HOOF * 3] == CC_SOUND_PLAYBACK_PITCH);
     CcAudioPlay(CC_SOUND_HOOF);
     CC_CHECK(PlayingCount() == 1);
     clock_seconds += 0.3;
@@ -104,6 +113,10 @@ int main(void)
     clock_seconds += 1.0;
     CcAudioPlay(CC_SOUND_HIT);
     CC_CHECK(PlayingCount() == 0);
+    CcAudioSetMode(0);
+    CcAudioPlay(CC_SOUND_STEP_STONE);
+    CC_CHECK(pitches[CC_SOUND_STEP_STONE * 3] == CC_SOUND_PLAYBACK_PITCH);
+    CcAudioSetMode(2);
     CcAudioSetMode(0);
     CcAudioVoice(NULL);
     CcAudioVoice("reply.wav");

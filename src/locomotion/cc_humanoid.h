@@ -93,6 +93,9 @@ typedef struct CcHumanoidFoot {
     CcHumanoidSpring pitch;
     CcHumanoidContact contact;
     float local_phase;
+    float yaw;
+    float swing_start_yaw;
+    float swing_target_yaw;
 } CcHumanoidFoot;
 
 typedef struct CcHumanoidPose {

@@ -7,6 +7,7 @@
 void CcOverlayBegin(float text_scale);
 void CcOverlayFlush(void);
 void CcOverlayEnd(void);
+void CcOverlaySetTextObserver(void (*observer)(const char *text));
 void CcOverlayDrawText(const char *text, int x, int y, int font_size,
                        Color color);
 int CcOverlayMeasureText(const char *text, int font_size);

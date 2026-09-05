@@ -524,7 +524,7 @@ if(CC_BUILD_CLIENT)
             SUFFIX ".html"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/site"
             LINK_DEPENDS
-                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CMAKE_CURRENT_SOURCE_DIR}/web/music.js;${CC_WEB_STARTUP_ASSET_STAMP};${CC_WEB_STARTUP_ASSET_OUTPUTS}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CMAKE_CURRENT_SOURCE_DIR}/web/music.js;${CC_WEB_STARTUP_ASSET_STAMP};${CC_WEB_STARTUP_ASSET_OUTPUTS}"
         )
         target_compile_definitions(crownless_carriage PRIVATE PLATFORM_WEB)
         set_property(TARGET crownless_carriage PROPERTY C_EXTENSIONS ON)
@@ -543,6 +543,7 @@ if(CC_BUILD_CLIENT)
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/music.js"
+            "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js"
             "SHELL:--preload-file ${CC_WEB_ASSET_DIR}/assets@/assets"
         )
     elseif(APPLE)
@@ -934,7 +935,7 @@ if(BUILD_TESTING)
     cc_strict_warnings(music_player_tests)
     add_test(NAME streamed_music_and_offline_fallback COMMAND music_player_tests)
     add_executable(soundscape_tests tests/soundscape_tests.c)
-    target_link_libraries(soundscape_tests PRIVATE crownless_soundscape)
+    target_link_libraries(soundscape_tests PRIVATE crownless_soundscape crownless_locomotion)
     cc_strict_warnings(soundscape_tests)
     add_test(NAME soundscape_timing_and_samples COMMAND soundscape_tests)
     if(CC_BUILD_CLIENT)
@@ -1261,6 +1262,13 @@ if(BUILD_TESTING)
         add_custom_target(run_character_material_captures
             COMMAND renderer_regression_tests --material-captures
                 "${CMAKE_CURRENT_BINARY_DIR}/character-materials"
+            DEPENDS renderer_regression_tests
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            USES_TERMINAL
+        )
+        add_custom_target(run_humanoid_animation_captures
+            COMMAND renderer_regression_tests --animation-captures
+                "${CMAKE_CURRENT_BINARY_DIR}/humanoid-animation"
             DEPENDS renderer_regression_tests
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             USES_TERMINAL

@@ -208,8 +208,105 @@ async function main() {
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => Module.crownlessScreen === 'playing');
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision + 2);
+    const phone = await browser.newContext({viewport: {width: 390, height: 844},
+      hasTouch: true, isMobile: true, deviceScaleFactor: 3});
+    const mobile = await phone.newPage();
+    mobile.on('pageerror', error => errors.push(error.message));
+    try {
+      await mobile.goto(`http://127.0.0.1:${server.address().port}/`);
+      await mobile.waitForFunction(() => window.Module?.crownlessScreen === 'title' &&
+        document.querySelector('#touch-actions button'));
+      assert.equal(await mobile.locator('#touch-panel').isVisible(), true);
+      async function mobileLayout(width, height) {
+        await mobile.setViewportSize({width, height});
+        await mobile.waitForTimeout(100);
+        const layout = await mobile.evaluate(() => ({
+          width: window.innerWidth, scroll: document.documentElement.scrollWidth,
+          buttons: Array.from(document.querySelectorAll('#touch-actions button'), b => {
+            const r = b.getBoundingClientRect();
+            return {width: r.width, height: r.height};
+          })
+        }));
+        assert(layout.scroll <= layout.width + 1, JSON.stringify(layout));
+        assert(layout.buttons.length > 0 && layout.buttons.every(b => b.width >= 44 && b.height >= 44), JSON.stringify(layout));
+        const canvas = await mobile.locator('#canvas').boundingBox();
+        assert(Math.abs(canvas.width / canvas.height - 16 / 9) < 0.01, JSON.stringify(canvas));
+        if (width >= 600 && width > height && height <= 600) {
+          const stage = await mobile.locator('#stage').boundingBox();
+          assert(stage.y + stage.height <= height + 1, JSON.stringify(stage));
+        }
+        await mobile.screenshot({path: path.join(output, `mobile-${width}x${height}.png`)});
+      }
+      for (const size of [[320, 740], [390, 844], [667, 375], [844, 390], [1024, 768]]) await mobileLayout(...size);
+      await mobile.setViewportSize({width: 390, height: 844});
+      // A real touch on the scaled canvas must reach the same Play control once.
+      await mobile.evaluate(() => {
+        window.touchTaps = [];
+        const tap = Module._CrownlessTouchTap;
+        Module._CrownlessTouchTap = (x, y) => { window.touchTaps.push([x, y]); tap(x, y); };
+      });
+      let canvas = await mobile.locator('#canvas').boundingBox();
+      await mobile.touchscreen.tap(canvas.x + canvas.width / 2, canvas.y + canvas.height * 394 / 720);
+      await mobile.waitForFunction(() => Module.crownlessScreen === 'playing');
+      const taps = await mobile.evaluate(() => window.touchTaps);
+      assert.equal(taps.length, 1);
+      assert(Math.abs(taps[0][0] - 640) < 5 && Math.abs(taps[0][1] - 394) < 5, JSON.stringify(taps));
+      const buttons = mobile.locator('#touch-actions');
+      const oldControl = await buttons.getByRole('button', {name: 'Menu', exact: true}).evaluate(button => ({
+        index: Array.from(button.parentElement.children).indexOf(button), revision: Number(button.dataset.revision)
+      }));
+      await buttons.getByRole('button', {name: 'Book', exact: true}).tap();
+      await mobile.getByRole('heading', {name: 'Company Book', exact: true}).waitFor();
+      await mobile.evaluate(({index, revision}) => Module._CrownlessTouchActivate(index, revision), oldControl);
+      await mobile.waitForTimeout(150);
+      assert.equal(await mobile.locator('#touch-title').innerText(), 'Company Book');
+      await buttons.getByRole('button', {name: 'Cargo', exact: true}).tap();
+      await mobile.locator('#touch-reading-panel summary').tap();
+      assert((await mobile.locator('#touch-reading').innerText()).length > 30);
+      await mobile.screenshot({path: path.join(output, 'mobile-book.png')});
+      await buttons.getByRole('button', {name: 'Back', exact: true}).tap();
+      await buttons.getByRole('button', {name: 'Menu', exact: true}).tap();
+      await mobile.waitForFunction(() => Module.crownlessScreen === 'paused');
+      const mobileRevision = await mobile.evaluate(() => Module.crownlessSaveRevision);
+      await buttons.getByRole('button', {name: 'Save world', exact: true}).tap();
+      await mobile.waitForFunction(revision => Module.crownlessSaveRevision > revision, mobileRevision);
+      await buttons.getByRole('button', {name: 'Resume', exact: true}).tap();
+      await mobile.waitForFunction(() => Module.crownlessScreen === 'playing');
+      // Dragged and cancelled touches must leave the current route untouched.
+      const input = await phone.newCDPSession(mobile);
+      canvas = await mobile.locator('#canvas').boundingBox();
+      const point = {x: canvas.x + canvas.width / 2, y: canvas.y + canvas.height / 2};
+      await input.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [point]});
+      await input.send('Input.dispatchTouchEvent', {type: 'touchMove', touchPoints: [{x: point.x + 30, y: point.y}]});
+      await input.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
+      await input.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [point]});
+      await input.send('Input.dispatchTouchEvent', {type: 'touchCancel', touchPoints: []});
+      assert.equal(await mobile.evaluate(() => window.touchTaps.length), 1);
+      await buttons.getByRole('button', {name: 'Menu', exact: true}).tap();
+      await mobile.waitForFunction(() => Module.crownlessScreen === 'paused');
+      await buttons.getByRole('button', {name: 'Your traveller', exact: true}).tap();
+      await mobile.waitForFunction(() => Module.crownlessScreen === 'avatar');
+      await buttons.getByRole('button', {name: /^Coat:/}).tap();
+      await buttons.getByRole('button', {name: 'Save appearance', exact: true}).tap();
+      await mobile.waitForFunction(() => Module.crownlessScreen === 'paused');
+      assert.match(await mobile.evaluate(() => FS.readFile('/crownless-save/crownless_campaign.ccsave.preferences', {encoding:'utf8'})), /avatar 4096/);
+      // Exercise the page fallback used when element fullscreen is unavailable.
+      await mobile.evaluate(() => { document.querySelector('#stage').requestFullscreen = undefined; });
+      await buttons.getByRole('button', {name: 'Full screen', exact: true}).tap();
+      assert.equal(await mobile.locator('#stage').evaluate(stage => stage.classList.contains('expanded')), true);
+      assert.equal(await mobile.locator('#touch-panel').isVisible(), true);
+      await mobile.setViewportSize({width: 844, height: 390});
+      await mobile.screenshot({path: path.join(output, 'mobile-expanded-landscape.png')});
+      await mobile.locator('#exit-fullscreen').tap();
+      assert.equal(await mobile.locator('#stage').evaluate(stage => stage.classList.contains('expanded')), false);
+      await mobile.evaluate(() => { document.querySelector('#stage').requestFullscreen = () => Promise.reject(new Error('declined')); });
+      await buttons.getByRole('button', {name: 'Full screen', exact: true}).tap();
+      assert.equal(await mobile.locator('#stage').evaluate(stage => stage.classList.contains('expanded')), true);
+      assert.equal(await mobile.locator('#loading').isVisible(), false);
+      await mobile.locator('#exit-fullscreen').tap();
+    } finally { await phone.close(); }
     assert.deepEqual(errors, []);
-    console.log('Browser title, menus, deletion, shaders, fullscreen, reload, and rejected save checks passed');
+    console.log('Browser desktop and mobile layout, touch input, menus, saves, shaders, fullscreen, and reload checks passed');
   } finally {
     await context.close();
     await browser.close();

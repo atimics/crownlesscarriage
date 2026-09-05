@@ -21,7 +21,8 @@ async function main() {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     browser = await chromium.launch({args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
-    const a = await browser.newContext(), b = await browser.newContext();
+    const a = await browser.newContext(), b = await browser.newContext({
+      viewport: {width: 390, height: 844}, hasTouch: true, isMobile: true});
     owner = await a.newPage(); crew = await b.newPage();
     await owner.goto(origin);
     await owner.getByRole('textbox', {name:'Your name'}).fill('Mara');
@@ -81,6 +82,14 @@ async function main() {
     await selectMenuItem(game, 0);
     await game.waitForFunction(() => Module.crownlessScreen === 'playing');
     assert.equal(await game.locator('body').getAttribute('data-avatar'), '12576');
+    assert.equal(await game.locator('#touch-panel').isVisible(), true);
+    const mobileLayout = await game.evaluate(() => ({
+      overflow: document.documentElement.scrollWidth > innerWidth,
+      canvasBottom: document.querySelector('#canvas').getBoundingClientRect().bottom,
+      controlsTop: document.querySelector('#touch-panel').getBoundingClientRect().top
+    }));
+    assert.equal(mobileLayout.overflow, false);
+    assert(mobileLayout.canvasBottom <= mobileLayout.controlsTop, JSON.stringify(mobileLayout));
     assert.equal(await owner.locator('body').getAttribute('data-avatar'), '0');
     for (const [page, name, appearance] of [[owner, 'Bren', 12576], [game, 'Mara', 0]]) {
       await page.waitForFunction(({name, appearance}) => {
@@ -99,7 +108,7 @@ async function main() {
     const start = await game.locator('body').getAttribute('data-player-position');
     const canvas = await game.locator('#canvas').boundingBox();
     // The road crosses the middle of this view; the lower edge is a cliff.
-    await game.mouse.click(canvas.x + canvas.width * 0.68, canvas.y + canvas.height * 0.50);
+    await game.touchscreen.tap(canvas.x + canvas.width * 0.68, canvas.y + canvas.height * 0.50);
     await game.waitForFunction(position => document.body.dataset.playerPosition !== position, start);
     await owner.waitForFunction(position => {
       const peer = JSON.parse(document.body.dataset.crewDrawn || '[]')[0];
@@ -134,7 +143,7 @@ async function main() {
     await game.waitForFunction(() => document.body.dataset.companyReady === 'ready', undefined, {timeout:120000});
     await game.waitForFunction(hash => document.body.dataset.companyHash === hash, travelling.state.hash);
     assert.deepEqual(errors, []);
-    console.log('Two players draw each other with their chosen appearance and moving poses; leaving, rejoining, reload, and shared travel pass.');
+    console.log('Desktop and phone players draw each other with their chosen appearance and moving poses; touch walking, leaving, rejoining, reload, and shared travel pass.');
   } catch (error) {
     await fs.mkdir('browser-results', {recursive:true});
     for (const [name, page] of [['owner', owner], ['crew', crew]]) {

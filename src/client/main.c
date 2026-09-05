@@ -333,6 +333,8 @@ static void ClientInputInstall(void)
         window, ClientMouseButtonCallback);
 }
 
+#include "cc_touch.inc"
+
 static bool ClientKeyPressed(int32_t key)
 {
     bool queued = key >= 0 && key <= GLFW_KEY_LAST && queued_key_press[key];
@@ -352,6 +354,9 @@ static void ClientInputClearPressed(void)
     (void)memset(queued_mouse_button_press, 0,
                  sizeof(queued_mouse_button_press));
     queued_save_shortcut = false;
+#if defined(PLATFORM_WEB)
+    touch_pointer_pending = false;
+#endif
 }
 
 #if defined(PLATFORM_WEB)
@@ -401,9 +406,9 @@ EM_JS(void, ClientBrowserFrontend, (const char *screen, int focus, int avatar), 
     Module.crownlessAvatarDraft = avatar;
 });
 EM_JS(void, ClientBrowserFullscreen, (), {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else document.getElementById('stage').requestFullscreen();
+    Module.toggleCrownlessFullscreen();
 });
+EM_JS(void, ClientBrowserTouchControls, (), { Module.toggleCrownlessTouch(); });
 EM_JS(int, ClientBrowserCampaignAccess, (), {
     return Number.isInteger(Module.crownlessCampaignAccess)
         ? Module.crownlessCampaignAccess : 1;
@@ -4621,7 +4626,7 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
 {
     ContextActionSet actions = BuildContextActions(
         sim, local, view, selected, selected_situation);
-    Vector2 mouse = GetMousePosition();
+    Vector2 mouse = ClientPointerPosition();
     bool cargo_controls = false;
     for (int32_t i = 0; i < actions.count; ++i) {
         if (actions.items[i].kind == CONTEXT_ACTION_BUY_CARGO) {
@@ -4639,6 +4644,7 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
     for (int32_t i = 0; i < actions.count; ++i) {
         Rectangle bounds = ContextActionBounds(i, actions.count);
         const ContextAction *action = &actions.items[i];
+        ClientTouchAdd(bounds, action->label, action->enabled, action->active);
         bool hover = action->enabled && CheckCollisionPointRec(mouse, bounds);
         Color accent = ContextActionColor(action->kind);
         Color fill = action->active ? Fade(accent, 0.20f) :
@@ -4740,7 +4746,7 @@ static ContextAction PressedContextAction(
     }
     ContextActionSet actions = BuildContextActions(
         sim, local, view, selected, selected_situation);
-    Vector2 mouse = GetMousePosition();
+    Vector2 mouse = ClientPointerPosition();
     for (int32_t i = 0; i < actions.count; ++i) {
         if (actions.items[i].enabled && CheckCollisionPointRec(
                 mouse, ContextActionBounds(i, actions.count))) {
@@ -4781,7 +4787,7 @@ static void UpdateMovementPreview(
     RenderTexture2D local_target, Rectangle local_bounds, float delta_time)
 {
     if (local == NULL) return;
-    Vector2 mouse = GetMousePosition();
+    Vector2 mouse = ClientPointerPosition();
     bool unavailable = view != VIEW_LOCAL || local->site_travel_active ||
         local->road_choice_active || local->journey_travel_active ||
         local->journey_parley_active ||
@@ -4946,7 +4952,7 @@ static void DrawCommandBar(ClientView view, const LocalState *local)
 {
     if (local != NULL &&
         local->opening_step != CC_LOCAL_OPENING_COMPLETE) return;
-    Vector2 mouse = GetMousePosition();
+    Vector2 mouse = ClientPointerPosition();
     for (int32_t value = COMMAND_ACTION_QUESTS;
          value < COMMAND_ACTION_COUNT; ++value) {
         CommandActionKind action = (CommandActionKind)value;
@@ -4964,6 +4970,7 @@ static void DrawCommandBar(ClientView view, const LocalState *local)
             enabled ? Fade(accent, hover || active ? 0.96f : 0.62f) :
                       Fade(MUTED, 0.28f));
         const char *label = CommandActionLabel(action);
+        ClientTouchAdd(bounds, label, enabled, active);
         int width = CcOverlayMeasureText(label, 10);
         CcOverlayDrawText(label,
                           (int)(bounds.x +
@@ -4984,7 +4991,7 @@ static CommandActionKind PressedCommandAction(const LocalState *local,
     if (!ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         return COMMAND_ACTION_NONE;
     }
-    Vector2 mouse = GetMousePosition();
+    Vector2 mouse = ClientPointerPosition();
     for (int32_t value = COMMAND_ACTION_QUESTS;
          value < COMMAND_ACTION_COUNT; ++value) {
         CommandActionKind action = (CommandActionKind)value;
@@ -8827,7 +8834,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         if (context_action == CONTEXT_ACTION_NONE &&
             ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            Vector2 mouse = GetMousePosition();
+            Vector2 mouse = ClientPointerPosition();
             CcLocalWorldTargetKind world_target = LocalCombatActive(local) ?
                 CC_LOCAL_WORLD_TARGET_NONE :
                 CcLocalAgentPickWorldTarget(
@@ -9350,7 +9357,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             *selected = StepVisibleMapIndex(sim, *selected, -1);
         }
         if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            Vector2 mouse = GetMousePosition();
+            Vector2 mouse = ClientPointerPosition();
             int32_t visible_start = VisibleMapListStart(sim, *selected);
             int32_t visible_rank = 0;
             int32_t row = 0;
@@ -9639,30 +9646,39 @@ static int RunMapSaleInputRegression(void)
 #endif
 
 static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
-                             const LocalState *local, ClientView view,
+                             LocalState *local, ClientView view,
                              float dt)
 {
     bool travel = local->journey_travel_active &&
         ((sim->journey.active && sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) ||
          local->arrival.phase == CC_CLIENT_ARRIVAL_ROAD_BOOK);
-    const CcLocalAgent *agent = &local->agent;
+    CcLocalAgent *agent = &local->agent;
+    uint32_t markers = CcHumanoidGaitConsumeMotionMarkers(&agent->humanoid);
     CcSoundFrame frame = {
         .x = agent->position.x, .z = agent->position.z,
         .place = sim->player.location_id, .scene = (int)agent->scene,
         .walking = view == VIEW_LOCAL && !travel && !local->site_travel_active,
         .grounded = agent->grounded || agent->swimming,
-        .jumping = !agent->grounded && agent->velocity.y > 1.0f,
+        .swimming = agent->swimming,
+        .jumping = !agent->grounded && !agent->swimming && agent->velocity.y > 1.0f,
         .striking = agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE,
         .strike_time = agent->humanoid.action_time,
         .impact_time = local->course.last_outcome >= CC_COMBAT_OUTCOME_HIT ?
             local->course.combat_event_seconds : 0.0f,
         .blocked = local->course.last_outcome == CC_COMBAT_OUTCOME_BLOCKED ||
                    local->course.last_outcome == CC_COMBAT_OUTCOME_GUARD_BROKEN,
-        .surface = agent->swimming ? CC_SOUND_SPLASH :
-                   agent->scene == CC_LOCAL_SCENE_MARKET ? CC_SOUND_STEP_WOOD :
-                   agent->scene == CC_LOCAL_SCENE_ROAD ? CC_SOUND_STEP_DIRT : CC_SOUND_STEP_STONE,
         .travel_pace = travel && view == VIEW_LOCAL ? local->convoy.pace : 0.0f
     };
+    for (int foot = 0; foot < CC_HUMANOID_LEG_COUNT; ++foot) {
+        uint32_t contact = foot == 0 ? CC_MOTION_MARKER_LEFT_CONTACT :
+                                      CC_MOTION_MARKER_RIGHT_CONTACT;
+        frame.footfall[foot] = (markers & contact) != 0U &&
+            !agent->climbing && !agent->humanoid.ragdoll.active;
+        if (frame.footfall[foot]) {
+            CcLimbVec3 point = agent->humanoid.feet[foot].planted_point;
+            frame.foot_surface[foot] = CcLocalFootstepSurfaceAt(agent->scene, point.x, point.z);
+        }
+    }
     uint32_t cues = CcSoundscapeStep(soundscape, frame, dt);
     for (int cue = 0; cue < CC_SOUND_COUNT; ++cue) {
         if ((cues & (UINT32_C(1) << (unsigned int)cue)) != 0U) CcAudioPlay((CcSoundCue)cue);
@@ -10220,6 +10236,9 @@ int main(int argc, char **argv)
     }
     SetExitKey(KEY_NULL);
     ClientInputInstall();
+#if defined(PLATFORM_WEB)
+    CcOverlaySetTextObserver(ClientTouchRecordText);
+#endif
     SetExitKey(KEY_NULL);
 
     SetWindowMinSize(normal_play || capture_road_fork || capture_ux ? 1040 : 1280,
@@ -11123,6 +11142,10 @@ int main(int argc, char **argv)
         if (normal_play && AdventureScene(&local)) local.course.automatic_alarm = false;
         adventure_preferences = local.adventure_ui ? &preferences : NULL;
         CcLocalRendererSetInteractionUI(AdventureScene(&local));
+        ClientTouchBegin();
+        const CcSettlement *touch_place = CcSimSettlement(&sim, sim.player.location_id);
+        ClientTouchHeading(touch_place != NULL ? touch_place->name : "The road",
+            "Tap clear ground to walk. Tap a person or doorway to approach.");
         local_bounds = LocalViewportBounds();
         float frame_delta_time = GetFrameTime();
         bool music_play_input = false;
@@ -11152,7 +11175,7 @@ int main(int argc, char **argv)
                        message);
         ClientView audio_previous_view = view;
         bool audio_clicked = normal_play && !local.adventure_ui && !menu_frame && ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-            CheckCollisionPointRec(GetMousePosition(), AudioControlBounds());
+            CheckCollisionPointRec(ClientPointerPosition(), AudioControlBounds());
         if (normal_play) {
             bool input = ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) ||
                          ClientMouseButtonPressed(MOUSE_BUTTON_RIGHT) ||
@@ -11506,6 +11529,7 @@ int main(int argc, char **argv)
             frontend.screen == FRONTEND_DELETE ? "delete" :
             frontend.screen == FRONTEND_AVATAR ? "avatar" : "playing", frontend.focus, (int)frontend.avatar);
 #endif
+        ClientTouchEnd();
         EndDrawing();
 #if defined(PLATFORM_WEB)
         if (!browser_memory_reported) {

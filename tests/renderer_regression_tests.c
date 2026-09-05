@@ -137,6 +137,7 @@ static void WriteViewportFixture(const char *path)
 
 #include "box_batch_tests.inc"
 #include "character_material_captures.inc"
+#include "humanoid_animation_captures.inc"
 #include "character_surface_tests.inc"
 #include "animal_captures.inc"
 
@@ -144,7 +145,8 @@ int main(int argc, char **argv)
 {
     TestSkinTurns();
     if (argc == 3 && (strcmp(argv[1], "--graphics") == 0 ||
-                      strcmp(argv[1], "--material-captures") == 0)) {
+                      strcmp(argv[1], "--material-captures") == 0 ||
+                      strcmp(argv[1], "--animation-captures") == 0)) {
         SetConfigFlags(FLAG_WINDOW_HIDDEN);
         InitWindow(1280, 760, "Renderer regression checks");
         SetTraceLogLevel(LOG_WARNING);
@@ -158,6 +160,8 @@ int main(int argc, char **argv)
             TestAnimalModels(argv[2]);
             TestPonyPortraits();
             WriteViewportFixture(argv[2]);
+        } else if (strcmp(argv[1], "--animation-captures") == 0) {
+            CaptureHumanoidAnimation(argv[2]);
         } else {
             CaptureCharacterMaterials(argv[2]);
         }
