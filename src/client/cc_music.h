@@ -68,8 +68,10 @@ typedef struct CcMusicVoice {
 typedef struct CcMusicDirector {
     CcMusicVoice voice[CC_MUSIC_VOICE_COUNT];
     bool available[CC_MUSIC_TAKE_COUNT];
-    bool ready[CC_MUSIC_TAKE_COUNT]; /* Local file or completed download. */
-    int requested_take; /* Next choice waiting for audio, or -1. */
+    bool ready[CC_MUSIC_TAKE_COUNT]; /* Opened and buffered by the player. */
+    int requested_take; /* Prepared next choice, or -1. */
+    float requested_fit;
+    bool requested_due;
     float duration[CC_MUSIC_TAKE_COUNT];
     int recent_cue[4];
     int last_take[CC_MUSIC_CUE_COUNT];

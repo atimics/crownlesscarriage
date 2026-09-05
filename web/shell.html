@@ -21,68 +21,17 @@
       #loading[hidden] { display: none; }
       #progress { display: block; width: min(280px, 70vw); margin-top: 12px; accent-color: #9f8657; }
       #company-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-      #touch-panel {
-        padding: 16px;
-        background: #201d18;
-        font: 1rem/1.45 system-ui, sans-serif;
-        min-width: 0;
-        width: 100%;
-        border-top: 1px solid #514a3d;
-      }
-      #touch-title { margin: 0; font: 1.3rem Georgia, serif; color: #dfc48c; }
-      #touch-detail { margin: 8px 0 16px; color: #c5bba6; overflow-wrap: anywhere; }
-      #touch-actions, .touch-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-      #touch-panel button { min-height: 48px; padding: 10px; overflow-wrap: anywhere; }
-      #touch-shortcuts { margin-top: 16px; }
-      #touch-panel summary { cursor: pointer; min-height: 44px; padding: 10px 0; color: #c5bba6; }
-      #touch-reading { white-space: pre-line; color: #d4c9b3; overflow-wrap: anywhere; }
-      button { border: 1px solid #8e8168; border-radius: 3px; background: #24211c; color: #e8dfc9; font: inherit; cursor: pointer; touch-action: manipulation; }
-      button:disabled { opacity: 0.5; }
-      button:focus-visible, summary:focus-visible { outline: 2px solid #d3b576; outline-offset: 3px; }
+      button { border: 1px solid #8e8168; border-radius: 3px; background: #24211c; color: #e8dfc9; font: inherit; cursor: pointer; }
       [hidden] { display: none !important; }
       canvas { touch-action: none; }
-      #exit-fullscreen { display: none; position: absolute; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); z-index: 2; min-height: 44px; padding: 8px 12px; }
-      #stage:fullscreen #exit-fullscreen, #stage.expanded #exit-fullscreen { display: block; }
       #stage.expanded { position: fixed; inset: 0; z-index: 10000; height: 100dvh; }
-      .touch-mode #stage { display: flex; flex-direction: column; justify-content: start; height: 100dvh; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
-      .touch-mode #stage canvas { width: 100%; height: auto; flex-shrink: 0; }
-      .touch-mode #touch-panel { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-      .touch-mode #stage:fullscreen, .touch-mode #stage.expanded { padding-top: max(56px, env(safe-area-inset-top)); }
-      @media (min-width: 600px) and (max-height: 600px) and (orientation: landscape) {
-        .touch-mode #stage, .touch-mode #stage:fullscreen, .touch-mode #stage.expanded { display: grid; grid-template-columns: minmax(0, 1fr) 250px; place-items: center; padding-top: 0; }
-        .touch-mode #stage canvas { width: min(100%, calc(100dvh * 16 / 9)); height: auto; }
-        .touch-mode #touch-panel { height: 100%; border-top: 0; border-left: 1px solid #514a3d; padding: 12px; }
-        .touch-mode #stage:fullscreen #touch-panel, .touch-mode #stage.expanded #touch-panel { padding-top: 60px; }
-        .touch-mode #touch-actions { grid-template-columns: 1fr; }
-      }
+      .game-field { position: fixed; opacity: 0; margin: 0; padding: 0; font-size: 16px; border: 0; z-index: 2; }
     </style>
   </head>
   <body>
     <main>
       <div id="stage">
         <canvas id="canvas" aria-label="Crownless Carriage game" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
-        <section id="touch-panel" aria-label="Game controls" hidden>
-          <h2 id="touch-title">Preparing your journey…</h2>
-          <p id="touch-detail">The game controls will appear here.</p>
-          <div id="touch-actions"></div>
-          <details id="touch-shortcuts" hidden>
-            <summary>More controls</summary>
-            <div class="touch-keys">
-              <button type="button" data-key="69">Next target</button>
-              <button type="button" data-key="70">Act</button>
-              <button type="button" data-key="74">Jump</button>
-              <button type="button" data-key="256">Back / menu</button>
-              <button type="button" data-key="265">Previous</button>
-              <button type="button" data-key="264">Next</button>
-              <button type="button" data-key="257">Choose</button>
-            </div>
-          </details>
-          <details id="touch-reading-panel" hidden>
-            <summary>Scene details</summary>
-            <p id="touch-reading"></p>
-          </details>
-        </section>
-        <button id="exit-fullscreen" type="button">Exit full screen</button>
         <div id="loading" role="status">
           <div>
             <span id="status">Downloading the world…</span>
@@ -162,7 +111,6 @@
         document.body.classList.add("expanded");
       }
       Module.toggleCrownlessFullscreen = toggleFullscreen;
-      document.querySelector("#exit-fullscreen").addEventListener("click", toggleFullscreen);
       window.addEventListener("keydown", event => {
         if (event.key === "Escape" && stage.classList.contains("expanded")) leaveExpandedView();
       });
