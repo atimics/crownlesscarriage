@@ -153,6 +153,7 @@ int main(int argc, char **argv)
             TestCharacterPrimitives();
             TestBoxBatchParity();
             TestBoxStateParity();
+            ReportBoxDrawPerformance();
             TestCharacterSurfaces();
             TestAnimalModels(argv[2]);
             TestPonyPortraits();

@@ -26,8 +26,14 @@ static void DrawBox(Vector3 center, Vector3 size, Color color)
     // Add the center here so each box shares its parent's transform.
     Vector3 low = Vector3Subtract(center, Vector3Scale(size, 0.5f));
     Vector3 high = Vector3Add(center, Vector3Scale(size, 0.5f));
+    // Batched vertices already include their transforms. Flush a full batch
+    // with identity matrices so its lighting uses those world coordinates.
+    rlPushMatrix();
+    rlLoadIdentity();
     rlSetTexture(rlGetTextureIdDefault());
     rlBegin(RL_QUADS);
+    (void)rlCheckRenderBatchLimit(24);
+    rlPopMatrix();
     rlColor4ub(color.r, color.g, color.b, color.a);
     rlNormal3f(0.0f, 0.0f, 1.0f);
     rlVertex3f(low.x, high.y, high.z);

@@ -39,7 +39,10 @@ static Image RenderBoxBatchFixture(RenderTexture2D target, Texture2D marker,
         if (reference) DrawCubeV(center, size, color);
         else DrawBox(center, size, color);
         rlPopMatrix();
-        if (i % 17 == 0) {
+        // Reference primitives flush after the parent transform is restored.
+        // This gives correct lighting independent of automatic batch limits.
+        if (reference && crowded) rlDrawRenderBatchActive();
+        if (view == 9 || i % 17 == 0) {
             // Exercise index alignment when triangles and lines share the batch.
             DrawTriangle3D((Vector3){-0.3f, -0.7f, 0.3f},
                            (Vector3){0.3f, -0.7f, 0.3f},
@@ -62,8 +65,8 @@ static void TestBoxBatchParity(void)
     Texture2D marker = LoadTextureFromImage(marker_image);
     UnloadImage(marker_image);
     RequireRenderer(IsTextureValid(marker), "box marker texture must load");
-    for (int32_t view = 0; view < 9; ++view) {
-        bool crowded = view == 8;
+    for (int32_t view = 0; view < 10; ++view) {
+        bool crowded = view >= 8;
         Image expected = RenderBoxBatchFixture(target, marker, true, view, crowded);
         Image actual = RenderBoxBatchFixture(target, marker, false, view, crowded);
         Color *before = LoadImageColors(expected);
@@ -168,4 +171,51 @@ static void TestBoxStateParity(void)
     UnloadImage(actual);
     UnloadRenderTexture(target);
     (void)puts("PASS render state: repeated values, cuts, terrain, and new passes");
+}
+
+static double MeasureBoxDraws(RenderTexture2D target, bool reference)
+{
+    Camera3D camera = {.position = {25, 30, 25}, .target = {0},
+                      .up = {0, 1, 0}, .fovy = 38.0f,
+                      .projection = CAMERA_ORTHOGRAPHIC};
+    double start = GetTime();
+    for (int32_t frame = 0; frame < 32; ++frame) {
+        BeginTextureMode(target);
+        ClearBackground(BLACK);
+        BeginMode3D(camera);
+        for (int32_t box = 0; box < 1600; ++box) {
+            Vector3 center = {(float)(box % 40) * 0.6f - 11.7f, 0.0f,
+                              (float)(box / 40) * 0.6f - 11.7f};
+            Vector3 size = {0.46f, 0.64f, 0.34f};
+            if (reference) DrawCubeV(center, size, WHITE);
+            else DrawBox(center, size, WHITE);
+        }
+        EndMode3D();
+        EndTextureMode();
+    }
+    // Readback includes completion of the queued GPU work in both timings.
+    Image result = LoadImageFromTexture(target.texture);
+    double elapsed = GetTime() - start;
+    UnloadImage(result);
+    return elapsed;
+}
+
+static void ReportBoxDrawPerformance(void)
+{
+    RenderTexture2D target = LoadRenderTexture(256, 256);
+    RequireRenderer(IsRenderTextureValid(target), "benchmark target must load");
+    (void)MeasureBoxDraws(target, true);
+    (void)MeasureBoxDraws(target, false);
+    double reference = 0.0;
+    double batched = 0.0;
+    for (int32_t round = 0; round < 4; ++round) {
+        // Alternate order to share warmup and scheduling effects.
+        if (round % 2 == 0) reference += MeasureBoxDraws(target, true);
+        batched += MeasureBoxDraws(target, false);
+        if (round % 2 != 0) reference += MeasureBoxDraws(target, true);
+    }
+    (void)printf("Box draw benchmark (1600 boxes, 128 frames): "
+                 "reference %.3f ms/frame, batched %.3f ms/frame\n",
+                 reference * 1000.0 / 128.0, batched * 1000.0 / 128.0);
+    UnloadRenderTexture(target);
 }
