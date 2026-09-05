@@ -215,3 +215,28 @@
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { Module._CcCoopCheckpointNow?.(); saveSession(true); } });
   }
 })();
+
+Module.ccCompany = {
+  random(bytes) {
+    return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), n => n.toString(16).padStart(2, '0')).join('');
+  },
+  async request(path, body) {
+    let token = localStorage.getItem('cc-coop-token');
+    if (!/^[a-f0-9]{64}$/.test(token || '')) {
+      token = this.random(32);
+      localStorage.setItem('cc-coop-token', token);
+    }
+    const response = await fetch(path, {method: body ? 'POST' : 'GET',
+      headers: {Authorization: 'Bearer ' + token, 'Content-Type': 'application/json'},
+      body: body || undefined, signal: AbortSignal.timeout(12000)});
+    const data = await response.text();
+    if (data.length > 12 * 1024 * 1024) throw new Error('The host response is too large.');
+    const parsed = JSON.parse(data);
+    if (!response.ok) {
+      const failure = new Error(parsed.error || 'Reconnect to the host.');
+      failure.status = response.status;
+      throw failure;
+    }
+    return {status: response.status, data};
+  }
+};

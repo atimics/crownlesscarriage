@@ -41,6 +41,7 @@ bool CcCoopApply(CcSim *sim, const char *action, CcId target,
         bool warned = candidate->journey.ambush_warned;
         for (int32_t tick = 0; tick < 3600 && candidate->journey.active &&
              candidate->journey.phase == CC_JOURNEY_PHASE_TRAVELLING; ++tick) {
+            if (CcSimJourneyRoadSiteStop(candidate) != NULL) break;
             CcSimAdvanceRuntimeTicks(candidate, 1);
             if (!warned && candidate->journey.ambush_warned) break;
         }
@@ -93,12 +94,16 @@ bool CcCoopAdvance(CcSim *sim, int32_t ticks, char *error, size_t capacity)
     CcSim *candidate = malloc(sizeof(*candidate));
     if (candidate == NULL) return false;
     *candidate = *sim;
-    /* Stop the host at the same roadside choices as the local client. */
+    /* Watches flow into a short break or overnight camp automatically. */
     for (int32_t tick = 0; tick < ticks; ++tick) {
-        if (CcSimJourneyRoadSiteStop(candidate) != NULL) break;
+        if (candidate->journey.active && candidate->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+            CcCommand rest = {.kind = CcSimJourneyStop(candidate) == CC_JOURNEY_STOP_MIDDAY ?
+                CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP};
+            if (!CcSimApply(candidate, &rest, error, capacity)) { free(candidate); return false; }
+        }
         CcSimAdvanceRuntimeTicks(candidate, 1);
         if (!candidate->journey.active ||
-            candidate->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) break;
+            candidate->journey.phase == CC_JOURNEY_PHASE_BLOCKED) break;
     }
     bool ok = CcSimValidate(candidate, error, capacity);
     if (ok) *sim = *candidate;
@@ -156,13 +161,20 @@ bool CcCoopSnapshot(const CcSim *sim, char *text, size_t capacity)
         sim->player.id, sim->player.location_id, sim->player.coins, sim->player.reputation,
         sim->player.cargo_capacity, CcPlayerCargoUsed(&sim->player), sim->player.accepted_situation_id);
     Goods(&json, sim->player.cargo);
-    Put(&json, "},\"journey\":{\"active\":%s,\"phase\":%d,\"route\":\"%" PRIu64 "\",\"origin\":\"%" PRIu64 "\",\"destination\":\"%" PRIu64 "\",\"pace\":%d,\"progress\":%d,\"watch\":%d,\"watches\":%d,\"eta\":%d,\"stop\":%d,\"lodge\":%s,\"bargain\":%d},",
+    Put(&json, "},\"journey\":{\"active\":%s,\"phase\":%d,\"route\":\"%" PRIu64 "\",\"origin\":\"%" PRIu64 "\",\"destination\":\"%" PRIu64 "\",\"pace\":%d,\"progress\":%d,\"watch\":%d,\"watches\":%d,\"eta\":%d,\"stop\":%d,\"lodge\":%s,\"bargain\":%d,\"road_site\":",
         sim->journey.active ? "true" : "false", (int)sim->journey.phase,
         sim->journey.route_id, sim->journey.origin_id, sim->journey.destination_id,
         (int)sim->journey.pace, sim->carriage.progress_milli,
         CcSimJourneyWatchNumber(sim), CcSimJourneyWatchCount(sim), CcSimJourneyEtaMinutes(sim),
         (int)CcSimJourneyStop(sim), CcSimJourneyRoadHouseAvailable(sim) ? "true" : "false",
         sim->journey.bargain_cost);
+    const CcRoadSite *road_site = CcSimJourneyRoadSiteStop(sim);
+    if (road_site != NULL) {
+        Put(&json, "{\"id\":\"%" PRIu64 "\",\"name\":", road_site->id);
+        Quote(&json, road_site->name);
+        Put(&json, "}");
+    } else Put(&json, "null");
+    Put(&json, "},");
     Put(&json, "\"goods\":[");
     for (int32_t i = 0; i < CC_GOOD_COUNT; ++i) {
         if (i) Put(&json, ",");

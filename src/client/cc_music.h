@@ -2,9 +2,8 @@
 #define CROWNLESS_MUSIC_H
 
 #include "sim/cc_sim.h"
+#include "client/cc_music_catalog.h"
 
-#define CC_MUSIC_CUE_COUNT 64
-#define CC_MUSIC_TAKE_COUNT 149
 #define CC_MUSIC_VOICE_COUNT 3
 #define CC_MUSIC_REGION_COUNT 6
 
@@ -19,11 +18,19 @@ typedef enum CcMusicTheme {
     CC_MUSIC_LOSS, CC_MUSIC_COURT, CC_MUSIC_ENDING, CC_MUSIC_THEME_COUNT
 } CcMusicTheme;
 
+typedef enum CcMusicMood {
+    CC_MUSIC_MOOD_ANY,
+    CC_MUSIC_MOOD_EVERYDAY,
+    CC_MUSIC_MOOD_SHORTAGE,
+    CC_MUSIC_MOOD_RECOVERY
+} CcMusicMood;
+
 typedef struct CcMusicContext {
     float theme[CC_MUSIC_THEME_COUNT];
     float region[CC_MUSIC_REGION_COUNT]; /* CcSettlementFunction order. */
     float cue[CC_MUSIC_CUE_COUNT]; /* Named place or room attraction. */
     bool combat;
+    CcMusicMood town_mood;
 } CcMusicContext;
 
 typedef struct CcMusicScene {
@@ -48,6 +55,7 @@ typedef struct CcMusicCue {
     CcMusicTheme secondary;
     int region; /* -1 is shared between regions. */
     bool combat;
+    CcMusicMood mood; /* A town arrangement follows its named town and mood. */
 } CcMusicCue;
 
 typedef struct CcMusicTake {

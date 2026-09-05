@@ -4605,6 +4605,49 @@ static int32_t MonsterPressureAtSettlement(const CcSim *sim, CcId settlement_id)
     return pressure;
 }
 
+bool CcSettlementCanRepairFire(const CcSettlement *place)
+{
+    return place != NULL && place->population > 0 &&
+           place->fire_damage > 0 && place->hunger < 40 &&
+           place->security >= 30 &&
+           place->stock[CC_GOOD_WOOD] >= 2 &&
+           place->stock[CC_GOOD_STONE] >= 1 &&
+           place->stock[CC_GOOD_TOOLS] >= 1;
+}
+
+uint32_t CcSimTownConditions(const CcSim *sim, CcId settlement_id)
+{
+    const CcSettlement *place = CcSimSettlement(sim, settlement_id);
+    if (place == NULL) return 0U;
+    uint32_t conditions = place->fire_damage > 0 ? CC_TOWN_BURNT : 0U;
+    if (CcSettlementIsAbandoned(place)) return conditions | CC_TOWN_ABANDONED;
+    if (CcSettlementCanRepairFire(place) ||
+        place->service_project != CC_SERVICE_NONE) conditions |= CC_TOWN_REBUILDING;
+    if (place->security <= 25) conditions |= CC_TOWN_LAWLESS;
+    if (place->security >= 60 &&
+        CcSimWarBurdenAtSettlement(sim, place->id) < 20 &&
+        MonsterPressureAtSettlement(sim, place->id) < 30) conditions |= CC_TOWN_PEACEFUL;
+    if (place->prosperity >= 70 && place->hunger < 20) conditions |= CC_TOWN_THRIVING;
+    if (place->hunger >= 40) conditions |= CC_TOWN_HUNGRY;
+    return conditions;
+}
+
+static void RepairSettlementFire(CcSim *sim, CcSettlement *place)
+{
+    if (sim->schema_version < 45U || !CcSettlementCanRepairFire(place) ||
+        sim->current_day - place->last_fire_day < 7) return;
+    place->stock[CC_GOOD_WOOD] -= 2;
+    place->stock[CC_GOOD_STONE] -= 1;
+    place->stock[CC_GOOD_TOOLS] -= 1;
+    place->fire_damage = MaximumI32(0, place->fire_damage - 10);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+        "%s's builders use 2 Wood, 1 Stone, and 1 Tools to repair fire damage; %d%% remains.",
+        place->name, place->fire_damage);
+    (void)PushEvent(sim, CC_EVENT_MASONRY_REPAIR, place->id, place->id,
+                    LatestLocalCause(sim, place->id), 10, text);
+}
+
 static int32_t GrainSeasonFactor(const CcSim *sim)
 {
     int32_t week = (sim->current_day / 7) % 52;
@@ -5522,6 +5565,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
                         settlement->hunger, text);
     }
     sim->last_shortage_level[index] = level;
+    RepairSettlementFire(sim, settlement);
 }
 
 static uint32_t RecolonizedServiceMask(const CcSettlement *settlement)
@@ -8178,6 +8222,10 @@ static void AdvanceDragonRetaliation(CcSim *sim)
     target->service_project = CC_SERVICE_NONE;
     target->service_project_days = 0;
     RemoveBurnedService(target);
+    if (sim->schema_version >= 45U) {
+        target->fire_damage = ClampI32(target->fire_damage + 60, 0, 100);
+        target->last_fire_day = sim->current_day;
+    }
     for (int32_t i = 0; i < sim->route_count; ++i) {
         CcRoute *route = &sim->routes[i];
         if (route->from_id != target->id && route->to_id != target->id) continue;
@@ -16090,7 +16138,7 @@ const CcRoadSite *CcSimJourneyRoadSiteStop(const CcSim *sim)
         int32_t progress = sim->journey.origin_id == route->from_id ?
             site->progress_milli : 1000 - site->progress_milli;
         int32_t distance = sim->carriage.progress_milli - progress;
-        if (distance >= 0 && distance <= 10) return site;
+        if (distance >= -20 && distance <= 30) return site;
     }
     return NULL;
 }
@@ -17670,12 +17718,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 40U ||
                          sim->schema_version == 41U ||
                          sim->schema_version == 42U ||
-                         sim->schema_version == 43U;
+                         sim->schema_version == 43U ||
+                         sim->schema_version == 44U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 44U && sim->generator_version == 25U) ||
         (sim->schema_version == 43U && sim->generator_version == 25U) ||
         (sim->schema_version == 42U && sim->generator_version == 25U) ||
         (sim->schema_version == 41U && sim->generator_version == 25U) ||
@@ -18017,6 +18067,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             settlement->prosperity < 0 || settlement->prosperity > 100 ||
             settlement->hunger < 0 || settlement->hunger > 100) {
             SetError(error, error_capacity, "Settlement state is invalid.");
+            return false;
+        }
+        if (sim->schema_version >= 45U &&
+            (settlement->fire_damage < 0 || settlement->fire_damage > 100 ||
+             settlement->last_fire_day < 0 ||
+             settlement->last_fire_day > sim->current_day ||
+             (settlement->fire_damage > 0 && settlement->last_fire_day == 0))) {
+            SetError(error, error_capacity, "Town fire history is invalid.");
             return false;
         }
         int32_t saved_good_count = CcGoodCountForSchema(sim->schema_version);
@@ -19772,6 +19830,9 @@ uint64_t CcSimHash(const CcSim *sim)
         hash = HashString(hash, item->name); HASH_VALUE(item->function);
         HASH_VALUE(item->map_x); HASH_VALUE(item->map_y); HASH_VALUE(item->population);
         HASH_VALUE(item->security); HASH_VALUE(item->prosperity); HASH_VALUE(item->hunger);
+        if (sim->schema_version >= 45U) {
+            HASH_VALUE(item->fire_damage); HASH_VALUE(item->last_fire_day);
+        }
         if (sim->schema_version >= 5U) {
             HASH_VALUE(item->size); HASH_VALUE(item->service_mask);
             HASH_VALUE(item->service_project);

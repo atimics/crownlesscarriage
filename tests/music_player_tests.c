@@ -11,6 +11,7 @@
 } } while (0)
 
 static bool local_files, fail_audio, bad_audio, active, catalog_request, net_cancelled;
+static bool town_catalog;
 static int ticks, remote_plays, calm_plays, combat_plays, cancelled, replaced;
 static float calm_gain;
 static double now;
@@ -68,6 +69,7 @@ bool CcMusicNetStart(const char *url, size_t limit) {
     CHECK(!active && limit > 1024);
     CHECK(strncmp(url, "https://crownless-music.pages.dev/", 34) == 0);
     active = true; ticks = 0; net_cancelled = false; catalog_request = strstr(url, "catalog.txt") != NULL;
+    if (town_catalog && !catalog_request) CHECK(strstr(url, "/audio/65-01-") != NULL);
     return true;
 }
 int CcMusicNetPoll(unsigned char **data, size_t *size) {
@@ -78,10 +80,13 @@ int CcMusicNetPoll(unsigned char **data, size_t *size) {
     if (!catalog_request && fail_audio) return -1;
     static const char manifest[] = "CROWNLESS_MUSIC 1\n07-01-"
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.mp3\n";
+    static const char town_manifest[] = "CROWNLESS_MUSIC 1\n65-01-"
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.mp3\n";
+    const char *selected_manifest = town_catalog ? town_manifest : manifest;
     *size = catalog_request ? sizeof(manifest) - 1 : 2048U;
     *data = malloc(*size);
     CHECK(*data);
-    if (catalog_request) memcpy(*data, manifest, *size); else memset(*data, 42, *size);
+    if (catalog_request) memcpy(*data, selected_manifest, *size); else memset(*data, 42, *size);
     return 1;
 }
 void CcMusicNetShutdown(void) { if (active) cancelled++; active = false; }
@@ -146,6 +151,14 @@ int main(void) {
     Frames(fields, 1);
     CcMusicPlayerShutdown();
     CHECK(cancelled >= 1);
+    /* A later catalog refresh makes a registered town export playable. */
+    town_catalog = true; remote_plays = 0;
+    CcMusicContext town = {.theme = {[CC_MUSIC_TOWN] = 1.0f},
+        .cue = {[64] = 0.35f}, .region = {[0] = 1.0f},
+        .town_mood = CC_MUSIC_MOOD_EVERYDAY};
+    Frames(town, 600);
+    CHECK(remote_plays == 1);
+    CcMusicPlayerShutdown();
     puts("Music player: remote loading, held fades, bundled combat, failed download and shutdown passed.");
     return 0;
 }

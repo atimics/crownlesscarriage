@@ -298,8 +298,14 @@ typedef enum CreatureGaitSlot {
 
 typedef struct CreatureGaitCache {
     CcCreatureRigController controller;
+    CcCreatureRigWorldCommand command;
+    CcCreatureRigPose pose;
     CcCreatureRigProfile profile;
+    CcLocalSceneKind scene;
+    float scale;
     float last_clock;
+    float pending_seconds;
+    CcCreatureRigGait requested_gait;
     bool ready;
 } CreatureGaitCache;
 
@@ -555,6 +561,7 @@ typedef struct VisualStyleCache {
     int32_t foliage_fog_color_location;
     int32_t foliage_fog_near_location;
     int32_t foliage_fog_far_location;
+    int32_t foliage_horizon_fog_location;
     int32_t foliage_depth_splits_location;
     int32_t foliage_depth_strength_location;
     bool foliage_ready;
@@ -1814,59 +1821,114 @@ static CcCreatureRigProfile CreatureRigProfileForVariant(
     }
 }
 
-static bool ResolveControlledCreatureGait(
-    CreatureGaitSlot slot, CcCreatureRigProfile profile,
+void CcLocalCreatureGaitsFixedStepInternal(float delta_time)
+{
+    if (!isfinite(delta_time) || delta_time <= 0.0f) return;
+    for (int32_t i = 0; i < CREATURE_GAIT_SLOT_COUNT; ++i) {
+        CreatureGaitCache *cache = &creature_gaits[i];
+        if (!cache->ready) continue;
+        CcCreatureRigWorldCommand command = cache->command;
+        CcLimbVec3 previous = cache->controller.ground_position;
+        float fraction = cache->pending_seconds > delta_time ?
+            delta_time / cache->pending_seconds : 1.0f;
+        command.ground_position = (CcLimbVec3){
+            previous.x + (command.ground_position.x - previous.x) * fraction,
+            previous.y + (command.ground_position.y - previous.y) * fraction,
+            previous.z + (command.ground_position.z - previous.z) * fraction};
+        command.yaw = WrapAngle(cache->controller.body_yaw +
+            WrapAngle(command.yaw - cache->controller.body_yaw) * fraction);
+        cache->pending_seconds = fmaxf(0.0f, cache->pending_seconds - delta_time);
+        command.velocity = (CcLimbVec3){
+            (command.ground_position.x - previous.x) / delta_time, 0.0f,
+            (command.ground_position.z - previous.z) / delta_time};
+        float speed = sqrtf(command.velocity.x * command.velocity.x +
+                             command.velocity.z * command.velocity.z);
+        command.movement = speed > 0.025f ? 1.0f : 0.0f;
+        LocalProbeContext context = {.scene = cache->scene};
+        CcLimbVec3 ground;
+        CcLimbVec3 normal;
+        command.grounded = ProbeLocalSurface(&context,
+            (CcLimbVec3){command.ground_position.x,
+                command.ground_position.y + 0.15f * cache->scale,
+                command.ground_position.z}, 0.30f * cache->scale, &ground, &normal);
+        (void)CcCreatureRigControllerSetGait(&cache->controller, cache->requested_gait);
+        (void)CcCreatureRigControllerStepWorldPhysical(&cache->controller, &command,
+            delta_time, ProbeLocalSurface, ProbeLocalCollision, &context, &cache->pose);
+    }
+}
+
+static CcLimbVec3 CreaturePosePointForDraw(CcLimbVec3 local,
+    const CreatureGaitCache *cache, Vector3 origin, float yaw)
+{
+    Vector3 world = LocalPoint(FromLimbVector(cache->controller.ground_position),
+        local.x, local.y, local.z, cache->controller.body_yaw);
+    Vector3 d = Vector3Subtract(world, origin);
+    return (CcLimbVec3){(d.x * cosf(yaw) - d.z * sinf(yaw)) / cache->scale,
+        d.y / cache->scale, (d.x * sinf(yaw) + d.z * cosf(yaw)) / cache->scale};
+}
+
+static CcLimbVec3 CreaturePoseDirectionForDraw(CcLimbVec3 v, float yaw)
+{
+    return (CcLimbVec3){v.x * cosf(yaw) + v.z * sinf(yaw), v.y,
+                        -v.x * sinf(yaw) + v.z * cosf(yaw)};
+}
+
+bool CcLocalCreatureGaitPoseInternal(
+    int32_t slot, CcCreatureRigProfile profile,
     CcCreatureRigGait gait, float clock, float initial_phase,
-    float forward_speed, bool moving, Vector3 ground_position,
-    float yaw, CcLocalSceneKind scene,
-    CcCreatureRigPose *pose)
+    Vector3 ground_position,
+    float yaw, float scale, CcLocalSceneKind scene, CcCreatureRigPose *pose)
 {
     if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || pose == NULL ||
-        !isfinite(clock)) {
-        return false;
-    }
+        !isfinite(clock) || !isfinite(scale) || scale <= 0.0f) return false;
     CreatureGaitCache *cache = &creature_gaits[slot];
-    CcCreatureRigWorldCommand command = {
-        .ground_position = ToLimbVector(ground_position),
-        .velocity = {sinf(yaw) * forward_speed, 0.0f,
-                     cosf(yaw) * forward_speed},
-        .yaw = yaw,
-        .movement = moving ? 1.0f : 0.0f,
-        .grounded = true,
-    };
-    LocalProbeContext context = {.scene = scene};
-    float elapsed = cache->ready ? clock - cache->last_clock : 0.0f;
     bool reset = !cache->ready || cache->profile != profile ||
-                 elapsed < 0.0f || elapsed > 0.35f;
+        cache->scene != scene || cache->scale != scale || clock < cache->last_clock ||
+        clock - cache->last_clock > 0.35f;
     if (reset) {
         *cache = (CreatureGaitCache){0};
         if (!CcCreatureRigControllerInit(&cache->controller, profile,
-                                         initial_phase, 1.0f)) {
-            return false;
-        }
+                                         initial_phase, scale)) return false;
         cache->profile = profile;
-        cache->last_clock = clock;
+        cache->scene = scene;
+        cache->scale = scale;
         cache->ready = true;
-        (void)CcCreatureRigControllerSetGait(&cache->controller, gait);
-        if (moving) {
-            CcCreatureRigPose warm_pose;
-            for (int32_t frame = 0; frame < 36; ++frame) {
-                if (!CcCreatureRigControllerStepWorld(
-                        &cache->controller, &command, 1.0f / 60.0f,
-                        ProbeLocalSurface, &context, &warm_pose)) {
-                    *cache = (CreatureGaitCache){0};
-                    return false;
-                }
-            }
-        }
-        elapsed = 0.0f;
+        cache->controller.world_bound = false;
     }
-
-    (void)CcCreatureRigControllerSetGait(&cache->controller, gait);
+    bool changed = Vector3DistanceSqr(ground_position,
+        FromLimbVector(cache->command.ground_position)) > 0.00000001f ||
+        fabsf(WrapAngle(yaw - cache->command.yaw)) > 0.0001f;
+    if (!reset && changed) {
+        cache->pending_seconds = fminf(0.10f,
+            cache->pending_seconds + clock - cache->last_clock);
+    }
+    cache->command = (CcCreatureRigWorldCommand){
+        .ground_position = ToLimbVector(ground_position), .yaw = yaw, .grounded = true};
     cache->last_clock = clock;
-    return CcCreatureRigControllerStepWorld(
-        &cache->controller, &command, elapsed,
-        ProbeLocalSurface, &context, pose);
+    cache->requested_gait = gait;
+    if (reset) {
+        LocalProbeContext context = {.scene = scene};
+        if (!CcCreatureRigControllerStepWorldPhysical(&cache->controller,
+            &cache->command, 0.0f, ProbeLocalSurface, ProbeLocalCollision,
+            &context, &cache->pose)) return false;
+    }
+    *pose = cache->pose;
+    pose->body = CreaturePosePointForDraw(pose->body, cache, ground_position, yaw);
+    for (int32_t limb = 0; limb < pose->limb_count; ++limb) {
+        for (int32_t joint = 0; joint <= pose->limbs[limb].segment_count; ++joint) {
+            pose->limbs[limb].joints[joint] = CreaturePosePointForDraw(
+                pose->limbs[limb].joints[joint], cache, ground_position, yaw);
+        }
+    }
+    float turn = cache->controller.body_yaw - yaw;
+    pose->up = CreaturePoseDirectionForDraw(pose->up, turn);
+    pose->forward = CreaturePoseDirectionForDraw(pose->forward, turn);
+    pose->right = CreaturePoseDirectionForDraw(pose->right, turn);
+    pose->support_normal = CreaturePoseDirectionForDraw(pose->support_normal, turn);
+    pose->body_width /= scale;
+    pose->body_depth /= scale;
+    pose->body_length /= scale;
+    return pose->valid;
 }
 
 static float CreatureRigPhase(CcCreaturePose pose)
@@ -2887,6 +2949,14 @@ static void SetWorldForegroundReveal(float amount, float cut_height)
     }
 }
 
+static float SetObjectForegroundReveal(float amount, float cut_height, float top_height)
+{
+    float active_cut = top_height + (cut_height - top_height) * amount;
+    /* Map the object's own height to the shared shader's reveal interval. */
+    SetWorldForegroundReveal(amount, active_cut - (1.0f - amount) * 8.0f);
+    return active_cut;
+}
+
 static void SetWorldTerrainSurface(bool enabled)
 {
     if (!visual_style.world_ready || visual_style.terrain_surface == enabled) {
@@ -3251,6 +3321,8 @@ static void LoadVisualStyle(void)
                 GetShaderLocation(visual_style.foliage, "fogNear");
             visual_style.foliage_fog_far_location =
                 GetShaderLocation(visual_style.foliage, "fogFar");
+            visual_style.foliage_horizon_fog_location =
+                GetShaderLocation(visual_style.foliage, "horizonFog");
             visual_style.foliage_depth_splits_location =
                 GetShaderLocation(visual_style.foliage, "depthSplits");
             visual_style.foliage_depth_strength_location =

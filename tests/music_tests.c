@@ -26,6 +26,105 @@ static void Advance(CcMusicDirector *director, const CcMusicContext *context, in
 
 int main(void)
 {
+    /* Every town keeps its familiar tune through everyday, shortage and recovery. */
+    static const int original_towns[] = {8, 12, 16, 20, 24, 28};
+    static const int original_variants[] = {5, 5, 3, 1, 1, 1};
+    static const CcMusicMood moods[] = {
+        CC_MUSIC_MOOD_EVERYDAY, CC_MUSIC_MOOD_SHORTAGE, CC_MUSIC_MOOD_RECOVERY
+    };
+    for (int town = 0; town < 6; ++town) {
+        CcSimInit(&sim, 17);
+        CcSettlement *place = &sim.settlements[town];
+        sim.player.location_id = place->id;
+        sim.current_day = 10;
+        sim.event_count = 0;
+        sim.event_write_index = 0;
+        CcMusicDirector town_music;
+        CcMusicInit(&town_music, 17);
+        int original = TakeFor(original_towns[town], original_variants[town]);
+        CHECK(original >= 0 && CcMusicBundled(original));
+        /* The currently exported town cue carries every mood before new exports arrive. */
+        town_music.available[original] = true;
+        for (int mood = 0; mood < 3; ++mood) {
+            place->hunger = mood == 1 ? 40 : 39;
+            sim.event_count = sim.event_write_index = mood == 2 ? 1 : 0;
+            sim.events[0] = (CcEvent){.day = 9, .kind = CC_EVENT_RELIEF,
+                .location_id = place->id, .magnitude = 1};
+            CcMusicContext context = CcMusicContextFor(&sim, (CcMusicScene){0});
+            CHECK(context.town_mood == moods[mood]);
+            CHECK(CcMusicChoose(&town_music, &context) == original);
+        }
+        for (int mood = 0; mood < 3; ++mood) {
+            int number = 65 + town * 3 + mood;
+            town_music.available[TakeFor(number, 1)] = true;
+            town_music.available[TakeFor(number, 2)] = true;
+        }
+        for (int mood = 0; mood < 3; ++mood) {
+            place->hunger = mood == 1 ? 40 : 39;
+            sim.event_count = sim.event_write_index = mood == 2 ? 1 : 0;
+            CcMusicContext context = CcMusicContextFor(&sim, (CcMusicScene){0});
+            int cue = 64 + town * 3 + mood;
+            CHECK(CcMusicScore(&context, cue) >=
+                  2.0f * CcMusicScore(&context, original_towns[town] - 1));
+            for (int candidate = 64; candidate < CC_MUSIC_CUE_COUNT; ++candidate)
+                if (candidate != cue) CHECK(CcMusicScore(&context, candidate) == 0.0f);
+            int chosen_a = 0, chosen_b = 0, old = 0;
+            for (int draw = 0; draw < 1000; ++draw) {
+                int selected = CcMusicChoose(&town_music, &context);
+                if (selected == original) old++;
+                else if (selected == TakeFor(cue + 1, 1)) chosen_a++;
+                else if (selected == TakeFor(cue + 1, 2)) chosen_b++;
+                else CHECK(false);
+            }
+            CHECK(chosen_a > 300 && chosen_b > 300 && old > 100 && old < 300);
+            town_music.recent_cue[0] = cue;
+            old = 0;
+            for (int draw = 0; draw < 1000; ++draw)
+                old += CcMusicChoose(&town_music, &context) == original;
+            CHECK(old > 350 && old < 650);
+            town_music.recent_cue[0] = -1;
+            int attack = TakeFor(59, 1);
+            town_music.available[attack] = true;
+            CcMusicContext combat = context;
+            combat.combat = true;
+            combat.theme[CC_MUSIC_BANDIT] = 1.0f;
+            combat.theme[CC_MUSIC_COMBAT] = 1.0f;
+            CHECK(CcMusicChoose(&town_music, &combat) == attack);
+        }
+        /* Recovery uses a recent positive delivery at this town, then expires. */
+        place->hunger = 39;
+        sim.events[0].day = 8;
+        CHECK(CcMusicContextFor(&sim, (CcMusicScene){0}).town_mood == CC_MUSIC_MOOD_RECOVERY);
+        sim.events[0].day = 7;
+        CHECK(CcMusicContextFor(&sim, (CcMusicScene){0}).town_mood == CC_MUSIC_MOOD_EVERYDAY);
+        sim.events[0].day = 11;
+        CHECK(CcMusicContextFor(&sim, (CcMusicScene){0}).town_mood == CC_MUSIC_MOOD_EVERYDAY);
+        sim.events[0].day = 10;
+        sim.events[0].location_id = sim.settlements[(town + 1) % 6].id;
+        CHECK(CcMusicContextFor(&sim, (CcMusicScene){0}).town_mood == CC_MUSIC_MOOD_EVERYDAY);
+        sim.events[0].location_id = place->id;
+        sim.events[0].magnitude = 0;
+        CHECK(CcMusicContextFor(&sim, (CcMusicScene){0}).town_mood == CC_MUSIC_MOOD_EVERYDAY);
+        sim.events[0].magnitude = 1;
+        place->hunger = 40;
+        uint64_t town_hash = CcSimHash(&sim);
+        CHECK(CcMusicContextFor(&sim, (CcMusicScene){0}).town_mood == CC_MUSIC_MOOD_SHORTAGE);
+        CHECK(CcSimHash(&sim) == town_hash);
+        static const CcMusicScene outside_town[] = {
+            {.road = true}, {.goblin_cave = true}, {.dragon_cave = true}, {.loss = true}
+        };
+        for (int site = 0; site < 4; ++site) {
+            CcMusicContext context = CcMusicContextFor(&sim, outside_town[site]);
+            CHECK(context.town_mood == CC_MUSIC_MOOD_ANY);
+            for (int cue = 64; cue < CC_MUSIC_CUE_COUNT; ++cue)
+                CHECK(CcMusicScore(&context, cue) == 0.0f);
+        }
+        sim.dungeon_expedition.active = true;
+        CcMusicContext dungeon = CcMusicContextFor(&sim, (CcMusicScene){0});
+        for (int cue = 64; cue < CC_MUSIC_CUE_COUNT; ++cue)
+            CHECK(CcMusicScore(&dungeon, cue) == 0.0f);
+    }
+
     /* Each underground scene draws its score from the site after leaving town. */
     static const CcMusicScene underground[] = {
         {.goblin_cave = true}, {.dragon_cave = true}, {0}
@@ -113,6 +212,21 @@ int main(void)
     int bundled_count = 0;
     for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i) bundled_count += CcMusicBundled(i) ? 1 : 0;
     CHECK(bundled_count == 27);
+    /* The whole expanded host catalog fits the parser and resolves each take. */
+    unsigned char full_catalog[16384];
+    size_t full_size = (size_t)snprintf((char *)full_catalog, sizeof(full_catalog),
+                                      "CROWNLESS_MUSIC 1\n");
+    for (int take = 0; take < CC_MUSIC_TAKE_COUNT; ++take) {
+        int written = snprintf((char *)full_catalog + full_size,
+            sizeof(full_catalog) - full_size,
+            "%02d-%02d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.mp3\n",
+            cc_music_takes[take].cue + 1, cc_music_takes[take].variant);
+        CHECK(written == 75);
+        full_size += (size_t)written;
+    }
+    CHECK(CcMusicLibraryParse(&library, full_catalog, full_size));
+    for (int take = 0; take < CC_MUSIC_TAKE_COUNT; ++take)
+        CHECK(library.file[take][0] != '\0');
     director.available[calm_a] = true;
     director.available[calm_b] = true;
     director.available[attack] = true;

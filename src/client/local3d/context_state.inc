@@ -1,3 +1,4 @@
+#include "client/cc_local_viewport.h"
 #if !defined(CC_LOCAL3D_UNITY_BUILD)
 #error "Include local renderer modules through client/cc_local3d.c"
 #endif
@@ -18,6 +19,7 @@
 #include "locomotion/cc_multileg.h"
 #include "locomotion/cc_quadruped.h"
 #include "locomotion/cc_robotics.h"
+#include "locomotion/cc_collision.h"
 
 #include "raymath.h"
 #include "rlgl.h"
@@ -649,6 +651,17 @@ static const StreetBoundaryExit STREET_BOUNDARY_EXITS[] = {
 };
 
 typedef struct FixedCameraRig {
+    Camera3D output_camera;
+    Vector3 output_hero_position;
+    bool output_valid;
+    float tree_angle;
+    float tree_goal;
+    float tree_hold;
+    Vector3 target_velocity;
+    Vector3 target_velocity_from;
+    Vector3 offset_velocity;
+    Vector3 offset_velocity_from;
+    Vector3 framing_velocity;
     Vector3 displayed_target;
     Vector3 transition_from;
     Vector3 destination;
@@ -694,11 +707,16 @@ typedef struct CombatCameraRig {
 } CombatCameraRig;
 
 typedef struct ConversationCameraRig {
+    Vector3 close_target;
+    Vector3 close_offset;
+    float close_fovy;
     Vector3 displayed_target;
     Vector3 displayed_offset;
     float displayed_fovy;
     float focus_weight;
+    float tree_clear_angle;
     float last_clock;
+    bool engaged;
     bool initialized;
 } ConversationCameraRig;
 
@@ -755,17 +773,46 @@ static const WorldTreePlacement WORLD_TREES[] = {
     {{93.0f, 36.0f}, TREE_FAMILY_OAK}
 };
 
+// Orchard rows and riverbank trees frame Thornford's working plots.
+static const WorldTreePlacement THORNFORD_TREES[] = {
+    {{3,58}, TREE_FAMILY_OAK}, {{8,64}, TREE_FAMILY_OAK},
+    {{18,57}, TREE_FAMILY_OAK}, {{24,63}, TREE_FAMILY_OAK},
+    {{31,66}, TREE_FAMILY_OAK}, {{46,65}, TREE_FAMILY_OAK},
+    {{51,57}, TREE_FAMILY_POLLARD}, {{62,63}, TREE_FAMILY_OAK},
+    {{70,55}, TREE_FAMILY_OAK}, {{76,57}, TREE_FAMILY_OAK},
+    {{71,61}, TREE_FAMILY_OAK}, {{77,63}, TREE_FAMILY_OAK},
+    {{81,51}, TREE_FAMILY_ALDER}, {{83,58}, TREE_FAMILY_ALDER},
+    {{82,66}, TREE_FAMILY_ALDER}, {{93,55}, TREE_FAMILY_ALDER},
+    {{17,7}, TREE_FAMILY_OAK}, {{25,7}, TREE_FAMILY_POLLARD},
+    {{32,5}, TREE_FAMILY_OAK}, {{49,6}, TREE_FAMILY_OAK},
+    {{56,7}, TREE_FAMILY_OAK}, {{62,4}, TREE_FAMILY_OAK},
+    {{5,13}, TREE_FAMILY_POLLARD}, {{13,13}, TREE_FAMILY_OAK},
+    {{18,47}, TREE_FAMILY_POLLARD}, {{24,50}, TREE_FAMILY_OAK},
+    {{52,42}, TREE_FAMILY_OAK}, {{75,42}, TREE_FAMILY_POLLARD},
+    {{83,41}, TREE_FAMILY_ALDER}, {{95,46}, TREE_FAMILY_ALDER}
+};
+_Static_assert(sizeof(THORNFORD_TREES) == sizeof(WORLD_TREES),
+               "Town tree plans share the same visibility mask");
+
 static FixedCameraRig street_camera_rig = {0};
 static FixedCameraRig road_camera_rig = {0};
 static CombatCameraRig combat_camera_rig = {0};
 static ConversationCameraRig conversation_camera_rig = {0};
 static PresentedCameraState presented_camera[3] = {0};
+static PresentedCameraState scenery_view = {0};
 static CcLocalPresentedPerson presented_people[64];
 static int32_t presented_people_count;
 static bool interaction_ui_enabled;
 static bool conversation_focus_active;
 static CcLocalAgent conversation_focus_agent;
 static uint32_t conversation_focus_seed;
+static bool pony_conversation_active;
+static float pony_conversation_weight;
+
+void CcLocalRendererSetPonyConversation(bool active)
+{
+    pony_conversation_active = active;
+}
 
 void CcLocalRendererSetConversationFocus(const Vector3 *position, uint32_t seed, float yaw)
 {
@@ -810,6 +857,7 @@ static void RememberPresentedCamera(CcLocalSceneKind scene, Camera3D camera,
     state->width = width;
     state->height = height;
     state->valid = true;
+    scenery_view = *state;
 }
 
 static bool PresentedCameraForInput(CcLocalSceneKind scene,

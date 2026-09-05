@@ -25,6 +25,7 @@
 #define CC_LOCAL_WORLD_WIDTH 96.0f
 #define CC_LOCAL_WORLD_DEPTH 72.0f
 #define CC_LOCAL_NAVIGATION_POINT_CAPACITY 48
+#define CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY 272
 #define CC_LOCAL_START_X 40.5f
 #define CC_LOCAL_START_Z 30.0f
 #define CC_LOCAL_MARKET_X 50.0f
@@ -449,6 +450,7 @@ void CcLocalTerrainSetSeed(uint32_t seed);
 void CcLocalBindPlace(const CcSim *sim);
 void CcLocalBindOpenWorld(const CcWorldStream *stream);
 float CcLocalTerrainHeightAt(float x, float z);
+int32_t CcLocalTownCarriagePath(bool arriving, Vector2 *points, int32_t capacity);
 Vector3 CcLocalTerrainNormalAt(float x, float z);
 CcSoundCue CcLocalFootstepSurfaceAt(CcLocalSceneKind scene, float x, float z);
 
@@ -565,6 +567,7 @@ float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
 void CcLocalRendererInit(void);
 void CcLocalDrawPonyPortrait(int32_t pony, bool known, Rectangle bounds);
+void CcLocalRendererSetPonyConversation(bool active);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
 void CcLocalRendererSetReducedMotion(bool enabled);
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step);

@@ -14,6 +14,26 @@
 #define CC_LOCAL_PLACE_COMPOUND_CAPACITY 12
 #define CC_LOCAL_PLACE_ESTABLISHING_SCENE_COUNT 3
 #define CC_LOCAL_PLACE_SCENE_COUNT 6
+#define CC_LOCAL_LANE_CAPACITY 9
+#define CC_LOCAL_LANE_POINT_CAPACITY 12
+#define CC_LOCAL_CARRIAGE_LANE_CAPACITY 3
+
+typedef struct CcLocalLanePoint {
+    float x;
+    float z;
+} CcLocalLanePoint;
+
+typedef struct CcLocalLane {
+    const char *name;
+    float width;
+    int32_t point_count;
+    CcLocalLanePoint point[CC_LOCAL_LANE_POINT_CAPACITY];
+} CcLocalLane;
+
+typedef struct CcLocalCarriageLane {
+    int32_t lane;
+    int32_t end_point;
+} CcLocalCarriageLane;
 
 typedef enum CcLocalPlaceFeature {
     CC_LOCAL_PLACE_FARMLAND = UINT32_C(1) << 0,
@@ -149,8 +169,16 @@ typedef struct CcLocalPlaceProfile {
     CcLocalPlaceCompoundStructure
         compound_structure[CC_LOCAL_PLACE_COMPOUND_CAPACITY];
     CcLocalTownScene scene[CC_LOCAL_PLACE_SCENE_COUNT];
+    int32_t lane_count;
+    CcLocalLane lane[CC_LOCAL_LANE_CAPACITY];
+    int32_t carriage_lane_count;
+    CcLocalCarriageLane carriage_lane[CC_LOCAL_CARRIAGE_LANE_CAPACITY];
+    float building_yaw_degrees[CC_LOCAL_PLACE_BUILDING_CAPACITY];
 } CcLocalPlaceProfile;
 
+CcLocalLanePoint CcLocalLaneSample(const CcLocalLane *lane, float progress);
+
+void CcLocalTownConditionText(uint32_t conditions, char *text, size_t capacity);
 const CcLocalPlaceProfile *CcLocalPlaceProfileForFunction(
     CcSettlementFunction function);
 const CcLocalPlaceProfile *CcLocalPlaceProfileForSettlement(

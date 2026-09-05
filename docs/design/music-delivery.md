@@ -1,9 +1,11 @@
 # Music delivery
 
 The public soundtrack host is https://crownless-music.pages.dev.
-It currently contains 27 exported takes. The theme catalog describes 149 finished
-Suno takes across 64 titles. The other 122 finished takes await export from Suno.
-The generation session also had one failed remix, making 150 attempts.
+It currently contains 27 exported takes. The game catalog describes 185 finished
+Suno takes across 82 cues: the original 149 takes plus 36 town arrangements.
+The other 158 finished takes await export from Suno. The existing 27 MP3s are
+bundled, hosted and playable today. Registered takes become available when their
+audio files are installed or added to the host catalog.
 
 The game reads `catalog.txt` when music starts. It checks again every five minutes,
 or after one minute when the host is unavailable. It chooses music by the current
@@ -60,9 +62,40 @@ The exporter publishes the supplied MP3s, a small text catalog, a JSON catalog,
 and CORS/cache headers. The public metadata contains titles, durations, file sizes,
 and hashes. Audio filenames are immutable; the catalog expires after one minute.
 
+## Town arrangements
+
+Each town has two everyday takes, two shortage takes and two recovery takes.
+The new cues follow the exact town name on the surface. Hunger of 40 or more
+selects shortage, matching the game's visible hungry condition. Below 40 hunger,
+a positive food-relief event at that town selects recovery for the delivery day
+and the next two days. Everyday applies at other times. Food-relief events also
+bring the existing shared relief music into the shuffle.
+
+| Town | Everyday stems | Shortage stems | Recovery stems |
+| --- | --- | --- | --- |
+| Thornford | 65-01, 65-02 | 66-01, 66-02 | 67-01, 67-02 |
+| Gloamgate | 68-01, 68-02 | 69-01, 69-02 | 70-01, 70-02 |
+| Alderwatch | 71-01, 71-02 | 72-01, 72-02 | 73-01, 73-02 |
+| Silverwick | 74-01, 74-02 | 75-01, 75-02 | 76-01, 76-02 |
+| Rosespire | 77-01, 77-02 | 78-01, 78-02 | 79-01, 79-02 |
+| Hollowbarrow | 80-01, 80-02 | 81-01, 81-02 | 82-01, 82-02 |
+
+A matching arrangement receives twice the normal relevance score. With the new
+pair and an old town cue available, this gives the new arrangement about 80% of
+a fresh draw. The usual recent-title penalty brings the old cue back into the
+mix. Extra takes affect performance choice within a cue. They share that cue's
+chance. The current library covers every mood while the new exports arrive.
+Roads, caves, dungeon rooms, combat and loss retain their own selection rules.
+
+The catalog generator writes both the C table and its count header. Its limits
+follow the player's two-digit stems and 16 KiB remote manifest. All 185 entries
+fit in a 13,892-byte text catalog. The offline bundle remains a separate 27-file
+set; later town exports can join the online library with the mapping above.
+
 ## Checks
 
-`music_tests` covers situation ranking and waiting for audio during fades.
+`music_tests` covers each town and mood, relief expiry, current-file fallback,
+weighted returns, combat, the full 185-entry manifest and waiting during fades.
 `music_player_tests` covers early loading, combat preemption, damaged files,
 playback clock changes, failed downloads and cleanup. `tests/web_music_tests.mjs` checks all 27 cached files while offline,
 reconnects, request size limits, storage delays and download priority.

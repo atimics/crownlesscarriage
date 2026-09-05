@@ -1,4 +1,5 @@
 #include "locomotion/cc_limb.h"
+#include "locomotion/cc_footing.h"
 
 #include <float.h>
 #include <math.h>
@@ -325,14 +326,10 @@ static bool ProbeContact(const CcLimbMorphology *morphology,
                          CcLimbVec3 body_position, CcLimbVec3 desired,
                          CcLimbVec3 *point, CcLimbVec3 *normal)
 {
-    if (probe == NULL) {
-        *point = desired;
-        *normal = (CcLimbVec3){0.0f, 1.0f, 0.0f};
-        return true;
-    }
-    CcLimbVec3 origin = desired;
-    origin.y = body_position.y + morphology->body_height;
-    return probe(context, origin, morphology->body_height * 3.0f, point, normal);
+    desired.y = body_position.y - morphology->body_height;
+    return CcFootingProbe(probe, context, desired,
+                          morphology->body_height * 2.0f,
+                          morphology->body_height, point, normal);
 }
 
 static void InitializeChain(CcLimbRuntime *limb, const CcLimbSpec *spec,
@@ -423,7 +420,7 @@ static void SolveChain(CcLimbRuntime *limb, const CcLimbSpec *spec,
         }
         return;
     }
-    for (int32_t iteration = 0; iteration < 7; ++iteration) {
+    for (int32_t iteration = 0; iteration < 32; ++iteration) {
         limb->joints[spec->segment_count] = target;
         for (int32_t segment = spec->segment_count - 1; segment >= 0; --segment) {
             CcLimbVec3 direction = NormalizeOr(
@@ -442,6 +439,7 @@ static void SolveChain(CcLimbRuntime *limb, const CcLimbSpec *spec,
                                             Scale(direction,
                                                   spec->segment_length[segment]));
         }
+        if (Distance(limb->joints[spec->segment_count], target) < 0.0005f) break;
     }
     limb->previous_joints[0] = limb->joints[0];
     limb->previous_joints[spec->segment_count] = limb->joints[spec->segment_count];
@@ -591,6 +589,8 @@ void CcLimbRigInit(CcLimbRig *rig, const CcLimbMorphology *morphology,
     rig->requested_pace = CC_LIMB_PACE_WALK;
     rig->support_state = CC_LIMB_SUPPORT_STABLE;
     rig->support_normal = (CcLimbVec3){0.0f, 1.0f, 0.0f};
+    rig->body_position = body_position;
+    rig->body_up = (CcLimbVec3){0.0f, 1.0f, 0.0f};
     rig->control_authority = 1.0f;
     rig->traction = 1.0f;
     rig->drive_scale = 1.0f;
@@ -602,14 +602,14 @@ void CcLimbRigInit(CcLimbRig *rig, const CcLimbMorphology *morphology,
         CcLimbVec3 desired = TransformPoint(body_position, spec->rest_contact_local,
                                              body_yaw);
         CcLimbVec3 normal = {0.0f, 1.0f, 0.0f};
-        (void)ProbeContact(morphology, probe, probe_context, body_position, desired,
+        bool supported = ProbeContact(morphology, probe, probe_context, body_position, desired,
                            &desired, &normal);
         limb->planted_contact = desired;
         limb->desired_contact = desired;
         limb->contact_start = desired;
         limb->contact_target = desired;
         limb->contact_normal = normal;
-        limb->state = CC_LIMB_STANCE;
+        limb->state = supported ? CC_LIMB_STANCE : CC_LIMB_SEARCHING;
         limb->swing_progress = 1.0f;
         limb->health = 1.0f;
         InitializeChain(limb, spec, root, desired, body_yaw);
@@ -627,19 +627,25 @@ static void UpdateSwing(CcLimbRuntime *limb, const CcLimbMorphology *morphology,
     float amount = limb->swing_progress;
     float eased = amount * amount * amount *
                   (amount * (amount * 6.0f - 15.0f) + 10.0f);
-    limb->planted_contact = Lerp(limb->contact_start, limb->contact_target, eased);
-    float lift = amount * (1.0f - amount);
-    limb->planted_contact.y += 64.0f * lift * lift * lift *
-                               morphology->step_height;
+    limb->planted_contact = CcFootingSwingPoint(
+        limb->contact_start, limb->contact_target, eased, limb->swing_lift);
     if (amount >= 1.0f) {
         limb->planted_contact = limb->contact_target;
         limb->state = CC_LIMB_STANCE;
     }
 }
 
-static void StartSwing(CcLimbRig *rig, int32_t limb_index)
+static bool StartSwing(CcLimbRig *rig, int32_t limb_index,
+                        CcLimbTerrainProbe probe,
+                        CcBiomechRagdollCollisionProbe collision, void *context)
 {
     CcLimbRuntime *limb = &rig->limbs[limb_index];
+    float height = rig->morphology.body_height;
+    if (!CcFootingPlanSwing(limb->planted_contact, limb->desired_contact,
+                            rig->morphology.step_height,
+                            fmaxf(rig->morphology.step_height, height * 0.75f),
+                            height * 0.02f, probe, collision, context,
+                            &limb->swing_lift)) return false;
     limb->contact_start = limb->planted_contact;
     limb->contact_target = limb->desired_contact;
     limb->swing_progress = 0.0f;
@@ -647,6 +653,63 @@ static void StartSwing(CcLimbRig *rig, int32_t limb_index)
     if (rig->morphology.preset == CC_MORPHOLOGY_BIPED) {
         rig->active_pose_limb = limb_index;
     }
+    return true;
+}
+
+CcLimbVec3 CcLimbRigBodyPoint(const CcLimbRig *rig, CcLimbVec3 local, float yaw)
+{
+    CcLimbVec3 up = rig->body_up;
+    CcLimbVec3 forward = TransformDirection((CcLimbVec3){0.0f, 0.0f, 1.0f}, yaw);
+    forward = NormalizeOr(Subtract(forward, Scale(up, Dot(forward, up))), forward);
+    CcLimbVec3 right = {up.y * forward.z - up.z * forward.y,
+                        up.z * forward.x - up.x * forward.z,
+                        up.x * forward.y - up.y * forward.x};
+    return Add(rig->body_position, Add(Scale(right, local.x),
+        Add(Scale(up, local.y), Scale(forward, local.z))));
+}
+
+static void FitBodyToContacts(CcLimbRig *rig, CcLimbVec3 body, float yaw,
+                               float delta_time)
+{
+    CcLimbVec3 center = {0.0f, 0.0f, 0.0f};
+    CcLimbVec3 up = {0.0f, 0.0f, 0.0f};
+    int32_t count = 0;
+    for (int32_t i = 0; i < rig->morphology.limb_count; ++i) {
+        const CcLimbRuntime *limb = &rig->limbs[i];
+        if (limb->state != CC_LIMB_STANCE || limb->health <= 0.0f) continue;
+        center = Add(center, limb->planted_contact);
+        up = Add(up, limb->contact_normal);
+        ++count;
+    }
+    up = NormalizeOr(up, (CcLimbVec3){0.0f, 1.0f, 0.0f});
+    float response = 1.0f - expf(-14.0f * delta_time);
+    rig->body_up = NormalizeOr(Lerp(rig->body_up, up, response), up);
+    rig->body_position = body;
+    float height = rig->morphology.body_height;
+    float offset = 0.0f;
+    if (count > 0) {
+        center = Scale(center, 1.0f / (float)count);
+        float plane_height = center.y -
+            ((body.x - center.x) * up.x + (body.z - center.z) * up.z) /
+            fmaxf(0.55f, up.y);
+        offset = Clamp(plane_height + height - body.y, -height * 0.45f, height * 0.45f);
+    }
+    rig->supported_height_offset += (offset - rig->supported_height_offset) * response;
+    rig->body_position.y += rig->supported_height_offset;
+    for (int32_t i = 0; i < rig->morphology.limb_count; ++i) {
+        CcLimbRuntime *limb = &rig->limbs[i];
+        if (limb->state != CC_LIMB_STANCE || limb->health <= 0.0f) continue;
+        CcLimbVec3 root = CcLimbRigBodyPoint(rig, rig->morphology.limbs[i].socket_local, yaw);
+        CcLimbVec3 d = Subtract(root, limb->planted_contact);
+        float reach = CcLimbChainLength(rig, i) * 0.998f;
+        float vertical_squared = reach * reach - d.x * d.x - d.z * d.z;
+        if (vertical_squared > 0.0f && d.y > 0.0f) {
+            float excess = d.y - sqrtf(vertical_squared);
+            if (excess > 0.0f) rig->body_position.y -= excess;
+        }
+    }
+    rig->body_position.y = fmaxf(rig->body_position.y, body.y - height * 0.45f);
+    rig->supported_height_offset = rig->body_position.y - body.y;
 }
 
 static void CalculateSupport(CcLimbRig *rig, CcLimbVec3 body_position,
@@ -705,15 +768,7 @@ static void CalculateSupport(CcLimbRig *rig, CcLimbVec3 body_position,
         } else {
             rig->body_acceleration = Scale(correction, 3.5f * urgency);
         }
-        float average_height = 0.0f;
-        for (int32_t contact = 0; contact < rig->planted_count; ++contact) {
-            average_height += contacts[contact].y;
-        }
-        average_height /= (float)rig->planted_count;
-        float desired_offset = Clamp(average_height + rig->morphology.body_height -
-                                     body_position.y, -0.22f, 0.22f);
-        rig->supported_height_offset +=
-            (desired_offset - rig->supported_height_offset) * 0.16f;
+
     }
     float contact_ratio = rig->morphology.minimum_supports > 0 ?
                           (float)rig->planted_count /
@@ -782,7 +837,19 @@ void CcLimbRigUpdate(CcLimbRig *rig, CcLimbVec3 body_position, float body_yaw,
                      float delta_time, CcLimbTerrainProbe probe,
                      void *probe_context)
 {
+    CcLimbRigUpdatePhysical(rig, body_position, body_yaw, body_velocity,
+                            body_grounded, delta_time, probe, NULL, probe_context);
+}
+
+void CcLimbRigUpdatePhysical(CcLimbRig *rig, CcLimbVec3 body_position,
+                             float body_yaw, CcLimbVec3 body_velocity,
+                             bool body_grounded, float delta_time,
+                             CcLimbTerrainProbe probe,
+                             CcBiomechRagdollCollisionProbe collision,
+                             void *probe_context)
+{
     if (rig == NULL || !rig->initialized) return;
+    if (!isfinite(delta_time) || delta_time < 0.0f) return;
     delta_time = Clamp(delta_time, 0.0f, 1.0f / 30.0f);
     (void)TryApplyRequestedPace(rig);
     int32_t scheduling_swings = rig->morphology.maximum_swings;
@@ -817,23 +884,44 @@ void CcLimbRigUpdate(CcLimbRig *rig, CcLimbVec3 body_position, float body_yaw,
         desired.z += body_velocity.z * rig->morphology.velocity_lead;
         CcLimbVec3 normal = {0.0f, 1.0f, 0.0f};
         CcLimbVec3 probed = desired;
+        if (limb->state == CC_LIMB_STANCE &&
+            !CcFootingContactValid(probe, probe_context, limb->planted_contact,
+                rig->morphology.body_height * 0.015f, &limb->contact_normal)) {
+            limb->state = CC_LIMB_SEARCHING;
+        }
         if (ProbeContact(&rig->morphology, probe, probe_context, body_position,
                          desired, &probed, &normal)) {
             float smoothing = 1.0f - expf(-10.0f * delta_time);
             limb->desired_contact = Lerp(limb->desired_contact, probed, smoothing);
-            limb->contact_normal = NormalizeOr(Lerp(limb->contact_normal, normal,
-                                                    smoothing),
-                                                (CcLimbVec3){0.0f, 1.0f, 0.0f});
+            CcLimbVec3 smoothed = limb->desired_contact;
+            if (ProbeContact(&rig->morphology, probe, probe_context, body_position,
+                             smoothed, &probed, &normal)) limb->desired_contact = probed;
+            if (limb->state != CC_LIMB_STANCE) limb->contact_normal = normal;
             if (limb->state == CC_LIMB_SEARCHING && limb->health > 0.0f) {
                 int32_t end = spec->segment_count;
                 limb->planted_contact = limb->joints[end];
-                StartSwing(rig, index);
+                (void)StartSwing(rig, index, probe, collision, probe_context);
             }
         } else if (limb->state == CC_LIMB_SWING) {
             limb->state = CC_LIMB_SEARCHING;
         }
-        UpdateSwing(limb, &rig->morphology, delta_time);
+        CcLimbMorphology swing_policy = rig->morphology;
+        if (speed > 0.025f) {
+            float cycle_time = rig->morphology.step_threshold * 2.0f / speed;
+            float swing_budget = cycle_time * (float)scheduling_swings /
+                                 (float)rig->morphology.limb_count;
+            swing_policy.swing_seconds = fminf(swing_policy.swing_seconds,
+                                                fmaxf(0.07f, swing_budget));
+        }
+        UpdateSwing(limb, &swing_policy, delta_time);
+        if (limb->state == CC_LIMB_STANCE &&
+            !CcFootingContactValid(probe, probe_context, limb->planted_contact,
+                rig->morphology.body_height * 0.015f, &limb->contact_normal)) {
+            limb->state = CC_LIMB_SEARCHING;
+        }
     }
+
+    FitBodyToContacts(rig, body_position, body_yaw, delta_time);
 
     int32_t active_swings = 0;
     for (int32_t limb = 0; limb < rig->morphology.limb_count; ++limb) {
@@ -865,13 +953,13 @@ void CcLimbRigUpdate(CcLimbRig *rig, CcLimbVec3 body_position, float body_yaw,
             }
         }
         if (candidate < 0) break;
-        StartSwing(rig, candidate);
+        if (!StartSwing(rig, candidate, probe, collision, probe_context)) break;
     }
 
     for (int32_t index = 0; index < rig->morphology.limb_count; ++index) {
         CcLimbRuntime *limb = &rig->limbs[index];
         const CcLimbSpec *spec = &rig->morphology.limbs[index];
-        CcLimbVec3 root = TransformPoint(body_position, spec->socket_local, body_yaw);
+        CcLimbVec3 root = CcLimbRigBodyPoint(rig, spec->socket_local, body_yaw);
         CcLimbVec3 target = limb->planted_contact;
         if (limb->state == CC_LIMB_DISABLED) {
             target = TransformPoint(body_position, spec->rest_contact_local, body_yaw);
@@ -880,6 +968,9 @@ void CcLimbRigUpdate(CcLimbRig *rig, CcLimbVec3 body_position, float body_yaw,
             target = limb->desired_contact;
         }
         SolveChain(limb, spec, root, target, body_yaw, delta_time);
+        if (limb->state == CC_LIMB_STANCE &&
+            Distance(limb->joints[spec->segment_count], limb->planted_contact) >
+                rig->morphology.body_height * 0.01f) limb->state = CC_LIMB_SEARCHING;
     }
     if (rig->morphology.preset == CC_MORPHOLOGY_BIPED &&
         rig->active_pose_limb >= 0 && rig->active_pose_limb < 2) {
@@ -887,7 +978,7 @@ void CcLimbRigUpdate(CcLimbRig *rig, CcLimbVec3 body_position, float body_yaw,
         rig->pose_phase = rig->active_pose_limb == 0 ? progress * 0.5f :
                           Wrap01(0.5f + progress * 0.5f);
     }
-    CalculateSupport(rig, body_position, body_yaw, body_grounded);
+    CalculateSupport(rig, rig->body_position, body_yaw, body_grounded);
     UpdateSupportState(rig, body_grounded, delta_time);
     (void)TryApplyRequestedPace(rig);
 }

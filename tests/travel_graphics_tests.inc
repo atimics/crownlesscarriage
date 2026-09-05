@@ -75,17 +75,45 @@ static void TestTravelForestCameraTurn(void)
     CcLocalDrawOpenWorld3D(&sim, &stream, &agent, NULL, &carriage, 0,
         target, (Rectangle){0, 0, 320, 180});
     EndDrawing();
-    RequireRenderer(storybook_forest.ready, "travel forest must draw");
-    uint64_t first_key = storybook_forest_key;
-    unsigned int first_buffer = storybook_forest.foliage.meshes[0].vboId[0];
+    uint64_t first_uploads = storybook_forest_uploads;
+    RequireRenderer(first_uploads > 0, "travel forest must draw");
+    unsigned int buffers[STORYBOOK_FOREST_CELL_COUNT] = {0};
+    for (int i = 0; i < STORYBOOK_FOREST_CELL_COUNT; ++i) {
+        if (storybook_forest_cells[i].batch.ready) {
+            buffers[i] = storybook_forest_cells[i].batch.foliage.meshes[0].vboId[0];
+        }
+    }
     carriage.camera_heading_yaw += 0.002f;
     BeginDrawing();
     CcLocalDrawOpenWorld3D(&sim, &stream, &agent, NULL, &carriage, 0,
         target, (Rectangle){0, 0, 320, 180});
     EndDrawing();
-    RequireRenderer(storybook_forest_key == first_key &&
-                    storybook_forest.foliage.meshes[0].vboId[0] == first_buffer,
-                    "small camera turns must keep the same trees and GPU buffers");
+    /* A turn may load a newly exposed cell. Existing cells retain their buffers. */
+    uint64_t turn_uploads = storybook_forest_uploads;
+    BeginDrawing();
+    CcLocalDrawOpenWorld3D(&sim, &stream, &agent, NULL, &carriage, 0,
+        target, (Rectangle){0, 0, 320, 180});
+    EndDrawing();
+    RequireRenderer(storybook_forest_uploads == turn_uploads,
+                    "a held camera must reuse every resident tree cell");
+    for (int i = 0; i < STORYBOOK_FOREST_CELL_COUNT; ++i) {
+        if (buffers[i] != 0) RequireRenderer(
+            storybook_forest_cells[i].batch.ready &&
+            storybook_forest_cells[i].batch.foliage.meshes[0].vboId[0] == buffers[i],
+            "resident cells must keep their GPU buffers");
+    }
+    carriage.position.x += 32.0f;
+    agent.position = carriage.position;
+    BeginDrawing();
+    CcLocalDrawOpenWorld3D(&sim, &stream, &agent, NULL, &carriage, 0,
+        target, (Rectangle){0, 0, 320, 180});
+    EndDrawing();
+    for (int i = 0; i < STORYBOOK_FOREST_CELL_COUNT; ++i) {
+        if (buffers[i] != 0) RequireRenderer(
+            storybook_forest_cells[i].batch.ready &&
+            storybook_forest_cells[i].batch.foliage.meshes[0].vboId[0] == buffers[i],
+            "ground cache movement must preserve resident tree buffers");
+    }
     (void)puts("PASS travel forest: camera turn preserves trees and GPU buffers");
     UnloadRenderTexture(target);
     CcLocalBindOpenWorld(NULL);

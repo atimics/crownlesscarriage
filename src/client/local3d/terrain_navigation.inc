@@ -88,6 +88,12 @@ static CcSettlementFunction active_place_function = CC_SETTLEMENT_MARKET;
 static float street_terrain_natural[CC_TERRAIN_SAMPLE_COUNT];
 static float street_terrain_height[CC_TERRAIN_SAMPLE_COUNT];
 
+static WorldTreePlacement ActiveWorldTreeAt(int32_t index)
+{
+    return active_place_function == CC_SETTLEMENT_FARMING ?
+        THORNFORD_TREES[index] : WORLD_TREES[index];
+}
+
 static const CcLocalPlaceLandmark *ActivePlaceLandmarkAt(int32_t index)
 {
     return CcLocalPlaceLandmarkAt(active_place_function, index);
@@ -307,6 +313,11 @@ static float TerrainLandform(float x, float z, float center_x,
     return expf(-(dx * dx + dz * dz));
 }
 
+static float TerrainFarmRiverCenter(float z)
+{
+    return 91.0f + sinf(z * 0.082f) * 3.2f;
+}
+
 static float TerrainNaturalHeight(float x, float z)
 {
     float broad = TerrainValueNoise(x, z, 34.0f, 1U) * 1.40f;
@@ -317,15 +328,16 @@ static float TerrainNaturalHeight(float x, float z)
     float land = 1.20f + broad + hills + detail;
     switch (active_place_function) {
         case CC_SETTLEMENT_FARMING: {
-            float river_center = 91.0f + sinf(z * 0.082f) * 1.7f;
-            float river_distance = (x - river_center) / 4.8f;
-            land -= 8.50f * expf(-river_distance * river_distance);
+            float river_center = TerrainFarmRiverCenter(z);
             land += TerrainLandform(x, z, 45.0f, 28.0f,
-                                    25.0f, 17.0f) * 2.80f;
+                                    25.0f, 17.0f) * 1.30f;
             land += TerrainLandform(x, z, 79.0f, 18.0f,
-                                    21.0f, 15.0f) * 11.20f;
+                                    21.0f, 15.0f) * 5.20f;
             land += TerrainLandform(x, z, 68.0f, 2.0f,
-                                    34.0f, 13.0f) * 4.20f;
+                                    34.0f, 13.0f) * 2.40f;
+            float bank = TerrainSmooth01((fabsf(x - river_center) - 3.0f) / 3.2f);
+            float bed = -1.8f + sinf(z * 0.03f) * 0.35f;
+            land = bed + (land - bed) * bank;
             break;
         }
         case CC_SETTLEMENT_MINING:
@@ -420,6 +432,117 @@ static float TerrainDistanceToRectangle(float x, float z,
     return sqrtf(dx * dx + dz * dz);
 }
 
+#define CC_LANE_SAMPLES ((CC_LOCAL_LANE_POINT_CAPACITY - 1) * 8 + 1)
+typedef struct TerrainLanePath {
+    Vector2 point[CC_LANE_SAMPLES];
+    float height[CC_LANE_SAMPLES];
+    Rectangle bounds;
+    float half_width;
+    int32_t count;
+} TerrainLanePath;
+static TerrainLanePath terrain_lanes[CC_LOCAL_LANE_CAPACITY];
+
+static float TerrainRectangleAverage(Rectangle footprint);
+
+static void TerrainBuildLanePaths(void)
+{
+    const CcLocalPlaceProfile *profile = ActivePlaceProfile();
+    for (int32_t lane = 0; lane < profile->lane_count; ++lane) {
+        TerrainLanePath *path = &terrain_lanes[lane];
+        const CcLocalLane *source = &profile->lane[lane];
+        path->count = (source->point_count - 1) * 8 + 1;
+        path->half_width = source->width * 0.5f;
+        Vector2 low = {FLT_MAX, FLT_MAX}, high = {-FLT_MAX, -FLT_MAX};
+        for (int32_t i = 0; i < path->count; ++i) {
+            CcLocalLanePoint point = CcLocalLaneSample(source,
+                (float)i / (float)(path->count - 1));
+            path->point[i] = (Vector2){point.x, point.z};
+            path->height[i] = TerrainNaturalHeight(point.x, point.z);
+            low.x = fminf(low.x, point.x); low.y = fminf(low.y, point.z);
+            high.x = fmaxf(high.x, point.x); high.y = fmaxf(high.y, point.z);
+        }
+        if (lane == 2) {
+            float distance[CC_LANE_SAMPLES] = {0};
+            for (int32_t i = 1; i < path->count; ++i) {
+                distance[i] = distance[i - 1] + Vector2Distance(path->point[i - 1], path->point[i]);
+            }
+            float start = path->height[0];
+            float run = distance[path->count - 9];
+            float finish = TerrainClamp(TerrainRectangleAverage(ActiveCompoundBounds()),
+                start - run * 0.11f, start + run * 0.11f);
+            for (int32_t i = 0; i < path->count; ++i) {
+                float t = TerrainClamp(distance[i] / fmaxf(run, 0.01f), 0.0f, 1.0f);
+                path->height[i] = start + (finish - start) * t;
+            }
+        }
+        if (lane == 3) {
+            float start = terrain_lanes[2].height[terrain_lanes[2].count - 1];
+            float finish = path->height[path->count - 1];
+            for (int32_t i = 0; i < path->count; ++i) {
+                float t = (float)i / (float)(path->count - 1);
+                path->height[i] = start + (finish - start) * t;
+            }
+        }
+        float margin = path->half_width + 2.0f;
+        path->bounds = (Rectangle){low.x - margin, low.y - margin,
+            high.x - low.x + margin * 2.0f, high.y - low.y + margin * 2.0f};
+    }
+}
+
+/* The same sampled centre lines shape the ground, paint and wheel tracks. */
+static float TerrainLanePathInset(const TerrainLanePath *path, float x, float z,
+                                   float *elevation)
+{
+    if (x < path->bounds.x || z < path->bounds.y ||
+        x > path->bounds.x + path->bounds.width ||
+        z > path->bounds.y + path->bounds.height) return -FLT_MAX;
+    float inset = -FLT_MAX;
+    for (int32_t i = 1; i < path->count; ++i) {
+        Vector2 a = path->point[i - 1], b = path->point[i];
+        float dx = b.x - a.x, dz = b.y - a.y;
+        float length2 = dx * dx + dz * dz;
+        float t = length2 > 0.0001f ? TerrainClamp(
+            ((x - a.x) * dx + (z - a.y) * dz) / length2, 0.0f, 1.0f) : 0.0f;
+        float candidate = path->half_width - hypotf(x - a.x - t * dx, z - a.y - t * dz);
+        if (candidate <= inset) continue;
+        inset = candidate;
+        if (elevation != NULL) *elevation = path->height[i - 1] +
+            (path->height[i] - path->height[i - 1]) * t;
+    }
+    return inset;
+}
+
+static float TerrainLaneInset(float x, float z, float *elevation)
+{
+    float inset = -FLT_MAX;
+    float height_sum = 0.0f, weight_sum = 0.0f;
+    for (int32_t lane = 0; lane < ActivePlaceProfile()->lane_count; ++lane) {
+        const TerrainLanePath *path = &terrain_lanes[lane];
+        float lane_height = 0.0f;
+        float lane_inset = TerrainLanePathInset(path, x, z, &lane_height);
+        inset = fmaxf(inset, lane_inset);
+        if (elevation != NULL) {
+            float weight = TerrainSmooth01((lane_inset + 1.8f) / (path->half_width + 1.8f));
+            height_sum += lane_height * weight;
+            weight_sum += weight;
+        }
+    }
+    if (elevation != NULL && weight_sum > 0.0f) *elevation = height_sum / weight_sum;
+    return inset;
+}
+
+static Vector2 BuildingUnrotatedPoint(int32_t index, float x, float z)
+{
+    if (index < 0 || index >= ActiveWorldBuildingCount()) return (Vector2){x, z};
+    WorldBuilding building = ActiveWorldBuildingAt(index);
+    float cx = building.footprint.x + building.footprint.width * 0.5f;
+    float cz = building.footprint.y + building.footprint.height * 0.5f;
+    float angle = ActivePlaceProfile()->building_yaw_degrees[index] * DEG2RAD;
+    float c = cosf(angle), s = sinf(angle);
+    return (Vector2){cx + c * (x - cx) - s * (z - cz),
+                     cz + s * (x - cx) + c * (z - cz)};
+}
+
 static float TerrainRoadProfile(const TerrainRoad *road, float x, float z)
 {
     float total = 0.0f;
@@ -442,8 +565,9 @@ static bool TerrainPointInsideMajorFoundation(float x, float z)
 {
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         Rectangle footprint = ActiveWorldBuildingAt(i).footprint;
-        if (x >= footprint.x && x <= footprint.x + footprint.width &&
-            z >= footprint.y && z <= footprint.y + footprint.height) {
+        Vector2 local = BuildingUnrotatedPoint(i, x, z);
+        if (local.x >= footprint.x && local.x <= footprint.x + footprint.width &&
+            local.y >= footprint.y && local.y <= footprint.y + footprint.height) {
             return true;
         }
     }
@@ -659,6 +783,75 @@ static float TerrainKeepRise(void)
     return 2.20f;
 }
 
+static void TerrainGradeLaneVillage(void)
+{
+    TerrainBuildLanePaths();
+    float keep_elevation = terrain_lanes[2].height[terrain_lanes[2].count - 1];
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            float z = (float)row * CC_TERRAIN_CELL_SIZE;
+            float elevation = 0.0f;
+            float inset = TerrainLaneInset(x, z, &elevation);
+            if (inset < -1.8f) continue;
+            float weight = TerrainSmooth01((inset + 1.8f) / 1.8f);
+            int32_t slot = TerrainIndex(column, row);
+            street_terrain_height[slot] +=
+                (elevation - street_terrain_height[slot]) * weight;
+        }
+    }
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        Rectangle pad = ActiveWorldBuildingAt(i).footprint;
+        float elevation = TerrainRectangleAverage(pad);
+        for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+            for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+                float x = (float)column * CC_TERRAIN_CELL_SIZE;
+                float z = (float)row * CC_TERRAIN_CELL_SIZE;
+                Vector2 local = BuildingUnrotatedPoint(i, x, z);
+                float distance = TerrainDistanceToRectangle(local.x, local.y, pad);
+                if (distance >= 1.6f) continue;
+                float weight = TerrainSmooth01(1.0f - distance / 1.6f);
+                int32_t slot = TerrainIndex(column, row);
+                street_terrain_height[slot] +=
+                    (elevation - street_terrain_height[slot]) * weight;
+            }
+        }
+    }
+    Rectangle keep = ActiveCompoundBounds();
+    TerrainGradePad(keep, keep_elevation, 2.8f);
+    /* Keep a steady cart grade through the junction and up to the gate. */
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            float z = (float)row * CC_TERRAIN_CELL_SIZE;
+            if (TerrainPointInsideMajorFoundation(x, z)) continue;
+            float elevation = 0.0f;
+            float inset = TerrainLanePathInset(&terrain_lanes[2], x, z, &elevation);
+            if (inset < -1.8f) continue;
+            float weight = TerrainSmooth01((inset + 1.8f) / 1.8f);
+            int32_t slot = TerrainIndex(column, row);
+            street_terrain_height[slot] += (elevation - street_terrain_height[slot]) * weight;
+        }
+    }
+    for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
+        Rectangle pad = PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i));
+        TerrainGradePad(pad, TerrainRectangleAverage(pad), 1.3f);
+    }
+    TerrainGradePad(CARRIAGE_FOOTPRINT, TerrainRectangleAverage(CARRIAGE_FOOTPRINT), 1.4f);
+    TerrainGradePad(DUNGEON_FOOTPRINT, TerrainRectangleAverage(DUNGEON_FOOTPRINT), 1.3f);
+    TerrainGradePad((Rectangle){1, 0, 14.6f, 11.1f}, 0.0f, 2.2f);
+    TerrainGradeNorthSouthRamp((Rectangle){7.45f, 10.5f, 1.8f, 16.25f}, 0.0f,
+        TerrainSampleGrid(street_terrain_height, 8.35f, 26.5f));
+    TerrainGradeNorthSouthRamp((Rectangle){14.65f, 10.5f, 3.5f, 16.6f}, 0.0f,
+        TerrainSampleGrid(street_terrain_height, 16.4f, 26.85f));
+    float west = TerrainSampleGrid(street_terrain_height, 83.5f, 34.0f);
+    float east = TerrainSampleGrid(street_terrain_height, 96.0f, 34.0f);
+    float bridge = fmaxf(west, east) + 0.18f;
+    TerrainGradeEastWestRamp((Rectangle){81, 31.75f, 2.5f, 4.5f},
+        TerrainSampleGrid(street_terrain_height, 81, 34), bridge);
+    TerrainGradeEastWestRamp((Rectangle){83.5f, 31.75f, 12.5f, 4.5f}, bridge, bridge);
+}
+
 static void TerrainGenerate(void)
 {
     for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
@@ -669,6 +862,11 @@ static void TerrainGenerate(void)
             street_terrain_natural[index] = TerrainNaturalHeight(x, z);
             street_terrain_height[index] = street_terrain_natural[index];
         }
+    }
+    if (ActivePlaceProfile()->lane_count > 0) {
+        TerrainGradeLaneVillage();
+        street_terrain_ready = true;
+        return;
     }
     for (int32_t road = 0;
          road < (int32_t)(sizeof(TERRAIN_ROADS) /
@@ -837,18 +1035,47 @@ void CcLocalBindPlace(const CcSim *sim)
         CcSimSettlement(sim, sim->player.location_id) : NULL;
     CcSettlementFunction function = place != NULL ? place->function :
                                                     CC_SETTLEMENT_MARKET;
-    if (function != active_place_function) {
+    uint32_t seed = sim != NULL ? CcLocalPlaceTerrainSeed(sim->world_seed, place) :
+        UINT32_C(0xc0a71a9e);
+    if (function != active_place_function || seed != street_terrain_seed) {
         street_camera_rig = (FixedCameraRig){0};
+        combat_camera_rig = (CombatCameraRig){0};
+        conversation_camera_rig = (ConversationCameraRig){0};
+        scenery_view.valid = false;
     }
     active_place_function = function;
-    CcLocalTerrainSetSeed(sim != NULL ?
-        CcLocalPlaceTerrainSeed(sim->world_seed, place) :
-        UINT32_C(0xc0a71a9e));
+    CcLocalTerrainSetSeed(seed);
 }
 
 void CcLocalBindOpenWorld(const CcWorldStream *stream)
 {
     active_world_stream = stream;
+}
+
+int32_t CcLocalTownCarriagePath(bool arriving, Vector2 *points, int32_t capacity)
+{
+    const CcLocalPlaceProfile *profile = ActivePlaceProfile();
+    if (points == NULL || profile->carriage_lane_count <= 0) return 0;
+    TerrainEnsureReady();
+    int32_t count = 0;
+    for (int32_t span = 0; span < profile->carriage_lane_count; ++span) {
+        const CcLocalCarriageLane *route = &profile->carriage_lane[span];
+        const TerrainLanePath *lane = &terrain_lanes[route->lane];
+        int32_t last = route->end_point * 8;
+        if (last >= lane->count) return 0;
+        for (int32_t sample = span == 0 ? 0 : 1; sample <= last; ++sample) {
+            if (count >= capacity) return 0;
+            points[count++] = lane->point[sample];
+        }
+    }
+    if (!arriving) {
+        for (int32_t i = 0; i < count / 2; ++i) {
+            Vector2 temporary = points[i];
+            points[i] = points[count - 1 - i];
+            points[count - 1 - i] = temporary;
+        }
+    }
+    return count;
 }
 
 float CcLocalTerrainHeightAt(float x, float z)
@@ -1030,60 +1257,77 @@ static bool CircleTouchesFootprint(float x, float z, float radius,
     return FootprintDistanceSquared(x, z, footprint) < radius * radius;
 }
 
-static bool OpenWorldTownBodyBlocked(const CcWorldManifest *manifest,
-                                     float x, float z, float radius)
+/* The town renderer uses this same profile origin, scale and Y rotation. */
+#define CC_LOCAL_COLLISION_BOX_CAPACITY (72 + CC_MAX_SETTLEMENTS * \
+    (CC_LOCAL_PLACE_BUILDING_CAPACITY + CC_LOCAL_PLACE_COMPOUND_CAPACITY + \
+     CC_LOCAL_PLACE_LANDMARK_COUNT))
+typedef CcCollisionBox LocalCollisionBox;
+
+static void AddTownCollisionBox(const CcWorldManifest *manifest,
+                                const CcWorldSettlementPlacement *place,
+                                Rectangle footprint, float height, float yaw_degrees,
+                                LocalCollisionBox *boxes, int32_t *count)
 {
-    if (manifest == NULL) return false;
-    for (int32_t settlement_index = 0;
-         settlement_index < manifest->settlement_count;
-         ++settlement_index) {
-        const CcWorldSettlementPlacement *place =
-            &manifest->settlements[settlement_index];
-        float offset_x = x - place->center.x;
-        float offset_z = z - place->center.z;
-        float reach = place->radius * 1.25f + radius;
-        if (offset_x * offset_x + offset_z * offset_z > reach * reach ||
-            place->profile_scale <= 0.0001f) continue;
+    if (height <= 0.0f || footprint.width <= 0.0f || footprint.height <= 0.0f ||
+        *count >= CC_LOCAL_COLLISION_BOX_CAPACITY) return;
+    CcWorldPoint center = CcWorldSettlementLocalPoint(
+        manifest, place->settlement_id, footprint.x + footprint.width * 0.5f,
+        footprint.y + footprint.height * 0.5f);
+    float half_x = footprint.width * place->profile_scale * 0.5f;
+    float half_z = footprint.height * place->profile_scale * 0.5f;
+    float base = place->plateau_height + 0.03f;
+    boxes[(*count)++] = (LocalCollisionBox){
+        .minimum = {center.x - half_x, base, center.z - half_z},
+        .maximum = {center.x + half_x, base + height * place->profile_scale,
+                    center.z + half_z},
+        .yaw = place->entrance_heading_yaw - 0.5f * PI + yaw_degrees * DEG2RAD,
+    };
+}
+
+static int32_t GatherTownCollisionBoxes(const CcWorldManifest *manifest,
+                                        LocalCollisionBox *boxes)
+{
+    int32_t count = 0;
+    if (manifest == NULL) return count;
+    for (int32_t town = 0; town < manifest->settlement_count; ++town) {
+        const CcWorldSettlementPlacement *place = &manifest->settlements[town];
+        if (place->profile_scale <= 0.0001f) continue;
         const CcLocalPlaceProfile *profile =
             CcLocalPlaceProfileForFunction(place->function);
         if (profile == NULL) continue;
-        float rotation = place->entrance_heading_yaw - 0.5f * PI;
-        float cosine = cosf(rotation);
-        float sine = sinf(rotation);
-        float local_x = 48.0f +
-            (cosine * offset_x - sine * offset_z) / place->profile_scale;
-        float local_z = 36.0f +
-            (sine * offset_x + cosine * offset_z) / place->profile_scale;
-        float local_radius = radius / place->profile_scale;
-        for (int32_t building_index = 0;
-             building_index < profile->building_count; ++building_index) {
-            const CcLocalPlaceBuilding *building =
-                &profile->building[building_index];
-            Rectangle footprint = {building->x, building->z,
-                                   building->width, building->depth};
-            if (CircleTouchesFootprint(local_x, local_z, local_radius,
-                                       footprint)) return true;
+        for (int32_t i = 0; i < profile->building_count; ++i) {
+            const CcLocalPlaceBuilding *building = &profile->building[i];
+            AddTownCollisionBox(manifest, place,
+                (Rectangle){building->x, building->z, building->width,
+                             building->depth}, building->height,
+                profile->building_yaw_degrees[i], boxes, &count);
         }
-        for (int32_t structure_index = 0;
-             structure_index < profile->compound_structure_count;
-             ++structure_index) {
+        for (int32_t i = 0; i < profile->compound_structure_count; ++i) {
             const CcLocalPlaceCompoundStructure *structure =
-                &profile->compound_structure[structure_index];
-            Rectangle footprint = {structure->x, structure->z,
-                                   structure->width, structure->depth};
-            if (CircleTouchesFootprint(local_x, local_z, local_radius,
-                                       footprint)) return true;
+                &profile->compound_structure[i];
+            AddTownCollisionBox(manifest, place,
+                (Rectangle){structure->x, structure->z, structure->width,
+                             structure->depth}, structure->height, 0.0f, boxes, &count);
         }
-        for (int32_t landmark_index = 0;
-             landmark_index < CC_LOCAL_PLACE_LANDMARK_COUNT;
-             ++landmark_index) {
-            const CcLocalPlaceLandmark *landmark =
-                &profile->landmark[landmark_index];
-            Rectangle footprint = {landmark->x, landmark->z,
-                                   landmark->width, landmark->depth};
-            if (CircleTouchesFootprint(local_x, local_z, local_radius,
-                                       footprint)) return true;
+        for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
+            const CcLocalPlaceLandmark *landmark = &profile->landmark[i];
+            AddTownCollisionBox(manifest, place,
+                (Rectangle){landmark->x, landmark->z, landmark->width,
+                             landmark->depth}, landmark->height, 0.0f, boxes, &count);
         }
+    }
+    return count;
+}
+
+static bool OpenWorldTownBodyBlocked(const CcWorldManifest *manifest,
+                                     float x, float z, float radius)
+{
+    LocalCollisionBox boxes[CC_LOCAL_COLLISION_BOX_CAPACITY];
+    int32_t count = GatherTownCollisionBoxes(manifest, boxes);
+    for (int32_t i = 0; i < count; ++i) {
+        CcLimbVec3 point = {x, (boxes[i].minimum.y + boxes[i].maximum.y) * 0.5f, z};
+        CcLimbVec3 normal;
+        if (CcCollisionPushSphere(&boxes[i], radius, &point, &normal)) return true;
     }
     return false;
 }
@@ -1129,7 +1373,8 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         WorldBuilding building = ActiveWorldBuildingAt(i);
 
-        if (CircleTouchesFootprint(x, z, radius,
+        Vector2 local = BuildingUnrotatedPoint(i, x, z);
+        if (CircleTouchesFootprint(local.x, local.y, radius,
                                    building.footprint)) return true;
     }
     for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
@@ -1538,16 +1783,7 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
 
 typedef struct LocalProbeContext {
     CcLocalSceneKind scene;
-    float root_base_y;
-    bool root_capsule;
 } LocalProbeContext;
-
-typedef struct LocalCollisionBox {
-    Vector3 minimum;
-    Vector3 maximum;
-} LocalCollisionBox;
-
-#define CC_LOCAL_COLLISION_BOX_CAPACITY 72
 
 static void AddLocalCollisionBox(LocalCollisionBox *boxes, int32_t *count,
                                  Rectangle footprint, float base,
@@ -1563,12 +1799,13 @@ static void AddLocalCollisionBox(LocalCollisionBox *boxes, int32_t *count,
 }
 
 static int32_t GatherLocalCollisionBoxes(const LocalProbeContext *context,
-                                         Vector3 point,
                                          LocalCollisionBox *boxes)
 {
-    (void)point;
     CcLocalSceneKind scene = context != NULL ? context->scene :
                                                CC_LOCAL_SCENE_STREET;
+    if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET) {
+        return GatherTownCollisionBoxes(&active_world_stream->manifest, boxes);
+    }
     int32_t count = 0;
     if (scene == CC_LOCAL_SCENE_MARKET) {
         AddLocalCollisionBox(boxes, &count, MARKET_COUNTER_FOOTPRINT,
@@ -1598,9 +1835,12 @@ static int32_t GatherLocalCollisionBoxes(const LocalProbeContext *context,
     for (int32_t building = 0;
          building < ActiveWorldBuildingCount(); ++building) {
         WorldBuilding world = ActiveWorldBuildingAt(building);
+        int32_t previous_count = count;
         AddLocalCollisionBox(boxes, &count, world.footprint,
                              TerrainFootprintHeight(world.footprint),
                              world.height);
+        if (count > previous_count) boxes[count - 1].yaw =
+            ActivePlaceProfile()->building_yaw_degrees[building] * DEG2RAD;
     }
     for (int32_t structure = 0;
          structure < ActiveCompoundStructureCount(); ++structure) {
@@ -1636,101 +1876,6 @@ static int32_t GatherLocalCollisionBoxes(const LocalProbeContext *context,
     return count;
 }
 
-static bool SweptPointAgainstBox(Vector3 previous, Vector3 position,
-                                 const LocalCollisionBox *box, float radius,
-                                 float *hit_time, Vector3 *hit_normal)
-{
-    Vector3 minimum = {box->minimum.x - radius,
-                       box->minimum.y - radius,
-                       box->minimum.z - radius};
-    Vector3 maximum = {box->maximum.x + radius,
-                       box->maximum.y + radius,
-                       box->maximum.z + radius};
-    Vector3 movement = Vector3Subtract(position, previous);
-    float enter = 0.0f;
-    float leave = 1.0f;
-    Vector3 normal = {0};
-    const float starts[3] = {previous.x, previous.y, previous.z};
-    const float moves[3] = {movement.x, movement.y, movement.z};
-    const float lows[3] = {minimum.x, minimum.y, minimum.z};
-    const float highs[3] = {maximum.x, maximum.y, maximum.z};
-    for (int32_t axis = 0; axis < 3; ++axis) {
-        if (fabsf(moves[axis]) <= 0.000001f) {
-            if (starts[axis] < lows[axis] || starts[axis] > highs[axis]) {
-                return false;
-            }
-            continue;
-        }
-        float inverse = 1.0f / moves[axis];
-        float near_time = (lows[axis] - starts[axis]) * inverse;
-        float far_time = (highs[axis] - starts[axis]) * inverse;
-        float near_sign = -1.0f;
-        if (near_time > far_time) {
-            float swap = near_time;
-            near_time = far_time;
-            far_time = swap;
-            near_sign = 1.0f;
-        }
-        if (near_time > enter) {
-            enter = near_time;
-            normal = (Vector3){0};
-            if (axis == 0) normal.x = near_sign;
-            else if (axis == 1) normal.y = near_sign;
-            else normal.z = near_sign;
-        }
-        leave = fminf(leave, far_time);
-        if (enter > leave) return false;
-    }
-    if (enter < 0.0f || enter > 1.0f ||
-        (fabsf(normal.x) + fabsf(normal.y) + fabsf(normal.z)) < 0.5f) {
-        return false;
-    }
-    *hit_time = enter;
-    *hit_normal = normal;
-    return true;
-}
-
-static bool PushSphereOutOfBox(Vector3 *position,
-                               const LocalCollisionBox *box, float radius,
-                               Vector3 *normal)
-{
-    Vector3 closest = {
-        fmaxf(box->minimum.x, fminf(position->x, box->maximum.x)),
-        fmaxf(box->minimum.y, fminf(position->y, box->maximum.y)),
-        fmaxf(box->minimum.z, fminf(position->z, box->maximum.z)),
-    };
-    Vector3 delta = Vector3Subtract(*position, closest);
-    float distance = Vector3Length(delta);
-    if (distance >= radius) return false;
-    if (distance > 0.00001f) {
-        *normal = Vector3Scale(delta, 1.0f / distance);
-        *position = Vector3Add(*position,
-                               Vector3Scale(*normal, radius - distance));
-        return true;
-    }
-
-    float distances[6] = {
-        position->x - box->minimum.x,
-        box->maximum.x - position->x,
-        position->y - box->minimum.y,
-        box->maximum.y - position->y,
-        position->z - box->minimum.z,
-        box->maximum.z - position->z,
-    };
-    int32_t face = 0;
-    for (int32_t candidate = 1; candidate < 6; ++candidate) {
-        if (distances[candidate] < distances[face]) face = candidate;
-    }
-    *normal = (Vector3){0};
-    if (face == 0) { normal->x = -1.0f; position->x = box->minimum.x - radius; }
-    else if (face == 1) { normal->x = 1.0f; position->x = box->maximum.x + radius; }
-    else if (face == 2) { normal->y = -1.0f; position->y = box->minimum.y - radius; }
-    else if (face == 3) { normal->y = 1.0f; position->y = box->maximum.y + radius; }
-    else if (face == 4) { normal->z = -1.0f; position->z = box->minimum.z - radius; }
-    else { normal->z = 1.0f; position->z = box->maximum.z + radius; }
-    return true;
-}
-
 static bool ProbeLocalCollision(void *raw_context,
                                 CcBiomechVec3 previous_position,
                                 CcBiomechVec3 proposed_position, float radius,
@@ -1745,56 +1890,14 @@ static bool ProbeLocalCollision(void *raw_context,
     Vector3 proposed = {proposed_position.x, proposed_position.y,
                         proposed_position.z};
     LocalCollisionBox boxes[CC_LOCAL_COLLISION_BOX_CAPACITY];
-    int32_t box_count = active_world_stream != NULL &&
-                        scene != CC_LOCAL_SCENE_MARKET ? 0 :
-        GatherLocalCollisionBoxes(context, proposed, boxes);
-    if (context != NULL && context->root_capsule) {
-        int32_t retained = 0;
-        for (int32_t box = 0; box < box_count; ++box) {
-            if (context->root_base_y >= boxes[box].maximum.y - 0.055f) {
-                continue;
-            }
-            boxes[retained++] = boxes[box];
-        }
-        box_count = retained;
-    }
-    bool collided = false;
-    Vector3 normal = {0.0f, 1.0f, 0.0f};
-
-    float earliest = 1.0f;
-    Vector3 swept_normal = {0};
-    for (int32_t box = 0; box < box_count; ++box) {
-        float hit_time = 1.0f;
-        Vector3 hit_normal = {0};
-        if (SweptPointAgainstBox(previous, proposed, &boxes[box], radius,
-                                 &hit_time, &hit_normal) &&
-            hit_time < earliest) {
-            earliest = hit_time;
-            swept_normal = hit_normal;
-        }
-    }
-    if (earliest < 1.0f) {
-        Vector3 movement = Vector3Subtract(proposed, previous);
-        proposed = Vector3Add(previous, Vector3Scale(movement,
-            fmaxf(0.0f, earliest - 0.0005f)));
-        normal = swept_normal;
-        collided = true;
-    }
-
-    for (int32_t iteration = 0; iteration < 3; ++iteration) {
-        bool corrected = false;
-        for (int32_t box = 0; box < box_count; ++box) {
-            Vector3 box_normal = {0};
-            if (!PushSphereOutOfBox(&proposed, &boxes[box], radius,
-                                    &box_normal)) {
-                continue;
-            }
-            normal = box_normal;
-            corrected = true;
-            collided = true;
-        }
-        if (!corrected) break;
-    }
+    int32_t box_count = GatherLocalCollisionBoxes(context, boxes);
+    CcCollisionMove movement = CcCollisionMoveSphere(boxes, box_count,
+        (CcLimbVec3){previous.x, previous.y, previous.z},
+        (CcLimbVec3){proposed.x - previous.x, proposed.y - previous.y,
+                     proposed.z - previous.z}, radius);
+    proposed = (Vector3){movement.position.x, movement.position.y, movement.position.z};
+    bool collided = movement.collided;
+    Vector3 normal = {movement.normal.x, movement.normal.y, movement.normal.z};
 
     float ground = BodySurfaceHeightAt(scene, proposed.x, proposed.z);
     if (proposed.y - radius < ground) {
@@ -1827,53 +1930,6 @@ bool CcLocalProbePhysicsSphereInternal(
     return collided;
 }
 
-static bool LocalAgentCapsuleBlocked(CcLocalSceneKind scene,
-                                     Vector3 previous, Vector3 proposed,
-                                     float radius)
-{
-    if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET) {
-        return false;
-    }
-    LocalProbeContext context = {
-        .scene = scene,
-        .root_base_y = previous.y,
-        .root_capsule = true,
-    };
-    const float heights[] = {radius, 0.92f, 1.54f};
-    for (int32_t sample = 0;
-         sample < (int32_t)(sizeof(heights) / sizeof(heights[0])); ++sample) {
-        CcBiomechVec3 before = {previous.x, previous.y + heights[sample],
-                                previous.z};
-        CcBiomechVec3 after = {proposed.x, proposed.y + heights[sample],
-                               proposed.z};
-        CcBiomechVec3 corrected = after;
-        CcBiomechVec3 normal = {0};
-        if (!ProbeLocalCollision(&context, before, after, radius,
-                                 &corrected, &normal)) {
-            continue;
-        }
-        float proposed_x = corrected.x - after.x;
-        float proposed_z = corrected.z - after.z;
-        float proposed_correction = proposed_x * proposed_x +
-                                    proposed_z * proposed_z;
-        if (proposed_correction > 0.0001f * 0.0001f) {
-            CcBiomechVec3 corrected_before = before;
-            CcBiomechVec3 before_normal = {0};
-            (void)ProbeLocalCollision(&context, before, before, radius,
-                                      &corrected_before, &before_normal);
-            float before_x = corrected_before.x - before.x;
-            float before_z = corrected_before.z - before.z;
-            float before_correction = before_x * before_x +
-                                      before_z * before_z;
-            if (before_correction > proposed_correction + 0.000001f) {
-                continue;
-            }
-            return true;
-        }
-    }
-    return false;
-}
-
 static int32_t LocalAgentPointSpace(const CcLocalAgent *agent,
                                     CcRobotCollisionPoint *points)
 {
@@ -1888,8 +1944,6 @@ bool CcLocalAgentPointSpaceBlockedInternal(const CcLocalAgent *agent,
                                             Vector3 proposed)
 {
     if (agent == NULL) return false;
-    if (active_world_stream != NULL &&
-        agent->scene != CC_LOCAL_SCENE_MARKET) return false;
     CcRobotCollisionPoint points[CC_ROBOT_POINT_CAPACITY];
     int32_t point_count = LocalAgentPointSpace(agent, points);
     Vector3 movement = Vector3Subtract(proposed, agent->position);
@@ -1937,66 +1991,34 @@ static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
                                          Vector3 *contact_normal)
 {
     if (resolved == NULL || contact_normal == NULL) return false;
-    Vector3 result = proposed;
-    Vector3 normal = {0.0f, 1.0f, 0.0f};
-    bool collided = false;
-    bool below_passable_support =
-        passable_support_height > -FLT_MAX &&
-        proposed.y < passable_support_height - 0.0001f;
-    const float heights[] = {radius, 0.92f, 1.54f};
-    for (int32_t iteration = 0; iteration < 2; ++iteration) {
-        bool iteration_collision = false;
-        for (int32_t sample = 0;
-             sample < (int32_t)(sizeof(heights) / sizeof(heights[0]));
-             ++sample) {
-            LocalProbeContext context = {
-                .scene = scene,
-                .root_base_y = fmaxf(result.y, passable_support_height),
-                .root_capsule = true,
-            };
-            CcBiomechVec3 before = {
-                previous.x, previous.y + heights[sample], previous.z};
-            CcBiomechVec3 after = {
-                result.x, result.y + heights[sample], result.z};
-            CcBiomechVec3 corrected = after;
-            CcBiomechVec3 sample_normal = {0};
-            if (!ProbeLocalCollision(&context, before, after, radius,
-                                     &corrected, &sample_normal)) {
-                continue;
-            }
-            Vector3 candidate = {
-                corrected.x,
-                corrected.y - heights[sample],
-                corrected.z,
-            };
-            bool crossing_passable_support =
-                passable_support_height > -FLT_MAX * 0.5f &&
-                result.y < passable_support_height - 0.001f &&
-                candidate.y >= passable_support_height - 0.001f &&
-                sample_normal.y > 0.90f;
-            if (crossing_passable_support) {
-
-                candidate.y = result.y;
-            }
-            Vector3 correction = Vector3Subtract(candidate, result);
-
-            if (below_passable_support && sample_normal.y > 0.50f &&
-                correction.y > 0.0f && fabsf(correction.x) <= 0.00001f &&
-                fabsf(correction.z) <= 0.00001f) {
-                continue;
-            }
-            if (Vector3Length(correction) <= 0.00001f) continue;
-            result = candidate;
-            normal = (Vector3){sample_normal.x, sample_normal.y,
-                               sample_normal.z};
-            collided = true;
-            iteration_collision = true;
-        }
-        if (!iteration_collision) break;
+    LocalProbeContext context = {.scene = scene};
+    LocalCollisionBox boxes[CC_LOCAL_COLLISION_BOX_CAPACITY];
+    int32_t count = GatherLocalCollisionBoxes(&context, boxes);
+    int32_t retained = 0;
+    float support = passable_support_height;
+    for (int32_t i = 0; i < count; ++i) {
+        /* A climb can pass the ledge it has already secured. Other surfaces
+           remain solid along the entire body, including its upper half. */
+        if (support >= boxes[i].maximum.y - 0.055f) continue;
+        boxes[retained++] = boxes[i];
     }
-    *resolved = result;
-    *contact_normal = normal;
-    return collided;
+    CcCollisionMove movement = CcCollisionMoveCapsule(
+        boxes, retained, (CcLimbVec3){previous.x, previous.y, previous.z},
+        (CcLimbVec3){proposed.x - previous.x, proposed.y - previous.y,
+                     proposed.z - previous.z}, radius, 1.54f + radius);
+    *resolved = (Vector3){movement.position.x, movement.position.y,
+                          movement.position.z};
+    *contact_normal = (Vector3){movement.normal.x, movement.normal.y,
+                                movement.normal.z};
+    return movement.collided;
+}
+
+bool CcLocalMoveCapsuleInternal(CcLocalSceneKind scene, Vector3 previous,
+                                Vector3 proposed, float radius,
+                                Vector3 *resolved, Vector3 *normal)
+{
+    return ResolveLocalAgentCapsuleMove(scene, previous, proposed, radius,
+                                        -FLT_MAX, resolved, normal);
 }
 
 static bool LocalWorldSphereSweep(CcLocalSceneKind scene, Vector3 previous,
@@ -2070,7 +2092,18 @@ static bool ProbeLocalSurface(void *raw_context, CcLimbVec3 origin,
     float height = SurfaceHeightAt(scene, origin.x, origin.z) + 0.035f;
     if (height > origin.y + 0.05f || origin.y - height > maximum_drop) return false;
     *point = (CcLimbVec3){origin.x, height, origin.z};
-    Vector3 surface_normal = SurfaceNormalAt(scene, origin.x, origin.z);
+    /* A level contact patch takes priority over the broad terrain normal. */
+    const float contact_radius = 0.02f;
+    Vector3 surface_normal = {
+        SurfaceHeightAt(scene, origin.x - contact_radius, origin.z) -
+            SurfaceHeightAt(scene, origin.x + contact_radius, origin.z),
+        contact_radius * 2.0f,
+        SurfaceHeightAt(scene, origin.x, origin.z - contact_radius) -
+            SurfaceHeightAt(scene, origin.x, origin.z + contact_radius)
+    };
+    surface_normal = Vector3Normalize(surface_normal);
+    Vector3 broad_normal = SurfaceNormalAt(scene, origin.x, origin.z);
+    if (broad_normal.y > surface_normal.y) surface_normal = broad_normal;
     *normal = (CcLimbVec3){surface_normal.x, surface_normal.y,
                            surface_normal.z};
     return true;

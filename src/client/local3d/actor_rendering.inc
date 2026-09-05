@@ -139,6 +139,8 @@ typedef struct WorldFaceCanvas {
     float pixel_width;
     float pixel_height;
     float horizontal_scale;
+    float readable_presence;
+    float detail_presence;
     CcLocalFaceLodInternal lod;
     bool always_paint;
     float profile_side;
@@ -172,12 +174,11 @@ static void PaintWorldFaceBlock(void *context, int32_t grid_x,
     if (grid_y <= 9 && grid_x != 9 && grid_x != 10 &&
         ((canvas->profile_side > 0.0f && grid_x < 9) ||
          (canvas->profile_side < 0.0f && grid_x > 10))) return;
-    if (!canvas->always_paint &&
-        canvas->lod == CC_LOCAL_FACE_LOD_READABLE &&
-        !IsPortraitEyeBlock(grid_x, grid_y, grid_width, grid_height) &&
-        !IsPortraitMouthBlock(grid_x, grid_y, grid_width, grid_height)) {
-        return;
-    }
+    bool readable = !canvas->always_paint &&
+        (IsPortraitEyeBlock(grid_x, grid_y, grid_width, grid_height) ||
+         IsPortraitMouthBlock(grid_x, grid_y, grid_width, grid_height));
+    float presence = readable ? canvas->readable_presence : canvas->detail_presence;
+    if (presence <= 0.0f) return;
 
     float grid_center_x = (float)grid_x + (float)grid_width * 0.5f;
     float grid_center_y = (float)grid_y + (float)grid_height * 0.5f;
@@ -188,15 +189,17 @@ static void PaintWorldFaceBlock(void *context, int32_t grid_x,
     width *= canvas->horizontal_scale;
     float y = (8.5f - grid_center_y) * canvas->cell_height;
     float height = (float)grid_height * canvas->cell_height;
-    if (canvas->lod == CC_LOCAL_FACE_LOD_READABLE) {
+    if (readable) {
         float pixels = IsPortraitEyeBlock(grid_x, grid_y, grid_width,
                                           grid_height) ? 0.85f : 0.65f;
-        width = fmaxf(width, canvas->pixel_width * pixels);
-        height = fmaxf(height, canvas->pixel_height * pixels);
+        width += (fmaxf(width, canvas->pixel_width * pixels) - width) *
+                 (1.0f - canvas->detail_presence);
+        height += (fmaxf(height, canvas->pixel_height * pixels) - height) *
+                  (1.0f - canvas->detail_presence);
     }
     float lift = 0.0030f + (float)canvas->layer * 0.00045f;
     DrawFaceQuad(canvas->origin, canvas->right, canvas->up, canvas->normal,
-                 x, y, width, height, lift, color);
+                 x, y, width * presence, height * presence, lift, color);
     canvas->layer += 1;
 }
 
@@ -249,7 +252,7 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
         eye_center, head_up, half_height);
     CcLocalFaceLodInternal lod = CcLocalFaceLodForProjectedHeightInternal(
         projected_face_height);
-    if (lod == CC_LOCAL_FACE_LOD_SILHOUETTE) return;
+    if (projected_face_height <= 3.0f) return;
 
 
     EndShaderMode();
@@ -275,12 +278,14 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
         .pixel_width = 1.0f / fmaxf(horizontal_pixels_per_unit, 0.0001f),
         .pixel_height = 1.0f / fmaxf(vertical_pixels_per_unit, 0.0001f),
         .horizontal_scale = 1.0f,
+        .readable_presence = SmoothStep01((projected_face_height - 3.0f) / 2.0f),
+        .detail_presence = SmoothStep01((projected_face_height - 10.0f) / 4.0f),
         .lod = lod,
         .always_paint = false,
         .profile_side = front_amount < 0.40f ? side_amount : 0.0f,
         .layer = 0,
     };
-    if (lod == CC_LOCAL_FACE_LOD_CLOSE) {
+    if (canvas.detail_presence > 0.0f) {
         canvas.always_paint = true;
         CcNpcPaintFaceBeard(face, &canvas, PaintWorldFaceBlock);
     }
@@ -2029,20 +2034,29 @@ static void DrawRobotShell(const CcLocalAgent *agent)
         return;
     }
     if (!biped) {
+        rlPushMatrix();
+        rlTranslatef(body.x, body.y, body.z);
+        if (!agent->multileg_ragdoll.active) {
+            CcLimbVec3 up = rig->body_up;
+            float angle = acosf(fmaxf(-1.0f, fminf(1.0f, up.y))) * RAD2DEG;
+            if (angle > 0.001f) rlRotatef(angle, up.z, 0.0f, -up.x);
+        }
+        Vector3 local_body = {0.0f, 0.0f, 0.0f};
         float body_length = rig->morphology.limb_count >= 6 ? 0.72f : 0.54f;
-        DrawOrientedBox(body, (Vector3){0.0f, 0.0f, 0.0f},
+        DrawOrientedBox(local_body, (Vector3){0.0f, 0.0f, 0.0f},
                         (Vector3){0.54f, 0.38f, body_length}, agent->facing_yaw,
                         (Color){42, 128, 136, 255});
-        DrawSmallSphere(body, 0.085f, WORLD_GOLD);
-        DrawOrientedBox(body, (Vector3){0.0f, 0.02f, 0.22f},
+        DrawSmallSphere(local_body, 0.085f, WORLD_GOLD);
+        DrawOrientedBox(local_body, (Vector3){0.0f, 0.02f, 0.22f},
                         (Vector3){0.24f, 0.18f, 0.28f}, agent->facing_yaw,
                         (Color){225, 177, 68, 255});
         DrawSmallSphere(
-            LocalPoint(body, -0.085f, 0.06f, 0.34f, agent->facing_yaw),
+            LocalPoint(local_body, -0.085f, 0.06f, 0.34f, agent->facing_yaw),
             0.040f, WORLD_VOID);
         DrawSmallSphere(
-            LocalPoint(body, 0.085f, 0.06f, 0.34f, agent->facing_yaw),
+            LocalPoint(local_body, 0.085f, 0.06f, 0.34f, agent->facing_yaw),
             0.040f, WORLD_VOID);
+        rlPopMatrix();
     }
     Vector3 rig_offset = LocalPoint((Vector3){0}, 0.022f, 0.010f, 0.040f,
                                     agent->facing_yaw);
@@ -2486,6 +2500,7 @@ typedef struct TreeRegionalStyle {
     float cluster_pull;
     float turn_steps;
     float shape_shift;
+    bool orchard_crown;
 } TreeRegionalStyle;
 
 static TreeRegionalStyle TreeStyleForKingdom(Color kingdom)
@@ -2493,18 +2508,18 @@ static TreeRegionalStyle TreeStyleForKingdom(Color kingdom)
     if (kingdom.r > kingdom.g && kingdom.r > kingdom.b) {
         return (TreeRegionalStyle){
             TREE_REGION_EMBER, {1.14f, 0.94f, 1.10f},
-            {112, 99, 58, 255}, 0.24f, 0.34f, 5.0f, 0.08f
+            {112, 99, 58, 255}, 0.24f, 0.34f, 5.0f, 0.08f, false
         };
     }
     if (kingdom.b > kingdom.r && kingdom.b > kingdom.g) {
         return (TreeRegionalStyle){
             TREE_REGION_BLUE, {0.98f, 1.06f, 0.88f},
-            {65, 89, 109, 255}, 0.22f, 0.22f, 6.0f, -0.04f
+            {65, 89, 109, 255}, 0.22f, 0.22f, 6.0f, -0.04f, false
         };
     }
     return (TreeRegionalStyle){
         TREE_REGION_VERDANT, {0.90f, 1.14f, 0.94f},
-        {43, 107, 88, 255}, 0.20f, 0.28f, 4.0f, 0.02f
+        {43, 107, 88, 255}, 0.20f, 0.28f, 4.0f, 0.02f, false
     };
 }
 
@@ -3240,6 +3255,34 @@ static void DrawPollardTree(Vector3 root, float turn, float shape,
     }
 }
 
+static void DrawThornfordOrchardTree(Vector3 root, float turn, float shape,
+                                      Color leaves)
+{
+    float height = 4.55f + shape * 0.65f;
+    Color bark = BlendColor(WORLD_WOOD_SHADOW, WORLD_WOOD, 0.36f);
+    Vector3 fork = LocalPoint(root, 0.12f, height * 0.42f, 0.0f, turn);
+    Vector3 left = LocalPoint(root, -1.02f, height * 0.76f, 0.08f, turn);
+    Vector3 right = LocalPoint(root, 1.10f, height * 0.74f, -0.12f, turn);
+    DrawTreeShadow(root, turn, 2.20f, 1.80f);
+    DrawTreeRootFlare(root, turn, 0.34f, bark);
+    DrawTreeCylinder(root, fork, 0.38f, 0.25f, 7, bark);
+    DrawTreeCylinder(fork, left, 0.23f, 0.06f, 6, bark);
+    DrawTreeCylinder(fork, right, 0.22f, 0.05f, 6, ShadeColor(bark, 0.84f));
+    DrawTreeFoliageMass(TREE_CROWN_OAK, left,
+                        (Vector3){1.62f, 1.85f, 1.48f}, turn + 0.20f,
+                        ShadeColor(leaves, 0.80f));
+    DrawTreeFoliageMass(TREE_CROWN_OAK, right,
+                        (Vector3){1.60f, 1.90f, 1.44f}, turn - 0.16f,
+                        ShadeColor(leaves, 0.94f));
+    DrawTreeFoliageMass(TREE_CROWN_OAK,
+                        LocalPoint(root, 0.08f, height * 0.91f, -0.16f, turn),
+                        (Vector3){1.78f, 1.80f, 1.52f}, turn + 0.08f, leaves);
+    DrawTreeFoliageMass(TREE_CROWN_OAK,
+                        LocalPoint(root, -0.12f, height * 0.72f, 0.95f, turn),
+                        (Vector3){1.54f, 1.52f, 1.36f}, turn + 0.32f,
+                        ShadeColor(leaves, 0.86f));
+}
+
 static void DrawTree(float x, float z, TreeFamily family, Color leaves,
                      TreeRegionalStyle regional_style)
 {
@@ -3271,7 +3314,11 @@ static void DrawTree(float x, float z, TreeFamily family, Color leaves,
 
     switch (family) {
         case TREE_FAMILY_OAK:
-            DrawOakTree(root, turn, shape, leaves);
+            if (regional_style.orchard_crown) {
+                DrawThornfordOrchardTree(root, turn, shape, leaves);
+            } else {
+                DrawOakTree(root, turn, shape, leaves);
+            }
             break;
         case TREE_FAMILY_POLLARD:
             DrawPollardTree(root, turn, shape, leaves);
@@ -3286,12 +3333,24 @@ static void DrawTree(float x, float z, TreeFamily family, Color leaves,
 
 static void DrawWorldTreeAt(int32_t index, TreeRegionalStyle regional_style)
 {
-    Vector2 position = WORLD_TREES[index].position;
-    position.x += (index & 1) != 0 ? -regional_style.cluster_pull :
-                                     regional_style.cluster_pull;
-    TreeFamily family = RegionalTreeFamily(WORLD_TREES[index].family, index,
+    WorldTreePlacement placement = ActiveWorldTreeAt(index);
+    Vector2 position = placement.position;
+    if (active_place_function != CC_SETTLEMENT_FARMING) {
+        position.x += (index & 1) != 0 ? -regional_style.cluster_pull :
+                                         regional_style.cluster_pull;
+    }
+    TreeFamily family = RegionalTreeFamily(placement.family, index,
                                            regional_style);
     Color leaves = (index & 1) != 0 ? WORLD_FOLIAGE : WORLD_FOLIAGE_LIGHT;
+    if (active_place_function == CC_SETTLEMENT_FARMING) {
+        regional_style.proportions = (Vector3){1.24f, 0.94f, 1.20f};
+        regional_style.foliage_bias = WORLD_CROP;
+        regional_style.foliage_mix = family == TREE_FAMILY_ALDER ? 0.16f : 0.38f;
+        regional_style.orchard_crown = true;
+        family = placement.family;
+        leaves = BlendColor(WORLD_FOLIAGE_LIGHT, WORLD_CROP_LIGHT,
+                             index % 3 == 0 ? 0.34f : 0.12f);
+    }
     if (family == TREE_FAMILY_OAK) {
         leaves = ShadeColor(leaves, 0.86f);
     } else if (family == TREE_FAMILY_POLLARD) {
@@ -3303,17 +3362,11 @@ static void DrawWorldTreeAt(int32_t index, TreeRegionalStyle regional_style)
 static uint32_t WorldTreeVisibilityMask(Vector3 focus,
                                         TreeRegionalStyle regional_style)
 {
+    (void)focus;
+    (void)regional_style;
     uint32_t mask = 0U;
-    int32_t scene = street_camera_rig.shot;
     for (int32_t i = 0;
          i < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0])); ++i) {
-        if (active_place_function == CC_SETTLEMENT_MINING &&
-            scene == CC_LOCAL_TOWN_SCENE_LANDMARK &&
-            (i == 4 || i == 25)) continue;
-        Vector2 position = WORLD_TREES[i].position;
-        position.x += (i & 1) != 0 ? -regional_style.cluster_pull :
-                                     regional_style.cluster_pull;
-        if (!SceneryPointVisible(position.x, position.y, focus)) continue;
         mask |= UINT32_C(1) << (uint32_t)i;
     }
     return mask;
@@ -4221,8 +4274,13 @@ static void BeginWorldLighting(Camera3D camera,
     float fog_color[3] = {(float)atmosphere_fog.r / 255.0f,
                           (float)atmosphere_fog.g / 255.0f,
                           (float)atmosphere_fog.b / 255.0f};
-    float fog_near = profile->fog_near * atmosphere.fog_distance_scale;
-    float fog_far = profile->fog_far * atmosphere.fog_distance_scale;
+    /* A long lens keeps the town's haze at its authored visual depth. */
+    float camera_distance = Vector3Distance(camera.position, camera.target);
+    float lens_depth_offset = camera.projection == CAMERA_PERSPECTIVE ?
+        fmaxf(0.0f, camera_distance * (1.0f -
+            tanf(camera.fovy * DEG2RAD * 0.5f) / tanf(12.0f * DEG2RAD))) : 0.0f;
+    float fog_near = profile->fog_near * atmosphere.fog_distance_scale + lens_depth_offset;
+    float fog_far = profile->fog_far * atmosphere.fog_distance_scale + lens_depth_offset;
     float horizon_fog = profile_id == ART_LIGHT_STORYBOOK ? 1.0f : 0.0f;
     SetShaderValue(visual_style.world, visual_style.horizon_fog_location,
                    &horizon_fog, SHADER_UNIFORM_FLOAT);
@@ -4242,9 +4300,9 @@ static void BeginWorldLighting(Camera3D camera,
     float foreground_anchor[3] = {composition->foreground_anchor.x,
                                   composition->foreground_anchor.y,
                                   composition->foreground_anchor.z};
-    float depth_splits[3] = {composition->depth_splits.x,
-                             composition->depth_splits.y,
-                             composition->depth_splits.z};
+    float depth_splits[3] = {composition->depth_splits.x + lens_depth_offset,
+                             composition->depth_splits.y + lens_depth_offset,
+                             composition->depth_splits.z + lens_depth_offset};
     SetShaderValue(visual_style.world,
                    visual_style.light_direction_location, direction,
                    SHADER_UNIFORM_VEC3);
@@ -4361,6 +4419,9 @@ static void BeginWorldLighting(Camera3D camera,
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_fog_far_location,
                        &fog_far, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_horizon_fog_location,
+                       &horizon_fog, SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_depth_splits_location,
                        depth_splits, SHADER_UNIFORM_VEC3);

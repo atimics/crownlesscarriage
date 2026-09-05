@@ -4,6 +4,10 @@
 #include "client/cc_crew.h"
 
 bool CcCoopClientActive(void);
+void CcCoopClientConfigure(const char *program, const char *campaign_path, const char *world);
+void CcCoopClientWorldId(char *world, size_t capacity);
+void CcCoopClientEnterWorld(const char *world);
+void CcCoopClientShutdown(void);
 bool CcCoopClientDead(void);
 int32_t CcCoopClientPartyWipes(void);
 void CcCoopClientLife(bool dead);

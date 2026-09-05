@@ -1,4 +1,4 @@
-/* The touch panel uses the same button bounds and input path as the canvas. */
+/* Reading and input metadata describe the controls drawn inside the game. */
 #if defined(PLATFORM_WEB)
 #define CLIENT_TOUCH_BUTTONS 96
 typedef struct ClientTouchButton {
@@ -55,8 +55,8 @@ EM_JS(int, ClientTouchEnabled, (), { return !!Module.crownlessTouchEnabled; });
 EM_JS(void, ClientTouchPublishBegin, (const char *title, const char *detail, const char *reading, int revision), {
     Module.crownlessTouchFrame = {title: UTF8ToString(title), detail: UTF8ToString(detail), reading: UTF8ToString(reading), revision, buttons: []};
 });
-EM_JS(void, ClientTouchPublishButton, (const char *label, int enabled, int active), {
-    Module.crownlessTouchFrame.buttons.push({label: UTF8ToString(label), enabled: !!enabled, active: !!active});
+EM_JS(void, ClientTouchPublishButton, (const char *label, int enabled, int active, float x, float y, float width, float height), {
+    Module.crownlessTouchFrame.buttons.push({label: UTF8ToString(label), enabled: !!enabled, active: !!active, x, y, width, height});
 });
 EM_JS(void, ClientTouchPublishEnd, (), {
     if (Module.renderCrownlessTouch) Module.renderCrownlessTouch(Module.crownlessTouchFrame);
@@ -117,8 +117,11 @@ static void ClientTouchEnd(void)
     (void)snprintf(touch_previous_detail, sizeof(touch_previous_detail), "%s", touch_detail);
     (void)snprintf(touch_previous_reading, sizeof(touch_previous_reading), "%s", touch_reading);
     ClientTouchPublishBegin(touch_title, touch_detail, touch_reading, touch_revision);
-    for (int i = 0; i < touch_count; ++i)
-        ClientTouchPublishButton(touch_buttons[i].label, touch_buttons[i].enabled, touch_buttons[i].active);
+    for (int i = 0; i < touch_count; ++i) {
+        Rectangle bounds = touch_buttons[i].bounds;
+        ClientTouchPublishButton(touch_buttons[i].label, touch_buttons[i].enabled, touch_buttons[i].active,
+            bounds.x, bounds.y, bounds.width, bounds.height);
+    }
     ClientTouchPublishEnd();
 }
 #else

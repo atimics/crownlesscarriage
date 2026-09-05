@@ -18,6 +18,7 @@ static bool HandlePonyInput(CcJournal *journal, CcSim *sim, LocalState *local,
     int32_t pony = CcPonyOnRoad(sim);
     if (pony < 0 || LocalCombatActive(local)) return false;
     if (sim->pony_company.encounter < 0) {
+        if (action.kind != CONTEXT_ACTION_PONY_MEET) return false;
         CcCommand meet = {.kind = CC_COMMAND_MEET_PONY, .target_id = (CcId)pony + 1U};
         if (!ApplyCommand(journal, sim, meet, message, capacity)) return true;
         local->travel_fast_forward = false;
@@ -64,29 +65,30 @@ static const Color PONY_COLORS[CC_PONY_COUNT] = {
 static void DrawPonyEncounter(const CcSim *sim)
 {
     int32_t pony = sim->pony_company.encounter;
-    if (pony >= 0) {
-        float x = (float)GetScreenWidth() * 0.5f - 330;
-        float y = (float)GetScreenHeight() - 274;
-        DrawPanel((Rectangle){x, y, 660, 148}, (Color){13, 18, 28, 250});
-        const CcPony *p = &sim->pony_company.ponies[pony];
-        CcOverlayDrawText(TextFormat("%s / %s", CcPonyName(pony),
-            p->releases > 0 ? "A familiar face" : "A rainbow traveller"),
-            (int)x + 16, (int)y + 16, 15, PONY_COLORS[pony]);
-        CcOverlayDrawText(CcPonyPersonality(pony), (int)x + 16, (int)y + 40, 10, MUTED);
-        char quest[256] = {0};
-        CcPonyQuestText(sim, pony, quest, sizeof(quest));
-        DrawTwoLineText(quest, (int)x + 16, (int)y + 63, 76U, 10, INK);
-        if (p->ready) {
-            CcOverlayDrawText("Quest complete. Invite this pony and let one companion roam free.",
-                (int)x + 16, (int)y + 106, 10, TEAL);
-
-        } else {
-            CcGood good = CcPonyQuestGood(p);
-            CcOverlayDrawText(TextFormat("You carry %d / %d %s. Bond %d.",
-                sim->player.cargo[good], p->quest_amount, CcGoodDefinitionFor(good)->name, p->bond),
-                (int)x + 16, (int)y + 106, 10, TEAL);
-        }
-    }
+    if (pony < 0) return;
+    const CcPony *p = &sim->pony_company.ponies[pony];
+    char quest[256] = {0};
+    CcPonyQuestText(sim, pony, quest, sizeof(quest));
+    const char *line = p->ready ? "Thank you. I would love to travel with you. Who will head out on a new adventure?" : quest;
+    ClientTouchHeading(CcPonyName(pony), line);
+    int size = AdventureTextSize(17);
+    float width = fminf(760.0f, (float)GetScreenWidth() - 80.0f);
+    int line_height = AdventureText(line, 0, 0, (int)width - 44, size, INK, false);
+    float height = 120.0f + (float)line_height;
+    float x = ((float)GetScreenWidth() - width) * 0.5f;
+    float y = (float)GetScreenHeight() - 108.0f - height;
+    DrawPanel((Rectangle){x, y, width, height}, Fade(PANEL_DEEP, 0.96f));
+    CcOverlayDrawText(CcPonyName(pony), (int)x + 22, (int)y + 16,
+        AdventureTextSize(23), PONY_COLORS[pony]);
+    CcOverlayDrawText(CcPonyPersonality(pony), (int)x + 22, (int)y + 49,
+        AdventureTextSize(13), MUTED);
+    (void)AdventureWrap(line, (int)x + 22, (int)y + 77, (int)width - 44, size, INK);
+    CcGood good = CcPonyQuestGood(p);
+    const char *detail = p->ready ? "Choose a companion to release, or say farewell." :
+        TextFormat("You carry %d of %d %s. Bond %d.", sim->player.cargo[good],
+            p->quest_amount, CcGoodDefinitionFor(good)->name, p->bond);
+    CcOverlayDrawText(detail, (int)x + 22, (int)(y + height) - 29,
+        AdventureTextSize(13), TEAL);
 }
 
 static void DrawCarriagePonies(const CcSim *sim)

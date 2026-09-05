@@ -1,7 +1,9 @@
 # Situation music
 
-The director ranks all 64 soundtrack titles by the current place and situation.
-The catalog contains 149 takes, including the dark pixel remixes.
+The director ranks 82 soundtrack cues by the current place and situation.
+The catalog contains 185 takes, including the original 149 performances and
+36 town arrangements. The 27 exported MP3s are playable now; 158 takes await
+export. Each file joins play through local installation or the hosted catalog.
 
 Road progress blends the origin and destination regions from 100/0 to 0/100.
 The same rule follows a journey in either direction. Nearby work sites add a
@@ -14,6 +16,13 @@ It chooses a title first, then a take. Recent titles get a lower chance. A title
 with several installed takes chooses a different take on its next play. The
 first folk arrangements have a take weight of 0.45; the dark pixel takes use 1.
 The shuffle has its own random state, so music choices preserve simulation RNG.
+
+The new town themes each have everyday, shortage and recovery pairs. They follow
+the named town on the surface. Hunger of 40 or more selects shortage. A positive
+food-relief event selects recovery below that threshold for three game days,
+including its delivery day. Everyday applies otherwise. A matching arrangement
+gets twice the usual relevance score, then the usual recent-title penalty.
+The existing library supplies music while the new files await export.
 
 | Change | Timing |
 | --- | --- |
@@ -36,7 +45,7 @@ music releases its streams before that device closes.
 
 ## Audio files
 
-The catalog and gameplay integration are ready for exported audio. Add files
+Add later files
 with the stems in `catalog.json`, for example `03-01.ogg` and `59-01.mp3`.
 The player accepts OGG, MP3, WAV and FLAC. It scans installed takes after the
 first play input and streams up to three at once. Native builds check the
@@ -44,13 +53,14 @@ working directory, source assets and app resource directory. A packaged browser
 build can use files mounted at the same paths in its virtual filesystem; the
 audio delivery step can choose which files to mount or stream remotely.
 
-The audio exports remain in Suno. The private download map is kept with the
-soundtrack work artifacts. This catalog contains titles, themes, file stems
-and lengths.
+The private Suno download map is kept with the soundtrack work artifacts.
+This catalog contains titles, themes, moods, file stems and lengths. The town
+stem mapping and host export steps are in `docs/design/music-delivery.md`.
 
 ## Editing themes
 
 Edit `catalog.json`, then run `python3 tools/music_catalog.py`.
 `python3 tools/music_catalog.py --check` checks the generated C table.
+The same command checks its generated cue and take counts.
 `situation_music_and_fades` tests route direction, place attraction, weighted
 shuffle, combat priority, interruptions and fade continuity.

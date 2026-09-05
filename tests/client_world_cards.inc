@@ -111,34 +111,18 @@ static int RunWorldCardRegression(void)
         CARD_INPUT();
         CARD_CHECK(view == VIEW_LEDGER && return_view == VIEW_LOCAL,
             "B must open the Company Book from the road.");
+        for (int32_t page = 0; page < 4; ++page) {
+            local.book_offset = 2;
+            queued_key_press[KEY_ONE + page] = true;
+            CARD_INPUT();
+            CARD_CHECK(view == VIEW_LEDGER && local.book_page == page && local.book_offset == 0,
+                "Keys 1 through 4 must open each book page at the start.");
+        }
         queued_key_press[KEY_FIVE] = true;
         CARD_INPUT();
-        CARD_CHECK(view == VIEW_LEDGER && local.book_page == 4 && local.book_offset == 0 &&
-            AdventureBookPony(&sim, 0) == sim.pony_company.team[0] &&
-            AdventureBookPony(&sim, 1) == sim.pony_company.team[1],
-            "The Ponies page must open with both travel companions.");
-        unsigned int pony_rows = 0;
-        for (int32_t row = 0; row < CC_PONY_COUNT; ++row) {
-            int32_t pony = AdventureBookPony(&sim, row);
-            CARD_CHECK(pony >= 0 && pony < CC_PONY_COUNT && (pony_rows & (1U << pony)) == 0,
-                "Every pony must appear once in the Company Book.");
-            pony_rows |= 1U << pony;
-            char details[384];
-            AdventurePonyDetails(&sim, pony, details, sizeof(details));
-            if (!sim.pony_company.ponies[pony].seen) CARD_CHECK(
-                strstr(details, CcPonyPersonality(pony)) == NULL && strstr(details, "Last seen") == NULL,
-                "An unknown pony must wait for an introduction.");
-        }
-        for (int32_t page = 1; page <= 4; ++page) {
-            queued_key_press[KEY_DOWN] = true;
-            CARD_INPUT();
-            CARD_CHECK(local.book_offset == (page < 3 ? page * 2 : 6),
-                "Pony page controls must reach the final pony and stay within the roster.");
-        }
-        queued_key_press[KEY_FOUR] = true;
-        CARD_INPUT();
-        CARD_CHECK(local.book_page == 3 && local.book_offset == 0,
-            "Switching to the Journal must reset the page position.");
+        CARD_CHECK(view == VIEW_LEDGER && local.book_page == 3 && local.book_offset == 0 &&
+            local.carriage_tab == CARRIAGE_OVERVIEW,
+            "The book must keep the Journal selected when 5 is pressed.");
         queued_key_press[KEY_B] = true;
         CARD_INPUT();
         CARD_CHECK(view == VIEW_LOCAL && CcSimHash(&sim) == carriage_hash,
@@ -147,8 +131,8 @@ static int RunWorldCardRegression(void)
         view = VIEW_LOCAL;
         BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
         ContextActionSet cards = BuildContextActions(&sim, &local, view, selected, 0);
-        CARD_CHECK(cards.count == local.interactions.count && cards.count > 4,
-            "Every town object needs a card, with four closest objects on the first page.");
+        CARD_CHECK(local.interactions.count > 4 && cards.count == 4,
+            "Town controls show the four closest objects.");
         CARD_CHECK(ContextCardsPerPage() == 4, "The tray must show four choices.");
         float last_distance = -1;
         for (int32_t i = 0; i < cards.count; ++i) {
@@ -177,13 +161,8 @@ static int RunWorldCardRegression(void)
         unavailable->available = true;
         message[0] = '\0';
 
-        Rectangle next = ContextPageBounds(true);
-        client_test_pointer_active = true;
-        client_test_pointer = (Vector2){next.x + 20, next.y + 20};
-        queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
-        CARD_INPUT();
-        CARD_CHECK(local.card_page == 1 && CcSimHash(&sim) == before && !local.agent.target_valid,
-            "Browsing cards must keep the campaign and walking target steady.");
+        CARD_CHECK(cards.count == 4 && ContextCardCount(cards.count, 0) == 4,
+            "Town controls must show the nearest four options together.");
         /* Card identity remains valid when the object is outside the camera. */
         CcInteractionTarget *door = NULL;
         for (int32_t i = 0; i < local.interactions.count; ++i)
@@ -258,10 +237,10 @@ static int RunWorldCardRegression(void)
         for (int32_t frame = 0; frame < 30; ++frame) CARD_INPUT();
         CARD_CHECK(!local.carriage_stopped && sim.journey.elapsed_subticks > elapsed,
             "Drive must resume journey progress.");
-        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_SET_PACE, CC_JOURNEY_PACE_CAREFUL, false),
-            "Journey pace needs a card.");
+        client_test_pointer_active = false;
+        queued_key_press[KEY_DOWN] = true;
         CARD_INPUT();
-        CARD_CHECK(sim.journey.pace == CC_JOURNEY_PACE_CAREFUL, "The pace card must set the journey posture.");
+        CARD_CHECK(sim.journey.pace == CC_JOURNEY_PACE_CAREFUL, "The pace shortcut must set the journey posture.");
         /* Put this journalled journey at one of its road stops. The simulation
            road-stop suite covers natural arrival, both directions and replay. */
         const CcRoadSite *site = NULL;
@@ -302,6 +281,6 @@ static int RunWorldCardRegression(void)
     (void)remove(path);
 #undef CARD_CHECK
 #undef CARD_INPUT
-    puts("World cards: nearest four, paging, doors, site returns, roads, stop, drive, pace, camp and reload passed");
+    puts("World cards: nearest four, doors, site returns, roads, stop, drive, pace, camp and reload passed");
     return 0;
 }

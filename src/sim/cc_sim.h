@@ -55,7 +55,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 44
+#define CC_SIM_SCHEMA_VERSION 45
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -503,6 +503,8 @@ typedef struct CcSettlement {
     int32_t security;
     int32_t prosperity;
     int32_t hunger;
+    int32_t fire_damage;
+    int32_t last_fire_day;
     CcSettlementSize size;
     uint32_t service_mask;
     CcServiceKind service_project;
@@ -536,6 +538,16 @@ typedef struct CcSettlement {
     int32_t sheep_condition;
     int32_t sheep_hunger;
 } CcSettlement;
+
+typedef enum CcTownCondition {
+    CC_TOWN_BURNT = UINT32_C(1) << 0,
+    CC_TOWN_REBUILDING = UINT32_C(1) << 1,
+    CC_TOWN_LAWLESS = UINT32_C(1) << 2,
+    CC_TOWN_PEACEFUL = UINT32_C(1) << 3,
+    CC_TOWN_THRIVING = UINT32_C(1) << 4,
+    CC_TOWN_HUNGRY = UINT32_C(1) << 5,
+    CC_TOWN_ABANDONED = UINT32_C(1) << 6
+} CcTownCondition;
 
 typedef struct CcFoodEconomy {
     int32_t stock;
@@ -1641,6 +1653,8 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days);
 void CcGossipText(const CcSim *sim, const CcGossip *story,
                   const CcGossipVersion *version, char *text, size_t capacity);
 bool CcSettlementIsAbandoned(const CcSettlement *settlement);
+uint32_t CcSimTownConditions(const CcSim *sim, CcId settlement_id);
+bool CcSettlementCanRepairFire(const CcSettlement *settlement);
 int32_t CcSimClimateFactor(const CcSim *sim);
 int32_t CcSimArchivePhysicalLore(const CcSim *sim);
 int32_t CcDragonCampaignExperience(const CcSim *sim);

@@ -65,9 +65,11 @@ endfunction()
 
 add_library(crownless_locomotion
     src/locomotion/cc_biomech.c
+    src/locomotion/cc_collision.c
     src/locomotion/cc_creature.c
     src/locomotion/cc_humanoid.c
     src/locomotion/cc_humanoid_skin.c
+    src/locomotion/cc_footing.c
     src/locomotion/cc_limb.c
     src/locomotion/cc_multileg.c
     src/locomotion/cc_motion.c
@@ -298,7 +300,9 @@ if(CC_BUILD_CLIENT)
     file(GLOB CC_VOICE_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/voice/*.wav")
     add_executable(crownless_carriage src/client/main.c src/client/cc_audio.c
                    src/client/cc_music_player.c
-        src/client/cc_music_stream.c src/client/cc_music_net.c src/client/cc_voice_net.c src/client/cc_coop_client.c)
+                   src/client/cc_music_stream.c src/client/cc_music_net.c
+                   src/client/cc_voice_net.c src/client/cc_coop_client.c
+                   src/client/cc_company.c)
     target_compile_definitions(crownless_carriage PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
     if(APPLE)
@@ -1105,6 +1109,17 @@ if(BUILD_TESTING)
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
     if(CC_PYTHON3_EXECUTABLE)
+        if(CC_BUILD_CLIENT AND NOT EMSCRIPTEN)
+            add_executable(native_coop_tests tests/native_coop_tests.c src/client/cc_coop_client.c src/client/cc_company.c)
+            target_link_libraries(native_coop_tests PRIVATE crownless_persistence crownless_client_session raylib CURL::libcurl Threads::Threads)
+            cc_strict_warnings(native_coop_tests)
+            # Python loads the host bridge with ctypes, as in shared_carriage_server.
+            if(NOT CMAKE_C_FLAGS MATCHES "sanitize")
+                add_test(NAME native_shared_company COMMAND ${CC_PYTHON3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/native_coop_tests.py $<TARGET_FILE:native_coop_tests> $<TARGET_FILE:crownless_coop>)
+                set_tests_properties(native_shared_company PROPERTIES TIMEOUT 60)
+            endif()
+        endif()
         add_test(NAME music_catalog_metadata
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tools/music_catalog.py --check)
@@ -1258,6 +1273,12 @@ if(BUILD_TESTING)
     cc_strict_warnings(local_place_tests)
     add_test(NAME distinct_local_places COMMAND local_place_tests)
 
+    add_executable(town_evolution_tests tests/town_evolution_tests.c)
+    target_link_libraries(town_evolution_tests PRIVATE
+        crownless_local_place crownless_persistence)
+    cc_strict_warnings(town_evolution_tests)
+    add_test(NAME town_evolution COMMAND town_evolution_tests)
+
     add_executable(world_stream_tests tests/world_stream_tests.c)
     target_link_libraries(world_stream_tests PRIVATE crownless_world)
     cc_strict_warnings(world_stream_tests)
@@ -1273,10 +1294,20 @@ if(BUILD_TESTING)
     cc_strict_warnings(limb_system_tests)
     add_test(NAME generalized_limb_system COMMAND limb_system_tests)
 
+    add_executable(collision_system_tests tests/collision_system_tests.c)
+    target_link_libraries(collision_system_tests PRIVATE crownless_locomotion)
+    cc_strict_warnings(collision_system_tests)
+    add_test(NAME continuous_character_collision COMMAND collision_system_tests)
+
     add_executable(biomech_system_tests tests/biomech_system_tests.c)
     target_link_libraries(biomech_system_tests PRIVATE crownless_locomotion)
     cc_strict_warnings(biomech_system_tests)
     add_test(NAME generalized_biomechanical_system COMMAND biomech_system_tests)
+
+    add_executable(footing_course_tests tests/footing_course_tests.c)
+    target_link_libraries(footing_course_tests PRIVATE crownless_locomotion)
+    cc_strict_warnings(footing_course_tests)
+    add_test(NAME verified_footing_course COMMAND footing_course_tests)
 
     add_executable(creature_rig_tests tests/creature_rig_tests.c)
     target_link_libraries(creature_rig_tests PRIVATE crownless_locomotion)
@@ -1376,6 +1407,11 @@ if(BUILD_TESTING)
             USES_TERMINAL
         )
 
+        add_executable(creature_frame_tests tests/creature_frame_tests.c)
+        target_link_libraries(creature_frame_tests PRIVATE crownless_local_renderer raylib)
+        cc_strict_warnings(creature_frame_tests)
+        add_test(NAME fixed_creature_gait_timing COMMAND creature_frame_tests)
+
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c
         )
@@ -1409,6 +1445,16 @@ if(BUILD_TESTING)
         )
         cc_strict_warnings(local_movement_tests)
         add_test(NAME local_collision_space COMMAND local_movement_tests)
+
+        add_executable(character_collision_course_tests tests/character_collision_course_tests.c)
+        target_link_libraries(character_collision_course_tests PRIVATE
+            crownless_local_renderer
+            crownless_sim crownless_locomotion
+            crownless_creature_catalog crownless_local_place
+            crownless_client_policy crownless_world raylib
+        )
+        cc_strict_warnings(character_collision_course_tests)
+        add_test(NAME character_collision_course COMMAND character_collision_course_tests)
 
         add_executable(terrain_tests tests/terrain_tests.c)
         target_link_libraries(terrain_tests PRIVATE

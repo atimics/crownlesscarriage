@@ -549,6 +549,11 @@ bool CcClientInstanceLockAcquire(const char *path,
                         "Could not open the campaign lock.");
         return false;
     }
+    if (fcntl(descriptor, F_SETFD, FD_CLOEXEC) != 0) {
+        (void)close(descriptor);
+        SetSessionError(error, error_capacity, "Could not prepare the campaign lock.");
+        return false;
+    }
     struct flock campaign_lock = {
         .l_type = F_WRLCK,
         .l_whence = SEEK_SET,
