@@ -27,6 +27,8 @@ static void PlanTrade(CcSim *sim);
 static int32_t SettlementSlotById(const CcSim *sim, CcId id);
 static int32_t CalculateDragonCrownStrength(const CcSim *sim);
 static bool DragonIsAliveAndUncrowned(const CcSim *sim);
+static int32_t TakeAllianceGood(CcSim *sim, uint32_t mask, CcGood good,
+                                int32_t quantity);
 static CcId LatestLocalCause(const CcSim *sim, CcId location);
 static uint32_t RoadHouseSeed(const CcSim *sim, CcId route_id);
 static const char *GeneratedRoadHouseName(const CcSim *sim, CcId route_id);
@@ -5648,7 +5650,8 @@ static void AdvanceCoronationLaw(CcSim *sim, bool scriptorium_ready,
         if (sim->schema_version >= 35U) {
             kingdom->anointed_by_character_id = 0U;
         }
-        bool live_uncrowned_dragon = DragonIsAliveAndUncrowned(sim);
+        bool live_uncrowned_dragon = sim->schema_version >= 42U &&
+                                     DragonIsAliveAndUncrowned(sim);
         int32_t legitimacy_loss = live_uncrowned_dragon ? 8 : 15;
         kingdom->legitimacy = MaximumI32(0, kingdom->legitimacy - legitimacy_loss);
         kingdom->pretender_crises += 1;
@@ -5659,11 +5662,12 @@ static void AdvanceCoronationLaw(CcSim *sim, bool scriptorium_ready,
                 "A pretender rises in %.60s, vowing to slay %.30s.",
                 kingdom->name, sim->dragon.name);
             if (sim->dragon_campaign.phase == CC_DRAGON_CAMPAIGN_OUTBOUND &&
-                ((sim->dragon_campaign.pledged_kingdom_mask >> i) & 1U) != 0) {
-                sim->dragon_campaign.supplies[CC_GOOD_TOOLS] =
-                    MinimumI32(CC_SIM_MAX_UNITS,
-                        sim->dragon_campaign.supplies[CC_GOOD_TOOLS] + 3);
-                sim->dragon_campaign.recovered_coins += 40;
+                ((sim->dragon_campaign.alliance_kingdom_mask >> i) & 1U) != 0) {
+                int32_t room = CC_SIM_MAX_UNITS -
+                    sim->dragon_campaign.supplies[CC_GOOD_TOOLS];
+                sim->dragon_campaign.supplies[CC_GOOD_TOOLS] +=
+                    TakeAllianceGood(sim, UINT32_C(1) << (uint32_t)i,
+                                     CC_GOOD_TOOLS, MinimumI32(3, room));
             }
             if (sim->dragon_campaign.phase == CC_DRAGON_CAMPAIGN_IDLE &&
                 sim->dragon_campaign.cooldown_days > 0) {
@@ -12003,12 +12007,14 @@ static void AdvanceDragonCampaign(CcSim *sim)
             sim, campaign->origin_settlement_id);
         CcTreasure *relic = origin != NULL ? AllocateTreasure(sim) : NULL;
         if (relic != NULL) {
-            const char *epithet =
+            const char *epithet = sim->schema_version < 42U ? "" :
                 slain_stage == CC_DRAGON_STAGE_DEEP_WYRM ? ", Wyrmsbane" :
                 slain_stage == CC_DRAGON_STAGE_CROWNED ?
                     ", the Crown's End" : "";
+            int name_limit = (int)sizeof(relic->name) - 9 - (int)strlen(epithet);
+            if (name_limit > 24) name_limit = 24;
             (void)snprintf(relic->name, sizeof(relic->name),
-                           "Bane of %.24s%s", sim->dragon.name, epithet);
+                           "Bane of %.*s%s", name_limit, sim->dragon.name, epithet);
             relic->maker_settlement_id = origin->id;
             relic->owner_id = hero != NULL ? hero->id : origin->id;
             relic->location_id = origin->id;
@@ -12021,14 +12027,21 @@ static void AdvanceDragonCampaign(CcSim *sim)
                outranks the Wyrmheart it was taken from. */
             relic->appraised_value = relic->gold_content * 40 +
                 relic->gem_content * 70 + relic->craft_work * 10 +
-                MinimumI32(slain_age_years / 10, 100) * 15;
+                (sim->schema_version >= 42U ?
+                    MinimumI32(slain_age_years / 10, 100) * 15 : 0);
             relic->created_day = sim->current_day;
             char relic_text[CC_EVENT_TEXT_CAPACITY];
-            (void)snprintf(relic_text, sizeof(relic_text),
-                           "From the hoard-fire %.20s raises %.20s, bane of %.20s, slain at %d years, day %d.",
-                           hero != NULL ? hero->name : "the host",
-                           relic->name, sim->dragon.name,
-                           slain_age_years, sim->current_day);
+            if (sim->schema_version >= 42U) {
+                (void)snprintf(relic_text, sizeof(relic_text),
+                    "From the hoard-fire %.20s raises %.20s, bane of %.20s, slain at %d years, day %d.",
+                    hero != NULL ? hero->name : "the host",
+                    relic->name, sim->dragon.name, slain_age_years, sim->current_day);
+            } else {
+                (void)snprintf(relic_text, sizeof(relic_text),
+                    "From the hoard-fire %.20s raises %.20s, bane of %.20s, day %d.",
+                    hero != NULL ? hero->name : "the host",
+                    relic->name, sim->dragon.name, sim->current_day);
+            }
             (void)PushEvent(sim, CC_EVENT_TREASURE_CRAFTED,
                             relic->id, origin->id, battle_event_id,
                             relic->appraised_value, relic_text);
@@ -17284,12 +17297,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 37U ||
                          sim->schema_version == 38U ||
                          sim->schema_version == 39U ||
-                         sim->schema_version == 40U;
+                         sim->schema_version == 40U ||
+                         sim->schema_version == 41U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 41U && sim->generator_version == 25U) ||
         (sim->schema_version == 40U && sim->generator_version == 25U) ||
         (sim->schema_version == 39U && sim->generator_version == 25U) ||
         (sim->schema_version == 38U && sim->generator_version == 25U) ||

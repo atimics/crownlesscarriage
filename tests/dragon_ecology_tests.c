@@ -263,6 +263,21 @@ int main(void)
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         bane.dragon_campaign.supplies[good] = 400;
     }
+    (void)snprintf(bane.dragon.name, sizeof(bane.dragon.name),
+                   "A dragon with a very long ancient name");
+    CcSim legacy_bane = bane;
+    legacy_bane.schema_version = 41U;
+    CcSimAdvanceDays(&legacy_bane, 1);
+    bool legacy_relic = false;
+    for (int32_t i = 0; i < legacy_bane.treasure_count; ++i) {
+        const CcTreasure *t = &legacy_bane.treasures[i];
+        if (strncmp(t->name, "Bane of ", 8) != 0 || t->destroyed) continue;
+        legacy_relic = true;
+        CC_CHECK(strstr(t->name, "the Crown's End") == NULL);
+        CC_CHECK(t->appraised_value == t->gold_content * 40 +
+            t->gem_content * 70 + t->craft_work * 10);
+    }
+    CC_CHECK(legacy_relic);
     CcSimAdvanceDays(&bane, 1);
     CC_CHECK(bane.dragon.slain);
     bool bane_found = false;
