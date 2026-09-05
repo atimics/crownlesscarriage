@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Crownless · A shared carriage</title>
   <meta name="theme-color" content="#20392f">
-  <link rel="stylesheet" href="/coop.css"><script src="/avatar.js" defer></script><script src="/coop.js" defer></script>
+  <link rel="stylesheet" href="/coop.css"><script src="/coop.js" defer></script>
 </head>
 <body>
   <header><a href="/" class="brand">CROWNLESS <span>Carriage & company</span></a><span id="connection">Finding the road…</span></header>
@@ -31,24 +31,9 @@
       <p class="quiet">Up to eight people share one company, one carriage, and one clock. Time gathers speed while everyone is away. Return to your place in a world that has grown older.</p>
     </section>
     <section id="world" hidden>
-      <div class="title-row"><div><p class="eyebrow" id="world-name"></p><h1>Your traveller.</h1></div><button id="leave" class="secondary">Worlds</button></div>
-      <p class="intro">Choose your look. Your company is waiting in the world.</p>
-      <div class="avatar-layout">
-        <section class="avatar-stage" aria-label="Your avatar preview">
-          <iframe id="avatar-preview" title="Live avatar preview" hidden></iframe>
-          <p id="preview-status">Preparing your traveller…</p>
-          <div class="preview-caption"><span id="player-name"></span><span>THE CROWNLESS COMPANY</span></div>
-        </section>
-        <form id="appearance-form" class="paper">
-          <h2>A face for the road</h2>
-          <fieldset id="skin-options"><legend>Skin tone</legend></fieldset>
-          <div class="appearance-fields"><label>Face<select id="face" name="face"></select></label><label>Hair style<select id="style" name="style"></select></label></div>
-          <fieldset id="hair-options"><legend>Hair colour</legend></fieldset>
-          <fieldset id="coat-options"><legend>Coat colour</legend></fieldset>
-          <div class="appearance-save"><button id="save-appearance" class="secondary" type="submit">Save appearance</button><span id="appearance-status" role="status">Saved</span></div>
-          <a id="game-link" class="button" hidden>Enter the world <span>↗</span></a>
-        </form>
-      </div>
+      <div class="title-row"><div><p class="eyebrow" id="world-name"></p><h1>Your company.</h1></div><button id="leave" class="secondary">Worlds</button></div>
+      <p class="intro">Your carriage is ready. Choose your look from Your traveller in the game menu.</p>
+      <a id="game-link" class="button" hidden>Enter the world <span>↗</span></a>
       <section class="crew-section"><div class="crew-heading"><h2>Your company</h2><button id="invite" class="secondary" hidden>Invite crew</button></div><div id="crew" class="crew" aria-label="Carriage crew"></div></section>
       <p class="quiet">One company. One carriage. One shared clock. Your journey continues in the world.</p>
     </section>

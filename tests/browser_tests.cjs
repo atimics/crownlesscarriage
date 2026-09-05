@@ -29,7 +29,9 @@ async function main() {
       await page.keyboard.press('ArrowDown');
       await page.waitForFunction(value => Module.crownlessMenuFocus !== value, previous);
     }
+    const draft = await page.evaluate(() => Module.crownlessScreen === 'avatar' ? Module.crownlessAvatarDraft : null);
     await page.keyboard.press('Enter');
+    if (draft !== null && index < 5) await page.waitForFunction(value => Module.crownlessAvatarDraft !== value, draft);
   }
   const errors = [];
   let rejectedWrite = false;
@@ -66,6 +68,22 @@ async function main() {
     await page.waitForFunction(() => Module.crownlessScreen === 'title');
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), 0);
     await page.screenshot({path: path.join(output, 'title.png')});
+    assert.equal(await page.locator('header, footer, iframe').count(), 0);
+    await selectMenuItem(3);
+    await page.waitForFunction(() => Module.crownlessScreen === 'avatar');
+    await selectMenuItem(4); // Moss coat, preview only.
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => Module.crownlessScreen === 'title');
+    await selectMenuItem(3);
+    await page.waitForFunction(() => Module.crownlessScreen === 'avatar');
+    await selectMenuItem(4);
+    await page.screenshot({path: path.join(output, 'traveller-editor.png')});
+    await selectMenuItem(5);
+    await page.waitForFunction(() => Module.crownlessScreen === 'title');
+    await page.reload();
+    await page.waitForFunction(() => window.Module && Module.crownlessScreen === 'title');
+    const appearance = await page.evaluate(() => FS.readFile('/crownless-save/crownless_campaign.ccsave.preferences', {encoding:'utf8'}));
+    assert.match(appearance, /avatar 4096\n/);
     await page.locator('#canvas').focus();
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => Module.crownlessScreen === 'playing' && Module.crownlessSaveRevision > 0);
@@ -107,7 +125,10 @@ async function main() {
     await fs.writeFile(path.join(output, 'minimum-uniform-budget.json'), JSON.stringify(minimumBudget, null, 2));
     for (const [width, height] of [[800, 600], [1280, 720], [600, 900]]) {
       await page.setViewportSize({width, height});
-      await page.locator('#fullscreen').click();
+      await page.locator('#canvas').focus();
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => Module.crownlessScreen === 'paused');
+      await selectMenuItem(10);
       await page.waitForFunction(() => document.fullscreenElement !== null);
       const bounds = await page.locator('#canvas').boundingBox();
       assert(Math.abs(bounds.width / bounds.height - 16 / 9) < 0.01);
@@ -129,6 +150,8 @@ async function main() {
       await page.screenshot({path: path.join(output, `fullscreen-${width}x${height}.png`)});
       await page.evaluate(() => document.exitFullscreen());
       await page.waitForFunction(() => document.fullscreenElement === null);
+      await selectMenuItem(0);
+      await page.waitForFunction(() => Module.crownlessScreen === 'playing');
     }
     await page.setViewportSize({width: 1280, height: 900});
     await page.keyboard.press('Control+s');
@@ -270,18 +293,26 @@ async function main() {
       await input.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [point]});
       await input.send('Input.dispatchTouchEvent', {type: 'touchCancel', touchPoints: []});
       assert.equal(await mobile.evaluate(() => window.touchTaps.length), 1);
+      await buttons.getByRole('button', {name: 'Menu', exact: true}).tap();
+      await mobile.waitForFunction(() => Module.crownlessScreen === 'paused');
+      await buttons.getByRole('button', {name: 'Your traveller', exact: true}).tap();
+      await mobile.waitForFunction(() => Module.crownlessScreen === 'avatar');
+      await buttons.getByRole('button', {name: /^Coat:/}).tap();
+      await buttons.getByRole('button', {name: 'Save appearance', exact: true}).tap();
+      await mobile.waitForFunction(() => Module.crownlessScreen === 'paused');
+      assert.match(await mobile.evaluate(() => FS.readFile('/crownless-save/crownless_campaign.ccsave.preferences', {encoding:'utf8'})), /avatar 4096/);
       // Exercise the page fallback used when element fullscreen is unavailable.
       await mobile.evaluate(() => { document.querySelector('#stage').requestFullscreen = undefined; });
-      await mobile.locator('#fullscreen').tap();
-      assert.equal(await mobile.locator('#stage').evaluate(stage => stage.classList.contains('expanded')), true);
+      await buttons.getByRole('button', {name: 'Full screen', exact: true}).tap();
+      await mobile.waitForFunction(() => document.querySelector('#stage').classList.contains('expanded'));
       assert.equal(await mobile.locator('#touch-panel').isVisible(), true);
       await mobile.setViewportSize({width: 844, height: 390});
       await mobile.screenshot({path: path.join(output, 'mobile-expanded-landscape.png')});
       await mobile.locator('#exit-fullscreen').tap();
       assert.equal(await mobile.locator('#stage').evaluate(stage => stage.classList.contains('expanded')), false);
       await mobile.evaluate(() => { document.querySelector('#stage').requestFullscreen = () => Promise.reject(new Error('declined')); });
-      await mobile.locator('#fullscreen').tap();
-      assert.equal(await mobile.locator('#stage').evaluate(stage => stage.classList.contains('expanded')), true);
+      await buttons.getByRole('button', {name: 'Full screen', exact: true}).tap();
+      await mobile.waitForFunction(() => document.querySelector('#stage').classList.contains('expanded'));
       assert.equal(await mobile.locator('#loading').isVisible(), false);
       await mobile.locator('#exit-fullscreen').tap();
     } finally { await phone.close(); }

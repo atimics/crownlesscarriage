@@ -128,6 +128,32 @@ assert.equal(files.has('/tmp/crownless-coop.ccsave.session'), false, 'A shared c
 assert.equal(responses.length, 0);
 console.log('Shared browser recovery, ordering, and save ownership passed.');
 
+// Appearance writes keep the pending campaign and reject stale appearance polls.
+coop = client();
+responses.push({...state(20), appearance:{coat:1}});
+await coop.connect();
+assert.equal(coop.avatar(), 4096);
+responses.push(new Error('Appearance interrupted'));
+await assert.rejects(coop.saveAppearance(12576), /Appearance interrupted/);
+assert.equal(coop.avatar(), 4096);
+responses.push({...state(22), appearance:{coat:3, hair:4, style:4}});
+await coop.saveAppearance(12576);
+assert.equal(coop.avatar(), 12576);
+assert.deepEqual(JSON.parse(requests.at(-1).body), {appearance:{skin:0, hair:4, style:4, face:0, coat:3}});
+assert.equal(coop.take(), 'snapshot-20', 'Saving appearance preserves a pending campaign');
+now += 1000;
+responses.push({...state(21), appearance:{coat:1}});
+coop.poll();
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(coop.avatar(), 12576, 'A poll started before the save preserves the saved appearance');
+now += 1000;
+responses.push({...state(22), appearance:{coat:3, hair:4, style:4}});
+coop.poll();
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(coop.take(), 'snapshot-22', 'The next poll can still refresh the campaign');
+assert.equal(responses.length, 0);
+console.log('Appearance save failure, ordering, and campaign refresh passed.');
+
 // Player poses update independently of shared campaign saves.
 storage.delete(sessionKey);
 coop = client();
