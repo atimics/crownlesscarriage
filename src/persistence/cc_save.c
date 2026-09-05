@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 26
+#define CC_SQLITE_USER_VERSION 27
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -438,6 +438,9 @@ static bool EnsureLegendColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "dragon_state", "lifecycle_event_id",
             "ALTER TABLE dragon_state ADD COLUMN lifecycle_event_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "hair_color",
+            "ALTER TABLE dragon_state ADD COLUMN hair_color INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity);
 }
 
@@ -2416,8 +2419,8 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                  "regional_influence,crown_continuity_days,hunt_cooldown_days,"
                  "hunts,egg_count,brood_days_remaining,brood_cooldown_days,"
                  "broods_laid,whelps_dispersed,afterdeath_days,lifecycle_event_id,"
-                 "territoryless_days) "
-                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "territoryless_days,hair_color) "
+                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     const CcDragon *dragon = &sim->dragon;
     column = 1;
@@ -2453,6 +2456,7 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
     BindInt(statement, column++, dragon->afterdeath_days);
     BindId(statement, column++, dragon->lifecycle_event_id);
     BindInt(statement, column++, dragon->territoryless_days);
+    BindInt(statement, column++, (int32_t)dragon->hair_color);
     result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!result) return false;
@@ -4471,7 +4475,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
                  "territory_stability,regional_influence,crown_continuity_days,"
                  "hunt_cooldown_days,hunts,egg_count,brood_days_remaining,"
                  "brood_cooldown_days,broods_laid,whelps_dispersed,afterdeath_days,"
-                 "lifecycle_event_id,territoryless_days "
+                 "lifecycle_event_id,territoryless_days,hair_color "
                  "FROM dragon_state WHERE slot=1;",
                  &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
@@ -4529,6 +4533,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     dragon->lifecycle_event_id =
         (CcId)sqlite3_column_int64(statement, column++);
     dragon->territoryless_days = sqlite3_column_int(statement, column++);
+    dragon->hair_color = (CcDragonHairColor)sqlite3_column_int(statement, column++);
     sqlite3_finalize(statement);
 
     if (sim->schema_version >= 11U) {
@@ -5679,7 +5684,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
 {
     uint32_t legacy_version = sim->schema_version;
     if ((legacy_version == 38U || legacy_version == 39U ||
-         legacy_version == 40U || legacy_version == 41U) && sim->generator_version == 25U) {
+         legacy_version == 40U || legacy_version == 41U ||
+         legacy_version == 42U) && sim->generator_version == 25U) {
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }

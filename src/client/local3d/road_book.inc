@@ -1327,7 +1327,7 @@ static void DrawDragonCliffRoost(const CcSim *sim)
     float dragon_scale = dragon_variant == CC_CREATURE_DRAGON_WHELP ?
         1.24f : 0.90f;
     (void)DrawCreature3D(dragon_variant, pose, dragon_position,
-                         dragon_yaw, dragon_scale, (Color){0});
+                         dragon_yaw, dragon_scale, DragonCourtHairColor(&sim->dragon));
 
     int32_t marks = 2 + sim->dragon.crown_strength / 20;
     for (int32_t i = 0; i < marks && i < 6; ++i) {
@@ -1393,11 +1393,11 @@ static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
         (void)DrawCreature3D(
             CC_CREATURE_GOBLIN_SCAVENGER, scavenger,
             (Vector3){x - 5.2f, 0.0f, z - 2.2f}, -0.5f * PI, 1.18f,
-            (Color){0});
+            DragonCourtHairColor(&sim->dragon));
         (void)DrawCreature3D(
             CC_CREATURE_GOBLIN_RAIDER, raider,
             (Vector3){x - 3.7f, 0.0f, z + 2.4f}, -0.5f * PI, 1.24f,
-            (Color){0});
+            DragonCourtHairColor(&sim->dragon));
         DrawBox((Vector3){x - 5.0f, 0.42f, z + 0.6f},
                 (Vector3){1.0f, 0.84f, 1.0f}, WORLD_WOOD);
         DrawHeraldryBanner3D(
@@ -1643,11 +1643,11 @@ static void DrawSettlementCreatures(const CcSim *sim,
         (void)DrawCreature3D(
             CC_CREATURE_GOBLIN_RAIDER, raid_pose,
             TerrainWorldPoint(46.7f, 34.0f), 0.62f * PI, 1.02f,
-            (Color){0});
+            DragonCourtHairColor(&sim->dragon));
         (void)DrawCreature3D(
             CC_CREATURE_GOBLIN_SCAVENGER, scout_pose,
             TerrainWorldPoint(48.0f, 34.7f), 0.62f * PI, 0.94f,
-            (Color){0});
+            DragonCourtHairColor(&sim->dragon));
     }
 
 }

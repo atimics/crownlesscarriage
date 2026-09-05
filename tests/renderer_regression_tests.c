@@ -140,12 +140,14 @@ static void WriteViewportFixture(const char *path)
 #include "humanoid_animation_captures.inc"
 #include "character_surface_tests.inc"
 #include "animal_captures.inc"
+#include "creature_captures.inc"
 #include "mesh_memory_tests.inc"
 
 int main(int argc, char **argv)
 {
     TestSkinTurns();
     if (argc == 3 && (strcmp(argv[1], "--graphics") == 0 ||
+                      strcmp(argv[1], "--creature-captures") == 0 ||
                       strcmp(argv[1], "--material-captures") == 0 ||
                       strcmp(argv[1], "--animation-captures") == 0)) {
         SetConfigFlags(FLAG_WINDOW_HIDDEN);
@@ -161,9 +163,14 @@ int main(int argc, char **argv)
             TestCharacterSurfaces();
             TestAnimalModels(argv[2]);
             TestPonyPortraits();
+            TestCreatureEllipsoidTurn();
+            TestCreatureTurns();
+            TestDragonCourtColors();
             WriteViewportFixture(argv[2]);
         } else if (strcmp(argv[1], "--animation-captures") == 0) {
             CaptureHumanoidAnimation(argv[2]);
+        } else if (strcmp(argv[1], "--creature-captures") == 0) {
+            CaptureCreatures(argv[2]);
         } else {
             CaptureCharacterMaterials(argv[2]);
         }
