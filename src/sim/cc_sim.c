@@ -16090,7 +16090,7 @@ const CcRoadSite *CcSimJourneyRoadSiteStop(const CcSim *sim)
         int32_t progress = sim->journey.origin_id == route->from_id ?
             site->progress_milli : 1000 - site->progress_milli;
         int32_t distance = sim->carriage.progress_milli - progress;
-        if (distance >= 0 && distance <= 10) return site;
+        if (distance >= -20 && distance <= 30) return site;
     }
     return NULL;
 }

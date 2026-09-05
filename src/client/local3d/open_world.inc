@@ -1433,6 +1433,10 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     } else {
         camera = SnapCameraToArtPixels(camera, target.texture.height);
     }
+    if (carriage != NULL && carriage->visible) {
+        camera = PonyConversationCamera(camera, carriage->position, carriage->heading_yaw, sim);
+        focus = camera.target;
+    }
     RememberPresentedCamera(CC_LOCAL_SCENE_STREET, camera, agent,
                             target.texture.width, target.texture.height);
     ArtComposition art = ROAD_ART_COMPOSITION;

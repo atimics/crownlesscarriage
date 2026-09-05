@@ -313,6 +313,42 @@ class CoopTests(unittest.TestCase):
                 self.assertEqual(result['world']['state'], before)
                 self.assertTrue(self.worlds.command(self.id, self.a, body)['duplicate'])
 
+    def test_two_players_camp_continue_and_resume_the_same_road(self):
+        def apply(token, action, target='0'):
+            result = self.worlds.command(self.id, token, self.command(token, action, target=target))
+            self.assertTrue(result['accepted'], result['message'])
+            return result['world']['state']
+        destination = next(t['id'] for t in self.worlds.view(self.id, self.a)['state']['travel'] if t['available'])
+        apply(self.a, 'travel', destination)
+        stopped = apply(self.b, 'skip_watch')
+        site = stopped['journey']['road_site']
+        self.assertIsNotNone(site)
+        self.assertEqual(apply(self.a, 'skip_watch'), stopped)
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.assertEqual(self.worlds.view(self.id, self.b)['state'], stopped)
+        body = self.command(self.b, 'camp_road_site', target=site['id'])
+        camp = self.worlds.command(self.id, self.b, body)
+        self.assertTrue(camp['accepted'])
+        camped = camp['world']['state']
+        elapsed = (camped['day'] - stopped['day']) * 1440 + camped['minute'] - stopped['minute']
+        self.assertEqual(elapsed, 480)
+        self.assertEqual(camped['journey']['progress'], stopped['journey']['progress'])
+        self.assertIsNone(camped['journey']['road_site'])
+        self.assertEqual(self.worlds.command(self.id, self.b, body)['world']['state'], camped)
+        self.assertEqual(self.worlds.view(self.id, self.a)['state'], camped)
+        next_stop = apply(self.a, 'skip_watch')
+        self.assertGreater(next_stop['journey']['progress'], stopped['journey']['progress'])
+        self.assertIsNotNone(next_stop['journey']['road_site'])
+        continued = apply(self.b, 'pass_road_site', next_stop['journey']['road_site']['id'])
+        self.assertIsNone(continued['journey']['road_site'])
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.assertEqual(self.worlds.view(self.id, self.a)['state'], continued)
+        self.assertEqual(self.worlds.view(self.id, self.b)['state'], continued)
+        moving = apply(self.a, 'skip_watch')
+        self.assertGreater(moving['journey']['progress'], continued['journey']['progress'])
+
     def test_failed_command_is_atomic_and_has_a_receipt(self):
         before = self.worlds.view(self.id, self.a)['state']
         body = self.command(self.a, amount=1000000, good=0)

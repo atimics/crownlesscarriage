@@ -1,4 +1,8 @@
+#if !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
 #include "client/cc_coop_client.h"
+#include "client/cc_company.h"
 #include "persistence/cc_save.h"
 #include "multiplayer/cc_coop_commands.h"
 #include <inttypes.h>
@@ -16,6 +20,12 @@
 #endif
 
 EM_JS(int, CoopEnabled, (), { return Module.ccCoop && Module.ccCoop.enabled ? 1 : 0; });
+EM_JS(void, CoopWorldId, (char *world, int capacity), {
+    stringToUTF8(new URLSearchParams(location.search).get('world') || "", world, capacity);
+});
+EM_JS(void, CoopEnterWorld, (const char *world), {
+    location.assign(location.pathname + '?world=' + UTF8ToString(world));
+});
 EM_JS(int, CoopDead, (), { return Module.ccCoop.dead() ? 1 : 0; });
 EM_JS(int, CoopPartyWipes, (), { return Module.ccCoop.partyWipes(); });
 EM_JS(void, CoopLife, (int dead), { Module.ccCoop.life(Boolean(dead)); });
@@ -85,6 +95,11 @@ EM_JS(unsigned char *, CoopTake, (int *length), {
 #endif
 
 bool CcCoopClientActive(void) { return CoopEnabled() != 0; }
+void CcCoopClientConfigure(const char *program, const char *campaign_path, const char *world)
+{ (void)program; (void)campaign_path; (void)world; }
+void CcCoopClientWorldId(char *world, size_t capacity) { CoopWorldId(world, (int)capacity); }
+void CcCoopClientEnterWorld(const char *world) { CoopEnterWorld(world); }
+void CcCoopClientShutdown(void) {}
 bool CcCoopClientDead(void) { return CoopDead() != 0; }
 int32_t CcCoopClientPartyWipes(void) { return CoopPartyWipes(); }
 void CcCoopClientLife(bool dead) { CoopLife(dead ? 1 : 0); }
@@ -156,42 +171,5 @@ bool CcCoopClientSkip(CcSim *sim, char *error, size_t capacity)
 }
 
 #else
-int32_t CcCoopClientSeat(void) { return 0; }
-int32_t CcCoopClientExchange(int32_t scene, const float *pose, CcCrewMember *crew)
-{ (void)scene; (void)pose; (void)crew; return 0; }
-void CcCoopClientDrawn(const CcCrewMember *crew, int32_t count)
-{ (void)crew; (void)count; }
-bool CcCoopClientSkip(CcSim *sim, char *error, size_t capacity)
-{
-    (void)sim; (void)error; (void)capacity; return false;
-}
-bool CcCoopClientActive(void) { return false; }
-bool CcCoopClientDead(void) { return false; }
-int32_t CcCoopClientPartyWipes(void) { return 0; }
-void CcCoopClientLife(bool dead) { (void)dead; }
-bool CcCoopClientOwner(void) { return false; }
-bool CcCoopClientDelete(char *error, size_t capacity) { (void)error; (void)capacity; return false; }
-void CcCoopClientOpenLobby(void) { OpenURL("https://crownless.ratimics.com/"); }
-void CcCoopClientReturnToTitle(void) {}
-void CcCoopClientOpenCompany(void) {}
-bool CcCoopClientPaused(void) { return false; }
-bool CcCoopClientTogglePause(char *error, size_t capacity) { (void)error; (void)capacity; return false; }
-bool CcCoopClientSetAppearance(uint32_t choices, char *error, size_t capacity)
-{ (void)choices; (void)error; (void)capacity; return false; }
-uint32_t CcCoopClientAppearance(void) { return 0U; }
-bool CcCoopClientHasSession(void) { return false; }
-void CcCoopClientCheckpoint(const char *path) { (void)path; }
-void CcCoopClientReady(const char *error) { (void)error; }
-bool CcCoopClientConnect(CcSim *sim, char *error, size_t capacity)
-{
-    (void)sim; (void)error; (void)capacity; return false;
-}
-bool CcCoopClientApply(CcSim *sim, const CcCommand *command, char *error, size_t capacity)
-{
-    (void)sim; (void)command; (void)error; (void)capacity; return false;
-}
-bool CcCoopClientPoll(CcSim *sim, char *error, size_t capacity)
-{
-    (void)sim; (void)error; (void)capacity; return false;
-}
+#include "client/cc_coop_native.inc"
 #endif

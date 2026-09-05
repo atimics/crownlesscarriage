@@ -157,6 +157,33 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock, float
     }
 }
 
+static Camera3D PonyConversationCamera(Camera3D road, Vector3 carriage, float yaw, const CcSim *sim)
+{
+    static float nearby_weight;
+    float nearby = CcSimJourneyRoadSiteStop(sim) != NULL ? 1.0f : 0.0f;
+    float easing = fminf(1.0f, GetFrameTime() * 2.0f);
+    nearby_weight = reduced_motion_enabled ? nearby : nearby_weight + (nearby - nearby_weight) * easing;
+    road.fovy *= 1.0f - 0.12f * nearby_weight;
+    float target = pony_conversation_active ? 1.0f : 0.0f;
+    float step = fminf(GetFrameTime(), 0.1f) * 4.0f;
+    if (reduced_motion_enabled) pony_conversation_weight = target;
+    else if (pony_conversation_weight < target) pony_conversation_weight = fminf(target, pony_conversation_weight + step);
+    else pony_conversation_weight = fmaxf(target, pony_conversation_weight - step);
+    float weight = SmoothStep01(pony_conversation_weight);
+    if (weight <= 0.0f) return road;
+    Vector3 pony = LocalPoint(carriage, 2.7f, 0.0f, 3.3f, yaw);
+    pony.y = CcLocalTerrainHeightAt(pony.x, pony.z);
+    Vector3 focus = Vector3Add(pony, (Vector3){0, 0.78f, 0});
+    Vector3 position = LocalPoint(pony, 2.8f, 2.2f, 5.0f, yaw - 0.6f);
+    float span = road.projection == CAMERA_PERSPECTIVE ?
+        2.0f * tanf(road.fovy * DEG2RAD * 0.5f) * Vector3Distance(road.position, road.target) : road.fovy;
+    road.position = Vector3Lerp(road.position, position, weight);
+    road.target = Vector3Lerp(road.target, focus, weight);
+    road.fovy = span + (3.4f - span) * weight;
+    road.projection = CAMERA_ORTHOGRAPHIC;
+    return road;
+}
+
 static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
                              float clock, float pace, float yaw,
                              bool horses_hitched, bool bridge_checkpoint)
@@ -834,6 +861,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                                       target.texture.height);
     Camera3D camera = CcLocalCombatCameraInternal(
         base_camera, agent, course, clock, true, target.texture.height);
+    if (travelling) camera = PonyConversationCamera(camera, carriage_base, 0.5f * PI, sim);
     if (!travelling) {
         camera = KeepHeroInsideStreetFrame(
             camera,

@@ -565,6 +565,7 @@ float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
 void CcLocalRendererInit(void);
 void CcLocalDrawPonyPortrait(int32_t pony, bool known, Rectangle bounds);
+void CcLocalRendererSetPonyConversation(bool active);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
 void CcLocalRendererSetReducedMotion(bool enabled);
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step);
