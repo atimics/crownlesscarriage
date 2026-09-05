@@ -59,6 +59,14 @@ def digest(value):
     return hashlib.sha256(value.encode("ascii")).hexdigest()
 
 
+def issue_world_pass(path):
+    """Issue one creation permission through local access to the host database."""
+    permission = secrets.token_hex(32)
+    with sqlite3.connect(Path(path).resolve().as_uri() + "?mode=rw", uri=True) as db:
+        db.execute("INSERT INTO world_passes(pass_hash) VALUES(?)", (digest(permission),))
+    return permission
+
+
 def number(value, minimum, maximum, label):
     require(type(value) is int and minimum <= value <= maximum, f"Choose a valid {label}.")
     return value
@@ -127,6 +135,8 @@ class Worlds:
         CREATE TABLE IF NOT EXISTS away_clocks (
           world TEXT PRIMARY KEY REFERENCES worlds(id), last_human REAL NOT NULL,
           accounted_at REAL NOT NULL, owed_days REAL NOT NULL DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS world_passes (
+          pass_hash TEXT PRIMARY KEY, claimed_world TEXT);
         PRAGMA user_version=1;
         """)
         self.seen, self.last_tick, self.failed = {}, {}, set()
@@ -316,6 +326,13 @@ class Worlds:
             if existing:
                 require(existing["owner"] == digest(token), "That world identity is already in use.", 409)
             else:
+                permission = body.get("world_pass")
+                require(isinstance(permission, str) and HEX64.fullmatch(permission),
+                        "Use a world pass from this host to start a shared world.", 403)
+                grant = self.db.execute("SELECT claimed_world FROM world_passes WHERE pass_hash=?",
+                                        (digest(permission),)).fetchone()
+                require(grant is not None and grant["claimed_world"] is None,
+                        "Ask this host for a fresh world pass, or open your saved world.", 403)
                 require(self.db.execute("SELECT count(*) FROM worlds").fetchone()[0] < MAX_WORLDS,
                         "This host has reached its world limit.", 409)
                 nonce = secrets.token_hex(16)
@@ -326,6 +343,8 @@ class Worlds:
                                 (world, name, digest(token), nonce, digest(invitation), saved, view))
                 self.db.execute("INSERT INTO members(world,token_hash,id,name) VALUES(?,?,?,?)",
                                 (world, digest(token), secrets.token_hex(8), player))
+                self.db.execute("UPDATE world_passes SET claimed_world=? WHERE pass_hash=?",
+                                (world, digest(permission)))
         return self.view(world, token, present=False)
 
     def session_context(self, world, row):
@@ -489,10 +508,17 @@ class Worlds:
 
     def delete_world(self, world, token):
         with self.lock:
+            row = self.db.execute("SELECT owner FROM worlds WHERE id=?", (world,)).fetchone()
+            require(row is not None and row["owner"] == digest(token),
+                    "The host can delete this world.", 403)
+            return self.remove_world(world)
+
+    def remove_world(self, world):
+        """Remove a world after owner authorization or exclusive operator access."""
+        with self.lock:
             with self.transaction():
-                row = self.db.execute("SELECT owner FROM worlds WHERE id=?", (world,)).fetchone()
-                require(row is not None and row["owner"] == digest(token),
-                        "The host can delete this world.", 403)
+                require(self.db.execute("SELECT id FROM worlds WHERE id=?", (world,)).fetchone(),
+                        "Choose a saved world on this host.", 404)
                 self.db.execute("DELETE FROM receipts WHERE world=?", (world,))
                 self.db.execute("DELETE FROM sessions WHERE world=?", (world,))
                 self.db.execute("DELETE FROM appearances WHERE world=?", (world,))
@@ -637,15 +663,30 @@ class Application:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--library", required=True, help="Built crownless_coop shared library")
+    parser.add_argument("--library", help="Built crownless_coop shared library")
     parser.add_argument("--database", default="out/worlds.sqlite3")
     parser.add_argument("--bind", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
     parser.add_argument("--public-origin", help="Public HTTPS origin when hosted behind a proxy")
     parser.add_argument("--game-dir", help="Built WebAssembly site to serve at /game/")
-    parser.add_argument("--backup-to", help="Write a consistent host database backup, then exit")
+    operation = parser.add_mutually_exclusive_group()
+    operation.add_argument("--backup-to", help="Write a consistent host database backup, then exit")
+    operation.add_argument("--issue-world-pass", action="store_true",
+                           help="Print a single-use world pass for an initialized database; works while the host runs")
+    operation.add_argument("--list-worlds", action="store_true",
+                           help="List saved world IDs and names, then exit")
+    operation.add_argument("--delete-world", metavar="ID",
+                           help="Delete one world with exclusive database access; stop the host first")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
+    if args.issue_world_pass:
+        print(issue_world_pass(args.database))
+        return
+    if args.list_worlds:
+        with sqlite3.connect(Path(args.database).resolve().as_uri() + "?mode=ro", uri=True) as db:
+            print(json.dumps([dict(id=row[0], name=row[1]) for row in db.execute(
+                "SELECT id,name FROM worlds ORDER BY id")]))
+        return
     if args.backup_to:
         source = sqlite3.connect(f"file:{Path(args.database).resolve()}?mode=ro", uri=True)
         destination = sqlite3.connect(args.backup_to)
@@ -653,8 +694,16 @@ def main():
         destination.close()
         source.close()
         return
-    from waitress import serve
+    if not args.library:
+        parser.error("Use --library to start or recover the host.")
     worlds = Worlds(args.database, Engine(args.library))
+    if args.delete_world:
+        try:
+            print(json.dumps(worlds.remove_world(args.delete_world)))
+        finally:
+            worlds.close()
+        return
+    from waitress import serve
     stop = threading.Event()
     def clock():
         while not stop.wait(0.5):

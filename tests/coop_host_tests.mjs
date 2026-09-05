@@ -22,7 +22,9 @@ try {
   const health = await ready();
   assert.equal(health.revision, process.env.GITHUB_SHA);
   assert.equal((await fetch(origin + '/game/index.wasm', {method:'HEAD'})).status, 200);
-  let state = await api('/api/worlds', {id:world, name:'Saved carriage', player:'Mara'});
+  const worldPass = docker('exec','--user','10001',name,'python','tools/coop/server.py',
+    '--database','/data/worlds/worlds.sqlite3','--issue-world-pass').trim();
+  let state = await api('/api/worlds', {id:world, name:'Saved carriage', player:'Mara', world_pass:worldPass});
   const command = {protocol:1, sequence:state.next_sequence, action_revision:state.action_revision, action:'trade', good:0, amount:1};
   const saved = await api(`/api/worlds/${world}/command`, command);
   assert.equal(saved.accepted, true);
