@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #define CC_SOUND_SAMPLE_RATE 22050U
+#define CC_SOUND_PLAYBACK_PITCH 0.84f
 
 typedef enum CcSoundCue {
     CC_SOUND_STEP_STONE,

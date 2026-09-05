@@ -115,6 +115,7 @@ bool CcSoundSynthesize(CcSoundCue cue, uint32_t variation,
     float low = 0.0f;
     float soft = 0.0f;
     float held = 0.0f;
+    double energy = 0.0;
     for (size_t i = 0; i < count; ++i) {
         float time = (float)i / (float)CC_SOUND_SAMPLE_RATE;
         float noise = Noise(&seed);
@@ -123,17 +124,15 @@ bool CcSoundSynthesize(CcSoundCue cue, uint32_t variation,
         float sample = 0.0f;
         switch (cue) {
             case CC_SOUND_STEP_STONE:
-                sample = 0.16f * Ring(time, 165.0f * pitch, 65.0f) +
-                         0.26f * low * expf(-48.0f * time) +
-                         0.09f * noise * expf(-95.0f * time); break;
+                sample = 0.23f * (noise - low) * expf(-200.0f * time) +
+                         0.08f * Ring(time, 1350.0f * pitch, 180.0f); break;
             case CC_SOUND_STEP_WOOD:
                 sample = 0.18f * Ring(time, 115.0f * pitch, 48.0f) +
                          0.07f * Ring(time, 310.0f * pitch, 75.0f) +
                          0.20f * low * expf(-32.0f * time); break;
             case CC_SOUND_STEP_DIRT:
-                sample = 0.34f * low * expf(-30.0f * time) +
-                         0.07f * Ring(time, 90.0f * pitch, 60.0f) +
-                         0.045f * noise * expf(-45.0f * time); break;
+                sample = 0.16f * Ring(time, 78.0f * pitch, 48.0f) +
+                         0.18f * soft * expf(-36.0f * time); break;
             case CC_SOUND_STEP_GRASS:
                 sample = (0.42f * soft + 0.07f * (low - soft)) *
                          expf(-22.0f * time) +
@@ -188,11 +187,20 @@ bool CcSoundSynthesize(CcSoundCue cue, uint32_t variation,
             sample = 0.65f * sample + 0.35f * held;
         }
         /* A short fade at both ends keeps each cue smooth at its boundary. */
-        float attack = cue == CC_SOUND_STEP_GRASS ? 154.0f : 44.0f;
+        float attack = cue == CC_SOUND_STEP_GRASS ? 154.0f :
+                       cue == CC_SOUND_STEP_STONE ? 11.0f : 44.0f;
         float fade = fminf(1.0f, (float)i / attack) *
                      fminf(1.0f, (float)(count - 1U - i) / 440.0f);
         sample = fmaxf(-0.9f, fminf(0.9f, sample * fade));
         samples[i] = (int16_t)lroundf(sample * 32767.0f);
+        energy += (double)samples[i] * (double)samples[i];
+    }
+    if (cue <= CC_SOUND_SPLASH && energy > 0.0) {
+        /* Match every surface and variation to the quiet grass sample level. */
+        double gain = 0.014 * 32767.0 / sqrt(energy / (double)count);
+        for (size_t i = 0; i < count; ++i) {
+            samples[i] = (int16_t)lround((double)samples[i] * gain);
+        }
     }
     return true;
 }

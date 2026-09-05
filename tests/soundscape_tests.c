@@ -61,8 +61,39 @@ static int CheckGaitTiming(int render_rate, float cadence)
     return sounds;
 }
 
+static void CheckSurfaceSoundProfiles(void)
+{
+    for (uint32_t variation = 0; variation <= 74U; variation += 37U) {
+        double brightness[CC_SOUND_SPLASH + 1] = {0};
+        double tail[CC_SOUND_SPLASH + 1] = {0};
+        for (int cue = CC_SOUND_STEP_STONE; cue <= CC_SOUND_SPLASH; ++cue) {
+            size_t count = CcSoundSampleCount((CcSoundCue)cue);
+            int16_t *samples = malloc(count * sizeof(*samples));
+            CC_CHECK(samples != NULL);
+            CC_CHECK(CcSoundSynthesize((CcSoundCue)cue, variation, samples, count));
+            double energy = 0.0, changes = 0.0, late = 0.0;
+            for (size_t i = 0; i < count; ++i) {
+                double sample = (double)samples[i] / 32768.0;
+                double previous = i > 0 ? (double)samples[i - 1U] / 32768.0 : 0.0;
+                energy += sample * sample;
+                changes += (sample - previous) * (sample - previous);
+                if (i > CC_SOUND_SAMPLE_RATE / 50U) late += sample * sample;
+            }
+            CC_CHECK(fabs(sqrt(energy / (double)count) - 0.014) < 0.00002);
+            brightness[cue] = changes / energy;
+            tail[cue] = late / energy;
+            free(samples);
+        }
+        /* Stone is a brief click; road steps carry a low, rounded thud. */
+        CC_CHECK(brightness[CC_SOUND_STEP_STONE] > brightness[CC_SOUND_STEP_DIRT] * 20.0);
+        CC_CHECK(tail[CC_SOUND_STEP_STONE] < 0.01);
+        CC_CHECK(tail[CC_SOUND_STEP_DIRT] > 0.10);
+    }
+}
+
 int main(void)
 {
+    CheckSurfaceSoundProfiles();
     int slow = CheckGaitTiming(60, 0.78f);
     int fast = CheckGaitTiming(60, 1.22f);
     CC_CHECK(fast > slow);
@@ -165,8 +196,8 @@ int main(void)
         free(samples);
         free(repeat);
     }
-    CC_CHECK(mean_energy[CC_SOUND_STEP_GRASS] < mean_energy[CC_SOUND_STEP_DIRT] * 0.6);
-    CC_CHECK(mean_energy[CC_SOUND_STEP_DIRT] < mean_energy[CC_SOUND_STEP_STONE]);
+    CC_CHECK(fabs(mean_energy[CC_SOUND_STEP_GRASS] - mean_energy[CC_SOUND_STEP_DIRT]) < 0.000001);
+    CC_CHECK(fabs(mean_energy[CC_SOUND_STEP_GRASS] - mean_energy[CC_SOUND_STEP_STONE]) < 0.000001);
     CC_CHECK(mean_energy[CC_SOUND_STEP_STONE] < mean_energy[CC_SOUND_HIT] * 0.2);
     char path[256], changed[256];
     CC_CHECK(CcSoundVoicePath("test.line", "Mara", "hello", path, sizeof(path)));
