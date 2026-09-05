@@ -1,12 +1,6 @@
 static Rectangle PonyBookButton(void)
 {
-    return (Rectangle){12, (float)GetScreenHeight() - 42, 142, 28};
-}
-
-static Rectangle PonyActionButton(int32_t action)
-{
-    return (Rectangle){(float)GetScreenWidth() * 0.5f - 318 + (float)action * 212,
-                       (float)GetScreenHeight() - 98, 202, 30};
+    return (Rectangle){12, (float)GetScreenHeight() - 145, 142, 28};
 }
 
 static bool PonyClicked(Rectangle bounds)
@@ -24,7 +18,7 @@ static void DrawPonyButton(Rectangle bounds, const char *label)
 }
 
 static bool HandlePonyInput(CcJournal *journal, CcSim *sim, LocalState *local,
-                            ClientView view, char *message, size_t capacity)
+                            ClientView view, ContextAction action, char *message, size_t capacity)
 {
     if (view != VIEW_LOCAL && !local->pony_book_open) return false;
     if (ClientKeyPressed(KEY_F7) || PonyClicked(PonyBookButton())) {
@@ -48,17 +42,17 @@ static bool HandlePonyInput(CcJournal *journal, CcSim *sim, LocalState *local,
     }
     CcCommand command = {.target_id = (CcId)pony + 1U};
     const CcPony *state = &sim->pony_company.ponies[pony];
-    if (ClientKeyPressed(KEY_BACKSPACE) || PonyClicked(PonyActionButton(2))) {
+    if (ClientKeyPressed(KEY_BACKSPACE) || action.kind == CONTEXT_ACTION_PONY_LEAVE) {
         command.kind = CC_COMMAND_LEAVE_PONY;
     } else if (state->ready) {
-        if (ClientKeyPressed(KEY_ONE) || PonyClicked(PonyActionButton(0))) {
+        if (ClientKeyPressed(KEY_ONE) || (action.kind == CONTEXT_ACTION_PONY_SWAP && action.amount == 0)) {
             command.kind = CC_COMMAND_SWAP_PONY;
             command.amount = 0;
-        } else if (ClientKeyPressed(KEY_TWO) || PonyClicked(PonyActionButton(1))) {
+        } else if (ClientKeyPressed(KEY_TWO) || (action.kind == CONTEXT_ACTION_PONY_SWAP && action.amount == 1)) {
             command.kind = CC_COMMAND_SWAP_PONY;
             command.amount = 1;
         }
-    } else if (ClientKeyPressed(KEY_ENTER) || PonyClicked(PonyActionButton(0))) {
+    } else if (ClientKeyPressed(KEY_ENTER) || action.kind == CONTEXT_ACTION_PONY_HELP) {
         command.kind = CC_COMMAND_HELP_PONY;
     }
     if (command.kind != CC_COMMAND_NONE) {
@@ -86,8 +80,8 @@ static void DrawPonyInterface(const CcSim *sim, const LocalState *local)
     int32_t pony = sim->pony_company.encounter;
     if (pony >= 0 && !local->pony_book_open) {
         float x = (float)GetScreenWidth() * 0.5f - 330;
-        float y = (float)GetScreenHeight() - 258;
-        DrawPanel((Rectangle){x, y, 660, 206}, (Color){13, 18, 28, 250});
+        float y = (float)GetScreenHeight() - 274;
+        DrawPanel((Rectangle){x, y, 660, 148}, (Color){13, 18, 28, 250});
         const CcPony *p = &sim->pony_company.ponies[pony];
         CcOverlayDrawText(TextFormat("%s / %s", CcPonyName(pony),
             p->releases > 0 ? "A familiar face" : "A rainbow traveller"),
@@ -99,18 +93,13 @@ static void DrawPonyInterface(const CcSim *sim, const LocalState *local)
         if (p->ready) {
             CcOverlayDrawText("Quest complete. Invite this pony and let one companion roam free.",
                 (int)x + 16, (int)y + 106, 10, TEAL);
-            for (int32_t slot = 0; slot < 2; ++slot) {
-                DrawPonyButton(PonyActionButton(slot), TextFormat("[%d] Release %s", slot + 1,
-                    CcPonyName(sim->pony_company.team[slot])));
-            }
+
         } else {
             CcGood good = CcPonyQuestGood(p);
             CcOverlayDrawText(TextFormat("You carry %d / %d %s. Bond %d.",
                 sim->player.cargo[good], p->quest_amount, CcGoodDefinitionFor(good)->name, p->bond),
                 (int)x + 16, (int)y + 106, 10, TEAL);
-            DrawPonyButton(PonyActionButton(0), "Help pony [Enter]");
         }
-        DrawPonyButton(PonyActionButton(2), "Keep travelling [Backspace]");
     }
     if (!local->pony_book_open) return;
     int x = GetScreenWidth() / 2 - 330;
@@ -149,14 +138,14 @@ static bool CheckPonyInterface(CcSim *sim, LocalState *local, int32_t pony)
     char message[256] = {0};
     ClientInputClearPressed();
     queued_key_press[KEY_ENTER] = true;
-    if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, message, sizeof(message)) ||
+    if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, (ContextAction){0}, message, sizeof(message)) ||
         !sim->pony_company.ponies[pony].ready) return false;
     CcPonyCompany ready = sim->pony_company;
     CcHorse horses[2] = {sim->horse_team[0], sim->horse_team[1]};
     for (int32_t slot = 0; slot < 2; ++slot) {
         ClientInputClearPressed();
         queued_key_press[KEY_ONE + slot] = true;
-        if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, message, sizeof(message)) ||
+        if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, (ContextAction){0}, message, sizeof(message)) ||
             sim->pony_company.team[slot] != pony ||
             sim->pony_company.team[1 - slot] != ready.team[1 - slot] ||
             sim->pony_company.ponies[ready.team[slot]].route_id == 0U ||
@@ -168,11 +157,11 @@ static bool CheckPonyInterface(CcSim *sim, LocalState *local, int32_t pony)
     }
     ClientInputClearPressed();
     queued_key_press[KEY_F7] = true;
-    if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, message, sizeof(message)) ||
+    if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, (ContextAction){0}, message, sizeof(message)) ||
         !local->pony_book_open) return false;
     ClientInputClearPressed();
     queued_key_press[KEY_BACKSPACE] = true;
-    if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, message, sizeof(message)) ||
+    if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, (ContextAction){0}, message, sizeof(message)) ||
         local->pony_book_open) return false;
     ClientInputClearPressed();
     (void)puts("PASS pony interface: quest, both swap slots, book open and close");
