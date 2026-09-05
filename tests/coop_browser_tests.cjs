@@ -60,7 +60,7 @@ async function main() {
     await crew.waitForFunction(() => Module.crownlessScreen === 'company');
     await ownerControls.button('Back').click();
     await ownerControls.button('Refresh crew').click();
-    await owner.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Bren'));
+    await owner.waitForFunction(() => Module.crownlessTouchFrame.buttons.some(button => button.label.includes('Bren')));
     await owner.screenshot({path:'browser-results/in-game-company.png'});
     const token = await crew.evaluate(() => localStorage.getItem('cc-coop-token'));
     async function state() {
