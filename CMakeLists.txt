@@ -65,6 +65,7 @@ endfunction()
 
 add_library(crownless_locomotion
     src/locomotion/cc_biomech.c
+    src/locomotion/cc_collision.c
     src/locomotion/cc_creature.c
     src/locomotion/cc_humanoid.c
     src/locomotion/cc_humanoid_skin.c
@@ -1292,6 +1293,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(limb_system_tests)
     add_test(NAME generalized_limb_system COMMAND limb_system_tests)
 
+    add_executable(collision_system_tests tests/collision_system_tests.c)
+    target_link_libraries(collision_system_tests PRIVATE crownless_locomotion)
+    cc_strict_warnings(collision_system_tests)
+    add_test(NAME continuous_character_collision COMMAND collision_system_tests)
+
     add_executable(biomech_system_tests tests/biomech_system_tests.c)
     target_link_libraries(biomech_system_tests PRIVATE crownless_locomotion)
     cc_strict_warnings(biomech_system_tests)
@@ -1428,6 +1434,16 @@ if(BUILD_TESTING)
         )
         cc_strict_warnings(local_movement_tests)
         add_test(NAME local_collision_space COMMAND local_movement_tests)
+
+        add_executable(character_collision_course_tests tests/character_collision_course_tests.c)
+        target_link_libraries(character_collision_course_tests PRIVATE
+            crownless_local_renderer
+            crownless_sim crownless_locomotion
+            crownless_creature_catalog crownless_local_place
+            crownless_client_policy crownless_world raylib
+        )
+        cc_strict_warnings(character_collision_course_tests)
+        add_test(NAME character_collision_course COMMAND character_collision_course_tests)
 
         add_executable(terrain_tests tests/terrain_tests.c)
         target_link_libraries(terrain_tests PRIVATE

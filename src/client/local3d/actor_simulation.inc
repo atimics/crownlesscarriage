@@ -1301,11 +1301,12 @@ static void CourseUpdateSituationWitnessBehavior(CcLocalCourse *course,
     }
 }
 
-static void CoursePlanActorSeparation(CcLocalCourse *course,
-                                      CcLocalAgent *player)
+#define CC_LOCAL_CONTACT_ACTOR_CAPACITY (2 + CC_LOCAL_COURSE_RUNNER_COUNT + \
+    CC_LOCAL_RAIDER_COUNT + CC_LOCAL_TRAVELLER_COUNT)
+
+static int32_t CourseContactActors(CcLocalCourse *course, CcLocalAgent *player,
+                                   CcLocalAgent **actors)
 {
-    CcLocalAgent *actors[1 + CC_LOCAL_COURSE_RUNNER_COUNT +
-                         CC_LOCAL_RAIDER_COUNT + CC_LOCAL_TRAVELLER_COUNT + 1];
     int32_t count = 0;
     if (player != NULL) actors[count++] = player;
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
@@ -1322,6 +1323,82 @@ static void CoursePlanActorSeparation(CcLocalCourse *course,
     if (course->situation_witness_active) {
         actors[count++] = &course->situation_witness;
     }
+    return count;
+}
+
+static bool CourseBodyCanContact(const CcLocalAgent *agent)
+{
+    return CourseAgentCanSeparate(agent) && agent->morphology == CC_MORPHOLOGY_BIPED;
+}
+
+static float CoursePushBody(CcLocalAgent *agent, Vector3 normal, float amount)
+{
+    Vector3 start = agent->position;
+    Vector3 target = Vector3Add(start, Vector3Scale(normal, amount));
+    Vector3 contact;
+    (void)ResolveLocalAgentCapsuleMove(agent->scene, start, target, agent->radius,
+        -FLT_MAX, &target, &contact);
+    if (StaticBodyBlocked(agent->scene, target.x, target.z, agent->radius)) return 0.0f;
+    agent->position = target;
+    return fmaxf(0.0f, Vector3DotProduct(Vector3Subtract(target, start), normal));
+}
+
+void CcLocalCourseResolveContactsInternal(CcLocalCourse *course, CcLocalAgent *player)
+{
+    if (course == NULL) return;
+    CcLocalAgent *actors[CC_LOCAL_CONTACT_ACTOR_CAPACITY];
+    int32_t count = CourseContactActors(course, player, actors);
+    Vector3 before[CC_LOCAL_CONTACT_ACTOR_CAPACITY];
+    for (int32_t i = 0; i < count; ++i) before[i] = actors[i]->position;
+    for (int32_t pass = 0; pass < 8; ++pass) {
+        bool corrected = false;
+        for (int32_t i = 0; i < count; ++i) {
+            CcLocalAgent *first = actors[i];
+            if (!CourseBodyCanContact(first)) continue;
+            for (int32_t j = i + 1; j < count; ++j) {
+                CcLocalAgent *second = actors[j];
+                if (!CourseBodyCanContact(second) || first->scene != second->scene) continue;
+                float vertical = fmaxf(0.0f, fmaxf(
+                    first->position.y + first->radius - (second->position.y + 1.54f),
+                    second->position.y + second->radius - (first->position.y + 1.54f)));
+                float radius = first->radius + second->radius + 2.0f * CC_COLLISION_SKIN;
+                Vector3 delta = {first->position.x - second->position.x, 0.0f,
+                                  first->position.z - second->position.z};
+                float distance_squared = Vector3LengthSqr(delta);
+                if (distance_squared + vertical * vertical >= radius * radius) continue;
+                float distance = sqrtf(distance_squared);
+                float required = sqrtf(radius * radius - vertical * vertical);
+                float penetration = required - distance;
+                if (penetration <= 0.00001f) continue;
+                Vector3 normal = distance > 0.00001f ? Vector3Scale(delta, 1.0f / distance) :
+                    (Vector3){(i + j) % 2 == 0 ? 1.0f : -1.0f, 0.0f, 0.0f};
+                float first_moved = CoursePushBody(first, normal, penetration * 0.5f);
+                Vector3 opposite = Vector3Negate(normal);
+                float second_moved = CoursePushBody(second, opposite, penetration - first_moved);
+                if (first_moved + second_moved < penetration) {
+                    first_moved += CoursePushBody(first, normal,
+                        penetration - first_moved - second_moved);
+                }
+                corrected = corrected || first_moved + second_moved > 0.00001f;
+            }
+        }
+        if (!corrected) break;
+    }
+    for (int32_t i = 0; i < count; ++i) {
+        CcLocalAgent *agent = actors[i];
+        if (Vector3DistanceSqr(before[i], agent->position) <= 0.00000001f) continue;
+        CcHumanoidGaitConstrainMotion(&agent->humanoid, ToLimbVector(agent->position),
+                                      ToLimbVector(agent->velocity), agent->grounded);
+        CcHumanoidGaitResolvePose(&agent->humanoid, ToLimbVector(agent->position),
+                                  agent->facing_yaw);
+    }
+}
+
+static void CoursePlanActorSeparation(CcLocalCourse *course,
+                                      CcLocalAgent *player)
+{
+    CcLocalAgent *actors[CC_LOCAL_CONTACT_ACTOR_CAPACITY];
+    int32_t count = CourseContactActors(course, player, actors);
     for (int32_t i = 0; i < count; ++i) {
         actors[i]->separation_velocity = (Vector3){0};
     }
@@ -4853,15 +4930,44 @@ static bool TryHorizontalAxis(CcLocalAgent *agent, bool market_interior,
     Vector3 candidate = agent->position;
     candidate.x = candidate_x;
     candidate.z = candidate_z;
-    if (StaticBodyBlocked(scene, candidate_x, candidate_z, agent->radius) ||
-        LocalAgentCapsuleBlocked(scene, agent->position, candidate,
-                                 agent->radius) ||
-        CcLocalAgentPointSpaceBlockedInternal(agent, candidate)) {
-        return false;
+    Vector3 normal;
+    Vector3 requested = candidate;
+    bool hit = ResolveLocalAgentCapsuleMove(scene, agent->position, candidate,
+        agent->radius, -FLT_MAX, &candidate, &normal);
+    if (hit && agent->grounded && !agent->swimming &&
+        agent->morphology == CC_MORPHOLOGY_BIPED) {
+        /* Step up, move across, then find support. Each leg of the move is
+           swept, so a low ceiling or a tall wall still bounds the body. */
+        const float step_height = 0.24f;
+        Vector3 raised = agent->position;
+        raised.y += step_height;
+        Vector3 raised_normal;
+        (void)ResolveLocalAgentCapsuleMove(scene, agent->position, raised,
+            agent->radius, -FLT_MAX, &raised, &raised_normal);
+        if (raised.y >= agent->position.y + step_height - 0.001f) {
+            Vector3 across = requested;
+            across.y = raised.y;
+            (void)ResolveLocalAgentCapsuleMove(scene, raised, across,
+                agent->radius, -FLT_MAX, &across, &raised_normal);
+            Vector3 down = across;
+            down.y = agent->position.y - 0.055f;
+            bool supported = ResolveLocalAgentCapsuleMove(scene, across, down,
+                agent->radius, -FLT_MAX, &down, &raised_normal);
+            float base_progress = (move_x ? candidate.x - agent->position.x :
+                                           candidate.z - agent->position.z) * amount;
+            float step_progress = (move_x ? down.x - agent->position.x :
+                                           down.z - agent->position.z) * amount;
+            if (supported && raised_normal.y >= 0.60f &&
+                down.y <= agent->position.y + step_height &&
+                step_progress > base_progress + 0.0000001f) candidate = down;
+        }
     }
-    if (move_x) agent->position.x = candidate_x;
-    else agent->position.z = candidate_z;
-    return true;
+    if (StaticBodyBlocked(scene, candidate.x, candidate.z, agent->radius) ||
+        CcLocalAgentPointSpaceBlockedInternal(agent, candidate)) return false;
+    float progress = move_x ? candidate.x - agent->position.x :
+                             candidate.z - agent->position.z;
+    agent->position = candidate;
+    return fabsf(progress) > 0.000001f;
 }
 
 static bool UpdateCombatClock(CcLocalAgent *agent, float delta_time)
@@ -5012,19 +5118,21 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
     bool was_swimming = agent->swimming;
     bool in_water = biped &&
                     CourseWaterContains(scene, agent->position.x,
-                                        agent->position.z);
+                                        agent->position.z) &&
+                    agent->position.y < COURSE_WATER_SURFACE - 0.10f;
     if (was_swimming && !in_water) {
         float surface = BodySurfaceHeightAt(scene, agent->position.x,
                                             agent->position.z);
-        agent->position.y = surface;
-        agent->velocity.y = 0.0f;
-        agent->grounded = true;
+        agent->position.y = fmaxf(agent->position.y, surface);
+        agent->grounded = agent->position.y <= surface + 0.01f;
+        if (agent->grounded) agent->velocity.y = 0.0f;
         CcHumanoidGaitEndSwim(&agent->humanoid,
                               ToLimbVector(agent->position),
                               agent->facing_yaw, ProbeLocalSurface, &context);
     }
     agent->swimming = in_water;
-    agent->immersion = Approach(agent->immersion, in_water ? 1.0f : 0.0f,
+    agent->immersion = Approach(agent->immersion, in_water ? Clamp(
+        (COURSE_WATER_SURFACE - agent->position.y) / 0.82f, 0.0f, 1.0f) : 0.0f,
                                 delta_time * 2.8f);
     float traction = agent->limb_rig.initialized ? agent->limb_rig.traction : 1.0f;
     float base_speed = in_water ? 0.76f : biped ? 1.45f : 2.35f;
@@ -5236,13 +5344,13 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         Vector3 side = {-forward.z * side_sign, 0.0f,
                         forward.x * side_sign};
         float sidestep = maximum_speed * 0.72f * delta_time;
+        Vector3 before_sidestep = agent->position;
         bool side_x = TryHorizontalAxis(agent, market_interior, true,
                                         side.x * sidestep);
         bool side_z = TryHorizontalAxis(agent, market_interior, false,
                                         side.z * sidestep);
         if ((!side_x || !side_z) && !agent->climbing) {
-            if (side_x) agent->position.x -= side.x * sidestep;
-            if (side_z) agent->position.z -= side.z * sidestep;
+            agent->position = before_sidestep;
             (void)TryHorizontalAxis(agent, market_interior, true,
                                     -side.x * sidestep);
             (void)TryHorizontalAxis(agent, market_interior, false,
@@ -5311,10 +5419,12 @@ local_navigation_recovered:
 
     bool occupies_water = biped &&
                           CourseWaterContains(scene, agent->position.x,
-                                              agent->position.z);
+                                              agent->position.z) &&
+                          agent->position.y < COURSE_WATER_SURFACE - 0.10f;
     if (occupies_water) {
         agent->swimming = true;
-        agent->immersion = Approach(agent->immersion, 1.0f,
+        agent->immersion = Approach(agent->immersion, Clamp(
+            (COURSE_WATER_SURFACE - agent->position.y) / 0.82f, 0.0f, 1.0f),
                                     delta_time * 2.8f);
         if (!in_water) {
             CcHumanoidGaitAdvanceSwim(
@@ -5326,8 +5436,11 @@ local_navigation_recovered:
             agent->velocity.z = agent->humanoid.root_velocity.z;
         }
         float float_base = COURSE_WATER_SURFACE - 0.82f;
-        agent->position.y = Approach(agent->position.y, float_base,
-                                     delta_time * 1.8f);
+        Vector3 float_target = agent->position;
+        float_target.y = Approach(float_target.y, float_base, delta_time * 1.8f);
+        Vector3 float_normal;
+        (void)ResolveLocalAgentCapsuleMove(scene, agent->position, float_target,
+            agent->radius, -FLT_MAX, &agent->position, &float_normal);
         agent->velocity.y = Approach(agent->velocity.y, 0.0f,
                                      delta_time * 4.0f);
         agent->grounded = false;
@@ -5341,11 +5454,26 @@ local_navigation_recovered:
         }
         bool followed_ground = agent->grounded;
         agent->velocity.y -= gravity * delta_time;
-        agent->position.y += agent->velocity.y * delta_time;
+        Vector3 vertical_start = agent->position;
+        Vector3 vertical_end = vertical_start;
+        vertical_end.y += agent->velocity.y * delta_time;
+        Vector3 vertical_normal;
+        bool vertical_hit = ResolveLocalAgentCapsuleMove(
+            scene, vertical_start, vertical_end, agent->radius, -FLT_MAX,
+            &agent->position, &vertical_normal);
+        bool solid_support = vertical_hit && vertical_normal.y > 0.60f &&
+                             agent->velocity.y <= 0.0f;
+        if (vertical_hit && vertical_normal.y < -0.01f && agent->velocity.y > 0.0f) {
+            agent->velocity.y = 0.0f;
+        }
         float surface = BodySurfaceHeightAt(scene,
                                             agent->position.x,
                                             agent->position.z);
-        if (agent->position.y <= surface && agent->velocity.y <= 0.0f) {
+        if (solid_support) {
+            landed = !agent->grounded;
+            agent->velocity.y = 0.0f;
+            agent->grounded = true;
+        } else if (agent->position.y <= surface && agent->velocity.y <= 0.0f) {
             landed = !agent->grounded;
             agent->position.y = surface;
             agent->velocity.y = 0.0f;

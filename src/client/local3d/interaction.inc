@@ -31,7 +31,7 @@ void CcLocalProjectInteraction(const CcLocalAgent *agent,
     if (!CameraPointInFront(camera, middle)) return;
     LocalCollisionBox boxes[CC_LOCAL_COLLISION_BOX_CAPACITY];
     LocalProbeContext context = {.scene = agent->scene};
-    int32_t count = GatherLocalCollisionBoxes(&context, middle, boxes);
+    int32_t count = GatherLocalCollisionBoxes(&context, boxes);
     bool exposed = false;
     if (target->key.kind == CC_INTERACTION_ACTION) exposed = true;
     for (int32_t sample = 0; sample < 3 && !exposed; ++sample) {
@@ -41,14 +41,24 @@ void CcLocalProjectInteraction(const CcLocalAgent *agent,
         float distance = Vector3Distance(camera.position, point);
         bool occluded = false;
         for (int32_t i = 0; i < count; ++i) {
-            BoundingBox box = {boxes[i].minimum, boxes[i].maximum};
+            BoundingBox box = {FromLimbVector(boxes[i].minimum),
+                               FromLimbVector(boxes[i].maximum)};
+            Vector3 center = Vector3Scale(Vector3Add(box.min, box.max), 0.5f);
+            Matrix inverse_rotation = MatrixRotateY(-boxes[i].yaw);
+            Ray local_ray = {
+                Vector3Add(center, Vector3Transform(
+                    Vector3Subtract(ray.position, center), inverse_rotation)),
+                Vector3Transform(ray.direction, inverse_rotation),
+            };
+            Vector3 local_point = Vector3Add(center, Vector3Transform(
+                Vector3Subtract(point, center), inverse_rotation));
             /* A building, counter or carriage may own the surface being picked. */
-            if (point.x >= box.min.x - target->width * 0.5f &&
-                point.x <= box.max.x + target->width * 0.5f &&
-                point.z >= box.min.z - target->depth * 0.5f &&
-                point.z <= box.max.z + target->depth * 0.5f &&
+            if (local_point.x >= box.min.x - target->width * 0.5f &&
+                local_point.x <= box.max.x + target->width * 0.5f &&
+                local_point.z >= box.min.z - target->depth * 0.5f &&
+                local_point.z <= box.max.z + target->depth * 0.5f &&
                 target->key.kind != CC_INTERACTION_PERSON) continue;
-            RayCollision hit = GetRayCollisionBox(ray, box);
+            RayCollision hit = GetRayCollisionBox(local_ray, box);
             if (hit.hit && hit.distance + 0.12f < distance) { occluded = true; break; }
         }
         if (!occluded) { exposed = true; break; }
