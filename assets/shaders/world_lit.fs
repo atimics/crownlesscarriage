@@ -62,6 +62,15 @@ float cellNoise(vec2 point)
     return hash21(floor(point));
 }
 
+float meadowNoise(vec2 point)
+{
+    vec2 cell = floor(point);
+    vec2 blend = smoothstep(vec2(0.0), vec2(1.0), fract(point));
+    return mix(mix(hash21(cell), hash21(cell + vec2(1.0, 0.0)), blend.x),
+               mix(hash21(cell + vec2(0.0, 1.0)),
+                   hash21(cell + vec2(1.0, 1.0)), blend.x), blend.y);
+}
+
 float orderedDither4x4(vec2 pixel)
 {
     ivec2 cell = ivec2(mod(floor(pixel), 4.0));
@@ -95,9 +104,13 @@ void main()
                                    normalize(cameraForward)));
     if (isTerrain > 0.5 && horizonFog > 0.5) {
         // The travel landscape uses broad paint and distance haze.
-        float brush = cellNoise(fragPosition.xz * 0.8) - 0.5;
+        vec2 brushPoint = fragPosition.xz * 0.8;
+        float brushPresence = 1.0 - smoothstep(0.4, 1.2,
+            max(fwidth(brushPoint.x), fwidth(brushPoint.y)));
+        float brush = (cellNoise(brushPoint) - 0.5) * brushPresence;
+        float meadow = meadowNoise(fragPosition.xz * 0.16) - 0.5;
         vec3 light = ambientColor * 0.90 + lightColor * (key * 0.44 + 0.12);
-        vec3 paint = albedo.rgb * light * (1.0 + brush * 0.07);
+        vec3 paint = albedo.rgb * light * (1.0 + meadow * 0.12 + brush * 0.035);
         paint *= mix(shadowColor, vec3(1.0), smoothstep(-0.08, 0.58, facing));
         float haze = smoothstep(fogNear, fogFar, viewDepth);
         finalColor = vec4(mix(clamp(paint, 0.0, 1.0), fogColor, haze), albedo.a);

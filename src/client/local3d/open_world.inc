@@ -281,6 +281,41 @@ static void OpenWorldRenderCacheClear(void)
     storybook_ground_ready = false;
 }
 
+static Color StorybookMeadowColor(float x, float z, Vector3 normal)
+{
+    float meadow = 0.5f + 0.5f * sinf(x * 0.047f +
+        sinf(z * 0.064f) * 2.0f);
+    Color color = BlendColor((Color){47, 83, 59, 255},
+                             (Color){115, 130, 75, 255}, meadow);
+    return BlendColor(color, WORLD_STONE,
+                       fmaxf(0.0f, 0.93f - normal.y) * 3.0f);
+}
+
+static void StorybookMeadowTuft(TerrainMeshWriter *writer, Vector3 base,
+                                 float scale, float angle, Color tip)
+{
+    Color root = BlendColor(tip, WORLD_GRASS_SHADOW, 0.72f);
+    for (int blade = 0; blade < 3; ++blade) {
+        float direction = angle + (float)blade * 2.1f;
+        float width = scale * 0.22f;
+        float height = scale * (blade == 1 ? 0.95f : 0.64f);
+        Vector3 points[3] = {
+            {base.x - cosf(direction) * width, base.y,
+             base.z - sinf(direction) * width},
+            {base.x + cosf(direction) * width, base.y,
+             base.z + sinf(direction) * width},
+            {base.x + sinf(direction) * scale * 0.26f, base.y + height,
+             base.z - cosf(direction) * scale * 0.26f},
+        };
+        static const int order[6] = {0, 1, 2, 2, 1, 0};
+        for (int vertex = 0; vertex < 6; ++vertex) {
+            int point = order[vertex];
+            TerrainMeshWriteVertexWithNormal(writer, points[point],
+                (Vector3){0.0f, 1.0f, 0.0f}, point == 2 ? tip : root);
+        }
+    }
+}
+
 static void DrawStorybookGround(const CcWorldManifest *manifest, Vector3 focus)
 {
     Vector2 center = {floorf(focus.x / 32.0f) * 32.0f,
@@ -289,17 +324,31 @@ static void DrawStorybookGround(const CcWorldManifest *manifest, Vector3 focus)
         storybook_generator != manifest->generator_version ||
         center.x != storybook_center.x || center.y != storybook_center.y) {
         OpenWorldRenderCacheClear();
-        enum { CELLS = 80 };
+        enum { CELLS = 80, COVER_CELLS = CELLS / 2, TUFT_VERTICES = 18 };
         const float step = 4.0f;
         TerrainMeshWriter writer;
-        if (!TerrainMeshWriterAllocate(&writer, CELLS * CELLS * 6)) return;
-        /* Shared height samples keep mesh work bounded at each crossing. */
-        float heights[CELLS + 1][CELLS + 1];
+        if (!TerrainMeshWriterAllocate(&writer, CELLS * CELLS * 6 +
+            COVER_CELLS * COVER_CELLS * TUFT_VERTICES)) return;
+        /* A one-cell border gives shared vertices the same slope at cache edges. */
+        float heights[CELLS + 3][CELLS + 3];
+        Vector3 normals[CELLS + 1][CELLS + 1];
+        Color colors[CELLS + 1][CELLS + 1];
+        for (int row = 0; row < CELLS + 3; ++row) {
+            for (int col = 0; col < CELLS + 3; ++col) {
+                float x = center.x + (float)(col - 1 - CELLS / 2) * step;
+                float z = center.y + (float)(row - 1 - CELLS / 2) * step;
+                heights[row][col] = CcWorldTerrainHeight(manifest, x, z);
+            }
+        }
         for (int row = 0; row <= CELLS; ++row) {
             for (int col = 0; col <= CELLS; ++col) {
                 float x = center.x + (float)(col - CELLS / 2) * step;
                 float z = center.y + (float)(row - CELLS / 2) * step;
-                heights[row][col] = CcWorldTerrainHeight(manifest, x, z);
+                normals[row][col] = Vector3Normalize((Vector3){
+                    heights[row + 1][col] - heights[row + 1][col + 2],
+                    2.0f * step,
+                    heights[row][col + 1] - heights[row + 2][col + 1]});
+                colors[row][col] = StorybookMeadowColor(x, z, normals[row][col]);
             }
         }
         for (int row = 0; row < CELLS; ++row) {
@@ -307,28 +356,61 @@ static void DrawStorybookGround(const CcWorldManifest *manifest, Vector3 focus)
                 float x = center.x + (float)(col - CELLS / 2) * step;
                 float z = center.y + (float)(row - CELLS / 2) * step;
                 Vector3 points[4] = {
-                    {x, heights[row][col] - 0.10f, z},
-                    {x + step, heights[row][col + 1] - 0.10f, z},
-                    {x, heights[row + 1][col] - 0.10f, z + step},
-                    {x + step, heights[row + 1][col + 1] - 0.10f, z + step},
+                    {x, heights[row + 1][col + 1] - 0.10f, z},
+                    {x + step, heights[row + 1][col + 2] - 0.10f, z},
+                    {x, heights[row + 2][col + 1] - 0.10f, z + step},
+                    {x + step, heights[row + 2][col + 2] - 0.10f, z + step},
                 };
-                Vector3 normal = Vector3Normalize((Vector3){
-                    points[0].y + points[2].y - points[1].y - points[3].y,
-                    2.0f * step,
-                    points[0].y + points[1].y - points[2].y - points[3].y});
-                float meadow = 0.5f + 0.5f * sinf(x * 0.047f +
-                    sinf(z * 0.064f) * 2.0f);
-                Color color = BlendColor((Color){66, 91, 55, 255},
-                                           (Color){132, 133, 75, 255}, meadow);
-                color = BlendColor(color, WORLD_STONE,
-                                    fmaxf(0.0f, 0.93f - normal.y) * 3.0f);
                 static const int order[6] = {0, 3, 1, 0, 2, 3};
                 for (int vertex = 0; vertex < 6; ++vertex) {
+                    int corner = order[vertex];
+                    int vr = row + corner / 2;
+                    int vc = col + corner % 2;
                     TerrainMeshWriteVertexWithNormal(
-                        &writer, points[order[vertex]], normal, color);
+                        &writer, points[corner], normals[vr][vc], colors[vr][vc]);
                 }
             }
         }
+        /* Stable world cells keep grass in place as the terrain cache moves. */
+        for (int row = 0; row < COVER_CELLS; ++row) {
+            for (int col = 0; col < COVER_CELLS; ++col) {
+                int32_t gx = (int32_t)(center.x / 8.0f) + col - COVER_CELLS / 2;
+                int32_t gz = (int32_t)(center.y / 8.0f) + row - COVER_CELLS / 2;
+                uint32_t scatter = TerrainMix(manifest->world_seed ^
+                    (uint32_t)gx * UINT32_C(0x9e3779b9) ^
+                    (uint32_t)gz * UINT32_C(0x85ebca6b));
+                if ((scatter & 3U) == 0U) continue;
+                float x = ((float)gx + 0.2f +
+                    (float)((scatter >> 2U) & 255U) / 425.0f) * 8.0f;
+                float z = ((float)gz + 0.2f +
+                    (float)((scatter >> 10U) & 255U) / 425.0f) * 8.0f;
+                if (CcWorldSurfaceAt(manifest, x, z) !=
+                    CC_WORLD_SURFACE_WILDERNESS) continue;
+                /* Seat each root on the same triangle that draws the meadow. */
+                float grid_x = (x - center.x) / step + (float)(CELLS / 2);
+                float grid_z = (z - center.y) / step + (float)(CELLS / 2);
+                int cell_x = (int)floorf(grid_x);
+                int cell_z = (int)floorf(grid_z);
+                float u = grid_x - (float)cell_x;
+                float v = grid_z - (float)cell_z;
+                float h00 = heights[cell_z + 1][cell_x + 1];
+                float h10 = heights[cell_z + 1][cell_x + 2];
+                float h01 = heights[cell_z + 2][cell_x + 1];
+                float h11 = heights[cell_z + 2][cell_x + 2];
+                float ground = u >= v ?
+                    h00 + u * (h10 - h00) + v * (h11 - h10) :
+                    h00 + u * (h11 - h01) + v * (h01 - h00);
+                float scale = 0.65f + (float)((scatter >> 18U) & 63U) / 90.0f;
+                float angle = (float)((scatter >> 24U) & 255U) * (2.0f * PI / 255.0f);
+                Color tip = BlendColor(StorybookMeadowColor(x, z,
+                    (Vector3){0.0f, 1.0f, 0.0f}), WORLD_CROP_LIGHT, 0.28f);
+                StorybookMeadowTuft(&writer,
+                    (Vector3){x, ground - 0.10f, z},
+                    scale, angle, tip);
+            }
+        }
+        writer.mesh.vertexCount = writer.cursor;
+        writer.mesh.triangleCount = writer.cursor / 3;
         UploadMesh(&writer.mesh, false);
         storybook_ground = LoadModelFromMesh(writer.mesh);
         ReleaseUploadedModelCpuData(&storybook_ground);
@@ -1057,32 +1139,49 @@ static Vector2 StorybookRoadSide(const CcWorldRoutePlacement *route,
 static void DrawStorybookStrip(CcWorldPoint first, CcWorldPoint second,
                                 Vector2 first_side, Vector2 second_side,
                                 float first_height, float second_height,
-                                float width, float offset, float lift, Color color)
+                                float width, float offset, float lift, Color color,
+                                bool feather_edge)
 {
     Vector3 points[4];
+    Color colors[4];
     for (int corner = 0; corner < 4; ++corner) {
         CcWorldPoint end = corner < 2 ? first : second;
         Vector2 side = corner < 2 ? first_side : second_side;
         float across = offset + ((corner == 0 || corner == 3) ? width : -width) * 0.5f;
+        float wear = 1.0f + sinf(end.x * 0.71f + end.z * 0.43f) * 0.035f +
+                     sinf(end.z * 1.13f - end.x * 0.37f) * 0.018f;
+        across *= wear;
         float x = end.x + side.x * across;
         float z = end.z + side.y * across;
         points[corner] = (Vector3){x,
             (corner < 2 ? first_height : second_height) + lift, z};
+        bool outer = feather_edge && fabsf(across) > fabsf(offset * wear);
+        colors[corner] = outer ? StorybookMeadowColor(x, z,
+            (Vector3){0.0f, 1.0f, 0.0f}) :
+            ShadeColor(color, 0.98f + 0.04f * sinf(end.x * 0.9f + end.z * 0.6f));
     }
-    Vector3 normal = Vector3Normalize(Vector3CrossProduct(
-        Vector3Subtract(points[2], points[0]), Vector3Subtract(points[1], points[0])));
-    rlNormal3f(normal.x, normal.y, normal.z);
-    DrawTriangle3D(points[0], points[2], points[1], color);
-    normal = Vector3Normalize(Vector3CrossProduct(
-        Vector3Subtract(points[3], points[0]), Vector3Subtract(points[2], points[0])));
-    rlNormal3f(normal.x, normal.y, normal.z);
-    DrawTriangle3D(points[0], points[3], points[2], color);
+    static const int order[6] = {0, 2, 1, 0, 3, 2};
+    rlBegin(RL_TRIANGLES);
+    for (int triangle = 0; triangle < 2; ++triangle) {
+        Vector3 normal = Vector3Normalize(Vector3CrossProduct(
+            Vector3Subtract(points[order[triangle * 3 + 1]], points[0]),
+            Vector3Subtract(points[order[triangle * 3 + 2]], points[0])));
+        rlNormal3f(normal.x, normal.y, normal.z);
+        for (int vertex = 0; vertex < 3; ++vertex) {
+            int corner = order[triangle * 3 + vertex];
+            Color tint = colors[corner];
+            rlColor4ub(tint.r, tint.g, tint.b, tint.a);
+            rlVertex3f(points[corner].x, points[corner].y, points[corner].z);
+        }
+    }
+    rlEnd();
 }
 
 static void DrawStorybookRoads(const CcSim *sim,
                                 const CcWorldManifest *manifest,
                                 const CcLocalWorldCarriageState *carriage)
 {
+    SetWorldTerrainSurface(true);
     for (int32_t index = 0; index < manifest->route_count; ++index) {
         const CcWorldRoutePlacement *route = &manifest->routes[index];
         CcRoadBookRouteView view = {0};
@@ -1117,20 +1216,22 @@ static void DrawStorybookRoads(const CcSim *sim,
                     float second_height = CcWorldTerrainHeight(manifest, second.x, second.z);
                     DrawStorybookStrip(first, second, first_side, second_side,
                         first_height, second_height,
-                        8.4f, 0.0f, 0.03f, (Color){115, 116, 70, 255});
-                    DrawStorybookStrip(first, second, first_side, second_side,
-                        first_height, second_height,
-                        5.8f, 0.0f, 0.13f, (Color){150, 127, 88, 255});
+                        5.8f, 0.0f, 0.13f, (Color){150, 127, 88, 255}, false);
                     for (int side = -1; side <= 1; side += 2) {
                         DrawStorybookStrip(first, second, first_side, second_side,
                             first_height, second_height,
+                            1.3f, (float)side * 3.55f, 0.13f,
+                            (Color){150, 127, 88, 255}, true);
+                        DrawStorybookStrip(first, second, first_side, second_side,
+                            first_height, second_height,
                             0.24f, (float)side * 1.35f, 0.15f,
-                            (Color){112, 94, 68, 255});
+                            (Color){112, 94, 68, 255}, false);
                     }
                 }
             }
         }
     }
+    SetWorldTerrainSurface(false);
 }
 
 typedef struct StorybookTree {
