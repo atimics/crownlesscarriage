@@ -408,6 +408,7 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
     SetFaceRenderContext(camera, target.texture.width, target.texture.height);
     BeginTextureMode(target);
     ClearBackground(ArtLightBackground(fork_art.light_profile));
+    rlSetClipPlanes(0.10, 512.0);
     BeginMode3D(camera);
     BeginWorldLighting(camera, &fork_art);
     DrawPlane((Vector3){48.0f, -0.08f, 40.0f},
@@ -533,6 +534,7 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
     }
     EndWorldLighting();
     EndMode3D();
+    rlSetClipPlanes(0.05, 4000.0);
     EndTextureMode();
     PresentTarget(target, destination);
     DrawCrewLabels(camera, destination);
@@ -855,6 +857,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     SetFaceRenderContext(camera, target.texture.width, target.texture.height);
     BeginTextureMode(target);
     ClearBackground(background);
+    rlSetClipPlanes(0.10, 512.0);
     BeginMode3D(camera);
     BeginWorldLighting(camera, &road_art);
     CcId road_kingdom_id = origin != NULL ? origin->kingdom_id :
@@ -995,6 +998,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawCrew(travelling ? &travelling_hero : agent, 2);
     EndWorldLighting();
     EndMode3D();
+    rlSetClipPlanes(0.05, 4000.0);
     DrawTargetAtmosphere(target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
@@ -1090,7 +1094,6 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                    (int32_t)lroundf(agent->combat.health),
                    course->raider_resolve > 0 ? course->raider_resolve : 0),
         destination, 18, 35, 10, WORLD_INK);
-    DrawFixedCameraFade(&road_camera_rig, destination);
 }
 
 const char *CcLocalSiteName(const CcSim *sim, CcLocalSiteKind site)
@@ -1488,6 +1491,7 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
     SetFaceRenderContext(camera, target.texture.width, target.texture.height);
     BeginTextureMode(target);
     ClearBackground(ArtLightBackground(site_art.light_profile));
+    rlSetClipPlanes(0.10, 512.0);
     BeginMode3D(camera);
     BeginWorldLighting(camera, &site_art);
     DrawRemoteSiteTerrain(
@@ -1513,6 +1517,7 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawCrew(travelling && crew_exchange != NULL ? &passenger : agent, 2 + (int32_t)site);
     EndWorldLighting();
     EndMode3D();
+    rlSetClipPlanes(0.05, 4000.0);
     DrawTargetAtmosphere(target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
@@ -1729,6 +1734,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     camera = CcLocalConversationCameraInternal(
         camera, camera_subject, conversation_partner,
         conversation_partner != NULL, clock, true, target.texture.height);
+    camera = StreetCameraClearVolume(camera);
     if (camera_subject != NULL && !arrival_pan &&
         conversation_partner == NULL) {
         camera = KeepHeroInsideStreetFrame(
@@ -1743,19 +1749,18 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                             target.texture.width, target.texture.height);
     int32_t presented_scene = arrival_pan ?
         CC_LOCAL_TOWN_SCENE_ARRIVAL : street_camera_rig.shot;
-    const StreetCameraShot *camera_shot = StreetCameraShotAt(
-        presented_scene);
-    ArtComposition street_art = camera_shot->art;
+    ArtComposition street_art = StreetCameraShotAt(
+        CC_LOCAL_TOWN_SCENE_ARRIVAL)->art;
     street_art.light_profile = StreetLightProfile(
-        place, street_art.light_profile);
-    street_art.focal_point.y += CcLocalTerrainHeightAt(
-        street_art.focal_point.x, street_art.focal_point.z);
+        place, StreetCameraShotAt(CC_LOCAL_TOWN_SCENE_ARRIVAL)->art.light_profile);
+    street_art.focal_point = camera.target;
     Color background = ArtLightBackground(street_art.light_profile);
     SetFaceRenderContext(camera, target.texture.width, target.texture.height);
     Vector3 scenery_focus = camera.target;
     Color kingdom = KingdomColor3D(sim, place->kingdom_id);
     BeginTextureMode(target);
     ClearBackground(background);
+    rlSetClipPlanes(0.10, 512.0);
     BeginMode3D(camera);
     BeginWorldLighting(camera, &street_art);
 
@@ -1775,26 +1780,42 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         Vector3Add(sightline_opponent->position,
                    (Vector3){0.0f, 1.02f, 0.0f}) :
         player_sightline;
+    enum { PLATFORM_REVEAL_COUNT = sizeof(STREET_PLATFORMS) /
+                                    sizeof(STREET_PLATFORMS[0]) };
+    static WorldBuildingRevealState platform_reveals[PLATFORM_REVEAL_COUNT];
+    static WorldBuildingRevealState gate_reveal;
+    static CcId reveal_place = 0;
+    static uint32_t reveal_seed = 0;
+    static float reveal_clock = 0.0f;
+    bool reset_reveals = reveal_place != place->id ||
+        reveal_seed != street_terrain_seed || clock < reveal_clock;
+    float reveal_dt = reset_reveals ? 0.0f :
+        CombatClamp(clock - reveal_clock, 0.0f, 0.05f);
+    reveal_place = place->id;
+    reveal_seed = street_terrain_seed;
+    reveal_clock = clock;
     for (int32_t i = 0; i < (int32_t)(sizeof(STREET_PLATFORMS) /
                                       sizeof(STREET_PLATFORMS[0])); ++i) {
         const NavPlatform *platform = &STREET_PLATFORMS[i];
         Rectangle footprint = {
             platform->x, platform->z, platform->width, platform->depth
         };
-        if (!SceneryFootprintVisible(footprint, scenery_focus)) {
-            continue;
-        }
         float overlap = close_combat_sightline ||
                         close_conversation_sightline ?
             CameraStreetPlatformSubjectOverlap(
                 camera, platform, player_sightline, opponent_sightline) :
             0.0f;
 
-        bool sightline_cut = overlap > 0.001f;
+        bool sightline_cut = overlap >
+            (platform_reveals[i].revealed ? 0.0005f : 0.0015f);
+        UpdateBuildingReveal(&platform_reveals[i], sightline_cut,
+                             reset_reveals, reveal_dt, 0.18f, 5.0f);
+        if (!SceneryFootprintVisible(footprint, scenery_focus)) continue;
         Color color = CoursePlatformColor(platform->style);
         float base = PlatformBaseHeight(platform);
-        float render_height = sightline_cut ?
-            fminf(platform->height, 0.12f) : platform->height;
+        float render_height = platform->height +
+            (fminf(platform->height, 0.12f) - platform->height) *
+            platform_reveals[i].amount;
         float top = base + render_height;
         DrawBox((Vector3){platform->x + platform->width * 0.5f,
                           base + render_height * 0.5f,
@@ -1865,12 +1886,15 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         }
     }
     DrawWorldTrees(scenery_focus, kingdom);
-    bool wayfarer_gate_sightline_cut = close_combat_sightline &&
-        (camera.projection == CAMERA_PERSPECTIVE ||
-         CameraWayfarerGateSubjectOverlap(
-             camera, player_sightline, opponent_sightline) > 0.001f);
+    float gate_overlap = close_combat_sightline ||
+                         close_conversation_sightline ?
+        CameraWayfarerGateSubjectOverlap(
+            camera, player_sightline, opponent_sightline) : 0.0f;
+    UpdateBuildingReveal(&gate_reveal,
+        gate_overlap > (gate_reveal.revealed ? 0.0005f : 0.0015f),
+        reset_reveals, reveal_dt, 0.18f, 5.0f);
     DrawRoomLandmarks(place, kingdom, profile, scenery_focus,
-                      wayfarer_gate_sightline_cut);
+                      gate_reveal.amount);
     DrawPlaceLandmarks(kingdom, scenery_focus);
     if (SceneryPointVisible(47.35f, 31.05f, scenery_focus)) {
         DrawJourneyAftermath3D(sim, place);
@@ -2002,6 +2026,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawCrew(convoy_visible ? &convoy_hero : agent, 0);
     EndWorldLighting();
     EndMode3D();
+    rlSetClipPlanes(0.05, 4000.0);
     DrawTargetAtmosphere(target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
@@ -2235,7 +2260,6 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                        agent->limb_rig.control_authority * 100.0f),
             destination, 18, 18, 10, WORLD_TEAL);
     }
-    DrawFixedCameraFade(&street_camera_rig, destination);
 }
 
 static CcNpcRole InteriorKeeperRole(CcSettlementFunction function)
@@ -2389,6 +2413,7 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     SetFaceRenderContext(camera, target.texture.width, target.texture.height);
     BeginTextureMode(target);
     ClearBackground(background);
+    rlSetClipPlanes(0.10, 512.0);
     BeginMode3D(camera);
     BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
 
@@ -2519,6 +2544,7 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     EndWorldLighting();
     DrawMarketEmberFlames(clock);
     EndMode3D();
+    rlSetClipPlanes(0.05, 4000.0);
     DrawMarketPracticalLightHalos(camera, target, clock);
     EndTextureMode();
     PresentTarget(target, destination);

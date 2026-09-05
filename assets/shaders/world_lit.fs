@@ -84,10 +84,31 @@ float orderedDither4x4(vec2 pixel)
     return (threshold[index] + 0.5) / 16.0;
 }
 
+float stripeIntegral(float x, float width)
+{
+    float phase = fract(x);
+    return floor(x) * (2.0 * width) + min(phase, width) +
+           max(phase - (1.0 - width), 0.0);
+}
+
 float centeredStripe(float coordinate, float frequency, float halfWidth)
 {
-    float phase = fract(coordinate * frequency);
-    return 1.0 - step(halfWidth, min(phase, 1.0 - phase));
+    float x = coordinate * frequency;
+    float radius = max(fwidth(x) * 0.5, 0.0001);
+    return (stripeIntegral(x + radius, halfWidth) -
+            stripeIntegral(x - radius, halfWidth)) / (2.0 * radius);
+}
+
+float paintResolution(vec2 point)
+{
+    return 1.0 - smoothstep(0.35, 1.10,
+        max(fwidth(point.x), fwidth(point.y)));
+}
+
+float paintEdge(float edge, float value)
+{
+    float width = max(fwidth(value) * 0.5, 0.005);
+    return smoothstep(edge - width, edge + width, value);
 }
 
 void main()
@@ -208,9 +229,10 @@ void main()
         vec2 groundMarkPoint = crossedTerrainPoint * 2.08 +
                                vec2(5.0, 17.0);
         vec2 groundMarkCenter = abs(fract(groundMarkPoint) - 0.5);
-        float groundMarkShape = 1.0 - step(
+        float groundMarkShape = 1.0 - paintEdge(
             0.29, groundMarkCenter.x + groundMarkCenter.y * 1.34);
         float groundMark = detailPresence * groundMarkShape *
+            paintResolution(groundMarkPoint) *
             step(0.90,
                  hash21(floor(groundMarkPoint) + vec2(37.0, 61.0)));
         color = mix(color, color * vec3(0.82, 0.86, 0.84),
@@ -231,21 +253,20 @@ void main()
         float roofCourseBreak = step(
             0.24, hash21(vec2(floor(roofAlong * 0.78),
                               roofCourseIndex + 17.0)));
-        float roofJointPhase = fract(roofAlong * 0.78 +
-                                     mod(roofCourseIndex, 2.0) * 0.5);
-        float roofJoint = (1.0 - step(0.065,
-                                      min(roofJointPhase,
-                                          1.0 - roofJointPhase))) *
-                          (1.0 - roofCourse);
+        float roofJoint = centeredStripe(
+            roofAlong * 0.78 + mod(roofCourseIndex, 2.0) * 0.5,
+            1.0, 0.065) * (1.0 - roofCourse);
         float roofJointBreak = step(
             0.34, hash21(vec2(roofCourseIndex + 53.0,
                               floor(roofAlong * 0.78))));
         float roofInk = pitchedSurface * detailPresence *
+            paintResolution(vec2(roofAcross * 1.38, roofAlong * 0.78)) *
             max(roofCourse * roofCourseBreak * 0.72,
                 roofJoint * roofJointBreak * 0.52);
-        float roofLip = pitchedSurface * detailPresence * roofCourseBreak *
-            step(0.09, roofCoursePhase) *
-            (1.0 - step(0.18, roofCoursePhase));
+        float roofLip = pitchedSurface * detailPresence *
+            paintResolution(vec2(roofAcross * 1.38, roofAlong * 0.78)) * roofCourseBreak *
+            paintEdge(0.09, roofCoursePhase) *
+            (1.0 - paintEdge(0.18, roofCoursePhase));
 
         // Warm timber uses long grain; stone keeps its broken mortar courses.
         float timber = smoothstep(0.025, 0.11, albedo.r - albedo.g) *
@@ -268,22 +289,22 @@ void main()
                                mod(wallCourseIndex, 2.0) * 0.5);
         float wallCourseBreak = step(
             0.49, hash21(vec2(wallCell, wallCourseIndex + 71.0)));
-        float wallJointPhase = fract(wallAlong * 0.48 +
-                                     mod(wallCourseIndex, 2.0) * 0.5);
-        float wallJoint = 1.0 - step(
-            0.052, min(wallJointPhase, 1.0 - wallJointPhase));
+        float wallJoint = centeredStripe(
+            wallAlong * 0.48 + mod(wallCourseIndex, 2.0) * 0.5, 1.0, 0.052);
         float wallJointBreak = step(
             0.70,
             hash21(vec2(wallCourseIndex + 31.0, wallCell + 11.0)));
         float wallInk = wallSurface * detailPresence *
+            paintResolution(vec2(wallAlong * 0.48, wallCourseCoordinate)) *
             max(wallCourse * wallCourseBreak * 0.46,
                 wallJoint * wallJointBreak * 0.34);
 
         vec2 wallChipPoint = vec2(wallAlong, fragPosition.y) * 1.72;
         vec2 wallChipCenter = abs(fract(wallChipPoint) - 0.5);
-        float wallChipShape = 1.0 - step(
+        float wallChipShape = 1.0 - paintEdge(
             0.42, wallChipCenter.x + wallChipCenter.y * 1.22);
         float wallChip = wallSurface * detailPresence * wallChipShape *
+            paintResolution(wallChipPoint) *
             step(0.88,
                  hash21(floor(wallChipPoint) + vec2(89.0, 13.0)));
 
@@ -312,7 +333,7 @@ void main()
     color *= mix(1.0, 0.79, foundation);
 
     float viewFacing = abs(dot(normal, viewDirection));
-    float edgeInk = (1.0 - step(0.13, viewFacing)) * (1.0 - isTerrain);
+    float edgeInk = (1.0 - smoothstep(0.10, 0.16, viewFacing)) * (1.0 - isTerrain);
     vec3 coloredInk = mix(vec3(0.020, 0.031, 0.034),
                           albedo.rgb * 0.20, 0.28);
     color = mix(color, coloredInk, edgeInk * 0.72 * detailPresence);
