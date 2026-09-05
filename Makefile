@@ -3,7 +3,7 @@
 	blender-exports-check blender-hero-assets blender-hero-assets-check blender-hero-animation \
 	blender-hero-actions blender-hero-engine blender-hero-procedural-preview \
 	blender-hero-procedural-check blender-hero-paint-channels \
-	blender-npc-assets blender-npc-assets-check \
+	blender-npc-assets blender-npc-assets-check blender-hero-armor \
 	blender-creature-assets blender-creature-assets-check \
 	blender-world-kit blender-world-kit-check blender-world-kit-review-check \
 	blender-character-experiments blender-character-animations blender-character-animations-check \
@@ -145,6 +145,11 @@ blender-npc-assets:
 blender-npc-assets-check:
 	python3 tools/blender/validate_npc_archetype_library.py
 	python3 tools/blender/validate_npc_dynamic_modules.py
+
+blender-hero-armor:
+	$(BLENDER) --background --python-exit-code 1 --factory-startup --python tools/blender/build_npc_dynamic_modules.py -- --hero-armor
+	python3 tools/blender/validate_npc_dynamic_modules.py
+	python3 tools/blender/validate_character_surfaces.py
 
 blender-creature-assets:
 	$(BLENDER) --background --python-exit-code 1 --factory-startup --python tools/blender/build_creature_library.py

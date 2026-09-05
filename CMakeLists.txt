@@ -1360,6 +1360,13 @@ if(BUILD_TESTING)
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             USES_TERMINAL
         )
+        add_custom_target(run_hero_face_captures
+            COMMAND renderer_regression_tests --hero-face-captures
+                "${CMAKE_CURRENT_BINARY_DIR}/hero-faces"
+            DEPENDS renderer_regression_tests
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            USES_TERMINAL
+        )
         add_custom_target(run_humanoid_animation_captures
             COMMAND renderer_regression_tests --animation-captures
                 "${CMAKE_CURRENT_BINARY_DIR}/humanoid-animation"

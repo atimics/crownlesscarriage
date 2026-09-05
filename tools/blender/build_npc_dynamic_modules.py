@@ -371,60 +371,36 @@ def add_hero_armor(collection: bpy.types.Collection,
         (-0.56, 0.37, 0.35), (-0.22, 0.47, 0.40),
         (0.18, 0.51, 0.42), (0.48, 0.43, 0.36),
     ), collection, material, sides=10), "outer")
-    for name, points in (
-        ("UpperLeft", (
-            (-0.48, -0.44, 0.43), (-0.11, -0.46, 0.50),
-            (-0.01, -0.49, 0.27), (-0.41, -0.46, 0.15),
-        )),
-        ("UpperRight", (
-            (0.11, -0.46, 0.50), (0.48, -0.44, 0.43),
-            (0.41, -0.46, 0.15), (0.01, -0.49, 0.27),
-        )),
-        ("Middle", (
-            (-0.41, -0.48, 0.17), (0.41, -0.48, 0.17),
-            (0.36, -0.50, -0.09), (-0.36, -0.50, -0.09),
-        )),
-        ("Lower", (
-            (-0.36, -0.51, -0.06), (0.36, -0.51, -0.06),
-            (0.29, -0.50, -0.38), (-0.29, -0.50, -0.38),
-        )),
-    ):
-        paint(add_panel(f"GEO_ModuleHeroPlate{name}", points,
-                        collection, material, thickness=0.060), "metal")
+    # Two broad plates meet at a shallow ridge above the fitted waist.
     for side in (-1.0, 1.0):
-        paint(add_box(
-            f"GEO_ModuleHeroHarness{side:+.0f}",
-            (side * 0.20, -0.54, -0.01), (0.085, 0.055, 0.92),
-            collection, material, width=0.014,
-            rotation=(0.0, side * 0.24, 0.0),
-        ), "leather")
-    paint(add_box("GEO_ModuleHeroBelt", (0.0, -0.50, -0.40),
-                  (0.90, 0.11, 0.11), collection, material,
+        plate = paint(add_panel(f"GEO_ModuleHeroBreastplate{side:+.0f}", (
+            (0.0, -0.58, 0.31), (side * 0.20, -0.51, 0.47),
+            (side * 0.43, -0.45, 0.37), (side * 0.46, -0.47, 0.07),
+            (side * 0.31, -0.46, -0.33), (0.0, -0.56, -0.37),
+        ), collection, material, thickness=0.045), "metal")
+        plate["cc_value_offset"] = 0.0 if side < 0 else -0.25
+    paint(add_box("GEO_ModuleHeroBelt", (0.0, -0.52, -0.40),
+                  (0.88, 0.095, 0.10), collection, material,
                   width=0.018), "leather")
-    paint(add_box("GEO_ModuleBrokenCrownBase", (0.0, -0.565, 0.06),
-                  (0.34, 0.045, 0.060), collection, material,
-                  width=0.010, rotation=(0.0, 0.0, -0.035)), "accent")
-    for index, (x, height, lean) in enumerate((
-        (-0.12, 0.15, -0.18), (0.0, 0.21, 0.04), (0.12, 0.12, 0.22),
-    )):
-        paint(add_box(
-            f"GEO_ModuleBrokenCrownTooth{index}",
-            (x, -0.565, 0.12 + height * 0.5), (0.055, 0.045, height),
-            collection, material, width=0.009,
-            rotation=(0.0, lean, 0.0),
-        ), "accent")
-    paint(add_panel("GEO_ModuleHeroTassetLeft", (
-        (-0.32, -0.39, -0.41), (-0.04, -0.39, -0.42),
-        (-0.07, -0.39, -0.84), (-0.29, -0.39, -0.78),
-    ), collection, material, thickness=0.065), "metal")
-    paint(add_panel("GEO_ModuleHeroTassetRight", (
-        (0.04, -0.37, -0.42), (0.28, -0.37, -0.40),
-        (0.31, -0.37, -0.72), (0.08, -0.37, -0.82),
-    ), collection, material, thickness=0.055), "outer")
-    add_armor_rivets("GEO_ModuleHero", (
-        (-0.39, 0.34), (0.39, 0.34), (-0.34, 0.01), (0.34, 0.01),
-        (-0.26, -0.28), (0.26, -0.28),
-    ), -0.57, collection, material)
+    paint(add_box("GEO_ModuleHeroBuckle", (0.10, -0.585, -0.40),
+                  (0.12, 0.025, 0.105), collection, material,
+                  width=0.012), "accent")
+    # One flat shoulder strap leaves a clear field around the badge.
+    paint(add_panel("GEO_ModuleHeroHarness", (
+        (-0.34, -0.55, 0.43), (-0.23, -0.59, 0.43),
+        (0.31, -0.54, -0.34), (0.20, -0.59, -0.34),
+    ), collection, material, thickness=0.025), "leather")
+    paint(add_panel("GEO_ModuleBrokenCrown", (
+        (-0.02, -0.625, 0.08), (0.23, -0.625, 0.08),
+        (0.25, -0.625, 0.26), (0.16, -0.625, 0.20),
+        (0.12, -0.625, 0.31), (0.08, -0.625, 0.20),
+        (-0.03, -0.625, 0.28),
+    ), collection, material, thickness=0.018), "accent")
+    for side, bottom in ((-1.0, -0.78), (1.0, -0.70)):
+        paint(add_panel(f"GEO_ModuleHeroTasset{side:+.0f}", (
+            (side * 0.04, -0.40, -0.45), (side * 0.32, -0.40, -0.43),
+            (side * 0.30, -0.38, bottom), (side * 0.08, -0.39, bottom - 0.04),
+        ), collection, material, thickness=0.04), "metal")
 
 
 def add_guard_pauldron(collection: bpy.types.Collection,
@@ -875,6 +851,8 @@ def build(selected_slots: set[str] | None = None) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--material-pilot", action="store_true")
+    parser.add_argument("--hero-armor", action="store_true")
     arguments = parser.parse_args(sys.argv[sys.argv.index("--") + 1:]
                                   if "--" in sys.argv else [])
-    build(MATERIAL_PILOT_SLOTS if arguments.material_pilot else None)
+    build({"chest_plate_hero", "pauldron_hero"} if arguments.hero_armor else
+          MATERIAL_PILOT_SLOTS if arguments.material_pilot else None)
