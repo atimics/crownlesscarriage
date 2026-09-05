@@ -1,5 +1,5 @@
 (function () {
-  if (Module.ccCoop && (Module.ccCoop.enabled || Module.ccCoop.preview)) {
+  if (Module.ccCoop && Module.ccCoop.enabled) {
     Module.crownlessCampaignAccess = 0;
     Module.crownlessCampaignAccessMessage = "";
     Module.persistCrownlessSave = async function () {};

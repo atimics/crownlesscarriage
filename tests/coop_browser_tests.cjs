@@ -33,11 +33,6 @@ async function main() {
     await crew.getByRole('button', {name:'Join the company'}).click();
     await owner.getByRole('button', {name:'Close', exact:true}).click();
     assert.equal(await crew.getByRole('button', {name:/Buy|Sell|Depart|Rest|Pause/}).count(), 0);
-    await crew.getByRole('button', {name:'Ocean coat', exact:true}).click();
-    await crew.getByRole('button', {name:'Silver hair', exact:true}).click();
-    await crew.getByRole('combobox', {name:'Hair style', exact:true}).selectOption('4');
-    await crew.getByRole('button', {name:'Save appearance', exact:true}).click();
-    await crew.waitForFunction(() => document.querySelector('#appearance-status').textContent === 'Saved');
     const worldId = new URL(await crew.url()).hash.slice('#world='.length);
     const token = await crew.evaluate(() => localStorage.getItem('cc-coop-token'));
     async function state() {
@@ -52,6 +47,39 @@ async function main() {
     for (const page of [owner, game]) {
       await page.waitForFunction(() => document.body.dataset.companyReady === 'ready' && document.body.dataset.playerPosition, undefined, {timeout:120000});
     }
+    async function selectMenuItem(page, index) {
+      await page.locator('#canvas').focus();
+      for (let step = 0; await page.evaluate(() => Module.crownlessMenuFocus) !== index; ++step) {
+        assert(step < 16, 'Menu item must be reachable');
+        const previous = await page.evaluate(() => Module.crownlessMenuFocus);
+        await page.keyboard.press('ArrowDown');
+        await page.waitForFunction(value => Module.crownlessMenuFocus !== value, previous);
+      }
+      const draft = await page.evaluate(() => Module.crownlessScreen === 'avatar' ? Module.crownlessAvatarDraft : null);
+      await page.keyboard.press('Enter');
+      if (draft !== null && index < 5) await page.waitForFunction(value => Module.crownlessAvatarDraft !== value, draft);
+    }
+    await game.locator('#canvas').focus();
+    await game.keyboard.press('Escape');
+    await game.waitForFunction(() => Module.crownlessScreen === 'paused');
+    await selectMenuItem(game, 9);
+    await game.waitForFunction(() => Module.crownlessScreen === 'avatar');
+    await selectMenuItem(game, 4);
+    await selectMenuItem(game, 4);
+    await selectMenuItem(game, 4);
+    await selectMenuItem(game, 1);
+    await selectMenuItem(game, 1);
+    await selectMenuItem(game, 1);
+    await selectMenuItem(game, 1);
+    await selectMenuItem(game, 2);
+    await selectMenuItem(game, 2);
+    await selectMenuItem(game, 2);
+    await selectMenuItem(game, 2);
+    await selectMenuItem(game, 5);
+    await game.waitForFunction(() => Module.crownlessScreen === 'paused');
+    assert.deepEqual((await state()).appearance, {skin:0, hair:4, style:4, face:0, coat:3});
+    await selectMenuItem(game, 0);
+    await game.waitForFunction(() => Module.crownlessScreen === 'playing');
     assert.equal(await game.locator('body').getAttribute('data-avatar'), '12576');
     assert.equal(await owner.locator('body').getAttribute('data-avatar'), '0');
     for (const [page, name, appearance] of [[owner, 'Bren', 12576], [game, 'Mara', 0]]) {
@@ -82,7 +110,10 @@ async function main() {
     assert.notEqual(await game.locator('body').getAttribute('data-player-position'), start);
     assert.equal(await game.locator('body').getAttribute('data-avatar'), '12576');
     await owner.waitForFunction(() => JSON.parse(document.body.dataset.crewDrawn || '[]')[0]?.name === 'Bren');
-    await game.getByRole('link', {name:'Your avatar & company ↗'}).click();
+    await game.locator('#canvas').focus();
+    await game.keyboard.press('Escape');
+    await game.waitForFunction(() => Module.crownlessScreen === 'paused');
+    await selectMenuItem(game, 11);
     await game.getByRole('link', {name:'Enter the world'}).waitFor();
     await owner.waitForFunction(() => JSON.parse(document.body.dataset.crewDrawn || '[]').length === 0);
     await game.getByRole('link', {name:'Enter the world'}).click();
@@ -91,8 +122,11 @@ async function main() {
     const destination = (await state()).state.travel[0].id;
     const departed = await game.evaluate(target => Module.ccCoop.apply('travel', target, 0, 0), destination);
     assert.equal(departed.accepted, true);
-    await owner.getByRole('button', {name:'Pause world', exact:true}).click();
-    await owner.getByRole('button', {name:'Resume world', exact:true}).waitFor();
+    await owner.locator('#canvas').focus();
+    await owner.keyboard.press('Escape');
+    await owner.waitForFunction(() => Module.crownlessScreen === 'paused');
+    await selectMenuItem(owner, 12);
+    await owner.waitForFunction(() => Module.ccCoop.paused());
     const travelling = await state();
     assert.equal(travelling.state.journey.active, true);
     for (const page of [owner, game]) await page.waitForFunction(hash => document.body.dataset.companyHash === hash, travelling.state.hash);

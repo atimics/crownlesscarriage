@@ -19,11 +19,20 @@ EM_JS(int, CoopEnabled, (), { return Module.ccCoop && Module.ccCoop.enabled ? 1 
 EM_JS(int, CoopOwner, (), { return Module.ccCoop.owner() ? 1 : 0; });
 EM_JS(void, CoopLobby, (), { Module.ccCoop.openLobby(); });
 EM_JS(void, CoopTitle, (), { location.assign(location.pathname); });
+EM_JS(void, CoopCompany, (), { Module.ccCoop.openCompany(); });
+EM_JS(int, CoopPaused, (), { return Module.ccCoop.paused() ? 1 : 0; });
+EM_ASYNC_JS(int, CoopSetAppearance, (int choices, char *error, int capacity), {
+    try { await Module.ccCoop.saveAppearance(choices); return 1; }
+    catch (failure) { stringToUTF8(failure.message, error, capacity); return 0; }
+});
+EM_ASYNC_JS(int, CoopTogglePause, (char *error, int capacity), {
+    try { await Module.ccCoop.togglePause(); return 1; }
+    catch (failure) { stringToUTF8(failure.message, error, capacity); return 0; }
+});
 EM_ASYNC_JS(int, CoopDelete, (char *error, int capacity), {
     try { await Module.ccCoop.deleteWorld(); return 1; }
     catch (failure) { stringToUTF8(failure.message, error, capacity); return 0; }
 });
-EM_JS(int, CoopPreview, (), { return Module.ccCoop && Module.ccCoop.preview ? 1 : 0; });
 EM_JS(int, CoopHasSession, (), { return Module.ccCoop && Module.ccCoop.hasSession() ? 1 : 0; });
 EM_JS(int, CoopSeat, (), { return Module.ccCoop ? Module.ccCoop.seat() : 0; });
 EM_JS(int, CoopExchange, (int scene, const float *pose, CcCrewMember *crew, int stride, int name_offset, int appearance_offset, int pose_offset), {
@@ -77,7 +86,11 @@ bool CcCoopClientOwner(void) { return CoopOwner() != 0; }
 bool CcCoopClientDelete(char *error, size_t capacity) { return CoopDelete(error, (int)capacity) != 0; }
 void CcCoopClientOpenLobby(void) { CoopLobby(); }
 void CcCoopClientReturnToTitle(void) { CoopTitle(); }
-bool CcCoopClientPreview(void) { return CoopPreview() != 0; }
+void CcCoopClientOpenCompany(void) { CoopCompany(); }
+bool CcCoopClientPaused(void) { return CoopPaused() != 0; }
+bool CcCoopClientTogglePause(char *error, size_t capacity) { return CoopTogglePause(error, (int)capacity) != 0; }
+bool CcCoopClientSetAppearance(uint32_t choices, char *error, size_t capacity)
+{ return CoopSetAppearance((int)choices, error, (int)capacity) != 0; }
 uint32_t CcCoopClientAppearance(void) { return (uint32_t)CoopAppearance(); }
 bool CcCoopClientHasSession(void) { return CoopHasSession() != 0; }
 int32_t CcCoopClientSeat(void) { return CoopSeat(); }
@@ -151,7 +164,11 @@ bool CcCoopClientOwner(void) { return false; }
 bool CcCoopClientDelete(char *error, size_t capacity) { (void)error; (void)capacity; return false; }
 void CcCoopClientOpenLobby(void) { OpenURL("https://crownless.ratimics.com/"); }
 void CcCoopClientReturnToTitle(void) {}
-bool CcCoopClientPreview(void) { return false; }
+void CcCoopClientOpenCompany(void) {}
+bool CcCoopClientPaused(void) { return false; }
+bool CcCoopClientTogglePause(char *error, size_t capacity) { (void)error; (void)capacity; return false; }
+bool CcCoopClientSetAppearance(uint32_t choices, char *error, size_t capacity)
+{ (void)choices; (void)error; (void)capacity; return false; }
 uint32_t CcCoopClientAppearance(void) { return 0U; }
 bool CcCoopClientHasSession(void) { return false; }
 void CcCoopClientCheckpoint(const char *path) { (void)path; }

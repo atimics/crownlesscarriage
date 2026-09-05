@@ -1,15 +1,14 @@
 (function () {
   const worldId = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('world') : null;
   const enabled = /^[a-f0-9]{32}$/.test(worldId || '');
-  const preview = typeof location !== 'undefined' && new URLSearchParams(location.search).get('avatar') === '1';
-  let avatar = CcAvatar.normalize();
+  let avatar = CcAvatar.normalize(), avatarRevision = -1;
   let state = null, pending = null, lastPoll = 0, inFlight = false, applying = false;
   const token = enabled ? localStorage.getItem('cc-coop-token') : '';
   const key = `cc-coop-pending-${worldId}`;
   let deleted = false;
   const sessionKey = `cc-coop-session-${worldId}`;
   let checkpoint = null, sessionSequence = 0, sessionSaved = 0, sessionFlight = false, lastSessionSave = 0, restoredSession = false;
-  let status, pauseControl, startupError = '';
+  let status, startupError = '';
   let visit = '', poseFlight = false, poseScene = -1, lastPose = -Infinity, peersAt = 0, peers = [], leaving = false;
   function say(message) { if (status) status.textContent = startupError || message; }
   function accept(next, forceSnapshot = false) {
@@ -18,10 +17,9 @@
     if (state && state.session_context !== next.session_context) peers = [];
     state = next;
     if (checkpoint && checkpoint.context !== next.session_context) checkpoint = null;
-    avatar = CcAvatar.normalize(next.appearance);
-    if (pauseControl) {
-      pauseControl.hidden = !next.owner;
-      pauseControl.textContent = next.paused ? 'Resume world' : 'Pause world';
+    if (next.revision >= avatarRevision) {
+      avatar = CcAvatar.normalize(next.appearance);
+      avatarRevision = next.revision;
     }
     say(next.paused ? 'Company paused' : `${next.crew.filter(p => p.online).length} aboard · shared carriage · saved`);
   }
@@ -176,45 +174,37 @@
   function openLobby() {
     location.assign(location.pathname.startsWith('/game/') ? '/' : 'https://crownless.ratimics.com/');
   }
-  Module.ccCoop = { enabled, preview, connect, apply, poll, deleteWorld, openLobby,
+  async function saveAppearance(choices) {
+    const next = await request('appearance', {appearance:CcAvatar.unpack(choices)});
+    if (next.revision >= avatarRevision) {
+      avatar = CcAvatar.normalize(next.appearance);
+      avatarRevision = next.revision;
+    }
+  }
+  async function togglePause() {
+    if (!state?.owner) throw new Error('The host can pause the world.');
+    await request('host', {action:state.paused ? 'resume' : 'pause'});
+    accept(await request('state?campaign=1'), true);
+  }
+  async function openCompany() {
+    Module._CcCoopCheckpointNow();
+    await saveSession(true);
+    leave();
+    location.assign(`/#world=${worldId}`);
+  }
+  Module.ccCoop = { enabled, connect, apply, poll, deleteWorld, openLobby, openCompany, saveAppearance, togglePause,
     exchange, exchangeMemory, drawnMemory, leave, seat:() => Math.max(0, state?.crew.findIndex(member => member.id === state.member) || 0),
     avatar:() => CcAvatar.pack(avatar), checkpoint:captureSession, hasSession:() => restoredSession,
     owner() { return Boolean(state?.owner); },
+    paused() { return Boolean(state?.paused); },
     ready(error) { startupError = error; document.body.dataset.companyReady = error ? 'error' : 'ready'; if (error) say(error); },
     take() { const value = pending; pending = null; return value; } };
   if (enabled && typeof document !== 'undefined') {
     const attach = () => {
-      const hint = document.getElementById('hint');
-      if (hint) hint.textContent = 'Click the game, then use the mouse and keyboard. Your company and clock are saved on the host.';
-      const bar = document.createElement('div');
-      bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;justify-content:space-between;padding:7px 16px;background:#20392f;color:#f5f0e4;font:12px system-ui';
-      status = document.createElement('span'); status.textContent = 'Joining the shared carriage…';
-      pauseControl = document.createElement('button'); pauseControl.hidden = true;
-      pauseControl.onclick = async () => {
-        pauseControl.disabled = true;
-        try {
-          await request('host', {action:state.paused ? 'resume' : 'pause'});
-          accept(await request('state?campaign=1'), true);
-        }
-        catch (error) { say(error.message); }
-        finally { pauseControl.disabled = false; }
-      };
-      const link = document.createElement('a'); link.href = `/#world=${worldId}`; link.textContent = 'Your avatar & company ↗'; link.style.color = 'inherit';
-      link.onclick = async event => { event.preventDefault(); Module._CcCoopCheckpointNow(); await saveSession(true); leave(); location.assign(link.href); };
-      bar.append(status, pauseControl, link); document.body.append(bar);
+      status = document.getElementById('company-status');
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
     window.addEventListener('pagehide', () => { Module._CcCoopCheckpointNow?.(); saveSession(true); leave(); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { Module._CcCoopCheckpointNow?.(); saveSession(true); } });
-  }
-  if (preview && typeof window !== 'undefined') {
-    window.addEventListener('message', event => {
-      if (event.origin === location.origin && event.source === window.parent && event.data?.type === 'crownless-avatar-preview') avatar = CcAvatar.normalize(event.data.appearance);
-    });
-    const attachPreview = () => {
-      document.body.classList.add('avatar-preview');
-      window.parent.postMessage({type:'crownless-avatar-ready'}, location.origin);
-    };
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachPreview); else attachPreview();
   }
 })();

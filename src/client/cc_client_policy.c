@@ -6,7 +6,14 @@
 #include <stdio.h>
 #include <string.h>
 
-#define CC_CLIENT_PREFERENCES_VERSION 3U
+#define CC_CLIENT_PREFERENCES_VERSION 4U
+
+static bool ValidAvatar(uint32_t avatar)
+{
+    return avatar < 32768U && (avatar & 7U) < 6U &&
+        ((avatar >> 3U) & 7U) < 6U && ((avatar >> 6U) & 7U) < 6U &&
+        ((avatar >> 9U) & 7U) < 4U && ((avatar >> 12U) & 7U) < 6U;
+}
 
 static void SetPreferencesError(char *error, size_t capacity,
                                 const char *message)
@@ -64,6 +71,11 @@ bool CcClientPreferencesLoad(const char *path,
             fscanf(file, "%31s %d", setting, &focus_hints) == 2 &&
             strcmp(setting, "focus_hints") == 0 && (focus_hints == 0 || focus_hints == 1);
     }
+    unsigned int avatar = 0U;
+    if (valid && version >= 4U) {
+        valid = fscanf(file, "%31s %u", setting, &avatar) == 2 &&
+            strcmp(setting, "avatar") == 0 && ValidAvatar(avatar);
+    }
     if (fclose(file) != 0) valid = false;
     if (!valid) {
         CcClientPreferencesDefault(preferences);
@@ -75,6 +87,7 @@ bool CcClientPreferencesLoad(const char *path,
     preferences->audio_mode = audio_mode;
     preferences->text_size = text_size;
     preferences->focus_hints = focus_hints != 0;
+    preferences->avatar = avatar;
     SetPreferencesError(error, error_capacity, "");
     return true;
 }
@@ -85,7 +98,8 @@ bool CcClientPreferencesSave(const char *path,
 {
     if (path == NULL || path[0] == '\0' || preferences == NULL ||
         preferences->audio_mode < 0 || preferences->audio_mode > 2 ||
-        preferences->text_size < 0 || preferences->text_size > 2) {
+        preferences->text_size < 0 || preferences->text_size > 2 ||
+        !ValidAvatar(preferences->avatar)) {
         SetPreferencesError(error, error_capacity,
                             "Preferences path or state is invalid.");
         return false;
@@ -107,11 +121,13 @@ bool CcClientPreferencesSave(const char *path,
                                "reduced_motion %d\n"
                                "audio_mode %d\n"
                                "text_size %d\n"
-                               "focus_hints %d\n",
+                               "focus_hints %d\n"
+                               "avatar %u\n",
                          CC_CLIENT_PREFERENCES_VERSION,
                          preferences->reduced_motion ? 1 : 0,
                          preferences->audio_mode, preferences->text_size,
-                         preferences->focus_hints ? 1 : 0) > 0;
+                         preferences->focus_hints ? 1 : 0,
+                         (unsigned int)preferences->avatar) > 0;
     saved = saved && fflush(file) == 0;
     if (fclose(file) != 0) saved = false;
     if (saved && rename(temporary, path) != 0) saved = false;

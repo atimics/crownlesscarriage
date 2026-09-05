@@ -39,6 +39,7 @@ int main(void)
     preferences.audio_mode = 2;
     preferences.text_size = 2;
     preferences.focus_hints = false;
+    preferences.avatar = 12576U;
     CC_CHECK(CcClientPreferencesSave(
         preferences_path, &preferences,
         preferences_error, sizeof(preferences_error)));
@@ -49,6 +50,7 @@ int main(void)
     CC_CHECK(preferences.reduced_motion);
     CC_CHECK(preferences.audio_mode == 2);
     CC_CHECK(preferences.text_size == 2 && !preferences.focus_hints);
+    CC_CHECK(preferences.avatar == 12576U);
     FILE *invalid_preferences = fopen(preferences_path, "wb");
     CC_CHECK(invalid_preferences != NULL);
     CC_CHECK(fputs("CROWNLESS_PREFERENCES 1\nreduced_motion 7\n",
@@ -77,6 +79,18 @@ int main(void)
     CC_CHECK(fclose(version_two) == 0);
     CC_CHECK(CcClientPreferencesLoad(preferences_path, &preferences, preferences_error, sizeof(preferences_error)));
     CC_CHECK(preferences.audio_mode == 1 && preferences.text_size == 0 && preferences.focus_hints);
+    CC_CHECK(preferences.avatar == 0U);
+    FILE *version_three = fopen(preferences_path, "wb");
+    CC_CHECK(version_three != NULL);
+    CC_CHECK(fputs("CROWNLESS_PREFERENCES 3\nreduced_motion 1\naudio_mode 2\ntext_size 2\nfocus_hints 0\n", version_three) >= 0);
+    CC_CHECK(fclose(version_three) == 0);
+    CC_CHECK(CcClientPreferencesLoad(preferences_path, &preferences, preferences_error, sizeof(preferences_error)));
+    CC_CHECK(preferences.avatar == 0U && preferences.text_size == 2 && preferences.reduced_motion);
+    preferences.avatar = 7U;
+    CC_CHECK(!CcClientPreferencesSave(preferences_path, &preferences, preferences_error, sizeof(preferences_error)));
+    preferences.avatar = 4U << 9U;
+    CC_CHECK(!CcClientPreferencesSave(preferences_path, &preferences, preferences_error, sizeof(preferences_error)));
+    preferences.avatar = 0U;
     preferences.text_size = 3;
     CC_CHECK(!CcClientPreferencesSave(preferences_path, &preferences, preferences_error, sizeof(preferences_error)));
     preferences.text_size = 0;

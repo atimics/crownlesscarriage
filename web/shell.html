@@ -6,137 +6,27 @@
     <meta name="theme-color" content="#171512">
     <title>Crownless Carriage</title>
     <style>
-      :root {
-        color-scheme: dark;
-        font-family: Georgia, "Times New Roman", serif;
-        background: #171512;
-        color: #e8dfc9;
-      }
+      :root { color-scheme: dark; background: #0b0a09; color: #e8dfc9; }
       * { box-sizing: border-box; }
-      body {
-        min-height: 100vh;
-        margin: 0;
-        display: grid;
-        place-items: center;
-        background:
-          radial-gradient(circle at 50% 10%, #353027 0, #171512 52%),
-          #171512;
-      }
-      main {
-        width: min(100%, 1240px);
-        padding: 18px 20px 28px;
-      }
-      header {
-        display: flex;
-        align-items: end;
-        justify-content: space-between;
-        gap: 18px;
-        margin-bottom: 12px;
-      }
-      h1 {
-        margin: 0;
-        font-size: clamp(1.2rem, 3vw, 2rem);
-        font-weight: 500;
-        letter-spacing: 0.05em;
-      }
-      p { margin: 4px 0 0; color: #aaa18e; }
-      button {
-        border: 1px solid #8e8168;
-        border-radius: 3px;
-        padding: 9px 13px;
-        background: #24211c;
-        color: #e8dfc9;
-        font: inherit;
-        cursor: pointer;
-      }
-      button:hover { background: #302b24; }
-      #stage {
-        position: relative;
-        overflow: hidden;
-        border: 1px solid #514a3d;
-        border-radius: 4px;
-        background: #0b0a09;
-        box-shadow: 0 24px 70px rgb(0 0 0 / 45%);
-      }
+      html, body, main, #stage { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+      #stage { display: grid; place-items: center; position: relative; }
       canvas {
-        width: 100%;
-        height: auto;
-        display: block;
-        border: 0;
-        outline: none;
-        background: #0b0a09;
-      }
-      #stage:fullscreen {
-        display: grid;
-        place-items: center;
-        width: 100vw;
-        height: 100vh;
-        border: 0;
-        border-radius: 0;
-      }
-      #stage:fullscreen canvas {
-        width: min(100vw, calc(100vh * 16 / 9));
-        height: min(100vh, calc(100vw * 9 / 16));
+        display: block; width: min(100vw, calc(100dvh * 16 / 9));
+        height: min(100dvh, calc(100vw * 9 / 16)); border: 0; outline: none;
       }
       #loading {
-        position: absolute;
-        inset: 0;
-        display: grid;
-        place-items: center;
-        background: #171512;
-        color: #c9bea6;
-        letter-spacing: 0.04em;
+        position: absolute; inset: 0; display: grid; place-items: center;
+        background: #171512; font: 16px Georgia, serif;
       }
       #loading[hidden] { display: none; }
-      #progress {
-        display: block;
-        width: min(280px, 70vw);
-        margin-top: 12px;
-        accent-color: #9f8657;
-      }
-      #hint {
-        margin-top: 10px;
-        text-align: center;
-        font: 0.82rem system-ui, sans-serif;
-      }
-      footer {
-        display: flex;
-        justify-content: center;
-        gap: 16px;
-        margin-top: 8px;
-        font: 0.76rem system-ui, sans-serif;
-      }
-      footer a { color: #a99b80; text-underline-offset: 0.2em; }
-      footer a:hover { color: #e8dfc9; }
-      footer a:focus-visible {
-        outline: 2px solid #c7a96b;
-        outline-offset: 3px;
-        border-radius: 2px;
-      }
-      @media (max-width: 680px) {
-        main { padding: 10px; }
-        header { align-items: start; }
-        header p { display: none; }
-      }
-      body.avatar-preview {min-height:100vh;background:#1a2823;overflow:hidden}
-      .avatar-preview main {padding:0;width:100%;height:100vh}
-      .avatar-preview header,.avatar-preview #hint,.avatar-preview footer {display:none}
-      .avatar-preview #stage {border:0;border-radius:0;box-shadow:none;height:100vh;display:grid;place-items:center;background:#1a2823}
-      .avatar-preview canvas {width:100%;height:auto;background:#1a2823}
-      .avatar-preview #loading {background:#1a2823}
+      #progress { display: block; width: min(280px, 70vw); margin-top: 12px; accent-color: #9f8657; }
+      #company-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     </style>
   </head>
   <body>
     <main>
-      <header>
-        <div>
-          <h1>Crownless Carriage</h1>
-          <p>A causal political action-RPG</p>
-        </div>
-        <button id="fullscreen" type="button">Full screen</button>
-      </header>
       <div id="stage">
-        <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+        <canvas id="canvas" aria-label="Crownless Carriage game" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
         <div id="loading">
           <div>
             <span id="status">Downloading the world…</span>
@@ -144,11 +34,7 @@
           </div>
         </div>
       </div>
-      <p id="hint">Choose Offline and Play. Esc opens the game menu. Saves stay in this browser.</p>
-      <footer aria-label="Project information">
-        <a href="licenses.html">Licenses &amp; credits</a>
-        <a href="https://github.com/atimics/crownlesscarriage">Source</a>
-      </footer>
+      <span id="company-status" role="status" aria-live="polite"></span>
     </main>
     <script>
       const canvas = document.querySelector("#canvas");
@@ -160,10 +46,6 @@
         preRun: [],
         postRun: [function () {
           loading.hidden = true;
-          if (Module.crownlessCampaignRestored) {
-            document.querySelector("#hint").textContent =
-              "Saved world ready. Choose Play to continue.";
-          }
           canvas.focus();
         }],
         canvas,
@@ -204,10 +86,6 @@
       canvas.addEventListener("webglcontextlost", function (event) {
         event.preventDefault();
         Module.setStatus("The graphics context was lost. Reload the page to continue.");
-      });
-      document.querySelector("#fullscreen").addEventListener("click", function () {
-        if (document.fullscreenElement) document.exitFullscreen();
-        else document.querySelector("#stage").requestFullscreen();
       });
     </script>
     {{{ SCRIPT }}}
