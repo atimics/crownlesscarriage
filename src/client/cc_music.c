@@ -282,6 +282,8 @@ void CcMusicUpdate(CcMusicDirector *director, const CcMusicContext *context,
         CcMusicVoice *voice = &director->voice[i];
         if (voice->take < 0) continue;
         voice->age += dt;
+        if (director->duration[voice->take] > 0.0f && voice->age >= director->duration[voice->take])
+            voice->age = fmodf(voice->age, director->duration[voice->take]);
         voice->gain = sqrtf(fmaxf(0.0f, voice->from_power * (1.0f - progress) +
                                  voice->target_power * progress));
         if (progress >= 1.0f && voice->target_power == 0.0f)
@@ -326,6 +328,10 @@ void CcMusicUpdate(CcMusicDirector *director, const CcMusicContext *context,
     }
     change = change || director->requested_due;
     if (!change) {
+        if (current != NULL && pending == current->take && current->age < 5.0f) {
+            director->requested_take = -1;
+            pending = -1;
+        }
         /* A stable choice gives the download and decoder the rest of this song. */
         if (pending < 0 && current != NULL && current->age >= 5.0f) {
             director->requested_take = CcMusicChoose(director, &effective);
@@ -367,8 +373,11 @@ void CcMusicUpdate(CcMusicDirector *director, const CcMusicContext *context,
         return;
     }
     if (current != NULL && current->take == take) {
-        if (current->age >= director->duration[take] - 8.0f)
-            current->age = 0.0f; /* A single installed take can loop. */
+        if (director->requested_take < 0) {
+            director->requested_take = take;
+            director->requested_fit = best > 0.0f ?
+                CcMusicScore(&effective, cc_music_takes[take].cue) / best : 0.0f;
+        }
         return;
     }
     if (!StartFade(director, take, fade)) {

@@ -11,7 +11,7 @@
 } } while (0)
 
 static bool local_files, fail_audio, bad_audio, active, catalog_request, net_cancelled;
-static int ticks, remote_plays, calm_plays, combat_plays, cancelled;
+static int ticks, remote_plays, calm_plays, combat_plays, cancelled, replaced;
 static float calm_gain;
 static double now;
 static int next_stream, buffer_frames;
@@ -85,7 +85,7 @@ int CcMusicNetPoll(unsigned char **data, size_t *size) {
     return 1;
 }
 void CcMusicNetShutdown(void) { if (active) cancelled++; active = false; }
-void CcMusicNetCancel(void) { CHECK(active); net_cancelled = true; }
+void CcMusicNetCancel(void) { CHECK(active); net_cancelled = true; replaced++; }
 static void Frames(CcMusicContext context, int count) {
     for (int i = 0; i < count; ++i) {
         now += 1.0 / 60.0;
@@ -107,6 +107,23 @@ int main(void) {
     CHECK(remote_plays == 1);
     Frames(combat, 120);
     CHECK(combat_plays == 1);
+    CcMusicPlayerShutdown();
+
+    /* A fight can take over a slow prefetch on the next frame. */
+    calm_plays = remote_plays = combat_plays = replaced = 0;
+    Frames(travel, 300); Frames(fields, 60);
+    CHECK(active && !catalog_request);
+    Frames(combat, 3);
+    CHECK(replaced == 1 && combat_plays == 1 && remote_plays == 0);
+    CcMusicPlayerShutdown();
+
+    /* The audio clock, including a delayed game frame, drives the ending. */
+    calm_plays = remote_plays = 0;
+    Frames(travel, 300); Frames(fields, 300);
+    CHECK(calm_plays == 1 && remote_plays == 0);
+    now += 164.0;
+    Frames(fields, 2);
+    CHECK(remote_plays == 1);
     CcMusicPlayerShutdown();
 
     /* A damaged download leaves the current song at full gain. */

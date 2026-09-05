@@ -103,8 +103,11 @@ static void UpdateSources(float dt)
 static void RequestAudio(void)
 {
     int wanted = player.director.requested_take;
-    if (player.downloading && player.download_take >= 0 &&
-        player.download_take != wanted && !player.cancelled_download) {
+    bool needs_file = wanted >= 0 && player.director.available[wanted] &&
+        player.path[wanted][0] == '\0' && player.data[wanted] == NULL;
+    if (player.downloading && !player.cancelled_download &&
+        ((player.download_take >= 0 && player.download_take != wanted) ||
+         (player.download_take < 0 && needs_file))) {
         CcMusicNetCancel();
         player.cancelled_download = true;
     }
@@ -226,6 +229,8 @@ void CcMusicPlayerUpdate(const CcMusicContext *context, float delta_seconds,
     /* Refill playing streams before file opening, cache copies and scene work. */
     for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i) {
         if (player.loaded_take[i] < 0) continue;
+        if (CcMusicStreamReady(player.stream[i]) < 0)
+            player.retry[player.loaded_take[i]] = 60.0f;
         CcMusicStreamUpdate(player.stream[i]);
         float position = CcMusicStreamPosition(player.stream[i]);
         if (isfinite(position) && position >= 0.0f)

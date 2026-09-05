@@ -63,7 +63,11 @@ and hashes. Audio filenames are immutable; the catalog expires after one minute.
 ## Checks
 
 `music_tests` covers situation ranking and waiting for audio during fades.
-`music_player_tests` covers remote loading, ready combat music, failed downloads,
-and cleanup. `tests/web_music_tests.mjs` checks all 27 cached files while offline,
-reconnects, request size limits, and full browser storage.
+`music_player_tests` covers early loading, combat preemption, damaged files,
+playback clock changes, failed downloads and cleanup. `tests/web_music_tests.mjs` checks all 27 cached files while offline,
+reconnects, request size limits, storage delays and download priority.
+`tests/music_browser_tests.cjs` measures a continuous signal through a 700 ms
+page stall. It also checks prepared playback, pause, resume, the four-stream
+limit, damaged files and cleanup. The built-game browser check confirms that
+the WebAssembly player starts native browser music.
 `tests/music_host_tests.py` checks the 27 local hashes and host export format.

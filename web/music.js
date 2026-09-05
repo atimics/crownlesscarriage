@@ -95,7 +95,7 @@
       stopped = false;
       clearTimeout(warmTimer);
       /* Promote a matching transfer; urgent music takes priority over other files. */
-      const shared = warmJob && warmJob.url === url ? warmJob : null;
+      const shared = warmJob && !warmJob.controller.signal.aborted && warmJob.url === url ? warmJob : null;
       if (warmJob && !shared) warmJob.controller.abort();
       const controller = shared ? shared.controller : new AbortController();
       const request = { status: 0, controller };
@@ -202,8 +202,10 @@
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => {
     for (const [id, item] of streams) {
       if (document.hidden) {
-        item.hiddenPaused = item.state === 1 && !item.media.paused;
-        item.media.pause();
+        if (item.state === 1) {
+          item.hiddenPaused = !item.media.paused;
+          item.media.pause();
+        }
       } else if (item.hiddenPaused) {
         item.hiddenPaused = false;
         Module.ccMusicPlayback.resume(id);
