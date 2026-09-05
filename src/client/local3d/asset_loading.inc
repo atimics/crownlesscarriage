@@ -1895,9 +1895,15 @@ bool CcLocalCreatureGaitPoseInternal(
         cache->ready = true;
         cache->controller.world_bound = false;
     }
+    bool changed = Vector3DistanceSqr(ground_position,
+        FromLimbVector(cache->command.ground_position)) > 0.00000001f ||
+        fabsf(WrapAngle(yaw - cache->command.yaw)) > 0.0001f;
+    if (!reset && changed) {
+        cache->pending_seconds = fminf(0.10f,
+            cache->pending_seconds + clock - cache->last_clock);
+    }
     cache->command = (CcCreatureRigWorldCommand){
         .ground_position = ToLimbVector(ground_position), .yaw = yaw, .grounded = true};
-    if (!reset) cache->pending_seconds += fminf(0.10f, clock - cache->last_clock);
     cache->last_clock = clock;
     cache->requested_gait = gait;
     if (reset) {

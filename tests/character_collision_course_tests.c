@@ -104,6 +104,12 @@ static void TestStandingCrowdContacts(void)
 static void TestWaterDepthAndExit(void)
 {
     CcLocalAgent agent;
+    CcLocalAgentInit(&agent, (Vector2){11, 10.75f}, false);
+    CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        Require(agent.humanoid.feet[leg].normal.y > 0.99f,
+            "flat footing beside the bank has level contact forces");
+    }
     CcLocalAgentInit(&agent, (Vector2){11, 9.70f}, false);
     agent.position.y = 2;
     agent.grounded = false;

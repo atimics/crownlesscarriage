@@ -1650,10 +1650,9 @@ static CcLimbVec3 PlanFootTarget(const CcHumanoidGait *gait, int32_t leg,
     float side = leg == 0 ? -1.0f : 1.0f;
     float preview_seconds = (0.38f + 0.31f) /
                             fmaxf(0.70f, gait->cadence);
-    float placement_speed = fmaxf(gait->speed.value, gait->requested_speed * 0.60f);
-    float lead = Clamp(placement_speed * preview_seconds *
+    float lead = Clamp(gait->speed.value * preview_seconds *
                        gait->walk_stride_scale, 0.12f, 0.96f);
-    lead *= Smooth01(placement_speed / 0.24f);
+    lead *= Smooth01(gait->speed.value / 0.24f);
     CcLimbVec3 desired = Add(body_position, Scale(forward, lead));
     desired = Add(desired, Scale(right, side * 0.135f));
     CcLimbVec3 best = ProbeGround(desired, body_position, probe, probe_context, normal);
@@ -3217,15 +3216,6 @@ void CcHumanoidGaitAdvancePhysical(
         }
     }
     bool controlled_jump = gait->action == CC_HUMANOID_ACTION_JUMP;
-    if (grounded && !controlled_jump && !gait->ragdoll.active && !gait->climbing &&
-        gait->action != CC_HUMANOID_ACTION_SWIM) {
-        bool supported = false;
-        for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
-            CcHumanoidContact contact = gait->feet[leg].contact;
-            supported |= contact != CC_HUMANOID_CONTACT_AIR && contact != CC_HUMANOID_CONTACT_SWING;
-        }
-        grounded = supported;
-    }
     if (!grounded && !gait->ragdoll.active && !controlled_jump) {
         gait->unsupported_seconds += delta_time;
         gait->support_state = CC_HUMANOID_SUPPORT_CONTROLLED_AIRBORNE;
@@ -3261,7 +3251,6 @@ void CcHumanoidGaitAdvancePhysical(
     gait->body.root.position.z = body_position.z;
     float desired_speed = sqrtf(desired_velocity.x * desired_velocity.x +
                                 desired_velocity.z * desired_velocity.z);
-    gait->requested_speed = desired_speed;
     if (gait->idle.stable && desired_speed > CC_HUMANOID_IDLE_EXIT_SPEED) {
         ReleaseStableIdle(gait);
     }
@@ -3405,8 +3394,7 @@ void CcHumanoidGaitAdvancePhysical(
             swing_in_progress = true;
         }
     }
-    float motion = fmaxf(Smooth01(gait->speed.value / 0.24f),
-                          0.35f * Smooth01(desired_speed / 0.24f));
+    float motion = Smooth01(gait->speed.value / 0.24f);
     if (turning) motion = fmaxf(motion, 0.55f);
     if (swing_in_progress) motion = fmaxf(motion, 0.38f);
     if (grounded && !gait->idle.stable) {
@@ -3792,6 +3780,7 @@ void CcHumanoidGaitEndSwim(CcHumanoidGait *gait,
         gait->action != CC_HUMANOID_ACTION_SWIM) return;
     CcLimbVec3 right = Right(body_yaw);
     CcLimbVec3 forward = Forward(body_yaw);
+    gait->planted_count = 0;
     for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
         float side = leg == 0 ? -1.0f : 1.0f;
         CcLimbVec3 desired = Add(body_position, Scale(right, side * 0.135f));
@@ -3805,15 +3794,18 @@ void CcHumanoidGaitEndSwim(CcHumanoidGait *gait,
         foot->yaw = body_yaw;
         foot->swing_start_yaw = body_yaw;
         foot->swing_target_yaw = body_yaw;
-        foot->contact = CC_HUMANOID_CONTACT_FLAT;
+        foot->contact = CcFootingContactValid(probe, probe_context,
+            foot->current_point, 0.015f, &foot->normal) ?
+            CC_HUMANOID_CONTACT_FLAT : CC_HUMANOID_CONTACT_AIR;
+        if (foot->contact == CC_HUMANOID_CONTACT_FLAT) ++gait->planted_count;
+        foot->swing_lift = 0.105f;
         foot->pitch.value = 0.0f;
         gait->idle.foot_anchor[leg] = foot->current_point;
         gait->idle.foot_normal[leg] = foot->normal;
     }
     gait->immersion = 0.0f;
-    gait->grounded = true;
-    gait->planted_count = CC_HUMANOID_LEG_COUNT;
-    gait->idle.stable = true;
+    gait->grounded = gait->planted_count > 0;
+    gait->idle.stable = gait->planted_count == CC_HUMANOID_LEG_COUNT;
     gait->idle.pose_locked = false;
     gait->idle.still_time = 0.0f;
     gait->idle.locked_phase = gait->phase;
@@ -3828,9 +3820,6 @@ void CcHumanoidGaitConstrainMotion(CcHumanoidGait *gait,
     if (gait == NULL || !gait->initialized) return;
     gait->authoritative_position = actual_position;
     bool controlled_jump = gait->action == CC_HUMANOID_ACTION_JUMP;
-    if (grounded && !controlled_jump && !gait->ragdoll.active &&
-        gait->planted_count == 0 && !gait->climbing &&
-        gait->action != CC_HUMANOID_ACTION_SWIM) grounded = false;
     if (!grounded && !gait->ragdoll.active && !controlled_jump) {
         if (gait->grounded) {
             gait->unsupported_seconds = fmaxf(
@@ -3850,8 +3839,10 @@ void CcHumanoidGaitConstrainMotion(CcHumanoidGait *gait,
     bool landed = grounded && !gait->grounded;
     if (grounded) {
         gait->unsupported_seconds = 0.0f;
-        gait->support_state = CC_HUMANOID_SUPPORT_STABLE;
-        gait->control_authority = 1.0f;
+        gait->support_state = gait->planted_count >= 2 ?
+            CC_HUMANOID_SUPPORT_STABLE : CC_HUMANOID_SUPPORT_MARGINAL;
+        gait->control_authority = gait->planted_count >= 2 ? 1.0f :
+                                  gait->planted_count == 1 ? 0.86f : 0.35f;
         gait->authoritative_position = actual_position;
         if (gait->action == CC_HUMANOID_ACTION_FALL) {
             SetAction(gait, CC_HUMANOID_ACTION_LOCOMOTION);

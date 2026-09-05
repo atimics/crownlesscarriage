@@ -191,7 +191,6 @@ typedef struct CcHumanoidGait {
     float phase;
     float travel_yaw;
     float cadence;
-    float requested_speed;
     float walk_cadence_scale;
     float walk_stride_scale;
     float last_delta_time;

@@ -4869,6 +4869,35 @@ static void UpdateClimb(CcLocalAgent *agent, float delta_time,
     }
 }
 
+static bool HasUphillFooting(const CcLocalAgent *agent, float surface,
+                             bool move_x, float amount)
+{
+    int32_t count = agent->morphology == CC_MORPHOLOGY_BIPED ?
+        CC_HUMANOID_LEG_COUNT : agent->limb_rig.morphology.limb_count;
+    for (int32_t i = 0; i < count; ++i) {
+        CcLimbVec3 contact;
+        CcLimbVec3 normal;
+        if (agent->morphology == CC_MORPHOLOGY_BIPED) {
+            const CcHumanoidFoot *foot = &agent->humanoid.feet[i];
+            if (foot->contact == CC_HUMANOID_CONTACT_SWING ||
+                foot->contact == CC_HUMANOID_CONTACT_AIR) continue;
+            contact = foot->current_point;
+            normal = foot->normal;
+        } else {
+            const CcLimbRuntime *foot = &agent->limb_rig.limbs[i];
+            if (foot->state != CC_LIMB_STANCE || foot->health <= 0.0f) continue;
+            contact = foot->planted_contact;
+            normal = foot->contact_normal;
+        }
+        float ahead = move_x ? contact.x - agent->position.x :
+                               contact.z - agent->position.z;
+        float rise = contact.y - agent->position.y;
+        if (ahead * amount > 0.0f && rise >= -0.015f && rise <= 0.65f &&
+            contact.y >= surface && normal.y >= 0.75f) return true;
+    }
+    return false;
+}
+
 static bool TryHorizontalAxis(CcLocalAgent *agent, bool market_interior,
                               bool move_x, float amount)
 {
@@ -4889,7 +4918,8 @@ static bool TryHorizontalAxis(CcLocalAgent *agent, bool market_interior,
             scene, candidate_x, candidate_z);
         if (agent->grounded && horizontal > 0.0001f &&
             candidate_surface > current_surface + 0.002f &&
-            candidate_normal.y < 0.60f) {
+            candidate_normal.y < 0.60f &&
+            !HasUphillFooting(agent, candidate_surface, move_x, amount)) {
             return false;
         }
         bool moving_toward_target = agent->exact_target_valid &&

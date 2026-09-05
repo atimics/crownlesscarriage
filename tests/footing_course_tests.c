@@ -97,6 +97,11 @@ static void LostSupport(void)
     t.absent = true;
     CcHumanoidGaitInit(&human, body, 0.0f, Probe, &t);
     Require(human.planted_count == 0, "human initialization invents support");
+    CcHumanoidGaitAdvanceSwim(&human, body, 0.0f, (CcLimbVec3){0},
+                             0.82f, 1.0f, 1.0f/60.0f);
+    CcHumanoidGaitEndSwim(&human, body, 0.0f, Probe, &t);
+    Require(human.planted_count == 0 && !human.idle.stable,
+            "leaving water invents a planted contact");
 }
 
 static void SlopeAndSkin(void)
