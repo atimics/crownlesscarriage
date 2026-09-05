@@ -3,6 +3,7 @@
 void CcLocalAgentStop(CcLocalAgent *agent)
 {
     if (agent == NULL) return;
+    agent->interaction_navigation = false;
     agent->navigation_active = false;
     agent->navigation_point_count = 0;
     agent->navigation_point_index = 0;
@@ -73,4 +74,34 @@ void CcLocalProjectInteraction(const CcLocalAgent *agent,
     target->bottom = fminf(bottom, destination.y + destination.height);
     target->camera_distance = Vector3Distance(camera.position, middle);
     target->visible = true;
+}
+
+/* Find a clear place within the object's interaction radius. The path finder may
+   project its destination, so verify the final point still reaches the object. */
+bool CcLocalAgentApproachInteraction(CcLocalAgent *agent, Vector2 point, float radius, bool interior)
+{
+    if (agent == NULL || !isfinite(radius) || radius <= 0.0f) return false;
+    float toward = atan2f(agent->position.x - point.x, agent->position.z - point.y);
+    for (int ring = 0; ring < 4; ++ring) {
+        int count = ring == 0 ? 1 : 8;
+        for (int step = 0; step < count; ++step) {
+            float angle = toward + (float)step * PI * 0.25f;
+            float reach = radius * (float)ring * 0.28f;
+            Vector3 candidate = {point.x + sinf(angle) * reach, 0, point.y + cosf(angle) * reach};
+            candidate.y = SurfaceHeightAt(interior ? CC_LOCAL_SCENE_MARKET : CC_LOCAL_SCENE_STREET,
+                candidate.x, candidate.z);
+            agent->interaction_navigation = true;
+            agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
+            bool started = interior ? CcLocalAgentSetExactTarget(agent, candidate, true) :
+                SetStreetClickTarget(agent, candidate);
+            float dx = agent->command_point.x - point.x;
+            float dz = agent->command_point.z - point.y;
+            if (started && dx * dx + dz * dz <= radius * radius * 0.95f) {
+                agent->interaction_navigation = true;
+                return true;
+            }
+        }
+    }
+    CcLocalAgentStop(agent);
+    return false;
 }

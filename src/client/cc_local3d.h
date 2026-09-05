@@ -301,6 +301,7 @@ typedef struct CcLocalAgent {
     bool swimming;
     bool allow_downclimb;
     bool exact_target_valid;
+    bool interaction_navigation;
     float radius;
     float immersion;
     CcMorphologyPreset morphology;
@@ -632,6 +633,7 @@ void CcLocalProjectInteraction(const CcLocalAgent *agent,
     RenderTexture2D texture, Rectangle destination,
     struct CcInteractionTarget *target);
 void CcLocalAgentStop(CcLocalAgent *agent);
+bool CcLocalAgentApproachInteraction(CcLocalAgent *agent, Vector2 point, float radius, bool interior);
 void CcLocalRendererSetInteractionUI(bool enabled);
 void CcLocalRendererSetConversationFocus(const Vector3 *position, uint32_t seed, float yaw);
 #endif

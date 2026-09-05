@@ -1185,6 +1185,10 @@ if(BUILD_TESTING)
         )
         add_test(NAME storybook_travel_boundaries
                  COMMAND crownless_carriage --test-storybook-travel)
+        add_test(NAME adventure_town_routes
+                 COMMAND crownless_carriage --test-adventure-town-routes)
+        add_test(NAME adventure_trade_terms
+                 COMMAND crownless_carriage --test-adventure-trade)
         add_test(NAME adventure_input_flow
                  COMMAND crownless_carriage --test-adventure-input)
         add_test(NAME map_sale_input

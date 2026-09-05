@@ -97,6 +97,11 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
                 "Traveller", "Talk", (Vector3){position.x, 0, position.z}, 0.9f, 2.0f, 0.7f,
                 (Vector2){position.x, position.z}, 1.8f);
         }
+        if (DungeonAtSettlement(sim, sim->player.location_id) != NULL) {
+            (void)AdventureTarget(local, sim, CC_INTERACTION_SITE, CC_LOCAL_SITE_DUNGEON,
+                "Mine road", "Drive to the mine", (Vector3){LOCAL_DUNGEON.x, 0, LOCAL_DUNGEON.y},
+                2.2f, 3.1f, 1.6f, LOCAL_DUNGEON, 1.3f);
+        }
         CcLocalPresentedPerson people[64];
         int32_t count = CcLocalPresentedPeople(people, 64);
         for (int32_t i = 0; i < count; ++i) {
@@ -131,7 +136,7 @@ static const CcInteractionTarget *AdventureFocus(const LocalState *local)
 {
     const CcInteractionTarget *target = CcInteractionFind(&local->interactions,
         local->interaction.approaching ? local->interaction.pending : local->interaction.focus);
-    return target != NULL && target->visible ? target : NULL;
+    return target != NULL && (target->visible || local->interaction.approaching) ? target : NULL;
 }
 
 static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteractionTarget *target,
@@ -171,12 +176,16 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
             local->trade_good = ContextCargoGood(sim);
             local->trade_mode = 0;
             local->trade_confirmed = false;
+            local->trade_quote_presented = false;
             *view = VIEW_TRADE;
             break;
         case CC_INTERACTION_BOARD:
             if (SelectedActiveSituation(sim, *selected_situation) == NULL)
                 *selected_situation = FirstActiveSituationIndex(sim);
             *view = VIEW_SITUATIONS;
+            break;
+        case CC_INTERACTION_SITE:
+            BeginSiteTravelState(local, (CcLocalSiteKind)target->key.object, false);
             break;
         case CC_INTERACTION_CARRIAGE: *view = VIEW_CARRIAGE; break;
         default: break;
@@ -237,19 +246,10 @@ static bool HandleAdventureScene(CcSim *sim, LocalState *local,
         (void)snprintf(message, capacity, "%s", local->interaction.feedback);
         return true;
     }
-    if (target != NULL && local->interaction.repath_seconds <= 0.0f) {
-        Vector3 approach = {target->approach_x, 0, target->approach_z};
-        if (target->key.kind == CC_INTERACTION_PERSON) {
-            float dx = position.x - approach.x, dz = position.y - approach.z;
-            float distance = sqrtf(dx * dx + dz * dz);
-            if (distance > 0.01f) {
-                approach.x += dx / distance * 1.25f;
-                approach.z += dz / distance * 1.25f;
-            }
-        }
-        bool walking = local->market_interior ?
-            CcLocalAgentSetExactTarget(&local->agent, approach, true) :
-            CcLocalAgentSetStreetTarget(&local->agent, approach);
+    if (target != NULL && local->interaction.repath_seconds <= 0.0f &&
+        (target->key.kind == CC_INTERACTION_PERSON || !local->agent.target_valid)) {
+        bool walking = CcLocalAgentApproachInteraction(&local->agent,
+            (Vector2){target->approach_x, target->approach_z}, target->radius * 0.9f, local->market_interior);
         local->interaction.repath_seconds = target->key.kind == CC_INTERACTION_PERSON ? 0.5f : 1.5f;
         if (!walking) {
             CcInteractionCancel(&local->interaction, "Choose a clear path closer to this target.");
@@ -290,12 +290,16 @@ static int AdventureText(const char *text, int x, int y, int width, int size, Co
         memcpy(line + used, cursor, copy); used += copy; line[used] = '\0';
         cursor = end;
         if (*cursor == '\n') {
-            if (draw) CcOverlayDrawText(line, x, y, size, color); y += size + 7;
+            if (draw) CcOverlayDrawText(line, x, y, size, color);
+            y += size + 7;
             used = 0; line[0] = '\0';
         }
         if (*cursor != '\0') ++cursor;
     }
-    if (used > 0) { if (draw) CcOverlayDrawText(line, x, y, size, color); y += size + 7; }
+    if (used > 0) {
+        if (draw) CcOverlayDrawText(line, x, y, size, color);
+        y += size + 7;
+    }
     return y - start;
 }
 
@@ -323,8 +327,9 @@ static void AdventureButton(Rectangle bounds, const char *label, bool enabled, b
     DrawRectangleRounded(bounds, 0.12f, 4, active || (hover && enabled) ? PANEL_HOVER : PANEL_DEEP);
     DrawRectangleRoundedLinesEx(bounds, 0.12f, 4, active ? 2.0f : 1.0f,
         enabled ? active ? CC_GOLD : TEAL : MUTED);
-    CcOverlayDrawText(label, (int)bounds.x + 12, (int)bounds.y + 12,
-        AdventureTextSize(14), enabled ? INK : MUTED);
+    int size = AdventureTextSize(14);
+    while (size > 12 && CcOverlayMeasureText(label, size) > (int)bounds.width - 24) --size;
+    CcOverlayDrawText(label, (int)bounds.x + 12, (int)bounds.y + 12, size, enabled ? INK : MUTED);
 }
 
 static Rectangle AdventureTab(Rectangle panel, int index, int count)
@@ -335,7 +340,7 @@ static Rectangle AdventureTab(Rectangle panel, int index, int count)
 
 static Rectangle AdventureClose(Rectangle panel)
 {
-    return (Rectangle){panel.x + panel.width - 124.0f, panel.y + 14.0f, 100.0f, 38.0f};
+    return (Rectangle){panel.x + panel.width - 156.0f, panel.y + 14.0f, 132.0f, 38.0f};
 }
 
 static void AdventurePanelTitle(Rectangle panel, const char *title)
@@ -401,7 +406,7 @@ static AdventureQuote AdventureTradeQuote(const CcSim *sim, const LocalState *lo
     }
     quote.available = reason[0] == '\0' && !local->trade_confirmed;
     (void)snprintf(quote.reason, sizeof(quote.reason), "%s", local->trade_confirmed ?
-        "Receipt saved below. Choose another good or quantity for your next trade." : reason);
+        "Trade complete. Choose another good or quantity for your next trade." : reason);
     return quote;
 }
 
@@ -424,12 +429,17 @@ static Rectangle AdventureConfirmBounds(Rectangle panel)
         panel.width * 0.48f - 24.0f, 46.0f};
 }
 
-static void DrawAdventureTrade(const CcSim *sim, const LocalState *local)
+static void DrawAdventureTrade(const CcSim *sim, LocalState *local)
 {
     Rectangle panel = AdventurePanel();
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     if (place == NULL) return;
     AdventureQuote quote = AdventureTradeQuote(sim, local);
+    local->trade_quote_presented = true;
+    local->trade_presented_total = quote.total;
+    local->trade_presented_reward = quote.reward;
+    local->trade_presented_promise_id = quote.promise_id;
+    local->trade_presented_command = quote.command;
     AdventurePanelTitle(panel, CcLocalPlaceProfileForSettlement(place)->interior_service);
     const char *modes[] = {"Buy", "Sell", "Deliver promise"};
     for (int i = 0; i < 3; ++i) AdventureButton(AdventureTab(panel, i, 3), modes[i], true, i == local->trade_mode);
@@ -469,7 +479,7 @@ static void DrawAdventureTrade(const CcSim *sim, const LocalState *local)
 static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *local,
     ClientView *view, char *message, size_t capacity)
 {
-    if (*view != VIEW_TRADE) return false;
+    if (*view != VIEW_TRADE || ClientKeyPressed(KEY_F5)) return false;
     Rectangle panel = AdventurePanel();
     if (ClientKeyPressed(KEY_ESCAPE) || AdventureHit(AdventureClose(panel))) { *view = VIEW_LOCAL; return true; }
     bool changed = false;
@@ -499,17 +509,57 @@ static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *loc
     if (changed) local->trade_confirmed = false;
     if (!changed && (AdventureHit(AdventureConfirmBounds(panel)) || ClientKeyPressed(KEY_ENTER))) {
         AdventureQuote quote = AdventureTradeQuote(sim, local);
-        if (quote.available) {
+        bool quote_matches = local->trade_quote_presented &&
+            local->trade_presented_command.good == quote.command.good &&
+            local->trade_presented_command.amount == quote.command.amount &&
+            local->trade_presented_total == quote.total && local->trade_presented_reward == quote.reward &&
+            local->trade_presented_promise_id == quote.promise_id;
+        if (quote.available && !quote_matches) {
+            (void)snprintf(local->receipt, sizeof(local->receipt), "The quote changed. Review the price and confirm again.");
+        } else if (quote.available) {
             if (ApplyCommand(journal, sim, quote.command, message, capacity)) {
                 local->trade_confirmed = true;
                 if (local->trade_mode == 2) {
-                    (void)snprintf(local->receipt, sizeof(local->receipt), "Delivered promise #%llu. %s", quote.promise_id, message);
+                    (void)snprintf(local->receipt, sizeof(local->receipt), "Delivery complete. %s", message);
                 } else (void)snprintf(local->receipt, sizeof(local->receipt), "%s", message);
                 local->receipt_serial += 1U;
             } else (void)snprintf(local->receipt, sizeof(local->receipt), "%s", message);
         } else (void)snprintf(message, capacity, "%s", quote.reason);
     }
     return true;
+}
+
+static bool AdventureKnownPerson(const CcSim *sim, const CcCharacter *person)
+{
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        const CcSituation *situation = &sim->situations[i];
+        if (!SituationVisibleToPlayer(sim, i) && situation->id != sim->player.accepted_situation_id) continue;
+        if (person->id == situation->affected_character_id || person->id == situation->sponsor_character_id ||
+            person->id == situation->witness_character_id) return true;
+    }
+    return false;
+}
+
+static int32_t AdventureBookPageSize(const LocalState *local)
+{
+    if (local->book_page == 0) return 2;
+    if (local->book_page == 1) return 5;
+    if (local->book_page == 2) return 8;
+    return adventure_preferences != NULL && adventure_preferences->text_size > 0 ? 3 : 4;
+}
+
+static int32_t AdventureBookLastPage(const CcSim *sim, const LocalState *local)
+{
+    int32_t count = 0;
+    if (local->book_page == 0) count = sim->quest_outcome_count;
+    else if (local->book_page == 1) {
+        for (int32_t i = 0; i < sim->character_count; ++i)
+            if (AdventureKnownPerson(sim, &sim->characters[i])) count += 1;
+    } else if (local->book_page == 2) {
+        for (int32_t i = 0; i < CC_GOOD_COUNT; ++i) if (sim->player.cargo[i] > 0) count += 1;
+    } else count = sim->event_count;
+    int32_t page = AdventureBookPageSize(local);
+    return count > 0 ? (count - 1) / page * page : 0;
 }
 
 static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
@@ -524,7 +574,7 @@ static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
     if (local->book_page == 0) {
         const CcSituation *promise = CcSimAcceptedSituation(sim);
         if (promise != NULL) {
-            CcOverlayDrawText(TextFormat("ACCEPTED  #%llu  /  due day %d", promise->id, promise->deadline_day), x, y, size, TEAL);
+            CcOverlayDrawText(TextFormat("Accepted  /  Due day %d", promise->deadline_day), x, y, size, TEAL);
             y += 36;
             char next[192] = "";
             SituationNextAction(sim, promise, next, sizeof(next));
@@ -541,8 +591,7 @@ static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
         for (int32_t i = sim->quest_outcome_count - 1 - local->book_offset; i >= 0 && shown < 2; --i) {
             const CcQuestOutcomeRecord *outcome = &sim->quest_outcomes[i];
             if (y > (int)(panel.y + panel.height) - 120) break;
-            CcOverlayDrawText(TextFormat("%s  #%llu  /  Day %d", CcQuestEndReasonName(outcome->end_reason),
-                outcome->situation_id, outcome->resolved_day), x, y, size, TEAL);
+            CcOverlayDrawText(TextFormat("%s  /  Day %d", CcQuestEndReasonName(outcome->end_reason), outcome->resolved_day), x, y, size, TEAL);
             y += 28;
             CcOverlayDrawText(TextFormat("%s  /  Progress %d of %d", SituationTitle(outcome->situation_kind),
                 outcome->progress_value, outcome->progress_limit), x, y, size, INK);
@@ -552,14 +601,7 @@ static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
         int32_t shown = 0, skipped = 0;
         for (int32_t i = 0; i < sim->character_count && shown < 5; ++i) {
             const CcCharacter *person = &sim->characters[i];
-            bool known = false;
-            for (int32_t j = 0; j < sim->situation_count; ++j) {
-                const CcSituation *situation = &sim->situations[j];
-                if (!SituationVisibleToPlayer(sim, j) && situation->id != sim->player.accepted_situation_id) continue;
-                if (person->id == situation->affected_character_id || person->id == situation->sponsor_character_id ||
-                    person->id == situation->witness_character_id) known = true;
-            }
-            if (!known) continue;
+            if (!AdventureKnownPerson(sim, person)) continue;
             if (skipped++ < local->book_offset) continue;
             CcOverlayDrawText(person->name, x, y, size + 2, CC_GOLD);
             const CcSettlement *home = CcSimSettlement(sim, person->home_settlement_id);
@@ -572,13 +614,15 @@ static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
         CcOverlayDrawText(TextFormat("Purse %" PRId64 " crowns  /  Cargo %d of %d spaces", sim->player.coins,
             CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity), x, y, size + 2, CC_GOLD);
         y += 46;
-        for (int32_t i = local->book_offset; i < CC_GOOD_COUNT && y < (int)(panel.y + panel.height) - 74; ++i) {
+        int32_t skipped = 0;
+        for (int32_t i = 0; i < CC_GOOD_COUNT && y < (int)(panel.y + panel.height) - 74; ++i) {
             if (sim->player.cargo[i] <= 0) continue;
+            if (skipped++ < local->book_offset) continue;
             CcOverlayDrawText(TextFormat("%d  %s", sim->player.cargo[i], CcGoodName((CcGood)i)), x, y, size, INK);
             y += 34;
         }
     } else {
-        int32_t limit = adventure_preferences != NULL && adventure_preferences->text_size > 0 ? 3 : 4;
+        int32_t limit = AdventureBookPageSize(local);
         for (int32_t i = local->book_offset; i < sim->event_count && i < local->book_offset + limit; ++i) {
             const CcEvent *event = CcSimRecentEvent(sim, i);
             if (event == NULL) continue;
@@ -587,13 +631,13 @@ static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
             y += AdventureWrap(event->text, x, y, width, size, INK) + 17;
         }
     }
-    AdventureButton((Rectangle){panel.x + 24, panel.y + panel.height - 52, 132, 38}, "Earlier  Up", true, false);
-    AdventureButton((Rectangle){panel.x + 166, panel.y + panel.height - 52, 142, 38}, "More  Down", true, false);
+    AdventureButton((Rectangle){panel.x + 24, panel.y + panel.height - 52, 132, 38}, "Previous Up", local->book_offset > 0, false);
+    AdventureButton((Rectangle){panel.x + 166, panel.y + panel.height - 52, 142, 38}, "Next Down", local->book_offset < AdventureBookLastPage(sim, local), false);
     CcOverlayDrawText("1-4 pages  /  B or Tab closes", (int)(panel.x + panel.width) - 350,
         (int)(panel.y + panel.height) - 38, AdventureTextSize(12), MUTED);
 }
 
-static bool HandleAdventureBook(LocalState *local, ClientView *view, ClientView *return_view)
+static bool HandleAdventureBook(const CcSim *sim, LocalState *local, ClientView *view, ClientView *return_view)
 {
     if (*view != VIEW_LEDGER || ClientKeyPressed(KEY_F5)) return false;
     Rectangle panel = AdventurePanel();
@@ -605,10 +649,10 @@ static bool HandleAdventureBook(LocalState *local, ClientView *view, ClientView 
         }
     }
     if (ClientKeyPressed(KEY_UP) || AdventureHit((Rectangle){panel.x + 24, panel.y + panel.height - 52, 132, 38}))
-        local->book_offset = local->book_offset >= 3 ? local->book_offset - 3 : 0;
+        local->book_offset = local->book_offset >= AdventureBookPageSize(local) ? local->book_offset - AdventureBookPageSize(local) : 0;
     if (ClientKeyPressed(KEY_DOWN) || AdventureHit((Rectangle){panel.x + 166, panel.y + panel.height - 52, 142, 38}))
-        local->book_offset += 3;
-    if (local->book_offset > CC_MAX_EVENTS - 4) local->book_offset = CC_MAX_EVENTS - 4;
+        local->book_offset += AdventureBookPageSize(local);
+    if (local->book_offset > AdventureBookLastPage(sim, local)) local->book_offset = AdventureBookLastPage(sim, local);
     return true;
 }
 
@@ -620,7 +664,7 @@ static Rectangle AdventureMenuItem(Rectangle panel, int index)
 static void DrawAdventurePause(const LocalState *local)
 {
     Rectangle panel = AdventurePanel();
-    AdventurePanelTitle(panel, "Paused");
+    AdventurePanelTitle(panel, CcCoopClientActive() ? "Company menu" : "Paused");
     AdventureButton(AdventureMenuItem(panel, 0), "Resume  Esc", true, false);
     AdventureButton(AdventureMenuItem(panel, 1), "Save game  F5", true, false);
     AdventureButton(AdventureMenuItem(panel, 2), "Company Book  B", true, false);
@@ -634,7 +678,7 @@ static void DrawAdventurePause(const LocalState *local)
             adventure_preferences->audio_mode == 1 ? "Sound: effects  F6" : "Sound: muted  F6", true, false);
     }
     int x = (int)(panel.x + panel.width * 0.53f), y = (int)panel.y + 84;
-    CcOverlayDrawText("At your own pace", x, y, AdventureTextSize(20), CC_GOLD);
+    CcOverlayDrawText(CcCoopClientActive() ? "The host keeps company time" : "At your own pace", x, y, AdventureTextSize(20), CC_GOLD);
     y += 46;
     (void)AdventureWrap("Click a person or doorway to approach and act. Click the ground to walk.\n\nE selects the next visible target. Shift+E goes back. F uses the selected action.\n\nB opens the Company Book. Q opens promises. M opens the map case.\n\nEsc cancels an approach or returns to the scene. F5 saves.",
         x, y, (int)(panel.width * 0.47f - 30.0f), AdventureTextSize(14), INK);
@@ -752,7 +796,7 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
         24, 67, AdventureTextSize(12), MUTED);
 }
 
-static void DrawAdventurePromises(const CcSim *sim, int32_t selected)
+static void DrawAdventurePromises(const CcSim *sim, const LocalState *local, int32_t selected)
 {
     Rectangle panel = AdventurePanel();
     panel.height -= 60.0f;
@@ -767,7 +811,7 @@ static void DrawAdventurePromises(const CcSim *sim, int32_t selected)
     }
     bool accepted = promise->id == sim->player.accepted_situation_id;
     bool offer = CcSimSituationCanAccept(sim, promise);
-    CcOverlayDrawText(TextFormat("%s  #%llu", accepted ? "ACCEPTED" : offer ? "OFFER" : "LEAD", promise->id),
+    CcOverlayDrawText(accepted ? "Accepted promise" : offer ? "Offer" : "Lead",
         x, y, AdventureTextSize(15), accepted ? TEAL : CC_GOLD);
     y += 38;
     CcOverlayDrawText(SituationTitle(promise->kind), x, y, AdventureTextSize(24), INK);
@@ -787,6 +831,11 @@ static void DrawAdventurePromises(const CcSim *sim, int32_t selected)
     }
     char next[192] = "";
     SituationNextAction(sim, promise, next, sizeof(next));
+    if (offer && !accepted && !local->open_world &&
+        !CcClientPromiseCanBeAccepted(local->market_interior, GridDistance(LocalPosition(local), LOCAL_NOTICE))) {
+        (void)snprintf(next, sizeof(next), "Visit the %s to accept this promise.",
+            CcLocalPlaceProfileForSettlement(CcSimSettlement(sim, sim->player.location_id))->notice_board);
+    }
     (void)AdventureWrap(next, x, y, width, AdventureTextSize(17), MUTED);
 }
 
@@ -795,8 +844,9 @@ static void DrawAdventureFeedback(const char *message)
     int size = AdventureTextSize(14);
     float width = fminf(800.0f, (float)GetScreenWidth() - 60.0f);
     float x = ((float)GetScreenWidth() - width) * 0.5f;
-    float y = (float)GetScreenHeight() - 172.0f;
-    DrawPanel((Rectangle){x, y, width, 68.0f}, Fade(PANEL_DEEP, 0.96f));
+    float height = 26.0f + (float)AdventureText(message, 0, 0, (int)width - 32, size, INK, false);
+    float y = (float)GetScreenHeight() - 104.0f - height;
+    DrawPanel((Rectangle){x, y, width, height}, Fade(PANEL_DEEP, 0.96f));
     (void)AdventureWrap(message, (int)x + 16, (int)y + 13, (int)width - 32, size, INK);
 }
 
