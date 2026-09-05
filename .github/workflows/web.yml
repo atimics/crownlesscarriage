@@ -135,7 +135,11 @@ jobs:
           python3 - <<'PY'
           import json, os, urllib.request
           for origin in ('https://crownless-ratimics.fly.dev', 'https://crownless.ratimics.com'):
-              with urllib.request.urlopen(origin + '/healthz', timeout=30) as response:
+              request = urllib.request.Request(
+                  origin + '/healthz',
+                  headers={'User-Agent': 'Crownless-Deploy/1.0', 'Accept': 'application/json'},
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
                   health = json.load(response)
               assert health['status'] == 'ready', health
               assert health['revision'] == os.environ['EXPECTED_REVISION'], health
