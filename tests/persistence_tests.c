@@ -526,7 +526,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 26);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 27);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -2343,6 +2343,7 @@ static void CheckArchivePhysicalLoreMigration(char *error,
     }
     legacy.events[0].day = 6;
     legacy.events[0].kind = CC_EVENT_KINGDOM_ACTION;
+    legacy.events[0].location_id = scriptorium->id;
     legacy.events[0].magnitude = 40;
     CcSimAdvanceDays(&legacy, 1);
     CC_CHECK(CcSimArchivePhysicalLore(&legacy) == 1);

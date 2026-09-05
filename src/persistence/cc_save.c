@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 26
+#define CC_SQLITE_USER_VERSION 27
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -1351,7 +1351,18 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " side INTEGER NOT NULL, spur_length INTEGER NOT NULL,"
         " condition INTEGER NOT NULL, blocker INTEGER NOT NULL,"
         " accessible INTEGER NOT NULL);";
-    return Execute(database, pony_schema, error, error_capacity) &&
+    const char *gossip_schema =
+        "CREATE TABLE IF NOT EXISTS gossip_state ("
+        " id INTEGER PRIMARY KEY CHECK(id=1), last_event_id INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS gossip_account ("
+        " slot INTEGER PRIMARY KEY, event_id INTEGER NOT NULL, origin_id INTEGER NOT NULL,"
+        " heard_event_id INTEGER NOT NULL, day INTEGER NOT NULL, heard_day INTEGER NOT NULL,"
+        " settlement_mask INTEGER NOT NULL, recorded INTEGER NOT NULL,"
+        " text TEXT NOT NULL, heard_from TEXT NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS gossip_carrier ("
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL, stories INTEGER NOT NULL);";
+    return Execute(database, gossip_schema, error, error_capacity) &&
+           Execute(database, pony_schema, error, error_capacity) &&
            Execute(database, schema, error, error_capacity) &&
            Execute(database, royal_carriage_schema, error, error_capacity) &&
            Execute(database, royal_route_usage_schema,
@@ -3021,6 +3032,107 @@ static bool SaveJourneyState(sqlite3 *database, const CcSim *sim,
     return result;
 }
 
+static bool SaveGossip(sqlite3 *database, const CcSim *sim,
+                        char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 42U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "INSERT INTO gossip_state VALUES(1,?);",
+                  &statement, error, error_capacity)) return false;
+    BindId(statement, 1, sim->gossip_last_event_id);
+    bool ok = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement);
+    if (!ok || !Prepare(database,
+            "INSERT INTO gossip_account VALUES(?,?,?,?,?,?,?,?,?,?);",
+            &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < CC_MAX_GOSSIP && ok; ++i) {
+        const CcGossip *story = &sim->gossip[i];
+        BindInt(statement, 1, i);
+        BindId(statement, 2, story->event_id);
+        BindId(statement, 3, story->origin_id);
+        BindId(statement, 4, story->heard_event_id);
+        BindInt(statement, 5, story->day);
+        BindInt(statement, 6, story->heard_day);
+        BindId(statement, 7, story->settlement_mask);
+        BindInt(statement, 8, story->recorded ? 1 : 0);
+        BindText(statement, 9, story->text);
+        BindText(statement, 10, story->heard_from);
+        ok = StepDone(database, statement, error, error_capacity) &&
+             ResetStatement(database, statement, error, error_capacity);
+    }
+    sqlite3_finalize(statement);
+    if (!ok || !Prepare(database,
+            "INSERT INTO gossip_carrier VALUES(?,?,?);",
+            &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS && ok; ++i) {
+        BindInt(statement, 1, i);
+        BindId(statement, 2, sim->gossip_carriers[i].id);
+        BindId(statement, 3, sim->gossip_carriers[i].stories);
+        ok = StepDone(database, statement, error, error_capacity) &&
+             ResetStatement(database, statement, error, error_capacity);
+    }
+    sqlite3_finalize(statement);
+    return ok;
+}
+
+static bool ReadGossip(sqlite3 *database, CcSim *sim,
+                        char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 42U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "SELECT last_event_id FROM gossip_state WHERE id=1;",
+                  &statement, error, error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW) goto invalid;
+    sim->gossip_last_event_id = (CcId)sqlite3_column_int64(statement, 0);
+    if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
+    sqlite3_finalize(statement);
+    if (!Prepare(database,
+            "SELECT slot,event_id,origin_id,heard_event_id,day,heard_day,"
+            "settlement_mask,recorded,text,heard_from FROM gossip_account ORDER BY slot;",
+            &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        if (sqlite3_step(statement) != SQLITE_ROW ||
+            sqlite3_column_int64(statement, 0) != i) goto invalid;
+        CcGossip *story = &sim->gossip[i];
+        sqlite3_int64 mask = sqlite3_column_int64(statement, 6);
+        sqlite3_int64 recorded = sqlite3_column_int64(statement, 7);
+        if (mask < 0 || mask > UINT32_MAX || recorded < 0 || recorded > 1) goto invalid;
+        story->event_id = (CcId)sqlite3_column_int64(statement, 1);
+        story->origin_id = (CcId)sqlite3_column_int64(statement, 2);
+        story->heard_event_id = (CcId)sqlite3_column_int64(statement, 3);
+        story->day = sqlite3_column_int(statement, 4);
+        story->heard_day = sqlite3_column_int(statement, 5);
+        story->settlement_mask = (uint32_t)mask;
+        story->recorded = recorded != 0;
+        if (!ReadTextColumn(statement, 8, story->text, sizeof(story->text),
+                             "gossip account", error, error_capacity) ||
+            !ReadTextColumn(statement, 9, story->heard_from, sizeof(story->heard_from),
+                             "gossip speaker", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
+    sqlite3_finalize(statement);
+    if (!Prepare(database, "SELECT slot,id,stories FROM gossip_carrier ORDER BY slot;",
+                  &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
+        if (sqlite3_step(statement) != SQLITE_ROW ||
+            sqlite3_column_int64(statement, 0) != i) goto invalid;
+        sqlite3_int64 stories = sqlite3_column_int64(statement, 2);
+        if (stories < 0 || stories > UINT32_MAX) goto invalid;
+        sim->gossip_carriers[i].id = (CcId)sqlite3_column_int64(statement, 1);
+        sim->gossip_carriers[i].stories = (uint32_t)stories;
+    }
+    if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
+    sqlite3_finalize(statement);
+    return true;
+invalid:
+    sqlite3_finalize(statement);
+    SetError(error, error_capacity, "Gossip rows are invalid or incomplete.");
+    return false;
+}
+
 static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
                                  uint64_t journal_generation,
                                  uint64_t journal_cursor,
@@ -3034,6 +3146,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         return false;
     }
     return Execute(database,
+            "DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
             "DELETE FROM horse_team; DELETE FROM stable_horse;"
             "DELETE FROM pony_company; DELETE FROM rainbow_pony;"
@@ -3072,6 +3185,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             error, error_capacity) &&
         SaveMeta(database, sim, journal_generation, journal_cursor,
                  error, error_capacity) &&
+        SaveGossip(database, sim, error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
         SavePonies(database, sim, error, error_capacity) &&
@@ -5679,7 +5793,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
 {
     uint32_t legacy_version = sim->schema_version;
     if ((legacy_version == 38U || legacy_version == 39U ||
-         legacy_version == 40U) && sim->generator_version == 25U) {
+         legacy_version == 40U || legacy_version == 41U) && sim->generator_version == 25U) {
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }
@@ -6190,7 +6304,8 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadGoods(database, sim, error, error_capacity) &&
               ReadPlayerCommitment(database, sim, error, error_capacity) &&
               ReadJourneyState(database, sim, error, error_capacity) &&
-              ReadPonies(database, sim, error, error_capacity);
+              ReadPonies(database, sim, error, error_capacity) &&
+              ReadGossip(database, sim, error, error_capacity);
     if (!ok) {
         return false;
     }

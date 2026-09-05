@@ -1158,6 +1158,12 @@ if(BUILD_TESTING)
     cc_large_sim_stack(material_chain_tests)
     add_test(NAME material_chain_proofs COMMAND material_chain_tests)
 
+    add_executable(gossip_tests tests/gossip_tests.c)
+    target_link_libraries(gossip_tests PRIVATE crownless_persistence crownless_metagame)
+    cc_strict_warnings(gossip_tests)
+    cc_large_sim_stack(gossip_tests)
+    add_test(NAME traveler_gossip_network COMMAND gossip_tests)
+
     add_executable(grain_economy_tests tests/grain_economy_tests.c)
     target_link_libraries(grain_economy_tests PRIVATE crownless_sim)
     cc_strict_warnings(grain_economy_tests)
