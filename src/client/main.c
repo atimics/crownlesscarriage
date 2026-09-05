@@ -8699,21 +8699,22 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (*view == VIEW_LEDGER) return;
+    if (local->site_kind != CC_LOCAL_SITE_NONE &&
+        (*view == VIEW_LOCAL || *view == VIEW_CARRIAGE) &&
+        (context_action == CONTEXT_ACTION_RETURN_FROM_SITE ||
+         (*view == VIEW_CARRIAGE && ClientKeyPressed(KEY_ENTER)))) {
+        CcLocalSiteKind site = local->site_kind;
+        BeginSiteTravelState(local, site, true);
+        *view = VIEW_LOCAL;
+        (void)snprintf(message, message_capacity,
+                       "The carriage turns back toward town.");
+        return;
+    }
     if (*view == VIEW_CARRIAGE) {
         if (ClientKeyPressed(KEY_BACKSPACE) || ClientKeyPressed(KEY_ESCAPE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
             CcLocalAgentClearWorldTarget(&local->agent);
             *view = VIEW_LOCAL;
-            return;
-        }
-        if (local->site_kind != CC_LOCAL_SITE_NONE &&
-            (ClientKeyPressed(KEY_ENTER) ||
-             context_action == CONTEXT_ACTION_RETURN_FROM_SITE)) {
-            CcLocalSiteKind site = local->site_kind;
-            BeginSiteTravelState(local, site, true);
-            *view = VIEW_LOCAL;
-            (void)snprintf(message, message_capacity,
-                           "The carriage turns back toward town.");
             return;
         }
         if (local->site_kind == CC_LOCAL_SITE_NONE &&
