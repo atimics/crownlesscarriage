@@ -293,7 +293,7 @@ async function main() {
       // Exercise the page fallback used when element fullscreen is unavailable.
       await mobile.evaluate(() => { document.querySelector('#stage').requestFullscreen = undefined; });
       await buttons.getByRole('button', {name: 'Full screen', exact: true}).tap();
-      assert.equal(await mobile.locator('#stage').evaluate(stage => stage.classList.contains('expanded')), true);
+      await mobile.waitForFunction(() => document.querySelector('#stage').classList.contains('expanded'));
       assert.equal(await mobile.locator('#touch-panel').isVisible(), true);
       await mobile.setViewportSize({width: 844, height: 390});
       await mobile.screenshot({path: path.join(output, 'mobile-expanded-landscape.png')});
@@ -301,7 +301,7 @@ async function main() {
       assert.equal(await mobile.locator('#stage').evaluate(stage => stage.classList.contains('expanded')), false);
       await mobile.evaluate(() => { document.querySelector('#stage').requestFullscreen = () => Promise.reject(new Error('declined')); });
       await buttons.getByRole('button', {name: 'Full screen', exact: true}).tap();
-      assert.equal(await mobile.locator('#stage').evaluate(stage => stage.classList.contains('expanded')), true);
+      await mobile.waitForFunction(() => document.querySelector('#stage').classList.contains('expanded'));
       assert.equal(await mobile.locator('#loading').isVisible(), false);
       await mobile.locator('#exit-fullscreen').tap();
     } finally { await phone.close(); }
