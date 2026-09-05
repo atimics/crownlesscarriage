@@ -1,8 +1,10 @@
 #include "client/cc_audio.h"
+#include "client/cc_voice_net.h"
 #include "raylib.h"
 #include "test_support.h"
 
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* A small device double verifies lifetime and mixing without a speaker. */
@@ -12,6 +14,34 @@ static float volumes[CC_SOUND_COUNT * 3];
 static float pitches[CC_SOUND_COUNT * 3];
 static int allocated, freed, device_opens, device_closes, voices_loaded, voices_freed;
 static double clock_seconds = 1.0;
+
+static bool net_busy;
+static int net_result, net_starts;
+bool CcVoiceNetStart(const CcSpeech *speech)
+{
+    CC_CHECK(speech != NULL && !net_busy);
+    net_busy = true;
+    ++net_starts;
+    return true;
+}
+bool CcVoiceNetBusy(void) { return net_busy; }
+void CcVoiceNetCancel(void) { /* Deliberately allow a late success. */ }
+void CcVoiceNetShutdown(void) { net_busy = false; net_result = 0; }
+int CcVoiceNetPoll(unsigned char **data, size_t *size)
+{
+    if (!net_busy || net_result == 0) return 0;
+    int result = net_result;
+    net_result = 0;
+    net_busy = false;
+    if (result > 0) { *data = calloc(44, 1); *size = 44; }
+    return result;
+}
+Music LoadMusicStreamFromMemory(const char *type, const unsigned char *bytes, int size)
+{
+    CC_CHECK(strcmp(type, ".wav") == 0 && bytes != NULL && size == 44);
+    ++voices_loaded;
+    return (Music){.frameCount = 24000U};
+}
 
 void InitAudioDevice(void) { ++device_opens; }
 bool IsAudioDeviceReady(void) { return device_available; }
@@ -131,6 +161,60 @@ int main(void)
     CcAudioSetFocused(true);
     CcAudioUpdate();
     CC_CHECK(!voice_playing && PlayingCount() == 0);
+    CcSpeech speech = {.speaker_id = 7, .audio_key = 42};
+    (void)strcpy(speech.text, "Eight boxes.");
+    int previous_loads = voices_loaded;
+    CcAudioSpeech(&speech, "speech.wav");
+    CcAudioSpeech(&speech, "speech.wav");
+    CC_CHECK(voice_playing && voices_loaded == previous_loads + 1);
+    CC_CHECK(strcmp(CcAudioCurrentSpeech()->text, "Eight boxes.") == 0);
+    CcAudioSkipSpeech();
+    CcAudioSpeech(&speech, "speech.wav");
+    CC_CHECK(!voice_playing && voices_loaded == previous_loads + 1);
+    CcAudioReplaySpeech();
+    CC_CHECK(voice_playing && voices_loaded == previous_loads + 2);
+    speech.speaker_id = 8;
+    CcAudioSpeech(&speech, "speech.wav");
+    CC_CHECK(voice_playing && voices_loaded == previous_loads + 3);
+    CcAudioSpeech(NULL, NULL);
+    CC_CHECK(!voice_playing && CcAudioCurrentSpeech() == NULL);
+    CcAudioSpeech(&speech, "speech.wav");
+    CC_CHECK(voice_playing && voices_loaded == previous_loads + 4);
+    CcAudioSpeech(NULL, NULL);
+    previous_loads = voices_loaded;
+    CcAudioSpeech(&speech, "missing.wav");
+    CcAudioUpdate();
+    CC_CHECK(net_starts == 0);
+    clock_seconds += 0.4;
+    CcAudioUpdate();
+    CC_CHECK(net_starts == 1);
+    CcAudioSkipSpeech();
+    net_result = 1;
+    CcAudioUpdate();
+    CC_CHECK(voices_loaded == previous_loads && !voice_playing);
+    CcAudioReplaySpeech();
+    CcAudioUpdate();
+    CC_CHECK(net_starts == 2);
+    /* A second person can use the same voice and words. The old turn is stale. */
+    speech.speaker_id++;
+    CcAudioSpeech(&speech, "missing.wav");
+    clock_seconds += 0.4;
+    net_result = 1;
+    CcAudioUpdate();
+    CC_CHECK(voices_loaded == previous_loads && net_starts == 3);
+    net_result = 1;
+    CcAudioUpdate();
+    CC_CHECK(voices_loaded == previous_loads + 1 && voice_playing);
+    CcAudioReplaySpeech();
+    CC_CHECK(voices_loaded == previous_loads + 1 && voice_playing);
+    speech.audio_key++;
+    CcAudioSpeech(&speech, "missing.wav");
+    clock_seconds += 0.4;
+    CcAudioUpdate();
+    CcAudioSpeech(NULL, NULL);
+    net_result = 1;
+    CcAudioUpdate();
+    CC_CHECK(voices_loaded == previous_loads + 1 && !voice_playing);
     CcAudioShutdown();
     CC_CHECK(freed == allocated && voices_freed == voices_loaded && device_closes == 1);
     CcAudioShutdown();

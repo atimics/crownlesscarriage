@@ -1,5 +1,6 @@
 #include "client/cc_soundscape.h"
 #include "story/cc_story.h"
+#include "story/cc_speech.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,6 +83,45 @@ static bool ExportScript(FILE *file)
     return !ferror(file);
 }
 
+static bool ExportCast(FILE *file)
+{
+    (void)fputs("[\n", file);
+    for (size_t i = 0; i < CcSpeechVoiceCount(); ++i) {
+        const CcVoiceProfile *voice = CcSpeechVoiceAt(i);
+        if (i > 0) (void)fputs(",\n", file);
+        (void)fputs("  {\"id\":", file); JsonString(file, voice->id);
+        (void)fputs(",\"name\":", file); JsonString(file, voice->name);
+        (void)fputs(",\"description\":", file); JsonString(file, voice->description);
+        (void)fputc('}', file);
+    }
+    (void)fputs("\n]\n", file);
+    return !ferror(file);
+}
+
+static bool ExportSpeech(FILE *file)
+{
+    static CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    (void)fputs("[\n", file);
+    bool first = true;
+    for (int32_t i = 0; i < sim.situation_count; ++i) {
+        const CcSituation *situation = &sim.situations[i];
+        const CcCharacter *people[] = {CcSimSituationSponsorCharacter(&sim, situation),
+            CcSimSituationAffectedCharacter(&sim, situation), CcSimSituationWitnessCharacter(&sim, situation)};
+        for (size_t person = 0; person < sizeof(people) / sizeof(people[0]); ++person) {
+            CcSpeech speech;
+            char json[CC_SPEECH_JSON_CAPACITY];
+            if (!CcSpeechCharacter(&sim, situation, people[person], &speech)) continue;
+            if (!CcSpeechJson(&speech, json, sizeof(json))) return false;
+            if (!first) (void)fputs(",\n", file);
+            (void)fputs(json, file);
+            first = false;
+        }
+    }
+    (void)fputs("\n]\n", file);
+    return !ferror(file) && !first;
+}
+
 static void LittleEndian(FILE *file, uint32_t value, unsigned int bytes)
 {
     for (unsigned int i = 0U; i < bytes; ++i) {
@@ -118,14 +158,17 @@ static bool ExportPreview(FILE *file)
 
 int main(int argc, char **argv)
 {
-    if (argc != 3 || (strcmp(argv[1], "--script") != 0 && strcmp(argv[1], "--opening") != 0 &&
+    if (argc != 3 || (strcmp(argv[1], "--cast") != 0 && strcmp(argv[1], "--speech") != 0 &&
+                      strcmp(argv[1], "--script") != 0 && strcmp(argv[1], "--opening") != 0 &&
                       strcmp(argv[1], "--preview") != 0)) {
         (void)fprintf(stderr, "Usage: crownless_audio_export --script script.json | --opening opening.json | --preview preview.wav\n");
         return 1;
     }
     FILE *file = fopen(argv[2], "wb");
     if (file == NULL) return 1;
-    bool ok = strcmp(argv[1], "--script") == 0 ? ExportScript(file) :
+    bool ok = strcmp(argv[1], "--cast") == 0 ? ExportCast(file) :
+              strcmp(argv[1], "--speech") == 0 ? ExportSpeech(file) :
+              strcmp(argv[1], "--script") == 0 ? ExportScript(file) :
               strcmp(argv[1], "--opening") == 0 ? ExportOpening(file) : ExportPreview(file);
     if (fclose(file) != 0) ok = false;
     return ok ? 0 : 1;

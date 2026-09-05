@@ -1,0 +1,15 @@
+[
+  {"id":"mara-v1","name":"Mara Venn","description":"A woman with a low, clear voice. Practical and warm, with steady pacing and a soft northern English accent."},
+  {"id":"jory-v1","name":"Jory Fen","description":"A man with a rough mid-range voice and a light Yorkshire accent. Direct, thoughtful, and slightly breathy."},
+  {"id":"tomas-v1","name":"Tomas Rill","description":"A man with a light baritone and a soft west-country English accent. Quick, dry humour and careful, quiet words."},
+  {"id":"ilyra-v1","name":"Ilyra Senn","description":"A woman with a clear alto and a light Scottish accent. Measured, firm delivery with a worn edge."},
+  {"id":"bren-v1","name":"Bren Alder","description":"A man with a soft tenor and a northern English accent. Hesitant starts, clear words, and a close, intimate sound."},
+  {"id":"hearth-v1","name":"Hearth","description":"A woman with a rounded middle register, a gentle Welsh accent, and relaxed, welcoming speech."},
+  {"id":"reed-v1","name":"Reed","description":"A man with a bright tenor, a light Irish accent, and quick, precise speech."},
+  {"id":"flint-v1","name":"Flint","description":"A woman with a dry low register, a light northern English accent, and short, firm phrases."},
+  {"id":"oak-v1","name":"Oak","description":"A man with a deep warm bass, a soft Scottish accent, and patient, evenly paced speech."},
+  {"id":"lark-v1","name":"Lark","description":"A woman with a clear, bright voice, a light west-country English accent, and lively, gentle speech."},
+  {"id":"ash-v1","name":"Ash","description":"A man with a grainy baritone, a light Welsh accent, and deliberate, unhurried speech."},
+  {"id":"brook-v1","name":"Brook","description":"A woman with a soft middle register, a light Irish accent, and calm, direct speech."},
+  {"id":"stone-v1","name":"Stone","description":"A man with a dry middle register, a northern English accent, and clipped, watchful speech."}
+]
