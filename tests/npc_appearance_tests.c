@@ -133,9 +133,10 @@ int main(void)
     CcNpcPaintFaceFeatures(&layout_face, CC_NPC_PORTRAIT_NEUTRAL,
                            &capture, CaptureFaceBlock);
     const FaceBlock expected[] = {
-        {6, 6, 3, 1}, {11, 6, 3, 1},
+        {6, 6, 2, 1}, {12, 6, 2, 1},
+        {7, 8, 2, 1}, {11, 8, 2, 1},
         {7, 8, 1, 1}, {12, 8, 1, 1},
-        {8, 11, 4, 1}, {8, 13, 4, 1},
+        {9, 11, 2, 1}, {9, 10, 1, 1}, {9, 13, 3, 1},
     };
     if (capture.count != (int32_t)(sizeof(expected) / sizeof(expected[0]))) {
         (void)fprintf(stderr, "shared face block count failed\n");

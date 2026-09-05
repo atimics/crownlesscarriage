@@ -138,6 +138,7 @@ static void WriteViewportFixture(const char *path)
 #include "building_cutaway_tests.inc"
 #include "box_batch_tests.inc"
 #include "character_material_captures.inc"
+#include "hero_face_captures.inc"
 #include "humanoid_animation_captures.inc"
 #include "character_surface_tests.inc"
 #include "animal_captures.inc"
@@ -155,6 +156,7 @@ int main(int argc, char **argv)
                       strcmp(argv[1], "--creature-captures") == 0 ||
                       strcmp(argv[1], "--pony-captures") == 0 ||
                       strcmp(argv[1], "--material-captures") == 0 ||
+                      strcmp(argv[1], "--hero-face-captures") == 0 ||
                       strcmp(argv[1], "--animation-captures") == 0)) {
         SetConfigFlags(FLAG_WINDOW_HIDDEN);
         InitWindow(1280, 760, "Renderer regression checks");
@@ -185,6 +187,8 @@ int main(int argc, char **argv)
             CaptureCreatures(argv[2]);
         } else if (strcmp(argv[1], "--pony-captures") == 0) {
             CapturePonies(argv[2]);
+        } else if (strcmp(argv[1], "--hero-face-captures") == 0) {
+            CaptureHeroFaces(argv[2]);
         } else {
             CaptureCharacterMaterials(argv[2]);
         }

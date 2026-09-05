@@ -2457,9 +2457,22 @@ static void TestFaceAngleAndLodContract(void)
         bool side_matches = fabsf(anchor.right) < 0.0001f ||
             (anchor.right < 0.0f) == (camera_angles[angle][1] < 0.0f);
         if (fabsf(length - 1.0f) > 0.0001f ||
-            anchor.forward <= 0.30f || !side_matches) {
+            anchor.forward < 0.96f || !side_matches) {
             (void)fprintf(stderr,
                           "visible face anchor moved behind the head\n");
+            exit(1);
+        }
+    }
+    /* Camera motion through the view thresholds keeps features on the brow. */
+    for (int32_t step = 1; step <= 160; ++step) {
+        float angle = (float)step * 0.01f;
+        CcLocalFaceAnchorInternal first = CcLocalFaceAnchorForCameraInternal(
+            cosf(angle - 0.01f), sinf(angle - 0.01f));
+        CcLocalFaceAnchorInternal second = CcLocalFaceAnchorForCameraInternal(
+            cosf(angle), sinf(angle));
+        if (fabsf(first.forward - second.forward) > 0.003f ||
+            fabsf(first.right - second.right) > 0.003f) {
+            (void)fprintf(stderr, "face features jumped during a camera turn\n");
             exit(1);
         }
     }
