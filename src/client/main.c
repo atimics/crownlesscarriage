@@ -9071,11 +9071,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     sim, local, selected, message, message_capacity);
                 return;
             }
-            if (local->convoy.phase != CC_LOCAL_CONVOY_ROAD) return;
-
+            /* Step the world before the road-only work below. This is the
+               only caller of the creature gait fixed step, and returning
+               ahead of it during a town arrival or departure left the pony
+               rigs frozen where they last stood while the carriage drove
+               away from them. */
             int32_t fixed_steps = CcLocalWorldUpdate(
                 &local->course, &local->agent, sim, delta_time,
                 false, false);
+            if (local->convoy.phase != CC_LOCAL_CONVOY_ROAD) return;
             float posture_pace = CcClientConvoyPosturePace(
                 (int32_t)sim->journey.pace);
             float road_motion = posture_pace > 0.01f ?
