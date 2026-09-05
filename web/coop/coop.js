@@ -44,7 +44,7 @@ $('create-form').onsubmit = async event => {
     let pending = JSON.parse(localStorage.getItem('cc-coop-create') || 'null');
     if (!pending) { const fields = new FormData(form); pending = {id:hex(16), player:fields.get('player').trim(), name:fields.get('name').trim()}; localStorage.setItem('cc-coop-create', JSON.stringify(pending)); }
     const created = await api('/api/worlds', {...pending, world_pass:new FormData(form).get('world_pass').trim()});
-    localStorage.removeItem('cc-coop-create'); form.elements.world_pass.value = ''; await openWorld(created.id);
+    localStorage.removeItem('cc-coop-create'); form.elements.world_pass.value = ''; $('notice').hidden = true; await openWorld(created.id);
   } catch (error) { if (error.status && error.status < 500) localStorage.removeItem('cc-coop-create'); notice(error.message); }
   finally { submit.disabled = false; }
 };

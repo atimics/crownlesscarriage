@@ -27,12 +27,17 @@ async function main() {
     await owner.goto(origin);
     await owner.getByRole('textbox', {name:'Your name'}).fill('Mara');
     await owner.getByRole('textbox', {name:'World name'}).fill('Shared test road');
+    await owner.getByLabel('World pass', {exact:true}).fill('0'.repeat(64));
+    await owner.getByRole('button', {name:'Ready the carriage'}).click();
+    await owner.getByRole('status').waitFor();
+    assert.match(await owner.getByRole('status').innerText(), /fresh world pass/);
     const worldPass = execFileSync(process.env.CC_COOP_PYTHON || 'python3', [
       'tools/coop/server.py', '--database', path.join(temp, 'worlds.sqlite3'), '--issue-world-pass'
     ], {encoding:'utf8'}).trim();
     await owner.getByLabel('World pass', {exact:true}).fill(worldPass);
     await owner.getByRole('button', {name:'Ready the carriage'}).click();
     await owner.getByRole('button', {name:'Invite crew', exact:true}).click();
+    assert.equal(await owner.getByRole('status').isVisible(), false);
     await crew.goto(await owner.getByRole('textbox', {name:'Invitation link'}).inputValue());
     await crew.getByRole('textbox', {name:'Your name'}).fill('Bren');
     await crew.getByRole('button', {name:'Join the company'}).click();
