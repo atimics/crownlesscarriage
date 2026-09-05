@@ -19,7 +19,10 @@ typedef enum FrontendAction {
     FRONTEND_ACTION_DELETE,
     FRONTEND_ACTION_CANCEL,
     FRONTEND_ACTION_CONFIRM_DELETE,
-    FRONTEND_ACTION_QUIT
+    FRONTEND_ACTION_QUIT,
+    FRONTEND_ACTION_BOOK,
+    FRONTEND_ACTION_TEXT,
+    FRONTEND_ACTION_HINTS
 } FrontendAction;
 
 typedef struct FrontendState {
@@ -39,16 +42,17 @@ typedef struct FrontendItem {
     bool enabled;
 } FrontendItem;
 
-static Rectangle FrontendPanel(void)
+static Rectangle FrontendPanel(FrontendScreen screen)
 {
-    return (Rectangle){((float)GetScreenWidth() - 440.0f) * 0.5f,
+    float width = screen == FRONTEND_PAUSED ? 920.0f : 440.0f;
+    return (Rectangle){((float)GetScreenWidth() - width) * 0.5f,
                        ((float)GetScreenHeight() - 556.0f) * 0.5f,
-                       440.0f, 556.0f};
+                       width, 556.0f};
 }
 
 static int FrontendItems(const FrontendState *state, FrontendItem *items)
 {
-    Rectangle panel = FrontendPanel();
+    Rectangle panel = FrontendPanel(state->screen);
     float x = panel.x + 36.0f;
     float y = panel.y + 148.0f;
     if (state->screen == FRONTEND_TITLE) {
@@ -95,6 +99,10 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
         items[5].enabled = CcCoopClientOwner();
         if (!items[5].enabled) items[5].label = "Host can delete world";
     }
+    float right = panel.x + 496.0f;
+    items[count++] = (FrontendItem){FRONTEND_ACTION_BOOK, {right, y, 388, 44}, "Company Book  B", true};
+    items[count++] = (FrontendItem){FRONTEND_ACTION_TEXT, {right, y + 56, 388, 44}, "Text size  T", true};
+    items[count++] = (FrontendItem){FRONTEND_ACTION_HINTS, {right, y + 112, 388, 44}, "Target hints  H", true};
     return count;
 }
 
@@ -103,6 +111,15 @@ static void FrontendOpen(FrontendState *state, FrontendScreen screen)
     state->screen = screen;
     state->focus = screen == FRONTEND_TITLE ? 2 : 0;
     state->feedback[0] = '\0';
+}
+
+/* A book opened from the menu returns to that menu and keeps its scene. */
+static void FrontendReturnFromBook(FrontendState *state, LocalState *local, ClientView *view)
+{
+    if (*view == VIEW_PAUSE && state->screen == FRONTEND_PLAYING) {
+        *view = local->pause_return_view;
+        FrontendOpen(state, FRONTEND_PAUSED);
+    }
 }
 
 static FrontendAction FrontendInput(FrontendState *state)
@@ -118,7 +135,13 @@ static FrontendAction FrontendInput(FrontendState *state)
         return FRONTEND_ACTION_NONE;
     }
     if (state->screen == FRONTEND_PLAYING) return FRONTEND_ACTION_NONE;
-    FrontendItem items[7];
+    if (state->screen == FRONTEND_PAUSED) {
+        if (ClientKeyPressed(KEY_B)) return FRONTEND_ACTION_BOOK;
+        if (ClientKeyPressed(KEY_T)) return FRONTEND_ACTION_TEXT;
+        if (ClientKeyPressed(KEY_H)) return FRONTEND_ACTION_HINTS;
+        if (ClientKeyPressed(KEY_F5)) return FRONTEND_ACTION_SAVE;
+    }
+    FrontendItem items[10];
     int count = FrontendItems(state, items);
     if (state->focus < 0 || state->focus >= count) state->focus = 0;
     int direction = ClientKeyPressed(KEY_UP) ? -1 :
@@ -188,7 +211,18 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
     ClientView *view, ClientView *return_view, int32_t *selected,
     int32_t *selected_situation, const char *save_path, const char *session_path)
 {
-    if (action == FRONTEND_ACTION_OFFLINE || action == FRONTEND_ACTION_ONLINE) {
+    if (action == FRONTEND_ACTION_BOOK) {
+        local->pause_return_view = *view;
+        *return_view = VIEW_PAUSE;
+        *view = VIEW_LEDGER;
+        FrontendOpen(state, FRONTEND_PLAYING);
+    } else if ((action == FRONTEND_ACTION_TEXT || action == FRONTEND_ACTION_HINTS) &&
+               adventure_preferences != NULL) {
+        if (action == FRONTEND_ACTION_TEXT)
+            adventure_preferences->text_size = (adventure_preferences->text_size + 1) % 3;
+        else adventure_preferences->focus_hints = !adventure_preferences->focus_hints;
+        adventure_preferences_dirty = true;
+    } else if (action == FRONTEND_ACTION_OFFLINE || action == FRONTEND_ACTION_ONLINE) {
         state->online = action == FRONTEND_ACTION_ONLINE;
         state->focus = state->online ? 1 : 2;
         state->feedback[0] = '\0';
@@ -286,7 +320,7 @@ static void FrontendCenteredText(const char *text, int y, int size, Color color)
 static void DrawFrontend(const FrontendState *state,
                          const CcClientPreferences *preferences, const CcSim *sim)
 {
-    Rectangle panel = FrontendPanel();
+    Rectangle panel = FrontendPanel(state->screen);
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BACKGROUND, 0.86f));
     DrawRectangleRounded(panel, 0.025f, 6, PANEL_DEEP);
     DrawRectangleRoundedLinesEx(panel, 0.025f, 6, 1.0f, Fade(CC_GOLD, 0.46f));
@@ -314,7 +348,7 @@ static void DrawFrontend(const FrontendState *state,
             TextFormat("OFFLINE  /  DAY %d", sim->current_day),
                              top + 120, 12, MUTED);
     }
-    FrontendItem items[7];
+    FrontendItem items[10];
     int count = FrontendItems(state, items);
     for (int i = 0; i < count; ++i) {
         FrontendItem item = items[i];
@@ -339,11 +373,21 @@ static void DrawFrontend(const FrontendState *state,
         } else if (item.action == FRONTEND_ACTION_MOTION) {
             label = preferences->reduced_motion ? "Reduced motion: on" : "Reduced motion: off";
         }
-        int size = primary ? 20 : 16;
+        if (item.action == FRONTEND_ACTION_TEXT) label = TextFormat("Text size: %s  T",
+            preferences->text_size == 0 ? "standard" : preferences->text_size == 1 ? "large" : "largest");
+        if (item.action == FRONTEND_ACTION_HINTS) label = preferences->focus_hints ? "Target hints: shown  H" : "Target hints: focus only  H";
+        int size = (primary ? 20 : 16) + preferences->text_size * 2;
+        while (size > 14 && MeasureText(label, size) > (int)item.bounds.width - 24) --size;
         DrawText(label, (int)(item.bounds.x + (item.bounds.width -
             (float)MeasureText(label, size)) * 0.5f),
             (int)(item.bounds.y + (item.bounds.height - (float)size) * 0.5f),
             size, Fade(danger ? DANGER : INK, item.enabled ? 1.0f : 0.35f));
+    }
+    if (state->screen == FRONTEND_PAUSED) {
+        const char *help[] = {"Click people and doors to approach.", "E selects a target. F acts.",
+            "B opens the book. Q reads promises.", "Esc returns or opens this menu."};
+        for (int i = 0; i < 4; ++i) DrawText(help[i], (int)panel.x + 496,
+            top + 345 + i * 25, 14 + preferences->text_size * 2, MUTED);
     }
     if (state->feedback[0] != '\0') {
         /* Wrap long save errors inside the panel. */
@@ -388,7 +432,7 @@ static int RunFrontendRegression(void)
     &local, &view, &return_view, &selected, &selected_situation, save_path, session_path)
     FRONTEND_CHECK(!CampaignSaveExists(save_path));
     FRONTEND_ACT(FRONTEND_ACTION_ONLINE);
-    FrontendItem items[7];
+    FrontendItem items[10];
     (void)FrontendItems(&state, items);
     FRONTEND_CHECK(items[2].enabled && items[2].action == FRONTEND_ACTION_PLAY);
     FRONTEND_CHECK(state.screen == FRONTEND_TITLE && journal == NULL);
@@ -412,6 +456,20 @@ static int RunFrontendRegression(void)
     FRONTEND_ACT(FRONTEND_ACTION_RESUME);
     FRONTEND_CHECK(state.screen == FRONTEND_PLAYING && view == VIEW_MAP);
     FrontendOpen(&state, FRONTEND_PAUSED);
+    FRONTEND_ACT(FRONTEND_ACTION_BOOK);
+    FRONTEND_CHECK(state.screen == FRONTEND_PLAYING && view == VIEW_LEDGER && return_view == VIEW_PAUSE);
+    queued_key_press[KEY_ESCAPE] = true;
+    FRONTEND_CHECK(HandleAdventureBook(&sim, &local, &view, &return_view));
+    ClientInputClearPressed();
+    FrontendReturnFromBook(&state, &local, &view);
+    FRONTEND_CHECK(state.screen == FRONTEND_PAUSED && view == VIEW_MAP);
+    CcClientPreferences interface_options = {0};
+    adventure_preferences = &interface_options;
+    FRONTEND_ACT(FRONTEND_ACTION_TEXT);
+    FRONTEND_ACT(FRONTEND_ACTION_HINTS);
+    FRONTEND_CHECK(interface_options.text_size == 1 && interface_options.focus_hints && adventure_preferences_dirty);
+    adventure_preferences = NULL;
+    adventure_preferences_dirty = false;
     local.road_choice_active = true;
     FRONTEND_ACT(FRONTEND_ACTION_TITLE);
     FRONTEND_CHECK(state.screen == FRONTEND_PAUSED && state.feedback[0] != '\0');

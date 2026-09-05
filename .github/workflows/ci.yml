@@ -124,6 +124,23 @@ jobs:
         run: cmake --build build --parallel
       - name: Test
         run: ctest --test-dir build --output-on-failure
+      - name: Capture interaction screens
+        if: runner.os == 'Linux'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+        working-directory: build
+        run: |
+          xvfb-run -a ./crownless_carriage --capture-ux 2 ux-conversation.png 1200 0
+          xvfb-run -a ./crownless_carriage --capture-ux 3 ux-trade.png 1040 2
+          xvfb-run -a ./crownless_carriage --capture-ux 4 ux-book.png 1040 2
+          xvfb-run -a ./crownless_carriage --capture-ux 5 ux-menu.png 1040 2
+      - name: Upload interaction screen captures
+        if: runner.os == 'Linux' && !cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interaction-screen-review
+          path: build/ux-*.png
+          if-no-files-found: error
       - name: Check character shaders and the full art viewport
         if: runner.os == 'Linux'
         env:

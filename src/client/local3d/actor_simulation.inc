@@ -848,6 +848,7 @@ void CcLocalCourseInit(CcLocalCourse *course)
     course->situation_witness_active = false;
 
     course->alarm_countdown = 24.0f;
+    course->automatic_alarm = true;
     course->raider_attack_cooldown[0] = 0.52f;
     course->raider_attack_cooldown[1] = 0.78f;
 }
@@ -2009,8 +2010,8 @@ void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
     CourseUpdatePlayerCombat(course, player, delta_time);
     if (!course->alarm_active) {
         if (player != NULL) CourseResolveImpact(course, player, NULL);
-        course->alarm_countdown -= delta_time;
-        if (course->alarm_countdown <= 0.0f) {
+        if (course->automatic_alarm) course->alarm_countdown -= delta_time;
+        if (course->automatic_alarm && course->alarm_countdown <= 0.0f) {
             if (course->raider_company_id == 0U) {
                 CcLocalCourseBindRaiderCompany(course, sim);
             }
@@ -2441,7 +2442,8 @@ static bool QueueStreetNavigationPointWithProjection(
                         agent->navigation_point_count;
     int32_t path_count = FindStreetPath(
         from, point, agent->radius, path, remaining, maximum_projection,
-        target_projected_out);
+        /* Object approaches leave room for foot placement around steep turns. */
+        agent->interaction_navigation ? 0.72f : 0.60f, target_projected_out);
     if (path_count <= 0) return false;
     for (int32_t index = 0; index < path_count; ++index) {
         if (!AppendStreetNavigationPoint(agent, path[index])) return false;
@@ -2506,7 +2508,10 @@ static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
 
 bool CcLocalAgentSetStreetTarget(CcLocalAgent *agent, Vector3 target)
 {
-    if (agent != NULL) agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
+    if (agent != NULL) {
+        agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
+        agent->interaction_navigation = false;
+    }
     return SetStreetClickTarget(agent, target);
 }
 
@@ -2684,7 +2689,8 @@ static bool AgentCanAdvanceNavigation(const CcLocalAgent *agent,
     Vector3 next = agent->navigation_point[next_index];
     return StreetSegmentClear(
         (Vector2){agent->position.x, agent->position.z},
-        (Vector2){next.x, next.z}, agent->radius);
+        (Vector2){next.x, next.z}, agent->radius,
+        agent->interaction_navigation ? 0.72f : 0.60f);
 }
 
 static float AgentCornerSpeedScale(const CcLocalAgent *agent,
@@ -2874,7 +2880,7 @@ static float StreetPortalCommandAlignment(
 
 static void UpdateStreetPortalProximity(CcLocalAgent *agent)
 {
-    if (active_world_stream != NULL) return;
+    if (active_world_stream != NULL || (agent != NULL && agent->interaction_navigation)) return;
     bool following_click_path = agent != NULL && agent->navigation_active &&
         agent->navigation_destination_room ==
             STREET_CLICK_NAVIGATION_DESTINATION;

@@ -508,7 +508,7 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
     EndTextureMode();
     PresentTarget(target, destination);
     DrawCrewLabels(camera, destination);
-    DrawLabels(labels, label_count, camera, destination);
+    if (!interaction_ui_enabled) DrawLabels(labels, label_count, camera, destination);
 }
 
 static void DrawRoadBarricade(const CcRoute *route)
@@ -1695,6 +1695,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         base_camera, camera_subject, course, clock, true,
         target.texture.height);
     const CcLocalAgent *conversation_partner =
+        conversation && conversation_focus_active ? &conversation_focus_agent :
         conversation && course != NULL && course->situation_witness_active ?
             &course->situation_witness : NULL;
     camera = CcLocalConversationCameraInternal(
@@ -2166,7 +2167,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
              CC_LOCAL_DRAGON_CAVE_Z},
             "Hidden trail to goblin dungeon", WORLD_VIOLET};
     }
-    if (!combat_nearby && conversation_partner == NULL) {
+    if (!interaction_ui_enabled && !combat_nearby && conversation_partner == NULL) {
         DrawLabels(labels, count, camera, destination);
     }
     if (combat_nearby) {
@@ -2548,7 +2549,7 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
             {1.55f, 2.25f, 6.54f}, "Exit  /  approach, then press F",
             WORLD_MUTED};
     }
-    DrawLabels(labels, label_count, camera, destination);
+    if (!interaction_ui_enabled) DrawLabels(labels, label_count, camera, destination);
     if (draw_hero_rig_debug &&
         agent->morphology == CC_MORPHOLOGY_BIPED) {
         DrawViewportText(

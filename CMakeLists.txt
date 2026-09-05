@@ -143,6 +143,7 @@ cc_strict_warnings(crownless_soundscape)
 
 add_library(crownless_client_policy
     src/client/cc_client_policy.c
+    src/client/cc_interaction.c
 )
 target_include_directories(crownless_client_policy PUBLIC src)
 if(NOT MSVC)
@@ -1042,6 +1043,10 @@ if(BUILD_TESTING)
         set_tests_properties(simulation_runner_resume PROPERTIES TIMEOUT 60)
     endif()
 
+    add_executable(interaction_tests tests/interaction_tests.c)
+    target_link_libraries(interaction_tests PRIVATE crownless_client_policy)
+    cc_strict_warnings(interaction_tests)
+    add_test(NAME interaction_planner COMMAND interaction_tests)
     if(NOT EMSCRIPTEN)
         add_executable(coop_bridge_tests tests/coop_bridge_tests.c)
         target_link_libraries(coop_bridge_tests PRIVATE crownless_coop crownless_sim)
@@ -1217,6 +1222,12 @@ if(BUILD_TESTING)
         )
         add_test(NAME storybook_travel_boundaries
                  COMMAND crownless_carriage --test-storybook-travel)
+        add_test(NAME adventure_town_routes
+                 COMMAND crownless_carriage --test-adventure-town-routes)
+        add_test(NAME adventure_trade_terms
+                 COMMAND crownless_carriage --test-adventure-trade)
+        add_test(NAME adventure_input_flow
+                 COMMAND crownless_carriage --test-adventure-input)
         add_test(NAME title_and_pause_menu
                  COMMAND crownless_carriage --test-frontend)
         add_test(NAME map_sale_input

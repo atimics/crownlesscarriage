@@ -10,3 +10,4 @@
 #include "client/local3d/crew_rendering.inc"
 #include "client/local3d/road_book.inc"
 #include "client/local3d/open_world.inc"
+#include "client/local3d/interaction.inc"

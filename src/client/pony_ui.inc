@@ -31,7 +31,7 @@ static bool HandlePonyInput(CcJournal *journal, CcSim *sim, LocalState *local,
         return true;
     }
     if (local->pony_book_open) {
-        if (ClientKeyPressed(KEY_BACKSPACE)) local->pony_book_open = false;
+        if (ClientKeyPressed(KEY_BACKSPACE) || ClientKeyPressed(KEY_ESCAPE)) local->pony_book_open = false;
         return true;
     }
     int32_t pony = CcPonyOnRoad(sim);
@@ -116,7 +116,7 @@ static void DrawPonyInterface(const CcSim *sim, const LocalState *local)
     int y = 106;
     DrawPanel((Rectangle){(float)x, (float)y, 660, 466}, (Color){13,18,28,252});
     CcOverlayDrawText("PONIES", x + 20, y + 18, 17, INK);
-    CcOverlayDrawText("Meet them on the roads. Help them. Travel together. [F7 / Backspace to close]",
+    CcOverlayDrawText("Meet them on the roads. Help them. Travel together. [F7 / Esc to close]",
                       x + 20, y + 47, 9, MUTED);
     for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
         const CcPony *p = &sim->pony_company.ponies[i];

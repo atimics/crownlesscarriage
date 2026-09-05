@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define CC_CLIENT_PREFERENCES_VERSION 2U
+#define CC_CLIENT_PREFERENCES_VERSION 3U
 
 static void SetPreferencesError(char *error, size_t capacity,
                                 const char *message)
@@ -18,7 +18,7 @@ static void SetPreferencesError(char *error, size_t capacity,
 void CcClientPreferencesDefault(CcClientPreferences *preferences)
 {
     if (preferences == NULL) return;
-    *preferences = (CcClientPreferences){0};
+    *preferences = (CcClientPreferences){.focus_hints = true};
 }
 
 bool CcClientPreferencesLoad(const char *path,
@@ -48,7 +48,7 @@ bool CcClientPreferencesLoad(const char *path,
     int reduced_motion = -1;
     bool valid = fscanf(file, "%31s %u", marker, &version) == 2 &&
         strcmp(marker, "CROWNLESS_PREFERENCES") == 0 &&
-        (version == 1U || version == CC_CLIENT_PREFERENCES_VERSION) &&
+        (version >= 1U && version <= CC_CLIENT_PREFERENCES_VERSION) &&
         fscanf(file, "%31s %d", setting, &reduced_motion) == 2 &&
         strcmp(setting, "reduced_motion") == 0 &&
         (reduced_motion == 0 || reduced_motion == 1);
@@ -56,6 +56,13 @@ bool CcClientPreferencesLoad(const char *path,
     if (valid && version >= 2U) {
         valid = fscanf(file, "%31s %d", setting, &audio_mode) == 2 &&
             strcmp(setting, "audio_mode") == 0 && audio_mode >= 0 && audio_mode <= 2;
+    }
+    int text_size = 0, focus_hints = 1;
+    if (valid && version >= 3U) {
+        valid = fscanf(file, "%31s %d", setting, &text_size) == 2 &&
+            strcmp(setting, "text_size") == 0 && text_size >= 0 && text_size <= 2 &&
+            fscanf(file, "%31s %d", setting, &focus_hints) == 2 &&
+            strcmp(setting, "focus_hints") == 0 && (focus_hints == 0 || focus_hints == 1);
     }
     if (fclose(file) != 0) valid = false;
     if (!valid) {
@@ -66,6 +73,8 @@ bool CcClientPreferencesLoad(const char *path,
     }
     preferences->reduced_motion = reduced_motion != 0;
     preferences->audio_mode = audio_mode;
+    preferences->text_size = text_size;
+    preferences->focus_hints = focus_hints != 0;
     SetPreferencesError(error, error_capacity, "");
     return true;
 }
@@ -75,7 +84,8 @@ bool CcClientPreferencesSave(const char *path,
                              char *error, size_t error_capacity)
 {
     if (path == NULL || path[0] == '\0' || preferences == NULL ||
-        preferences->audio_mode < 0 || preferences->audio_mode > 2) {
+        preferences->audio_mode < 0 || preferences->audio_mode > 2 ||
+        preferences->text_size < 0 || preferences->text_size > 2) {
         SetPreferencesError(error, error_capacity,
                             "Preferences path or state is invalid.");
         return false;
@@ -95,10 +105,13 @@ bool CcClientPreferencesSave(const char *path,
     }
     bool saved = fprintf(file, "CROWNLESS_PREFERENCES %u\n"
                                "reduced_motion %d\n"
-                               "audio_mode %d\n",
+                               "audio_mode %d\n"
+                               "text_size %d\n"
+                               "focus_hints %d\n",
                          CC_CLIENT_PREFERENCES_VERSION,
                          preferences->reduced_motion ? 1 : 0,
-                         preferences->audio_mode) > 0;
+                         preferences->audio_mode, preferences->text_size,
+                         preferences->focus_hints ? 1 : 0) > 0;
     saved = saved && fflush(file) == 0;
     if (fclose(file) != 0) saved = false;
     if (saved && rename(temporary, path) != 0) saved = false;

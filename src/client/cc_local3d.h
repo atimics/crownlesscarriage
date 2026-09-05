@@ -307,6 +307,7 @@ typedef struct CcLocalAgent {
     bool swimming;
     bool allow_downclimb;
     bool exact_target_valid;
+    bool interaction_navigation;
     float radius;
     float immersion;
     CcMorphologyPreset morphology;
@@ -407,6 +408,7 @@ typedef struct CcLocalCourse {
     float combat_event_seconds;
     double world_simulation_accumulator;
     bool alarm_active;
+    bool automatic_alarm;
     bool raiders_retreating;
     bool combat_origin_valid;
     bool raider_response_waypoint_active[CC_LOCAL_RAIDER_COUNT];
@@ -628,4 +630,19 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
                            Rectangle destination);
 Vector2 CcLocalMove(Vector2 current, Vector2 delta, bool market_interior);
 
+typedef struct CcLocalPresentedPerson {
+    Vector3 position;
+    uint32_t seed;
+    CcNpcRole role;
+    float size;
+} CcLocalPresentedPerson;
+int32_t CcLocalPresentedPeople(CcLocalPresentedPerson *people, int32_t capacity);
+struct CcInteractionTarget;
+void CcLocalProjectInteraction(const CcLocalAgent *agent,
+    RenderTexture2D texture, Rectangle destination,
+    struct CcInteractionTarget *target);
+void CcLocalAgentStop(CcLocalAgent *agent);
+bool CcLocalAgentApproachInteraction(CcLocalAgent *agent, Vector2 point, float radius, bool interior);
+void CcLocalRendererSetInteractionUI(bool enabled);
+void CcLocalRendererSetConversationFocus(const Vector3 *position, uint32_t seed, float yaw);
 #endif

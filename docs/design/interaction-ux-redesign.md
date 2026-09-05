@@ -203,3 +203,8 @@ Observe at least three fresh players after the first full slice. Ask them to fin
 Browser checks exercised the prototype's talk, board acceptance, shop entry, purchase, exit, departure, fast-forward stop, arrival, delivery, and journal recall. The sample delivery finished with 42 crowns and zero cargo after buying eight boxes for 16 crowns and earning the 18-crown reward. A double click on Buy committed one trade. A separate sale returned two crowns for one box. F opened Talk, Enter chose a reply or trade, and Escape returned to the scene. Book return and focus assistance were also checked.
 
 The prototype was inspected at 1024, 736, 360, and 320 pixels wide. Narrow layouts fit the document width. Browser inspection reported zero script errors. These are prototype checks; the acceptance matrix above defines the game implementation checks.
+
+
+## Game implementation
+
+[Implementation notes, controls, native captures, and checks](interaction-ux-implementation.md) describe the game changes in PR #304. The acceptance matrix above continues to track the wider scene and accessibility work.

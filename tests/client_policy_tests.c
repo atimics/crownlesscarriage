@@ -37,6 +37,8 @@ int main(void)
     CC_CHECK(!preferences.reduced_motion);
     preferences.reduced_motion = true;
     preferences.audio_mode = 2;
+    preferences.text_size = 2;
+    preferences.focus_hints = false;
     CC_CHECK(CcClientPreferencesSave(
         preferences_path, &preferences,
         preferences_error, sizeof(preferences_error)));
@@ -46,6 +48,7 @@ int main(void)
         preferences_error, sizeof(preferences_error)));
     CC_CHECK(preferences.reduced_motion);
     CC_CHECK(preferences.audio_mode == 2);
+    CC_CHECK(preferences.text_size == 2 && !preferences.focus_hints);
     FILE *invalid_preferences = fopen(preferences_path, "wb");
     CC_CHECK(invalid_preferences != NULL);
     CC_CHECK(fputs("CROWNLESS_PREFERENCES 1\nreduced_motion 7\n",
@@ -67,6 +70,16 @@ int main(void)
     CC_CHECK(CcClientPreferencesLoad(preferences_path, &preferences,
                                     preferences_error, sizeof(preferences_error)));
     CC_CHECK(preferences.reduced_motion && preferences.audio_mode == 0);
+    CC_CHECK(preferences.text_size == 0 && preferences.focus_hints);
+    FILE *version_two = fopen(preferences_path, "wb");
+    CC_CHECK(version_two != NULL);
+    CC_CHECK(fputs("CROWNLESS_PREFERENCES 2\nreduced_motion 0\naudio_mode 1\n", version_two) >= 0);
+    CC_CHECK(fclose(version_two) == 0);
+    CC_CHECK(CcClientPreferencesLoad(preferences_path, &preferences, preferences_error, sizeof(preferences_error)));
+    CC_CHECK(preferences.audio_mode == 1 && preferences.text_size == 0 && preferences.focus_hints);
+    preferences.text_size = 3;
+    CC_CHECK(!CcClientPreferencesSave(preferences_path, &preferences, preferences_error, sizeof(preferences_error)));
+    preferences.text_size = 0;
     preferences.audio_mode = 3;
     CC_CHECK(!CcClientPreferencesSave(preferences_path, &preferences,
                                      preferences_error, sizeof(preferences_error)));
