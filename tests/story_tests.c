@@ -369,6 +369,64 @@ static void ValidateConversationBeats(void)
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
+static void ValidateReliefArrivalDialogue(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcSituation *relief = FindSituation(
+        &sim, CC_SITUATION_RELIEF_DELIVERY);
+    CC_CHECK(relief != NULL);
+    sim.player.location_id = CcSimSituationOfferSettlementId(&sim, relief);
+    sim.carriage.location_id = sim.player.location_id;
+    char error[192];
+    CcCommand pledge = {
+        .kind = CC_COMMAND_CHARACTER_RESPONSE,
+        .target_id = relief->id,
+        .amount = CC_CHARACTER_RESPONSE_PLEDGE_HELP
+    };
+    CC_CHECK(CcSimApply(&sim, &pledge, error, sizeof(error)));
+    const CcCharacter *affected = CcSimSituationAffectedCharacter(
+        &sim, relief);
+    const CcSettlement *target = CcSimSettlement(&sim, relief->target_id);
+    CC_CHECK(affected != NULL && target != NULL);
+    CC_CHECK(strcmp(affected->name, "Jory Fen") == 0);
+    CC_CHECK(strcmp(target->name, "Silverwick") == 0);
+    CcId offer = sim.player.location_id;
+    sim.player.location_id = target->id;
+    sim.carriage.location_id = target->id;
+    CC_CHECK(CcSimApply(&sim, &pledge, error, sizeof(error)));
+    sim.player.location_id = offer;
+    sim.carriage.location_id = offer;
+    char spoken[192];
+    CC_CHECK(CcStoryCharacterText(
+        &sim, relief, affected, spoken, sizeof(spoken)));
+    CC_CHECK(strstr(spoken, target->name) != NULL);
+
+    sim.player.location_id = target->id;
+    sim.carriage.location_id = target->id;
+    CC_CHECK(sim.player.cargo[CC_GOOD_FOOD] >= relief->quantity);
+    CC_CHECK(CcStoryCharacterText(
+        &sim, relief, affected, spoken, sizeof(spoken)));
+    CC_CHECK(strstr(spoken, "market hall") != NULL);
+
+    /* Supply the arrival record used by the market delivery command. */
+    sim.resolved_journey_situation_id = relief->id;
+    sim.resolved_journey_outcome = CC_JOURNEY_OUTCOME_NEGOTIATED;
+    sim.journey.destination_id = target->id;
+    sim.journey.route_id = sim.routes[2].id;
+    CcCommand deliver = {
+        .kind = CC_COMMAND_TRADE,
+        .good = CC_GOOD_FOOD,
+        .amount = -relief->quantity
+    };
+    CC_CHECK(CcSimApply(&sim, &deliver, error, sizeof(error)));
+    CC_CHECK(relief->status == CC_SITUATION_RESOLVED);
+    CC_CHECK(CcStoryCharacterText(
+        &sim, relief, affected, spoken, sizeof(spoken)));
+    CC_CHECK(strcmp(spoken, "The food arrived. Thank you.") == 0);
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+}
+
 static void ValidateFrontUrgencyBeats(void)
 {
     CcSim sim;
@@ -452,6 +510,7 @@ int main(void)
     ValidateRoadCompanyVoices();
     ValidateSituationCoverage();
     ValidateConversationBeats();
+    ValidateReliefArrivalDialogue();
     ValidateFrontUrgencyBeats();
     ValidateMineSocialThread();
     ValidateExpiredPromiseMemory();
