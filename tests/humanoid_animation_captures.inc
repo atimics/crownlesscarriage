@@ -75,12 +75,15 @@ static void CaptureHumanoidAnimation(const char *directory)
         for (int32_t sample = 0; sample < 3; ++sample) {
             PresentTarget(scenes[sample], (Rectangle){(float)sample * 256.0f,
                                                      24.0f, 256.0f, 256.0f});
-            DrawText(labels[sample], sample * 256 + 12, 6, 16, RAYWHITE);
         }
         rlDrawRenderBatchActive();
         Image shot = LoadImageFromScreen();
         EndDrawing();
         ImageCrop(&shot, (Rectangle){0, 0, 768, 280});
+        for (int32_t sample = 0; sample < 3; ++sample) {
+            ImageDrawText(&shot, labels[sample], sample * 256 + 12, 6,
+                          16, RAYWHITE);
+        }
         char path[1024];
         (void)snprintf(path, sizeof(path), "%s/frame-%03d.png", directory, tick / 4);
         RequireRenderer(ExportImage(shot, path), "animation frame must be written");
