@@ -146,6 +146,7 @@ static void WriteViewportFixture(const char *path)
 #include "creature_captures.inc"
 #include "mesh_memory_tests.inc"
 #include "travel_graphics_tests.inc"
+#include "camera_continuity_tests.inc"
 
 int main(int argc, char **argv)
 {
@@ -153,6 +154,8 @@ int main(int argc, char **argv)
         TestPhysicalGoods();
         return 0;
     }
+    TestCameraContinuity();
+    TestStableVisibility();
     TestBuildingRevealTiming();
     TestSkinTurns();
     TestPonyHarnessAttachment();

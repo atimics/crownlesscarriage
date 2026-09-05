@@ -849,6 +849,16 @@ static void DrawTerrainPatchAtTop(float x, float z, float width, float depth,
 static bool SceneryFootprintVisibleWithin(Rectangle footprint, Vector3 focus,
                                           float visibility_radius)
 {
+    if (scenery_view.valid) {
+        float ground = TerrainFootprintHeight(footprint);
+        Vector3 center = {footprint.x + footprint.width * 0.5f,
+                           ground + 12.0f,
+                           footprint.y + footprint.height * 0.5f};
+        Vector3 half = {footprint.width * 0.5f + 3.0f, 16.0f,
+                        footprint.height * 0.5f + 3.0f};
+        return CameraBoundsVisible(scenery_view.camera, center, half,
+            (float)scenery_view.width / (float)scenery_view.height, 512.0f);
+    }
     float nearest_x = fmaxf(footprint.x,
                             fminf(focus.x, footprint.x + footprint.width));
     float nearest_z = fmaxf(footprint.y,
@@ -933,27 +943,25 @@ static void DrawStreetLantern(float x, float z,
     }
 }
 
-static void DrawWayfarerGate(Color accent, bool sightline_cut)
+static void DrawWayfarerGate(Color accent, float reveal)
 {
     Color wood = WORLD_WOOD;
     float left = 8.66f;
     float right = 14.34f;
     float z = 10.56f;
-    if (sightline_cut) {
-        DrawBox((Vector3){left, 0.06f, z},
-                (Vector3){0.22f, 0.12f, 0.22f}, wood);
-        DrawBox((Vector3){right, 0.06f, z},
-                (Vector3){0.22f, 0.12f, 0.22f}, wood);
-        return;
-    }
-    DrawBox((Vector3){left, 1.16f, z}, (Vector3){0.22f, 2.32f, 0.22f}, wood);
-    DrawBox((Vector3){right, 1.16f, z}, (Vector3){0.22f, 2.32f, 0.22f}, wood);
-    DrawBox((Vector3){11.50f, 2.24f, z},
-            (Vector3){5.90f, 0.22f, 0.24f}, wood);
+    /* Keep the same pieces throughout the reveal. */
+    float height = 2.32f + (0.12f - 2.32f) * reveal;
+    float scale = height / 2.32f;
+    DrawBox((Vector3){left, height * 0.5f, z},
+            (Vector3){0.22f, height, 0.22f}, wood);
+    DrawBox((Vector3){right, height * 0.5f, z},
+            (Vector3){0.22f, height, 0.22f}, wood);
+    DrawBox((Vector3){11.50f, 2.24f * scale, z},
+            (Vector3){5.90f, 0.22f * scale, 0.24f}, wood);
     for (int32_t i = 0; i < 3; ++i) {
         float x = 10.05f + (float)i * 1.45f;
-        DrawBox((Vector3){x, 1.91f, z + 0.07f},
-                (Vector3){0.56f, 0.48f, 0.07f},
+        DrawBox((Vector3){x, 1.91f * scale, z + 0.07f},
+                (Vector3){0.56f, 0.48f * scale, 0.07f},
                 i == 1 ? WORLD_GOLD : accent);
     }
 }
@@ -1563,7 +1571,7 @@ static void DrawPlaceLandmarks(Color kingdom, Vector3 focus)
 
 static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
                               const CcLocalPlaceProfile *profile,
-                              Vector3 focus, bool wayfarer_gate_sightline_cut)
+                              Vector3 focus, float wayfarer_gate_sightline_cut)
 {
     float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
     if (RoomDetailPointVisible(11.50f, 10.56f, focus)) {
@@ -3675,6 +3683,9 @@ bool CcLocalBuildingObscuresHeroInternal(Rectangle footprint, float height,
     return false;
 }
 
+static Vector3 secondary_reveal_subject;
+static bool secondary_reveal_valid;
+
 static bool WorldBuildingObscuresReveal(const WorldBuilding *building,
                                         int32_t index, Camera3D camera,
                                         Vector3 reveal_world,
@@ -3690,7 +3701,10 @@ static bool WorldBuildingObscuresReveal(const WorldBuilding *building,
     reveal_world.x = hero.x; reveal_world.z = hero.y;
     return CcLocalBuildingObscuresHeroInternal(
         building->footprint, building->height, camera, reveal_world,
-        render_width, render_height);
+        render_width, render_height) ||
+        (secondary_reveal_valid && CcLocalBuildingObscuresHeroInternal(
+            building->footprint, building->height, camera, secondary_reveal_subject,
+            render_width, render_height));
 }
 
 typedef struct WorldBuildingRevealState {
@@ -3734,6 +3748,7 @@ static void UpdateBuildingReveal(WorldBuildingRevealState *state,
 
 static WorldBuildingRevealState world_building_reveals[
     CC_LOCAL_PLACE_BUILDING_CAPACITY];
+static uint32_t world_building_reveal_seed;
 static float world_building_reveal_clock = 0.0f;
 static bool world_building_reveals_initialized = false;
 static CcSettlementFunction world_building_reveal_function =
@@ -3746,11 +3761,13 @@ static void UpdateWorldBuildingReveals(Camera3D camera,
                                        float clock)
 {
     bool reset = !world_building_reveals_initialized ||
+                 world_building_reveal_seed != street_terrain_seed ||
                  clock < world_building_reveal_clock ||
                  world_building_reveal_function != active_place_function;
     float delta_time = reset ? 0.0f :
         fmaxf(0.0f, fminf(clock - world_building_reveal_clock, 0.05f));
     world_building_reveal_clock = clock;
+    world_building_reveal_seed = street_terrain_seed;
     world_building_reveals_initialized = true;
     world_building_reveal_function = active_place_function;
 
@@ -3874,9 +3891,10 @@ static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
             i == profile->primary_building &&
             runtime_assets[RUNTIME_ASSET_MARKET].ready) continue;
         float reveal = world_building_reveals[i].amount;
-        SetWorldForegroundReveal(reveal, reveal_cut_height);
-        rlPushMatrix();
         float building_base = TerrainFootprintHeight(building.footprint);
+        float active_cut_world = SetObjectForegroundReveal(reveal, reveal_cut_height,
+            building_base + building.height + 3.5f);
+        rlPushMatrix();
         rlTranslatef(0.0f, building_base, 0.0f);
         RotateBuildingPlot(building.footprint, profile->building_yaw_degrees[i]);
         bool farming = profile->function == CC_SETTLEMENT_FARMING;
@@ -3895,8 +3913,6 @@ static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
                                       place->last_fire_day > 0 && i < 8 && fire_rank[i] <= 4, i);
         }
         if (reveal > 0.05f) {
-            float active_cut_world = reveal_cut_height +
-                                     (1.0f - reveal) * 8.0f;
             DrawBuildingRevealCap(
                 building.footprint.x, building.footprint.y,
                 building.footprint.width, building.footprint.height,
@@ -3945,6 +3961,7 @@ static bool DrawAuthoredMarket(const CcSettlement *place)
 
 static WorldBuildingRevealState castle_structure_reveals[
     CC_LOCAL_PLACE_COMPOUND_CAPACITY];
+static uint32_t castle_reveal_seed;
 static float castle_reveal_clock = 0.0f;
 static bool castle_reveals_initialized = false;
 static CcSettlementFunction castle_reveal_function = CC_SETTLEMENT_MARKET;
@@ -3956,10 +3973,12 @@ static void UpdateCastleStructureReveals(Camera3D camera,
                                          float clock)
 {
     bool reset = !castle_reveals_initialized || clock < castle_reveal_clock ||
+                 castle_reveal_seed != street_terrain_seed ||
                  castle_reveal_function != active_place_function;
     float delta_time = reset ? 0.0f :
         fmaxf(0.0f, fminf(clock - castle_reveal_clock, 0.05f));
     castle_reveal_clock = clock;
+    castle_reveal_seed = street_terrain_seed;
     castle_reveals_initialized = true;
     castle_reveal_function = active_place_function;
     for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
@@ -4209,11 +4228,11 @@ static void DrawCastle(const CcSim *sim, const CcSettlement *place,
                        float clock)
 {
     Rectangle keep_pad = ActiveCompoundBounds();
-    if (!SceneryFootprintVisible(keep_pad, focus)) return;
     float reveal_cut_height = reveal_world.y - 0.30f;
     float castle_base = TerrainFootprintHeight(keep_pad);
     UpdateCastleStructureReveals(camera, reveal_world,
                                  render_width, render_height, clock);
+    if (!SceneryFootprintVisible(keep_pad, focus)) return;
     rlPushMatrix();
     rlTranslatef(0.0f, castle_base, 0.0f);
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
@@ -4229,7 +4248,8 @@ static void DrawCastle(const CcSim *sim, const CcSettlement *place,
         WorldStructure structure = ActiveCompoundStructureAt(i);
         Color stone = CompoundStoneColor(profile, kingdom, structure.kind);
         float reveal = castle_structure_reveals[i].amount;
-        SetWorldForegroundReveal(reveal, reveal_cut_height);
+        (void)SetObjectForegroundReveal(reveal, reveal_cut_height,
+            castle_base + structure.height + 3.5f);
         DrawConstructedCompoundStructure(&structure, stone, kingdom, profile);
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);

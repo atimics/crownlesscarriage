@@ -16,6 +16,7 @@ uniform vec3 shadowColor;
 uniform vec3 fogColor;
 uniform float fogNear;
 uniform float fogFar;
+uniform float horizonFog;
 uniform vec3 depthSplits;
 uniform float depthStrength;
 
@@ -124,7 +125,7 @@ void main()
                           fogColor + vec3(0.040, 0.050, 0.045), 0.35);
     color = mix(color, quietCrown, backgroundWeight * 0.56);
     float fog = smoothstep(fogNear, fogFar, viewDepth) *
-                mix(0.24, 0.44, depthStrength);
+                mix(mix(0.24, 0.44, depthStrength), 1.0, horizonFog);
     color = mix(color, fogColor, fog);
     finalColor = vec4(clamp(color, 0.0, 1.0), albedo.a);
 }

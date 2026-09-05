@@ -139,6 +139,8 @@ typedef struct WorldFaceCanvas {
     float pixel_width;
     float pixel_height;
     float horizontal_scale;
+    float readable_presence;
+    float detail_presence;
     CcLocalFaceLodInternal lod;
     bool always_paint;
     float profile_side;
@@ -172,12 +174,11 @@ static void PaintWorldFaceBlock(void *context, int32_t grid_x,
     if (grid_y <= 9 && grid_x != 9 && grid_x != 10 &&
         ((canvas->profile_side > 0.0f && grid_x < 9) ||
          (canvas->profile_side < 0.0f && grid_x > 10))) return;
-    if (!canvas->always_paint &&
-        canvas->lod == CC_LOCAL_FACE_LOD_READABLE &&
-        !IsPortraitEyeBlock(grid_x, grid_y, grid_width, grid_height) &&
-        !IsPortraitMouthBlock(grid_x, grid_y, grid_width, grid_height)) {
-        return;
-    }
+    bool readable = !canvas->always_paint &&
+        (IsPortraitEyeBlock(grid_x, grid_y, grid_width, grid_height) ||
+         IsPortraitMouthBlock(grid_x, grid_y, grid_width, grid_height));
+    float presence = readable ? canvas->readable_presence : canvas->detail_presence;
+    if (presence <= 0.0f) return;
 
     float grid_center_x = (float)grid_x + (float)grid_width * 0.5f;
     float grid_center_y = (float)grid_y + (float)grid_height * 0.5f;
@@ -188,15 +189,17 @@ static void PaintWorldFaceBlock(void *context, int32_t grid_x,
     width *= canvas->horizontal_scale;
     float y = (8.5f - grid_center_y) * canvas->cell_height;
     float height = (float)grid_height * canvas->cell_height;
-    if (canvas->lod == CC_LOCAL_FACE_LOD_READABLE) {
+    if (readable) {
         float pixels = IsPortraitEyeBlock(grid_x, grid_y, grid_width,
                                           grid_height) ? 0.85f : 0.65f;
-        width = fmaxf(width, canvas->pixel_width * pixels);
-        height = fmaxf(height, canvas->pixel_height * pixels);
+        width += (fmaxf(width, canvas->pixel_width * pixels) - width) *
+                 (1.0f - canvas->detail_presence);
+        height += (fmaxf(height, canvas->pixel_height * pixels) - height) *
+                  (1.0f - canvas->detail_presence);
     }
     float lift = 0.0030f + (float)canvas->layer * 0.00045f;
     DrawFaceQuad(canvas->origin, canvas->right, canvas->up, canvas->normal,
-                 x, y, width, height, lift, color);
+                 x, y, width * presence, height * presence, lift, color);
     canvas->layer += 1;
 }
 
@@ -249,7 +252,7 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
         eye_center, head_up, half_height);
     CcLocalFaceLodInternal lod = CcLocalFaceLodForProjectedHeightInternal(
         projected_face_height);
-    if (lod == CC_LOCAL_FACE_LOD_SILHOUETTE) return;
+    if (projected_face_height <= 3.0f) return;
 
 
     EndShaderMode();
@@ -275,12 +278,14 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
         .pixel_width = 1.0f / fmaxf(horizontal_pixels_per_unit, 0.0001f),
         .pixel_height = 1.0f / fmaxf(vertical_pixels_per_unit, 0.0001f),
         .horizontal_scale = 1.0f,
+        .readable_presence = SmoothStep01((projected_face_height - 3.0f) / 2.0f),
+        .detail_presence = SmoothStep01((projected_face_height - 10.0f) / 4.0f),
         .lod = lod,
         .always_paint = false,
         .profile_side = front_amount < 0.40f ? side_amount : 0.0f,
         .layer = 0,
     };
-    if (lod == CC_LOCAL_FACE_LOD_CLOSE) {
+    if (canvas.detail_presence > 0.0f) {
         canvas.always_paint = true;
         CcNpcPaintFaceBeard(face, &canvas, PaintWorldFaceBlock);
     }
@@ -3303,17 +3308,11 @@ static void DrawWorldTreeAt(int32_t index, TreeRegionalStyle regional_style)
 static uint32_t WorldTreeVisibilityMask(Vector3 focus,
                                         TreeRegionalStyle regional_style)
 {
+    (void)focus;
+    (void)regional_style;
     uint32_t mask = 0U;
-    int32_t scene = street_camera_rig.shot;
     for (int32_t i = 0;
          i < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0])); ++i) {
-        if (active_place_function == CC_SETTLEMENT_MINING &&
-            scene == CC_LOCAL_TOWN_SCENE_LANDMARK &&
-            (i == 4 || i == 25)) continue;
-        Vector2 position = WORLD_TREES[i].position;
-        position.x += (i & 1) != 0 ? -regional_style.cluster_pull :
-                                     regional_style.cluster_pull;
-        if (!SceneryPointVisible(position.x, position.y, focus)) continue;
         mask |= UINT32_C(1) << (uint32_t)i;
     }
     return mask;
@@ -4221,8 +4220,13 @@ static void BeginWorldLighting(Camera3D camera,
     float fog_color[3] = {(float)atmosphere_fog.r / 255.0f,
                           (float)atmosphere_fog.g / 255.0f,
                           (float)atmosphere_fog.b / 255.0f};
-    float fog_near = profile->fog_near * atmosphere.fog_distance_scale;
-    float fog_far = profile->fog_far * atmosphere.fog_distance_scale;
+    /* A long lens keeps the town's haze at its authored visual depth. */
+    float camera_distance = Vector3Distance(camera.position, camera.target);
+    float lens_depth_offset = camera.projection == CAMERA_PERSPECTIVE ?
+        fmaxf(0.0f, camera_distance * (1.0f -
+            tanf(camera.fovy * DEG2RAD * 0.5f) / tanf(12.0f * DEG2RAD))) : 0.0f;
+    float fog_near = profile->fog_near * atmosphere.fog_distance_scale + lens_depth_offset;
+    float fog_far = profile->fog_far * atmosphere.fog_distance_scale + lens_depth_offset;
     float horizon_fog = profile_id == ART_LIGHT_STORYBOOK ? 1.0f : 0.0f;
     SetShaderValue(visual_style.world, visual_style.horizon_fog_location,
                    &horizon_fog, SHADER_UNIFORM_FLOAT);
@@ -4242,9 +4246,9 @@ static void BeginWorldLighting(Camera3D camera,
     float foreground_anchor[3] = {composition->foreground_anchor.x,
                                   composition->foreground_anchor.y,
                                   composition->foreground_anchor.z};
-    float depth_splits[3] = {composition->depth_splits.x,
-                             composition->depth_splits.y,
-                             composition->depth_splits.z};
+    float depth_splits[3] = {composition->depth_splits.x + lens_depth_offset,
+                             composition->depth_splits.y + lens_depth_offset,
+                             composition->depth_splits.z + lens_depth_offset};
     SetShaderValue(visual_style.world,
                    visual_style.light_direction_location, direction,
                    SHADER_UNIFORM_VEC3);
@@ -4361,6 +4365,9 @@ static void BeginWorldLighting(Camera3D camera,
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_fog_far_location,
                        &fog_far, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_horizon_fog_location,
+                       &horizon_fog, SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_depth_splits_location,
                        depth_splits, SHADER_UNIFORM_VEC3);
