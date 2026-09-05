@@ -27,6 +27,8 @@
 #define CC_MAX_PENDING_ECHOES 3
 #define CC_MAX_CHARACTERS 24
 #define CC_MAX_SCRIBES 4
+#define CC_MAX_GOSSIP 32
+#define CC_MAX_GOSSIP_CARRIERS (1 + CC_MAX_KINGDOMS + CC_MAX_SHIPMENTS + CC_MAX_COURIERS)
 #define CC_CHARACTER_MEMORY_CAPACITY 4
 #define CC_CHARACTER_KNOWLEDGE_CAPACITY 8
 #define CC_MAX_RELATIONSHIPS 48
@@ -53,7 +55,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 43
+#define CC_SIM_SCHEMA_VERSION 44
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -339,6 +341,36 @@ typedef struct CcArchives {
     CcId abbot_character_id;
     int32_t stewardship_rank;
 } CcArchives;
+
+typedef struct CcGossipVersion {
+    CcId source_character_id;
+    int32_t retellings;
+    int32_t court_bias;
+    int32_t alarm;
+    int32_t confidence;
+} CcGossipVersion;
+
+/* Towns and travelers keep their own telling; scribes preserve the one they heard. */
+typedef struct CcGossip {
+    CcId event_id;
+    CcId origin_id;
+    CcId heard_event_id;
+    int32_t day;
+    int32_t heard_day;
+    CcEventKind kind;
+    uint32_t settlement_mask;
+    bool recorded;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    char heard_from[CC_NAME_CAPACITY];
+    CcGossipVersion local[CC_MAX_SETTLEMENTS];
+    CcGossipVersion heard;
+} CcGossip;
+
+typedef struct CcGossipCarrier {
+    CcId id;
+    uint32_t stories;
+    CcGossipVersion versions[CC_MAX_GOSSIP];
+} CcGossipCarrier;
 
 typedef enum CcMaterialChainBlocker {
     CC_MATERIAL_CHAIN_READY = 0,
@@ -1537,6 +1569,9 @@ typedef struct CcSim {
     int32_t stable_horse_count;
     CcWorldClock clock;
     CcArchives archives;
+    CcGossip gossip[CC_MAX_GOSSIP];
+    CcGossipCarrier gossip_carriers[CC_MAX_GOSSIP_CARRIERS];
+    CcId gossip_last_event_id;
     CcJourneyEncounter journey;
     CcCarriageState carriage;
     CcDelayedEcho delayed_echo;
@@ -1603,6 +1638,8 @@ void CcSimUpgradeQuestArchitecture(CcSim *sim);
 void CcSimInitializeUnderroad(CcSim *sim);
 void CcSimUpgradeGrainEconomy(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
+void CcGossipText(const CcSim *sim, const CcGossip *story,
+                  const CcGossipVersion *version, char *text, size_t capacity);
 bool CcSettlementIsAbandoned(const CcSettlement *settlement);
 int32_t CcSimClimateFactor(const CcSim *sim);
 int32_t CcSimArchivePhysicalLore(const CcSim *sim);

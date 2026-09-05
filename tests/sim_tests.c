@@ -129,6 +129,7 @@ static void PrepareArchiveWeek(CcSim *sim, CcMoney reserve,
     for (int32_t i = 0; i < notable; ++i) {
         sim->events[i].day = 6;
         sim->events[i].kind = CC_EVENT_KINGDOM_ACTION;
+        sim->events[i].location_id = scriptorium->id;
         sim->events[i].magnitude = 40 + i;
     }
 }

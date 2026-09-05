@@ -526,7 +526,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 27);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 28);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -2343,6 +2343,7 @@ static void CheckArchivePhysicalLoreMigration(char *error,
     }
     legacy.events[0].day = 6;
     legacy.events[0].kind = CC_EVENT_KINGDOM_ACTION;
+    legacy.events[0].location_id = scriptorium->id;
     legacy.events[0].magnitude = 40;
     CcSimAdvanceDays(&legacy, 1);
     CC_CHECK(CcSimArchivePhysicalLore(&legacy) == 1);
@@ -2404,6 +2405,43 @@ static void CheckWoodPaperJournalMigration(char *error,
     CcSim round_trip;
     CC_CHECK(CcSaveRead(path, &round_trip, error, error_capacity));
     CC_CHECK(CcSimHash(&round_trip) == CcSimHash(&restored));
+    RemoveDatabase(path);
+}
+
+static void CheckPreGossipJournalMigration(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-schema41-gossip-journal.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0xa4c417e));
+    legacy.schema_version = 41U;
+    legacy.current_day = 6;
+    legacy.iron_ledger_reserve = 50;
+    legacy.archives.scribes = 1;
+    legacy.settlements[1].stock[CC_GOOD_WHEAT] = 100;
+    legacy.settlements[1].stock[CC_GOOD_PAPER] = 1;
+    legacy.settlements[1].stock[CC_GOOD_TOOLS] = 1;
+    legacy.events[0].day = 6;
+    legacy.events[0].kind = CC_EVENT_KINGDOM_ACTION;
+    legacy.events[0].magnitude = 40;
+    CcSim suffix = legacy;
+    CcSimAdvanceDays(&suffix, 1);
+    CC_CHECK(suffix.archives.lore_stored == 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    AddLegacyDayJournalSuffix(path, &legacy, &suffix, 41U, 25U);
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    ExecuteFixtureSql(database,
+        "DROP TABLE gossip_state; DROP TABLE gossip_account; DROP TABLE gossip_carrier;"
+        "PRAGMA user_version=26;", "could not prepare the schema 41 gossip fixture");
+    sqlite3_close(database);
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.archives.lore_stored == 1);
+    CC_CHECK(restored.gossip_last_event_id == 0U);
+    restored.schema_version = 41U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&suffix));
     RemoveDatabase(path);
 }
 
@@ -2503,7 +2541,7 @@ static void CheckShippedSaveCompatibility(char *error,
         {22U, 20U}, {23U, 20U}, {24U, 20U}, {25U, 20U},
         {26U, 21U}, {27U, 21U}, {27U, 22U}, {28U, 22U},
         {29U, 23U}, {30U, 23U}, {31U, 24U}, {32U, 25U},
-        {33U, 25U}, {34U, 25U}, {35U, 25U}
+        {33U, 25U}, {34U, 25U}, {35U, 25U}, {42U, 25U}, {43U, 25U}
     };
     for (size_t i = 0; i < sizeof(fixtures) / sizeof(fixtures[0]); ++i) {
         const ShippedSaveFixture *fixture = &fixtures[i];
@@ -2631,16 +2669,20 @@ static void CheckDragonHairPersistence(void)
 static void CheckSchema41Upgrade(void)
 {
     const char *path = "schema41-upgrade.ccsave";
-    CcSim legacy, restored;
+    CcSim *legacy = malloc(sizeof(*legacy));
+    CcSim *restored = malloc(sizeof(*restored));
+    CC_CHECK(legacy != NULL && restored != NULL);
     char error[256];
-    CcSimInit(&legacy, 42U);
-    legacy.schema_version = 41U;
-    CcSimAdvanceDays(&legacy, 7);
-    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
-    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
-    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
-    legacy.schema_version = CC_SIM_SCHEMA_VERSION;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&legacy));
+    CcSimInit(legacy, 42U);
+    legacy->schema_version = 41U;
+    CcSimAdvanceDays(legacy, 7);
+    CC_CHECK(CcSaveWrite(path, legacy, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, restored, error, sizeof(error)));
+    CC_CHECK(restored->schema_version == CC_SIM_SCHEMA_VERSION);
+    legacy->schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSimHash(restored) == CcSimHash(legacy));
+    free(restored);
+    free(legacy);
     RemoveDatabase(path);
 }
 
@@ -2721,6 +2763,7 @@ int main(void)
                             error, sizeof(error));
     CheckMaterialChainMigration(error, sizeof(error));
     CheckArchivePhysicalLoreMigration(error, sizeof(error));
+    CheckPreGossipJournalMigration(error, sizeof(error));
     CheckWoodPaperJournalMigration(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));

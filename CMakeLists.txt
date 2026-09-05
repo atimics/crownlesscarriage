@@ -1165,6 +1165,12 @@ if(BUILD_TESTING)
     target_link_libraries(persistence_tests PRIVATE crownless_persistence)
     target_compile_definitions(persistence_tests PRIVATE
         CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    # Keep each migration fixture's large simulation states in its own frame.
+    if(MSVC)
+        target_compile_options(persistence_tests PRIVATE /Ob0)
+    else()
+        target_compile_options(persistence_tests PRIVATE -fno-inline)
+    endif()
     cc_strict_warnings(persistence_tests)
     add_test(NAME sqlite_round_trip COMMAND persistence_tests)
 
@@ -1227,6 +1233,12 @@ if(BUILD_TESTING)
     cc_strict_warnings(material_chain_tests)
     cc_large_sim_stack(material_chain_tests)
     add_test(NAME material_chain_proofs COMMAND material_chain_tests)
+
+    add_executable(gossip_tests tests/gossip_tests.c)
+    target_link_libraries(gossip_tests PRIVATE crownless_persistence crownless_metagame)
+    cc_strict_warnings(gossip_tests)
+    cc_large_sim_stack(gossip_tests)
+    add_test(NAME traveler_gossip_network COMMAND gossip_tests)
 
     add_executable(grain_economy_tests tests/grain_economy_tests.c)
     target_link_libraries(grain_economy_tests PRIVATE crownless_sim)

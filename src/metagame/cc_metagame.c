@@ -521,6 +521,22 @@ static void DescribeRumors(const CcMetagame *metagame,
     const CcSettlement *place = CurrentPlace(metagame);
     Append(output, capacity, "Rumors heard in %s:\n",
            place != NULL ? place->name : "the road");
+    if (place != NULL && !sim->journey.active) {
+        for (int32_t town = 0; town < sim->settlement_count; ++town) {
+            if (sim->settlements[town].id != place->id) continue;
+            uint32_t bit = UINT32_C(1) << (uint32_t)town;
+            for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+                const CcGossip *story = &sim->gossip[i];
+                if ((story->settlement_mask & bit) == 0U) continue;
+                const CcSettlement *origin = CcSimSettlement(sim, story->origin_id);
+                char account[CC_EVENT_TEXT_CAPACITY];
+                CcGossipText(sim, story, &story->local[town], account, sizeof(account));
+                Append(output, capacity, "  From %s, day %d (%d tellings, %d%% confidence): %s\n",
+                       origin != NULL ? origin->name : "the road", story->day,
+                       story->local[town].retellings, story->local[town].confidence, account);
+            }
+        }
+    }
     if (place != NULL && place->id == sim->settlements[1].id) {
         Append(output, capacity,
                "  The miller swears the western fields still whisper with grain. He lowers his voice before saying where the wagons went.\n"
@@ -2001,6 +2017,20 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                CcMaterialChainBlockerName(chain.blocker),
                chain.wheat, chain.paper, chain.tools, chain.iron,
                chain.gold, chain.gems);
+        int32_t pending_accounts = 0;
+        for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+            const CcGossip *story = &metagame->sim.gossip[i];
+            if (story->heard_day > 0 && !story->recorded) pending_accounts += 1;
+        }
+        Append(output, output_capacity, "Accounts heard and awaiting ink: %d.\n", pending_accounts);
+        for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+            const CcGossip *story = &metagame->sim.gossip[i];
+            if (story->heard_day == 0 || story->recorded) continue;
+            char account[CC_EVENT_TEXT_CAPACITY];
+            CcGossipText(&metagame->sim, story, &story->heard, account, sizeof(account));
+            Append(output, output_capacity, "  Heard from %s on day %d (%d%% confidence): %s\n",
+                   story->heard_from, story->heard_day, story->heard.confidence, account);
+        }
         for (int32_t i = 0; i < metagame->sim.kingdom_count; ++i) {
             const CcKingdom *kingdom = &metagame->sim.kingdoms[i];
             Append(output, output_capacity,
