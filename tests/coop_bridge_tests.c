@@ -1,8 +1,35 @@
 #include "multiplayer/cc_coop.h"
+#include "multiplayer/cc_coop_commands.h"
 #include "test_support.h"
 #include "persistence/cc_save.h"
 #include <stdlib.h>
 #include <string.h>
+
+static void CheckCommandRoundTrips(void)
+{
+    CcSim *direct = CcCoopCreate(42U);
+    CcSim *shared = CcCoopCreate(42U);
+    CC_CHECK(direct != NULL && shared != NULL);
+    for (int32_t kind = 1; kind <= (int32_t)CC_COMMAND_PARTY_WIPE; ++kind) {
+        CcSimInit(direct, 42U);
+        *shared = *direct;
+        const char *name = CcCoopActionName((CcCommandKind)kind);
+        CC_CHECK(name[0] != '\0');
+        for (int32_t prior = 1; prior < kind; ++prior)
+            CC_CHECK(strcmp(name, CcCoopActionName((CcCommandKind)prior)) != 0);
+        CcCommand command = {.kind = (CcCommandKind)kind, .good = CC_GOOD_BREAD,
+                              .amount = 1, .dungeon_state = (CcDungeonState)1};
+        char direct_error[256] = "", shared_error[256] = "";
+        bool expected = CcSimApply(direct, &command, direct_error, sizeof(direct_error));
+        bool actual = CcCoopApply(shared, name, 0U, CC_GOOD_BREAD, 1,
+                                  shared_error, sizeof(shared_error));
+        CC_CHECK(actual == expected);
+        CC_CHECK(strcmp(direct_error, shared_error) == 0);
+        if (expected) CC_CHECK(CcSimHash(direct) == CcSimHash(shared));
+    }
+    CcCoopDestroy(direct);
+    CcCoopDestroy(shared);
+}
 
 static void CheckPartyWipe(void)
 {
@@ -134,7 +161,7 @@ static void CheckSharedDepartureAndRoadStop(void)
         ((int64_t)host->journey.total_subticks * site->progress_milli + 999) / 1000);
     CC_CHECK(CcSimJourneyRoadSiteStop(host) == site);
     uint64_t stopped = CcSimHash(host);
-    CC_CHECK(CcCoopAdvance(host, 3600, error, sizeof(error)));
+    CC_CHECK(CcCoopApply(host, "skip_watch", 0U, 0, 0, error, sizeof(error)));
     CC_CHECK(CcSimHash(host) == stopped);
     unsigned char *bytes = NULL;
     size_t length = 0;
@@ -142,10 +169,12 @@ static void CheckSharedDepartureAndRoadStop(void)
     CC_CHECK(CcCoopDecode(guest, bytes, length, error, sizeof(error)));
     CcCoopFree(bytes);
     CC_CHECK(CcSimHash(guest) == stopped && CcSimJourneyRoadSiteStop(guest) != NULL);
-    CC_CHECK(CcCoopApply(host, "pass_road_site", site->id, 0, 0, error, sizeof(error)));
+    CC_CHECK(CcCoopApply(guest, "pass_road_site", site->id, 0, 0, error, sizeof(error)));
     int32_t before = host->carriage.progress_milli;
     CC_CHECK(CcCoopAdvance(host, 60, error, sizeof(error)));
     CC_CHECK(host->carriage.progress_milli > before);
+    CC_CHECK(CcCoopAdvance(host, 3600, error, sizeof(error)));
+    CC_CHECK(!host->journey.active || host->journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
     CC_CHECK(CcSimJourneyRoadSiteStop(host) != site);
     CcCoopDestroy(host);
     CcCoopDestroy(guest);
@@ -259,6 +288,7 @@ static void CheckJourneyQuestRetirement(void)
 
 int main(void)
 {
+    CheckCommandRoundTrips();
     CheckJourneyQuestRetirement();
     CheckPartyWipe();
     CheckSharedDepartureAndRoadStop();

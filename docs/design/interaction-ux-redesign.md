@@ -105,9 +105,9 @@ Every named character has a stable conversation identity under #275. Local conve
 
 ### Storyboard D: the carriage and road
 
-The carriage opens cargo, company, maps, and departure choices. A departure card names the destination, known travel time, supplies, and reported danger. The hero boards; the wheels begin to move; the view joins the storybook road. Normal travel keeps the caravan readable as it crests a hill. **Let time pass** eases the camera out and advances time. **Normal time** returns to the close view. A warning, rest stop, encounter, site choice, or arrival brings attention back to a clear choice.
+The carriage opens cargo, company, maps, and departure choices. A departure card names the destination, known travel time, supplies, and reported danger. The hero boards; the wheels begin to move; the view joins the storybook road. Travel keeps the carriage moving. CAREFUL, STEADY, and PUSH set the pace in the toolbar. Nearby stops appear below the scene. Speed and camera ease near a stop, and PUSH gives the player a shorter response window. Choosing a pony opens a close conversation view. Routine breaks continue automatically.
 
-Reading road facts is separate from committing departure. Fast-forward stops at the first event that needs a decision. Source and learning day distinguish a report from a witnessed fact. The map shows learned knowledge and a useful route; physical road geometry remains derived from the saved journey.
+Town scenes show the four nearest choices, ordered by distance as the traveller moves. The Book, Map, Save, and Menu stay in the toolbar. Shared-world creation, invitations, crew, and host controls use the same game menus on desktop and web. The web landing page offers Start. Source and learning day distinguish a report from a witnessed fact. The map shows learned knowledge and a useful route; physical road geometry remains derived from the saved journey.
 
 ### Storyboard E: trouble
 
@@ -170,7 +170,7 @@ Extend #216 as the parent for this full UX pass. Keep the existing issues as wor
 | 3 | Clear scene, dialogue, and first objective | #218, #222, #258 | Both people stay visible; replies update in place; offer and accepted promise read clearly |
 | 4 | Explicit trade and remembered results | #290; #291 | Buy, sell, and deliver show correct totals and distinct receipts |
 | 5 | Book, pause, clock, and settings | #292; #293; #184 | Back restores focus; clock follows declared mode; large text fits |
-| 6 | Road and site continuity | #132, #259, #268 | Normal travel, fast-forward stop, site entry, return, and arrival work in one play session |
+| 6 | Road and site continuity | #132, #259, #268 | Continuous travel, optional stops, site entry, return, and arrival work in one play session |
 | 7 | Cast and full scene coverage | #275–#281, #183, #216 | Named cast, six services, roads, sites, and shared-play integration meet the same contract |
 
 Build each slice through a small PR with captures and a real input check. A broad rewrite of `main.c` should follow proven extracted boundaries. Coordinate the adapter and save behavior with open PRs #273 and #253. Scene readability should consume the accepted art from #272 when it lands.
@@ -189,7 +189,7 @@ Build each slice through a small PR with captures and a real input check. A broa
 | Quote changes; cargo fills; repeated click; save write fails | Fresh validated result; at most one commit; useful reason; retry preserves state |
 | Offer, accepted promise, partial load, completion, failure | Correct state label and next action, linked person/place, readable history |
 | Book from conversation, trade, road choice; Escape back | Correct return focus and declared clock state for each layer |
-| Normal travel; fast-forward; first warning; site return | Saved route and progress match presentation; decision stop remains available |
+| Each pace; optional stops; first warning; site return | Saved route and progress match presentation; decision stop remains available |
 | Save/resume during each safe state | Committed results persist; pending screens revalidate; actions execute once |
 | All supported window sizes; larger text; keyboard; touch | Readable text, complete controls, stable focus, correct hit regions |
 

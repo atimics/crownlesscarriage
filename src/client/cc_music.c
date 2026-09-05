@@ -282,6 +282,8 @@ void CcMusicUpdate(CcMusicDirector *director, const CcMusicContext *context,
         CcMusicVoice *voice = &director->voice[i];
         if (voice->take < 0) continue;
         voice->age += dt;
+        if (director->duration[voice->take] > 0.0f && voice->age >= director->duration[voice->take])
+            voice->age = fmodf(voice->age, director->duration[voice->take]);
         voice->gain = sqrtf(fmaxf(0.0f, voice->from_power * (1.0f - progress) +
                                  voice->target_power * progress));
         if (progress >= 1.0f && voice->target_power == 0.0f)
@@ -291,20 +293,20 @@ void CcMusicUpdate(CcMusicDirector *director, const CcMusicContext *context,
         &director->voice[director->target_voice] : NULL;
     bool change = current == NULL;
     float fade = 12.0f;
+    float best = 0.0f;
+    bool combat_available = false;
+    for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i) {
+        if (!director->available[i]) continue;
+        int candidate = cc_music_takes[i].cue;
+        if ((unsigned int)candidate >= CC_MUSIC_CUE_COUNT) continue;
+        float candidate_score = CcMusicScore(&effective, candidate);
+        best = fmaxf(best, candidate_score);
+        if (cc_music_cues[candidate].combat && candidate_score > 0.0f)
+            combat_available = true;
+    }
     if (current != NULL && current->take >= 0) {
         int cue = cc_music_takes[current->take].cue;
         float score = CcMusicScore(&effective, cue);
-        float best = 0.0f;
-        bool combat_available = false;
-        for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i) {
-            if (!director->available[i]) continue;
-            int candidate = cc_music_takes[i].cue;
-            if ((unsigned int)candidate >= CC_MUSIC_CUE_COUNT) continue;
-            float candidate_score = CcMusicScore(&effective, candidate);
-            best = fmaxf(best, candidate_score);
-            if (cc_music_cues[candidate].combat && candidate_score > 0.0f)
-                combat_available = true;
-        }
         bool combat_change = (effective.combat && combat_available) !=
             cc_music_cues[cue].combat;
         bool near_end = current->age >= director->duration[current->take] - 8.0f;
@@ -315,16 +317,36 @@ void CcMusicUpdate(CcMusicDirector *director, const CcMusicContext *context,
         fade = effective.combat ? 1.2f : 4.0f;
     }
     int pending = director->requested_take;
+    float pending_fit = pending >= 0 && best > 0.0f ?
+        CcMusicScore(&effective, cc_music_takes[pending].cue) / best : 0.0f;
     if (pending >= 0 && (!director->available[pending] ||
-        CcMusicScore(&effective, cc_music_takes[pending].cue) <= 0.0f ||
-        effective.combat != cc_music_cues[cc_music_takes[pending].cue].combat)) {
+        pending_fit <= 0.0f || pending_fit < director->requested_fit * 0.55f ||
+        (effective.combat && combat_available) != cc_music_cues[cc_music_takes[pending].cue].combat)) {
         director->requested_take = -1;
+        director->requested_due = false;
         pending = -1;
     }
-    if (!change) { director->requested_take = -1; return; }
+    change = change || director->requested_due;
+    if (!change) {
+        if (current != NULL && pending == current->take && current->age < 5.0f) {
+            director->requested_take = -1;
+            pending = -1;
+        }
+        /* A stable choice gives the download and decoder the rest of this song. */
+        if (pending < 0 && current != NULL && current->age >= 5.0f) {
+            director->requested_take = CcMusicChoose(director, &effective);
+            int next = director->requested_take;
+            director->requested_fit = next >= 0 && best > 0.0f ?
+                CcMusicScore(&effective, cc_music_takes[next].cue) / best : 0.0f;
+        }
+        return;
+    }
     int take = pending >= 0 ? pending : CcMusicChoose(director, &effective);
     if (take >= 0 && !director->ready[take]) {
         director->requested_take = take;
+        if (pending < 0) director->requested_fit = best > 0.0f ?
+            CcMusicScore(&effective, cc_music_takes[take].cue) / best : 0.0f;
+        director->requested_due = true;
         /* Keep the score playing while audio arrives. Combat can use a ready take. */
         if (!effective.combat && current != NULL) return;
         CcMusicDirector local = *director;
@@ -335,6 +357,7 @@ void CcMusicUpdate(CcMusicDirector *director, const CcMusicContext *context,
         if (take < 0) return;
     } else {
         director->requested_take = -1;
+        director->requested_due = false;
     }
     if (take < 0) {
         if (current != NULL) {
@@ -350,9 +373,17 @@ void CcMusicUpdate(CcMusicDirector *director, const CcMusicContext *context,
         return;
     }
     if (current != NULL && current->take == take) {
-        if (current->age >= director->duration[take] - 8.0f)
-            current->age = 0.0f; /* A single installed take can loop. */
+        if (director->requested_take < 0) {
+            director->requested_take = take;
+            director->requested_fit = best > 0.0f ?
+                CcMusicScore(&effective, cc_music_takes[take].cue) / best : 0.0f;
+        }
         return;
     }
-    (void)StartFade(director, take, fade);
+    if (!StartFade(director, take, fade)) {
+        director->requested_take = take;
+        director->requested_fit = best > 0.0f ?
+            CcMusicScore(&effective, cc_music_takes[take].cue) / best : 0.0f;
+        director->requested_due = true;
+    }
 }

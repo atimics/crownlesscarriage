@@ -94,9 +94,9 @@ static void CheckChoices(void)
     uint64_t hash = CcSimHash(&sim);
     CC_CHECK(!CcSimApply(&sim, &choice, error, sizeof(error)));
     CC_CHECK(CcSimHash(&sim) == hash);
-    sim.carriage.progress_milli -= 1;
+    sim.carriage.progress_milli -= 21;
     CC_CHECK(CcSimJourneyRoadSiteStop(&sim) == NULL);
-    sim.carriage.progress_milli += 12;
+    sim.carriage.progress_milli += 52;
     CC_CHECK(CcSimJourneyRoadSiteStop(&sim) == NULL);
     PrepareStop(0, false);
     sim.journey.phase = CC_JOURNEY_PHASE_BLOCKED;

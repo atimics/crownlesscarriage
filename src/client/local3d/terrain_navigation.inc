@@ -321,11 +321,11 @@ static float TerrainNaturalHeight(float x, float z)
             float river_distance = (x - river_center) / 4.8f;
             land -= 8.50f * expf(-river_distance * river_distance);
             land += TerrainLandform(x, z, 45.0f, 28.0f,
-                                    25.0f, 17.0f) * 2.80f;
+                                    25.0f, 17.0f) * 1.30f;
             land += TerrainLandform(x, z, 79.0f, 18.0f,
-                                    21.0f, 15.0f) * 11.20f;
+                                    21.0f, 15.0f) * 5.20f;
             land += TerrainLandform(x, z, 68.0f, 2.0f,
-                                    34.0f, 13.0f) * 4.20f;
+                                    34.0f, 13.0f) * 2.40f;
             break;
         }
         case CC_SETTLEMENT_MINING:

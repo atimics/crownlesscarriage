@@ -151,6 +151,7 @@ typedef struct CcLocalPlaceProfile {
     CcLocalTownScene scene[CC_LOCAL_PLACE_SCENE_COUNT];
 } CcLocalPlaceProfile;
 
+void CcLocalTownConditionText(uint32_t conditions, char *text, size_t capacity);
 const CcLocalPlaceProfile *CcLocalPlaceProfileForFunction(
     CcSettlementFunction function);
 const CcLocalPlaceProfile *CcLocalPlaceProfileForSettlement(

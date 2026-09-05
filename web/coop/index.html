@@ -1,47 +1,26 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Crownless · A shared carriage</title>
-  <meta name="theme-color" content="#20392f">
-  <link rel="stylesheet" href="/coop.css"><script src="/coop.js" defer></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171512">
+  <title>Crownless Carriage</title>
+  <style>
+    :root { color-scheme: dark; background: #0b0a09; color: #e8dfc9; font: 18px Georgia, serif; }
+    body { min-height: 100dvh; margin: 0; display: grid; place-items: center; }
+    main { text-align: center; }
+    h1 { font-size: clamp(28px, 6vw, 48px); font-weight: normal; }
+    a { display: inline-block; margin-top: 20px; padding: 18px 64px; color: #e8dfc9; border: 1px solid #9f8657; border-radius: 4px; text-decoration: none; }
+    a:focus-visible, a:hover { background: #24211c; outline: 2px solid #9f8657; }
+  </style>
 </head>
 <body>
-  <header><a href="/" class="brand">CROWNLESS <span>Carriage & company</span></a><span id="connection">Finding the road…</span></header>
-  <main>
-    <section id="lobby">
-      <p class="eyebrow">A ROAD STORY, TOGETHER</p>
-      <h1>One carriage.<br>A whole company.</h1>
-      <p class="intro">Gather your crew. Share the road, the cargo, and the choices that change the towns ahead.</p>
-      <div class="lobby-grid">
-        <form id="create-form" class="paper">
-          <h2>Start a shared world</h2>
-          <label>Your name<input name="player" required maxlength="31" autocomplete="nickname" placeholder="Mara"></label>
-          <label>World name<input name="name" required maxlength="31" placeholder="The Lantern Road"></label>
-          <label>World pass<input name="world_pass" type="password" required minlength="64" maxlength="64" pattern="[a-f0-9]{64}" autocomplete="off" aria-describedby="world-pass-help"></label>
-          <p id="world-pass-help" class="quiet">Use the pass from this host to start a world. Your crew can join with an invitation.</p>
-          <button type="submit">Ready the carriage <span>↗</span></button>
-        </form>
-        <form id="join-form" class="paper" hidden>
-          <h2>A place in the carriage</h2>
-          <p>Your crew has sent an invitation.</p>
-          <label>Your name<input name="player" required maxlength="31" autocomplete="nickname" placeholder="Bren"></label>
-          <button type="submit">Join the company <span>↗</span></button>
-        </form>
-        <section class="paper" id="saved-worlds"><h2>Your roads</h2><div id="world-list"></div></section>
-      </div>
-      <p class="quiet">Up to eight people share one company, one carriage, and one clock. Time gathers speed while everyone is away. Return to your place in a world that has grown older.</p>
-    </section>
-    <section id="world" hidden>
-      <div class="title-row"><div><p class="eyebrow" id="world-name"></p><h1>Your company.</h1></div><button id="leave" class="secondary">Worlds</button></div>
-      <p class="intro">Your carriage is ready. Choose your look from Your traveller in the game menu.</p>
-      <a id="game-link" class="button" hidden>Enter the world <span>↗</span></a>
-      <section class="crew-section"><div class="crew-heading"><h2>Your company</h2><button id="invite" class="secondary" hidden>Invite crew</button></div><div id="crew" class="crew" aria-label="Carriage crew"></div></section>
-      <p class="quiet">One company. One carriage. One shared clock. Your journey continues in the world.</p>
-    </section>
-    <div id="notice" role="status" aria-live="polite" hidden><span></span><button id="dismiss" aria-label="Dismiss message">×</button></div>
-    <dialog id="invite-dialog"><h2>Gather the crew</h2><p>Send this invitation to a friend.</p><label>Invitation link<input id="invite-url" readonly></label><div class="tools"><button id="copy-invite">Copy invitation</button><button id="close-invite" class="secondary">Close</button></div></dialog>
-  </main>
-  <footer>Crownless Carriage <span>Good roads leave a story.</span></footer>
+  <main><h1>Crownless Carriage</h1><a id="start" href="/game/index.html">Start</a></main>
+  <script>
+    const fragment = new URLSearchParams(location.hash.slice(1));
+    const world = fragment.get('world'), join = fragment.get('join');
+    if (/^[a-f0-9]{32}$/.test(world || '')) document.querySelector('#start').href += '?world=' + world;
+    else if (/^[a-f0-9]{32}\.[a-f0-9]{64}$/.test(join || '')) document.querySelector('#start').href += '#join=' + join;
+  </script>
 </body>
 </html>

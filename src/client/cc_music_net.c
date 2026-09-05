@@ -13,9 +13,8 @@ EM_JS(int, WebStart, (const char *url, int limit), {
     return Module.ccMusicNet.start(UTF8ToString(url), limit) ? 1 : 0;
 });
 EM_JS(int, WebPoll, (unsigned char **data, size_t *size), {
-    const request = Module.ccMusicNet.request;
-    if (!request || !request.status) return 0;
-    Module.ccMusicNet.request = null;
+    const request = Module.ccMusicNet.poll();
+    if (!request) return 0;
     if (request.status < 0) return -1;
     const pointer = _malloc(request.data.length);
     if (!pointer) return -1;
@@ -25,12 +24,14 @@ EM_JS(int, WebPoll, (unsigned char **data, size_t *size), {
     return 1;
 });
 EM_JS(void, WebShutdown, (), { Module.ccMusicNet.stop(); });
+EM_JS(void, WebCancel, (), { Module.ccMusicNet.cancel(); });
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
 bool CcMusicNetStart(const char *url, size_t limit) { return WebStart(url, (int)limit) != 0; }
 int CcMusicNetPoll(unsigned char **data, size_t *size) { return WebPoll(data, size); }
 void CcMusicNetShutdown(void) { WebShutdown(); }
+void CcMusicNetCancel(void) { WebCancel(); }
 #else
 #include <curl/curl.h>
 #include <pthread.h>
@@ -132,5 +133,10 @@ void CcMusicNetShutdown(void)
     free(net.data);
     if (net.initialized) curl_global_cleanup();
     memset(&net, 0, sizeof(net));
+}
+
+void CcMusicNetCancel(void)
+{
+    if (net.active) atomic_store(&net.cancel, true);
 }
 #endif

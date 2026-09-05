@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 28
+#define CC_SQLITE_USER_VERSION 29
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -977,6 +977,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " pretender_crises INTEGER NOT NULL DEFAULT 0,"
         " anointed INTEGER NOT NULL DEFAULT 0);";
     const char *realm_schema =
+        "CREATE TABLE IF NOT EXISTS town_recovery ("
+        " slot INTEGER PRIMARY KEY, fire_damage INTEGER NOT NULL,"
+        " last_fire_day INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS settlement ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, kingdom_id INTEGER NOT NULL,"
         " name TEXT NOT NULL, function INTEGER NOT NULL, map_x INTEGER NOT NULL,"
@@ -1480,6 +1483,27 @@ static bool SaveKingdoms(sqlite3 *database, const CcSim *sim,
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool SaveTownRecovery(sqlite3 *database, const CcSim *sim,
+                             char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 45U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "INSERT INTO town_recovery VALUES(?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        BindInt(statement, 1, i);
+        BindInt(statement, 2, sim->settlements[i].fire_damage);
+        BindInt(statement, 3, sim->settlements[i].last_fire_day);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
         }
     }
     sqlite3_finalize(statement);
@@ -3208,6 +3232,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
             "DELETE FROM gossip_version;"
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
+            "DELETE FROM town_recovery;"
             "DELETE FROM horse_team; DELETE FROM stable_horse;"
             "DELETE FROM pony_company; DELETE FROM rainbow_pony;"
             "DELETE FROM route; DELETE FROM road_site;"
@@ -3248,6 +3273,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveGossip(database, sim, error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
+        SaveTownRecovery(database, sim, error, error_capacity) &&
         SavePonies(database, sim, error, error_capacity) &&
         SaveHorseTeam(database, sim, error, error_capacity) &&
         SaveStableHorses(database, sim, error, error_capacity) &&
@@ -3509,6 +3535,30 @@ static bool ReadDiplomacyAndCouriers(sqlite3 *database, CcSim *sim,
         sim->courier_count += 1;
     }
     sqlite3_finalize(statement);
+    return true;
+}
+
+static bool ReadTownRecovery(sqlite3 *database, CcSim *sim,
+                             char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 45U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "SELECT slot, fire_damage, last_fire_day FROM town_recovery ORDER BY slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t rows = 0;
+    int result;
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        if (slot != rows || slot >= sim->settlement_count) break;
+        sim->settlements[slot].fire_damage = sqlite3_column_int(statement, 1);
+        sim->settlements[slot].last_fire_day = sqlite3_column_int(statement, 2);
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE || rows != sim->settlement_count) {
+        SetError(error, error_capacity, "Town fire history rows are incomplete.");
+        return false;
+    }
     return true;
 }
 
@@ -5855,7 +5905,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     uint32_t legacy_version = sim->schema_version;
     if ((legacy_version == 38U || legacy_version == 39U ||
          legacy_version == 40U || legacy_version == 41U ||
-         legacy_version == 42U || legacy_version == 43U) &&
+         legacy_version == 42U || legacy_version == 43U ||
+         legacy_version == 44U) &&
         sim->generator_version == 25U) {
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
@@ -6339,6 +6390,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadDiplomacyAndCouriers(database, sim,
                                        error, error_capacity) &&
               ReadSettlements(database, sim, error, error_capacity) &&
+              ReadTownRecovery(database, sim, error, error_capacity) &&
               ReadHorseTeam(database, sim, error, error_capacity) &&
               ReadStableHorses(database, sim, error, error_capacity) &&
               ReadRoutes(database, sim, error, error_capacity) &&
