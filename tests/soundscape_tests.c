@@ -91,9 +91,39 @@ static void CheckSurfaceSoundProfiles(void)
     }
 }
 
+static void CheckTravelTiming(void)
+{
+    const int rates[] = {30, 60, 120};
+    const float paces[] = {0.48f, 0.72f, 1.0f};
+    for (int pace = 0; pace < 3; ++pace) {
+        for (int rate = 0; rate < 3; ++rate) {
+            CcSoundscape state = {0};
+            CcSoundFrame frame = {.travel_pace = paces[pace]};
+            float dt = 1.0f / (float)rates[rate];
+            (void)CcSoundscapeStep(&state, frame, dt);
+            int hooves = 0, wheels = 0;
+            for (int i = 0; i < rates[rate] * 10; ++i) {
+                frame.x += dt;
+                uint32_t cues = CcSoundscapeStep(&state, frame, dt);
+                if ((cues & CUE(CC_SOUND_HOOF)) != 0U) ++hooves;
+                if ((cues & CUE(CC_SOUND_WHEEL)) != 0U) ++wheels;
+            }
+            CC_CHECK(hooves == (int)(10.0f / (0.42f - 0.19f * paces[pace])));
+            CC_CHECK(wheels == (int)(10.0f / (0.95f - 0.30f * paces[pace])));
+            frame.travel_pace = 0;
+            CC_CHECK(CcSoundscapeStep(&state, frame, dt) == 0U);
+            CC_CHECK(state.hoof_time == 0 && state.wheel_time == 0);
+        }
+    }
+    float wheel_seconds = (float)CcSoundSampleCount(CC_SOUND_WHEEL) /
+        ((float)CC_SOUND_SAMPLE_RATE * CC_SOUND_PLAYBACK_PITCH);
+    CC_CHECK(wheel_seconds > 0.90f && wheel_seconds < 1.0f);
+}
+
 int main(void)
 {
     CheckSurfaceSoundProfiles();
+    CheckTravelTiming();
     int slow = CheckGaitTiming(60, 0.78f);
     int fast = CheckGaitTiming(60, 1.22f);
     CC_CHECK(fast > slow);

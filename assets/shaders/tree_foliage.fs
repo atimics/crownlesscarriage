@@ -88,6 +88,9 @@ void main()
     float faceSeed = hash31(floor(normal * 17.0 + vec3(23.0)));
     vec2 chipPoint = plane * 3.85 + vec2(faceSeed * 13.0,
                                          faceSeed * 29.0);
+    // Fade small leaf marks as their footprint approaches one screen pixel.
+    float chipPresence = 1.0 - smoothstep(0.35, 1.0,
+        max(fwidth(chipPoint.x), fwidth(chipPoint.y)));
     vec2 chipCenter = fract(chipPoint) - 0.5;
     float chipShape = 1.0 - step(0.72,
                                  abs(chipCenter.x) +
@@ -101,16 +104,17 @@ void main()
                                 smoothstep(-0.08, 0.58, facing));
     vec3 color = albedo.rgb * light * paintTemperature;
     color *= mix(vec3(1.0), vec3(0.63, 0.82, 0.69),
-                 shadowChip * 0.62 * detailPresence);
+                 shadowChip * 0.62 * detailPresence * chipPresence);
     vec3 warmLeaf = color * vec3(1.28, 1.18, 0.78) +
                     vec3(0.035, 0.026, 0.004);
-    color = mix(color, warmLeaf, lightChip * 0.56 * detailPresence);
+    color = mix(color, warmLeaf, lightChip * 0.56 * detailPresence * chipPresence);
 
     vec3 viewDirection = normalize(cameraPosition - fragPosition);
     float rim = pow(1.0 - max(dot(normal, viewDirection), 0.0), 3.0);
     color += vec3(0.10, 0.23, 0.18) * rim * 0.025 * detailPresence;
     float viewFacing = abs(dot(normal, viewDirection));
-    float edgeInk = 1.0 - step(0.10, viewFacing);
+    float edgeWidth = max(fwidth(viewFacing), 0.025);
+    float edgeInk = 1.0 - smoothstep(0.10 - edgeWidth, 0.10 + edgeWidth, viewFacing);
     color = mix(color, albedo.rgb * 0.24,
                 edgeInk * 0.42 * detailPresence);
 
