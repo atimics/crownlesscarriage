@@ -74,6 +74,18 @@ static void RepairsUseGoodsAndSurviveSave(CcSim *sim, CcSim *restored)
     CcSimAdvanceDays(restored, 7);
     CC_CHECK(CcSimHash(sim) == CcSimHash(restored));
     CC_CHECK(town->fire_damage == 40);
+    for (int32_t week = 0; week < 4; ++week) {
+        town->hunger = 0;
+        town->security = 75;
+        town->stock[CC_GOOD_BREAD] = 500;
+        town->stock[CC_GOOD_WOOD] = 30;
+        town->stock[CC_GOOD_STONE] = 30;
+        town->stock[CC_GOOD_TOOLS] = 30;
+        CcSimAdvanceDays(sim, 7);
+    }
+    CC_CHECK(town->fire_damage == 0);
+    CC_CHECK(town->last_fire_day == 1);
+    CC_CHECK((CcSimTownConditions(sim, town->id) & CC_TOWN_BURNT) == 0U);
 
     /* A damaged snapshot needs every town row to restore the same history. */
     sqlite3 *database = NULL;
@@ -114,6 +126,22 @@ static void SuppliesAndSafetyGateRepairs(CcSim *sim)
     town->last_fire_day = sim->current_day + 1;
     char error[256];
     CC_CHECK(!CcSimValidate(sim, error, sizeof(error)));
+
+    CcSimInit(sim, UINT32_C(0x710c));
+    sim->current_day = 13;
+    town = &sim->settlements[0];
+    town->fire_damage = 60;
+    town->last_fire_day = 13;
+    town->security = 75;
+    town->hunger = 0;
+    town->stock[CC_GOOD_BREAD] = 500;
+    town->stock[CC_GOOD_WOOD] = 30;
+    town->stock[CC_GOOD_STONE] = 30;
+    town->stock[CC_GOOD_TOOLS] = 30;
+    CcSimAdvanceDays(sim, 1);
+    CC_CHECK(town->fire_damage == 60);
+    CcSimAdvanceDays(sim, 7);
+    CC_CHECK(town->fire_damage == 50);
 }
 
 static void LegacyHistoryStartsClean(CcSim *sim, CcSim *restored)

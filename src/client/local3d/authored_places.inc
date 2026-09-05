@@ -709,6 +709,11 @@ static void DrawSettlementBuilding(const WorldBuilding *building,
 
     switch (profile->function) {
         case CC_SETTLEMENT_FARMING:
+            if (building_index == 6) {
+                DrawBuilding(x, z, width, depth - 0.9f, height,
+                             wall, roof, building->door, 1);
+                break;
+            }
             if (building->style == CC_LOCAL_BUILDING_WORKSHOP ||
                 building_index < 0) {
 
@@ -1832,7 +1837,7 @@ static Color TerrainRoadRutColor(CcLocalRoadSurface surface,
     Color rut = WORLD_ROAD_SHADOW;
     switch (surface) {
         case CC_LOCAL_ROAD_FARM_TRACK:
-            rut = BlendColor(WORLD_EARTH_SHADOW, WORLD_CROP_SHADOW, 0.28f);
+            rut = BlendColor(WORLD_EARTH, WORLD_CROP_SHADOW, 0.20f);
             break;
         case CC_LOCAL_ROAD_INDUSTRIAL:
             rut = BlendColor(WORLD_METAL_SHADOW, WORLD_ROAD_SHADOW, 0.34f);
@@ -2368,6 +2373,8 @@ static void DrawTerrainRoadIdentityMotif(const TerrainRoad *road,
                                          CcLocalRoadSurface surface,
                                          Vector3 focus)
 {
+    if (surface == CC_LOCAL_ROAD_FARM_TRACK &&
+        road_index < TerrainCarriageRoadIndexOffset()) return;
     Rectangle footprint = road->footprint;
     float start = road->runs_east_west ? footprint.x : footprint.y;
     float finish = start + (road->runs_east_west ? footprint.width :
@@ -2410,8 +2417,8 @@ static void DrawTerrainRoadIdentityMotif(const TerrainRoad *road,
         switch (surface) {
             case CC_LOCAL_ROAD_FARM_TRACK:
                 if (segment % 3 != 2) {
-                    TerrainRibbonSegment(center_a, center_b, 0.085f, 0.058f,
-                                         WORLD_GRASS_SHADOW);
+                    TerrainRibbonSegment(center_a, center_b, 0.14f, 0.058f,
+                                         BlendColor(WORLD_GRASS, WORLD_EARTH, 0.45f));
                 }
                 break;
             case CC_LOCAL_ROAD_INDUSTRIAL:
@@ -2489,6 +2496,8 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
         bool rural_track = i == 0 || i == 1 || i == 3 || i == 4 ||
                            i == 9 || i == 12 || i == 13 || i == 14;
         if (!rural_track) continue;
+        if (active_surface == CC_LOCAL_ROAD_FARM_TRACK &&
+            (i == 3 || i == 12 || i == 14)) continue;
         const TerrainRoad *road = &TERRAIN_ROADS[i];
         Rectangle footprint = road->footprint;
         Color color = i < TerrainVisibleRoadCount() ? paved_rut : field_track;
@@ -2573,8 +2582,9 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
         TerrainRoad road = PlaceTerrainRoad(carriage_road);
         Rectangle footprint = road.footprint;
         int32_t road_index = TerrainCarriageRoadIndexOffset() + i;
-        Color color = ShadeColor(
-            TerrainPlaceRoadColor(carriage_road->surface), 0.58f);
+        Color color = carriage_road->surface == CC_LOCAL_ROAD_FARM_TRACK ?
+            TerrainRoadRutColor(carriage_road->surface, prosperity) :
+            ShadeColor(TerrainPlaceRoadColor(carriage_road->surface), 0.58f);
         float lane_offset = fminf(
             0.92f,
             (road.runs_east_west ? footprint.height : footprint.width) *
@@ -2990,23 +3000,27 @@ static void DrawThornfordMill(const CcSettlement *place, float clock)
 {
     WorldBuilding mill = ActiveWorldBuildingAt(6);
     float base = TerrainFootprintHeight(mill.footprint);
-    Vector3 hub = {89.2f, base + 2.2f, 25.0f};
+    Vector3 hub = {87.0f, base + 2.2f, 28.85f};
     float phase = CcSettlementHasService(place, CC_SERVICE_MILL) &&
-                  place->fire_damage < 60 ? clock * 0.32f : 0.0f;
-    DrawCylinderEx(Vector3Add(hub, (Vector3){-0.75f, 0.0f, 0.0f}),
-                    Vector3Add(hub, (Vector3){0.25f, 0.0f, 0.0f}),
+                  place->fire_damage < 45 ? clock * 0.32f : 0.0f;
+    DrawCylinderEx(Vector3Add(hub, (Vector3){0.0f, 0.0f, -0.75f}),
+                    Vector3Add(hub, (Vector3){0.0f, 0.0f, 0.25f}),
                     0.18f, 0.18f, 8, WORLD_WOOD_SHADOW);
+    DrawBox((Vector3){87.0f, base + 0.08f, 28.85f},
+            (Vector3){3.8f, 0.10f, 0.72f}, WORLD_TEAL);
+    DrawBox((Vector3){89.5f, base + 0.08f, 28.85f},
+            (Vector3){2.0f, 0.10f, 0.72f}, WORLD_TEAL);
     for (int32_t blade = 0; blade < 12; ++blade) {
         float angle = phase + (float)blade * PI / 6.0f;
         float next = angle + PI / 6.0f;
         Vector3 rim = Vector3Add(hub,
-            (Vector3){0.0f, sinf(angle) * 1.8f, cosf(angle) * 1.8f});
+            (Vector3){cosf(angle) * 1.8f, sinf(angle) * 1.8f, 0.0f});
         Vector3 rim_next = Vector3Add(hub,
-            (Vector3){0.0f, sinf(next) * 1.8f, cosf(next) * 1.8f});
+            (Vector3){cosf(next) * 1.8f, sinf(next) * 1.8f, 0.0f});
         DrawCylinderEx(rim, rim_next, 0.12f, 0.12f, 5, WORLD_WOOD_SHADOW);
         DrawCylinderEx(hub, rim, 0.075f, 0.075f, 5, WORLD_WOOD);
-        DrawTiltedBox(rim, (Vector3){0.62f, 0.16f, 0.54f},
-                      (Vector3){1.0f, 0.0f, 0.0f}, -angle * RAD2DEG,
+        DrawTiltedBox(rim, (Vector3){0.16f, 0.54f, 0.62f},
+                      (Vector3){0.0f, 0.0f, 1.0f}, angle * RAD2DEG,
                       WORLD_WOOD);
     }
 }
@@ -3054,16 +3068,6 @@ static void DrawFarmTerrainStage(const CcSettlement *place, uint32_t conditions,
         }
     }
 
-    if (SceneryPointVisible(45.0f, 29.0f, focus)) {
-        for (int32_t terrace = 0; terrace < 3; ++terrace) {
-            float radius = 4.7f - (float)terrace * 0.72f;
-            float y = CcLocalTerrainHeightAt(45.0f, 29.5f) +
-                      0.03f + (float)terrace * 0.035f;
-            DrawCylinder((Vector3){45.0f, y, 29.5f},
-                         radius, radius, 0.06f, 20,
-                         terrace == 2 ? WORLD_CROP_LIGHT : WORLD_EARTH);
-        }
-    }
 }
 
 static void DrawMiningTerrainStage(Vector3 focus)
@@ -3679,7 +3683,7 @@ static void DrawThornfordBuildingLife(const WorldBuilding *building,
             float x = pad.x + pad.width * (0.14f + (float)scar * 0.22f);
             DrawBox((Vector3){x, building->height * 0.67f, front},
                     (Vector3){0.32f + (float)(scar % 2) * 0.20f,
-                              building->height * 0.64f, 0.04f}, WORLD_INK);
+                              building->height * 0.64f, 0.04f}, CC_VISUAL_PALETTE.cool_ink);
         }
     } else if (repaired) {
         DrawBox((Vector3){middle, building->height * 0.72f, front},
@@ -3698,12 +3702,27 @@ static void DrawThornfordBuildingLife(const WorldBuilding *building,
         }
     }
     if ((conditions & CC_TOWN_LAWLESS) != 0U) {
-        for (int32_t side = -1; side <= 1; side += 2) {
-            DrawTiltedBox((Vector3){middle + (float)side * pad.width * 0.28f,
-                                    1.65f, front + 0.10f},
-                          (Vector3){1.30f, 0.18f, 0.12f},
-                          (Vector3){0.0f, 0.0f, 1.0f}, (float)side * 18.0f,
-                          WORLD_WOOD_SHADOW);
+        Rectangle facade = pad;
+        if (index == 6) {
+            facade.height -= 0.9f;
+        } else if (building->style == CC_LOCAL_BUILDING_WORKSHOP) {
+            facade.x += pad.width * 0.20f;
+            facade.width *= 0.60f;
+        } else {
+            facade.width *= 0.70f;
+            if ((index & 1) != 0) facade.x += pad.width - facade.width;
+        }
+        int32_t bays = facade.width >= 10.0f ? 3 : 2;
+        for (int32_t bay = 0; bay < bays; ++bay) {
+            float x = facade.x + facade.width * (float)(bay + 1) / (float)(bays + 1);
+            if (building->door && fabsf(x - facade.x - facade.width * 0.5f) < 0.82f) continue;
+            for (int32_t board = -1; board <= 1; board += 2) {
+                DrawTiltedBox((Vector3){x, fminf(building->height * 0.56f, 2.90f),
+                                        facade.y + facade.height + 0.32f},
+                              (Vector3){1.30f, 0.24f, 0.12f},
+                              (Vector3){0.0f, 0.0f, 1.0f}, (float)board * 18.0f,
+                              CC_VISUAL_PALETTE.wood.light);
+            }
         }
     }
     if ((conditions & CC_TOWN_PEACEFUL) != 0U && !burnt) {
@@ -3757,19 +3776,19 @@ static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
         float building_base = TerrainFootprintHeight(building.footprint);
         rlTranslatef(0.0f, building_base, 0.0f);
         bool farming = profile->function == CC_SETTLEMENT_FARMING;
-        static const int32_t fire_rank[] = {4, 1, 7, 0, 6, 2, 3, 5};
+        static const int32_t fire_rank[] = {4, 2, 0, 1, 6, 5, 3, 7};
         bool burnt = farming && i < 8 &&
                      place->fire_damage > fire_rank[i] * 12 + 8;
         Color wall = BuildingWallColor(building.style, profile);
         Color roof = BuildingRoofColor(building.style, kingdom, profile);
         if (burnt) {
-            wall = BlendColor(wall, WORLD_INK, 0.70f);
-            roof = BlendColor(roof, WORLD_INK, 0.88f);
+            wall = BlendColor(wall, CC_VISUAL_PALETTE.cool_ink, 0.70f);
+            roof = BlendColor(roof, CC_VISUAL_PALETTE.cool_ink, 0.88f);
         }
         DrawSettlementBuilding(&building, wall, roof, profile, i);
         if (farming) {
             DrawThornfordBuildingLife(&building, conditions, burnt,
-                                      place->last_fire_day > 0, i);
+                                      place->last_fire_day > 0 && i < 8 && fire_rank[i] <= 4, i);
         }
         if (reveal > 0.05f) {
             float active_cut_world = reveal_cut_height +
@@ -3778,8 +3797,7 @@ static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
                 building.footprint.x, building.footprint.y,
                 building.footprint.width, building.footprint.height,
                 building.height, active_cut_world - building_base,
-                BuildingWallColor(building.style, profile),
-                BuildingRoofColor(building.style, kingdom, profile));
+                wall, roof);
         }
         rlPopMatrix();
     }
@@ -4062,7 +4080,9 @@ static Color CompoundStoneColor(const CcLocalPlaceProfile *profile,
     if (profile == NULL) return stone;
     switch (profile->function) {
         case CC_SETTLEMENT_FARMING:
-            return BlendColor(stone, WORLD_WOOD, 0.24f);
+            return kind == CC_LOCAL_COMPOUND_HALL ?
+                BlendColor(WORLD_STONE_LIGHT, WORLD_CROP_LIGHT, 0.28f) :
+                BlendColor(stone, WORLD_WOOD, 0.24f);
         case CC_SETTLEMENT_MINING:
             return BlendColor(stone, WORLD_METAL_SHADOW, 0.28f);
         case CC_SETTLEMENT_MARKET:
