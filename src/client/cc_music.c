@@ -69,7 +69,8 @@ CcMusicContext CcMusicContextFor(const CcSim *sim, CcMusicScene scene)
         }
     } else {
         AttractSettlement(&context, here, 1.0f);
-        if (here != NULL && !scene.road)
+        if (here != NULL && !scene.road && !sim->dungeon_expedition.active &&
+            !scene.goblin_cave && !scene.dragon_cave)
             CcMusicAttractPlace(&context, here->name, 0.35f);
     }
     context.theme[CC_MUSIC_NIGHT] = scene.night ? 0.75f : 0.0f;

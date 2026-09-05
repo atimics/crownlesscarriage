@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "date": "2026-09-05",
+  "status": "ready for listening review",
+  "model": "Suno v5.5",
+  "mode": "new instrumental",
+  "shared_style": "Lo-fi pixel fantasy, warm 16-bit sampler colour, soft tape movement, clear small melodies, space for dialogue.",
+  "selection_intent": {
+    "library": "Retain the existing music library and welcome familiar repeats.",
+    "location_anchors": "A few recognisable location themes lead arrivals and return during longer stays. The existing region and situation tracks play between those returns.",
+    "weighting": "Apply anchor preference when choosing a title. Keep take selection for alternate performances. Tune the balance by listening for place identity.",
+    "supernatural_encounters": "Wyrm, Dracolich and living dragon encounters each have a distinct motif, palette, rhythm and space. Direct encounter identity leads cue selection, followed by encounter phase.",
+    "lich_identity": "Dracolich: an undead dragon. Cold pipe organ, spectral tones and bone-like percussion express vast intelligence held together after death."
+  },
+  "towns": [
+    {
+      "town": "Thornford",
+      "title": "Thornford - Flour on the Windowsill - Town Trial",
+      "existing_cue": 8,
+      "existing_stem": "08-05",
+      "family": "road",
+      "style": "Pastoral folktronica",
+      "bpm": 76,
+      "meter": "6/8",
+      "key": "G major",
+      "motif": "A falling third, two small upward steps, then a long home note.",
+      "prompt": "Instrumental lo-fi pixel fantasy village theme for Thornford, a farming town beside a ford. Pastoral folktronica, 76 BPM in lilting 6/8, G major with gentle pentatonic turns. A wooden flute sample plays a new memorable tune: a falling third, two small upward steps, then a long home note. Thumb piano and plucked lute answer it. Soft brushed frame drum, round triangle bass, warm 16-bit sampler colour, light tape flutter. Flour on a windowsill, river water, neighbours sharing bread. Cheerful, earthy and intimate. State the tune in the first eight seconds, develop a quiet contrasting middle, return to the opening pulse. About three minutes, steady low intensity, soft edges, clear space for dialogue, instrumental throughout.",
+      "takes": [
+        {
+          "label": "A",
+          "duration_seconds": 106,
+          "status": "finished in Suno"
+        },
+        {
+          "label": "B",
+          "duration_seconds": 118,
+          "status": "finished in Suno"
+        }
+      ]
+    },
+    {
+      "town": "Gloamgate",
+      "title": "Gloamgate - Small Change, Tall Stories - Town Trial",
+      "existing_cue": 12,
+      "existing_stem": "12-05",
+      "family": "road",
+      "style": "Swung market groove",
+      "bpm": 96,
+      "meter": "4/4 swing",
+      "key": "A mixolydian",
+      "motif": "Three quick repeated notes, a sixth upward, then a crooked descending reply.",
+      "prompt": "Instrumental lo-fi pixel fantasy market theme for Gloamgate. Playful downtempo jazz and medieval street music, swung 4/4 at 96 BPM, A mixolydian. A dry plucked dulcimer plays a new catchy hook: three quick repeated notes, a sixth upward, then a crooked descending reply. Muted FM clarinet answers across the beat, warm electric piano chords, bouncy plucked bass, dusty brush drums and tiny coin-like ticks. 16-bit sampler colour and soft tape movement. Busy stalls, clever bargains, familiar faces, sly humour. The groove should feel nimble and human. Present the hook immediately, thin to bass and clarinet in the middle, return to the market bustle. Around three minutes, relaxed game underscore, room for dialogue, instrumental throughout.",
+      "takes": [
+        {
+          "label": "A",
+          "duration_seconds": 151,
+          "status": "finished in Suno"
+        },
+        {
+          "label": "B",
+          "duration_seconds": 134,
+          "status": "finished in Suno"
+        }
+      ]
+    },
+    {
+      "town": "Alderwatch",
+      "title": "Alderwatch - Boots on the Old Bridge - Town Trial",
+      "existing_cue": 16,
+      "existing_stem": "16-03",
+      "family": "iron",
+      "style": "Quiet electronic march",
+      "bpm": 84,
+      "meter": "4/4 straight",
+      "key": "D aeolian",
+      "motif": "Two low repeated notes, an open fifth upward, then a step down held across the bar.",
+      "prompt": "Instrumental lo-fi pixel fantasy fortress town theme for Alderwatch. A quiet electronic march at 84 BPM in straight 4/4, D aeolian with a warm F major middle. Muted sampled horn plays a new sturdy motif: two low repeated notes, an open fifth upward, then a step down held across the bar. Dry rim taps and soft marching toms, grainy cello, restrained square-wave counterline, deep rounded bass, worn 16-bit sampler texture. Boots on a stone bridge, patient guards, civilians coming home. Steady duty and restrained courage. Keep the pulse grounded and the melody plain enough to remember. Opening hook within eight seconds, a tender middle led by cello, return to the quiet march. About three minutes, even dynamics, space for conversation, instrumental throughout.",
+      "takes": [
+        {
+          "label": "A",
+          "duration_seconds": 119,
+          "status": "finished in Suno"
+        },
+        {
+          "label": "B",
+          "duration_seconds": 137,
+          "status": "finished in Suno"
+        }
+      ]
+    },
+    {
+      "town": "Silverwick",
+      "title": "Silverwick - Shift Change in Blue - Town Trial",
+      "existing_cue": 20,
+      "existing_stem": "20-01",
+      "family": "iron",
+      "style": "Industrial trip-hop",
+      "bpm": 72,
+      "meter": "4/4 half-time",
+      "key": "C dorian",
+      "motif": "A syncopated low note, a minor third upward, then two falling whole steps.",
+      "prompt": "Instrumental lo-fi pixel fantasy mining town theme for Silverwick. Mellow industrial trip-hop, 72 BPM in half-time 4/4, C dorian. A soft electric piano states a new bluesy working tune: a syncopated low note, a minor third upward, then two falling whole steps. Tuned iron bars answer the melody. Dusty broken drum groove, warm sub bass, short mechanical clicks, granular bowed metal at the edges. Worn 16-bit samples and gentle tape saturation. Shift change, tired hands, tea by the pit entrance, solidarity and quiet pride. The beat has weight and an easy pocket. Bring in the tune early, open a spacious bell passage midway, return to the groove. About three minutes, soft transients, steady listening level, space for dialogue, instrumental throughout.",
+      "takes": [
+        {
+          "label": "A",
+          "duration_seconds": 167,
+          "status": "finished in Suno"
+        },
+        {
+          "label": "B",
+          "duration_seconds": 157,
+          "status": "finished in Suno"
+        }
+      ]
+    },
+    {
+      "town": "Rosespire",
+      "title": "Rosespire - Petals in the Clockwork - Town Trial",
+      "existing_cue": 24,
+      "existing_stem": "24-01",
+      "family": "deep",
+      "style": "Baroque dream waltz",
+      "bpm": 90,
+      "meter": "3/4",
+      "key": "E-flat lydian",
+      "motif": "A rising broken major chord, a bright raised fourth, then a slow settling answer.",
+      "prompt": "Instrumental lo-fi pixel fantasy capital theme for Rosespire. A baroque dream waltz, 90 BPM in 3/4, E-flat lydian with suspended harmony. Soft sampled harpsichord introduces a new elegant motif: a rising broken major chord, a bright raised fourth, then a slow settling answer. Glassy FM celesta replies, chamber strings, a gentle plucked bass and brushed waltz pulse. Warm 16-bit sampler colour, delicate tape drift, small room reverb. Rose gardens, paper petitions, court manners and secret ambition. Graceful, curious, faintly uncanny. Melody enters in the first eight seconds, an intimate celesta middle, then a poised return. Around three minutes, light textures, restrained dynamics, comfortable under dialogue, instrumental throughout.",
+      "takes": [
+        {
+          "label": "A",
+          "duration_seconds": 101,
+          "status": "finished in Suno"
+        },
+        {
+          "label": "B",
+          "duration_seconds": 128,
+          "status": "finished in Suno"
+        }
+      ]
+    },
+    {
+      "town": "Hollowbarrow",
+      "title": "Hollowbarrow - One Lantern Left - Town Trial",
+      "existing_cue": 28,
+      "existing_stem": "28-01",
+      "family": "deep",
+      "style": "Warm dungeon ambient",
+      "bpm": 60,
+      "meter": "4/4 spacious",
+      "key": "B minor",
+      "motif": "A high held note, a drop of a sixth, then a questioning half-step upward.",
+      "prompt": "Instrumental lo-fi pixel fantasy frontier town theme for Hollowbarrow. Warm dungeon ambient with a sparse dub pulse, 60 BPM in spacious 4/4, B minor with occasional hopeful D major chords. A breathy ocarina sample introduces a new searching motif: a high held note, a drop of a sixth, then a questioning half-step upward. Soft marimba answers, deep triangle bass, a felted hand drum every other bar, distant granular strings, tiny lantern-like bell echoes. Dusty 16-bit sampler colour, gentle tape movement. An inn window above old tunnels, fragile safety, friendship and curiosity at the edge of the dark. State the tune early and leave long breathing spaces. A warmer middle returns to the lantern pulse. About three minutes, quiet sustained atmosphere, room for voices, instrumental throughout.",
+      "takes": [
+        {
+          "label": "A",
+          "duration_seconds": 193,
+          "status": "finished in Suno"
+        },
+        {
+          "label": "B",
+          "duration_seconds": 172,
+          "status": "finished in Suno"
+        }
+      ]
+    }
+  ],
+  "settings": {
+    "weirdness_percent": 50,
+    "style_influence_percent": 50,
+    "duration": "auto",
+    "lyrics": "empty for instrumental"
+  }
+}
