@@ -692,6 +692,8 @@ static const StreetCameraShot *StreetCameraShotAt(int32_t shot)
         scene->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST;
     ArtLightProfileId light = scene->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ?
         ART_LIGHT_ROAD_DUSK : ART_LIGHT_CLEAR_MARKET;
+    if (active_place_function == CC_SETTLEMENT_FARMING &&
+        scene->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL) light = ART_LIGHT_CLEAR_MARKET;
     if (scene->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
         light = active_place_function == CC_SETTLEMENT_MINING ||
                 active_place_function == CC_SETTLEMENT_DUNGEON_TOWN ?

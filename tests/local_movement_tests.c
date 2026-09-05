@@ -333,13 +333,29 @@ static void TestTownPlanCollisionAndGate(void)
         }
 
         float maximum_gate_grade = 0.0f;
-        float previous_gate_height = CcLocalTerrainHeightAt(78.50f, 54.0f);
-        for (float z = 53.50f; z >= 31.0f; z -= 0.50f) {
-            float gate_height = CcLocalTerrainHeightAt(78.50f, z);
-            maximum_gate_grade = fmaxf(
-                maximum_gate_grade,
-                fabsf(gate_height - previous_gate_height) / 0.50f);
-            previous_gate_height = gate_height;
+        const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(&sim.settlements[settlement]);
+        if (profile->lane_count > 0) {
+            const CcLocalLane *lane = &profile->lane[2];
+            CcLocalLanePoint previous = CcLocalLaneSample(lane, 0.0f);
+            for (int32_t sample = 1; sample <= 180; ++sample) {
+                CcLocalLanePoint point = CcLocalLaneSample(lane, (float)sample / 180.0f);
+                float distance = hypotf(point.x - previous.x, point.z - previous.z);
+                float difference = CcLocalTerrainHeightAt(point.x, point.z) -
+                    CcLocalTerrainHeightAt(previous.x, previous.z);
+                if (fabsf(difference) / distance > maximum_gate_grade && fabsf(difference) / distance > 0.14f) {
+                    fprintf(stderr, "gate grade at %.2f %.2f: %.3f\n", point.x, point.z, fabsf(difference) / distance);
+                }
+                maximum_gate_grade = fmaxf(maximum_gate_grade, fabsf(difference) / distance);
+                previous = point;
+            }
+        } else {
+            float previous_gate_height = CcLocalTerrainHeightAt(78.50f, 54.0f);
+            for (float z = 53.50f; z >= 31.0f; z -= 0.50f) {
+                float gate_height = CcLocalTerrainHeightAt(78.50f, z);
+                maximum_gate_grade = fmaxf(maximum_gate_grade,
+                    fabsf(gate_height - previous_gate_height) / 0.50f);
+                previous_gate_height = gate_height;
+            }
         }
         if (maximum_gate_grade > 0.14f) {
             (void)fprintf(

@@ -504,6 +504,23 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
              place->profile_scale);
     rlTranslatef(-48.0f, 0.0f, -36.0f);
 
+    if (profile->lane_count > 0) {
+        Color road_color = TerrainBrightRoadColor(CC_LOCAL_ROAD_FARM_TRACK,
+            (float)settlement->prosperity / 100.0f);
+        for (int32_t lane = 0; lane < profile->lane_count; ++lane) {
+            const CcLocalLane *path = &profile->lane[lane];
+            int32_t samples = (path->point_count - 1) * 8;
+            CcLocalLanePoint a = CcLocalLaneSample(path, 0.0f);
+            for (int32_t i = 1; i <= samples; ++i) {
+                CcLocalLanePoint b = CcLocalLaneSample(path, (float)i / (float)samples);
+                float lane_dx = b.x - a.x, lane_dz = b.z - a.z;
+                DrawTiltedBox((Vector3){(a.x + b.x) * 0.5f, 0.045f, (a.z + b.z) * 0.5f},
+                    (Vector3){path->width, 0.08f, hypotf(lane_dx, lane_dz) + 0.12f},
+                    (Vector3){0,1,0}, atan2f(lane_dx, lane_dz) * RAD2DEG, road_color);
+                a = b;
+            }
+        }
+    } else {
     for (int32_t road_index = 0;
          road_index < CC_LOCAL_PLACE_ROAD_COUNT; ++road_index) {
         const CcLocalPlaceRoad *road = &profile->road[road_index];
@@ -522,6 +539,8 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
                 TerrainPlaceRoadColor(road->surface));
     }
 
+    }
+
     for (int32_t building_index = 0;
          building_index < profile->building_count; ++building_index) {
         const CcLocalPlaceBuilding *source =
@@ -533,10 +552,13 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
             .style = (int32_t)source->style,
             .door = source->door,
         };
+        rlPushMatrix();
+        RotateBuildingPlot(building.footprint, profile->building_yaw_degrees[building_index]);
         DrawSettlementBuilding(
             &building, BuildingWallColor(building.style, profile),
             BuildingRoofColor(building.style, kingdom, profile),
             profile, building_index);
+        rlPopMatrix();
     }
 
     for (int32_t landmark_index = 0;

@@ -319,7 +319,7 @@ static float TerrainNaturalHeight(float x, float z)
         case CC_SETTLEMENT_FARMING: {
             float river_center = 91.0f + sinf(z * 0.082f) * 1.7f;
             float river_distance = (x - river_center) / 4.8f;
-            land -= 8.50f * expf(-river_distance * river_distance);
+            land -= 4.60f * expf(-river_distance * river_distance);
             land += TerrainLandform(x, z, 45.0f, 28.0f,
                                     25.0f, 17.0f) * 1.30f;
             land += TerrainLandform(x, z, 79.0f, 18.0f,
@@ -420,6 +420,92 @@ static float TerrainDistanceToRectangle(float x, float z,
     return sqrtf(dx * dx + dz * dz);
 }
 
+#define CC_LANE_SAMPLES ((CC_LOCAL_LANE_POINT_CAPACITY - 1) * 8 + 1)
+typedef struct TerrainLanePath {
+    Vector2 point[CC_LANE_SAMPLES];
+    float height[CC_LANE_SAMPLES];
+    Rectangle bounds;
+    float half_width;
+    int32_t count;
+} TerrainLanePath;
+static TerrainLanePath terrain_lanes[CC_LOCAL_LANE_CAPACITY];
+
+static float TerrainRectangleAverage(Rectangle footprint);
+
+static void TerrainBuildLanePaths(void)
+{
+    const CcLocalPlaceProfile *profile = ActivePlaceProfile();
+    for (int32_t lane = 0; lane < profile->lane_count; ++lane) {
+        TerrainLanePath *path = &terrain_lanes[lane];
+        const CcLocalLane *source = &profile->lane[lane];
+        path->count = (source->point_count - 1) * 8 + 1;
+        path->half_width = source->width * 0.5f;
+        Vector2 low = {FLT_MAX, FLT_MAX}, high = {-FLT_MAX, -FLT_MAX};
+        for (int32_t i = 0; i < path->count; ++i) {
+            CcLocalLanePoint point = CcLocalLaneSample(source,
+                (float)i / (float)(path->count - 1));
+            path->point[i] = (Vector2){point.x, point.z};
+            path->height[i] = TerrainNaturalHeight(point.x, point.z);
+            low.x = fminf(low.x, point.x); low.y = fminf(low.y, point.z);
+            high.x = fmaxf(high.x, point.x); high.y = fmaxf(high.y, point.z);
+        }
+        if (lane == 2) {
+            float distance[CC_LANE_SAMPLES] = {0};
+            for (int32_t i = 1; i < path->count; ++i) {
+                distance[i] = distance[i - 1] + Vector2Distance(path->point[i - 1], path->point[i]);
+            }
+            float start = path->height[0];
+            float finish = TerrainRectangleAverage(ActiveCompoundBounds());
+            float run = distance[path->count - 9];
+            for (int32_t i = 0; i < path->count; ++i) {
+                float t = TerrainClamp(distance[i] / fmaxf(run, 0.01f), 0.0f, 1.0f);
+                path->height[i] = start + (finish - start) * t;
+            }
+        }
+        float margin = path->half_width + 2.0f;
+        path->bounds = (Rectangle){low.x - margin, low.y - margin,
+            high.x - low.x + margin * 2.0f, high.y - low.y + margin * 2.0f};
+    }
+}
+
+/* The same sampled centre lines shape the ground, paint and wheel tracks. */
+static float TerrainLaneInset(float x, float z, float *elevation)
+{
+    float inset = -FLT_MAX;
+    for (int32_t lane = 0; lane < ActivePlaceProfile()->lane_count; ++lane) {
+        const TerrainLanePath *path = &terrain_lanes[lane];
+        if (x < path->bounds.x || z < path->bounds.y ||
+            x > path->bounds.x + path->bounds.width ||
+            z > path->bounds.y + path->bounds.height) continue;
+        for (int32_t i = 1; i < path->count; ++i) {
+            Vector2 a = path->point[i - 1], b = path->point[i];
+            float dx = b.x - a.x, dz = b.y - a.y;
+            float length2 = dx * dx + dz * dz;
+            float t = length2 > 0.0001f ? TerrainClamp(
+                ((x - a.x) * dx + (z - a.y) * dz) / length2, 0.0f, 1.0f) : 0.0f;
+            float distance = hypotf(x - a.x - t * dx, z - a.y - t * dz);
+            float candidate = path->half_width - distance;
+            if (candidate <= inset) continue;
+            inset = candidate;
+            if (elevation != NULL) *elevation = path->height[i - 1] +
+                (path->height[i] - path->height[i - 1]) * t;
+        }
+    }
+    return inset;
+}
+
+static Vector2 BuildingUnrotatedPoint(int32_t index, float x, float z)
+{
+    if (index < 0 || index >= ActiveWorldBuildingCount()) return (Vector2){x, z};
+    WorldBuilding building = ActiveWorldBuildingAt(index);
+    float cx = building.footprint.x + building.footprint.width * 0.5f;
+    float cz = building.footprint.y + building.footprint.height * 0.5f;
+    float angle = ActivePlaceProfile()->building_yaw_degrees[index] * DEG2RAD;
+    float c = cosf(angle), s = sinf(angle);
+    return (Vector2){cx + c * (x - cx) - s * (z - cz),
+                     cz + s * (x - cx) + c * (z - cz)};
+}
+
 static float TerrainRoadProfile(const TerrainRoad *road, float x, float z)
 {
     float total = 0.0f;
@@ -442,8 +528,9 @@ static bool TerrainPointInsideMajorFoundation(float x, float z)
 {
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         Rectangle footprint = ActiveWorldBuildingAt(i).footprint;
-        if (x >= footprint.x && x <= footprint.x + footprint.width &&
-            z >= footprint.y && z <= footprint.y + footprint.height) {
+        Vector2 local = BuildingUnrotatedPoint(i, x, z);
+        if (local.x >= footprint.x && local.x <= footprint.x + footprint.width &&
+            local.y >= footprint.y && local.y <= footprint.y + footprint.height) {
             return true;
         }
     }
@@ -659,6 +746,61 @@ static float TerrainKeepRise(void)
     return 2.20f;
 }
 
+static void TerrainGradeLaneVillage(void)
+{
+    float keep_elevation = TerrainRectangleAverage(ActiveCompoundBounds());
+    TerrainBuildLanePaths();
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            float z = (float)row * CC_TERRAIN_CELL_SIZE;
+            float elevation = 0.0f;
+            float inset = TerrainLaneInset(x, z, &elevation);
+            if (inset < -1.8f) continue;
+            float weight = TerrainSmooth01((inset + 1.8f) / 1.8f);
+            int32_t slot = TerrainIndex(column, row);
+            street_terrain_height[slot] +=
+                (elevation - street_terrain_height[slot]) * weight;
+        }
+    }
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        Rectangle pad = ActiveWorldBuildingAt(i).footprint;
+        float elevation = TerrainRectangleAverage(pad);
+        for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+            for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+                float x = (float)column * CC_TERRAIN_CELL_SIZE;
+                float z = (float)row * CC_TERRAIN_CELL_SIZE;
+                Vector2 local = BuildingUnrotatedPoint(i, x, z);
+                float distance = TerrainDistanceToRectangle(local.x, local.y, pad);
+                if (distance >= 1.6f) continue;
+                float weight = TerrainSmooth01(1.0f - distance / 1.6f);
+                int32_t slot = TerrainIndex(column, row);
+                street_terrain_height[slot] +=
+                    (elevation - street_terrain_height[slot]) * weight;
+            }
+        }
+    }
+    Rectangle keep = ActiveCompoundBounds();
+    TerrainGradePad(keep, keep_elevation, 2.8f);
+    for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
+        Rectangle pad = PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i));
+        TerrainGradePad(pad, TerrainRectangleAverage(pad), 1.3f);
+    }
+    TerrainGradePad(CARRIAGE_FOOTPRINT, TerrainRectangleAverage(CARRIAGE_FOOTPRINT), 1.4f);
+    TerrainGradePad(DUNGEON_FOOTPRINT, TerrainRectangleAverage(DUNGEON_FOOTPRINT), 1.3f);
+    TerrainGradePad((Rectangle){1, 0, 14.6f, 11.1f}, 0.0f, 2.2f);
+    TerrainGradeNorthSouthRamp((Rectangle){7.45f, 10.5f, 1.8f, 16.25f}, 0.0f,
+        TerrainSampleGrid(street_terrain_height, 8.35f, 26.5f));
+    TerrainGradeNorthSouthRamp((Rectangle){14.65f, 10.5f, 3.5f, 16.6f}, 0.0f,
+        TerrainSampleGrid(street_terrain_height, 16.4f, 26.85f));
+    float west = TerrainSampleGrid(street_terrain_height, 83.5f, 34.0f);
+    float east = TerrainSampleGrid(street_terrain_height, 96.0f, 34.0f);
+    float bridge = fmaxf(west, east) + 0.18f;
+    TerrainGradeEastWestRamp((Rectangle){81, 31.75f, 2.5f, 4.5f},
+        TerrainSampleGrid(street_terrain_height, 81, 34), bridge);
+    TerrainGradeEastWestRamp((Rectangle){83.5f, 31.75f, 12.5f, 4.5f}, bridge, bridge);
+}
+
 static void TerrainGenerate(void)
 {
     for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
@@ -669,6 +811,11 @@ static void TerrainGenerate(void)
             street_terrain_natural[index] = TerrainNaturalHeight(x, z);
             street_terrain_height[index] = street_terrain_natural[index];
         }
+    }
+    if (ActivePlaceProfile()->lane_count > 0) {
+        TerrainGradeLaneVillage();
+        street_terrain_ready = true;
+        return;
     }
     for (int32_t road = 0;
          road < (int32_t)(sizeof(TERRAIN_ROADS) /
@@ -1038,7 +1185,7 @@ typedef CcCollisionBox LocalCollisionBox;
 
 static void AddTownCollisionBox(const CcWorldManifest *manifest,
                                 const CcWorldSettlementPlacement *place,
-                                Rectangle footprint, float height,
+                                Rectangle footprint, float height, float yaw_degrees,
                                 LocalCollisionBox *boxes, int32_t *count)
 {
     if (height <= 0.0f || footprint.width <= 0.0f || footprint.height <= 0.0f ||
@@ -1053,7 +1200,7 @@ static void AddTownCollisionBox(const CcWorldManifest *manifest,
         .minimum = {center.x - half_x, base, center.z - half_z},
         .maximum = {center.x + half_x, base + height * place->profile_scale,
                     center.z + half_z},
-        .yaw = place->entrance_heading_yaw - 0.5f * PI,
+        .yaw = place->entrance_heading_yaw - 0.5f * PI + yaw_degrees * DEG2RAD,
     };
 }
 
@@ -1072,20 +1219,21 @@ static int32_t GatherTownCollisionBoxes(const CcWorldManifest *manifest,
             const CcLocalPlaceBuilding *building = &profile->building[i];
             AddTownCollisionBox(manifest, place,
                 (Rectangle){building->x, building->z, building->width,
-                             building->depth}, building->height, boxes, &count);
+                             building->depth}, building->height,
+                profile->building_yaw_degrees[i], boxes, &count);
         }
         for (int32_t i = 0; i < profile->compound_structure_count; ++i) {
             const CcLocalPlaceCompoundStructure *structure =
                 &profile->compound_structure[i];
             AddTownCollisionBox(manifest, place,
                 (Rectangle){structure->x, structure->z, structure->width,
-                             structure->depth}, structure->height, boxes, &count);
+                             structure->depth}, structure->height, 0.0f, boxes, &count);
         }
         for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
             const CcLocalPlaceLandmark *landmark = &profile->landmark[i];
             AddTownCollisionBox(manifest, place,
                 (Rectangle){landmark->x, landmark->z, landmark->width,
-                             landmark->depth}, landmark->height, boxes, &count);
+                             landmark->depth}, landmark->height, 0.0f, boxes, &count);
         }
     }
     return count;
@@ -1145,7 +1293,8 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         WorldBuilding building = ActiveWorldBuildingAt(i);
 
-        if (CircleTouchesFootprint(x, z, radius,
+        Vector2 local = BuildingUnrotatedPoint(i, x, z);
+        if (CircleTouchesFootprint(local.x, local.y, radius,
                                    building.footprint)) return true;
     }
     for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
@@ -1606,9 +1755,12 @@ static int32_t GatherLocalCollisionBoxes(const LocalProbeContext *context,
     for (int32_t building = 0;
          building < ActiveWorldBuildingCount(); ++building) {
         WorldBuilding world = ActiveWorldBuildingAt(building);
+        int32_t previous_count = count;
         AddLocalCollisionBox(boxes, &count, world.footprint,
                              TerrainFootprintHeight(world.footprint),
                              world.height);
+        if (count > previous_count) boxes[count - 1].yaw =
+            ActivePlaceProfile()->building_yaw_degrees[building] * DEG2RAD;
     }
     for (int32_t structure = 0;
          structure < ActiveCompoundStructureCount(); ++structure) {

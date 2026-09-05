@@ -1,4 +1,6 @@
 #include "client/cc_local3d.h"
+#include "client/cc_local3d_internal.h"
+#include "client/cc_local_place.h"
 #include "test_support.h"
 
 #include <float.h>
@@ -193,6 +195,35 @@ static void TestFootstepSurfaces(void)
     CcLocalBindPlace(NULL);
 }
 
+static void TestCurvedVillageRoads(void)
+{
+    static CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcLocalBindOpenWorld(NULL);
+    sim.player.location_id = sim.settlements[0].id;
+    CcLocalBindPlace(&sim);
+    const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(&sim.settlements[0]);
+    CC_CHECK(profile->lane_count > 0);
+    for (int32_t lane = 0; lane < 3; ++lane) {
+        const CcLocalLane *path = &profile->lane[lane];
+        CcLocalLanePoint previous = CcLocalLaneSample(path, 0.0f);
+        for (int32_t i = 1; i <= 180; ++i) {
+            CcLocalLanePoint point = CcLocalLaneSample(path, (float)i / 180.0f);
+            CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, point.x, point.z) == CC_SOUND_STEP_DIRT);
+            Vector3 start = {previous.x, CcLocalTerrainHeightAt(previous.x, previous.z), previous.z};
+            Vector3 end = {point.x, CcLocalTerrainHeightAt(point.x, point.z), point.z};
+            Vector3 corrected, normal;
+            CC_CHECK(!CcLocalMoveCapsuleInternal(CC_LOCAL_SCENE_STREET,
+                start, end, 0.24f, &corrected, &normal));
+            CC_CHECK(CcLocalTerrainNormalAt(point.x, point.z).y > 0.82f);
+            previous = point;
+        }
+    }
+    CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 78.5f, 50.0f) == CC_SOUND_STEP_GRASS);
+    CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 41.5f, 15.0f) == CC_SOUND_STEP_GRASS);
+    CcLocalBindPlace(NULL);
+}
+
 int main(void)
 {
     if (TestSeededTerrain() != 0) return 1;
@@ -200,5 +231,6 @@ int main(void)
     if (TestSocietyUsesLocalFoundations() != 0) return 1;
     if (TestWalkingFollowsTheLand() != 0) return 1;
     TestFootstepSurfaces();
+    TestCurvedVillageRoads();
     return 0;
 }

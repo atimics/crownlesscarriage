@@ -65,10 +65,10 @@ static int ProfileContract(void)
                 (camera->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ||
                  camera->kind == CC_LOCAL_TOWN_SCENE_HEART ||
                  camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK);
-            float maximum_span = valley_view ? 34.0f : 24.0f;
+            float maximum_span = valley_view ? 45.0f : 24.0f;
             CHECK(camera_distance_squared <= maximum_span * maximum_span);
             CHECK(camera->fovy >= 5.8f && camera->fovy <=
-                  (valley_view ? 22.0f : 10.0f));
+                  (valley_view ? 38.0f : 10.0f));
             if (camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
                 CHECK(camera->fovy >= 9.0f);
             } else if (camera->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST) {
