@@ -2693,7 +2693,10 @@ static void DrawContactShadow(Vector3 center, float width, float depth,
             center.y,
             center.z - local_bx * yaw_sin + local_bz * yaw_cos,
         };
+        // Keep the contact dark beneath the feet and fade toward the ground.
+        rlColor4ub(color.r, color.g, color.b, color.a);
         rlVertex3f(center.x, center.y, center.z);
+        rlColor4ub(color.r, color.g, color.b, 0);
         rlVertex3f(edge_b.x, edge_b.y, edge_b.z);
         rlVertex3f(edge_a.x, edge_a.y, edge_a.z);
     }

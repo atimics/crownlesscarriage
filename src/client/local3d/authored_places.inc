@@ -22,8 +22,8 @@ static void DrawScenerySphere(Vector3 center, float radius, Color color)
 
 static void DrawBox(Vector3 center, Vector3 size, Color color)
 {
+    // Face lighting and painted material seams define the small forms.
     DrawCubeV(center, size, color);
-    DrawCubeWiresV(center, size, Fade(WORLD_INK, 0.18f));
 }
 
 static Color ShadeColor(Color color, float scale)

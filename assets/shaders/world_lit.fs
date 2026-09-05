@@ -141,8 +141,9 @@ void main()
     light += vec3(0.19, 0.11, 0.065) * max(-normal.y, 0.0) * 0.07;
     float smoothDiffuse = key * 0.48 + wrap * 0.20;
     float diffuse = smoothDiffuse;
-    float paintedDiffuse = diffuse < 0.18 ? 0.0 :
-                           diffuse < 0.48 ? 0.34 : 0.68;
+    float paintedDiffuse = diffuse < 0.16 ? 0.06 :
+                           diffuse < 0.36 ? 0.28 :
+                           diffuse < 0.54 ? 0.52 : 0.76;
     float terrainDiffuse = smoothDiffuse < 0.18 ? 0.08 :
                            smoothDiffuse < 0.40 ? 0.30 :
                            smoothDiffuse < 0.58 ? 0.49 : 0.67;
@@ -163,7 +164,7 @@ void main()
         facadeCoordinate * vec2(0.34, 0.48) + vec2(7.0, 19.0)) - 0.5;
     float facadeChip = cellNoise(
         facadeCoordinate * vec2(0.92, 0.22) + vec2(31.0, 5.0)) - 0.5;
-    float facadeVariation = (facadePatch * 0.050 + facadeChip * 0.018) *
+    float facadeVariation = (facadePatch * 0.090 + facadeChip * 0.024) *
                             structureVertical * (1.0 - isTerrain);
     float variation = blockVariation * 0.026 * (1.0 - isTerrain);
     variation += facadeVariation;
@@ -233,7 +234,18 @@ void main()
             step(0.09, roofCoursePhase) *
             (1.0 - step(0.18, roofCoursePhase));
 
-        float wallSurface = structureVertical *
+        // Warm timber uses long grain; stone keeps its broken mortar courses.
+        float timber = smoothstep(0.025, 0.11, albedo.r - albedo.g) *
+                       (1.0 - smoothstep(0.40, 0.62, albedoValue));
+        vec2 grainPoint = facadeCoordinate * vec2(6.0, 0.42);
+        float grain = cellNoise(grainPoint + vec2(17.0, 43.0));
+        float grainResolution = 1.0 - smoothstep(
+            0.35, 1.10, max(fwidth(grainPoint.x), fwidth(grainPoint.y)));
+        float timberSurface = timber * structureVertical * detailPresence;
+        color *= 1.0 + (grain - 0.5) * timberSurface *
+                         grainResolution * 0.16;
+
+        float wallSurface = structureVertical * (1.0 - timber) *
                             smoothstep(0.12, 0.34, albedoValue);
         float wallAlong = mix(fragPosition.x, fragPosition.z, normalAxis);
         float wallCourseCoordinate = max(fragPosition.y, 0.0) * 1.08;
@@ -309,7 +321,7 @@ void main()
     vec3 quietBackground = mix(vec3(luminance) * vec3(0.84, 0.94, 1.06),
                                fogColor + vec3(0.055), 0.42);
     color = mix(color, quietBackground, backgroundWeight * 0.48);
-    float foregroundDarkening = mix(0.16, 0.10, isTerrain);
+    float foregroundDarkening = mix(0.10, 0.055, isTerrain);
     color *= 1.0 - foreground * depthStrength * foregroundDarkening;
 
     vec2 axis = length(storyAxis) > 0.001 ? normalize(storyAxis) :

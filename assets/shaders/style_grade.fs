@@ -157,6 +157,6 @@ void main()
 
     // Retain painted shading between the shared palette's anchor colours.
     color = mix(clamp(color, 0.0, 1.0),
-                nearestPaletteColor(clamp(color, 0.0, 1.0)), 0.30);
+                nearestPaletteColor(clamp(color, 0.0, 1.0)), 0.45);
     finalColor = vec4(color, 1.0);
 }
