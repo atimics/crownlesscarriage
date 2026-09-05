@@ -539,6 +539,10 @@ typedef struct VisualStyleCache {
     int32_t horizon_fog_location;
     int32_t weather_wetness_location;
     bool world_ready;
+    bool foreground_reveal_valid;
+    float foreground_reveal;
+    float foreground_cut_height;
+    bool terrain_surface;
     PaintedEnvironmentStyle painted_environment;
     Shader foliage;
     int32_t foliage_light_direction_location;
@@ -2839,8 +2843,16 @@ static void SetWorldForegroundReveal(float amount, float cut_height)
 {
     if (!visual_style.world_ready) return;
 
-    rlDrawRenderBatchActive();
     float active = fmaxf(0.0f, fminf(amount, 1.0f));
+    if (visual_style.foreground_reveal_valid &&
+        visual_style.foreground_reveal == active &&
+        (active == 0.0f || visual_style.foreground_cut_height == cut_height)) {
+        return;
+    }
+    rlDrawRenderBatchActive();
+    visual_style.foreground_reveal_valid = true;
+    visual_style.foreground_reveal = active;
+    visual_style.foreground_cut_height = cut_height;
     SetShaderValue(visual_style.world,
                    visual_style.foreground_reveal_location,
                    &active, SHADER_UNIFORM_FLOAT);
@@ -2861,9 +2873,12 @@ static void SetWorldForegroundReveal(float amount, float cut_height)
 
 static void SetWorldTerrainSurface(bool enabled)
 {
-    if (!visual_style.world_ready) return;
+    if (!visual_style.world_ready || visual_style.terrain_surface == enabled) {
+        return;
+    }
 
     rlDrawRenderBatchActive();
+    visual_style.terrain_surface = enabled;
     float active = enabled ? 1.0f : 0.0f;
     SetShaderValue(visual_style.world,
                    visual_style.terrain_surface_location,

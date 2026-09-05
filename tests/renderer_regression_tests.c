@@ -135,6 +135,7 @@ static void WriteViewportFixture(const char *path)
     UnloadImage(shot);
 }
 
+#include "box_batch_tests.inc"
 #include "character_material_captures.inc"
 #include "character_surface_tests.inc"
 #include "animal_captures.inc"
@@ -150,6 +151,9 @@ int main(int argc, char **argv)
         CcLocalRendererInit();
         if (strcmp(argv[1], "--graphics") == 0) {
             TestCharacterPrimitives();
+            TestBoxBatchParity();
+            TestBoxStateParity();
+            ReportBoxDrawPerformance();
             TestCharacterSurfaces();
             TestAnimalModels(argv[2]);
             TestPonyPortraits();
