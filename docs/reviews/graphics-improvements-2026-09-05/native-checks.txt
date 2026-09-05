@@ -1,181 +1,181 @@
 Test project /private/tmp/crownless-graphics-improvements-20260905/out/graphics
       Start 25: browser_music_download_and_cache
       Start 33: shared_carriage_server
-      Start 14: deterministic_simulation
       Start 86: local_collision_space
- 1/88 Test #14: deterministic_simulation ..............   Passed    3.00 sec
+      Start 14: deterministic_simulation
+ 1/88 Test #14: deterministic_simulation ..............   Passed    2.67 sec
       Start 37: osr_long_run_balance
- 2/88 Test #33: shared_carriage_server ................   Passed    3.10 sec
-      Start 39: sqlite_round_trip
- 3/88 Test #39: sqlite_round_trip .....................   Passed    1.99 sec
-      Start 26: native_shared_company
- 4/88 Test #37: osr_long_run_balance ..................   Passed    2.19 sec
+ 2/88 Test #33: shared_carriage_server ................   Passed    2.90 sec
       Start 68: adventure_town_routes
- 5/88 Test #26: native_shared_company .................   Passed    1.96 sec
+ 3/88 Test #37: osr_long_run_balance ..................   Passed    2.16 sec
+      Start 39: sqlite_round_trip
+ 4/88 Test #68: adventure_town_routes .................   Passed    2.82 sec
+      Start 26: native_shared_company
+ 5/88 Test #39: sqlite_round_trip .....................   Passed    1.92 sec
       Start  5: native_speech_delivery
- 6/88 Test #86: local_collision_space .................   Passed    7.37 sec
+ 6/88 Test #86: local_collision_space .................   Passed    7.00 sec
       Start 32: shared_carriage_bridge
- 7/88 Test #25: browser_music_download_and_cache ......   Passed    8.24 sec
+ 7/88 Test #26: native_shared_company .................   Passed    1.95 sec
       Start  8: speech_worker_and_cache
- 8/88 Test #68: adventure_town_routes .................   Passed    3.11 sec
+ 8/88 Test #25: browser_music_download_and_cache ......   Passed    8.20 sec
       Start  6: audio_exports_and_voice_assets
- 9/88 Test #32: shared_carriage_bridge ................   Passed    1.31 sec
+ 9/88 Test #32: shared_carriage_bridge ................   Passed    1.27 sec
       Start 22: web_speech_delivery
-10/88 Test  #5: native_speech_delivery ................   Passed    1.92 sec
+10/88 Test  #5: native_speech_delivery ................   Passed    1.86 sec
       Start 45: causal_history_retention
-11/88 Test  #6: audio_exports_and_voice_assets ........   Passed    0.85 sec
-      Start 87: character_collision_course
-12/88 Test #87: character_collision_course ............   Passed    0.28 sec
+11/88 Test  #6: audio_exports_and_voice_assets ........   Passed    0.84 sec
       Start 81: renderer_skin_rotation
-13/88 Test #22: web_speech_delivery ...................   Passed    0.80 sec
-      Start 55: town_evolution
-14/88 Test #45: causal_history_retention ..............   Passed    0.53 sec
+12/88 Test  #8: speech_worker_and_cache ...............   Passed    1.37 sec
       Start 88: seeded_hilly_terrain
-15/88 Test #55: town_evolution ........................   Passed    0.07 sec
-      Start 57: simulation_shape_metrics
-16/88 Test  #8: speech_worker_and_cache ...............   Passed    1.38 sec
-      Start 21: free_road_departures
-17/88 Test #57: simulation_shape_metrics ..............   Passed    0.16 sec
-      Start 42: persistent_underroad_expeditions
-18/88 Test #42: persistent_underroad_expeditions ......   Passed    0.08 sec
-      Start 41: persistent_route_knowledge
-19/88 Test #21: free_road_departures ..................   Passed    0.18 sec
-      Start 44: living_world_feedback
-20/88 Test #41: persistent_route_knowledge ............   Passed    0.15 sec
-      Start 38: rainbow_pony_companions
-21/88 Test #44: living_world_feedback .................   Passed    0.16 sec
-      Start 35: horse_cattle_and_flock_economy
-22/88 Test #35: horse_cattle_and_flock_economy ........   Passed    0.03 sec
-      Start 46: goblin_dragon_causal_cycle
-23/88 Test #38: rainbow_pony_companions ...............   Passed    0.12 sec
-      Start 47: goblin_society_choices
-24/88 Test #46: goblin_dragon_causal_cycle ............   Passed    0.13 sec
-      Start 53: text_first_metagame
-25/88 Test #47: goblin_society_choices ................   Passed    0.12 sec
-      Start 20: roadside_camp_choices
-26/88 Test #88: seeded_hilly_terrain ..................   Passed    0.69 sec
-      Start 16: speech_identity_and_words
-27/88 Test #16: speech_identity_and_words .............   Passed    0.11 sec
+13/88 Test #22: web_speech_delivery ...................   Passed    0.79 sec
       Start 66: storybook_travel_boundaries
-28/88 Test #20: roadside_camp_choices .................   Passed    0.15 sec
-      Start 19: local_session_round_trip
-29/88 Test #19: local_session_round_trip ..............   Passed    0.01 sec
-      Start 54: distinct_local_places
-30/88 Test #54: distinct_local_places .................   Passed    0.01 sec
-      Start 49: physical_material_economy
-31/88 Test #49: physical_material_economy .............   Passed    0.00 sec
+14/88 Test #45: causal_history_retention ..............   Passed    0.54 sec
+      Start 57: simulation_shape_metrics
+15/88 Test #57: simulation_shape_metrics ..............   Passed    0.17 sec
+      Start 21: free_road_departures
+16/88 Test #66: storybook_travel_boundaries ...........   Passed    0.30 sec
+      Start 87: character_collision_course
+17/88 Test #21: free_road_departures ..................   Passed    0.18 sec
+      Start 41: persistent_route_knowledge
+18/88 Test #41: persistent_route_knowledge ............   Passed    0.16 sec
+      Start 44: living_world_feedback
+19/88 Test #87: character_collision_course ............   Passed    0.39 sec
+      Start 53: text_first_metagame
+20/88 Test #88: seeded_hilly_terrain ..................   Passed    0.72 sec
       Start 40: royal_carriage_trade
-32/88 Test #53: text_first_metagame ...................   Passed    0.22 sec
-      Start 48: dragon_crown_ecology
-33/88 Test #48: dragon_crown_ecology ..................   Passed    0.06 sec
+21/88 Test #44: living_world_feedback .................   Passed    0.16 sec
+      Start 42: persistent_underroad_expeditions
+22/88 Test #42: persistent_underroad_expeditions ......   Passed    0.09 sec
+      Start 38: rainbow_pony_companions
+23/88 Test #40: royal_carriage_trade ..................   Passed    0.19 sec
+      Start 46: goblin_dragon_causal_cycle
+24/88 Test #53: text_first_metagame ...................   Passed    0.22 sec
+      Start 20: roadside_camp_choices
+25/88 Test #81: renderer_skin_rotation ................   Passed    0.98 sec
+      Start 47: goblin_society_choices
+26/88 Test #38: rainbow_pony_companions ...............   Passed    0.13 sec
+      Start 16: speech_identity_and_words
+27/88 Test #46: goblin_dragon_causal_cycle ............   Passed    0.12 sec
       Start 51: traveler_gossip_network
-34/88 Test #81: renderer_skin_rotation ................   Passed    1.08 sec
+28/88 Test #20: roadside_camp_choices .................   Passed    0.18 sec
+      Start 35: horse_cattle_and_flock_economy
+29/88 Test #47: goblin_society_choices ................   Passed    0.13 sec
+      Start 55: town_evolution
+30/88 Test #16: speech_identity_and_words .............   Passed    0.11 sec
       Start 30: simulation_runner_resume
-35/88 Test #40: royal_carriage_trade ..................   Passed    0.26 sec
-      Start 50: material_chain_proofs
-36/88 Test #51: traveler_gossip_network ...............   Passed    0.20 sec
-      Start  4: audio_playback_lifetime
-37/88 Test #50: material_chain_proofs .................   Passed    0.00 sec
-      Start 43: empty_granary_scenario
-38/88 Test #43: empty_granary_scenario ................   Passed    0.00 sec
-      Start 56: finite_world_streaming
-39/88 Test  #4: audio_playback_lifetime ...............   Passed    0.00 sec
-      Start  2: streamed_music_and_offline_fallback
-40/88 Test  #2: streamed_music_and_offline_fallback ...   Passed    0.01 sec
-      Start  1: situation_music_and_fades
-41/88 Test  #1: situation_music_and_fades .............   Passed    0.02 sec
-      Start 52: grain_food_economy
-42/88 Test #52: grain_food_economy ....................   Passed    0.00 sec
-      Start 36: horse_stable_breeding
-43/88 Test #30: simulation_runner_resume ..............   Passed    0.15 sec
-      Start 84: perceptual_visual_palette
-44/88 Test #84: perceptual_visual_palette .............   Passed    0.01 sec
-      Start 17: quest_fronts_and_clocks
-45/88 Test #36: horse_stable_breeding .................   Passed    0.04 sec
+31/88 Test #35: horse_cattle_and_flock_economy ........   Passed    0.05 sec
+      Start 19: local_session_round_trip
+32/88 Test #19: local_session_round_trip ..............   Passed    0.00 sec
+      Start 48: dragon_crown_ecology
+33/88 Test #55: town_evolution ........................   Passed    0.09 sec
+      Start 54: distinct_local_places
+34/88 Test #48: dragon_crown_ecology ..................   Passed    0.04 sec
       Start 85: dynamic_kingdom_heraldry
-46/88 Test #66: storybook_travel_boundaries ...........   Passed    0.41 sec
-      Start 59: continuous_character_collision
-47/88 Test #59: continuous_character_collision ........   Passed    0.00 sec
+35/88 Test #54: distinct_local_places .................   Passed    0.01 sec
+      Start 56: finite_world_streaming
+36/88 Test #51: traveler_gossip_network ...............   Passed    0.17 sec
+      Start 49: physical_material_economy
+37/88 Test #49: physical_material_economy .............   Passed    0.01 sec
+      Start 50: material_chain_proofs
+38/88 Test #50: material_chain_proofs .................   Passed    0.01 sec
+      Start  4: audio_playback_lifetime
+39/88 Test  #4: audio_playback_lifetime ...............   Passed    0.01 sec
+      Start 43: empty_granary_scenario
+40/88 Test #43: empty_granary_scenario ................   Passed    0.01 sec
+      Start 36: horse_stable_breeding
+41/88 Test #30: simulation_runner_resume ..............   Passed    0.15 sec
+      Start  1: situation_music_and_fades
+42/88 Test #36: horse_stable_breeding .................   Passed    0.04 sec
+      Start  2: streamed_music_and_offline_fallback
+43/88 Test  #1: situation_music_and_fades .............   Passed    0.03 sec
+      Start 17: quest_fronts_and_clocks
+44/88 Test  #2: streamed_music_and_offline_fallback ...   Passed    0.01 sec
+      Start 52: grain_food_economy
+45/88 Test #52: grain_food_economy ....................   Passed    0.00 sec
+      Start 84: perceptual_visual_palette
+46/88 Test #84: perceptual_visual_palette .............   Passed    0.01 sec
+      Start 83: deterministic_npc_population
+47/88 Test #17: quest_fronts_and_clocks ...............   Passed    0.03 sec
       Start 18: encounter_loot_tables
-48/88 Test #17: quest_fronts_and_clocks ...............   Passed    0.03 sec
+48/88 Test #18: encounter_loot_tables .................   Passed    0.01 sec
       Start 15: authored_story_beats
 49/88 Test #15: authored_story_beats ..................   Passed    0.00 sec
       Start 60: generalized_biomechanical_system
-50/88 Test #18: encounter_loot_tables .................   Passed    0.01 sec
+50/88 Test #56: finite_world_streaming ................   Passed    0.12 sec
       Start 65: generated_creature_catalog
 51/88 Test #65: generated_creature_catalog ............   Passed    0.00 sec
       Start 64: layered_motion_contract
 52/88 Test #60: generalized_biomechanical_system ......   Passed    0.01 sec
       Start 13: benchmark_rejects_day_overflow
 53/88 Test #13: benchmark_rejects_day_overflow ........   Passed    0.00 sec
-      Start 83: deterministic_npc_population
-54/88 Test #64: layered_motion_contract ...............   Passed    0.00 sec
       Start 63: blender_quadruped_skin_contract
-55/88 Test #63: blender_quadruped_skin_contract .......   Passed    0.00 sec
+54/88 Test #64: layered_motion_contract ...............   Passed    0.01 sec
       Start 58: generalized_limb_system
-56/88 Test #58: generalized_limb_system ...............   Passed    0.01 sec
+55/88 Test #63: blender_quadruped_skin_contract .......   Passed    0.00 sec
       Start 62: blender_humanoid_skin_contract
-57/88 Test #62: blender_humanoid_skin_contract ........   Passed    0.00 sec
-      Start 61: creature_skeletal_muscular_system
-58/88 Test #56: finite_world_streaming ................   Passed    0.13 sec
+56/88 Test #62: blender_humanoid_skin_contract ........   Passed    0.00 sec
       Start 71: adventure_input_flow
+57/88 Test #58: generalized_limb_system ...............   Passed    0.01 sec
+      Start 72: title_and_pause_menu
+58/88 Test #85: dynamic_kingdom_heraldry ..............   Passed    0.19 sec
+      Start 61: creature_skeletal_muscular_system
 59/88 Test #61: creature_skeletal_muscular_system .....   Passed    0.01 sec
       Start  3: soundscape_timing_and_samples
 60/88 Test  #3: soundscape_timing_and_samples .........   Passed    0.01 sec
+      Start 59: continuous_character_collision
+61/88 Test #59: continuous_character_collision ........   Passed    0.01 sec
       Start 34: daily_play_policy
-61/88 Test #34: daily_play_policy .....................   Passed    0.00 sec
-      Start 72: title_and_pause_menu
-62/88 Test #85: dynamic_kingdom_heraldry ..............   Passed    0.20 sec
+62/88 Test #34: daily_play_policy .....................   Passed    0.01 sec
       Start 31: interaction_planner
 63/88 Test #31: interaction_planner ...................   Passed    0.00 sec
-      Start 67: travel_audio_presentation
-64/88 Test #67: travel_audio_presentation .............   Passed    0.00 sec
       Start 79: solo_party_wipe
-65/88 Test #71: adventure_input_flow ..................   Passed    0.15 sec
+64/88 Test #71: adventure_input_flow ..................   Passed    0.15 sec
       Start 70: world_card_input_parity
-66/88 Test #72: title_and_pause_menu ..................   Passed    0.21 sec
+65/88 Test #72: title_and_pause_menu ..................   Passed    0.22 sec
+      Start 67: travel_audio_presentation
+66/88 Test #67: travel_audio_presentation .............   Passed    0.00 sec
       Start  7: campaign_speech_pack
-67/88 Test #70: world_card_input_parity ...............   Passed    0.12 sec
+67/88 Test #79: solo_party_wipe .......................   Passed    0.16 sec
       Start 28: bundled_music_and_host_catalog
-68/88 Test  #7: campaign_speech_pack ..................   Passed    0.07 sec
+68/88 Test #83: deterministic_npc_population ..........   Passed    0.29 sec
       Start 73: map_sale_input
-69/88 Test #79: solo_party_wipe .......................   Passed    0.16 sec
-      Start 69: adventure_trade_terms
-70/88 Test #69: adventure_trade_terms .................   Passed    0.00 sec
+69/88 Test #70: world_card_input_parity ...............   Passed    0.14 sec
       Start 77: world_session_startup_restore
-71/88 Test #83: deterministic_npc_population ..........   Passed    0.34 sec
+70/88 Test  #7: campaign_speech_pack ..................   Passed    0.09 sec
+      Start 23: browser_persistence_contract
+71/88 Test #73: map_sale_input ........................   Passed    0.08 sec
       Start 75: town_departure_to_road_book
 72/88 Test #28: bundled_music_and_host_catalog ........   Passed    0.09 sec
       Start 76: roadbook_arrival_transition
-73/88 Test #73: map_sale_input ........................   Passed    0.09 sec
-      Start 23: browser_persistence_contract
-74/88 Test #77: world_session_startup_restore .........   Passed    0.08 sec
-75/88 Test #75: town_departure_to_road_book ...........   Passed    0.06 sec
+73/88 Test #77: world_session_startup_restore .........   Passed    0.07 sec
+      Start 69: adventure_trade_terms
+74/88 Test #69: adventure_trade_terms .................   Passed    0.00 sec
       Start 80: road_encounter_session_restore
+75/88 Test #23: browser_persistence_contract ..........   Passed    0.06 sec
       Start 74: town_arrival_parking
 76/88 Test #76: roadbook_arrival_transition ...........   Passed    0.06 sec
       Start 24: browser_shared_carriage_contract
-77/88 Test #74: town_arrival_parking ..................   Passed    0.06 sec
+77/88 Test #75: town_departure_to_road_book ...........   Passed    0.06 sec
       Start 29: webgl2_skinning_uniform_budget
 78/88 Test #80: road_encounter_session_restore ........   Passed    0.06 sec
       Start 78: town_session_startup_restore
-79/88 Test #23: browser_persistence_contract ..........   Passed    0.09 sec
+79/88 Test #29: webgl2_skinning_uniform_budget ........   Passed    0.05 sec
       Start 27: music_catalog_metadata
-80/88 Test #24: browser_shared_carriage_contract ......   Passed    0.06 sec
+80/88 Test #74: town_arrival_parking ..................   Passed    0.06 sec
       Start 10: macos_deployment_target
-81/88 Test #29: webgl2_skinning_uniform_budget ........   Passed    0.05 sec
+81/88 Test #24: browser_shared_carriage_contract ......   Passed    0.06 sec
       Start  9: license_page_contract
-82/88 Test #78: town_session_startup_restore ..........   Passed    0.05 sec
+82/88 Test  #9: license_page_contract .................   Passed    0.01 sec
       Start 82: physical_goods_displays
-83/88 Test #10: macos_deployment_target ...............   Passed    0.01 sec
-84/88 Test  #9: license_page_contract .................   Passed    0.01 sec
-85/88 Test #82: physical_goods_displays ...............   Passed    0.01 sec
-86/88 Test #27: music_catalog_metadata ................   Passed    0.04 sec
+83/88 Test #82: physical_goods_displays ...............   Passed    0.00 sec
+84/88 Test #10: macos_deployment_target ...............   Passed    0.01 sec
+85/88 Test #27: music_catalog_metadata ................   Passed    0.03 sec
+86/88 Test #78: town_session_startup_restore ..........   Passed    0.05 sec
       Start 11: robotics_benchmark
-87/88 Test #11: robotics_benchmark ....................   Passed    0.04 sec
+87/88 Test #11: robotics_benchmark ....................   Passed    0.05 sec
       Start 12: headless_performance_budget
 88/88 Test #12: headless_performance_budget ...........   Passed    0.11 sec
 
 100% tests passed, 0 tests failed out of 88
 
-Total Test time (real) =  11.41 sec
+Total Test time (real) =  11.04 sec

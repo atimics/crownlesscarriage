@@ -10,6 +10,20 @@ static void TestCameraContinuity(void)
             sim.player.location_id = sim.settlements[town].id;
             CcLocalBindPlace(&sim);
             const CcLocalPlaceProfile *profile = ActivePlaceProfile();
+            CcLocalConvoyState convoy = {.phase_progress = 1.0f,
+                .town_position = {CC_LOCAL_CARRIAGE_X, 0, CC_LOCAL_CARRIAGE_Z}};
+            convoy.town_position.y = CcLocalTerrainHeightAt(
+                convoy.town_position.x, convoy.town_position.z);
+            CcLocalAgent arrived;
+            CcLocalAgentInit(&arrived, (Vector2){CC_LOCAL_CARRIAGE_APPROACH_X,
+                                               CC_LOCAL_CARRIAGE_APPROACH_Z}, false);
+            Camera3D arrival = TownArrivalCamera(&convoy, 10.0f, 320);
+            Camera3D street = CcLocalStreetCameraInternal(
+                &arrived, 10.0f + 1.0f / 60.0f, true, 320);
+            RequireRenderer(Vector3Distance(arrival.position, street.position) < 0.001f &&
+                            Vector3Distance(arrival.target, street.target) < 0.001f &&
+                            fabsf(arrival.fovy - street.fovy) < 0.001f,
+                            "arrival must hand its displayed view to the street camera");
             for (int rate = 0; rate < 3; ++rate) {
                 int frames = rates[rate] * 15;
                 for (int route = 0; route < CC_LOCAL_CARRIAGE_ROUTE_COUNT; ++route) {

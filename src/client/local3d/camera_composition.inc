@@ -1161,6 +1161,10 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
             arrival->target_x, arrival->target_z),
         arrival->target_z,
     };
+    Vector3 parked_target = Vector3Add(convoy->town_position,
+        (Vector3){0.0f, travel.target_height, 0.0f});
+    wide_target = Vector3Lerp(wide_target, parked_target,
+        SmoothStep01((convoy->phase_progress - 0.12f) / 0.72f));
     Vector3 wide_position = Vector3Add(wide_target, travel.offset);
     float pull_out = SmoothStep01(
         (convoy->phase_progress - 0.08f) / 0.78f);
@@ -1171,6 +1175,7 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
         .fovy = 43.0f + (32.0f - 43.0f) * pull_out,
         .projection = CAMERA_PERSPECTIVE,
     };
+    camera = StreetCameraClearVolume(camera);
 
     Vector3 arrival_offset = Vector3Subtract(camera.position, camera.target);
     float arrival_span = 2.0f * Vector3Length(arrival_offset) *

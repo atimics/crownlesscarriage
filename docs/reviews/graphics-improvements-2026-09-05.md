@@ -21,7 +21,9 @@ now share a perspective camera family with a long lens for the wider town views.
 
 Town lighting stays consistent across a camera move. A lens adjustment preserves
 the authored haze depth as the wider camera moves farther from the scene.
-Arrival passes its last camera position to the street camera for the handoff.
+Arrival follows the carriage into its parking place, then passes its last
+camera position to the street camera. A regression check covers this handoff
+in every town with both world seeds.
 Foreground roofs still lower when they cover an actor; that reveal now eases
 over time.
 
