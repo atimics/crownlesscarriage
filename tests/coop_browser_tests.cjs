@@ -158,6 +158,7 @@ async function main() {
     assert.equal(firstStop.accepted, true);
     assert(firstStop.world.state.journey.road_site, 'Travel must stop at the first road site');
     const firstJourney = firstStop.world.state.journey;
+    for (const page of [owner, game]) await page.waitForFunction(hash => document.body.dataset.companyHash === hash, firstStop.world.state.hash);
     const held = await game.evaluate(() => Module.ccCoop.apply('skip_watch', '0', 0, 0));
     assert.equal(held.accepted, true);
     assert.equal(held.world.state.hash, firstStop.world.state.hash);
@@ -167,6 +168,7 @@ async function main() {
     assert.equal(camped.world.state.journey.progress, firstJourney.progress);
     assert.equal(camped.world.state.minute, firstStop.world.state.minute + 480);
     assert.equal(camped.world.state.journey.road_site, null);
+    await owner.waitForFunction(hash => document.body.dataset.companyHash !== hash, held.world.state.hash);
     const nextStop = await owner.evaluate(() => Module.ccCoop.apply('skip_watch', '0', 0, 0));
     assert.equal(nextStop.accepted, true);
     assert(nextStop.world.state.journey.progress > firstJourney.progress);
