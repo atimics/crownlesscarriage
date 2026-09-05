@@ -1,0 +1,148 @@
+PASS building cutaways: edge crossings, transitions and resets at 30/60/144 Hz
+PASS skin rotation: all bones, three quarter turns, two bind frames
+PASS pony harness: head and chest attachments follow the skin
+INFO: Initializing raylib 6.0
+INFO: Platform backend: DESKTOP (GLFW)
+INFO: Supported raylib modules:
+INFO:     > rcore:..... loaded (mandatory)
+INFO:     > rlgl:...... loaded (mandatory)
+INFO:     > rshapes:... loaded (optional)
+INFO:     > rtextures:. loaded (optional)
+INFO:     > rtext:..... loaded (optional)
+INFO:     > rmodels:... loaded (optional)
+INFO:     > raudio:.... loaded (optional)
+INFO: DISPLAY: Device initialized successfully
+INFO:     > Display size: 1512 x 982
+INFO:     > Screen size:  1280 x 760
+INFO:     > Render size:  1280 x 760
+INFO:     > Viewport offsets: 0, 0
+INFO: GLAD: OpenGL extensions loaded successfully
+INFO: GL: Supported extensions count: 43
+INFO: GL: OpenGL device information:
+INFO:     > Vendor:   Apple
+INFO:     > Renderer: Apple M4 Max
+INFO:     > Version:  4.1 Metal - 90.5
+INFO:     > GLSL:     4.10
+INFO: GL: VAO extension detected, VAO functions loaded successfully
+INFO: GL: NPOT textures extension detected, full NPOT textures supported
+INFO: GL: DXT compressed textures supported
+INFO: PLATFORM: DESKTOP (GLFW - Cocoa): Initialized successfully
+INFO: TEXTURE: [ID 1] Texture loaded successfully (1x1 | R8G8B8A8 | 1 mipmaps)
+INFO: TEXTURE: [ID 1] Default texture loaded successfully
+INFO: SHADER: [ID 1] Vertex shader compiled successfully
+INFO: SHADER: [ID 2] Fragment shader compiled successfully
+INFO: SHADER: [ID 3] Program shader loaded successfully
+INFO: SHADER: [ID 3] Default shader loaded successfully
+INFO: RLGL: Render batch vertex buffers loaded successfully in RAM (CPU)
+INFO: RLGL: Render batch vertex buffers loaded successfully in VRAM (GPU)
+INFO: RLGL: Default OpenGL state initialized successfully
+INFO: TEXTURE: [ID 2] Texture loaded successfully (128x128 | GRAY_ALPHA | 1 mipmaps)
+INFO: FONT: Default font loaded successfully (224 glyphs)
+INFO: SYSTEM: Working Directory: /private/tmp/crownless-graphics-flicker-review-20260905
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+WARNING: MODEL: [assets/exports/glb/environment_market_granary_v01.glb] Colors attribute data already loaded
+PASS travel forest: camera turn preserves trees and GPU buffers
+Travel leaf motion: 0.000 mean channel change
+Raised cutaway: 5709 visible pixels, 0 changed pixels
+PASS cargo pixels: 10721 changed, fallback 0
+PASS cargo pixels: 21448 changed, fallback 1
+PASS mesh memory: released 768 cube bytes and 331184 horse bytes; pixels match
+PASS primitive pass 0: 3198 red pixels, 4293 blue pixels
+PASS primitive pass 1: 3198 red pixels, 4293 blue pixels
+Box parity view 0: 0 changed of 5880 visible pixels
+Box parity view 1: 0 changed of 5391 visible pixels
+Box parity view 2: 0 changed of 6690 visible pixels
+Box parity view 3: 0 changed of 5975 visible pixels
+Box parity view 4: 0 changed of 6365 visible pixels
+Box parity view 5: 0 changed of 4946 visible pixels
+Box parity view 6: 0 changed of 5879 visible pixels
+Box parity view 7: 0 changed of 5597 visible pixels
+Box parity view 8: 0 changed of 6303 visible pixels
+Box parity view 9: 0 changed of 8176 visible pixels
+PASS box batch: all faces, transforms, alpha, and buffer rollover
+PASS render state: repeated values, cuts, terrain, and new passes
+Box draw benchmark (1600 boxes, 128 frames): reference 0.863 ms/frame, batched 0.646 ms/frame
+PASS hero material samples: cloth 125, metal 194, skin 130
+PASS indexed material samples: cloth 122, metal 192, skin 132
+PASS animal skins: seven pony colors and two farm species, four turns, two walking poses
+PASS pony portraits: seven colored faces and a shared gray mystery face
+PASS creature body rotation: rendered silhouette follows yaw
+PASS creature turns: seven variants, four moving turns, visible purple hair
+PASS dragon courts: matching purple, red and blue hair across seven variants
