@@ -139,3 +139,24 @@ keeps the take number and its seed. Keep the cast reference fixed.
 For a fast voice, `--cfg-weight 0.3` can slow the delivery, following the
 [Chatterbox tuning guide](https://github.com/resemble-ai/chatterbox#original-chatterbox-tips).
 The receipt records this setting.
+
+## Spoken play
+
+Sound & voices in the pause menu offers voice volume, eight player voices,
+text-only player replies, optional page reading, and nearby voices. Preferences
+use format five; older preference files load with the full voice volume and
+Hearth as the player voice. These settings leave the saved simulation intact.
+
+Chosen replies enter a four-slot speech queue before the next NPC line. The
+caption follows the active speaker. Trade confirmations use the accepted
+quantity. Paid road demands receive a reply from the same company voice.
+Nearby greetings use visible people within talking distance and a one-minute
+cooldown. Combat calls have a separate cooldown. Warnings take priority, and
+short field lines expire after six seconds. Page reading uses the visible
+book or selected notice; changing pages clears the previous reading.
+
+Closing a turn, changing places, pausing, losing focus, or muting clears its
+pending audio as appropriate. A party wipe also clears the former company's
+speech. Replay and skip use F7 and F8 or their on-screen buttons. Native
+packaged clips are tried before the local worker. The browser fetches the
+versioned cast pack before requesting generated speech.

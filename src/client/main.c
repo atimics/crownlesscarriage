@@ -124,6 +124,10 @@ typedef struct LocalState {
     CcCommand trade_presented_command;
     char receipt[256];
     uint32_t receipt_serial;
+    double voice_ambient_after, voice_effort_after;
+    bool voice_alarm;
+    uint64_t voice_read_page;
+    CcId voice_place;
     ClientView pause_return_view;
     bool request_save;
     double caravan_tap_deadline;
@@ -5840,6 +5844,36 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
         CcSimHorseTeamReadiness(sim) < 30 ? DANGER : TEAL);
 }
 
+static void ClientSpeechPath(const CcSpeech *speech, char *path, size_t capacity)
+{
+    path[0] = '\0';
+    char relative[256];
+    if (speech == NULL || !CcSpeechPath(speech, relative, sizeof(relative))) return;
+    (void)ResolveClientAssetPath(relative, path, capacity);
+#if !defined(PLATFORM_WEB)
+    if (!FileExists(path) && CcSoundVoicePath(speech->line_id, speech->speaker,
+            speech->text, relative, sizeof(relative))) {
+        char legacy[768];
+        (void)ResolveClientAssetPath(relative, legacy, sizeof(legacy));
+        if (FileExists(legacy)) (void)snprintf(path, capacity, "%s", legacy);
+    }
+#endif
+}
+
+static void ClientSaySpeech(const CcSpeech *speech)
+{
+    char path[768];
+    ClientSpeechPath(speech, path, sizeof(path));
+    CcAudioSay(speech, path);
+}
+
+static void ClientReadSpeech(const CcSim *sim, const char *text, CcId source)
+{
+    CcSpeech speech;
+    if (CcSpeechCompose(&speech, "reader.page", sim->player.id, "Reader", 5, text,
+        CC_SPEECH_PLAIN, CC_SPEECH_FEEDBACK, source)) ClientSaySpeech(&speech);
+}
+
 static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
                                      CcSpeech *speech)
 {
@@ -5903,6 +5937,8 @@ static void DrawCharacterConversation(const CcSim *sim,
                       (int)panel_y + 76, 10, MUTED);
     CcSpeech speech;
     bool has_spoken = ClientConversationSpeech(sim, local, &speech);
+    const CcSpeech *playing = CcAudioCurrentSpeech();
+    if (playing != NULL) { speech = *playing; has_spoken = true; }
     const char *spoken = speech.text;
     CcOverlayDrawText("SPEAKS", speech_x, (int)panel_y + 20, 8, TEAL);
     if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
@@ -5995,6 +6031,9 @@ static void DrawJourneyEncounter(const CcSim *sim)
 static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
                          char *message, size_t message_capacity)
 {
+    CcSpeech road_answer;
+    bool road_reply = (command.kind == CC_COMMAND_RESOLVE_ENCOUNTER_PROVISIONS ||
+        command.kind == CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE) && CcSpeechRoad(sim, &road_answer);
     CcMoney coins_before = sim->player.coins;
     const CcSituation *accepted_before = CcSimAcceptedSituation(sim);
     CcId promise_before = accepted_before != NULL ? accepted_before->id : 0U;
@@ -6006,6 +6045,12 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
     if (!applied) {
         (void)snprintf(message, message_capacity, "%s", error);
         return false;
+    }
+    if (road_reply) {
+        CcSpeech answer;
+        if (CcSpeechCompose(&answer, "road.paid", road_answer.speaker_id, road_answer.speaker,
+            road_answer.voice_index, "We have what we asked for. Move along.", CC_SPEECH_FIRM,
+            CC_SPEECH_FEEDBACK, 0)) ClientSaySpeech(&answer);
     }
     if (journal != NULL) {
         switch (command.kind) {
@@ -8247,6 +8292,7 @@ static bool ResolveSoloPartyWipe(CcJournal *journal, CcSim *sim,
         .target_id = (CcId)sim->current_day
     };
     if (!ApplyCommand(journal, sim, wipe, message, capacity)) return false;
+    CcAudioClearSpeech();
     LeaveOpenWorld(local);
     ResetLocalStatePreservingAthletics(local);
     CcLocalBindPlace(sim);
@@ -8545,6 +8591,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     if (*view == VIEW_CHARACTER) {
         if ((local->adventure_ui && ClientKeyPressed(KEY_ESCAPE)) || ClientKeyPressed(KEY_BACKSPACE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
+            CcAudioClearSpeech();
+            CcSpeech goodbye;
+            const CcSituation *leaving = CcSimSituation(sim, local->conversation_situation_id);
+            if (adventure_preferences != NULL && adventure_preferences->player_voice >= 5 &&
+                CcSpeechPlayerChoice(sim, leaving, CC_STORY_PLAYER_LEAVE,
+                    (uint32_t)adventure_preferences->player_voice, &goodbye)) ClientSaySpeech(&goodbye);
             *view = VIEW_LOCAL;
             return;
         }
@@ -8590,6 +8642,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
         }
         if (response != 0) {
+            CcSpeech player_reply;
+            CcStoryPlayerChoice choice = response == CC_CHARACTER_RESPONSE_LISTEN ? CC_STORY_PLAYER_ASK :
+                response == CC_CHARACTER_RESPONSE_PLEDGE_HELP ? CC_STORY_PLAYER_PROMISE :
+                response == CC_CHARACTER_RESPONSE_REPORT_EVIDENCE ? CC_STORY_PLAYER_REPORT : CC_STORY_PLAYER_KEEP_CONFIDENCE;
+            bool voiced_reply = adventure_preferences != NULL && adventure_preferences->player_voice >= 5 &&
+                CcSpeechPlayerChoice(sim, conversation, choice, (uint32_t)adventure_preferences->player_voice, &player_reply);
             CcCommand reply = {
                 .kind = CC_COMMAND_CHARACTER_RESPONSE,
                 .target_id = local->conversation_situation_id,
@@ -8597,6 +8655,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             };
             if (ApplyCommand(*journal, sim, reply,
                              message, message_capacity)) {
+                if (voiced_reply) ClientSaySpeech(&player_reply);
                 const CcSituation *updated = CcSimSituation(
                     sim, local->conversation_situation_id);
                 const CcCharacter *character = CcSimCharacter(
@@ -10052,9 +10111,115 @@ static int RunMapSaleInputRegression(void)
 }
 #endif
 
+static void ReadCompanyPage(const CcSim *sim, const LocalState *local)
+{
+    char words[CC_SPEECH_TEXT_CAPACITY];
+    if (local->book_page == 0) {
+        const CcSituation *promise = CcSimAcceptedSituation(sim);
+        if (promise != NULL) {
+            char next[192];
+            SituationNextAction(sim, promise, next, sizeof(next));
+            (void)snprintf(words, sizeof(words), "Due day %d. %s Progress %d of %d. Reward %" PRId64 " crowns.",
+                promise->deadline_day, next, promise->progress, promise->quantity, promise->reward);
+            ClientReadSpeech(sim, words, promise->cause_event_id);
+        } else ClientReadSpeech(sim, "Visit a notice board or speak to a neighbour to find your next promise.", 0);
+        int shown = 0;
+        for (int32_t i = sim->quest_outcome_count - 1 - local->book_offset; i >= 0 && shown < 2; --i, ++shown) {
+            const CcQuestOutcomeRecord *outcome = &sim->quest_outcomes[i];
+            (void)snprintf(words, sizeof(words), "%s. Day %d. %s. Progress %d of %d.",
+                CcQuestEndReasonName(outcome->end_reason), outcome->resolved_day,
+                SituationTitle(outcome->situation_kind), outcome->progress_value, outcome->progress_limit);
+            ClientReadSpeech(sim, words, outcome->resolved_event_id);
+        }
+    } else if (local->book_page == 1) {
+        int skipped = 0, shown = 0;
+        for (int32_t i = 0; i < sim->character_count && shown < 5; ++i) {
+            const CcCharacter *person = &sim->characters[i];
+            if (!AdventureKnownPerson(sim, person) || skipped++ < local->book_offset) continue;
+            const CcSettlement *home = CcSimSettlement(sim, person->home_settlement_id);
+            (void)snprintf(words, sizeof(words), "%s. %s. From %s.", person->name,
+                CcCharacterRoleName(person->role), home != NULL ? home->name : "the road");
+            ClientReadSpeech(sim, words, 0);
+            ++shown;
+        }
+        if (shown == 0) ClientReadSpeech(sim, "People named in the stories you have found appear here.", 0);
+    } else if (local->book_page == 2) {
+        (void)snprintf(words, sizeof(words), "Purse %" PRId64 " crowns. Cargo %d of %d spaces.",
+            sim->player.coins, CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity);
+        ClientReadSpeech(sim, words, 0);
+        int skipped = 0;
+        words[0] = '\0';
+        for (int32_t i = 0; i < CC_GOOD_COUNT; ++i) {
+            if (sim->player.cargo[i] <= 0 || skipped++ < local->book_offset) continue;
+            size_t used = strlen(words);
+            (void)snprintf(words + used, sizeof(words) - used, "%d %s. ", sim->player.cargo[i], CcGoodName((CcGood)i));
+        }
+        ClientReadSpeech(sim, words, 0);
+    } else {
+        int32_t limit = AdventureBookPageSize(local);
+        for (int32_t i = local->book_offset; i < sim->event_count && i < local->book_offset + limit; ++i) {
+            const CcEvent *event = CcSimRecentEvent(sim, i);
+            if (event != NULL) {
+                (void)snprintf(words, sizeof(words), "Day %d. %s. %s", event->day, CcEventKindName(event->kind), event->text);
+                ClientReadSpeech(sim, words, event->id);
+            }
+        }
+    }
+}
+
+static void UpdateFieldVoices(const CcSim *sim, LocalState *local, ClientView view)
+{
+    bool alarm = local->course.alarm_active || local->journey_combat_active;
+    int player_voice = adventure_preferences != NULL ? adventure_preferences->player_voice : -1;
+    CcSpeech speech;
+    if (view == VIEW_LOCAL && player_voice >= 5) {
+        const char *words = NULL;
+        CcSpeechPriority priority = CC_SPEECH_FEEDBACK;
+        CcSpeechDelivery delivery = CC_SPEECH_PLAIN;
+        char arrival[160];
+        if (alarm && !local->voice_alarm) {
+            words = "Raiders! Stay close!"; priority = CC_SPEECH_WARNING; delivery = CC_SPEECH_URGENT;
+        } else if (alarm && local->agent.humanoid.action == CC_HUMANOID_ACTION_STRIKE && GetTime() >= local->voice_effort_after) {
+            words = "Back!"; delivery = CC_SPEECH_FIRM;
+            local->voice_effort_after = GetTime() + 12.0;
+        } else if (local->voice_place != 0 && local->voice_place != sim->player.location_id) {
+            const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
+            if (place != NULL) {
+                (void)snprintf(arrival, sizeof(arrival), "We have reached %s.", place->name);
+                words = arrival;
+            }
+        }
+        if (words != NULL && CcSpeechCompose(&speech, "player.field", sim->player.id, "You", (uint32_t)player_voice,
+                words, delivery, priority, 0)) ClientSaySpeech(&speech);
+    }
+    local->voice_alarm = alarm;
+    local->voice_place = sim->player.location_id;
+    if (view != VIEW_LOCAL || alarm || local->journey_travel_active || adventure_preferences == NULL ||
+        !adventure_preferences->ambient_voices || GetTime() < local->voice_ambient_after || CcAudioCurrentSpeech() != NULL) return;
+    const CcLocalPlaceProfile *place = CcLocalPlaceProfileForSettlement(CcSimSettlement(sim, sim->player.location_id));
+    for (int32_t i = 0; i < local->interactions.count; ++i) {
+        const CcInteractionTarget *target = &local->interactions.targets[i];
+        if (target->key.kind != CC_INTERACTION_PERSON || !target->visible || !target->available ||
+            GridDistance(LocalPosition(local), (Vector2){target->x, target->z}) > 2.5f) continue;
+        if (CcSpeechGreeting(sim, sim->player.location_id, target->key.object,
+            target->name, place->primary_hall, &speech)) {
+            const CcCharacter *person = CcSimCharacter(sim, target->character_id);
+            if (person != NULL) {
+                CcSpeech named;
+                if (CcSpeechCompose(&named, speech.line_id, person->id, person->name,
+                    CcSpeechCharacterVoice(sim, person), speech.text, speech.delivery, CC_SPEECH_BACKGROUND, 0)) speech = named;
+            }
+            speech.priority = CC_SPEECH_BACKGROUND;
+            ClientSaySpeech(&speech);
+            local->voice_ambient_after = GetTime() + 60.0;
+        }
+        break;
+    }
+}
+
 static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
                              LocalState *local, ClientView view,
-                             float dt)
+                             int32_t selected_situation, float dt)
 {
     bool travel = local->journey_travel_active &&
         ((sim->journey.active && sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) ||
@@ -10090,6 +10255,46 @@ static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
     for (int cue = 0; cue < CC_SOUND_COUNT; ++cue) {
         if ((cues & (UINT32_C(1) << (unsigned int)cue)) != 0U) CcAudioPlay((CcSoundCue)cue);
     }
+    CcAudioSetContext(((uint64_t)sim->world_seed << 32U) ^ sim->player.location_id);
+    uint64_t page = 0;
+    if (adventure_preferences != NULL && adventure_preferences->read_aloud) {
+        if (view == VIEW_LEDGER) page = UINT64_C(1) + (uint64_t)local->book_page * 1000U + (uint64_t)local->book_offset;
+        else if (view == VIEW_SITUATIONS) page = UINT64_C(1000000) + (uint64_t)selected_situation;
+    }
+    if (page != local->voice_read_page) {
+        CcAudioClearSpeech();
+        local->voice_read_page = page;
+        if (page != 0 && view == VIEW_LEDGER) ReadCompanyPage(sim, local);
+        else if (page != 0 && view == VIEW_SITUATIONS) {
+            const CcSituation *promise = SelectedActiveSituation(sim, selected_situation);
+            if (promise == NULL) ClientReadSpeech(sim, "Listen to the people in town for your next lead.", 0);
+            else {
+                char target[96], next[192], words[CC_SPEECH_TEXT_CAPACITY];
+                SituationTargetLabel(sim, promise, target, sizeof(target));
+                SituationNextAction(sim, promise, next, sizeof(next));
+                bool accepted = promise->id == sim->player.accepted_situation_id;
+                bool offer = CcSimSituationCanAccept(sim, promise);
+                if (offer && !accepted && !local->open_world &&
+                    !CcClientPromiseCanBeAccepted(local->market_interior, GridDistance(LocalPosition(local), LOCAL_NOTICE))) {
+                    (void)snprintf(next, sizeof(next), "Visit the %s to accept this promise.",
+                        CcLocalPlaceProfileForSettlement(CcSimSettlement(sim, sim->player.location_id))->notice_board);
+                }
+                (void)snprintf(words, sizeof(words), "%s. %s. %s. %s.", accepted ? "Accepted promise" : offer ? "Offer" : "Lead",
+                    SituationTitle(promise->kind), target, promise->affected_name);
+                ClientReadSpeech(sim, words, promise->cause_event_id);
+                if (offer || accepted) {
+                    if (promise->kind == CC_SITUATION_RELIEF_DELIVERY || promise->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
+                        (void)snprintf(words, sizeof(words), "%d %s. Progress %d of %d.",
+                            promise->quantity, CcGoodName(promise->good), promise->progress, promise->quantity);
+                        ClientReadSpeech(sim, words, promise->cause_event_id);
+                    }
+                    (void)snprintf(words, sizeof(words), "Due day %d. Reward %" PRId64 " crowns.", promise->deadline_day, promise->reward);
+                    ClientReadSpeech(sim, words, promise->cause_event_id);
+                }
+                ClientReadSpeech(sim, next, promise->cause_event_id);
+            }
+        }
+    }
     CcSpeech speech;
     bool has_speech = false;
     if (view == VIEW_CHARACTER) {
@@ -10105,18 +10310,10 @@ static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
         has_speech = CcSpeechTrade(sim, place->keeper_name, quote.command.good,
             quantity, quote.total, local->trade_mode, quote.reason, &speech);
     }
-    char voice_path[768] = "";
-    char relative[256];
-    if (has_speech && CcSpeechPath(&speech, relative, sizeof(relative))) {
-        (void)ResolveClientAssetPath(relative, voice_path, sizeof(voice_path));
-        if (!FileExists(voice_path) && CcSoundVoicePath(speech.line_id, speech.speaker,
-                speech.text, relative, sizeof(relative))) {
-            char legacy[768];
-            (void)ResolveClientAssetPath(relative, legacy, sizeof(legacy));
-            if (FileExists(legacy)) (void)snprintf(voice_path, sizeof(voice_path), "%s", legacy);
-        }
-    }
+    char voice_path[768];
+    ClientSpeechPath(has_speech ? &speech : NULL, voice_path, sizeof(voice_path));
     CcAudioSpeech(has_speech ? &speech : NULL, voice_path);
+    UpdateFieldVoices(sim, local, view);
     CcAudioUpdate();
 }
 
@@ -10166,7 +10363,7 @@ int main(int argc, char **argv)
 #endif
     bool capture_ux = argc >= 4 && strcmp(argv[1], "--capture-ux") == 0;
     int32_t capture_ux_view = capture_ux ? atoi(argv[2]) : 0;
-    if (capture_ux && (capture_ux_view < 0 || capture_ux_view > 9)) return 1;
+    if (capture_ux && (capture_ux_view < 0 || capture_ux_view > 10)) return 1;
     bool screen_first_hero = true;
     for (int32_t argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--screen-first-hero") == 0) {
@@ -11428,7 +11625,7 @@ int main(int argc, char **argv)
         if (capture_ux_view == 4) { view = VIEW_LEDGER; local.book_page = 3; }
         if (capture_ux_view == 5) view = VIEW_LOCAL;
         if (capture_ux_view == 6) view = VIEW_SITUATIONS;
-        if (capture_ux_view >= 7) {
+        if (capture_ux_view >= 7 && capture_ux_view <= 9) {
             (void)InitializeOpenWorld(&sim, &local, false);
             selected = FirstOutgoingRouteIndex(&sim);
             const CcRoute *route = SelectedOutgoingRoute(&sim, selected);
@@ -11542,6 +11739,7 @@ int main(int argc, char **argv)
         .screen = CcCoopClientActive() ? FRONTEND_PLAYING :
                   normal_play || capture_title ? FRONTEND_TITLE :
                   capture_delete ? FRONTEND_DELETE :
+                  capture_ux && capture_ux_view == 10 ? FRONTEND_SOUND :
                   capture_menu || (capture_ux && capture_ux_view == 5) ? FRONTEND_PAUSED : FRONTEND_PLAYING,
         .has_world = resuming_campaign || capture_menu || capture_delete,
     };
@@ -11550,6 +11748,7 @@ int main(int argc, char **argv)
     }
     CcSoundscape soundscape = {0};
     CcAudioSetMode(preferences.audio_mode);
+    CcAudioSetVoiceVolume(preferences.voice_volume);
     Rectangle local_bounds;
     double coop_checkpoint_time = 0.0;
     int32_t coop_party_wipes = CcCoopClientPartyWipes();
@@ -11586,6 +11785,7 @@ int main(int argc, char **argv)
                  old_location != sim.player.location_id || old_journey != sim.journey.active ||
                  old_route != sim.journey.route_id || old_phase != sim.journey.phase ||
                  old_dungeon != sim.dungeon_expedition.active)) {
+                CcAudioClearSpeech();
                 LeaveOpenWorld(&local);
                 ResetLocalStatePreservingAthletics(&local);
                 CcLocalBindPlace(&sim);
@@ -11652,6 +11852,9 @@ int main(int argc, char **argv)
             music_play_input = input;
             if (input) CcAudioInit();
             CcAudioSetFocused(IsWindowFocused());
+            CcAudioSetVoiceVolume(preferences.voice_volume);
+            CcAudioSetContext(((uint64_t)sim.world_seed << 32U) ^ sim.player.location_id);
+            if (menu_frame) { CcAudioClearSpeech(); local.voice_read_page = 0; }
         }
         bool speech_clicked = normal_play && !menu_frame && CcAudioCurrentSpeech() != NULL &&
             ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
@@ -11765,7 +11968,8 @@ int main(int argc, char **argv)
         }
         if (normal_play) {
             if (view != audio_previous_view) CcAudioPlay(CC_SOUND_PAGE);
-            UpdatePlayAudio(&soundscape, &sim, &local, view, world_delta_time);
+            if (!menu_frame) UpdatePlayAudio(&soundscape, &sim, &local, view, selected_situation, world_delta_time);
+            else CcAudioUpdate();
         }
         bool persistence_blocked = CcClientCampaignAccessFor(
             normal_play && (frontend.has_world || frontend.screen == FRONTEND_PLAYING),

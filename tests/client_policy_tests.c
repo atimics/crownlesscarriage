@@ -40,6 +40,10 @@ int main(void)
     preferences.text_size = 2;
     preferences.focus_hints = false;
     preferences.avatar = 12576U;
+    preferences.voice_volume = 50;
+    preferences.player_voice = 12;
+    preferences.read_aloud = true;
+    preferences.ambient_voices = false;
     CC_CHECK(CcClientPreferencesSave(
         preferences_path, &preferences,
         preferences_error, sizeof(preferences_error)));
@@ -51,6 +55,8 @@ int main(void)
     CC_CHECK(preferences.audio_mode == 2);
     CC_CHECK(preferences.text_size == 2 && !preferences.focus_hints);
     CC_CHECK(preferences.avatar == 12576U);
+    CC_CHECK(preferences.voice_volume == 50 && preferences.player_voice == 12 &&
+        preferences.read_aloud && !preferences.ambient_voices);
     FILE *invalid_preferences = fopen(preferences_path, "wb");
     CC_CHECK(invalid_preferences != NULL);
     CC_CHECK(fputs("CROWNLESS_PREFERENCES 1\nreduced_motion 7\n",
@@ -86,6 +92,15 @@ int main(void)
     CC_CHECK(fclose(version_three) == 0);
     CC_CHECK(CcClientPreferencesLoad(preferences_path, &preferences, preferences_error, sizeof(preferences_error)));
     CC_CHECK(preferences.avatar == 0U && preferences.text_size == 2 && preferences.reduced_motion);
+    CC_CHECK(preferences.voice_volume == 100 && preferences.player_voice == 5 &&
+        !preferences.read_aloud && preferences.ambient_voices);
+    preferences.voice_volume = 101;
+    CC_CHECK(!CcClientPreferencesSave(preferences_path, &preferences, preferences_error, sizeof(preferences_error)));
+    preferences.voice_volume = 100;
+    preferences.player_voice = 4;
+    CC_CHECK(!CcClientPreferencesSave(preferences_path, &preferences, preferences_error, sizeof(preferences_error)));
+    preferences.player_voice = -1;
+    CC_CHECK(CcClientPreferencesSave(preferences_path, &preferences, preferences_error, sizeof(preferences_error)));
     preferences.avatar = 7U;
     CC_CHECK(!CcClientPreferencesSave(preferences_path, &preferences, preferences_error, sizeof(preferences_error)));
     preferences.avatar = 4U << 9U;

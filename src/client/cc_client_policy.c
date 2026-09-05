@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define CC_CLIENT_PREFERENCES_VERSION 4U
+#define CC_CLIENT_PREFERENCES_VERSION 5U
 
 static bool ValidAvatar(uint32_t avatar)
 {
@@ -25,7 +25,8 @@ static void SetPreferencesError(char *error, size_t capacity,
 void CcClientPreferencesDefault(CcClientPreferences *preferences)
 {
     if (preferences == NULL) return;
-    *preferences = (CcClientPreferences){.focus_hints = true};
+    *preferences = (CcClientPreferences){.focus_hints = true, .voice_volume = 100,
+        .player_voice = 5, .ambient_voices = true};
 }
 
 bool CcClientPreferencesLoad(const char *path,
@@ -76,6 +77,17 @@ bool CcClientPreferencesLoad(const char *path,
         valid = fscanf(file, "%31s %u", setting, &avatar) == 2 &&
             strcmp(setting, "avatar") == 0 && ValidAvatar(avatar);
     }
+    int voice_volume = 100, player_voice = 5, read_aloud = 0, ambient_voices = 1;
+    if (valid && version >= 5U) {
+        valid = fscanf(file, "%31s %d", setting, &voice_volume) == 2 &&
+            strcmp(setting, "voice_volume") == 0 && voice_volume >= 0 && voice_volume <= 100 &&
+            fscanf(file, "%31s %d", setting, &player_voice) == 2 &&
+            strcmp(setting, "player_voice") == 0 && (player_voice == -1 || (player_voice >= 5 && player_voice <= 12)) &&
+            fscanf(file, "%31s %d", setting, &read_aloud) == 2 &&
+            strcmp(setting, "read_aloud") == 0 && (read_aloud == 0 || read_aloud == 1) &&
+            fscanf(file, "%31s %d", setting, &ambient_voices) == 2 &&
+            strcmp(setting, "ambient_voices") == 0 && (ambient_voices == 0 || ambient_voices == 1);
+    }
     if (fclose(file) != 0) valid = false;
     if (!valid) {
         CcClientPreferencesDefault(preferences);
@@ -88,6 +100,10 @@ bool CcClientPreferencesLoad(const char *path,
     preferences->text_size = text_size;
     preferences->focus_hints = focus_hints != 0;
     preferences->avatar = avatar;
+    preferences->voice_volume = voice_volume;
+    preferences->player_voice = player_voice;
+    preferences->read_aloud = read_aloud != 0;
+    preferences->ambient_voices = ambient_voices != 0;
     SetPreferencesError(error, error_capacity, "");
     return true;
 }
@@ -99,6 +115,8 @@ bool CcClientPreferencesSave(const char *path,
     if (path == NULL || path[0] == '\0' || preferences == NULL ||
         preferences->audio_mode < 0 || preferences->audio_mode > 2 ||
         preferences->text_size < 0 || preferences->text_size > 2 ||
+        preferences->voice_volume < 0 || preferences->voice_volume > 100 ||
+        (preferences->player_voice != -1 && (preferences->player_voice < 5 || preferences->player_voice > 12)) ||
         !ValidAvatar(preferences->avatar)) {
         SetPreferencesError(error, error_capacity,
                             "Preferences path or state is invalid.");
@@ -122,12 +140,18 @@ bool CcClientPreferencesSave(const char *path,
                                "audio_mode %d\n"
                                "text_size %d\n"
                                "focus_hints %d\n"
-                               "avatar %u\n",
+                               "avatar %u\n"
+                               "voice_volume %d\n"
+                               "player_voice %d\n"
+                               "read_aloud %d\n"
+                               "ambient_voices %d\n",
                          CC_CLIENT_PREFERENCES_VERSION,
                          preferences->reduced_motion ? 1 : 0,
                          preferences->audio_mode, preferences->text_size,
                          preferences->focus_hints ? 1 : 0,
-                         (unsigned int)preferences->avatar) > 0;
+                         (unsigned int)preferences->avatar, preferences->voice_volume,
+                         preferences->player_voice, preferences->read_aloud ? 1 : 0,
+                         preferences->ambient_voices ? 1 : 0) > 0;
     saved = saved && fflush(file) == 0;
     if (fclose(file) != 0) saved = false;
     if (saved && rename(temporary, path) != 0) saved = false;
