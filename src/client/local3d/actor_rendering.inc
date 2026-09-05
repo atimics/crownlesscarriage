@@ -4326,6 +4326,9 @@ static void BeginWorldLighting(Camera3D camera,
         SetShaderValue(painted->shader, painted->focal_contrast_location,
                        &focal_contrast, SHADER_UNIFORM_FLOAT);
     }
+    visual_style.foreground_reveal_valid = true;
+    visual_style.foreground_reveal = 0.0f;
+    visual_style.terrain_surface = false;
     const float foreground_reveal = 0.0f;
     SetShaderValue(visual_style.world,
                    visual_style.foreground_reveal_location,

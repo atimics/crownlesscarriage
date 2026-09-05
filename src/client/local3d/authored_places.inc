@@ -22,8 +22,43 @@ static void DrawScenerySphere(Vector3 center, float radius, Color color)
 
 static void DrawBox(Vector3 center, Vector3 size, Color color)
 {
-    // Face lighting and painted material seams define the small forms.
-    DrawCubeV(center, size, color);
+    // rlgl shares the four corners of each face through its quad index buffer.
+    // Add the center here so each box shares its parent's transform.
+    Vector3 low = Vector3Subtract(center, Vector3Scale(size, 0.5f));
+    Vector3 high = Vector3Add(center, Vector3Scale(size, 0.5f));
+    rlBegin(RL_QUADS);
+    rlColor4ub(color.r, color.g, color.b, color.a);
+    rlNormal3f(0.0f, 0.0f, 1.0f);
+    rlVertex3f(low.x, high.y, high.z);
+    rlVertex3f(low.x, low.y, high.z);
+    rlVertex3f(high.x, low.y, high.z);
+    rlVertex3f(high.x, high.y, high.z);
+    rlNormal3f(0.0f, 0.0f, -1.0f);
+    rlVertex3f(high.x, low.y, low.z);
+    rlVertex3f(low.x, low.y, low.z);
+    rlVertex3f(low.x, high.y, low.z);
+    rlVertex3f(high.x, high.y, low.z);
+    rlNormal3f(0.0f, 1.0f, 0.0f);
+    rlVertex3f(low.x, high.y, low.z);
+    rlVertex3f(low.x, high.y, high.z);
+    rlVertex3f(high.x, high.y, high.z);
+    rlVertex3f(high.x, high.y, low.z);
+    rlNormal3f(0.0f, -1.0f, 0.0f);
+    rlVertex3f(high.x, low.y, high.z);
+    rlVertex3f(low.x, low.y, high.z);
+    rlVertex3f(low.x, low.y, low.z);
+    rlVertex3f(high.x, low.y, low.z);
+    rlNormal3f(1.0f, 0.0f, 0.0f);
+    rlVertex3f(high.x, low.y, low.z);
+    rlVertex3f(high.x, high.y, low.z);
+    rlVertex3f(high.x, high.y, high.z);
+    rlVertex3f(high.x, low.y, high.z);
+    rlNormal3f(-1.0f, 0.0f, 0.0f);
+    rlVertex3f(low.x, high.y, high.z);
+    rlVertex3f(low.x, high.y, low.z);
+    rlVertex3f(low.x, low.y, low.z);
+    rlVertex3f(low.x, low.y, high.z);
+    rlEnd();
 }
 
 static Color ShadeColor(Color color, float scale)
