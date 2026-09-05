@@ -581,11 +581,11 @@ def paint_coat_patch(obj: bpy.types.Object, spec: CreatureSpec) -> None:
 def add_animal_ear(spec: CreatureSpec, collection: bpy.types.Collection,
                    head: Vector, sign: float, side: str) -> None:
     upright = spec.family == "horse"
-    center = head + Vector((0.15 * sign, 0.015, 0.33)) if upright else head + Vector((0.34 * sign, 0.0, 0.10))
-    size = (0.095, 0.065, 0.19) if upright else (0.22, 0.095, 0.085)
+    center = head + Vector((0.19 * sign, 0.015, 0.32)) if upright else head + Vector((0.34 * sign, 0.0, 0.10))
+    size = (0.088, 0.070, 0.19) if upright else (0.22, 0.095, 0.085)
     ear = add_ellipsoid(f"{spec.family}_Ear_{side}", center, size,
                        "skin" if upright else "secondary", collection, spec,
-                       f"ear_{side.lower()}")
+                       f"ear_{side.lower()}", subdivisions=2 if upright else 1)
     # One curious ear and one relaxed ear give the pony an alert expression.
     ear.rotation_euler.y = (-0.12 if sign < 0.0 else 0.52) if upright else sign * -0.20
     inner = add_ellipsoid(f"{spec.family}_InnerEar_{side}",
@@ -593,6 +593,76 @@ def add_animal_ear(spec: CreatureSpec, collection: bpy.types.Collection,
                          (size[0] * 0.66, 0.022, size[2] * 0.66),
                          "accent", collection, spec, f"ear_{side.lower()}")
     inner.rotation_euler.y = ear.rotation_euler.y
+
+
+def add_pony_lock(name: str, rings: tuple[tuple[float, ...], ...],
+                  collection: bpy.types.Collection, spec: CreatureSpec,
+                  part: str) -> bpy.types.Object:
+    """Shape a continuous lock, with a narrow ribbon along its length."""
+    sides = 8
+    vertices = []
+    faces = []
+    for index, ring in enumerate(rings):
+        center = Vector(ring[:3])
+        before = Vector(rings[max(0, index - 1)][:3])
+        after = Vector(rings[min(len(rings) - 1, index + 1)][:3])
+        tangent = (after - before).normalized()
+        right = Vector((1.0, 0.0, 0.0))
+        right = (right - tangent * right.dot(tangent)).normalized()
+        up = tangent.cross(right).normalized()
+        for side in range(sides):
+            angle = math.tau * side / sides
+            vertices.append(tuple(center + right * math.cos(angle) * ring[3]
+                                  + up * math.sin(angle) * ring[4]))
+        if index:
+            for side in range(sides):
+                following = (side + 1) % sides
+                previous = (index - 1) * sides
+                current = index * sides
+                faces.append((previous + side, previous + following,
+                              current + following, current + side))
+    faces.append(tuple(reversed(range(sides))))
+    faces.append(tuple((len(rings) - 1) * sides + side
+                       for side in range(sides)))
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    collection.objects.link(obj)
+    assign(obj, "secondary", spec)
+    assign(obj, "cloth", spec)
+    for face in mesh.polygons:
+        if face.index < (len(rings) - 1) * sides:
+            face.material_index = 1 if face.index % sides == 1 else 0
+    tag(obj, spec, part)
+    return obj
+
+
+def add_pony_eye(spec: CreatureSpec, collection: bpy.types.Collection,
+                 head: Vector, sign: float, side: str) -> None:
+    # Put every layer on the same cheek plane so the eye sits in its socket.
+    normal = Vector((sign * 0.72, -0.69, 0.08)).normalized()
+    right = Vector((0.0, 0.0, 1.0)).cross(normal).normalized()
+    up = normal.cross(right)
+    rotation = Matrix((right, up, normal)).transposed().to_euler()
+    center = head + Vector((sign * 0.235, -0.235, 0.10))
+    layers = (
+        ("Lid", 0.0, (0.103, 0.130, 0.036), "secondary"),
+        ("White", 0.022, (0.088, 0.112, 0.025), "horn"),
+        ("Iris", 0.044, (0.060, 0.086, 0.015), "metal"),
+        ("Pupil", 0.057, (0.035, 0.066, 0.008), "eye"),
+    )
+    for name, depth, size, semantic in layers:
+        eye = add_ellipsoid(f"PONY_Eye{name}_{side}",
+                            center + normal * depth, size, semantic,
+                            collection, spec, f"eye_{side.lower()}",
+                            subdivisions=2)
+        eye.rotation_euler = rotation
+    glint = add_ellipsoid(f"PONY_EyeGlint_{side}",
+                          center + normal * 0.066 + up * 0.037 - right * 0.016,
+                          (0.016, 0.021, 0.007), "horn", collection, spec,
+                          f"eye_{side.lower()}")
+    glint.rotation_euler = rotation
 
 
 def build_quadruped(spec: CreatureSpec,
@@ -638,10 +708,10 @@ def build_quadruped(spec: CreatureSpec,
     elif pony:
         add_ellipsoid("PONY_RoundRump", (0.0, 0.38, body_z + 0.02),
                       (0.49, 0.42, 0.44), "skin", collection, spec,
-                      "barrel", subdivisions=1)
+                      "barrel", subdivisions=2)
         add_ellipsoid("PONY_RoundShoulder", (0.0, -0.38, body_z + 0.12),
                       (0.47, 0.40, 0.45), "skin", collection, spec,
-                      "chest", subdivisions=1)
+                      "chest", subdivisions=2)
 
     leg_roots = {
         "fl": Vector((-half_width, front_y, body_z - 0.08)),
@@ -661,19 +731,21 @@ def build_quadruped(spec: CreatureSpec,
                     "secondary" if sheep else "skin", collection, spec,
                     f"upper_leg_{name}")
         add_segment(f"CREATURE_LowerLeg_{name.upper()}", knee, hoof,
-                    radius * 0.78, radius * 0.58, "secondary", collection,
+                    radius * 0.78, radius * 0.58,
+                    "hide" if pony else "secondary", collection,
                     spec, f"lower_leg_{name}")
         hoof_size = ((0.12, 0.16, 0.09) if sheep else
                      (0.18, 0.23, 0.12) if cow else
                      (0.17, 0.20, 0.12))
         add_box(f"CREATURE_Hoof_{name.upper()}",
                 hoof + Vector((0.0, -0.035, -0.015)), hoof_size,
-                "secondary", collection, spec, f"hoof_{name}")
+                "leather" if pony else "secondary", collection, spec,
+                f"hoof_{name}", bevel=0.025 if pony else 0.012)
         if pony:
             add_ellipsoid(
                 f"PONY_HoofFeather_{name.upper()}",
                 hoof + Vector((0.0, 0.0, 0.10)),
-                (0.14, 0.13, 0.13), "secondary", collection, spec,
+                (0.13, 0.14, 0.13), "hide", collection, spec,
                 f"lower_leg_{name}")
 
     if sheep:
@@ -738,59 +810,36 @@ def build_quadruped(spec: CreatureSpec,
         head = Vector((0.0, -0.93, body_z + 0.43))
         add_segment("HORSE_Neck", neck_start, neck_end, 0.30, 0.22, "skin",
                     collection, spec, "neck", sides=9)
-        add_ellipsoid("HORSE_Head", head, (0.34, 0.36, 0.35), "skin",
+        add_ellipsoid("HORSE_Head", head, (0.31, 0.37, 0.32), "skin",
                       collection, spec, "head", subdivisions=2)
-        add_ellipsoid("HORSE_Muzzle", head + Vector((0.0, -0.25, -0.08)),
-                      (0.25, 0.17, 0.18), "hide", collection, spec,
-                      "muzzle")
-        add_ellipsoid("HORSE_Blaze", head + Vector((0.0, -0.328, 0.10)),
-                      (0.075, 0.045, 0.19), "horn", collection, spec, "head")
+        add_ellipsoid("HORSE_Muzzle", head + Vector((0.0, -0.32, -0.14)),
+                      (0.24, 0.25, 0.18), "hide", collection, spec,
+                      "muzzle", subdivisions=2)
+        add_ellipsoid("HORSE_Blaze", head + Vector((0.0, -0.345, 0.075)),
+                      (0.065, 0.038, 0.16), "horn", collection, spec, "head",
+                      subdivisions=2)
         for side, sign in (("L", -1.0), ("R", 1.0)):
             add_animal_ear(spec, collection, head, sign, side)
             add_ellipsoid(f"HORSE_Nostril_{side}",
-                          head + Vector((0.13 * sign, -0.402, -0.065)),
-                          (0.044, 0.022, 0.032), "eye", collection, spec, "muzzle")
-            add_ellipsoid(f"PONY_EyeWhite_{side}",
-                          head + Vector((0.27 * sign, -0.20, 0.115)),
-                          (0.116, 0.067, 0.145), "horn", collection, spec,
-                          f"eye_{side.lower()}", subdivisions=2)
-            add_ellipsoid(f"PONY_Iris_{side}",
-                          head + Vector((0.315 * sign, -0.252, 0.115)),
-                          (0.070, 0.026, 0.103), "metal", collection, spec,
-                          f"eye_{side.lower()}", subdivisions=2)
-            add_ellipsoid(f"PONY_Pupil_{side}",
-                          head + Vector((0.321 * sign, -0.273, 0.12)),
-                          (0.036, 0.014, 0.073), "eye", collection, spec,
-                          f"eye_{side.lower()}")
-            add_ellipsoid(f"PONY_EyeGlint_{side}",
-                          head + Vector((0.31 * sign, -0.285, 0.163)),
-                          (0.020, 0.011, 0.025), "horn", collection, spec,
-                          f"eye_{side.lower()}")
-            add_ellipsoid(
-                f"PONY_Cheek_{side}",
-                head + Vector((0.322 * sign, -0.10, -0.045)),
-                (0.020, 0.14, 0.105), "hide", collection, spec, "head")
-        mane_wedges = (
-            (((-0.04, -0.35, body_z + 0.25),
-              (-0.04, -0.45, body_z + 0.64),
-              (-0.04, -0.61, body_z + 0.46),
-              (-0.04, -0.54, body_z + 0.22)), 0.34, "neck"),
-            (((-0.04, -0.52, body_z + 0.43),
-              (-0.04, -0.65, body_z + 0.78),
-              (-0.04, -0.81, body_z + 0.54),
-              (-0.04, -0.69, body_z + 0.37)), 0.31, "mane"),
-            (((-0.03, -0.72, body_z + 0.49),
-              (-0.03, -0.86, body_z + 0.78),
-              (-0.03, -1.02, body_z + 0.59),
-              (-0.03, -0.91, body_z + 0.42)), 0.28, "head"),
-            (((0.06, -0.92, body_z + 0.56),
-              (0.06, -1.06, body_z + 0.76),
-              (0.06, -1.25, body_z + 0.46)), 0.28, "head"),
-        )
-        for index, (points, thickness, part) in enumerate(mane_wedges):
-            add_lateral_prism(f"PONY_ManeWedge_{index}", points, thickness,
-                              "secondary" if index % 2 == 0 else "cloth",
-                              collection, spec, part)
+                          head + Vector((0.135 * sign, -0.522, -0.10)),
+                          (0.037, 0.018, 0.028), "eye", collection, spec, "muzzle")
+            add_pony_eye(spec, collection, head, sign, side)
+        add_pony_lock("PONY_SweptForelock", (
+            (0.12, -0.85, body_z + 0.69, 0.07, 0.045),
+            (0.10, -0.94, body_z + 0.73, 0.13, 0.055),
+            (0.01, -1.06, body_z + 0.70, 0.14, 0.070),
+            (-0.13, -1.14, body_z + 0.62, 0.12, 0.065),
+            (-0.23, -1.12, body_z + 0.52, 0.065, 0.040),
+            (-0.25, -1.06, body_z + 0.46, 0.012, 0.012),
+        ), collection, spec, "head")
+        add_pony_lock("PONY_DrapedMane", (
+            (-0.015, -0.76, body_z + 0.68, 0.11, 0.060),
+            (-0.20, -0.63, body_z + 0.70, 0.17, 0.075),
+            (-0.34, -0.53, body_z + 0.62, 0.17, 0.085),
+            (-0.43, -0.47, body_z + 0.48, 0.15, 0.085),
+            (-0.48, -0.44, body_z + 0.32, 0.10, 0.065),
+            (-0.46, -0.40, body_z + 0.17, 0.015, 0.018),
+        ), collection, spec, "mane")
 
     if sheep:
         tail_base = Vector((0.0, 0.60, body_z + 0.14))
@@ -811,26 +860,24 @@ def build_quadruped(spec: CreatureSpec,
                            body_z - (0.62 if cow else 0.48)))
         tail_semantic = "secondary"
         tail_radius = 0.075
-    add_segment("CREATURE_TailRoot", tail_base, tail_mid,
-                tail_radius, tail_radius * 0.73, tail_semantic,
-                collection, spec, "tail_root")
-    add_segment("CREATURE_Tail", tail_mid, tail_end,
-                tail_radius * 0.78, tail_radius * 0.46, tail_semantic,
-                collection, spec, "tail")
+    if not pony:
+        add_segment("CREATURE_TailRoot", tail_base, tail_mid,
+                    tail_radius, tail_radius * 0.73, tail_semantic,
+                    collection, spec, "tail_root")
+        add_segment("CREATURE_Tail", tail_mid, tail_end,
+                    tail_radius * 0.78, tail_radius * 0.46, tail_semantic,
+                    collection, spec, "tail")
     if pony:
-        plume_points = (
-            Vector((0.0, 0.82, body_z + 0.03)),
-            Vector((-0.09, 0.99, body_z - 0.16)),
-            Vector((0.10, 1.13, body_z - 0.39)),
-            Vector((-0.03, 1.23, body_z - 0.62)),
-        )
-        plume_radii = (0.19, 0.18, 0.145, 0.025)
-        for index in range(3):
-            add_segment(f"PONY_TailFlow_{index}",
-                        plume_points[index], plume_points[index + 1],
-                        plume_radii[index], plume_radii[index + 1],
-                        "secondary" if index % 2 == 0 else "cloth", collection, spec,
-                        "tail_root" if index == 0 else "tail", sides=7)
+        add_pony_lock("PONY_FlowingTail", (
+            (0.0, 0.65, body_z + 0.12, 0.09, 0.075),
+            (0.0, 0.80, body_z + 0.12, 0.16, 0.13),
+            (-0.025, 0.94, body_z + 0.02, 0.19, 0.15),
+            (-0.045, 1.05, body_z - 0.13, 0.20, 0.14),
+            (-0.025, 1.13, body_z - 0.30, 0.18, 0.12),
+            (0.025, 1.18, body_z - 0.46, 0.14, 0.10),
+            (0.08, 1.16, body_z - 0.59, 0.085, 0.06),
+            (0.10, 1.11, body_z - 0.65, 0.012, 0.012),
+        ), collection, spec, "tail_flow")
         # Enlarge the whole face together, including its eyes and markings.
         # The head bone stays at the shared gait pivot.
         head_parts = {"head", "muzzle", "ear_l", "ear_r", "eye_l", "eye_r"}
@@ -1420,6 +1467,7 @@ def quadruped_bone_for_part(part: str) -> str:
         "horn_r": "head",
         "tail_root": "tail.root",
         "tail": "tail",
+        "tail_flow": "tail.root",
     }
     if part in direct:
         return direct[part]
@@ -1481,6 +1529,14 @@ def skin_quadruped(collection: bpy.types.Collection,
         obj.vertex_groups.clear()
         group = obj.vertex_groups.new(name=bone_name)
         group.add(tuple(range(len(obj.data.vertices))), 1.0, "REPLACE")
+        if obj.get("cc_part") == "tail_flow":
+            tip_group = obj.vertex_groups.new(name="tail")
+            for vertex in obj.data.vertices:
+                longitudinal = (obj.matrix_world @ vertex.co).y
+                weight = max(0.0, min(1.0, (longitudinal - 0.80) / 0.30))
+                weight = weight * weight * (3.0 - 2.0 * weight)
+                group.add((vertex.index,), 1.0 - weight, "REPLACE")
+                tip_group.add((vertex.index,), weight, "REPLACE")
         modifier = obj.modifiers.new("CC_QuadrupedSkin", "ARMATURE")
         modifier.object = rig
         world = obj.matrix_world.copy()

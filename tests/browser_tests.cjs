@@ -154,8 +154,9 @@ async function main() {
       await page.waitForFunction(() => Module.crownlessScreen === 'playing');
     }
     await page.setViewportSize({width: 1280, height: 900});
+    const beforeSave = await page.evaluate(() => Module.crownlessSaveRevision);
     await page.keyboard.press('Control+s');
-    await page.waitForFunction(() => Module.crownlessSaveRevision > 0);
+    await page.waitForFunction(previous => Module.crownlessSaveRevision > previous, beforeSave);
     const revision = await page.evaluate(() => Module.crownlessSaveRevision);
     await page.reload();
     await page.waitForFunction(() => window.Module && Module.crownlessCampaignRestored && document.querySelector('#loading').hidden);

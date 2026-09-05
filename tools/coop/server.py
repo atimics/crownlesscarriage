@@ -119,6 +119,11 @@ class Worlds:
           world TEXT NOT NULL, member TEXT NOT NULL, sequence INTEGER NOT NULL,
           context TEXT NOT NULL, session TEXT NOT NULL, PRIMARY KEY(world,member),
           FOREIGN KEY(world,member) REFERENCES members(world,id));
+        CREATE TABLE IF NOT EXISTS party_lives (
+          world TEXT NOT NULL, member TEXT NOT NULL, dead INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(world,member), FOREIGN KEY(world,member) REFERENCES members(world,id));
+        CREATE TABLE IF NOT EXISTS party_wipes (
+          world TEXT PRIMARY KEY REFERENCES worlds(id), count INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS away_clocks (
           world TEXT PRIMARY KEY REFERENCES worlds(id), last_human REAL NOT NULL,
           accounted_at REAL NOT NULL, owed_days REAL NOT NULL DEFAULT 0);
@@ -202,6 +207,8 @@ class Worlds:
                 online=time.monotonic() - self.seen.get((world, m["id"]), -100) < 15)
                 for m in self.db.execute("SELECT m.id,m.name,a.appearance FROM members m LEFT JOIN appearances a ON a.world=m.world AND a.member=m.id WHERE m.world=? AND m.revoked=0 ORDER BY m.rowid", (world,))]
             result["appearance"] = next(m["appearance"] for m in result["crew"] if m["id"] == member["id"])
+            result["party_wipes"] = self.wipe_count(world)
+            result["dead"] = self.member_dead(world, member["id"])
             result["session_context"] = self.session_context(world, row)
             if campaign and after is None:
                 if enter:
@@ -216,7 +223,10 @@ class Worlds:
             return result
 
     def pose(self, world, token, body):
-        require(set(body) == {"visit", "context", "scene", "pose"}, "Send your current traveller pose.")
+        require(set(body) in ({"visit", "context", "scene", "pose"},
+                              {"visit", "context", "scene", "pose", "dead"}),
+                "Send your current traveller pose.")
+        require(type(body.get("dead", False)) is bool, "Send your traveller life state.")
         scene = number(body["scene"], 0, 7, "scene")
         pose = body["pose"]
         if pose is not None:
@@ -245,6 +255,12 @@ class Worlds:
             self.poses[key] = dict(context=context, scene=scene, pose=pose,
                                    sequence=self.pose_sequence, seen=now)
             self.seen[key] = now
+            dead = self.member_dead(world, member["id"])
+            if body.get("dead", False) and not dead:
+                dead = True
+                with self.transaction():
+                    self.db.execute("INSERT INTO party_lives(world,member,dead) VALUES(?,?,1) ON CONFLICT(world,member) DO UPDATE SET dead=1", key)
+            wiped = dead and self.resolve_party_wipe(world, row, now)
             peers = []
             for crew in self.db.execute("SELECT m.id,m.name,a.appearance FROM members m LEFT JOIN appearances a ON a.world=m.world AND a.member=m.id WHERE m.world=? AND m.revoked=0 ORDER BY m.rowid", (world,)):
                 other = self.poses.get((world, crew["id"]))
@@ -253,7 +269,41 @@ class Worlds:
                 if other["context"] == context and other["scene"] == scene:
                     peers.append(dict(id=crew["id"], name=crew["name"], pose=other["pose"], sequence=other["sequence"],
                         appearance=json.loads(crew["appearance"]) if crew["appearance"] else {}))
-            return {"context": context, "scene": scene, "peers": peers}
+            result = {"context": context, "scene": scene, "peers": peers}
+            if wiped:
+                result["world"] = self.view(world, token, campaign=True)
+            return result
+
+    def member_dead(self, world, member):
+        row = self.db.execute("SELECT dead FROM party_lives WHERE world=? AND member=?", (world, member)).fetchone()
+        return bool(row and row["dead"])
+
+    def wipe_count(self, world):
+        row = self.db.execute("SELECT count FROM party_wipes WHERE world=?", (world,)).fetchone()
+        return row["count"] if row else 0
+
+    def resolve_party_wipe(self, world, row, now):
+        # Visits cover the whole party, including players in other scenes.
+        party = [m["id"] for m in self.db.execute(
+            "SELECT id FROM members WHERE world=? AND revoked=0", (world,))
+            if (world, m["id"]) in self.visits and
+            now - self.seen.get((world, m["id"]), -100) < 15]
+        if (row["paused"] or world in self.failed or not party or
+                any(not self.member_dead(world, member) for member in party)):
+            return False
+        with self.transaction():
+            with self.engine.open(saved=row["state"]) as sim:
+                day = json.loads(row["view"])["day"]
+                accepted, message = sim.apply("party_wipe", str(day), 0, 0)
+                require(accepted, message or "The next generation needs recovery.", 503)
+                self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1,action_revision=action_revision+1 WHERE id=?",
+                                (sim.save(), json.dumps(sim.snapshot()), world))
+            self.db.execute("INSERT INTO party_wipes(world,count) VALUES(?,1) ON CONFLICT(world) DO UPDATE SET count=count+1", (world,))
+            self.db.execute("DELETE FROM party_lives WHERE world=?", (world,))
+            self.db.execute("DELETE FROM sessions WHERE world=?", (world,))
+        self.poses = {key: value for key, value in self.poses.items() if key[0] != world}
+        self.last_tick[world] = now
+        return True
 
     def create(self, token, body):
         world, name, player = body.get("id"), body.get("name"), body.get("player")
@@ -283,6 +333,9 @@ class Worlds:
         journey = state["journey"]
         signature = json.dumps([state["company"]["location"],
             *[journey[key] for key in ("active", "phase", "route", "watch")]])
+        wipes = self.wipe_count(world)
+        if wipes:
+            signature += ':' + str(wipes)
         previous = self.db.execute("SELECT signature,context FROM scene_contexts WHERE world=?", (world,)).fetchone()
         if previous and previous["signature"] == signature:
             return previous["context"]
@@ -380,6 +433,7 @@ class Worlds:
                 require(revision == row["action_revision"], "The company has changed. Review the latest state and choose again.", 409)
                 require(world not in self.failed, "This world needs recovery before play resumes.", 503)
                 require(not row["paused"], "Resume the world before taking a company action.", 409)
+                require(not self.member_dead(world, member["id"]), "Your traveller has fallen. The living party carries on.", 409)
                 owed, _ = self.account_away(world, time.time(), present=True)
                 require(owed < 1, "The world is catching up. Your company can act when it is ready.", 409)
                 with self.engine.open(saved=row["state"]) as sim:
@@ -444,6 +498,8 @@ class Worlds:
                 self.db.execute("DELETE FROM appearances WHERE world=?", (world,))
                 self.db.execute("DELETE FROM scene_contexts WHERE world=?", (world,))
                 self.db.execute("DELETE FROM away_clocks WHERE world=?", (world,))
+                self.db.execute("DELETE FROM party_lives WHERE world=?", (world,))
+                self.db.execute("DELETE FROM party_wipes WHERE world=?", (world,))
                 self.db.execute("DELETE FROM members WHERE world=?", (world,))
                 self.db.execute("DELETE FROM worlds WHERE id=?", (world,))
             self.seen = {key: value for key, value in self.seen.items() if key[0] != world}

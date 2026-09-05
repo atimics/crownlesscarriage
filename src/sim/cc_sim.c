@@ -1157,6 +1157,7 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_ROAD_HOUSE_LODGING: return "ROAD HOUSE";
         case CC_EVENT_CHARACTER_BORN: return "BIRTH";
         case CC_EVENT_CHARACTER_DIED: return "DEATH";
+        case CC_EVENT_PARTY_WIPED: return "TWENTY YEARS LATER";
         case CC_EVENT_WOODLOT_HARVEST: return "WOODLOT";
         case CC_EVENT_BAKERY_PRODUCTION: return "BAKERY";
         case CC_EVENT_QUARRY_OUTPUT: return "QUARRY";
@@ -16851,6 +16852,36 @@ static bool ApplyGoblinTunnelTraversal(CcSim *sim,
     return true;
 }
 
+static bool ApplyPartyWipe(CcSim *sim, const CcCommand *command,
+                           char *error, size_t error_capacity)
+{
+    if (sim->current_day < 1 || command->target_id != (CcId)sim->current_day ||
+        sim->current_day > CC_SIM_MAX_DAY - CC_PARTY_WIPE_DAYS) {
+        SetError(error, error_capacity, "Refresh the world before the next generation.");
+        return false;
+    }
+    sim->journey = (CcJourneyEncounter){0};
+    sim->dungeon_expedition = (CcDungeonExpedition){
+        .current_room = -1,
+        .encounter_room = -1
+    };
+    sim->resolved_journey_situation_id = 0U;
+    sim->resolved_journey_outcome = CC_JOURNEY_OUTCOME_NONE;
+    sim->pony_company.encounter = -1;
+    sim->carriage = (CcCarriageState){
+        .mode = CC_CARRIAGE_PARKED,
+        .location_id = sim->player.location_id,
+        .condition = sim->carriage.condition
+    };
+    sim->clock.game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND;
+    CcSimAdvanceDays(sim, CC_PARTY_WIPE_DAYS);
+    (void)PushEvent(sim, CC_EVENT_PARTY_WIPED, sim->player.id,
+                    sim->player.location_id, 0U, 20,
+                    "The whole company fell. Twenty years pass, and a new company takes up the carriage.");
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 bool CcSimApply(CcSim *sim, const CcCommand *command,
                 char *error, size_t error_capacity)
 {
@@ -16858,7 +16889,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Command target is missing.");
         return false;
     }
-    if (sim->schema_version >= 40U && sim->pony_company.encounter >= 0 &&
+    bool party_wipe = command->kind == CC_COMMAND_PARTY_WIPE;
+    if (!party_wipe && sim->schema_version >= 40U && sim->pony_company.encounter >= 0 &&
         (command->kind < CC_COMMAND_MEET_PONY || command->kind > CC_COMMAND_LEAVE_PONY)) {
         SetError(error, error_capacity, "Finish your pony visit before continuing.");
         return false;
@@ -16869,7 +16901,7 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_OPEN_DUNGEON_SHORTCUT ||
         command->kind == CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER ||
         command->kind == CC_COMMAND_RETREAT_DUNGEON;
-    if (sim->dungeon_expedition.active && !dungeon_action) {
+    if (sim->dungeon_expedition.active && !dungeon_action && !party_wipe) {
         SetError(error, error_capacity,
                  "Return to the carriage before taking an outside action.");
         return false;
@@ -16898,6 +16930,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         return false;
     }
     switch (command->kind) {
+        case CC_COMMAND_PARTY_WIPE:
+            return ApplyPartyWipe(sim, command, error, error_capacity);
         case CC_COMMAND_MEET_PONY:
         case CC_COMMAND_HELP_PONY:
         case CC_COMMAND_SWAP_PONY:
@@ -17497,7 +17531,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_ROYAL_CARRIAGE_REROUTED ||
+                event->kind > CC_EVENT_PARTY_WIPED ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||
