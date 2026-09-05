@@ -5,6 +5,12 @@
   "model": "Suno v5.5",
   "mode": "new instrumental",
   "shared_style": "Lo-fi pixel fantasy, warm 16-bit sampler colour, soft tape movement, clear small melodies, space for dialogue.",
+  "selection_intent": {
+    "library": "Retain the existing music library and welcome familiar repeats.",
+    "location_anchors": "A few recognisable location themes lead arrivals and return during longer stays. The existing region and situation tracks play between those returns.",
+    "weighting": "Apply anchor preference when choosing a title. Keep take selection for alternate performances. Tune the balance by listening for place identity.",
+    "supernatural_encounters": "Wyrm, Lich and dragon encounters each have a distinct motif, palette, rhythm and space. Direct encounter identity leads cue selection, followed by encounter phase."
+  },
   "towns": [
     {
       "town": "Thornford",

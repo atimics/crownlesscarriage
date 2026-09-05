@@ -2,10 +2,11 @@
 
 Review base: `e02b647`, fetched from main on 5 September 2026.
 
-Crownless has a working music director and a large Suno library. The first step
-is six fresh town themes with distinct melodies and styles. Three kingdom sound
-families can connect those towns. Each court, trading faction and commons can
-then develop its own theme within its kingdom family.
+Crownless has a working music director and a large Suno library. The existing
+library and its repetition are part of the intended score. Six clear town themes
+will anchor that library through weighted returns. Three kingdom sound families
+can connect those towns. Wyrm, Lich and dragon encounters need their own musical
+identities, each distinct from the location score and from the other encounters.
 
 ## What has reached the game
 
@@ -65,7 +66,7 @@ to `CcMusicContextFor` in `src/client/cc_music.c`.
 3. The director squares each score, applies recent-title penalties, chooses a
    title, then chooses a take. Extra takes give a title more performances while
    keeping its title-level chance stable. The last take is skipped when another
-take of that title is available. Music uses its own random state.
+   take of that title is available. Music uses its own random state.
 4. The player opens a local file or downloads the selected MP3. The current
    music continues during the download. Up to three streams support overlapping
    fades and a sudden combat interruption.
@@ -78,9 +79,9 @@ Kingdom identity and the nine political factions are the next context layer.
 A probe against the current C library used seed 17, the bundled set and a fresh
 director in each quiet daytime town. Each town's own cue had a 99.847% chance on
 the first draw. Weather, nearby sites and recent-title history change that
-figure during play. Each town currently has one available take of its own cue,
-so town identity is strong but its performance can repeat. More exports and fresh
-town compositions address separate parts of that experience.
+figure during play. Each town currently has one available take of its own cue.
+These returns give the town a familiar sound. The new weighting should use that
+recognition while keeping the wider library active around a few strong anchors.
 
 The review also found that the town's name boost carried into underground scenes.
 At the review base, a quiet dragon cave near Silverwick gave its town cue 81.960%
@@ -187,14 +188,51 @@ pass can check whether listeners can place each tune.
 The trial set remains available for this listening pass. The next import should
 add one winner per town as its primary arrival theme and retain the current town
 cue as an alternate. A primary-cue preference belongs at title selection: the
-existing take weight only changes performances within the same title. Returning
-to a town should recover its identity while later tracks draw from its alternates,
-nearby activity and current mood. Combat keeps its quick transition and recovery.
+existing take weight only changes performances within the same title.
 
-After the six town themes settle, compose the three kingdom themes and then the
-nine faction themes. Build night, tension and relief arrangements from each
-chosen melody. Export the old library in useful groups: regional nights and inns
-first, then work sites, hunger and relief, then dungeon rooms and combat.
+Use these rules for the first weighting pass:
+
+- A town's ready anchor leads an arrival and returns during a longer stay.
+- The existing library fills the space between those returns. Region, activity,
+  weather and mood continue to guide those choices.
+- Familiar repeats remain welcome. Judge the weighting by recognition and place
+  identity. Give the anchor enough weight to recover after the recent-title
+  penalty, then tune the balance through listening.
+- Returning to a town brings back its established melody. Its alternate takes
+  provide different performances of that familiar theme.
+- A named supernatural encounter leads with its own theme. Its identity chooses
+  the cue family before the ordinary scene shuffle. Encounter phase then chooses
+  approach, audience, combat or aftermath within that family.
+
+Combat keeps its quick transition and recovery. Existing library growth can
+continue through exports of regional nights, inns, work sites and dungeon rooms.
+Town anchors come first; the Wyrm, Lich and dragon identities are the next music
+pass. Kingdom and faction themes can grow from those results.
+
+## Wyrm, Lich and dragon identities
+
+These encounters should be recognisable in their first few seconds. Each gets a
+fresh motif, its own instrument palette, rhythmic language and sense of space.
+Their link to the pixel world can be the grain of the samples. Their composition
+can reach far beyond the town score's relaxed feel.
+
+| Identity | Musical direction | Recognisable signature |
+| --- | --- | --- |
+| Deep Wyrm | Primordial ritual doom; immense bass, bowed metal and stone-like percussion | A vast low note, a grinding half-step rise, then a long fall; slow uneven breaths |
+| Lich | Cold ritual counterpoint; pipe organ, brittle keys and a precise skeletal pulse | A clipped high figure that answers itself in another register; uncanny precision |
+| Dragon | Predatory grandeur; raw brass, rushing strings and heavy wingbeat drums | A sudden wide upward leap and a commanding descending answer; force and movement |
+
+The Deep Wyrm direction follows the existing stage in `CcDragonLifeStage`:
+centuries bind the creature, hoard and mountain. The music context can use that
+stage together with a direct encounter and its phase. Dragon signs during travel
+can keep their current supporting cues; an audience or fight earns the full
+encounter identity. Lich activation will bind to the intended encounter state
+when its creature identity is specified.
+
+Each named creature can own its own motif within its encounter family. A later
+fight arrangement should retain that creature's motif so recognition survives
+the change in intensity. The existing dragon and combat tracks remain useful
+for signs, approaches, support and aftermath as their tags and scene fit allow.
 
 ## Verification
 
