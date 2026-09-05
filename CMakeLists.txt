@@ -297,7 +297,7 @@ if(CC_BUILD_CLIENT)
 
     file(GLOB CC_VOICE_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/voice/*.wav")
     add_executable(crownless_carriage src/client/main.c src/client/cc_audio.c
-                   src/client/cc_music_player.c src/client/cc_music_net.c src/client/cc_voice_net.c src/client/cc_coop_client.c)
+                   src/client/cc_music_player.c src/client/cc_music_net.c src/client/cc_voice_net.c src/client/cc_coop_client.c src/client/cc_company.c)
     target_compile_definitions(crownless_carriage PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
     if(APPLE)

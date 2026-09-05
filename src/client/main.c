@@ -2,6 +2,7 @@
 #include "client/cc_client_policy.h"
 #include "client/cc_interaction.h"
 #include "client/cc_coop_client.h"
+#include "client/cc_company.h"
 #include "client/cc_client_session.h"
 #include "client/cc_local3d.h"
 #include "client/cc_local_place.h"
@@ -10661,6 +10662,9 @@ int main(int argc, char **argv)
         }
     }
 #endif
+    char company_identity[768];
+    (void)snprintf(company_identity, sizeof(company_identity), "%s.company-identity", save_path);
+    CcCompanyConfigure(company_identity);
     if (CcCoopClientActive())
         (void)snprintf(save_path, sizeof(save_path), "/tmp/crownless-coop.ccsave");
     char session_path[704];

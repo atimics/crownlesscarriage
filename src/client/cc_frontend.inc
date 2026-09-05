@@ -5,7 +5,12 @@ typedef enum FrontendScreen {
     FRONTEND_PAUSED,
     FRONTEND_DELETE,
     FRONTEND_AVATAR,
-    FRONTEND_SOUND
+    FRONTEND_SOUND,
+    FRONTEND_WORLDS,
+    FRONTEND_CREATE_WORLD,
+    FRONTEND_JOIN_WORLD,
+    FRONTEND_COMPANY,
+    FRONTEND_REMOVE_MEMBER
 } FrontendScreen;
 
 typedef enum FrontendAction {
@@ -42,7 +47,24 @@ typedef enum FrontendAction {
     FRONTEND_ACTION_VOICE_VOLUME,
     FRONTEND_ACTION_PLAYER_VOICE,
     FRONTEND_ACTION_READ_ALOUD,
-    FRONTEND_ACTION_AMBIENT
+    FRONTEND_ACTION_AMBIENT,
+    FRONTEND_ACTION_WORLD_LIST,
+    FRONTEND_ACTION_CREATE_WORLD,
+    FRONTEND_ACTION_JOIN_WORLD,
+    FRONTEND_ACTION_CREATE_SUBMIT,
+    FRONTEND_ACTION_JOIN_SUBMIT,
+    FRONTEND_ACTION_WORLD_ENTER,
+    FRONTEND_ACTION_INVITE_COPY,
+    FRONTEND_ACTION_INVITE_ROTATE,
+    FRONTEND_ACTION_WORLD_PREVIOUS,
+    FRONTEND_ACTION_WORLD_NEXT,
+    FRONTEND_ACTION_FIELD_NAME,
+    FRONTEND_ACTION_FIELD_WORLD,
+    FRONTEND_ACTION_FIELD_PASS,
+    FRONTEND_ACTION_FIELD_INVITATION,
+    FRONTEND_ACTION_CONFIRM_REMOVE,
+    FRONTEND_ACTION_WORLD_FIRST = 100,
+    FRONTEND_ACTION_MEMBER_FIRST = 200
 } FrontendAction;
 
 typedef struct FrontendState {
@@ -55,6 +77,17 @@ typedef struct FrontendState {
     FrontendScreen avatar_return;
     uint32_t avatar;
     char feedback[256];
+    CcCompany company;
+    char player_name[32];
+    char world_name[65];
+    char world_pass[65];
+    char invitation[256];
+    int world_page;
+    FrontendAction text_field;
+    FrontendScreen company_return;
+    bool deleting_company;
+    char remove_member[33];
+    char remove_name[65];
 } FrontendState;
 
 static CcLocalAgent frontend_avatar_preview;
@@ -86,7 +119,8 @@ typedef struct FrontendItem {
 
 static Rectangle FrontendPanel(FrontendScreen screen)
 {
-    float width = screen == FRONTEND_PAUSED || screen == FRONTEND_AVATAR ? 920.0f : 440.0f;
+    float width = screen == FRONTEND_PAUSED || screen == FRONTEND_AVATAR || screen == FRONTEND_COMPANY ||
+        screen == FRONTEND_WORLDS || screen == FRONTEND_CREATE_WORLD || screen == FRONTEND_JOIN_WORLD ? 920.0f : 440.0f;
     return (Rectangle){((float)GetScreenWidth() - width) * 0.5f,
                        ((float)GetScreenHeight() - 556.0f) * 0.5f,
                        width, 556.0f};
@@ -97,6 +131,52 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
     Rectangle panel = FrontendPanel(state->screen);
     float x = panel.x + 36.0f;
     float y = panel.y + 148.0f;
+    if (state->screen == FRONTEND_REMOVE_MEMBER) {
+        items[0] = (FrontendItem){FRONTEND_ACTION_CANCEL, {x, y + 120, 368, 44}, "Keep traveller", true};
+        items[1] = (FrontendItem){FRONTEND_ACTION_CONFIRM_REMOVE, {x, y + 180, 368, 44}, "Remove from company", true};
+        return 2;
+    }
+    if (state->screen == FRONTEND_WORLDS) {
+        int count = 0;
+        for (int i = state->world_page * 6; i < state->company.world_count && i < state->world_page * 6 + 6; ++i)
+            items[count++] = (FrontendItem){(FrontendAction)(FRONTEND_ACTION_WORLD_FIRST + i),
+                {x, y + (float)(i % 6) * 45, 488, 36}, state->company.worlds[i].name, true};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_CREATE_WORLD, {x + 512, y, 336, 40}, "Create world", true};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_JOIN_WORLD, {x + 512, y + 48, 336, 40}, "Join with invitation", true};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_WORLD_LIST, {x + 512, y + 96, 336, 40}, "Refresh worlds", true};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_WORLD_PREVIOUS, {x + 512, y + 144, 164, 40}, "Previous", state->world_page > 0};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_WORLD_NEXT, {x + 684, y + 144, 164, 40}, "Next", (state->world_page + 1) * 6 < state->company.world_count};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_CANCEL, {x + 512, y + 240, 336, 40}, "Back to title", true};
+        return count;
+    }
+    if (state->screen == FRONTEND_CREATE_WORLD || state->screen == FRONTEND_JOIN_WORLD) {
+        bool create = state->screen == FRONTEND_CREATE_WORLD;
+        items[0] = (FrontendItem){FRONTEND_ACTION_FIELD_NAME, {x, y, 848, 46}, "Your name", true};
+        items[1] = (FrontendItem){create ? FRONTEND_ACTION_FIELD_WORLD : FRONTEND_ACTION_FIELD_INVITATION,
+            {x, y + 64, 848, 46}, create ? "World name" : "Invitation", true};
+        int count = 2;
+        if (create) items[count++] = (FrontendItem){FRONTEND_ACTION_FIELD_PASS, {x, y + 128, 848, 46}, "World pass", true};
+        items[count++] = (FrontendItem){create ? FRONTEND_ACTION_CREATE_SUBMIT : FRONTEND_ACTION_JOIN_SUBMIT,
+            {x, y + 240, 412, 46}, create ? "Create world" : "Join company", true};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_WORLD_LIST, {x + 436, y + 240, 412, 46}, "Back", true};
+        return count;
+    }
+    if (state->screen == FRONTEND_COMPANY) {
+        int count = 0;
+        for (int i = 0; i < state->company.crew_count; ++i)
+            items[count++] = (FrontendItem){(FrontendAction)(FRONTEND_ACTION_MEMBER_FIRST + i),
+                {x, y + (float)i * 34, 440, 29}, state->company.crew[i].name,
+                state->company.owner && !state->company.crew[i].self};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_WORLD_ENTER, {x + 464, y, 384, 44},
+            CcCoopClientActive() ? "Return to the road" : "Enter world", true};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_INVITE_COPY, {x + 464, y + 54, 384, 40}, "Copy invitation", state->company.owner};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_INVITE_ROTATE, {x + 464, y + 102, 384, 40}, "New invitation", state->company.owner};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_HOST_PAUSE, {x + 464, y + 150, 384, 40},
+            state->company.paused ? "Resume shared world" : "Pause shared world", state->company.owner};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_DELETE, {x + 464, y + 198, 384, 40}, "Delete world", state->company.owner};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_CANCEL, {x + 464, y + 246, 384, 40}, "Back", true};
+        return count;
+    }
     if (state->screen == FRONTEND_SOUND) {
         const FrontendAction actions[] = {FRONTEND_ACTION_SOUND, FRONTEND_ACTION_VOICE_VOLUME,
             FRONTEND_ACTION_PLAYER_VOICE, FRONTEND_ACTION_READ_ALOUD, FRONTEND_ACTION_AMBIENT,
@@ -179,9 +259,6 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
         credits_y = y + 336;
     }
     items[count++] = (FrontendItem){FRONTEND_ACTION_CREDITS, {right, credits_y, 388, 36}, "Licenses & credits", true};
-#if defined(PLATFORM_WEB)
-    items[count++] = (FrontendItem){FRONTEND_ACTION_TOUCH, {x, y + 270, 368, 36}, "Touch controls", true};
-#endif
     return count;
 }
 
@@ -190,7 +267,10 @@ static void FrontendOpen(FrontendState *state, FrontendScreen screen)
     state->screen = screen;
     state->focus = screen == FRONTEND_TITLE ? 2 : 0;
     state->feedback[0] = '\0';
+    state->text_field = FRONTEND_ACTION_NONE;
 }
+
+#include "cc_company_ui.inc"
 
 /* A book opened from the menu returns to that menu and keeps its scene. */
 static void FrontendReturnFromBook(FrontendState *state, LocalState *local, ClientView *view)
@@ -203,12 +283,14 @@ static void FrontendReturnFromBook(FrontendState *state, LocalState *local, Clie
 
 static FrontendAction FrontendInput(FrontendState *state)
 {
+    if (FrontendCompanyTextInput(state)) return FRONTEND_ACTION_NONE;
     if (ClientKeyPressed(KEY_ESCAPE)) {
         if (state->screen == FRONTEND_PLAYING) {
             FrontendOpen(state, FRONTEND_PAUSED);
         } else if (state->screen == FRONTEND_PAUSED) {
             return FRONTEND_ACTION_RESUME;
-        } else if (state->screen == FRONTEND_DELETE || state->screen == FRONTEND_SOUND) {
+        } else if (state->screen == FRONTEND_DELETE || state->screen == FRONTEND_SOUND ||
+            state->screen >= FRONTEND_WORLDS) {
             return FRONTEND_ACTION_CANCEL;
         } else if (state->screen == FRONTEND_AVATAR) {
             return FRONTEND_ACTION_CANCEL_AVATAR;
@@ -298,6 +380,7 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
     int32_t *selected_situation, const char *save_path, const char *session_path,
     const char *preferences_path)
 {
+    if (FrontendCompanyAction(state, action)) return;
     if (action == FRONTEND_ACTION_AVATAR) {
         state->avatar_return = state->screen;
         state->avatar = CcCoopClientActive() ? CcCoopClientAppearance() :
@@ -382,8 +465,7 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
         state->focus = state->online ? 1 : 2;
         state->feedback[0] = '\0';
     } else if (action == FRONTEND_ACTION_PLAY && state->online) {
-        CcCoopClientOpenLobby();
-        (void)snprintf(state->feedback, sizeof(state->feedback), "The online lobby opens in your browser.");
+        (void)FrontendCompanyAction(state, FRONTEND_ACTION_WORLD_LIST);
     } else if (action == FRONTEND_ACTION_PLAY) {
 #if defined(PLATFORM_WEB)
         if (ClientBrowserCampaignAccess() != 0) {
@@ -486,6 +568,11 @@ static void DrawFrontend(const FrontendState *state,
     const char *title = state->screen == FRONTEND_TITLE ? "The road awaits" :
         state->screen == FRONTEND_AVATAR ? "Your traveller" :
         state->screen == FRONTEND_SOUND ? "Sound & voices" :
+        state->screen == FRONTEND_WORLDS ? "Shared worlds" :
+        state->screen == FRONTEND_CREATE_WORLD ? "Create a shared world" :
+        state->screen == FRONTEND_JOIN_WORLD ? "Join a company" :
+        state->screen == FRONTEND_COMPANY ? state->company.name :
+        state->screen == FRONTEND_REMOVE_MEMBER ? "Remove this traveller?" :
         state->screen == FRONTEND_DELETE ? "Delete this world?" :
         CcCoopClientActive() ? "Company menu" : "Journey paused";
     ClientTouchHeading(title, state->feedback[0] != '\0' ? state->feedback :
@@ -499,13 +586,13 @@ static void DrawFrontend(const FrontendState *state,
         FrontendCenteredText("Choose how to play", top + 126, 14, MUTED);
         FrontendCenteredText(state->online ? "Share a carriage with your company." :
             "Your world is saved on this device.", top + 232, 14, MUTED);
-        FrontendCenteredText(state->online ? "Play opens the online lobby." :
+        FrontendCenteredText(state->online ? "Create a world or join your company." :
             state->has_world ? "Continue your saved journey." : "Begin a new world.",
             top + 354, 14, MUTED);
     } else if (state->screen == FRONTEND_DELETE) {
-        FrontendCenteredText(CcCoopClientActive() ? "This removes the shared world and progress" :
+        FrontendCenteredText(CcCoopClientActive() || state->deleting_company ? "This removes the shared world and progress" :
             "This removes your world and its progress", top + 165, 16, INK);
-        FrontendCenteredText(CcCoopClientActive() ? "for everyone in the company." :
+        FrontendCenteredText(CcCoopClientActive() || state->deleting_company ? "for everyone in the company." :
             "from this device.", top + 189, 16, INK);
         FrontendCenteredText("Your next Play begins a new world.", top + 224, 14, MUTED);
     } else if (state->screen == FRONTEND_AVATAR) {
@@ -513,6 +600,14 @@ static void DrawFrontend(const FrontendState *state,
         frontend_avatar_preview.appearance = CcNpcPlayerAppearance(state->avatar);
         CcLocalDrawAvatarPreview3D(&frontend_avatar_preview, preview_target,
             (Rectangle){panel.x + 36, panel.y + 148, 424, 318});
+    } else if (state->screen == FRONTEND_REMOVE_MEMBER) {
+        FrontendCenteredText(state->remove_name, top + 165, 22, INK);
+        FrontendCenteredText("This traveller will leave the company.", top + 209, 14, MUTED);
+    } else if (state->screen >= FRONTEND_WORLDS) {
+        FrontendCenteredText(state->screen == FRONTEND_CREATE_WORLD ? "Use the world pass from this host." :
+            state->screen == FRONTEND_JOIN_WORLD ? "Paste an invitation and choose your traveller's name." :
+            state->screen == FRONTEND_COMPANY ? "Your company and its shared road." :
+            state->company.world_count == 0 ? "Create a world or join with an invitation." : "Choose a saved journey.", top + 120, 14, MUTED);
     } else {
         FrontendCenteredText(CcCoopClientActive() ? "ONLINE  /  THE COMPANY KEEPS PLAYING" :
             TextFormat("OFFLINE  /  DAY %d", sim->current_day),
@@ -524,7 +619,7 @@ static void DrawFrontend(const FrontendState *state,
         FrontendItem item = items[i];
         bool selected = (item.action == FRONTEND_ACTION_ONLINE && state->online) ||
                         (item.action == FRONTEND_ACTION_OFFLINE && !state->online);
-        bool danger = item.action == FRONTEND_ACTION_DELETE ||
+        bool danger = item.action == FRONTEND_ACTION_DELETE || item.action == FRONTEND_ACTION_CONFIRM_REMOVE ||
                       item.action == FRONTEND_ACTION_CONFIRM_DELETE;
         bool primary = item.action == FRONTEND_ACTION_PLAY ||
                        item.action == FRONTEND_ACTION_SAVE_AVATAR ||
@@ -538,6 +633,21 @@ static void DrawFrontend(const FrontendState *state,
             i == state->focus ? 2.0f : 1.0f,
             Fade(accent, item.enabled ? (i == state->focus || selected ? 1.0f : 0.45f) : 0.18f));
         const char *label = item.label;
+        char field_label[192];
+        if (FrontendIsCompanyField(item.action)) {
+            size_t field_capacity;
+            char *value = FrontendCompanyField((FrontendState *)state, item.action, &field_capacity);
+            (void)field_capacity;
+            (void)snprintf(field_label, sizeof(field_label), "%s: %s%s", item.label,
+                item.action == FRONTEND_ACTION_FIELD_PASS && value[0] != '\0' ? "••••••••" : value,
+                state->text_field == item.action ? "_" : "");
+            label = field_label;
+        }
+        if (item.action >= FRONTEND_ACTION_MEMBER_FIRST) {
+            const CcCompanyEntry *member = &state->company.crew[item.action - FRONTEND_ACTION_MEMBER_FIRST];
+            label = TextFormat("%s%s%s / %s", item.enabled ? "Remove " : "", member->name,
+                member->self ? " (you)" : "", member->online ? "Aboard" : "Away");
+        }
         if (item.action >= FRONTEND_ACTION_SKIN && item.action <= FRONTEND_ACTION_COAT) {
             int field = (int)(item.action - FRONTEND_ACTION_SKIN);
             unsigned int choice = (state->avatar >> ((unsigned int)field * 3U)) & 7U;
@@ -566,6 +676,7 @@ static void DrawFrontend(const FrontendState *state,
             (int)(item.bounds.y + (item.bounds.height - (float)size) * 0.5f),
             size, Fade(danger ? DANGER : INK, item.enabled ? 1.0f : 0.35f));
     }
+    FrontendCompanyPublishFields((FrontendState *)state, items, count);
     if (state->feedback[0] != '\0') {
         /* Wrap long save errors inside the panel. */
         char line[64];

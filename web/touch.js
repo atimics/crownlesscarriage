@@ -1,77 +1,56 @@
-/* Touch controls are published by the game from its current menu and actions. */
+/* Canvas controls share the native game's input and layout. */
 (function () {
   const canvas = document.querySelector('#canvas');
-  const panel = document.querySelector('#touch-panel');
-  if (!canvas || !panel) return;
-  const actions = document.querySelector('#touch-actions');
-  const title = document.querySelector('#touch-title');
-  const detail = document.querySelector('#touch-detail');
-  const shortcuts = document.querySelector('#touch-shortcuts');
-  const reading = document.querySelector('#touch-reading');
-  const readingPanel = document.querySelector('#touch-reading-panel');
-  const smallScreen = window.matchMedia('(max-width: 680px)');
-  const coarsePointer = window.matchMedia('(any-pointer: coarse)');
-  let preference = null;
+  if (!canvas) return;
   let gesture = null;
-  let frame = null;
-
-  function updateMode() {
-    Module.crownlessTouchEnabled = preference ??
-      (coarsePointer.matches || (smallScreen.matches && navigator.maxTouchPoints > 0));
-    document.body.classList.toggle('touch-mode', Module.crownlessTouchEnabled);
-    panel.hidden = !Module.crownlessTouchEnabled;
-    if (Module.crownlessTouchEnabled && frame) Module.renderCrownlessTouch(frame);
-  }
-
-  Module.renderCrownlessTouch = function (next) {
-    frame = next;
-    if (!Module.crownlessTouchEnabled) return;
-    title.textContent = next.title || 'Your journey';
-    detail.textContent = next.detail;
-    shortcuts.hidden = Module.crownlessScreen !== 'playing';
-    readingPanel.hidden = Module.crownlessScreen !== 'playing' || !next.reading;
-    if (reading.textContent !== next.reading) reading.textContent = next.reading;
-    // Keep unchanged buttons mounted so a frame update preserves focus and taps.
-    next.buttons.forEach((item, index) => {
-      let button = actions.children[index];
-      if (!button) {
-        button = document.createElement('button');
-        button.type = 'button';
-        button.addEventListener('pointerdown', () => { button.touchRevision = button.dataset.revision; });
-        button.addEventListener('click', event => {
-          const revision = event.detail === 0 ? button.dataset.revision : button.touchRevision;
-          if (revision !== button.dataset.revision) return;
-          Module._CrownlessTouchActivate(index, Number(revision));
+  Module.crownlessTouchEnabled = true;
+  Module.renderCrownlessTouch = frame => {
+    canvas.setAttribute('aria-label', frame.title || 'Crownless Carriage game');
+  };
+  const fields = new Map();
+  Module.renderCrownlessFields = descriptors => {
+    const present = new Set();
+    const bounds = canvas.getBoundingClientRect();
+    for (const field of descriptors) {
+      present.add(field.action);
+      let input = fields.get(field.action);
+      if (!input) {
+        input = document.createElement('input');
+        input.className = 'game-field';
+        input.type = field.secret ? 'password' : 'text';
+        input.autocomplete = 'off';
+        input.autocapitalize = 'off';
+        input.spellcheck = false;
+        input.setAttribute('aria-label', field.label);
+        const publish = () => {
+          const size = lengthBytesUTF8(input.value) + 1;
+          const pointer = _malloc(size);
+          if (!pointer) return;
+          stringToUTF8(input.value, pointer, size);
+          Module._CrownlessCompanyText(field.action, pointer);
+          _free(pointer);
+        };
+        input.addEventListener('input', publish);
+        input.addEventListener('focus', publish);
+        input.addEventListener('blur', () => Module._CrownlessCompanyText(0, 0));
+        input.addEventListener('keydown', event => {
+          event.stopPropagation();
+          if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); input.blur(); canvas.focus(); }
         });
-        actions.append(button);
+        input.addEventListener('keyup', event => event.stopPropagation());
+        input.addEventListener('keypress', event => event.stopPropagation());
+        document.body.append(input);
+        fields.set(field.action, input);
       }
-      const label = item.label.replace(/\s*\[(?:F7|Enter|Backspace)\]$/, '')
-        .replace(/^\[\d\]\s*/, '').replace(/\s+(?:F5|Esc|Enter|Up|Down|[BQTMH])$/, '').trim();
-      if (button.textContent !== label) {
-        button.blur();
-        button.textContent = label;
-      }
-      button.disabled = !item.enabled;
-      button.setAttribute('aria-pressed', String(item.active));
-      button.dataset.revision = String(next.revision);
-    });
-    while (actions.children.length > next.buttons.length) actions.lastElementChild.remove();
+      if (document.activeElement !== input) input.value = field.value;
+      input.maxLength = field.capacity;
+      input.style.left = (bounds.left + field.x * bounds.width / canvas.width) + 'px';
+      input.style.top = (bounds.top + field.y * bounds.height / canvas.height) + 'px';
+      input.style.width = (field.width * bounds.width / canvas.width) + 'px';
+      input.style.height = (field.height * bounds.height / canvas.height) + 'px';
+    }
+    for (const [id, input] of fields) if (!present.has(id)) { input.remove(); fields.delete(id); }
   };
-
-  Module.toggleCrownlessTouch = () => {
-    preference = !Module.crownlessTouchEnabled;
-    updateMode();
-  };
-  smallScreen.addEventListener('change', updateMode);
-  coarsePointer.addEventListener('change', updateMode);
-  panel.addEventListener('keydown', event => event.stopPropagation());
-  panel.addEventListener('keyup', event => event.stopPropagation());
-  panel.querySelectorAll('[data-key]').forEach(button => {
-    button.addEventListener('click', () => {
-      if (Module._CrownlessTouchKey) Module._CrownlessTouchKey(Number(button.dataset.key));
-    });
-  });
-
   canvas.addEventListener('pointerdown', event => {
     if (event.pointerType === 'mouse') return;
     event.preventDefault();
@@ -107,5 +86,4 @@
       event.stopImmediatePropagation();
     }, {capture: true, passive: false});
   }
-  updateMode();
 })();
