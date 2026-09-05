@@ -102,6 +102,8 @@ float CcAudioMusicGain(void)
 static float CueVolume(CcSoundCue cue)
 {
     float volume = cue <= CC_SOUND_WHEEL ? 0.32f : 0.48f;
+    if (cue <= CC_SOUND_SPLASH) volume = 0.18f;
+    if (cue == CC_SOUND_LAND) volume = 0.28f;
     if (audio.voice_loaded && IsMusicStreamPlaying(audio.voice)) volume *= 0.36f;
     return volume;
 }
@@ -117,6 +119,7 @@ void CcAudioPlay(CcSoundCue cue)
     Sound sound = audio.sounds[cue][variant];
     if (!IsSoundValid(sound)) return;
     SetSoundVolume(sound, CueVolume(cue));
+    SetSoundPitch(sound, CC_SOUND_PLAYBACK_PITCH);
     PlaySound(sound);
 }
 

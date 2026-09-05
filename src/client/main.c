@@ -9634,30 +9634,39 @@ static int RunMapSaleInputRegression(void)
 #endif
 
 static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
-                             const LocalState *local, ClientView view,
+                             LocalState *local, ClientView view,
                              float dt)
 {
     bool travel = local->journey_travel_active &&
         ((sim->journey.active && sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) ||
          local->arrival.phase == CC_CLIENT_ARRIVAL_ROAD_BOOK);
-    const CcLocalAgent *agent = &local->agent;
+    CcLocalAgent *agent = &local->agent;
+    uint32_t markers = CcHumanoidGaitConsumeMotionMarkers(&agent->humanoid);
     CcSoundFrame frame = {
         .x = agent->position.x, .z = agent->position.z,
         .place = sim->player.location_id, .scene = (int)agent->scene,
         .walking = view == VIEW_LOCAL && !travel && !local->site_travel_active,
         .grounded = agent->grounded || agent->swimming,
-        .jumping = !agent->grounded && agent->velocity.y > 1.0f,
+        .swimming = agent->swimming,
+        .jumping = !agent->grounded && !agent->swimming && agent->velocity.y > 1.0f,
         .striking = agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE,
         .strike_time = agent->humanoid.action_time,
         .impact_time = local->course.last_outcome >= CC_COMBAT_OUTCOME_HIT ?
             local->course.combat_event_seconds : 0.0f,
         .blocked = local->course.last_outcome == CC_COMBAT_OUTCOME_BLOCKED ||
                    local->course.last_outcome == CC_COMBAT_OUTCOME_GUARD_BROKEN,
-        .surface = agent->swimming ? CC_SOUND_SPLASH :
-                   agent->scene == CC_LOCAL_SCENE_MARKET ? CC_SOUND_STEP_WOOD :
-                   agent->scene == CC_LOCAL_SCENE_ROAD ? CC_SOUND_STEP_DIRT : CC_SOUND_STEP_STONE,
         .travel_pace = travel && view == VIEW_LOCAL ? local->convoy.pace : 0.0f
     };
+    for (int foot = 0; foot < CC_HUMANOID_LEG_COUNT; ++foot) {
+        uint32_t contact = foot == 0 ? CC_MOTION_MARKER_LEFT_CONTACT :
+                                      CC_MOTION_MARKER_RIGHT_CONTACT;
+        frame.footfall[foot] = (markers & contact) != 0U &&
+            !agent->climbing && !agent->humanoid.ragdoll.active;
+        if (frame.footfall[foot]) {
+            CcLimbVec3 point = agent->humanoid.feet[foot].planted_point;
+            frame.foot_surface[foot] = CcLocalFootstepSurfaceAt(agent->scene, point.x, point.z);
+        }
+    }
     uint32_t cues = CcSoundscapeStep(soundscape, frame, dt);
     for (int cue = 0; cue < CC_SOUND_COUNT; ++cue) {
         if ((cues & (UINT32_C(1) << (unsigned int)cue)) != 0U) CcAudioPlay((CcSoundCue)cue);

@@ -1,4 +1,5 @@
 #include "client/cc_local3d.h"
+#include "test_support.h"
 
 #include <float.h>
 #include <math.h>
@@ -164,11 +165,40 @@ static int TestWalkingFollowsTheLand(void)
     return 0;
 }
 
+static void TestFootstepSurfaces(void)
+{
+    CcLocalBindOpenWorld(NULL);
+    CcLocalBindPlace(NULL);
+    const uint32_t seeds[] = {UINT32_C(0xc0a71a9e), UINT32_C(0x12345678)};
+    for (size_t i = 0; i < sizeof(seeds) / sizeof(seeds[0]); ++i) {
+        CcLocalTerrainSetSeed(seeds[i]);
+        CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 24.0f, 29.4f) == CC_SOUND_STEP_STONE);
+        CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 24.0f, 32.8f) == CC_SOUND_STEP_GRASS);
+        CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 11.0f, 9.8f) == CC_SOUND_SPLASH);
+        CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 10.4f, 1.0f) == CC_SOUND_STEP_WOOD);
+        CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_ROAD, 24.0f, 40.0f) == CC_SOUND_STEP_DIRT);
+        CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_ROAD, 24.0f, 44.0f) == CC_SOUND_STEP_GRASS);
+        CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_MARKET, 4.0f, 4.0f) == CC_SOUND_STEP_WOOD);
+    }
+    static CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    for (int32_t i = 0; i < sim.settlement_count; ++i) {
+        if (sim.settlements[i].function != CC_SETTLEMENT_FARMING) continue;
+        sim.player.location_id = sim.settlements[i].id;
+        CcLocalBindPlace(&sim);
+        CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 24.0f, 29.4f) == CC_SOUND_STEP_DIRT);
+        CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 24.0f, 32.8f) == CC_SOUND_STEP_GRASS);
+        break;
+    }
+    CcLocalBindPlace(NULL);
+}
+
 int main(void)
 {
     if (TestSeededTerrain() != 0) return 1;
     if (TestCountryHasRelief() != 0) return 1;
     if (TestSocietyUsesLocalFoundations() != 0) return 1;
     if (TestWalkingFollowsTheLand() != 0) return 1;
+    TestFootstepSurfaces();
     return 0;
 }
