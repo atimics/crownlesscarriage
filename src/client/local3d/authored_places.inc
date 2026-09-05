@@ -1631,6 +1631,19 @@ static const Rectangle TERRAIN_FIELDS[] = {
     {76.0f, 43.0f, 15.0f, 10.0f},
 };
 
+static Vector2 TerrainFieldPoint(int32_t index, float x, float z, bool inverse)
+{
+    if (active_place_function != CC_SETTLEMENT_FARMING) return (Vector2){x, z};
+    static const float angles[] = {-8, 11, -16, 16, -12};
+    Rectangle field = TERRAIN_FIELDS[index];
+    float cx = field.x + field.width * 0.5f;
+    float cz = field.y + field.height * 0.5f;
+    float angle = angles[index] * DEG2RAD * (inverse ? -1.0f : 1.0f);
+    float c = cosf(angle), s = sinf(angle);
+    return (Vector2){cx + c * (x - cx) + s * (z - cz),
+                     cz - s * (x - cx) + c * (z - cz)};
+}
+
 static float TerrainRectangleInset(float x, float z, Rectangle rectangle)
 {
     if (!TerrainPointInRectangle(x, z, rectangle)) return 0.0f;
@@ -1870,13 +1883,14 @@ static Color TerrainRoadRutColor(CcLocalRoadSurface surface,
 static float TerrainFieldAmount(float x, float z)
 {
     if (ActivePlaceProfile()->lane_count > 0 &&
-        (TerrainLaneInset(x, z, NULL) > -0.55f ||
+        (TerrainLaneInset(x, z, NULL) > -0.55f || x > 86.0f ||
          TerrainPointInsideMajorFoundation(x, z))) return 0.0f;
     float amount = 0.0f;
     for (int32_t i = 0; i < (int32_t)(sizeof(TERRAIN_FIELDS) /
                                       sizeof(TERRAIN_FIELDS[0])); ++i) {
         Rectangle field = TERRAIN_FIELDS[i];
-        float inset = TerrainRectangleSignedInset(x, z, field);
+        Vector2 local = TerrainFieldPoint(i, x, z, true);
+        float inset = TerrainRectangleSignedInset(local.x, local.y, field);
         float broad = TerrainValueNoise(
             x + (float)i * 8.2f, z - (float)i * 5.3f, 6.4f, 73U);
         float scallop = sinf((x - field.x) * 0.48f + (float)i) * 0.16f +
@@ -1949,6 +1963,9 @@ static Color TerrainSurfaceColor(const CcSettlement *place,
     float field_amount = TerrainFieldAmount(x, z);
     Color field = BlendColor(WORLD_CROP,
                              WORLD_CROP_LIGHT, prosperity * 0.26f);
+    if (active_place_function == CC_SETTLEMENT_FARMING) {
+        field = BlendColor(WORLD_EARTH, WORLD_CROP_SHADOW, 0.25f);
+    }
     field = BlendColor(field, grass, hunger * 0.28f);
     color = BlendColor(color, field, field_amount * 0.84f);
 
@@ -2529,7 +2546,9 @@ static void DrawCurvedLaneRuts(const CcSettlement *place)
 static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
 {
     if (ActivePlaceProfile()->lane_count > 0) {
+        TerrainDetailBegin();
         DrawCurvedLaneRuts(place);
+        TerrainDetailEnd();
         return;
     }
     float prosperity = place != NULL ?
@@ -2722,12 +2741,12 @@ static void DrawTerrainFieldRows(const CcSettlement *place, Vector3 focus)
                     (x - field.x) * 0.36f + (float)i * 1.2f) * 0.10f;
                 float next_bend = sinf(
                     (next - field.x) * 0.36f + (float)i * 1.2f) * 0.10f;
-                float middle_x = (x + next) * 0.5f;
-                float middle_z = z + (row_bend + next_bend) * 0.5f;
-                if (TerrainFieldAmount(middle_x, middle_z) < 0.30f) continue;
-                TerrainRibbonSegment((Vector2){x, z + row_bend},
-                                     (Vector2){next, z + next_bend},
-                                     0.080f, 0.055f, color);
+                Vector2 a = TerrainFieldPoint(i, x, z + row_bend, false);
+                Vector2 b = TerrainFieldPoint(i, next, z + next_bend, false);
+                if (TerrainFieldAmount((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f) < 0.30f) continue;
+                TerrainRibbonSegment(a, b,
+                                     active_place_function == CC_SETTLEMENT_FARMING ? 0.20f : 0.080f,
+                                     0.055f, color);
             }
         }
     }
@@ -2858,9 +2877,9 @@ static void DrawTerrainPlantCover(const CcSettlement *place, Vector3 focus)
                 float scale = 0.82f + TerrainScatter01(
                     field_index * 37 + column_index,
                     row_index, 42U) * 0.38f;
-                float crop_x = x + jitter * 0.22f;
-                if (TerrainFieldAmount(crop_x, z) < 0.22f) continue;
-                TerrainTuft(crop_x, z,
+                Vector2 crop = TerrainFieldPoint(field_index, x + jitter * 0.22f, z, false);
+                if (TerrainFieldAmount(crop.x, crop.y) < 0.22f) continue;
+                TerrainTuft(crop.x, crop.y,
                              0.31f * scale, 0.070f * scale,
                              jitter * 0.55f, crop_bottom, crop_top);
             }

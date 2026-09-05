@@ -318,14 +318,15 @@ static float TerrainNaturalHeight(float x, float z)
     switch (active_place_function) {
         case CC_SETTLEMENT_FARMING: {
             float river_center = 91.0f + sinf(z * 0.082f) * 1.7f;
-            float river_distance = (x - river_center) / 4.8f;
-            land -= 4.60f * expf(-river_distance * river_distance);
             land += TerrainLandform(x, z, 45.0f, 28.0f,
                                     25.0f, 17.0f) * 1.30f;
             land += TerrainLandform(x, z, 79.0f, 18.0f,
                                     21.0f, 15.0f) * 5.20f;
             land += TerrainLandform(x, z, 68.0f, 2.0f,
                                     34.0f, 13.0f) * 2.40f;
+            float bank = TerrainSmooth01((fabsf(x - river_center) - 3.0f) / 3.2f);
+            float bed = -1.8f + sinf(z * 0.03f) * 0.35f;
+            land = bed + (land - bed) * bank;
             break;
         }
         case CC_SETTLEMENT_MINING:
@@ -455,10 +456,19 @@ static void TerrainBuildLanePaths(void)
                 distance[i] = distance[i - 1] + Vector2Distance(path->point[i - 1], path->point[i]);
             }
             float start = path->height[0];
-            float finish = TerrainRectangleAverage(ActiveCompoundBounds());
             float run = distance[path->count - 9];
+            float finish = TerrainClamp(TerrainRectangleAverage(ActiveCompoundBounds()),
+                start - run * 0.11f, start + run * 0.11f);
             for (int32_t i = 0; i < path->count; ++i) {
                 float t = TerrainClamp(distance[i] / fmaxf(run, 0.01f), 0.0f, 1.0f);
+                path->height[i] = start + (finish - start) * t;
+            }
+        }
+        if (lane == 3) {
+            float start = terrain_lanes[2].height[terrain_lanes[2].count - 1];
+            float finish = path->height[path->count - 1];
+            for (int32_t i = 0; i < path->count; ++i) {
+                float t = (float)i / (float)(path->count - 1);
                 path->height[i] = start + (finish - start) * t;
             }
         }
@@ -469,28 +479,44 @@ static void TerrainBuildLanePaths(void)
 }
 
 /* The same sampled centre lines shape the ground, paint and wheel tracks. */
+static float TerrainLanePathInset(const TerrainLanePath *path, float x, float z,
+                                   float *elevation)
+{
+    if (x < path->bounds.x || z < path->bounds.y ||
+        x > path->bounds.x + path->bounds.width ||
+        z > path->bounds.y + path->bounds.height) return -FLT_MAX;
+    float inset = -FLT_MAX;
+    for (int32_t i = 1; i < path->count; ++i) {
+        Vector2 a = path->point[i - 1], b = path->point[i];
+        float dx = b.x - a.x, dz = b.y - a.y;
+        float length2 = dx * dx + dz * dz;
+        float t = length2 > 0.0001f ? TerrainClamp(
+            ((x - a.x) * dx + (z - a.y) * dz) / length2, 0.0f, 1.0f) : 0.0f;
+        float candidate = path->half_width - hypotf(x - a.x - t * dx, z - a.y - t * dz);
+        if (candidate <= inset) continue;
+        inset = candidate;
+        if (elevation != NULL) *elevation = path->height[i - 1] +
+            (path->height[i] - path->height[i - 1]) * t;
+    }
+    return inset;
+}
+
 static float TerrainLaneInset(float x, float z, float *elevation)
 {
     float inset = -FLT_MAX;
+    float height_sum = 0.0f, weight_sum = 0.0f;
     for (int32_t lane = 0; lane < ActivePlaceProfile()->lane_count; ++lane) {
         const TerrainLanePath *path = &terrain_lanes[lane];
-        if (x < path->bounds.x || z < path->bounds.y ||
-            x > path->bounds.x + path->bounds.width ||
-            z > path->bounds.y + path->bounds.height) continue;
-        for (int32_t i = 1; i < path->count; ++i) {
-            Vector2 a = path->point[i - 1], b = path->point[i];
-            float dx = b.x - a.x, dz = b.y - a.y;
-            float length2 = dx * dx + dz * dz;
-            float t = length2 > 0.0001f ? TerrainClamp(
-                ((x - a.x) * dx + (z - a.y) * dz) / length2, 0.0f, 1.0f) : 0.0f;
-            float distance = hypotf(x - a.x - t * dx, z - a.y - t * dz);
-            float candidate = path->half_width - distance;
-            if (candidate <= inset) continue;
-            inset = candidate;
-            if (elevation != NULL) *elevation = path->height[i - 1] +
-                (path->height[i] - path->height[i - 1]) * t;
+        float lane_height = 0.0f;
+        float lane_inset = TerrainLanePathInset(path, x, z, &lane_height);
+        inset = fmaxf(inset, lane_inset);
+        if (elevation != NULL) {
+            float weight = TerrainSmooth01((lane_inset + 1.8f) / (path->half_width + 1.8f));
+            height_sum += lane_height * weight;
+            weight_sum += weight;
         }
     }
+    if (elevation != NULL && weight_sum > 0.0f) *elevation = height_sum / weight_sum;
     return inset;
 }
 
@@ -748,8 +774,8 @@ static float TerrainKeepRise(void)
 
 static void TerrainGradeLaneVillage(void)
 {
-    float keep_elevation = TerrainRectangleAverage(ActiveCompoundBounds());
     TerrainBuildLanePaths();
+    float keep_elevation = terrain_lanes[2].height[terrain_lanes[2].count - 1];
     for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
         for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
             float x = (float)column * CC_TERRAIN_CELL_SIZE;
@@ -782,6 +808,20 @@ static void TerrainGradeLaneVillage(void)
     }
     Rectangle keep = ActiveCompoundBounds();
     TerrainGradePad(keep, keep_elevation, 2.8f);
+    /* Keep a steady cart grade through the junction and up to the gate. */
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            float z = (float)row * CC_TERRAIN_CELL_SIZE;
+            if (TerrainPointInsideMajorFoundation(x, z)) continue;
+            float elevation = 0.0f;
+            float inset = TerrainLanePathInset(&terrain_lanes[2], x, z, &elevation);
+            if (inset < -1.8f) continue;
+            float weight = TerrainSmooth01((inset + 1.8f) / 1.8f);
+            int32_t slot = TerrainIndex(column, row);
+            street_terrain_height[slot] += (elevation - street_terrain_height[slot]) * weight;
+        }
+    }
     for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
         Rectangle pad = PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i));
         TerrainGradePad(pad, TerrainRectangleAverage(pad), 1.3f);

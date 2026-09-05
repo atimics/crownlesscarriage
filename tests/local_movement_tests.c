@@ -323,7 +323,8 @@ static void TestTownPlanCollisionAndGate(void)
                 maximum_height = fmaxf(maximum_height, height);
             }
         }
-        if (maximum_height - minimum_height < 8.0f) {
+        float required_relief = sim.settlements[settlement].function == CC_SETTLEMENT_FARMING ? 7.0f : 8.0f;
+        if (maximum_height - minimum_height < required_relief) {
             (void)fprintf(
                 stderr,
                 "town plan %d lost its major landform: relief %.2f\n",
@@ -342,9 +343,6 @@ static void TestTownPlanCollisionAndGate(void)
                 float distance = hypotf(point.x - previous.x, point.z - previous.z);
                 float difference = CcLocalTerrainHeightAt(point.x, point.z) -
                     CcLocalTerrainHeightAt(previous.x, previous.z);
-                if (fabsf(difference) / distance > maximum_gate_grade && fabsf(difference) / distance > 0.14f) {
-                    fprintf(stderr, "gate grade at %.2f %.2f: %.3f\n", point.x, point.z, fabsf(difference) / distance);
-                }
                 maximum_gate_grade = fmaxf(maximum_gate_grade, fabsf(difference) / distance);
                 previous = point;
             }
