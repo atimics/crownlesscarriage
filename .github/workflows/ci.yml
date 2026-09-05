@@ -152,6 +152,9 @@ jobs:
           xvfb-run -a ./crownless_carriage --capture-ux 2 ux-conversation.png 1200 0
           xvfb-run -a ./crownless_carriage --capture-ux 3 ux-trade.png 1040 2
           xvfb-run -a ./crownless_carriage --capture-ux 4 ux-book.png 1040 2
+          xvfb-run -a ./crownless_carriage --capture-ux 11 ux-ponies.png 1200 0
+          xvfb-run -a ./crownless_carriage --capture-ux 11 ux-ponies-large.png 1040 2
+          xvfb-run -a ./crownless_carriage --capture-ux 12 ux-ponies-roaming.png 1040 2
           xvfb-run -a ./crownless_carriage --capture-ux 5 ux-menu.png 1040 2
       - name: Upload interaction screen captures
         if: runner.os == 'Linux' && !cancelled()
