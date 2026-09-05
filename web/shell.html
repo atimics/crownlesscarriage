@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#171512">
     <title>Crownless Carriage</title>
     <style>
@@ -15,6 +15,7 @@
       * { box-sizing: border-box; }
       body {
         min-height: 100vh;
+        min-height: 100dvh;
         margin: 0;
         display: grid;
         place-items: center;
@@ -44,12 +45,19 @@
         border: 1px solid #8e8168;
         border-radius: 3px;
         padding: 9px 13px;
+        min-height: 44px;
+        touch-action: manipulation;
         background: #24211c;
         color: #e8dfc9;
         font: inherit;
         cursor: pointer;
       }
       button:hover { background: #302b24; }
+      button:focus-visible, summary:focus-visible { outline: 2px solid #d3b576; outline-offset: 3px; }
+      button:disabled { opacity: 0.5; cursor: default; }
+      button[aria-pressed="true"] { border-color: #bca46f; background: #393123; }
+      [hidden] { display: none !important; }
+      .page-tools { display: flex; flex-wrap: wrap; gap: 8px; }
       #stage {
         position: relative;
         overflow: hidden;
@@ -64,6 +72,7 @@
         display: block;
         border: 0;
         outline: none;
+        touch-action: none;
         background: #0b0a09;
       }
       #stage:fullscreen {
@@ -113,10 +122,57 @@
         outline-offset: 3px;
         border-radius: 2px;
       }
+      #touch-panel {
+        padding: 16px;
+        background: #201d18;
+        font: 1rem/1.45 system-ui, sans-serif;
+        min-width: 0;
+        width: 100%;
+        border-top: 1px solid #514a3d;
+      }
+      #touch-title { margin: 0; font: 1.3rem Georgia, serif; color: #dfc48c; }
+      #touch-detail { margin: 8px 0 16px; color: #c5bba6; overflow-wrap: anywhere; }
+      #touch-actions, .touch-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      #touch-panel button { min-height: 48px; padding: 10px; overflow-wrap: anywhere; }
+      #touch-shortcuts { margin-top: 16px; }
+      #touch-panel summary { cursor: pointer; min-height: 44px; padding: 10px 0; color: #c5bba6; }
+      #touch-reading { white-space: pre-line; color: #d4c9b3; overflow-wrap: anywhere; }
+      #exit-fullscreen { display: none; position: absolute; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); z-index: 2; }
+      #stage:fullscreen #exit-fullscreen, #stage.expanded #exit-fullscreen { display: block; }
+      body.expanded { overflow: hidden; }
+      #stage.expanded { position: fixed; inset: 0; z-index: 10; width: 100%; height: 100dvh; border: 0; border-radius: 0; display: grid; place-items: center; }
+      #stage.expanded canvas { width: min(100vw, calc(100dvh * 16 / 9)); height: auto; }
+      .touch-mode #stage:fullscreen, .touch-mode #stage.expanded {
+        display: flex; flex-direction: column; justify-content: start;
+        overflow-y: auto; padding: max(56px, env(safe-area-inset-top)) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      }
+      .touch-mode #stage:fullscreen canvas, .touch-mode #stage.expanded canvas { width: 100%; height: auto; flex-shrink: 0; }
+      .touch-mode #stage:fullscreen #touch-panel, .touch-mode #stage.expanded #touch-panel { width: 100%; }
       @media (max-width: 680px) {
-        main { padding: 10px; }
-        header { align-items: start; }
+        body { display: block; }
+        main { padding: max(12px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+        header { align-items: start; flex-direction: column; gap: 12px; }
         header p { display: none; }
+        .page-tools { width: 100%; }
+        .page-tools button { flex: 1; }
+        footer { flex-wrap: wrap; }
+        footer a { padding: 12px 4px; }
+      }
+      @media (min-width: 600px) and (max-height: 600px) and (orientation: landscape) {
+        .touch-mode { display: block; }
+        .touch-mode main { width: 100%; padding: 8px max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left)); }
+        .touch-mode header { margin-bottom: 8px; align-items: center; }
+        .touch-mode header p, .touch-mode #hint, .touch-mode footer { display: none; }
+        .touch-mode h1 { font-size: 1.1rem; }
+        .touch-mode #stage, .touch-mode #stage:fullscreen, .touch-mode #stage.expanded {
+          display: grid; grid-template-columns: minmax(0, 1fr) 250px; place-items: center;
+          height: calc(100dvh - 70px); overflow: hidden;
+        }
+        .touch-mode #stage:fullscreen, .touch-mode #stage.expanded { height: 100dvh; padding-top: 0; }
+        .touch-mode #stage canvas { width: min(100%, calc((100dvh - 70px) * 16 / 9)); height: auto; }
+        .touch-mode #touch-panel { height: 100%; overflow-y: auto; overscroll-behavior: contain; border-top: 0; border-left: 1px solid #514a3d; padding: 12px; }
+        .touch-mode #stage:fullscreen #touch-panel, .touch-mode #stage.expanded #touch-panel { padding-top: 60px; }
+        .touch-mode #touch-actions { grid-template-columns: 1fr; }
       }
       body.avatar-preview {min-height:100vh;background:#1a2823;overflow:hidden}
       .avatar-preview main {padding:0;width:100%;height:100vh}
@@ -133,11 +189,36 @@
           <h1>Crownless Carriage</h1>
           <p>A causal political action-RPG</p>
         </div>
-        <button id="fullscreen" type="button">Full screen</button>
+        <div class="page-tools">
+          <button id="touch-toggle" type="button" aria-pressed="false" aria-controls="touch-panel">Touch controls</button>
+          <button id="fullscreen" type="button">Full screen</button>
+        </div>
       </header>
       <div id="stage">
         <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
-        <div id="loading">
+        <section id="touch-panel" aria-label="Game controls" hidden>
+          <h2 id="touch-title">Preparing your journey…</h2>
+          <p id="touch-detail">The game controls will appear here.</p>
+          <div id="touch-actions"></div>
+          <details id="touch-shortcuts" hidden>
+            <summary>More controls</summary>
+            <div class="touch-keys">
+              <button type="button" data-key="69">Next target</button>
+              <button type="button" data-key="70">Act</button>
+              <button type="button" data-key="74">Jump</button>
+              <button type="button" data-key="256">Back / menu</button>
+              <button type="button" data-key="265">Previous</button>
+              <button type="button" data-key="264">Next</button>
+              <button type="button" data-key="257">Choose</button>
+            </div>
+          </details>
+          <details id="touch-reading-panel" hidden>
+            <summary>Scene details</summary>
+            <p id="touch-reading"></p>
+          </details>
+        </section>
+        <button id="exit-fullscreen" type="button">Exit full screen</button>
+        <div id="loading" role="status">
           <div>
             <span id="status">Downloading the world…</span>
             <progress id="progress" value="0" max="100" hidden></progress>
@@ -160,11 +241,11 @@
         preRun: [],
         postRun: [function () {
           loading.hidden = true;
-          if (Module.crownlessCampaignRestored) {
+          if (Module.crownlessCampaignRestored && !Module.crownlessTouchEnabled) {
             document.querySelector("#hint").textContent =
               "Saved world ready. Choose Play to continue.";
           }
-          canvas.focus();
+          if (!Module.crownlessTouchEnabled) canvas.focus({preventScroll: true});
         }],
         canvas,
         print: console.log.bind(console),
@@ -200,14 +281,33 @@
           event.preventDefault();
         }
       });
-      canvas.addEventListener("pointerdown", function () { canvas.focus(); });
+      canvas.addEventListener("pointerdown", function () { canvas.focus({preventScroll: true}); });
       canvas.addEventListener("webglcontextlost", function (event) {
         event.preventDefault();
         Module.setStatus("The graphics context was lost. Reload the page to continue.");
       });
-      document.querySelector("#fullscreen").addEventListener("click", function () {
-        if (document.fullscreenElement) document.exitFullscreen();
-        else document.querySelector("#stage").requestFullscreen();
+      const stage = document.querySelector("#stage");
+      function leaveExpandedView() {
+        stage.classList.remove("expanded");
+        document.body.classList.remove("expanded");
+      }
+      async function toggleFullscreen() {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+          return;
+        }
+        if (stage.classList.contains("expanded")) { leaveExpandedView(); return; }
+        if (stage.requestFullscreen && document.fullscreenEnabled) {
+          try { await stage.requestFullscreen(); return; }
+          catch { /* Use the page view when the browser declines fullscreen. */ }
+        }
+        stage.classList.add("expanded");
+        document.body.classList.add("expanded");
+      }
+      document.querySelector("#fullscreen").addEventListener("click", toggleFullscreen);
+      document.querySelector("#exit-fullscreen").addEventListener("click", toggleFullscreen);
+      window.addEventListener("keydown", event => {
+        if (event.key === "Escape" && stage.classList.contains("expanded")) leaveExpandedView();
       });
     </script>
     {{{ SCRIPT }}}

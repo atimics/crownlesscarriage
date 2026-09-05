@@ -157,7 +157,7 @@ static FrontendAction FrontendInput(FrontendState *state)
     }
     if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         for (int i = 0; i < count; ++i) {
-            if (CheckCollisionPointRec(GetMousePosition(), items[i].bounds)) {
+            if (CheckCollisionPointRec(ClientPointerPosition(), items[i].bounds)) {
                 state->focus = i;
                 return items[i].enabled ? items[i].action : FRONTEND_ACTION_NONE;
             }
@@ -320,6 +320,7 @@ static void FrontendCenteredText(const char *text, int y, int size, Color color)
 static void DrawFrontend(const FrontendState *state,
                          const CcClientPreferences *preferences, const CcSim *sim)
 {
+    ClientTouchBegin();
     Rectangle panel = FrontendPanel(state->screen);
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BACKGROUND, 0.86f));
     DrawRectangleRounded(panel, 0.025f, 6, PANEL_DEEP);
@@ -329,6 +330,10 @@ static void DrawFrontend(const FrontendState *state,
     const char *title = state->screen == FRONTEND_TITLE ? "The road awaits" :
         state->screen == FRONTEND_DELETE ? "Delete this world?" :
         CcCoopClientActive() ? "Company menu" : "Journey paused";
+    ClientTouchHeading(title, state->feedback[0] != '\0' ? state->feedback :
+        state->screen == FRONTEND_DELETE ? "This removes your world and its progress. Your next Play begins a new world." :
+        state->screen == FRONTEND_TITLE ? "Choose Offline or Online, then Play. Your world is saved on this device." :
+        "Resume your journey, save your world, or change your settings.");
     FrontendCenteredText(title, top + 76, 28, INK);
     if (state->screen == FRONTEND_TITLE) {
         FrontendCenteredText("Choose how to play", top + 126, 14, MUTED);
@@ -358,7 +363,7 @@ static void DrawFrontend(const FrontendState *state,
                       item.action == FRONTEND_ACTION_CONFIRM_DELETE;
         bool primary = item.action == FRONTEND_ACTION_PLAY ||
                        item.action == FRONTEND_ACTION_RESUME;
-        bool hover = CheckCollisionPointRec(GetMousePosition(), item.bounds);
+        bool hover = CheckCollisionPointRec(ClientPointerPosition(), item.bounds);
         Color accent = danger ? DANGER : selected || primary ? TEAL : CC_GOLD;
         DrawRectangleRounded(item.bounds, 0.12f, 4,
             Fade(hover || selected || primary ? PANEL_HOVER : PANEL,
@@ -376,6 +381,7 @@ static void DrawFrontend(const FrontendState *state,
         if (item.action == FRONTEND_ACTION_TEXT) label = TextFormat("Text size: %s  T",
             preferences->text_size == 0 ? "standard" : preferences->text_size == 1 ? "large" : "largest");
         if (item.action == FRONTEND_ACTION_HINTS) label = preferences->focus_hints ? "Target hints: shown  H" : "Target hints: focus only  H";
+        ClientTouchAdd(item.bounds, label, item.enabled, selected);
         int size = (primary ? 20 : 16) + preferences->text_size * 2;
         while (size > 14 && MeasureText(label, size) > (int)item.bounds.width - 24) --size;
         DrawText(label, (int)(item.bounds.x + (item.bounds.width -
