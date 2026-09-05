@@ -924,8 +924,12 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
     float camera_x = destination.x + camera_offset.x;
     float camera_z = destination.z + camera_offset.z;
     float camera_ground = CcLocalTerrainHeightAt(camera_x, camera_z);
-    camera_offset.y = camera_ground + composition->camera_offset.y -
-                      destination.y;
+    float horizontal_span = sqrtf(camera_offset.x * camera_offset.x +
+                                   camera_offset.z * camera_offset.z);
+    /* Keep a view down onto the street when the camera stands on lower land. */
+    camera_offset.y = fmaxf(
+        camera_ground + composition->camera_offset.y - destination.y,
+        horizontal_span * 0.55f);
     FixedCameraRigAim(&street_camera_rig, shot, destination,
                       camera_offset, composition->fovy,
                       clock, advance);

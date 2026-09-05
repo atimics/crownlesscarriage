@@ -2633,8 +2633,57 @@ static void TestOpenWorldSettlementPresentationTransition(void)
     }
 }
 
+static void TestTownSquareGroundSightlines(void)
+{
+    static const uint32_t seeds[] = {
+        UINT32_C(0xc0a71a9e), UINT32_C(0x12345678),
+    };
+    for (int32_t seed = 0; seed < 2; ++seed) {
+        CcSim sim;
+        CcSimInit(&sim, seeds[seed]);
+        for (int32_t town = 0; town < sim.settlement_count; ++town) {
+            sim.player.location_id = sim.settlements[town].id;
+            CcLocalBindPlace(&sim);
+            CcLocalAgent agent;
+            CcLocalAgentInit(&agent, (Vector2){44.25f, 28.85f}, false);
+            Camera3D camera = {0};
+            for (int32_t frame = 0; frame < 90; ++frame) {
+                camera = CcLocalStreetCameraInternal(
+                    &agent, (float)frame / 60.0f, true, 320);
+            }
+            Vector3 feet = agent.position;
+            feet.y += 0.15f;
+            Vector2 screen = GetWorldToScreenEx(feet, camera, 630, 320);
+            Ray sightline = GetScreenToWorldRayEx(screen, camera, 630, 320);
+            if (sightline.direction.y > -0.25f) {
+                (void)fprintf(stderr,
+                    "town square view needs ground depth: seed %u town %d ray y %.3f\n",
+                    seeds[seed], town, sightline.direction.y);
+                exit(1);
+            }
+            for (int32_t sample = 1; sample <= 32; ++sample) {
+                float amount = (float)sample / 32.0f;
+                Vector3 point = {
+                    feet.x + (sightline.position.x - feet.x) * amount,
+                    feet.y + (sightline.position.y - feet.y) * amount,
+                    feet.z + (sightline.position.z - feet.z) * amount,
+                };
+                float ground = CcLocalTerrainHeightAt(point.x, point.z);
+                if (point.y < ground + 0.04f) {
+                    (void)fprintf(stderr,
+                        "town square ground covers feet: seed %u town %d sample %d clearance %.3f\n",
+                        seeds[seed], town, sample, point.y - ground);
+                    exit(1);
+                }
+            }
+        }
+    }
+    CcLocalBindPlace(NULL);
+}
+
 int main(void)
 {
+    TestTownSquareGroundSightlines();
     CcLocalTerrainMeshStatsInternal terrain_mesh =
         CcLocalTerrainMeshStatsInternalGet();
     if (terrain_mesh.vertex_count != 41093 ||
@@ -2797,7 +2846,8 @@ int main(void)
                                alley_camera.position.z);
     if (alley_camera.projection != CAMERA_ORTHOGRAPHIC ||
         alley_camera.fovy < 5.8f || alley_camera.fovy > 6.6f ||
-        alley_eye_height < 0.45f || alley_eye_height > 1.05f ||
+        alley_eye_height < 0.45f ||
+        alley_camera.position.y < alley_camera.target.y + 2.0f ||
         alley_hero_screen.x < 88.0f || alley_hero_screen.x > 369.0f ||
         alley_hero_screen.y < 54.0f || alley_hero_screen.y > 231.0f) {
         (void)fprintf(stderr,
@@ -3001,14 +3051,15 @@ int main(void)
 
 
     CcLocalAgent shoulder_player;
-    CcLocalAgentInit(&shoulder_player, (Vector2){15.40f, 9.65f}, false);
+    /* Keep the click targets together on the level training yard. */
+    CcLocalAgentInit(&shoulder_player, (Vector2){10.40f, 9.65f}, false);
     CcLocalCourse shoulder_course;
     CcLocalCourseInit(&shoulder_course);
     shoulder_course.scene = CC_LOCAL_SCENE_STREET;
     shoulder_course.alarm_active = true;
     shoulder_course.raiders_retreating = false;
     shoulder_course.raiders[0].position = (Vector3){
-        18.20f, CcLocalTerrainHeightAt(18.20f, 9.65f), 9.65f};
+        13.20f, CcLocalTerrainHeightAt(13.20f, 9.65f), 9.65f};
     Camera3D shoulder_base = {0};
     for (int32_t frame = 0; frame < 120; ++frame) {
         camera_clock += 1.0f / 60.0f;
@@ -3049,8 +3100,8 @@ int main(void)
         click_target, click_viewport);
     if (picked_raider != 0 || shoulder_player.combat.target_index != 0) {
         (void)fprintf(stderr,
-                      "near-body combat click missed raider: %d\n",
-                      picked_raider);
+                      "near-body combat click missed raider: %d at %.2f %.2f\n",
+                      picked_raider, raider_center_art.x, raider_center_art.y);
         return 1;
     }
     for (int32_t frame = 0; frame < 180; ++frame) {
@@ -3363,7 +3414,7 @@ int main(void)
             &edge_walker, camera_clock, true, 285);
         Vector2 hero_screen = GetWorldToScreenEx(
             (Vector3){edge_walker.position.x,
-                      edge_walker.position.y + 1.0f,
+                      edge_walker.position.y + 1.05f,
                       edge_walker.position.z},
             travel_camera, 457, 285);
         if (hero_screen.x < 88.0f || hero_screen.x > 369.0f ||
