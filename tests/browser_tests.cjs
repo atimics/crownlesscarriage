@@ -315,11 +315,11 @@ async function main() {
       assert((await mobile.locator('#touch-reading').innerText()).includes('With you'));
       await mobile.screenshot({path: path.join(output, 'mobile-ponies.png')});
       for (const range of ['3-4', '5-6', '7-7']) {
-        await buttons.getByRole('button', {name: 'Next Down', exact: true}).tap();
+        await buttons.getByRole('button', {name: 'Next', exact: true}).tap();
         await mobile.waitForFunction(range => document.querySelector('#touch-reading').textContent.includes(`Ponies ${range} of 7`), range);
       }
-      assert(await buttons.getByRole('button', {name: 'Next Down', exact: true}).isDisabled());
-      await buttons.getByRole('button', {name: 'Previous Up', exact: true}).tap();
+      assert(await buttons.getByRole('button', {name: 'Next', exact: true}).isDisabled());
+      await buttons.getByRole('button', {name: 'Previous', exact: true}).tap();
       await mobile.waitForFunction(() => document.querySelector('#touch-reading').textContent.includes('Ponies 5-6 of 7'));
       await buttons.getByRole('button', {name: 'Back', exact: true}).tap();
       await buttons.getByRole('button', {name: 'Menu', exact: true}).tap();
