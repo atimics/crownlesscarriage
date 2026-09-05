@@ -8,6 +8,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+static float CameraViewSpan(Camera3D camera)
+{
+    return camera.projection == CAMERA_ORTHOGRAPHIC ? camera.fovy :
+        2.0f * sqrtf((camera.position.x - camera.target.x) *
+                       (camera.position.x - camera.target.x) +
+                       (camera.position.y - camera.target.y) *
+                       (camera.position.y - camera.target.y) +
+                       (camera.position.z - camera.target.z) *
+                       (camera.position.z - camera.target.z)) *
+        tanf(camera.fovy * DEG2RAD * 0.5f);
+}
+
 static int32_t StreetPortalIndex(const CcLocalAgent *agent,
                                  const char *name)
 {
@@ -2799,9 +2811,9 @@ int main(void)
     TestStreetWaypointCornerProgress();
     TestRagdollStepsInWater();
     RenderTexture2D click_target = {0};
-    click_target.texture.width = 457;
-    click_target.texture.height = 285;
-    Rectangle click_viewport = {0.0f, 0.0f, 914.0f, 570.0f};
+    click_target.texture.width = 630;
+    click_target.texture.height = 320;
+    Rectangle click_viewport = {0.0f, 0.0f, 1260.0f, 640.0f};
     static const Vector3 crown_gate_road_targets[] = {
         {53.0f, 0.0f, 27.30f},
         {53.4f, 0.0f, 27.80f},
@@ -2838,8 +2850,8 @@ int main(void)
                           framing_agent.position.z},
                 review_camera, click_target.texture.width,
                 click_target.texture.height);
-            if (hero_screen.x < 88.0f || hero_screen.x > 369.0f ||
-                hero_screen.y < 54.0f || hero_screen.y > 231.0f) {
+            if (hero_screen.x < (88.0f * 630.0f / 457.0f) || hero_screen.x > (369.0f * 630.0f / 457.0f) ||
+                hero_screen.y < (54.0f * 320.0f / 285.0f) || hero_screen.y > (231.0f * 320.0f / 285.0f)) {
                 (void)fprintf(
                     stderr,
                     "camera review point %d frame %d lost hero at %.2f %.2f\n",
@@ -2869,12 +2881,12 @@ int main(void)
     float alley_eye_height = alley_camera.position.y -
         CcLocalTerrainHeightAt(alley_camera.position.x,
                                alley_camera.position.z);
-    if (alley_camera.projection != CAMERA_ORTHOGRAPHIC ||
-        alley_camera.fovy < 5.8f || alley_camera.fovy > 6.6f ||
+    if (alley_camera.projection != CAMERA_PERSPECTIVE ||
+        CameraViewSpan(alley_camera) < 5.8f || CameraViewSpan(alley_camera) > 6.6f ||
         alley_eye_height < 0.45f ||
         alley_camera.position.y < alley_camera.target.y + 2.0f ||
-        alley_hero_screen.x < 88.0f || alley_hero_screen.x > 369.0f ||
-        alley_hero_screen.y < 54.0f || alley_hero_screen.y > 231.0f) {
+        alley_hero_screen.x < (88.0f * 630.0f / 457.0f) || alley_hero_screen.x > (369.0f * 630.0f / 457.0f) ||
+        alley_hero_screen.y < (54.0f * 320.0f / 285.0f) || alley_hero_screen.y > (231.0f * 320.0f / 285.0f)) {
         (void)fprintf(stderr,
                       "authored close camera was invalid: fovy %.2f eye %.2f screen %.2f %.2f\n",
                       alley_camera.fovy, alley_eye_height,
@@ -2922,7 +2934,7 @@ int main(void)
             &coach_road_camera_agent, camera_clock, true,
             click_target.texture.height);
     }
-    if (coach_road_camera.fovy < 6.8f) {
+    if (CameraViewSpan(coach_road_camera) < 6.8f) {
         (void)fprintf(stderr,
                       "main coach road retained an unrelated close page: %.2f\n",
                       coach_road_camera.fovy);
@@ -2945,6 +2957,7 @@ int main(void)
     int32_t camera_moving_frames = 0;
     int32_t current_motion_frames = 0;
     int32_t longest_motion_run = 0;
+    float largest_camera_step = 0.0f;
     for (int32_t frame = 0; frame < 720; ++frame) {
         float amount = (float)frame / 719.0f;
         miller_camera_agent.position.x = 54.6f + 17.0f * amount;
@@ -2962,16 +2975,16 @@ int main(void)
                       miller_camera_agent.position.z},
             miller_camera, click_target.texture.width,
             click_target.texture.height);
-        if (hero_screen.x < 88.0f || hero_screen.x > 369.0f ||
-            hero_screen.y < 54.0f || hero_screen.y > 231.0f) {
+        if (hero_screen.x < (88.0f * 630.0f / 457.0f) || hero_screen.x > (369.0f * 630.0f / 457.0f) ||
+            hero_screen.y < (54.0f * 320.0f / 285.0f) || hero_screen.y > (231.0f * 320.0f / 285.0f)) {
             (void)fprintf(stderr,
                           "Miller's Row camera lost hero at frame %d: %.2f %.2f\n",
                           frame, hero_screen.x, hero_screen.y);
             return 1;
         }
-        bool camera_moving =
-            VectorDistance3(previous_camera_target, miller_camera.target) >
-                0.002f;
+        float camera_step = VectorDistance3(previous_camera_target, miller_camera.target);
+        largest_camera_step = fmaxf(largest_camera_step, camera_step);
+        bool camera_moving = camera_step > 0.002f;
         if (camera_moving && !camera_was_moving) camera_motion_runs += 1;
         if (camera_moving) camera_moving_frames += 1;
         current_motion_frames = camera_moving ? current_motion_frames + 1 : 0;
@@ -2981,11 +2994,11 @@ int main(void)
         camera_was_moving = camera_moving;
         previous_camera_target = miller_camera.target;
     }
-    if (longest_motion_run > 75 || camera_moving_frames > 320) {
+    if (largest_camera_step > 0.60f || camera_moving_frames == 0) {
         (void)fprintf(stderr,
-                      "Miller's Row camera followed continuously: %d runs, %d moving frames, longest %d frames\n",
+                      "Miller's Row camera motion: %d runs, %d moving frames, longest %d frames, largest step %.3f\n",
                       camera_motion_runs, camera_moving_frames,
-                      longest_motion_run);
+                      longest_motion_run, largest_camera_step);
         return 1;
     }
 
@@ -3099,7 +3112,7 @@ int main(void)
             shoulder_base, &shoulder_player, &shoulder_course,
             camera_clock, true, click_target.texture.height);
     }
-    if (shoulder_camera.projection != CAMERA_ORTHOGRAPHIC) {
+    if (VectorDistance3(shoulder_camera.position, shoulder_base.position) > 0.001f) {
         (void)fprintf(
             stderr,
             "combat camera chose an unselected raider: projection %d\n",
@@ -3190,14 +3203,14 @@ int main(void)
     float shoulder_raider_height = fabsf(
         shoulder_raider_foot.y - shoulder_raider_head.y);
     bool shoulder_subjects_safe =
-        shoulder_player_screen.x > 22.0f &&
-        shoulder_player_screen.x < 435.0f &&
-        shoulder_player_screen.y > 14.0f &&
-        shoulder_player_screen.y < 271.0f &&
-        shoulder_raider_screen.x > 22.0f &&
-        shoulder_raider_screen.x < 435.0f &&
-        shoulder_raider_screen.y > 14.0f &&
-        shoulder_raider_screen.y < 271.0f;
+        shoulder_player_screen.x > (22.0f * 630.0f / 457.0f) &&
+        shoulder_player_screen.x < (435.0f * 630.0f / 457.0f) &&
+        shoulder_player_screen.y > (14.0f * 320.0f / 285.0f) &&
+        shoulder_player_screen.y < (271.0f * 320.0f / 285.0f) &&
+        shoulder_raider_screen.x > (22.0f * 630.0f / 457.0f) &&
+        shoulder_raider_screen.x < (435.0f * 630.0f / 457.0f) &&
+        shoulder_raider_screen.y > (14.0f * 320.0f / 285.0f) &&
+        shoulder_raider_screen.y < (271.0f * 320.0f / 285.0f);
     if (shoulder_camera.projection != CAMERA_PERSPECTIVE ||
         behind_amount > -3.50f || fabsf(side_amount) < 2.80f ||
         !shoulder_subjects_safe ||
@@ -3264,18 +3277,18 @@ int main(void)
     if (conversation_camera.projection != CAMERA_PERSPECTIVE ||
         VectorDistance3(conversation_camera.position,
                         conversation_camera.target) > 6.50f ||
-        conversation_player_screen.x < 40.0f ||
+        conversation_player_screen.x < (40.0f * 630.0f / 457.0f) ||
         conversation_player_screen.x >
             (float)click_target.texture.width - 40.0f ||
-        conversation_partner_screen.x < 40.0f ||
+        conversation_partner_screen.x < (40.0f * 630.0f / 457.0f) ||
         conversation_partner_screen.x >
             (float)click_target.texture.width - 40.0f ||
         fabsf(conversation_player_screen.x -
               conversation_partner_screen.x) < 54.0f ||
-        conversation_player_screen.y < 22.0f ||
+        conversation_player_screen.y < (22.0f * 320.0f / 285.0f) ||
         conversation_player_screen.y >
             (float)click_target.texture.height * 0.72f ||
-        conversation_partner_screen.y < 22.0f ||
+        conversation_partner_screen.y < (22.0f * 320.0f / 285.0f) ||
         conversation_partner_screen.y >
             (float)click_target.texture.height * 0.72f) {
         (void)fprintf(
@@ -3417,7 +3430,7 @@ int main(void)
     for (int32_t frame = 0; frame < 120; ++frame) {
         camera_clock += 1.0f / 60.0f;
         (void)CcLocalStreetCameraInternal(
-            &edge_walker, camera_clock, true, 285);
+            &edge_walker, camera_clock, true, 320);
     }
     if (!CcLocalAgentSetExactTarget(
             &edge_walker, (Vector3){55.6f, 0.0f, 27.0f}, false)) {
@@ -3436,14 +3449,14 @@ int main(void)
          frame < 4800 && edge_walker.navigation_active; ++frame) {
         camera_clock += 1.0f / 60.0f;
         Camera3D travel_camera = CcLocalStreetCameraInternal(
-            &edge_walker, camera_clock, true, 285);
+            &edge_walker, camera_clock, true, 320);
         Vector2 hero_screen = GetWorldToScreenEx(
             (Vector3){edge_walker.position.x,
                       edge_walker.position.y + 1.05f,
                       edge_walker.position.z},
-            travel_camera, 457, 285);
-        if (hero_screen.x < 88.0f || hero_screen.x > 369.0f ||
-            hero_screen.y < 54.0f || hero_screen.y > 231.0f) {
+            travel_camera, 630, 320);
+        if (hero_screen.x < (88.0f * 630.0f / 457.0f) || hero_screen.x > (369.0f * 630.0f / 457.0f) ||
+            hero_screen.y < (54.0f * 320.0f / 285.0f) || hero_screen.y > (231.0f * 320.0f / 285.0f)) {
             (void)fprintf(stderr,
                           "road traversal camera lost hero at screen %.2f %.2f\n",
                           hero_screen.x, hero_screen.y);

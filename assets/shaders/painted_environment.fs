@@ -105,11 +105,12 @@ void main()
              wood * woodStroke * 0.16;
 
     float stoneFleck = step(0.78, hash21(floor(fragPosition.xz * 1.15))) *
+                       (1.0 - smoothstep(0.3, 1.0, length(fwidth(fragPosition.xz * 1.15)))) *
                        smoothstep(0.20, 0.86, normal.y);
     color += vec3(0.075, 0.085, 0.080) * stone * stoneFleck;
 
     vec3 halfDirection = normalize(toCamera + toLight);
-    float metalStroke = step(0.82, pow(max(dot(normal, halfDirection), 0.0),
+    float metalStroke = smoothstep(0.78, 0.86, pow(max(dot(normal, halfDirection), 0.0),
                                        18.0));
     color += lightColor * metal * metalStroke * (0.16 + accent * 0.14);
 
@@ -118,7 +119,7 @@ void main()
     color += vec3(0.035, 0.11, 0.12) * water * waterStroke * 0.42;
 
     float viewFacing = abs(dot(normal, toCamera));
-    float edgeInk = 1.0 - step(0.11, viewFacing);
+    float edgeInk = 1.0 - smoothstep(0.08, 0.14, viewFacing);
     vec3 coloredInk = mix(vec3(0.020, 0.030, 0.032),
                           surface.rgb * 0.20, 0.30);
 

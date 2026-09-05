@@ -1,3 +1,4 @@
+#include "client/cc_local_viewport.h"
 #if !defined(CC_LOCAL3D_UNITY_BUILD)
 #error "Include local renderer modules through client/cc_local3d.c"
 #endif
@@ -650,6 +651,17 @@ static const StreetBoundaryExit STREET_BOUNDARY_EXITS[] = {
 };
 
 typedef struct FixedCameraRig {
+    Camera3D output_camera;
+    Vector3 output_hero_position;
+    bool output_valid;
+    float tree_angle;
+    float tree_goal;
+    float tree_hold;
+    Vector3 target_velocity;
+    Vector3 target_velocity_from;
+    Vector3 offset_velocity;
+    Vector3 offset_velocity_from;
+    Vector3 framing_velocity;
     Vector3 displayed_target;
     Vector3 transition_from;
     Vector3 destination;
@@ -695,11 +707,16 @@ typedef struct CombatCameraRig {
 } CombatCameraRig;
 
 typedef struct ConversationCameraRig {
+    Vector3 close_target;
+    Vector3 close_offset;
+    float close_fovy;
     Vector3 displayed_target;
     Vector3 displayed_offset;
     float displayed_fovy;
     float focus_weight;
+    float tree_clear_angle;
     float last_clock;
+    bool engaged;
     bool initialized;
 } ConversationCameraRig;
 
@@ -761,6 +778,7 @@ static FixedCameraRig road_camera_rig = {0};
 static CombatCameraRig combat_camera_rig = {0};
 static ConversationCameraRig conversation_camera_rig = {0};
 static PresentedCameraState presented_camera[3] = {0};
+static PresentedCameraState scenery_view = {0};
 static CcLocalPresentedPerson presented_people[64];
 static int32_t presented_people_count;
 static bool interaction_ui_enabled;
@@ -818,6 +836,7 @@ static void RememberPresentedCamera(CcLocalSceneKind scene, Camera3D camera,
     state->width = width;
     state->height = height;
     state->valid = true;
+    scenery_view = *state;
 }
 
 static bool PresentedCameraForInput(CcLocalSceneKind scene,

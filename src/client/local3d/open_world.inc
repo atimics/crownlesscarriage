@@ -263,14 +263,32 @@ static uint32_t storybook_seed = 0;
 static uint32_t storybook_generator = 0;
 static Vector2 storybook_center = {0};
 static bool storybook_ground_ready = false;
-static TreeSceneryBatchCache storybook_forest = {0};
-static uint64_t storybook_forest_key = 0;
+enum { STORYBOOK_FOREST_CELL_COUNT = 121 };
+typedef struct StorybookForestCell {
+    TreeSceneryBatchCache batch;
+    Vector3 rocks[16];
+    int rock_count;
+    int32_t x;
+    int32_t z;
+    bool occupied;
+} StorybookForestCell;
+static StorybookForestCell storybook_forest_cells[STORYBOOK_FOREST_CELL_COUNT];
+static uint32_t storybook_forest_seed;
+static uint32_t storybook_forest_generator;
+static uint64_t storybook_forest_uploads;
+
+static void ClearStorybookForestCell(StorybookForestCell *cell)
+{
+    if (IsModelValid(cell->batch.structure)) UnloadModel(cell->batch.structure);
+    if (IsModelValid(cell->batch.foliage)) UnloadModel(cell->batch.foliage);
+    *cell = (StorybookForestCell){0};
+}
 
 static void ClearStorybookForest(void)
 {
-    if (IsModelValid(storybook_forest.structure)) UnloadModel(storybook_forest.structure);
-    if (IsModelValid(storybook_forest.foliage)) UnloadModel(storybook_forest.foliage);
-    storybook_forest = (TreeSceneryBatchCache){0};
+    for (int32_t i = 0; i < STORYBOOK_FOREST_CELL_COUNT; ++i) {
+        ClearStorybookForestCell(&storybook_forest_cells[i]);
+    }
 }
 
 static void OpenWorldRenderCacheClear(void)
@@ -323,7 +341,9 @@ static void DrawStorybookGround(const CcWorldManifest *manifest, Vector3 focus)
     if (!storybook_ground_ready || storybook_seed != manifest->world_seed ||
         storybook_generator != manifest->generator_version ||
         center.x != storybook_center.x || center.y != storybook_center.y) {
-        OpenWorldRenderCacheClear();
+        if (storybook_ground_ready) UnloadModel(storybook_ground);
+        storybook_ground = (Model){0};
+        storybook_ground_ready = false;
         enum { CELLS = 80, COVER_CELLS = CELLS / 2, TUFT_VERTICES = 18 };
         const float step = 4.0f;
         TerrainMeshWriter writer;
@@ -1251,10 +1271,10 @@ static void EmitStorybookTrees(const StorybookTree *trees, int count,
     }
 }
 
-static bool BuildStorybookForest(const StorybookTree *trees, int count,
-                                  TreeRegionalStyle style, uint64_t key)
+static bool BuildStorybookForest(TreeSceneryBatchCache *batch,
+                                  const StorybookTree *trees, int count,
+                                  TreeRegionalStyle style)
 {
-    ClearStorybookForest();
     rlDrawRenderBatchActive();
     TreeBatchMeshWriter structure = {.indexed = true, .count_only = true};
     TreeBatchMeshWriter foliage = {.count_only = true};
@@ -1276,62 +1296,121 @@ static bool BuildStorybookForest(const StorybookTree *trees, int count,
     tree_foliage_writer = &foliage;
     EmitStorybookTrees(trees, count, style);
     TreeBatchFinishBuildPass();
-    bool trunk_ready = TreeBatchMeshUpload(&structure, false, &storybook_forest.structure);
-    bool leaves_ready = TreeBatchMeshUpload(&foliage, true, &storybook_forest.foliage);
+    bool trunk_ready = TreeBatchMeshUpload(&structure, false, &batch->structure);
+    bool leaves_ready = TreeBatchMeshUpload(&foliage, true, &batch->foliage);
     if (!trunk_ready || !leaves_ready) {
-        ClearStorybookForest();
+        if (IsModelValid(batch->structure)) UnloadModel(batch->structure);
+        if (IsModelValid(batch->foliage)) UnloadModel(batch->foliage);
+        *batch = (TreeSceneryBatchCache){0};
         return false;
     }
-    storybook_forest.ready = true;
-    storybook_forest.source_draw_count = source_draws;
-    storybook_forest.vertex_count = vertices;
-    storybook_forest_key = key;
+    batch->ready = true;
+    batch->source_draw_count = source_draws;
+    batch->vertex_count = vertices;
+    storybook_forest_uploads += 2;
     return true;
 }
 
-static void DrawStorybookScenery(const CcWorldManifest *manifest, Vector3 focus)
+/* A whole cell stays resident until it is beyond the camera's far plane.
+   The extra ring lets a reversed move reuse the same GPU buffers. */
+static bool StorybookCellVisible(Camera3D camera, int32_t x, int32_t z,
+                                 float ground)
 {
-    int32_t origin_x = (int32_t)floorf(focus.x / 20.0f);
-    int32_t origin_z = (int32_t)floorf(focus.z / 20.0f);
-    TreeRegionalStyle style = TreeStyleForKingdom(WORLD_GRASS);
-    style.proportions = (Vector3){1.5f, 1.6f, 1.5f};
-    StorybookTree trees[169];
+    Vector3 center = {(float)x * 80.0f + 40.0f, ground + 8.0f,
+                       (float)z * 80.0f + 40.0f};
+    return CameraBoundsVisible(camera, center, (Vector3){49.0f, 60.0f, 49.0f},
+        (float)CC_LOCAL_ART_WIDTH / (float)CC_LOCAL_ART_HEIGHT, 240.0f);
+}
+
+static int StorybookCellTrees(const CcWorldManifest *manifest,
+                              int32_t cell_x, int32_t cell_z,
+                              StorybookTree trees[16], Vector3 rocks[16], int *rock_count)
+{
     int count = 0;
-    uint64_t key = manifest->world_seed;
-    for (int32_t row = -6; row <= 6; ++row) {
-        for (int32_t col = -6; col <= 6; ++col) {
-            int32_t gx = origin_x + col;
-            int32_t gz = origin_z + row;
+    *rock_count = 0;
+    for (int32_t row = 0; row < 4; ++row) {
+        for (int32_t col = 0; col < 4; ++col) {
+            int32_t gx = cell_x * 4 + col;
+            int32_t gz = cell_z * 4 + row;
             float scatter = TerrainScatter01(gx, gz, manifest->world_seed);
             if (scatter < 0.54f) continue;
             float x = ((float)gx + 0.2f + scatter * 0.6f) * 20.0f;
             float z = ((float)gz + TerrainScatter01(gx, gz, 813U)) * 20.0f;
-            /* Road and settlement clearings keep tree placement fixed as the camera turns. */
-            if (hypotf(x - focus.x, z - focus.z) > 122.0f ||
-                CcWorldSurfaceAt(manifest, x, z) != CC_WORLD_SURFACE_WILDERNESS ||
+            if (CcWorldSurfaceAt(manifest, x, z) != CC_WORLD_SURFACE_WILDERNESS ||
                 !OpenWorldPointClearsSettlements(manifest,
                     (CcWorldPoint){x, z}, 5.0f)) continue;
             if (scatter > 0.66f) {
                 trees[count++] = (StorybookTree){x, z, scatter};
-                key = (key ^ (uint32_t)gx) * UINT64_C(1099511628211);
-                key = (key ^ (uint32_t)gz) * UINT64_C(1099511628211);
             } else {
                 float y = CcWorldTerrainHeight(manifest, x, z);
-                DrawScenerySphere((Vector3){x, y + 0.4f, z}, 0.9f,
-                                   BlendColor(WORLD_STONE, WORLD_GRASS, 0.25f));
+                rocks[(*rock_count)++] = (Vector3){x, y + 0.4f, z};
             }
         }
     }
-    if (count == 0) return;
-    if ((!storybook_forest.ready || storybook_forest_key != key) &&
-        !BuildStorybookForest(trees, count, style, key)) {
-        EmitStorybookTrees(trees, count, style);
-        return;
+    return count;
+}
+
+static void DrawStorybookScenery(const CcWorldManifest *manifest, Camera3D camera)
+{
+    int32_t origin_x = (int32_t)floorf(camera.position.x / 80.0f);
+    int32_t origin_z = (int32_t)floorf(camera.position.z / 80.0f);
+    if (storybook_forest_seed != manifest->world_seed ||
+        storybook_forest_generator != manifest->generator_version) {
+        ClearStorybookForest();
+        storybook_forest_seed = manifest->world_seed;
+        storybook_forest_generator = manifest->generator_version;
     }
-    DrawModel(storybook_forest.structure, (Vector3){0}, 1.0f, WHITE);
-    DrawModel(storybook_forest.foliage, (Vector3){0}, 1.0f, WHITE);
-    CcLocalRendererRecordStaticBatch(2, storybook_forest.source_draw_count,
-                                    storybook_forest.vertex_count);
+    for (int32_t i = 0; i < STORYBOOK_FOREST_CELL_COUNT; ++i) {
+        StorybookForestCell *cell = &storybook_forest_cells[i];
+        if (cell->occupied && (abs(cell->x - origin_x) > 5 ||
+                               abs(cell->z - origin_z) > 5)) {
+            ClearStorybookForestCell(cell);
+        }
+    }
+    TreeRegionalStyle style = TreeStyleForKingdom(WORLD_GRASS);
+    style.proportions = (Vector3){1.5f, 1.6f, 1.5f};
+    for (int32_t row = -4; row <= 4; ++row) {
+        for (int32_t col = -4; col <= 4; ++col) {
+            int32_t x = origin_x + col;
+            int32_t z = origin_z + row;
+            float ground = CcWorldTerrainHeight(manifest,
+                (float)x * 80.0f + 40.0f, (float)z * 80.0f + 40.0f);
+            if (!StorybookCellVisible(camera, x, z, ground)) continue;
+            StorybookForestCell *cell = NULL;
+            StorybookForestCell *free_cell = NULL;
+            for (int32_t i = 0; i < STORYBOOK_FOREST_CELL_COUNT; ++i) {
+                StorybookForestCell *candidate = &storybook_forest_cells[i];
+                if (candidate->occupied && candidate->x == x && candidate->z == z) {
+                    cell = candidate;
+                    break;
+                }
+                if (!candidate->occupied) free_cell = candidate;
+            }
+            if (cell == NULL) cell = free_cell;
+            if (cell == NULL) continue;
+            if (!cell->occupied) {
+                StorybookTree trees[16];
+                int count = StorybookCellTrees(manifest, x, z, trees,
+                    cell->rocks, &cell->rock_count);
+                if (count > 0 && !BuildStorybookForest(&cell->batch, trees, count, style)) {
+                    EmitStorybookTrees(trees, count, style);
+                    continue;
+                }
+                cell->occupied = true;
+                cell->x = x;
+                cell->z = z;
+            }
+            for (int rock = 0; rock < cell->rock_count; ++rock) {
+                DrawScenerySphere(cell->rocks[rock], 0.9f,
+                    BlendColor(WORLD_STONE, WORLD_GRASS, 0.25f));
+            }
+            if (!cell->batch.ready) continue;
+            DrawModel(cell->batch.structure, (Vector3){0}, 1.0f, WHITE);
+            DrawModel(cell->batch.foliage, (Vector3){0}, 1.0f, WHITE);
+            CcLocalRendererRecordStaticBatch(2, cell->batch.source_draw_count,
+                                            cell->batch.vertex_count);
+        }
+    }
 }
 
 void CcLocalDrawOpenWorld3D(const CcSim *sim,
@@ -1460,6 +1539,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
             DrawEllipse((int)x + 25, (int)y + 3, 34.0f, 5.0f, mist);
         }
     }
+    rlSetClipPlanes(0.10, storybook ? 512.0 : 4000.0);
     BeginMode3D(camera);
     BeginWorldLighting(camera, &art);
     if (storybook) {
@@ -1467,10 +1547,10 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         DrawStorybookRoads(sim, &stream->manifest, carriage);
         /* Finish world-space ribbons before tree models change the transform. */
         rlDrawRenderBatchActive();
-        float scenery_fog = 0.0f;
+        float scenery_fog = 1.0f;
         SetShaderValue(visual_style.world, visual_style.horizon_fog_location,
                        &scenery_fog, SHADER_UNIFORM_FLOAT);
-        DrawStorybookScenery(&stream->manifest, carriage->position);
+        DrawStorybookScenery(&stream->manifest, camera);
     } else {
         DrawOpenWorldRouteNetwork(
             sim, &stream->manifest, carriage, kingdom_view);
@@ -1542,6 +1622,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     DrawCrew(hero_embarked && crew_exchange != NULL ? &passenger : agent, 6);
     EndWorldLighting();
     EndMode3D();
+    rlSetClipPlanes(0.05, 4000.0);
     DrawTargetAtmosphere(target, clock);
     EndTextureMode();
     PresentTarget(target, destination);

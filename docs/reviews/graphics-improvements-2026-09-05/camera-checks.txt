@@ -1,0 +1,9 @@
+PASS town camera: six towns, two seeds, 30/60/144 Hz, peak speed 45.659
+camera return rate 30 peak 96.2809 residual 0.000000
+camera return rate 60 peak 96.6016 residual 0.000000
+camera return rate 144 peak 96.6331 residual 0.000000
+PASS camera handoffs: held landmarks, interrupted moves, pony views and smooth returns
+PASS scenery visibility: depth ordering, full bounds and stable town tree residency
+PASS building cutaways: edge crossings, transitions and resets at 30/60/144 Hz
+PASS skin rotation: all bones, three quarter turns, two bind frames
+PASS pony harness: head and chest attachments follow the skin

@@ -837,13 +837,16 @@ void CcLocalBindPlace(const CcSim *sim)
         CcSimSettlement(sim, sim->player.location_id) : NULL;
     CcSettlementFunction function = place != NULL ? place->function :
                                                     CC_SETTLEMENT_MARKET;
-    if (function != active_place_function) {
+    uint32_t seed = sim != NULL ? CcLocalPlaceTerrainSeed(sim->world_seed, place) :
+        UINT32_C(0xc0a71a9e);
+    if (function != active_place_function || seed != street_terrain_seed) {
         street_camera_rig = (FixedCameraRig){0};
+        combat_camera_rig = (CombatCameraRig){0};
+        conversation_camera_rig = (ConversationCameraRig){0};
+        scenery_view.valid = false;
     }
     active_place_function = function;
-    CcLocalTerrainSetSeed(sim != NULL ?
-        CcLocalPlaceTerrainSeed(sim->world_seed, place) :
-        UINT32_C(0xc0a71a9e));
+    CcLocalTerrainSetSeed(seed);
 }
 
 void CcLocalBindOpenWorld(const CcWorldStream *stream)
