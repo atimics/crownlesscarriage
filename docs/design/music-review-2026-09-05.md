@@ -65,7 +65,7 @@ to `CcMusicContextFor` in `src/client/cc_music.c`.
 3. The director squares each score, applies recent-title penalties, chooses a
    title, then chooses a take. Extra takes give a title more performances while
    keeping its title-level chance stable. The last take is skipped when another
-   take of that title is available. Music uses its own random state.
+take of that title is available. Music uses its own random state.
 4. The player opens a local file or downloads the selected MP3. The current
    music continues during the download. Up to three streams support overlapping
    fades and a sudden combat interruption.
@@ -81,6 +81,13 @@ the first draw. Weather, nearby sites and recent-title history change that
 figure during play. Each town currently has one available take of its own cue,
 so town identity is strong but its performance can repeat. More exports and fresh
 town compositions address separate parts of that experience.
+
+The review also found that the town's name boost carried into underground scenes.
+At the review base, a quiet dragon cave near Silverwick gave its town cue 81.960%
+of a fresh draw and the dragon cue 18.040%. This change scopes the town-name boost
+to surface scenes. Tests cover entry to goblin caves, dragon caves and dungeon
+expeditions, followed by a return to town. Local room and cave cues can then lead
+the underground score.
 
 | Event | Transition |
 | --- | --- |
@@ -150,9 +157,10 @@ their places; a change of ruler can introduce the new ruler's theme at court and
 in related events. Goblin groups and dragons can have additional identities as
 their encounters receive a later pass.
 
-The first trial asks Suno v5.5 for two new instrumental takes per town. Each prompt
-sets a different melodic shape. The shared thread is warm 16-bit sampler colour,
-gentle tape movement, modest dynamics and room for dialogue.
+The first trial produced twelve finished Suno v5.5 takes, two per town, totalling
+28 minutes 3 seconds. Each prompt sets a different melodic shape. The shared
+thread is warm 16-bit sampler colour, gentle tape movement, modest dynamics and
+room for dialogue.
 
 | Town | Trial | Pulse and key | Lead |
 | --- | --- | --- | --- |
@@ -190,12 +198,14 @@ first, then work sites, hunger and relief, then dungeon rooms and combat.
 
 ## Verification
 
-The strict Debug build of `music_tests` and `music_player_tests` passed. All five
+The new underground-scene regression failed on the review base. After the town
+boost fix, the strict Debug build of `music_tests` and `music_player_tests` passed. All five
 music CTest checks passed: situation selection and fades; streamed playback and
 fallback; browser download and cache; generated catalog; bundled files and host
 format. The quiet-town probe used the current compiled C scoring code. File
 hashes were checked locally against the offline manifest and the live host's
-metadata. New composition quality is reserved for the listening pass.
+metadata. All twelve Suno takes show finished durations. The browser decoded and
+played a Thornford take. New composition quality is reserved for the listening pass.
 
 The original integration was merged in PR #295. Hosted delivery and the offline
 set were merged in PR #306. The current code and live catalog were read directly
