@@ -98,7 +98,33 @@ static void TestCameraContinuity(void)
         RequireRenderer(largest_step < Vector3Distance(base.position, base.target) * 3.0f && Vector3Distance(previous.position, base.position) < 0.001f,
                         "conversation interruptions and returns must settle smoothly");
     }
-    puts("PASS camera handoffs: held landmarks, interrupted moves and smooth returns");
+    for (int projection = CAMERA_PERSPECTIVE;
+         projection <= CAMERA_ORTHOGRAPHIC; ++projection) {
+        Camera3D road = base;
+        road.projection = projection;
+        if (projection == CAMERA_ORTHOGRAPHIC) road.fovy = 7.2f;
+        Camera3D entry = PonyConversationFraming(road, (Vector3){0}, 0, 0.000001f);
+        for (int depth = -10; depth <= 5; depth += 5) {
+            Vector3 point = {2, 1, (float)depth};
+            RequireRenderer(Vector2Distance(GetWorldToScreenEx(point, road, 630, 320),
+                            GetWorldToScreenEx(point, entry, 630, 320)) < 0.01f,
+                            "pony conversation entry must preserve landmark positions");
+        }
+        for (int frame = 0; frame <= 240; ++frame) {
+            float weight = frame <= 120 ? (float)frame / 120.0f :
+                                          (float)(240 - frame) / 120.0f;
+            Camera3D pony = PonyConversationFraming(road, (Vector3){0}, 0, weight);
+            RequireRenderer(pony.projection == road.projection &&
+                            isfinite(pony.fovy) && pony.fovy > 0,
+                            "pony conversations must preserve the incoming lens family");
+            if (frame == 240) {
+                RequireRenderer(Vector3Distance(pony.position, road.position) < 0.0001f &&
+                                fabsf(pony.fovy - road.fovy) < 0.0001f,
+                                "pony conversation exit must return to the road view");
+            }
+        }
+    }
+    puts("PASS camera handoffs: held landmarks, interrupted moves, pony views and smooth returns");
 }
 
 static void TestStableVisibility(void)
