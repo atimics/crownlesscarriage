@@ -296,6 +296,9 @@ typedef enum CreatureGaitSlot {
     CREATURE_GAIT_SLOT_COUNT
 } CreatureGaitSlot;
 
+/* Further than a harnessed animal could travel between two frames. */
+#define CC_CREATURE_GAIT_TELEPORT_RANGE 8.0f
+
 typedef struct CreatureGaitCache {
     CcCreatureRigController controller;
     CcCreatureRigWorldCommand command;
@@ -1882,9 +1885,20 @@ bool CcLocalCreatureGaitPoseInternal(
     if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || pose == NULL ||
         !isfinite(clock) || !isfinite(scale) || scale <= 0.0f) return false;
     CreatureGaitCache *cache = &creature_gaits[slot];
+    /* The rig walks toward its commanded ground position a fraction at a time,
+       which is right for motion and wrong for a jump. A carriage crossing
+       between the town and the road moves its team further in one frame than
+       a pony could walk, and the scene id does not change with it, so the rig
+       spent the next frames trailing tens of units behind the drawn carriage
+       and the pose was read out that far from the model. Treat a jump as a
+       teleport and re-seat the rig where the carriage actually is. */
+    float jump = cache->ready ? Vector3Distance(
+        ground_position, FromLimbVector(cache->controller.ground_position)) :
+        0.0f;
     bool reset = !cache->ready || cache->profile != profile ||
         cache->scene != scene || cache->scale != scale || clock < cache->last_clock ||
-        clock - cache->last_clock > 0.35f;
+        clock - cache->last_clock > 0.35f ||
+        jump > CC_CREATURE_GAIT_TELEPORT_RANGE;
     if (reset) {
         *cache = (CreatureGaitCache){0};
         if (!CcCreatureRigControllerInit(&cache->controller, profile,
@@ -2919,6 +2933,21 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
         if (!CcCreatureRigPoseResolve(
                 CreatureRigProfileForVariant(variant), rig_phase, rig_movement,
                 ToLimbVector(position), yaw, scale, &generated_rig)) {
+            /* Nothing is drawn past this point, so the creature simply is not
+               there. Say so once per variant rather than leaving a carriage
+               rolling through town with no team in front of it. */
+            static bool reported[CC_CREATURE_VARIANT_COUNT];
+            if (variant >= 0 && variant < CC_CREATURE_VARIANT_COUNT &&
+                !reported[variant]) {
+                reported[variant] = true;
+                TraceLog(LOG_WARNING,
+                         "CREATURE: variant %d not drawn; rig pose failed at "
+                         "(%.2f, %.2f, %.2f) yaw %.2f scale %.2f phase %.2f "
+                         "movement %.2f",
+                         (int)variant, (double)position.x, (double)position.y,
+                         (double)position.z, (double)yaw, (double)scale,
+                         (double)rig_phase, (double)rig_movement);
+            }
             return false;
         }
         rig = &generated_rig;
