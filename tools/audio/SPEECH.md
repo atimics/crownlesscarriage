@@ -82,3 +82,25 @@ the model loads with the first generation request.
 
 Run the foundation checks with `ctest --test-dir <build> -R
 'speech_identity|authored_story' --output-on-failure`.
+
+## Playback delivery
+
+Native builds fetch missing recordings from `http://127.0.0.1:8766` on a
+background thread. Set `CROWNLESS_VOICE_URL` to another worker URL, or to an
+empty value for packaged audio only. Each request has a 45-second deadline
+and a 1.2 MB download budget. Changing the turn cancels its request. Late
+results are checked against the turn before playback. Replay can retry a
+failed request. Captions remain available while generation runs.
+
+Browser builds fetch `speech/<key>.wav` beside the game, then use an optional
+worker configured through `globalThis.CROWNLESS_VOICE_URL` before game startup.
+They keep 32 clips in memory and up to 64 in browser storage. Configure the
+worker's allowed origin to match the page. Native worker caches survive
+restarts. Audio downloads stay outside the render loop on both platforms.
+
+Delivery tests use small WAV fixtures and cover the actual HTTP queue, oversized
+responses, cancellation, late completion, cache reuse, and playback lifetime:
+
+```sh
+ctest --test-dir <build> -R 'speech_delivery|audio_playback_lifetime' --output-on-failure
+```
