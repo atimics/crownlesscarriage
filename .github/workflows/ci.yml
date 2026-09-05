@@ -151,12 +151,20 @@ jobs:
           python3 tests/art_check_tests.py --viewport-image build/renderer-viewport.png
           xvfb-run --auto-servernum cmake --build build --target run_character_material_captures
           python3 tools/art/check_character_materials.py build/character-materials
+          xvfb-run --auto-servernum cmake --build build --target run_humanoid_animation_captures
       - name: Upload character material captures
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: character-materials
           path: build/character-materials
+      - name: Upload character animation review
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: humanoid-animation
+          path: build/humanoid-animation
+          if-no-files-found: error
       - name: Launch macOS app smoke
         if: runner.os == 'macOS'
         run: >-

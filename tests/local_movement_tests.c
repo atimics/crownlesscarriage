@@ -122,7 +122,8 @@ static float MaximumPoseStep(const CcHumanoidPose *before,
 }
 
 static float RelativePointStep(CcLimbVec3 before, CcLimbVec3 before_root,
-                               CcLimbVec3 after, CcLimbVec3 after_root)
+                               CcLimbVec3 after, CcLimbVec3 after_root,
+                               float yaw_delta)
 {
     CcLimbVec3 before_relative = {
         before.x - before_root.x,
@@ -134,30 +135,39 @@ static float RelativePointStep(CcLimbVec3 before, CcLimbVec3 before_root,
         after.y - after_root.y,
         after.z - after_root.z,
     };
+    /* Compare the held pose in the actor's frame as its heading changes. */
+    float cosine = cosf(yaw_delta);
+    float sine = sinf(yaw_delta);
+    before_relative = (CcLimbVec3){
+        before_relative.x * cosine + before_relative.z * sine,
+        before_relative.y,
+        -before_relative.x * sine + before_relative.z * cosine,
+    };
     return Distance3(before_relative, after_relative);
 }
 
 static float MaximumRelativeUpperPoseStep(const CcHumanoidPose *before,
-                                          const CcHumanoidPose *after)
+                                          const CcHumanoidPose *after,
+                                          float yaw_delta)
 {
     float maximum = RelativePointStep(before->spine, before->pelvis,
-                                      after->spine, after->pelvis);
+                                      after->spine, after->pelvis, yaw_delta);
 #define INCLUDE_RELATIVE_UPPER_POINT(point) \
     maximum = fmaxf(maximum, RelativePointStep( \
-        before->point, before->pelvis, after->point, after->pelvis))
+        before->point, before->pelvis, after->point, after->pelvis, yaw_delta))
     INCLUDE_RELATIVE_UPPER_POINT(chest);
     INCLUDE_RELATIVE_UPPER_POINT(neck);
     INCLUDE_RELATIVE_UPPER_POINT(head);
     for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
         maximum = fmaxf(maximum, RelativePointStep(
             before->shoulder[arm], before->pelvis,
-            after->shoulder[arm], after->pelvis));
+            after->shoulder[arm], after->pelvis, yaw_delta));
         maximum = fmaxf(maximum, RelativePointStep(
             before->elbow[arm], before->pelvis,
-            after->elbow[arm], after->pelvis));
+            after->elbow[arm], after->pelvis, yaw_delta));
         maximum = fmaxf(maximum, RelativePointStep(
             before->hand[arm], before->pelvis,
-            after->hand[arm], after->pelvis));
+            after->hand[arm], after->pelvis, yaw_delta));
     }
 #undef INCLUDE_RELATIVE_UPPER_POINT
     return maximum;
@@ -3933,6 +3943,7 @@ int main(void)
     uint32_t stepped_pose_mask = 0;
     int32_t held_upper_pose_frames = 0;
     CcHumanoidPose previous_stepped_render = paced_agent.render_pose;
+    float previous_stepped_yaw = paced_agent.facing_yaw;
     int32_t previous_stepped_bin = -1;
     for (int32_t frame = 0; frame < 600; ++frame) {
         CcLocalAgentUpdate(&paced_agent, 1.0f / 60.0f, true);
@@ -3952,12 +3963,14 @@ int main(void)
             if (stepped_bin == previous_stepped_bin && within > 0.32f &&
                 MaximumRelativeUpperPoseStep(
                     &previous_stepped_render,
-                    &paced_agent.render_pose) < 0.00001f) {
+                    &paced_agent.render_pose,
+                    paced_agent.facing_yaw - previous_stepped_yaw) < 0.00001f) {
                 held_upper_pose_frames += 1;
             }
             previous_stepped_bin = stepped_bin;
         }
         previous_stepped_render = paced_agent.render_pose;
+        previous_stepped_yaw = paced_agent.facing_yaw;
 
         const CcHumanoidPoseSnapshot *render_physical =
             CcHumanoidGaitPreviousSnapshot(&paced_agent.humanoid);
@@ -4185,7 +4198,7 @@ int main(void)
             maximum_merchant_gesture = fmaxf(
                 maximum_merchant_gesture,
                 MaximumRelativeUpperPoseStep(
-                    &merchant_physical->pose, &merchant_idle.render_pose));
+                    &merchant_physical->pose, &merchant_idle.render_pose, 0.0f));
             for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
                 if (Distance3(merchant_physical->pose.ankle[leg],
                               merchant_idle.render_pose.ankle[leg]) >
@@ -4202,7 +4215,7 @@ int main(void)
         maximum_role_difference = fmaxf(
             maximum_role_difference,
             MaximumRelativeUpperPoseStep(&merchant_idle.render_pose,
-                                         &scout_idle.render_pose));
+                                         &scout_idle.render_pose, 0.0f));
     }
     if (!merchant_idle.humanoid.idle.stable ||
         !scout_idle.humanoid.idle.stable ||

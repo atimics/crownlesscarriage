@@ -2353,9 +2353,9 @@ void CcHumanoidGaitAdvanceMantle(
         CcLimbVec3 authored_heel = Add(contacts[leg], Scale(foot_axis, -0.11f));
         CcLimbVec3 authored_ball = Add(contacts[leg], Scale(foot_axis, 0.13f));
         CcLimbVec3 authored_toe = Add(contacts[leg], Scale(foot_axis, 0.20f));
-        CcLimbVec3 requested_ankle = Lerp(authored_ankle,
-                                          standing.pose.ankle[leg],
-                                          exit_weight);
+        CcLimbVec3 requested_ankle = ClimbBlendPoint(
+            gait->climb_entry_pose.ankle[leg], authored_ankle,
+            standing.pose.ankle[leg], acquisition, exit_weight);
         pose.ankle[leg] = ClampClimbTarget(pose.hip[leg], requested_ankle,
                                            0.935f);
         pose.ankle[leg] = LimitClimbPointSpeed(
@@ -2364,12 +2364,15 @@ void CcHumanoidGaitAdvanceMantle(
         pose.ankle[leg] = ClampClimbTarget(pose.hip[leg], pose.ankle[leg],
                                            0.935f);
         CcLimbVec3 correction = Subtract(pose.ankle[leg], requested_ankle);
-        pose.heel[leg] = Add(Lerp(authored_heel, standing.pose.heel[leg],
-                                  exit_weight), correction);
-        pose.ball[leg] = Add(Lerp(authored_ball, standing.pose.ball[leg],
-                                  exit_weight), correction);
-        pose.toe[leg] = Add(Lerp(authored_toe, standing.pose.toe[leg],
-                                 exit_weight), correction);
+        pose.heel[leg] = Add(ClimbBlendPoint(
+            gait->climb_entry_pose.heel[leg], authored_heel,
+            standing.pose.heel[leg], acquisition, exit_weight), correction);
+        pose.ball[leg] = Add(ClimbBlendPoint(
+            gait->climb_entry_pose.ball[leg], authored_ball,
+            standing.pose.ball[leg], acquisition, exit_weight), correction);
+        pose.toe[leg] = Add(ClimbBlendPoint(
+            gait->climb_entry_pose.toe[leg], authored_toe,
+            standing.pose.toe[leg], acquisition, exit_weight), correction);
         pose.heel[leg] = LimitClimbPointSpeed(
             gait->previous_pose.heel[leg], pose.heel[leg], 3.10f, delta_time);
         pose.ball[leg] = LimitClimbPointSpeed(
