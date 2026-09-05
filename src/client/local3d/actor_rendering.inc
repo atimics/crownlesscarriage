@@ -2491,6 +2491,7 @@ typedef struct TreeRegionalStyle {
     float cluster_pull;
     float turn_steps;
     float shape_shift;
+    bool orchard_crown;
 } TreeRegionalStyle;
 
 static TreeRegionalStyle TreeStyleForKingdom(Color kingdom)
@@ -2498,18 +2499,18 @@ static TreeRegionalStyle TreeStyleForKingdom(Color kingdom)
     if (kingdom.r > kingdom.g && kingdom.r > kingdom.b) {
         return (TreeRegionalStyle){
             TREE_REGION_EMBER, {1.14f, 0.94f, 1.10f},
-            {112, 99, 58, 255}, 0.24f, 0.34f, 5.0f, 0.08f
+            {112, 99, 58, 255}, 0.24f, 0.34f, 5.0f, 0.08f, false
         };
     }
     if (kingdom.b > kingdom.r && kingdom.b > kingdom.g) {
         return (TreeRegionalStyle){
             TREE_REGION_BLUE, {0.98f, 1.06f, 0.88f},
-            {65, 89, 109, 255}, 0.22f, 0.22f, 6.0f, -0.04f
+            {65, 89, 109, 255}, 0.22f, 0.22f, 6.0f, -0.04f, false
         };
     }
     return (TreeRegionalStyle){
         TREE_REGION_VERDANT, {0.90f, 1.14f, 0.94f},
-        {43, 107, 88, 255}, 0.20f, 0.28f, 4.0f, 0.02f
+        {43, 107, 88, 255}, 0.20f, 0.28f, 4.0f, 0.02f, false
     };
 }
 
@@ -3304,7 +3305,7 @@ static void DrawTree(float x, float z, TreeFamily family, Color leaves,
 
     switch (family) {
         case TREE_FAMILY_OAK:
-            if (active_place_function == CC_SETTLEMENT_FARMING) {
+            if (regional_style.orchard_crown) {
                 DrawThornfordOrchardTree(root, turn, shape, leaves);
             } else {
                 DrawOakTree(root, turn, shape, leaves);
@@ -3336,7 +3337,7 @@ static void DrawWorldTreeAt(int32_t index, TreeRegionalStyle regional_style)
         regional_style.proportions = (Vector3){1.24f, 0.94f, 1.20f};
         regional_style.foliage_bias = WORLD_CROP;
         regional_style.foliage_mix = family == TREE_FAMILY_ALDER ? 0.16f : 0.38f;
-        regional_style.cluster_pull = 0.0f;
+        regional_style.orchard_crown = true;
         family = placement.family;
         leaves = BlendColor(WORLD_FOLIAGE_LIGHT, WORLD_CROP_LIGHT,
                              index % 3 == 0 ? 0.34f : 0.12f);

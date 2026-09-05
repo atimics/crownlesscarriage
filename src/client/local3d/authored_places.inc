@@ -3222,10 +3222,9 @@ static void DrawThornfordRiverbank(Vector3 focus)
     }
 }
 
-static void DrawFarmTerrainStage(const CcSettlement *place, uint32_t conditions,
+static void DrawFarmTerrainStage(const CcSettlement *place,
                                   Vector3 focus, float clock)
 {
-    (void)conditions;
     Color water = BlendColor(WORLD_TEAL, CC_STYLE_TEAL_SHADOW, 0.18f);
     for (float z = -24.0f; z < CC_LOCAL_WORLD_DEPTH + 32.0f; z += 4.0f) {
         float river_x = TerrainFarmRiverCenter(z);
@@ -3241,6 +3240,14 @@ static void DrawFarmTerrainStage(const CcSettlement *place, uint32_t conditions,
         Vector3 d = {river_x + 3.6f, ground + 0.12f, z};
         DrawTriangle3D(a, b, c, water);
         DrawTriangle3D(a, c, d, water);
+        if (fabsf(z - 34.0f) > 4.0f) {
+            float offset = sinf(z * 0.61f) * 1.7f;
+            Vector3 ripple = {river_x + offset, ground + 0.15f, z + 0.4f};
+            Vector3 tip = {next_x + offset, next_ground + 0.15f, z + 2.8f};
+            DrawTriangle3D(ripple,
+                (Vector3){ripple.x + 0.14f, ripple.y, ripple.z + 1.0f},
+                tip, BlendColor(water, CC_VISUAL_PALETTE.parchment.light, 0.42f));
+        }
     }
     DrawThornfordRiverbank(focus);
     DrawThornfordGardens(place, focus);
@@ -3628,10 +3635,11 @@ static void DrawTownBackdrop(const CcSettlement *place)
 static void DrawTownTerrainStage(const CcSettlement *place, uint32_t conditions,
                                   Vector3 focus, float clock)
 {
+    (void)conditions;
     if (place == NULL) return;
     switch (place->function) {
         case CC_SETTLEMENT_FARMING:
-            DrawFarmTerrainStage(place, conditions, focus, clock); break;
+            DrawFarmTerrainStage(place, focus, clock); break;
         case CC_SETTLEMENT_MINING: DrawMiningTerrainStage(focus); break;
         case CC_SETTLEMENT_MARKET: DrawMarketTerrainStage(focus); break;
         case CC_SETTLEMENT_FORTRESS: DrawFortressTerrainStage(focus); break;

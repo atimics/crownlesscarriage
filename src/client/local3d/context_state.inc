@@ -789,7 +789,7 @@ static const WorldTreePlacement THORNFORD_TREES[] = {
     {{5,13}, TREE_FAMILY_POLLARD}, {{13,13}, TREE_FAMILY_OAK},
     {{18,47}, TREE_FAMILY_POLLARD}, {{24,50}, TREE_FAMILY_OAK},
     {{52,42}, TREE_FAMILY_OAK}, {{75,42}, TREE_FAMILY_POLLARD},
-    {{83,41}, TREE_FAMILY_ALDER}, {{98,28}, TREE_FAMILY_ALDER}
+    {{83,41}, TREE_FAMILY_ALDER}, {{95,46}, TREE_FAMILY_ALDER}
 };
 _Static_assert(sizeof(THORNFORD_TREES) == sizeof(WORLD_TREES),
                "Town tree plans share the same visibility mask");
