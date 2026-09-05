@@ -11612,8 +11612,11 @@ int main(int argc, char **argv)
             local.carriage_tab = CARRIAGE_PONIES;
             int32_t pony = sim.pony_company.team[0];
             if (capture_ux_view == 12) {
-                for (pony = 0; pony < CC_PONY_COUNT; ++pony) {
-                    if (pony != sim.pony_company.team[0] && pony != sim.pony_company.team[1]) break;
+                for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
+                    if (i != sim.pony_company.team[0] && i != sim.pony_company.team[1]) {
+                        pony = i;
+                        break;
+                    }
                 }
             }
             sim.pony_company.ponies[pony].seen = true;
