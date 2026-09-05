@@ -3245,7 +3245,8 @@ static void DrawFarmTerrainStage(const CcSettlement *place,
             Vector3 ripple = {river_x + offset, ground + 0.15f, z + 0.4f};
             Vector3 tip = {next_x + offset, next_ground + 0.15f, z + 2.8f};
             DrawTriangle3D(ripple,
-                (Vector3){ripple.x + 0.14f, ripple.y, ripple.z + 1.0f},
+                (Vector3){(ripple.x + tip.x) * 0.5f - 0.14f,
+                          (ripple.y + tip.y) * 0.5f, (ripple.z + tip.z) * 0.5f},
                 tip, BlendColor(water, CC_VISUAL_PALETTE.parchment.light, 0.42f));
         }
     }
