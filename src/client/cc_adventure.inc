@@ -531,6 +531,15 @@ static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *loc
                     (void)snprintf(local->receipt, sizeof(local->receipt), "Delivery complete. %s", message);
                 } else (void)snprintf(local->receipt, sizeof(local->receipt), "%s", message);
                 local->receipt_serial += 1U;
+                const CcLocalPlaceProfile *place = CcLocalPlaceProfileForSettlement(
+                    CcSimSettlement(sim, sim->player.location_id));
+                int32_t quantity = quote.command.amount < 0 ? -quote.command.amount : quote.command.amount;
+                char words[CC_SPEECH_TEXT_CAPACITY];
+                (void)snprintf(words, sizeof(words), local->trade_mode == 0 ?
+                    "The %d %s are yours. Thank you." : "I have the %d %s. Thank you.", quantity, CcGoodName(quote.command.good));
+                CcSpeech speech;
+                if (CcSpeechTrade(sim, place->keeper_name, quote.command.good, quantity,
+                    quote.total, local->trade_mode, words, &speech)) ClientSaySpeech(&speech);
             } else (void)snprintf(local->receipt, sizeof(local->receipt), "%s", message);
         } else (void)snprintf(message, capacity, "%s", quote.reason);
     }
@@ -787,6 +796,8 @@ static void DrawAdventureConversation(const CcSim *sim, const LocalState *local)
 {
     CcSpeech speech;
     bool spoken = ClientConversationSpeech(sim, local, &speech);
+    const CcSpeech *playing = CcAudioCurrentSpeech();
+    if (playing != NULL) { speech = *playing; spoken = true; }
     const char *name = spoken ? speech.speaker : local->conversation_name;
     const char *line = spoken ? speech.text : local->conversation_line;
     ClientTouchHeading(name, line);

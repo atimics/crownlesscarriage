@@ -4,7 +4,8 @@ typedef enum FrontendScreen {
     FRONTEND_PLAYING,
     FRONTEND_PAUSED,
     FRONTEND_DELETE,
-    FRONTEND_AVATAR
+    FRONTEND_AVATAR,
+    FRONTEND_SOUND
 } FrontendScreen;
 
 typedef enum FrontendAction {
@@ -36,7 +37,12 @@ typedef enum FrontendAction {
     FRONTEND_ACTION_COMPANY,
     FRONTEND_ACTION_HOST_PAUSE,
     FRONTEND_ACTION_CREDITS,
-    FRONTEND_ACTION_TOUCH
+    FRONTEND_ACTION_TOUCH,
+    FRONTEND_ACTION_SOUND_MENU,
+    FRONTEND_ACTION_VOICE_VOLUME,
+    FRONTEND_ACTION_PLAYER_VOICE,
+    FRONTEND_ACTION_READ_ALOUD,
+    FRONTEND_ACTION_AMBIENT
 } FrontendAction;
 
 typedef struct FrontendState {
@@ -91,6 +97,15 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
     Rectangle panel = FrontendPanel(state->screen);
     float x = panel.x + 36.0f;
     float y = panel.y + 148.0f;
+    if (state->screen == FRONTEND_SOUND) {
+        const FrontendAction actions[] = {FRONTEND_ACTION_SOUND, FRONTEND_ACTION_VOICE_VOLUME,
+            FRONTEND_ACTION_PLAYER_VOICE, FRONTEND_ACTION_READ_ALOUD, FRONTEND_ACTION_AMBIENT,
+            FRONTEND_ACTION_CANCEL};
+        const char *labels[] = {"Sound", "Voice volume", "Your voice", "Read pages aloud", "Nearby voices", "Back"};
+        for (int i = 0; i < 6; ++i)
+            items[i] = (FrontendItem){actions[i], {x, y + (float)i * 48, 368, 40}, labels[i], true};
+        return 6;
+    }
     if (state->screen == FRONTEND_TITLE) {
         items[0] = (FrontendItem){FRONTEND_ACTION_OFFLINE,
             {x, y + 20.0f, 179.0f, 44.0f}, "Offline", true};
@@ -128,11 +143,11 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
     }
     const FrontendAction actions[] = {
         FRONTEND_ACTION_RESUME, FRONTEND_ACTION_SAVE,
-        FRONTEND_ACTION_SOUND, FRONTEND_ACTION_MOTION,
+        FRONTEND_ACTION_SOUND_MENU, FRONTEND_ACTION_MOTION,
         FRONTEND_ACTION_TITLE, FRONTEND_ACTION_DELETE, FRONTEND_ACTION_QUIT
     };
     const char *labels[] = {
-        "Resume", "Save world", "Sound", "Reduced motion",
+        "Resume", "Save world", "Sound & voices", "Reduced motion",
         "Save and return to title", "Delete world", "Save and quit"
     };
     int count = 7;
@@ -193,7 +208,7 @@ static FrontendAction FrontendInput(FrontendState *state)
             FrontendOpen(state, FRONTEND_PAUSED);
         } else if (state->screen == FRONTEND_PAUSED) {
             return FRONTEND_ACTION_RESUME;
-        } else if (state->screen == FRONTEND_DELETE) {
+        } else if (state->screen == FRONTEND_DELETE || state->screen == FRONTEND_SOUND) {
             return FRONTEND_ACTION_CANCEL;
         } else if (state->screen == FRONTEND_AVATAR) {
             return FRONTEND_ACTION_CANCEL_AVATAR;
@@ -321,6 +336,20 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
 #else
         ToggleFullscreen();
 #endif
+    } else if (action == FRONTEND_ACTION_SOUND_MENU) {
+        FrontendOpen(state, FRONTEND_SOUND);
+    } else if (adventure_preferences != NULL && (action == FRONTEND_ACTION_VOICE_VOLUME ||
+        action == FRONTEND_ACTION_PLAYER_VOICE || action == FRONTEND_ACTION_READ_ALOUD ||
+        action == FRONTEND_ACTION_AMBIENT)) {
+        if (action == FRONTEND_ACTION_VOICE_VOLUME)
+            adventure_preferences->voice_volume = (adventure_preferences->voice_volume + 25) % 125;
+        else if (action == FRONTEND_ACTION_PLAYER_VOICE)
+            adventure_preferences->player_voice = adventure_preferences->player_voice == 12 ? -1 :
+                adventure_preferences->player_voice < 5 ? 5 : adventure_preferences->player_voice + 1;
+        else if (action == FRONTEND_ACTION_READ_ALOUD)
+            adventure_preferences->read_aloud = !adventure_preferences->read_aloud;
+        else adventure_preferences->ambient_voices = !adventure_preferences->ambient_voices;
+        adventure_preferences_dirty = true;
     } else if (action == FRONTEND_ACTION_TOUCH) {
 #if defined(PLATFORM_WEB)
         ClientBrowserTouchControls();
@@ -456,6 +485,7 @@ static void DrawFrontend(const FrontendState *state,
     FrontendCenteredText("CROWNLESS CARRIAGE", top + 38, 14, CC_GOLD);
     const char *title = state->screen == FRONTEND_TITLE ? "The road awaits" :
         state->screen == FRONTEND_AVATAR ? "Your traveller" :
+        state->screen == FRONTEND_SOUND ? "Sound & voices" :
         state->screen == FRONTEND_DELETE ? "Delete this world?" :
         CcCoopClientActive() ? "Company menu" : "Journey paused";
     ClientTouchHeading(title, state->feedback[0] != '\0' ? state->feedback :
@@ -520,6 +550,11 @@ static void DrawFrontend(const FrontendState *state,
         } else if (item.action == FRONTEND_ACTION_MOTION) {
             label = preferences->reduced_motion ? "Reduced motion: on" : "Reduced motion: off";
         }
+        if (item.action == FRONTEND_ACTION_VOICE_VOLUME) label = TextFormat("Voice volume: %d%%", preferences->voice_volume);
+        if (item.action == FRONTEND_ACTION_PLAYER_VOICE) label = preferences->player_voice < 5 ? "Your replies: text" :
+            TextFormat("Your voice: %s", CcSpeechVoiceAt((size_t)preferences->player_voice)->name);
+        if (item.action == FRONTEND_ACTION_READ_ALOUD) label = preferences->read_aloud ? "Read pages aloud: on" : "Read pages aloud: off";
+        if (item.action == FRONTEND_ACTION_AMBIENT) label = preferences->ambient_voices ? "Nearby voices: on" : "Nearby voices: off";
         if (item.action == FRONTEND_ACTION_TEXT) label = TextFormat("Text size: %s  T",
             preferences->text_size == 0 ? "standard" : preferences->text_size == 1 ? "large" : "largest");
         if (item.action == FRONTEND_ACTION_HINTS) label = preferences->focus_hints ? "Target hints: shown  H" : "Target hints: focus only  H";
@@ -580,7 +615,8 @@ static int RunFrontendRegression(void)
     FRONTEND_CHECK(items[2].enabled && items[2].action == FRONTEND_ACTION_PLAY);
     FRONTEND_CHECK(state.screen == FRONTEND_TITLE && journal == NULL);
     FRONTEND_CHECK(!CampaignSaveExists(save_path));
-    CcClientPreferences avatar_preferences = {0};
+    CcClientPreferences avatar_preferences;
+    CcClientPreferencesDefault(&avatar_preferences);
     adventure_preferences = &avatar_preferences;
     FRONTEND_ACT(FRONTEND_ACTION_AVATAR);
     FRONTEND_CHECK(state.screen == FRONTEND_AVATAR && state.avatar_return == FRONTEND_TITLE);
@@ -638,11 +674,22 @@ static int RunFrontendRegression(void)
     ClientInputClearPressed();
     FrontendReturnFromBook(&state, &local, &view);
     FRONTEND_CHECK(state.screen == FRONTEND_PAUSED && view == VIEW_MAP);
-    CcClientPreferences interface_options = {0};
+    CcClientPreferences interface_options;
+    CcClientPreferencesDefault(&interface_options);
     adventure_preferences = &interface_options;
     FRONTEND_ACT(FRONTEND_ACTION_TEXT);
     FRONTEND_ACT(FRONTEND_ACTION_HINTS);
-    FRONTEND_CHECK(interface_options.text_size == 1 && interface_options.focus_hints && adventure_preferences_dirty);
+    FRONTEND_CHECK(interface_options.text_size == 1 && !interface_options.focus_hints && adventure_preferences_dirty);
+    FRONTEND_ACT(FRONTEND_ACTION_SOUND_MENU);
+    FRONTEND_CHECK(state.screen == FRONTEND_SOUND && FrontendItems(&state, items) == 6);
+    FRONTEND_ACT(FRONTEND_ACTION_VOICE_VOLUME);
+    FRONTEND_ACT(FRONTEND_ACTION_PLAYER_VOICE);
+    FRONTEND_ACT(FRONTEND_ACTION_READ_ALOUD);
+    FRONTEND_ACT(FRONTEND_ACTION_AMBIENT);
+    FRONTEND_CHECK(interface_options.voice_volume == 0 && interface_options.player_voice == 6 &&
+        interface_options.read_aloud && !interface_options.ambient_voices);
+    FRONTEND_ACT(FRONTEND_ACTION_CANCEL);
+    FRONTEND_CHECK(state.screen == FRONTEND_PAUSED);
     adventure_preferences = NULL;
     adventure_preferences_dirty = false;
     local.road_choice_active = true;
@@ -660,7 +707,10 @@ static int RunFrontendRegression(void)
     local.site_travel_active = false;
     FRONTEND_ACT(FRONTEND_ACTION_PLAY);
     FRONTEND_CHECK(state.screen == FRONTEND_PLAYING && sim.world_seed == first_seed);
-    CcClientPreferences preferences = {.reduced_motion = true, .audio_mode = 2};
+    CcClientPreferences preferences;
+    CcClientPreferencesDefault(&preferences);
+    preferences.reduced_motion = true;
+    preferences.audio_mode = 2;
     char error[256];
     FRONTEND_CHECK(CcClientPreferencesSave(preferences_path, &preferences, error, sizeof(error)));
     FrontendOpen(&state, FRONTEND_PAUSED);

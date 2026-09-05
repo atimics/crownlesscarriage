@@ -10,6 +10,10 @@ typedef struct CcClientPreferences {
     int32_t text_size; /* 0: standard, 1: large, 2: largest */
     bool focus_hints;
     int32_t audio_mode; /* 0: full, 1: effects, 2: muted */
+    int32_t voice_volume; /* 0..100 */
+    int32_t player_voice; /* -1: text replies, 5..12: version-one cast */
+    bool read_aloud;
+    bool ambient_voices;
     uint32_t avatar; /* Five appearance choices, three bits per choice. */
 } CcClientPreferences;
 
