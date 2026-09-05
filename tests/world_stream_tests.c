@@ -1,5 +1,6 @@
 #include "world/cc_world.h"
 
+#include <float.h>
 #include <math.h>
 #include <stdio.h>
 
@@ -33,6 +34,93 @@ static float DistanceToSegment(CcWorldPoint point, CcWorldPoint first,
         first.z + dz * amount,
     };
     return PointDistance(point, nearest);
+}
+
+/* Exhaustive reference keeps query results stable as distant roads are culled. */
+static int CheckRoadQuery(const CcWorldManifest *manifest,
+                         const CcWorldManifest *without_roads,
+                         CcWorldPoint point)
+{
+    float nearest = FLT_MAX;
+    CcWorldPoint center = {0};
+    for (int32_t r = 0; r < manifest->route_count; ++r) {
+        for (int32_t s = 1; s < CC_WORLD_ROUTE_SAMPLE_COUNT; ++s) {
+            CcWorldPoint a = manifest->routes[r].samples[s - 1];
+            CcWorldPoint b = manifest->routes[r].samples[s];
+            float distance = DistanceToSegment(point, a, b);
+            if (distance >= nearest) continue;
+            nearest = distance;
+            float dx = b.x - a.x;
+            float dz = b.z - a.z;
+            float length_squared = dx * dx + dz * dz;
+            float t = length_squared > 0.0001f ?
+                ((point.x - a.x) * dx + (point.z - a.z) * dz) /
+                    length_squared : 0.0f;
+            t = fmaxf(0.0f, fminf(1.0f, t));
+            center = (CcWorldPoint){a.x + dx * t, a.z + dz * t};
+        }
+    }
+    float expected = CcWorldTerrainHeight(without_roads, point.x, point.z);
+    if (nearest < 6.7f) {
+        float road = CcWorldTerrainHeight(without_roads, center.x, center.z);
+        float t = fmaxf(0.0f, fminf(1.0f, (nearest - 3.2f) / 3.5f));
+        expected += (road - expected) * (1.0f - t * t * (3.0f - 2.0f * t));
+    }
+    CHECK(fabsf(CcWorldTerrainHeight(manifest, point.x, point.z) - expected) <
+          0.000001f);
+    CcWorldSurfaceKind surface = CcWorldSurfaceAt(without_roads, point.x, point.z);
+    if (surface == CC_WORLD_SURFACE_WILDERNESS && nearest <= 3.2f) {
+        surface = CC_WORLD_SURFACE_ROAD;
+    }
+    CHECK(CcWorldSurfaceAt(manifest, point.x, point.z) == surface);
+    return 0;
+}
+
+static int TestRoadQueryParity(void)
+{
+    for (uint32_t seed = 1; seed <= 4; ++seed) {
+        CcSim sim;
+        CcWorldManifest manifest;
+        CcSimInit(&sim, seed * UINT32_C(0x9e3779b9));
+        CHECK(CcWorldManifestBuild(&manifest, &sim));
+        CcWorldManifest without_roads = manifest;
+        without_roads.route_count = 0;
+        for (int32_t row = 0; row < 64; ++row) {
+            for (int32_t col = 0; col < 64; ++col) {
+                CcWorldPoint point = {
+                    manifest.minimum_x + (manifest.maximum_x - manifest.minimum_x) *
+                        ((float)col + 0.5f) / 64.0f,
+                    manifest.minimum_z + (manifest.maximum_z - manifest.minimum_z) *
+                        ((float)row + 0.5f) / 64.0f,
+                };
+                CHECK(CheckRoadQuery(&manifest, &without_roads, point) == 0);
+            }
+        }
+        const float offsets[] = {-6.7001f, -6.7f, -3.2001f, -3.2f, 0.0f,
+                                   3.2f, 3.2001f, 6.7f, 6.7001f};
+        for (int32_t r = 0; r < manifest.route_count; ++r) {
+            for (int32_t s = 0; s < CC_WORLD_ROUTE_SAMPLE_COUNT; ++s) {
+                for (size_t offset = 0; offset < sizeof(offsets) / sizeof(offsets[0]);
+                     ++offset) {
+                    CcWorldPoint point = manifest.routes[r].samples[s];
+                    point.x += offsets[offset];
+                    CHECK(CheckRoadQuery(&manifest, &without_roads, point) == 0);
+                    point = manifest.routes[r].samples[s];
+                    point.z += offsets[offset];
+                    CHECK(CheckRoadQuery(&manifest, &without_roads, point) == 0);
+                }
+            }
+        }
+    }
+    CcWorldManifest straight = {.route_count = 1};
+    for (int32_t s = 0; s < CC_WORLD_ROUTE_SAMPLE_COUNT; ++s) {
+        straight.routes[0].samples[s] = (CcWorldPoint){(float)(s - 16) * 2.0f, 0};
+    }
+    CHECK(CcWorldSurfaceAt(&straight, 0, 3.2f) == CC_WORLD_SURFACE_ROAD);
+    CHECK(CcWorldSurfaceAt(&straight, 0, nextafterf(3.2f, INFINITY)) ==
+          CC_WORLD_SURFACE_WILDERNESS);
+    CHECK(CcWorldSurfaceAt(&straight, 0, -3.2f) == CC_WORLD_SURFACE_ROAD);
+    return 0;
 }
 
 static int TestCanonicalRoadManifest(void)
@@ -518,6 +606,7 @@ static int TestStreamFollowsCarriage(void)
 
 int main(void)
 {
+    if (TestRoadQueryParity() != 0) return 1;
     if (TestStreamFollowsCarriage() != 0) return 1;
     if (TestCanonicalRoadManifest() != 0) return 1;
     if (TestManifestIsStableAndFinite() != 0) return 1;
