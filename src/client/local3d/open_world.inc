@@ -541,24 +541,23 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
             }
         }
     } else {
-    for (int32_t road_index = 0;
-         road_index < CC_LOCAL_PLACE_ROAD_COUNT; ++road_index) {
-        const CcLocalPlaceRoad *road = &profile->road[road_index];
-        DrawBox((Vector3){road->x + road->width * 0.5f, 0.045f,
-                          road->z + road->depth * 0.5f},
-                (Vector3){road->width, 0.09f, road->depth},
-                TerrainBrightRoadColor(
-                    road->surface, (float)settlement->prosperity / 100.0f));
-    }
-    for (int32_t road_index = 0;
-         road_index < CC_LOCAL_CARRIAGE_ROUTE_COUNT; ++road_index) {
-        const CcLocalPlaceRoad *road = &profile->carriage_route[road_index];
-        DrawBox((Vector3){road->x + road->width * 0.5f, 0.055f,
-                          road->z + road->depth * 0.5f},
-                (Vector3){road->width, 0.11f, road->depth},
-                TerrainPlaceRoadColor(road->surface));
-    }
-
+        for (int32_t road_index = 0;
+             road_index < CC_LOCAL_PLACE_ROAD_COUNT; ++road_index) {
+            const CcLocalPlaceRoad *road = &profile->road[road_index];
+            DrawBox((Vector3){road->x + road->width * 0.5f, 0.045f,
+                              road->z + road->depth * 0.5f},
+                    (Vector3){road->width, 0.09f, road->depth},
+                    TerrainBrightRoadColor(
+                        road->surface, (float)settlement->prosperity / 100.0f));
+        }
+        for (int32_t road_index = 0;
+             road_index < CC_LOCAL_CARRIAGE_ROUTE_COUNT; ++road_index) {
+            const CcLocalPlaceRoad *road = &profile->carriage_route[road_index];
+            DrawBox((Vector3){road->x + road->width * 0.5f, 0.055f,
+                              road->z + road->depth * 0.5f},
+                    (Vector3){road->width, 0.11f, road->depth},
+                    TerrainPlaceRoadColor(road->surface));
+        }
     }
 
     for (int32_t building_index = 0;

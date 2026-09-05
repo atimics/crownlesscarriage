@@ -307,6 +307,11 @@ static float TerrainLandform(float x, float z, float center_x,
     return expf(-(dx * dx + dz * dz));
 }
 
+static float TerrainFarmRiverCenter(float z)
+{
+    return 91.0f + sinf(z * 0.082f) * 3.2f;
+}
+
 static float TerrainNaturalHeight(float x, float z)
 {
     float broad = TerrainValueNoise(x, z, 34.0f, 1U) * 1.40f;
@@ -317,7 +322,7 @@ static float TerrainNaturalHeight(float x, float z)
     float land = 1.20f + broad + hills + detail;
     switch (active_place_function) {
         case CC_SETTLEMENT_FARMING: {
-            float river_center = 91.0f + sinf(z * 0.082f) * 1.7f;
+            float river_center = TerrainFarmRiverCenter(z);
             land += TerrainLandform(x, z, 45.0f, 28.0f,
                                     25.0f, 17.0f) * 1.30f;
             land += TerrainLandform(x, z, 79.0f, 18.0f,

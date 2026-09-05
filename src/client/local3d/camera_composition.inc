@@ -801,7 +801,8 @@ static float StreetCameraClearanceHeight(float x, float z)
     }
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         WorldBuilding building = ActiveWorldBuildingAt(i);
-        float distance = TerrainDistanceToRectangle(x, z, building.footprint);
+        Vector2 local = BuildingUnrotatedPoint(i, x, z);
+        float distance = TerrainDistanceToRectangle(local.x, local.y, building.footprint);
         float influence = 1.0f - SmoothStep01((distance - 0.4f) / 3.0f);
         float roof = TerrainFootprintHeight(building.footprint) + building.height + 3.0f;
         floor_height = fmaxf(floor_height,
@@ -1019,7 +1020,8 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
     rig->framing_destination = Vector3Add(rig->framing_offset, adjustment);
     rig->framing_elapsed = 0.0f;
 
-    rig->framing_duration = 0.40f;
+    /* Wider town views need more time to reframe the same screen distance. */
+    rig->framing_duration = fmaxf(0.40f, Vector3Length(adjustment) / 22.0f);
     rig->framing_hold_seconds = 0.0f;
     return camera;
 }

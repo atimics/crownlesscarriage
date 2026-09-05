@@ -1891,7 +1891,7 @@ static Color TerrainRoadRutColor(CcLocalRoadSurface surface,
 static float TerrainFieldAmount(float x, float z)
 {
     if (ActivePlaceProfile()->lane_count > 0 &&
-        (TerrainLaneInset(x, z, NULL) > -0.55f || x > 86.0f ||
+        (TerrainLaneInset(x, z, NULL) > -0.55f || x > TerrainFarmRiverCenter(z) - 5.4f ||
          TerrainPointInsideMajorFoundation(x, z))) return 0.0f;
     float amount = 0.0f;
     for (int32_t i = 0; i < (int32_t)(sizeof(TERRAIN_FIELDS) /
@@ -3124,18 +3124,20 @@ static void DrawFarmTerrainStage(const CcSettlement *place, uint32_t conditions,
                                   Vector3 focus, float clock)
 {
     Color water = BlendColor(WORLD_TEAL, CC_STYLE_TEAL_SHADOW, 0.18f);
-    for (float z = 2.0f; z < 72.0f; z += 4.0f) {
-        float river_x = 91.0f + sinf(z * 0.082f) * 1.7f;
+    for (float z = -24.0f; z < CC_LOCAL_WORLD_DEPTH + 32.0f; z += 4.0f) {
+        float river_x = TerrainFarmRiverCenter(z);
         if (!SceneryPointVisible(river_x, z, focus)) continue;
-        float next_x = 91.0f + sinf((z + 4.0f) * 0.082f) * 1.7f;
-        float angle = -atan2f(next_x - river_x, 4.0f) * RAD2DEG;
-
-        float ground = TerrainSampleGrid(street_terrain_natural,
-                                         river_x, z);
-        DrawTiltedBox((Vector3){(river_x + next_x) * 0.5f,
-                                ground + 0.045f, z + 2.0f},
-                      (Vector3){7.2f, 0.07f, 4.5f},
-                      (Vector3){0.0f, 1.0f, 0.0f}, angle, water);
+        float next_x = TerrainFarmRiverCenter(z + 4.0f);
+        float ground = TerrainPointInPlayableWorld(river_x, z) ?
+            TerrainNaturalHeight(river_x, z) : TerrainVisualHeightAt(river_x, z);
+        float next_ground = TerrainPointInPlayableWorld(next_x, z + 4.0f) ?
+            TerrainNaturalHeight(next_x, z + 4.0f) : TerrainVisualHeightAt(next_x, z + 4.0f);
+        Vector3 a = {river_x - 3.6f, ground + 0.12f, z};
+        Vector3 b = {next_x - 3.6f, next_ground + 0.12f, z + 4.0f};
+        Vector3 c = {next_x + 3.6f, next_ground + 0.12f, z + 4.0f};
+        Vector3 d = {river_x + 3.6f, ground + 0.12f, z};
+        DrawTriangle3D(a, b, c, water);
+        DrawTriangle3D(a, c, d, water);
     }
     if (SceneryPointVisible(91.0f, 34.0f, focus)) {
         DrawArrivalBridge(false);
