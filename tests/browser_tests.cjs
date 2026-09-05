@@ -208,9 +208,13 @@ async function main() {
         assert(layout.buttons.length > 0 && layout.buttons.every(b => b.width >= 44 && b.height >= 44), JSON.stringify(layout));
         const canvas = await mobile.locator('#canvas').boundingBox();
         assert(Math.abs(canvas.width / canvas.height - 16 / 9) < 0.01, JSON.stringify(canvas));
+        if (width >= 600 && width > height && height <= 600) {
+          const stage = await mobile.locator('#stage').boundingBox();
+          assert(stage.y + stage.height <= height + 1, JSON.stringify(stage));
+        }
         await mobile.screenshot({path: path.join(output, `mobile-${width}x${height}.png`)});
       }
-      for (const size of [[320, 740], [390, 844], [844, 390], [1024, 768]]) await mobileLayout(...size);
+      for (const size of [[320, 740], [390, 844], [667, 375], [844, 390], [1024, 768]]) await mobileLayout(...size);
       await mobile.setViewportSize({width: 390, height: 844});
       // A real touch on the scaled canvas must reach the same Play control once.
       await mobile.evaluate(() => {

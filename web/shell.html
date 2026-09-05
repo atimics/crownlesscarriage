@@ -164,7 +164,9 @@
       @media (min-width: 600px) and (max-height: 600px) and (orientation: landscape) {
         .touch-mode { display: block; }
         .touch-mode main { width: 100%; padding: 8px max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left)); }
-        .touch-mode header { margin-bottom: 8px; align-items: center; }
+        .touch-mode header { margin-bottom: 8px; align-items: center; flex-direction: row; }
+        .touch-mode .page-tools { width: auto; }
+        .touch-mode .page-tools button { flex: initial; }
         .touch-mode header p, .touch-mode #hint, .touch-mode footer { display: none; }
         .touch-mode h1 { font-size: 1.1rem; }
         .touch-mode #stage, .touch-mode #stage:fullscreen, .touch-mode #stage.expanded {
