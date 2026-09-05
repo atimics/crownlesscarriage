@@ -185,8 +185,12 @@
   if (enabled && typeof document !== 'undefined') {
     const attach = () => {
       const hint = document.getElementById('hint');
-      if (hint) hint.textContent = 'Click the game, then use the mouse and keyboard. Your company and clock are saved on the host.';
+      if (hint) hint.textContent = Module.crownlessTouchEnabled ?
+        'Tap the scene to walk or approach. Your company and clock are saved on the host.' :
+        'Click the game, then use the mouse and keyboard. Your company and clock are saved on the host.';
       const bar = document.createElement('div');
+      bar.id = 'company-bar';
+      document.body.classList.add('shared-game');
       bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;justify-content:space-between;padding:7px 16px;background:#20392f;color:#f5f0e4;font:12px system-ui';
       status = document.createElement('span'); status.textContent = 'Joining the shared carriage…';
       pauseControl = document.createElement('button'); pauseControl.hidden = true;
@@ -201,7 +205,10 @@
       };
       const link = document.createElement('a'); link.href = `/#world=${worldId}`; link.textContent = 'Your avatar & company ↗'; link.style.color = 'inherit';
       link.onclick = async event => { event.preventDefault(); Module._CcCoopCheckpointNow(); await saveSession(true); leave(); location.assign(link.href); };
-      bar.append(status, pauseControl, link); document.body.append(bar);
+      bar.append(status, pauseControl, link); document.body.prepend(bar);
+      new ResizeObserver(() => {
+        document.body.style.setProperty('--company-bar-height', `${bar.getBoundingClientRect().height}px`);
+      }).observe(bar);
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
     window.addEventListener('pagehide', () => { Module._CcCoopCheckpointNow?.(); saveSession(true); leave(); });
