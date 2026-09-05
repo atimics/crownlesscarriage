@@ -345,8 +345,7 @@ static void CombatDefeat(CcLocalAgent *agent, Vector3 impact_direction,
     agent->combat.active_skill = -1;
     agent->exact_target_valid = false;
     agent->combat.stagger_seconds = 1.10f;
-    agent->combat.respawn_seconds = agent->combat.team == CC_COMBAT_PLAYER ?
-                                    2.75f : 0.0f;
+    agent->combat.respawn_seconds = 0.0f;
     agent->combat.knockback_velocity = (Vector3){0};
     if (agent->morphology == CC_MORPHOLOGY_BIPED) {
         CcHumanoidGaitSetGuarded(&agent->humanoid, false);
@@ -362,6 +361,12 @@ static void CombatDefeat(CcLocalAgent *agent, Vector3 impact_direction,
                                         impact_speed, false);
         }
     }
+}
+
+void CcLocalAgentDie(CcLocalAgent *agent)
+{
+    if (agent == NULL || agent->combat.life_state == CC_LIFE_DEAD) return;
+    CombatDefeat(agent, (Vector3){0.0f, 0.0f, 1.0f}, agent->position, 0.0f);
 }
 
 bool CcLocalAgentApplyDamage(CcLocalAgent *agent, float health_damage,
@@ -4874,20 +4879,6 @@ static bool UpdateCombatClock(CcLocalAgent *agent, float delta_time)
                                     combat->hitstop_seconds - delta_time);
     combat->stagger_seconds = fmaxf(0.0f,
                                     combat->stagger_seconds - delta_time);
-    if (combat->life_state == CC_LIFE_DEAD &&
-        combat->team == CC_COMBAT_PLAYER) {
-        combat->respawn_seconds = fmaxf(0.0f,
-                                        combat->respawn_seconds - delta_time);
-        if (combat->respawn_seconds <= 0.0f) {
-            combat->life_state = CC_LIFE_RESPAWNING;
-            if (agent->morphology == CC_MORPHOLOGY_BIPED) {
-                CcHumanoidGaitBeginResurrection(&agent->humanoid);
-            } else {
-                CcMultilegRagdollAllowRecovery(
-                    &agent->multileg_ragdoll);
-            }
-        }
-    }
     if (combat->life_state == CC_LIFE_RESPAWNING &&
         !AgentPhysicalRagdollActive(agent) &&
         !AgentPhysicalRecovering(agent)) {

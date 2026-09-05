@@ -9,19 +9,22 @@
   const sessionKey = `cc-coop-session-${worldId}`;
   let checkpoint = null, sessionSequence = 0, sessionSaved = 0, sessionFlight = false, lastSessionSave = 0, restoredSession = false;
   let status, startupError = '';
+  let travellerDead = false;
   let visit = '', poseFlight = false, poseScene = -1, lastPose = -Infinity, peersAt = 0, peers = [], leaving = false;
   function say(message) { if (status) status.textContent = startupError || message; }
   function accept(next, forceSnapshot = false) {
     if (deleted || (state && next.revision < state.revision)) return;
     if (!state || next.revision !== state.revision || forceSnapshot) pending = next.campaign;
     if (state && state.session_context !== next.session_context) peers = [];
+    if (state && (next.party_wipes || 0) > (state.party_wipes || 0)) travellerDead = false;
+    travellerDead = travellerDead || Boolean(next.dead);
     state = next;
     if (checkpoint && checkpoint.context !== next.session_context) checkpoint = null;
     if (next.revision >= avatarRevision) {
       avatar = CcAvatar.normalize(next.appearance);
       avatarRevision = next.revision;
     }
-    say(next.paused ? 'Company paused' : `${next.crew.filter(p => p.online).length} aboard · shared carriage · saved`);
+    say(travellerDead ? 'You have fallen. Your party carries on.' : next.paused ? 'Company paused' : `${next.crew.filter(p => p.online).length} aboard · shared carriage · saved`);
   }
   async function request(path, body) {
     const response = await fetch(`/api/worlds/${worldId}/${path}`, { method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(10000) });
@@ -114,7 +117,8 @@
     if (!poseFlight && now - lastPose >= 100) {
       const context = state.session_context, activeVisit = visit;
       lastPose = now; poseFlight = true;
-      request('pose', {visit:activeVisit, context, scene, pose:readPose()}).then(next => {
+      request('pose', {visit:activeVisit, context, scene, pose:readPose(), dead:travellerDead}).then(next => {
+        if (next.world) accept(next.world);
         if (!leaving && activeVisit === visit && next.context === state.session_context && next.scene === poseScene) {
           peers = next.peers.slice(0, 7).map(peer => ({...peer, appearance:CcAvatar.pack(CcAvatar.normalize(peer.appearance))})); peersAt = performance.now();
         }
@@ -194,6 +198,9 @@
   }
   Module.ccCoop = { enabled, connect, apply, poll, deleteWorld, openLobby, openCompany, saveAppearance, togglePause,
     exchange, exchangeMemory, drawnMemory, leave, seat:() => Math.max(0, state?.crew.findIndex(member => member.id === state.member) || 0),
+    life(dead) { travellerDead = travellerDead || Boolean(dead); },
+    dead:() => travellerDead,
+    partyWipes:() => state?.party_wipes || 0,
     avatar:() => CcAvatar.pack(avatar), checkpoint:captureSession, hasSession:() => restoredSession,
     owner() { return Boolean(state?.owner); },
     paused() { return Boolean(state?.paused); },

@@ -8209,6 +8209,53 @@ static bool HandleCaravanRecovery(LocalState *local, ClientView *view,
     return true;
 }
 
+static bool ResolveSoloPartyWipe(CcJournal *journal, CcSim *sim,
+                                  LocalState *local, ClientView *view,
+                                  char *message, size_t capacity)
+{
+    if (local->agent.combat.life_state != CC_LIFE_DEAD) return false;
+    CcCommand wipe = {
+        .kind = CC_COMMAND_PARTY_WIPE,
+        .target_id = (CcId)sim->current_day
+    };
+    if (!ApplyCommand(journal, sim, wipe, message, capacity)) return false;
+    LeaveOpenWorld(local);
+    ResetLocalStatePreservingAthletics(local);
+    CcLocalBindPlace(sim);
+    (void)InitializeOpenWorld(sim, local, false);
+    *view = VIEW_LOCAL;
+    (void)snprintf(message, capacity,
+                   "Twenty years later. A new company takes up the carriage.");
+    return true;
+}
+
+#if defined(CC_CLIENT_SELF_TESTS)
+static int RunSoloPartyWipeRegression(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, 42U);
+    LocalState local = {0};
+    ResetLocalState(&local);
+    ClientView view = VIEW_LOCAL;
+    char message[256];
+    int32_t day = sim.current_day;
+    local.agent.combat.life_state = CC_LIFE_KNOCKED_DOWN;
+    if (ResolveSoloPartyWipe(NULL, &sim, &local, &view, message, sizeof(message)) ||
+        sim.current_day != day) return 1;
+    CcLocalAgentDie(&local.agent);
+    if (!ResolveSoloPartyWipe(NULL, &sim, &local, &view, message, sizeof(message)) ||
+        sim.current_day != day + CC_PARTY_WIPE_DAYS || view != VIEW_LOCAL ||
+        local.agent.combat.life_state != CC_LIFE_ALIVE ||
+        !CcSimValidate(&sim, message, sizeof(message))) return 1;
+    uint64_t hash = CcSimHash(&sim);
+    if (ResolveSoloPartyWipe(NULL, &sim, &local, &view, message, sizeof(message)) ||
+        CcSimHash(&sim) != hash) return 1;
+    LeaveOpenWorld(&local);
+    (void)puts("Solo death advances the world once and starts the next company.");
+    return 0;
+}
+#endif
+
 static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         int32_t *selected_situation, ClientView *view,
                         ClientView *return_view, LocalState *local,
@@ -9299,23 +9346,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 "That road is for the carriage. Return to the yard to drive out.");
             return;
         }
-        if (local->journey_combat_active &&
-            local->agent.combat.life_state == CC_LIFE_DEAD &&
-            sim->journey.active) {
-            CcCommand defeated = {
-                .kind = CC_COMMAND_WITHDRAW_ENCOUNTER,
-                .amount = 1
-            };
-            if (ApplyCommand(*journal, sim, defeated, message,
-                             message_capacity)) {
-                ResetLocalStatePreservingAthletics(local);
-                *selected = FirstVisibleMapIndex(sim);
-                *view = VIEW_LOCAL;
-                (void)snprintf(message, message_capacity,
-                               "Defeated. The carriage withdrew under fire.");
-            }
-            return;
-        }
+        if (local->agent.combat.life_state == CC_LIFE_DEAD) return;
         if (local->journey_parley_active) {
             Vector2 collector = {CC_LOCAL_ROAD_PARLEY_X,
                                  CC_LOCAL_ROAD_PARLEY_Z};
@@ -10086,6 +10117,9 @@ int main(int argc, char **argv)
     if (argc == 2 &&
         strcmp(argv[1], "--test-road-encounter-session") == 0) {
         return RunRoadEncounterSessionRegression();
+    }
+    if (argc == 2 && strcmp(argv[1], "--test-party-wipe") == 0) {
+        return RunSoloPartyWipeRegression();
     }
 #endif
     bool capture_ux = argc >= 4 && strcmp(argv[1], "--capture-ux") == 0;
@@ -11476,6 +11510,7 @@ int main(int argc, char **argv)
     CcAudioSetMode(preferences.audio_mode);
     Rectangle local_bounds;
     double coop_checkpoint_time = 0.0;
+    int32_t coop_party_wipes = CcCoopClientPartyWipes();
     if (CcCoopClientActive() && journal != NULL) {
         coop_checkpoint_sim = &sim;
         coop_checkpoint_local = &local;
@@ -11505,7 +11540,8 @@ int main(int argc, char **argv)
             bool old_dungeon = sim.dungeon_expedition.active;
             char sync_error[256] = "";
             if (CcCoopClientPoll(&sim, sync_error, sizeof(sync_error)) &&
-                (old_location != sim.player.location_id || old_journey != sim.journey.active ||
+                (coop_party_wipes != CcCoopClientPartyWipes() ||
+                 old_location != sim.player.location_id || old_journey != sim.journey.active ||
                  old_route != sim.journey.route_id || old_phase != sim.journey.phase ||
                  old_dungeon != sim.dungeon_expedition.active)) {
                 LeaveOpenWorld(&local);
@@ -11520,7 +11556,13 @@ int main(int argc, char **argv)
                 selected = FirstOutgoingRouteIndex(&sim);
                 selected_situation = FirstActiveSituationIndex(&sim);
                 view = sim.dungeon_expedition.active ? VIEW_DUNGEON : VIEW_LOCAL;
+                if (coop_party_wipes != CcCoopClientPartyWipes()) {
+                    coop_party_wipes = CcCoopClientPartyWipes();
+                    (void)snprintf(message, sizeof(message),
+                        "Twenty years later. A new company takes up the carriage.");
+                }
             }
+            if (CcCoopClientDead()) CcLocalAgentDie(&local.agent);
         }
         local.adventure_ui = normal_play || capture_ux || capture_road_fork;
         if (normal_play && AdventureScene(&local)) local.course.automatic_alarm = false;
@@ -11633,7 +11675,11 @@ int main(int argc, char **argv)
         } else if (render_benchmark || capture_ux || capture_road_fork) {
             ClientInputClearPressed();
         } else {
-            if (!menu_frame && !audio_clicked) HandleInput(&journal, &sim, &selected, &selected_situation,
+            if (local.agent.combat.life_state == CC_LIFE_DEAD) {
+                (void)CcLocalWorldUpdate(&local.course, &local.agent, &sim,
+                    world_delta_time, local.market_interior,
+                    !local.market_interior && local.site_kind == CC_LOCAL_SITE_NONE);
+            } else if (!menu_frame && !audio_clicked) HandleInput(&journal, &sim, &selected, &selected_situation,
                         &view, &return_view, &local,
                         local_target, local_bounds,
                         frame_delta_time,
@@ -11641,6 +11687,18 @@ int main(int argc, char **argv)
                         save_feedback, sizeof(save_feedback),
                         &save_feedback_age);
             ClientInputClearPressed();
+        }
+        if (normal_play && journal != NULL) {
+            if (CcCoopClientActive()) {
+                CcCoopClientLife(local.agent.combat.life_state == CC_LIFE_DEAD);
+            } else if (ResolveSoloPartyWipe(journal, &sim, &local, &view,
+                                           message, sizeof(message))) {
+                selected = FirstOutgoingRouteIndex(&sim);
+                selected_situation = FirstActiveSituationIndex(&sim);
+                return_view = VIEW_LOCAL;
+                (void)SaveClientWorld(journal, &sim, &local, save_path,
+                    session_path, save_feedback, sizeof(save_feedback));
+            }
         }
         if (normal_play && view == VIEW_PAUSE && frontend.screen == FRONTEND_PLAYING) {
             FrontendReturnFromBook(&frontend, &local, &view);
