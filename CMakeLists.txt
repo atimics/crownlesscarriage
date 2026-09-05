@@ -95,7 +95,7 @@ target_include_directories(crownless_story PUBLIC src)
 target_link_libraries(crownless_story PUBLIC crownless_sim)
 cc_strict_warnings(crownless_story)
 
-add_library(crownless_music src/client/cc_music.c)
+add_library(crownless_music src/client/cc_music.c src/client/cc_music_library.c)
 target_include_directories(crownless_music PUBLIC src)
 target_link_libraries(crownless_music PUBLIC crownless_sim)
 if(NOT MSVC)
@@ -289,7 +289,7 @@ if(CC_BUILD_CLIENT)
 
     file(GLOB CC_VOICE_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/voice/*.wav")
     add_executable(crownless_carriage src/client/main.c src/client/cc_audio.c
-                   src/client/cc_music_player.c src/client/cc_coop_client.c)
+                   src/client/cc_music_player.c src/client/cc_music_net.c src/client/cc_coop_client.c)
     target_compile_definitions(crownless_carriage PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
     if(APPLE)
@@ -319,7 +319,27 @@ if(CC_BUILD_CLIENT)
         raylib
     )
     if(NOT EMSCRIPTEN)
-        target_link_libraries(crownless_carriage PRIVATE glfw)
+        find_package(CURL REQUIRED)
+        find_package(Threads REQUIRED)
+        target_link_libraries(crownless_carriage PRIVATE glfw CURL::libcurl Threads::Threads)
+    endif()
+    file(GLOB CC_MUSIC_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/music/*.mp3")
+    if(EMSCRIPTEN)
+        set(CC_MUSIC_BUNDLE_DIR "${CMAKE_CURRENT_BINARY_DIR}/site/assets/audio/music")
+    elseif(APPLE)
+        set(CC_MUSIC_BUNDLE_DIR "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/audio/music")
+    else()
+        set(CC_MUSIC_BUNDLE_DIR "$<TARGET_FILE_DIR:crownless_carriage>/assets/audio/music")
+    endif()
+    add_custom_target(crownless_music_assets ALL
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CC_MUSIC_BUNDLE_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CC_MUSIC_ASSETS} "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/music/offline.json"
+            "${CC_MUSIC_BUNDLE_DIR}"
+        DEPENDS ${CC_MUSIC_ASSETS} "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/music/offline.json"
+        VERBATIM)
+    if(NOT EMSCRIPTEN)
+        add_dependencies(crownless_music_assets crownless_carriage)
     endif()
     if(EMSCRIPTEN)
         target_compile_definitions(crownless_local_renderer PRIVATE PLATFORM_WEB)
@@ -503,7 +523,7 @@ if(CC_BUILD_CLIENT)
             SUFFIX ".html"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/site"
             LINK_DEPENDS
-                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CC_WEB_STARTUP_ASSET_STAMP};${CC_WEB_STARTUP_ASSET_OUTPUTS}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CMAKE_CURRENT_SOURCE_DIR}/web/music.js;${CC_WEB_STARTUP_ASSET_STAMP};${CC_WEB_STARTUP_ASSET_OUTPUTS}"
         )
         target_compile_definitions(crownless_carriage PRIVATE PLATFORM_WEB)
         set_property(TARGET crownless_carriage PROPERTY C_EXTENSIONS ON)
@@ -521,6 +541,7 @@ if(CC_BUILD_CLIENT)
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
+            "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/music.js"
             "SHELL:--preload-file ${CC_WEB_ASSET_DIR}/assets@/assets"
         )
     elseif(APPLE)
@@ -906,6 +927,11 @@ if(BUILD_TESTING)
     target_link_libraries(music_tests PRIVATE crownless_music)
     cc_strict_warnings(music_tests)
     add_test(NAME situation_music_and_fades COMMAND music_tests)
+    add_executable(music_player_tests tests/music_player_tests.c src/client/cc_music_player.c)
+    target_include_directories(music_player_tests PRIVATE tests/music_stub)
+    target_link_libraries(music_player_tests PRIVATE crownless_music)
+    cc_strict_warnings(music_player_tests)
+    add_test(NAME streamed_music_and_offline_fallback COMMAND music_player_tests)
     add_executable(soundscape_tests tests/soundscape_tests.c)
     target_link_libraries(soundscape_tests PRIVATE crownless_soundscape)
     cc_strict_warnings(soundscape_tests)
@@ -995,6 +1021,8 @@ if(BUILD_TESTING)
         add_test(NAME browser_shared_carriage_contract
                  COMMAND ${CC_NODE_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_coop_tests.mjs)
+        add_test(NAME browser_music_download_and_cache
+                 COMMAND ${CC_NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_music_tests.mjs)
     endif()
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
@@ -1002,6 +1030,8 @@ if(BUILD_TESTING)
         add_test(NAME music_catalog_metadata
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tools/music_catalog.py --check)
+        add_test(NAME bundled_music_and_host_catalog
+                 COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/music_host_tests.py)
         add_test(NAME webgl2_skinning_uniform_budget
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_uniform_budget_tests.py)

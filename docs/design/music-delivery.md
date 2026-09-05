@@ -1,0 +1,52 @@
+# Music delivery
+
+The public soundtrack host is https://crownless-music.pages.dev.
+It currently contains 27 exported takes. The theme catalog describes 149 finished
+Suno takes across 64 titles. The other 122 finished takes await export from Suno.
+The generation session also had one failed remix, making 150 attempts.
+
+The game reads `catalog.txt` when music starts. It checks again every five minutes,
+or after one minute when the host is unavailable. It chooses music by the current
+place, road progress, and situation. Each published take can join that shuffle.
+
+Desktop releases contain the 27 MP3s in `assets/audio/music`. The macOS app keeps
+them inside `Contents/Resources/assets/audio/music`. A matching bundled copy plays
+straight away. A selected take from the online catalog loads on demand in a
+background worker. The current score keeps playing until the whole MP3 is ready,
+then the usual crossfade starts. Bandit attacks can use a ready combat take.
+Failed downloads return selection to available local music and retry later.
+
+The player buffers at most the three active fades and one pending track.
+Each download has a 16 MiB limit, a three-second connection timeout on desktop,
+and a 30-second transfer timeout. Published filenames use known track stems and
+SHA-256 names. HTTPS protects the catalog and downloads in transit.
+
+The browser package also contains the 27 MP3s as separate static files. They stay
+outside the startup data pack. After music starts, the browser saves those files
+one at a time in its music cache. Once this background copy finishes, all 27 are
+available during an offline game session. Browser storage must have room for the
+122 MB set. Clearing site storage removes that copy. Downloading a selected song
+can use the Cloudflare host or the packaged file. The same mixer handles fades.
+
+## Add later exports
+
+Keep the existing 27-file offline set. Put newly exported MP3 files in a separate
+staging folder using the stems in `assets/audio/music/catalog.json`. Include copies
+of the existing 27 files in that folder to retain them in the hosted catalog.
+
+```sh
+python3 tools/music_host.py --audio-dir /path/to/staged-music
+wrangler pages deploy out/music-site --project-name crownless-music --branch main
+```
+
+The exporter publishes the supplied MP3s, a small text catalog, a JSON catalog,
+and CORS/cache headers. The public metadata contains titles, durations, file sizes,
+and hashes. Audio filenames are immutable; the catalog expires after one minute.
+
+## Checks
+
+`music_tests` covers situation ranking and waiting for audio during fades.
+`music_player_tests` covers remote loading, ready combat music, failed downloads,
+and cleanup. `tests/web_music_tests.mjs` checks all 27 cached files while offline,
+reconnects, request size limits, and full browser storage.
+`tests/music_host_tests.py` checks the 27 local hashes and host export format.
