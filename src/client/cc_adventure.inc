@@ -595,7 +595,6 @@ static int32_t AdventureBookPageSize(const LocalState *local)
     if (local->book_page == 0) return 2;
     if (local->book_page == 1) return 5;
     if (local->book_page == 2) return 8;
-    if (local->book_page == 4) return 2;
     return adventure_preferences != NULL && adventure_preferences->text_size > 0 ? 3 : 4;
 }
 
@@ -608,44 +607,17 @@ static int32_t AdventureBookLastPage(const CcSim *sim, const LocalState *local)
             if (AdventureKnownPerson(sim, &sim->characters[i])) count += 1;
     } else if (local->book_page == 2) {
         for (int32_t i = 0; i < CC_GOOD_COUNT; ++i) if (sim->player.cargo[i] > 0) count += 1;
-    } else if (local->book_page == 4) count = CC_PONY_COUNT;
-    else count = sim->event_count;
+    } else count = sim->event_count;
     int32_t page = AdventureBookPageSize(local);
     return count > 0 ? (count - 1) / page * page : 0;
-}
-
-static int32_t AdventureBookPony(const CcSim *sim, int32_t row)
-{
-    if (row < 2) return sim->pony_company.team[row];
-    for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
-        if (i == sim->pony_company.team[0] || i == sim->pony_company.team[1]) continue;
-        if (row-- == 2) return i;
-    }
-    return -1;
-}
-
-static void AdventurePonyDetails(const CcSim *sim, int32_t pony, char *text, size_t capacity)
-{
-    const CcPony *p = &sim->pony_company.ponies[pony];
-    if (!p->seen) {
-        (void)snprintf(text, capacity, "A new friend to meet on the roads.");
-        return;
-    }
-    const CcRoute *road = CcSimRoute(sim, p->last_seen_route);
-    const CcSettlement *from = road != NULL ? CcSimSettlement(sim, road->from_id) : NULL;
-    const CcSettlement *to = road != NULL ? CcSimSettlement(sim, road->to_id) : NULL;
-    (void)snprintf(text, capacity, "%s. Bond %d. Quests completed %d. Released %d times. %s",
-        CcPonyPersonality(pony), p->bond, p->quests_completed, p->releases,
-        from != NULL && to != NULL ? TextFormat("Last seen: %s to %s.", from->name, to->name) :
-        "New adventures await.");
 }
 
 static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
 {
     Rectangle panel = AdventurePanel();
     AdventurePanelTitle(panel, "Company Book");
-    const char *pages[] = {"Promises", "People", "Cargo", "Journal", "PONIES"};
-    for (int i = 0; i < 5; ++i) AdventureButton(AdventureTab(panel, i, 5), pages[i], true, local->book_page == i);
+    const char *pages[] = {"Promises", "People", "Cargo", "Journal"};
+    for (int i = 0; i < 4; ++i) AdventureButton(AdventureTab(panel, i, 4), pages[i], true, local->book_page == i);
     int x = (int)panel.x + 28, y = (int)panel.y + 132;
     int width = (int)panel.width - 56;
     int size = AdventureTextSize(15);
@@ -699,24 +671,6 @@ static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
             CcOverlayDrawText(TextFormat("%d  %s", sim->player.cargo[i], CcGoodName((CcGood)i)), x, y, size, INK);
             y += 34;
         }
-    } else if (local->book_page == 4) {
-        int32_t limit = AdventureBookPageSize(local);
-        int row_height = ((int)panel.height - 204) / limit;
-        for (int32_t row = local->book_offset; row < CC_PONY_COUNT && row < local->book_offset + limit; ++row) {
-            int32_t pony = AdventureBookPony(sim, row);
-            const CcPony *p = &sim->pony_company.ponies[pony];
-            bool team = pony == sim->pony_company.team[0] || pony == sim->pony_company.team[1];
-            CcLocalDrawPonyPortrait(pony, p->seen, (Rectangle){(float)x, (float)y, 86, 86});
-            CcOverlayDrawText(p->seen ? CcPonyName(pony) : "Yet to meet", x + 106, y, size + 4, CC_GOLD);
-            if (p->seen) CcOverlayDrawText(team ? "With you" : "Roaming", x + width - 130, y + 2, size, TEAL);
-            char details[384];
-            AdventurePonyDetails(sim, pony, details, sizeof(details));
-            (void)AdventureWrap(details, x + 106, y + size + 16, width - 106, size, INK);
-            y += row_height;
-        }
-        CcOverlayDrawText(TextFormat("Ponies %d-%d of %d", local->book_offset + 1,
-            local->book_offset + limit < CC_PONY_COUNT ? local->book_offset + limit : CC_PONY_COUNT,
-            CC_PONY_COUNT), x, (int)(panel.y + panel.height) - 80, AdventureTextSize(12), MUTED);
     } else {
         int32_t limit = AdventureBookPageSize(local);
         for (int32_t i = local->book_offset; i < sim->event_count && i < local->book_offset + limit; ++i) {
@@ -729,7 +683,7 @@ static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
     }
     AdventureButton((Rectangle){panel.x + 24, panel.y + panel.height - 52, 132, 38}, "Previous Up", local->book_offset > 0, false);
     AdventureButton((Rectangle){panel.x + 166, panel.y + panel.height - 52, 142, 38}, "Next Down", local->book_offset < AdventureBookLastPage(sim, local), false);
-    CcOverlayDrawText("1-5 pages  /  B or Tab closes", (int)(panel.x + panel.width) - 350,
+    CcOverlayDrawText("1-4 pages  /  B or Tab closes", (int)(panel.x + panel.width) - 350,
         (int)(panel.y + panel.height) - 38, AdventureTextSize(12), MUTED);
 }
 
@@ -739,8 +693,8 @@ static bool HandleAdventureBook(const CcSim *sim, LocalState *local, ClientView 
     Rectangle panel = AdventurePanel();
     if (ClientKeyPressed(KEY_ESCAPE) || ClientKeyPressed(KEY_B) || ClientKeyPressed(KEY_TAB) ||
         AdventureHit(AdventureClose(panel))) { *view = SafeOverlayReturnView(*return_view); return true; }
-    for (int i = 0; i < 5; ++i) {
-        if (ClientKeyPressed(KEY_ONE + i) || AdventureHit(AdventureTab(panel, i, 5))) {
+    for (int i = 0; i < 4; ++i) {
+        if (ClientKeyPressed(KEY_ONE + i) || AdventureHit(AdventureTab(panel, i, 4))) {
             local->book_page = i; local->book_offset = 0;
         }
     }
