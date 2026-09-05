@@ -172,9 +172,8 @@ void CcNpcPaintFaceFeatures(const CcFaceRecipe *face,
     int32_t mouth_width = 2 + (int32_t)(face->mouth_style % 2U);
     int32_t mouth_x = 10 - mouth_width / 2;
     if (expression == CC_NPC_PORTRAIT_TALKING) {
-        int32_t highlight_width = mouth_width > 2 ? mouth_width - 2 : 1;
         paint(context, mouth_x, mouth_y, mouth_width, 2, ink);
-        paint(context, mouth_x + 1, mouth_y, highlight_width, 1,
+        paint(context, mouth_x + 1, mouth_y, 1, 1,
               Shade(face->skin, 1.18f));
     } else if (expression == CC_NPC_PORTRAIT_HURT) {
         paint(context, mouth_x, mouth_y + 1, mouth_width, 1, lip);
