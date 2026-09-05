@@ -48,6 +48,49 @@ static int RunAdventureInputRegression(void)
     ClientInputClearPressed();
     UX_CHECK(view == VIEW_CHARACTER, "A scene click must open the same conversation as F.");
     UX_KEY(KEY_ESCAPE);
+    CcCharacter *speaker = NULL;
+    for (int32_t i = 0; i < sim.character_count; ++i) {
+        if (sim.characters[i].current_settlement_id == sim.player.location_id &&
+            sim.characters[i].activity != CC_CHARACTER_ACTIVITY_TRAVELLING &&
+            CcCharacterAgeYears(&sim, &sim.characters[i]) >= 16) { speaker = &sim.characters[i]; break; }
+    }
+    UX_CHECK(speaker != NULL, "The starting town needs a resident to exchange news.");
+    target->character_id = speaker->id;
+    local.interaction.focus = target->key;
+    UX_KEY(KEY_F);
+    UX_CHECK(view == VIEW_CHARACTER, "A resident must open their own conversation.");
+    CcSpeech report, source;
+    UX_CHECK(ClientConversationSpeech(&sim, &local, &report) && report.source_event_id != 0U,
+        "A resident must speak a local report with its event source.");
+    uint64_t heard = CcSimHash(&sim);
+    ContextActionSet replies = BuildContextActions(&sim, &local, view, selected, selected_situation);
+    UX_CHECK(replies.count >= 3 && replies.items[0].kind == CONTEXT_ACTION_GOSSIP_SOURCE,
+        "The conversation must offer a source, an exchange, and farewell.");
+    UX_KEY(KEY_ONE);
+    UX_CHECK(ClientConversationSpeech(&sim, &local, &source) && source.source_event_id == report.source_event_id &&
+        strcmp(report.text, source.text) != 0 && CcSimHash(&sim) == heard,
+        "Asking for the source must explain the displayed report and preserve the world.");
+    int32_t share_key = KEY_ONE;
+    for (int32_t i = 0; i < replies.count; ++i)
+        if (replies.items[i].kind == CONTEXT_ACTION_GOSSIP_SHARE) share_key = KEY_ONE + i;
+    UX_KEY(share_key);
+    UX_CHECK(!local.conversation_gossip_source && CcSimHash(&sim) == heard,
+        "A repeated exchange must keep the same remembered account.");
+    local.conversation_gossip_source = false;
+    replies = BuildContextActions(&sim, &local, view, selected, selected_situation);
+    Rectangle source_card = ContextActionBounds(0, ContextCardCount(replies.count, 0));
+    client_test_pointer_active = true;
+    client_test_pointer = (Vector2){source_card.x + source_card.width * 0.5f,
+        source_card.y + source_card.height * 0.5f};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+    HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view, &local,
+        (RenderTexture2D){0}, (Rectangle){0}, 1.0f / 60.0f, path, "", message, sizeof(message),
+        feedback, sizeof(feedback), &feedback_age);
+    client_test_pointer_active = false;
+    ClientInputClearPressed();
+    UX_CHECK(local.conversation_gossip_source && CcSimHash(&sim) == heard,
+        "The source card must match the keyboard reply.");
+    UX_KEY(KEY_ESCAPE);
     local.course.alarm_active = false;
     local.course.automatic_alarm = false;
     target->key.kind = CC_INTERACTION_DOOR;

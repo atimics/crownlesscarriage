@@ -134,8 +134,25 @@ static void ConfigureCapacityWaitScenario(CcSim *sim)
     sim->royal_route_slots_used[3] = 3;
 }
 
+static void CheckChangedDestination(void)
+{
+    static CcSim sim;
+    ConfigureCapacityWaitScenario(&sim);
+    sim.settlements[4].kingdom_id = sim.kingdoms[0].id;
+    CcSimUpgradeHistoryOffices(&sim);
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(sim.shipments[0].status == CC_SHIPMENT_ARRIVED);
+    CC_CHECK(sim.royal_carriages[2].mode == CC_ROYAL_CARRIAGE_IDLE);
+    CC_CHECK(sim.royal_carriages[2].active_shipment_id == 0U);
+    const CcSettlement *stopped = CcSimSettlement(&sim, sim.royal_carriages[2].location_id);
+    CC_CHECK(stopped != NULL && stopped->stock[CC_GOOD_BREAD] >= 24);
+    char error[256];
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+}
+
 int main(void)
 {
+    CheckChangedDestination();
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0xc4111a9e));
     CC_CHECK(sim.royal_carriage_count == sim.kingdom_count);

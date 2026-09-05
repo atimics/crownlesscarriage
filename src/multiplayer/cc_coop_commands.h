@@ -53,7 +53,8 @@ static inline const char *CcCoopActionName(CcCommandKind kind)
         "swap_pony",
         "leave_pony",
         "party_wipe",
+        "exchange_gossip",
     };
-    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_PARTY_WIPE ? names[(int)kind] : "";
+    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_EXCHANGE_GOSSIP ? names[(int)kind] : "";
 }
 #endif

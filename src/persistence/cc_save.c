@@ -3098,7 +3098,7 @@ static bool SaveGossip(sqlite3 *database, const CcSim *sim,
     if (!ok || !Prepare(database,
             "INSERT INTO gossip_carrier VALUES(?,?,?);",
             &statement, error, error_capacity)) return false;
-    for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS && ok; ++i) {
+    for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim) && ok; ++i) {
         BindInt(statement, 1, i);
         BindId(statement, 2, sim->gossip_carriers[i].id);
         BindId(statement, 3, sim->gossip_carriers[i].stories);
@@ -3110,7 +3110,7 @@ static bool SaveGossip(sqlite3 *database, const CcSim *sim,
                          &statement, error, error_capacity)) return false;
     for (int32_t kind = 0; kind < 3 && ok; ++kind) {
         int32_t holders = kind == 0 ? CC_MAX_SETTLEMENTS :
-                          kind == 1 ? CC_MAX_GOSSIP_CARRIERS : 1;
+                          kind == 1 ? CcSimGossipCarrierCapacity(sim) : 1;
         for (int32_t holder = 0; holder < holders && ok; ++holder) {
             for (int32_t i = 0; i < CC_MAX_GOSSIP && ok; ++i) {
                 const CcGossipVersion *version = kind == 0 ? &sim->gossip[i].local[holder] :
@@ -3175,7 +3175,7 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
     sqlite3_finalize(statement);
     if (!Prepare(database, "SELECT slot,id,stories FROM gossip_carrier ORDER BY slot;",
                   &statement, error, error_capacity)) return false;
-    for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
+    for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
         if (sqlite3_step(statement) != SQLITE_ROW ||
             sqlite3_column_int64(statement, 0) != i) goto invalid;
         sqlite3_int64 stories = sqlite3_column_int64(statement, 2);
@@ -3195,7 +3195,7 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
         sqlite3_int64 slot = sqlite3_column_int64(statement, 2);
         if (kind < 0 || kind > 2 || holder < 0 || slot < 0 || slot >= CC_MAX_GOSSIP ||
             (kind == 0 && holder >= CC_MAX_SETTLEMENTS) ||
-            (kind == 1 && holder >= CC_MAX_GOSSIP_CARRIERS) ||
+            (kind == 1 && holder >= CcSimGossipCarrierCapacity(sim)) ||
             (kind == 2 && holder != 0)) goto invalid;
         CcGossipVersion *version = kind == 0 ? &sim->gossip[slot].local[holder] :
             kind == 1 ? &sim->gossip_carriers[holder].versions[slot] : &sim->gossip[slot].heard;
@@ -5906,7 +5906,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     if ((legacy_version == 38U || legacy_version == 39U ||
          legacy_version == 40U || legacy_version == 41U ||
          legacy_version == 42U || legacy_version == 43U ||
-         legacy_version == 44U) &&
+         legacy_version == 44U || legacy_version == 45U) &&
         sim->generator_version == 25U) {
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;

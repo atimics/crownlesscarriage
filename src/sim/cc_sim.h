@@ -28,7 +28,8 @@
 #define CC_MAX_CHARACTERS 24
 #define CC_MAX_SCRIBES 4
 #define CC_MAX_GOSSIP 32
-#define CC_MAX_GOSSIP_CARRIERS (1 + CC_MAX_KINGDOMS + CC_MAX_SHIPMENTS + CC_MAX_COURIERS)
+#define CC_LEGACY_GOSSIP_CARRIERS (1 + CC_MAX_KINGDOMS + CC_MAX_SHIPMENTS + CC_MAX_COURIERS)
+#define CC_MAX_GOSSIP_CARRIERS (CC_LEGACY_GOSSIP_CARRIERS + CC_MAX_CHARACTERS)
 #define CC_CHARACTER_MEMORY_CAPACITY 4
 #define CC_CHARACTER_KNOWLEDGE_CAPACITY 8
 #define CC_MAX_RELATIONSHIPS 48
@@ -55,7 +56,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 45
+#define CC_SIM_SCHEMA_VERSION 46
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -443,7 +444,8 @@ typedef enum CcCommandKind {
     CC_COMMAND_HELP_PONY = 44,
     CC_COMMAND_SWAP_PONY = 45,
     CC_COMMAND_LEAVE_PONY = 46,
-    CC_COMMAND_PARTY_WIPE = 47
+    CC_COMMAND_PARTY_WIPE = 47,
+    CC_COMMAND_EXCHANGE_GOSSIP = 48
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1650,6 +1652,11 @@ void CcSimUpgradeQuestArchitecture(CcSim *sim);
 void CcSimInitializeUnderroad(CcSim *sim);
 void CcSimUpgradeGrainEconomy(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
+int32_t CcSimGossipCarrierCapacity(const CcSim *sim);
+const CcGossipCarrier *CcSimGossipCarrier(const CcSim *sim, CcId id);
+const CcGossip *CcSimPersonalGossip(const CcSim *sim, CcId id, int32_t offset,
+                                  const CcGossipVersion **version);
+void CcSimRefreshCharacterGossip(CcSim *sim);
 void CcGossipText(const CcSim *sim, const CcGossip *story,
                   const CcGossipVersion *version, char *text, size_t capacity);
 bool CcSettlementIsAbandoned(const CcSettlement *settlement);

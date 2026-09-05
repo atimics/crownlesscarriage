@@ -111,6 +111,8 @@ typedef struct LocalState {
     uint64_t conversation_object;
     char conversation_name[64];
     char conversation_line[192];
+    int32_t conversation_gossip_offset;
+    bool conversation_gossip_source;
     Vector3 conversation_position;
     int32_t book_page;
     int32_t book_offset;
@@ -242,6 +244,9 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_ABANDON_PROMISE,
     CONTEXT_ACTION_NEXT_PROMISE,
     CONTEXT_ACTION_CLOSE_VIEW,
+    CONTEXT_ACTION_GOSSIP_SOURCE,
+    CONTEXT_ACTION_GOSSIP_NEXT,
+    CONTEXT_ACTION_GOSSIP_SHARE,
     CONTEXT_ACTION_FIGHT,
     CONTEXT_ACTION_PAY,
     CONTEXT_ACTION_TRAVEL,
@@ -4102,6 +4107,18 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (local->adventure_ui && view == VIEW_CHARACTER && local->conversation_situation_id == 0U) {
+        const CcGossip *story = CcSimPersonalGossip(sim, local->conversation_character_id,
+            local->conversation_gossip_offset, NULL);
+        if (story != NULL) {
+            AddDetailedContextAction(&set, CONTEXT_ACTION_GOSSIP_SOURCE,
+                "Who told you?", "1", "", true, false);
+            if (CcSimPersonalGossip(sim, local->conversation_character_id, 1, NULL) != NULL)
+                AddDetailedContextAction(&set, CONTEXT_ACTION_GOSSIP_NEXT,
+                    "Other news?", "2", "", true, false);
+        }
+        if (CcSimCharacter(sim, local->conversation_character_id) != NULL)
+            AddDetailedContextAction(&set, CONTEXT_ACTION_GOSSIP_SHARE,
+                "Exchange road news", "", "", true, false);
         AddDetailedContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Farewell", "ESC", "", true, false);
         return set;
     }
@@ -5847,6 +5864,8 @@ static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
     const CcSituation *situation = CcSimSituation(sim, local->conversation_situation_id);
     const CcCharacter *person = CcSimCharacter(sim, local->conversation_character_id);
     if (CcSpeechCharacter(sim, situation, person, speech)) return true;
+    if (CcSpeechGossip(sim, local->conversation_character_id, local->conversation_gossip_offset,
+        local->conversation_gossip_source, speech)) return true;
     const CcLocalPlaceProfile *place = CcLocalPlaceProfileForSettlement(
         CcSimSettlement(sim, sim->player.location_id));
     const char *name = person != NULL ? person->name :
@@ -8561,7 +8580,14 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         HandleAdventureScene(sim, local, view, return_view, selected_situation,
             context_action == CONTEXT_ACTION_WORLD_TARGET ?
                 CcInteractionFind(&local->interactions, pressed_action.target) : NULL,
-            delta_time, message, message_capacity)) return;
+            delta_time, message, message_capacity)) {
+        if (*view == VIEW_CHARACTER && local->conversation_situation_id == 0U &&
+            local->conversation_character_id != 0U) {
+            (void)ApplyCommand(*journal, sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
+                .target_id = local->conversation_character_id}, message, message_capacity);
+        }
+        return;
+    }
     if (*view == VIEW_CHARACTER) {
         if ((local->adventure_ui && ClientKeyPressed(KEY_ESCAPE)) || ClientKeyPressed(KEY_BACKSPACE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
@@ -8575,7 +8601,29 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         if (local->adventure_ui && local->conversation_situation_id == 0U) {
-            if (ClientKeyPressed(KEY_ONE)) *view = VIEW_LOCAL;
+            ContextActionSet replies = BuildContextActions(sim, local, VIEW_CHARACTER, *selected, *selected_situation);
+            for (int32_t i = 0; i < replies.count; ++i)
+                if (ClientKeyPressed(KEY_ONE + i)) context_action = replies.items[i].kind;
+            if (context_action == CONTEXT_ACTION_CLOSE_VIEW) { *view = VIEW_LOCAL; return; }
+            if (context_action == CONTEXT_ACTION_GOSSIP_SOURCE) local->conversation_gossip_source = true;
+            if (context_action == CONTEXT_ACTION_GOSSIP_NEXT) {
+                local->conversation_gossip_source = false;
+                local->conversation_gossip_offset += 1;
+                if (CcSimPersonalGossip(sim, local->conversation_character_id,
+                    local->conversation_gossip_offset, NULL) == NULL) local->conversation_gossip_offset = 0;
+            }
+            if (context_action == CONTEXT_ACTION_GOSSIP_SHARE) {
+                (void)ApplyCommand(*journal, sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
+                    .target_id = local->conversation_character_id}, message, message_capacity);
+                local->conversation_gossip_offset = 0;
+                local->conversation_gossip_source = false;
+            }
+            if (context_action == CONTEXT_ACTION_GOSSIP_SOURCE || context_action == CONTEXT_ACTION_GOSSIP_NEXT ||
+                context_action == CONTEXT_ACTION_GOSSIP_SHARE) {
+                CcAudioClearSpeech();
+                CcSpeech answer;
+                if (ClientConversationSpeech(sim, local, &answer)) ClientSaySpeech(&answer);
+            }
             return;
         }
         const CcSituation *conversation = CcSimSituation(
@@ -10083,13 +10131,14 @@ static void UpdateFieldVoices(const CcSim *sim, LocalState *local, ClientView vi
         const CcInteractionTarget *target = &local->interactions.targets[i];
         if (target->key.kind != CC_INTERACTION_PERSON || !target->visible || !target->available ||
             GridDistance(LocalPosition(local), (Vector2){target->x, target->z}) > 2.5f) continue;
-        if (CcSpeechGreeting(sim, sim->player.location_id, target->key.object,
+        if (CcSpeechGossip(sim, target->character_id, 0, false, &speech) ||
+            CcSpeechGreeting(sim, sim->player.location_id, target->key.object,
             target->name, place->primary_hall, &speech)) {
             const CcCharacter *person = CcSimCharacter(sim, target->character_id);
             if (person != NULL) {
                 CcSpeech named;
                 if (CcSpeechCompose(&named, speech.line_id, person->id, person->name,
-                    CcSpeechCharacterVoice(sim, person), speech.text, speech.delivery, CC_SPEECH_BACKGROUND, 0)) speech = named;
+                    CcSpeechCharacterVoice(sim, person), speech.text, speech.delivery, CC_SPEECH_BACKGROUND, speech.source_event_id)) speech = named;
             }
             speech.priority = CC_SPEECH_BACKGROUND;
             ClientSaySpeech(&speech);
@@ -10293,7 +10342,7 @@ int main(int argc, char **argv)
 #endif
     bool capture_ux = argc >= 4 && strcmp(argv[1], "--capture-ux") == 0;
     int32_t capture_ux_view = capture_ux ? atoi(argv[2]) : 0;
-    if (capture_ux && (capture_ux_view < 0 || capture_ux_view > 12)) return 1;
+    if (capture_ux && (capture_ux_view < 0 || capture_ux_view > 14)) return 1;
     bool screen_first_hero = true;
     for (int32_t argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--screen-first-hero") == 0) {
@@ -11604,6 +11653,21 @@ int main(int argc, char **argv)
             RepositionHero(&local, (Vector2){local.course.situation_witness.position.x + 1.4f,
                 local.course.situation_witness.position.z + 0.4f}, false);
             view = VIEW_CHARACTER;
+        }
+        if (capture_ux_view == 13 || capture_ux_view == 14) {
+            for (int32_t i = 0; i < sim.character_count; ++i) {
+                const CcCharacter *person = &sim.characters[i];
+                if (person->current_settlement_id != sim.player.location_id ||
+                    person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING || CcCharacterAgeYears(&sim, person) < 16) continue;
+                local.conversation_character_id = person->id;
+                local.conversation_situation_id = 0U;
+                local.conversation_gossip_source = capture_ux_view == 14;
+                char capture_error[192];
+                if (!ApplyCommand(NULL, &sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
+                    .target_id = person->id}, capture_error, sizeof(capture_error))) return 1;
+                view = VIEW_CHARACTER;
+                break;
+            }
         }
         if (capture_ux_view == 3) { view = VIEW_TRADE; local.trade_good = CC_GOOD_FOOD; local.trade_quantity = 2; }
         if (capture_ux_view == 4) { view = VIEW_LEDGER; local.book_page = 3; }
