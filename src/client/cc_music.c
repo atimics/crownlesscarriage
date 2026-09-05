@@ -162,11 +162,14 @@ void CcMusicInit(CcMusicDirector *director, uint32_t seed)
     memset(director, 0, sizeof(*director));
     director->random_state = seed != 0U ? seed : UINT32_C(0x6d757369);
     director->target_voice = -1;
+    director->requested_take = -1;
     for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i) director->voice[i].take = -1;
     for (int i = 0; i < 4; ++i) director->recent_cue[i] = -1;
     for (int i = 0; i < CC_MUSIC_CUE_COUNT; ++i) director->last_take[i] = -1;
-    for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i)
+    for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i) {
         director->duration[i] = cc_music_takes[i].duration;
+        director->ready[i] = true;
+    }
 }
 
 static float RandomUnit(CcMusicDirector *director)
@@ -310,8 +313,28 @@ void CcMusicUpdate(CcMusicDirector *director, const CcMusicContext *context,
     } else {
         fade = effective.combat ? 1.2f : 4.0f;
     }
-    if (!change) return;
-    int take = CcMusicChoose(director, &effective);
+    int pending = director->requested_take;
+    if (pending >= 0 && (!director->available[pending] ||
+        CcMusicScore(&effective, cc_music_takes[pending].cue) <= 0.0f ||
+        effective.combat != cc_music_cues[cc_music_takes[pending].cue].combat)) {
+        director->requested_take = -1;
+        pending = -1;
+    }
+    if (!change) { director->requested_take = -1; return; }
+    int take = pending >= 0 ? pending : CcMusicChoose(director, &effective);
+    if (take >= 0 && !director->ready[take]) {
+        director->requested_take = take;
+        /* Keep the score playing while audio arrives. Combat can use a ready take. */
+        if (!effective.combat && current != NULL) return;
+        CcMusicDirector local = *director;
+        for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i)
+            local.available[i] = local.available[i] && local.ready[i];
+        take = CcMusicChoose(&local, &effective);
+        director->random_state = local.random_state;
+        if (take < 0) return;
+    } else {
+        director->requested_take = -1;
+    }
     if (take < 0) {
         if (current != NULL) {
             for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i) {

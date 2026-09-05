@@ -9,6 +9,8 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
 MAX_TRACKED_ASSET_BYTES = 64 * 1024 * 1024
+MAX_BUNDLED_MUSIC_BYTES = 128 * 1024 * 1024
+MAX_BUNDLED_MUSIC_FILES = 27
 MAX_SINGLE_ASSET_BYTES = 8 * 1024 * 1024
 BINARY_SUFFIXES = {".blend", ".gif", ".glb", ".mp3", ".mp4", ".png"}
 TEXT_SUFFIXES = {
@@ -63,9 +65,14 @@ def main() -> int:
 
     sizes: dict[str, int] = defaultdict(int)
     total = 0
+    music_bytes = 0
+    music_count = 0
     for path in tracked_assets:
         size = path.stat().st_size
         total += size
+        if path.parent == ROOT / "assets/audio/music" and path.suffix == ".mp3":
+            music_bytes += size
+            music_count += 1
         relative = path.relative_to(ROOT)
         group = "/".join(relative.parts[:2])
         sizes[group] += size
@@ -78,9 +85,15 @@ def main() -> int:
     print(f"tracked art: {len(tracked_assets)} files, {size_text(total)}")
     for group, size in sorted(sizes.items()):
         print(f"  {group}: {size_text(size)}")
-    if total > MAX_TRACKED_ASSET_BYTES:
+    if music_count > MAX_BUNDLED_MUSIC_FILES or music_bytes > MAX_BUNDLED_MUSIC_BYTES:
         failures.append(
-            f"tracked art is {size_text(total)}; the limit is "
+            f"bundled music is {music_count} files, {size_text(music_bytes)}; limits are "
+            f"{MAX_BUNDLED_MUSIC_FILES} files and {size_text(MAX_BUNDLED_MUSIC_BYTES)}"
+        )
+    art_bytes = total - music_bytes
+    if art_bytes > MAX_TRACKED_ASSET_BYTES:
+        failures.append(
+            f"tracked art outside the music bundle is {size_text(art_bytes)}; the limit is "
             f"{size_text(MAX_TRACKED_ASSET_BYTES)}"
         )
 

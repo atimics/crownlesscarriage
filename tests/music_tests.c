@@ -1,4 +1,5 @@
 #include "client/cc_music.h"
+#include "client/cc_music_library.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -70,6 +71,22 @@ int main(void)
     CHECK(CcMusicChoose(&director, &context) == -1);
     int calm_a = TakeFor(3, 1), calm_b = TakeFor(3, 2), attack = TakeFor(59, 1);
     CHECK(calm_a >= 0 && calm_b >= 0 && attack >= 0);
+    CcMusicLibrary library = {0};
+    const unsigned char manifest[] = "CROWNLESS_MUSIC 1\n03-01-"
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.mp3\n";
+    CHECK(CcMusicLibraryParse(&library, manifest, sizeof(manifest) - 1));
+    CHECK(strncmp(library.file[calm_a], "03-01-", 6) == 0);
+    CcMusicLibrary saved = library;
+    CHECK(!CcMusicLibraryParse(&library, manifest, sizeof(manifest) - 2));
+    CHECK(memcmp(&saved, &library, sizeof(library)) == 0);
+    unsigned char invalid[sizeof(manifest)];
+    memcpy(invalid, manifest, sizeof(invalid));
+    invalid[17] = '/';
+    CHECK(!CcMusicLibraryParse(&library, invalid, sizeof(invalid) - 1));
+    CHECK(!CcMusicLibraryParse(&library, (const unsigned char *)"<html>", 6));
+    int bundled_count = 0;
+    for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i) bundled_count += CcMusicBundled(i) ? 1 : 0;
+    CHECK(bundled_count == 27);
     director.available[calm_a] = true;
     director.available[calm_b] = true;
     director.available[attack] = true;
@@ -81,6 +98,47 @@ int main(void)
 
     CcMusicContext battle = {.combat = true, .theme = {
         [CC_MUSIC_BANDIT] = 1.0f, [CC_MUSIC_COMBAT] = 1.0f}};
+    /* A selected download holds the existing score until its bytes are ready. */
+    CcMusicDirector waiting;
+    CcMusicInit(&waiting, 22);
+    waiting.available[calm_a] = true;
+    Advance(&waiting, &context, 300);
+    waiting.available[calm_b] = true;
+    waiting.ready[calm_b] = false;
+    waiting.duration[calm_a] = 10.0f;
+    Advance(&waiting, &context, 300);
+    CHECK(waiting.requested_take == calm_b);
+    CHECK(waiting.voice[waiting.target_voice].take == calm_a);
+    CHECK(waiting.voice[waiting.target_voice].gain > 0.99f);
+    uint32_t held_random = waiting.random_state;
+    Advance(&waiting, &context, 120);
+    CHECK(waiting.random_state == held_random);
+    waiting.ready[calm_b] = true;
+    Advance(&waiting, &context, 600);
+    CHECK(waiting.voice[waiting.target_voice].take == calm_b);
+    CHECK(waiting.voice[waiting.target_voice].gain > 0.99f);
+    /* A bandit attack replaces a pending calm download with a ready combat take. */
+    waiting.ready[calm_a] = false;
+    waiting.duration[calm_b] = 10.0f;
+    Advance(&waiting, &context, 60);
+    CHECK(waiting.requested_take == calm_a);
+    waiting.available[attack] = true;
+    Advance(&waiting, &battle, 90);
+    CHECK(waiting.voice[waiting.target_voice].take == attack);
+    CHECK(waiting.requested_take == -1);
+    /* Losing the remote choice leaves the bundled score playable. */
+    CcMusicInit(&waiting, 22);
+    waiting.available[calm_a] = true;
+    Advance(&waiting, &context, 300);
+    waiting.available[calm_b] = true;
+    waiting.ready[calm_b] = false;
+    waiting.duration[calm_a] = 10.0f;
+    Advance(&waiting, &context, 60);
+    CHECK(waiting.requested_take == calm_b);
+    waiting.available[calm_b] = false;
+    Advance(&waiting, &context, 600);
+    CHECK(waiting.voice[waiting.target_voice].take == calm_a);
+    CHECK(waiting.voice[waiting.target_voice].gain > 0.99f);
     for (int i = 0; i < 100; ++i) CHECK(CcMusicChoose(&director, &battle) == attack);
     CcMusicUpdate(&director, &battle, 1.0f / 60.0f);
     CHECK(director.voice[director.target_voice].take == attack);
