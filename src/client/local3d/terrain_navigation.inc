@@ -1554,8 +1554,6 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
 
 typedef struct LocalProbeContext {
     CcLocalSceneKind scene;
-    float root_base_y;
-    bool root_capsule;
 } LocalProbeContext;
 
 static void AddLocalCollisionBox(LocalCollisionBox *boxes, int32_t *count,
@@ -1572,10 +1570,8 @@ static void AddLocalCollisionBox(LocalCollisionBox *boxes, int32_t *count,
 }
 
 static int32_t GatherLocalCollisionBoxes(const LocalProbeContext *context,
-                                         Vector3 point,
                                          LocalCollisionBox *boxes)
 {
-    (void)point;
     CcLocalSceneKind scene = context != NULL ? context->scene :
                                                CC_LOCAL_SCENE_STREET;
     if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET) {
@@ -1662,17 +1658,7 @@ static bool ProbeLocalCollision(void *raw_context,
     Vector3 proposed = {proposed_position.x, proposed_position.y,
                         proposed_position.z};
     LocalCollisionBox boxes[CC_LOCAL_COLLISION_BOX_CAPACITY];
-    int32_t box_count = GatherLocalCollisionBoxes(context, proposed, boxes);
-    if (context != NULL && context->root_capsule) {
-        int32_t retained = 0;
-        for (int32_t box = 0; box < box_count; ++box) {
-            if (context->root_base_y >= boxes[box].maximum.y - 0.055f) {
-                continue;
-            }
-            boxes[retained++] = boxes[box];
-        }
-        box_count = retained;
-    }
+    int32_t box_count = GatherLocalCollisionBoxes(context, boxes);
     CcCollisionMove movement = CcCollisionMoveSphere(boxes, box_count,
         (CcLimbVec3){previous.x, previous.y, previous.z},
         (CcLimbVec3){proposed.x - previous.x, proposed.y - previous.y,
@@ -1775,7 +1761,7 @@ static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
     if (resolved == NULL || contact_normal == NULL) return false;
     LocalProbeContext context = {.scene = scene};
     LocalCollisionBox boxes[CC_LOCAL_COLLISION_BOX_CAPACITY];
-    int32_t count = GatherLocalCollisionBoxes(&context, proposed, boxes);
+    int32_t count = GatherLocalCollisionBoxes(&context, boxes);
     int32_t retained = 0;
     float support = passable_support_height;
     for (int32_t i = 0; i < count; ++i) {

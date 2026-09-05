@@ -31,7 +31,7 @@ void CcLocalProjectInteraction(const CcLocalAgent *agent,
     if (!CameraPointInFront(camera, middle)) return;
     LocalCollisionBox boxes[CC_LOCAL_COLLISION_BOX_CAPACITY];
     LocalProbeContext context = {.scene = agent->scene};
-    int32_t count = GatherLocalCollisionBoxes(&context, middle, boxes);
+    int32_t count = GatherLocalCollisionBoxes(&context, boxes);
     bool exposed = false;
     if (target->key.kind == CC_INTERACTION_ACTION) exposed = true;
     for (int32_t sample = 0; sample < 3 && !exposed; ++sample) {

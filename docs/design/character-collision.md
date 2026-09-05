@@ -10,7 +10,9 @@ The C implementation lives in `src/locomotion/cc_collision.c`. Rotated boxes
 use the town profile's origin, scale, and rotation. Town navigation, character
 movement, ragdoll contacts, and interaction visibility read these shapes.
 The box capacity includes every building, compound, and landmark in all six
-towns. Terrain support continues to use the world height sampler.
+towns. Buildings use authored footprints and wall heights. Sloped roofs and
+decorative overhangs are future collision surface types. Terrain support
+continues to use the world height sampler.
 
 Walking checks vertical clearance before stepping up by at most 24 cm. It
 sweeps across the step and down to a support surface. Climbing keeps its
@@ -34,7 +36,7 @@ ctest --test-dir out/collision --output-on-failure \
 ```
 
 The tests cover thin walls, rounded corners, rotated towns, full body clearance,
-doorways, roofs, ceilings, overlapping crowds, water entry and exit, and the
+doorways, building tops, ceilings, overlapping crowds, water entry and exit, and the
 existing climbing and fall recovery course.
 
 Design references: [PhysX character controllers](https://nvidia-omniverse.github.io/PhysX/physx/5.6.0/docs/CharacterControllers.html)
