@@ -123,7 +123,7 @@ class SpeechWorkerTests(unittest.TestCase):
         started, finish = threading.Event(), threading.Event()
         def blocked(record, path):
             started.set()
-            finish.wait(3)
+            finish.wait()
             tone(record, path)
         jobs = self.jobs(blocked)
         self.addCleanup(finish.set)
