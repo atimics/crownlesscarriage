@@ -428,6 +428,8 @@ class Worlds:
                 self.db.execute("DELETE FROM members WHERE world=?", (world,))
                 self.db.execute("DELETE FROM worlds WHERE id=?", (world,))
             self.seen = {key: value for key, value in self.seen.items() if key[0] != world}
+            self.visits = {key: value for key, value in self.visits.items() if key[0] != world}
+            self.poses = {key: value for key, value in self.poses.items() if key[0] != world}
             self.last_tick.pop(world, None)
             self.failed.discard(world)
         return {"deleted": True}

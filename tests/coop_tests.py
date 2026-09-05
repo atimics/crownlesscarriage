@@ -351,6 +351,7 @@ class CoopTests(unittest.TestCase):
         return int(statuses[0].split()[0]), json.loads(data)
 
     def test_owner_deletes_only_their_world(self):
+        self.worlds.pose(self.id, self.a, self.enter(self.a))
         self.worlds.command(self.id, self.a, self.command(self.a, amount=1, good=0))
         view = self.worlds.appearance(self.id, self.a,
             {'appearance': dict(skin=1, hair=2, style=3, face=1, coat=4)})
@@ -370,6 +371,8 @@ class CoopTests(unittest.TestCase):
                               ('scene_contexts', 'world'), ('away_clocks', 'world')]:
             self.assertEqual(self.worlds.db.execute(f'SELECT count(*) FROM {table} WHERE {column}=?', (self.id,)).fetchone()[0], 0)
         self.assertFalse(any(key[0] == self.id for key in self.worlds.seen))
+        self.assertFalse(any(key[0] == self.id for key in self.worlds.visits))
+        self.assertFalse(any(key[0] == self.id for key in self.worlds.poses))
         self.assertNotIn(self.id, self.worlds.last_tick)
         self.assertEqual(self.worlds.view(other, self.a)['id'], other)
         self.worlds.close()
