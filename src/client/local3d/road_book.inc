@@ -358,7 +358,7 @@ static void DrawForkSignpost(Vector3 junction, Vector3 branch_end,
                              (Color){132, 91, 54, 255});
 }
 
-void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
+void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t selected_route,
                        float turn_progress, float clock,
                        RenderTexture2D target,
                        Rectangle destination)
@@ -497,10 +497,17 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
         (Vector3){26.0f, 0.0f, 45.2f}, 0.86f, 0.74f,
         UINT32_C(0x666f726d), CC_NPC_ROLE_TRAVELLER, WORLD_TEAL,
         clock * 0.28f + 1.0f, CC_TRAVERSAL_IDLE, camera.target);
+    if (crew_exchange != NULL) {
+        CcLocalAgent passenger;
+        PrepareCrewPassenger(agent, carriage, carriage_heading, &passenger);
+        DrawRobotShell(&passenger);
+        DrawCrew(&passenger, 7);
+    }
     EndWorldLighting();
     EndMode3D();
     EndTextureMode();
     PresentTarget(target, destination);
+    DrawCrewLabels(camera, destination);
     if (!interaction_ui_enabled) DrawLabels(labels, label_count, camera, destination);
 }
 
@@ -785,7 +792,8 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
             carriage_base.x, carriage_base.z);
     }
     Vector3 travelling_hero_position = {
-        carriage_x - 3.25f, 0.0f, 37.95f + lateral_offset
+        carriage_x - 3.25f + (float)(crew_seat % 4) * 0.85f, 0.0f,
+        37.95f + lateral_offset + (float)(crew_seat / 4) * 1.25f
     };
     CcLocalAgent travelling_hero = {0};
     if (travelling) {
@@ -956,11 +964,13 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawCombatSkillTell(agent);
         DrawCombatImpact(agent);
     }
+    DrawCrew(travelling ? &travelling_hero : agent, 2);
     EndWorldLighting();
     EndMode3D();
     DrawTargetAtmosphere(target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
+    DrawCrewLabels(camera, destination);
     char route_label[96];
     char blockade_label[96];
     (void)snprintf(route_label, sizeof(route_label), "%s -> %s",
@@ -1467,11 +1477,18 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawRobotShell(agent);
         DrawCombatSword(agent);
     }
+    CcLocalAgent passenger;
+    if (travelling && crew_exchange != NULL) {
+        PrepareCrewPassenger(agent, carriage, 0.5f * PI, &passenger);
+        DrawRobotShell(&passenger);
+    }
+    DrawCrew(travelling && crew_exchange != NULL ? &passenger : agent, 2 + (int32_t)site);
     EndWorldLighting();
     EndMode3D();
     DrawTargetAtmosphere(target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
+    DrawCrewLabels(camera, destination);
 
     WorldLabel labels[3] = {
         {{CC_LOCAL_SITE_ENTRANCE_X -
@@ -1655,7 +1672,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         convoy_subject.position = convoy->town_position;
         convoy_subject.facing_yaw = convoy->town_heading_yaw;
         convoy_hero_position = LocalPoint(
-            convoy->town_position, -1.65f, 0.0f, -2.10f,
+            convoy->town_position, -1.65f + (float)(crew_seat % 4) * 0.85f,
+            0.0f, -2.10f + (float)(crew_seat / 4) * 1.25f,
             convoy->town_heading_yaw);
         convoy_hero_position.y = CcLocalTerrainHeightAt(
             convoy_hero_position.x, convoy_hero_position.z);
@@ -1953,11 +1971,13 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawCombatSkillTell(agent);
         DrawCombatImpact(agent);
     }
+    DrawCrew(convoy_visible ? &convoy_hero : agent, 0);
     EndWorldLighting();
     EndMode3D();
     DrawTargetAtmosphere(target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
+    DrawCrewLabels(camera, destination);
     bool combat_nearby = CcLocalCourseHasNearbyHostile(course, agent);
     bool combat_presentation = course != NULL && course->alarm_active &&
                                camera.projection == CAMERA_PERSPECTIVE;
@@ -2507,12 +2527,14 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawRobotShell(agent);
     DrawCombatSword(agent);
     DrawCombatSkillTell(agent);
+    DrawCrew(agent, 1);
     EndWorldLighting();
     DrawMarketEmberFlames(clock);
     EndMode3D();
     DrawMarketPracticalLightHalos(camera, target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
+    DrawCrewLabels(camera, destination);
     WorldLabel labels[3];
     int32_t label_count = 0;
     if (AgentNearLabel(agent, MARKET_PEOPLE[0].x,

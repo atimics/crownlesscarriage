@@ -4,6 +4,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include "raylib.h"
 
 #if defined(PLATFORM_WEB)
@@ -24,6 +25,13 @@ EM_ASYNC_JS(int, CoopDelete, (char *error, int capacity), {
 });
 EM_JS(int, CoopPreview, (), { return Module.ccCoop && Module.ccCoop.preview ? 1 : 0; });
 EM_JS(int, CoopHasSession, (), { return Module.ccCoop && Module.ccCoop.hasSession() ? 1 : 0; });
+EM_JS(int, CoopSeat, (), { return Module.ccCoop ? Module.ccCoop.seat() : 0; });
+EM_JS(int, CoopExchange, (int scene, const float *pose, CcCrewMember *crew, int stride, int name_offset, int appearance_offset, int pose_offset), {
+    return Module.ccCoop.exchangeMemory(scene, pose, crew, stride, name_offset, appearance_offset, pose_offset);
+});
+EM_JS(void, CoopDrawn, (const CcCrewMember *crew, int count, int stride, int name_offset, int appearance_offset, int pose_offset), {
+    Module.ccCoop.drawnMemory(crew, count, stride, name_offset, appearance_offset, pose_offset);
+});
 EM_JS(void, CoopCheckpoint, (const char *path), {
     Module.ccCoop.checkpoint(FS.readFile(UTF8ToString(path), {encoding:'utf8'}));
 });
@@ -72,6 +80,17 @@ void CcCoopClientReturnToTitle(void) { CoopTitle(); }
 bool CcCoopClientPreview(void) { return CoopPreview() != 0; }
 uint32_t CcCoopClientAppearance(void) { return (uint32_t)CoopAppearance(); }
 bool CcCoopClientHasSession(void) { return CoopHasSession() != 0; }
+int32_t CcCoopClientSeat(void) { return CoopSeat(); }
+int32_t CcCoopClientExchange(int32_t scene, const float *pose, CcCrewMember *crew)
+{
+    return CoopExchange(scene, pose, crew, sizeof(*crew), offsetof(CcCrewMember, name),
+        offsetof(CcCrewMember, appearance), offsetof(CcCrewMember, pose));
+}
+void CcCoopClientDrawn(const CcCrewMember *crew, int32_t count)
+{
+    CoopDrawn(crew, count, sizeof(*crew), offsetof(CcCrewMember, name),
+        offsetof(CcCrewMember, appearance), offsetof(CcCrewMember, pose));
+}
 void CcCoopClientCheckpoint(const char *path) { CoopCheckpoint(path); }
 void CcCoopClientReady(const char *error) { CoopReady(error); }
 
@@ -118,6 +137,11 @@ bool CcCoopClientSkip(CcSim *sim, char *error, size_t capacity)
 }
 
 #else
+int32_t CcCoopClientSeat(void) { return 0; }
+int32_t CcCoopClientExchange(int32_t scene, const float *pose, CcCrewMember *crew)
+{ (void)scene; (void)pose; (void)crew; return 0; }
+void CcCoopClientDrawn(const CcCrewMember *crew, int32_t count)
+{ (void)crew; (void)count; }
 bool CcCoopClientSkip(CcSim *sim, char *error, size_t capacity)
 {
     (void)sim; (void)error; (void)capacity; return false;

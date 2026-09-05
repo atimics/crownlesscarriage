@@ -39,6 +39,77 @@ class CoopTests(unittest.TestCase):
         return {'protocol': 1, 'sequence': view['next_sequence'],
                 'action_revision': view['action_revision'], 'action': action, **values}
 
+    def enter(self, token):
+        state = self.worlds.view(self.id, token, campaign=True, enter=True)
+        return dict(visit=state['visit'], context=state['session_context'], scene=0, pose=[0.0] * 83)
+
+    def test_visible_crew_pose_appearance_and_isolation(self):
+        a, b = self.enter(self.a), self.enter(self.b)
+        before = self.worlds.view(self.id, self.a)['state']
+        appearance = dict(skin=4, hair=2, style=3, face=1, coat=5)
+        self.worlds.appearance(self.id, self.b, {'appearance': appearance})
+        self.assertEqual(self.worlds.pose(self.id, self.a, a)['peers'], [])
+        peers = self.worlds.pose(self.id, self.b, b)['peers']
+        self.assertEqual([peer['name'] for peer in peers], ['Mara'])
+        peers = self.worlds.pose(self.id, self.a, a)['peers']
+        self.assertEqual([peer['name'] for peer in peers], ['Bren'])
+        self.assertEqual(peers[0]['appearance'], appearance)
+        self.assertEqual(set(peers[0]), {'id', 'name', 'appearance', 'pose', 'sequence'})
+        b['pose'][0] = 2.5
+        self.worlds.pose(self.id, self.b, b)
+        self.assertEqual(self.worlds.pose(self.id, self.a, a)['peers'][0]['pose'][0], 2.5)
+        self.assertEqual(self.worlds.pose(self.id, self.b, dict(b, scene=1))['peers'], [])
+        self.assertEqual(self.worlds.pose(self.id, self.a, a)['peers'], [])
+        self.assertEqual(self.worlds.view(self.id, self.a)['state'], before)
+        other = '2' * 32
+        self.worlds.create(self.a, {'id':other, 'name':'Other road', 'player':'Mara'})
+        other_state = self.worlds.view(other, self.a, campaign=True, enter=True)
+        self.assertEqual(self.worlds.pose(other, self.a, dict(a, visit=other_state['visit'], context=other_state['session_context']))['peers'], [])
+        with self.assertRaises(ApiError):
+            self.worlds.pose(other, self.b, b)
+
+    def test_pose_expiry_reload_leave_and_restart(self):
+        a, b = self.enter(self.a), self.enter(self.b)
+        with patch('server.time.monotonic', return_value=100):
+            self.worlds.pose(self.id, self.b, b)
+        with patch('server.time.monotonic', return_value=102):
+            self.assertEqual(len(self.worlds.pose(self.id, self.a, a)['peers']), 1)
+        with patch('server.time.monotonic', return_value=104):
+            self.assertEqual(self.worlds.pose(self.id, self.a, a)['peers'], [])
+        fresh = self.enter(self.b)
+        with self.assertRaises(ApiError) as old:
+            self.worlds.pose(self.id, self.b, dict(b, pose=None))
+        self.assertEqual(old.exception.status, 409)
+        # A normal campaign read leaves the active game visit intact.
+        self.worlds.view(self.id, self.b, campaign=True)
+        self.worlds.pose(self.id, self.b, fresh)
+        self.assertEqual(len(self.worlds.pose(self.id, self.a, a)['peers']), 1)
+        self.worlds.pose(self.id, self.b, dict(fresh, pose=None))
+        self.assertEqual(self.worlds.pose(self.id, self.a, a)['peers'], [])
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        with self.assertRaises(ApiError) as missing:
+            self.worlds.pose(self.id, self.a, a)
+        self.assertEqual(missing.exception.status, 428)
+        self.worlds.pose(self.id, self.a, self.enter(self.a))
+
+    def test_pose_validation_context_and_revocation(self):
+        a, b = self.enter(self.a), self.enter(self.b)
+        for bad in ([0] * 82, [True] * 83, [float('nan')] * 83,
+                    [float('inf')] * 83, [2000000] * 83,
+                    [0] * 4 + [100] + [0] * 78):
+            with self.assertRaises(ApiError):
+                self.worlds.pose(self.id, self.a, dict(a, pose=bad))
+        for changed in (dict(scene=8), dict(scene=True), dict(context='stale'), dict(name='Imposter')):
+            with self.assertRaises(ApiError):
+                self.worlds.pose(self.id, self.a, dict(a, **changed))
+        self.worlds.pose(self.id, self.b, b)
+        member = self.worlds.view(self.id, self.b)['member']
+        self.worlds.owner_action(self.id, self.a, 'remove', member)
+        self.assertEqual(self.worlds.pose(self.id, self.a, a)['peers'], [])
+        with self.assertRaises(ApiError):
+            self.worlds.pose(self.id, self.b, b)
+
     def test_one_company_and_save_round_trip(self):
         a, b = [self.worlds.view(self.id, token) for token in (self.a, self.b)]
         self.assertEqual(a['state'], b['state'])
@@ -280,6 +351,7 @@ class CoopTests(unittest.TestCase):
         return int(statuses[0].split()[0]), json.loads(data)
 
     def test_owner_deletes_only_their_world(self):
+        self.worlds.pose(self.id, self.a, self.enter(self.a))
         self.worlds.command(self.id, self.a, self.command(self.a, amount=1, good=0))
         view = self.worlds.appearance(self.id, self.a,
             {'appearance': dict(skin=1, hair=2, style=3, face=1, coat=4)})
@@ -299,6 +371,8 @@ class CoopTests(unittest.TestCase):
                               ('scene_contexts', 'world'), ('away_clocks', 'world')]:
             self.assertEqual(self.worlds.db.execute(f'SELECT count(*) FROM {table} WHERE {column}=?', (self.id,)).fetchone()[0], 0)
         self.assertFalse(any(key[0] == self.id for key in self.worlds.seen))
+        self.assertFalse(any(key[0] == self.id for key in self.worlds.visits))
+        self.assertFalse(any(key[0] == self.id for key in self.worlds.poses))
         self.assertNotIn(self.id, self.worlds.last_tick)
         self.assertEqual(self.worlds.view(other, self.a)['id'], other)
         self.worlds.close()

@@ -13,7 +13,7 @@ async function main() {
     '--database', path.join(temp, 'worlds.sqlite3'), '--port', '8788',
     '--game-dir', path.resolve(process.argv[3])
   ], {stdio: ['ignore', 'inherit', 'inherit']});
-  let browser;
+  let browser, owner, crew;
   try {
     for (let i = 0; ; i++) {
       try { if ((await fetch(origin + '/healthz')).ok) break; } catch {}
@@ -22,7 +22,7 @@ async function main() {
     }
     browser = await chromium.launch({args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
     const a = await browser.newContext(), b = await browser.newContext();
-    const owner = await a.newPage(), crew = await b.newPage();
+    owner = await a.newPage(); crew = await b.newPage();
     await owner.goto(origin);
     await owner.getByRole('textbox', {name:'Your name'}).fill('Mara');
     await owner.getByRole('textbox', {name:'World name'}).fill('Shared test road');
@@ -54,6 +54,15 @@ async function main() {
     }
     assert.equal(await game.locator('body').getAttribute('data-avatar'), '12576');
     assert.equal(await owner.locator('body').getAttribute('data-avatar'), '0');
+    for (const [page, name, appearance] of [[owner, 'Bren', 12576], [game, 'Mara', 0]]) {
+      await page.waitForFunction(({name, appearance}) => {
+        const drawn = JSON.parse(document.body.dataset.crewDrawn || '[]');
+        return drawn.length === 1 && drawn[0].name === name && drawn[0].appearance === appearance;
+      }, {name, appearance}, {timeout:30000});
+    }
+    await fs.mkdir('browser-results', {recursive:true});
+    await owner.screenshot({path:'browser-results/visible-crew.png'});
+    const remoteStart = JSON.parse(await owner.locator('body').getAttribute('data-crew-drawn'))[0].position;
     const purchased = await game.evaluate(() => Module.ccCoop.apply('trade', '0', 0, 1));
     assert.equal(purchased.accepted, true);
     assert.equal(purchased.world.state.company.cargo[0], 1);
@@ -64,10 +73,21 @@ async function main() {
     // The road crosses the middle of this view; the lower edge is a cliff.
     await game.mouse.click(canvas.x + canvas.width * 0.68, canvas.y + canvas.height * 0.50);
     await game.waitForFunction(position => document.body.dataset.playerPosition !== position, start);
+    await owner.waitForFunction(position => {
+      const peer = JSON.parse(document.body.dataset.crewDrawn || '[]')[0];
+      return peer && Math.hypot(peer.position[0] - position[0], peer.position[2] - position[2]) > 0.1;
+    }, remoteStart);
     await game.reload();
     await game.waitForFunction(() => document.body.dataset.companyReady === 'ready' && document.body.dataset.playerPosition, undefined, {timeout:120000});
     assert.notEqual(await game.locator('body').getAttribute('data-player-position'), start);
     assert.equal(await game.locator('body').getAttribute('data-avatar'), '12576');
+    await owner.waitForFunction(() => JSON.parse(document.body.dataset.crewDrawn || '[]')[0]?.name === 'Bren');
+    await game.getByRole('link', {name:'Your avatar & company ↗'}).click();
+    await game.getByRole('link', {name:'Enter the world'}).waitFor();
+    await owner.waitForFunction(() => JSON.parse(document.body.dataset.crewDrawn || '[]').length === 0);
+    await game.getByRole('link', {name:'Enter the world'}).click();
+    await game.waitForFunction(() => document.body.dataset.companyReady === 'ready', undefined, {timeout:120000});
+    await owner.waitForFunction(() => JSON.parse(document.body.dataset.crewDrawn || '[]')[0]?.name === 'Bren');
     const destination = (await state()).state.travel[0].id;
     const departed = await game.evaluate(target => Module.ccCoop.apply('travel', target, 0, 0), destination);
     assert.equal(departed.accepted, true);
@@ -80,7 +100,16 @@ async function main() {
     await game.waitForFunction(() => document.body.dataset.companyReady === 'ready', undefined, {timeout:120000});
     await game.waitForFunction(hash => document.body.dataset.companyHash === hash, travelling.state.hash);
     assert.deepEqual(errors, []);
-    console.log('Two player appearances persist; the avatar panel opens the world; reload keeps the saved place and shared campaign.');
+    console.log('Two players draw each other with their chosen appearance and moving poses; leaving, rejoining, reload, and shared travel pass.');
+  } catch (error) {
+    await fs.mkdir('browser-results', {recursive:true});
+    for (const [name, page] of [['owner', owner], ['crew', crew]]) {
+      if (page && !page.isClosed()) {
+        await page.screenshot({path:`browser-results/crew-failure-${name}.png`}).catch(() => {});
+        console.error(name, await page.locator('body').getAttribute('data-crew-drawn'));
+      }
+    }
+    throw error;
   } finally {
     if (browser) await browser.close();
     host.kill('SIGTERM');

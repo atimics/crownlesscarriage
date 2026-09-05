@@ -268,6 +268,12 @@ typedef struct CcSteppedPoseState {
     bool initialized;
 } CcSteppedPoseState;
 
+#include "client/cc_crew.h"
+void CcLocalCrewSetExchange(CcCrewExchange exchange);
+void CcLocalCrewSetSeat(int32_t seat);
+void CcLocalCrewBeginFrame(float delta_time);
+const CcCrewMember *CcLocalCrewDrawn(int32_t *count);
+
 typedef struct CcLocalAgent {
     Vector3 position;
     Vector3 velocity;
@@ -608,7 +614,7 @@ Vector2 CcLocalForkBranchEndInternal(int32_t branch_ordinal,
 float CcLocalRoadCheckpointSurfaceYInternal(float x, float z);
 float CcLocalRoadHorseLateralSpacingInternal(bool bridge_checkpoint);
 float CcLocalRoadHorseLongitudinalOffsetInternal(void);
-void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
+void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t selected_route,
                        float turn_progress, float clock,
                        RenderTexture2D target,
                        Rectangle destination);
