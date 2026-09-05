@@ -91,6 +91,8 @@ cc_strict_warnings(crownless_sim)
 add_library(crownless_story
     src/story/cc_story.c
     src/story/cc_speech.c
+    src/story/cc_speech_interactions.c
+    src/story/cc_speech_json.c
 )
 target_include_directories(crownless_story PUBLIC src)
 target_link_libraries(crownless_story PUBLIC crownless_sim)
@@ -974,6 +976,9 @@ if(BUILD_TESTING)
         if(Python3_Interpreter_FOUND)
             add_test(NAME audio_exports_and_voice_assets
                 COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/audio_export_tests.py
+                    $<TARGET_FILE:crownless_audio_export>)
+            add_test(NAME speech_worker_and_cache
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/speech_worker_tests.py
                     $<TARGET_FILE:crownless_audio_export>)
         endif()
     endif()
