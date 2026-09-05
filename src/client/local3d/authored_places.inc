@@ -26,6 +26,7 @@ static void DrawBox(Vector3 center, Vector3 size, Color color)
     // Add the center here so each box shares its parent's transform.
     Vector3 low = Vector3Subtract(center, Vector3Scale(size, 0.5f));
     Vector3 high = Vector3Add(center, Vector3Scale(size, 0.5f));
+    rlSetTexture(rlGetTextureIdDefault());
     rlBegin(RL_QUADS);
     rlColor4ub(color.r, color.g, color.b, color.a);
     rlNormal3f(0.0f, 0.0f, 1.0f);

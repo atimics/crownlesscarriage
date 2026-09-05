@@ -1,6 +1,6 @@
 /* Compare the box batch with raylib's reference primitive on the GPU. */
-static Image RenderBoxBatchFixture(RenderTexture2D target, bool reference,
-                                    int32_t view, bool crowded)
+static Image RenderBoxBatchFixture(RenderTexture2D target, Texture2D marker,
+                                    bool reference, int32_t view, bool crowded)
 {
     float turn = (float)view * PI * 0.5f;
     Camera3D camera = {
@@ -15,6 +15,10 @@ static Image RenderBoxBatchFixture(RenderTexture2D target, bool reference,
     ClearBackground(BLACK);
     BeginMode3D(camera);
     BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
+    // Texture draws also use quads; the following box must use solid color.
+    DrawTexturePro(marker, (Rectangle){0, 0, 2, 2},
+                   (Rectangle){-0.7f, -0.7f, 0.25f, 0.25f},
+                   (Vector2){0}, 0.0f, WHITE);
     int32_t count = crowded ? 1600 : 4;
     for (int32_t i = 0; i < count; ++i) {
         rlPushMatrix();
@@ -54,10 +58,14 @@ static void TestBoxBatchParity(void)
 {
     RenderTexture2D target = LoadRenderTexture(256, 256);
     RequireRenderer(IsRenderTextureValid(target), "box target must load");
+    Image marker_image = GenImageColor(2, 2, MAGENTA);
+    Texture2D marker = LoadTextureFromImage(marker_image);
+    UnloadImage(marker_image);
+    RequireRenderer(IsTextureValid(marker), "box marker texture must load");
     for (int32_t view = 0; view < 9; ++view) {
         bool crowded = view == 8;
-        Image expected = RenderBoxBatchFixture(target, true, view, crowded);
-        Image actual = RenderBoxBatchFixture(target, false, view, crowded);
+        Image expected = RenderBoxBatchFixture(target, marker, true, view, crowded);
+        Image actual = RenderBoxBatchFixture(target, marker, false, view, crowded);
         Color *before = LoadImageColors(expected);
         Color *after = LoadImageColors(actual);
         RequireRenderer(before != NULL && after != NULL,
@@ -83,6 +91,7 @@ static void TestBoxBatchParity(void)
         UnloadImage(expected);
         UnloadImage(actual);
     }
+    UnloadTexture(marker);
     UnloadRenderTexture(target);
     (void)puts("PASS box batch: all faces, transforms, alpha, and buffer rollover");
 }
