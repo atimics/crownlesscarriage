@@ -2,6 +2,7 @@
 #define CC_AUDIO_H
 
 #include "client/cc_soundscape.h"
+#include "story/cc_speech.h"
 
 /* Call initialization on the first play input so browsers can start audio. */
 void CcAudioInit(void);
@@ -11,6 +12,10 @@ void CcAudioSetFocused(bool focused);
 float CcAudioMusicGain(void);
 void CcAudioPlay(CcSoundCue cue);
 void CcAudioVoice(const char *path);
+void CcAudioSpeech(const CcSpeech *speech, const char *path);
+void CcAudioReplaySpeech(void);
+void CcAudioSkipSpeech(void);
+const CcSpeech *CcAudioCurrentSpeech(void);
 void CcAudioUpdate(void);
 
 #endif

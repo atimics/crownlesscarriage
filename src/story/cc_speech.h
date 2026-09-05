@@ -56,5 +56,14 @@ bool CcSpeechCompose(CcSpeech *speech, const char *line_id, CcId speaker_id,
 bool CcSpeechCharacter(const CcSim *sim, const CcSituation *situation,
                         const CcCharacter *character, CcSpeech *speech);
 bool CcSpeechPath(const CcSpeech *speech, char *path, size_t capacity);
+bool CcSpeechGreeting(const CcSim *sim, CcId place_id, CcId object_id,
+                       const char *speaker, const char *service, CcSpeech *speech);
+bool CcSpeechRoad(const CcSim *sim, CcSpeech *speech);
+bool CcSpeechPlayerChoice(const CcSim *sim, const CcSituation *situation,
+                           CcStoryPlayerChoice choice, uint32_t voice_index,
+                           CcSpeech *speech);
+bool CcSpeechTrade(const CcSim *sim, const char *keeper, CcGood good,
+                    int32_t quantity, CcMoney total, int mode,
+                    const char *response, CcSpeech *speech);
 
 #endif

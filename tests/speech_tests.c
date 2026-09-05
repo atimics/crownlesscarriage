@@ -89,10 +89,44 @@ static void CampaignSpeech(void)
     }
 }
 
+static void EverydaySpeech(void)
+{
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    before = sim;
+    CcSpeech speech;
+    CcId place_id = sim.player.location_id;
+    CC_CHECK(CcSpeechGreeting(&sim, place_id, 15, "Town guard", "hall", &speech));
+    CC_CHECK(strstr(speech.text, CcSimSettlement(&sim, place_id)->name) != NULL);
+    uint32_t voice = speech.voice_index;
+    CC_CHECK(CcSpeechGreeting(&sim, place_id, 15, "Town worker", "hall", &speech));
+    CC_CHECK(speech.voice_index == voice);
+    CC_CHECK(CcSpeechTrade(&sim, "Keeper", CC_GOOD_FOOD, 8, 123, 0, "", &speech));
+    CC_CHECK(strstr(speech.text, "123 crowns") != NULL && strstr(speech.text, "8 ") != NULL);
+    CC_CHECK(CcSpeechTrade(&sim, "Keeper", CC_GOOD_FOOD, 7, 321, 1, "", &speech));
+    CC_CHECK(strstr(speech.text, "321 crowns") != NULL && strstr(speech.text, "7 ") != NULL);
+    CC_CHECK(CcSpeechTrade(&sim, "Keeper", CC_GOOD_FOOD, 7, 321, 1, "Bring the full quantity.", &speech));
+    CC_CHECK(strcmp(speech.text, "Bring the full quantity.") == 0);
+    for (int choice = CC_STORY_PLAYER_ASK; choice <= CC_STORY_PLAYER_LEAVE; ++choice) {
+        CC_CHECK(CcSpeechPlayerChoice(&sim, &sim.situations[0], (CcStoryPlayerChoice)choice, 5, &speech));
+        CC_CHECK(strncmp(speech.text, "1 ", 2) != 0 && strncmp(speech.text, "2 ", 2) != 0);
+        CC_CHECK(strstr(speech.text, "Esc") == NULL);
+    }
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    CC_CHECK(!CcSpeechRoad(&sim, &speech));
+    sim.journey.active = true;
+    sim.journey.phase = CC_JOURNEY_PHASE_BLOCKED;
+    sim.journey.route_id = sim.bandits[0].route_id;
+    sim.journey.bargain_cost = 37;
+    CC_CHECK(CcSpeechRoad(&sim, &speech));
+    CC_CHECK(strstr(speech.text, "37 crowns") != NULL);
+    CC_CHECK(speech.speaker_id == sim.bandits[0].id);
+}
+
 int main(void)
 {
     CharacterIdentity();
     ExactWords();
     CampaignSpeech();
+    EverydaySpeech();
     return 0;
 }

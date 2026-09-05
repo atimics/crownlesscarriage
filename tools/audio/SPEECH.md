@@ -21,5 +21,12 @@ should validate the complete record before reusing a file with the same key.
 The speech builder also gives generated mine testimony a line ID. This lets
 successor characters use the same speech path as the opening cast.
 
+The client uses speech records for named conversations, town greetings, current
+trade quotes, and road demands. Both conversation layouts show the record's
+words. Other spoken interactions have a caption beside the playback controls.
+Replay with F7 and skip with F8, or use their on-screen buttons. Closing the
+interaction clears its turn. The original opening WAVs remain usable while
+the larger cast pack is prepared.
+
 Run the foundation checks with `ctest --test-dir <build> -R
 'speech_identity|authored_story' --output-on-failure`.

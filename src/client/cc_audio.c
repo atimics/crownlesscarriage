@@ -15,6 +15,8 @@ static struct {
     double last_play[CC_SOUND_COUNT];
     int mode;
     bool attempted, ready, focused, voice_loaded;
+    CcSpeech speech;
+    bool has_speech;
 } audio;
 
 static void StopVoice(void)
@@ -151,4 +153,38 @@ void CcAudioUpdate(void)
             if (IsSoundValid(sound)) SetSoundVolume(sound, CueVolume((CcSoundCue)cue));
         }
     }
+}
+
+void CcAudioSpeech(const CcSpeech *speech, const char *path)
+{
+    if (speech == NULL || speech->text[0] == '\0') {
+        audio.has_speech = false;
+        CcAudioVoice(NULL);
+        return;
+    }
+    if (!audio.ready) return;
+    if (audio.has_speech && audio.speech.audio_key == speech->audio_key &&
+        audio.speech.speaker_id == speech->speaker_id) return;
+    audio.speech = *speech;
+    audio.has_speech = true;
+    /* The same words may come from a different person in the next turn. */
+    StopVoice();
+    audio.voice_path[0] = '\0';
+    CcAudioVoice(path);
+}
+
+void CcAudioReplaySpeech(void)
+{
+    if (!audio.has_speech) return;
+    char path[sizeof(audio.voice_path)];
+    (void)snprintf(path, sizeof(path), "%s", audio.voice_path);
+    audio.voice_path[0] = '\0';
+    CcAudioVoice(path);
+}
+
+void CcAudioSkipSpeech(void) { StopVoice(); }
+
+const CcSpeech *CcAudioCurrentSpeech(void)
+{
+    return audio.has_speech ? &audio.speech : NULL;
 }
