@@ -28,6 +28,7 @@ typedef struct CcLocalTerrainMeshStatsInternal {
 
 void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                                    bool market_interior);
+void CcLocalCreatureGaitsFixedStepInternal(float delta_time);
 void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
                                     CcLocalAgent *player,
                                     const CcSim *sim, float delta_time);

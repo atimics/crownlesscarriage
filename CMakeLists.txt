@@ -69,6 +69,7 @@ add_library(crownless_locomotion
     src/locomotion/cc_creature.c
     src/locomotion/cc_humanoid.c
     src/locomotion/cc_humanoid_skin.c
+    src/locomotion/cc_footing.c
     src/locomotion/cc_limb.c
     src/locomotion/cc_multileg.c
     src/locomotion/cc_motion.c
@@ -1302,6 +1303,11 @@ if(BUILD_TESTING)
     target_link_libraries(biomech_system_tests PRIVATE crownless_locomotion)
     cc_strict_warnings(biomech_system_tests)
     add_test(NAME generalized_biomechanical_system COMMAND biomech_system_tests)
+
+    add_executable(footing_course_tests tests/footing_course_tests.c)
+    target_link_libraries(footing_course_tests PRIVATE crownless_locomotion)
+    cc_strict_warnings(footing_course_tests)
+    add_test(NAME verified_footing_course COMMAND footing_course_tests)
 
     add_executable(creature_rig_tests tests/creature_rig_tests.c)
     target_link_libraries(creature_rig_tests PRIVATE crownless_locomotion)

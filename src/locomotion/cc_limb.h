@@ -1,6 +1,8 @@
 #ifndef CROWNLESS_LIMB_H
 #define CROWNLESS_LIMB_H
 
+#include "locomotion/cc_biomech.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -80,6 +82,7 @@ typedef struct CcLimbRuntime {
     CcLimbVec3 contact_normal;
     CcLimbState state;
     float swing_progress;
+    float swing_lift;
     float health;
 } CcLimbRuntime;
 
@@ -90,6 +93,8 @@ typedef struct CcLimbRig {
     CcLimbVec3 support_center;
     CcLimbVec3 support_normal;
     CcLimbVec3 body_acceleration;
+    CcLimbVec3 body_position;
+    CcLimbVec3 body_up;
     CcLimbPace pace;
     CcLimbPace requested_pace;
     CcLimbSupportState support_state;
@@ -121,6 +126,12 @@ void CcLimbRigUpdate(CcLimbRig *rig, CcLimbVec3 body_position, float body_yaw,
                      CcLimbVec3 body_velocity, bool body_grounded,
                      float delta_time, CcLimbTerrainProbe probe,
                      void *probe_context);
+void CcLimbRigUpdatePhysical(CcLimbRig *rig, CcLimbVec3 body_position,
+                             float body_yaw, CcLimbVec3 body_velocity,
+                             bool body_grounded, float delta_time,
+                             CcLimbTerrainProbe probe,
+                             CcBiomechRagdollCollisionProbe collision,
+                             void *probe_context);
 void CcLimbRigSetHealth(CcLimbRig *rig, int32_t limb_index, float health);
 void CcLimbRigPinContact(CcLimbRig *rig, int32_t limb_index,
                          CcLimbVec3 body_position, float body_yaw,
@@ -129,6 +140,7 @@ void CcLimbRigEvaluateSupport(CcLimbRig *rig,
                               CcLimbVec3 body_position, float body_yaw,
                               bool grounded, float delta_time);
 bool CcLimbRigRequestPace(CcLimbRig *rig, CcLimbPace pace);
+CcLimbVec3 CcLimbRigBodyPoint(const CcLimbRig *rig, CcLimbVec3 local, float yaw);
 float CcLimbChainLength(const CcLimbRig *rig, int32_t limb_index);
 const char *CcLimbStateName(CcLimbState state);
 const char *CcLimbPaceName(CcLimbPace pace);

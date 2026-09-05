@@ -4850,10 +4850,10 @@ static void UpdateClimb(CcLocalAgent *agent, float delta_time,
         agent->grounded = true;
         agent->traversal = CC_TRAVERSAL_IDLE;
     }
-    CcLimbRigUpdate(&agent->limb_rig, ToLimbVector(ShellPodBaseCenter(agent)),
+    CcLimbRigUpdatePhysical(&agent->limb_rig, ToLimbVector(ShellPodBaseCenter(agent)),
                     agent->facing_yaw, ToLimbVector(agent->velocity),
                     agent->grounded, agent->climbing ? 0.0f : delta_time,
-                    ProbeLocalSurface, &context);
+                    ProbeLocalSurface, ProbeLocalCollision, &context);
     if (agent->climbing) {
         (void)UpdateMultiLegClimbContacts(
             agent, amount, delta_time, &context);
@@ -5545,9 +5545,9 @@ local_body_resolved:
             CC_LIMB_PACE_WALK : speed_ratio < 0.82f ?
             CC_LIMB_PACE_RUN : CC_LIMB_PACE_SPRINT;
         (void)CcLimbRigRequestPace(&agent->limb_rig, requested_pace);
-        CcLimbRigUpdate(&agent->limb_rig, ToLimbVector(ShellPodBaseCenter(agent)),
+        CcLimbRigUpdatePhysical(&agent->limb_rig, ToLimbVector(ShellPodBaseCenter(agent)),
                         agent->facing_yaw, ToLimbVector(agent->velocity),
-                        agent->grounded, delta_time, ProbeLocalSurface, &context);
+                        agent->grounded, delta_time, ProbeLocalSurface, ProbeLocalCollision, &context);
         agent->cape = (CcLocalCapeState){0};
         agent->previous_cape = (CcLocalCapeState){0};
         agent->render_cape = (CcLocalCapeState){0};

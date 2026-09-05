@@ -139,7 +139,7 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock, float
         bool controlled = ResolveControlledCreatureGait(
             slot, CC_CREATURE_RIG_HORSE, rig_gait, clock,
             horse < 0 ? 0.0f : 0.5f, forward_speed, moving,
-            horse_base, yaw, CC_LOCAL_SCENE_ROAD,
+            horse_base, yaw, 0.96f, CC_LOCAL_SCENE_ROAD,
             &controlled_pose);
         (void)DrawCreatureGait3D(
             CC_CREATURE_HORSE, pose, horse_base,
@@ -947,7 +947,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
             CREATURE_GAIT_ROAD_COW, CC_CREATURE_RIG_COW,
             CC_CREATURE_RIG_GAIT_WALK, clock,
             0.18f, 0.62f, travelling, cow_position,
-            -0.72f * PI, CC_LOCAL_SCENE_ROAD, &controlled_cow);
+            -0.72f * PI, 0.88f, CC_LOCAL_SCENE_ROAD, &controlled_cow);
         (void)DrawCreatureGait3D(
             CC_CREATURE_COW, cow_pose, cow_position,
             -0.72f * PI, 0.88f, (Color){184, 169, 139, 255},
@@ -1674,7 +1674,7 @@ static void DrawSettlementCreatures(const CcSim *sim,
             CREATURE_GAIT_STREET_COW, CC_CREATURE_RIG_COW,
             CC_CREATURE_RIG_GAIT_WALK, clock,
             0.34f, 0.48f, true, TerrainWorldPoint(63.0f, 38.3f),
-            0.72f * PI, CC_LOCAL_SCENE_STREET, &controlled_cow);
+            0.72f * PI, 0.84f, CC_LOCAL_SCENE_STREET, &controlled_cow);
         (void)DrawCreatureGait3D(
             CC_CREATURE_COW, cow_pose,
             TerrainWorldPoint(63.0f, 38.3f), 0.72f * PI, 0.84f,

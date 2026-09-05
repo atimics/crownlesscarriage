@@ -51,6 +51,7 @@ typedef struct CcQuadrupedPose {
 const char *CcQuadrupedBoneName(CcQuadrupedBone bone);
 int32_t CcQuadrupedBoneParent(CcQuadrupedBone bone);
 int32_t CcQuadrupedBoneFind(const char *name);
+bool CcQuadrupedConfigureRig(CcQuadrupedMorphology morphology, CcLimbMorphology *rig);
 void CcQuadrupedPoseResolve(CcQuadrupedMorphology morphology, float phase,
                             bool moving, CcQuadrupedPose *result);
 void CcQuadrupedPoseResolveFromRig(CcQuadrupedMorphology morphology,

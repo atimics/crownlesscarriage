@@ -2034,20 +2034,29 @@ static void DrawRobotShell(const CcLocalAgent *agent)
         return;
     }
     if (!biped) {
+        rlPushMatrix();
+        rlTranslatef(body.x, body.y, body.z);
+        if (!agent->multileg_ragdoll.active) {
+            CcLimbVec3 up = rig->body_up;
+            float angle = acosf(fmaxf(-1.0f, fminf(1.0f, up.y))) * RAD2DEG;
+            if (angle > 0.001f) rlRotatef(angle, up.z, 0.0f, -up.x);
+        }
+        Vector3 local_body = {0.0f, 0.0f, 0.0f};
         float body_length = rig->morphology.limb_count >= 6 ? 0.72f : 0.54f;
-        DrawOrientedBox(body, (Vector3){0.0f, 0.0f, 0.0f},
+        DrawOrientedBox(local_body, (Vector3){0.0f, 0.0f, 0.0f},
                         (Vector3){0.54f, 0.38f, body_length}, agent->facing_yaw,
                         (Color){42, 128, 136, 255});
-        DrawSmallSphere(body, 0.085f, WORLD_GOLD);
-        DrawOrientedBox(body, (Vector3){0.0f, 0.02f, 0.22f},
+        DrawSmallSphere(local_body, 0.085f, WORLD_GOLD);
+        DrawOrientedBox(local_body, (Vector3){0.0f, 0.02f, 0.22f},
                         (Vector3){0.24f, 0.18f, 0.28f}, agent->facing_yaw,
                         (Color){225, 177, 68, 255});
         DrawSmallSphere(
-            LocalPoint(body, -0.085f, 0.06f, 0.34f, agent->facing_yaw),
+            LocalPoint(local_body, -0.085f, 0.06f, 0.34f, agent->facing_yaw),
             0.040f, WORLD_VOID);
         DrawSmallSphere(
-            LocalPoint(body, 0.085f, 0.06f, 0.34f, agent->facing_yaw),
+            LocalPoint(local_body, 0.085f, 0.06f, 0.34f, agent->facing_yaw),
             0.040f, WORLD_VOID);
+        rlPopMatrix();
     }
     Vector3 rig_offset = LocalPoint((Vector3){0}, 0.022f, 0.010f, 0.040f,
                                     agent->facing_yaw);
