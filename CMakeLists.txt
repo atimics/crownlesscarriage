@@ -1014,6 +1014,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(road_stop_tests)
     add_test(NAME roadside_camp_choices COMMAND road_stop_tests)
 
+    add_executable(travel_departure_tests tests/travel_departure_tests.c)
+    target_link_libraries(travel_departure_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(travel_departure_tests)
+    add_test(NAME free_road_departures COMMAND travel_departure_tests)
+
     find_program(CC_NODE_EXECUTABLE node)
     if(CC_NODE_EXECUTABLE)
         add_test(NAME browser_persistence_contract

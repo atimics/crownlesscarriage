@@ -93,7 +93,13 @@ bool CcCoopAdvance(CcSim *sim, int32_t ticks, char *error, size_t capacity)
     CcSim *candidate = malloc(sizeof(*candidate));
     if (candidate == NULL) return false;
     *candidate = *sim;
-    CcSimAdvanceRuntimeTicks(candidate, ticks);
+    /* Stop the host at the same roadside choices as the local client. */
+    for (int32_t tick = 0; tick < ticks; ++tick) {
+        if (CcSimJourneyRoadSiteStop(candidate) != NULL) break;
+        CcSimAdvanceRuntimeTicks(candidate, 1);
+        if (!candidate->journey.active ||
+            candidate->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) break;
+    }
     bool ok = CcSimValidate(candidate, error, capacity);
     if (ok) *sim = *candidate;
     free(candidate);

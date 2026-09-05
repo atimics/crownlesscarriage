@@ -108,6 +108,8 @@ int main(void)
 
     CcSim tolled_road;
     CcSimInit(&tolled_road, UINT32_C(0x7011ed));
+    /* Historical command replay keeps the original paid-departure rule. */
+    tolled_road.schema_version = 40U;
     tolled_road.player.coins = 100;
     tolled_road.routes[0].closed = true;
     tolled_road.routes[0].security = 100;

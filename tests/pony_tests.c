@@ -107,7 +107,7 @@ int main(void)
         sim.schema_version = legacy_versions[version];
         CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
         CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
-        CC_CHECK(restored.schema_version == 40U && CcPoniesValidate(&restored));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION && CcPoniesValidate(&restored));
     }
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     sqlite3 *db = NULL;
