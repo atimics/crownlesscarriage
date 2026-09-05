@@ -66,6 +66,40 @@ async function main() {
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.waitForFunction(() => window.Module && Module.crownlessCampaignAccess === 0 && document.querySelector('#loading').hidden && window.shaderLinks.some(link => link.skinned), {timeout: 120000});
     await page.waitForFunction(() => Module.crownlessScreen === 'title');
+    const startupMemory = await page.evaluate(() => {
+      const buffers = new Set();
+      const files = [];
+      function visit(directory) {
+        for (const name of FS.readdir(directory)) {
+          if (name === '.' || name === '..') continue;
+          const filename = directory + '/' + name;
+          const stat = FS.stat(filename);
+          if (FS.isDir(stat.mode)) visit(filename);
+          else {
+            const contents = FS.lookupPath(filename).node.contents;
+            buffers.add(contents.buffer);
+            files.push({filename, size: stat.size, bufferBytes: contents.buffer.byteLength});
+          }
+        }
+      }
+      visit('/assets');
+      return {
+        files,
+        retainedFileBytes: files.reduce((sum, file) => sum + file.size, 0),
+        retainedBufferBytes: [...buffers].reduce((sum, buffer) => sum + buffer.byteLength, 0),
+        wasmBytes: HEAPU8.byteLength
+      };
+    });
+    await fs.writeFile(path.join(output, 'startup-memory.json'), JSON.stringify(startupMemory, null, 2));
+    assert(startupMemory.files.length > 0, 'Voice files remain available after startup');
+    assert.equal(startupMemory.retainedBufferBytes, startupMemory.retainedFileBytes,
+      'Retained voice files should own only their audio bytes');
+    for (const file of startupMemory.files) {
+      assert(file.filename.startsWith('/assets/audio/'));
+      const actual = await page.evaluate(filename => Array.from(FS.readFile(filename)), file.filename);
+      const expected = await fs.readFile(path.join(__dirname, '..', file.filename.slice(1)));
+      assert.deepEqual(Buffer.from(actual), expected, file.filename);
+    }
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), 0);
     await page.screenshot({path: path.join(output, 'title.png')});
     assert.equal(await page.locator('header, footer, iframe').count(), 0);
@@ -154,8 +188,9 @@ async function main() {
       await page.waitForFunction(() => Module.crownlessScreen === 'playing');
     }
     await page.setViewportSize({width: 1280, height: 900});
+    const beforeSave = await page.evaluate(() => Module.crownlessSaveRevision);
     await page.keyboard.press('Control+s');
-    await page.waitForFunction(() => Module.crownlessSaveRevision > 0);
+    await page.waitForFunction(previous => Module.crownlessSaveRevision > previous, beforeSave);
     const revision = await page.evaluate(() => Module.crownlessSaveRevision);
     await page.reload();
     await page.waitForFunction(() => window.Module && Module.crownlessCampaignRestored && document.querySelector('#loading').hidden);

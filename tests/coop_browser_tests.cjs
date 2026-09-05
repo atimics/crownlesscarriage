@@ -32,13 +32,14 @@ async function main() {
     await crew.goto(await owner.getByRole('textbox', {name:'Invitation link'}).inputValue());
     await crew.getByRole('textbox', {name:'Your name'}).fill('Bren');
     await crew.getByRole('button', {name:'Join the company'}).click();
+    await crew.waitForURL(/#world=[a-f0-9]{32}$/);
     await owner.getByRole('button', {name:'Close', exact:true}).click();
     assert.equal(await crew.getByRole('button', {name:/Buy|Sell|Depart|Rest|Pause/}).count(), 0);
     const worldId = new URL(await crew.url()).hash.slice('#world='.length);
     const token = await crew.evaluate(() => localStorage.getItem('cc-coop-token'));
     async function state() {
       const response = await fetch(`${origin}/api/worlds/${worldId}/state?campaign=1`, {headers:{Authorization:`Bearer ${token}`}});
-      assert(response.ok);
+      assert(response.ok, `Shared state returned ${response.status}`);
       return response.json();
     }
     const game = crew, errors = [];
@@ -142,8 +143,31 @@ async function main() {
     await game.reload();
     await game.waitForFunction(() => document.body.dataset.companyReady === 'ready', undefined, {timeout:120000});
     await game.waitForFunction(hash => document.body.dataset.companyHash === hash, travelling.state.hash);
+    // The C client reports each death and resets both players after one jump.
+    await owner.evaluate(() => Module.ccCoop.togglePause());
+    const beforeDeath = await state();
+    await owner.evaluate(() => Module.ccCoop.life(true));
+    await owner.waitForFunction(() => Module.ccCoop.dead());
+    await game.waitForTimeout(1000);
+    assert.equal((await state()).state.day, beforeDeath.state.day);
+    await game.evaluate(() => Module.ccCoop.life(true));
+    for (const page of [owner, game]) {
+      await page.waitForFunction(() => Module.ccCoop.partyWipes() === 1 &&
+        !Module.ccCoop.dead(), undefined, {timeout:30000});
+    }
+    const nextCompany = await state();
+    assert.equal(nextCompany.state.day, beforeDeath.state.day + 7300);
+    assert.equal(nextCompany.state.journey.active, false);
+    for (const page of [owner, game]) {
+      await page.waitForFunction(hash => document.body.dataset.companyHash === hash,
+        nextCompany.state.hash);
+    }
+    await game.reload();
+    await game.waitForFunction(() => document.body.dataset.companyReady === 'ready' &&
+      Module.ccCoop.partyWipes() === 1 && !Module.ccCoop.dead(), undefined, {timeout:120000});
+    assert.equal((await state()).state.day, nextCompany.state.day);
     assert.deepEqual(errors, []);
-    console.log('Desktop and phone players draw each other with their chosen appearance and moving poses; touch walking, leaving, rejoining, reload, and shared travel pass.');
+    console.log('Desktop and phone players draw each other with their chosen appearance and moving poses; touch walking, leaving, rejoining, reload, shared travel, and the twenty-year party death jump pass.');
   } catch (error) {
     await fs.mkdir('browser-results', {recursive:true});
     for (const [name, page] of [['owner', owner], ['crew', crew]]) {

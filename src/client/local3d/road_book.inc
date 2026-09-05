@@ -36,39 +36,65 @@ float CcLocalRoadHorseLongitudinalOffsetInternal(void)
     return 5.55f;
 }
 
-static void DrawRoadHorseHarness(Vector3 base, float yaw, float gait_phase)
+static Vector3 RoadPonySkinPoint(Vector3 base, float yaw, Vector3 point,
+                                 CcQuadrupedBone part)
+{
+    const CreatureModelCache *pony =
+        &creature_models[CC_CREATURE_HORSE][CC_CREATURE_POSE_IDLE];
+    if (pony->ready) {
+        for (int32_t bone = 0; bone < pony->model.skeleton.boneCount; ++bone) {
+            if (pony->quadruped_bone[bone] != (int32_t)part) continue;
+            Transform bind = pony->model.skeleton.bindPose[bone];
+            Transform pose = pony->pose[bone];
+            Quaternion rotation = QuaternionMultiply(
+                pose.rotation, QuaternionInvert(bind.rotation));
+            point = Vector3Add(pose.translation, Vector3RotateByQuaternion(
+                Vector3Subtract(point, bind.translation), rotation));
+            break;
+        }
+    }
+    return LocalPoint(base, point.x * 0.96f, point.y * 0.96f,
+                       point.z * 0.96f, yaw);
+}
+
+static void DrawRoadHorseHarness(Vector3 base, float yaw)
 {
     Color leather = (Color){55, 35, 28, 255};
     Color leather_edge = (Color){91, 57, 38, 255};
     Color buckle = (Color){172, 137, 78, 255};
-    float step = sinf(gait_phase) * 0.018f;
-
-
-    DrawOrientedBox(base, (Vector3){0.0f, 1.31f + step, 0.49f},
-                    (Vector3){0.72f, 0.065f, 0.085f}, yaw, leather);
-    Vector3 collar_top = LocalPoint(
-        base, 0.0f, 1.73f + step, 0.70f, yaw);
+    Vector3 collar_top = RoadPonySkinPoint(
+        base, yaw, (Vector3){0.0f, 1.57f, 0.65f}, CC_QUADRUPED_NECK);
+    Vector3 nose_ends[2];
+    Vector3 brow_ends[2];
     for (int32_t side = -1; side <= 1; side += 2) {
-        Vector3 collar_side = LocalPoint(
-            base, (float)side * 0.28f, 1.35f + step, 0.48f, yaw);
-        Vector3 shoulder = LocalPoint(
-            base, (float)side * 0.30f, 1.27f + step, 0.04f, yaw);
+        Vector3 collar_side = RoadPonySkinPoint(
+            base, yaw, (Vector3){(float)side * 0.44f, 1.19f, 0.64f},
+            CC_QUADRUPED_CHEST);
+        Vector3 shoulder = RoadPonySkinPoint(
+            base, yaw, (Vector3){(float)side * 0.47f, 1.15f, 0.08f},
+            CC_QUADRUPED_CHEST);
         DrawCylinderEx(collar_top, collar_side, 0.034f, 0.030f, 6,
                        leather_edge);
         DrawCylinderEx(collar_side, shoulder, 0.026f, 0.022f, 6, leather);
-
-
-        Vector3 cheek = LocalPoint(
-            base, (float)side * 0.18f, 1.76f + step, 1.30f, yaw);
-        Vector3 bit_end = LocalPoint(
-            base, (float)side * 0.18f, 1.60f + step, 1.56f, yaw);
+        Vector3 cheek = RoadPonySkinPoint(
+            base, yaw, (Vector3){(float)side * 0.30f, 1.65f, 1.07f},
+            CC_QUADRUPED_HEAD);
+        Vector3 bit_end = RoadPonySkinPoint(
+            base, yaw, (Vector3){(float)side * 0.26f, 1.27f, 1.39f},
+            CC_QUADRUPED_HEAD);
         DrawCylinderEx(cheek, bit_end, 0.020f, 0.017f, 6, leather);
         DrawCharacterSphere(bit_end, 0.027f, buckle);
+        brow_ends[side < 0 ? 0 : 1] = cheek;
+        nose_ends[side < 0 ? 0 : 1] = bit_end;
     }
-    DrawOrientedBox(base, (Vector3){0.0f, 1.78f + step, 1.28f},
-                    (Vector3){0.43f, 0.035f, 0.045f}, yaw, leather);
-    DrawOrientedBox(base, (Vector3){0.0f, 1.60f + step, 1.56f},
-                    (Vector3){0.43f, 0.025f, 0.030f}, yaw, buckle);
+    Vector3 brow_front = RoadPonySkinPoint(
+        base, yaw, (Vector3){0.0f, 1.66f, 1.20f}, CC_QUADRUPED_HEAD);
+    Vector3 nose_front = RoadPonySkinPoint(
+        base, yaw, (Vector3){0.0f, 1.29f, 1.56f}, CC_QUADRUPED_HEAD);
+    for (int32_t side = 0; side < 2; ++side) {
+        DrawCylinderEx(brow_ends[side], brow_front, 0.018f, 0.018f, 6, leather);
+        DrawCylinderEx(nose_ends[side], nose_front, 0.016f, 0.016f, 6, leather);
+    }
 }
 
 static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock, float pace,
@@ -119,7 +145,7 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock, float
             CC_CREATURE_HORSE, pose, horse_base,
             yaw, 0.96f, coat, gait_phase, moving,
             controlled ? &controlled_pose : NULL);
-        DrawRoadHorseHarness(horse_base, yaw, gait_phase);
+        DrawRoadHorseHarness(horse_base, yaw);
         Vector3 trace_start = LocalPoint(
             base, (float)horse * 0.42f, 0.77f, 3.05f, yaw);
         Vector3 trace_end = LocalPoint(horse_base, 0.0f, 0.91f, -0.52f, yaw);

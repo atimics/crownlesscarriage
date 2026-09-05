@@ -207,8 +207,15 @@ assert.deepEqual(storedFiles.get(campaignPath), oldCampaign);
 assert.deepEqual(storedFiles.get(sessionPath), oldSession);
 assert.equal(storedFiles.get(revisionPath), 0);
 
-await owner.Module.persistCrownlessSave(campaignPath, sessionPath);
+owner.files.set(campaignPath, new Uint8Array(ownerCampaign));
+owner.files.set(sessionPath, new Uint8Array(oldSession));
+const pendingSave = owner.Module.persistCrownlessSave(campaignPath, sessionPath);
+// In-place edits during the database await leave the captured save intact.
+owner.files.get(campaignPath)[0] = 99;
+owner.files.get(sessionPath)[0] = 99;
+await pendingSave;
 assert.deepEqual(storedFiles.get(campaignPath), ownerCampaign);
+assert.deepEqual(storedFiles.get(sessionPath), oldSession);
 assert.equal(storedFiles.get(revisionPath), 1);
 
 await owner.close();
@@ -226,12 +233,16 @@ const recovered = await createPage();
 assert.equal(recovered.Module.crownlessCampaignAccess, 0);
 assert.equal(recovered.Module.crownlessSaveRevision, 1);
 assert.deepEqual(recovered.files.get(campaignPath), ownerCampaign);
-recovered.files.set(campaignPath, replacementCampaign);
-await recovered.Module.persistCrownlessNewCampaign(campaignPath);
+recovered.files.set(campaignPath, new Uint8Array(replacementCampaign));
+const pendingCampaign = recovered.Module.persistCrownlessNewCampaign(campaignPath);
+recovered.files.get(campaignPath)[0] = 99;
+await pendingCampaign;
 assert.deepEqual(storedFiles.get(campaignPath), replacementCampaign);
 assert.equal(storedFiles.has(sessionPath), false);
 recovered.files.set(preferencesPath, new Uint8Array([19, 20, 21]));
-await recovered.Module.persistCrownlessPreferences(preferencesPath);
+const pendingPreferences = recovered.Module.persistCrownlessPreferences(preferencesPath);
+recovered.files.get(preferencesPath)[0] = 99;
+await pendingPreferences;
 assert.deepEqual(storedFiles.get(preferencesPath),
   new Uint8Array([19, 20, 21]));
 assert.equal(storedFiles.get(revisionPath), 2);

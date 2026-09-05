@@ -145,7 +145,9 @@ static void WriteViewportFixture(const char *path)
 int main(int argc, char **argv)
 {
     TestSkinTurns();
+    TestPonyHarnessAttachment();
     if (argc == 3 && (strcmp(argv[1], "--graphics") == 0 ||
+                      strcmp(argv[1], "--pony-captures") == 0 ||
                       strcmp(argv[1], "--material-captures") == 0 ||
                       strcmp(argv[1], "--animation-captures") == 0)) {
         SetConfigFlags(FLAG_WINDOW_HIDDEN);
@@ -160,10 +162,12 @@ int main(int argc, char **argv)
             ReportBoxDrawPerformance();
             TestCharacterSurfaces();
             TestAnimalModels(argv[2]);
-            TestPonyPortraits();
+            TestPonyPortraits(argv[2]);
             WriteViewportFixture(argv[2]);
         } else if (strcmp(argv[1], "--animation-captures") == 0) {
             CaptureHumanoidAnimation(argv[2]);
+        } else if (strcmp(argv[1], "--pony-captures") == 0) {
+            CapturePonies(argv[2]);
         } else {
             CaptureCharacterMaterials(argv[2]);
         }

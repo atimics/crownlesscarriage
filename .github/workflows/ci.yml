@@ -9,28 +9,47 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CTEST_PARALLEL_LEVEL: 4
+
 jobs:
   static-analysis:
     name: Static analysis
     runs-on: ubuntu-latest
+    env:
+      CPPCHECK_COMMIT: e73bf44c3e49686b7495fab352d03a6c6075516b
     steps:
       - uses: actions/checkout@v4
+      - name: Restore pinned Cppcheck
+        id: cppcheck-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/cppcheck
+          key: cppcheck-${{ runner.os }}-${{ runner.arch }}-${{ env.CPPCHECK_COMMIT }}-v1
       - name: Build pinned Cppcheck
-        env:
-          CPPCHECK_COMMIT: e73bf44c3e49686b7495fab352d03a6c6075516b
+        if: steps.cppcheck-cache.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 --branch 2.21.0 \
             https://github.com/cppcheck-opensource/cppcheck.git \
             "$RUNNER_TEMP/cppcheck"
           test "$(git -C "$RUNNER_TEMP/cppcheck" rev-parse HEAD)" = \
             "$CPPCHECK_COMMIT"
-          make -C "$RUNNER_TEMP/cppcheck" -j2 \
+          make -C "$RUNNER_TEMP/cppcheck" -j"$(nproc)" \
             MATCHCOMPILER=yes \
             FILESDIR="$RUNNER_TEMP/cppcheck" \
             CXXOPTS="-O2" CPPOPTS="-DNDEBUG"
+      - name: Verify pinned Cppcheck
+        run: |
+          test "$(git -C "$RUNNER_TEMP/cppcheck" rev-parse HEAD)" = "$CPPCHECK_COMMIT"
+          "$RUNNER_TEMP/cppcheck/cppcheck" --version
       - name: Check for dead and repeated logic
         env:
           CC_CPPCHECK_EXECUTABLE: ${{ runner.temp }}/cppcheck/cppcheck
+          CC_CPPCHECK_JOBS: 4
         run: make static-analysis
 
   assets:
@@ -233,6 +252,9 @@ jobs:
   sanitizers:
     name: Address and undefined behavior sanitizers
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
@@ -249,7 +271,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Debug
           -DCC_BUILD_CLIENT=ON
           -DCC_WARNINGS_AS_ERRORS=ON
-          -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
+          -DCMAKE_C_FLAGS="-O1 -fsanitize=address,undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-sanitize-recover=undefined"
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined"
       - name: Build
         run: cmake --build build --parallel
@@ -258,16 +280,16 @@ jobs:
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: |
           clang \
+            -O1 \
             -fsanitize=undefined \
             -fno-sanitize-recover=undefined \
             tests/sanitizer_ub_fixture.c \
             -o "$RUNNER_TEMP/sanitizer_ub_fixture"
           set +e
           "$RUNNER_TEMP/sanitizer_ub_fixture" \
-            > sanitizer-self-check.log 2>&1
+            2>&1 | tee sanitizer-self-check.log
           fixture_status=$?
           set -e
-          cat sanitizer-self-check.log
           test "$fixture_status" -ne 0
           grep -q "runtime error: signed integer overflow" \
             sanitizer-self-check.log
