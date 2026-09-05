@@ -111,34 +111,18 @@ static int RunWorldCardRegression(void)
         CARD_INPUT();
         CARD_CHECK(view == VIEW_LEDGER && return_view == VIEW_LOCAL,
             "B must open the Company Book from the road.");
+        for (int32_t page = 0; page < 4; ++page) {
+            local.book_offset = 2;
+            queued_key_press[KEY_ONE + page] = true;
+            CARD_INPUT();
+            CARD_CHECK(view == VIEW_LEDGER && local.book_page == page && local.book_offset == 0,
+                "Keys 1 through 4 must open each book page at the start.");
+        }
         queued_key_press[KEY_FIVE] = true;
         CARD_INPUT();
-        CARD_CHECK(view == VIEW_LEDGER && local.book_page == 4 && local.book_offset == 0 &&
-            AdventureBookPony(&sim, 0) == sim.pony_company.team[0] &&
-            AdventureBookPony(&sim, 1) == sim.pony_company.team[1],
-            "The Ponies page must open with both travel companions.");
-        unsigned int pony_rows = 0;
-        for (int32_t row = 0; row < CC_PONY_COUNT; ++row) {
-            int32_t pony = AdventureBookPony(&sim, row);
-            CARD_CHECK(pony >= 0 && pony < CC_PONY_COUNT && (pony_rows & (1U << pony)) == 0,
-                "Every pony must appear once in the Company Book.");
-            pony_rows |= 1U << pony;
-            char details[384];
-            AdventurePonyDetails(&sim, pony, details, sizeof(details));
-            if (!sim.pony_company.ponies[pony].seen) CARD_CHECK(
-                strstr(details, CcPonyPersonality(pony)) == NULL && strstr(details, "Last seen") == NULL,
-                "An unknown pony must wait for an introduction.");
-        }
-        for (int32_t page = 1; page <= 4; ++page) {
-            queued_key_press[KEY_DOWN] = true;
-            CARD_INPUT();
-            CARD_CHECK(local.book_offset == (page < 3 ? page * 2 : 6),
-                "Pony page controls must reach the final pony and stay within the roster.");
-        }
-        queued_key_press[KEY_FOUR] = true;
-        CARD_INPUT();
-        CARD_CHECK(local.book_page == 3 && local.book_offset == 0,
-            "Switching to the Journal must reset the page position.");
+        CARD_CHECK(view == VIEW_LEDGER && local.book_page == 3 && local.book_offset == 0 &&
+            local.carriage_tab == CARRIAGE_OVERVIEW,
+            "The book must keep the Journal selected when 5 is pressed.");
         queued_key_press[KEY_B] = true;
         CARD_INPUT();
         CARD_CHECK(view == VIEW_LOCAL && CcSimHash(&sim) == carriage_hash,

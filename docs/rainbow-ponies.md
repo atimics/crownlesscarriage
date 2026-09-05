@@ -16,7 +16,8 @@ condition. They move to another road with a fresh request. **Keep travelling**
 or **Backspace** leaves the meeting; a completed request remains ready for a later visit.
 Ponies greet the carriage at most once per game day.
 
-Open the carriage interface and choose the **Ponies** tab. Press **2** or **F7**
+The Company Book (**B**) holds Promises, People, Cargo, and Journal.
+Open the carriage interface and choose the **Ponies** tab for your pony roster. Press **2** or **F7**
 to select it, or **1** to return to **Overview**. **Esc** or **Backspace** steps
 away from the carriage. Met ponies show their faces, names,
 personalities, bonds, completed quests, releases, and last seen roads.

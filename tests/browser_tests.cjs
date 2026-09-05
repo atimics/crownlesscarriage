@@ -288,17 +288,15 @@ async function main() {
       await controls.button('Cargo').tap();
       assert((await controls.reading()).length > 30);
       await mobile.screenshot({path: path.join(output, 'mobile-book.png')});
-      await controls.button('PONIES').tap();
-      await mobile.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Ponies 1-2 of 7'));
-      assert((await controls.reading()).includes('With you'));
-      await mobile.screenshot({path: path.join(output, 'mobile-ponies.png')});
-      for (const range of ['3-4', '5-6', '7-7']) {
-        await controls.button('Next').tap();
-        await mobile.waitForFunction(range => Module.crownlessTouchFrame.reading.includes(`Ponies ${range} of 7`), range);
+      const bookPages = (await controls.buttons()).filter(button =>
+        ['Promises', 'People', 'Cargo', 'Journal', 'PONIES', 'Ponies'].includes(button.label));
+      assert.deepEqual(bookPages.map(button => button.label), ['Promises', 'People', 'Cargo', 'Journal']);
+      for (const name of ['Promises', 'People', 'Cargo', 'Journal']) {
+        await controls.button(name).tap();
+        await mobile.waitForFunction(label => Module.crownlessTouchFrame.buttons.some(
+          button => button.label === label && button.active), name);
       }
-      assert(await controls.button('Next').isDisabled());
-      await controls.button('Previous').tap();
-      await mobile.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Ponies 5-6 of 7'));
+      assert((await controls.reading()).includes('1-4 pages'));
       await controls.button('Back').tap();
       await controls.button('Menu').tap();
       await mobile.waitForFunction(() => Module.crownlessScreen === 'paused');

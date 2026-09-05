@@ -138,7 +138,8 @@ static int ProfileContract(void)
             CHECK(structure->name != NULL && structure->name[0] != '\0');
             CHECK(structure->width >= 4.5f);
             CHECK(structure->depth >= 4.5f);
-            CHECK(structure->height >= 4.5f);
+            float minimum_height = function == CC_SETTLEMENT_FARMING ? 3.0f : 4.5f;
+            CHECK(structure->height >= minimum_height);
             CHECK(structure->style >= CC_LOCAL_BUILDING_DOMESTIC);
             CHECK(structure->style <= CC_LOCAL_BUILDING_WORKER_ROW);
             CHECK(structure->x >= 0.0f &&

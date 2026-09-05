@@ -1,4 +1,5 @@
 #include "locomotion/cc_creature.h"
+#include "locomotion/cc_quadruped.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -454,6 +455,7 @@ static bool FillPose(CcCreatureRigProfile profile,
     pose->body = Add(body, offset);
     pose->forward = forward;
     pose->right = right;
+    pose->up = skeleton->body_up;
     pose->support_normal = skeleton->support_normal;
     pose->body_width = dimensions->body_width;
     pose->body_depth = dimensions->body_depth;
@@ -491,6 +493,7 @@ static void LocalizePose(CcCreatureRigPose *pose, CcLimbVec3 origin,
     pose->forward = LocalizeDirection(pose->forward, yaw);
     pose->right = LocalizeDirection(pose->right, yaw);
     pose->support_normal = LocalizeDirection(pose->support_normal, yaw);
+    pose->up = LocalizeDirection(pose->up, yaw);
     for (int32_t limb = 0; limb < pose->limb_count; ++limb) {
         for (int32_t joint = 0;
              joint <= pose->limbs[limb].segment_count; ++joint) {
@@ -670,7 +673,20 @@ bool CcCreatureRigControllerInit(CcCreatureRigController *controller,
     ScaleDimensions(&dimensions, scale);
     CcLimbMorphology morphology;
     if (!ConfigureSkeleton(&dimensions, &morphology)) return false;
-    CcLimbVec3 body = {0.0f, dimensions.body_height, 0.0f};
+    if (profile == CC_CREATURE_RIG_HORSE || profile == CC_CREATURE_RIG_COW) {
+        (void)CcQuadrupedConfigureRig(profile == CC_CREATURE_RIG_HORSE ?
+            CC_QUADRUPED_HORSE : CC_QUADRUPED_COW, &morphology);
+        morphology.body_height *= scale;
+        for (int32_t i = 0; i < morphology.limb_count; ++i) {
+            CcLimbSpec *spec = &morphology.limbs[i];
+            spec->socket_local = (CcLimbVec3){spec->socket_local.x * scale,
+                spec->socket_local.y * scale, spec->socket_local.z * scale};
+            spec->rest_contact_local = (CcLimbVec3){spec->rest_contact_local.x * scale,
+                spec->rest_contact_local.y * scale, spec->rest_contact_local.z * scale};
+            for (int32_t j = 0; j < spec->segment_count; ++j) spec->segment_length[j] *= scale;
+        }
+    }
+    CcLimbVec3 body = {0.0f, morphology.body_height, 0.0f};
     CcLimbRigInit(&controller->skeleton, &morphology, body, 0.0f,
                   NULL, NULL);
     if (!controller->skeleton.initialized ||
@@ -794,6 +810,16 @@ bool CcCreatureRigControllerStepWorld(
     CcLimbTerrainProbe probe, void *probe_context,
     CcCreatureRigPose *pose)
 {
+    return CcCreatureRigControllerStepWorldPhysical(controller, command, delta_time,
+        probe, NULL, probe_context, pose);
+}
+
+bool CcCreatureRigControllerStepWorldPhysical(
+    CcCreatureRigController *controller, const CcCreatureRigWorldCommand *command,
+    float delta_time, CcLimbTerrainProbe probe,
+    CcBiomechRagdollCollisionProbe collision, void *probe_context,
+    CcCreatureRigPose *pose)
+{
     if (controller == NULL || command == NULL || pose == NULL ||
         !controller->initialized || !FiniteVector(command->ground_position) ||
         !FiniteVector(command->velocity) || !isfinite(command->yaw) ||
@@ -849,8 +875,7 @@ bool CcCreatureRigControllerStepWorld(
         float yaw = WrapAngle(
             start_yaw + yaw_delta * Clamp(amount, 0.0f, 1.0f));
         CcLimbVec3 body = ground;
-        body.y += controller->skeleton.morphology.body_height +
-                  controller->skeleton.supported_height_offset;
+        body.y += controller->skeleton.morphology.body_height;
         int32_t declared_maximum_swings =
             controller->skeleton.morphology.maximum_swings;
         bool walking_requested =
@@ -860,8 +885,8 @@ bool CcCreatureRigControllerStepWorld(
         if (walking_requested) {
             controller->skeleton.morphology.maximum_swings = 1;
         }
-        CcLimbRigUpdate(&controller->skeleton, body, yaw, velocity,
-                        command->grounded, step, probe, probe_context);
+        CcLimbRigUpdatePhysical(&controller->skeleton, body, yaw, velocity,
+                        command->grounded, step, probe, collision, probe_context);
         controller->skeleton.morphology.maximum_swings =
             declared_maximum_swings;
         if (walking_requested &&
@@ -878,13 +903,15 @@ bool CcCreatureRigControllerStepWorld(
     CcCreatureRigDimensions dimensions;
     if (!DimensionsForProfile(controller->profile, &dimensions)) return false;
     ScaleDimensions(&dimensions, controller->scale);
-    CcLimbVec3 body = controller->ground_position;
-    body.y += dimensions.body_height +
-              controller->skeleton.supported_height_offset;
+    CcLimbVec3 body = controller->skeleton.body_position;
     CcLimbVec3 forward = {sinf(controller->body_yaw), 0.0f,
                           cosf(controller->body_yaw)};
-    CcLimbVec3 right = {cosf(controller->body_yaw), 0.0f,
-                        -sinf(controller->body_yaw)};
+    CcLimbVec3 up = controller->skeleton.body_up;
+    forward = NormalizeOr(Subtract(forward, (CcLimbVec3){
+        up.x * Dot(forward, up), up.y * Dot(forward, up), up.z * Dot(forward, up)}), forward);
+    CcLimbVec3 right = {up.y * forward.z - up.z * forward.y,
+                        up.z * forward.x - up.x * forward.z,
+                        up.x * forward.y - up.y * forward.x};
     if (!FillPose(controller->profile, &dimensions, &controller->skeleton,
                   &controller->muscles, body, (CcLimbVec3){0},
                   forward, right, controller->skeleton.gait_phase,
@@ -893,6 +920,7 @@ bool CcCreatureRigControllerStepWorld(
         return false;
     }
     LocalizePose(pose, controller->ground_position, controller->body_yaw);
+    pose->world_contacts = true;
     return true;
 }
 

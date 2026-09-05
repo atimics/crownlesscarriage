@@ -88,6 +88,12 @@ static CcSettlementFunction active_place_function = CC_SETTLEMENT_MARKET;
 static float street_terrain_natural[CC_TERRAIN_SAMPLE_COUNT];
 static float street_terrain_height[CC_TERRAIN_SAMPLE_COUNT];
 
+static WorldTreePlacement ActiveWorldTreeAt(int32_t index)
+{
+    return active_place_function == CC_SETTLEMENT_FARMING ?
+        THORNFORD_TREES[index] : WORLD_TREES[index];
+}
+
 static const CcLocalPlaceLandmark *ActivePlaceLandmarkAt(int32_t index)
 {
     return CcLocalPlaceLandmarkAt(active_place_function, index);
@@ -2086,7 +2092,18 @@ static bool ProbeLocalSurface(void *raw_context, CcLimbVec3 origin,
     float height = SurfaceHeightAt(scene, origin.x, origin.z) + 0.035f;
     if (height > origin.y + 0.05f || origin.y - height > maximum_drop) return false;
     *point = (CcLimbVec3){origin.x, height, origin.z};
-    Vector3 surface_normal = SurfaceNormalAt(scene, origin.x, origin.z);
+    /* A level contact patch takes priority over the broad terrain normal. */
+    const float contact_radius = 0.02f;
+    Vector3 surface_normal = {
+        SurfaceHeightAt(scene, origin.x - contact_radius, origin.z) -
+            SurfaceHeightAt(scene, origin.x + contact_radius, origin.z),
+        contact_radius * 2.0f,
+        SurfaceHeightAt(scene, origin.x, origin.z - contact_radius) -
+            SurfaceHeightAt(scene, origin.x, origin.z + contact_radius)
+    };
+    surface_normal = Vector3Normalize(surface_normal);
+    Vector3 broad_normal = SurfaceNormalAt(scene, origin.x, origin.z);
+    if (broad_normal.y > surface_normal.y) surface_normal = broad_normal;
     *normal = (CcLimbVec3){surface_normal.x, surface_normal.y,
                            surface_normal.z};
     return true;
