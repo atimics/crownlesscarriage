@@ -19,6 +19,12 @@ static CcOverlayTextItem overlay_text[CC_OVERLAY_MAX_TEXT_ITEMS];
 static int overlay_text_count = 0;
 static float overlay_text_scale = 1.0f;
 static bool overlay_active = false;
+static void (*overlay_text_observer)(const char *text);
+
+void CcOverlaySetTextObserver(void (*observer)(const char *text))
+{
+    overlay_text_observer = observer;
+}
 
 static float ScaledFontSize(int font_size)
 {
@@ -59,6 +65,7 @@ void CcOverlayDrawText(const char *text, int x, int y, int font_size,
                        Color color)
 {
     if (text == NULL) return;
+    if (overlay_text_observer != NULL) overlay_text_observer(text);
     if (!overlay_active) {
         CcOverlayTextItem item = {
             .x = x, .y = y, .font_size = font_size, .color = color
