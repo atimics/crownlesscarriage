@@ -90,6 +90,7 @@ cc_strict_warnings(crownless_sim)
 
 add_library(crownless_story
     src/story/cc_story.c
+    src/story/cc_speech.c
 )
 target_include_directories(crownless_story PUBLIC src)
 target_link_libraries(crownless_story PUBLIC crownless_sim)
@@ -1018,6 +1019,11 @@ if(BUILD_TESTING)
     target_link_libraries(story_tests PRIVATE crownless_story)
     cc_strict_warnings(story_tests)
     add_test(NAME authored_story_beats COMMAND story_tests)
+
+    add_executable(speech_tests tests/speech_tests.c)
+    target_link_libraries(speech_tests PRIVATE crownless_story)
+    cc_strict_warnings(speech_tests)
+    add_test(NAME speech_identity_and_words COMMAND speech_tests)
 
     add_executable(quest_system_tests tests/quest_system_tests.c)
     target_link_libraries(quest_system_tests PRIVATE crownless_persistence)
