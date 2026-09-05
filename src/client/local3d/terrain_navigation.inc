@@ -1046,6 +1046,32 @@ void CcLocalBindOpenWorld(const CcWorldStream *stream)
     active_world_stream = stream;
 }
 
+int32_t CcLocalTownCarriagePath(bool arriving, Vector2 *points, int32_t capacity)
+{
+    const CcLocalPlaceProfile *profile = ActivePlaceProfile();
+    if (points == NULL || profile->carriage_lane_count <= 0) return 0;
+    TerrainEnsureReady();
+    int32_t count = 0;
+    for (int32_t span = 0; span < profile->carriage_lane_count; ++span) {
+        const CcLocalCarriageLane *route = &profile->carriage_lane[span];
+        const TerrainLanePath *lane = &terrain_lanes[route->lane];
+        int32_t last = route->end_point * 8;
+        if (last >= lane->count) return 0;
+        for (int32_t sample = span == 0 ? 0 : 1; sample <= last; ++sample) {
+            if (count >= capacity) return 0;
+            points[count++] = lane->point[sample];
+        }
+    }
+    if (!arriving) {
+        for (int32_t i = 0; i < count / 2; ++i) {
+            Vector2 temporary = points[i];
+            points[i] = points[count - 1 - i];
+            points[count - 1 - i] = temporary;
+        }
+    }
+    return count;
+}
+
 float CcLocalTerrainHeightAt(float x, float z)
 {
     if (active_world_stream != NULL) {

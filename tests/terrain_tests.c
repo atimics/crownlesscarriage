@@ -221,6 +221,20 @@ static void TestCurvedVillageRoads(void)
     }
     CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 78.5f, 50.0f) == CC_SOUND_STEP_GRASS);
     CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 41.5f, 15.0f) == CC_SOUND_STEP_GRASS);
+    Vector2 arrival[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+    Vector2 departure[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+    int32_t count = CcLocalTownCarriagePath(true, arrival, CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY);
+    CC_CHECK(count > 2);
+    CC_CHECK(CcLocalTownCarriagePath(false, departure, CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY) == count);
+    CC_CHECK(fabsf(arrival[0].x - CC_LOCAL_TOWN_GATE_X) < 0.001f);
+    CC_CHECK(fabsf(arrival[count - 1].x - CC_LOCAL_CARRIAGE_X) < 0.001f);
+    CC_CHECK(fabsf(arrival[count - 1].y - CC_LOCAL_CARRIAGE_Z) < 0.001f);
+    for (int32_t i = 0; i < count; ++i) {
+        CC_CHECK(hypotf(arrival[i].x - departure[count - 1 - i].x,
+                         arrival[i].y - departure[count - 1 - i].y) < 0.001f);
+        CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET,
+            arrival[i].x, arrival[i].y) == CC_SOUND_STEP_DIRT);
+    }
     CcLocalBindPlace(NULL);
 }
 
