@@ -863,6 +863,11 @@ static Rectangle AdventureNavBounds(int index)
     return (Rectangle){(float)GetScreenWidth() - 420.0f + (float)index * 102.0f, 12, 96, 40};
 }
 
+static Rectangle AdventurePaceBounds(int32_t pace)
+{
+    return (Rectangle){(float)GetScreenWidth() - 420.0f + (float)pace * 136.0f, 58, 130, 28};
+}
+
 static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
 {
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
@@ -873,13 +878,14 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
             TextFormat("%s to %s", place != NULL ? place->name : "Road", destination->name) :
         place != NULL ? place->name : "Crownless";
     int title_size = AdventureTextSize(22);
-    while (title_size > 14 && CcOverlayMeasureText(title, title_size) > GetScreenWidth() - 450) --title_size;
+    int toolbar_width = 450;
+    while (title_size > 12 && CcOverlayMeasureText(title, title_size) > GetScreenWidth() - toolbar_width) --title_size;
     CcOverlayDrawText(title, 24, 14, title_size, INK);
     CcOverlayDrawText(TextFormat("Day %d  /  %" PRId64 " crowns  /  Cargo %d/%d", sim->current_day,
         sim->player.coins, CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity),
         24, 43, AdventureTextSize(13), CC_GOLD);
     const CcRoadSite *stop = CcSimJourneyRoadSiteStop(sim);
-    const char *detail = stop != NULL ? TextFormat("%s / Camp or continue", stop->name) :
+    const char *detail = stop != NULL ? TextFormat("Passing %s / Choose a stop below", stop->name) :
         local->journey_travel_active && sim->journey.active ?
             TextFormat("%s / %d%% / ETA %dh / %s", local->carriage_stopped ? "Stopped" :
                 CcJourneyPaceName(sim->journey.pace), sim->carriage.progress_milli / 10,

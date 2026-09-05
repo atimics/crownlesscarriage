@@ -766,6 +766,13 @@ static bool interaction_ui_enabled;
 static bool conversation_focus_active;
 static CcLocalAgent conversation_focus_agent;
 static uint32_t conversation_focus_seed;
+static bool pony_conversation_active;
+static float pony_conversation_weight;
+
+void CcLocalRendererSetPonyConversation(bool active)
+{
+    pony_conversation_active = active;
+}
 
 void CcLocalRendererSetConversationFocus(const Vector3 *position, uint32_t seed, float yaw)
 {

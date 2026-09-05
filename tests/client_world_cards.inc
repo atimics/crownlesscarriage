@@ -147,8 +147,8 @@ static int RunWorldCardRegression(void)
         view = VIEW_LOCAL;
         BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
         ContextActionSet cards = BuildContextActions(&sim, &local, view, selected, 0);
-        CARD_CHECK(cards.count == local.interactions.count && cards.count > 4,
-            "Every town object needs a card, with four closest objects on the first page.");
+        CARD_CHECK(local.interactions.count > 4 && cards.count == 4,
+            "Town controls show the four closest objects.");
         CARD_CHECK(ContextCardsPerPage() == 4, "The tray must show four choices.");
         float last_distance = -1;
         for (int32_t i = 0; i < cards.count; ++i) {
@@ -177,13 +177,8 @@ static int RunWorldCardRegression(void)
         unavailable->available = true;
         message[0] = '\0';
 
-        Rectangle next = ContextPageBounds(true);
-        client_test_pointer_active = true;
-        client_test_pointer = (Vector2){next.x + 20, next.y + 20};
-        queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
-        CARD_INPUT();
-        CARD_CHECK(local.card_page == 1 && CcSimHash(&sim) == before && !local.agent.target_valid,
-            "Browsing cards must keep the campaign and walking target steady.");
+        CARD_CHECK(cards.count == 4 && ContextCardCount(cards.count, 0) == 4,
+            "Town controls must show the nearest four options together.");
         /* Card identity remains valid when the object is outside the camera. */
         CcInteractionTarget *door = NULL;
         for (int32_t i = 0; i < local.interactions.count; ++i)
@@ -258,10 +253,10 @@ static int RunWorldCardRegression(void)
         for (int32_t frame = 0; frame < 30; ++frame) CARD_INPUT();
         CARD_CHECK(!local.carriage_stopped && sim.journey.elapsed_subticks > elapsed,
             "Drive must resume journey progress.");
-        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_SET_PACE, CC_JOURNEY_PACE_CAREFUL, false),
-            "Journey pace needs a card.");
+        client_test_pointer_active = false;
+        queued_key_press[KEY_DOWN] = true;
         CARD_INPUT();
-        CARD_CHECK(sim.journey.pace == CC_JOURNEY_PACE_CAREFUL, "The pace card must set the journey posture.");
+        CARD_CHECK(sim.journey.pace == CC_JOURNEY_PACE_CAREFUL, "The pace shortcut must set the journey posture.");
         /* Put this journalled journey at one of its road stops. The simulation
            road-stop suite covers natural arrival, both directions and replay. */
         const CcRoadSite *site = NULL;
@@ -302,6 +297,6 @@ static int RunWorldCardRegression(void)
     (void)remove(path);
 #undef CARD_CHECK
 #undef CARD_INPUT
-    puts("World cards: nearest four, paging, doors, site returns, roads, stop, drive, pace, camp and reload passed");
+    puts("World cards: nearest four, doors, site returns, roads, stop, drive, pace, camp and reload passed");
     return 0;
 }
