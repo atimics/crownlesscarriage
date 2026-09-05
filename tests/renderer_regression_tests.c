@@ -135,6 +135,7 @@ static void WriteViewportFixture(const char *path)
     UnloadImage(shot);
 }
 
+#include "building_cutaway_tests.inc"
 #include "box_batch_tests.inc"
 #include "character_material_captures.inc"
 #include "humanoid_animation_captures.inc"
@@ -144,6 +145,7 @@ static void WriteViewportFixture(const char *path)
 
 int main(int argc, char **argv)
 {
+    TestBuildingRevealTiming();
     TestSkinTurns();
     TestPonyHarnessAttachment();
     if (argc == 3 && (strcmp(argv[1], "--graphics") == 0 ||
@@ -155,6 +157,7 @@ int main(int argc, char **argv)
         SetTraceLogLevel(LOG_WARNING);
         CcLocalRendererInit();
         if (strcmp(argv[1], "--graphics") == 0) {
+            TestRaisedBuildingCutaway(argv[2]);
             TestUploadedMeshRelease();
             TestCharacterPrimitives();
             TestBoxBatchParity();

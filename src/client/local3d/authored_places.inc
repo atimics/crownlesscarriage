@@ -3539,9 +3539,42 @@ static bool WorldBuildingObscuresReveal(const WorldBuilding *building,
 
 typedef struct WorldBuildingRevealState {
     float amount;
-    float occluded_seconds;
-    float clear_seconds;
+    float pending_seconds;
+    bool revealed;
 } WorldBuildingRevealState;
+
+static void UpdateBuildingReveal(WorldBuildingRevealState *state,
+                                  bool occluded, bool reset, float delta_time,
+                                  float clear_delay, float close_response)
+{
+    if (reset) {
+        state->amount = occluded ? 1.0f : 0.0f;
+        state->pending_seconds = 0.0f;
+        state->revealed = occluded;
+        return;
+    }
+    if (delta_time <= 0.0f) return;
+
+    // Hold the current target until the opposite sightline lasts long enough.
+    if (occluded == state->revealed) {
+        state->pending_seconds = 0.0f;
+    } else {
+        state->pending_seconds += delta_time;
+        float delay = occluded ? 0.06f : clear_delay;
+        if (state->pending_seconds >= delay) {
+            state->revealed = occluded;
+            state->pending_seconds = 0.0f;
+        }
+    }
+
+    float destination = state->revealed ? 1.0f : 0.0f;
+    float response = state->revealed ? 8.0f : close_response;
+    float blend = 1.0f - expf(-response * delta_time);
+    state->amount += (destination - state->amount) * blend;
+    if (fabsf(destination - state->amount) < 0.002f) {
+        state->amount = destination;
+    }
+}
 
 static WorldBuildingRevealState world_building_reveals[
     CC_LOCAL_PLACE_BUILDING_CAPACITY];
@@ -3571,32 +3604,7 @@ static void UpdateWorldBuildingReveals(Camera3D camera,
         bool occluded = WorldBuildingObscuresReveal(
             &building, camera, reveal_world,
             render_width, render_height);
-        if (reset) {
-            state->amount = occluded ? 1.0f : 0.0f;
-            state->occluded_seconds = occluded ? 0.06f : 0.0f;
-            state->clear_seconds = occluded ? 0.0f : 0.14f;
-            continue;
-        }
-        if (occluded) {
-            state->occluded_seconds = fminf(
-                0.30f, state->occluded_seconds + delta_time);
-            state->clear_seconds = 0.0f;
-        } else {
-            state->clear_seconds = fminf(
-                0.30f, state->clear_seconds + delta_time);
-            state->occluded_seconds = 0.0f;
-        }
-
-        bool held_reveal = occluded ? state->occluded_seconds >= 0.06f :
-                           state->clear_seconds < 0.14f &&
-                           state->amount > 0.002f;
-        float destination = held_reveal ? 1.0f : 0.0f;
-        float response = destination > state->amount ? 8.0f : 5.0f;
-        float blend = 1.0f - expf(-response * delta_time);
-        state->amount += (destination - state->amount) * blend;
-        if (fabsf(destination - state->amount) < 0.002f) {
-            state->amount = destination;
-        }
+        UpdateBuildingReveal(state, occluded, reset, delta_time, 0.14f, 5.0f);
     }
 }
 
@@ -3625,7 +3633,6 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
         rlPopMatrix();
     }
 
-    float reveal_active = -1.0f;
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         WorldBuilding building = ActiveWorldBuildingAt(i);
         if (!SceneryFootprintVisible(building.footprint, focus)) continue;
@@ -3634,10 +3641,7 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
             i == profile->primary_building &&
             runtime_assets[RUNTIME_ASSET_MARKET].ready) continue;
         float reveal = world_building_reveals[i].amount;
-        if (fabsf(reveal - reveal_active) > 0.001f) {
-            SetWorldForegroundReveal(reveal, reveal_cut_height);
-            reveal_active = reveal;
-        }
+        SetWorldForegroundReveal(reveal, reveal_cut_height);
         rlPushMatrix();
         float building_base = TerrainFootprintHeight(building.footprint);
         rlTranslatef(0.0f, building_base, 0.0f);
@@ -3723,30 +3727,7 @@ static void UpdateCastleStructureReveals(Camera3D camera,
         bool occluded = WorldBuildingObscuresReveal(
             &proxy, camera, reveal_world,
             render_width, render_height);
-        if (reset) {
-            state->amount = occluded ? 1.0f : 0.0f;
-            state->occluded_seconds = occluded ? 0.06f : 0.0f;
-            state->clear_seconds = occluded ? 0.0f : 0.16f;
-            continue;
-        }
-        if (occluded) {
-            state->occluded_seconds = fminf(
-                0.32f, state->occluded_seconds + delta_time);
-            state->clear_seconds = 0.0f;
-        } else {
-            state->clear_seconds = fminf(
-                0.32f, state->clear_seconds + delta_time);
-            state->occluded_seconds = 0.0f;
-        }
-        bool held = occluded ? state->occluded_seconds >= 0.06f :
-                    state->clear_seconds < 0.16f && state->amount > 0.002f;
-        float destination = held ? 1.0f : 0.0f;
-        float response = destination > state->amount ? 8.0f : 4.6f;
-        float blend = 1.0f - expf(-response * delta_time);
-        state->amount += (destination - state->amount) * blend;
-        if (fabsf(destination - state->amount) < 0.002f) {
-            state->amount = destination;
-        }
+        UpdateBuildingReveal(state, occluded, reset, delta_time, 0.16f, 4.6f);
     }
 }
 
@@ -3984,15 +3965,11 @@ static void DrawCastle(const CcSim *sim, const CcSettlement *place,
             footprint.x, footprint.y, footprint.width, footprint.height,
             structure.height, stone);
     }
-    float reveal_active = -1.0f;
     for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
         WorldStructure structure = ActiveCompoundStructureAt(i);
         Color stone = CompoundStoneColor(profile, kingdom, structure.kind);
         float reveal = castle_structure_reveals[i].amount;
-        if (fabsf(reveal - reveal_active) > 0.001f) {
-            SetWorldForegroundReveal(reveal, reveal_cut_height);
-            reveal_active = reveal;
-        }
+        SetWorldForegroundReveal(reveal, reveal_cut_height);
         DrawConstructedCompoundStructure(&structure, stone, kingdom, profile);
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
