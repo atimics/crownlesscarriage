@@ -1,4 +1,5 @@
 #include "client/cc_audio.h"
+#include "client/cc_voice_net.h"
 #include "raylib.h"
 
 #include <stdio.h>
@@ -17,7 +18,17 @@ static struct {
     bool attempted, ready, focused, voice_loaded;
     CcSpeech speech;
     bool has_speech;
+    unsigned char *voice_bytes;
+    uint64_t request_key, generation, request_generation;
+    bool speech_pending;
+    double request_after;
 } audio;
+
+static void CancelRequest(void)
+{
+    ++audio.generation;
+    CcVoiceNetCancel();
+}
 
 static void StopVoice(void)
 {
@@ -26,6 +37,8 @@ static void StopVoice(void)
         UnloadMusicStream(audio.voice);
         audio.voice_loaded = false;
     }
+    free(audio.voice_bytes);
+    audio.voice_bytes = NULL;
 }
 
 static void StopEffects(void)
@@ -66,6 +79,7 @@ void CcAudioInit(void)
 
 void CcAudioShutdown(void)
 {
+    CcVoiceNetShutdown();
     StopVoice();
     if (audio.ready) {
         for (int cue = 0; cue < CC_SOUND_COUNT; ++cue) {
@@ -82,7 +96,11 @@ void CcAudioShutdown(void)
 void CcAudioSetMode(int mode)
 {
     audio.mode = mode >= 0 && mode <= 2 ? mode : 0;
-    if (audio.mode > 0) StopVoice();
+    if (audio.mode > 0) {
+        StopVoice();
+        CancelRequest();
+        audio.speech_pending = false;
+    }
     if (audio.mode == 2) StopEffects();
 }
 
@@ -91,6 +109,8 @@ void CcAudioSetFocused(bool focused)
     if (audio.focused && !focused) {
         StopVoice();
         StopEffects();
+        CancelRequest();
+        audio.speech_pending = false;
     }
     audio.focused = focused;
 }
@@ -146,6 +166,33 @@ void CcAudioVoice(const char *path)
 void CcAudioUpdate(void)
 {
     if (!audio.ready) return;
+    unsigned char *data = NULL;
+    size_t size = 0;
+    int result = CcVoiceNetPoll(&data, &size);
+    if (result != 0) {
+        if (result > 0 && audio.has_speech && audio.speech_pending && audio.focused &&
+            audio.mode == 0 && audio.request_generation == audio.generation &&
+            audio.request_key == audio.speech.audio_key && size <= CC_VOICE_DOWNLOAD_LIMIT) {
+            StopVoice();
+            audio.voice = LoadMusicStreamFromMemory(".wav", data, (int)size);
+            audio.voice_loaded = IsMusicValid(audio.voice);
+            if (audio.voice_loaded) {
+                audio.voice_bytes = data;
+                data = NULL;
+                audio.voice.looping = false;
+                SetMusicVolume(audio.voice, 0.85f);
+                PlayMusicStream(audio.voice);
+            }
+        }
+        if (audio.request_generation == audio.generation) audio.speech_pending = false;
+        free(data);
+    }
+    if (audio.speech_pending && !CcVoiceNetBusy() &&
+        audio.focused && audio.mode == 0 && GetTime() >= audio.request_after) {
+        audio.request_key = audio.speech.audio_key;
+        audio.request_generation = audio.generation;
+        if (!CcVoiceNetStart(&audio.speech)) audio.speech_pending = false;
+    }
     if (audio.voice_loaded) UpdateMusicStream(audio.voice);
     for (int cue = 0; cue < CC_SOUND_COUNT; ++cue) {
         for (int variant = 0; variant < VARIATIONS; ++variant) {
@@ -159,6 +206,8 @@ void CcAudioSpeech(const CcSpeech *speech, const char *path)
 {
     if (speech == NULL || speech->text[0] == '\0') {
         audio.has_speech = false;
+        audio.speech_pending = false;
+        CancelRequest();
         CcAudioVoice(NULL);
         return;
     }
@@ -167,22 +216,37 @@ void CcAudioSpeech(const CcSpeech *speech, const char *path)
         audio.speech.speaker_id == speech->speaker_id) return;
     audio.speech = *speech;
     audio.has_speech = true;
+    CancelRequest();
     /* The same words may come from a different person in the next turn. */
     StopVoice();
     audio.voice_path[0] = '\0';
     CcAudioVoice(path);
+    audio.speech_pending = !audio.voice_loaded && audio.focused && audio.mode == 0;
+    audio.request_after = GetTime() + 0.35;
 }
 
 void CcAudioReplaySpeech(void)
 {
     if (!audio.has_speech) return;
+    if (audio.voice_loaded) {
+        StopMusicStream(audio.voice);
+        if (audio.focused && audio.mode == 0) PlayMusicStream(audio.voice);
+        return;
+    }
     char path[sizeof(audio.voice_path)];
     (void)snprintf(path, sizeof(path), "%s", audio.voice_path);
     audio.voice_path[0] = '\0';
     CcAudioVoice(path);
+    audio.speech_pending = !audio.voice_loaded && audio.focused && audio.mode == 0;
+    audio.request_after = GetTime();
 }
 
-void CcAudioSkipSpeech(void) { StopVoice(); }
+void CcAudioSkipSpeech(void)
+{
+    StopVoice();
+    audio.speech_pending = false;
+    CancelRequest();
+}
 
 const CcSpeech *CcAudioCurrentSpeech(void)
 {

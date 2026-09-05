@@ -293,7 +293,7 @@ if(CC_BUILD_CLIENT)
 
     file(GLOB CC_VOICE_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/voice/*.wav")
     add_executable(crownless_carriage src/client/main.c src/client/cc_audio.c
-                   src/client/cc_music_player.c src/client/cc_music_net.c src/client/cc_coop_client.c)
+                   src/client/cc_music_player.c src/client/cc_music_net.c src/client/cc_voice_net.c src/client/cc_coop_client.c)
     target_compile_definitions(crownless_carriage PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
     if(APPLE)
@@ -550,7 +550,7 @@ if(CC_BUILD_CLIENT)
             SUFFIX ".html"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/site"
             LINK_DEPENDS
-                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CMAKE_CURRENT_SOURCE_DIR}/web/music.js"
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CMAKE_CURRENT_SOURCE_DIR}/web/music.js;${CMAKE_CURRENT_SOURCE_DIR}/web/voice.js"
         )
         target_compile_definitions(crownless_carriage PRIVATE PLATFORM_WEB)
         set_property(TARGET crownless_carriage PROPERTY C_EXTENSIONS ON)
@@ -570,6 +570,7 @@ if(CC_BUILD_CLIENT)
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/music.js"
+            "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/voice.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js"
         )
     elseif(APPLE)
@@ -970,10 +971,20 @@ if(BUILD_TESTING)
         target_link_libraries(audio_playback_tests PRIVATE crownless_soundscape)
         cc_strict_warnings(audio_playback_tests)
         add_test(NAME audio_playback_lifetime COMMAND audio_playback_tests)
+        if(NOT EMSCRIPTEN)
+            add_executable(voice_net_tests tests/voice_net_tests.c src/client/cc_voice_net.c)
+            target_link_libraries(voice_net_tests PRIVATE crownless_story CURL::libcurl Threads::Threads)
+            cc_strict_warnings(voice_net_tests)
+        endif()
     endif()
     if(NOT EMSCRIPTEN)
         find_package(Python3 COMPONENTS Interpreter)
         if(Python3_Interpreter_FOUND)
+            if(CC_BUILD_CLIENT)
+                add_test(NAME native_speech_delivery
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/voice_net_tests.py
+                        $<TARGET_FILE:voice_net_tests>)
+            endif()
             add_test(NAME audio_exports_and_voice_assets
                 COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/audio_export_tests.py
                     $<TARGET_FILE:crownless_audio_export>)
@@ -1057,6 +1068,7 @@ if(BUILD_TESTING)
 
     find_program(CC_NODE_EXECUTABLE node)
     if(CC_NODE_EXECUTABLE)
+        add_test(NAME web_speech_delivery COMMAND ${CC_NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_voice_tests.cjs)
         add_test(NAME browser_persistence_contract
                  COMMAND ${CC_NODE_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_persistence_tests.mjs)
