@@ -457,7 +457,7 @@ class Worlds:
                 require(owed < 1, "The world is catching up. Your company can act when it is ready.", 409)
                 with self.engine.open(saved=row["state"]) as sim:
                     accepted, message = sim.apply(action, target, good, amount)
-                    if accepted:
+                    if accepted and sim.snapshot() != json.loads(row["view"]):
                         self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1,action_revision=action_revision+1 WHERE id=?",
                                         (sim.save(), json.dumps(sim.snapshot()), world))
                     result = {"accepted": accepted, "message": message or "Company action completed.",
