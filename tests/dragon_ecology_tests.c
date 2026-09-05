@@ -263,8 +263,8 @@ int main(void)
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         bane.dragon_campaign.supplies[good] = 400;
     }
-    (void)snprintf(bane.dragon.name, sizeof(bane.dragon.name),
-                   "A dragon with a very long ancient name");
+    memset(bane.dragon.name, 'A', sizeof(bane.dragon.name) - 1);
+    bane.dragon.name[sizeof(bane.dragon.name) - 1] = '\0';
     CcSim legacy_bane = bane;
     legacy_bane.schema_version = 41U;
     CcSimAdvanceDays(&legacy_bane, 1);
