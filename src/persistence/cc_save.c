@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 27
+#define CC_SQLITE_USER_VERSION 28
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -3040,7 +3040,7 @@ static bool SaveJourneyState(sqlite3 *database, const CcSim *sim,
 static bool SaveGossip(sqlite3 *database, const CcSim *sim,
                         char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 42U) return true;
+    if (sim->schema_version < 44U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "INSERT INTO gossip_state VALUES(1,?);",
                   &statement, error, error_capacity)) return false;
@@ -3108,7 +3108,7 @@ static bool SaveGossip(sqlite3 *database, const CcSim *sim,
 static bool ReadGossip(sqlite3 *database, CcSim *sim,
                         char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 42U) return true;
+    if (sim->schema_version < 44U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "SELECT last_event_id FROM gossip_state WHERE id=1;",
                   &statement, error, error_capacity)) return false;
@@ -5849,7 +5849,9 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
 {
     uint32_t legacy_version = sim->schema_version;
     if ((legacy_version == 38U || legacy_version == 39U ||
-         legacy_version == 40U || legacy_version == 41U) && sim->generator_version == 25U) {
+         legacy_version == 40U || legacy_version == 41U ||
+         legacy_version == 42U || legacy_version == 43U) &&
+        sim->generator_version == 25U) {
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }

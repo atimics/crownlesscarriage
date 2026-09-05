@@ -488,7 +488,7 @@ static bool EventIsPinned(const CcSim *sim, CcId event_id,
                           CcId incoming_parent)
 {
     if (event_id == 0U) return false;
-    if (sim->schema_version >= 42U) {
+    if (sim->schema_version >= 44U) {
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
             if (!sim->gossip[i].recorded &&
                 (sim->gossip[i].event_id == event_id ||
@@ -559,7 +559,7 @@ static bool EventIsPinned(const CcSim *sim, CcId event_id,
 static void RedirectEventReference(CcSim *sim, CcId removed_id,
                                    CcId replacement_id)
 {
-    if (sim->schema_version >= 42U) {
+    if (sim->schema_version >= 44U) {
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
             if (sim->gossip[i].heard_event_id == removed_id) {
                 sim->gossip[i].heard_event_id = 0U;
@@ -5561,7 +5561,7 @@ static bool IsNotableGossip(const CcEvent *event)
 
 static void GatherGossip(CcSim *sim)
 {
-    if (sim->schema_version < 42U) return;
+    if (sim->schema_version < 44U) return;
     CcId latest = sim->gossip_last_event_id;
     for (int32_t offset = sim->event_count - 1; offset >= 0; --offset) {
         const CcEvent *event = CcSimRecentEvent(sim, offset);
@@ -5729,7 +5729,7 @@ static void HearGossip(CcSim *sim, CcGossip *story, CcId place_id,
 static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
                             const char *speaker)
 {
-    if (sim->schema_version < 42U) return;
+    if (sim->schema_version < 44U) return;
     int32_t place = SettlementSlotById(sim, place_id);
     if (place < 0 || CcSettlementIsAbandoned(&sim->settlements[place])) return;
     GatherGossip(sim);
@@ -5781,7 +5781,7 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
 
 static void HearLocalGossip(CcSim *sim)
 {
-    if (sim->schema_version < 42U) return;
+    if (sim->schema_version < 44U) return;
     GatherGossip(sim);
     const CcSettlement *place = Scriptorium(sim);
     int32_t slot = place != NULL ? SettlementSlotById(sim, place->id) : -1;
@@ -6098,7 +6098,7 @@ static void AdvanceArchives(CcSim *sim)
     char noted_text[CC_MAX_SCRIBES][CC_EVENT_TEXT_CAPACITY];
     int32_t noted_count = 0;
     HearLocalGossip(sim);
-    if (sim->schema_version >= 42U) {
+    if (sim->schema_version >= 44U) {
         while (noted_count < active_scribes) {
             int32_t oldest = -1;
             for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
@@ -6129,7 +6129,7 @@ static void AdvanceArchives(CcSim *sim)
     }
     int32_t first_day = MaximumI32(1, sim->current_day - 7);
     for (int32_t offset = 0;
-         sim->schema_version < 42U && offset < sim->event_count &&
+         sim->schema_version < 44U && offset < sim->event_count &&
          noted_count < active_scribes;
          ++offset) {
         const CcEvent *event = CcSimRecentEvent(sim, offset);
@@ -6154,7 +6154,7 @@ static void AdvanceArchives(CcSim *sim)
         if (!BindArchiveTome(sim)) break;
         archives->lore_stored += 1;
         archives->last_recorded_day = sim->current_day;
-        if (sim->schema_version >= 42U) {
+        if (sim->schema_version >= 44U) {
             sim->gossip[noted_gossip[i]].recorded = true;
         }
         (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, noted[i],
@@ -17658,12 +17658,16 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 38U ||
                          sim->schema_version == 39U ||
                          sim->schema_version == 40U ||
-                         sim->schema_version == 41U;
+                         sim->schema_version == 41U ||
+                         sim->schema_version == 42U ||
+                         sim->schema_version == 43U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 43U && sim->generator_version == 25U) ||
+        (sim->schema_version == 42U && sim->generator_version == 25U) ||
         (sim->schema_version == 41U && sim->generator_version == 25U) ||
         (sim->schema_version == 40U && sim->generator_version == 25U) ||
         (sim->schema_version == 39U && sim->generator_version == 25U) ||
@@ -17786,7 +17790,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         return false;
     }
     if (!ValidateIdentityState(sim, error, error_capacity)) return false;
-    if (sim->schema_version >= 42U) {
+    if (sim->schema_version >= 44U) {
         uint32_t stories = 0U;
         uint32_t towns = (UINT32_C(1) << (uint32_t)sim->settlement_count) - 1U;
         if (sim->gossip_last_event_id != 0U &&
@@ -20439,7 +20443,7 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(sim->archives.stewardship_rank);
         }
     }
-    if (sim->schema_version >= 42U) {
+    if (sim->schema_version >= 44U) {
         HASH_VALUE(sim->gossip_last_event_id);
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
             const CcGossip *story = &sim->gossip[i];

@@ -526,7 +526,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 27);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 28);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -2541,7 +2541,7 @@ static void CheckShippedSaveCompatibility(char *error,
         {22U, 20U}, {23U, 20U}, {24U, 20U}, {25U, 20U},
         {26U, 21U}, {27U, 21U}, {27U, 22U}, {28U, 22U},
         {29U, 23U}, {30U, 23U}, {31U, 24U}, {32U, 25U},
-        {33U, 25U}, {34U, 25U}, {35U, 25U}
+        {33U, 25U}, {34U, 25U}, {35U, 25U}, {42U, 25U}
     };
     for (size_t i = 0; i < sizeof(fixtures) / sizeof(fixtures[0]); ++i) {
         const ShippedSaveFixture *fixture = &fixtures[i];
@@ -2633,16 +2633,20 @@ static void CheckShippedSaveCompatibility(char *error,
 static void CheckSchema41Upgrade(void)
 {
     const char *path = "schema41-upgrade.ccsave";
-    CcSim legacy, restored;
+    CcSim *legacy = malloc(sizeof(*legacy));
+    CcSim *restored = malloc(sizeof(*restored));
+    CC_CHECK(legacy != NULL && restored != NULL);
     char error[256];
-    CcSimInit(&legacy, 42U);
-    legacy.schema_version = 41U;
-    CcSimAdvanceDays(&legacy, 7);
-    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
-    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
-    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
-    legacy.schema_version = CC_SIM_SCHEMA_VERSION;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&legacy));
+    CcSimInit(legacy, 42U);
+    legacy->schema_version = 41U;
+    CcSimAdvanceDays(legacy, 7);
+    CC_CHECK(CcSaveWrite(path, legacy, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, restored, error, sizeof(error)));
+    CC_CHECK(restored->schema_version == CC_SIM_SCHEMA_VERSION);
+    legacy->schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSimHash(restored) == CcSimHash(legacy));
+    free(restored);
+    free(legacy);
     RemoveDatabase(path);
 }
 
