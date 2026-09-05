@@ -8815,6 +8815,24 @@ static void ReleaseBlockedRoyalCarriage(CcSim *sim,
     carriage->departure_day = sim->current_day;
 }
 
+static void SettleChangedRoyalDestinations(CcSim *sim)
+{
+    if (sim->schema_version < 46U) return;
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+        if (carriage->active_shipment_id == 0U) continue;
+        const CcSettlement *target = CcSimSettlement(sim, carriage->target_id);
+        if (target != NULL && target->kingdom_id == carriage->kingdom_id) continue;
+        for (int32_t j = 0; j < sim->shipment_count; ++j) {
+            CcShipment *shipment = &sim->shipments[j];
+            if (shipment->id == carriage->active_shipment_id) {
+                ReleaseBlockedRoyalCarriage(sim, carriage, shipment, "the destination changed crowns");
+                break;
+            }
+        }
+    }
+}
+
 static bool StartRoyalRepositioningLeg(CcSim *sim,
                                        CcRoyalCarriage *carriage,
                                        CcId target_id)
@@ -13917,6 +13935,7 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
             PlanHoardRaid(sim);
             next_situation_expiry = NextSituationExpiryDay(sim);
         }
+        SettleChangedRoyalDestinations(sim);
         DeliverDelayedEchoIfReady(sim);
     }
 }

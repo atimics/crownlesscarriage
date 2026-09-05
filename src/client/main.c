@@ -10354,7 +10354,7 @@ int main(int argc, char **argv)
 #endif
     bool capture_ux = argc >= 4 && strcmp(argv[1], "--capture-ux") == 0;
     int32_t capture_ux_view = capture_ux ? atoi(argv[2]) : 0;
-    if (capture_ux && (capture_ux_view < 0 || capture_ux_view > 12)) return 1;
+    if (capture_ux && (capture_ux_view < 0 || capture_ux_view > 14)) return 1;
     bool screen_first_hero = true;
     for (int32_t argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--screen-first-hero") == 0) {
@@ -11665,6 +11665,21 @@ int main(int argc, char **argv)
             RepositionHero(&local, (Vector2){local.course.situation_witness.position.x + 1.4f,
                 local.course.situation_witness.position.z + 0.4f}, false);
             view = VIEW_CHARACTER;
+        }
+        if (capture_ux_view == 13 || capture_ux_view == 14) {
+            for (int32_t i = 0; i < sim.character_count; ++i) {
+                const CcCharacter *person = &sim.characters[i];
+                if (person->current_settlement_id != sim.player.location_id ||
+                    person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING || CcCharacterAgeYears(&sim, person) < 16) continue;
+                local.conversation_character_id = person->id;
+                local.conversation_situation_id = 0U;
+                local.conversation_gossip_source = capture_ux_view == 14;
+                char capture_error[192];
+                if (!ApplyCommand(NULL, &sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
+                    .target_id = person->id}, capture_error, sizeof(capture_error))) return 1;
+                view = VIEW_CHARACTER;
+                break;
+            }
         }
         if (capture_ux_view == 3) { view = VIEW_TRADE; local.trade_good = CC_GOOD_FOOD; local.trade_quantity = 2; }
         if (capture_ux_view == 4) { view = VIEW_LEDGER; local.book_page = 3; }

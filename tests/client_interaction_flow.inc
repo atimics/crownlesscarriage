@@ -76,6 +76,20 @@ static int RunAdventureInputRegression(void)
     UX_KEY(share_key);
     UX_CHECK(!local.conversation_gossip_source && CcSimHash(&sim) == heard,
         "A repeated exchange must keep the same remembered account.");
+    local.conversation_gossip_source = false;
+    replies = BuildContextActions(&sim, &local, view, selected, selected_situation);
+    Rectangle source_card = ContextActionBounds(0, ContextCardCount(replies.count, 0));
+    client_test_pointer_active = true;
+    client_test_pointer = (Vector2){source_card.x + source_card.width * 0.5f,
+        source_card.y + source_card.height * 0.5f};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+    HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view, &local,
+        (RenderTexture2D){0}, (Rectangle){0}, 1.0f / 60.0f, path, "", message, sizeof(message),
+        feedback, sizeof(feedback), &feedback_age);
+    client_test_pointer_active = false;
+    ClientInputClearPressed();
+    UX_CHECK(local.conversation_gossip_source && CcSimHash(&sim) == heard,
+        "The source card must match the keyboard reply.");
     UX_KEY(KEY_ESCAPE);
     local.course.alarm_active = false;
     local.course.automatic_alarm = false;
