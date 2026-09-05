@@ -1834,6 +1834,16 @@ void CcLocalCreatureGaitsFixedStepInternal(float delta_time)
         CcLimbVec3 previous = cache->controller.ground_position;
         float fraction = cache->pending_seconds > delta_time ?
             delta_time / cache->pending_seconds : 1.0f;
+        /* Smoothing the approach is right while the team is walking. Across a
+           jump it is not: a carriage crossing between the town and the road
+           moves further in one frame than a pony could walk, and feeding the
+           rig a slowly advancing target left it trailing the drawn carriage by
+           tens of units. Hand a jump straight through so the controller's own
+           reframe carries the pose over intact, rather than re-seating the rig
+           here and losing the gait with it. */
+        float jump = Vector3Distance(
+            FromLimbVector(command.ground_position), FromLimbVector(previous));
+        if (jump > CC_CREATURE_GAIT_TELEPORT_RANGE) fraction = 1.0f;
         command.ground_position = (CcLimbVec3){
             previous.x + (command.ground_position.x - previous.x) * fraction,
             previous.y + (command.ground_position.y - previous.y) * fraction,
@@ -1885,20 +1895,9 @@ bool CcLocalCreatureGaitPoseInternal(
     if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || pose == NULL ||
         !isfinite(clock) || !isfinite(scale) || scale <= 0.0f) return false;
     CreatureGaitCache *cache = &creature_gaits[slot];
-    /* The rig walks toward its commanded ground position a fraction at a time,
-       which is right for motion and wrong for a jump. A carriage crossing
-       between the town and the road moves its team further in one frame than
-       a pony could walk, and the scene id does not change with it, so the rig
-       spent the next frames trailing tens of units behind the drawn carriage
-       and the pose was read out that far from the model. Treat a jump as a
-       teleport and re-seat the rig where the carriage actually is. */
-    float jump = cache->ready ? Vector3Distance(
-        ground_position, FromLimbVector(cache->controller.ground_position)) :
-        0.0f;
     bool reset = !cache->ready || cache->profile != profile ||
         cache->scene != scene || cache->scale != scale || clock < cache->last_clock ||
-        clock - cache->last_clock > 0.35f ||
-        jump > CC_CREATURE_GAIT_TELEPORT_RANGE;
+        clock - cache->last_clock > 0.35f;
     if (reset) {
         *cache = (CreatureGaitCache){0};
         if (!CcCreatureRigControllerInit(&cache->controller, profile,
