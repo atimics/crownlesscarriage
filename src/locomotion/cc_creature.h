@@ -41,6 +41,7 @@ typedef struct CcCreatureRigPose {
     CcLimbVec3 forward;
     CcLimbVec3 right;
     CcLimbVec3 support_normal;
+    CcLimbVec3 up;
     float body_width;
     float body_depth;
     float body_length;
@@ -58,6 +59,7 @@ typedef struct CcCreatureRigPose {
     int32_t biomech_muscle_count;
     CcCreatureRigProfile profile;
     CcLimbSupportState support_state;
+    bool world_contacts;
     bool valid;
 } CcCreatureRigPose;
 
@@ -100,6 +102,11 @@ bool CcCreatureRigControllerStepWorld(
     CcCreatureRigController *controller,
     const CcCreatureRigWorldCommand *command, float delta_time,
     CcLimbTerrainProbe probe, void *probe_context,
+    CcCreatureRigPose *pose);
+bool CcCreatureRigControllerStepWorldPhysical(
+    CcCreatureRigController *controller, const CcCreatureRigWorldCommand *command,
+    float delta_time, CcLimbTerrainProbe probe,
+    CcBiomechRagdollCollisionProbe collision, void *probe_context,
     CcCreatureRigPose *pose);
 const char *CcCreatureRigProfileName(CcCreatureRigProfile profile);
 const char *CcCreatureRigGaitName(CcCreatureRigGait gait);

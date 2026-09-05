@@ -96,6 +96,7 @@ typedef struct CcHumanoidFoot {
     float yaw;
     float swing_start_yaw;
     float swing_target_yaw;
+    float swing_lift;
 } CcHumanoidFoot;
 
 typedef struct CcHumanoidPose {

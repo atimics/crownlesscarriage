@@ -121,6 +121,30 @@ static void ResolveBone(CcQuadrupedPose *pose, CcQuadrupedBone bone,
     result->parent = CcQuadrupedBoneParent(bone);
 }
 
+bool CcQuadrupedConfigureRig(CcQuadrupedMorphology morphology, CcLimbMorphology *rig)
+{
+    if (rig == NULL || rig->limb_count != 4 || morphology < 0 ||
+        morphology >= CC_QUADRUPED_MORPHOLOGY_COUNT) return false;
+    const CcQuadrupedProfile *profile = &PROFILES[morphology];
+    rig->body_height = profile->body_height;
+    for (int32_t leg = 0; leg < 4; ++leg) {
+        float height = profile->body_height - (leg < 2 ? 0.08f : 0.10f) - 0.10f;
+        float upper_height = height * 0.5f - 0.02f;
+        float lower_height = height * 0.5f + 0.02f;
+        CcLimbSpec *spec = &rig->limbs[leg];
+        spec->socket_local = (CcLimbVec3){
+            (leg & 1) == 0 ? -profile->half_width : profile->half_width,
+            height - profile->body_height,
+            leg < 2 ? profile->front_leg_forward : profile->hind_leg_back};
+        spec->rest_contact_local = spec->socket_local;
+        spec->rest_contact_local.y = -profile->body_height;
+        spec->segment_length[0] = sqrtf(upper_height * upper_height + 0.01f);
+        spec->segment_length[1] = sqrtf(lower_height * lower_height + 0.01f);
+        spec->segment_count = 2;
+    }
+    return true;
+}
+
 static void ResolveLeg(CcQuadrupedPose *pose, int32_t leg,
                        const CcQuadrupedProfile *profile, float body_height,
                        const CcCreatureRigPose *rig_rest,
@@ -151,7 +175,14 @@ static void ResolveLeg(CcQuadrupedPose *pose, int32_t leg,
         0.5f * (root.y + hoof.y) + 0.02f,
         0.5f * (root.z + hoof.z) + bend,
     };
-    if (rig_rest != NULL && rig_target != NULL) {
+    if (rig_target != NULL && rig_target->world_contacts) {
+        CcLimbVec3 offset = {rig_target->up.x * 0.10f,
+                             rig_target->up.y * 0.10f,
+                             rig_target->up.z * 0.10f};
+        root = Add(rig_target->limbs[leg].joints[0], offset);
+        knee = Add(rig_target->limbs[leg].joints[1], offset);
+        hoof = Add(rig_target->limbs[leg].joints[2], offset);
+    } else if (rig_rest != NULL && rig_target != NULL) {
         root = Add(root, Subtract(rig_target->limbs[leg].joints[0],
                                   rig_rest->limbs[leg].joints[0]));
         knee = Add(knee, Subtract(rig_target->limbs[leg].joints[1],
@@ -159,8 +190,13 @@ static void ResolveLeg(CcQuadrupedPose *pose, int32_t leg,
         hoof = Add(hoof, Subtract(rig_target->limbs[leg].joints[2],
                                   rig_rest->limbs[leg].joints[2]));
     }
-    CcLimbVec3 hoof_tail = {hoof.x, hoof.y - 0.015f,
-                            hoof.z + 0.20f};
+    CcLimbVec3 hoof_tail = {hoof.x, hoof.y - 0.015f, hoof.z + 0.20f};
+    if (rig_target != NULL && rig_target->world_contacts) {
+        hoof_tail = Add(hoof, (CcLimbVec3){
+            rig_target->forward.x * 0.20f - rig_target->up.x * 0.015f,
+            rig_target->forward.y * 0.20f - rig_target->up.y * 0.015f,
+            rig_target->forward.z * 0.20f - rig_target->up.z * 0.015f});
+    }
     ResolveBone(pose, upper_bones[leg], root, knee);
     ResolveBone(pose, lower_bones[leg], knee, hoof);
     ResolveBone(pose, hoof_bones[leg], hoof, hoof_tail);
@@ -279,6 +315,22 @@ static void ResolveFromRig(CcQuadrupedMorphology morphology,
     tail_end.y += bob + breath;
     ResolveBone(result, CC_QUADRUPED_TAIL_ROOT, tail_base, tail_mid);
     ResolveBone(result, CC_QUADRUPED_TAIL, tail_mid, tail_end);
+    if (rig_target->world_contacts) {
+        for (int32_t bone = 0; bone < CC_QUADRUPED_BONE_COUNT; ++bone) {
+            if (bone >= CC_QUADRUPED_UPPER_LEG_FL && bone <= CC_QUADRUPED_HOOF_HR) continue;
+            CcQuadrupedBonePose *b = &result->bones[bone];
+            CcLimbVec3 points[2] = {b->head, b->tail};
+            for (int32_t i = 0; i < 2; ++i) {
+                CcLimbVec3 p = points[i];
+                p.y -= profile->body_height;
+                points[i] = Add(rig_target->body, (CcLimbVec3){
+                    p.x * rig_target->right.x + p.y * rig_target->up.x + p.z * rig_target->forward.x,
+                    p.x * rig_target->right.y + p.y * rig_target->up.y + p.z * rig_target->forward.y,
+                    p.x * rig_target->right.z + p.y * rig_target->up.z + p.z * rig_target->forward.z});
+            }
+            ResolveBone(result, (CcQuadrupedBone)bone, points[0], points[1]);
+        }
+    }
     result->valid = true;
 }
 
