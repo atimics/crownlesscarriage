@@ -2,6 +2,7 @@
 #define CROWNLESS_LOCAL3D_INTERNAL_H
 
 #include "client/cc_local3d.h"
+#include "locomotion/cc_creature.h"
 
 typedef enum CcLocalFaceLodInternal {
     CC_LOCAL_FACE_LOD_SILHOUETTE,
@@ -29,6 +30,10 @@ typedef struct CcLocalTerrainMeshStatsInternal {
 void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                                    bool market_interior);
 void CcLocalCreatureGaitsFixedStepInternal(float delta_time);
+bool CcLocalCreatureGaitPoseInternal(int32_t slot, CcCreatureRigProfile profile,
+    CcCreatureRigGait gait, float clock, float initial_phase,
+    Vector3 ground_position, float yaw, float scale, CcLocalSceneKind scene,
+    CcCreatureRigPose *pose);
 void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
                                     CcLocalAgent *player,
                                     const CcSim *sim, float delta_time);

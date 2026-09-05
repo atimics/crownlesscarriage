@@ -108,7 +108,6 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock, float
             CC_CREATURE_RIG_GAIT_TROT : CC_CREATURE_RIG_GAIT_WALK;
     bool moving = convoy_gait != CC_CLIENT_CONVOY_GAIT_HALT;
     float cadence = CcClientConvoyGaitCadence(convoy_gait);
-    float forward_speed = moving ? 0.50f + pace * 1.45f : 0.0f;
     CcCreaturePose left_pose = CcCreatureSteppedPose(
         CC_CREATURE_HORSE, clock * cadence, moving);
     CcCreaturePose right_pose = CcCreatureSteppedPose(
@@ -136,9 +135,9 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock, float
         CcCreatureRigPose controlled_pose;
         CreatureGaitSlot slot = horse < 0 ? CREATURE_GAIT_ROAD_HORSE_LEFT :
                                             CREATURE_GAIT_ROAD_HORSE_RIGHT;
-        bool controlled = ResolveControlledCreatureGait(
-            slot, CC_CREATURE_RIG_HORSE, rig_gait, clock,
-            horse < 0 ? 0.0f : 0.5f, forward_speed, moving,
+        bool controlled = CcLocalCreatureGaitPoseInternal(
+            (int32_t)slot, CC_CREATURE_RIG_HORSE, rig_gait, clock,
+            horse < 0 ? 0.0f : 0.5f,
             horse_base, yaw, 0.96f, CC_LOCAL_SCENE_ROAD,
             &controlled_pose);
         (void)DrawCreatureGait3D(
@@ -943,10 +942,10 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         CcCreaturePose cow_pose = CcCreatureSteppedPose(
             CC_CREATURE_COW, clock * 1.55f, travelling);
         CcCreatureRigPose controlled_cow;
-        bool controlled = ResolveControlledCreatureGait(
+        bool controlled = CcLocalCreatureGaitPoseInternal(
             CREATURE_GAIT_ROAD_COW, CC_CREATURE_RIG_COW,
             CC_CREATURE_RIG_GAIT_WALK, clock,
-            0.18f, 0.62f, travelling, cow_position,
+            0.18f, cow_position,
             -0.72f * PI, 0.88f, CC_LOCAL_SCENE_ROAD, &controlled_cow);
         (void)DrawCreatureGait3D(
             CC_CREATURE_COW, cow_pose, cow_position,
@@ -1670,10 +1669,10 @@ static void DrawSettlementCreatures(const CcSim *sim,
         CcCreaturePose cow_pose = CcCreatureSteppedPose(
             CC_CREATURE_COW, clock * 1.25f, true);
         CcCreatureRigPose controlled_cow;
-        bool controlled = ResolveControlledCreatureGait(
+        bool controlled = CcLocalCreatureGaitPoseInternal(
             CREATURE_GAIT_STREET_COW, CC_CREATURE_RIG_COW,
             CC_CREATURE_RIG_GAIT_WALK, clock,
-            0.34f, 0.48f, true, TerrainWorldPoint(63.0f, 38.3f),
+            0.34f, TerrainWorldPoint(63.0f, 38.3f),
             0.72f * PI, 0.84f, CC_LOCAL_SCENE_STREET, &controlled_cow);
         (void)DrawCreatureGait3D(
             CC_CREATURE_COW, cow_pose,

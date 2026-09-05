@@ -74,10 +74,15 @@ bool CcFootingPlanSwing(CcLimbVec3 start, CcLimbVec3 target,
     for (int32_t i = 1; i < samples; ++i) {
         float t = (float)i / (float)samples;
         CcLimbVec3 line = CcFootingSwingPoint(start, target, t, 0.0f);
-        CcLimbVec3 surface;
+        CcLimbVec3 surface = line;
         CcLimbVec3 normal;
-        if (CcFootingProbe(terrain, context, line, fmaxf(2.0f, maximum_lift * 4.0f),
-                           maximum_lift, &surface, &normal)) {
+        CcLimbVec3 origin = line;
+        float rise = fmaxf(2.0f, maximum_lift * 4.0f);
+        origin.y += rise;
+        /* Steep faces also need clearance, even when they cannot support a foot. */
+        bool found = terrain == NULL ||
+            terrain(context, origin, rise + maximum_lift, &surface, &normal);
+        if (found && Finite(surface)) {
             float arch = sinf(t * 3.14159265358979323846f);
             clearance = fmaxf(clearance, (surface.y - line.y) / arch + radius);
         }

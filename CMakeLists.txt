@@ -1407,6 +1407,11 @@ if(BUILD_TESTING)
             USES_TERMINAL
         )
 
+        add_executable(creature_frame_tests tests/creature_frame_tests.c)
+        target_link_libraries(creature_frame_tests PRIVATE crownless_local_renderer raylib)
+        cc_strict_warnings(creature_frame_tests)
+        add_test(NAME fixed_creature_gait_timing COMMAND creature_frame_tests)
+
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c
         )

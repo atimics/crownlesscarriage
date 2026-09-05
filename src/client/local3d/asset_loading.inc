@@ -305,6 +305,7 @@ typedef struct CreatureGaitCache {
     float scale;
     float last_clock;
     float pending_seconds;
+    CcCreatureRigGait requested_gait;
     bool ready;
 } CreatureGaitCache;
 
@@ -1850,6 +1851,7 @@ void CcLocalCreatureGaitsFixedStepInternal(float delta_time)
             (CcLimbVec3){command.ground_position.x,
                 command.ground_position.y + 0.15f * cache->scale,
                 command.ground_position.z}, 0.30f * cache->scale, &ground, &normal);
+        (void)CcCreatureRigControllerSetGait(&cache->controller, cache->requested_gait);
         (void)CcCreatureRigControllerStepWorldPhysical(&cache->controller, &command,
             delta_time, ProbeLocalSurface, ProbeLocalCollision, &context, &cache->pose);
     }
@@ -1871,16 +1873,14 @@ static CcLimbVec3 CreaturePoseDirectionForDraw(CcLimbVec3 v, float yaw)
                         -v.x * sinf(yaw) + v.z * cosf(yaw)};
 }
 
-static bool ResolveControlledCreatureGait(
-    CreatureGaitSlot slot, CcCreatureRigProfile profile,
+bool CcLocalCreatureGaitPoseInternal(
+    int32_t slot, CcCreatureRigProfile profile,
     CcCreatureRigGait gait, float clock, float initial_phase,
-    float forward_speed, bool moving, Vector3 ground_position,
+    Vector3 ground_position,
     float yaw, float scale, CcLocalSceneKind scene, CcCreatureRigPose *pose)
 {
     if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || pose == NULL ||
         !isfinite(clock) || !isfinite(scale) || scale <= 0.0f) return false;
-    (void)forward_speed;
-    (void)moving;
     CreatureGaitCache *cache = &creature_gaits[slot];
     bool reset = !cache->ready || cache->profile != profile ||
         cache->scene != scene || cache->scale != scale || clock < cache->last_clock ||
@@ -1899,7 +1899,7 @@ static bool ResolveControlledCreatureGait(
         .ground_position = ToLimbVector(ground_position), .yaw = yaw, .grounded = true};
     if (!reset) cache->pending_seconds += fminf(0.10f, clock - cache->last_clock);
     cache->last_clock = clock;
-    (void)CcCreatureRigControllerSetGait(&cache->controller, gait);
+    cache->requested_gait = gait;
     if (reset) {
         LocalProbeContext context = {.scene = scene};
         if (!CcCreatureRigControllerStepWorldPhysical(&cache->controller,

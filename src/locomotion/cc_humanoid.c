@@ -1643,18 +1643,39 @@ static CcLimbVec3 PlanFootTarget(const CcHumanoidGait *gait, int32_t leg,
     CcLimbVec3 momentum_forward = HorizontalMomentumDirection(
         gait, travel_forward);
     float momentum_alignment = Dot(momentum_forward, travel_forward);
-    CcLimbVec3 forward = momentum_alignment < 0.985f ? momentum_forward :
-                                                        travel_forward;
+    /* A slip should place the next foot along the requested route. */
+    CcLimbVec3 forward = momentum_alignment >= 0.0f && momentum_alignment < 0.985f ?
+        momentum_forward : travel_forward;
     CcLimbVec3 right = Right(gait->travel_yaw);
     float side = leg == 0 ? -1.0f : 1.0f;
     float preview_seconds = (0.38f + 0.31f) /
                             fmaxf(0.70f, gait->cadence);
-    float lead = Clamp(gait->speed.value * preview_seconds *
+    float placement_speed = fmaxf(gait->speed.value, gait->requested_speed * 0.60f);
+    float lead = Clamp(placement_speed * preview_seconds *
                        gait->walk_stride_scale, 0.12f, 0.96f);
-    lead *= Smooth01(gait->speed.value / 0.24f);
+    lead *= Smooth01(placement_speed / 0.24f);
     CcLimbVec3 desired = Add(body_position, Scale(forward, lead));
     desired = Add(desired, Scale(right, side * 0.135f));
-    return ProbeGround(desired, body_position, probe, probe_context, normal);
+    CcLimbVec3 best = ProbeGround(desired, body_position, probe, probe_context, normal);
+    if (probe == NULL || normal->y >= 0.85f) return best;
+    /* Prefer a nearby level patch when the nominal foothold is on a steep face. */
+    float score = normal->y;
+    for (int32_t sample = 1; sample <= 3; ++sample) {
+        float offset = (float)sample * 0.08f;
+        CcLimbVec3 candidate = Add(desired, Scale(travel_forward, offset));
+        CcLimbVec3 point;
+        CcLimbVec3 up;
+        candidate.y = body_position.y;
+        if (!CcFootingProbe(probe, probe_context, candidate, 0.65f, 0.45f, &point, &up)) continue;
+        CcLimbVec3 reach = Subtract(point, body_position);
+        float candidate_score = up.y - offset * 0.15f;
+        if (reach.x * reach.x + reach.z * reach.z <= 0.85f * 0.85f && candidate_score > score) {
+            best = point;
+            *normal = up;
+            score = candidate_score;
+        }
+    }
+    return best;
 }
 
 static void BeginSwing(CcHumanoidGait *gait, int32_t leg,
@@ -1677,7 +1698,7 @@ static void BeginSwing(CcHumanoidGait *gait, int32_t leg,
                                  1.0f - (float)attempt * 0.25f);
         target = ProbeGround(target, body_position, probe, probe_context, &foot->normal);
         if (CcFootingContactValid(probe, probe_context, target, 0.015f, &foot->normal) &&
-            CcFootingPlanSwing(foot->swing_start, target, base_lift, 0.38f,
+            CcFootingPlanSwing(foot->swing_start, target, base_lift, 0.55f,
                                0.02f, probe, collision, probe_context, &foot->swing_lift)) {
             foot->swing_target = target;
             return;
@@ -1730,6 +1751,23 @@ static void UpdateFoot(CcHumanoidGait *gait, int32_t leg, float old_phase,
     foot->contact = ContactForPhase(local);
     if (foot->contact == CC_HUMANOID_CONTACT_SWING) {
         float swing = Clamp((local - 0.62f) / 0.38f, 0.0f, 1.0f);
+        CcLimbVec3 revised_normal = foot->normal;
+        CcLimbVec3 revised_target = PlanFootTarget(gait, leg, body_position,
+            probe, probe_context, &revised_normal);
+        float revision_window = 1.0f - Smooth01((swing - 0.68f) / 0.28f);
+        float revision = (1.0f - expf(-11.0f * delta_time)) * revision_window;
+        CcLimbVec3 target = Lerp(foot->swing_target, revised_target, revision);
+        target = ProbeGround(target, body_position, probe, probe_context, &revised_normal);
+        float revised_lift = foot->swing_lift;
+        if (CcFootingContactValid(probe, probe_context, target, 0.015f, &revised_normal) &&
+            CcFootingPlanSwing(foot->swing_start, target, foot->swing_lift,
+                0.55f, 0.02f, probe, collision, probe_context, &revised_lift)) {
+            foot->swing_target = target;
+            foot->swing_lift = revised_lift;
+            foot->normal = revised_normal;
+            foot->swing_target_yaw = WrapAngle(foot->swing_target_yaw +
+                WrapAngle(body_yaw - foot->swing_target_yaw) * revision);
+        }
         float travel = SwingProgress(swing);
         foot->yaw = WrapAngle(foot->swing_start_yaw +
             WrapAngle(foot->swing_target_yaw - foot->swing_start_yaw) * travel);
@@ -3223,6 +3261,7 @@ void CcHumanoidGaitAdvancePhysical(
     gait->body.root.position.z = body_position.z;
     float desired_speed = sqrtf(desired_velocity.x * desired_velocity.x +
                                 desired_velocity.z * desired_velocity.z);
+    gait->requested_speed = desired_speed;
     if (gait->idle.stable && desired_speed > CC_HUMANOID_IDLE_EXIT_SPEED) {
         ReleaseStableIdle(gait);
     }
@@ -3366,7 +3405,8 @@ void CcHumanoidGaitAdvancePhysical(
             swing_in_progress = true;
         }
     }
-    float motion = Smooth01(gait->speed.value / 0.24f);
+    float motion = fmaxf(Smooth01(gait->speed.value / 0.24f),
+                          0.35f * Smooth01(desired_speed / 0.24f));
     if (turning) motion = fmaxf(motion, 0.55f);
     if (swing_in_progress) motion = fmaxf(motion, 0.38f);
     if (grounded && !gait->idle.stable) {

@@ -173,11 +173,79 @@ static void Clearance(void)
             "high obstacle should require another step target");
 }
 
+static void MovingCourse(void)
+{
+    const CcCreatureRigProfile profiles[] = {CC_CREATURE_RIG_HORSE, CC_CREATURE_RIG_HEXAPOD};
+    Terrain terrain = {.slope = 0.12f, .curb = 0.12f};
+    for (int32_t profile = 0; profile < 2; ++profile) {
+        CcCreatureRigController c;
+        CcCreatureRigPose pose;
+        Require(CcCreatureRigControllerInit(&c, profiles[profile], 0.0f, 1.0f), "course init failed");
+        CcCreatureRigWorldCommand command = {
+            .ground_position = {7.0f, Height(&terrain, -0.5f), -0.5f}, .grounded = true};
+        int32_t locked_frames = 0;
+        for (int32_t frame = 0; frame < 600; ++frame) {
+            CcLimbRuntime before[CC_CREATURE_RIG_MAX_LIMBS];
+            for (int32_t i = 0; i < c.skeleton.morphology.limb_count; ++i) before[i] = c.skeleton.limbs[i];
+            float time = (float)frame / 60.0f;
+            command.velocity = time < 6.0f ?
+                (CcLimbVec3){0.12f * cosf(time * 0.5f), 0.0f, 0.4f} :
+                (CcLimbVec3){0.0f, 0.0f, 0.0f};
+            command.ground_position.x += command.velocity.x / 60.0f;
+            command.ground_position.z += command.velocity.z / 60.0f;
+            command.ground_position.y = Height(&terrain, command.ground_position.z);
+            if (time < 6.0f) command.yaw = atan2f(command.velocity.x, command.velocity.z);
+            command.movement = time < 6.0f ? 1.0f : 0.0f;
+            Require(CcCreatureRigControllerStepWorld(&c, &command, 1.0f/60.0f,
+                Probe, &terrain, &pose), "moving course step failed");
+            CheckSegments(&c.skeleton);
+            for (int32_t i = 0; i < pose.limb_count; ++i) {
+                const CcLimbRuntime *limb = &c.skeleton.limbs[i];
+                if (limb->state != CC_LIMB_STANCE) continue;
+                Require(fabsf(limb->planted_contact.y - Height(&terrain, limb->planted_contact.z)) < 0.002f,
+                        "moving creature planted between terrain surfaces");
+                if (frame > 0 && before[i].state == CC_LIMB_STANCE) {
+                    Require(Distance(before[i].planted_contact, limb->planted_contact) < 0.01f,
+                            "course stance foot slid more than one centimeter");
+                    ++locked_frames;
+                }
+            }
+        }
+        Require(locked_frames > 1000 && pose.planted_count == pose.limb_count,
+                "creature should finish the course standing on planted feet");
+    }
+    CcHumanoidGait human;
+    CcLimbVec3 body = {7.0f, Height(&terrain, -0.5f), -0.5f};
+    CcHumanoidGaitInit(&human, body, 0.0f, Probe, &terrain);
+    int32_t supported_frames = 0;
+    for (int32_t frame = 0; frame < 600; ++frame) {
+        float time = (float)frame / 60.0f;
+        CcLimbVec3 velocity = {0.0f, 0.0f, time < 6.0f ? 0.4f : 0.0f};
+        CcHumanoidGaitAdvance(&human, body, 0.0f, velocity, true, 1.0f/60.0f, Probe, &terrain);
+        body.x += human.root_velocity.x / 60.0f;
+        body.z += human.root_velocity.z / 60.0f;
+        body.y = Height(&terrain, body.z);
+        CcHumanoidGaitConstrainMotion(&human, body, human.root_velocity, true);
+        CcHumanoidGaitResolvePose(&human, body, 0.0f);
+        Require(!human.ragdoll.active, "human lost balance on the walking course");
+        for (int32_t leg = 0; leg < 2; ++leg) {
+            CcHumanoidFoot *foot = &human.feet[leg];
+            if (foot->contact == CC_HUMANOID_CONTACT_SWING || foot->contact == CC_HUMANOID_CONTACT_AIR) continue;
+            Require(fabsf(foot->current_point.y - Height(&terrain, foot->current_point.z)) < 0.002f,
+                    "human planted foot missed the terrain");
+            ++supported_frames;
+        }
+    }
+    Require(supported_frames > 600 && human.idle.stable,
+            "human should finish the course in a planted idle pose");
+}
+
 int main(void)
 {
     LostSupport();
     SlopeAndSkin();
     Clearance();
+    MovingCourse();
     puts("verified footing course passed");
     return 0;
 }
