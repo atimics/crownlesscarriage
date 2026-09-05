@@ -125,6 +125,10 @@ stay in the source tree for the generation worker. Each cast receipt records
 its description, model, seed, text, and WAV fingerprint. Each speech receipt
 links to that reference fingerprint and records the voice texture step.
 
+The asset inventory allows 20 MiB for the voice pack, including receipts,
+with at most 16 cast references and 128 campaign clips. Art and music keep
+their own size limits. `make art-assets-check` checks all three budgets.
+
 The references were generated from the descriptions in `cast.json` with
 [Qwen3-TTS VoiceDesign](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign).
 Dialogue was generated with [Chatterbox](https://github.com/resemble-ai/chatterbox)
