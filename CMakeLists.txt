@@ -1148,6 +1148,12 @@ if(BUILD_TESTING)
     target_link_libraries(persistence_tests PRIVATE crownless_persistence)
     target_compile_definitions(persistence_tests PRIVATE
         CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    # Keep each migration fixture's large simulation states in its own frame.
+    if(MSVC)
+        target_compile_options(persistence_tests PRIVATE /Ob0)
+    else()
+        target_compile_options(persistence_tests PRIVATE -fno-inline)
+    endif()
     cc_strict_warnings(persistence_tests)
     add_test(NAME sqlite_round_trip COMMAND persistence_tests)
 
