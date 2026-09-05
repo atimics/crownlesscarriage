@@ -139,6 +139,7 @@ static void WriteViewportFixture(const char *path)
 #include "character_material_captures.inc"
 #include "character_surface_tests.inc"
 #include "animal_captures.inc"
+#include "mesh_memory_tests.inc"
 
 int main(int argc, char **argv)
 {
@@ -150,6 +151,7 @@ int main(int argc, char **argv)
         SetTraceLogLevel(LOG_WARNING);
         CcLocalRendererInit();
         if (strcmp(argv[1], "--graphics") == 0) {
+            TestUploadedMeshRelease();
             TestCharacterPrimitives();
             TestBoxBatchParity();
             TestBoxStateParity();

@@ -696,6 +696,7 @@ static float TerrainWithoutRoads(const CcWorldManifest *manifest,
 
 static float NearestRoadDistance(const CcWorldManifest *manifest,
                                  CcWorldPoint point,
+                                 float maximum_distance,
                                  const CcWorldRoutePlacement **nearest_route,
                                  CcWorldPoint *nearest_point)
 {
@@ -703,21 +704,29 @@ static float NearestRoadDistance(const CcWorldManifest *manifest,
     if (nearest_point != NULL) *nearest_point = (CcWorldPoint){0};
     if (manifest == NULL) return FLT_MAX;
     float nearest = FLT_MAX;
+    float minimum_x = point.x - maximum_distance;
+    float maximum_x = point.x + maximum_distance;
+    float minimum_z = point.z - maximum_distance;
+    float maximum_z = point.z + maximum_distance;
     for (int32_t route_index = 0;
          route_index < manifest->route_count; ++route_index) {
         const CcWorldRoutePlacement *route = &manifest->routes[route_index];
         for (int32_t sample = 0;
-             sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
+         sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
+            CcWorldPoint first = route->samples[sample];
+            CcWorldPoint second = route->samples[sample + 1];
+            /* Terrain and surface queries only need roads within their reach. */
+            if ((first.x < minimum_x && second.x < minimum_x) ||
+                (first.x > maximum_x && second.x > maximum_x) ||
+                (first.z < minimum_z && second.z < minimum_z) ||
+                (first.z > maximum_z && second.z > maximum_z)) continue;
             float segment_amount = 0.0f;
             float distance = DistanceToSegment(
-                point, route->samples[sample], route->samples[sample + 1],
-                &segment_amount);
+                point, first, second, &segment_amount);
             if (distance >= nearest) continue;
             nearest = distance;
             if (nearest_route != NULL) *nearest_route = route;
             if (nearest_point != NULL) {
-                CcWorldPoint first = route->samples[sample];
-                CcWorldPoint second = route->samples[sample + 1];
                 *nearest_point = (CcWorldPoint){
                     first.x + (second.x - first.x) * segment_amount,
                     first.z + (second.z - first.z) * segment_amount,
@@ -735,7 +744,8 @@ float CcWorldTerrainHeight(const CcWorldManifest *manifest, float x, float z)
     const CcWorldRoutePlacement *route = NULL;
     CcWorldPoint center = {0};
     float distance = NearestRoadDistance(
-        manifest, (CcWorldPoint){x, z}, &route, &center);
+        manifest, (CcWorldPoint){x, z}, CC_WORLD_ROAD_HALF_WIDTH + 3.5f,
+        &route, &center);
     if (route != NULL && distance < CC_WORLD_ROAD_HALF_WIDTH + 3.5f) {
         float road_height = TerrainWithoutRoads(manifest, center.x, center.z);
         float weight = 1.0f - SmoothStep(
@@ -756,7 +766,7 @@ CcWorldSurfaceKind CcWorldSurfaceAt(
         return CC_WORLD_SURFACE_SETTLEMENT;
     }
     float road_distance = NearestRoadDistance(
-        manifest, (CcWorldPoint){x, z}, NULL, NULL);
+        manifest, (CcWorldPoint){x, z}, CC_WORLD_ROAD_HALF_WIDTH, NULL, NULL);
     return road_distance <= CC_WORLD_ROAD_HALF_WIDTH ?
         CC_WORLD_SURFACE_ROAD : CC_WORLD_SURFACE_WILDERNESS;
 }

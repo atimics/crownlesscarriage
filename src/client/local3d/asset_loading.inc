@@ -920,10 +920,13 @@ static Rectangle RoadObstacleAt(int32_t index)
 
 static void ReleaseUploadedModelCpuData(Model *model)
 {
-#if defined(PLATFORM_WEB)
     if (model == NULL || model->meshes == NULL) return;
     for (int32_t index = 0; index < model->meshCount; ++index) {
         Mesh *mesh = &model->meshes[index];
+        /* CPU skinning and software rendering keep their source geometry. */
+        if (mesh->vboId == NULL || mesh->vboId[0] == 0 ||
+            mesh->animVertices != NULL || mesh->animNormals != NULL) continue;
+        /* Keep indices for raylib's indexed draw choice and bones for posing. */
 #define CC_RELEASE_UPLOADED_BUFFER(field) \
         do { \
             if (mesh->field != NULL) { \
@@ -943,9 +946,8 @@ static void ReleaseUploadedModelCpuData(Model *model)
         CC_RELEASE_UPLOADED_BUFFER(animNormals);
 #undef CC_RELEASE_UPLOADED_BUFFER
     }
+#if defined(PLATFORM_WEB)
     emscripten_sleep(0);
-#else
-    (void)model;
 #endif
 }
 

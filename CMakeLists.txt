@@ -218,7 +218,7 @@ cc_strict_warnings(crownless_agent_courier)
 if(CC_BUILD_BENCHMARKS)
     add_executable(crownless_benchmark tools/benchmark.c)
     target_link_libraries(crownless_benchmark PRIVATE
-        crownless_sim crownless_locomotion
+        crownless_sim crownless_locomotion crownless_world
     )
     cc_strict_warnings(crownless_benchmark)
     add_custom_target(run_benchmarks
