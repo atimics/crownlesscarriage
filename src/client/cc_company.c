@@ -99,31 +99,21 @@ void CcCompanyConfigure(const char *identity_path)
 #pragma clang diagnostic ignored "-Wstrict-prototypes"
 #pragma clang diagnostic ignored "-Wextra-semi"
 EM_JS(int, CompanyRandom, (char *text, int bytes), {
-    const value = Array.from(crypto.getRandomValues(new Uint8Array(bytes)), n => n.toString(16).padStart(2, '0')).join("");
+    const value = Module.ccCompany.random(bytes);
     stringToUTF8(value, text, bytes * 2 + 1);
     return 1;
 });
 EM_ASYNC_JS(int, CompanyRequest, (const char *path, const char *body, char **result, int *status, char *error, int capacity), {
     try {
-        let token = localStorage.getItem('cc-coop-token');
-        if (!new RegExp("^[a-f0-9]{64}$").test(token || "")) {
-            token = Array.from(crypto.getRandomValues(new Uint8Array(32)), n => n.toString(16).padStart(2, '0')).join("");
-            localStorage.setItem('cc-coop-token', token);
-        }
-        const response = await fetch(UTF8ToString(path), {method: body ? 'POST' : 'GET',
-            headers: {Authorization: 'Bearer ' + token, 'Content-Type': 'application/json'},
-            body: body ? UTF8ToString(body) : undefined, signal: AbortSignal.timeout(12000)});
-        const data = await response.text();
+        const response = await Module.ccCompany.request(UTF8ToString(path), body ? UTF8ToString(body) : null);
+        const data = response.data;
         HEAP32[status >> 2] = response.status;
-        const parsed = JSON.parse(data);
-        if (!response.ok) throw new Error(parsed.error || 'Reconnect to the host.');
-        if (data.length > 12 * 1024 * 1024) throw new Error('The host response is too large.');
         const size = lengthBytesUTF8(data) + 1, pointer = _malloc(size);
         if (!pointer) throw new Error('Free some memory and try again.');
         stringToUTF8(data, pointer, size);
         HEAPU32[result >> 2] = pointer;
         return 1;
-    } catch (failure) { stringToUTF8(failure.message, error, capacity); return 0; }
+    } catch (failure) { HEAP32[status >> 2] = failure.status || 0; stringToUTF8(failure.message, error, capacity); return 0; }
 });
 #pragma clang diagnostic pop
 bool CcCompanyRequestStatus(const char *path, const char *body, char **result, int *status, char *error, size_t capacity)

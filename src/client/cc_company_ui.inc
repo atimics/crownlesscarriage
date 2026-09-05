@@ -209,7 +209,7 @@ static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
             return true;
         }
         if (action == FRONTEND_ACTION_WORLD_ENTER) {
-            if (CcCoopClientActive()) FrontendOpen(state, FRONTEND_PLAYING);
+            if (CcCoopClientActive() && state->company_return == FRONTEND_PAUSED) FrontendOpen(state, FRONTEND_PLAYING);
             else CcCoopClientEnterWorld(state->company.id);
             return true;
         }

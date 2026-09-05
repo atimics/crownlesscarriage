@@ -574,7 +574,7 @@ class Application:
                 "revision": os.environ.get("CROWNLESS_REVISION", "development")}, None
         if not path.startswith("/api/"):
             require(method in ("GET", "HEAD"), "Use GET for game files.", 405)
-            if path in ("/", "/coop.js", "/coop.css", "/avatar.js"):
+            if path in ("/", "/avatar.js"):
                 file = self.static / ("index.html" if path == "/" else path[1:])
             elif self.game_dir and path.startswith("/game/"):
                 file = (self.game_dir / (path[6:] or "index.html")).resolve()

@@ -11693,14 +11693,15 @@ int main(int argc, char **argv)
 
     FrontendState frontend = {
         .focus = normal_play || capture_title ? 2 : 0,
-        .screen = CcCoopClientActive() ? FRONTEND_PLAYING :
+        .online = CcCoopClientActive(),
+        .screen = CcCoopClientActive() ? journal != NULL ? FRONTEND_PLAYING : FRONTEND_TITLE :
                   normal_play || capture_title ? FRONTEND_TITLE :
                   capture_delete ? FRONTEND_DELETE :
                   capture_ux && capture_ux_view == 10 ? FRONTEND_SOUND :
                   capture_menu || (capture_ux && capture_ux_view == 5) ? FRONTEND_PAUSED : FRONTEND_PLAYING,
         .has_world = resuming_campaign || capture_menu || capture_delete,
     };
-    if (resuming_campaign && journal == NULL) {
+    if ((resuming_campaign || CcCoopClientActive()) && journal == NULL) {
         (void)snprintf(frontend.feedback, sizeof(frontend.feedback), "%s", startup_message);
     }
     if (normal_play && !CcCoopClientActive()) {

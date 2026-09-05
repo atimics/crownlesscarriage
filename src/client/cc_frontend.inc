@@ -176,7 +176,7 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
                 {x, y + (float)i * 34, 440, 29}, state->company.crew[i].name,
                 state->company.owner && !state->company.crew[i].self};
         items[count++] = (FrontendItem){FRONTEND_ACTION_WORLD_ENTER, {x + 464, y, 384, 44},
-            CcCoopClientActive() ? "Return to the road" : "Enter world", true};
+            state->company_return == FRONTEND_PAUSED ? "Return to the road" : "Enter world", true};
         items[count++] = (FrontendItem){FRONTEND_ACTION_INVITE_COPY, {x + 464, y + 54, 384, 40}, "Copy invitation", state->company.owner};
         items[count++] = (FrontendItem){FRONTEND_ACTION_INVITE_ROTATE, {x + 464, y + 102, 384, 40}, "New invitation", state->company.owner};
         items[count++] = (FrontendItem){FRONTEND_ACTION_HOST_PAUSE, {x + 464, y + 150, 384, 40},
@@ -469,6 +469,10 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
         else adventure_preferences->focus_hints = !adventure_preferences->focus_hints;
         adventure_preferences_dirty = true;
     } else if (action == FRONTEND_ACTION_OFFLINE || action == FRONTEND_ACTION_ONLINE) {
+        if (action == FRONTEND_ACTION_OFFLINE && CcCoopClientActive()) {
+            CcCoopClientReturnToTitle();
+            return;
+        }
         state->online = action == FRONTEND_ACTION_ONLINE;
         state->focus = state->online ? 1 : 2;
         state->feedback[0] = '\0';
@@ -650,7 +654,7 @@ static void DrawFrontend(const FrontendState *state,
             (void)field_capacity;
             const char *visible = item.action == FRONTEND_ACTION_FIELD_PASS && value[0] != '\0' ? "********" : value;
             if (strlen(visible) > 66) visible += strlen(visible) - 66;
-            (void)snprintf(field_label, sizeof(field_label), "%s: %s%s", item.label, visible,
+            (void)snprintf(field_label, sizeof(field_label), "%.24s: %.66s%s", item.label, visible,
                 state->text_field == item.action ? "_" : "");
             label = field_label;
         }
