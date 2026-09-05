@@ -5981,10 +5981,10 @@ void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount)
             &agent->humanoid.pose;
         CcHumanoidPose physical_pose;
         BlendHumanoidPose(&physical_pose, before_pose, after_pose, amount);
+        (void)ApplyLocomotionPostureCorrection(agent, &physical_pose);
         agent->render_pose = physical_pose;
         (void)ApplySteppedLocomotionPose(
             agent, &physical_pose, &agent->render_pose);
-        (void)ApplyLocomotionPostureCorrection(agent, &agent->render_pose);
         (void)ApplyRoleIdleGesture(agent, &agent->render_pose);
         (void)ApplyHeroKnockdownPresentationPose(agent,
                                                  &agent->render_pose);
