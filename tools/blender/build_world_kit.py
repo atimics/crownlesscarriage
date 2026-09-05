@@ -555,22 +555,23 @@ def add_hair_clump(name: str,
             side = Vector((1.0, 0.0, 0.0))
         side.normalize()
         thickness = tangent.cross(side).normalized()
-        vertices.extend((
-            tuple(center - side * widths[index] * 0.5),
-            tuple(center - thickness * depths[index] * 0.5),
-            tuple(center + side * widths[index] * 0.5),
-            tuple(center + thickness * depths[index] * 0.5),
-        ))
-    faces: list[tuple[int, ...]] = [(3, 2, 1, 0)]
+        # Broad faces give each lock a soft ridge at small screen sizes.
+        section = ((-1.0, 0.0), (-0.5, -0.85), (0.5, -0.85),
+                   (1.0, 0.0), (0.5, 0.85), (-0.5, 0.85))
+        vertices.extend(tuple(center + side * widths[index] * 0.5 * sx +
+                              thickness * depths[index] * 0.5 * sy)
+                        for sx, sy in section)
+    sides = 6
+    faces: list[tuple[int, ...]] = [tuple(reversed(range(sides)))]
     for section in range(len(path) - 1):
-        first = section * 4
-        following = (section + 1) * 4
-        for edge in range(4):
-            nxt = (edge + 1) % 4
+        first = section * sides
+        following = (section + 1) * sides
+        for edge in range(sides):
+            nxt = (edge + 1) % sides
             faces.append((first + edge, first + nxt,
                           following + nxt, following + edge))
-    final = (len(path) - 1) * 4
-    faces.append((final, final + 1, final + 2, final + 3))
+    final = (len(path) - 1) * sides
+    faces.append(tuple(final + edge for edge in range(sides)))
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(vertices, [], faces)
     mesh.update()
@@ -618,66 +619,107 @@ def hair_paths(style: str, center: tuple[float, float, float]
     def shifted(points: Iterable[tuple[float, float, float]]) -> tuple[tuple[float, float, float], ...]:
         return tuple((x + px, y + py, z + pz) for px, py, pz in points)
 
-    crown_l = (shifted(((-0.02, -0.015, 0.155), (-0.070, -0.025, 0.145),
-                        (-0.120, -0.005, 0.080), (-0.110, 0.015, -0.010))),
-               (0.17, 0.16, 0.12, 0.018), (0.16, 0.14, 0.10, 0.018))
-    crown_r = (shifted(((0.02, -0.015, 0.155), (0.070, -0.025, 0.145),
-                        (0.120, -0.005, 0.080), (0.110, 0.015, -0.010))),
-               (0.17, 0.16, 0.12, 0.018), (0.16, 0.14, 0.10, 0.018))
-    back_l = (shifted(((-0.055, 0.055, 0.135), (-0.105, 0.095, 0.075),
-                       (-0.115, 0.105, -0.035), (-0.075, 0.095, -0.125))),
-              (0.17, 0.16, 0.105, 0.018), (0.13, 0.12, 0.08, 0.018))
-    back_r = (shifted(((0.055, 0.055, 0.135), (0.105, 0.095, 0.075),
-                       (0.115, 0.105, -0.035), (0.075, 0.095, -0.125))),
-              (0.17, 0.16, 0.105, 0.018), (0.13, 0.12, 0.08, 0.018))
-
-
-
-    back_center = (shifted(((0.0, 0.065, 0.145), (0.0, 0.112, 0.075),
-                            (0.0, 0.122, -0.035), (0.0, 0.100, -0.130))),
-                   (0.145, 0.145, 0.105, 0.018),
-                   (0.125, 0.125, 0.080, 0.018))
-    bang_l = (shifted(((-0.060, -0.055, 0.125), (-0.075, -0.105, 0.060),
-                       (-0.055, -0.120, -0.015), (-0.020, -0.118, -0.095))),
-              (0.13, 0.12, 0.075, 0.014), (0.11, 0.095, 0.055, 0.014))
-    bang_r = (shifted(((0.060, -0.055, 0.125), (0.080, -0.105, 0.065),
-                       (0.070, -0.120, -0.005), (0.045, -0.118, -0.075))),
-              (0.13, 0.115, 0.068, 0.014), (0.11, 0.09, 0.05, 0.014))
-
+    crown_l = (shifted(((0.025, -0.015, 0.175), (-0.045, -0.04, 0.17),
+                        (-0.105, -0.025, 0.12), (-0.123, 0.015, 0.015))),
+               (0.115, 0.15, 0.105, 0.018), (0.14, 0.16, 0.10, 0.018))
+    crown_r = (shifted(((0.035, 0.005, 0.17), (0.09, -0.015, 0.15),
+                        (0.123, 0.005, 0.08), (0.12, 0.025, 0.005))),
+               (0.10, 0.12, 0.085, 0.016), (0.14, 0.14, 0.09, 0.016))
+    back_l = (shifted(((-0.055, 0.055, 0.145), (-0.105, 0.10, 0.08),
+                       (-0.115, 0.11, -0.025), (-0.075, 0.105, -0.12))),
+              (0.16, 0.16, 0.105, 0.018), (0.12, 0.10, 0.07, 0.018))
+    back_r = (shifted(((0.055, 0.055, 0.145), (0.105, 0.10, 0.08),
+                       (0.115, 0.11, -0.025), (0.075, 0.105, -0.11))),
+              (0.16, 0.16, 0.105, 0.018), (0.12, 0.10, 0.07, 0.018))
+    back_center = (shifted(((0.01, 0.06, 0.155), (0.0, 0.12, 0.075),
+                            (-0.015, 0.127, -0.035), (0.005, 0.108, -0.135))),
+                   (0.135, 0.14, 0.10, 0.014), (0.11, 0.085, 0.06, 0.014))
+    bang_l = (shifted(((0.035, -0.07, 0.16), (-0.035, -0.105, 0.135),
+                       (-0.08, -0.12, 0.08), (-0.105, -0.115, 0.02))),
+              (0.105, 0.12, 0.075, 0.012), (0.09, 0.085, 0.055, 0.012))
+    bang_r = (shifted(((0.05, -0.065, 0.15), (0.085, -0.105, 0.11),
+                       (0.095, -0.115, 0.065), (0.11, -0.105, 0.035))),
+              (0.075, 0.075, 0.045, 0.012), (0.085, 0.07, 0.045, 0.012))
+    crown = (crown_l, crown_r)
+    back = (back_l, back_r, back_center)
     if style == "cropped":
-        return crown_l, crown_r, back_l, back_r, back_center
+        fringe = (shifted(((0.045, -0.065, 0.158), (0.0, -0.108, 0.142),
+                           (-0.055, -0.12, 0.102), (-0.08, -0.112, 0.065))),
+                  (0.10, 0.115, 0.075, 0.012), (0.075, 0.07, 0.045, 0.012))
+        return *crown, *back, fringe
     if style == "swept":
-        long_side = (shifted(((-0.090, -0.020, 0.125), (-0.125, -0.075, 0.035),
-                              (-0.130, -0.070, -0.085), (-0.110, -0.025, -0.185))),
-                     (0.14, 0.13, 0.08, 0.015), (0.12, 0.10, 0.06, 0.015))
-        return crown_l, crown_r, bang_l, bang_r, back_r, long_side
+        long_side = (shifted(((-0.09, -0.02, 0.135), (-0.13, -0.06, 0.035),
+                              (-0.14, -0.04, -0.08), (-0.12, 0.015, -0.185))),
+                     (0.12, 0.12, 0.08, 0.012), (0.12, 0.10, 0.06, 0.012))
+        return *crown, *back, bang_l, bang_r, long_side
     if style == "bob":
-        side_l = (shifted(((-0.09, -0.005, 0.12), (-0.135, -0.045, 0.015),
-                           (-0.14, -0.015, -0.10), (-0.105, 0.015, -0.19))),
-                  (0.15, 0.14, 0.09, 0.016), (0.13, 0.11, 0.06, 0.016))
-        side_r = tuple((tuple((-px + 2*x, py, pz) for px, py, pz in side_l[0]),
-                        side_l[1], side_l[2]))
-        return crown_l, crown_r, bang_l, bang_r, side_l, side_r
+        side_l = (shifted(((-0.09, -0.005, 0.13), (-0.137, -0.04, 0.015),
+                           (-0.145, -0.015, -0.10), (-0.115, 0.015, -0.19))),
+                  (0.13, 0.14, 0.12, 0.035), (0.13, 0.12, 0.09, 0.025))
+        side_r = (tuple((-px + 2*x, py, pz) for px, py, pz in side_l[0]),
+                  side_l[1], side_l[2])
+        return *crown, *back, bang_l, bang_r, side_l, side_r
     if style == "crest":
-        crest = (shifted(((0.0, 0.045, 0.12), (0.0, 0.035, 0.22),
-                          (0.0, 0.015, 0.30), (0.0, -0.005, 0.34))),
-                 (0.11, 0.105, 0.07, 0.018), (0.18, 0.16, 0.12, 0.018))
-        return crown_l, crown_r, back_l, back_r, crest
+        crest = (shifted(((0.0, 0.045, 0.145), (0.0, 0.035, 0.225),
+                          (0.0, 0.015, 0.285), (-0.025, -0.02, 0.32))),
+                 (0.10, 0.105, 0.07, 0.012), (0.17, 0.16, 0.11, 0.012))
+        return *crown, *back, crest
     if style == "braided":
-        braid = (shifted(((0.095, 0.065, 0.08), (0.13, 0.105, -0.06),
-                          (0.12, 0.115, -0.22), (0.085, 0.105, -0.36))),
-                 (0.105, 0.09, 0.065, 0.014), (0.095, 0.08, 0.055, 0.014))
-        return crown_l, crown_r, bang_l, back_l, back_r, braid
+        braid = []
+        for index in range(4):
+            side = 1.0 if index % 2 == 0 else -1.0
+            top = 0.025 - index * 0.078
+            width = 0.085 - index * 0.011
+            braid.append((shifted(((0.105, 0.105, top + 0.045),
+                                    (0.11 + side * 0.025, 0.125, top),
+                                    (0.105, 0.115, top - 0.065))),
+                          (width * 0.65, width, width * 0.4),
+                          (width * 0.65, width * 0.85, width * 0.4)))
+        tip = (shifted(((0.105, 0.115, -0.27), (0.115, 0.12, -0.315),
+                        (0.10, 0.11, -0.365))),
+               (0.04, 0.048, 0.008), (0.04, 0.04, 0.008))
+        return *crown, *back, bang_l, *braid, tip
     if style == "rear_lock":
-        rear = (shifted(((0.0, 0.07, 0.14), (-0.03, 0.13, 0.015),
-                         (-0.02, 0.14, -0.17), (0.025, 0.12, -0.34))),
-                (0.22, 0.20, 0.12, 0.018), (0.14, 0.12, 0.075, 0.018))
-        return crown_l, crown_r, bang_l, bang_r, rear
+        rear = (shifted(((0.0, 0.08, 0.14), (-0.02, 0.145, 0.015),
+                         (-0.02, 0.16, -0.17), (0.035, 0.13, -0.34))),
+                (0.16, 0.18, 0.115, 0.014), (0.13, 0.12, 0.075, 0.014))
+        return *crown, *back, bang_l, bang_r, rear
     raise ValueError(f"unknown hair style {style}")
+
+
+def add_hair_scalp(style: str, center: tuple[float, float, float],
+                   collection: bpy.types.Collection) -> None:
+    """Fit the crown and nape beneath the locks, with an open forehead."""
+    x, y, z = center
+    sides = 16
+    vertices = [(x, y + 0.005, z + 0.18)]
+    for ring in range(3):
+        for index in range(sides):
+            angle = math.tau * index / sides
+            front = max(0.0, math.cos(angle))
+            back = max(0.0, -math.cos(angle))
+            height = (0.158, 0.115, -0.02 + front * 0.115 - back * 0.09)[ring]
+            radius = (0.68, 0.94, 1.0)[ring]
+            vertices.append((x + math.sin(angle) * 0.131 * radius,
+                             y + 0.005 - math.cos(angle) * 0.12 * radius,
+                             z + height))
+    faces = [(0, 1 + index, 1 + (index + 1) % sides) for index in range(sides)]
+    for ring in range(2):
+        for index in range(sides):
+            start = 1 + ring * sides
+            nxt = (index + 1) % sides
+            faces.append((start + index, start + sides + index,
+                          start + sides + nxt, start + nxt))
+    mesh = bpy.data.meshes.new(f"GEO_Hair_{style}_Scalp")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(mesh.name, mesh)
+    finish(obj, collection, "hair", "fitted_hair_scalp")
 
 
 def add_hair_style(style: str, center: tuple[float, float, float],
                    collection: bpy.types.Collection) -> None:
+    add_hair_scalp(style, center, collection)
     for index, (path, widths, depths) in enumerate(hair_paths(style, center)):
         add_hair_clump(f"GEO_Hair_{style}_{index + 1:02d}", path,
                        widths, depths, collection)
@@ -1277,6 +1319,15 @@ def export_assets() -> None:
         objects = [obj for obj in collection.all_objects if obj.type == "MESH"]
         if not objects:
             raise RuntimeError(f"{asset_id} has no mesh objects")
+        if asset_id.startswith("wk_hair_"):
+            # A style uses one palette and one draw call, including its scalp.
+            bpy.ops.object.select_all(action="DESELECT")
+            for obj in objects:
+                obj.select_set(True)
+            bpy.context.view_layer.objects.active = objects[0]
+            bpy.ops.object.join()
+            objects = [bpy.context.object]
+            objects[0].name = f"GEO_{asset_id}"
         if asset_id.startswith("wk_head_") or asset_id.startswith("wk_hair_"):
             default_semantic = 0 if asset_id.startswith("wk_head_") else 1
             for obj in objects:
@@ -1286,7 +1337,8 @@ def export_assets() -> None:
                             else default_semantic)
                 paint_channels.add_indexed_paint_channels(
                     obj, [semantic] * len(obj.data.polygons),
-                    BODY_PAINT_SEMANTICS)
+                    BODY_PAINT_SEMANTICS,
+                    surface_labels=asset_id.startswith("wk_hair_"))
         bpy.ops.object.select_all(action="DESELECT")
         for obj in objects:
             obj.select_set(True)
@@ -2827,5 +2879,21 @@ def build() -> None:
     print(f"previews: {PREVIEW_DIR}")
 
 
+def build_hair_only() -> None:
+    """Refresh the six runtime hair exports and their manifest records."""
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    reset_scene()
+    make_materials()
+    build_hair_assets()
+    export_assets()
+    records = {record["id"]: record for record in ASSET_RECORDS}
+    manifest["modules"] = [records.get(record["id"], record)
+                           for record in manifest["modules"]]
+    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+
 if __name__ == "__main__":
-    build()
+    if "--hair-only" in sys.argv:
+        build_hair_only()
+    else:
+        build()
