@@ -213,6 +213,32 @@ static void TestGenericTissues(void)
     Require(fabsf(rig.total_mass - 16.0f) < 0.001f,
             "bone masses did not aggregate");
 
+    const float paused_steps[] = {0.0f, -0.01f, NAN, INFINITY};
+    for (size_t step = 0; step < sizeof(paused_steps) / sizeof(paused_steps[0]);
+         ++step) {
+        CcBiomechRig pending = rig;
+        pending.root.gravity = (CcBiomechVec3){0};
+        pending.root.linear_damping = 0.0f;
+        CcBiomechRigApplyBodyForce(&pending, (CcBiomechVec3){96.0f, 0.0f, 0.0f});
+        CcBiomechRigApplyTorque(&pending, joint, 0.60f);
+        CcBiomechRigStepBody(&pending, paused_steps[step]);
+        CcBiomechRigStep(&pending, paused_steps[step]);
+        Require(pending.root.position.x == 0.0f &&
+                    pending.joints[joint].angle == 0.0f &&
+                    pending.root.accumulated_force.x == 96.0f &&
+                    pending.joints[joint].external_torque == 0.60f,
+                "paused physics must preserve the pose and queued forces");
+        CcBiomechRigStepBody(&pending, 1.0f / 60.0f);
+        CcBiomechRigStep(&pending, 1.0f / 60.0f);
+        Require(fabsf(pending.root.velocity.x - 0.10f) < 0.00001f &&
+                    fabsf(pending.joints[joint].angular_velocity - 0.10f) <
+                        0.00001f,
+                "resumed physics must apply the queued force and torque");
+        Require(pending.root.accumulated_force.x == 0.0f &&
+                    pending.joints[joint].external_torque == 0.0f,
+                "a completed step must consume its queued forces");
+    }
+
     CcBiomechRigSetBodyState(&rig, (CcBiomechVec3){0.0f, 2.0f, 0.0f},
                              (CcBiomechVec3){0});
     for (int32_t frame = 0; frame < 60; ++frame) {
@@ -428,6 +454,57 @@ static void TestRagdollAnatomyAndVolume(void)
                              normal.z * normal.z);
         Require(fabsf(length - 1.0f) < 0.0001f,
                 "limb capsule retained a non-unit collision normal");
+    }
+}
+
+static bool SegmentLedge(void *context, CcBiomechVec3 previous_position,
+                         CcBiomechVec3 position, float radius,
+                         CcBiomechVec3 *corrected_position,
+                         CcBiomechVec3 *surface_normal)
+{
+    (void)previous_position;
+    float ledge_x = *(const float *)context;
+    if (radius < 0.10f || fabsf(position.x - ledge_x) > 0.001f ||
+        position.y >= radius) return false;
+    *corrected_position = position;
+    corrected_position->y = radius;
+    *surface_normal = (CcBiomechVec3){0.0f, 1.0f, 0.0f};
+    return true;
+}
+
+static void TestSegmentContactProjection(void)
+{
+    const float masses[][2] = {{0.2f, 0.2f}, {0.1f, 0.4f},
+                                {0.0f, 0.3f}, {0.3f, 0.0f}};
+    for (size_t mass = 0; mass < sizeof(masses) / sizeof(masses[0]); ++mass) {
+        for (int32_t sample = 1; sample <= 3; ++sample) {
+            CcBiomechRagdoll ragdoll;
+            CcBiomechRagdollInit(&ragdoll);
+            ragdoll.gravity = (CcBiomechVec3){0};
+            ragdoll.active = true;
+            int32_t a = CcBiomechRagdollAddParticle(
+                &ragdoll, (CcBiomechVec3){0}, masses[mass][0], 0.02f);
+            int32_t b = CcBiomechRagdollAddParticle(
+                &ragdoll, (CcBiomechVec3){4.0f, 0.0f, 0.0f},
+                masses[mass][1], 0.02f);
+            Require(CcBiomechRagdollAddCollisionSegment(&ragdoll, a, b, 0.12f)
+                        >= 0, "segment contact fixture must initialize");
+            float ledge_x = (float)sample;
+            CcBiomechRagdollStep(&ragdoll, 1.0f / 60.0f, 1,
+                                 SegmentLedge, &ledge_x);
+            float amount = ledge_x / 4.0f;
+            float contact_height = ragdoll.particles[a].position.y *
+                                       (1.0f - amount) +
+                                   ragdoll.particles[b].position.y * amount;
+            Require(fabsf(contact_height - 0.12f) < 0.00001f,
+                    "one contact pass must place the limb on the ledge");
+            for (int32_t particle = 0; particle < 2; ++particle) {
+                if (masses[mass][particle] == 0.0f) {
+                    Require(ragdoll.particles[particle].position.y == 0.0f,
+                            "a fixed endpoint must retain its position");
+                }
+            }
+        }
     }
 }
 
@@ -1272,6 +1349,7 @@ int main(void)
     TestGenericTissues();
     TestGenericRagdoll();
     TestRagdollAnatomyAndVolume();
+    TestSegmentContactProjection();
     TestRagdollSupportPlane();
     TestBiomechanicalClimb();
     TestClimbSupportLoss();

@@ -222,9 +222,13 @@ if(CC_BUILD_BENCHMARKS)
         crownless_sim crownless_locomotion crownless_world
     )
     cc_strict_warnings(crownless_benchmark)
+    add_executable(crownless_robotics_benchmark tools/robotics_benchmark.c)
+    target_link_libraries(crownless_robotics_benchmark PRIVATE crownless_locomotion)
+    cc_strict_warnings(crownless_robotics_benchmark)
     add_custom_target(run_benchmarks
         COMMAND crownless_benchmark
-        DEPENDS crownless_benchmark
+        COMMAND crownless_robotics_benchmark
+        DEPENDS crownless_benchmark crownless_robotics_benchmark
         USES_TERMINAL
     )
 
@@ -996,6 +1000,8 @@ if(BUILD_TESTING)
     endif()
 
     if(CC_BUILD_BENCHMARKS)
+        add_test(NAME robotics_benchmark COMMAND crownless_robotics_benchmark)
+        set_tests_properties(robotics_benchmark PROPERTIES RUN_SERIAL TRUE)
         set(CC_BENCHMARK_TEST_ARGUMENTS --quick)
         if(CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
             list(APPEND CC_BENCHMARK_TEST_ARGUMENTS --assert-budget)

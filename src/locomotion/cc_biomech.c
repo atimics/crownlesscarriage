@@ -182,6 +182,7 @@ void CcBiomechRigApplyBodyForce(CcBiomechRig *rig, CcBiomechVec3 force)
 void CcBiomechRigStepBody(CcBiomechRig *rig, float delta_time)
 {
     if (rig == NULL || !rig->initialized || rig->total_mass <= 0.0f) return;
+    if (!isfinite(delta_time) || delta_time <= 0.0f) return;
     delta_time = Clamp(delta_time, 0.0f, 1.0f / 30.0f);
     CcBiomechVec3 gravity_force = ScaleVec3(rig->root.gravity,
                                             rig->total_mass);
@@ -235,11 +236,13 @@ static float LigamentTorque(const CcBiomechJointSpec *spec, float angle)
 void CcBiomechRigStep(CcBiomechRig *rig, float delta_time)
 {
     if (rig == NULL || !rig->initialized) return;
+    if (!isfinite(delta_time) || delta_time <= 0.0f) return;
     delta_time = Clamp(delta_time, 0.0f, 1.0f / 30.0f);
+    float contact_retention = expf(-18.0f * delta_time);
     for (int32_t joint = 0; joint < rig->morphology.joint_count; ++joint) {
         rig->joints[joint].muscle_torque = 0.0f;
         rig->joints[joint].passive_torque = 0.0f;
-        rig->joints[joint].contact_reaction_torque *= expf(-18.0f * delta_time);
+        rig->joints[joint].contact_reaction_torque *= contact_retention;
     }
 
     for (int32_t muscle = 0; muscle < rig->morphology.muscle_count; ++muscle) {
@@ -734,13 +737,13 @@ static void CollideRagdollSegments(CcBiomechRagdoll *ragdoll,
             float total_weight = weight_a * (1.0f - amount) +
                                  weight_b * amount;
             if (total_weight <= 0.00001f) continue;
+            // The interpolated sample must receive the full contact correction.
             a->position = AddVec3(
                 a->position,
-                ScaleVec3(correction,
-                          weight_a * (1.0f - amount) / total_weight));
+                ScaleVec3(correction, weight_a / total_weight));
             b->position = AddVec3(
                 b->position,
-                ScaleVec3(correction, weight_b * amount / total_weight));
+                ScaleVec3(correction, weight_b / total_weight));
             a->collided = true;
             b->collided = true;
             a->contact_normal = normal;
