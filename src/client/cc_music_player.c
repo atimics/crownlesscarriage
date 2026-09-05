@@ -1,6 +1,7 @@
 #include "client/cc_music_player.h"
 #include "client/cc_music_library.h"
 #include "client/cc_music_net.h"
+#include "client/cc_music_stream.h"
 #include "raylib.h"
 
 #include <stdio.h>
@@ -10,8 +11,10 @@
 
 static struct {
     CcMusicDirector director;
-    Music stream[CC_MUSIC_VOICE_COUNT];
+    CcMusicStream stream[CC_MUSIC_VOICE_COUNT];
     int loaded_take[CC_MUSIC_VOICE_COUNT];
+    CcMusicStream prepared;
+    int prepared_take;
     char path[CC_MUSIC_TAKE_COUNT][512];
     CcMusicLibrary library;
     bool bundled[CC_MUSIC_TAKE_COUNT];
@@ -20,6 +23,7 @@ static struct {
     bool downloading;
     int download_take; /* -1 is the catalog. */
     bool local_download;
+    bool cancelled_download;
     float refresh;
     float retry[CC_MUSIC_TAKE_COUNT];
     bool initialized;
@@ -31,7 +35,9 @@ static struct {
 static void Availability(void)
 {
     for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i) {
-        player.director.ready[i] = player.path[i][0] != '\0' || player.data[i] != NULL;
+        player.director.ready[i] = player.prepared_take == i && CcMusicStreamReady(player.prepared) == 1;
+        for (int slot = 0; slot < CC_MUSIC_VOICE_COUNT; ++slot)
+            player.director.ready[i] = player.director.ready[i] || player.loaded_take[slot] == i;
         player.director.available[i] = player.retry[i] <= 0.0f &&
             (player.bundled[i] || player.data[i] != NULL || player.library.file[i][0] != '\0');
     }
@@ -39,7 +45,7 @@ static void Availability(void)
 
 static void Offline(void)
 {
-    memset(&player.library, 0, sizeof(player.library));
+    /* Keep the last good catalog through a brief connection failure. */
     player.refresh = 60.0f;
     Availability();
 }
@@ -71,7 +77,10 @@ static void UpdateSources(float dt)
     if (result != 0) {
         player.downloading = false;
         int take = player.download_take;
-        if (take < 0) {
+        if (player.cancelled_download) {
+            player.cancelled_download = false;
+            free(data);
+        } else if (take < 0) {
             if (result > 0 && CcMusicLibraryParse(&player.library, data, size))
                 player.refresh = 300.0f;
             else Offline();
@@ -82,12 +91,8 @@ static void UpdateSources(float dt)
             player.size[take] = size;
         } else {
             free(data);
-            if (!player.local_download) {
-                Offline();
-#if defined(PLATFORM_WEB)
-                if (player.bundled[take]) RequestTake(take, true);
-#endif
-            }
+            if (player.local_download && player.library.file[take][0] != '\0')
+                RequestTake(take, false);
             if (!player.downloading && player.path[take][0] == '\0')
                 player.retry[take] = 60.0f;
         }
@@ -97,10 +102,18 @@ static void UpdateSources(float dt)
 
 static void RequestAudio(void)
 {
-    if (player.downloading) return;
+    int wanted = player.director.requested_take;
+    bool needs_file = wanted >= 0 && player.director.available[wanted] &&
+        player.path[wanted][0] == '\0' && player.data[wanted] == NULL;
+    if (player.downloading && !player.cancelled_download &&
+        ((player.download_take >= 0 && player.download_take != wanted) ||
+         (player.download_take < 0 && needs_file))) {
+        CcMusicNetCancel();
+        player.cancelled_download = true;
+    }
     /* Keep only the active fades and the next selected take in memory. */
     for (int take = 0; take < CC_MUSIC_TAKE_COUNT; ++take) {
-        if (player.data[take] == NULL || take == player.director.requested_take) continue;
+        if (player.data[take] == NULL || take == wanted || take == player.prepared_take) continue;
         bool active = false;
         for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i)
             active = active || player.loaded_take[i] == take;
@@ -111,9 +124,11 @@ static void RequestAudio(void)
         }
     }
     Availability();
+    if (player.downloading) return;
     int take = player.director.requested_take;
-    if (take >= 0 && player.director.available[take] && !player.director.ready[take]) {
-        bool local = player.library.file[take][0] == '\0';
+    if (take >= 0 && player.director.available[take] && !player.director.ready[take] &&
+        player.path[take][0] == '\0' && player.data[take] == NULL) {
+        bool local = player.bundled[take];
         RequestTake(take, local);
     } else if (player.refresh <= 0.0f) {
         if (CcMusicNetStart(CC_MUSIC_HOST "/catalog.txt", 16384U)) {
@@ -121,6 +136,36 @@ static void RequestAudio(void)
             player.download_take = -1;
         } else player.refresh = 60.0f;
     }
+}
+
+static void PrepareAudio(void)
+{
+    int take = player.director.requested_take;
+    if (player.prepared_take >= 0 && player.prepared_take != take) {
+        CcMusicStreamClose(player.prepared);
+        player.prepared_take = -1;
+        Availability();
+    }
+    if (take < 0 || !player.director.available[take]) return;
+    if (player.prepared_take < 0) {
+        if (player.director.ready[take] ||
+            (player.path[take][0] == '\0' && player.data[take] == NULL)) return;
+        player.prepared = CcMusicStreamOpen(player.path[take], player.data[take], (int)player.size[take]);
+        player.prepared_take = take;
+    }
+    int ready = CcMusicStreamReady(player.prepared);
+    if (ready < 0) {
+        CcMusicStreamClose(player.prepared);
+        player.prepared_take = -1;
+        player.retry[take] = 60.0f;
+        free(player.data[take]);
+        player.data[take] = NULL;
+        player.size[take] = 0;
+    } else if (ready > 0) {
+        float duration = CcMusicStreamLength(player.prepared);
+        if (isfinite(duration) && duration > 1.0f) player.director.duration[take] = duration;
+    }
+    Availability();
 }
 
 static bool FindTrack(int take, char *path, size_t capacity)
@@ -150,6 +195,7 @@ static bool FindTrack(int take, char *path, size_t capacity)
 static void Initialize(uint32_t seed)
 {
     player.initialized = true;
+    player.prepared_take = -1;
     CcMusicInit(&player.director, seed ^ UINT32_C(0x53434f52));
     for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i) player.loaded_take[i] = -1;
     for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i) {
@@ -173,14 +219,25 @@ void CcMusicPlayerUpdate(const CcMusicContext *context, float delta_seconds,
     if (player.focused != focused) {
         for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i) {
             if (player.loaded_take[i] < 0) continue;
-            if (focused) ResumeMusicStream(player.stream[i]);
-            else PauseMusicStream(player.stream[i]);
+            if (focused) CcMusicStreamResume(player.stream[i]);
+            else CcMusicStreamPause(player.stream[i]);
         }
         player.focused = focused;
     }
     if (!focused) return;
     float dt = isfinite(delta_seconds) ? fminf(1.0f, fmaxf(0.0f, delta_seconds)) : 0.0f;
+    /* Refill playing streams before file opening, cache copies and scene work. */
+    for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i) {
+        if (player.loaded_take[i] < 0) continue;
+        if (CcMusicStreamReady(player.stream[i]) < 0)
+            player.retry[player.loaded_take[i]] = 60.0f;
+        CcMusicStreamUpdate(player.stream[i]);
+        float position = CcMusicStreamPosition(player.stream[i]);
+        if (isfinite(position) && position >= 0.0f)
+            player.director.voice[i].age = position;
+    }
     UpdateSources(dt);
+    PrepareAudio();
     float rate = volume < player.volume ? 4.0f : 1.25f;
     player.volume += (volume - player.volume) * fminf(1.0f, dt * rate);
     CcMusicUpdate(&player.director, context, delta_seconds);
@@ -188,34 +245,18 @@ void CcMusicPlayerUpdate(const CcMusicContext *context, float delta_seconds,
         CcMusicVoice *voice = &player.director.voice[i];
         if (voice->take != player.loaded_take[i]) {
             if (player.loaded_take[i] >= 0) {
-                StopMusicStream(player.stream[i]);
-                UnloadMusicStream(player.stream[i]);
+                CcMusicStreamClose(player.stream[i]);
                 player.loaded_take[i] = -1;
             }
-            if (voice->take >= 0 && player.director.available[voice->take]) {
-                int take = voice->take;
-                Music stream = player.data[take] != NULL ?
-                    LoadMusicStreamFromMemory(".mp3", player.data[take], (int)player.size[take]) :
-                    LoadMusicStream(player.path[take]);
-                if (!IsMusicValid(stream)) {
-                    player.retry[take] = 60.0f;
-                    free(player.data[take]);
-                    player.data[take] = NULL;
-                    player.director.available[take] = false;
-                    continue;
-                }
-                stream.looping = true;
-                player.stream[i] = stream;
+            if (voice->take >= 0 && voice->take == player.prepared_take) {
+                player.stream[i] = player.prepared;
                 player.loaded_take[i] = voice->take;
-                float duration = GetMusicTimeLength(stream);
-                if (duration > 1.0f) player.director.duration[voice->take] = duration;
-                SetMusicVolume(stream, 0.0f);
-                PlayMusicStream(stream);
+                player.prepared_take = -1;
+                CcMusicStreamResume(player.stream[i]);
             }
         }
         if (player.loaded_take[i] >= 0) {
-            SetMusicVolume(player.stream[i], voice->gain * player.volume * 0.55f);
-            UpdateMusicStream(player.stream[i]);
+            CcMusicStreamVolume(player.stream[i], voice->gain * player.volume * 0.55f);
         }
     }
     RequestAudio();
@@ -225,10 +266,12 @@ void CcMusicPlayerShutdown(void)
 {
     if (!player.initialized) return;
     CcMusicNetShutdown();
+    if (player.prepared_take >= 0) {
+        CcMusicStreamClose(player.prepared);
+    }
     for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i) {
         if (player.loaded_take[i] < 0) continue;
-        StopMusicStream(player.stream[i]);
-        UnloadMusicStream(player.stream[i]);
+        CcMusicStreamClose(player.stream[i]);
     }
     for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i) free(player.data[i]);
     memset(&player, 0, sizeof(player));

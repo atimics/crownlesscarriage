@@ -122,6 +122,10 @@ async function main() {
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => Module.crownlessScreen === 'playing' && Module.crownlessSaveRevision > 0);
     await page.screenshot({path: path.join(output, 'opening.png')});
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-crownless-music]')]
+      .some(media => !media.paused && media.readyState >= 3), {timeout: 60000});
+    assert(await page.locator('[data-crownless-music]').count() <= 4,
+      'The game uses at most three playing songs and one prepared song');
     const shaders = await page.evaluate(() => window.shaderLinks);
     assert(shaders.every(shader => shader.linked), JSON.stringify(shaders));
     assert(shaders.every(shader => shader.vectors <= 256), JSON.stringify(shaders));

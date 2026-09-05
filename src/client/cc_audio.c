@@ -40,6 +40,15 @@ static struct {
 
 static void BeginSpeech(const CcSpeech *speech, const char *path);
 
+static Music LoadVoiceStream(const char *path, const unsigned char *data, size_t size)
+{
+    SetAudioStreamBufferSizeDefault(24000);
+    Music voice = data != NULL ? LoadMusicStreamFromMemory(".wav", data, (int)size) :
+        LoadMusicStream(path);
+    SetAudioStreamBufferSizeDefault(0);
+    return voice;
+}
+
 static void CancelRequest(void)
 {
     ++audio.generation;
@@ -169,18 +178,20 @@ void CcAudioVoice(const char *path)
     (void)snprintf(audio.voice_path, sizeof(audio.voice_path), "%s", requested);
     if (!audio.focused || audio.mode > 0 || audio.voice_percent == 0 || requested[0] == '\0' ||
         !FileExists(requested)) return;
-    audio.voice = LoadMusicStream(requested);
+    audio.voice = LoadVoiceStream(requested, NULL, 0);
     audio.voice_loaded = IsMusicValid(audio.voice);
     if (audio.voice_loaded) {
         audio.voice.looping = false;
         SetMusicVolume(audio.voice, 0.85f * (float)audio.voice_percent / 100.0f);
         PlayMusicStream(audio.voice);
+        UpdateMusicStream(audio.voice);
     }
 }
 
 void CcAudioUpdate(void)
 {
     if (!audio.ready) return;
+    if (audio.voice_loaded) UpdateMusicStream(audio.voice);
     unsigned char *data = NULL;
     size_t size = 0;
     int result = CcVoiceNetPoll(&data, &size);
@@ -189,7 +200,7 @@ void CcAudioUpdate(void)
             audio.mode == 0 && audio.voice_percent > 0 && audio.request_generation == audio.generation &&
             audio.request_key == audio.speech.audio_key && size <= CC_VOICE_DOWNLOAD_LIMIT) {
             StopVoice();
-            audio.voice = LoadMusicStreamFromMemory(".wav", data, (int)size);
+            audio.voice = LoadVoiceStream(NULL, data, size);
             audio.voice_loaded = IsMusicValid(audio.voice);
             if (audio.voice_loaded) {
                 audio.voice_bytes = data;
@@ -197,6 +208,7 @@ void CcAudioUpdate(void)
                 audio.voice.looping = false;
                 SetMusicVolume(audio.voice, 0.85f * (float)audio.voice_percent / 100.0f);
                 PlayMusicStream(audio.voice);
+                UpdateMusicStream(audio.voice);
             }
         }
         if (audio.request_generation == audio.generation) audio.speech_pending = false;
@@ -320,7 +332,10 @@ void CcAudioReplaySpeech(void)
     if (!audio.has_speech) return;
     if (audio.voice_loaded) {
         StopMusicStream(audio.voice);
-        if (audio.focused && audio.mode == 0 && audio.voice_percent > 0) PlayMusicStream(audio.voice);
+        if (audio.focused && audio.mode == 0 && audio.voice_percent > 0) {
+            PlayMusicStream(audio.voice);
+            UpdateMusicStream(audio.voice);
+        }
         return;
     }
     char path[sizeof(audio.voice_path)];
