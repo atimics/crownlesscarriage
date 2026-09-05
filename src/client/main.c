@@ -10037,18 +10037,6 @@ static void ReadCompanyPage(const CcSim *sim, const LocalState *local)
             (void)snprintf(words + used, sizeof(words) - used, "%d %s. ", sim->player.cargo[i], CcGoodName((CcGood)i));
         }
         ClientReadSpeech(sim, words, 0);
-    } else if (local->book_page == 4) {
-        int32_t limit = AdventureBookPageSize(local);
-        for (int32_t row = local->book_offset; row < CC_PONY_COUNT && row < local->book_offset + limit; ++row) {
-            int32_t pony = AdventureBookPony(sim, row);
-            const CcPony *p = &sim->pony_company.ponies[pony];
-            bool team = pony == sim->pony_company.team[0] || pony == sim->pony_company.team[1];
-            char details[384];
-            AdventurePonyDetails(sim, pony, details, sizeof(details));
-            (void)snprintf(words, sizeof(words), "%s. %s %s", p->seen ? CcPonyName(pony) : "Yet to meet",
-                p->seen ? team ? "With you." : "Roaming." : "", details);
-            ClientReadSpeech(sim, words, 0);
-        }
     } else {
         int32_t limit = AdventureBookPageSize(local);
         for (int32_t i = local->book_offset; i < sim->event_count && i < local->book_offset + limit; ++i) {
@@ -11620,10 +11608,17 @@ int main(int argc, char **argv)
         if (capture_ux_view == 3) { view = VIEW_TRADE; local.trade_good = CC_GOOD_FOOD; local.trade_quantity = 2; }
         if (capture_ux_view == 4) { view = VIEW_LEDGER; local.book_page = 3; }
         if (capture_ux_view == 11 || capture_ux_view == 12) {
-            view = VIEW_LEDGER;
-            local.book_page = 4;
-            local.book_offset = capture_ux_view == 12 ? 2 : 0;
-            int32_t pony = AdventureBookPony(&sim, local.book_offset);
+            view = VIEW_CARRIAGE;
+            local.carriage_tab = CARRIAGE_PONIES;
+            int32_t pony = sim.pony_company.team[0];
+            if (capture_ux_view == 12) {
+                for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
+                    if (i != sim.pony_company.team[0] && i != sim.pony_company.team[1]) {
+                        pony = i;
+                        break;
+                    }
+                }
+            }
             sim.pony_company.ponies[pony].seen = true;
             sim.pony_company.ponies[pony].bond = 3;
             sim.pony_company.ponies[pony].quests_completed = 2;
