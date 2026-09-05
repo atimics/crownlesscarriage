@@ -26,6 +26,32 @@ static void Advance(CcMusicDirector *director, const CcMusicContext *context, in
 
 int main(void)
 {
+    /* Each underground scene draws its score from the site after leaving town. */
+    static const CcMusicScene underground[] = {
+        {.goblin_cave = true}, {.dragon_cave = true}, {0}
+    };
+    static const int site_cues[] = {46, 52, 39};
+    for (int site = 0; site < 3; ++site) {
+        CcSimInit(&sim, 17);
+        sim.player.location_id = sim.settlements[3].id; /* Silverwick. */
+        CcMusicDirector site_music;
+        CcMusicInit(&site_music, 17);
+        int town_take = TakeFor(20, 1);
+        int site_take = TakeFor(site_cues[site], 1);
+        CHECK(town_take >= 0 && site_take >= 0);
+        site_music.available[town_take] = true;
+        site_music.available[site_take] = true;
+        CcMusicContext town = CcMusicContextFor(&sim, (CcMusicScene){0});
+        CHECK(CcMusicChoose(&site_music, &town) == town_take);
+        sim.dungeon_expedition.active = site == 2;
+        CcMusicContext inside = CcMusicContextFor(&sim, underground[site]);
+        CHECK(CcMusicScore(&inside, 19) == 0.0f);
+        CHECK(CcMusicChoose(&site_music, &inside) == site_take);
+        sim.dungeon_expedition.active = false;
+        CcMusicContext returned = CcMusicContextFor(&sim, (CcMusicScene){0});
+        CHECK(CcMusicChoose(&site_music, &returned) == town_take);
+    }
+
     CcSimInit(&sim, 17);
     CcId from_id = sim.settlements[0].id;
     CcId to_id = sim.settlements[1].id;
