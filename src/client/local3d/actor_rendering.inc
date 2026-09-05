@@ -3245,6 +3245,34 @@ static void DrawPollardTree(Vector3 root, float turn, float shape,
     }
 }
 
+static void DrawThornfordOrchardTree(Vector3 root, float turn, float shape,
+                                      Color leaves)
+{
+    float height = 4.55f + shape * 0.65f;
+    Color bark = BlendColor(WORLD_WOOD_SHADOW, WORLD_WOOD, 0.36f);
+    Vector3 fork = LocalPoint(root, 0.12f, height * 0.42f, 0.0f, turn);
+    Vector3 left = LocalPoint(root, -1.02f, height * 0.76f, 0.08f, turn);
+    Vector3 right = LocalPoint(root, 1.10f, height * 0.74f, -0.12f, turn);
+    DrawTreeShadow(root, turn, 2.20f, 1.80f);
+    DrawTreeRootFlare(root, turn, 0.34f, bark);
+    DrawTreeCylinder(root, fork, 0.38f, 0.25f, 7, bark);
+    DrawTreeCylinder(fork, left, 0.23f, 0.06f, 6, bark);
+    DrawTreeCylinder(fork, right, 0.22f, 0.05f, 6, ShadeColor(bark, 0.84f));
+    DrawTreeFoliageMass(TREE_CROWN_OAK, left,
+                        (Vector3){1.62f, 1.85f, 1.48f}, turn + 0.20f,
+                        ShadeColor(leaves, 0.80f));
+    DrawTreeFoliageMass(TREE_CROWN_OAK, right,
+                        (Vector3){1.60f, 1.90f, 1.44f}, turn - 0.16f,
+                        ShadeColor(leaves, 0.94f));
+    DrawTreeFoliageMass(TREE_CROWN_OAK,
+                        LocalPoint(root, 0.08f, height * 0.91f, -0.16f, turn),
+                        (Vector3){1.78f, 1.80f, 1.52f}, turn + 0.08f, leaves);
+    DrawTreeFoliageMass(TREE_CROWN_OAK,
+                        LocalPoint(root, -0.12f, height * 0.72f, 0.95f, turn),
+                        (Vector3){1.54f, 1.52f, 1.36f}, turn + 0.32f,
+                        ShadeColor(leaves, 0.86f));
+}
+
 static void DrawTree(float x, float z, TreeFamily family, Color leaves,
                      TreeRegionalStyle regional_style)
 {
@@ -3276,7 +3304,11 @@ static void DrawTree(float x, float z, TreeFamily family, Color leaves,
 
     switch (family) {
         case TREE_FAMILY_OAK:
-            DrawOakTree(root, turn, shape, leaves);
+            if (active_place_function == CC_SETTLEMENT_FARMING) {
+                DrawThornfordOrchardTree(root, turn, shape, leaves);
+            } else {
+                DrawOakTree(root, turn, shape, leaves);
+            }
             break;
         case TREE_FAMILY_POLLARD:
             DrawPollardTree(root, turn, shape, leaves);
@@ -3291,12 +3323,24 @@ static void DrawTree(float x, float z, TreeFamily family, Color leaves,
 
 static void DrawWorldTreeAt(int32_t index, TreeRegionalStyle regional_style)
 {
-    Vector2 position = WORLD_TREES[index].position;
-    position.x += (index & 1) != 0 ? -regional_style.cluster_pull :
-                                     regional_style.cluster_pull;
-    TreeFamily family = RegionalTreeFamily(WORLD_TREES[index].family, index,
+    WorldTreePlacement placement = ActiveWorldTreeAt(index);
+    Vector2 position = placement.position;
+    if (active_place_function != CC_SETTLEMENT_FARMING) {
+        position.x += (index & 1) != 0 ? -regional_style.cluster_pull :
+                                         regional_style.cluster_pull;
+    }
+    TreeFamily family = RegionalTreeFamily(placement.family, index,
                                            regional_style);
     Color leaves = (index & 1) != 0 ? WORLD_FOLIAGE : WORLD_FOLIAGE_LIGHT;
+    if (active_place_function == CC_SETTLEMENT_FARMING) {
+        regional_style.proportions = (Vector3){1.24f, 0.94f, 1.20f};
+        regional_style.foliage_bias = WORLD_CROP;
+        regional_style.foliage_mix = family == TREE_FAMILY_ALDER ? 0.16f : 0.38f;
+        regional_style.cluster_pull = 0.0f;
+        family = placement.family;
+        leaves = BlendColor(WORLD_FOLIAGE_LIGHT, WORLD_CROP_LIGHT,
+                             index % 3 == 0 ? 0.34f : 0.12f);
+    }
     if (family == TREE_FAMILY_OAK) {
         leaves = ShadeColor(leaves, 0.86f);
     } else if (family == TREE_FAMILY_POLLARD) {

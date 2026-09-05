@@ -88,6 +88,12 @@ static CcSettlementFunction active_place_function = CC_SETTLEMENT_MARKET;
 static float street_terrain_natural[CC_TERRAIN_SAMPLE_COUNT];
 static float street_terrain_height[CC_TERRAIN_SAMPLE_COUNT];
 
+static WorldTreePlacement ActiveWorldTreeAt(int32_t index)
+{
+    return active_place_function == CC_SETTLEMENT_FARMING ?
+        THORNFORD_TREES[index] : WORLD_TREES[index];
+}
+
 static const CcLocalPlaceLandmark *ActivePlaceLandmarkAt(int32_t index)
 {
     return CcLocalPlaceLandmarkAt(active_place_function, index);
