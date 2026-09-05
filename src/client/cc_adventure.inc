@@ -785,13 +785,10 @@ static void DrawAdventureFocus(const CcSim *sim, const LocalState *local, Client
 
 static void DrawAdventureConversation(const CcSim *sim, const LocalState *local)
 {
-    const CcSituation *situation = CcSimSituation(sim, local->conversation_situation_id);
-    const CcCharacter *person = CcSimCharacter(sim, local->conversation_character_id);
-    const char *name = person != NULL ? person->name : local->conversation_name;
-    char spoken[192] = "";
-    bool authored = situation != NULL && person != NULL &&
-        CcStoryCharacterText(sim, situation, person, spoken, sizeof(spoken));
-    const char *line = authored ? spoken : local->conversation_line;
+    CcSpeech speech;
+    bool spoken = ClientConversationSpeech(sim, local, &speech);
+    const char *name = spoken ? speech.speaker : local->conversation_name;
+    const char *line = spoken ? speech.text : local->conversation_line;
     ClientTouchHeading(name, line);
     float width = fminf(720.0f, (float)GetScreenWidth() - 80.0f);
     float height = 68.0f + (float)AdventureText(line, 0, 0, (int)width - 44,

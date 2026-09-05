@@ -91,6 +91,7 @@ cc_strict_warnings(crownless_sim)
 add_library(crownless_story
     src/story/cc_story.c
     src/story/cc_speech.c
+    src/story/cc_speech_interactions.c
 )
 target_include_directories(crownless_story PUBLIC src)
 target_link_libraries(crownless_story PUBLIC crownless_sim)

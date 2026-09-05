@@ -5808,6 +5808,29 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
         CcSimHorseTeamReadiness(sim) < 30 ? DANGER : TEAL);
 }
 
+static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
+                                     CcSpeech *speech)
+{
+    const CcSituation *situation = CcSimSituation(sim, local->conversation_situation_id);
+    const CcCharacter *person = CcSimCharacter(sim, local->conversation_character_id);
+    if (CcSpeechCharacter(sim, situation, person, speech)) return true;
+    const CcLocalPlaceProfile *place = CcLocalPlaceProfileForSettlement(
+        CcSimSettlement(sim, sim->player.location_id));
+    const char *name = person != NULL ? person->name :
+        local->conversation_name[0] != '\0' ? local->conversation_name : "Neighbour";
+    CcSpeech greeting;
+    if (!CcSpeechGreeting(sim, sim->player.location_id,
+            person != NULL ? person->id : local->conversation_object,
+            name, place->primary_hall, &greeting)) return false;
+    if (person != NULL) {
+        return CcSpeechCompose(speech, greeting.line_id, person->id, person->name,
+            CcSpeechCharacterVoice(sim, person), greeting.text, greeting.delivery,
+            greeting.priority, 0);
+    }
+    *speech = greeting;
+    return true;
+}
+
 static void DrawCharacterConversation(const CcSim *sim,
                                       const LocalState *local)
 {
@@ -5846,9 +5869,9 @@ static void DrawCharacterConversation(const CcSim *sim,
                       19, CC_GOLD);
     CcOverlayDrawText(SituationTitle(situation->kind), speaker_x,
                       (int)panel_y + 76, 10, MUTED);
-    char spoken[192];
-    bool has_spoken = CcStoryCharacterText(
-        sim, situation, character, spoken, sizeof(spoken));
+    CcSpeech speech;
+    bool has_spoken = ClientConversationSpeech(sim, local, &speech);
+    const char *spoken = speech.text;
     CcOverlayDrawText("SPEAKS", speech_x, (int)panel_y + 20, 8, TEAL);
     if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
         const CcRelationship *relationship = CcSimRelationship(
@@ -10002,19 +10025,33 @@ static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
     for (int cue = 0; cue < CC_SOUND_COUNT; ++cue) {
         if ((cues & (UINT32_C(1) << (unsigned int)cue)) != 0U) CcAudioPlay((CcSoundCue)cue);
     }
-    char voice_path[768] = "";
+    CcSpeech speech;
+    bool has_speech = false;
     if (view == VIEW_CHARACTER) {
-        const CcSituation *situation = CcSimSituation(sim, local->conversation_situation_id);
-        const CcCharacter *character = CcSimCharacter(sim, local->conversation_character_id);
-        const CcStoryLine *line = CcStoryCharacterLine(sim, situation, character);
-        char spoken[192];
-        char relative[256];
-        if (line != NULL && CcStoryCharacterText(sim, situation, character, spoken, sizeof(spoken)) &&
-            CcSoundVoicePath(line->id, character->name, spoken, relative, sizeof(relative))) {
-            (void)ResolveClientAssetPath(relative, voice_path, sizeof(voice_path));
+        has_speech = ClientConversationSpeech(sim, local, &speech);
+    } else if (view == VIEW_ENCOUNTER || (view == VIEW_LOCAL && local->journey_parley_active &&
+        GridDistance(LocalPosition(local), (Vector2){CC_LOCAL_ROAD_PARLEY_X, CC_LOCAL_ROAD_PARLEY_Z}) < 1.55f)) {
+        has_speech = CcSpeechRoad(sim, &speech);
+    } else if (view == VIEW_TRADE && local->adventure_ui) {
+        AdventureQuote quote = AdventureTradeQuote(sim, local);
+        const CcLocalPlaceProfile *place = CcLocalPlaceProfileForSettlement(
+            CcSimSettlement(sim, sim->player.location_id));
+        int32_t quantity = quote.command.amount < 0 ? -quote.command.amount : quote.command.amount;
+        has_speech = CcSpeechTrade(sim, place->keeper_name, quote.command.good,
+            quantity, quote.total, local->trade_mode, quote.reason, &speech);
+    }
+    char voice_path[768] = "";
+    char relative[256];
+    if (has_speech && CcSpeechPath(&speech, relative, sizeof(relative))) {
+        (void)ResolveClientAssetPath(relative, voice_path, sizeof(voice_path));
+        if (!FileExists(voice_path) && CcSoundVoicePath(speech.line_id, speech.speaker,
+                speech.text, relative, sizeof(relative))) {
+            char legacy[768];
+            (void)ResolveClientAssetPath(relative, legacy, sizeof(legacy));
+            if (FileExists(legacy)) (void)snprintf(voice_path, sizeof(voice_path), "%s", legacy);
         }
     }
-    CcAudioVoice(voice_path);
+    CcAudioSpeech(has_speech ? &speech : NULL, voice_path);
     CcAudioUpdate();
 }
 
@@ -11537,6 +11574,16 @@ int main(int argc, char **argv)
             if (input) CcAudioInit();
             CcAudioSetFocused(IsWindowFocused());
         }
+        bool speech_clicked = normal_play && !menu_frame && CcAudioCurrentSpeech() != NULL &&
+            ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+            (CheckCollisionPointRec(ClientPointerPosition(), (Rectangle){18, 92, 110, 32}) ||
+             CheckCollisionPointRec(ClientPointerPosition(), (Rectangle){136, 92, 110, 32}));
+        if (normal_play && !menu_frame && CcAudioCurrentSpeech() != NULL) {
+            if (ClientKeyPressed(KEY_F7) || (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+                CheckCollisionPointRec(ClientPointerPosition(), (Rectangle){18, 92, 110, 32}))) CcAudioReplaySpeech();
+            if (ClientKeyPressed(KEY_F8) || (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+                CheckCollisionPointRec(ClientPointerPosition(), (Rectangle){136, 92, 110, 32}))) CcAudioSkipSpeech();
+        }
         bool change_audio = normal_play && (ClientKeyPressed(KEY_F6) || audio_clicked ||
             menu_action == FRONTEND_ACTION_SOUND);
         if (change_audio) {
@@ -11601,7 +11648,7 @@ int main(int argc, char **argv)
         } else if (render_benchmark || capture_ux || capture_road_fork) {
             ClientInputClearPressed();
         } else {
-            if (!menu_frame && !audio_clicked) HandleInput(&journal, &sim, &selected, &selected_situation,
+            if (!menu_frame && !audio_clicked && !speech_clicked) HandleInput(&journal, &sim, &selected, &selected_situation,
                         &view, &return_view, &local,
                         local_target, local_bounds,
                         frame_delta_time,
@@ -11861,6 +11908,15 @@ int main(int argc, char **argv)
         if ((normal_play || capture_ux) && view == VIEW_LOCAL) {
             const char *navigation[] = {"Book  B", "Map  M", "Save F5", "Menu Esc"};
             for (int i = 0; i < 4; ++i) AdventureButton(AdventureNavBounds(i), navigation[i], true, false);
+        }
+        if (normal_play && !menu_frame && CcAudioCurrentSpeech() != NULL) {
+            AdventureButton((Rectangle){18, 92, 110, 32}, "Replay F7", true, false);
+            AdventureButton((Rectangle){136, 92, 110, 32}, "Skip F8", true, false);
+            if (view != VIEW_CHARACTER) {
+                const CcSpeech *spoken = CcAudioCurrentSpeech();
+                (void)AdventureWrap(spoken->text, 22, 134, GetScreenWidth() - 44,
+                    AdventureTextSize(14), INK);
+            }
         }
         CcOverlayEnd();
         if (normal_play && !local.adventure_ui && frontend.screen == FRONTEND_PLAYING) {
