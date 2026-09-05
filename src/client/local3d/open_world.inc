@@ -1436,11 +1436,18 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         DrawRobotShell(agent);
         DrawCombatSword(agent);
     }
+    CcLocalAgent passenger;
+    if (hero_embarked && crew_exchange != NULL) {
+        PrepareCrewPassenger(agent, carriage->position, carriage->heading_yaw, &passenger);
+        DrawRobotShell(&passenger);
+    }
+    DrawCrew(hero_embarked && crew_exchange != NULL ? &passenger : agent, 6);
     EndWorldLighting();
     EndMode3D();
     DrawTargetAtmosphere(target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
+    DrawCrewLabels(camera, destination);
 
     WorldLabel labels[64] = {0};
     int32_t label_count = 0;

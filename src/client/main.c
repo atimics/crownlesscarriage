@@ -10859,6 +10859,14 @@ int main(int argc, char **argv)
         coop_checkpoint_sim = &sim;
         coop_checkpoint_local = &local;
         coop_checkpoint_path = session_path;
+        CcLocalCrewSetExchange(CcCoopClientExchange);
+        CcLocalCrewSetSeat(CcCoopClientSeat());
+        if (!restored_local_session && !sim.journey.active &&
+            local.agent.scene == CC_LOCAL_SCENE_STREET) {
+            int32_t seat = CcCoopClientSeat();
+            RepositionHero(&local, (Vector2){local.agent.position.x + (float)seat * 0.85f,
+                local.agent.position.z - (float)seat * 0.35f}, false);
+        }
     }
     while (render_benchmark || (!frontend.quit && !WindowShouldClose())) {
 #if defined(PLATFORM_WEB)
@@ -11074,6 +11082,7 @@ int main(int argc, char **argv)
                                 IsWindowFocused(), music_play_input,
                                 CcAudioMusicGain(), sim.world_seed);
         }
+        CcLocalCrewBeginFrame(frame_delta_time);
         BeginDrawing();
         ClearBackground(BACKGROUND);
         CcOverlayBegin(1.0f);
@@ -11093,7 +11102,7 @@ int main(int argc, char **argv)
                     clock, local_target, local_bounds);
             } else {
                 CcLocalDrawFork3D(
-                    &sim, selected, local.fork_turn_progress, clock,
+                    &sim, &local.agent, selected, local.fork_turn_progress, clock,
                     local_target, local_bounds);
             }
             DrawLocalHeader(&sim, &local, false);
@@ -11251,6 +11260,11 @@ int main(int argc, char **argv)
             const char *audio_label = preferences.audio_mode == 0 ? "Sound full F6" :
                 preferences.audio_mode == 1 ? "Effects F6" : "Muted F6";
             DrawText(audio_label, (int)audio_bounds.x + 10, (int)audio_bounds.y + 10, 10, INK);
+        }
+        if (CcCoopClientActive()) {
+            int32_t crew_count;
+            const CcCrewMember *crew = CcLocalCrewDrawn(&crew_count);
+            CcCoopClientDrawn(crew, crew_count);
         }
         if (frontend.screen != FRONTEND_PLAYING) {
             DrawFrontend(&frontend, &preferences, &sim);

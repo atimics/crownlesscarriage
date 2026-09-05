@@ -7,5 +7,6 @@
 #include "client/local3d/authored_places.inc"
 #include "client/local3d/heraldry.inc"
 #include "client/local3d/actor_rendering.inc"
+#include "client/local3d/crew_rendering.inc"
 #include "client/local3d/road_book.inc"
 #include "client/local3d/open_world.inc"

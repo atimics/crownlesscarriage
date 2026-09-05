@@ -9,6 +9,7 @@ const world = '1'.repeat(32), key = `cc-coop-pending-${world}`;
 const storage = new Map([['cc-coop-token', 'a'.repeat(64)]]);
 const requests = [], responses = [], navigations = [];
 const files = new Map();
+let now = 2000;
 function client(pathname = "/game/index.html") {
   files.clear();
   const context = vm.createContext({
@@ -19,13 +20,13 @@ function client(pathname = "/game/index.html") {
     window: {addEventListener() {}},
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
     navigator: { locks: { request: (_key, callback) => callback() } },
-    performance: { now: () => 2000 },
+    performance: { now: () => now },
     fetch: async (path, options) => {
       requests.push({path, ...options});
       const response = responses.shift();
       if (response instanceof Error) throw response;
       assert.ok(response, 'Every network request needs an expected response');
-      return { ok: !response.error, status: response.error ? 409 : 200, json: async () => response };
+      return { ok: !response.error, status: response.status || (response.error ? 409 : 200), json: async () => response };
     }
   });
   vm.runInContext(avatar, context);
@@ -125,6 +126,42 @@ await coop.connect();
 assert.equal(coop.hasSession(), false);
 assert.equal(files.has('/tmp/crownless-coop.ccsave.session'), false, 'A shared carriage move starts in the current scene');
 assert.equal(responses.length, 0);
+console.log('Shared browser recovery, ordering, and save ownership passed.');
+
+// Player poses update independently of shared campaign saves.
+storage.delete(sessionKey);
+coop = client();
+responses.push({...state(5), session_context:'town', visit:'visit-one'});
+await coop.connect();
+const pose = Array(83).fill(0);
+const peer = {id:'b'.repeat(16), name:'Bren', appearance:{coat:3, hair:2}, pose};
+responses.push({context:'town', scene:0, peers:[peer]});
+assert.equal(coop.exchange(0, () => pose).length, 0);
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(coop.exchange(0, () => { throw Error('Pose reads are throttled'); })[0].name, 'Bren');
+assert.equal(typeof coop.exchange(0, () => pose)[0].appearance, 'number');
+assert.equal(JSON.parse(requests.at(-1).body).visit, 'visit-one');
+assert.equal(coop.exchange(1, () => pose).length, 0, 'Changing rooms clears the prior crew');
+now += 4000;
+responses.push({context:'town', scene:1, peers:[peer]});
+assert.equal(coop.exchange(1, () => pose).length, 0, 'Expired poses stay hidden');
+await new Promise(resolve => setImmediate(resolve));
+now += 100;
+responses.push({error:'Host restarted', status:428}, {...state(6), session_context:'town', visit:'visit-two'});
+coop.exchange(1, () => pose);
+await new Promise(resolve => setImmediate(resolve));
+now += 100;
+responses.push({context:'town', scene:1, peers:[]});
+coop.exchange(1, () => pose);
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(JSON.parse(requests.at(-1).body).visit, 'visit-two', 'A host restart renews presence');
+responses.push({});
+coop.leave();
+assert.equal(JSON.parse(requests.at(-1).body).pose, null);
+assert.equal(requests.at(-1).keepalive, true);
+assert.equal(coop.exchange(1, () => pose).length, 0);
+assert.equal(responses.length, 0);
+console.log('Crew movement, room changes, expiry, reconnect, and leave passed.');
 coop = client();
 responses.push({...state(4), owner:false});
 await coop.connect();
