@@ -268,7 +268,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Debug
           -DCC_BUILD_CLIENT=ON
           -DCC_WARNINGS_AS_ERRORS=ON
-          -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
+          -DCMAKE_C_FLAGS="-O1 -fsanitize=address,undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-sanitize-recover=undefined"
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined"
       - name: Build
         run: cmake --build build --parallel
@@ -277,6 +277,7 @@ jobs:
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: |
           clang \
+            -O1 \
             -fsanitize=undefined \
             -fno-sanitize-recover=undefined \
             tests/sanitizer_ub_fixture.c \
