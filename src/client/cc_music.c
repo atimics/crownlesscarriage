@@ -43,6 +43,20 @@ static void AttractSettlement(CcMusicContext *context,
         weight * Unit(((float)place->hunger - 25.0f) / 60.0f);
 }
 
+static CcMusicMood TownMood(const CcSim *sim, const CcSettlement *place)
+{
+    /* This is the same hunger threshold used by the town's visible condition. */
+    if (place->hunger >= 40) return CC_MUSIC_MOOD_SHORTAGE;
+    for (int i = 0; i < sim->event_count; ++i) {
+        const CcEvent *event = CcSimRecentEvent(sim, i);
+        if (event == NULL || event->kind != CC_EVENT_RELIEF ||
+            event->location_id != place->id || event->magnitude <= 0) continue;
+        int64_t age = (int64_t)sim->current_day - event->day;
+        if (age >= 0 && age < 3) return CC_MUSIC_MOOD_RECOVERY;
+    }
+    return CC_MUSIC_MOOD_EVERYDAY;
+}
+
 CcMusicContext CcMusicContextFor(const CcSim *sim, CcMusicScene scene)
 {
     CcMusicContext context = {0};
@@ -70,8 +84,12 @@ CcMusicContext CcMusicContextFor(const CcSim *sim, CcMusicScene scene)
     } else {
         AttractSettlement(&context, here, 1.0f);
         if (here != NULL && !scene.road && !sim->dungeon_expedition.active &&
-            !scene.goblin_cave && !scene.dragon_cave)
+            !scene.goblin_cave && !scene.dragon_cave) {
             CcMusicAttractPlace(&context, here->name, 0.35f);
+            context.town_mood = TownMood(sim, here);
+            if (context.town_mood == CC_MUSIC_MOOD_RECOVERY)
+                context.theme[CC_MUSIC_RELIEF] = 1.0f;
+        }
     }
     context.theme[CC_MUSIC_NIGHT] = scene.night ? 0.75f : 0.0f;
     context.theme[CC_MUSIC_RAIN] = scene.rain ? 0.75f : 0.0f;
@@ -134,6 +152,7 @@ CcMusicContext CcMusicContextFor(const CcSim *sim, CcMusicScene scene)
         memset(context.cue, 0, sizeof(context.cue));
         context.theme[CC_MUSIC_LOSS] = 1.0f;
         context.combat = false;
+        context.town_mood = CC_MUSIC_MOOD_ANY;
     }
     return context;
 }
@@ -142,6 +161,9 @@ float CcMusicScore(const CcMusicContext *context, int cue)
 {
     if (context == NULL || cue < 0 || cue >= CC_MUSIC_CUE_COUNT) return 0.0f;
     const CcMusicCue *track = &cc_music_cues[cue];
+    if (track->mood != CC_MUSIC_MOOD_ANY &&
+        (context->town_mood != track->mood || Unit(context->cue[cue]) == 0.0f))
+        return 0.0f;
     if (track->combat && !context->combat) return 0.0f;
     if (track->combat && Unit(context->theme[track->theme]) == 0.0f) return 0.0f;
     if ((track->theme == CC_MUSIC_NIGHT || track->theme == CC_MUSIC_RAIN ||
@@ -153,6 +175,8 @@ float CcMusicScore(const CcMusicContext *context, int cue)
         0.22f * Unit(context->theme[track->secondary]) +
         3.0f * Unit(context->cue[cue]);
     if (track->region >= 0) score *= 0.03f + 2.0f * Unit(context->region[track->region]);
+    /* Familiar town arrangements lead fresh draws; recent-title penalties still apply. */
+    if (track->mood != CC_MUSIC_MOOD_ANY) score *= 2.0f;
     if (context->combat && !track->combat) score *= 0.015f;
     return score;
 }
