@@ -95,3 +95,77 @@ static void TestBoxBatchParity(void)
     UnloadRenderTexture(target);
     (void)puts("PASS box batch: all faces, transforms, alpha, and buffer rollover");
 }
+
+static void ApplyBoxFixtureState(bool reference, float reveal, float height,
+                                  bool terrain)
+{
+    if (!reference) {
+        SetWorldForegroundReveal(reveal, height);
+        SetWorldTerrainSurface(terrain);
+        return;
+    }
+    // The reference always uploads state after flushing the preceding shapes.
+    rlDrawRenderBatchActive();
+    float surface = terrain ? 1.0f : 0.0f;
+    SetShaderValue(visual_style.world, visual_style.foreground_reveal_location,
+                   &reveal, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(visual_style.world, visual_style.reveal_cut_height_location,
+                   &height, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(visual_style.world, visual_style.terrain_surface_location,
+                   &surface, SHADER_UNIFORM_FLOAT);
+}
+
+static Image RenderBoxStateFixture(RenderTexture2D target, bool reference)
+{
+    Camera3D camera = {.position = {4, 5, 7}, .target = {0}, .up = {0, 1, 0},
+                      .fovy = 6.0f, .projection = CAMERA_ORTHOGRAPHIC};
+    BeginTextureMode(target);
+    ClearBackground(BLACK);
+    BeginMode3D(camera);
+    for (int32_t pass = 0; pass < 2; ++pass) {
+        BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
+        const float reveals[] = {1.0f, 1.0f, 1.0f, 0.0f, 1.0f};
+        const float heights[] = {0.2f, 0.2f, 0.7f, 0.7f, 0.2f};
+        const bool terrain[] = {true, true, false, false, true};
+        for (int32_t i = 0; i < 5; ++i) {
+            ApplyBoxFixtureState(reference, reveals[i], heights[i], terrain[i]);
+            DrawBox((Vector3){(float)i * 0.8f - 1.6f, 0.0f,
+                              (float)pass * 1.5f - 0.75f},
+                    (Vector3){0.6f, 1.8f, 0.6f},
+                    i % 2 == 0 ? WORLD_ROAD : WORLD_TEAL);
+        }
+        EndWorldLighting();
+    }
+    EndMode3D();
+    EndTextureMode();
+    return LoadImageFromTexture(target.texture);
+}
+
+static void TestBoxStateParity(void)
+{
+    RenderTexture2D target = LoadRenderTexture(256, 256);
+    RequireRenderer(IsRenderTextureValid(target), "state target must load");
+    Image expected = RenderBoxStateFixture(target, true);
+    Image actual = RenderBoxStateFixture(target, false);
+    Color *before = LoadImageColors(expected);
+    Color *after = LoadImageColors(actual);
+    RequireRenderer(before != NULL && after != NULL,
+                    "state images must be readable");
+    int32_t changed = 0;
+    int32_t visible = 0;
+    for (int32_t i = 0; i < expected.width * expected.height; ++i) {
+        if (before[i].r > 16 || before[i].g > 16 || before[i].b > 16) visible++;
+        if (abs((int)before[i].r - (int)after[i].r) > 1 ||
+            abs((int)before[i].g - (int)after[i].g) > 1 ||
+            abs((int)before[i].b - (int)after[i].b) > 1) changed++;
+    }
+    RequireRenderer(visible > 1000, "state fixture must cover the target");
+    RequireRenderer(changed == 0,
+                    "cached state must preserve cuts, terrain, and new passes");
+    UnloadImageColors(before);
+    UnloadImageColors(after);
+    UnloadImage(expected);
+    UnloadImage(actual);
+    UnloadRenderTexture(target);
+    (void)puts("PASS render state: repeated values, cuts, terrain, and new passes");
+}

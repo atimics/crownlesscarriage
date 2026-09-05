@@ -152,6 +152,7 @@ int main(int argc, char **argv)
         if (strcmp(argv[1], "--graphics") == 0) {
             TestCharacterPrimitives();
             TestBoxBatchParity();
+            TestBoxStateParity();
             TestCharacterSurfaces();
             TestAnimalModels(argv[2]);
             TestPonyPortraits();
