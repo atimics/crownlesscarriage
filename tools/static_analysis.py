@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
@@ -154,13 +155,16 @@ def main() -> int:
         "src",
     ]
     try:
-        result = subprocess.run(
-            command,
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        jobs = max(1, int(os.environ.get("CC_CPPCHECK_JOBS", "1")))
+        # A build directory keeps whole-program checks enabled with parallel workers.
+        with tempfile.TemporaryDirectory(prefix="crownless-cppcheck-") as build_dir:
+            result = subprocess.run(
+                command + [f"-j{jobs}", f"--cppcheck-build-dir={build_dir}"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
     except FileNotFoundError:
         print("cppcheck is required for static analysis.", file=sys.stderr)
         return 2

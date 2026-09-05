@@ -396,6 +396,45 @@ static void RefillSilentAbbey(CcSettlement *place)
     place->prosperity = 0;
 }
 
+static void CheckPretenderCampaignSupplies(void)
+{
+    for (uint32_t schema = 41U; schema <= 42U; ++schema) {
+        CcSim sim;
+        CcSettlement *place = PrepareIsolated(&sim);
+        sim.schema_version = schema;
+        place->kingdom_id = sim.kingdoms[0].id;
+        RefillSilentAbbey(place);
+        place->stock[CC_GOOD_TOOLS] = 2;
+        sim.archives.scribes = 1;
+        sim.kingdoms[0].unsanctioned_weeks = 51;
+        sim.dragon.slain = false;
+        sim.dragon.life_stage = CC_DRAGON_STAGE_WHELP;
+        sim.dragon.age_days = 365;
+        sim.dragon_campaign.phase = CC_DRAGON_CAMPAIGN_OUTBOUND;
+        sim.dragon_campaign.days_remaining = 20;
+        sim.dragon_campaign.pledged_kingdom_mask = 1U;
+        sim.dragon_campaign.alliance_kingdom_mask = 1U;
+        sim.dragon_campaign.supplies[CC_GOOD_TOOLS] = 0;
+        CcMoney gold = CcSimTrackedGold(&sim);
+        CcSimAdvanceDays(&sim, 1);
+        CC_CHECK(sim.kingdoms[0].pretender_crises == 1);
+        CC_CHECK(sim.dragon_campaign.recovered_coins == 0);
+        CC_CHECK(CcSimTrackedGold(&sim) == gold);
+        CC_CHECK(place->stock[CC_GOOD_TOOLS] +
+            sim.dragon_campaign.supplies[CC_GOOD_TOOLS] == 2);
+        CC_CHECK(sim.dragon_campaign.supplies[CC_GOOD_TOOLS] ==
+            (schema >= 42U ? 2 : 0));
+        bool crisis_found = false;
+        for (int32_t i = 0; i < sim.event_count; ++i) {
+            const CcEvent *event = CcSimRecentEvent(&sim, i);
+            if (event->kind != CC_EVENT_PRETENDER_CRISIS) continue;
+            crisis_found = true;
+            CC_CHECK(event->magnitude == (schema >= 42U ? -8 : -15));
+        }
+        CC_CHECK(crisis_found);
+    }
+}
+
 static void CheckPretenderYear(void)
 {
     CcSim sim;
@@ -466,6 +505,7 @@ int main(void)
     CheckScribeKitWear();
     CheckIronDeliveryRestoresWriting();
     CheckPretenderYear();
+    CheckPretenderCampaignSupplies();
     CheckAbandonedScriptoriumMoves();
     return 0;
 }

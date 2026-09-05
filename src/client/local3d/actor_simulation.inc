@@ -2917,6 +2917,7 @@ static float RayFootprintDistance(Ray ray, Rectangle footprint, float height)
         .max = {footprint.x + footprint.width, height,
                 footprint.y + footprint.height}
     };
+    if (CcLocalRayMissesBoxParallelSlabInternal(ray, box)) return FLT_MAX;
     RayCollision collision = GetRayCollisionBox(ray, box);
     return collision.hit ? collision.distance : FLT_MAX;
 }
