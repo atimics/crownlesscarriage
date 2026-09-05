@@ -1,5 +1,29 @@
 # Procedural speech
 
+## What fully voiced means here
+
+Speech follows the current game state. The same words appear in captions and
+reach the voice model. A person's voice stays stable across travel and saved
+games. New people receive a voice from the generated cast.
+
+| Surface | Spoken content |
+| --- | --- |
+| Named conversations | Meetings, questions, promises, outcomes, relationship branches, and mine testimony |
+| Player replies | The chosen reply, followed by the next person's answer |
+| Town interactions | Visible people's greetings, current trade quotes, and accepted trades |
+| Road encounters | The current demand and the company's reply after payment |
+| Field calls | Arrival, combat warnings, and brief effort calls |
+| Company Book and notices | Optional reading of the current page's visible text |
+| Successor generations | Current names and words, with stable voices assigned to their own identities |
+| Playback | Captions, replay, skip, voice volume, and interruption when the scene changes |
+
+The campaign pack supplies common lines. The local speech worker fills in
+changing names, quantities, prices, and other generated text. Browser play uses
+the same pack and can connect to a configured worker. The cast and scripts use
+English. Player speech, page reading, and nearby greetings have separate settings.
+
+## Speech records
+
 `CcSpeech` holds the exact words, speaker, voice, delivery, priority, and source
 event for a spoken turn. The story module creates these records from the same
 state used for dialogue text. Its builders leave the simulation unchanged.
@@ -25,8 +49,8 @@ The client uses speech records for named conversations, town greetings, current
 trade quotes, and road demands. Both conversation layouts show the record's
 words. Other spoken interactions have a caption beside the playback controls.
 Replay with F7 and skip with F8, or use their on-screen buttons. Closing the
-interaction clears its turn. The original opening WAVs remain usable while
-the larger cast pack is prepared.
+interaction clears its turn. Native clients can also use the original opening
+WAVs as a fallback.
 
 ## Preparing voices
 
