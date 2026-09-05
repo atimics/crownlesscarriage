@@ -2292,26 +2292,26 @@
       "export": "assets/exports/world_kit/wk_hair_bob_v01.glb",
       "bounds": {
         "min": [
-          -0.2033,
-          -0.1481,
-          -0.1929
+          -0.2051,
+          -0.1433,
+          -0.1958
         ],
         "max": [
-          0.2033,
-          0.0635,
-          0.2383
+          0.2051,
+          0.1541,
+          0.2391
         ],
         "size": [
-          0.4065,
-          0.2116,
-          0.4312
+          0.4102,
+          0.2974,
+          0.4349
         ]
       },
       "material_roles": [
         "hair"
       ],
-      "mesh_objects": 6,
-      "bytes": 18036
+      "mesh_objects": 1,
+      "bytes": 34384
     },
     {
       "id": "wk_hair_braided_v01",
@@ -2346,25 +2346,25 @@
       "bounds": {
         "min": [
           -0.1804,
-          -0.1481,
-          -0.3617
+          -0.1433,
+          -0.3662
         ],
         "max": [
           0.1804,
-          0.1528,
-          0.2383
+          0.1556,
+          0.2391
         ],
         "size": [
           0.3609,
-          0.3009,
-          0.6
+          0.2989,
+          0.6053
         ]
       },
       "material_roles": [
         "hair"
       ],
-      "mesh_objects": 6,
-      "bytes": 18084
+      "mesh_objects": 1,
+      "bytes": 36100
     },
     {
       "id": "wk_hair_crest_v01",
@@ -2399,25 +2399,25 @@
       "bounds": {
         "min": [
           -0.1804,
-          -0.0948,
-          -0.1287
+          -0.115,
+          -0.1368
         ],
         "max": [
           0.1804,
-          0.1528,
-          0.344
+          0.1541,
+          0.3244
         ],
         "size": [
           0.3609,
-          0.2476,
-          0.4727
+          0.2691,
+          0.4611
         ]
       },
       "material_roles": [
         "hair"
       ],
-      "mesh_objects": 5,
-      "bytes": 15140
+      "mesh_objects": 1,
+      "bytes": 25532
     },
     {
       "id": "wk_hair_cropped_v01",
@@ -2452,25 +2452,25 @@
       "bounds": {
         "min": [
           -0.1804,
-          -0.0948,
-          -0.132
+          -0.1391,
+          -0.1368
         ],
         "max": [
           0.1804,
-          0.1716,
-          0.2383
+          0.1541,
+          0.2391
         ],
         "size": [
           0.3609,
-          0.2664,
-          0.3704
+          0.2932,
+          0.3758
         ]
       },
       "material_roles": [
         "hair"
       ],
-      "mesh_objects": 5,
-      "bytes": 15160
+      "mesh_objects": 1,
+      "bytes": 25536
     },
     {
       "id": "wk_hair_rear_lock_v01",
@@ -2504,26 +2504,26 @@
       "export": "assets/exports/world_kit/wk_hair_rear_lock_v01.glb",
       "bounds": {
         "min": [
-          -0.1781,
-          -0.1481,
-          -0.3423
+          -0.1804,
+          -0.1433,
+          -0.3422
         ],
         "max": [
-          0.1781,
-          0.1885,
-          0.2383
+          0.1804,
+          0.1944,
+          0.2391
         ],
         "size": [
-          0.3562,
-          0.3366,
-          0.5807
+          0.3609,
+          0.3377,
+          0.5812
         ]
       },
       "material_roles": [
         "hair"
       ],
-      "mesh_objects": 5,
-      "bytes": 15180
+      "mesh_objects": 1,
+      "bytes": 31452
     },
     {
       "id": "wk_hair_swept_v01",
@@ -2557,26 +2557,26 @@
       "export": "assets/exports/world_kit/wk_hair_swept_v01.glb",
       "bounds": {
         "min": [
-          -0.1889,
-          -0.1481,
-          -0.188
+          -0.1884,
+          -0.1433,
+          -0.1879
         ],
         "max": [
           0.1804,
-          0.1528,
-          0.2383
+          0.1541,
+          0.2391
         ],
         "size": [
-          0.3693,
-          0.3009,
-          0.4263
+          0.3689,
+          0.2974,
+          0.4269
         ]
       },
       "material_roles": [
         "hair"
       ],
-      "mesh_objects": 6,
-      "bytes": 18060
+      "mesh_objects": 1,
+      "bytes": 31436
     },
     {
       "id": "wk_head_broad_v01",

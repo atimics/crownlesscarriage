@@ -43,6 +43,9 @@ def main() -> None:
         if manifest.get("surface_classes") != list(SURFACES):
             raise ValueError("surface class order must match the opaque shader contract")
     validate(hero, set(SURFACES))
+    for style in ("cropped", "swept", "bob", "crest", "braided", "rear_lock"):
+        validate(ROOT / f"assets/exports/world_kit/wk_hair_{style}_v01.glb",
+                 {"hair"})
     for module in modules["modules"]:
         if module["slot"] in modules["surface_modules"]:
             expected = {"metal", "leather", "cloth"} \
