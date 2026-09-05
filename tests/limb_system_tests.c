@@ -2,6 +2,7 @@
 #include "locomotion/cc_multileg.h"
 #include "locomotion/cc_robotics.h"
 
+#include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -110,6 +111,41 @@ static void Require(bool condition, const char *message)
     exit(1);
 }
 
+static void TestAvoidanceClearance(void)
+{
+    const struct {
+        CcLimbVec3 position;
+        CcLimbVec3 velocity;
+        bool avoid;
+    } cases[] = {
+        {{0.8f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, false},
+        {{0.79f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, true},
+        {{0.79f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, true},
+        {{2.0f, 0.0f, 0.0f}, {-4.0f, 0.0f, 0.0f}, true},
+        {{2.0f, 0.0f, 0.0f}, {-0.1f, 0.0f, 0.0f}, false},
+        {{2.0f, 0.0f, 0.81f}, {-4.0f, 0.0f, 0.0f}, false},
+        {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, true},
+        {{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, true},
+    };
+    for (size_t index = 0; index < sizeof(cases) / sizeof(cases[0]); ++index) {
+        CcLimbVec3 first = {5.0f, 5.0f, 5.0f};
+        CcLimbVec3 second = first;
+        bool avoided = CcRobotPredictiveAvoidance(
+            cases[index].position, cases[index].velocity,
+            (CcLimbVec3){0}, (CcLimbVec3){0}, 0.8f, 0.85f,
+            (int32_t)index, &first, &second);
+        Require(avoided == cases[index].avoid,
+                "avoidance must respect current and predicted clearance");
+        Require(isfinite(first.x) && isfinite(first.z) &&
+                    first.y == 0.0f && second.y == 0.0f &&
+                    fabsf(first.x + second.x) < 0.00001f &&
+                    fabsf(first.z + second.z) < 0.00001f,
+                "avoidance must share a finite horizontal correction");
+        Require(avoided ? Dot(first, first) > 0.0f : Dot(first, first) == 0.0f,
+                "avoidance must clear output for pairs with safe clearance");
+    }
+}
+
 static void VerifySegments(const CcLimbRig *rig)
 {
     for (int32_t limb = 0; limb < rig->morphology.limb_count; ++limb) {
@@ -126,6 +162,7 @@ static void VerifySegments(const CcLimbRig *rig)
 
 int main(void)
 {
+    TestAvoidanceClearance();
     CcLimbMorphology invalid;
     (void)CcLimbMorphologyFromPreset(&invalid, CC_MORPHOLOGY_BIPED);
     CcLimbRig invalid_rig;
@@ -372,6 +409,27 @@ int main(void)
 
     CcRobotCollisionPoint point_space[CC_ROBOT_POINT_CAPACITY];
     CcRobotCollisionPoint link_points[16];
+    const float invalid_radii[] = {FLT_MIN, NAN, INFINITY};
+    for (size_t index = 0;
+         index < sizeof(invalid_radii) / sizeof(invalid_radii[0]); ++index) {
+        link_points[0].radius = 7.0f;
+        Require(CcRobotSampleLink((CcLimbVec3){0},
+                    (CcLimbVec3){1.0f, 0.0f, 0.0f}, invalid_radii[index],
+                    link_points, 16) == 0 && link_points[0].radius == 7.0f,
+                "invalid link sampling must preserve the output buffer");
+    }
+    Require(CcRobotSampleLink((CcLimbVec3){0},
+                (CcLimbVec3){NAN, 0.0f, 0.0f}, 0.1f,
+                link_points, 16) == 0,
+            "link sampling must require finite endpoints");
+    Require(CcRobotSampleLink((CcLimbVec3){0},
+                (CcLimbVec3){1.0f, 0.0f, 0.0f}, 0.1f,
+                link_points, 6) == 0,
+            "link sampling must fit the entire segment in the buffer");
+    Require(CcRobotSampleLink((CcLimbVec3){0},
+                (CcLimbVec3){1.0f, 0.0f, 0.0f}, 0.1f,
+                link_points, 7) == 7 && link_points[6].center.x == 1.0f,
+            "link sampling must include both endpoints at exact capacity");
     int32_t link_point_count = CcRobotSampleLink(
         (CcLimbVec3){0.0f, 0.0f, 0.0f},
         (CcLimbVec3){1.0f, 0.0f, 0.0f}, 0.10f,
