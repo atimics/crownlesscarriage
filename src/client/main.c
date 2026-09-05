@@ -4896,7 +4896,7 @@ static ContextAction PressedContextAction(
     for (int32_t i = first; i < first + shown; ++i) {
         if (CheckCollisionPointRec(mouse, ContextActionBounds(i - first, shown))) {
             ContextAction pressed = actions.items[i];
-            if (!pressed.enabled || (right && pressed.kind != CONTEXT_ACTION_BUY_CARGO)) return none;
+            if (right && pressed.kind != CONTEXT_ACTION_BUY_CARGO) return none;
             if (right) pressed.amount = -1;
             return pressed;
         }
@@ -8143,6 +8143,10 @@ static bool HandleCaravanRecovery(LocalState *local, ClientView *view,
         position = (Vector2){
             local->world_carriage.position.x + 3.0f * cosf(heading),
             local->world_carriage.position.z - 3.0f * sinf(heading)};
+    } else if (local->site_travel_active) {
+        Vector3 caravan = WorldActionCarriagePosition(local);
+        position = (Vector2){caravan.x + 3.0f, caravan.z};
+        scene = CC_LOCAL_SCENE_ROAD;
     } else if (local->site_kind != CC_LOCAL_SITE_NONE) {
         position = (Vector2){CC_LOCAL_SITE_CARRIAGE_X + 3.0f,
                              CC_LOCAL_SITE_CARRIAGE_Z};
@@ -8244,6 +8248,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     if (*view != VIEW_MAP) local->pending_map_sale_id = 0U;
     ContextAction pressed_action = PressedContextAction(
         sim, local, *view, *selected, *selected_situation);
+    if (pressed_action.kind != CONTEXT_ACTION_NONE && !pressed_action.enabled) {
+        (void)snprintf(message, message_capacity,
+            "%s Double-tap [N] to return to the caravan.", pressed_action.detail);
+        return;
+    }
     ContextActionKind context_action = pressed_action.kind;
     if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) && context_action == CONTEXT_ACTION_NONE &&
         PointerOverContextAction(sim, local, *view, *selected, *selected_situation, ClientPointerPosition())) return;

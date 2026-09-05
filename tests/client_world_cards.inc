@@ -80,6 +80,24 @@ static int RunWorldCardRegression(void)
             last_distance = distance;
         }
         uint64_t before = CcSimHash(&sim);
+        CcInteractionTarget *unavailable = NULL;
+        for (int32_t i = 0; i < local.interactions.count; ++i)
+            if (CcInteractionKeyEqual(local.interactions.targets[i].key, cards.items[0].target))
+                unavailable = &local.interactions.targets[i];
+        CARD_CHECK(unavailable != NULL, "The nearest card needs its scene target.");
+        unavailable->available = false;
+        (void)snprintf(unavailable->reason, sizeof(unavailable->reason), "Choose a clear approach.");
+        cards = BuildContextActions(&sim, &local, view, selected, 0);
+        Rectangle disabled_card = ContextActionBounds(0, ContextCardCount(cards.count, 0));
+        client_test_pointer_active = true;
+        client_test_pointer = (Vector2){disabled_card.x + 12, disabled_card.y + 12};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+        CARD_INPUT();
+        CARD_CHECK(strstr(message, "Double-tap [N]") != NULL && CcSimHash(&sim) == before,
+            "A denied card click must show the caravan recovery tip and preserve the campaign.");
+        unavailable->available = true;
+        message[0] = '\0';
+
         Rectangle next = ContextPageBounds(true);
         client_test_pointer_active = true;
         client_test_pointer = (Vector2){next.x + 20, next.y + 20};
