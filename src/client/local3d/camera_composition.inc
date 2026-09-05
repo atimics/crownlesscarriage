@@ -580,7 +580,8 @@ float CcLocalCameraTreeOcclusionScoreInternal(Camera3D camera,
     for (int32_t tree = 0;
          tree < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0]));
          ++tree) {
-        Vector2 position = WORLD_TREES[tree].position;
+        WorldTreePlacement placement = ActiveWorldTreeAt(tree);
+        Vector2 position = placement.position;
         if (Vector2Distance(position,
                             (Vector2){camera.target.x, camera.target.z}) >
             18.0f) continue;
@@ -589,9 +590,16 @@ float CcLocalCameraTreeOcclusionScoreInternal(Camera3D camera,
         float crown_top = 0.0f;
         float trunk_radius = 0.0f;
         float crown_radius = 0.0f;
-        WorldTreeVisibilityShape(WORLD_TREES[tree].family, &trunk_top,
+        WorldTreeVisibilityShape(placement.family, &trunk_top,
                                  &crown_bottom, &crown_top, &trunk_radius,
                                  &crown_radius);
+        if (active_place_function == CC_SETTLEMENT_FARMING) {
+            trunk_top *= 0.94f;
+            crown_bottom *= 0.94f;
+            crown_top *= 0.94f;
+            crown_radius *= 1.24f;
+            trunk_radius *= 1.24f;
+        }
         float root_y = CcLocalTerrainHeightAt(position.x, position.y);
         CameraProjectedVolume trunk = CameraProjectVolume(
             camera,
