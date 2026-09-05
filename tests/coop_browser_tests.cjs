@@ -32,13 +32,14 @@ async function main() {
     await crew.goto(await owner.getByRole('textbox', {name:'Invitation link'}).inputValue());
     await crew.getByRole('textbox', {name:'Your name'}).fill('Bren');
     await crew.getByRole('button', {name:'Join the company'}).click();
+    await crew.waitForURL(/#world=[a-f0-9]{32}$/);
     await owner.getByRole('button', {name:'Close', exact:true}).click();
     assert.equal(await crew.getByRole('button', {name:/Buy|Sell|Depart|Rest|Pause/}).count(), 0);
     const worldId = new URL(await crew.url()).hash.slice('#world='.length);
     const token = await crew.evaluate(() => localStorage.getItem('cc-coop-token'));
     async function state() {
       const response = await fetch(`${origin}/api/worlds/${worldId}/state?campaign=1`, {headers:{Authorization:`Bearer ${token}`}});
-      assert(response.ok);
+      assert(response.ok, `Shared state returned ${response.status}`);
       return response.json();
     }
     const game = crew, errors = [];
