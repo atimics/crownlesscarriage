@@ -816,12 +816,15 @@ static void RunTowerFallScenario(const char *name, Vector2 start,
                              ++contact) {
                             const CcBiomechRagdollParticle *body =
                                 &agent.humanoid.ragdoll.particles[contact];
-                            if (!body->collided || body->contact_normal.y <= 0.35f)
-                                continue;
+                            if (!body->collided ||
+                                body->contact_normal.y <= 0.35f) continue;
                             maximum_particle_supports += 1;
-                            maximum_particle_support_normal.x += body->contact_normal.x;
-                            maximum_particle_support_normal.y += body->contact_normal.y;
-                            maximum_particle_support_normal.z += body->contact_normal.z;
+                            maximum_particle_support_normal.x +=
+                                body->contact_normal.x;
+                            maximum_particle_support_normal.y +=
+                                body->contact_normal.y;
+                            maximum_particle_support_normal.z +=
+                                body->contact_normal.z;
                         }
                     }
                 }
@@ -868,8 +871,10 @@ static void RunTowerFallScenario(const char *name, Vector2 start,
                       agent.position.x, agent.position.y, agent.position.z,
                       street_error);
         (void)fprintf(stderr, "peak support contacts %d normal %.3f %.3f %.3f\n",
-                      maximum_particle_supports, maximum_particle_support_normal.x,
-                      maximum_particle_support_normal.y, maximum_particle_support_normal.z);
+                      maximum_particle_supports,
+                      maximum_particle_support_normal.x,
+                      maximum_particle_support_normal.y,
+                      maximum_particle_support_normal.z);
         exit(1);
     }
 }

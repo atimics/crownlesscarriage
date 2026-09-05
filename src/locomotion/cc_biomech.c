@@ -794,8 +794,10 @@ static void DampRagdollImpact(CcBiomechRagdoll *ragdoll, float delta_time)
             contact_normal = AddVec3(contact_normal, runtime->contact_normal);
             if (runtime->contact_normal.y > 0.35f) {
                 support_contact_count += 1;
-                support_normal = AddVec3(
-                    support_normal, runtime->contact_normal);
+                // Keep the most level support plane when floor and edge contacts meet.
+                if (runtime->contact_normal.y > support_normal.y) {
+                    support_normal = runtime->contact_normal;
+                }
             }
         }
         if (runtime->inverse_mass <= 0.0f) continue;

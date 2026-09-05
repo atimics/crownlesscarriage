@@ -589,6 +589,62 @@ static void TestRagdollSupportPlane(void)
             "clustered contacts created false broad support");
 }
 
+static bool MixedSupportProbe(void *context, CcBiomechVec3 previous_position,
+                              CcBiomechVec3 position, float radius,
+                              CcBiomechVec3 *corrected_position,
+                              CcBiomechVec3 *surface_normal)
+{
+    (void)previous_position;
+    (void)radius;
+    bool floor_contact = *(const bool *)context;
+    if (position.x > -1.0f && position.x < 1.0f) return false;
+    if (position.x < -1.0f && !floor_contact) return false;
+    *corrected_position = position;
+    *surface_normal = position.x < -1.0f ?
+        (CcBiomechVec3){0.0f, 1.0f, 0.0f} :
+        (CcBiomechVec3){-0.815f, 0.580f, 0.0f};
+    return true;
+}
+
+static void TestMixedSupportRebound(void)
+{
+    const float delta_time = 1.0f / 60.0f;
+    for (int32_t floor = 0; floor <= 1; ++floor) {
+        CcBiomechRagdoll ragdoll;
+        CcBiomechRagdollInit(&ragdoll);
+        ragdoll.active = true;
+        ragdoll.gravity = (CcBiomechVec3){0};
+        ragdoll.damping = 0.0f;
+        ragdoll.contact_damping = 0.0f;
+        ragdoll.resting_contact_damping = 0.0f;
+        ragdoll.collision_friction = 0.0f;
+        Require(CcBiomechRagdollAddParticle(
+                    &ragdoll, (CcBiomechVec3){-2.0f, 0.0f, 0.0f}, 1.0f, 0.0f) >= 0 &&
+                CcBiomechRagdollAddParticle(
+                    &ragdoll, (CcBiomechVec3){2.0f, 0.0f, 0.0f}, 1.0f, 0.0f) >= 0,
+                "mixed support contacts must initialize");
+        int32_t knee = CcBiomechRagdollAddParticle(
+            &ragdoll, (CcBiomechVec3){0.0f, 1.0f, 0.0f}, 1.0f, 0.0f);
+        int32_t balance = CcBiomechRagdollAddParticle(
+            &ragdoll, (CcBiomechVec3){0.0f, 2.0f, 0.0f}, 1.0f, 0.0f);
+        Require(knee >= 0 && balance >= 0, "moving body particles must initialize");
+        ragdoll.particles[knee].previous_position.x = -1.2f * delta_time;
+        ragdoll.particles[knee].previous_position.y -= 0.7f * delta_time;
+        ragdoll.particles[balance].previous_position.x = 1.2f * delta_time;
+        ragdoll.particles[balance].previous_position.y += 0.7f * delta_time;
+        bool floor_contact = floor != 0;
+        CcBiomechRagdollStep(&ragdoll, delta_time, 1,
+                             MixedSupportProbe, &floor_contact);
+        CcBiomechVec3 velocity = CcBiomechRagdollParticleVelocity(
+            &ragdoll, knee, delta_time);
+        Require(fabsf(velocity.x - 1.2f) < 0.00001f,
+                "support damping must preserve motion along the floor");
+        Require(floor_contact ? velocity.y <= 0.201f :
+                    fabsf(velocity.y - 0.7f) < 0.00001f,
+                "floor contacts must bound rebound beside sloped contacts");
+    }
+}
+
 static void TestBiomechanicalClimb(void)
 {
     const float delta_time = 1.0f / 60.0f;
@@ -1392,6 +1448,7 @@ int main(void)
     TestHingeSplayPreservesLength();
     TestSegmentContactProjection();
     TestRagdollSupportPlane();
+    TestMixedSupportRebound();
     TestBiomechanicalClimb();
     TestClimbSupportLoss();
     TestHumanoidController();
