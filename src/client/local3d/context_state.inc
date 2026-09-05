@@ -1,3 +1,4 @@
+#include "client/cc_local_viewport.h"
 #if !defined(CC_LOCAL3D_UNITY_BUILD)
 #error "Include local renderer modules through client/cc_local3d.c"
 #endif
@@ -650,6 +651,7 @@ static const StreetBoundaryExit STREET_BOUNDARY_EXITS[] = {
 
 typedef struct FixedCameraRig {
     Camera3D output_camera;
+    Vector3 output_hero_position;
     bool output_valid;
     float tree_angle;
     float tree_goal;

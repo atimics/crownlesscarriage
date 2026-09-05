@@ -266,6 +266,8 @@ static bool storybook_ground_ready = false;
 enum { STORYBOOK_FOREST_CELL_COUNT = 121 };
 typedef struct StorybookForestCell {
     TreeSceneryBatchCache batch;
+    Vector3 rocks[16];
+    int rock_count;
     int32_t x;
     int32_t z;
     bool occupied;
@@ -1317,9 +1319,10 @@ static bool StorybookCellVisible(Camera3D camera, int32_t x, int32_t z,
 
 static int StorybookCellTrees(const CcWorldManifest *manifest,
                               int32_t cell_x, int32_t cell_z,
-                              StorybookTree trees[16], bool draw_rocks)
+                              StorybookTree trees[16], Vector3 rocks[16], int *rock_count)
 {
     int count = 0;
+    *rock_count = 0;
     for (int32_t row = 0; row < 4; ++row) {
         for (int32_t col = 0; col < 4; ++col) {
             int32_t gx = cell_x * 4 + col;
@@ -1333,10 +1336,9 @@ static int StorybookCellTrees(const CcWorldManifest *manifest,
                     (CcWorldPoint){x, z}, 5.0f)) continue;
             if (scatter > 0.66f) {
                 trees[count++] = (StorybookTree){x, z, scatter};
-            } else if (draw_rocks) {
+            } else {
                 float y = CcWorldTerrainHeight(manifest, x, z);
-                DrawScenerySphere((Vector3){x, y + 0.4f, z}, 0.9f,
-                    BlendColor(WORLD_STONE, WORLD_GRASS, 0.25f));
+                rocks[(*rock_count)++] = (Vector3){x, y + 0.4f, z};
             }
         }
     }
@@ -1380,13 +1382,11 @@ static void DrawStorybookScenery(const CcWorldManifest *manifest, Camera3D camer
                 if (!candidate->occupied) free_cell = candidate;
             }
             if (cell == NULL) cell = free_cell;
-            StorybookTree trees[16];
-            int count = StorybookCellTrees(manifest, x, z, trees, true);
-            if (cell == NULL) {
-                EmitStorybookTrees(trees, count, style);
-                continue;
-            }
+            if (cell == NULL) continue;
             if (!cell->occupied) {
+                StorybookTree trees[16];
+                int count = StorybookCellTrees(manifest, x, z, trees,
+                    cell->rocks, &cell->rock_count);
                 if (count > 0 && !BuildStorybookForest(&cell->batch, trees, count, style)) {
                     EmitStorybookTrees(trees, count, style);
                     continue;
@@ -1394,6 +1394,10 @@ static void DrawStorybookScenery(const CcWorldManifest *manifest, Camera3D camer
                 cell->occupied = true;
                 cell->x = x;
                 cell->z = z;
+            }
+            for (int rock = 0; rock < cell->rock_count; ++rock) {
+                DrawScenerySphere(cell->rocks[rock], 0.9f,
+                    BlendColor(WORLD_STONE, WORLD_GRASS, 0.25f));
             }
             if (!cell->batch.ready) continue;
             DrawModel(cell->batch.structure, (Vector3){0}, 1.0f, WHITE);

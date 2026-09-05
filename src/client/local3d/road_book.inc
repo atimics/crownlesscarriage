@@ -1721,7 +1721,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     const CcLocalPlaceProfile *profile =
         CcLocalPlaceProfileForSettlement(place);
     Camera3D base_camera = arrival_pan ?
-        TownArrivalCamera(convoy, target.texture.height) :
+        TownArrivalCamera(convoy, clock, target.texture.height) :
         CcLocalStreetCameraInternal(
             camera_subject, clock, true, target.texture.height);
     Camera3D camera = CcLocalCombatCameraInternal(
@@ -1767,12 +1767,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawExteriorTerrain(place, scenery_focus);
     DrawTownRaidStaging(course, scenery_focus);
     const CcLocalAgent *sightline_opponent = conversation_partner != NULL ?
-        conversation_partner : CombatCameraOpponent(course, agent);
-    bool close_combat_sightline = course != NULL && agent != NULL &&
-        sightline_opponent != NULL && course->alarm_active &&
-        CombatHorizontalDistanceSquared(agent, sightline_opponent) <=
-            7.0f * 7.0f;
-    bool close_conversation_sightline = conversation_partner != NULL;
+        conversation_partner : course != NULL && course->alarm_active ?
+        CombatCameraOpponent(course, agent) : NULL;
     Vector3 player_sightline = agent != NULL ?
         Vector3Add(agent->position, (Vector3){0.0f, 1.02f, 0.0f}) :
         (Vector3){0};
@@ -1800,8 +1796,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         Rectangle footprint = {
             platform->x, platform->z, platform->width, platform->depth
         };
-        float overlap = close_combat_sightline ||
-                        close_conversation_sightline ?
+        float overlap = agent != NULL ?
             CameraStreetPlatformSubjectOverlap(
                 camera, platform, player_sightline, opponent_sightline) :
             0.0f;
@@ -1836,6 +1831,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         camera_subject->position.x, camera_subject->position.y + 1.05f,
         camera_subject->position.z,
     };
+    secondary_reveal_valid = sightline_opponent != NULL;
+    secondary_reveal_subject = opponent_sightline;
     DrawWorldBuildings(kingdom, scenery_focus, profile, camera,
                        foreground_reveal_world,
                        target.texture.width, target.texture.height, clock);
@@ -1886,8 +1883,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         }
     }
     DrawWorldTrees(scenery_focus, kingdom);
-    float gate_overlap = close_combat_sightline ||
-                         close_conversation_sightline ?
+    float gate_overlap = agent != NULL ?
         CameraWayfarerGateSubjectOverlap(
             camera, player_sightline, opponent_sightline) : 0.0f;
     UpdateBuildingReveal(&gate_reveal,

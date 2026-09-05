@@ -113,6 +113,12 @@ static void TestStableVisibility(void)
                     630.0f / 320.0f, 512), "visible bounds must stay in the frame");
     RequireRenderer(!CameraBoundsVisible(camera, (Vector3){0, 2, 20}, (Vector3){1, 1, 1},
                     630.0f / 320.0f, 512), "bounds behind the camera must cull");
+    Camera3D gate_camera = {.position = {11.5f, 0.4f, 16},
+        .target = {11.5f, 0.4f, 9}, .up = {0, 1, 0},
+        .fovy = 6, .projection = CAMERA_ORTHOGRAPHIC};
+    RequireRenderer(CameraWayfarerGateSubjectOverlap(gate_camera,
+        (Vector3){11.5f, 0.4f, 9}, (Vector3){11.5f, 0.4f, 9}) == 0.0f,
+        "the clear space under a gate must preserve its structure");
     TreeRegionalStyle style = TreeStyleForKingdom(WHITE);
     uint32_t mask = WorldTreeVisibilityMask((Vector3){0}, style);
     street_camera_rig.shot = CC_LOCAL_TOWN_SCENE_LANDMARK;

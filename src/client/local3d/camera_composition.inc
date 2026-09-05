@@ -1,5 +1,3 @@
-#include "client/cc_local_viewport.h"
-
 static Camera3D ExteriorCameraAt(Vector3 target, float fovy)
 {
     return ExteriorCameraComposed(
@@ -523,11 +521,20 @@ static float CameraWayfarerGateSubjectOverlap(
         CameraProjectVolume(camera, first_subject, 0.48f, 1.00f),
         CameraProjectVolume(camera, second_subject, 0.48f, 1.00f),
     };
-    CameraProjectedVolume gate = CameraProjectBox(
-        camera, (Vector3){11.50f, 1.16f, 10.56f},
-        (Vector3){3.06f, 1.16f, 0.16f});
-    return CameraVolumeOverlap(subjects[0], gate) +
-           CameraVolumeOverlap(subjects[1], gate);
+    const Vector3 centers[] = {
+        {8.66f, 1.16f, 10.56f}, {14.34f, 1.16f, 10.56f},
+        {11.50f, 2.24f, 10.56f},
+        {10.05f, 1.91f, 10.63f}, {11.50f, 1.91f, 10.63f}, {12.95f, 1.91f, 10.63f},
+    };
+    float overlap = 0.0f;
+    for (int piece = 0; piece < 6; ++piece) {
+        Vector3 half = piece < 2 ? (Vector3){0.11f, 1.16f, 0.11f} :
+            piece == 2 ? (Vector3){2.95f, 0.11f, 0.12f} : (Vector3){0.28f, 0.24f, 0.035f};
+        CameraProjectedVolume gate = CameraProjectBox(camera, centers[piece], half);
+        overlap += CameraVolumeOverlap(subjects[0], gate) +
+                   CameraVolumeOverlap(subjects[1], gate);
+    }
+    return overlap;
 }
 
 static void WorldTreeVisibilityShape(TreeFamily family, float *trunk_top,
@@ -1018,7 +1025,9 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
 Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
                                      bool advance, int32_t art_height)
 {
-    if (!advance && street_camera_rig.initialized && street_camera_rig.output_valid) {
+    Vector3 requested_focus = agent != NULL ? agent->position : (Vector3){0};
+    if (!advance && street_camera_rig.initialized && street_camera_rig.output_valid &&
+        Vector3Distance(requested_focus, street_camera_rig.output_hero_position) < 0.0001f) {
         return street_camera_rig.output_camera;
     }
     bool fresh_view = !street_camera_rig.initialized;
@@ -1087,12 +1096,13 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
         street_camera_rig.framing_destination = Vector3Add(street_camera_rig.framing_destination, guard);
     }
     street_camera_rig.output_camera = camera;
+    street_camera_rig.output_hero_position = focus;
     street_camera_rig.output_valid = true;
     return camera;
 }
 
 static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
-                                  int32_t art_height)
+                                  float clock, int32_t art_height)
 {
     typedef struct TownTravelCamera {
         float target_height;
@@ -1170,6 +1180,7 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
         .displayed_offset = Vector3Scale(arrival_offset, 1.0f / 2.5f),
         .displayed_fovy = arrival_span,
         .shot = -1,
+        .last_clock = clock,
         .initialized = true,
     };
     return SnapCameraToArtPixels(camera, art_height);

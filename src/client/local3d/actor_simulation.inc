@@ -2808,7 +2808,7 @@ static float StreetPortalProximityScore(const CcLocalAgent *agent,
                                         const ResolvedStreetPortal *portal,
                                         int32_t room)
 {
-    enum { ART_WIDTH = 457, ART_HEIGHT = 285 };
+    enum { ART_WIDTH = CC_LOCAL_ART_WIDTH, ART_HEIGHT = CC_LOCAL_ART_HEIGHT };
     if (agent == NULL || portal == NULL || room < 0 ||
         room >= (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
                           sizeof(STREET_CAMERA_SHOTS[0]))) return FLT_MAX;

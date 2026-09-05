@@ -3533,6 +3533,9 @@ bool CcLocalBuildingObscuresHeroInternal(Rectangle footprint, float height,
     return false;
 }
 
+static Vector3 secondary_reveal_subject;
+static bool secondary_reveal_valid;
+
 static bool WorldBuildingObscuresReveal(const WorldBuilding *building,
                                         Camera3D camera,
                                         Vector3 reveal_world,
@@ -3542,7 +3545,10 @@ static bool WorldBuildingObscuresReveal(const WorldBuilding *building,
     if (building == NULL) return false;
     return CcLocalBuildingObscuresHeroInternal(
         building->footprint, building->height, camera, reveal_world,
-        render_width, render_height);
+        render_width, render_height) ||
+        (secondary_reveal_valid && CcLocalBuildingObscuresHeroInternal(
+            building->footprint, building->height, camera, secondary_reveal_subject,
+            render_width, render_height));
 }
 
 typedef struct WorldBuildingRevealState {
@@ -3962,11 +3968,11 @@ static void DrawCastle(const CcSim *sim, const CcSettlement *place,
                        float clock)
 {
     Rectangle keep_pad = ActiveCompoundBounds();
-    if (!SceneryFootprintVisible(keep_pad, focus)) return;
     float reveal_cut_height = reveal_world.y - 0.30f;
     float castle_base = TerrainFootprintHeight(keep_pad);
     UpdateCastleStructureReveals(camera, reveal_world,
                                  render_width, render_height, clock);
+    if (!SceneryFootprintVisible(keep_pad, focus)) return;
     rlPushMatrix();
     rlTranslatef(0.0f, castle_base, 0.0f);
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
