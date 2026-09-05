@@ -1,0 +1,8 @@
+PASS travel forest: camera turn preserves trees and GPU buffers
+Travel leaf motion: 0.000 mean channel change
+Captured town 0
+Captured town 1
+Captured town 2
+Captured town 3
+Captured town 4
+Captured town 5

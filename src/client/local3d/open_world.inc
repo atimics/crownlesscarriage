@@ -1297,7 +1297,10 @@ static bool BuildStorybookForest(TreeSceneryBatchCache *batch,
     bool trunk_ready = TreeBatchMeshUpload(&structure, false, &batch->structure);
     bool leaves_ready = TreeBatchMeshUpload(&foliage, true, &batch->foliage);
     if (!trunk_ready || !leaves_ready) {
-            return false;
+        if (IsModelValid(batch->structure)) UnloadModel(batch->structure);
+        if (IsModelValid(batch->foliage)) UnloadModel(batch->foliage);
+        *batch = (TreeSceneryBatchCache){0};
+        return false;
     }
     batch->ready = true;
     batch->source_draw_count = source_draws;
