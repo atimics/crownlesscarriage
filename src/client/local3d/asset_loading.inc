@@ -1781,10 +1781,14 @@ static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
         default:
             break;
     }
+    Color court_color = primary.a > 0 ? primary : DragonCourtHairColor(NULL);
+    if (variant <= CC_CREATURE_GOBLIN_TRIBUTE_BEARER || IsDragonCreatureVariant(variant)) {
+        colors[7] = court_color;
+    }
     return (CreatureRenderPalette){
         colors[0], colors[1], colors[2], colors[3], colors[4],
         colors[5], colors[6], colors[7], colors[8],
-        primary.a > 0 ? primary : DragonCourtHairColor(NULL)
+        court_color
     };
 }
 

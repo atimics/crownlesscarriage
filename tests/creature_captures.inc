@@ -56,6 +56,7 @@ static Image CaptureCreatureView(const CreatureReview *review, int32_t size,
     EndMode3D();
     EndTextureMode();
     Image raw = LoadImageFromTexture(scene.texture);
+    ImageFlipVertical(&raw);
     Color *pixels = LoadImageColors(raw);
     RequireRenderer(pixels != NULL, "creature pixels must be readable");
     int32_t visible = 0;
@@ -71,7 +72,7 @@ static Image CaptureCreatureView(const CreatureReview *review, int32_t size,
                 hair == CC_DRAGON_HAIR_BLUE ?
                 color.b > color.r + 25 && color.b > color.g + 15 :
                 color.b > color.g + 20 && color.r > color.g + 15;
-            if (hair_match) hair_pixels++;
+            if (hair_match && y < size / 2) hair_pixels++;
             if (x < 2 || y < 2 || x >= size - 2 || y >= size - 2) edge++;
         }
     }
@@ -191,14 +192,16 @@ static void CaptureCreatures(const char *directory)
         RequireRenderer(ExportImage(sheet, path), "creature review sheet must be written");
         UnloadImage(sheet);
     }
-    Image courts = GenImageColor(size * 3, size * 2 + 28, (Color){17, 19, 28, 255});
+    Image courts = GenImageColor(size * 3, size * 3 + 28, (Color){17, 19, 28, 255});
     const char *names[] = {"Purple court", "Red court", "Blue court"};
     for (int32_t court = 0; court < CC_DRAGON_HAIR_COLOR_COUNT; ++court) {
         ImageDrawText(&courts, names[court], court * size + 12, 8, 16,
                       (Color){224, 219, 202, 255});
-        for (int32_t row = 0; row < 2; ++row) {
-            Image shot = CaptureCreatureView(&CREATURE_REVIEWS[row == 0 ? 5 : 0],
-                size, 0, CC_CREATURE_POSE_IDLE, true, (CcDragonHairColor)court);
+        for (int32_t row = 0; row < 3; ++row) {
+            int32_t index = row == 0 ? 4 : row == 1 ? 5 : 0;
+            Image shot = CaptureCreatureView(&CREATURE_REVIEWS[index],
+                size, row == 0 ? PI * 0.5f : 0, CC_CREATURE_POSE_IDLE,
+                row > 0, (CcDragonHairColor)court);
             ImageDraw(&courts, shot, (Rectangle){0, 0, (float)size, (float)size},
                 (Rectangle){(float)(court * size), (float)(row * size + 28),
                             (float)size, (float)size}, WHITE);
