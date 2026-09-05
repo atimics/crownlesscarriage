@@ -449,15 +449,20 @@ static const char *ClientBrowserCampaignAccessMessage(int32_t access)
 }
 EM_JS(int, ClientReleaseBrowserAssets, (), {
     let releasedBytes = 0;
-    const removeTree = (path) => {
+    const removeTree = (path, keep = false) => {
         for (const name of FS.readdir(path)) {
             if (name === "." || name === "..") continue;
             const child = path + "/" + name;
-            if (child === "/assets/audio") continue;
+            const keepChild = keep || child === "/assets/audio";
             const stat = FS.stat(child);
             if (FS.isDir(stat.mode)) {
-                removeTree(child);
-                FS.rmdir(child);
+                removeTree(child, keepChild);
+                if (!keepChild) FS.rmdir(child);
+            } else if (keepChild) {
+                // Preloaded files share one pack buffer. Give retained audio
+                // its own bytes so the browser can collect the startup pack.
+                const bytes = FS.readFile(child);
+                FS.writeFile(child, bytes, {canOwn: true});
             } else {
                 releasedBytes += stat.size;
                 FS.unlink(child);
