@@ -18,6 +18,7 @@
 #include "locomotion/cc_multileg.h"
 #include "locomotion/cc_quadruped.h"
 #include "locomotion/cc_robotics.h"
+#include "locomotion/cc_collision.h"
 
 #include "raymath.h"
 #include "rlgl.h"

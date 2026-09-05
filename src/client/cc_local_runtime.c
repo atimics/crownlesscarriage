@@ -37,6 +37,7 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
     for (int32_t step = 0; step < steps; ++step) {
         CcLocalCourseFixedStepInternal(course, player, sim,
                                        (float)fixed_step);
+        CcLocalCourseResolveContactsInternal(course, player);
         course->world_simulation_accumulator -= fixed_step;
     }
     if (course->world_simulation_accumulator < 0.0) {
@@ -68,6 +69,7 @@ int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
         if (advance_course) {
             CcLocalCourseFixedStepInternal(course, player, sim,
                                            (float)fixed_step);
+            CcLocalCourseResolveContactsInternal(course, player);
         }
         course->world_simulation_accumulator -= fixed_step;
     }

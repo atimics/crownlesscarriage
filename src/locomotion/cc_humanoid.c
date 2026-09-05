@@ -1362,6 +1362,10 @@ static void BeginRagdollRecovery(CcHumanoidGait *gait,
     gait->ragdoll.contact_damping = 0.08f;
 }
 
+static CcLimbVec3 ProbeGround(CcLimbVec3 desired, CcLimbVec3 body_position,
+                              CcLimbTerrainProbe probe, void *probe_context,
+                              CcLimbVec3 *normal);
+
 static bool StepRagdoll(CcHumanoidGait *gait, CcLimbVec3 body_position,
                         float body_yaw, bool grounded, float delta_time,
                         CcLimbTerrainProbe probe,
@@ -1414,7 +1418,13 @@ static bool StepRagdoll(CcHumanoidGait *gait, CcLimbVec3 body_position,
             gait->recovery_speed < 0.22f) {
             float cadence_scale = gait->walk_cadence_scale;
             float stride_scale = gait->walk_stride_scale;
-            CcHumanoidGaitInit(gait, gait->authoritative_position, body_yaw,
+            /* Recovery ends at the supported standing pose. The center-of-mass
+               offset belongs to the fallen pose and changes as the body rises. */
+            CcLimbVec3 normal;
+            CcLimbVec3 standing_root = ProbeGround(
+                gait->recovery_origin, gait->recovery_origin, probe,
+                probe_context, &normal);
+            CcHumanoidGaitInit(gait, standing_root, body_yaw,
                                probe, probe_context);
             CcHumanoidGaitSetWalkingProfile(gait, cadence_scale,
                                              stride_scale);
