@@ -2064,7 +2064,8 @@ static void DrawGoblinRig(CcCreatureVariant variant,
                     (Vector3){0.09f * scale, 0.085f * scale, 0.024f * scale}, yaw, palette->horn);
     DrawCreatureEllipsoid(neck, (Vector3){0.145f * scale, 0.066f * scale, 0.13f * scale},
                            yaw, palette->accent);
-    DrawGoblinHair(head, yaw, scale, 0.035f * wave * rig->movement, palette->hair);
+    DrawGoblinHair(variant, head, yaw, scale,
+                   0.035f * wave * rig->movement, palette->hair);
 
     if (variant == CC_CREATURE_GOBLIN_RAIDER) {
         Vector3 helmet = LocalPoint(head, 0, 0.21f * scale, -0.01f * scale, yaw);

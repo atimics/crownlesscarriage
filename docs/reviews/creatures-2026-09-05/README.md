@@ -8,7 +8,9 @@ The current world tracks one dragon and its goblin court. Live encounters read t
 
 ## Goblins
 
-All three roles have tall, bright hair inspired by Trolls toys. Wider ears, brows, pupils, a hooked nose, and small tusks make their faces clearer. The scavenger has a pack and hooked tool. The raider has armour and a spear. The tribute bearer holds its box in both hands.
+All three roles have bright hair inspired by Trolls toys. Scavengers have a messy side sweep, raiders have a narrow swept crest, and tribute bearers have curled bunches. Each style uses the court colour and moves with the goblin.
+
+Wider ears, brows, pupils, a hooked nose, and small tusks make their faces clearer. The scavenger has a pack and hooked tool. The raider has armour and a spear. The tribute bearer holds its box in both hands.
 
 ![Goblins after](goblins-after.png)
 

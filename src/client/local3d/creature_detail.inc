@@ -67,10 +67,40 @@ static void DrawCreatureTube(const Vector3 *points, const float *radii,
     rlNormal3f(0, 1, 0);
 }
 
-static void DrawGoblinHair(Vector3 head, float yaw, float scale, float sway, Color color)
+static void DrawGoblinHair(CcCreatureVariant variant, Vector3 head, float yaw,
+                            float scale, float sway, Color color)
 {
+    bool crest = variant == CC_CREATURE_GOBLIN_RAIDER;
+    bool bunches = variant == CC_CREATURE_GOBLIN_TRIBUTE_BEARER;
     DrawCreatureEllipsoid(LocalPoint(head, 0, 0.20f * scale, -0.025f * scale, yaw),
-        (Vector3){0.245f * scale, 0.16f * scale, 0.20f * scale}, yaw, color);
+        (Vector3){(crest ? 0.12f : 0.245f) * scale,
+                  (bunches ? 0.11f : 0.16f) * scale, 0.20f * scale}, yaw, color);
+    if (bunches) {
+        for (int32_t side = -1; side <= 1; side += 2) {
+            float sign = (float)side;
+            Vector3 bunch = LocalPoint(head, sign * 0.22f * scale,
+                0.37f * scale, -0.055f * scale, yaw);
+            DrawCreatureEllipsoid(bunch,
+                (Vector3){0.20f * scale, 0.23f * scale, 0.19f * scale}, yaw, color);
+            Vector3 local[] = {
+                {sign * 0.20f, 0.37f, -0.06f},
+                {sign * 0.31f + sway, 0.60f, -0.08f},
+                {sign * 0.21f + sway, 0.79f, -0.07f},
+                {sign * 0.09f + sway, 0.78f, 0.005f},
+                {sign * 0.09f + sway, 0.67f, 0.025f},
+            };
+            Vector3 points[5];
+            for (int32_t point = 0; point < 5; ++point) {
+                points[point] = LocalPoint(head, local[point].x * scale,
+                    local[point].y * scale, local[point].z * scale, yaw);
+            }
+            const float radii[] = {0.145f, 0.16f, 0.115f, 0.060f, 0.003f};
+            DrawCreatureTube(points, radii, 5, scale,
+                BlendColor(color, WHITE, side < 0 ? 0.18f : 0.09f),
+                ShadeColor(color, 0.75f));
+        }
+        return;
+    }
     static const Vector3 roots[] = {
         {-0.16f, 0.15f, -0.04f}, {0.16f, 0.15f, -0.04f},
         {-0.10f, 0.22f, -0.04f}, {0.10f, 0.22f, -0.04f},
@@ -78,17 +108,25 @@ static void DrawGoblinHair(Vector3 head, float yaw, float scale, float sway, Col
         {0.10f, 0.18f, 0.10f},
     };
     static const Vector3 tips[] = {
-        {-0.28f, 0.62f, -0.13f}, {0.28f, 0.65f, -0.12f},
-        {-0.15f, 0.80f, -0.10f}, {0.17f, 0.78f, -0.16f},
-        {0.03f, 0.92f, -0.13f}, {-0.12f, 0.65f, 0.10f},
-        {0.10f, 0.68f, 0.10f},
+        {-0.35f, 0.49f, -0.13f}, {0.40f, 0.51f, -0.12f},
+        {-0.02f, 0.78f, -0.10f}, {0.39f, 0.67f, -0.16f},
+        {0.23f, 0.91f, -0.13f}, {-0.13f, 0.57f, 0.10f},
+        {0.29f, 0.59f, 0.10f},
     };
     const float radii[] = {0.11f, 0.13f, 0.068f, 0.003f};
-    for (int32_t lock = 0; lock < 7; ++lock) {
+    int32_t lock_count = crest ? 5 : 7;
+    for (int32_t lock = 0; lock < lock_count; ++lock) {
+        Vector3 root = roots[lock];
         Vector3 tip = tips[lock];
+        if (crest) {
+            float row = (float)lock;
+            root = (Vector3){0, 0.27f, 0.16f - row * 0.085f};
+            tip = (Vector3){0.018f, 1.02f - row * 0.09f,
+                             -0.13f - row * 0.095f};
+        }
         tip.x += sway;
-        Vector3 local[] = {roots[lock], Vector3Lerp(roots[lock], tip, 0.34f),
-                           Vector3Lerp(roots[lock], tip, 0.72f), tip};
+        Vector3 local[] = {root, Vector3Lerp(root, tip, 0.34f),
+                           Vector3Lerp(root, tip, 0.72f), tip};
         Vector3 points[4];
         for (int32_t point = 0; point < 4; ++point) {
             points[point] = LocalPoint(head, local[point].x * scale,
@@ -96,7 +134,8 @@ static void DrawGoblinHair(Vector3 head, float yaw, float scale, float sway, Col
         }
         Color highlight = BlendColor(color, WHITE,
                                       lock % 2 == 0 ? 0.23f : 0.08f);
-        DrawCreatureTube(points, radii, 4, scale, highlight, ShadeColor(color, 0.75f));
+        DrawCreatureTube(points, radii, 4, scale * (crest ? 0.72f : 1.0f),
+                          highlight, ShadeColor(color, 0.75f));
     }
 }
 
