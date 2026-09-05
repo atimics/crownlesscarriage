@@ -125,18 +125,11 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
         CcLocalProjectInteraction(&local->agent, texture, destination, &local->interactions.targets[i]);
 }
 
-static Rectangle AdventureActionBounds(void)
-{
-    float width = fminf(560.0f, (float)GetScreenWidth() - 40.0f);
-    return (Rectangle){((float)GetScreenWidth() - width) * 0.5f,
-        (float)GetScreenHeight() - 90.0f, width, 64.0f};
-}
-
 static const CcInteractionTarget *AdventureFocus(const LocalState *local)
 {
     const CcInteractionTarget *target = CcInteractionFind(&local->interactions,
         local->interaction.approaching ? local->interaction.pending : local->interaction.focus);
-    return target != NULL && (target->visible || local->interaction.approaching) ? target : NULL;
+    return target;
 }
 
 static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteractionTarget *target,
@@ -144,6 +137,7 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
 {
     CcLocalAgentStop(&local->agent);
     CcInteractionCancel(&local->interaction, "");
+    local->card_page = 0;
     *return_view = VIEW_LOCAL;
     switch (target->key.kind) {
         case CC_INTERACTION_PERSON:
@@ -194,7 +188,8 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
 
 /* Called before legacy movement and command handling. A handled click is consumed. */
 static bool HandleAdventureScene(CcSim *sim, LocalState *local,
-    ClientView *view, ClientView *return_view, int32_t *selected_situation, float dt,
+    ClientView *view, ClientView *return_view, int32_t *selected_situation,
+    const CcInteractionTarget *card_target, float dt,
     char *message, size_t capacity)
 {
     if (*view != VIEW_LOCAL || !AdventureScene(local)) return false;
@@ -211,9 +206,9 @@ static bool HandleAdventureScene(CcSim *sim, LocalState *local,
     const CcInteractionTarget *hover = CcInteractionPick(&local->interactions, mouse.x, mouse.y);
     bool click = ClientMouseButtonPressed(MOUSE_BUTTON_LEFT);
     const CcInteractionTarget *focus = AdventureFocus(local);
-    bool activate = ClientKeyPressed(KEY_F) || (click && focus != NULL &&
-        CheckCollisionPointRec(mouse, AdventureActionBounds()));
-    const CcInteractionTarget *chosen = click && hover != NULL ? hover : activate ? focus : NULL;
+    bool activate = ClientKeyPressed(KEY_F);
+    const CcInteractionTarget *chosen = card_target != NULL ? card_target :
+        click && hover != NULL ? hover : activate ? focus : NULL;
     if (chosen == NULL && activate) {
         float nearest = 3.0f;
         for (int32_t i = 0; i < local->interactions.count; ++i) {
@@ -680,7 +675,7 @@ static void DrawAdventurePause(const LocalState *local)
     int x = (int)(panel.x + panel.width * 0.53f), y = (int)panel.y + 84;
     CcOverlayDrawText(CcCoopClientActive() ? "The host keeps company time" : "At your own pace", x, y, AdventureTextSize(20), CC_GOLD);
     y += 46;
-    (void)AdventureWrap("Click a person or doorway to approach and act. Click the ground to walk.\n\nE selects the next visible target. Shift+E goes back. F uses the selected action.\n\nB opens the Company Book. Q opens promises. M opens the map case.\n\nEsc cancels an approach or returns to the scene. F5 saves.",
+    (void)AdventureWrap("Choose an object card or tap the object to approach and act. Browse more cards with the arrows. Click the ground to walk. Tap a road to turn, the carriage to stop or drive, and a camp to rest.\n\nE selects the next visible target. Shift+E goes back. F uses the selected action.\n\nB opens the Company Book. Q opens promises. M opens the map case.\n\nEsc cancels an approach or returns to the scene. F5 saves.",
         x, y, (int)(panel.width * 0.47f - 30.0f), AdventureTextSize(14), INK);
     (void)local;
 }
@@ -718,11 +713,42 @@ static bool HandleAdventurePause(LocalState *local, ClientView *view, ClientView
     return true;
 }
 
-static void DrawAdventureFocus(const LocalState *local)
+static Rectangle WorldActionLabelBounds(const CcInteractionTarget *target)
+{
+    int width = CcOverlayMeasureText(target->name, AdventureTextSize(14)) + 20;
+    float x = (target->left + target->right) * 0.5f;
+    float left = fmaxf(12, fminf(x - (float)width * 0.5f, (float)GetScreenWidth() - (float)width - 12));
+    return (Rectangle){left, target->top - 33, (float)width, 28};
+}
+
+static const CcInteractionTarget *WorldActionPointerTarget(const LocalState *local, Vector2 mouse)
+{
+    for (int32_t i = 0; i < local->interactions.count; ++i) {
+        const CcInteractionTarget *target = &local->interactions.targets[i];
+        if (target->key.kind == CC_INTERACTION_ACTION && target->visible &&
+            CheckCollisionPointRec(mouse, WorldActionLabelBounds(target))) return target;
+    }
+    return CcInteractionPick(&local->interactions, mouse.x, mouse.y);
+}
+
+static void DrawAdventureFocus(const CcSim *sim, const LocalState *local, ClientView view,
+    int32_t selected_route, int32_t selected_situation)
 {
     const CcInteractionTarget *focus = AdventureFocus(local);
     Vector2 mouse = GetMousePosition();
-    const CcInteractionTarget *hover = CcInteractionPick(&local->interactions, mouse.x, mouse.y);
+    const CcInteractionTarget *hover = WorldActionPointerTarget(local, mouse);
+    ContextActionSet cards = BuildContextActions(sim, local, view, selected_route, selected_situation);
+    int32_t first = ContextCardFirst(local, cards.count);
+    int32_t shown = ContextCardCount(cards.count, first);
+    for (int32_t card = first; card < first + shown; ++card) {
+        if (!CheckCollisionPointRec(mouse, ContextActionBounds(card - first, shown))) continue;
+        for (int32_t i = 0; i < local->interactions.count; ++i) {
+            const CcInteractionTarget *target = &local->interactions.targets[i];
+            if (CcInteractionKeyEqual(target->key, cards.items[card].target) ||
+                (target->key.kind == CC_INTERACTION_ACTION && target->action == (int32_t)cards.items[card].kind &&
+                 target->amount == cards.items[card].amount)) hover = target;
+        }
+    }
     if (hover != NULL) SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
     else SetMouseCursor(MOUSE_CURSOR_DEFAULT);
     bool hints = adventure_preferences == NULL || adventure_preferences->focus_hints;
@@ -735,28 +761,13 @@ static void DrawAdventureFocus(const LocalState *local)
             Rectangle outline = {target->left, target->top, target->right - target->left, target->bottom - target->top};
             DrawRectangleRoundedLinesEx(outline, 0.12f, 4, 2.0f, target->available ? CC_GOLD : MUTED);
         } else if (hints) DrawCircle((int)x, (int)target->top - 6, 3, Fade(CC_GOLD, 0.85f));
-        if (selected) {
-            int width = CcOverlayMeasureText(target->name, AdventureTextSize(14)) + 20;
-            float label_x = fmaxf(12.0f, fminf(x - (float)width * 0.5f, (float)GetScreenWidth() - (float)width - 12.0f));
-            DrawRectangle((int)label_x, (int)target->top - 33, width, 28, PANEL_DEEP);
-            CcOverlayDrawText(target->name, (int)label_x + 10, (int)target->top - 27, AdventureTextSize(14), INK);
+        if (selected || target->key.kind == CC_INTERACTION_ACTION) {
+            Rectangle label = WorldActionLabelBounds(target);
+            DrawRectangleRec(label, PANEL_DEEP);
+            CcOverlayDrawText(target->name, (int)label.x + 10, (int)label.y + 6, AdventureTextSize(14), INK);
         }
     }
-    Rectangle action = AdventureActionBounds();
-    DrawPanel(action, PANEL_DEEP);
-    if (focus != NULL) {
-        CcOverlayDrawText(TextFormat("%s%s %s", local->interaction.approaching ? "Walking to " : "F  ",
-            local->interaction.approaching ? "" : focus->verb, focus->name),
-            (int)action.x + 18, (int)action.y + 11, AdventureTextSize(16), focus->available ? CC_GOLD : MUTED);
-        CcOverlayDrawText(focus->available ? local->interaction.approaching ?
-            "Esc cancels  /  Click another target to change course" : "Click to act  /  E chooses another target" : focus->reason,
-            (int)action.x + 18, (int)action.y + 38, AdventureTextSize(12), MUTED);
-    } else {
-        CcOverlayDrawText("Click a person or doorway  /  E selects a target", (int)action.x + 18,
-            (int)action.y + 12, AdventureTextSize(15), INK);
-        CcOverlayDrawText("Click clear ground to walk  /  B Company Book  /  Esc menu", (int)action.x + 18,
-            (int)action.y + 39, AdventureTextSize(12), MUTED);
-    }
+
 }
 
 static void DrawAdventureConversation(const CcSim *sim, const LocalState *local)
@@ -788,12 +799,28 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
 {
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(place);
-    CcOverlayDrawText(place != NULL ? place->name : "Crownless", 24, 14, AdventureTextSize(22), INK);
+    const CcSettlement *destination = CcSimSettlement(sim, sim->journey.destination_id);
+    const char *title = local->site_kind != CC_LOCAL_SITE_NONE ? CcLocalSiteName(sim, local->site_kind) :
+        local->journey_travel_active && destination != NULL ?
+            TextFormat("%s to %s", place != NULL ? place->name : "Road", destination->name) :
+        place != NULL ? place->name : "Crownless";
+    int title_size = AdventureTextSize(22);
+    while (title_size > 14 && CcOverlayMeasureText(title, title_size) > GetScreenWidth() - 450) --title_size;
+    CcOverlayDrawText(title, 24, 14, title_size, INK);
     CcOverlayDrawText(TextFormat("Day %d  /  %" PRId64 " crowns  /  Cargo %d/%d", sim->current_day,
         sim->player.coins, CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity),
         24, 43, AdventureTextSize(13), CC_GOLD);
-    CcOverlayDrawText(local->market_interior ? profile->interior_service : profile->identity,
-        24, 67, AdventureTextSize(12), MUTED);
+    const CcRoadSite *stop = CcSimJourneyRoadSiteStop(sim);
+    const char *detail = stop != NULL ? TextFormat("%s / Camp or continue", stop->name) :
+        local->journey_travel_active && sim->journey.active ?
+            TextFormat("%s / %d%% / ETA %dh / %s", local->carriage_stopped ? "Stopped" :
+                CcJourneyPaceName(sim->journey.pace), sim->carriage.progress_milli / 10,
+                (CcSimJourneyEtaMinutes(sim) + 59) / 60,
+                sim->journey.phase == CC_JOURNEY_PHASE_RESTING ? "Time to rest" : "On the road") :
+        local->road_choice_active ? "Choose a road card or tap its sign" :
+        local->site_travel_active ? "Tap the carriage to stop or drive" :
+        local->market_interior ? profile->interior_service : profile->identity;
+    CcOverlayDrawText(detail, 24, 67, AdventureTextSize(12), MUTED);
 }
 
 static void DrawAdventurePromises(const CcSim *sim, const LocalState *local, int32_t selected)

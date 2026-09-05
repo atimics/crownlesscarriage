@@ -24,7 +24,7 @@ void CcLocalProjectInteraction(const CcLocalAgent *agent,
     if (agent == NULL || destination.width <= 0 || destination.height <= 0 ||
         !PresentedCameraForInput(agent->scene, agent, texture.texture.width,
                                   texture.texture.height, &camera)) return;
-    float base = agent->scene == CC_LOCAL_SCENE_STREET ?
+    float base = target->key.kind != CC_INTERACTION_ACTION && agent->scene == CC_LOCAL_SCENE_STREET ?
         CcLocalTerrainHeightAt(target->x, target->z) : 0.0f;
     target->y += base;
     Vector3 middle = {target->x, target->y + target->height * 0.65f, target->z};
@@ -33,7 +33,8 @@ void CcLocalProjectInteraction(const CcLocalAgent *agent,
     LocalProbeContext context = {.scene = agent->scene};
     int32_t count = GatherLocalCollisionBoxes(&context, middle, boxes);
     bool exposed = false;
-    for (int32_t sample = 0; sample < 3; ++sample) {
+    if (target->key.kind == CC_INTERACTION_ACTION) exposed = true;
+    for (int32_t sample = 0; sample < 3 && !exposed; ++sample) {
         Vector3 point = {middle.x, target->y + target->height *
             (0.35f + (float)sample * 0.3f), middle.z};
         Ray ray = {camera.position, Vector3Normalize(Vector3Subtract(point, camera.position))};

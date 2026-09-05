@@ -15,7 +15,8 @@ typedef enum CcInteractionKind {
     CC_INTERACTION_CARRIAGE,
     CC_INTERACTION_EXIT,
     CC_INTERACTION_SITE,
-    CC_INTERACTION_PORTAL
+    CC_INTERACTION_PORTAL,
+    CC_INTERACTION_ACTION
 } CcInteractionKind;
 
 typedef struct CcInteractionKey {
@@ -29,6 +30,7 @@ typedef struct CcInteractionTarget {
     uint64_t character_id;
     uint64_t situation_id;
     int32_t action;
+    int32_t amount;
     float x, y, z;
     float width, height, depth;
     float approach_x, approach_z;

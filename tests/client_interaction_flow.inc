@@ -161,10 +161,10 @@ static int RunAdventureTownRoutesRegression(void)
         int32_t selected_situation = 0;
         char message[256] = "";
         queued_key_press[KEY_F] = true;
-        (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, 1.0f / 60.0f, message, sizeof(message));
+        (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
         ClientInputClearPressed();
         for (int frame = 0; frame < 3000 && !local.market_interior && local.interaction.approaching; ++frame) {
-            (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, 1.0f / 60.0f, message, sizeof(message));
+            (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
         }
         if (!local.market_interior) {
             fprintf(stderr, "town type %d at %.2f %.2f: %s / %s\n", type, local.agent.position.x, local.agent.position.z, message, local.interaction.feedback);
@@ -177,10 +177,10 @@ static int RunAdventureTownRoutesRegression(void)
         counter->visible = true;
         local.interaction.focus = counter->key;
         queued_key_press[KEY_F] = true;
-        (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, 1.0f / 60.0f, message, sizeof(message));
+        (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
         ClientInputClearPressed();
         for (int frame = 0; frame < 1200 && view == VIEW_LOCAL && local.interaction.approaching; ++frame)
-            (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, 1.0f / 60.0f, message, sizeof(message));
+            (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
         if (view != VIEW_TRADE) return ClientRegressionFailure("Each keeper must be reachable from the shop entrance.");
     }
     puts("six town door and counter routes passed");
