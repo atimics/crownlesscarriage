@@ -162,6 +162,15 @@ static int RunWorldCardRegression(void)
         CARD_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)), error);
         CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_CAMP_ROAD_SITE, 0, mode != 0),
             "A camp needs matching card and world actions.");
+        if (mode != 0) {
+            CcInteractionTarget *camp = &local.interactions.targets[0];
+            uint64_t subject = camp->subject_id;
+            camp->subject_id = subject + 1;
+            ContextActionSet current = BuildContextActions(&sim, &local, view, selected, 0);
+            CARD_CHECK(WorldContextActionAt(&sim, &local, view, &current, client_test_pointer).kind == CONTEXT_ACTION_NONE,
+                "A camp tap must keep the identity of the camp that was drawn.");
+            camp->subject_id = subject;
+        }
         int32_t progress = sim.carriage.progress_milli;
         CARD_INPUT();
         CARD_CHECK(CcSimJourneyRoadSiteStop(&sim) == NULL && sim.carriage.progress_milli == progress,

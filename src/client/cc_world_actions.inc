@@ -15,7 +15,7 @@ static ContextAction WorldContextActionAt(const CcSim *sim, const LocalState *lo
         if (action->enabled && (int32_t)action->kind == target->action &&
             action->amount == target->amount &&
             (action->target.kind == CC_INTERACTION_NONE ||
-             CcInteractionKeyEqual(action->target, target->key))) return *action;
+             action->target.object == target->subject_id)) return *action;
     }
     return none;
 }
@@ -129,7 +129,7 @@ static void BuildWorldActionTargets(const CcSim *sim, LocalState *local, ClientV
             action->label, action->label, position, width, height, depth,
             (Vector2){position.x, position.z}, 1.0f);
         if (target == NULL) break;
-        if (action->target.kind != CC_INTERACTION_NONE) target->key = action->target;
+        target->subject_id = action->target.object;
         target->action = (int32_t)action->kind;
         target->amount = action->amount;
         target->available = action->enabled;

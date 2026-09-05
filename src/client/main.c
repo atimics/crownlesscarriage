@@ -159,6 +159,7 @@ static bool AdventureScene(const LocalState *local);
 static void DrawAdventureConversation(const CcSim *sim, const LocalState *local);
 static int AdventureTextSize(int base);
 static int AdventureWrap(const char *text, int x, int y, int width, int size, Color color);
+static int AdventureText(const char *text, int x, int y, int width, int size, Color color, bool draw);
 static void DrawAdventureHeader(const CcSim *sim, const LocalState *local);
 static Rectangle AdventureNavBounds(int index);
 static void DrawAdventurePromises(const CcSim *sim, const LocalState *local, int32_t selected);
@@ -4839,6 +4840,8 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
         }
         int label_size = local->adventure_ui ? AdventureTextSize(14) : detailed ? 10 : 11;
         if (local->adventure_ui) {
+            while (label_size > 12 && AdventureText(action_label, 0, 0,
+                (int)bounds.width - 24, label_size, label_color, false) > 44) --label_size;
             (void)AdventureWrap(action_label, (int)bounds.x + 12, (int)bounds.y + 12,
                 (int)bounds.width - 24, label_size, label_color);
         } else {

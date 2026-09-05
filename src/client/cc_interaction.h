@@ -31,6 +31,7 @@ typedef struct CcInteractionTarget {
     uint64_t situation_id;
     int32_t action;
     int32_t amount;
+    uint64_t subject_id;
     float x, y, z;
     float width, height, depth;
     float approach_x, approach_z;
