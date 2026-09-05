@@ -364,7 +364,27 @@ class Worlds:
                     self.failed.add(world)
                     logging.exception("World %s needs recovery", world)
 
+    def delete_world(self, world, token):
+        with self.lock:
+            with self.transaction():
+                row = self.db.execute("SELECT owner FROM worlds WHERE id=?", (world,)).fetchone()
+                require(row is not None and row["owner"] == digest(token),
+                        "The host can delete this world.", 403)
+                self.db.execute("DELETE FROM receipts WHERE world=?", (world,))
+                self.db.execute("DELETE FROM sessions WHERE world=?", (world,))
+                self.db.execute("DELETE FROM appearances WHERE world=?", (world,))
+                self.db.execute("DELETE FROM scene_contexts WHERE world=?", (world,))
+                self.db.execute("DELETE FROM away_clocks WHERE world=?", (world,))
+                self.db.execute("DELETE FROM members WHERE world=?", (world,))
+                self.db.execute("DELETE FROM worlds WHERE id=?", (world,))
+            self.seen = {key: value for key, value in self.seen.items() if key[0] != world}
+            self.last_tick.pop(world, None)
+            self.failed.discard(world)
+        return {"deleted": True}
+
     def owner_action(self, world, token, action, member=None):
+        if action == "delete":
+            return self.delete_world(world, token)
         with self.transaction():
             row = self.db.execute("SELECT owner,paused FROM worlds WHERE id=?", (world,)).fetchone()
             require(row is not None and row["owner"] == digest(token), "The world host manages the crew and pause control.", 403)

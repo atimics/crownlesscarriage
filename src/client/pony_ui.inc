@@ -31,7 +31,7 @@ static bool HandlePonyInput(CcJournal *journal, CcSim *sim, LocalState *local,
         return true;
     }
     if (local->pony_book_open) {
-        if (ClientKeyPressed(KEY_ESCAPE)) local->pony_book_open = false;
+        if (ClientKeyPressed(KEY_BACKSPACE)) local->pony_book_open = false;
         return true;
     }
     int32_t pony = CcPonyOnRoad(sim);
@@ -47,7 +47,7 @@ static bool HandlePonyInput(CcJournal *journal, CcSim *sim, LocalState *local,
     }
     CcCommand command = {.target_id = (CcId)pony + 1U};
     const CcPony *state = &sim->pony_company.ponies[pony];
-    if (ClientKeyPressed(KEY_ESCAPE) || PonyClicked(PonyActionButton(2))) {
+    if (ClientKeyPressed(KEY_BACKSPACE) || PonyClicked(PonyActionButton(2))) {
         command.kind = CC_COMMAND_LEAVE_PONY;
     } else if (state->ready) {
         if (ClientKeyPressed(KEY_ONE) || PonyClicked(PonyActionButton(0))) {
@@ -109,14 +109,14 @@ static void DrawPonyInterface(const CcSim *sim, const LocalState *local)
                 (int)x + 16, (int)y + 106, 10, TEAL);
             DrawPonyButton(PonyActionButton(0), "Help pony [Enter]");
         }
-        DrawPonyButton(PonyActionButton(2), "Keep travelling [Esc]");
+        DrawPonyButton(PonyActionButton(2), "Keep travelling [Backspace]");
     }
     if (!local->pony_book_open) return;
     int x = GetScreenWidth() / 2 - 330;
     int y = 106;
     DrawPanel((Rectangle){(float)x, (float)y, 660, 466}, (Color){13,18,28,252});
     CcOverlayDrawText("PONIES", x + 20, y + 18, 17, INK);
-    CcOverlayDrawText("Meet them on the roads. Help them. Travel together. [F7 / Esc to close]",
+    CcOverlayDrawText("Meet them on the roads. Help them. Travel together. [F7 / Backspace to close]",
                       x + 20, y + 47, 9, MUTED);
     for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
         const CcPony *p = &sim->pony_company.ponies[i];
@@ -170,7 +170,7 @@ static bool CheckPonyInterface(CcSim *sim, LocalState *local, int32_t pony)
     if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, message, sizeof(message)) ||
         !local->pony_book_open) return false;
     ClientInputClearPressed();
-    queued_key_press[KEY_ESCAPE] = true;
+    queued_key_press[KEY_BACKSPACE] = true;
     if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, message, sizeof(message)) ||
         local->pony_book_open) return false;
     ClientInputClearPressed();

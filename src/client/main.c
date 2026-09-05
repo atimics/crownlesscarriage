@@ -19,6 +19,7 @@
 #include <emscripten.h>
 #endif
 
+#include <errno.h>
 #include <inttypes.h>
 #include <math.h>
 #include <stdbool.h>
@@ -338,16 +339,12 @@ EM_ASYNC_JS(int, ClientFlushBrowserSaves,
         return 0;
     }
 });
-EM_ASYNC_JS(int, ClientFlushNewBrowserCampaign,
-            (const char *campaign_path), {
+EM_ASYNC_JS(int, ClientDeleteBrowserCampaign, (), {
     try {
-        await Module.persistCrownlessNewCampaign(
-            UTF8ToString(campaign_path));
-        console.info("Crownless Carriage new campaign stored.");
+        await Module.deleteCrownlessCampaign();
         return 1;
     } catch (error) {
-        console.error("Could not store the new Crownless Carriage campaign",
-                      error);
+        console.error("World deletion failed", error);
         return 0;
     }
 });
@@ -363,6 +360,10 @@ EM_ASYNC_JS(int, ClientFlushBrowserPreferences,
                       error);
         return 0;
     }
+});
+EM_JS(void, ClientBrowserFrontend, (const char *screen, int focus), {
+    Module.crownlessScreen = UTF8ToString(screen);
+    Module.crownlessMenuFocus = focus;
 });
 EM_JS(int, ClientBrowserCampaignAccess, (), {
     return Number.isInteger(Module.crownlessCampaignAccess)
@@ -3998,7 +3999,7 @@ static ContextActionSet BuildContextActions(
         AddDetailedContextAction(
             &set, CONTEXT_ACTION_DUNGEON_RETREAT,
             room->depth == 0 ? "Return to carriage" : "Flee to carriage",
-            "ESC", room->depth == 0 ? "SAFE WITHDRAWAL" :
+            "BKSP", room->depth == 0 ? "SAFE WITHDRAWAL" :
                                        "RISK CARGO + STRAIN",
             true, false);
         return set;
@@ -4057,14 +4058,14 @@ static ContextActionSet BuildContextActions(
                 payment > 0, false);
         }
         AddDetailedContextAction(
-            &set, CONTEXT_ACTION_CLOSE_VIEW, "Return to goblin chimney", "ESC",
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Return to goblin chimney", "BKSP",
             sim->dragon.slain ? "LEAVE THE ASHEN ROOST" :
                                 "THE ONLY EXIT", true, false);
         return set;
     }
     if (view == VIEW_LEDGER) {
         AddDetailedContextAction(
-            &set, CONTEXT_ACTION_CLOSE_VIEW, "Close ledger", "ESC",
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Close ledger", "BKSP",
             "RETURN TO PREVIOUS VIEW", true, false);
         return set;
     }
@@ -4094,7 +4095,7 @@ static ContextActionSet BuildContextActions(
                              "Next quest");
         }
         AddDetailedContextAction(
-            &set, CONTEXT_ACTION_CLOSE_VIEW, "Close quests", "ESC",
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Close quests", "BKSP",
             "RETURN TO PREVIOUS VIEW", true, false);
         return set;
     }
@@ -4116,7 +4117,7 @@ static ContextActionSet BuildContextActions(
             &set, CONTEXT_ACTION_OPEN_PROMISES, "Review quest papers", "Q",
             "ACTIVE LOAD AND COMMITMENTS", true, false);
         AddDetailedContextAction(
-            &set, CONTEXT_ACTION_CLOSE_VIEW, "Step away", "ESC",
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Step away", "BKSP",
             "RETURN TO THE STREET", true, false);
         return set;
     }
@@ -4185,7 +4186,7 @@ static ContextActionSet BuildContextActions(
                 "GIVE UP THIS CHART'S ROUTE GUIDANCE", true, confirming);
         }
         AddDetailedContextAction(
-            &set, CONTEXT_ACTION_CLOSE_VIEW, "Close map case", "ESC",
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Close map case", "BKSP",
             "RETURN TO THE CARRIAGE", true, false);
         return set;
     }
@@ -4210,7 +4211,7 @@ static ContextActionSet BuildContextActions(
             set.items[set.count - 1].amount = i;
         }
         AddDetailedContextAction(
-            &set, CONTEXT_ACTION_CLOSE_VIEW, "Turn back to town", "ESC",
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Turn back to town", "BKSP",
             "RETURN THROUGH THE GATE", true, false);
         return set;
     }
@@ -7731,6 +7732,87 @@ static int RunRoadEncounterSessionRegression(void)
 }
 #endif
 
+static bool SaveClientWorld(CcJournal *journal, CcSim *sim,
+                            const LocalState *local,
+                            const char *save_path, const char *session_path,
+                            char *save_feedback, size_t save_feedback_capacity)
+{
+    if (CcCoopClientActive()) {
+        (void)snprintf(save_feedback, save_feedback_capacity,
+                       "The host saves each company action and the shared clock.");
+        return true;
+    }
+#if !defined(PLATFORM_WEB)
+    (void)save_path;
+#endif
+#if defined(PLATFORM_WEB)
+    int32_t browser_access = ClientBrowserCampaignAccess();
+    if (browser_access != 0) {
+        (void)snprintf(
+            save_feedback, save_feedback_capacity, "Save blocked. %s",
+            ClientBrowserCampaignAccessMessage(browser_access));
+        return false;
+    }
+#endif
+    if (local->road_choice_active &&
+        !StableWorldRoadChoice(local)) {
+        (void)snprintf(
+            save_feedback, save_feedback_capacity,
+            "Save paused. Choose a road or turn back first.");
+        return false;
+    }
+    if (!LocalSessionEligible(local)) {
+        (void)snprintf(
+            save_feedback, save_feedback_capacity,
+            "Save paused. Finish the current movement first.");
+        return false;
+    }
+    char error[256];
+    if (!CcJournalCheckpoint(journal, sim, error, sizeof(error))) {
+        (void)snprintf(save_feedback, save_feedback_capacity,
+                       "Journal save failed: %.72s", error);
+        return false;
+    }
+    if (!SaveLocalSession(session_path, sim, local,
+                          error, sizeof(error))) {
+#if defined(PLATFORM_WEB)
+        (void)snprintf(
+            save_feedback, save_feedback_capacity,
+            "Journal is ready in this tab. "
+            "Local scene checkpoint failed: %.44s",
+            error);
+#else
+        (void)snprintf(
+            save_feedback, save_feedback_capacity,
+            "Journal saved. Local scene checkpoint failed: %.52s",
+            error);
+#endif
+        return false;
+    }
+#if defined(PLATFORM_WEB)
+    if (ClientFlushBrowserSaves(save_path, session_path) == 0) {
+        int32_t save_access = ClientBrowserCampaignAccess();
+        if (save_access == 0) {
+            (void)snprintf(
+                save_feedback, save_feedback_capacity,
+                "Browser storage failed. Journal and local scene "
+                "remain in this tab.");
+        } else {
+            (void)snprintf(
+                save_feedback, save_feedback_capacity,
+                "Save blocked. %s",
+                ClientBrowserCampaignAccessMessage(save_access));
+        }
+        return false;
+    }
+#endif
+    (void)snprintf(
+        save_feedback, save_feedback_capacity,
+        "Journal saved. Local scene checkpoint saved.");
+    return true;
+}
+
+#include "client/cc_frontend.inc"
 #include "pony_ui.inc"
 
 static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
@@ -7761,77 +7843,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     if (command_action == COMMAND_ACTION_SAVE || ClientKeyPressed(KEY_F5) ||
         queued_save_shortcut || (control && ClientKeyPressed(KEY_S))) {
         *save_feedback_age = 0.0f;
-        if (CcCoopClientActive()) {
-            (void)snprintf(save_feedback, save_feedback_capacity,
-                           "The host saves each company action and the shared clock.");
-            return;
-        }
-#if defined(PLATFORM_WEB)
-        int32_t browser_access = ClientBrowserCampaignAccess();
-        if (browser_access != 0) {
-            (void)snprintf(
-                save_feedback, save_feedback_capacity, "Save blocked. %s",
-                ClientBrowserCampaignAccessMessage(browser_access));
-            return;
-        }
-#endif
-        if (local->road_choice_active &&
-            !StableWorldRoadChoice(local)) {
-            (void)snprintf(
-                save_feedback, save_feedback_capacity,
-                "Save paused. Choose a road or turn back first.");
-            return;
-        }
-        if (!LocalSessionEligible(local)) {
-            (void)snprintf(
-                save_feedback, save_feedback_capacity,
-                "Save paused. Finish the current movement first.");
-            return;
-        }
-        char error[256];
-        if (!CcJournalCheckpoint(*journal, sim, error, sizeof(error))) {
-            (void)snprintf(save_feedback, save_feedback_capacity,
-                           "Journal save failed: %.72s", error);
-            return;
-        }
-        if (!SaveLocalSession(session_path, sim, local,
-                              error, sizeof(error))) {
-#if defined(PLATFORM_WEB)
-            (void)snprintf(
-                save_feedback, save_feedback_capacity,
-                "Journal is ready in this tab. "
-                "Local scene checkpoint failed: %.44s",
-                error);
-#else
-            (void)snprintf(
-                save_feedback, save_feedback_capacity,
-                "Journal saved. Local scene checkpoint failed: %.52s",
-                error);
-#endif
-            return;
-        }
-#if defined(PLATFORM_WEB)
-        if (ClientFlushBrowserSaves(save_path, session_path) == 0) {
-            int32_t save_access = ClientBrowserCampaignAccess();
-            if (save_access == 0) {
-                (void)snprintf(
-                    save_feedback, save_feedback_capacity,
-                    "Browser storage failed. Journal and local scene "
-                    "remain in this tab.");
-            } else {
-                (void)snprintf(
-                    save_feedback, save_feedback_capacity,
-                    "Save blocked. %s",
-                    ClientBrowserCampaignAccessMessage(save_access));
-            }
-            return;
-        }
-#endif
-        (void)snprintf(
-            save_feedback, save_feedback_capacity,
-            "Journal saved. Local scene checkpoint saved.");
+        (void)SaveClientWorld(*journal, sim, local, save_path, session_path,
+                              save_feedback, save_feedback_capacity);
         return;
     }
+
     if (HandlePonyInput(*journal, sim, local, *view, message, message_capacity)) return;
     if (*view == VIEW_ENCOUNTER) {
         if (!sim->journey.active ||
@@ -7871,7 +7887,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 }
             }
         }
-        if (ClientKeyPressed(KEY_ESCAPE)) {
+        if (ClientKeyPressed(KEY_BACKSPACE)) {
             context_action = CONTEXT_ACTION_DUNGEON_RETREAT;
         }
         CcCommand dungeon_command = {0};
@@ -7916,7 +7932,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 }
             }
         }
-        if (ClientKeyPressed(KEY_ESCAPE) ||
+        if (ClientKeyPressed(KEY_BACKSPACE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
             *view = VIEW_LOCAL;
             return;
@@ -7952,7 +7968,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (*view == VIEW_CHARACTER) {
-        if (ClientKeyPressed(KEY_ESCAPE) ||
+        if (ClientKeyPressed(KEY_BACKSPACE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
             *view = VIEW_LOCAL;
             return;
@@ -8023,7 +8039,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (IsCommandOverlay(*view) &&
-        (ClientKeyPressed(KEY_ESCAPE) ||
+        (ClientKeyPressed(KEY_BACKSPACE) ||
          context_action == CONTEXT_ACTION_CLOSE_VIEW)) {
         *view = SafeOverlayReturnView(*return_view);
         return;
@@ -8159,7 +8175,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
     if (*view == VIEW_LEDGER) return;
     if (*view == VIEW_CARRIAGE) {
-        if (ClientKeyPressed(KEY_ESCAPE) ||
+        if (ClientKeyPressed(KEY_BACKSPACE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
             CcLocalAgentClearWorldTarget(&local->agent);
             *view = VIEW_LOCAL;
@@ -8253,98 +8269,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
-    if (ClientKeyPressed(KEY_N)) {
-#if defined(PLATFORM_WEB)
-        int32_t browser_access = ClientBrowserCampaignAccess();
-        if (browser_access != 0) {
-            (void)snprintf(
-                message, message_capacity, "%s",
-                ClientBrowserCampaignAccessMessage(browser_access));
-            return;
-        }
-#endif
-        static double confirmation_deadline = 0.0;
-        double now = GetTime();
-        if (now > confirmation_deadline) {
-            confirmation_deadline = now + 3.0;
-            (void)snprintf(message, message_capacity,
-                           "Press N again to start a new campaign.");
-            return;
-        }
-        confirmation_deadline = 0.0;
-        char error[256];
-        if (!CcJournalClose(journal, sim, error, sizeof(error))) {
-            (void)snprintf(message, message_capacity, "%s", error);
-            return;
-        }
-        CcSim replacement;
-        CcSimInit(&replacement,
-                  sim->world_seed + UINT32_C(0x9e3779b9));
-        CcJournal *replacement_journal = CcJournalRestart(
-            save_path, &replacement, error, sizeof(error));
-        if (replacement_journal == NULL) {
-            char restart_error[256];
-            (void)snprintf(restart_error, sizeof(restart_error), "%s", error);
-            CcSim restored_sim;
-            CcJournal *restored_journal = CcJournalResume(
-                save_path, &restored_sim, error, sizeof(error));
-            if (restored_journal != NULL) {
-                *journal = restored_journal;
-                *sim = restored_sim;
-                (void)snprintf(
-                    message, message_capacity,
-                    "A new campaign could not start. "
-                    "Your previous campaign is still active.");
-                *view = VIEW_LOCAL;
-                return;
-            }
-            *view = VIEW_LOCAL;
-            (void)snprintf(message, message_capacity, "%s", restart_error);
-            return;
-        }
-#if defined(PLATFORM_WEB)
-        if (ClientFlushNewBrowserCampaign(save_path) == 0) {
-            CcJournalAbandon(&replacement_journal);
-            CcJournal *restored_journal = CcJournalRestart(
-                save_path, sim, error, sizeof(error));
-            if (restored_journal == NULL) {
-                *view = VIEW_LOCAL;
-                (void)snprintf(
-                    message, message_capacity,
-                    "The browser could not store the new campaign. "
-                    "Reload to recover your previous campaign.");
-                return;
-            }
-            *journal = restored_journal;
-            *view = VIEW_LOCAL;
-            int32_t failure_access = ClientBrowserCampaignAccess();
-            if (failure_access == 0) {
-                (void)snprintf(
-                    message, message_capacity,
-                    "The browser could not store the new campaign. "
-                    "Your previous campaign is still active.");
-            } else {
-                (void)snprintf(
-                    message, message_capacity,
-                    "Browser ownership changed. Reload before saving. "
-                    "Your previous campaign is still active.");
-            }
-            return;
-        }
-#endif
-        *journal = replacement_journal;
-        *sim = replacement;
-        *selected = FirstOutgoingRouteIndex(sim);
-        *selected_situation = FirstActiveSituationIndex(sim);
-        CcLocalBindPlace(sim);
-        LeaveOpenWorld(local);
-        ResetLocalState(local);
-        (void)InitializeOpenWorld(sim, local, false);
-        BeginOpening(local);
-        *view = VIEW_LOCAL;
-        message[0] = '\0';
-        return;
-    }
     if (ClientKeyPressed(KEY_PERIOD) && !sim->journey.active) {
         char error[256];
         bool advanced = CcJournalAdvanceDays(*journal, sim, 1,
@@ -8365,7 +8289,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
 
     if (*view == VIEW_LOCAL) {
-        if (local->open_world_market && ClientKeyPressed(KEY_ESCAPE)) {
+        if (local->open_world_market && ClientKeyPressed(KEY_BACKSPACE)) {
             local->open_world_market = false;
             message[0] = '\0';
             return;
@@ -9238,7 +9162,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
 
     if (*view == VIEW_MAP) {
-        if (ClientKeyPressed(KEY_ESCAPE) ||
+        if (ClientKeyPressed(KEY_BACKSPACE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
             *view = *return_view == VIEW_CARRIAGE ?
                 VIEW_CARRIAGE : VIEW_LOCAL;
@@ -9316,7 +9240,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
 
     if (*view == VIEW_ROADS && RoadBookDepartureInProgress(local)) return;
 
-    if (ClientKeyPressed(KEY_ESCAPE) ||
+    if (ClientKeyPressed(KEY_BACKSPACE) ||
         context_action == CONTEXT_ACTION_CLOSE_VIEW) {
         BeginTownArrivalState(local);
         *view = VIEW_LOCAL;
@@ -9579,6 +9503,9 @@ static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
 int main(int argc, char **argv)
 {
 #if defined(CC_CLIENT_SELF_TESTS)
+    if (argc == 2 && strcmp(argv[1], "--test-frontend") == 0) {
+        return RunFrontendRegression();
+    }
     if (argc == 2 && strcmp(argv[1], "--test-storybook-travel") == 0) {
         return RunStorybookTravelRegression();
     }
@@ -9981,8 +9908,12 @@ int main(int argc, char **argv)
             return 1;
         }
     }
+    bool capture_title = argc >= 2 && strcmp(argv[1], "--capture-title") == 0;
+    bool capture_menu = argc >= 2 && strcmp(argv[1], "--capture-menu") == 0;
+    bool capture_delete = argc >= 2 && strcmp(argv[1], "--capture-delete-menu") == 0;
     bool capture = argc >= 2 &&
-                   (strcmp(argv[1], "--capture") == 0 || capture_world ||
+                   (strcmp(argv[1], "--capture") == 0 || capture_title ||
+                    capture_menu || capture_delete || capture_world ||
                     capture_board ||
                     capture_opening ||
                     capture_interior || capture_navigation || capture_limbs ||
@@ -10017,6 +9948,12 @@ int main(int argc, char **argv)
                                "architecture-proof.png";
     char save_path[640];
     CampaignSavePath(save_path, sizeof(save_path));
+#if !defined(PLATFORM_WEB)
+    if (argc >= 3 && strcmp(argv[1], "--save-path") == 0) {
+        if (strlen(argv[2]) >= sizeof(save_path)) return 1;
+        (void)snprintf(save_path, sizeof(save_path), "%s", argv[2]);
+    }
+#endif
     if (CcCoopClientActive() || CcCoopClientPreview())
         (void)snprintf(save_path, sizeof(save_path), "/tmp/crownless-coop.ccsave");
     char session_path[704];
@@ -10084,6 +10021,7 @@ int main(int argc, char **argv)
         CcClientInstanceLockRelease(&instance_lock);
         return 1;
     }
+    SetExitKey(KEY_NULL);
     ClientInputInstall();
 
     SetWindowMinSize(normal_play || capture_road_fork ? 1040 : 1280,
@@ -10136,10 +10074,6 @@ int main(int argc, char **argv)
             journal = CcJournalResume(save_path, &sim, error, sizeof(error));
             (void)snprintf(startup_message, sizeof(startup_message), "%s",
                            journal != NULL ? "Campaign resumed." : error);
-        } else {
-            journal = CcJournalStart(save_path, &sim, error, sizeof(error));
-            (void)snprintf(startup_message, sizeof(startup_message), "%s",
-                           journal != NULL ? "New campaign started." : error);
         }
     }
 #if defined(PLATFORM_WEB)
@@ -10906,6 +10840,17 @@ int main(int argc, char **argv)
             LocalAtmosphereForSimulation(&sim),
         0.0f);
 
+    FrontendState frontend = {
+        .focus = normal_play || capture_title ? 2 : 0,
+        .screen = CcCoopClientActive() ? FRONTEND_PLAYING :
+                  normal_play || capture_title ? FRONTEND_TITLE :
+                  capture_delete ? FRONTEND_DELETE :
+                  capture_menu ? FRONTEND_PAUSED : FRONTEND_PLAYING,
+        .has_world = resuming_campaign || capture_menu || capture_delete,
+    };
+    if (resuming_campaign && journal == NULL) {
+        (void)snprintf(frontend.feedback, sizeof(frontend.feedback), "%s", startup_message);
+    }
     CcSoundscape soundscape = {0};
     CcAudioSetMode(preferences.audio_mode);
     Rectangle local_bounds;
@@ -10915,7 +10860,7 @@ int main(int argc, char **argv)
         coop_checkpoint_local = &local;
         coop_checkpoint_path = session_path;
     }
-    while (render_benchmark || !WindowShouldClose()) {
+    while (render_benchmark || (!frontend.quit && !WindowShouldClose())) {
 #if defined(PLATFORM_WEB)
         ClientWaitForAnimationFrame();
 #endif
@@ -10959,19 +10904,30 @@ int main(int argc, char **argv)
         local_bounds = LocalViewportBounds();
         float frame_delta_time = GetFrameTime();
         bool music_play_input = false;
+        bool menu_frame = frontend.screen != FRONTEND_PLAYING;
+        FrontendAction menu_action = FRONTEND_ACTION_NONE;
+        if (normal_play) {
+            menu_action = FrontendInput(&frontend);
+            menu_frame = menu_frame || frontend.screen != FRONTEND_PLAYING;
+            if (menu_action != FRONTEND_ACTION_NONE) menu_frame = true;
+            HandleFrontendAction(&frontend, menu_action, &journal, &sim,
+                                 &local, &view, &return_view, &selected,
+                                 &selected_situation, save_path, session_path);
+        }
+        float world_delta_time = menu_frame ? 0.0f : frame_delta_time;
         save_feedback_age = fminf(
             SAVE_FEEDBACK_VISIBLE_SECONDS,
             save_feedback_age + frame_delta_time);
         CcLocalRendererSetOpeningStep(local.opening_step);
         if (view == VIEW_ROADS) {
             local.fork_turn_progress = fminf(
-                1.0f, local.fork_turn_progress + frame_delta_time * 0.78f);
+                1.0f, local.fork_turn_progress + world_delta_time * 0.78f);
         }
         char previous_message[sizeof(message)];
         (void)snprintf(previous_message, sizeof(previous_message), "%s",
                        message);
         ClientView audio_previous_view = view;
-        bool audio_clicked = normal_play && ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+        bool audio_clicked = normal_play && !menu_frame && ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
             CheckCollisionPointRec(GetMousePosition(), AudioControlBounds());
         if (normal_play) {
             bool input = ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) ||
@@ -10982,12 +10938,14 @@ int main(int argc, char **argv)
             if (input) CcAudioInit();
             CcAudioSetFocused(IsWindowFocused());
         }
-        bool change_audio = normal_play && (ClientKeyPressed(KEY_F6) || audio_clicked);
+        bool change_audio = normal_play && (ClientKeyPressed(KEY_F6) || audio_clicked ||
+            menu_action == FRONTEND_ACTION_SOUND);
         if (change_audio) {
             preferences.audio_mode = (preferences.audio_mode + 1) % 3;
             CcAudioSetMode(preferences.audio_mode);
         }
-        if (change_audio || (normal_play && ClientKeyPressed(KEY_F4))) {
+        if (change_audio || (normal_play && (ClientKeyPressed(KEY_F4) ||
+            menu_action == FRONTEND_ACTION_MOTION))) {
             if (!change_audio) preferences.reduced_motion = !preferences.reduced_motion;
             CcLocalRendererSetReducedMotion(preferences.reduced_motion);
             char preferences_error[192];
@@ -11013,6 +10971,9 @@ int main(int argc, char **argv)
                         "Reduced motion enabled and saved." :
                         "Reduced motion disabled and saved.")) :
                     preferences_error);
+        }
+        if (menu_frame && (change_audio || menu_action == FRONTEND_ACTION_MOTION)) {
+            (void)snprintf(frontend.feedback, sizeof(frontend.feedback), "%s", message);
         }
         CcLocalRendererSetAtmosphere(
             capture_atmosphere ? capture_atmosphere_preset :
@@ -11046,7 +11007,7 @@ int main(int argc, char **argv)
         } else if (render_benchmark) {
             ClientInputClearPressed();
         } else {
-            if (!audio_clicked) HandleInput(&journal, &sim, &selected, &selected_situation,
+            if (!menu_frame && !audio_clicked) HandleInput(&journal, &sim, &selected, &selected_situation,
                         &view, &return_view, &local,
                         local_target, local_bounds,
                         frame_delta_time,
@@ -11059,15 +11020,16 @@ int main(int argc, char **argv)
             CcCoopCheckpointNow();
             coop_checkpoint_time = GetTime();
         }
-        if (!capture_road_arrival && !capture_storybook) {
+        if (!menu_frame && !capture_road_arrival && !capture_storybook) {
             UpdateOpenWorldCamera(&sim, &local, frame_delta_time);
         }
         if (normal_play) {
             if (view != audio_previous_view) CcAudioPlay(CC_SOUND_PAGE);
-            UpdatePlayAudio(&soundscape, &sim, &local, view, frame_delta_time);
+            UpdatePlayAudio(&soundscape, &sim, &local, view, world_delta_time);
         }
         bool persistence_blocked = CcClientCampaignAccessFor(
-            normal_play, journal != NULL) == CC_CLIENT_CAMPAIGN_BLOCKED;
+            normal_play && (frontend.has_world || frontend.screen == FRONTEND_PLAYING),
+            journal != NULL) == CC_CLIENT_CAMPAIGN_BLOCKED;
         CcLocalRendererSetOpeningStep(local.opening_step);
         CcLocalBindPlace(&sim);
         BindOpenWorldForLocalState(&local);
@@ -11281,7 +11243,8 @@ int main(int argc, char **argv)
             DrawCampaignUnavailable(message);
         }
         CcOverlayEnd();
-        if (normal_play) {
+        if (normal_play && frontend.screen == FRONTEND_PLAYING) {
+            DrawText("ESC  Menu", 18, GetScreenHeight() - 22, 10, MUTED);
             Rectangle audio_bounds = AudioControlBounds();
             DrawRectangleRounded(audio_bounds, 0.25f, 4, PANEL_DEEP);
             DrawRectangleRoundedLinesEx(audio_bounds, 0.25f, 4, 1.0f, Fade(TEAL, 0.62f));
@@ -11289,6 +11252,14 @@ int main(int argc, char **argv)
                 preferences.audio_mode == 1 ? "Effects F6" : "Muted F6";
             DrawText(audio_label, (int)audio_bounds.x + 10, (int)audio_bounds.y + 10, 10, INK);
         }
+        if (frontend.screen != FRONTEND_PLAYING) {
+            DrawFrontend(&frontend, &preferences, &sim);
+        }
+#if defined(PLATFORM_WEB)
+        ClientBrowserFrontend(frontend.screen == FRONTEND_TITLE ? "title" :
+            frontend.screen == FRONTEND_PAUSED ? "paused" :
+            frontend.screen == FRONTEND_DELETE ? "delete" : "playing", frontend.focus);
+#endif
         EndDrawing();
 #if defined(PLATFORM_WEB)
         if (!browser_memory_reported) {
@@ -11359,9 +11330,9 @@ int main(int argc, char **argv)
     }
 
     bool campaign_unavailable = CcClientCampaignAccessFor(
-        normal_play, journal != NULL) == CC_CLIENT_CAMPAIGN_BLOCKED;
+        normal_play && frontend.has_world, journal != NULL) == CC_CLIENT_CAMPAIGN_BLOCKED;
     char journal_error[256];
-    if (normal_play && !campaign_unavailable &&
+    if (normal_play && journal != NULL && !campaign_unavailable &&
         !SaveLocalSession(session_path, &sim, &local,
                           journal_error, sizeof(journal_error))) {
         (void)fprintf(stderr, "Could not save the local session: %s\n",

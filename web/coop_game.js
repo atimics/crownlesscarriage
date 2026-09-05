@@ -6,12 +6,13 @@
   let state = null, pending = null, lastPoll = 0, inFlight = false, applying = false;
   const token = enabled ? localStorage.getItem('cc-coop-token') : '';
   const key = `cc-coop-pending-${worldId}`;
+  let deleted = false;
   const sessionKey = `cc-coop-session-${worldId}`;
   let checkpoint = null, sessionSequence = 0, sessionSaved = 0, sessionFlight = false, lastSessionSave = 0, restoredSession = false;
   let status, pauseControl, startupError = '';
   function say(message) { if (status) status.textContent = startupError || message; }
   function accept(next, forceSnapshot = false) {
-    if (state && next.revision < state.revision) return;
+    if (deleted || (state && next.revision < state.revision)) return;
     if (!state || next.revision !== state.revision || forceSnapshot) pending = next.campaign;
     state = next;
     if (checkpoint && checkpoint.context !== next.session_context) checkpoint = null;
@@ -53,7 +54,7 @@
     }
   }
   function captureSession(session) {
-    if (!enabled || !state?.session_context || checkpoint?.session === session) return;
+    if (deleted || !enabled || !state?.session_context || checkpoint?.session === session) return;
     checkpoint = {context:state.session_context, sequence:++sessionSequence, session};
     localStorage.setItem(sessionKey, JSON.stringify(checkpoint));
     const place = session.split('\n')[1].split(' ');
@@ -61,7 +62,7 @@
     document.body.dataset.playerScene = place[2];
   }
   async function saveSession(leaving = false) {
-    if (!checkpoint || checkpoint.sequence <= sessionSaved || (sessionFlight && !leaving)) return;
+    if (deleted || !checkpoint || checkpoint.sequence <= sessionSaved || (sessionFlight && !leaving)) return;
     if (!leaving && performance.now() - lastSessionSave < 1000) return;
     const saved = checkpoint;
     lastSessionSave = performance.now(); sessionFlight = true;
@@ -99,13 +100,27 @@
     return navigator.locks ? navigator.locks.request(`cc-coop-command-${worldId}`, run) : run();
   }
   function poll() {
+    if (deleted) return;
     saveSession();
     if (!enabled || inFlight || applying || performance.now() - lastPoll < 750) return;
     lastPoll = performance.now(); inFlight = true;
     request(`state?campaign=1&after=${state ? state.revision : -1}`).then(accept).catch(error => say(error.message)).finally(() => { inFlight = false; });
   }
-  Module.ccCoop = { enabled, preview, connect, apply, poll, avatar:() => CcAvatar.pack(avatar),
-    checkpoint:captureSession, hasSession:() => restoredSession,
+  async function deleteWorld() {
+    if (!state?.owner) throw new Error('The host can delete this world.');
+    if (applying || localStorage.getItem(key)) throw new Error('Finish the pending company action first.');
+    const result = await request('host', {action: 'delete'});
+    if (result.deleted !== true) throw new Error('Check the company road book and try again.');
+    deleted = true; pending = null; checkpoint = null;
+    localStorage.removeItem(sessionKey);
+    localStorage.removeItem(key);
+  }
+  function openLobby() {
+    location.assign(location.pathname.startsWith('/game/') ? '/' : 'https://crownless.ratimics.com/');
+  }
+  Module.ccCoop = { enabled, preview, connect, apply, poll, deleteWorld, openLobby,
+    avatar:() => CcAvatar.pack(avatar), checkpoint:captureSession, hasSession:() => restoredSession,
+    owner() { return Boolean(state?.owner); },
     ready(error) { startupError = error; document.body.dataset.companyReady = error ? 'error' : 'ready'; if (error) say(error); },
     take() { const value = pending; pending = null; return value; } };
   if (enabled && typeof document !== 'undefined') {
