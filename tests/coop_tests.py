@@ -80,6 +80,81 @@ class CoopTests(unittest.TestCase):
         state = self.worlds.view(self.id, token, campaign=True, enter=True)
         return dict(visit=state['visit'], context=state['session_context'], scene=0, pose=[0.0] * 83)
 
+    def test_party_wipe_waits_for_last_player_and_advances_once(self):
+        a, b = self.enter(self.a), self.enter(self.b)
+        before = self.worlds.view(self.id, self.a)
+        self.worlds.pose(self.id, self.a, dict(a, dead=True))
+        self.assertEqual(self.worlds.view(self.id, self.a)['state']['day'], before['state']['day'])
+        # A living player in a different scene is still part of the party.
+        self.worlds.pose(self.id, self.b, dict(b, scene=1, dead=False))
+        self.worlds.pose(self.id, self.a, dict(a, dead=False))
+        self.assertTrue(self.worlds.view(self.id, self.a)['dead'])
+        with self.assertRaises(ApiError):
+            self.worlds.command(self.id, self.a, self.command(self.a))
+        result = self.worlds.pose(self.id, self.b, dict(b, scene=1, dead=True))['world']
+        self.assertEqual(result['state']['day'], before['state']['day'] + 20 * 365)
+        self.assertEqual(result['party_wipes'], 1)
+        self.assertFalse(result['dead'])
+        self.assertNotEqual(result['session_context'], before['session_context'])
+        for token, pose in ((self.a, a), (self.b, b)):
+            with self.assertRaises(ApiError):
+                self.worlds.pose(self.id, token, dict(pose, dead=True))
+        self.assertEqual(self.worlds.view(self.id, self.a)['party_wipes'], 1)
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        restored = self.worlds.view(self.id, self.a)
+        self.assertEqual(restored['state'], result['state'])
+        self.assertEqual(restored['party_wipes'], 1)
+        self.assertEqual(restored['session_context'], result['session_context'])
+
+    def test_simultaneous_deaths_share_one_world_jump(self):
+        a, b = self.enter(self.a), self.enter(self.b)
+        before = self.worlds.view(self.id, self.a)['state']['day']
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            first = workers.submit(self.worlds.pose, self.id, self.a, dict(a, dead=True))
+            second = workers.submit(self.worlds.pose, self.id, self.b, dict(b, dead=True))
+            first.result()
+            second.result()
+        result = self.worlds.view(self.id, self.a)
+        self.assertEqual(result['state']['day'], before + 7300)
+        self.assertEqual(result['party_wipes'], 1)
+
+    def test_solo_death_ignores_members_in_the_lobby(self):
+        a = self.enter(self.a)
+        before = self.worlds.view(self.id, self.a)['state']['day']
+        result = self.worlds.pose(self.id, self.a, dict(a, dead=True))['world']
+        self.assertEqual(result['state']['day'], before + 7300)
+        a['context'] = result['session_context']
+        self.worlds.pose(self.id, self.a, dict(a, dead=False))
+        self.assertEqual(self.worlds.view(self.id, self.a)['party_wipes'], 1)
+        result = self.worlds.pose(self.id, self.a, dict(a, dead=True))['world']
+        self.assertEqual(result['state']['day'], before + 14600)
+        self.assertEqual(result['party_wipes'], 2)
+
+    def test_party_death_survives_reconnect_and_host_restart(self):
+        a, b = self.enter(self.a), self.enter(self.b)
+        self.worlds.pose(self.id, self.a, dict(a, dead=True))
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        a, b = self.enter(self.a), self.enter(self.b)
+        self.assertTrue(self.worlds.view(self.id, self.a)['dead'])
+        self.worlds.pose(self.id, self.a, dict(a, dead=False))
+        self.assertEqual(self.worlds.view(self.id, self.a)['party_wipes'], 0)
+        result = self.worlds.pose(self.id, self.b, dict(b, dead=True))['world']
+        self.assertEqual(result['party_wipes'], 1)
+
+    def test_knockdowns_and_paused_world_wait_for_death_resolution(self):
+        a = self.enter(self.a)
+        before = self.worlds.view(self.id, self.a)['state']['day']
+        self.worlds.pose(self.id, self.a, dict(a, dead=False))
+        self.assertEqual(self.worlds.view(self.id, self.a)['state']['day'], before)
+        self.worlds.owner_action(self.id, self.a, 'pause')
+        self.worlds.pose(self.id, self.a, dict(a, dead=True))
+        self.assertEqual(self.worlds.view(self.id, self.a)['state']['day'], before)
+        self.worlds.owner_action(self.id, self.a, 'resume')
+        result = self.worlds.pose(self.id, self.a, dict(a, dead=True))['world']
+        self.assertEqual(result['state']['day'], before + 7300)
+
     def test_visible_crew_pose_appearance_and_isolation(self):
         a, b = self.enter(self.a), self.enter(self.b)
         before = self.worlds.view(self.id, self.a)['state']

@@ -1587,26 +1587,12 @@ static void TestDeathLifecycle(void)
         (void)fprintf(stderr, "player death fixture did not land lethally\n");
         exit(1);
     }
-    bool saw_respawning = false;
-    bool saw_get_up = false;
-    bool resumed_inside_ragdoll = false;
     for (int32_t frame = 0; frame < 900; ++frame) {
         CcLocalAgentUpdate(&player, 1.0f / 60.0f, true);
-        saw_respawning = saw_respawning ||
-            player.combat.life_state == CC_LIFE_RESPAWNING;
-        saw_get_up = saw_get_up || player.humanoid.recovering;
-        resumed_inside_ragdoll = resumed_inside_ragdoll ||
-            (player.combat.life_state == CC_LIFE_ALIVE &&
-             player.humanoid.ragdoll.active);
-        if (player.combat.life_state == CC_LIFE_ALIVE) break;
     }
-    if (!saw_respawning || !saw_get_up || resumed_inside_ragdoll ||
-        player.combat.life_state != CC_LIFE_ALIVE ||
-        player.humanoid.ragdoll.active || player.humanoid.recovering ||
-        player.combat.health != 45.0f ||
-        player.combat.weapon_mode != CC_WEAPON_HELD) {
-        (void)fprintf(stderr,
-                      "player respawn was not synchronized with physical get-up\n");
+    if (player.combat.life_state != CC_LIFE_DEAD ||
+        player.combat.health != 0.0f || !player.humanoid.ragdoll.active) {
+        (void)fprintf(stderr, "fallen player must wait for the company fate\n");
         exit(1);
     }
 

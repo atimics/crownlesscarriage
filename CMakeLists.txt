@@ -1250,6 +1250,8 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-world-session-startup)
         add_test(NAME town_session_startup_restore
                  COMMAND crownless_carriage --test-town-session-startup)
+        add_test(NAME solo_party_wipe
+                 COMMAND crownless_carriage --test-party-wipe)
         add_test(NAME road_encounter_session_restore
                  COMMAND crownless_carriage --test-road-encounter-session)
 

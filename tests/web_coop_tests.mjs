@@ -154,6 +154,28 @@ assert.equal(coop.take(), 'snapshot-22', 'The next poll can still refresh the ca
 assert.equal(responses.length, 0);
 console.log('Appearance save failure, ordering, and campaign refresh passed.');
 
+// Death reports stay latched until the host confirms the next generation.
+coop = client();
+responses.push({...state(0), session_context:'old-town', visit:'life-visit', party_wipes:0});
+await coop.connect();
+coop.take();
+coop.life(true);
+coop.life(false);
+assert.equal(coop.dead(), true);
+responses.push({context:'old-town', scene:0, peers:[], world:{...state(1),
+  session_context:'new-town', party_wipes:1, dead:false}});
+coop.exchange(0, () => Array(83).fill(0));
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(JSON.parse(requests.at(-1).body).dead, true);
+assert.equal(coop.dead(), false);
+assert.equal(coop.partyWipes(), 1);
+assert.equal(coop.take(), 'snapshot-1');
+responses.push({...state(2), session_context:'new-town', party_wipes:1, dead:true});
+now += 800;
+coop.poll();
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(coop.dead(), true, 'Saved death returns after reconnect');
+
 // Player poses update independently of shared campaign saves.
 storage.delete(sessionKey);
 coop = client();

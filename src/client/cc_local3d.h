@@ -494,6 +494,7 @@ const char *CcLocalAgentMorphologyName(const CcLocalAgent *agent);
 bool CcLocalAgentBeginFreeClimb(CcLocalAgent *agent,
                                 Vector3 surface_point,
                                 Vector3 surface_normal);
+void CcLocalAgentDie(CcLocalAgent *agent);
 bool CcLocalAgentApplyDamage(CcLocalAgent *agent, float health_damage,
                              float posture_damage,
                              Vector3 impact_direction,
