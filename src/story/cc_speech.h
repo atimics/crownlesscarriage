@@ -7,6 +7,7 @@
 #define CC_SPEECH_LINE_CAPACITY 96
 #define CC_SPEECH_LANGUAGE "en"
 #define CC_SPEECH_VERSION 1
+#define CC_SPEECH_JSON_CAPACITY 4096
 
 typedef enum CcSpeechDelivery {
     CC_SPEECH_PLAIN,
@@ -56,6 +57,7 @@ bool CcSpeechCompose(CcSpeech *speech, const char *line_id, CcId speaker_id,
 bool CcSpeechCharacter(const CcSim *sim, const CcSituation *situation,
                         const CcCharacter *character, CcSpeech *speech);
 bool CcSpeechPath(const CcSpeech *speech, char *path, size_t capacity);
+bool CcSpeechJson(const CcSpeech *speech, char *json, size_t capacity);
 bool CcSpeechGreeting(const CcSim *sim, CcId place_id, CcId object_id,
                        const char *speaker, const char *service, CcSpeech *speech);
 bool CcSpeechRoad(const CcSim *sim, CcSpeech *speech);

@@ -59,6 +59,13 @@ static void ExactWords(void)
     CC_CHECK(!CcSpeechCompose(&next, "test", 1, "Mara", 0, oversized,
         CC_SPEECH_PLAIN, CC_SPEECH_CONVERSATION, 2));
     CC_CHECK(next.text[0] == '\0');
+    CC_CHECK(CcSpeechCompose(&next, "quote", 1, "Mara", 0, "The \"boat\"\\road.\nGo on.",
+        CC_SPEECH_PLAIN, CC_SPEECH_CONVERSATION, 2));
+    char json[CC_SPEECH_JSON_CAPACITY];
+    CC_CHECK(CcSpeechJson(&next, json, sizeof(json)));
+    CC_CHECK(strstr(json, "\\\"boat\\\"\\\\road.\\u000a") != NULL);
+    CC_CHECK(!CcSpeechJson(&next, json, 20));
+    CC_CHECK(json[0] == '\0');
 }
 
 static void CampaignSpeech(void)
