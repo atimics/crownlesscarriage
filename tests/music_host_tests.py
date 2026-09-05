@@ -14,6 +14,7 @@ offline = json.loads((folder / 'offline.json').read_text())['tracks']
 assert len(offline) == 27
 assert {p.stem for p in folder.glob('*.mp3')} == {t['stem'] for t in offline}
 for track in offline:
+    assert track['file'] == track['stem'] + '.mp3'
     data = (folder / (track['stem'] + '.mp3')).read_bytes()
     assert len(data) == track['bytes']
     assert hashlib.sha256(data).hexdigest() == track['sha256']

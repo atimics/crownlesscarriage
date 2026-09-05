@@ -4,137 +4,164 @@
     {
       "stem": "01-05",
       "bytes": 4552338,
-      "sha256": "de038f4dcb7f04321c6c3574fe47716357b7fe30c8adf554eaf226fc8de0e345"
+      "sha256": "de038f4dcb7f04321c6c3574fe47716357b7fe30c8adf554eaf226fc8de0e345",
+      "file": "01-05.mp3"
     },
     {
       "stem": "03-03",
       "bytes": 4133582,
-      "sha256": "fe0d996475acf972888df8ab75a62cca0b437e52bed40a4c3fa97bafd6bea5e2"
+      "sha256": "fe0d996475acf972888df8ab75a62cca0b437e52bed40a4c3fa97bafd6bea5e2",
+      "file": "03-03.mp3"
     },
     {
       "stem": "03-05",
       "bytes": 4283799,
-      "sha256": "76d6765a8013a43a6638ea69e432db2a6a67d274d5aa5e38e2f6480170bdfd8a"
+      "sha256": "76d6765a8013a43a6638ea69e432db2a6a67d274d5aa5e38e2f6480170bdfd8a",
+      "file": "03-05.mp3"
     },
     {
       "stem": "04-01",
       "bytes": 3847632,
-      "sha256": "359b859aa95c324b7157098ca8ea95980b8879fb38b70e82cbdcfa5bca44aa69"
+      "sha256": "359b859aa95c324b7157098ca8ea95980b8879fb38b70e82cbdcfa5bca44aa69",
+      "file": "04-01.mp3"
     },
     {
       "stem": "05-01",
       "bytes": 4195836,
-      "sha256": "a91cded7fae8c5923de25fffa2147ecdfc05e2fb8509845b919baa7b854266a8"
+      "sha256": "a91cded7fae8c5923de25fffa2147ecdfc05e2fb8509845b919baa7b854266a8",
+      "file": "05-01.mp3"
     },
     {
       "stem": "06-01",
       "bytes": 3885592,
-      "sha256": "2b337e774bf1f6ec0040b5e817230104337b8a9b58b2b344203b9bf2c5bc1aff"
+      "sha256": "2b337e774bf1f6ec0040b5e817230104337b8a9b58b2b344203b9bf2c5bc1aff",
+      "file": "06-01.mp3"
     },
     {
       "stem": "07-01",
       "bytes": 4072604,
-      "sha256": "142b9e509cc0291aa8390e201a9840b4c193cd995fd8776561ccb91ddb4aae61"
+      "sha256": "142b9e509cc0291aa8390e201a9840b4c193cd995fd8776561ccb91ddb4aae61",
+      "file": "07-01.mp3"
     },
     {
       "stem": "08-05",
       "bytes": 3789288,
-      "sha256": "19f197142f9f6b7664ac795a3a7982efb21200cf2fb89939944a75f6b91362c0"
+      "sha256": "19f197142f9f6b7664ac795a3a7982efb21200cf2fb89939944a75f6b91362c0",
+      "file": "08-05.mp3"
     },
     {
       "stem": "09-01",
       "bytes": 3915142,
-      "sha256": "c3d4b01d98ecf1c678952276c073edba28b813e18f808d6c89c9a409b7bcaeca"
+      "sha256": "c3d4b01d98ecf1c678952276c073edba28b813e18f808d6c89c9a409b7bcaeca",
+      "file": "09-01.mp3"
     },
     {
       "stem": "11-01",
       "bytes": 4642180,
-      "sha256": "6e00472fd839cbe45869dded7c8c0123ba57b0ed4a8dc1057f80f59bf875dd10"
+      "sha256": "6e00472fd839cbe45869dded7c8c0123ba57b0ed4a8dc1057f80f59bf875dd10",
+      "file": "11-01.mp3"
     },
     {
       "stem": "12-05",
       "bytes": 3792461,
-      "sha256": "5d2810f2ee2a3f5450eaa69f46331584e9d8964902b3cb034cb0d77a12812e8d"
+      "sha256": "5d2810f2ee2a3f5450eaa69f46331584e9d8964902b3cb034cb0d77a12812e8d",
+      "file": "12-05.mp3"
     },
     {
       "stem": "15-01",
       "bytes": 6124704,
-      "sha256": "9951db5482f9d91037f98fa4a882e10ee2585d972d2c4714bdcaffa4bf1793e2"
+      "sha256": "9951db5482f9d91037f98fa4a882e10ee2585d972d2c4714bdcaffa4bf1793e2",
+      "file": "15-01.mp3"
     },
     {
       "stem": "16-03",
       "bytes": 4640657,
-      "sha256": "fedc4590fdca1c3bd6ff0dd197102f661776b953794c44ec0cc3586b74afac59"
+      "sha256": "fedc4590fdca1c3bd6ff0dd197102f661776b953794c44ec0cc3586b74afac59",
+      "file": "16-03.mp3"
     },
     {
       "stem": "19-01",
       "bytes": 5425013,
-      "sha256": "b986a36f8294666e14715281e4e2506cbcd669070ed538751b63913638f083d5"
+      "sha256": "b986a36f8294666e14715281e4e2506cbcd669070ed538751b63913638f083d5",
+      "file": "19-01.mp3"
     },
     {
       "stem": "20-01",
       "bytes": 3797274,
-      "sha256": "df250e6f6c56d7cd80932e38025df71bb71c8dc3f617491d9ce346bc78d4beb0"
+      "sha256": "df250e6f6c56d7cd80932e38025df71bb71c8dc3f617491d9ce346bc78d4beb0",
+      "file": "20-01.mp3"
     },
     {
       "stem": "21-01",
       "bytes": 5329467,
-      "sha256": "8711b1383dd514f541247c15a74121c75e68b6bfdb2f61b377efc0b7539c01da"
+      "sha256": "8711b1383dd514f541247c15a74121c75e68b6bfdb2f61b377efc0b7539c01da",
+      "file": "21-01.mp3"
     },
     {
       "stem": "23-01",
       "bytes": 4904869,
-      "sha256": "22b447d6c5e041e891014fbc929ff769697ecbc9b97ba7a1157a254eae63ff52"
+      "sha256": "22b447d6c5e041e891014fbc929ff769697ecbc9b97ba7a1157a254eae63ff52",
+      "file": "23-01.mp3"
     },
     {
       "stem": "24-01",
       "bytes": 4822087,
-      "sha256": "abe5ebe4c19eec301bb14e6c5f278c9fb7abdc01df4ce70386fdd4f4b9f80d80"
+      "sha256": "abe5ebe4c19eec301bb14e6c5f278c9fb7abdc01df4ce70386fdd4f4b9f80d80",
+      "file": "24-01.mp3"
     },
     {
       "stem": "27-01",
       "bytes": 5082377,
-      "sha256": "0f59545ca9fa4eb35b6ba15b54db281d38f03f2e334de74b6de244a7d4aad8ba"
+      "sha256": "0f59545ca9fa4eb35b6ba15b54db281d38f03f2e334de74b6de244a7d4aad8ba",
+      "file": "27-01.mp3"
     },
     {
       "stem": "28-01",
       "bytes": 5143674,
-      "sha256": "988b50e5ec77dec830c851341239978695ad614d7ee895a8a53801bfbb4d0530"
+      "sha256": "988b50e5ec77dec830c851341239978695ad614d7ee895a8a53801bfbb4d0530",
+      "file": "28-01.mp3"
     },
     {
       "stem": "39-01",
       "bytes": 4617880,
-      "sha256": "1abd50b69f40e653531d087acdd11c7da3aefc05727a26a50e9da8861b3f6c4a"
+      "sha256": "1abd50b69f40e653531d087acdd11c7da3aefc05727a26a50e9da8861b3f6c4a",
+      "file": "39-01.mp3"
     },
     {
       "stem": "46-01",
       "bytes": 4408738,
-      "sha256": "3c54ff807d7af20ee59381097ea5a7a5408d6a7908ac341dd0f8804652a3453c"
+      "sha256": "3c54ff807d7af20ee59381097ea5a7a5408d6a7908ac341dd0f8804652a3453c",
+      "file": "46-01.mp3"
     },
     {
       "stem": "52-01",
       "bytes": 4278676,
-      "sha256": "a705afc2e6112fd4574a3702f60422a9fe4ac4dc56ff14ce0b37b6545cdf8438"
+      "sha256": "a705afc2e6112fd4574a3702f60422a9fe4ac4dc56ff14ce0b37b6545cdf8438",
+      "file": "52-01.mp3"
     },
     {
       "stem": "53-01",
       "bytes": 4474584,
-      "sha256": "cc2c3157d94e29cbf61ac5a85397cb39663309f9fec436ce11e499f9bfed17d7"
+      "sha256": "cc2c3157d94e29cbf61ac5a85397cb39663309f9fec436ce11e499f9bfed17d7",
+      "file": "53-01.mp3"
     },
     {
       "stem": "59-01",
       "bytes": 4604659,
-      "sha256": "f188abe4cfa00ab4ac0fabe966da52c3f93f1a8550685df3736240b3b287562a"
+      "sha256": "f188abe4cfa00ab4ac0fabe966da52c3f93f1a8550685df3736240b3b287562a",
+      "file": "59-01.mp3"
     },
     {
       "stem": "60-01",
       "bytes": 4829591,
-      "sha256": "38100e61ddd9d20f2d10aacb3ddf0a141ea1e912a1ecfacec6cd2e043f90fb17"
+      "sha256": "38100e61ddd9d20f2d10aacb3ddf0a141ea1e912a1ecfacec6cd2e043f90fb17",
+      "file": "60-01.mp3"
     },
     {
       "stem": "63-01",
       "bytes": 4849674,
-      "sha256": "eedd8184fb42dfd84d4c4ba87a5aa0b24bc7fbdef59677bb97acc8476069f3c1"
+      "sha256": "eedd8184fb42dfd84d4c4ba87a5aa0b24bc7fbdef59677bb97acc8476069f3c1",
+      "file": "63-01.mp3"
     }
   ]
 }
