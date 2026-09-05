@@ -16,7 +16,7 @@ bool CcSpeechGreeting(const CcSim *sim, CcId place_id, CcId object_id,
     if (strstr(speaker, "guard") != NULL) {
         (void)snprintf(text, sizeof(text), "Welcome to %s. Keep the gate clear for the wagons.", place->name);
     } else if (strcmp(speaker, "Traveller") == 0) {
-        (void)snprintf(text, sizeof(text), "I am stopping in %s. Try the notice board for word from the other towns.", place->name);
+        (void)snprintf(text, sizeof(text), "I am stopping in %s for a meal. How was the road?", place->name);
     } else if (strstr(speaker, "trader") != NULL) {
         (void)snprintf(text, sizeof(text), "Come into the %s. We can settle a price at the counter.", service);
     } else if (place->hunger >= 50) {
@@ -27,6 +27,38 @@ bool CcSpeechGreeting(const CcSim *sim, CcId place_id, CcId object_id,
     return CcSpeechCompose(speech, "town.greeting", object_id, speaker,
         CcSpeechLocalVoice(sim->world_seed, place_id, object_id), text,
         CC_SPEECH_PLAIN, CC_SPEECH_CONVERSATION, 0);
+}
+
+bool CcSpeechGossip(const CcSim *sim, CcId character_id, int32_t offset,
+                      bool source, CcSpeech *speech)
+{
+    if (speech == NULL) return false;
+    *speech = (CcSpeech){0};
+    if (sim == NULL) return false;
+    const CcCharacter *person = CcSimCharacter(sim, character_id);
+    if (person == NULL) return false;
+    const CcGossipVersion *version = NULL;
+    const CcGossip *story = CcSimPersonalGossip(sim, character_id, offset, &version);
+    if (story == NULL) return false;
+    char text[CC_SPEECH_TEXT_CAPACITY];
+    if (source) {
+        const CcCharacter *teller = CcSimCharacter(sim, version->source_character_id);
+        const CcSettlement *origin = CcSimSettlement(sim, story->origin_id);
+        if (teller != NULL && teller->id != person->id) {
+            (void)snprintf(text, sizeof(text), "%s told me. The account concerns %s, on day %d.",
+                teller->name, origin != NULL ? origin->name : "the road", story->day);
+        } else {
+            (void)snprintf(text, sizeof(text), "People were talking about %s. The account is from day %d.",
+                origin != NULL ? origin->name : "town", story->day);
+        }
+    } else {
+        char account[CC_EVENT_TEXT_CAPACITY];
+        CcGossipText(sim, story, version, account, sizeof(account));
+        (void)snprintf(text, sizeof(text), "I heard this: %s", account);
+    }
+    return CcSpeechCompose(speech, source ? "gossip.source" : "gossip.account",
+        person->id, person->name, CcSpeechCharacterVoice(sim, person), text,
+        CC_SPEECH_PLAIN, CC_SPEECH_CONVERSATION, story->event_id);
 }
 
 bool CcSpeechRoad(const CcSim *sim, CcSpeech *speech)

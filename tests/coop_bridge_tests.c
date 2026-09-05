@@ -10,7 +10,7 @@ static void CheckCommandRoundTrips(void)
     CcSim *direct = CcCoopCreate(42U);
     CcSim *shared = CcCoopCreate(42U);
     CC_CHECK(direct != NULL && shared != NULL);
-    for (int32_t kind = 1; kind <= (int32_t)CC_COMMAND_PARTY_WIPE; ++kind) {
+    for (int32_t kind = 1; kind <= (int32_t)CC_COMMAND_EXCHANGE_GOSSIP; ++kind) {
         CcSimInit(direct, 42U);
         *shared = *direct;
         const char *name = CcCoopActionName((CcCommandKind)kind);

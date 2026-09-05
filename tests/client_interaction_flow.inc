@@ -48,6 +48,35 @@ static int RunAdventureInputRegression(void)
     ClientInputClearPressed();
     UX_CHECK(view == VIEW_CHARACTER, "A scene click must open the same conversation as F.");
     UX_KEY(KEY_ESCAPE);
+    CcCharacter *speaker = NULL;
+    for (int32_t i = 0; i < sim.character_count; ++i) {
+        if (sim.characters[i].current_settlement_id == sim.player.location_id &&
+            sim.characters[i].activity != CC_CHARACTER_ACTIVITY_TRAVELLING &&
+            CcCharacterAgeYears(&sim, &sim.characters[i]) >= 16) { speaker = &sim.characters[i]; break; }
+    }
+    UX_CHECK(speaker != NULL, "The starting town needs a resident to exchange news.");
+    target->character_id = speaker->id;
+    local.interaction.focus = target->key;
+    UX_KEY(KEY_F);
+    UX_CHECK(view == VIEW_CHARACTER, "A resident must open their own conversation.");
+    CcSpeech report, source;
+    UX_CHECK(ClientConversationSpeech(&sim, &local, &report) && report.source_event_id != 0U,
+        "A resident must speak a local report with its event source.");
+    uint64_t heard = CcSimHash(&sim);
+    ContextActionSet replies = BuildContextActions(&sim, &local, view, selected, selected_situation);
+    UX_CHECK(replies.count >= 3 && replies.items[0].kind == CONTEXT_ACTION_GOSSIP_SOURCE,
+        "The conversation must offer a source, an exchange, and farewell.");
+    UX_KEY(KEY_ONE);
+    UX_CHECK(ClientConversationSpeech(&sim, &local, &source) && source.source_event_id == report.source_event_id &&
+        strcmp(report.text, source.text) != 0 && CcSimHash(&sim) == heard,
+        "Asking for the source must explain the displayed report and preserve the world.");
+    int32_t share_key = KEY_ONE;
+    for (int32_t i = 0; i < replies.count; ++i)
+        if (replies.items[i].kind == CONTEXT_ACTION_GOSSIP_SHARE) share_key = KEY_ONE + i;
+    UX_KEY(share_key);
+    UX_CHECK(!local.conversation_gossip_source && CcSimHash(&sim) == heard,
+        "A repeated exchange must keep the same remembered account.");
+    UX_KEY(KEY_ESCAPE);
     local.course.alarm_active = false;
     local.course.automatic_alarm = false;
     target->key.kind = CC_INTERACTION_DOOR;

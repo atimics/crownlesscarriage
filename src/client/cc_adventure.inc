@@ -44,6 +44,30 @@ static const char *AdventureRoleName(CcNpcRole role)
     }
 }
 
+static void AdventureBindPerson(const CcSim *sim, LocalState *local,
+                                 CcInteractionTarget *target, CcNpcRole role)
+{
+    if (target == NULL) return;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *person = &sim->characters[i];
+        if (person->current_settlement_id != sim->player.location_id ||
+            person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING || CcCharacterAgeYears(sim, person) < 16) continue;
+        bool matches = (role == CC_NPC_ROLE_TRAVELLER && person->role == CC_CHARACTER_TRAVELLER) ||
+            (role == CC_NPC_ROLE_SCOUT && person->role == CC_CHARACTER_SCOUT) ||
+            (role == CC_NPC_ROLE_REFUGEE && person->role == CC_CHARACTER_REFUGEE) ||
+            (role == CC_NPC_ROLE_LABORER && person->role == CC_CHARACTER_LABORER) ||
+            (role == CC_NPC_ROLE_GUARD && person->role == CC_CHARACTER_OFFICIAL);
+        if (!matches) continue;
+        bool used = false;
+        for (int32_t j = 0; j < local->interactions.count; ++j)
+            if (local->interactions.targets[j].character_id == person->id) used = true;
+        if (used) continue;
+        target->character_id = person->id;
+        (void)snprintf(target->name, sizeof(target->name), "%s", person->name);
+        return;
+    }
+}
+
 static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
     RenderTexture2D texture, Rectangle destination)
 {
@@ -103,9 +127,11 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
         for (int32_t i = 0; i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
             if (!local->course.travellers[i].active) continue;
             Vector3 position = local->course.travellers[i].agent.position;
-            (void)AdventureTarget(local, sim, CC_INTERACTION_PERSON, UINT64_C(0x300000000) + (uint64_t)i,
-                "Traveller", "Talk", (Vector3){position.x, 0, position.z}, 0.9f, 2.0f, 0.7f,
+            CcInteractionTarget *traveller = AdventureTarget(local, sim, CC_INTERACTION_PERSON,
+                UINT64_C(0x300000000) + (uint64_t)i, "Traveller", "Talk",
+                (Vector3){position.x, 0, position.z}, 0.9f, 2.0f, 0.7f,
                 (Vector2){position.x, position.z}, 1.8f);
+            AdventureBindPerson(sim, local, traveller, CC_NPC_ROLE_TRAVELLER);
         }
         if (DungeonAtSettlement(sim, sim->player.location_id) != NULL) {
             (void)AdventureTarget(local, sim, CC_INTERACTION_SITE, CC_LOCAL_SITE_DUNGEON,
@@ -124,11 +150,12 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
                         (Vector2){people[i].position.x, people[i].position.z}) < 0.65f)) duplicate = true;
             }
             if (duplicate || people[i].role == CC_NPC_ROLE_RAIDER) continue;
-            (void)AdventureTarget(local, sim, CC_INTERACTION_PERSON,
+            CcInteractionTarget *resident = AdventureTarget(local, sim, CC_INTERACTION_PERSON,
                 UINT64_C(0x100000000) | (uint64_t)people[i].seed, AdventureRoleName(people[i].role), "Talk",
                 (Vector3){people[i].position.x, 0, people[i].position.z},
                 0.9f, 2.0f, 0.7f,
                 (Vector2){people[i].position.x, people[i].position.z}, 1.8f);
+            AdventureBindPerson(sim, local, resident, people[i].role);
         }
     }
     for (int32_t i = 0; i < local->interactions.count; ++i)
@@ -152,12 +179,14 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
     switch (target->key.kind) {
         case CC_INTERACTION_PERSON:
             local->conversation_object = target->key.object;
+            local->conversation_gossip_offset = 0;
+            local->conversation_gossip_source = false;
             local->conversation_character_id = target->character_id;
             local->conversation_situation_id = target->situation_id;
             local->conversation_position = (Vector3){target->x, target->y, target->z};
             (void)snprintf(local->conversation_name, sizeof(local->conversation_name), "%s", target->name);
             (void)snprintf(local->conversation_line, sizeof(local->conversation_line),
-                "Welcome. The %s has work and supplies. The notice board carries news from our neighbours.",
+                "Welcome. I was passing the %s. How was your journey?",
                 CcLocalPlaceProfileForSettlement(CcSimSettlement(sim, sim->player.location_id))->primary_hall);
             local->agent.facing_yaw = atan2f(target->x - local->agent.position.x,
                 target->z - local->agent.position.z);

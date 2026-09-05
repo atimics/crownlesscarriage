@@ -1,6 +1,7 @@
 #include "metagame/cc_metagame.h"
 #include "persistence/cc_save.h"
 #include "test_support.h"
+#include "story/cc_speech.h"
 
 #include <stdio.h>
 #include <sqlite3.h>
@@ -21,6 +22,8 @@ static void CheckValid(void)
 static void Prepare(void)
 {
     CcSimInit(&sim, 42U);
+    /* Each fixture supplies its own notable accounts. */
+    for (int32_t i = 0; i < sim.event_count; ++i) sim.events[i].magnitude = 0;
     for (int32_t i = 0; i < sim.royal_carriage_count; ++i) {
         sim.royal_carriages[i].next_dispatch_day = sim.current_day + 7;
         sim.royal_carriages[i].condition = 0;
@@ -403,7 +406,7 @@ static void CheckBiasAndDecay(void)
     CC_CHECK(heard.alarm > loyal.alarm);
     CC_CHECK(strcmp(fearful_text, loyal_text) != 0);
     CC_CHECK(strstr(fearful_text, "blame the court") != NULL);
-    CC_CHECK(strstr(fearful_text, "raids are spreading") != NULL);
+    CC_CHECK(strstr(fearful_text, "five sacks") != NULL);
     CC_CHECK(strcmp(Account(report)->text, witness) == 0);
     CC_CHECK(Account(report)->local[0].retellings == 0);
 
@@ -433,8 +436,76 @@ static void CheckBiasAndDecay(void)
     printf("Loyal account: %s\nFearful account: %s\n", loyal_text, fearful_text);
 }
 
+static void CheckPersonalAccounts(void)
+{
+    Prepare();
+    CcCharacter *traveller = &sim.characters[0];
+    CcCharacter *neighbour = &sim.characters[1];
+    traveller->current_settlement_id = sim.settlements[0].id;
+    neighbour->current_settlement_id = sim.settlements[2].id;
+    traveller->activity = neighbour->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    CcId report = AddAccount(sim.settlements[0].id, "Raiders took three sacks from the western granary.");
+    CcSimRefreshCharacterGossip(&sim);
+    const CcGossipVersion *version = NULL;
+    CC_CHECK(CcSimPersonalGossip(&sim, traveller->id, 0, &version)->event_id == report);
+    CC_CHECK(CcSimPersonalGossip(&sim, neighbour->id, 0, NULL) == NULL);
+    CC_CHECK(version != NULL && version->retellings == 1);
+    CcSpeech original;
+    CC_CHECK(CcSpeechGossip(&sim, traveller->id, 0, false, &original));
+    CC_CHECK(original.speaker_id == traveller->id && original.source_event_id == report);
+    CC_CHECK(strstr(original.text, "three sacks") != NULL);
+    traveller->current_settlement_id = neighbour->current_settlement_id;
+    CcSimRefreshCharacterGossip(&sim);
+    CcSpeech carried, source;
+    CC_CHECK(CcSpeechGossip(&sim, traveller->id, 0, false, &carried));
+    CC_CHECK(strcmp(carried.text, original.text) == 0);
+    CC_CHECK(CcSpeechGossip(&sim, neighbour->id, 0, true, &source));
+    CC_CHECK(strstr(source.text, traveller->name) != NULL);
+    CC_CHECK(CcSpeechGossip(&sim, neighbour->id, 0, false, &carried));
+    CC_CHECK(strstr(carried.text, "five sacks") != NULL);
+    CcCommand talk = {.kind = CC_COMMAND_EXCHANGE_GOSSIP, .target_id = neighbour->id};
+    uint64_t before = CcSimHash(&sim);
+    CC_CHECK(!CcSimApply(&sim, &talk, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == before);
+    sim.player.location_id = neighbour->current_settlement_id;
+    sim.carriage.location_id = sim.player.location_id;
+    const char *path = "personal-gossip.ccsave";
+    (void)remove(path);
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalApply(journal, &sim, &talk, error, sizeof(error)));
+    CC_CHECK(CcSimPersonalGossip(&sim, sim.player.id, 0, &version)->event_id == report);
+    CC_CHECK(version->source_character_id == neighbour->id);
+    before = CcSimHash(&sim);
+    CC_CHECK(CcJournalApply(journal, &sim, &talk, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == before);
+    CcJournalAbandon(&journal);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&restored) == before);
+    CcSpeech saved;
+    CC_CHECK(CcSpeechGossip(&restored, neighbour->id, 0, false, &saved));
+    CC_CHECK(strcmp(saved.text, carried.text) == 0 && saved.audio_key == carried.audio_key);
+    CC_CHECK(CcSimPersonalGossip(&restored, neighbour->id, -1, NULL) == NULL);
+    CC_CHECK(CcSimPersonalGossip(&restored, neighbour->id, CC_MAX_GOSSIP, NULL) == NULL);
+    (void)remove(path);
+    CheckValid();
+
+    Prepare();
+    sim.schema_version = 45U;
+    AddAccount(sim.settlements[0].id, "An older traveller brings three sacks.");
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(CcSimGossipCarrierCapacity(&sim) == CC_LEGACY_GOSSIP_CARRIERS);
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(CcSimGossipCarrierCapacity(&restored) == CC_MAX_GOSSIP_CARRIERS);
+    CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
+    (void)remove(path);
+}
+
 int main(void)
 {
+    CheckPersonalAccounts();
     CheckLocalAndRemoteAccounts();
     CheckArrivalAndLateRecording();
     CheckCourierRelay();
