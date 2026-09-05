@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import argparse
 import json
 import math
 from pathlib import Path
@@ -22,7 +23,11 @@ ROOT = Path(__file__).resolve().parents[2]
 BLEND_PATH = ROOT / "assets" / "blender" / "crownless_npc_dynamic_modules.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "npc"
 MANIFEST_PATH = ROOT / "assets" / "npc_dynamic_module_manifest.json"
-LIBRARY_VERSION = "0.6.0"
+LIBRARY_VERSION = "0.7.0"
+MATERIAL_PILOT_SLOTS = {
+    "torso", "foot", "mantle", "chest_plate", "chest_plate_hero",
+    "pauldron", "pauldron_hero",
+}
 MATERIAL_NAME = "MAT_NPC_INDEXED"
 PALETTE_INDEX = {
     "skin": 0,
@@ -68,10 +73,9 @@ def make_material() -> bpy.types.Material:
     material.diffuse_color = (1.0, 1.0, 1.0, 1.0)
     material.use_nodes = True
     principled = material.node_tree.nodes.get("Principled BSDF")
-    vertex_color = material.node_tree.nodes.new("ShaderNodeVertexColor")
-    vertex_color.layer_name = "COLOR_0"
-    material.node_tree.links.new(
-        vertex_color.outputs["Color"], principled.inputs["Base Color"])
+    # Export the active attribute as data, including its opaque surface label.
+    # A Base Color link makes Blender trim alpha for opaque materials.
+    principled.inputs["Base Color"].default_value = (1.0, 1.0, 1.0, 1.0)
     principled.inputs["Roughness"].default_value = 0.78
     return material
 
@@ -291,9 +295,13 @@ def add_guard_armor(collection: bpy.types.Collection,
         )),
     ):
         paint(add_panel(f"GEO_ModuleGuardPlate{name}", points,
-                        collection, material, thickness=0.055), "metal")
+                        collection, material, thickness=0.075), "metal")
+    # The broad band remains visible beneath the overlapping breastplate.
+    shadow = paint(add_box("GEO_ModuleGuardPlateShadow", (0.0, -0.47, 0.13),
+        (0.76, 0.07, 0.09), collection, material, width=0.015), "metal")
+    shadow["cc_value_offset"] = -0.25
     paint(add_box("GEO_ModuleGuardCenterRidge", (0.0, -0.515, 0.04),
-                  (0.060, 0.050, 0.72), collection, material,
+                  (0.090, 0.050, 0.72), collection, material,
                   width=0.012), "accent")
     paint(add_box("GEO_ModuleGuardBelt", (0.0, -0.49, -0.40),
                   (0.88, 0.10, 0.105), collection, material,
@@ -425,7 +433,7 @@ def add_guard_pauldron(collection: bpy.types.Collection,
                   (0.62, 0.50, 0.48), collection, material,
                   subdivisions=1), "outer")
     paint(add_ico("GEO_ModuleGuardPauldron", (0.0, -0.05, 0.02),
-                  (0.57, 0.44, 0.42), collection, material,
+                  (0.64, 0.44, 0.44), collection, material,
                   subdivisions=1), "metal")
     paint(add_box("GEO_ModuleGuardPauldronLip", (0.0, -0.35, -0.18),
                   (0.95, 0.13, 0.18), collection, material,
@@ -459,7 +467,7 @@ def add_hero_pauldron(collection: bpy.types.Collection,
                   (0.64, 0.50, 0.49), collection, material,
                   subdivisions=1), "outer")
     paint(add_ico("GEO_ModuleHeroPauldron", (0.0, -0.05, 0.04),
-                  (0.62, 0.47, 0.45), collection, material,
+                  (0.68, 0.47, 0.47), collection, material,
                   subdivisions=1), "metal")
     paint(add_box("GEO_ModuleHeroPauldronLowerLip", (0.0, -0.36, -0.20),
                   (1.00, 0.13, 0.18), collection, material,
@@ -488,6 +496,15 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
                       (0.70, 0.56, 0.075), collection, material,
                       width=0.020)
         hem["cc_palette_slot"] = "trousers"
+        for side in (-1.0, 1.0):
+            fold = paint(add_panel(f"GEO_ModuleTunicFold{side:+.0f}", (
+                (side * 0.10, -0.32, 0.12),
+                (side * 0.22, -0.32, 0.14),
+                (side * 0.30, -0.35, 0.58),
+                (side * 0.20, -0.35, 0.63),
+            ), collection, material, thickness=0.035), "outer")
+            fold["cc_value_offset"] = -0.25
+        yoke["cc_value_offset"] = -0.25
     elif slot == "pelvis":
         add_loft("GEO_ModulePelvis", (
             (-0.08, 0.44, 0.34), (0.50, 0.50, 0.37),
@@ -525,9 +542,10 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
     elif slot == "foot":
 
         add_box("GEO_ModuleFoot", (0.0, -0.02, 0.48),
-                (0.78, 0.74, 1.08), collection, material, width=0.10)
-        add_box("GEO_ModuleFootSole", (0.0, -0.22, 0.53),
-                (0.84, 0.23, 1.15), collection, material, width=0.05)
+                (0.84, 0.74, 1.12), collection, material, width=0.10)
+        sole = add_box("GEO_ModuleFootSole", (0.0, -0.22, 0.53),
+                (0.91, 0.23, 1.19), collection, material, width=0.05)
+        sole["cc_value_offset"] = -0.25
     elif slot == "head":
         add_ico("GEO_ModuleCranium", (0.0, 0.0, 0.06),
                 (0.50, 0.46, 0.44), collection, material)
@@ -539,6 +557,11 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
             (0.36, 0.10, -0.86), (0.05, 0.13, -1.00),
             (-0.46, 0.10, -0.78),
         ), collection, material, thickness=0.055)
+        fold = add_panel("GEO_ModuleMantleFold", (
+            (-0.10, -0.04, 0.03), (0.06, -0.04, 0.02),
+            (0.20, 0.08, -0.88), (0.03, 0.09, -0.96),
+        ), collection, material, thickness=0.035)
+        fold["cc_value_offset"] = -0.25
     elif slot == "coat_tail":
         add_box("GEO_ModuleCoatTail", (0.0, 0.0, -0.50),
                 (0.78, 0.20, 1.0), collection, material, width=0.08,
@@ -724,7 +747,7 @@ def apply_modifiers(obj: bpy.types.Object) -> None:
 
 def consolidate(collection: bpy.types.Collection, asset_id: str,
                 material: bpy.types.Material,
-                palette_slot: str) -> bpy.types.Object:
+                palette_slot: str, surface_labels: bool = False) -> bpy.types.Object:
     objects = [obj for obj in collection.objects if obj.type == "MESH"]
     if not objects:
         raise RuntimeError(f"{asset_id} generated no mesh")
@@ -733,7 +756,9 @@ def consolidate(collection: bpy.types.Collection, asset_id: str,
         object_palette_slot = str(obj.get("cc_palette_slot", palette_slot))
         semantic_index = PALETTE_INDEX[object_palette_slot]
         paint_channels.add_indexed_paint_channels(
-            obj, [semantic_index] * len(obj.data.polygons), PAINT_SEMANTICS)
+            obj, [semantic_index] * len(obj.data.polygons), PAINT_SEMANTICS,
+            surface_labels=surface_labels,
+            value_offset=float(obj.get("cc_value_offset", 0.0)))
     bpy.ops.object.select_all(action="DESELECT")
     for obj in objects:
         obj.select_set(True)
@@ -750,7 +775,10 @@ def consolidate(collection: bpy.types.Collection, asset_id: str,
     bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
     joined["cc_asset_id"] = asset_id
     joined["cc_rigid_module"] = True
-    joined["cc_material_contract"] = "COLOR_0:palette,value,fold"
+    joined["cc_material_contract"] = paint_channels.SURFACE_CONTRACT \
+        if surface_labels else "COLOR_0:palette,value,fold"
+    if surface_labels:
+        joined["cc_surface_classes"] = list(paint_channels.SURFACE_CLASSES)
     return joined
 
 
@@ -763,14 +791,15 @@ def export_model(model: bpy.types.Object, asset_id: str) -> Path:
     bpy.ops.export_scene.gltf(
         filepath=str(path), export_format="GLB", use_selection=True,
         export_yup=True, export_animations=False, export_skins=False,
-        export_morph=False, export_extras=True, export_materials="EXPORT")
+        export_morph=False, export_extras=True, export_materials="EXPORT",
+        export_vertex_color="ACTIVE")
     model.select_set(False)
     model.hide_render = True
     model.hide_set(True)
     return path
 
 
-def build() -> None:
+def build(selected_slots: set[str] | None = None) -> None:
     reset_scene()
     material = make_material()
     specs = (
@@ -807,10 +836,13 @@ def build() -> None:
     records: list[ModuleRecord] = []
     for suffix, slot, anchor, palette in specs:
         asset_id = f"npc_module_{suffix}_v01"
-        collection = collection_for(asset_id)
-        build_geometry(slot, collection, material)
-        model = consolidate(collection, asset_id, material, palette)
-        path = export_model(model, asset_id)
+        path = EXPORT_DIR / f"{asset_id}.glb"
+        if selected_slots is None or slot in selected_slots:
+            collection = collection_for(asset_id)
+            build_geometry(slot, collection, material)
+            model = consolidate(collection, asset_id, material, palette,
+                                slot in MATERIAL_PILOT_SLOTS)
+            path = export_model(model, asset_id)
         records.append(ModuleRecord(
             id=asset_id, slot=slot, anchor=anchor, material=palette,
             export=str(path.relative_to(ROOT)),
@@ -826,15 +858,23 @@ def build() -> None:
         "runtime_strategy": "bone-frame instancing without skins or animations",
         "coordinate_system": "glTF +Y up, +Z forward",
         "material_contract": "single indexed material; COLOR_0 stores palette, value, and fold",
+        "surface_contract": paint_channels.SURFACE_CONTRACT,
+        "surface_classes": list(paint_channels.SURFACE_CLASSES),
+        "surface_modules": sorted(MATERIAL_PILOT_SLOTS),
         "modules": [asdict(record) for record in records],
     }
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n",
                              encoding="utf-8")
-    BLEND_PATH.parent.mkdir(parents=True, exist_ok=True)
-    bpy.ops.wm.save_as_mainfile(filepath=str(BLEND_PATH))
-    print(f"built {len(records)} rigid NPC modules")
+    if selected_slots is None:
+        BLEND_PATH.parent.mkdir(parents=True, exist_ok=True)
+        bpy.ops.wm.save_as_mainfile(filepath=str(BLEND_PATH))
+    print(f"built {len(selected_slots) if selected_slots is not None else len(records)} rigid NPC modules")
     print(f"manifest: {MANIFEST_PATH}")
 
 
 if __name__ == "__main__":
-    build()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--material-pilot", action="store_true")
+    arguments = parser.parse_args(sys.argv[sys.argv.index("--") + 1:]
+                                  if "--" in sys.argv else [])
+    build(MATERIAL_PILOT_SLOTS if arguments.material_pilot else None)

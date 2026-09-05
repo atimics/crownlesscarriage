@@ -23,6 +23,7 @@ static void UpdateRoyalDiplomacy(CcSim *sim);
 static void AdvanceDragonCampaign(CcSim *sim);
 static void AdvanceHorseTeam(CcSim *sim);
 static void AdvanceRuins(CcSim *sim);
+static void PlanTrade(CcSim *sim);
 static int32_t SettlementSlotById(const CcSim *sim, CcId id);
 static int32_t CalculateDragonCrownStrength(const CcSim *sim);
 static bool DragonIsAliveAndUncrowned(const CcSim *sim);
@@ -932,6 +933,19 @@ const char *CcFactionKindName(CcFactionKind kind)
     return "Faction";
 }
 
+const char *CcRoyalCarriageModeName(CcRoyalCarriageMode mode)
+{
+    switch (mode) {
+        case CC_ROYAL_CARRIAGE_IDLE: return "Idle";
+        case CC_ROYAL_CARRIAGE_REPOSITIONING: return "Seeking cargo";
+        case CC_ROYAL_CARRIAGE_DELIVERING: return "Delivering";
+        case CC_ROYAL_CARRIAGE_BLOCKED: return "Blocked";
+        case CC_ROYAL_CARRIAGE_WAITING_CAPACITY:
+            return "Waiting for road space";
+    }
+    return "Unknown";
+}
+
 const char *CcKingdomCallingName(CcKingdomCalling calling)
 {
     switch (calling) {
@@ -1154,6 +1168,8 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_ROYAL_SUCCESSION: return "NEW RULER";
         case CC_EVENT_DRAGON_PATRON_NAMED: return "DRAGON VOW";
         case CC_EVENT_DRAGON_TERRITORY_LOST: return "CROWN BROKEN";
+        case CC_EVENT_ROYAL_CARRIAGE_BLOCKED: return "BORDER BLOCK";
+        case CC_EVENT_ROYAL_CARRIAGE_REROUTED: return "CARRIAGE ROUTE";
     }
     return "EVENT";
 }
@@ -1808,6 +1824,109 @@ bool CcSimKingdomsAllied(const CcSim *sim, CcId first, CcId second)
         sim->diplomacy[first_slot][second_slot] == CC_DIPLOMACY_ALLIANCE;
 }
 
+const CcRoyalCarriage *CcSimRoyalCarriage(const CcSim *sim,
+                                          CcId kingdom_id)
+{
+    if (sim == NULL) return NULL;
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        if (sim->royal_carriages[i].kingdom_id == kingdom_id) {
+            return &sim->royal_carriages[i];
+        }
+    }
+    return NULL;
+}
+
+static int32_t FactionSupportFor(const CcSim *sim, CcId kingdom_id,
+                                 CcFactionKind kind)
+{
+    if (sim == NULL) return 0;
+    for (int32_t i = 0; i < sim->faction_count; ++i) {
+        const CcFaction *faction = &sim->factions[i];
+        if (faction->kingdom_id == kingdom_id && faction->kind == kind) {
+            return faction->support;
+        }
+    }
+    return 0;
+}
+
+static void RaiseRoyalTradeSupport(CcSim *sim,
+                                  const CcRoyalCarriage *carriage)
+{
+    if (sim == NULL || carriage == NULL) return;
+    const CcRoute *route = CcSimRoute(sim, carriage->route_id);
+    const CcSettlement *from = route != NULL ?
+        CcSimSettlement(sim, route->from_id) : NULL;
+    const CcSettlement *to = route != NULL ?
+        CcSimSettlement(sim, route->to_id) : NULL;
+    if (from == NULL || to == NULL) return;
+    CcId hosts[2] = {from->kingdom_id, to->kingdom_id};
+    for (int32_t host = 0; host < 2; ++host) {
+        CcId host_id = hosts[host];
+        if (host_id == carriage->kingdom_id ||
+            (host == 1 && host_id == hosts[0]) ||
+            CcSimKingdomsAtWar(sim, carriage->kingdom_id, host_id)) continue;
+        for (int32_t faction = 0; faction < sim->faction_count; ++faction) {
+            CcFaction *item = &sim->factions[faction];
+            if (item->kingdom_id == host_id &&
+                (item->kind == CC_FACTION_CROWN ||
+                 item->kind == CC_FACTION_GUILD)) {
+                item->support = ClampI32(item->support + 3, 0, 100);
+            }
+        }
+    }
+}
+
+static bool RoyalCarriageMayEnter(const CcSim *sim,
+                                  CcId carriage_kingdom_id,
+                                  CcId host_kingdom_id)
+{
+    if (sim == NULL || KingdomSlotById(sim, carriage_kingdom_id) < 0 ||
+        KingdomSlotById(sim, host_kingdom_id) < 0) return false;
+    if (carriage_kingdom_id == host_kingdom_id ||
+        CcSimKingdomsAllied(sim, carriage_kingdom_id, host_kingdom_id)) {
+        return true;
+    }
+    if (CcSimKingdomsAtWar(sim, carriage_kingdom_id, host_kingdom_id)) {
+        return false;
+    }
+    return FactionSupportFor(sim, host_kingdom_id, CC_FACTION_CROWN) >=
+               CC_ROYAL_TRADE_SUPPORT_FLOOR &&
+           FactionSupportFor(sim, host_kingdom_id, CC_FACTION_GUILD) >=
+               CC_ROYAL_TRADE_SUPPORT_FLOOR;
+}
+
+static bool RoyalRouteIsOfficial(const CcSim *sim, const CcRoute *route)
+{
+    if (sim == NULL || route == NULL) return false;
+    return !(route->smuggler_route &&
+             CcSimRouteCrossesKingdomBorder(sim, route->id)) &&
+           !CcSimRouteCrossesWarBorder(sim, route->id);
+}
+
+static bool RoyalRouteCanReopen(const CcSim *sim, const CcRoute *route)
+{
+    if (sim == NULL || route == NULL) return false;
+    return !(route->smuggler_route &&
+             CcSimRouteCrossesKingdomBorder(sim, route->id));
+}
+
+bool CcSimRoyalCarriageCanUseRoute(const CcSim *sim,
+                                   CcId carriage_kingdom_id,
+                                   CcId route_id)
+{
+    const CcRoute *route = CcSimRoute(sim, route_id);
+    const CcSettlement *from = route != NULL ?
+        CcSimSettlement(sim, route->from_id) : NULL;
+    const CcSettlement *to = route != NULL ?
+        CcSimSettlement(sim, route->to_id) : NULL;
+    if (route == NULL || from == NULL || to == NULL) return false;
+    if (!RoyalRouteIsOfficial(sim, route)) return false;
+    return RoyalCarriageMayEnter(sim, carriage_kingdom_id,
+                                 from->kingdom_id) &&
+           RoyalCarriageMayEnter(sim, carriage_kingdom_id,
+                                 to->kingdom_id);
+}
+
 CcKingdomCalling CcSimKingdomCalling(const CcSim *sim, CcId kingdom_id)
 {
     if (sim == NULL || KingdomSlotById(sim, kingdom_id) < 0) {
@@ -2247,7 +2366,8 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
         if (good == CC_GOOD_IRON) total += sim->settlements[i].iron_deposit;
     }
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
-        if (sim->shipments[i].status == CC_SHIPMENT_TRAVELLING &&
+        if ((sim->shipments[i].status == CC_SHIPMENT_TRAVELLING ||
+             sim->shipments[i].status == CC_SHIPMENT_BLOCKED) &&
             sim->shipments[i].good == good) total += sim->shipments[i].quantity;
     }
     if (sim->schema_version >= 19U) {
@@ -3310,7 +3430,8 @@ int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good)
     int64_t incoming = 0;
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         const CcShipment *shipment = &sim->shipments[i];
-        if (shipment->status == CC_SHIPMENT_TRAVELLING &&
+        if ((shipment->status == CC_SHIPMENT_TRAVELLING ||
+             shipment->status == CC_SHIPMENT_BLOCKED) &&
             shipment->final_destination_id == settlement_id && shipment->good == good) {
             incoming += shipment->quantity;
         }
@@ -4165,6 +4286,68 @@ void CcSimInitializeMaterialChain(CcSim *sim)
     }
 }
 
+void CcSimInitializeRoyalCarriages(CcSim *sim)
+{
+    if (sim == NULL) return;
+    sim->royal_trade_week = sim->current_day / 7;
+    for (int32_t route = 0; route < CC_MAX_ROUTES; ++route) {
+        sim->royal_route_slots_used[route] = 0;
+    }
+    sim->royal_carriage_count = sim->kingdom_count;
+    for (int32_t kingdom = 0; kingdom < sim->kingdom_count; ++kingdom) {
+        CcId home_id = 0U;
+        for (int32_t place = 0; place < sim->settlement_count; ++place) {
+            if (sim->settlements[place].kingdom_id == sim->kingdoms[kingdom].id) {
+                home_id = sim->settlements[place].id;
+                break;
+            }
+        }
+        sim->royal_carriages[kingdom] = (CcRoyalCarriage){
+            .id = NextId(sim, CC_ENTITY_ROYAL_CARRIAGE),
+            .kingdom_id = sim->kingdoms[kingdom].id,
+            .location_id = home_id,
+            .mode = CC_ROYAL_CARRIAGE_IDLE,
+            .condition = 100
+        };
+    }
+    for (int32_t shipment_slot = 0;
+         shipment_slot < sim->shipment_count; ++shipment_slot) {
+        CcShipment *shipment = &sim->shipments[shipment_slot];
+        if (shipment->status != CC_SHIPMENT_TRAVELLING) continue;
+        const CcSettlement *origin = CcSimSettlement(sim, shipment->origin_id);
+        const CcSettlement *final = CcSimSettlement(
+            sim, shipment->final_destination_id);
+        int32_t kingdom_slot = final != NULL ?
+            KingdomSlotById(sim, final->kingdom_id) :
+            origin != NULL ? KingdomSlotById(sim, origin->kingdom_id) : -1;
+        if (kingdom_slot < 0 ||
+            sim->royal_carriages[kingdom_slot].active_shipment_id != 0U ||
+            FreightCargoSlots(shipment->good, shipment->quantity) >
+                CC_ROYAL_CARRIAGE_CARGO_SLOTS) {
+            CcSettlement *destination = CcSimSettlementMutable(
+                sim, shipment->final_destination_id);
+            if (destination != NULL && shipment->good >= 0 &&
+                shipment->good < CC_GOOD_COUNT && shipment->quantity > 0) {
+                destination->stock[shipment->good] = ClampI32(
+                    destination->stock[shipment->good] +
+                        shipment->quantity,
+                    0, CC_SIM_MAX_UNITS);
+            }
+            shipment->status = CC_SHIPMENT_ARRIVED;
+            continue;
+        }
+        CcRoyalCarriage *carriage = &sim->royal_carriages[kingdom_slot];
+        carriage->location_id = shipment->origin_id;
+        carriage->route_id = shipment->route_id;
+        carriage->destination_id = shipment->destination_id;
+        carriage->target_id = shipment->final_destination_id;
+        carriage->active_shipment_id = shipment->id;
+        carriage->mode = CC_ROYAL_CARRIAGE_DELIVERING;
+        carriage->departure_day = shipment->departure_day;
+        carriage->arrival_day = shipment->arrival_day;
+    }
+}
+
 void CcSimInit(CcSim *sim, uint32_t seed)
 {
     if (sim == NULL) return;
@@ -4378,6 +4561,8 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcSimUpgradeHistoryOffices(sim);
     CcSimInitializeAnimalEconomy(sim);
     CcSimInitializeRoadSites(sim);
+    CcSimInitializeRoyalCarriages(sim);
+    CcPoniesInit(sim);
 }
 
 static CcDungeon *DungeonByIdMutable(CcSim *sim, CcId id)
@@ -4776,30 +4961,38 @@ static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
     if (!CcSettlementHasService(settlement, CC_SERVICE_MILL) ||
         settlement->hunger > 0 ||
         settlement->stock[CC_GOOD_TOOLS] <= 0) return;
+    /* Keep mill work behind the town's food buffer, across all edible goods. */
+    if (sim->schema_version >= 37U &&
+        NutritionRations(settlement->stock, CC_NUTRITION_CIVILIAN) <
+            WeeklyFoodUse(sim, settlement) * 4) return;
     int32_t capacity = MaximumI32(
         0, settlement->production[CC_GOOD_PAPER]);
     int32_t gap = MaximumI32(
         0, settlement->reserve_target[CC_GOOD_PAPER] * 2 -
            settlement->stock[CC_GOOD_PAPER]);
-    int32_t protected_wheat = settlement->reserve_target[CC_GOOD_WHEAT] +
-        WeeklyFoodUse(sim, settlement) * 4;
-    int32_t wheat_available = MaximumI32(
-        0, settlement->stock[CC_GOOD_WHEAT] - protected_wheat);
+    CcGood input = sim->schema_version < 37U ?
+        CC_GOOD_WHEAT : CC_GOOD_WOOD;
+    int32_t protected_input = settlement->reserve_target[input];
+    if (input == CC_GOOD_WHEAT) {
+        protected_input += WeeklyFoodUse(sim, settlement) * 4;
+    }
+    int32_t input_available = MaximumI32(
+        0, settlement->stock[input] - protected_input);
     int32_t paper_made = MinimumI32(
-        capacity, MinimumI32(gap, wheat_available * 4));
+        capacity, MinimumI32(gap, input_available * 4));
     if (paper_made <= 0) return;
-    int32_t wheat_used = (paper_made + 3) / 4;
-    settlement->stock[CC_GOOD_WHEAT] -= wheat_used;
+    int32_t input_used = (paper_made + 3) / 4;
+    settlement->stock[input] -= input_used;
     settlement->stock[CC_GOOD_PAPER] += paper_made;
     WearOneTool(settlement, &settlement->paper_tool_wear, 8);
-    RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_WHEAT);
+    RefreshSettlementGoodPrice(sim, settlement, input);
     RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
     RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_TOOLS);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
-        "%s's mill uses %d Wheat to make %d Paper.",
-        settlement->name, wheat_used, paper_made);
+        "%s's mill uses %d %s to make %d Paper.",
+        settlement->name, input_used, CcGoodName(input), paper_made);
     (void)PushEvent(
         sim, CC_EVENT_PAPER_MILLED, settlement->id, settlement->id,
         LatestLocalCause(sim, settlement->id), paper_made, text);
@@ -6943,7 +7136,7 @@ static void DragonHunt(CcSim *sim)
     } else if (sim->schema_version >= 14U) {
         (void)snprintf(
             text, sizeof(text),
-            "%s takes %d cow%s and %d Food from %s and leaves the roofs untouched.",
+            "%s takes %d cow%s and %d Food from %s, sparing the roofs.",
             dragon->name, cows_taken, cows_taken == 1 ? "" : "s",
             food_taken, target->name);
     } else {
@@ -7861,6 +8054,28 @@ static int32_t TradeRouteCapacity(const CcSim *sim, const CcRoute *route)
     return capacity;
 }
 
+static void PrepareRoyalRouteUsage(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 38U) return;
+    int32_t trade_week = sim->current_day / 7;
+    if (sim->royal_trade_week == trade_week) return;
+    sim->royal_trade_week = trade_week;
+    for (int32_t route = 0; route < CC_MAX_ROUTES; ++route) {
+        sim->royal_route_slots_used[route] = 0;
+    }
+}
+
+static void UseRoyalRoute(CcSim *sim, int32_t route_slot,
+                          int32_t cargo_slots)
+{
+    if (sim == NULL || route_slot < 0 || route_slot >= sim->route_count ||
+        cargo_slots < 1) return;
+    PrepareRoyalRouteUsage(sim);
+    sim->royal_route_slots_used[route_slot] = ClampI32(
+        sim->royal_route_slots_used[route_slot] + cargo_slots,
+        0, CC_SIM_MAX_UNITS);
+}
+
 static int32_t SettlementSlotById(const CcSim *sim, CcId id)
 {
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
@@ -7872,9 +8087,12 @@ static int32_t SettlementSlotById(const CcSim *sim, CcId id)
 static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
                           CcGood good,
                           int32_t *first_route_slot, CcId *first_hop_id,
-                          int32_t *total_cost,
+                          int32_t *total_cost, int32_t *path_capacity,
                           const int32_t route_used[CC_MAX_ROUTES],
-                          bool allow_kingdom_borders)
+                          bool allow_kingdom_borders,
+                          CcId carriage_kingdom_id,
+                          bool ignore_royal_relations,
+                          int32_t required_slots)
 {
     int32_t source = SettlementSlotById(sim, from_id);
     int32_t target = SettlementSlotById(sim, to_id);
@@ -7883,16 +8101,19 @@ static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
         CcSettlementIsAbandoned(&sim->settlements[target])) return false;
     (void)good;
     int32_t distance[CC_MAX_SETTLEMENTS];
+    int32_t bottleneck[CC_MAX_SETTLEMENTS];
     int32_t first_route[CC_MAX_SETTLEMENTS];
     CcId first_hop[CC_MAX_SETTLEMENTS];
     bool visited[CC_MAX_SETTLEMENTS];
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         distance[i] = INT_MAX;
+        bottleneck[i] = 0;
         first_route[i] = -1;
         first_hop[i] = 0U;
         visited[i] = false;
     }
     distance[source] = 0;
+    bottleneck[source] = INT_MAX;
     for (int32_t iteration = 0; iteration < sim->settlement_count; ++iteration) {
         int32_t current = -1;
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
@@ -7907,10 +8128,20 @@ static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
             const CcRoute *route = &sim->routes[route_slot];
             if (!allow_kingdom_borders &&
                 CcSimRouteCrossesKingdomBorder(sim, route->id)) continue;
+            if (carriage_kingdom_id != 0U) {
+                if (!(ignore_royal_relations ?
+                      RoyalRouteCanReopen(sim, route) :
+                      RoyalRouteIsOfficial(sim, route)) ||
+                    (!ignore_royal_relations &&
+                     !CcSimRoyalCarriageCanUseRoute(
+                         sim, carriage_kingdom_id, route->id))) continue;
+            }
             bool war_border = CcSimRouteCrossesWarBorder(sim, route->id) &&
                               !route->smuggler_route;
             int32_t effective_capacity = TradeRouteCapacity(sim, route);
-            if (route_used != NULL && route_used[route_slot] >= effective_capacity) continue;
+            int32_t available_capacity = effective_capacity -
+                (route_used != NULL ? route_used[route_slot] : 0);
+            if (available_capacity < MaximumI32(1, required_slots)) continue;
             CcId neighbor_id = route->from_id == current_id ? route->to_id :
                                route->to_id == current_id ? route->from_id : 0U;
             int32_t neighbor = SettlementSlotById(sim, neighbor_id);
@@ -7921,8 +8152,13 @@ static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
                                 (war_border ? 25 : 0);
             if (distance[current] > INT_MAX - edge_cost) continue;
             int32_t candidate = distance[current] + edge_cost;
-            if (candidate >= distance[neighbor]) continue;
+            int32_t candidate_bottleneck = MinimumI32(
+                bottleneck[current], available_capacity);
+            if (candidate > distance[neighbor] ||
+                (candidate == distance[neighbor] &&
+                 candidate_bottleneck <= bottleneck[neighbor])) continue;
             distance[neighbor] = candidate;
+            bottleneck[neighbor] = candidate_bottleneck;
             first_route[neighbor] = current == source ? route_slot : first_route[current];
             first_hop[neighbor] = current == source ? neighbor_id : first_hop[current];
         }
@@ -7933,18 +8169,424 @@ static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
     if (first_route_slot != NULL) *first_route_slot = first_route[target];
     if (first_hop_id != NULL) *first_hop_id = first_hop[target];
     if (total_cost != NULL) *total_cost = distance[target];
+    if (path_capacity != NULL) *path_capacity = bottleneck[target];
     return true;
+}
+
+static bool RoyalPathExistsIgnoringRelations(const CcSim *sim,
+                                              CcId owner_id,
+                                              CcId from_id, CcId to_id,
+                                              int32_t required_slots)
+{
+    if (from_id == to_id) return true;
+    return FindTradePath(sim, from_id, to_id, CC_GOOD_FOOD,
+                         NULL, NULL, NULL, NULL, NULL, true,
+                         owner_id, true, required_slots);
+}
+
+static CcRoyalCarriage *RoyalCarriageForShipment(CcSim *sim,
+                                                 CcId shipment_id)
+{
+    if (sim == NULL || shipment_id == 0U) return NULL;
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        if (sim->royal_carriages[i].active_shipment_id == shipment_id) {
+            return &sim->royal_carriages[i];
+        }
+    }
+    return NULL;
+}
+
+static const CcRoyalCarriage *RoyalCarriageForShipmentConst(
+    const CcSim *sim, CcId shipment_id)
+{
+    if (sim == NULL || shipment_id == 0U) return NULL;
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        if (sim->royal_carriages[i].active_shipment_id == shipment_id) {
+            return &sim->royal_carriages[i];
+        }
+    }
+    return NULL;
+}
+
+static void ParkRoyalCarriage(CcRoyalCarriage *carriage, CcId location_id)
+{
+    if (carriage == NULL) return;
+    carriage->location_id = location_id;
+    carriage->route_id = 0U;
+    carriage->destination_id = 0U;
+    carriage->target_id = 0U;
+    carriage->active_shipment_id = 0U;
+    carriage->mode = CC_ROYAL_CARRIAGE_IDLE;
+    carriage->arrival_day = 0;
+    carriage->blocked_since_day = 0;
+}
+
+static void BlockRoyalCarriage(CcSim *sim, CcRoyalCarriage *carriage,
+                               CcId target_id, CcId route_id,
+                               CcId destination_id)
+{
+    if (sim == NULL || carriage == NULL) return;
+    bool first_block = carriage->mode != CC_ROYAL_CARRIAGE_BLOCKED;
+    carriage->mode = CC_ROYAL_CARRIAGE_BLOCKED;
+    carriage->target_id = target_id;
+    carriage->route_id = route_id;
+    carriage->destination_id = destination_id;
+    carriage->departure_day = 0;
+    carriage->arrival_day = 0;
+    if (carriage->blocked_since_day == 0) {
+        carriage->blocked_since_day = sim->current_day;
+    }
+    if (!first_block) return;
+    int32_t kingdom_slot = KingdomSlotById(sim, carriage->kingdom_id);
+    const char *kingdom_name = kingdom_slot >= 0 ?
+        sim->kingdoms[kingdom_slot].name : "A royal";
+    const CcSettlement *place = CcSimSettlement(sim, carriage->location_id);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "%.24s carriage waits at %.24s; court relations close every legal road.",
+                   kingdom_name, place != NULL ? place->name : "the border");
+    (void)PushEvent(sim, CC_EVENT_ROYAL_CARRIAGE_BLOCKED,
+                    carriage->id, carriage->location_id,
+                    0U, 1, text);
+}
+
+static void WaitRoyalCarriageForCapacity(CcRoyalCarriage *carriage,
+                                         CcId target_id, CcId route_id,
+                                         CcId destination_id)
+{
+    if (carriage == NULL) return;
+    carriage->mode = CC_ROYAL_CARRIAGE_WAITING_CAPACITY;
+    carriage->target_id = target_id;
+    carriage->route_id = route_id;
+    carriage->destination_id = destination_id;
+    carriage->departure_day = 0;
+    carriage->arrival_day = 0;
+    carriage->blocked_since_day = 0;
+}
+
+static bool HasRoyalCapacityWait(const CcSim *sim)
+{
+    if (sim == NULL) return false;
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        if (sim->royal_carriages[i].mode ==
+            CC_ROYAL_CARRIAGE_WAITING_CAPACITY) return true;
+    }
+    return false;
+}
+
+static CcSettlement *RoyalFallbackSettlement(CcSim *sim,
+                                              const CcRoyalCarriage *carriage)
+{
+    if (sim == NULL || carriage == NULL) return NULL;
+    const CcSettlement *location = CcSimSettlement(
+        sim, carriage->location_id);
+    CcSettlement *best = NULL;
+    int64_t best_distance = INT64_MAX;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *candidate = &sim->settlements[i];
+        if (candidate->kingdom_id != carriage->kingdom_id ||
+            CcSettlementIsAbandoned(candidate)) continue;
+        int64_t dx = location != NULL ?
+            (int64_t)candidate->map_x - location->map_x : 0;
+        int64_t dy = location != NULL ?
+            (int64_t)candidate->map_y - location->map_y : 0;
+        int64_t distance = dx * dx + dy * dy;
+        if (best == NULL || distance < best_distance) {
+            best = candidate;
+            best_distance = distance;
+        }
+    }
+    return best;
+}
+
+static void ReleaseBlockedRoyalCarriage(CcSim *sim,
+                                         CcRoyalCarriage *carriage,
+                                         CcShipment *shipment,
+                                         const char *reason)
+{
+    if (sim == NULL || carriage == NULL) return;
+    CcSettlement *place = CcSimSettlementMutable(
+        sim, carriage->location_id);
+    if (place == NULL || CcSettlementIsAbandoned(place)) {
+        place = RoyalFallbackSettlement(sim, carriage);
+    }
+    if (shipment != NULL && place != NULL &&
+        shipment->good >= 0 && shipment->good < CC_GOOD_COUNT &&
+        shipment->quantity > 0) {
+        place->stock[shipment->good] = ClampI32(
+            place->stock[shipment->good] + shipment->quantity,
+            0, CC_SIM_MAX_UNITS);
+        shipment->status = CC_SHIPMENT_ARRIVED;
+    }
+    CcId location_id = place != NULL ? place->id : carriage->location_id;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "A royal carriage releases its load at %.32s after %.48s.",
+        place != NULL ? place->name : "the nearest safe road house",
+        reason != NULL ? reason : "a border delay");
+    (void)PushEvent(sim, CC_EVENT_SHIPMENT_ARRIVED,
+                    shipment != NULL ? shipment->id : carriage->id,
+                    location_id, 0U,
+                    shipment != NULL ? shipment->quantity : 0, text);
+    ParkRoyalCarriage(carriage, location_id);
+    carriage->departure_day = sim->current_day;
+}
+
+static bool StartRoyalRepositioningLeg(CcSim *sim,
+                                       CcRoyalCarriage *carriage,
+                                       CcId target_id)
+{
+    if (sim == NULL || carriage == NULL ||
+        CcSimSettlement(sim, carriage->location_id) == NULL ||
+        CcSimSettlement(sim, target_id) == NULL) return false;
+    if (carriage->location_id == target_id) {
+        ParkRoyalCarriage(carriage, target_id);
+        return true;
+    }
+    int32_t route_slot = -1;
+    CcId next_hop_id = 0U;
+    if (!FindTradePath(sim, carriage->location_id, target_id,
+                       CC_GOOD_FOOD, &route_slot, &next_hop_id,
+                       NULL, NULL, NULL, true, carriage->kingdom_id,
+                       false, 1)) {
+        if (!FindTradePath(sim, carriage->location_id, target_id,
+                           CC_GOOD_FOOD, &route_slot, &next_hop_id,
+                           NULL, NULL, NULL, true,
+                           carriage->kingdom_id, true, 1)) {
+            return false;
+        }
+        if (!CcSimRoyalCarriageCanUseRoute(
+                sim, carriage->kingdom_id,
+                sim->routes[route_slot].id)) {
+            BlockRoyalCarriage(sim, carriage, target_id,
+                               sim->routes[route_slot].id,
+                               next_hop_id);
+            return false;
+        }
+    }
+    CcRoute *route = &sim->routes[route_slot];
+    carriage->route_id = route->id;
+    carriage->destination_id = next_hop_id;
+    carriage->target_id = target_id;
+    carriage->mode = CC_ROYAL_CARRIAGE_REPOSITIONING;
+    carriage->departure_day = sim->current_day;
+    carriage->arrival_day = sim->current_day + route->travel_days;
+    carriage->blocked_since_day = 0;
+    const CcSettlement *destination = CcSimSettlement(sim, next_hop_id);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "A royal carriage rides empty toward %.32s to collect a needed load.",
+                   destination != NULL ? destination->name : "the next market");
+    (void)PushEvent(sim, CC_EVENT_ROYAL_CARRIAGE_REROUTED,
+                    carriage->id, route->id,
+                    0U, route->travel_days, text);
+    return true;
+}
+
+static void AdvanceRoyalCarriages(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 38U) return;
+    bool reached_market = false;
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+        const CcSettlement *location = CcSimSettlement(
+            sim, carriage->location_id);
+        if ((location == NULL || CcSettlementIsAbandoned(location)) &&
+            carriage->active_shipment_id == 0U) {
+            CcSettlement *home = RoyalFallbackSettlement(sim, carriage);
+            if (home != NULL) {
+                ParkRoyalCarriage(carriage, home->id);
+                carriage->departure_day = sim->current_day;
+                reached_market = true;
+            }
+            continue;
+        }
+        if (carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED &&
+            carriage->active_shipment_id == 0U) {
+            if (sim->current_day % 7 == 0 &&
+                !CcSimRoyalCarriageCanUseRoute(
+                    sim, carriage->kingdom_id, carriage->route_id)) {
+                RaiseRoyalTradeSupport(sim, carriage);
+            }
+            if (sim->current_day - carriage->blocked_since_day >= 28) {
+                ReleaseBlockedRoyalCarriage(
+                    sim, carriage, NULL, "four weeks of closed talks");
+                reached_market = true;
+                continue;
+            }
+            if (CcSimRoyalCarriageCanUseRoute(
+                    sim, carriage->kingdom_id, carriage->route_id)) {
+                if (carriage->location_id == carriage->target_id) {
+                    ParkRoyalCarriage(carriage, carriage->location_id);
+                    carriage->departure_day = sim->current_day;
+                    reached_market = true;
+                } else {
+                    (void)StartRoyalRepositioningLeg(
+                        sim, carriage, carriage->target_id);
+                }
+            }
+            continue;
+        }
+        if (carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED &&
+            sim->current_day % 7 == 0 &&
+            !CcSimRoyalCarriageCanUseRoute(
+                sim, carriage->kingdom_id, carriage->route_id)) {
+            RaiseRoyalTradeSupport(sim, carriage);
+        }
+        if (carriage->mode != CC_ROYAL_CARRIAGE_REPOSITIONING ||
+            carriage->arrival_day > sim->current_day) continue;
+        if (!CcSimRoyalCarriageCanUseRoute(
+                sim, carriage->kingdom_id, carriage->route_id)) {
+            BlockRoyalCarriage(sim, carriage, carriage->target_id,
+                               carriage->route_id,
+                               carriage->destination_id);
+            continue;
+        }
+        carriage->location_id = carriage->destination_id;
+        carriage->condition = ClampI32(carriage->condition - 1, 0, 100);
+        if (carriage->location_id == carriage->target_id) {
+            ParkRoyalCarriage(carriage, carriage->location_id);
+            carriage->departure_day = sim->current_day;
+            reached_market = true;
+        } else {
+            (void)StartRoyalRepositioningLeg(
+                sim, carriage, carriage->target_id);
+        }
+    }
+    if (reached_market && !HasRoyalCapacityWait(sim)) PlanTrade(sim);
 }
 
 static void UpdateShipments(CcSim *sim)
 {
+    PrepareRoyalRouteUsage(sim);
+    bool reached_market = false;
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         CcShipment *shipment = &sim->shipments[i];
+        CcRoyalCarriage *carriage = RoyalCarriageForShipment(
+            sim, shipment->id);
+        if (shipment->status == CC_SHIPMENT_BLOCKED) {
+            if (carriage == NULL) continue;
+            bool waited_for_capacity = carriage->mode ==
+                CC_ROYAL_CARRIAGE_WAITING_CAPACITY;
+            CcId final_id = shipment->final_destination_id;
+            const CcSettlement *final = CcSimSettlement(sim, final_id);
+            if (final == NULL || CcSettlementIsAbandoned(final)) {
+                ReleaseBlockedRoyalCarriage(
+                    sim, carriage, shipment,
+                    "the destination fell");
+                reached_market = true;
+                continue;
+            }
+            int32_t route_slot = -1;
+            CcId next_hop_id = 0U;
+            int32_t cargo_slots = FreightCargoSlots(
+                shipment->good, shipment->quantity);
+            if (!FindTradePath(sim, carriage->location_id, final_id,
+                               shipment->good, &route_slot, &next_hop_id,
+                               NULL, NULL, sim->royal_route_slots_used, true,
+                               carriage->kingdom_id, false,
+                               cargo_slots)) {
+                int32_t waiting_route_slot = -1;
+                CcId waiting_hop_id = 0U;
+                if (FindTradePath(
+                        sim, carriage->location_id, final_id,
+                        shipment->good, &waiting_route_slot,
+                        &waiting_hop_id, NULL, NULL, NULL, true,
+                        carriage->kingdom_id, false, cargo_slots)) {
+                    WaitRoyalCarriageForCapacity(
+                        carriage, final_id,
+                        sim->routes[waiting_route_slot].id,
+                        waiting_hop_id);
+                    continue;
+                }
+                if (carriage->mode ==
+                    CC_ROYAL_CARRIAGE_WAITING_CAPACITY) {
+                    int32_t blocked_route_slot = -1;
+                    CcId blocked_hop_id = 0U;
+                    if (FindTradePath(
+                            sim, carriage->location_id, final_id,
+                            shipment->good, &blocked_route_slot,
+                            &blocked_hop_id, NULL, NULL, NULL, true,
+                            carriage->kingdom_id, true, cargo_slots)) {
+                        BlockRoyalCarriage(
+                            sim, carriage, final_id,
+                            sim->routes[blocked_route_slot].id,
+                            blocked_hop_id);
+                    } else {
+                        ReleaseBlockedRoyalCarriage(
+                            sim, carriage, shipment,
+                            "every safe road failed");
+                        reached_market = true;
+                    }
+                    continue;
+                }
+                if (sim->current_day - carriage->blocked_since_day >= 28) {
+                    ReleaseBlockedRoyalCarriage(
+                        sim, carriage, shipment,
+                        "four weeks of closed talks");
+                    reached_market = true;
+                }
+                continue;
+            }
+            CcRoute *route = &sim->routes[route_slot];
+            shipment->origin_id = carriage->location_id;
+            shipment->destination_id = next_hop_id;
+            shipment->route_id = route->id;
+            shipment->departure_day = sim->current_day;
+            shipment->arrival_day = sim->current_day + route->travel_days;
+            shipment->status = CC_SHIPMENT_TRAVELLING;
+            carriage->route_id = route->id;
+            carriage->destination_id = next_hop_id;
+            carriage->target_id = final_id;
+            carriage->mode = CC_ROYAL_CARRIAGE_DELIVERING;
+            carriage->departure_day = shipment->departure_day;
+            carriage->arrival_day = shipment->arrival_day;
+            carriage->blocked_since_day = 0;
+            UseRoyalRoute(sim, route_slot, cargo_slots);
+            const CcSettlement *destination = CcSimSettlement(
+                sim, next_hop_id);
+            char text[CC_EVENT_TEXT_CAPACITY];
+            if (waited_for_capacity) {
+                (void)snprintf(
+                    text, sizeof(text),
+                    "Weekly road space clears; the carriage resumes toward %.32s.",
+                    destination != NULL ? destination->name :
+                    "the next market");
+            } else {
+                (void)snprintf(
+                    text, sizeof(text),
+                    "Court relations reopen the road; the carriage resumes toward %.32s.",
+                    destination != NULL ? destination->name :
+                    "the next market");
+            }
+            (void)PushEvent(sim, CC_EVENT_ROYAL_CARRIAGE_REROUTED,
+                            carriage->id, route->id,
+                            0U, shipment->quantity, text);
+            continue;
+        }
         if (shipment->status != CC_SHIPMENT_TRAVELLING ||
             shipment->arrival_day > sim->current_day) continue;
         if (shipment->good < CC_GOOD_FOOD ||
             shipment->good >= CC_GOOD_COUNT) {
             shipment->status = CC_SHIPMENT_LOST;
+            if (carriage != NULL) {
+                carriage->cargo_losses += 1;
+                carriage->condition = ClampI32(
+                    carriage->condition - 12, 0, 100);
+                ParkRoyalCarriage(carriage, shipment->origin_id);
+                carriage->departure_day = sim->current_day;
+            }
+            continue;
+        }
+        if (carriage != NULL &&
+            !CcSimRoyalCarriageCanUseRoute(
+                sim, carriage->kingdom_id, shipment->route_id)) {
+            shipment->status = CC_SHIPMENT_BLOCKED;
+            BlockRoyalCarriage(sim, carriage,
+                               shipment->final_destination_id,
+                               shipment->route_id,
+                               shipment->destination_id);
             continue;
         }
         CcGood shipment_good = shipment->good;
@@ -7983,6 +8625,13 @@ static void UpdateShipments(CcSim *sim)
                             final_id,
                             departure != NULL ? departure->id : 0U,
                             shipment->quantity, text);
+            if (carriage != NULL) {
+                carriage->cargo_losses += 1;
+                carriage->condition = ClampI32(
+                    carriage->condition - 12, 0, 100);
+                ParkRoyalCarriage(carriage, shipment->origin_id);
+                carriage->departure_day = sim->current_day;
+            }
             continue;
         }
         if (sim->schema_version >= 36U) {
@@ -7993,29 +8642,52 @@ static void UpdateShipments(CcSim *sim)
         }
         CcSettlement *hop = CcSimSettlementMutable(sim, shipment->destination_id);
         if (shipment->destination_id != final_id && hop != NULL) {
-            int32_t local_need = EffectiveReserveTarget(
-                                     sim, hop, shipment_good) -
-                                 hop->stock[shipment_good] -
-                                 CcSimIncomingGood(sim, hop->id, shipment_good);
-            int32_t unload = MinimumI32(local_need, shipment->quantity / 3);
-            unload = MinimumI32(unload, shipment->quantity - 4);
-            unload = MaximumI32(0, unload);
-            if (unload > 0) {
-                hop->stock[shipment_good] += unload;
-                hop->prosperity = ClampI32(hop->prosperity + 1, 0, 100);
-                shipment->quantity -= unload;
+            int32_t unload = 0;
+            if (carriage == NULL) {
+                int32_t local_need = EffectiveReserveTarget(
+                                         sim, hop, shipment_good) -
+                                     hop->stock[shipment_good] -
+                                     CcSimIncomingGood(
+                                         sim, hop->id, shipment_good);
+                unload = MinimumI32(local_need, shipment->quantity / 3);
+                unload = MinimumI32(unload, shipment->quantity - 4);
+                unload = MaximumI32(0, unload);
+                if (unload > 0) {
+                    hop->stock[shipment_good] += unload;
+                    hop->prosperity = ClampI32(
+                        hop->prosperity + 1, 0, 100);
+                    shipment->quantity -= unload;
+                }
             }
             int32_t next_route_slot = -1;
             CcId next_hop_id = 0U;
+            int32_t cargo_slots = FreightCargoSlots(
+                shipment_good, shipment->quantity);
             if (FindTradePath(sim, hop->id, final_id, shipment_good,
                               &next_route_slot,
-                              &next_hop_id, NULL, NULL, false)) {
+                              &next_hop_id, NULL, NULL,
+                              carriage != NULL ?
+                                  sim->royal_route_slots_used : NULL,
+                              carriage != NULL,
+                              carriage != NULL ? carriage->kingdom_id : 0U,
+                              false, cargo_slots)) {
                 CcRoute *next_route = &sim->routes[next_route_slot];
                 shipment->origin_id = hop->id;
                 shipment->destination_id = next_hop_id;
                 shipment->route_id = next_route->id;
                 shipment->departure_day = sim->current_day;
                 shipment->arrival_day = sim->current_day + next_route->travel_days;
+                if (carriage != NULL) {
+                    carriage->location_id = hop->id;
+                    carriage->route_id = next_route->id;
+                    carriage->destination_id = next_hop_id;
+                    carriage->target_id = final_id;
+                    carriage->departure_day = shipment->departure_day;
+                    carriage->arrival_day = shipment->arrival_day;
+                    carriage->condition = ClampI32(
+                        carriage->condition - 1, 0, 100);
+                    UseRoyalRoute(sim, next_route_slot, cargo_slots);
+                }
                 if (next_route->smuggler_route || sim->current_day % 21 == 0) {
                     next_route->condition = ClampI32(next_route->condition - 1, 0, 100);
                 }
@@ -8029,6 +8701,41 @@ static void UpdateShipments(CcSim *sim)
                 (void)PushEvent(sim, CC_EVENT_SHIPMENT_DEPARTED, shipment->id,
                                 hop->id, departure != NULL ? departure->id : 0U,
                                 shipment->quantity, text);
+                continue;
+            }
+            if (carriage != NULL) {
+                carriage->location_id = hop->id;
+                shipment->status = CC_SHIPMENT_BLOCKED;
+                int32_t waiting_route_slot = -1;
+                CcId waiting_hop = 0U;
+                if (FindTradePath(
+                        sim, hop->id, final_id, shipment_good,
+                        &waiting_route_slot, &waiting_hop,
+                        NULL, NULL, NULL, true,
+                        carriage->kingdom_id, false, cargo_slots)) {
+                    WaitRoyalCarriageForCapacity(
+                        carriage, final_id,
+                        sim->routes[waiting_route_slot].id,
+                        waiting_hop);
+                    continue;
+                }
+                int32_t blocked_route_slot = -1;
+                CcId blocked_hop = 0U;
+                if (FindTradePath(
+                        sim, hop->id, final_id, shipment_good,
+                        &blocked_route_slot, &blocked_hop,
+                        NULL, NULL, NULL, true,
+                        carriage->kingdom_id, true, cargo_slots)) {
+                    BlockRoyalCarriage(
+                        sim, carriage, final_id,
+                        sim->routes[blocked_route_slot].id,
+                        blocked_hop);
+                } else {
+                    ReleaseBlockedRoyalCarriage(
+                        sim, carriage, shipment,
+                        "every safe road failed");
+                    reached_market = true;
+                }
                 continue;
             }
             hop->stock[shipment_good] += shipment->quantity;
@@ -8056,13 +8763,23 @@ static void UpdateShipments(CcSim *sim)
                         final_id,
                         departure != NULL ? departure->id : 0U,
                         shipment->quantity, text);
+        if (carriage != NULL) {
+            carriage->condition = ClampI32(
+                carriage->condition - 1, 0, 100);
+            carriage->trips_completed += 1;
+            ParkRoyalCarriage(carriage, final_id);
+            carriage->departure_day = sim->current_day;
+            reached_market = true;
+        }
     }
+    if (reached_market) PlanTrade(sim);
 }
 
 static CcShipment *AllocateShipment(CcSim *sim)
 {
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
-        if (sim->shipments[i].status != CC_SHIPMENT_TRAVELLING) {
+        if (sim->shipments[i].status != CC_SHIPMENT_TRAVELLING &&
+            sim->shipments[i].status != CC_SHIPMENT_BLOCKED) {
             sim->shipments[i] = (CcShipment){0};
             return &sim->shipments[i];
         }
@@ -8083,6 +8800,11 @@ static int32_t TradeSurplus(const CcSim *sim,
         CcSettlementIsAbandoned(destination) ||
         good < 0 || good >= CC_GOOD_COUNT) return 0;
     int32_t protected_stock = origin->reserve_target[good];
+    if ((good == CC_GOOD_GOLD || good == CC_GOOD_GEMS) &&
+        destination->stock[good == CC_GOOD_GOLD ?
+                           CC_GOOD_GEMS : CC_GOOD_GOLD] > 0) {
+        protected_stock = 0;
+    }
     if (good == CC_GOOD_FOOD && destination->hunger >= 65 &&
         origin->hunger < 35) {
         int32_t survival_stock = MaximumI32(
@@ -8093,14 +8815,47 @@ static int32_t TradeSurplus(const CcSim *sim,
     return origin->stock[good] - protected_stock;
 }
 
-static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id,
+static CcMoney RoyalTradeRouteToll(const CcSim *sim, const CcRoute *route,
+                                   CcId carriage_kingdom_id)
+{
+    CcMoney toll = TradeRouteToll(sim, route);
+    const CcSettlement *from = route != NULL ?
+        CcSimSettlement(sim, route->from_id) : NULL;
+    const CcSettlement *to = route != NULL ?
+        CcSimSettlement(sim, route->to_id) : NULL;
+    if (from == NULL || to == NULL ||
+        from->kingdom_id == to->kingdom_id) return toll;
+    CcId host = from->kingdom_id == carriage_kingdom_id ?
+        to->kingdom_id : from->kingdom_id;
+    toll += CcSimKingdomsAllied(sim, carriage_kingdom_id, host) ? 1 : 3;
+    return toll;
+}
+
+static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
+                                int32_t route_slot, CcId next_hop_id,
                                 CcGood good, CcSettlement *origin,
                                 CcSettlement *final_destination,
+                                int32_t path_capacity,
+                                int32_t minimum_cargo_slots,
                                 int32_t route_used[CC_MAX_ROUTES])
 {
+    if (sim == NULL || route_slot < 0 ||
+        route_slot >= sim->route_count || origin == NULL ||
+        final_destination == NULL) return false;
+    bool royal = carriage != NULL;
+    if (royal &&
+        (carriage->mode != CC_ROYAL_CARRIAGE_IDLE ||
+         carriage->active_shipment_id != 0U ||
+         carriage->location_id != origin->id ||
+         final_destination->kingdom_id != carriage->kingdom_id)) return false;
     CcRoute *route = &sim->routes[route_slot];
-    if (CcSimRouteCrossesKingdomBorder(sim, route->id) ||
-        origin->kingdom_id != final_destination->kingdom_id) return;
+    if (royal) {
+        if (!CcSimRoyalCarriageCanUseRoute(
+                sim, carriage->kingdom_id, route->id)) return false;
+    } else if (CcSimRouteCrossesKingdomBorder(sim, route->id) ||
+               origin->kingdom_id != final_destination->kingdom_id) {
+        return false;
+    }
     int32_t surplus = TradeSurplus(
         sim, origin, final_destination, good);
     int32_t incoming = CcSimIncomingGood(sim, final_destination->id, good);
@@ -8108,10 +8863,13 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
                    final_destination->stock[good] - incoming;
     int32_t effective_capacity = TradeRouteCapacity(sim, route);
     int32_t available_capacity = effective_capacity - route_used[route_slot];
-    int32_t cargo_capacity = available_capacity * FreightUnitsPerCargoSlot(good);
+    int32_t cargo_capacity = MinimumI32(
+        available_capacity, path_capacity) *
+        FreightUnitsPerCargoSlot(good);
     int32_t quantity = MinimumI32(
-        5 * FreightUnitsPerCargoSlot(good), MinimumI32(cargo_capacity,
-                                                 MinimumI32(surplus, need)));
+        (royal ? CC_ROYAL_CARRIAGE_CARGO_SLOTS : 5) *
+            FreightUnitsPerCargoSlot(good),
+        MinimumI32(cargo_capacity, MinimumI32(surplus, need)));
     bool military_supply = WarWeeklyNeed(
         sim, final_destination, good) > 0;
     CcMoney *buyer_coins = military_supply ?
@@ -8121,20 +8879,22 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
         sim, final_destination->kingdom_id);
     bool essential_credit = IronLedgerWillFund(final_destination, good);
     int32_t unit_price = MaximumI32(1, origin->price[good]);
-    CcMoney toll = TradeRouteToll(sim, route);
+    CcMoney toll = royal ? RoyalTradeRouteToll(
+        sim, route, carriage->kingdom_id) : TradeRouteToll(sim, route);
     CcMoney credit_available = essential_credit ?
         IronLedgerCreditAvailable(sim, buyer_kingdom) : 0;
     CcMoney purchasing_power = *buyer_coins + credit_available;
-    if (purchasing_power <= toll) return;
+    if (purchasing_power <= toll) return false;
     int32_t affordable = (purchasing_power - toll) / unit_price > INT32_MAX ?
                          INT32_MAX :
                          (int32_t)((purchasing_power - toll) / unit_price);
     quantity = MinimumI32(quantity, affordable);
     int32_t minimum_load =
         CcGoodDefinitionFor(good)->minimum_trade_units;
-    if (quantity < minimum_load) return;
+    if (quantity < minimum_load ||
+        FreightCargoSlots(good, quantity) < minimum_cargo_slots) return false;
     CcShipment *shipment = AllocateShipment(sim);
-    if (shipment == NULL) return;
+    if (shipment == NULL) return false;
     origin->stock[good] -= quantity;
     CcMoney payment = (CcMoney)quantity * unit_price;
     CcMoney total_charge = payment + toll;
@@ -8173,6 +8933,17 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
     shipment->departure_day = sim->current_day;
     shipment->arrival_day = sim->current_day + route->travel_days;
     shipment->status = CC_SHIPMENT_TRAVELLING;
+    if (royal) {
+        carriage->route_id = route->id;
+        carriage->destination_id = next_hop_id;
+        carriage->target_id = final_destination->id;
+        carriage->active_shipment_id = shipment->id;
+        carriage->mode = CC_ROYAL_CARRIAGE_DELIVERING;
+        carriage->departure_day = shipment->departure_day;
+        carriage->arrival_day = shipment->arrival_day;
+        carriage->blocked_since_day = 0;
+        carriage->next_dispatch_day = sim->current_day + 7;
+    }
     route_used[route_slot] += FreightCargoSlots(good, quantity);
     if (route->smuggler_route || sim->current_day % 21 == 0) {
         route->condition = ClampI32(route->condition - 1, 0, 100);
@@ -8207,28 +8978,34 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
                     need_event != NULL ? need_event->id :
                     LatestLocalCause(sim, final_destination->id),
                     quantity, text);
+    return true;
 }
 
-static void PlanTrade(CcSim *sim)
+static void PlanLegacyTrade(CcSim *sim)
 {
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         int32_t minimum_load = CcGoodDefinitionFor(
             (CcGood)good)->minimum_trade_units;
         int32_t route_used[CC_MAX_ROUTES] = {0};
-        for (int32_t transfer = 0; transfer < sim->settlement_count * 2; ++transfer) {
+        for (int32_t transfer = 0;
+             transfer < sim->settlement_count * 2; ++transfer) {
             int32_t best_score = 0;
             int32_t best_source = -1;
             int32_t best_destination = -1;
             int32_t best_route = -1;
+            int32_t best_path_capacity = 0;
             CcId best_hop = 0U;
-            for (int32_t destination = 0; destination < sim->settlement_count; ++destination) {
+            for (int32_t destination = 0;
+                 destination < sim->settlement_count; ++destination) {
                 CcSettlement *to = &sim->settlements[destination];
                 if (CcSettlementIsAbandoned(to)) continue;
                 int32_t need = EffectiveReserveTarget(
                                    sim, to, (CcGood)good) - to->stock[good] -
-                               CcSimIncomingGood(sim, to->id, (CcGood)good);
+                               CcSimIncomingGood(
+                                   sim, to->id, (CcGood)good);
                 if (need < minimum_load) continue;
-                for (int32_t source = 0; source < sim->settlement_count; ++source) {
+                for (int32_t source = 0;
+                     source < sim->settlement_count; ++source) {
                     if (source == destination) continue;
                     CcSettlement *from = &sim->settlements[source];
                     if (CcSettlementIsAbandoned(from)) continue;
@@ -8238,10 +9015,13 @@ static void PlanTrade(CcSim *sim)
                     int32_t route_slot = -1;
                     CcId next_hop = 0U;
                     int32_t path_cost = 0;
-                    if (!FindTradePath(sim, from->id, to->id,
-                                       (CcGood)good, &route_slot,
-                                       &next_hop, &path_cost, route_used,
-                                       false)) continue;
+                    int32_t path_capacity = 0;
+                    if (!FindTradePath(
+                            sim, from->id, to->id, (CcGood)good,
+                            &route_slot, &next_hop, &path_cost,
+                            &path_capacity, route_used, false, 0U,
+                            false, FreightCargoSlots(
+                                (CcGood)good, minimum_load))) continue;
                     bool military_supply = WarWeeklyNeed(
                         sim, to, (CcGood)good) > 0;
                     CcMoney buyer_coins = military_supply ?
@@ -8253,26 +9033,360 @@ static void PlanTrade(CcSim *sim)
                     CcMoney credit_available = essential_credit ?
                         IronLedgerCreditAvailable(sim, buyer_kingdom) : 0;
                     CcMoney minimum_cost =
-                        (CcMoney)minimum_load * MaximumI32(1, from->price[good]) +
+                        (CcMoney)minimum_load *
+                            MaximumI32(1, from->price[good]) +
                         TradeRouteToll(sim, &sim->routes[route_slot]);
-                    if (buyer_coins + credit_available < minimum_cost) continue;
+                    if (buyer_coins + credit_available < minimum_cost) {
+                        continue;
+                    }
                     int32_t score = need * 3 + surplus +
-                                    ((CcGood)good == CC_GOOD_FOOD ? to->hunger * 2 : 0) -
-                                    path_cost / 3;
+                        ((CcGood)good == CC_GOOD_FOOD ? to->hunger * 2 : 0) -
+                        path_cost / 3;
                     if (score > best_score) {
                         best_score = score;
                         best_source = source;
                         best_destination = destination;
                         best_route = route_slot;
+                        best_path_capacity = path_capacity;
                         best_hop = next_hop;
                     }
                 }
             }
-            if (best_source < 0 || best_destination < 0 || best_route < 0) break;
-            CreateTradeShipment(sim, best_route, best_hop, (CcGood)good,
-                                &sim->settlements[best_source],
-                                &sim->settlements[best_destination], route_used);
+            if (best_source < 0 || best_destination < 0 || best_route < 0) {
+                break;
+            }
+            (void)CreateTradeShipment(
+                sim, NULL, best_route, best_hop, (CcGood)good,
+                &sim->settlements[best_source],
+                &sim->settlements[best_destination],
+                best_path_capacity, 1, route_used);
         }
+    }
+}
+
+static int32_t RoyalTradeScore(const CcSim *sim,
+                               const CcMaterialChainSnapshot *archive_chain,
+                               const CcSettlement *destination,
+                               CcGood good, int32_t need, int32_t surplus,
+                               int32_t path_cost, int32_t reposition_cost)
+{
+    int32_t freight_need = FreightCargoSlots(good, need);
+    int32_t freight_surplus = FreightCargoSlots(good, surplus);
+    bool nutrition = good == CC_GOOD_BREAD ||
+                     good == CC_GOOD_WHEAT || good == CC_GOOD_MEAT;
+    bool military_supply = WarWeeklyNeed(sim, destination, good) > 0;
+    int32_t load_slots = MinimumI32(
+        CC_ROYAL_CARRIAGE_CARGO_SLOTS,
+        MinimumI32(freight_need, freight_surplus));
+    int32_t score = freight_need * 120 +
+        MinimumI32(freight_surplus, freight_need * 2) * 20 +
+        load_slots * 60 +
+        (nutrition ? destination->hunger * 30 +
+         (destination->hunger >= 25 ? 500 : 0) : 0) +
+        (military_supply ? 180 : 0);
+    if (good == CC_GOOD_TOOLS &&
+        CcSettlementHasService(destination, CC_SERVICE_MINE)) score += 500;
+    if (good == CC_GOOD_IRON &&
+        CcSettlementHasService(destination, CC_SERVICE_SMITHY)) score += 600;
+    if (good == CC_GOOD_WOOL && military_supply) score += 240;
+    if (destination->id == archive_chain->scriptorium_id) {
+        if (archive_chain->blocker == CC_MATERIAL_CHAIN_GRAIN &&
+            good == CC_GOOD_WHEAT) score += 2400;
+        if (archive_chain->blocker == CC_MATERIAL_CHAIN_PAPER &&
+            (good == CC_GOOD_PAPER || good == CC_GOOD_WOOD)) score += 2000;
+        if (archive_chain->blocker == CC_MATERIAL_CHAIN_TOOLS &&
+            (good == CC_GOOD_TOOLS || good == CC_GOOD_IRON)) score += 2400;
+        if (archive_chain->blocker == CC_MATERIAL_CHAIN_BINDING &&
+            (good == CC_GOOD_GOLD || good == CC_GOOD_GEMS) &&
+            destination->stock[good == CC_GOOD_GOLD ?
+                               CC_GOOD_GEMS : CC_GOOD_GOLD] > 0) {
+            score += 2400;
+        }
+    }
+    return score - path_cost / 3 - reposition_cost / 4;
+}
+
+static bool RoyalTradeIsUrgent(
+    const CcSim *sim, const CcMaterialChainSnapshot *archive_chain,
+    const CcSettlement *destination, CcGood good)
+{
+    bool nutrition = good == CC_GOOD_BREAD ||
+                     good == CC_GOOD_WHEAT || good == CC_GOOD_MEAT;
+    if ((nutrition && destination->hunger >= 25) ||
+        WarWeeklyNeed(sim, destination, good) > 0 ||
+        (good == CC_GOOD_TOOLS &&
+         CcSettlementHasService(destination, CC_SERVICE_MINE)) ||
+        (good == CC_GOOD_IRON &&
+         CcSettlementHasService(destination, CC_SERVICE_SMITHY))) return true;
+    if (destination->id != archive_chain->scriptorium_id) return false;
+    return (archive_chain->blocker == CC_MATERIAL_CHAIN_GRAIN &&
+            good == CC_GOOD_WHEAT) ||
+           (archive_chain->blocker == CC_MATERIAL_CHAIN_PAPER &&
+            (good == CC_GOOD_PAPER || good == CC_GOOD_WOOD)) ||
+           (archive_chain->blocker == CC_MATERIAL_CHAIN_TOOLS &&
+            (good == CC_GOOD_TOOLS || good == CC_GOOD_IRON)) ||
+           (archive_chain->blocker == CC_MATERIAL_CHAIN_BINDING &&
+            (good == CC_GOOD_GOLD || good == CC_GOOD_GEMS));
+}
+
+static void BlockRoyalTradeDemand(
+    CcSim *sim, CcRoyalCarriage *carriage,
+    const CcMaterialChainSnapshot *archive_chain)
+{
+    if (sim->current_day % 7 != 0) return;
+    bool has_permission_barrier = false;
+    for (int32_t route = 0; route < sim->route_count; ++route) {
+        if (RoyalRouteCanReopen(sim, &sim->routes[route]) &&
+            !CcSimRoyalCarriageCanUseRoute(
+                sim, carriage->kingdom_id, sim->routes[route].id)) {
+            has_permission_barrier = true;
+            break;
+        }
+    }
+    if (!has_permission_barrier) return;
+    int32_t best_score = 0;
+    int32_t best_source = -1;
+    int32_t best_destination = -1;
+    int32_t best_required_slots = 0;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        CcGood cargo_good = (CcGood)good;
+        int32_t minimum_load = CcGoodDefinitionFor(
+            cargo_good)->minimum_trade_units;
+        int32_t required_slots = FreightCargoSlots(
+            cargo_good, minimum_load);
+        for (int32_t destination = 0;
+             destination < sim->settlement_count; ++destination) {
+            CcSettlement *to = &sim->settlements[destination];
+            if (CcSettlementIsAbandoned(to) ||
+                to->kingdom_id != carriage->kingdom_id) continue;
+            int32_t need = EffectiveReserveTarget(sim, to, cargo_good) -
+                to->stock[good] - CcSimIncomingGood(sim, to->id, cargo_good);
+            if (need < minimum_load) continue;
+            for (int32_t source = 0;
+                 source < sim->settlement_count; ++source) {
+                CcSettlement *from = &sim->settlements[source];
+                if (source == destination || CcSettlementIsAbandoned(from)) {
+                    continue;
+                }
+                int32_t surplus = TradeSurplus(sim, from, to, cargo_good);
+                if (surplus < minimum_load) continue;
+                int32_t load_slots = MinimumI32(
+                    CC_ROYAL_CARRIAGE_CARGO_SLOTS,
+                    MinimumI32(FreightCargoSlots(cargo_good, need),
+                               FreightCargoSlots(cargo_good, surplus)));
+                    if (load_slots < 2 &&
+                        !RoyalTradeIsUrgent(
+                        sim, archive_chain, to, cargo_good)) continue;
+                if (!RoyalPathExistsIgnoringRelations(
+                        sim, carriage->kingdom_id, from->id, to->id,
+                        required_slots) ||
+                    (carriage->location_id != from->id &&
+                     !RoyalPathExistsIgnoringRelations(
+                         sim, carriage->kingdom_id,
+                         carriage->location_id, from->id, 1))) continue;
+                bool source_path_open = carriage->location_id == from->id ||
+                    FindTradePath(
+                        sim, carriage->location_id, from->id,
+                        CC_GOOD_FOOD, NULL, NULL, NULL, NULL, NULL,
+                        true, carriage->kingdom_id, false, 1);
+                bool delivery_path_open = FindTradePath(
+                    sim, from->id, to->id, cargo_good,
+                    NULL, NULL, NULL, NULL, NULL, true,
+                    carriage->kingdom_id, false, required_slots);
+                if (source_path_open && delivery_path_open) continue;
+                bool military_supply = WarWeeklyNeed(
+                    sim, to, cargo_good) > 0;
+                CcMoney buyer_coins = military_supply ?
+                    to->war_chest : to->market_coins;
+                CcKingdom *buyer_kingdom = KingdomMutable(
+                    sim, to->kingdom_id);
+                CcMoney credit_available = IronLedgerWillFund(
+                    to, cargo_good) ?
+                    IronLedgerCreditAvailable(sim, buyer_kingdom) : 0;
+                CcMoney minimum_cost =
+                    (CcMoney)minimum_load *
+                        MaximumI32(1, from->price[good]) + 3;
+                if (buyer_coins + credit_available < minimum_cost) continue;
+                int32_t score = RoyalTradeScore(
+                    sim, archive_chain, to, cargo_good,
+                    need, surplus, 0, 0);
+                if (score > best_score) {
+                    best_score = score;
+                    best_source = source;
+                    best_destination = destination;
+                    best_required_slots = required_slots;
+                }
+            }
+        }
+    }
+    if (best_source < 0 || best_destination < 0) return;
+    CcSettlement *source = &sim->settlements[best_source];
+    if (carriage->location_id != source->id) {
+        (void)StartRoyalRepositioningLeg(sim, carriage, source->id);
+        return;
+    }
+    int32_t blocked_route = -1;
+    CcId blocked_destination = 0U;
+    if (!FindTradePath(
+            sim, source->id, sim->settlements[best_destination].id,
+            CC_GOOD_FOOD, &blocked_route, &blocked_destination,
+            NULL, NULL, NULL, true, carriage->kingdom_id, true,
+            best_required_slots) ||
+        CcSimRoyalCarriageCanUseRoute(
+            sim, carriage->kingdom_id,
+            sim->routes[blocked_route].id)) return;
+    BlockRoyalCarriage(sim, carriage, carriage->location_id,
+                       sim->routes[blocked_route].id,
+                       blocked_destination);
+}
+
+static void PlanTrade(CcSim *sim)
+{
+    if (sim->schema_version < 38U) {
+        PlanLegacyTrade(sim);
+        return;
+    }
+    PrepareRoyalRouteUsage(sim);
+    int32_t *route_used = sim->royal_route_slots_used;
+    CcMaterialChainSnapshot archive_chain =
+        CcSimMaterialChainSnapshot(sim);
+    for (int32_t carriage_slot = 0;
+         carriage_slot < sim->royal_carriage_count; ++carriage_slot) {
+        CcRoyalCarriage *carriage = &sim->royal_carriages[carriage_slot];
+        if (carriage->mode != CC_ROYAL_CARRIAGE_IDLE ||
+            carriage->active_shipment_id != 0U ||
+            CcSimSettlement(sim, carriage->location_id) == NULL ||
+            sim->current_day < carriage->next_dispatch_day) continue;
+        if (carriage->condition < 20) {
+            carriage->condition = ClampI32(
+                carriage->condition + 4, 0, 100);
+            continue;
+        }
+        int32_t best_score = 0;
+        int32_t best_source = -1;
+        int32_t best_destination = -1;
+        int32_t best_route = -1;
+        int32_t best_path_capacity = 0;
+        int32_t best_minimum_cargo_slots = 1;
+        CcId best_hop = 0U;
+        CcGood best_good = CC_GOOD_FOOD;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            int32_t minimum_load = CcGoodDefinitionFor(
+                (CcGood)good)->minimum_trade_units;
+            for (int32_t destination = 0;
+                 destination < sim->settlement_count; ++destination) {
+                CcSettlement *to = &sim->settlements[destination];
+                if (CcSettlementIsAbandoned(to) ||
+                    to->kingdom_id != carriage->kingdom_id) continue;
+                int32_t need = EffectiveReserveTarget(
+                                   sim, to, (CcGood)good) - to->stock[good] -
+                               CcSimIncomingGood(
+                                   sim, to->id, (CcGood)good);
+                if (need < minimum_load) continue;
+                for (int32_t source = 0;
+                     source < sim->settlement_count; ++source) {
+                    if (source == destination) continue;
+                    CcSettlement *from = &sim->settlements[source];
+                    if (CcSettlementIsAbandoned(from)) continue;
+                    int32_t surplus = TradeSurplus(
+                        sim, from, to, (CcGood)good);
+                    if (surplus < minimum_load) continue;
+                    int32_t route_slot = -1;
+                    CcId next_hop = 0U;
+                    int32_t path_cost = 0;
+                    int32_t path_capacity = 0;
+                    bool delivery_path = FindTradePath(
+                            sim, from->id, to->id, (CcGood)good,
+                            &route_slot, &next_hop, &path_cost,
+                            &path_capacity, route_used, true,
+                            carriage->kingdom_id, false,
+                            FreightCargoSlots(
+                                (CcGood)good, minimum_load));
+                    if (!delivery_path) {
+                        delivery_path = FindTradePath(
+                            sim, from->id, to->id, (CcGood)good,
+                            &route_slot, &next_hop, &path_cost,
+                            &path_capacity, route_used, true,
+                            carriage->kingdom_id, true,
+                            FreightCargoSlots(
+                                (CcGood)good, minimum_load));
+                        if (!delivery_path ||
+                            !CcSimRoyalCarriageCanUseRoute(
+                                sim, carriage->kingdom_id,
+                                sim->routes[route_slot].id)) continue;
+                    }
+                    int32_t load_slots = MinimumI32(
+                        CC_ROYAL_CARRIAGE_CARGO_SLOTS,
+                        MinimumI32(
+                            path_capacity,
+                            MinimumI32(
+                                FreightCargoSlots((CcGood)good, need),
+                                FreightCargoSlots((CcGood)good, surplus))));
+                    bool urgent = RoyalTradeIsUrgent(
+                        sim, &archive_chain, to, (CcGood)good);
+                    int32_t minimum_cargo_slots = MinimumI32(
+                        2, path_capacity);
+                    if (load_slots < minimum_cargo_slots && !urgent) continue;
+                    int32_t reposition_cost = 0;
+                    if (carriage->location_id != from->id &&
+                        !FindTradePath(
+                            sim, carriage->location_id, from->id,
+                            CC_GOOD_FOOD, NULL, NULL,
+                            &reposition_cost, NULL, NULL, true,
+                            carriage->kingdom_id, false, 1)) continue;
+                    bool military_supply = WarWeeklyNeed(
+                        sim, to, (CcGood)good) > 0;
+                    CcMoney buyer_coins = military_supply ?
+                        to->war_chest : to->market_coins;
+                    CcKingdom *buyer_kingdom = KingdomMutable(
+                        sim, to->kingdom_id);
+                    bool essential_credit = IronLedgerWillFund(
+                        to, (CcGood)good);
+                    CcMoney credit_available = essential_credit ?
+                        IronLedgerCreditAvailable(sim, buyer_kingdom) : 0;
+                    int32_t required_units = urgent ? minimum_load :
+                        MaximumI32(minimum_load,
+                            (minimum_cargo_slots - 1) *
+                                FreightUnitsPerCargoSlot((CcGood)good) + 1);
+                    CcMoney minimum_cost =
+                        (CcMoney)required_units *
+                            MaximumI32(1, from->price[good]) +
+                        RoyalTradeRouteToll(
+                            sim, &sim->routes[route_slot],
+                            carriage->kingdom_id);
+                    if (buyer_coins + credit_available < minimum_cost) {
+                        continue;
+                    }
+                    int32_t score = RoyalTradeScore(
+                        sim, &archive_chain, to, (CcGood)good,
+                        need, surplus, path_cost, reposition_cost);
+                    if (score > best_score) {
+                        best_score = score;
+                        best_source = source;
+                        best_destination = destination;
+                        best_route = route_slot;
+                        best_path_capacity = path_capacity;
+                        best_minimum_cargo_slots = urgent ?
+                            1 : minimum_cargo_slots;
+                        best_hop = next_hop;
+                        best_good = (CcGood)good;
+                    }
+                }
+            }
+        }
+        if (best_source < 0 || best_destination < 0 || best_route < 0) {
+            BlockRoyalTradeDemand(sim, carriage, &archive_chain);
+            continue;
+        }
+        CcSettlement *source = &sim->settlements[best_source];
+        if (carriage->location_id != source->id) {
+            (void)StartRoyalRepositioningLeg(sim, carriage, source->id);
+            continue;
+        }
+        (void)CreateTradeShipment(
+            sim, carriage, best_route, best_hop, best_good, source,
+            &sim->settlements[best_destination],
+            best_path_capacity, best_minimum_cargo_slots, route_used);
     }
 }
 
@@ -10267,7 +11381,8 @@ static void StartCourierLeg(CcSim *sim, CcCourier *courier)
     CcId next_hop = 0U;
     if (!FindTradePath(sim, courier->current_settlement_id,
                        courier->destination_settlement_id, CC_GOOD_FOOD,
-                       &route_slot, &next_hop, NULL, NULL, true)) {
+                       &route_slot, &next_hop, NULL, NULL, NULL,
+                       true, 0U, false, 1)) {
         courier->status = CC_COURIER_LOST;
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(text, sizeof(text),
@@ -11223,10 +12338,24 @@ static void UpdateThreats(CcSim *sim)
 static int32_t ActiveShipmentsForKingdom(const CcSim *sim, CcId kingdom_id)
 {
     int32_t count = 0;
+    const CcRoyalCarriage *carriage = CcSimRoyalCarriage(
+        sim, kingdom_id);
+    if (carriage != NULL &&
+        (carriage->mode == CC_ROYAL_CARRIAGE_DELIVERING ||
+         (carriage->mode == CC_ROYAL_CARRIAGE_IDLE &&
+          carriage->trips_completed + carriage->cargo_losses > 0 &&
+          carriage->departure_day > 0 &&
+          sim->current_day - carriage->departure_day <= 7))) {
+        count += 1;
+    }
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         const CcShipment *shipment = &sim->shipments[i];
+        if (RoyalCarriageForShipmentConst(sim, shipment->id) != NULL) {
+            continue;
+        }
         const CcSettlement *origin = CcSimSettlement(sim, shipment->origin_id);
-        if (shipment->status == CC_SHIPMENT_TRAVELLING && origin != NULL &&
+        if ((shipment->status == CC_SHIPMENT_TRAVELLING ||
+             shipment->status == CC_SHIPMENT_BLOCKED) && origin != NULL &&
             origin->kingdom_id == kingdom_id) count += 1;
     }
     return count;
@@ -12244,6 +13373,7 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
             ExpireSituations(sim);
             next_situation_expiry = NextSituationExpiryDay(sim);
         }
+        AdvanceRoyalCarriages(sim);
         UpdateShipments(sim);
         AdvanceCouriers(sim);
         AdvanceServiceProjects(sim);
@@ -13501,6 +14631,21 @@ static void CreateJourneyTraffic(CcSim *sim,
     const CcRoute *route = CcSimRoute(sim, journey->route_id);
     if (origin == NULL || destination == NULL || route == NULL ||
         CcSimRouteCrossesKingdomBorder(sim, route->id)) return;
+    CcRoyalCarriage *carriage = NULL;
+    if (sim->schema_version >= 41U) {
+        for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+            CcRoyalCarriage *candidate = &sim->royal_carriages[i];
+            if (candidate->kingdom_id == destination->kingdom_id &&
+                candidate->location_id == origin->id &&
+                candidate->mode == CC_ROYAL_CARRIAGE_IDLE &&
+                candidate->active_shipment_id == 0U) {
+                carriage = candidate;
+                break;
+            }
+        }
+        /* The daily trade planner can dispatch when a carriage returns. */
+        if (carriage == NULL) return;
+    }
     CcGood good = CC_GOOD_FOOD;
     for (int32_t candidate = 1; candidate < CC_GOOD_COUNT; ++candidate) {
         if (origin->stock[candidate] > origin->stock[good]) {
@@ -13524,6 +14669,17 @@ static void CreateJourneyTraffic(CcSim *sim,
         .arrival_day = sim->current_day + route->travel_days,
         .status = CC_SHIPMENT_TRAVELLING
     };
+    if (carriage != NULL) {
+        carriage->route_id = route->id;
+        carriage->destination_id = destination->id;
+        carriage->target_id = destination->id;
+        carriage->active_shipment_id = shipment->id;
+        carriage->mode = CC_ROYAL_CARRIAGE_DELIVERING;
+        carriage->departure_day = shipment->departure_day;
+        carriage->arrival_day = shipment->arrival_day;
+        carriage->blocked_since_day = 0;
+        carriage->next_dispatch_day = sim->current_day + 7;
+    }
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
                    "%.24s sends %d %.16s toward %.24s after the Crownless intervention.",
@@ -13950,7 +15106,8 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
     *preview = (CcTravelPreview){
         .route_id = route->id,
         .destination_id = destination->id,
-        .provision_cost = base_fare + TradeRouteToll(sim, route),
+        .provision_cost = sim->schema_version >= 41U ? 0 :
+            base_fare + TradeRouteToll(sim, route),
         .travel_days = days,
         .claimed_condition = map != NULL ? map->recorded_condition : -1,
         .claimed_danger = map != NULL ?
@@ -14035,8 +15192,11 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         full_contract_load;
     bool uncharted = !preview.charted && !sponsored_night_passage;
     int32_t days = preview.travel_days;
-    int32_t base_fare = days + (route->smuggler_route ? 3 : 0);
-    CcMoney toll = TradeRouteToll(sim, route);
+    /* Replay older journals with their original departure transfers. */
+    int32_t base_fare = sim->schema_version >= 41U ? 0 :
+        days + (route->smuggler_route ? 3 : 0);
+    CcMoney toll = sim->schema_version >= 41U ? 0 :
+        TradeRouteToll(sim, route);
     CcMoney fare = preview.provision_cost;
     const CcSettlement *origin = CcSimSettlement(
         sim, sim->player.location_id);
@@ -14172,7 +15332,8 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         (void)snprintf(
             text, sizeof(text),
             "%.16s and %.16s pull from %.16s toward %.16s %sfor %d watches with %d fodder.",
-            sim->horse_team[0].name, sim->horse_team[1].name,
+            sim->schema_version >= 40U ? CcPonyName(sim->pony_company.team[0]) : sim->horse_team[0].name,
+            sim->schema_version >= 40U ? CcPonyName(sim->pony_company.team[1]) : sim->horse_team[1].name,
             origin != NULL ? origin->name : "the waystation",
             destination->name,
             waited_for_morning ? "at first light " : "",
@@ -14580,6 +15741,59 @@ static void AdvanceJourneyRestWatch(CcSim *sim)
     }
 }
 
+const CcRoadSite *CcSimJourneyRoadSiteStop(const CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 39U ||
+        !sim->journey.active ||
+        sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) return NULL;
+    const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
+    if (route == NULL) return NULL;
+    for (int32_t i = 0; i < sim->road_site_count; ++i) {
+        const CcRoadSite *site = &sim->road_sites[i];
+        if (site->route_id != route->id ||
+            (sim->journey.road_site_stop_mask & (UINT32_C(1) << i)) != 0U)
+            continue;
+        int32_t progress = sim->journey.origin_id == route->from_id ?
+            site->progress_milli : 1000 - site->progress_milli;
+        int32_t distance = sim->carriage.progress_milli - progress;
+        if (distance >= 0 && distance <= 10) return site;
+    }
+    return NULL;
+}
+
+static bool ApplyRoadSiteStop(CcSim *sim, const CcCommand *command,
+                              char *error, size_t error_capacity)
+{
+    const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+    if (site == NULL || site->id != command->target_id) {
+        SetError(error, error_capacity, "Reach this roadside stop first.");
+        return false;
+    }
+    int32_t slot = (int32_t)(site - sim->road_sites);
+    sim->journey.road_site_stop_mask |= UINT32_C(1) << slot;
+    bool camping = command->kind == CC_COMMAND_CAMP_ROAD_SITE;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    if (camping) {
+        RecoverJourneyTeam(sim, 8, 5);
+        sim->journey.danger = ClampI32(sim->journey.danger + 3, 0, 95);
+        AdvanceJourneyRestWatch(sim);
+        (void)snprintf(text, sizeof(text),
+            "The company camps beside %.40s for one watch. The team rests while a guard keeps watch by the carriage.",
+            site->name);
+    } else {
+        (void)snprintf(text, sizeof(text),
+            "The company passes the turn to %.40s and follows the main road.",
+            site->name);
+    }
+    CcEvent *event = PushEvent(sim,
+        camping ? CC_EVENT_JOURNEY_CAMP : CC_EVENT_JOURNEY_BREAK,
+        sim->player.id, sim->journey.route_id,
+        sim->journey.parent_event_id, camping ? 3 : 0, text);
+    sim->journey.parent_event_id = event->id;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool ApplyJourneyStopAction(CcSim *sim, const CcCommand *command,
                                    char *error, size_t error_capacity)
 {
@@ -14681,6 +15895,7 @@ void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks)
         sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
         sim->clock.tick > UINT64_MAX - (uint64_t)ticks) return;
     for (int32_t tick = 0; tick < ticks; ++tick) {
+        if (sim->schema_version >= 40U && sim->pony_company.encounter >= 0) break;
         if (!sim->journey.active ||
             sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) break;
         sim->clock.tick += 1U;
@@ -15629,6 +16844,11 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Command target is missing.");
         return false;
     }
+    if (sim->schema_version >= 40U && sim->pony_company.encounter >= 0 &&
+        (command->kind < CC_COMMAND_MEET_PONY || command->kind > CC_COMMAND_LEAVE_PONY)) {
+        SetError(error, error_capacity, "Finish your pony visit before continuing.");
+        return false;
+    }
     bool dungeon_action =
         command->kind == CC_COMMAND_MOVE_DUNGEON ||
         command->kind == CC_COMMAND_SEARCH_DUNGEON ||
@@ -15664,6 +16884,11 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         return false;
     }
     switch (command->kind) {
+        case CC_COMMAND_MEET_PONY:
+        case CC_COMMAND_HELP_PONY:
+        case CC_COMMAND_SWAP_PONY:
+        case CC_COMMAND_LEAVE_PONY:
+            return CcPoniesApply(sim, command, error, error_capacity);
         case CC_COMMAND_TRADE:
             return ApplyTrade(sim, command, error, error_capacity);
         case CC_COMMAND_TRAVEL:
@@ -15722,6 +16947,9 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_LODGE_ROAD_HOUSE:
             return ApplyJourneyStopAction(
                 sim, command, error, error_capacity);
+        case CC_COMMAND_CAMP_ROAD_SITE:
+        case CC_COMMAND_PASS_ROAD_SITE:
+            return ApplyRoadSiteStop(sim, command, error, error_capacity);
         case CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL:
             return ApplyGoblinTunnelTraversal(
                 sim, command, error, error_capacity);
@@ -15872,7 +17100,7 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
      CC_MAX_SITUATIONS + CC_MAX_FRONTS + CC_MAX_QUEST_OUTCOMES + \
      CC_MAX_CHARACTERS + CC_MAX_EVENTS + \
      CC_CARRIAGE_HORSE_COUNT + \
-     CC_MAX_STABLE_HORSES + 4)
+     CC_MAX_STABLE_HORSES + CC_MAX_KINGDOMS + 4)
 
 typedef struct CcIdentityLedger {
     CcId ids[CC_MAX_TRACKED_IDENTITIES];
@@ -15938,6 +17166,25 @@ static bool ValidateIdentityState(const CcSim *sim,
         TRACK_ID(sim->factions[i].id, CC_ENTITY_FACTION);
     for (int32_t i = 0; i < sim->shipment_count; ++i)
         TRACK_ID(sim->shipments[i].id, CC_ENTITY_SHIPMENT);
+    if (sim->schema_version >= 38U) {
+        if (sim->royal_trade_week != sim->current_day / 7) {
+            SetError(error, error_capacity,
+                     "Royal route usage week is invalid.");
+            return false;
+        }
+        for (int32_t route = 0; route < sim->route_count; ++route) {
+            if (sim->royal_route_slots_used[route] < 0 ||
+                sim->royal_route_slots_used[route] > CC_SIM_MAX_UNITS) {
+                SetError(error, error_capacity,
+                         "Royal route usage is invalid.");
+                return false;
+            }
+        }
+        for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+            TRACK_ID(sim->royal_carriages[i].id,
+                     CC_ENTITY_ROYAL_CARRIAGE);
+        }
+    }
     if (sim->schema_version >= 11U) {
         for (int32_t i = 0; i < sim->courier_count; ++i)
             TRACK_ID(sim->couriers[i].id, CC_ENTITY_COURIER);
@@ -16032,12 +17279,22 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 32U ||
                          sim->schema_version == 33U ||
                          sim->schema_version == 34U ||
-                         sim->schema_version == 35U;
+                         sim->schema_version == 35U ||
+                         sim->schema_version == 36U ||
+                         sim->schema_version == 37U ||
+                         sim->schema_version == 38U ||
+                         sim->schema_version == 39U ||
+                         sim->schema_version == 40U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 40U && sim->generator_version == 25U) ||
+        (sim->schema_version == 39U && sim->generator_version == 25U) ||
+        (sim->schema_version == 38U && sim->generator_version == 25U) ||
+        (sim->schema_version == 37U && sim->generator_version == 25U) ||
+        (sim->schema_version == 36U && sim->generator_version == 25U) ||
         (sim->schema_version == 35U && sim->generator_version == 25U) ||
         (sim->schema_version == 34U && sim->generator_version == 25U) ||
         (sim->schema_version == 33U && sim->generator_version == 25U) ||
@@ -16120,6 +17377,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         sim->treasure_count < 0 || sim->treasure_count > CC_MAX_TREASURES ||
         sim->faction_count < 0 || sim->faction_count > CC_MAX_FACTIONS ||
         sim->shipment_count < 0 || sim->shipment_count > CC_MAX_SHIPMENTS ||
+        sim->royal_carriage_count < 0 ||
+        sim->royal_carriage_count > CC_MAX_KINGDOMS ||
+        (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+         sim->royal_carriage_count != sim->kingdom_count) ||
         sim->courier_count < 0 || sim->courier_count > CC_MAX_COURIERS ||
         sim->bandit_count < 0 || sim->bandit_count > CC_MAX_BANDITS ||
         sim->monster_count < 0 || sim->monster_count > CC_MAX_MONSTERS ||
@@ -16218,7 +17479,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_DRAGON_TERRITORY_LOST ||
+                event->kind > CC_EVENT_ROYAL_CARRIAGE_REROUTED ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||
@@ -16611,9 +17872,134 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             shipment->quantity < 1 ||
             shipment->quantity > CC_SIM_MAX_UNITS ||
             shipment->status < CC_SHIPMENT_UNUSED ||
-            shipment->status > CC_SHIPMENT_LOST || !capacity_valid) {
+            shipment->status >
+                (sim->schema_version >= 38U ?
+                 CC_SHIPMENT_BLOCKED : CC_SHIPMENT_LOST) ||
+            !capacity_valid) {
             SetError(error, error_capacity, "Shipment data is invalid.");
             return false;
+        }
+    }
+    if (sim->schema_version >= 38U) {
+        for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+            const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+            const CcSettlement *location = CcSimSettlement(
+                sim, carriage->location_id);
+            const CcSettlement *destination = CcSimSettlement(
+                sim, carriage->destination_id);
+            const CcSettlement *target = CcSimSettlement(
+                sim, carriage->target_id);
+            const CcRoute *route = CcSimRoute(sim, carriage->route_id);
+            const CcShipment *shipment = NULL;
+            for (int32_t slot = 0; slot < sim->shipment_count; ++slot) {
+                if (sim->shipments[slot].id ==
+                    carriage->active_shipment_id) {
+                    shipment = &sim->shipments[slot];
+                    break;
+                }
+            }
+            bool idle = carriage->mode == CC_ROYAL_CARRIAGE_IDLE;
+            bool repositioning =
+                carriage->mode == CC_ROYAL_CARRIAGE_REPOSITIONING;
+            bool delivering =
+                carriage->mode == CC_ROYAL_CARRIAGE_DELIVERING;
+            bool blocked = carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED;
+            bool waiting_capacity = carriage->mode ==
+                CC_ROYAL_CARRIAGE_WAITING_CAPACITY;
+            bool route_connects = route != NULL && destination != NULL &&
+                ((route->from_id == carriage->location_id &&
+                  route->to_id == carriage->destination_id) ||
+                 (route->to_id == carriage->location_id &&
+                  route->from_id == carriage->destination_id));
+            bool trip_timing = carriage->departure_day >= 1 &&
+                carriage->departure_day <= sim->current_day &&
+                carriage->arrival_day > sim->current_day && route != NULL &&
+                (int64_t)carriage->arrival_day ==
+                    (int64_t)carriage->departure_day + route->travel_days;
+            bool mode_valid =
+                (idle && carriage->active_shipment_id == 0U &&
+                 carriage->route_id == 0U &&
+                 carriage->destination_id == 0U &&
+                 carriage->target_id == 0U &&
+                 carriage->arrival_day == 0 &&
+                 carriage->blocked_since_day == 0) ||
+                (repositioning && carriage->active_shipment_id == 0U &&
+                 route_connects && target != NULL && trip_timing &&
+                 carriage->blocked_since_day == 0) ||
+                (delivering && shipment != NULL &&
+                 shipment->status == CC_SHIPMENT_TRAVELLING &&
+                 shipment->origin_id == carriage->location_id &&
+                 shipment->route_id == carriage->route_id &&
+                 shipment->destination_id == carriage->destination_id &&
+                 shipment->final_destination_id == carriage->target_id &&
+                 route_connects && trip_timing &&
+                 carriage->blocked_since_day == 0) ||
+                (blocked && target != NULL && route_connects &&
+                 carriage->arrival_day == 0 &&
+                 carriage->blocked_since_day >= 1 &&
+                 carriage->blocked_since_day <= sim->current_day &&
+                 ((carriage->active_shipment_id == 0U &&
+                   shipment == NULL) ||
+                  (shipment != NULL &&
+                   shipment->status == CC_SHIPMENT_BLOCKED &&
+                   shipment->final_destination_id ==
+                       carriage->target_id))) ||
+                (waiting_capacity && target != NULL && route_connects &&
+                 carriage->arrival_day == 0 &&
+                 carriage->blocked_since_day == 0 && shipment != NULL &&
+                 shipment->status == CC_SHIPMENT_BLOCKED &&
+                 shipment->final_destination_id == carriage->target_id);
+            if (CcIdKind(carriage->id) != CC_ENTITY_ROYAL_CARRIAGE ||
+                carriage->kingdom_id != sim->kingdoms[i].id ||
+                location == NULL ||
+                carriage->mode < CC_ROYAL_CARRIAGE_IDLE ||
+                carriage->mode > CC_ROYAL_CARRIAGE_WAITING_CAPACITY ||
+                carriage->condition < 0 || carriage->condition > 100 ||
+                carriage->trips_completed < 0 ||
+                carriage->trips_completed > CC_SIM_MAX_UNITS ||
+                carriage->cargo_losses < 0 ||
+                carriage->cargo_losses > CC_SIM_MAX_UNITS ||
+                carriage->departure_day < 0 ||
+                carriage->departure_day > sim->current_day ||
+                carriage->next_dispatch_day < 0 ||
+                carriage->next_dispatch_day > sim->current_day + 7 ||
+                (shipment != NULL &&
+                 (CcSimSettlement(sim,
+                     shipment->final_destination_id)->kingdom_id !=
+                      carriage->kingdom_id ||
+                  FreightCargoSlots(shipment->good,
+                                    shipment->quantity) >
+                      CC_ROYAL_CARRIAGE_CARGO_SLOTS)) ||
+                !mode_valid) {
+                if (error != NULL && error_capacity > 0U) {
+                    (void)snprintf(
+                        error, error_capacity,
+                        "Royal carriage %d state is invalid"
+                        " (mode=%d route=%d timing=%d link=%d).",
+                        i, (int32_t)carriage->mode,
+                        route_connects ? 1 : 0, trip_timing ? 1 : 0,
+                        shipment != NULL ? 1 : 0);
+                }
+                return false;
+            }
+        }
+        for (int32_t shipment_slot = 0;
+             shipment_slot < sim->shipment_count; ++shipment_slot) {
+            const CcShipment *shipment = &sim->shipments[shipment_slot];
+            if (shipment->status != CC_SHIPMENT_TRAVELLING &&
+                shipment->status != CC_SHIPMENT_BLOCKED) continue;
+            int32_t links = 0;
+            for (int32_t carriage_slot = 0;
+                 carriage_slot < sim->royal_carriage_count;
+                 ++carriage_slot) {
+                if (sim->royal_carriages[carriage_slot].active_shipment_id ==
+                    shipment->id) links += 1;
+            }
+            if (links != 1) {
+                SetError(error, error_capacity,
+                         "Active shipment carriage link is invalid.");
+                return false;
+            }
         }
     }
     if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
@@ -17651,6 +19037,11 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             SetError(error, error_capacity, "World clock state is invalid.");
             return false;
         }
+        if (sim->schema_version >= 39U &&
+            (sim->journey.road_site_stop_mask >> CC_MAX_ROAD_SITES) != 0U) {
+            SetError(error, error_capacity, "Roadside stop history is invalid.");
+            return false;
+        }
         if (sim->journey.active) {
             bool situation_valid = sim->journey.situation_id == 0U ||
                 CcSimSituation(sim, sim->journey.situation_id) != NULL;
@@ -17687,7 +19078,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 sim->journey.encounter_subticks < 0 ||
                 sim->journey.encounter_subticks >
                     sim->journey.total_subticks ||
-                sim->journey.fare_reserved < 1 ||
+                sim->journey.fare_reserved < 0 ||
                 sim->journey.pace < CC_JOURNEY_PACE_CAREFUL ||
                 sim->journey.pace > CC_JOURNEY_PACE_PUSH ||
                 (sim->journey.ambush_warned &&
@@ -17792,6 +19183,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         }
     }
     SetError(error, error_capacity, "");
+    if (sim->schema_version >= 40U && !CcPoniesValidate(sim)) {
+        SetError(error, error_capacity, "Pony company state is invalid.");
+        return false;
+    }
     return true;
 }
 
@@ -17847,6 +19242,9 @@ uint64_t CcSimHash(const CcSim *sim)
     if (sim->schema_version >= 9U) HASH_VALUE(sim->treasure_count);
     HASH_VALUE(sim->faction_count);
     HASH_VALUE(sim->shipment_count);
+    if (sim->schema_version >= 38U) {
+        HASH_VALUE(sim->royal_carriage_count);
+    }
     HASH_VALUE(sim->bandit_count);
     HASH_VALUE(sim->monster_count);
     HASH_VALUE(sim->dungeon_count);
@@ -17991,6 +19389,24 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(item->final_destination_id); HASH_VALUE(item->route_id);
         HASH_VALUE(item->good); HASH_VALUE(item->quantity);
         HASH_VALUE(item->departure_day); HASH_VALUE(item->arrival_day); HASH_VALUE(item->status);
+    }
+    if (sim->schema_version >= 38U) {
+        HASH_VALUE(sim->royal_trade_week);
+        for (int32_t route = 0; route < sim->route_count; ++route) {
+            HASH_VALUE(sim->royal_route_slots_used[route]);
+        }
+        for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+            const CcRoyalCarriage *item = &sim->royal_carriages[i];
+            HASH_VALUE(item->id); HASH_VALUE(item->kingdom_id);
+            HASH_VALUE(item->location_id); HASH_VALUE(item->route_id);
+            HASH_VALUE(item->destination_id); HASH_VALUE(item->target_id);
+            HASH_VALUE(item->active_shipment_id); HASH_VALUE(item->mode);
+            HASH_VALUE(item->departure_day); HASH_VALUE(item->arrival_day);
+            HASH_VALUE(item->blocked_since_day);
+            HASH_VALUE(item->next_dispatch_day);
+            HASH_VALUE(item->condition);
+            HASH_VALUE(item->trips_completed); HASH_VALUE(item->cargo_losses);
+        }
     }
     if (sim->schema_version >= 11U) {
         for (int32_t i = 0; i < sim->courier_count; ++i) {
@@ -18489,6 +19905,9 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(sim->journey.pace);
             HASH_VALUE(sim->journey.ambush_warned);
         }
+        if (sim->schema_version >= 39U) {
+            HASH_VALUE(sim->journey.road_site_stop_mask);
+        }
         HASH_VALUE(sim->journey.parent_event_id);
         HASH_VALUE(sim->carriage.mode);
         HASH_VALUE(sim->carriage.location_id);
@@ -18549,6 +19968,27 @@ uint64_t CcSimHash(const CcSim *sim)
         if (sim->schema_version >= 35U) {
             HASH_VALUE(sim->archives.abbot_character_id);
             HASH_VALUE(sim->archives.stewardship_rank);
+        }
+    }
+    if (sim->schema_version >= 40U) {
+        HASH_VALUE(sim->pony_company.team[0]);
+        HASH_VALUE(sim->pony_company.team[1]);
+        HASH_VALUE(sim->pony_company.encounter);
+        for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
+            const CcPony *pony = &sim->pony_company.ponies[i];
+            HASH_VALUE(pony->route_id);
+            HASH_VALUE(pony->last_seen_route);
+            HASH_VALUE(pony->bond);
+            HASH_VALUE(pony->quests_completed);
+            HASH_VALUE(pony->releases);
+            HASH_VALUE(pony->last_met_day);
+            HASH_VALUE(pony->quest_kind);
+            HASH_VALUE(pony->quest_amount);
+            HASH_VALUE(pony->health);
+            HASH_VALUE(pony->fatigue);
+            HASH_VALUE(pony->hunger);
+            HASH_VALUE(pony->seen);
+            HASH_VALUE(pony->ready);
         }
     }
 #undef HASH_VALUE

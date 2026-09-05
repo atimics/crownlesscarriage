@@ -53,6 +53,11 @@ static void TravelAndArrive(CcSim *sim, CcId destination, char *error,
         .target_id = destination
     };
     CC_CHECK(CcSimApply(sim, &travel, error, error_capacity));
+    CcCommand careful = {
+        .kind = CC_COMMAND_SET_JOURNEY_PACE,
+        .amount = CC_JOURNEY_PACE_CAREFUL
+    };
+    CC_CHECK(CcSimApply(sim, &careful, error, error_capacity));
     AdvanceUntilStop(sim);
     CC_CHECK(!sim->journey.active);
 }
@@ -103,6 +108,8 @@ int main(void)
 
     CcSim tolled_road;
     CcSimInit(&tolled_road, UINT32_C(0x7011ed));
+    /* Historical command replay keeps the original paid-departure rule. */
+    tolled_road.schema_version = 40U;
     tolled_road.player.coins = 100;
     tolled_road.routes[0].closed = true;
     tolled_road.routes[0].security = 100;

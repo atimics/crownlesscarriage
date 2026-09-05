@@ -12,6 +12,11 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
                  char *error, size_t error_capacity);
 bool CcSaveRead(const char *path, CcSim *sim,
                 char *error, size_t error_capacity);
+bool CcSaveEncode(const CcSim *sim, unsigned char **bytes, size_t *length,
+                  char *error, size_t error_capacity);
+bool CcSaveDecode(const unsigned char *bytes, size_t length, CcSim *sim,
+                  char *error, size_t error_capacity);
+void CcSaveFreeBuffer(void *bytes);
 
 
 CcJournal *CcJournalStart(const char *path, const CcSim *sim,

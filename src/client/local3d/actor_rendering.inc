@@ -583,10 +583,10 @@ static bool DrawNpcArchetypePose3D(
                       silhouette_gain,
                   &face, expression, false);
     RestoreWorldLighting();
-    if (visual_style.hero_ready) {
+    if (visual_style.hero.ready) {
         float ink_strength = CC_HERO_INK_STRENGTH;
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_ink_strength_location,
+        SetShaderValue(visual_style.hero.shader,
+                       visual_style.hero.ink_strength_location,
                        &ink_strength, SHADER_UNIFORM_FLOAT);
     }
     return true;
@@ -841,7 +841,14 @@ static void DrawVisibleNpcFigure3D(Vector3 position, float size_hint,
                                    Color accent, float phase,
                                    CcTraversalMode mode, Vector3 focus)
 {
+    if (conversation_focus_active && conversation_focus_seed == seed) {
+        position = conversation_focus_agent.position;
+        yaw = conversation_focus_agent.facing_yaw;
+        mode = CC_TRAVERSAL_IDLE;
+        phase = 0.0f;
+    }
     if (!SceneryPointVisible(position.x, position.z, focus)) return;
+    RememberPresentedPerson(position, size_hint, seed, role);
     DrawNpcFigure3D(position, size_hint, yaw, seed, role, accent, phase, mode);
 }
 
@@ -850,7 +857,14 @@ static void DrawVisibleNpcPoseFigure3D(
     CcNpcRole role, Color accent, float phase, CcTraversalMode mode,
     int32_t fixed_pose, Vector3 focus)
 {
+    if (conversation_focus_active && conversation_focus_seed == seed) {
+        position = conversation_focus_agent.position;
+        yaw = conversation_focus_agent.facing_yaw;
+        mode = CC_TRAVERSAL_IDLE;
+        phase = 0.0f;
+    }
     if (!SceneryPointVisible(position.x, position.z, focus)) return;
+    RememberPresentedPerson(position, size_hint, seed, role);
     DrawNpcFigurePose3D(position, size_hint, yaw, seed, role, accent, phase,
                         mode, fixed_pose);
 }
@@ -1005,6 +1019,7 @@ static Matrix NpcModuleTransform(Vector3 origin, Vector3 right, Vector3 up,
 static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
 {
     if (skin == NULL || !skin->valid) return;
+    UseCharacterLighting();
     Vector3 up = PhysicsNormalizeOr(FromLimbVector(skin->body_up),
                                     (Vector3){0.0f, 1.0f, 0.0f});
     Vector3 right = PhysicsNormalizeOr(FromLimbVector(skin->body_right),
@@ -1348,6 +1363,21 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
 
     const CcHumanoidSkinBonePose *head_bone =
         &skin->bones[CC_HUMANOID_SKIN_HEAD];
+    if (featured_hero || appearance->role == CC_NPC_ROLE_GUARD) {
+        const CcHumanoidSkinBone hands[] = {
+            CC_HUMANOID_SKIN_HAND_LEFT, CC_HUMANOID_SKIN_HAND_RIGHT,
+        };
+        for (int32_t side = 0; side < 2; ++side) {
+            const CcHumanoidSkinBonePose *hand = &skin->bones[hands[side]];
+            Vector3 center = Vector3Lerp(FromLimbVector(hand->head),
+                                         FromLimbVector(hand->tail), 0.5f);
+            drew = DrawNpcDynamicModule(NPC_DYNAMIC_HAND,
+                NpcModuleTransform(center, FromLimbVector(hand->right),
+                    FromLimbVector(hand->up), FromLimbVector(hand->forward),
+                    (Vector3){0.18f * mass, 0.22f, 0.16f * mass}),
+                appearance->skin) && drew;
+        }
+    }
     Vector3 head = FromLimbVector(
         skin->sockets[CC_HUMANOID_SOCKET_HEAD].position);
     Vector3 head_right = FromLimbVector(head_bone->right);
@@ -1423,7 +1453,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                                    FromLimbVector(shoulder->right),
                                    FromLimbVector(shoulder->up),
                                    FromLimbVector(shoulder->forward),
-                                   (Vector3){(featured_hero ? 0.15f : 0.22f) *
+                                   (Vector3){(featured_hero ? 0.17f : 0.24f) *
                                                  mass * shoulder_scale,
                                              (featured_hero ? 0.15f : 0.20f) *
                                                  shoulder_scale,
@@ -3835,7 +3865,22 @@ static void PresentTarget(RenderTexture2D target, Rectangle destination)
 {
     Rectangle source = {0.0f, 0.0f, (float)target.texture.width,
                         -(float)target.texture.height};
+    bool grade_at_source = false;
     if (visual_style.grade_ready) {
+        if (art_grade_target.texture.width != target.texture.width ||
+            art_grade_target.texture.height != target.texture.height) {
+            if (IsRenderTextureValid(art_grade_target)) {
+                UnloadRenderTexture(art_grade_target);
+            }
+            art_grade_target = LoadRenderTexture(
+                target.texture.width, target.texture.height);
+            if (IsRenderTextureValid(art_grade_target)) {
+                SetTextureFilter(art_grade_target.texture, TEXTURE_FILTER_POINT);
+            }
+        }
+        grade_at_source = IsRenderTextureValid(art_grade_target);
+        // Paint each art pixel once before enlarging it for the window.
+        if (grade_at_source) BeginTextureMode(art_grade_target);
         BeginShaderMode(visual_style.grade);
         SetShaderValueTexture(visual_style.grade,
                               visual_style.palette_lut_location,
@@ -3861,9 +3906,17 @@ static void PresentTarget(RenderTexture2D target, Rectangle destination)
                        &visual_style.presentation_practical_glow,
                        SHADER_UNIFORM_FLOAT);
     }
-    DrawTexturePro(target.texture, source, destination, (Vector2){0.0f, 0.0f},
+    Rectangle paint_bounds = grade_at_source ?
+        (Rectangle){0.0f, 0.0f, (float)target.texture.width,
+                     (float)target.texture.height} : destination;
+    DrawTexturePro(target.texture, source, paint_bounds, (Vector2){0.0f, 0.0f},
                    0.0f, WHITE);
     if (visual_style.grade_ready) EndShaderMode();
+    if (grade_at_source) {
+        EndTextureMode();
+        DrawTexturePro(art_grade_target.texture, source, destination,
+                       (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
+    }
 }
 
 static Color ArtLightBackground(ArtLightProfileId profile_id)
@@ -4194,6 +4247,9 @@ static void BeginWorldLighting(Camera3D camera,
                           (float)atmosphere_fog.b / 255.0f};
     float fog_near = profile->fog_near * atmosphere.fog_distance_scale;
     float fog_far = profile->fog_far * atmosphere.fog_distance_scale;
+    float horizon_fog = profile_id == ART_LIGHT_STORYBOOK ? 1.0f : 0.0f;
+    SetShaderValue(visual_style.world, visual_style.horizon_fog_location,
+                   &horizon_fog, SHADER_UNIFORM_FLOAT);
     float depth_strength = profile->depth_strength * atmosphere.depth_scale;
     float focal_contrast = profile->focal_contrast * atmosphere.focal_scale;
     float character_rim_tint[3] = {
@@ -4284,6 +4340,9 @@ static void BeginWorldLighting(Camera3D camera,
         SetShaderValue(painted->shader, painted->focal_contrast_location,
                        &focal_contrast, SHADER_UNIFORM_FLOAT);
     }
+    visual_style.foreground_reveal_valid = true;
+    visual_style.foreground_reveal = 0.0f;
+    visual_style.terrain_surface = false;
     const float foreground_reveal = 0.0f;
     SetShaderValue(visual_style.world,
                    visual_style.foreground_reveal_location,
@@ -4333,32 +4392,37 @@ static void BeginWorldLighting(Camera3D camera,
                        visual_style.foliage_depth_strength_location,
                        &depth_strength, SHADER_UNIFORM_FLOAT);
     }
-    if (visual_style.hero_ready) {
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_light_direction_location, direction,
+    CharacterLightingStyle *character_styles[] = {
+        &visual_style.hero, &visual_style.character,
+    };
+    for (int32_t index = 0; index < 2; ++index) {
+        const CharacterLightingStyle *style = character_styles[index];
+        if (!style->ready) continue;
+        SetShaderValue(style->shader,
+                       style->light_direction_location, direction,
                        SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_camera_position_location,
+        SetShaderValue(style->shader,
+                       style->camera_position_location,
                        camera_position, SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_shadow_color_location,
+        SetShaderValue(style->shader,
+                       style->shadow_color_location,
                        shadow_color, SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_fog_color_location, fog_color,
+        SetShaderValue(style->shader,
+                       style->fog_color_location, fog_color,
                        SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_fog_near_location,
+        SetShaderValue(style->shader,
+                       style->fog_near_location,
                        &fog_near,
                        SHADER_UNIFORM_FLOAT);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_fog_far_location,
+        SetShaderValue(style->shader,
+                       style->fog_far_location,
                        &fog_far,
                        SHADER_UNIFORM_FLOAT);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_rim_tint_location,
+        SetShaderValue(style->shader,
+                       style->rim_tint_location,
                        character_rim_tint, SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_rim_strength_location,
+        SetShaderValue(style->shader,
+                       style->rim_strength_location,
                        &character_rim_strength, SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.npc_ready) {
@@ -4632,6 +4696,44 @@ void CcLocalDrawNpcPortrait3D(const CcNpcAppearance *appearance,
     face_render_context = previous_face_context;
 
     PresentCharacterPortrait(bounds, appearance->accent);
+}
+
+void CcLocalDrawAvatarPreview3D(const CcLocalAgent *agent,
+                               RenderTexture2D target, Rectangle bounds)
+{
+    Vector3 center = Vector3Add(agent->position, (Vector3){0.0f, 0.85f, 0.0f});
+    CcHumanoidSkinPose skin;
+    CcHumanoidSkinPoseResolve(AgentRenderPose(agent), &skin);
+    Vector3 forward = skin.valid ? FromLimbVector(skin.bones[CC_HUMANOID_SKIN_HEAD].forward) :
+        (Vector3){sinf(agent->facing_yaw), 0.0f, cosf(agent->facing_yaw)};
+    Vector3 right = Vector3CrossProduct((Vector3){0, 1, 0}, forward);
+    Camera3D camera = {
+        .position = Vector3Add(center, Vector3Add(Vector3Scale(forward, 4.0f),
+            Vector3Add(Vector3Scale(right, 1.0f), (Vector3){0, 0.20f, 0}))),
+        .target = center, .up = {0.0f, 1.0f, 0.0f},
+        .fovy = 2.65f, .projection = CAMERA_ORTHOGRAPHIC
+    };
+    FaceRenderContext previous = face_render_context;
+    BeginTextureMode(target);
+    ClearBackground((Color){26, 40, 35, 255});
+    SetFaceRenderContext(camera, target.texture.width, target.texture.height);
+    BeginMode3D(camera);
+    BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
+    DrawCylinder((Vector3){agent->position.x, agent->position.y - 0.05f,
+                           agent->position.z}, 0.65f, 0.70f, 0.08f, 24,
+                 (Color){55, 66, 51, 255});
+    DrawBiomechanicalBiped(agent);
+    EndWorldLighting();
+    EndMode3D();
+    EndTextureMode();
+    face_render_context = previous;
+    float crop_width = fminf((float)target.texture.width,
+        (float)target.texture.height * bounds.width / bounds.height);
+    float crop_height = crop_width * bounds.height / bounds.width;
+    DrawTexturePro(target.texture,
+        (Rectangle){((float)target.texture.width - crop_width) * 0.5f,
+                    ((float)target.texture.height - crop_height) * 0.5f, crop_width, -crop_height},
+        bounds, (Vector2){0, 0}, 0, WHITE);
 }
 
 void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
@@ -4982,4 +5084,53 @@ static void DrawCourseRunners(const CcLocalCourse *course, Vector3 focus)
                       runner->agent.position.z},
             0.085f, runner->marker_color);
     }
+}
+
+void CcLocalDrawPonyPortrait(int32_t pony, bool known, Rectangle bounds)
+{
+    if (pony < 0 || pony >= CC_PONY_COUNT) return;
+    int32_t index = known ? pony : CC_PONY_COUNT;
+    RenderTexture2D *portrait = &pony_portraits[index];
+    if (!IsRenderTextureValid(*portrait)) {
+        CreatureModelCache *creature = &creature_models[CC_CREATURE_HORSE][CC_CREATURE_POSE_IDLE];
+        if (!creature->ready || !PoseQuadrupedCreature(creature, CC_CREATURE_HORSE, 0.0f, false, NULL)) return;
+        *portrait = LoadRenderTexture(64, 64);
+        if (!IsRenderTextureValid(*portrait)) return;
+        Camera3D camera = {
+            .position = {2.8f, 2.1f, 5.0f}, .target = {0.0f, 1.53f, 0.96f},
+            .up = {0.0f, 1.0f, 0.0f}, .fovy = 1.14f,
+            .projection = CAMERA_ORTHOGRAPHIC,
+        };
+        CreatureRenderPalette palette = CreaturePalette(CC_CREATURE_HORSE, PONY_COLORS[known ? pony : 0][0]);
+        Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
+            palette.skin, palette.secondary, palette.hide, palette.cloth,
+            palette.leather, palette.horn, palette.metal, palette.accent, palette.eye,
+        };
+        if (!known) {
+            for (int32_t i = 0; i < CC_NPC_ARCHETYPE_MATERIAL_COUNT; ++i)
+                colors[i] = (Color){114, 114, 114, 255};
+        }
+        BeginTextureMode(*portrait);
+        ClearBackground((Color){24, 28, 37, 255});
+        BeginMode3D(camera);
+        BeginWorldLighting(camera, &ROAD_ART_COMPOSITION);
+        SetIndexedPalette(colors, 0.38f, false, (Vector3){0}, false);
+        float remap = 0.0f;
+        SetShaderValue(visual_style.npc_skinned,
+            visual_style.npc_skinned_body_skin_remap_location, &remap, SHADER_UNIFORM_FLOAT);
+        DrawModel(creature->model, (Vector3){0}, 1.0f, WHITE);
+        EndWorldLighting();
+        EndMode3D();
+        EndTextureMode();
+        if (!known) {
+            Image gray = LoadImageFromTexture(portrait->texture);
+            ImageColorGrayscale(&gray);
+            ImageFormat(&gray, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+            UpdateTexture(portrait->texture, gray.data);
+            UnloadImage(gray);
+        }
+        SetTextureFilter(portrait->texture, TEXTURE_FILTER_POINT);
+    }
+    DrawTexturePro(portrait->texture, (Rectangle){0, 0, 64, -64},
+                   bounds, (Vector2){0}, 0.0f, WHITE);
 }

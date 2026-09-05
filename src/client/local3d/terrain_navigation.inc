@@ -1206,7 +1206,7 @@ static Vector2 StreetPathNodePoint(int32_t node)
                      ((float)row + 0.5f) * STREET_PATH_CELL_SIZE};
 }
 
-static bool StreetSegmentClear(Vector2 from, Vector2 to, float radius)
+static bool StreetSegmentClear(Vector2 from, Vector2 to, float radius, float minimum_normal)
 {
     float x = to.x - from.x;
     float z = to.y - from.y;
@@ -1230,7 +1230,7 @@ static bool StreetSegmentClear(Vector2 from, Vector2 to, float radius)
 
         if (height_change > step_length * 1.25f + 0.025f ||
             height_change < -step_length * 1.65f - 0.060f ||
-            sample_normal.y < 0.60f) {
+            sample_normal.y < minimum_normal) {
             return false;
         }
         previous = (Vector2){sample_x, sample_z};
@@ -1240,7 +1240,7 @@ static bool StreetSegmentClear(Vector2 from, Vector2 to, float radius)
 }
 
 static int32_t StreetPathNearestNode(Vector2 point, float radius,
-                                     bool require_point_connection)
+                                     bool require_point_connection, float minimum_normal)
 {
     int32_t center_column = (int32_t)floorf(point.x / STREET_PATH_CELL_SIZE);
     int32_t center_row = (int32_t)floorf(point.y / STREET_PATH_CELL_SIZE);
@@ -1260,7 +1260,7 @@ static int32_t StreetPathNearestNode(Vector2 point, float radius,
                 if (StreetPathBodyBlocked(candidate.x, candidate.y,
                                           radius + 0.025f) ||
                     (require_point_connection &&
-                     !StreetSegmentClear(point, candidate, radius))) {
+                     !StreetSegmentClear(point, candidate, radius, minimum_normal))) {
                     continue;
                 }
                 float x = candidate.x - point.x;
@@ -1366,20 +1366,20 @@ static int32_t StreetPathHeapPop(StreetPathSearch *search, int32_t goal)
 
 static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
                               Vector2 *points, int32_t capacity,
-                              float maximum_projection,
+                              float maximum_projection, float minimum_normal,
                               bool *target_projected_out)
 {
     if (target_projected_out != NULL) *target_projected_out = false;
     if (points == NULL || capacity <= 0) return 0;
     bool target_blocked = StreetPathBodyBlocked(to.x, to.y, radius);
     bool target_projected = target_blocked;
-    if (!target_blocked && StreetSegmentClear(from, to, radius)) {
+    if (!target_blocked && StreetSegmentClear(from, to, radius, minimum_normal)) {
         points[0] = to;
         return 1;
     }
 
-    int32_t start = StreetPathNearestNode(from, radius, true);
-    int32_t goal = StreetPathNearestNode(to, radius, !target_blocked);
+    int32_t start = StreetPathNearestNode(from, radius, true, minimum_normal);
+    int32_t goal = StreetPathNearestNode(to, radius, !target_blocked, minimum_normal);
     if (start < 0 || goal < 0) return 0;
     if (target_blocked) {
         Vector2 projected = StreetPathNodePoint(goal);
@@ -1422,7 +1422,7 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
             Vector2 next_point = StreetPathNodePoint(next);
             if (StreetPathBodyBlocked(next_point.x, next_point.y,
                                       radius + 0.025f) ||
-                !StreetSegmentClear(current_point, next_point, radius)) {
+                !StreetSegmentClear(current_point, next_point, radius, minimum_normal)) {
                 continue;
             }
             bool diagonal = neighbor_column[neighbor] != 0 &&
@@ -1508,7 +1508,7 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
         *target_projected_out = target_projected;
     }
     while (cursor < ordered_count - 1) {
-        if (StreetSegmentClear(current_point, resolved_target, radius)) {
+        if (StreetSegmentClear(current_point, resolved_target, radius, minimum_normal)) {
             if (point_count >= capacity) return 0;
             points[point_count++] = resolved_target;
             return point_count;
@@ -1518,7 +1518,7 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
              --candidate) {
             Vector2 candidate_point = StreetPathNodePoint(
                 search->heap[candidate]);
-            if (!StreetSegmentClear(current_point, candidate_point, radius)) {
+            if (!StreetSegmentClear(current_point, candidate_point, radius, minimum_normal)) {
                 continue;
             }
             chosen = candidate;
@@ -1530,7 +1530,7 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
         current_point = chosen_point;
         cursor = chosen;
     }
-    if (!StreetSegmentClear(current_point, resolved_target, radius) ||
+    if (!StreetSegmentClear(current_point, resolved_target, radius, minimum_normal) ||
         point_count >= capacity) return 0;
     points[point_count++] = resolved_target;
     return point_count;

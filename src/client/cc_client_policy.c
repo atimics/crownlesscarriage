@@ -6,7 +6,14 @@
 #include <stdio.h>
 #include <string.h>
 
-#define CC_CLIENT_PREFERENCES_VERSION 1U
+#define CC_CLIENT_PREFERENCES_VERSION 4U
+
+static bool ValidAvatar(uint32_t avatar)
+{
+    return avatar < 32768U && (avatar & 7U) < 6U &&
+        ((avatar >> 3U) & 7U) < 6U && ((avatar >> 6U) & 7U) < 6U &&
+        ((avatar >> 9U) & 7U) < 4U && ((avatar >> 12U) & 7U) < 6U;
+}
 
 static void SetPreferencesError(char *error, size_t capacity,
                                 const char *message)
@@ -18,7 +25,7 @@ static void SetPreferencesError(char *error, size_t capacity,
 void CcClientPreferencesDefault(CcClientPreferences *preferences)
 {
     if (preferences == NULL) return;
-    *preferences = (CcClientPreferences){0};
+    *preferences = (CcClientPreferences){.focus_hints = true};
 }
 
 bool CcClientPreferencesLoad(const char *path,
@@ -48,10 +55,27 @@ bool CcClientPreferencesLoad(const char *path,
     int reduced_motion = -1;
     bool valid = fscanf(file, "%31s %u", marker, &version) == 2 &&
         strcmp(marker, "CROWNLESS_PREFERENCES") == 0 &&
-        version == CC_CLIENT_PREFERENCES_VERSION &&
+        (version >= 1U && version <= CC_CLIENT_PREFERENCES_VERSION) &&
         fscanf(file, "%31s %d", setting, &reduced_motion) == 2 &&
         strcmp(setting, "reduced_motion") == 0 &&
         (reduced_motion == 0 || reduced_motion == 1);
+    int audio_mode = 0;
+    if (valid && version >= 2U) {
+        valid = fscanf(file, "%31s %d", setting, &audio_mode) == 2 &&
+            strcmp(setting, "audio_mode") == 0 && audio_mode >= 0 && audio_mode <= 2;
+    }
+    int text_size = 0, focus_hints = 1;
+    if (valid && version >= 3U) {
+        valid = fscanf(file, "%31s %d", setting, &text_size) == 2 &&
+            strcmp(setting, "text_size") == 0 && text_size >= 0 && text_size <= 2 &&
+            fscanf(file, "%31s %d", setting, &focus_hints) == 2 &&
+            strcmp(setting, "focus_hints") == 0 && (focus_hints == 0 || focus_hints == 1);
+    }
+    unsigned int avatar = 0U;
+    if (valid && version >= 4U) {
+        valid = fscanf(file, "%31s %u", setting, &avatar) == 2 &&
+            strcmp(setting, "avatar") == 0 && ValidAvatar(avatar);
+    }
     if (fclose(file) != 0) valid = false;
     if (!valid) {
         CcClientPreferencesDefault(preferences);
@@ -60,6 +84,10 @@ bool CcClientPreferencesLoad(const char *path,
         return false;
     }
     preferences->reduced_motion = reduced_motion != 0;
+    preferences->audio_mode = audio_mode;
+    preferences->text_size = text_size;
+    preferences->focus_hints = focus_hints != 0;
+    preferences->avatar = avatar;
     SetPreferencesError(error, error_capacity, "");
     return true;
 }
@@ -68,9 +96,12 @@ bool CcClientPreferencesSave(const char *path,
                              const CcClientPreferences *preferences,
                              char *error, size_t error_capacity)
 {
-    if (path == NULL || path[0] == '\0' || preferences == NULL) {
+    if (path == NULL || path[0] == '\0' || preferences == NULL ||
+        preferences->audio_mode < 0 || preferences->audio_mode > 2 ||
+        preferences->text_size < 0 || preferences->text_size > 2 ||
+        !ValidAvatar(preferences->avatar)) {
         SetPreferencesError(error, error_capacity,
-                            "Preferences path or state is missing.");
+                            "Preferences path or state is invalid.");
         return false;
     }
     char temporary[768];
@@ -87,9 +118,16 @@ bool CcClientPreferencesSave(const char *path,
         return false;
     }
     bool saved = fprintf(file, "CROWNLESS_PREFERENCES %u\n"
-                               "reduced_motion %d\n",
+                               "reduced_motion %d\n"
+                               "audio_mode %d\n"
+                               "text_size %d\n"
+                               "focus_hints %d\n"
+                               "avatar %u\n",
                          CC_CLIENT_PREFERENCES_VERSION,
-                         preferences->reduced_motion ? 1 : 0) > 0;
+                         preferences->reduced_motion ? 1 : 0,
+                         preferences->audio_mode, preferences->text_size,
+                         preferences->focus_hints ? 1 : 0,
+                         (unsigned int)preferences->avatar) > 0;
     saved = saved && fflush(file) == 0;
     if (fclose(file) != 0) saved = false;
     if (saved && rename(temporary, path) != 0) saved = false;
@@ -113,6 +151,22 @@ bool CcClientHitEffectVisible(bool reduced_motion,
 static float ClampPace(float pace)
 {
     return fmaxf(0.0f, fminf(1.0f, pace));
+}
+
+float CcClientTravelBlendStep(float blend, bool fast_forward, float delta_time)
+{
+    if (!isfinite(blend)) blend = 0.0f;
+    blend = ClampPace(blend);
+    if (!isfinite(delta_time) || delta_time <= 0.0f) return blend;
+    float step = fminf(delta_time, 0.1f) / 1.4f;
+    return ClampPace(blend + (fast_forward ? step : -step));
+}
+
+float CcClientTravelTimeScale(float blend)
+{
+    if (!isfinite(blend)) return 1.0f;
+    blend = ClampPace(blend);
+    return 1.0f + 7.0f * blend * blend * (3.0f - 2.0f * blend);
 }
 
 static float ClampUnit(float value)

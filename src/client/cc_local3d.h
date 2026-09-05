@@ -2,6 +2,8 @@
 #define CROWNLESS_LOCAL3D_H
 
 #include "client/cc_npc_appearance.h"
+#include "client/cc_local_viewport.h"
+#include "client/cc_soundscape.h"
 #include "locomotion/cc_limb.h"
 #include "locomotion/cc_humanoid.h"
 #include "locomotion/cc_multileg.h"
@@ -131,10 +133,13 @@ typedef struct CcLocalWorldCarriageState {
     float pace;
     float camera_weight;
     float camera_target;
+    float camera_heading_yaw;
+    float arrival_travel_weight;
     CcId route_id;
     bool visible;
     bool hero_embarked;
     bool town_arrival;
+    bool storybook_travel;
 } CcLocalWorldCarriageState;
 
 typedef enum CcLocalAtmospherePreset {
@@ -264,6 +269,12 @@ typedef struct CcSteppedPoseState {
     bool initialized;
 } CcSteppedPoseState;
 
+#include "client/cc_crew.h"
+void CcLocalCrewSetExchange(CcCrewExchange exchange);
+void CcLocalCrewSetSeat(int32_t seat);
+void CcLocalCrewBeginFrame(float delta_time);
+const CcCrewMember *CcLocalCrewDrawn(int32_t *count);
+
 typedef struct CcLocalAgent {
     Vector3 position;
     Vector3 velocity;
@@ -297,6 +308,7 @@ typedef struct CcLocalAgent {
     bool swimming;
     bool allow_downclimb;
     bool exact_target_valid;
+    bool interaction_navigation;
     float radius;
     float immersion;
     CcMorphologyPreset morphology;
@@ -397,6 +409,7 @@ typedef struct CcLocalCourse {
     float combat_event_seconds;
     double world_simulation_accumulator;
     bool alarm_active;
+    bool automatic_alarm;
     bool raiders_retreating;
     bool combat_origin_valid;
     bool raider_response_waypoint_active[CC_LOCAL_RAIDER_COUNT];
@@ -437,6 +450,7 @@ void CcLocalBindPlace(const CcSim *sim);
 void CcLocalBindOpenWorld(const CcWorldStream *stream);
 float CcLocalTerrainHeightAt(float x, float z);
 Vector3 CcLocalTerrainNormalAt(float x, float z);
+CcSoundCue CcLocalFootstepSurfaceAt(CcLocalSceneKind scene, float x, float z);
 
 void CcLocalAgentInit(CcLocalAgent *agent, Vector2 position, bool market_interior);
 void CcLocalAgentSetNpcAppearance(CcLocalAgent *agent, uint32_t seed,
@@ -549,6 +563,7 @@ float CcLocalCombatSkillCooldown(const CcLocalAgent *player,
 float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
 void CcLocalRendererInit(void);
+void CcLocalDrawPonyPortrait(int32_t pony, bool known, Rectangle bounds);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
 void CcLocalRendererSetReducedMotion(bool enabled);
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step);
@@ -567,6 +582,8 @@ void CcLocalDrawNpcPortrait3D(const CcNpcAppearance *appearance,
                               CcNpcPortraitExpression expression);
 void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
                                 Rectangle bounds);
+void CcLocalDrawAvatarPreview3D(const CcLocalAgent *agent,
+                               RenderTexture2D target, Rectangle bounds);
 void CcLocalDrawNpcReview3D(int32_t view, float clock,
                             RenderTexture2D target, Rectangle destination);
 void CcLocalDrawHeraldryReview3D(const CcSim *sim, float clock,
@@ -599,7 +616,7 @@ Vector2 CcLocalForkBranchEndInternal(int32_t branch_ordinal,
 float CcLocalRoadCheckpointSurfaceYInternal(float x, float z);
 float CcLocalRoadHorseLateralSpacingInternal(bool bridge_checkpoint);
 float CcLocalRoadHorseLongitudinalOffsetInternal(void);
-void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
+void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t selected_route,
                        float turn_progress, float clock,
                        RenderTexture2D target,
                        Rectangle destination);
@@ -615,4 +632,19 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
                            Rectangle destination);
 Vector2 CcLocalMove(Vector2 current, Vector2 delta, bool market_interior);
 
+typedef struct CcLocalPresentedPerson {
+    Vector3 position;
+    uint32_t seed;
+    CcNpcRole role;
+    float size;
+} CcLocalPresentedPerson;
+int32_t CcLocalPresentedPeople(CcLocalPresentedPerson *people, int32_t capacity);
+struct CcInteractionTarget;
+void CcLocalProjectInteraction(const CcLocalAgent *agent,
+    RenderTexture2D texture, Rectangle destination,
+    struct CcInteractionTarget *target);
+void CcLocalAgentStop(CcLocalAgent *agent);
+bool CcLocalAgentApproachInteraction(CcLocalAgent *agent, Vector2 point, float radius, bool interior);
+void CcLocalRendererSetInteractionUI(bool enabled);
+void CcLocalRendererSetConversationFocus(const Vector3 *position, uint32_t seed, float yaw);
 #endif

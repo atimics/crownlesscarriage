@@ -14,14 +14,27 @@ uniform vec3 fogColor;
 uniform float fogNear;
 uniform float fogFar;
 uniform float inkStrength;
+uniform float vertexColorsAreAlbedo;
 uniform vec3 characterRimTint;
 uniform float characterRimStrength;
 
 out vec4 finalColor;
 
+// Skin, cloth, leather, hair, metal, eye: dark, light, gloss, highlight.
+vec4 surfaceResponse(int surface)
+{
+    if (surface == 0) return vec4(0.78, 1.04, 8.0, 0.016);
+    if (surface == 1) return vec4(0.65, 1.00, 6.0, 0.006);
+    if (surface == 2) return vec4(0.58, 1.02, 12.0, 0.055);
+    if (surface == 3) return vec4(0.55, 0.94, 20.0, 0.045);
+    if (surface == 4) return vec4(0.48, 1.08, 24.0, 0.26);
+    return vec4(0.50, 0.95, 12.0, 0.005);
+}
+
 void main()
 {
     vec4 albedo = texture(texture0, fragTexCoord) * colDiffuse;
+    albedo *= mix(vec4(1.0), fragColor, vertexColorsAreAlbedo);
     vec3 normal = normalize(fragNormal);
     vec3 toLight = normalize(lightDirection);
     vec3 toCamera = normalize(cameraPosition - fragPosition);
@@ -30,17 +43,24 @@ void main()
     float wrapped = clamp((facing + 0.30) / 1.30, 0.0, 1.0);
     float lightBand = step(0.47, wrapped);
     float shade = mix(0.70, 1.03, lightBand);
-    float authoredPaint = 1.0 - step(0.98, fragColor.r);
+    float authoredPaint = (1.0 - step(0.98, fragColor.r)) *
+                          (1.0 - vertexColorsAreAlbedo);
     float authoredValue = fragColor.g < 0.375 ? 0.68 :
                           fragColor.g < 0.625 ? 0.86 : 1.05;
+    int surface = int(floor(fragColor.a * 8.0));
+    float materialStyle = float(surface < 6) * (1.0 - vertexColorsAreAlbedo);
+    vec4 response = surfaceResponse(surface);
     float skinMask = smoothstep(0.40, 0.52, albedo.r) *
                      (1.0 - smoothstep(0.88, 0.96, albedo.r)) *
                      smoothstep(0.22, 0.32, albedo.g) *
                      (1.0 - smoothstep(0.78, 0.88, albedo.g)) *
                      smoothstep(0.14, 0.22, albedo.b) *
                      (1.0 - smoothstep(0.72, 0.82, albedo.b));
+    skinMask = mix(skinMask, float(surface == 0), materialStyle);
     shade = mix(shade, mix(0.76, 1.05, lightBand), skinMask);
-    shade = mix(shade, authoredValue, authoredPaint * 0.78);
+    shade = mix(shade, mix(response.x, response.y, lightBand), materialStyle);
+    shade = mix(shade, authoredValue, authoredPaint *
+                mix(0.78, surface == 4 ? 0.28 : 0.58, materialStyle));
     vec3 bodyShadow = vec3(0.83, 0.91, 1.02);
     vec3 skinShadow = vec3(1.04, 0.83, 0.76);
     vec3 shadowTemperature = mix(bodyShadow, skinShadow, skinMask) *
@@ -58,9 +78,15 @@ void main()
              (1.0 - lightBand) * 0.095;
 
     vec3 halfDirection = normalize(toCamera + toLight);
-    float paintedHighlight = pow(max(dot(normal, halfDirection), 0.0), 18.0);
-    paintedHighlight = step(0.62, paintedHighlight) * lightBand;
-    color += vec3(1.0, 0.91, 0.76) * paintedHighlight * 0.038;
+    float gloss = pow(max(dot(normal, halfDirection), 0.0),
+                       mix(18.0, response.z, materialStyle));
+    float glossWidth = max(fwidth(gloss), 0.055);
+    float paintedHighlight = mix(step(0.62, gloss),
+        smoothstep(0.52 - glossWidth, 0.52 + glossWidth, gloss), materialStyle);
+    vec3 highlightColor = surface == 4 ? mix(vec3(1.0), albedo.rgb, 0.30) :
+                                          vec3(1.0, 0.91, 0.76);
+    color += highlightColor * paintedHighlight * lightBand *
+             mix(0.038, response.w, materialStyle);
 
     float viewFacing = abs(dot(normal, toCamera));
     float edgeInk = 1.0 - step(0.105, viewFacing);

@@ -91,6 +91,7 @@ static const float CARRIAGE_ASSET_SCALE = 0.92f;
 
 static const float CARRIAGE_ASSET_STREET_YAW_DEGREES = -90.0f;
 static bool draw_hero_rig_debug = false;
+static bool distant_building_view = false;
 static bool reduced_motion_enabled = false;
 static CcLocalOpeningStep active_opening_step = CC_LOCAL_OPENING_COMPLETE;
 static CcLocalMovementPreview renderer_movement_preview = {0};
@@ -212,6 +213,7 @@ typedef enum ArtLightProfileId {
     ART_LIGHT_RECOVERY_WARM,
     ART_LIGHT_ROAD_DUSK,
     ART_LIGHT_INTERIOR_EMBER,
+    ART_LIGHT_STORYBOOK,
     ART_LIGHT_PROFILE_COUNT
 } ArtLightProfileId;
 
@@ -270,20 +272,25 @@ typedef struct ArtAtmosphereState {
 } ArtAtmosphereState;
 
 static const ArtLightProfileDefinition ART_LIGHT_PROFILES[] = {
+    [ART_LIGHT_STORYBOOK] = {
+        {-0.58f, 0.68f, 0.42f}, {1.20f, 1.02f, 0.76f},
+        {0.72f, 0.78f, 0.80f}, {0.72f, 0.86f, 1.06f},
+        {142, 161, 153, 255}, 68.0f, 150.0f, 0.38f, 0.16f,
+    },
     [ART_LIGHT_CLEAR_MARKET] = {
-        {-0.42f, 0.84f, 0.34f}, {1.12f, 0.96f, 0.78f},
-        {0.62f, 0.66f, 0.69f}, {0.82f, 0.91f, 1.04f},
-        {18, 34, 39, 255}, 26.0f, 55.0f, 0.70f, 0.12f,
+        {-0.48f, 0.78f, 0.40f}, {1.18f, 1.06f, 0.88f},
+        {0.78f, 0.82f, 0.87f}, {0.82f, 0.92f, 1.06f},
+        {42, 62, 70, 255}, 26.0f, 55.0f, 0.70f, 0.12f,
     },
     [ART_LIGHT_SHORTAGE_OVERCAST] = {
         {-0.20f, 0.92f, 0.33f}, {1.00f, 1.02f, 1.06f},
-        {0.69f, 0.74f, 0.78f}, {0.78f, 0.87f, 1.04f},
-        {24, 38, 47, 255}, 24.0f, 52.0f, 0.78f, 0.10f,
+        {0.78f, 0.84f, 0.91f}, {0.82f, 0.91f, 1.06f},
+        {50, 66, 82, 255}, 24.0f, 52.0f, 0.78f, 0.10f,
     },
     [ART_LIGHT_RECOVERY_WARM] = {
         {-0.56f, 0.72f, 0.40f}, {1.20f, 0.91f, 0.65f},
-        {0.65f, 0.63f, 0.62f}, {0.84f, 0.91f, 1.01f},
-        {22, 37, 38, 255}, 27.0f, 56.0f, 0.64f, 0.15f,
+        {0.80f, 0.78f, 0.79f}, {0.84f, 0.93f, 1.06f},
+        {53, 68, 70, 255}, 27.0f, 56.0f, 0.64f, 0.15f,
     },
     [ART_LIGHT_ROAD_DUSK] = {
         {-0.63f, 0.55f, 0.31f}, {1.26f, 0.76f, 0.50f},
@@ -753,6 +760,42 @@ static FixedCameraRig road_camera_rig = {0};
 static CombatCameraRig combat_camera_rig = {0};
 static ConversationCameraRig conversation_camera_rig = {0};
 static PresentedCameraState presented_camera[3] = {0};
+static CcLocalPresentedPerson presented_people[64];
+static int32_t presented_people_count;
+static bool interaction_ui_enabled;
+static bool conversation_focus_active;
+static CcLocalAgent conversation_focus_agent;
+static uint32_t conversation_focus_seed;
+
+void CcLocalRendererSetConversationFocus(const Vector3 *position, uint32_t seed, float yaw)
+{
+    conversation_focus_active = position != NULL;
+    if (position == NULL) return;
+    conversation_focus_agent.position = *position;
+    conversation_focus_agent.facing_yaw = yaw;
+    conversation_focus_seed = seed;
+}
+
+void CcLocalRendererSetInteractionUI(bool enabled)
+{
+    interaction_ui_enabled = enabled;
+}
+
+static void RememberPresentedPerson(Vector3 position, float size,
+                                    uint32_t seed, CcNpcRole role)
+{
+    if (presented_people_count >= 64) return;
+    presented_people[presented_people_count++] =
+        (CcLocalPresentedPerson){position, seed, role, size};
+}
+
+int32_t CcLocalPresentedPeople(CcLocalPresentedPerson *people, int32_t capacity)
+{
+    int32_t count = capacity < presented_people_count ? capacity : presented_people_count;
+    if (people == NULL || count < 0) return 0;
+    for (int32_t i = 0; i < count; ++i) people[i] = presented_people[i];
+    return count;
+}
 
 static void RememberPresentedCamera(CcLocalSceneKind scene, Camera3D camera,
                                     const CcLocalAgent *agent,
@@ -760,6 +803,7 @@ static void RememberPresentedCamera(CcLocalSceneKind scene, Camera3D camera,
 {
     if (scene < CC_LOCAL_SCENE_STREET || scene > CC_LOCAL_SCENE_ROAD ||
         width <= 0 || height <= 0) return;
+    presented_people_count = 0;
     PresentedCameraState *state = &presented_camera[scene];
     state->camera = camera;
     state->hero_position = agent != NULL ? agent->position : (Vector3){0};

@@ -820,14 +820,14 @@ static void DescribeRoutes(const CcMetagame *metagame,
             destination->name : "unmarked track";
         if (preview.opening_half_day) {
             Append(output, capacity,
-                   "  %d. %s toward %s — opening half-day, %" PRId64 " crowns, %d fodder, horse team %d%%, %s",
+                   "  %d. %s toward %s — opening half-day, %" PRId64 " crowns to depart, %d fodder, horse team %d%%, %s",
                    i + 1, StoryRoadName(sim, route), road_name,
                    preview.provision_cost, preview.horse_feed_required,
                    preview.horse_readiness,
                    route->closed ? "restricted and tolled" : "open");
         } else {
             Append(output, capacity,
-                   "  %d. %s toward %s — %d watches with %d overnight stop%s, %" PRId64 " crowns, %d fodder, horse team %d%%, %s",
+                   "  %d. %s toward %s — %d watches with %d overnight stop%s, %" PRId64 " crowns to depart, %d fodder, horse team %d%%, %s",
                    i + 1, StoryRoadName(sim, route), road_name,
                    preview.travel_watches, preview.overnight_stops,
                    preview.overnight_stops == 1 ? "" : "s",

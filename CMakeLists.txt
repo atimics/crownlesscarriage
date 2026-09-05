@@ -83,6 +83,7 @@ cc_strict_warnings(crownless_locomotion)
 add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
+    src/sim/cc_ponies.c
 )
 target_include_directories(crownless_sim PUBLIC src)
 cc_strict_warnings(crownless_sim)
@@ -93,6 +94,14 @@ add_library(crownless_story
 target_include_directories(crownless_story PUBLIC src)
 target_link_libraries(crownless_story PUBLIC crownless_sim)
 cc_strict_warnings(crownless_story)
+
+add_library(crownless_music src/client/cc_music.c src/client/cc_music_library.c)
+target_include_directories(crownless_music PUBLIC src)
+target_link_libraries(crownless_music PUBLIC crownless_sim)
+if(NOT MSVC)
+    target_link_libraries(crownless_music PUBLIC m)
+endif()
+cc_strict_warnings(crownless_music)
 
 add_library(crownless_creature_catalog
     src/client/cc_creature_catalog.c
@@ -125,8 +134,16 @@ add_library(crownless_client_session
 target_include_directories(crownless_client_session PUBLIC src)
 cc_strict_warnings(crownless_client_session)
 
+add_library(crownless_soundscape src/client/cc_soundscape.c)
+target_include_directories(crownless_soundscape PUBLIC src)
+if(NOT MSVC)
+    target_link_libraries(crownless_soundscape PUBLIC m)
+endif()
+cc_strict_warnings(crownless_soundscape)
+
 add_library(crownless_client_policy
     src/client/cc_client_policy.c
+    src/client/cc_interaction.c
 )
 target_include_directories(crownless_client_policy PUBLIC src)
 if(NOT MSVC)
@@ -140,6 +157,12 @@ add_library(crownless_road_book
 target_include_directories(crownless_road_book PUBLIC src)
 target_link_libraries(crownless_road_book PUBLIC crownless_sim)
 cc_strict_warnings(crownless_road_book)
+
+if(NOT EMSCRIPTEN)
+    add_executable(crownless_audio_export tools/audio_export.c)
+    target_link_libraries(crownless_audio_export PRIVATE crownless_story crownless_soundscape)
+    cc_strict_warnings(crownless_audio_export)
+endif()
 
 if(EMSCRIPTEN)
     add_library(crownless_sqlite_web INTERFACE)
@@ -162,6 +185,14 @@ target_link_libraries(crownless_persistence PUBLIC
     crownless_sim ${CC_SQLITE_TARGET}
 )
 cc_strict_warnings(crownless_persistence)
+
+if(NOT EMSCRIPTEN)
+    set_target_properties(crownless_sim crownless_persistence PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    add_library(crownless_coop SHARED src/multiplayer/cc_coop.c)
+    target_include_directories(crownless_coop PUBLIC src)
+    target_link_libraries(crownless_coop PRIVATE crownless_persistence)
+    cc_strict_warnings(crownless_coop)
+endif()
 
 add_library(crownless_metagame
     src/metagame/cc_metagame.c
@@ -187,7 +218,7 @@ cc_strict_warnings(crownless_agent_courier)
 if(CC_BUILD_BENCHMARKS)
     add_executable(crownless_benchmark tools/benchmark.c)
     target_link_libraries(crownless_benchmark PRIVATE
-        crownless_sim crownless_locomotion
+        crownless_sim crownless_locomotion crownless_world
     )
     cc_strict_warnings(crownless_benchmark)
     add_custom_target(run_benchmarks
@@ -257,7 +288,11 @@ if(CC_BUILD_CLIENT)
     )
     cc_strict_warnings(crownless_local_renderer)
 
-    add_executable(crownless_carriage src/client/main.c)
+    file(GLOB CC_VOICE_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/voice/*.wav")
+    add_executable(crownless_carriage src/client/main.c src/client/cc_audio.c
+                   src/client/cc_music_player.c src/client/cc_music_net.c src/client/cc_coop_client.c)
+    target_compile_definitions(crownless_carriage PRIVATE
+        CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
     if(APPLE)
         set_target_properties(crownless_carriage PROPERTIES
             MACOSX_BUNDLE TRUE
@@ -267,16 +302,45 @@ if(CC_BUILD_CLIENT)
             MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
         )
     endif()
+    if(APPLE AND NOT EMSCRIPTEN)
+        add_custom_target(crownless_voice_assets ALL
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/voice"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/audio/voice"
+            DEPENDS ${CC_VOICE_ASSETS}
+            VERBATIM)
+        add_dependencies(crownless_voice_assets crownless_carriage)
+    endif()
     target_link_libraries(crownless_carriage PRIVATE
         crownless_local_renderer
         crownless_persistence crownless_locomotion
         crownless_creature_catalog crownless_local_place
-        crownless_client_session crownless_client_policy crownless_story
-        crownless_world
+        crownless_client_session crownless_client_policy crownless_story crownless_soundscape
+        crownless_world crownless_music
         raylib
     )
     if(NOT EMSCRIPTEN)
-        target_link_libraries(crownless_carriage PRIVATE glfw)
+        find_package(CURL REQUIRED)
+        find_package(Threads REQUIRED)
+        target_link_libraries(crownless_carriage PRIVATE glfw CURL::libcurl Threads::Threads)
+    endif()
+    file(GLOB CC_MUSIC_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/music/*.mp3")
+    if(EMSCRIPTEN)
+        set(CC_MUSIC_BUNDLE_DIR "${CMAKE_CURRENT_BINARY_DIR}/site/assets/audio/music")
+    elseif(APPLE)
+        set(CC_MUSIC_BUNDLE_DIR "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/audio/music")
+    else()
+        set(CC_MUSIC_BUNDLE_DIR "$<TARGET_FILE_DIR:crownless_carriage>/assets/audio/music")
+    endif()
+    add_custom_target(crownless_music_assets ALL
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CC_MUSIC_BUNDLE_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CC_MUSIC_ASSETS} "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/music/offline.json"
+            "${CC_MUSIC_BUNDLE_DIR}"
+        DEPENDS ${CC_MUSIC_ASSETS} "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/music/offline.json"
+        VERBATIM)
+    if(NOT EMSCRIPTEN)
+        add_dependencies(crownless_music_assets crownless_carriage)
     endif()
     if(EMSCRIPTEN)
         target_compile_definitions(crownless_local_renderer PRIVATE PLATFORM_WEB)
@@ -307,6 +371,7 @@ if(CC_BUILD_CLIENT)
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/economy_cargo_*.glb"
         )
         set(CC_WEB_STARTUP_ASSET_SOURCES
+            ${CC_VOICE_ASSETS}
             ${CC_WEB_NPC_ASSET_SOURCES}
             ${CC_WEB_WORLD_KIT_ASSET_SOURCES}
             ${CC_WEB_SHADER_ASSET_SOURCES}
@@ -459,7 +524,7 @@ if(CC_BUILD_CLIENT)
             SUFFIX ".html"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/site"
             LINK_DEPENDS
-                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CC_WEB_STARTUP_ASSET_STAMP};${CC_WEB_STARTUP_ASSET_OUTPUTS}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CMAKE_CURRENT_SOURCE_DIR}/web/music.js;${CC_WEB_STARTUP_ASSET_STAMP};${CC_WEB_STARTUP_ASSET_OUTPUTS}"
         )
         target_compile_definitions(crownless_carriage PRIVATE PLATFORM_WEB)
         set_property(TARGET crownless_carriage PROPERTY C_EXTENSIONS ON)
@@ -474,7 +539,11 @@ if(CC_BUILD_CLIENT)
             "-sMIN_WEBGL_VERSION=2"
             "-sMAX_WEBGL_VERSION=2"
             "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
+            "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js"
+            "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
+            "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/music.js"
+            "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js"
             "SHELL:--preload-file ${CC_WEB_ASSET_DIR}/assets@/assets"
         )
     elseif(APPLE)
@@ -725,6 +794,14 @@ if(CC_BUILD_CLIENT)
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 "${CC_ROADBOOK_REVIEW_DIR}"
         COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-storybook 0.25 0.0 "roadbook-review/storybook-close.png"
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-storybook 0.25 0.5 "roadbook-review/storybook-pullback.png"
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-storybook 0.25 1.0 "roadbook-review/storybook-wide.png"
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-storybook-arrival 0.5 "roadbook-review/storybook-arrival.png"
+        COMMAND $<TARGET_FILE:crownless_carriage>
                 --capture-travel
                 "roadbook-review/travel.png"
         COMMAND ${CMAKE_COMMAND}
@@ -848,6 +925,35 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(music_tests tests/music_tests.c)
+    target_link_libraries(music_tests PRIVATE crownless_music)
+    cc_strict_warnings(music_tests)
+    add_test(NAME situation_music_and_fades COMMAND music_tests)
+    add_executable(music_player_tests tests/music_player_tests.c src/client/cc_music_player.c)
+    target_include_directories(music_player_tests PRIVATE tests/music_stub)
+    target_link_libraries(music_player_tests PRIVATE crownless_music)
+    cc_strict_warnings(music_player_tests)
+    add_test(NAME streamed_music_and_offline_fallback COMMAND music_player_tests)
+    add_executable(soundscape_tests tests/soundscape_tests.c)
+    target_link_libraries(soundscape_tests PRIVATE crownless_soundscape crownless_locomotion)
+    cc_strict_warnings(soundscape_tests)
+    add_test(NAME soundscape_timing_and_samples COMMAND soundscape_tests)
+    if(CC_BUILD_CLIENT)
+        add_executable(audio_playback_tests tests/audio_playback_tests.c src/client/cc_audio.c)
+        target_include_directories(audio_playback_tests PRIVATE $<TARGET_PROPERTY:raylib,INTERFACE_INCLUDE_DIRECTORIES>)
+        target_link_libraries(audio_playback_tests PRIVATE crownless_soundscape)
+        cc_strict_warnings(audio_playback_tests)
+        add_test(NAME audio_playback_lifetime COMMAND audio_playback_tests)
+    endif()
+    if(NOT EMSCRIPTEN)
+        find_package(Python3 COMPONENTS Interpreter)
+        if(Python3_Interpreter_FOUND)
+            add_test(NAME audio_exports_and_voice_assets
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/audio_export_tests.py
+                    $<TARGET_FILE:crownless_audio_export>)
+        endif()
+    endif()
+
     add_test(
         NAME license_page_contract
         COMMAND ${CMAKE_COMMAND}
@@ -904,18 +1010,60 @@ if(BUILD_TESTING)
     cc_strict_warnings(client_session_tests)
     add_test(NAME local_session_round_trip COMMAND client_session_tests)
 
+    add_executable(road_stop_tests tests/road_stop_tests.c)
+    target_link_libraries(road_stop_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(road_stop_tests)
+    add_test(NAME roadside_camp_choices COMMAND road_stop_tests)
+
+    add_executable(travel_departure_tests tests/travel_departure_tests.c)
+    target_link_libraries(travel_departure_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(travel_departure_tests)
+    add_test(NAME free_road_departures COMMAND travel_departure_tests)
+
     find_program(CC_NODE_EXECUTABLE node)
     if(CC_NODE_EXECUTABLE)
         add_test(NAME browser_persistence_contract
                  COMMAND ${CC_NODE_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_persistence_tests.mjs)
+        add_test(NAME browser_shared_carriage_contract
+                 COMMAND ${CC_NODE_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_coop_tests.mjs)
+        add_test(NAME browser_music_download_and_cache
+                 COMMAND ${CC_NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_music_tests.mjs)
     endif()
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
     if(CC_PYTHON3_EXECUTABLE)
+        add_test(NAME music_catalog_metadata
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/music_catalog.py --check)
+        add_test(NAME bundled_music_and_host_catalog
+                 COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/music_host_tests.py)
         add_test(NAME webgl2_skinning_uniform_budget
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_uniform_budget_tests.py)
+        add_test(NAME simulation_runner_resume
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/sim_runner_tests.py
+                         $<TARGET_FILE:crownless_sim_runner>)
+        set_tests_properties(simulation_runner_resume PROPERTIES TIMEOUT 60)
+    endif()
+
+    add_executable(interaction_tests tests/interaction_tests.c)
+    target_link_libraries(interaction_tests PRIVATE crownless_client_policy)
+    cc_strict_warnings(interaction_tests)
+    add_test(NAME interaction_planner COMMAND interaction_tests)
+    if(NOT EMSCRIPTEN)
+        add_executable(coop_bridge_tests tests/coop_bridge_tests.c)
+        target_link_libraries(coop_bridge_tests PRIVATE crownless_coop crownless_sim)
+        cc_strict_warnings(coop_bridge_tests)
+        add_test(NAME shared_carriage_bridge COMMAND coop_bridge_tests)
+        if(CC_PYTHON3_EXECUTABLE AND NOT CMAKE_C_FLAGS MATCHES "sanitize")
+            add_test(NAME shared_carriage_server
+                COMMAND ${CC_PYTHON3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/coop_tests.py
+                        $<TARGET_FILE:crownless_coop>)
+        endif()
     endif()
 
     add_executable(client_policy_tests tests/client_policy_tests.c)
@@ -938,12 +1086,25 @@ if(BUILD_TESTING)
     cc_strict_warnings(balance_tests)
     add_test(NAME osr_long_run_balance COMMAND balance_tests)
 
+    add_executable(pony_tests tests/pony_tests.c)
+    target_link_libraries(pony_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(pony_tests)
+    add_test(NAME rainbow_pony_companions COMMAND pony_tests)
+
     add_executable(persistence_tests tests/persistence_tests.c)
     target_link_libraries(persistence_tests PRIVATE crownless_persistence)
     target_compile_definitions(persistence_tests PRIVATE
         CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     cc_strict_warnings(persistence_tests)
     add_test(NAME sqlite_round_trip COMMAND persistence_tests)
+
+    add_executable(royal_carriage_trade_tests
+        tests/royal_carriage_trade_tests.c)
+    target_link_libraries(royal_carriage_trade_tests PRIVATE
+        crownless_persistence)
+    cc_strict_warnings(royal_carriage_trade_tests)
+    cc_large_sim_stack(royal_carriage_trade_tests)
+    add_test(NAME royal_carriage_trade COMMAND royal_carriage_trade_tests)
 
     add_executable(route_knowledge_tests tests/route_knowledge_tests.c)
     target_link_libraries(route_knowledge_tests PRIVATE
@@ -1065,6 +1226,18 @@ if(BUILD_TESTING)
         target_compile_definitions(crownless_carriage PRIVATE
             CC_CLIENT_SELF_TESTS=1
         )
+        add_test(NAME storybook_travel_boundaries
+                 COMMAND crownless_carriage --test-storybook-travel)
+        add_test(NAME adventure_town_routes
+                 COMMAND crownless_carriage --test-adventure-town-routes)
+        add_test(NAME adventure_trade_terms
+                 COMMAND crownless_carriage --test-adventure-trade)
+        add_test(NAME world_card_input_parity
+                 COMMAND crownless_carriage --test-world-cards)
+        add_test(NAME adventure_input_flow
+                 COMMAND crownless_carriage --test-adventure-input)
+        add_test(NAME title_and_pause_menu
+                 COMMAND crownless_carriage --test-frontend)
         add_test(NAME map_sale_input
                  COMMAND crownless_carriage --test-map-sale-input)
         add_test(NAME town_arrival_parking
@@ -1079,6 +1252,34 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-town-session-startup)
         add_test(NAME road_encounter_session_restore
                  COMMAND crownless_carriage --test-road-encounter-session)
+
+        add_executable(renderer_regression_tests tests/renderer_regression_tests.c)
+        target_link_libraries(renderer_regression_tests PRIVATE crownless_local_renderer)
+        target_compile_definitions(renderer_regression_tests PRIVATE
+            CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+        cc_strict_warnings(renderer_regression_tests)
+        add_test(NAME renderer_skin_rotation COMMAND renderer_regression_tests)
+        add_custom_target(run_renderer_graphics_tests
+            COMMAND renderer_regression_tests --graphics
+                "${CMAKE_CURRENT_BINARY_DIR}/renderer-viewport.png"
+            DEPENDS renderer_regression_tests
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            USES_TERMINAL
+        )
+        add_custom_target(run_character_material_captures
+            COMMAND renderer_regression_tests --material-captures
+                "${CMAKE_CURRENT_BINARY_DIR}/character-materials"
+            DEPENDS renderer_regression_tests
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            USES_TERMINAL
+        )
+        add_custom_target(run_humanoid_animation_captures
+            COMMAND renderer_regression_tests --animation-captures
+                "${CMAKE_CURRENT_BINARY_DIR}/humanoid-animation"
+            DEPENDS renderer_regression_tests
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            USES_TERMINAL
+        )
 
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c

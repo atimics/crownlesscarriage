@@ -7,6 +7,7 @@ typedef struct SphereModelCache {
 
 static SphereModelCache sphere_models = {0};
 static RenderTexture2D npc_portrait_target = {0};
+static RenderTexture2D art_grade_target = {0};
 
 typedef enum TreeCrownShape {
     TREE_CROWN_ALDER = 0,
@@ -22,6 +23,8 @@ typedef struct TreeCrownModelCache {
 } TreeCrownModelCache;
 
 static TreeCrownModelCache tree_crown_models = {0};
+
+static RenderTexture2D pony_portraits[CC_PONY_COUNT + 1];
 
 #define CC_HERO_SKIN_MAX_BONES 32
 #define CC_HERO_CAPE_BONE_COUNT 4
@@ -70,6 +73,34 @@ typedef struct RuntimeAsset {
     bool ready;
     bool attempted;
 } RuntimeAsset;
+
+/* Bounds are in the shipped carriage model's local frame, before CPU release. */
+static unsigned char carriage_wheel_mesh[144] = {0};
+static const Vector3 carriage_wheel_centers[4] = {
+    {-1.22f, 0.80f, 0.94f}, {-1.22f, 0.80f, -0.94f},
+    {1.05f, 0.62f, 0.94f}, {1.05f, 0.62f, -0.94f},
+};
+
+static void ClassifyCarriageWheels(const Model *model)
+{
+    memset(carriage_wheel_mesh, 0, sizeof(carriage_wheel_mesh));
+    for (int mesh = 0; mesh < model->meshCount && mesh < 144; ++mesh) {
+        BoundingBox bounds = GetMeshBoundingBox(model->meshes[mesh]);
+        for (int wheel = 0; wheel < 4; ++wheel) {
+            Vector3 center = carriage_wheel_centers[wheel];
+            float radius = wheel < 2 ? 0.81f : 0.63f;
+            if (bounds.min.x >= center.x - radius &&
+                bounds.max.x <= center.x + radius &&
+                bounds.min.y >= center.y - radius &&
+                bounds.max.y <= center.y + radius &&
+                bounds.min.z >= center.z - 0.18f &&
+                bounds.max.z <= center.z + 0.18f) {
+                carriage_wheel_mesh[mesh] = (unsigned char)(wheel + 1);
+                break;
+            }
+        }
+    }
+}
 
 static RuntimeAsset runtime_assets[RUNTIME_ASSET_COUNT] = {
     [RUNTIME_ASSET_BRIDGE] = {
@@ -462,6 +493,20 @@ typedef struct PaintedEnvironmentStyle {
     bool ready;
 } PaintedEnvironmentStyle;
 
+typedef struct CharacterLightingStyle {
+    Shader shader;
+    int32_t light_direction_location;
+    int32_t camera_position_location;
+    int32_t shadow_color_location;
+    int32_t fog_color_location;
+    int32_t fog_near_location;
+    int32_t fog_far_location;
+    int32_t ink_strength_location;
+    int32_t rim_tint_location;
+    int32_t rim_strength_location;
+    bool ready;
+} CharacterLightingStyle;
+
 typedef struct VisualStyleCache {
     Shader grade;
     Texture2D palette_lut;
@@ -491,8 +536,13 @@ typedef struct VisualStyleCache {
     int32_t reveal_cut_height_location;
     int32_t foreground_reveal_location;
     int32_t terrain_surface_location;
+    int32_t horizon_fog_location;
     int32_t weather_wetness_location;
     bool world_ready;
+    bool foreground_reveal_valid;
+    float foreground_reveal;
+    float foreground_cut_height;
+    bool terrain_surface;
     PaintedEnvironmentStyle painted_environment;
     Shader foliage;
     int32_t foliage_light_direction_location;
@@ -507,17 +557,8 @@ typedef struct VisualStyleCache {
     int32_t foliage_depth_splits_location;
     int32_t foliage_depth_strength_location;
     bool foliage_ready;
-    Shader hero;
-    int32_t hero_light_direction_location;
-    int32_t hero_camera_position_location;
-    int32_t hero_shadow_color_location;
-    int32_t hero_fog_color_location;
-    int32_t hero_fog_near_location;
-    int32_t hero_fog_far_location;
-    int32_t hero_ink_strength_location;
-    int32_t hero_rim_tint_location;
-    int32_t hero_rim_strength_location;
-    bool hero_ready;
+    CharacterLightingStyle hero;
+    CharacterLightingStyle character;
     Shader npc;
     int32_t npc_light_direction_location;
     int32_t npc_camera_position_location;
@@ -532,6 +573,7 @@ typedef struct VisualStyleCache {
     int32_t npc_hero_head_position_location;
     int32_t npc_rim_tint_location;
     int32_t npc_rim_strength_location;
+    int32_t npc_material_style_location;
     bool npc_ready;
     Shader npc_skinned;
     int32_t npc_skinned_light_direction_location;
@@ -548,6 +590,7 @@ typedef struct VisualStyleCache {
     int32_t npc_skinned_body_skin_remap_location;
     int32_t npc_skinned_rim_tint_location;
     int32_t npc_skinned_rim_strength_location;
+    int32_t npc_skinned_material_style_location;
     bool npc_skinned_ready;
     ArtAtmosphereDefinition presentation_atmosphere;
     float presentation_practical_glow;
@@ -777,6 +820,36 @@ static Quaternion HeroRotationBetween(Vector3 from, Vector3 to)
     return QuaternionFromAxisAngle(Vector3Normalize(axis), PI);
 }
 
+static Quaternion HumanoidSkinRotation(CcHumanoidSkinBone bone,
+                                        const CcHumanoidSkinBonePose *target,
+                                        Quaternion bind_rotation)
+{
+    Vector3 up = Vector3Normalize(HERO_REST_DIRECTIONS[bone]);
+    bool foot = bone == CC_HUMANOID_SKIN_FOOT_LEFT ||
+                bone == CC_HUMANOID_SKIN_FOOT_RIGHT;
+    Vector3 right = Vector3Normalize(foot ?
+        Vector3CrossProduct((Vector3){0.0f, 1.0f, 0.0f}, up) :
+        Vector3CrossProduct(up, (Vector3){0.0f, 0.0f, 1.0f}));
+    Vector3 forward = Vector3CrossProduct(right, up);
+    Matrix rest_frame = MatrixIdentity();
+    rest_frame.m0 = right.x;
+    rest_frame.m1 = right.y;
+    rest_frame.m2 = right.z;
+    rest_frame.m4 = up.x;
+    rest_frame.m5 = up.y;
+    rest_frame.m6 = up.z;
+    rest_frame.m8 = forward.x;
+    rest_frame.m9 = forward.y;
+    rest_frame.m10 = forward.z;
+    Quaternion target_rotation = {
+        target->world_rotation.x, target->world_rotation.y,
+        target->world_rotation.z, target->world_rotation.w,
+    };
+    Quaternion delta = QuaternionMultiply(
+        target_rotation, QuaternionInvert(QuaternionFromMatrix(rest_frame)));
+    return QuaternionNormalize(QuaternionMultiply(delta, bind_rotation));
+}
+
 static const char *HeroSkinAssetPath(void)
 {
     const char *experiment = getenv("CC_SCREEN_FIRST_HERO");
@@ -847,10 +920,13 @@ static Rectangle RoadObstacleAt(int32_t index)
 
 static void ReleaseUploadedModelCpuData(Model *model)
 {
-#if defined(PLATFORM_WEB)
     if (model == NULL || model->meshes == NULL) return;
     for (int32_t index = 0; index < model->meshCount; ++index) {
         Mesh *mesh = &model->meshes[index];
+        /* CPU skinning and software rendering keep their source geometry. */
+        if (mesh->vboId == NULL || mesh->vboId[0] == 0 ||
+            mesh->animVertices != NULL || mesh->animNormals != NULL) continue;
+        /* Keep indices for raylib's indexed draw choice and bones for posing. */
 #define CC_RELEASE_UPLOADED_BUFFER(field) \
         do { \
             if (mesh->field != NULL) { \
@@ -870,9 +946,8 @@ static void ReleaseUploadedModelCpuData(Model *model)
         CC_RELEASE_UPLOADED_BUFFER(animNormals);
 #undef CC_RELEASE_UPLOADED_BUFFER
     }
+#if defined(PLATFORM_WEB)
     emscripten_sleep(0);
-#else
-    (void)model;
 #endif
 }
 
@@ -933,6 +1008,7 @@ static bool LoadRuntimeAsset(RuntimeAssetId id)
         asset->model = (Model){0};
         return false;
     }
+    if (id == RUNTIME_ASSET_CARRIAGE) ClassifyCarriageWheels(&asset->model);
     ReleaseUploadedModelCpuData(&asset->model);
     asset->ready = true;
     ApplyRuntimeAssetShader(id);
@@ -1361,8 +1437,8 @@ static void ApplyHeroStyle(Model *model)
     if (screen_first_hero_active) {
         for (int32_t material = 0; material < model->materialCount;
              ++material) {
-            model->materials[material].shader = visual_style.hero_ready ?
-                                                 visual_style.hero :
+            model->materials[material].shader = visual_style.hero.ready ?
+                                                 visual_style.hero.shader :
                                                  visual_style.world;
         }
         return;
@@ -1374,14 +1450,14 @@ static void ApplyHeroStyle(Model *model)
     for (int32_t material = 0; material < material_count; ++material) {
         model->materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
             HeroRetroMaterialColor(material);
-        model->materials[material].shader = visual_style.hero_ready ?
-                                             visual_style.hero :
+        model->materials[material].shader = visual_style.hero.ready ?
+                                             visual_style.hero.shader :
                                              visual_style.world;
     }
     for (int32_t material = material_count;
          material < model->materialCount; ++material) {
-        model->materials[material].shader = visual_style.hero_ready ?
-                                             visual_style.hero :
+        model->materials[material].shader = visual_style.hero.ready ?
+                                             visual_style.hero.shader :
                                              visual_style.world;
     }
     if (model->materialCount < CC_HERO_RETRO_MATERIAL_COUNT) {
@@ -1397,8 +1473,8 @@ static void ApplyNpcStyle(Model *model)
     for (int32_t material = 0; material < model->materialCount; ++material) {
         model->materials[material].shader = visual_style.npc_ready ?
                                              visual_style.npc :
-                                             visual_style.hero_ready ?
-                                                visual_style.hero :
+                                             visual_style.character.ready ?
+                                                visual_style.character.shader :
                                                 visual_style.world;
     }
 }
@@ -1425,7 +1501,8 @@ static void ApplyNpcBodyStyle(Model *model)
 
 static void SetIndexedPalette(
     const Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT],
-    float ink_strength, bool hero_emphasis, Vector3 hero_head_position)
+    float ink_strength, bool hero_emphasis, Vector3 hero_head_position,
+    bool material_style)
 {
     if (!visual_style.npc_ready || colors == NULL) return;
     float palette[CC_NPC_ARCHETYPE_MATERIAL_COUNT * 4];
@@ -1451,6 +1528,9 @@ static void SetIndexedPalette(
                    visual_style.npc_ink_strength_location,
                    &ink_strength, SHADER_UNIFORM_FLOAT);
     float hero = hero_emphasis ? 1.0f : 0.0f;
+    float surface_style = material_style ? 1.0f : 0.0f;
+    SetShaderValue(visual_style.npc, visual_style.npc_material_style_location,
+                   &surface_style, SHADER_UNIFORM_FLOAT);
     SetShaderValue(visual_style.npc,
                    visual_style.npc_hero_emphasis_location,
                    &hero, SHADER_UNIFORM_FLOAT);
@@ -1458,6 +1538,9 @@ static void SetIndexedPalette(
                    visual_style.npc_hero_head_position_location,
                    &hero_head_position, SHADER_UNIFORM_VEC3);
     if (visual_style.npc_skinned_ready) {
+        SetShaderValue(visual_style.npc_skinned,
+                        visual_style.npc_skinned_material_style_location,
+                        &surface_style, SHADER_UNIFORM_FLOAT);
         SetShaderValueV(visual_style.npc_skinned,
                         visual_style.npc_skinned_palette_location,
                         palette, SHADER_UNIFORM_VEC4,
@@ -1495,7 +1578,8 @@ static void SetNpcPalette(const CcNpcAppearance *appearance,
         ShadeColor(appearance->hair, 0.62f),
     };
     SetIndexedPalette(colors, ink_strength, hero_emphasis,
-                      hero_head_position);
+                      hero_head_position,
+                      hero_emphasis || appearance->role == CC_NPC_ROLE_GUARD);
 }
 
 typedef struct CreatureRenderPalette {
@@ -1549,6 +1633,35 @@ static CcCreatureVariant DragonCreatureForLifeStage(
     }
 }
 
+/* Coat, mane, and ribbon colors stay paired across travel and stable scenes. */
+static const Color PONY_COLORS[CC_PONY_COUNT][3] = {
+    {{244, 104, 115, 255}, {170, 43, 69, 255}, {255, 206, 123, 255}},
+    {{255, 169, 84, 255}, {196, 87, 42, 255}, {255, 231, 143, 255}},
+    {{255, 229, 110, 255}, {219, 155, 56, 255}, {253, 147, 198, 255}},
+    {{124, 224, 137, 255}, {51, 147, 113, 255}, {253, 226, 146, 255}},
+    {{114, 195, 246, 255}, {63, 113, 207, 255}, {137, 238, 223, 255}},
+    {{135, 139, 224, 255}, {73, 57, 151, 255}, {166, 214, 249, 255}},
+    {{208, 153, 245, 255}, {148, 63, 191, 255}, {255, 160, 218, 255}},
+};
+
+static int32_t PonyColorIndex(Color coat)
+{
+    if (coat.a == 0) return 0;
+    int32_t best = 0;
+    int32_t distance = INT32_MAX;
+    for (int32_t index = 0; index < CC_PONY_COUNT; ++index) {
+        int32_t r = (int32_t)coat.r - PONY_COLORS[index][0].r;
+        int32_t g = (int32_t)coat.g - PONY_COLORS[index][0].g;
+        int32_t b = (int32_t)coat.b - PONY_COLORS[index][0].b;
+        int32_t candidate = r * r + g * g + b * b;
+        if (candidate < distance) {
+            distance = candidate;
+            best = index;
+        }
+    }
+    return best;
+}
+
 static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
                                               Color primary)
 {
@@ -1572,14 +1685,16 @@ static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
             colors[7] = (Color){220, 158, 54, 255};
             break;
         case CC_CREATURE_HORSE: {
-            Color coat = primary.a > 0 ? primary :
-                                         (Color){104, 78, 59, 255};
-            colors[0] = coat;
-            colors[1] = ShadeColor(coat, 0.54f);
-            colors[2] = ShadeColor(coat, 0.82f);
-            colors[3] = (Color){72, 48, 38, 255};
-            colors[4] = (Color){50, 37, 32, 255};
-            colors[7] = (Color){128, 88, 52, 255};
+            const Color *pony = PONY_COLORS[PonyColorIndex(primary)];
+            colors[0] = pony[0];
+            colors[1] = pony[1];
+            colors[2] = BlendColor(pony[0], (Color){255, 244, 250, 255}, 0.32f);
+            colors[3] = pony[2];
+            colors[4] = (Color){58, 37, 81, 255};
+            colors[5] = (Color){255, 251, 244, 255};
+            colors[6] = (Color){81, 139, 216, 255};
+            colors[7] = pony[2];
+            colors[8] = (Color){23, 17, 45, 255};
             break;
         }
         case CC_CREATURE_COW: {
@@ -1591,6 +1706,7 @@ static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
             colors[3] = (Color){88, 70, 59, 255};
             colors[5] = (Color){205, 186, 143, 255};
             colors[7] = (Color){137, 85, 61, 255};
+            colors[8] = (Color){12, 10, 9, 255};
             break;
         }
         case CC_CREATURE_SHEEP:
@@ -2583,7 +2699,10 @@ static void DrawContactShadow(Vector3 center, float width, float depth,
             center.y,
             center.z - local_bx * yaw_sin + local_bz * yaw_cos,
         };
+        // Keep the contact dark beneath the feet and fade toward the ground.
+        rlColor4ub(color.r, color.g, color.b, color.a);
         rlVertex3f(center.x, center.y, center.z);
+        rlColor4ub(color.r, color.g, color.b, 0);
         rlVertex3f(edge_b.x, edge_b.y, edge_b.z);
         rlVertex3f(edge_a.x, edge_a.y, edge_a.z);
     }
@@ -2657,7 +2776,7 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
                 palette.cloth, palette.leather, palette.horn,
                 palette.metal, palette.accent, palette.eye,
             };
-            SetIndexedPalette(colors, 0.54f, false, (Vector3){0});
+            SetIndexedPalette(colors, 0.54f, false, (Vector3){0}, false);
             if (visual_style.npc_skinned_ready) {
                 float body_skin_remap = 0.0f;
                 SetShaderValue(
@@ -2704,13 +2823,21 @@ static bool DrawCreature3D(CcCreatureVariant variant, CcCreaturePose pose,
 
 static void UseCharacterLighting(void)
 {
-    if (visual_style.hero_ready) BeginShaderMode(visual_style.hero);
+    if (visual_style.character.ready) {
+        BeginShaderMode(visual_style.character.shader);
+    } else if (visual_style.world_ready) {
+        BeginShaderMode(visual_style.world);
+    } else {
+        EndShaderMode();
+    }
 }
 
 static void RestoreWorldLighting(void)
 {
-    if (visual_style.hero_ready && visual_style.world_ready) {
+    if (visual_style.world_ready) {
         BeginShaderMode(visual_style.world);
+    } else {
+        EndShaderMode();
     }
 }
 
@@ -2718,8 +2845,16 @@ static void SetWorldForegroundReveal(float amount, float cut_height)
 {
     if (!visual_style.world_ready) return;
 
-    rlDrawRenderBatchActive();
     float active = fmaxf(0.0f, fminf(amount, 1.0f));
+    if (visual_style.foreground_reveal_valid &&
+        visual_style.foreground_reveal == active &&
+        (active == 0.0f || visual_style.foreground_cut_height == cut_height)) {
+        return;
+    }
+    rlDrawRenderBatchActive();
+    visual_style.foreground_reveal_valid = true;
+    visual_style.foreground_reveal = active;
+    visual_style.foreground_cut_height = cut_height;
     SetShaderValue(visual_style.world,
                    visual_style.foreground_reveal_location,
                    &active, SHADER_UNIFORM_FLOAT);
@@ -2740,9 +2875,12 @@ static void SetWorldForegroundReveal(float amount, float cut_height)
 
 static void SetWorldTerrainSurface(bool enabled)
 {
-    if (!visual_style.world_ready) return;
+    if (!visual_style.world_ready || visual_style.terrain_surface == enabled) {
+        return;
+    }
 
     rlDrawRenderBatchActive();
+    visual_style.terrain_surface = enabled;
     float active = enabled ? 1.0f : 0.0f;
     SetShaderValue(visual_style.world,
                    visual_style.terrain_surface_location,
@@ -2887,6 +3025,45 @@ static bool LoadSharedPaletteLookup(void)
     return true;
 }
 
+static CharacterLightingStyle LoadCharacterLightingStyle(
+    const char *vertex_path, const char *fragment_path, bool vertex_colors)
+{
+    CharacterLightingStyle style = {0};
+    style.shader = LoadShader(vertex_path, fragment_path);
+    if (!IsShaderValid(style.shader) ||
+        style.shader.id == rlGetShaderIdDefault()) {
+        UnloadShader(style.shader);
+        return (CharacterLightingStyle){0};
+    }
+    style.light_direction_location = GetShaderLocation(
+        style.shader, "lightDirection");
+    style.camera_position_location = GetShaderLocation(
+        style.shader, "cameraPosition");
+    style.shadow_color_location = GetShaderLocation(
+        style.shader, "shadowColor");
+    style.fog_color_location = GetShaderLocation(
+        style.shader, "fogColor");
+    style.fog_near_location = GetShaderLocation(
+        style.shader, "fogNear");
+    style.fog_far_location = GetShaderLocation(
+        style.shader, "fogFar");
+    style.ink_strength_location = GetShaderLocation(
+        style.shader, "inkStrength");
+    style.rim_tint_location = GetShaderLocation(
+        style.shader, "characterRimTint");
+    style.rim_strength_location = GetShaderLocation(
+        style.shader, "characterRimStrength");
+    float ink_strength = CC_HERO_INK_STRENGTH;
+    SetShaderValue(style.shader, style.ink_strength_location,
+                   &ink_strength, SHADER_UNIFORM_FLOAT);
+    float colors_are_albedo = vertex_colors ? 1.0f : 0.0f;
+    SetShaderValue(style.shader,
+                   GetShaderLocation(style.shader, "vertexColorsAreAlbedo"),
+                   &colors_are_albedo, SHADER_UNIFORM_FLOAT);
+    style.ready = true;
+    return style;
+}
+
 static void LoadVisualStyle(void)
 {
     char grade_path[1024];
@@ -2968,6 +3145,8 @@ static void LoadVisualStyle(void)
         visual_style.world, "foregroundReveal");
     visual_style.terrain_surface_location = GetShaderLocation(
         visual_style.world, "terrainSurface");
+    visual_style.horizon_fog_location = GetShaderLocation(
+        visual_style.world, "horizonFog");
     visual_style.weather_wetness_location = GetShaderLocation(
         visual_style.world, "weatherWetness");
     visual_style.world_ready = true;
@@ -3073,39 +3252,13 @@ static void LoadVisualStyle(void)
     }
 
     char hero_fragment_path[1024];
-    if (skinned_vertex_ready &&
-        ResolveAssetPath(CC_HERO_PIXEL_FRAGMENT_SHADER, hero_fragment_path,
+    if (ResolveAssetPath(CC_HERO_PIXEL_FRAGMENT_SHADER, hero_fragment_path,
                          sizeof(hero_fragment_path))) {
-        visual_style.hero = LoadShader(skinned_vertex_path,
-                                       hero_fragment_path);
-        if (IsShaderValid(visual_style.hero)) {
-            visual_style.hero_light_direction_location = GetShaderLocation(
-                visual_style.hero, "lightDirection");
-            visual_style.hero_camera_position_location = GetShaderLocation(
-                visual_style.hero, "cameraPosition");
-            visual_style.hero_shadow_color_location = GetShaderLocation(
-                visual_style.hero, "shadowColor");
-            visual_style.hero_fog_color_location = GetShaderLocation(
-                visual_style.hero, "fogColor");
-            visual_style.hero_fog_near_location = GetShaderLocation(
-                visual_style.hero, "fogNear");
-            visual_style.hero_fog_far_location = GetShaderLocation(
-                visual_style.hero, "fogFar");
-            visual_style.hero_ink_strength_location = GetShaderLocation(
-                visual_style.hero, "inkStrength");
-            visual_style.hero_rim_tint_location = GetShaderLocation(
-                visual_style.hero, "characterRimTint");
-            visual_style.hero_rim_strength_location = GetShaderLocation(
-                visual_style.hero, "characterRimStrength");
-            float ink_strength = CC_HERO_INK_STRENGTH;
-            SetShaderValue(visual_style.hero,
-                           visual_style.hero_ink_strength_location,
-                           &ink_strength, SHADER_UNIFORM_FLOAT);
-            visual_style.hero_ready = true;
-        } else {
-            visual_style.hero = (Shader){0};
-            TraceLog(LOG_WARNING,
-                     "STYLE: retro hero shader could not be loaded");
+        visual_style.character = LoadCharacterLightingStyle(
+            vertex_path, hero_fragment_path, true);
+        if (skinned_vertex_ready) {
+            visual_style.hero = LoadCharacterLightingStyle(
+                skinned_vertex_path, hero_fragment_path, false);
         }
     } else {
         TraceLog(LOG_WARNING, "STYLE: retro hero shader was not found");
@@ -3143,6 +3296,8 @@ static void LoadVisualStyle(void)
             visual_style.npc_rim_strength_location = GetShaderLocation(
                 visual_style.npc, "characterRimStrength");
             visual_style.npc_ready = true;
+            visual_style.npc_material_style_location = GetShaderLocation(
+                visual_style.npc, "materialStyle");
         } else {
             visual_style.npc = (Shader){0};
             TraceLog(LOG_WARNING,
@@ -3192,6 +3347,8 @@ static void LoadVisualStyle(void)
                     GetShaderLocation(visual_style.npc_skinned,
                                       "characterRimStrength");
                 visual_style.npc_skinned_ready = true;
+                visual_style.npc_skinned_material_style_location =
+                    GetShaderLocation(visual_style.npc_skinned, "materialStyle");
             } else {
                 visual_style.npc_skinned = (Shader){0};
                 TraceLog(LOG_WARNING,
@@ -3404,20 +3561,15 @@ static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
             hero_skin.pose[bone] = hero_skin.model.skeleton.bindPose[bone];
             continue;
         }
-        Quaternion delta = HeroRotationBetween(
-            rest_direction, target_direction);
-        if (skin_bone == CC_HUMANOID_SKIN_HEAD) {
-
-            const CcHumanoidSkinBonePose *head =
-                &skin->bones[CC_HUMANOID_SKIN_HEAD];
-            delta = (Quaternion){head->world_rotation.x,
-                                 head->world_rotation.y,
-                                 head->world_rotation.z,
-                                 head->world_rotation.w};
-        }
+        Quaternion bind_rotation =
+            hero_skin.model.skeleton.bindPose[bone].rotation;
         hero_skin.pose[bone].translation = target_head;
-        hero_skin.pose[bone].rotation = QuaternionMultiply(
-            delta, hero_skin.model.skeleton.bindPose[bone].rotation);
+        hero_skin.pose[bone].rotation =
+            skin_bone >= 0 && skin_bone < CC_HUMANOID_SKIN_BONE_COUNT ?
+            HumanoidSkinRotation((CcHumanoidSkinBone)skin_bone,
+                                  &skin->bones[skin_bone], bind_rotation) :
+            QuaternionMultiply(HeroRotationBetween(
+                rest_direction, target_direction), bind_rotation);
         hero_skin.pose[bone].scale =
             hero_skin.model.skeleton.bindPose[bone].scale;
         float gameplay_scale =
@@ -3500,17 +3652,10 @@ static bool DrawNpcBodySkin(const CcHumanoidSkinPose *skin,
             continue;
         }
         const CcHumanoidSkinBonePose *target = &skin->bones[skin_bone];
-        Quaternion delta = HeroRotationBetween(
-            HERO_REST_DIRECTIONS[skin_bone], FromLimbVector(target->up));
-        if (skin_bone == CC_HUMANOID_SKIN_HEAD) {
-            delta = (Quaternion){target->world_rotation.x,
-                                 target->world_rotation.y,
-                                 target->world_rotation.z,
-                                 target->world_rotation.w};
-        }
         body->pose[bone].translation = FromLimbVector(target->head);
-        body->pose[bone].rotation = QuaternionMultiply(
-            delta, body->model.skeleton.bindPose[bone].rotation);
+        body->pose[bone].rotation = HumanoidSkinRotation(
+            (CcHumanoidSkinBone)skin_bone, target,
+            body->model.skeleton.bindPose[bone].rotation);
         body->pose[bone].scale = body->model.skeleton.bindPose[bone].scale;
     }
     UpdateModelAnimation(body->model, body->animation, 0.0f);
@@ -3776,6 +3921,10 @@ void CcLocalRendererSetMovementPreview(
 
 void CcLocalRendererShutdown(void)
 {
+    for (int32_t i = 0; i <= CC_PONY_COUNT; ++i) {
+        if (IsRenderTextureValid(pony_portraits[i])) UnloadRenderTexture(pony_portraits[i]);
+        pony_portraits[i] = (RenderTexture2D){0};
+    }
     if (!sphere_models.ready) return;
     OpenWorldRenderCacheClear();
     TerrainRenderCacheClear();
@@ -3845,7 +3994,10 @@ void CcLocalRendererShutdown(void)
         UnloadShader(visual_style.npc_skinned);
     }
     if (visual_style.npc_ready) UnloadShader(visual_style.npc);
-    if (visual_style.hero_ready) UnloadShader(visual_style.hero);
+    if (visual_style.hero.ready) UnloadShader(visual_style.hero.shader);
+    if (visual_style.character.ready) {
+        UnloadShader(visual_style.character.shader);
+    }
     if (visual_style.foliage_ready) UnloadShader(visual_style.foliage);
     if (visual_style.painted_environment.ready) {
         UnloadShader(visual_style.painted_environment.shader);
@@ -3857,6 +4009,10 @@ void CcLocalRendererShutdown(void)
     if (IsRenderTextureValid(npc_portrait_target)) {
         UnloadRenderTexture(npc_portrait_target);
     }
+    if (IsRenderTextureValid(art_grade_target)) {
+        UnloadRenderTexture(art_grade_target);
+    }
+    art_grade_target = (RenderTexture2D){0};
     if (visual_style.grade_ready) UnloadShader(visual_style.grade);
     sphere_models = (SphereModelCache){0};
     npc_portrait_target = (RenderTexture2D){0};

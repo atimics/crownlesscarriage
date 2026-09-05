@@ -272,6 +272,120 @@ static void TestPoseOwnership(void)
             "orientation-specific recovery timelines are unavailable");
 }
 
+static float FootHeading(const CcHumanoidPose *pose, int32_t leg)
+{
+    return atan2f(pose->toe[leg].x - pose->heel[leg].x,
+                  pose->toe[leg].z - pose->heel[leg].z);
+}
+
+static float HeadingDifference(float a, float b)
+{
+    return atan2f(sinf(a - b), cosf(a - b));
+}
+
+static void TestFootTurns(void)
+{
+    const float starts[] = {0.0f, 0.0f, 2.97f, -2.97f, 0.0f, 0.0f};
+    const float turns[] = {1.57f, -1.57f, 0.35f, -0.35f, 3.14f, -3.14f};
+    for (int32_t sample = 0; sample < 6; ++sample) {
+        CcHumanoidGait gait;
+        CcLimbVec3 body = {0};
+        CcHumanoidGaitInit(&gait, body, starts[sample], PlaneProbe, NULL);
+        int32_t flat_samples = 0;
+        int32_t steps[CC_HUMANOID_LEG_COUNT] = {0};
+        float maximum_heading_step = 0.0f;
+        float maximum_standing_drift = 0.0f;
+        for (int32_t frame = 0; frame < 900; ++frame) {
+            CcHumanoidPose before = gait.pose;
+            CcHumanoidContact contacts[CC_HUMANOID_LEG_COUNT] = {
+                gait.feet[0].contact, gait.feet[1].contact};
+            float turn = fminf(1.0f, (float)frame / 120.0f);
+            float yaw = starts[sample] + turns[sample] * turn;
+            float speed = sample < 2 && frame < 360 ? 0.70f : 0.0f;
+            CcLimbVec3 velocity = {sinf(yaw) * speed, 0.0f,
+                                    cosf(yaw) * speed};
+            CcHumanoidGaitAdvance(&gait, body, yaw, velocity, true,
+                                  1.0f / 120.0f, PlaneProbe, NULL);
+            body.x += gait.root_velocity.x / 120.0f;
+            body.z += gait.root_velocity.z / 120.0f;
+            if (sample >= 2) {
+                maximum_standing_drift = fmaxf(maximum_standing_drift,
+                                               Distance(body, (CcLimbVec3){0}));
+            }
+            for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+                float heading_step = fabsf(HeadingDifference(
+                    FootHeading(&gait.pose, leg), FootHeading(&before, leg)));
+                maximum_heading_step = fmaxf(maximum_heading_step, heading_step);
+                if (contacts[leg] == CC_HUMANOID_CONTACT_FLAT &&
+                    gait.feet[leg].contact == CC_HUMANOID_CONTACT_FLAT) {
+                    Require(heading_step < 0.00001f,
+                            "a planted boot should keep its ground heading during a turn");
+                    flat_samples += 1;
+                }
+                if (contacts[leg] == CC_HUMANOID_CONTACT_SWING &&
+                    gait.feet[leg].contact == CC_HUMANOID_CONTACT_HEEL) {
+                    steps[leg] += 1;
+                }
+            }
+        }
+        Require(flat_samples > 120 && steps[0] > 0 && steps[1] > 0,
+                "turning should include support and a step from each foot");
+        Require(maximum_heading_step < 0.08f,
+                "the boot should turn smoothly through the shortest angle");
+        Require(gait.idle.stable && gait.idle.pose_locked,
+                "a completed turn should settle into a stable standing pose");
+        Require(maximum_standing_drift < 0.20f,
+                "a standing turn should stay close to its starting position");
+        for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+            Require(fabsf(HeadingDifference(FootHeading(&gait.pose, leg),
+                      starts[sample] + turns[sample])) < 0.20f,
+                    "both boots should face the completed turn");
+        }
+    }
+}
+
+static void TestSoftFootfalls(void)
+{
+    CcHumanoidGait gait;
+    CcLimbVec3 body = {0};
+    CcHumanoidGaitInit(&gait, body, 0.0f, PlaneProbe, NULL);
+    int32_t landings = 0;
+    float maximum_landing_speed = 0.0f;
+    float maximum_lift_speed = 0.0f;
+    float maximum_clearance = 0.0f;
+    for (int32_t frame = 0; frame < 1200; ++frame) {
+        CcHumanoidFoot before[CC_HUMANOID_LEG_COUNT] = {
+            gait.feet[0], gait.feet[1]};
+        CcHumanoidGaitAdvance(&gait, body, 0.0f,
+                              (CcLimbVec3){0.0f, 0.0f, 0.70f}, true,
+                              1.0f / 120.0f, PlaneProbe, NULL);
+        body.x += gait.root_velocity.x / 120.0f;
+        body.z += gait.root_velocity.z / 120.0f;
+        if (frame < 240) continue;
+        for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+            const CcHumanoidFoot *foot = &gait.feet[leg];
+            float vertical_speed = fabsf(foot->current_point.y -
+                                         before[leg].current_point.y) * 120.0f;
+            maximum_clearance = fmaxf(maximum_clearance, foot->current_point.y);
+            if (before[leg].contact == CC_HUMANOID_CONTACT_SWING &&
+                foot->contact == CC_HUMANOID_CONTACT_HEEL) {
+                maximum_landing_speed = fmaxf(maximum_landing_speed, vertical_speed);
+                landings += 1;
+            }
+            if (before[leg].contact == CC_HUMANOID_CONTACT_TOE &&
+                foot->contact == CC_HUMANOID_CONTACT_SWING) {
+                maximum_lift_speed = fmaxf(maximum_lift_speed, vertical_speed);
+            }
+        }
+    }
+    (void)printf("footfalls: landing %.4f m/s, lift %.4f m/s, clearance %.4f m\n",
+                  maximum_landing_speed, maximum_lift_speed, maximum_clearance);
+    Require(landings >= 10 && maximum_clearance > 0.10f,
+            "walking should retain its step rhythm and ground clearance");
+    Require(maximum_landing_speed < 0.12f && maximum_lift_speed < 0.12f,
+            "the swing should ease into takeoff and ground contact");
+}
+
 int main(void)
 {
     TestMotionTimeline();
@@ -279,6 +393,8 @@ int main(void)
     TestHighMantlePerformance();
     TestStableIdleAndSnapshots();
     TestPoseOwnership();
+    TestFootTurns();
+    TestSoftFootfalls();
     (void)printf("motion system tests passed\n");
     return 0;
 }

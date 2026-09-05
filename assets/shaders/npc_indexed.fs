@@ -21,8 +21,20 @@ uniform vec3 heroHeadPosition;
 uniform float bodySkinRemap;
 uniform vec3 characterRimTint;
 uniform float characterRimStrength;
+uniform float materialStyle;
 
 out vec4 finalColor;
+
+// Skin, cloth, leather, hair, metal, eye: dark, light, gloss, highlight.
+vec4 surfaceResponse(int surface)
+{
+    if (surface == 0) return vec4(0.78, 1.04, 8.0, 0.016);
+    if (surface == 1) return vec4(0.65, 1.00, 6.0, 0.006);
+    if (surface == 2) return vec4(0.58, 1.02, 12.0, 0.055);
+    if (surface == 3) return vec4(0.55, 0.94, 20.0, 0.045);
+    if (surface == 4) return vec4(0.48, 1.08, 24.0, 0.26);
+    return vec4(0.50, 0.95, 12.0, 0.005);
+}
 
 void main()
 {
@@ -42,9 +54,18 @@ void main()
     float lightBand = step(0.48, wrapped);
     lightBand = max(lightBand, step(0.30, headFocus));
 
-    bool isSkin = paletteIndex == 0;
+    int surface = paletteIndex == 0 ? 0 : paletteIndex == 1 ? 3 :
+                  paletteIndex == 5 ? 2 :
+                  (paletteIndex == 6 || paletteIndex == 7) ? 4 :
+                  paletteIndex == 8 ? 5 : 1;
+    int authoredSurface = int(floor(fragColor.a * 8.0));
+    if (authoredSurface < 6) surface = authoredSurface;
+    vec4 response = surfaceResponse(surface);
+    bool isSkin = materialStyle > 0.5 ? surface == 0 : paletteIndex == 0;
     float darkValue = isSkin ? 0.72 : 0.63;
     float lightValue = isSkin ? 1.04 : 1.01;
+    darkValue = mix(darkValue, response.x, materialStyle);
+    lightValue = mix(lightValue, response.y, materialStyle);
     float authoredValue = fragColor.g < 0.375 ? (isSkin ? 0.73 : 0.64) :
                           fragColor.g < 0.625 ? (isSkin ? 0.88 : 0.82) :
                                                      (isSkin ? 1.05 : 1.03);
@@ -55,6 +76,8 @@ void main()
     vec3 temperature = mix(shadowTemperature, lightTemperature, lightBand);
     float normalValue = mix(darkValue, lightValue, lightBand);
     float authoredWeight = mix(0.72, 0.46, heroEmphasis);
+    authoredWeight = mix(authoredWeight, surface == 4 ? 0.28 : 0.58,
+                         materialStyle);
     vec3 color = paint.rgb * mix(normalValue, authoredValue, authoredWeight) *
                  temperature;
     float foldShadow = (1.0 - smoothstep(-0.18, 0.48, facing)) *
@@ -65,12 +88,21 @@ void main()
     color += paint.rgb * vec3(0.74, 0.91, 1.04) * skyExposure *
              (1.0 - lightBand) * 0.052;
 
+    vec3 halfDirection = normalize(toCamera + toLight);
+    float gloss = pow(max(dot(normal, halfDirection), 0.0), response.z);
+    float glossWidth = max(fwidth(gloss), 0.055);
+    float highlight = smoothstep(0.52 - glossWidth, 0.52 + glossWidth, gloss);
+    vec3 highlightColor = surface == 4 ? mix(vec3(1.0), paint.rgb, 0.30) :
+                                          vec3(1.0, 0.91, 0.80);
+    color += highlightColor * highlight * response.w * lightBand * materialStyle;
+
     float viewFacing = abs(dot(normal, toCamera));
     float edgeInk = 1.0 - smoothstep(0.055, 0.205, viewFacing);
     vec3 coloredInk = mix(vec3(0.024, 0.030, 0.032),
                           paint.rgb * 0.24, 0.38);
     color = mix(color, coloredInk,
-                edgeInk * inkStrength * paletteInk[paletteIndex]);
+                edgeInk * inkStrength * paletteInk[paletteIndex] *
+                mix(1.0, surface == 0 ? 0.72 : 0.90, materialStyle));
     float litEdge = edgeInk * smoothstep(0.08, 0.68, facing) * lightBand;
     color += vec3(0.18, 0.27, 0.28) * litEdge * 0.050;
 

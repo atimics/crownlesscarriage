@@ -22,8 +22,50 @@ static void DrawScenerySphere(Vector3 center, float radius, Color color)
 
 static void DrawBox(Vector3 center, Vector3 size, Color color)
 {
-    DrawCubeV(center, size, color);
-    DrawCubeWiresV(center, size, Fade(WORLD_INK, 0.18f));
+    // rlgl shares the four corners of each face through its quad index buffer.
+    // Add the center here so each box shares its parent's transform.
+    Vector3 low = Vector3Subtract(center, Vector3Scale(size, 0.5f));
+    Vector3 high = Vector3Add(center, Vector3Scale(size, 0.5f));
+    // Batched vertices already include their transforms. Flush a full batch
+    // with identity matrices so its lighting uses those world coordinates.
+    rlPushMatrix();
+    rlLoadIdentity();
+    rlSetTexture(rlGetTextureIdDefault());
+    rlBegin(RL_QUADS);
+    (void)rlCheckRenderBatchLimit(24);
+    rlPopMatrix();
+    rlColor4ub(color.r, color.g, color.b, color.a);
+    rlNormal3f(0.0f, 0.0f, 1.0f);
+    rlVertex3f(low.x, high.y, high.z);
+    rlVertex3f(low.x, low.y, high.z);
+    rlVertex3f(high.x, low.y, high.z);
+    rlVertex3f(high.x, high.y, high.z);
+    rlNormal3f(0.0f, 0.0f, -1.0f);
+    rlVertex3f(high.x, low.y, low.z);
+    rlVertex3f(low.x, low.y, low.z);
+    rlVertex3f(low.x, high.y, low.z);
+    rlVertex3f(high.x, high.y, low.z);
+    rlNormal3f(0.0f, 1.0f, 0.0f);
+    rlVertex3f(low.x, high.y, low.z);
+    rlVertex3f(low.x, high.y, high.z);
+    rlVertex3f(high.x, high.y, high.z);
+    rlVertex3f(high.x, high.y, low.z);
+    rlNormal3f(0.0f, -1.0f, 0.0f);
+    rlVertex3f(high.x, low.y, high.z);
+    rlVertex3f(low.x, low.y, high.z);
+    rlVertex3f(low.x, low.y, low.z);
+    rlVertex3f(high.x, low.y, low.z);
+    rlNormal3f(1.0f, 0.0f, 0.0f);
+    rlVertex3f(high.x, low.y, low.z);
+    rlVertex3f(high.x, high.y, low.z);
+    rlVertex3f(high.x, high.y, high.z);
+    rlVertex3f(high.x, low.y, high.z);
+    rlNormal3f(-1.0f, 0.0f, 0.0f);
+    rlVertex3f(low.x, high.y, high.z);
+    rlVertex3f(low.x, high.y, low.z);
+    rlVertex3f(low.x, low.y, low.z);
+    rlVertex3f(low.x, low.y, high.z);
+    rlEnd();
 }
 
 static Color ShadeColor(Color color, float scale)
@@ -470,6 +512,12 @@ static void DrawBuilding(float x, float z, float width, float depth,
                          int32_t style)
 {
     Vector3 center = {x + width * 0.5f, height * 0.5f, z + depth * 0.5f};
+    if (distant_building_view) {
+        // Keep the authored walls and roofline legible from the road.
+        DrawCubeV(center, (Vector3){width, height, depth}, wall);
+        (void)DrawPitchedRoof(x, z, width, depth, height, wall, roof);
+        return;
+    }
     Color trim = style == 2 ? WORLD_GOLD : ShadeColor(wall, 0.60f);
     Color glass = style == 1 ? (Color){148, 103, 55, 255} :
                   style == 3 ? Fade(WORLD_VIOLET, 0.84f) :
@@ -1712,6 +1760,40 @@ static float TerrainRoadAmount(float x, float z)
     }
     amount = fmaxf(amount, TerrainPlaceRoadAmount(x, z));
     return fmaxf(amount, TerrainCarriageRoadAmount(x, z));
+}
+
+CcSoundCue CcLocalFootstepSurfaceAt(CcLocalSceneKind scene, float x, float z)
+{
+    if (scene == CC_LOCAL_SCENE_MARKET) return CC_SOUND_STEP_WOOD;
+    if (active_world_stream != NULL) {
+        CcWorldSurfaceKind surface = CcWorldSurfaceAt(
+            &active_world_stream->manifest, x, z);
+        return surface == CC_WORLD_SURFACE_WILDERNESS ? CC_SOUND_STEP_GRASS :
+               surface == CC_WORLD_SURFACE_ROAD ? CC_SOUND_STEP_DIRT : CC_SOUND_STEP_STONE;
+    }
+    if (scene == CC_LOCAL_SCENE_ROAD) {
+        if (RoadUsesAuthoredCheckpoint() &&
+            CcLocalRoadCheckpointSurfaceYInternal(x, z) > 0.0f)
+            return CC_SOUND_STEP_STONE;
+        return x >= 15.0f && x <= 81.0f && z >= 36.30f && z <= 43.70f ?
+               CC_SOUND_STEP_DIRT : CC_SOUND_STEP_GRASS;
+    }
+    if (scene != CC_LOCAL_SCENE_STREET) return CC_SOUND_STEP_STONE;
+    if (CourseWaterContains(scene, x, z)) return CC_SOUND_SPLASH;
+    float terrain = CcLocalTerrainHeightAt(x, z);
+    for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
+        const NavPlatform *platform = StreetPhysicsPlatformAt(i);
+        if (platform != NULL && x >= platform->x && x <= platform->x + platform->width &&
+            z >= platform->z && z <= platform->z + platform->depth &&
+            PlatformTopHeight(platform) > terrain) {
+            return platform->style == 0 ? CC_SOUND_STEP_STONE : CC_SOUND_STEP_WOOD;
+        }
+    }
+    /* Use the same road edges and seed as the ground colors. */
+    if (TerrainRoadAmount(x, z) < 0.5f) return CC_SOUND_STEP_GRASS;
+    CcLocalRoadSurface surface = ActiveTownRoadSurface();
+    return surface == CC_LOCAL_ROAD_FARM_TRACK || surface == CC_LOCAL_ROAD_EXPEDITION ?
+           CC_SOUND_STEP_DIRT : CC_SOUND_STEP_STONE;
 }
 
 static Color TerrainPlaceRoadColor(CcLocalRoadSurface surface)

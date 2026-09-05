@@ -526,7 +526,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 25);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 26);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -1291,6 +1291,7 @@ static void CheckPreJourneySchema3Compatibility(char *error,
     RemoveDatabase(journey_path);
     CcSim legacy_journey;
     CcSimInit(&legacy_journey, UINT32_C(0x1e9ac4));
+    legacy_journey.schema_version = 40U;
     const CcSituation *situation = NULL;
     for (int32_t i = 0; i < legacy_journey.situation_count; ++i) {
         if (legacy_journey.situations[i].status == CC_SITUATION_ACTIVE) {
@@ -2360,6 +2361,52 @@ static void CheckArchivePhysicalLoreMigration(char *error,
     RemoveDatabase(path);
 }
 
+static void CheckWoodPaperJournalMigration(char *error,
+                                           size_t error_capacity)
+{
+    char fixture[512];
+    (void)snprintf(
+        fixture, sizeof(fixture),
+        "%s/tests/fixtures/shipped/schema-36-generator-25-paper-journal.ccsave",
+        CC_TEST_SOURCE_DIR);
+    CC_CHECK(ReadSqliteInteger(
+        fixture, "SELECT schema_version FROM meta WHERE id=1;") == 36);
+    CC_CHECK(ReadSqliteInteger(
+        fixture, "SELECT COUNT(*) FROM action_journal;") == 1);
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(fixture, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.current_day == 7);
+    CC_CHECK(restored.settlements[1].stock[CC_GOOD_WHEAT] == 98);
+    /* The replay produces 22 wood in transit. Migration completes this
+       extra load because the Crown carriage already holds its food load. */
+    CC_CHECK(restored.settlements[1].stock[CC_GOOD_WOOD] == 22);
+    CC_CHECK(restored.shipments[1].good == CC_GOOD_WOOD);
+    CC_CHECK(restored.shipments[1].quantity == 22);
+    CC_CHECK(restored.shipments[1].status == CC_SHIPMENT_ARRIVED);
+    CC_CHECK(restored.settlements[1].stock[CC_GOOD_PAPER] == 8);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+
+    /* Captured with main 9ab3a56 before changing the paper recipe. */
+    CcSim legacy_view = restored;
+    legacy_view.schema_version = 36U;
+    legacy_view.next_entity_serial -= (uint64_t)restored.kingdom_count;
+    legacy_view.settlements[1].stock[CC_GOOD_WOOD] -= 22;
+    legacy_view.shipments[1].status = CC_SHIPMENT_TRAVELLING;
+    CC_CHECK(CcSimHash(&legacy_view) == UINT64_C(0x8e390ecaf46cc546));
+    CC_CHECK(ReadSqliteInteger(
+        fixture, "SELECT schema_version FROM meta WHERE id=1;") == 36);
+
+    const char *path = "persistence-wood-paper-upgrade-test.ccsave";
+    RemoveDatabase(path);
+    CC_CHECK(CcSaveWrite(path, &restored, error, error_capacity));
+    CcSim round_trip;
+    CC_CHECK(CcSaveRead(path, &round_trip, error, error_capacity));
+    CC_CHECK(CcSimHash(&round_trip) == CcSimHash(&restored));
+    RemoveDatabase(path);
+}
+
 static void CheckJourneyStopPersistence(char *error, size_t error_capacity)
 {
     const char *path = "persistence-journey-stop-test.ccsave";
@@ -2429,7 +2476,8 @@ static void CheckLegacyLifecycleJournalCompatibility(
     CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
     CC_CHECK(restored.current_day == suffix.current_day);
     CC_CHECK(restored.characters[0].id == first_character_id);
-    CC_CHECK(restored.next_entity_serial == first_unused_serial);
+    CC_CHECK(restored.next_entity_serial ==
+             first_unused_serial + (uint64_t)restored.kingdom_count);
     CC_CHECK(restored.character_births == 0);
     CC_CHECK(restored.character_deaths == 0);
     for (int32_t i = 0; i < restored.character_count; ++i) {
@@ -2619,6 +2667,7 @@ int main(void)
                             error, sizeof(error));
     CheckMaterialChainMigration(error, sizeof(error));
     CheckArchivePhysicalLoreMigration(error, sizeof(error));
+    CheckWoodPaperJournalMigration(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));

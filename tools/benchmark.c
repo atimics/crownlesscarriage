@@ -1,5 +1,6 @@
 #include "locomotion/cc_humanoid.h"
 #include "sim/cc_sim.h"
+#include "world/cc_world.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -83,9 +84,9 @@ int main(int argc, char **argv)
 
     uint64_t checksum = 0U;
     char validation[192];
+    CcSim sim;
     clock_t started = clock();
     for (int32_t seed = 0; seed < sim_seeds; ++seed) {
-        CcSim sim;
         CcSimInit(&sim, (uint32_t)seed * UINT32_C(0x9e3779b9) + 1U);
         CcSimAdvanceDays(&sim, simulation_days_per_seed);
         if (!CcSimValidate(&sim, validation, sizeof(validation))) {
@@ -98,6 +99,30 @@ int main(int argc, char **argv)
     int64_t simulated_days =
         (int64_t)sim_seeds * simulation_days_per_seed;
     double nanoseconds_per_day = sim_seconds * 1.0e9 / (double)simulated_days;
+
+    enum { TERRAIN_SIDE = 64 };
+    started = clock();
+    for (int32_t seed = 0; seed < sim_seeds; ++seed) {
+        CcWorldManifest manifest;
+        CcSimInit(&sim, (uint32_t)seed * UINT32_C(0x9e3779b9) + 1U);
+        if (!CcWorldManifestBuild(&manifest, &sim)) return EXIT_FAILURE;
+        for (int32_t row = 0; row < TERRAIN_SIDE; ++row) {
+            float z = manifest.minimum_z +
+                (manifest.maximum_z - manifest.minimum_z) *
+                    ((float)row + 0.5f) / (float)TERRAIN_SIDE;
+            for (int32_t column = 0; column < TERRAIN_SIDE; ++column) {
+                float x = manifest.minimum_x +
+                    (manifest.maximum_x - manifest.minimum_x) *
+                        ((float)column + 0.5f) / (float)TERRAIN_SIDE;
+                float height = CcWorldTerrainHeight(&manifest, x, z);
+                checksum = checksum * UINT64_C(1099511628211) ^
+                    (uint64_t)(int64_t)(height * 1000.0f);
+                checksum ^= (uint64_t)CcWorldSurfaceAt(&manifest, x, z);
+            }
+        }
+    }
+    double terrain_seconds = ElapsedSeconds(started);
+    int64_t terrain_points = (int64_t)sim_seeds * TERRAIN_SIDE * TERRAIN_SIDE;
 
     CcHumanoidGait *gaits = calloc((size_t)agent_count, sizeof(*gaits));
     CcLimbVec3 *positions = calloc((size_t)agent_count, sizeof(*positions));
@@ -145,6 +170,10 @@ int main(int argc, char **argv)
                  " cpu=%.6fs ns/step=%.1f\n",
                  agent_count, locomotion_frames, agent_steps,
                  locomotion_seconds, nanoseconds_per_step);
+    (void)printf("terrain: seeds=%d points=%" PRId64
+                 " cpu=%.6fs ns/point=%.1f\n",
+                 sim_seeds, terrain_points, terrain_seconds,
+                 terrain_seconds * 1.0e9 / (double)terrain_points);
     (void)printf("checksum=%016" PRIx64 "\n", checksum);
     if (assert_budget &&
         (nanoseconds_per_day > CC_SIMULATION_BUDGET_NS_PER_DAY ||
