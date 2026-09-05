@@ -109,6 +109,9 @@ int main(void)
     CC_CHECK(volumes[CC_SOUND_STEP_STONE * 3] < volumes[CC_SOUND_HIT * 3] * 0.5f);
     CcAudioPlay(CC_SOUND_HOOF);
     CC_CHECK(PlayingCount() == 1);
+    CC_CHECK(volumes[CC_SOUND_HOOF * 3] > 0.40f);
+    CC_CHECK(volumes[CC_SOUND_WHEEL * 3] > 0.40f);
+    float hoof_volume = volumes[CC_SOUND_HOOF * 3];
     CC_CHECK(pitches[CC_SOUND_HOOF * 3] == CC_SOUND_PLAYBACK_PITCH);
     CcAudioPlay(CC_SOUND_HOOF);
     CC_CHECK(PlayingCount() == 1);
@@ -120,14 +123,14 @@ int main(void)
     CC_CHECK(voices_loaded == 1 && voice_playing);
     CC_CHECK(CcAudioMusicGain() == 0.36f);
     CcAudioUpdate();
-    CC_CHECK(fabsf(volumes[CC_SOUND_HOOF * 3] - 0.32f * 0.36f) < 0.0001f);
+    CC_CHECK(fabsf(volumes[CC_SOUND_HOOF * 3] - hoof_volume * 0.36f) < 0.0001f);
     CcAudioVoice("reply.wav");
     CC_CHECK(voices_loaded == 2 && voices_freed == 1 && voice_playing);
     CcAudioVoice(NULL);
     CcAudioUpdate();
     CC_CHECK(!voice_playing && voices_freed == 2);
     CC_CHECK(CcAudioMusicGain() == 1.0f);
-    CC_CHECK(fabsf(volumes[CC_SOUND_HOOF * 3] - 0.32f) < 0.0001f);
+    CC_CHECK(fabsf(volumes[CC_SOUND_HOOF * 3] - hoof_volume) < 0.0001f);
     CcAudioVoice("missing.wav");
     CcAudioVoice("missing.wav");
     CC_CHECK(voices_loaded == 2);

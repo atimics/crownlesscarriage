@@ -99,10 +99,9 @@ CcLocalFaceViewInternal CcLocalFaceViewForFrontAmountInternal(
 CcLocalFaceAnchorInternal CcLocalFaceAnchorForCameraInternal(
     float front_amount, float side_amount)
 {
-    CcLocalFaceViewInternal view =
-        CcLocalFaceViewForFrontAmountInternal(front_amount);
-    float turn = view == CC_LOCAL_FACE_VIEW_FRONT ? 0.0f :
-                 view == CC_LOCAL_FACE_VIEW_THREE_QUARTER ? 0.52f : 1.22f;
+    /* A small, continuous turn keeps the painted features on the brow. */
+    float turn = fminf(0.28f, atan2f(fabsf(side_amount),
+                                    fmaxf(front_amount, 0.0f)) * 0.22f);
     float side = side_amount < 0.0f ? -1.0f : 1.0f;
     return (CcLocalFaceAnchorInternal){
         .forward = cosf(turn),
@@ -137,9 +136,12 @@ typedef struct WorldFaceCanvas {
     Vector3 normal;
     float cell_width;
     float cell_height;
+    float pixel_width;
+    float pixel_height;
     float horizontal_scale;
     CcLocalFaceLodInternal lod;
     bool always_paint;
+    float profile_side;
     int32_t layer;
 } WorldFaceCanvas;
 
@@ -166,6 +168,10 @@ static void PaintWorldFaceBlock(void *context, int32_t grid_x,
                                 int32_t grid_height, Color color)
 {
     WorldFaceCanvas *canvas = context;
+    /* The far eye and brow sit behind the bridge in a side view. */
+    if (grid_y <= 9 && grid_x != 9 && grid_x != 10 &&
+        ((canvas->profile_side > 0.0f && grid_x < 9) ||
+         (canvas->profile_side < 0.0f && grid_x > 10))) return;
     if (!canvas->always_paint &&
         canvas->lod == CC_LOCAL_FACE_LOD_READABLE &&
         !IsPortraitEyeBlock(grid_x, grid_y, grid_width, grid_height) &&
@@ -182,6 +188,12 @@ static void PaintWorldFaceBlock(void *context, int32_t grid_x,
     width *= canvas->horizontal_scale;
     float y = (8.5f - grid_center_y) * canvas->cell_height;
     float height = (float)grid_height * canvas->cell_height;
+    if (canvas->lod == CC_LOCAL_FACE_LOD_READABLE) {
+        float pixels = IsPortraitEyeBlock(grid_x, grid_y, grid_width,
+                                          grid_height) ? 0.85f : 0.65f;
+        width = fmaxf(width, canvas->pixel_width * pixels);
+        height = fmaxf(height, canvas->pixel_height * pixels);
+    }
     float lift = 0.0030f + (float)canvas->layer * 0.00045f;
     DrawFaceQuad(canvas->origin, canvas->right, canvas->up, canvas->normal,
                  x, y, width, height, lift, color);
@@ -231,7 +243,7 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
         (surface_sine * surface_sine) / (half_width * half_width));
     Vector3 surface = Vector3Add(
         eye_center, Vector3Scale(
-            normal, surface_radius * (priority_face ? 1.15f : 1.03f)));
+            normal, surface_radius * 1.03f));
 
     float projected_face_height = FaceProjectedHeight(
         eye_center, head_up, half_height);
@@ -260,16 +272,19 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
                       fmaxf(horizontal_pixels_per_unit, 0.0001f),
         .cell_height = cell_pixels /
                        fmaxf(vertical_pixels_per_unit, 0.0001f),
+        .pixel_width = 1.0f / fmaxf(horizontal_pixels_per_unit, 0.0001f),
+        .pixel_height = 1.0f / fmaxf(vertical_pixels_per_unit, 0.0001f),
         .horizontal_scale = 1.0f,
         .lod = lod,
         .always_paint = false,
+        .profile_side = front_amount < 0.40f ? side_amount : 0.0f,
         .layer = 0,
     };
-    if (lod == CC_LOCAL_FACE_LOD_CLOSE || priority_face) {
+    if (lod == CC_LOCAL_FACE_LOD_CLOSE) {
         canvas.always_paint = true;
         CcNpcPaintFaceBeard(face, &canvas, PaintWorldFaceBlock);
     }
-    canvas.always_paint = priority_face;
+    canvas.always_paint = false;
     CcNpcPaintFaceFeatures(face, expression, &canvas,
                            PaintWorldFaceBlock);
     EndShaderMode();
@@ -1020,20 +1035,9 @@ static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
 {
     if (skin == NULL || !skin->valid) return;
     UseCharacterLighting();
-    Vector3 up = PhysicsNormalizeOr(FromLimbVector(skin->body_up),
-                                    (Vector3){0.0f, 1.0f, 0.0f});
-    Vector3 right = PhysicsNormalizeOr(FromLimbVector(skin->body_right),
-                                       (Vector3){1.0f, 0.0f, 0.0f});
     Vector3 forward = PhysicsNormalizeOr(FromLimbVector(skin->body_forward),
                                          (Vector3){0.0f, 0.0f, 1.0f});
-    Vector3 chest = FromLimbVector(
-        skin->sockets[CC_HUMANOID_SOCKET_CHEST_FRONT].position);
-    chest = PhysicsAdd(chest, PhysicsScale(forward, 0.032f));
-
     Color portrait_burgundy = CC_STYLE_HERO_OUTER;
-    Color broken_gold = CC_STYLE_HERO_ACCENT;
-    Vector3 panel = PhysicsAdd(chest, PhysicsScale(up, -0.018f));
-
 
     static const CcHumanoidSkinBone shoulder_bones[] = {
         CC_HUMANOID_SKIN_UPPER_ARM_LEFT,
@@ -1050,17 +1054,6 @@ static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
         DrawCylinderEx(shoulder, tab_end, 0.108f, 0.084f, 6,
                        portrait_burgundy);
     }
-
-    Vector3 left_top = NpcModuleLocalPoint(
-        panel, right, up, forward, (Vector3){-0.112f, 0.076f, 0.022f});
-    Vector3 left_low = NpcModuleLocalPoint(
-        panel, right, up, forward, (Vector3){-0.020f, -0.030f, 0.022f});
-    Vector3 right_low = NpcModuleLocalPoint(
-        panel, right, up, forward, (Vector3){0.026f, -0.014f, 0.022f});
-    Vector3 right_top = NpcModuleLocalPoint(
-        panel, right, up, forward, (Vector3){0.116f, 0.064f, 0.022f});
-    DrawCylinderEx(left_top, left_low, 0.020f, 0.016f, 5, broken_gold);
-    DrawCylinderEx(right_low, right_top, 0.016f, 0.020f, 5, broken_gold);
 }
 
 static bool DrawNpcDynamicModule(NpcDynamicModuleId id, Matrix transform,
@@ -1383,7 +1376,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     Vector3 head_right = FromLimbVector(head_bone->right);
     Vector3 head_up = FromLimbVector(head_bone->up);
     Vector3 head_forward = FromLimbVector(head_bone->forward);
-    float hero_head_scale = featured_hero ? 1.04f : 1.0f;
+    float hero_head_scale = featured_hero ? 1.10f : 1.0f;
     Vector3 head_scale = {appearance->head_width * hero_head_scale,
                           hero_head_scale,
                           appearance->head_depth * hero_head_scale};
@@ -1579,13 +1572,18 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     }
 
     CcFaceRecipe face = CcNpcFaceRecipe(appearance);
-    float face_half_width = featured_hero ?
-        0.138f * appearance->head_width :
-        0.105f * appearance->head_width;
-    float face_half_height = featured_hero ? 0.145f : 0.158f;
-    float face_half_depth = featured_hero ?
-        0.142f * appearance->head_depth :
-        0.125f * appearance->head_depth;
+    /* Match the exported head shells at the eye line (Blender HEADS). */
+    static const Vector3 face_dimensions[CC_NPC_HEAD_FAMILY_COUNT] = {
+        {0.1125f, 0.1525f, 0.1025f}, {0.1240f, 0.1250f, 0.1090f},
+        {0.1190f, 0.1475f, 0.1075f}, {0.1100f, 0.1550f, 0.1025f},
+    };
+    Vector3 dimensions = face_dimensions[NpcHeadFamilyForAppearance(appearance)];
+    if (!npc_head_families[NpcHeadFamilyForAppearance(appearance)].ready) {
+        dimensions = (Vector3){0.15f, 0.17f, 0.14f};
+    }
+    float face_half_width = dimensions.x * head_scale.x;
+    float face_half_height = dimensions.y * head_scale.y;
+    float face_half_depth = dimensions.z * head_scale.z;
     DrawWorldFace(PhysicsAdd(head, Vector3Scale(head_up, 0.025f)),
                   head_right, head_up, head_forward,
                   face_half_width, face_half_height, face_half_depth,
@@ -2238,6 +2236,7 @@ int32_t CcLocalCargoBoxCountInternal(const CcPlayerCompany *player)
     if (player == NULL) return 0;
     int32_t count = 0;
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        if (player->cargo[good] >= 24 - count) return 24;
         if (player->cargo[good] > 0) count += player->cargo[good];
         if (count >= 24) return 24;
     }
@@ -2275,39 +2274,40 @@ static Color CargoBoxBandColor(CcGood good)
     return WORLD_INK;
 }
 
-static void DrawFallbackCargoBoxes(const CcPlayerCompany *player,
-                                   Vector3 base, float yaw, int32_t limit)
+/* Each model fits a real rack cell, including tall weapon and tool bundles. */
+static void DrawEconomicCargoUnit(CcGood good, Vector3 base, Vector3 floor,
+                                  Vector3 cell, float yaw)
 {
-    int32_t drawn = 0;
-    for (int32_t good = 0;
-         good < CC_GOOD_COUNT && drawn < limit; ++good) {
-        int32_t quantity = player != NULL ? player->cargo[good] : 0;
-        for (int32_t unit = 0; unit < quantity && drawn < limit;
-             ++unit, ++drawn) {
-            int32_t layer = drawn / 8;
-            int32_t spot = drawn % 8;
-            int32_t column = spot % 4;
-            int32_t row = spot / 4;
-            Vector3 center = {
-                -1.26f + (float)column * 0.64f,
-                2.49f + (float)layer * 0.49f,
-                -0.34f + (float)row * 0.68f
-            };
-            Color box = CargoBoxColor((CcGood)good);
-            Color band = CargoBoxBandColor((CcGood)good);
-            DrawOrientedBox(base, center,
-                            (Vector3){0.58f, 0.44f, 0.59f}, yaw, box);
-            DrawOrientedBox(
-                base,
-                (Vector3){center.x, center.y + 0.23f, center.z},
-                (Vector3){0.60f, 0.055f, 0.61f}, yaw, band);
-            DrawOrientedBox(
-                base,
-                (Vector3){center.x, center.y, center.z - 0.302f},
-                (Vector3){0.15f, 0.32f, 0.022f}, yaw,
-                Fade(band, 0.92f));
+    EconomicCargoAsset *asset = &economic_cargo_assets[good];
+    if (asset->ready) {
+        Vector3 size = Vector3Subtract(asset->bounds.max, asset->bounds.min);
+        float scale = fminf(cell.x / fmaxf(size.x, 0.01f),
+            fminf(cell.y / fmaxf(size.y, 0.01f), cell.z / fmaxf(size.z, 0.01f)));
+        Vector3 center = Vector3Scale(Vector3Add(asset->bounds.min, asset->bounds.max), 0.5f);
+        Vector3 position = LocalPoint(base, floor.x - center.x * scale,
+            floor.y - asset->bounds.min.y * scale, floor.z - center.z * scale, yaw);
+        DrawModelEx(asset->model, position, (Vector3){0, 1, 0}, yaw * RAD2DEG,
+            (Vector3){scale, scale, scale}, WHITE);
+        return;
+    }
+    Vector3 center = {floor.x, floor.y + cell.y * 0.5f, floor.z};
+    DrawOrientedBox(base, center, cell, yaw, CargoBoxColor(good));
+    DrawOrientedBox(base, (Vector3){floor.x, floor.y + cell.y, floor.z},
+        (Vector3){cell.x, 0.04f, cell.z}, yaw, CargoBoxBandColor(good));
+}
+
+/* Fill one unit of every good first so a full rack still shows mixed cargo. */
+CcGood CcLocalCargoBoxGoodInternal(const CcPlayerCompany *player, int32_t slot)
+{
+    if (slot < 0 || slot >= CcLocalCargoBoxCountInternal(player)) return CC_GOOD_COUNT;
+    int32_t shown = 0;
+    for (int32_t unit = 0; unit < 24; ++unit) {
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            if (player->cargo[good] <= unit) continue;
+            if (shown++ == slot) return (CcGood)good;
         }
     }
+    return CC_GOOD_COUNT;
 }
 
 static void DrawCarriedCargoBoxes(const CcPlayerCompany *player,
@@ -2331,36 +2331,12 @@ static void DrawCarriedCargoBoxes(const CcPlayerCompany *player,
     DrawOrientedBox(base, (Vector3){1.18f, 2.42f, 0.0f},
                     (Vector3){0.07f, 0.42f, 1.52f}, yaw,
                     WORLD_WOOD_SHADOW);
-
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        if (player != NULL && player->cargo[good] > 0 &&
-            !economic_cargo_assets[good].ready) {
-            DrawFallbackCargoBoxes(player, base, yaw, limit);
-            return;
-        }
-    }
-
-    static const float scales[CC_GOOD_COUNT] = {
-        0.46f, 0.52f, 0.44f, 0.40f, 0.54f, 0.49f,
-        0.46f, 0.43f, 0.48f, 0.46f, 0.48f,
-        0.47f, 0.48f, 0.47f,
-    };
-    int32_t shown = 0;
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        if (player == NULL || player->cargo[good] <= 0) continue;
-        int32_t column = shown % 5;
-        int32_t row = shown / 5;
-        Vector3 position = LocalPoint(
-            base,
-            -1.42f + (float)column * 0.60f,
-            2.25f,
-            -0.46f + (float)row * 0.46f,
-            yaw);
-        float scale = scales[good];
-        DrawModelEx(economic_cargo_assets[good].model, position,
-                    (Vector3){0.0f, 1.0f, 0.0f}, yaw * RAD2DEG,
-                    (Vector3){scale, scale, scale}, WHITE);
-        shown += 1;
+    for (int32_t slot = 0; slot < limit; ++slot) {
+        Vector3 floor = {-1.26f + (float)(slot % 4) * 0.64f,
+            2.27f + (float)(slot / 8) * 0.49f,
+            -0.34f + (float)((slot % 8) / 4) * 0.68f};
+        DrawEconomicCargoUnit(CcLocalCargoBoxGoodInternal(player, slot), base,
+            floor, (Vector3){0.58f, 0.44f, 0.59f}, yaw);
     }
 }
 

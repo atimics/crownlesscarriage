@@ -174,7 +174,7 @@ static const Rectangle COURSE_SCENERY_FOOTPRINT = {
 };
 static const float COURSE_WATER_SURFACE = 0.82f;
 static const Rectangle MARKET_COUNTER_FOOTPRINT = {6.05f, 1.84f, 2.10f, 0.72f};
-static const Rectangle MARKET_SHELF_FOOTPRINT = {1.10f, 1.175f, 0.72f, 3.45f};
+static const Rectangle MARKET_SHELF_FOOTPRINT = {1.10f, 0.65f, 4.25f, 1.40f};
 static const Rectangle ROAD_OBSTACLES[] = {
 
     {36.20f, 38.68f, 4.30f, 2.64f},

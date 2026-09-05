@@ -1449,16 +1449,18 @@ static void TestSharedCombat(void)
         exit(1);
     }
 
-    InitCombatant(&attacker, (Vector2){0.75f, 3.00f}, 0.5f * PI,
+    /* Strike across the front-left corner of the back-wall warehouse rack. */
+    float rack_attack_yaw = atan2f(0.85f, 1.10f);
+    InitCombatant(&attacker, (Vector2){0.75f, 1.30f}, rack_attack_yaw,
                   CC_COMBAT_PLAYER);
-    InitCombatant(&defender, (Vector2){2.17f, 3.00f}, -0.5f * PI,
+    InitCombatant(&defender, (Vector2){1.60f, 2.40f}, rack_attack_yaw + PI,
                   CC_COMBAT_RAIDER);
     outcome = RunCombatStrike(&attacker, &defender);
     if (outcome != CC_COMBAT_OUTCOME_MISS || defender.combat.health !=
             CC_LOCAL_COMBAT_MAX_HEALTH ||
         !attacker.combat.impact_valid) {
         (void)fprintf(stderr,
-                      "shared world collision let a strike pass through the market shelf: outcome %d health %.1f impact %d\n",
+                      "shared world collision let a strike pass through the warehouse rack: outcome %d health %.1f impact %d\n",
                       outcome, defender.combat.health,
                       attacker.combat.impact_valid);
         exit(1);
@@ -2457,9 +2459,22 @@ static void TestFaceAngleAndLodContract(void)
         bool side_matches = fabsf(anchor.right) < 0.0001f ||
             (anchor.right < 0.0f) == (camera_angles[angle][1] < 0.0f);
         if (fabsf(length - 1.0f) > 0.0001f ||
-            anchor.forward <= 0.30f || !side_matches) {
+            anchor.forward < 0.96f || !side_matches) {
             (void)fprintf(stderr,
                           "visible face anchor moved behind the head\n");
+            exit(1);
+        }
+    }
+    /* Camera motion through the view thresholds keeps features on the brow. */
+    for (int32_t step = 1; step <= 160; ++step) {
+        float angle = (float)step * 0.01f;
+        CcLocalFaceAnchorInternal first = CcLocalFaceAnchorForCameraInternal(
+            cosf(angle - 0.01f), sinf(angle - 0.01f));
+        CcLocalFaceAnchorInternal second = CcLocalFaceAnchorForCameraInternal(
+            cosf(angle), sinf(angle));
+        if (fabsf(first.forward - second.forward) > 0.003f ||
+            fabsf(first.right - second.right) > 0.003f) {
+            (void)fprintf(stderr, "face features jumped during a camera turn\n");
             exit(1);
         }
     }

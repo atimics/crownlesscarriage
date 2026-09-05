@@ -1289,8 +1289,7 @@ static bool BuildStorybookForest(const StorybookTree *trees, int count,
     return true;
 }
 
-static void DrawStorybookScenery(const CcWorldManifest *manifest, Vector3 focus,
-                                  Camera3D camera)
+static void DrawStorybookScenery(const CcWorldManifest *manifest, Vector3 focus)
 {
     int32_t origin_x = (int32_t)floorf(focus.x / 20.0f);
     int32_t origin_z = (int32_t)floorf(focus.z / 20.0f);
@@ -1307,13 +1306,7 @@ static void DrawStorybookScenery(const CcWorldManifest *manifest, Vector3 focus,
             if (scatter < 0.54f) continue;
             float x = ((float)gx + 0.2f + scatter * 0.6f) * 20.0f;
             float z = ((float)gz + TerrainScatter01(gx, gz, 813U)) * 20.0f;
-            float view_x = camera.position.x - focus.x;
-            float view_z = camera.position.z - focus.z;
-            float along_view = ((x - focus.x) * view_x + (z - focus.z) * view_z) /
-                fmaxf(0.01f, view_x * view_x + view_z * view_z);
-            if (along_view > 0.0f && along_view < 1.0f &&
-                hypotf(x - focus.x - view_x * along_view,
-                       z - focus.z - view_z * along_view) < 4.5f) continue;
+            /* Road and settlement clearings keep tree placement fixed as the camera turns. */
             if (hypotf(x - focus.x, z - focus.z) > 122.0f ||
                 CcWorldSurfaceAt(manifest, x, z) != CC_WORLD_SURFACE_WILDERNESS ||
                 !OpenWorldPointClearsSettlements(manifest,
@@ -1477,7 +1470,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         float scenery_fog = 0.0f;
         SetShaderValue(visual_style.world, visual_style.horizon_fog_location,
                        &scenery_fog, SHADER_UNIFORM_FLOAT);
-        DrawStorybookScenery(&stream->manifest, carriage->position, camera);
+        DrawStorybookScenery(&stream->manifest, carriage->position);
     } else {
         DrawOpenWorldRouteNetwork(
             sim, &stream->manifest, carriage, kingdom_view);

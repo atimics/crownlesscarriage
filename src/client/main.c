@@ -10117,7 +10117,12 @@ static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
             local->course.combat_event_seconds : 0.0f,
         .blocked = local->course.last_outcome == CC_COMBAT_OUTCOME_BLOCKED ||
                    local->course.last_outcome == CC_COMBAT_OUTCOME_GUARD_BROKEN,
-        .travel_pace = travel && view == VIEW_LOCAL ? local->convoy.pace : 0.0f
+        .travel_pace = view == VIEW_LOCAL ?
+            (local->open_world && local->world_carriage.hero_embarked ?
+                local->world_carriage.pace :
+                (travel || local->site_travel_active ||
+                 local->convoy.phase == CC_LOCAL_CONVOY_DEPARTING ?
+                    local->convoy.pace : 0.0f)) : 0.0f
     };
     for (int foot = 0; foot < CC_HUMANOID_LEG_COUNT; ++foot) {
         uint32_t contact = foot == 0 ? CC_MOTION_MARKER_LEFT_CONTACT :
@@ -10195,9 +10200,52 @@ static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
     CcAudioUpdate();
 }
 
+#if defined(CC_CLIENT_SELF_TESTS)
+static int RunTravelAudioRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    local.voice_ambient_after = 1.0e30;
+    local.convoy.pace = 0.72f;
+    local.open_world = true;
+    local.world_carriage.hero_embarked = true;
+    local.world_carriage.pace = 0.48f;
+    CcSoundscape soundscape = {0};
+    UpdatePlayAudio(&soundscape, &sim, &local, VIEW_LOCAL, 0, 1.0f / 60.0f);
+    if (soundscape.previous.travel_pace != 0.48f)
+        return ClientRegressionFailure("Road departure sound must follow the visible carriage.");
+    local.journey_travel_active = true;
+    sim.journey.active = true;
+    sim.journey.phase = CC_JOURNEY_PHASE_TRAVELLING;
+    local.world_carriage.pace = 0;
+    UpdatePlayAudio(&soundscape, &sim, &local, VIEW_LOCAL, 0, 1.0f / 60.0f);
+    if (soundscape.previous.travel_pace != 0)
+        return ClientRegressionFailure("A roadside stop must settle the travel sound clocks.");
+    local.world_carriage.pace = 0.72f;
+    UpdatePlayAudio(&soundscape, &sim, &local, VIEW_LEDGER, 0, 1.0f / 60.0f);
+    if (soundscape.previous.travel_pace != 0)
+        return ClientRegressionFailure("The book view must keep its quiet sound setting.");
+    local.open_world = false;
+    local.journey_travel_active = false;
+    local.site_travel_active = true;
+    UpdatePlayAudio(&soundscape, &sim, &local, VIEW_LOCAL, 0, 1.0f / 60.0f);
+    if (soundscape.previous.travel_pace != 0.72f)
+        return ClientRegressionFailure("Site travel must play carriage sounds.");
+    local.site_travel_active = false;
+    local.convoy.phase = CC_LOCAL_CONVOY_DEPARTING;
+    UpdatePlayAudio(&soundscape, &sim, &local, VIEW_LOCAL, 0, 1.0f / 60.0f);
+    if (soundscape.previous.travel_pace != 0.72f)
+        return ClientRegressionFailure("Town departure must play carriage sounds.");
+    (void)puts("PASS travel audio: departure, road stop, book, and site travel");
+    return 0;
+}
+#endif
+
 int main(int argc, char **argv)
 {
 #if defined(CC_CLIENT_SELF_TESTS)
+    if (argc == 2 && strcmp(argv[1], "--test-travel-audio") == 0) return RunTravelAudioRegression();
     if (argc == 2 && strcmp(argv[1], "--test-world-cards") == 0) return RunWorldCardRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-input") == 0) return RunAdventureInputRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-trade") == 0) return RunAdventureTradeTermsRegression();
@@ -12056,7 +12104,7 @@ int main(int argc, char **argv)
             if (local.adventure_ui) DrawAdventureBook(&sim, &local);
             else DrawLedger(&sim);
         }
-        if (view == VIEW_TRADE) { CcOverlayFlush(); DrawAdventureTrade(&sim, &local); }
+        if (view == VIEW_TRADE) { CcOverlayFlush(); DrawAdventureTrade(&sim, &local, map_textures.economic_goods); }
         if (view == VIEW_PAUSE) { CcOverlayFlush(); DrawAdventurePause(&local); }
         if (view == VIEW_CARRIAGE) {
             CcOverlayFlush();

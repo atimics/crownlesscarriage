@@ -135,31 +135,43 @@ static void WriteViewportFixture(const char *path)
     UnloadImage(shot);
 }
 
+#include "physical_goods_tests.inc"
 #include "building_cutaway_tests.inc"
 #include "box_batch_tests.inc"
 #include "character_material_captures.inc"
+#include "hero_face_captures.inc"
 #include "humanoid_animation_captures.inc"
 #include "character_surface_tests.inc"
 #include "animal_captures.inc"
 #include "creature_captures.inc"
 #include "mesh_memory_tests.inc"
+#include "travel_graphics_tests.inc"
 
 int main(int argc, char **argv)
 {
+    if (argc == 2 && strcmp(argv[1], "--physical-goods") == 0) {
+        TestPhysicalGoods();
+        return 0;
+    }
     TestBuildingRevealTiming();
     TestSkinTurns();
     TestPonyHarnessAttachment();
     if (argc == 3 && (strcmp(argv[1], "--graphics") == 0 ||
+                      strcmp(argv[1], "--travel-graphics") == 0 ||
                       strcmp(argv[1], "--creature-captures") == 0 ||
                       strcmp(argv[1], "--pony-captures") == 0 ||
                       strcmp(argv[1], "--material-captures") == 0 ||
+                      strcmp(argv[1], "--hero-face-captures") == 0 ||
                       strcmp(argv[1], "--animation-captures") == 0)) {
         SetConfigFlags(FLAG_WINDOW_HIDDEN);
         InitWindow(1280, 760, "Renderer regression checks");
         SetTraceLogLevel(LOG_WARNING);
         CcLocalRendererInit();
         if (strcmp(argv[1], "--graphics") == 0) {
+            TestTravelForestCameraTurn();
+            TestTravelLeafShimmer();
             TestRaisedBuildingCutaway(argv[2]);
+            TestPhysicalGoodsGraphics(argv[2]);
             TestUploadedMeshRelease();
             TestCharacterPrimitives();
             TestBoxBatchParity();
@@ -172,12 +184,17 @@ int main(int argc, char **argv)
             TestCreatureTurns();
             TestDragonCourtColors();
             WriteViewportFixture(argv[2]);
+        } else if (strcmp(argv[1], "--travel-graphics") == 0) {
+            TestTravelForestCameraTurn();
+            TestTravelLeafShimmer();
         } else if (strcmp(argv[1], "--animation-captures") == 0) {
             CaptureHumanoidAnimation(argv[2]);
         } else if (strcmp(argv[1], "--creature-captures") == 0) {
             CaptureCreatures(argv[2]);
         } else if (strcmp(argv[1], "--pony-captures") == 0) {
             CapturePonies(argv[2]);
+        } else if (strcmp(argv[1], "--hero-face-captures") == 0) {
+            CaptureHeroFaces(argv[2]);
         } else {
             CaptureCharacterMaterials(argv[2]);
         }

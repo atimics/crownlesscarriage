@@ -58,13 +58,15 @@ uint32_t CcSoundscapeStep(CcSoundscape *state, CcSoundFrame frame, float dt)
         float pace = fminf(frame.travel_pace, 1.0f);
         state->hoof_time += dt;
         state->wheel_time += dt;
-        if (state->hoof_time >= 0.42f - 0.19f * pace) {
+        float hoof_interval = 0.42f - 0.19f * pace;
+        float wheel_interval = 0.95f - 0.30f * pace;
+        if (state->hoof_time >= hoof_interval) {
             cues |= CUE(CC_SOUND_HOOF);
-            state->hoof_time = 0.0f;
+            state->hoof_time = fmodf(state->hoof_time, hoof_interval);
         }
-        if (state->wheel_time >= 0.95f - 0.30f * pace) {
+        if (state->wheel_time >= wheel_interval) {
             cues |= CUE(CC_SOUND_WHEEL);
-            state->wheel_time = 0.0f;
+            state->wheel_time = fmodf(state->wheel_time, wheel_interval);
         }
     } else {
         state->hoof_time = 0.0f;
@@ -77,7 +79,7 @@ uint32_t CcSoundscapeStep(CcSoundscape *state, CcSoundFrame frame, float dt)
 size_t CcSoundSampleCount(CcSoundCue cue)
 {
     static const float seconds[CC_SOUND_COUNT] = {
-        0.13f, 0.15f, 0.15f, 0.18f, 0.24f, 0.20f, 0.38f, 0.16f,
+        0.13f, 0.15f, 0.15f, 0.18f, 0.24f, 0.20f, 0.78f, 0.16f,
         0.21f, 0.18f, 0.18f, 0.28f, 0.14f, 0.32f, 0.48f
     };
     if (cue < 0 || cue >= CC_SOUND_COUNT) return 0U;
@@ -147,10 +149,15 @@ bool CcSoundSynthesize(CcSoundCue cue, uint32_t variation,
                          0.32f * Ring(second, 165.0f * pitch, 48.0f) +
                          0.14f * noise * expf(-80.0f * time); break;
             }
-            case CC_SOUND_WHEEL:
-                sample = 0.23f * low * (0.6f + 0.4f * sinf(TAU * 19.0f * time)) +
-                         0.10f * sinf(TAU * (88.0f * time + 8.0f * time * time)) *
-                         sinf(3.14159265f * (float)i / (float)count); break;
+            case CC_SOUND_WHEEL: {
+                float envelope = sinf(3.14159265f * (float)i / (float)count);
+                float rattle = 0.65f + 0.35f * sinf(TAU * 19.0f * time);
+                sample = (0.34f * low * rattle +
+                          0.13f * sinf(TAU * 74.0f * pitch * time) +
+                          0.06f * sinf(TAU * 121.0f * pitch * time) +
+                          0.035f * Ring(fmodf(time, 0.17f), 310.0f * pitch, 38.0f)) *
+                         envelope; break;
+            }
             case CC_SOUND_JUMP:
                 sample = 0.22f * ChipNote(time, 220.0f * pitch, 42.0f) +
                          0.19f * ChipNote(time - 0.04f, 293.66f * pitch, 42.0f) +

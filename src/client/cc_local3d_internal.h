@@ -52,6 +52,8 @@ Camera3D CcLocalConversationCameraInternal(
     Camera3D base, const CcLocalAgent *player, const CcLocalAgent *partner,
     bool active, float clock, bool advance, int32_t art_height);
 int32_t CcLocalCargoBoxCountInternal(const CcPlayerCompany *player);
+int32_t CcLocalWarehousePileCountInternal(const CcSettlement *place, CcGood good);
+CcGood CcLocalCargoBoxGoodInternal(const CcPlayerCompany *player, int32_t slot);
 float CcLocalCameraTreeOcclusionScoreInternal(Camera3D camera,
                                                Vector3 first_subject,
                                                Vector3 second_subject);

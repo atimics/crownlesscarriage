@@ -1318,6 +1318,8 @@ if(BUILD_TESTING)
         )
         add_test(NAME storybook_travel_boundaries
                  COMMAND crownless_carriage --test-storybook-travel)
+        add_test(NAME travel_audio_presentation
+                 COMMAND crownless_carriage --test-travel-audio)
         add_test(NAME adventure_town_routes
                  COMMAND crownless_carriage --test-adventure-town-routes)
         add_test(NAME adventure_trade_terms
@@ -1351,6 +1353,7 @@ if(BUILD_TESTING)
             CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
         cc_strict_warnings(renderer_regression_tests)
         add_test(NAME renderer_skin_rotation COMMAND renderer_regression_tests)
+        add_test(NAME physical_goods_displays COMMAND renderer_regression_tests --physical-goods)
         add_custom_target(run_renderer_graphics_tests
             COMMAND renderer_regression_tests --graphics
                 "${CMAKE_CURRENT_BINARY_DIR}/renderer-viewport.png"
@@ -1361,6 +1364,13 @@ if(BUILD_TESTING)
         add_custom_target(run_character_material_captures
             COMMAND renderer_regression_tests --material-captures
                 "${CMAKE_CURRENT_BINARY_DIR}/character-materials"
+            DEPENDS renderer_regression_tests
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            USES_TERMINAL
+        )
+        add_custom_target(run_hero_face_captures
+            COMMAND renderer_regression_tests --hero-face-captures
+                "${CMAKE_CURRENT_BINARY_DIR}/hero-faces"
             DEPENDS renderer_regression_tests
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             USES_TERMINAL
