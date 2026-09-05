@@ -1,0 +1,10 @@
+{
+  "id": "hearth-v1",
+  "name": "Hearth",
+  "description": "A woman with a rounded middle register, a gentle Welsh accent, and relaxed, welcoming speech.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 4238484718,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "b1279b4f8fd7d39cae4dd391c7e1d7c5d21ec70214ee78ef471aacb4d670c2c7"
+}

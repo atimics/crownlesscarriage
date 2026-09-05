@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "key": "7e6476a4ebb85448",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "worried",
+  "text": "The breathing is closer to the lifts now. Even the foreman heard it.",
+  "id": "lower_silverworks.jory.pressing",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 2120513190,
+  "take": 2,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "72a04f15b9d1d1952b9aa15779fb37f6fc7f37461731db17c68ccefc84639671",
+  "wav_sha256": "051786f5098930dbdb724cf2a3afa35c01dc99631a0bfb1a9da763e05b88cb4f",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "id": "stone-v1",
+  "name": "Stone",
+  "description": "A man with a dry middle register, a northern English accent, and clipped, watchful speech.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 878423103,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "c87190602c0f0d193be9d4cd998a35925b37d0ed5df63cb2bd70922be7b5fb6e"
+}

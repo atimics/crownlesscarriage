@@ -1,0 +1,10 @@
+{
+  "id": "tomas-v1",
+  "name": "Tomas Rill",
+  "description": "A man with a light baritone and a soft west-country English accent. Quick, dry humour and careful, quiet words.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 4200191496,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "09bbb99862b976d7355261eac3929cc3648ea40a04b8d0682e322bb4b31f9980"
+}

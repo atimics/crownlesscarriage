@@ -1,0 +1,10 @@
+{
+  "id": "lark-v1",
+  "name": "Lark",
+  "description": "A woman with a clear, bright voice, a light west-country English accent, and lively, gentle speech.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 2005022314,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "164f603900b336ca3ebc35b65327a75d0704201ae13766ad832e144da2b9a650"
+}

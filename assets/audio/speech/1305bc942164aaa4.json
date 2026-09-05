@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "1305bc942164aaa4",
+  "voice": "bren-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "I heard stone moving behind the old wall. Tell Jory Fen.",
+  "id": "situation.2.discovery.1",
+  "speaker": "Bren Alder",
+  "model": "chatterbox",
+  "seed": 319143060,
+  "reference_sha256": "a5ff8538b7bbda3767abf645b3eae480bc892bee973077a919361a7c05f43c59",
+  "sample_rate": 24000,
+  "master_sha256": "47bc9483533f92e849047dd39755d548f5519555070f7d96d70b590f3d403349",
+  "wav_sha256": "2d210e3c24537bc486200fde639eb5d4bac2747801e24573cab7c85ec44f9940",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

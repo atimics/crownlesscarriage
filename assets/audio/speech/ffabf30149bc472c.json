@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "ffabf30149bc472c",
+  "voice": "ilyra-v1",
+  "language": "en",
+  "delivery": "worried",
+  "text": "The chain still holds. The wagons behind it have started turning back.",
+  "id": "treaty_bridge.ilyra.pressing",
+  "speaker": "Ilyra Senn",
+  "model": "chatterbox",
+  "seed": 4289458945,
+  "reference_sha256": "4f872149b489921a727c3d7607ff6de790cac9ee4d7bb9af3c5e999d8752bd84",
+  "sample_rate": 24000,
+  "master_sha256": "7cb1ca9dd0246dc48666dd20fc757d3a6a084993020928deaede64412e2d54ee",
+  "wav_sha256": "18ff6184443187f440f32e11c8d5a939b8861b56eaf4322d5d0fd6ccb740681d",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

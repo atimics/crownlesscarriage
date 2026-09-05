@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "2dd22103ae27d132",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Tell Mara what Bren heard. She knows the mine, and she will listen.",
+  "id": "lower_silverworks.jory.decision.friend",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 768745731,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "75fb201963db29bcefef105486229e7efe248eda77a21d6c3dec688c74c1b0c7",
+  "wav_sha256": "3359e02ce293ece1f897c143a1db17ed82a94eb1760773dbe5e07725ad226989",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

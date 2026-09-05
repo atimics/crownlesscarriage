@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "04947785d5c13e6b",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "firm",
+  "text": "The food did not reach Silverwick.",
+  "id": "character.withdrew.sponsor",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 76838789,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "5d6988065504ec38fb76d0dbc54fb42b57e562673cf6c775be58c37cec8d122c",
+  "wav_sha256": "bc8b9cb1b20e34f064c160dc9746fe045645a3864a93134aa8ab8de68a861b4d",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

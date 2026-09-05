@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "0451e740db4fc49b",
+  "voice": "ilyra-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "The bridge works. I was ordered to keep the gate closed.",
+  "id": "treaty_bridge.ilyra.offer",
+  "speaker": "Ilyra Senn",
+  "model": "chatterbox",
+  "seed": 72476480,
+  "reference_sha256": "4f872149b489921a727c3d7607ff6de790cac9ee4d7bb9af3c5e999d8752bd84",
+  "sample_rate": 24000,
+  "master_sha256": "0ea8c6c52864ad13ef83566fa7b2d882209e97dd511b12acb2ebf359a4e45317",
+  "wav_sha256": "d0c48e3a40e3487197572e978ab69f9042d96bc8c92ffa282ce531c03f9cef5b",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

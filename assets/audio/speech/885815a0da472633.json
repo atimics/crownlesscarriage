@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "885815a0da472633",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "warm",
+  "text": "Cera came up with the morning shift. She won't work the west gallery again.",
+  "id": "lower_silverworks.jory.helped",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 2287474080,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "ac05200f4fb9dc6e00c3f88a3ec35bac534ab590e8b2e7236b863b7b7e79e965",
+  "wav_sha256": "6560e386c4add637fe97b5bb2142cadf6a6837f53d8d8c443d1abceffa43f424",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

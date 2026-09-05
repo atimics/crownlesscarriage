@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "0ab0ebe385f92401",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "firm",
+  "text": "I put your name on the job. Now I have to find another carrier.",
+  "id": "character.withdrew.sponsor",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 179366883,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "a00de6958fb12d98be69567a6ef7a5457091dc5762f1303e5c515bbf39d41953",
+  "wav_sha256": "54e461b37cb9935d28543c67d8007c365b89fcaa303286b395dfbd8c52ab338d",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

@@ -11,7 +11,7 @@ from voice_style import render_voice
 
 
 class SpeechEngine:
-    def __init__(self, device='cpu', references=ROOT / 'assets/audio/cast', engine='chatterbox', allow_download=False):
+    def __init__(self, device='cpu', references=ROOT / 'assets/audio/cast', engine='chatterbox', allow_download=False, take=0, cfg_weight=0.5):
         if not allow_download:
             os.environ['HF_HUB_OFFLINE'] = '1'
             os.environ['TRANSFORMERS_OFFLINE'] = '1'
@@ -20,6 +20,8 @@ class SpeechEngine:
         self.references = Path(references)
         self.engine = engine
         self.prompts = {}
+        self.take = take
+        self.cfg_weight = cfg_weight
         if engine == 'qwen':
             from qwen_tts import Qwen3TTSModel
             self.model = Qwen3TTSModel.from_pretrained('Qwen/Qwen3-TTS-12Hz-1.7B-Base',
@@ -36,7 +38,7 @@ class SpeechEngine:
         reference = self.references / (record['voice'] + '.wav')
         if not reference.is_file():
             raise ValueError(f"Prepare the reference for {record['voice']}")
-        seed = int(record['key'][:8], 16)
+        seed = (int(record['key'][:8], 16) + self.take) & 0xffffffff
         self.torch.manual_seed(seed)
         with self.torch.inference_mode():
             if self.engine == 'qwen':
@@ -50,7 +52,7 @@ class SpeechEngine:
             else:
                 intensity = {'plain': 0.45, 'warm': 0.55, 'worried': 0.65, 'urgent': 0.75, 'quiet': 0.3, 'firm': 0.55}
                 samples = self.model.generate(record['text'], audio_prompt_path=str(reference),
-                    exaggeration=intensity[record['delivery']], cfg_weight=0.5).detach().float().cpu().numpy().reshape(-1)
+                    exaggeration=intensity[record['delivery']], cfg_weight=self.cfg_weight).detach().float().cpu().numpy().reshape(-1)
                 rate = self.model.sr
         if rate != 24000 or not np.isfinite(samples).all() or not 0.15 <= len(samples) / rate <= 25:
             raise ValueError('The model returned invalid speech samples')
@@ -64,7 +66,7 @@ class SpeechEngine:
             master = Path(temporary) / 'master.wav'
             rendered = Path(temporary) / 'speech.wav'
             sf.write(master, samples, rate, subtype='PCM_16')
-            receipt = dict(record, model=self.engine, seed=seed,
+            receipt = dict(record, model=self.engine, seed=seed, take=self.take, cfg_weight=self.cfg_weight,
                 reference_sha256=hashlib.sha256(reference.read_bytes()).hexdigest())
             render_voice(master, rendered, receipt)
             check_wav(rendered)

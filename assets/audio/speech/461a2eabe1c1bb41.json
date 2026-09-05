@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "461a2eabe1c1bb41",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Another town is running out of food.",
+  "id": "empty_granary.mara.offer",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 1176121003,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "f1bbefd0037623e82249c73b1d93572e24e4ecb034b6a0b8949dff82e399972e",
+  "wav_sha256": "52b72b6d0011b648c42308838d4cd5c4ab2888d47c5521d87abe50bbe7dfb480",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

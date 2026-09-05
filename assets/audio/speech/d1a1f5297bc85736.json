@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "d1a1f5297bc85736",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "worried",
+  "text": "It is too late for that plan now. We have to manage what is left.",
+  "id": "character.failed.affected",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 3517052201,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "f6187923b9a85ff9e323feced6ef23ef7394034d4bd4cbc794bd4cab97555a1b",
+  "wav_sha256": "e8b5ade9cc1faabf5a8cb4480c47bab198e0ae1cd3068a70e2b273f1dcab77b3",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

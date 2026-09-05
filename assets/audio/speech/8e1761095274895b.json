@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "8e1761095274895b",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "warm",
+  "text": "The food arrived. You kept your word.",
+  "id": "empty_granary.mara.helped",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 2383896841,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "76fe6420b25d568ac998a5d89a86941b1d47833c0fa6fbd0fab81b5e1fbe2d7c",
+  "wav_sha256": "bb36319561fede46f24191ef3badddec29cad6683c869f6e768d6ceadb04e2cf",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

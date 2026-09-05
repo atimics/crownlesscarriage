@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "14e137f92008b68d",
+  "voice": "bren-v1",
+  "language": "en",
+  "delivery": "quiet",
+  "text": "I heard someone using a pick behind the old wall. Cera was still down there, so I ran.",
+  "id": "lower_silverworks.bren.witness",
+  "speaker": "Bren Alder",
+  "model": "chatterbox",
+  "seed": 350304249,
+  "reference_sha256": "a5ff8538b7bbda3767abf645b3eae480bc892bee973077a919361a7c05f43c59",
+  "sample_rate": 24000,
+  "master_sha256": "4927f37869e8e665897524d38557a82e883dab6b5aad4696e597a9482ad255b3",
+  "wav_sha256": "62c087c0be05900d0dcd41571ba08c07ef09bf9e476dc27017b030b0813a93f0",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

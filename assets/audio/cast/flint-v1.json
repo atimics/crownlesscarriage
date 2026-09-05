@@ -1,0 +1,10 @@
+{
+  "id": "flint-v1",
+  "name": "Flint",
+  "description": "A woman with a dry low register, a light northern English accent, and short, firm phrases.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 3786698755,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "98454193d1e240932634c3e81ea4f241337bef7643832dde811e183906f7af80"
+}

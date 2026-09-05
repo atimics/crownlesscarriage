@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "3024a976709372cf",
+  "voice": "ilyra-v1",
+  "language": "en",
+  "delivery": "warm",
+  "text": "Another crew finished it this morning. The offer is closed.",
+  "id": "character.resolved.sponsor",
+  "speaker": "Ilyra Senn",
+  "model": "chatterbox",
+  "seed": 807709046,
+  "reference_sha256": "4f872149b489921a727c3d7607ff6de790cac9ee4d7bb9af3c5e999d8752bd84",
+  "sample_rate": 24000,
+  "master_sha256": "05e80b3e9cc81e281389d97ecea831022bb75df349988826a262bdab630a302a",
+  "wav_sha256": "c197023817c3324e9835812a05eafa1b803a78f709b377afcf68d37a45569267",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

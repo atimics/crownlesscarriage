@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "aec87e91447f929c",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Do not tell Mara yet. She will close the mine before we find Cera.",
+  "id": "lower_silverworks.jory.decision.rival",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 2932375185,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "545776d6fb0a31ca4df6686b97964f97dadfea8000faae00cf744f0ebbe87ae1",
+  "wav_sha256": "0aa58e9713e5b4be3eb55300951881de4a2286f24ec3cdd4700b436c7347b903",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "66213261fe377ff6",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "The mine official must hear this. I trust your choice.",
+  "id": "situation.2.discovery.2",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 1713451617,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "809108ccea172a0d735d813bc35f6e4fd3ba6e1b7726163fc45be5ab1b66546f",
+  "wav_sha256": "5dbcf2b20ae7244b7208e65f9b75ce6ffc1115f8fb20185bbfb641a4aeb2b73f",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

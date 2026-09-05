@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "662a1b2ce007fd29",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "worried",
+  "text": "The flour ledger lost another page this week. The bread line did not.",
+  "id": "empty_granary.mara.pressing",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 1714035500,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "152c4091907193b1281221fcfba07fe8e1a2e27ba297642638385c5736f9077e",
+  "wav_sha256": "dcb74292077f15ace2e201fcde99a43f2a7e30d0c6f0a06053ab357923fcbded",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

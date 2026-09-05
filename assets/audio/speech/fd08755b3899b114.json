@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "fd08755b3899b114",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Bring the food to Silverwick.",
+  "id": "empty_granary.jory.promised",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 4245189979,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "3c1d694237d5f92db42c6c38bac04d7678499bf61d20526470088fe0cc45edfc",
+  "wav_sha256": "18946efaaf30946d159680a147930227e63786729ae892e041ea3398e819754a",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

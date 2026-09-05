@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "key": "ac60f839af53aecf",
+  "voice": "brook-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Thank you. I will tell the others you are coming.",
+  "id": "character.promised.affected",
+  "speaker": "Cera Mott",
+  "model": "chatterbox",
+  "seed": 2892036154,
+  "take": 1,
+  "reference_sha256": "e9ff04762f3cbb959c4f5bbc7e337a6c074b12b127c15b4f9958545fd826d0dc",
+  "sample_rate": 24000,
+  "master_sha256": "fa2557e07a497241b9de558e3f4396beebe34d50ade787a3d0adb1fd13c46833",
+  "wav_sha256": "b05282007b47444d997d521c1d79870cade0fcd41922df1882b3fa64db17611c",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

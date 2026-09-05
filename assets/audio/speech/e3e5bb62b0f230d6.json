@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "e3e5bb62b0f230d6",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "All right. I will put your company name on the job papers.",
+  "id": "character.promised.sponsor",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 3823483746,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "012f76150544f51326efbf275439109560a30c7cc8bb56c89094a253a9cd3c2a",
+  "wav_sha256": "5cb5df48306fdbe1707da5efef7267d30a0e61aea3048b03a41c3d3f2cbc9a99",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

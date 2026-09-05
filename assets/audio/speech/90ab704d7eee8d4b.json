@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "90ab704d7eee8d4b",
+  "voice": "ilyra-v1",
+  "language": "en",
+  "delivery": "firm",
+  "text": "I put your name on the job. Now I have to find another carrier.",
+  "id": "character.withdrew.sponsor",
+  "speaker": "Ilyra Senn",
+  "model": "chatterbox",
+  "seed": 2427154509,
+  "reference_sha256": "4f872149b489921a727c3d7607ff6de790cac9ee4d7bb9af3c5e999d8752bd84",
+  "sample_rate": 24000,
+  "master_sha256": "4e16fb03320c3108adcd91b2c2005bdeeac44fedc198fa45a1f1387d1588bbe2",
+  "wav_sha256": "633751b94b4fa1207b07519f1a93813593c2862a0e37dde09e40978c0ef0cd39",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

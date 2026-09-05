@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "f4c07dbb4658d25b",
+  "voice": "ilyra-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Alderwatch is hungry. If I open the gate, I answer for every food box that crosses.",
+  "id": "treaty_bridge.ilyra.heard",
+  "speaker": "Ilyra Senn",
+  "model": "chatterbox",
+  "seed": 4106255803,
+  "reference_sha256": "4f872149b489921a727c3d7607ff6de790cac9ee4d7bb9af3c5e999d8752bd84",
+  "sample_rate": 24000,
+  "master_sha256": "6210126faa39404be1cd4ac530b43d3baa6029ebc1e374dc257d53f773b500f1",
+  "wav_sha256": "f3e4193b90f838a32dc657177fc747d33e932a5c7e7bd97fdb471c345d908736",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

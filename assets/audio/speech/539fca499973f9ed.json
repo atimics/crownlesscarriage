@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "539fca499973f9ed",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "We need all 8 food boxes.",
+  "id": "empty_granary.jory.heard",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 1402980937,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "c22cd166f9f2e263c405e47e2c9001256e7b429ccbe679e175757c94f15ab9e9",
+  "wav_sha256": "a3c9fa6153b0287db5aef415ad772fb5a3c6730c69b1f4679b0f9a15b54eb42c",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

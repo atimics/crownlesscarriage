@@ -1,0 +1,10 @@
+{
+  "id": "ilyra-v1",
+  "name": "Ilyra Senn",
+  "description": "A woman with a clear alto and a light Scottish accent. Measured, firm delivery with a worn edge.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 813676666,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "4f872149b489921a727c3d7607ff6de790cac9ee4d7bb9af3c5e999d8752bd84"
+}

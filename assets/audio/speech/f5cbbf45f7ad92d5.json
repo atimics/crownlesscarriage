@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "f5cbbf45f7ad92d5",
+  "voice": "brook-v1",
+  "language": "en",
+  "delivery": "worried",
+  "text": "It is too late for that plan now. We have to manage what is left.",
+  "id": "character.failed.affected",
+  "speaker": "Cera Mott",
+  "model": "chatterbox",
+  "seed": 4123770693,
+  "reference_sha256": "e9ff04762f3cbb959c4f5bbc7e337a6c074b12b127c15b4f9958545fd826d0dc",
+  "sample_rate": 24000,
+  "master_sha256": "a155c177c5bd7a47250fca0055282eab643269321f98956f7686532c122a2a04",
+  "wav_sha256": "325065f208a7b2408efe5d7044e5e4698aa36cadf0d44dcea3782d346843abcd",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

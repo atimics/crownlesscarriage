@@ -50,6 +50,7 @@ const CcVoiceProfile *CcSpeechVoiceAt(size_t index);
 uint32_t CcSpeechCharacterVoice(const CcSim *sim, const CcCharacter *character);
 uint32_t CcSpeechLocalVoice(uint32_t world_seed, CcId place, CcId object);
 const char *CcSpeechDeliveryName(CcSpeechDelivery delivery);
+CcSpeechDelivery CcSpeechDeliveryForBeat(CcStoryBeat beat);
 bool CcSpeechCompose(CcSpeech *speech, const char *line_id, CcId speaker_id,
                       const char *speaker, uint32_t voice_index,
                       const char *text, CcSpeechDelivery delivery,

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "27ff1d21c1c59fd3",
+  "voice": "brook-v1",
+  "language": "en",
+  "delivery": "firm",
+  "text": "We waited until dark. No one came.",
+  "id": "character.withdrew.affected",
+  "speaker": "Cera Mott",
+  "model": "chatterbox",
+  "seed": 671030561,
+  "reference_sha256": "e9ff04762f3cbb959c4f5bbc7e337a6c074b12b127c15b4f9958545fd826d0dc",
+  "sample_rate": 24000,
+  "master_sha256": "1ae64cf7c27101e9304a2c647b68dddee732fe164f5daeabef634a1e98eca8cd",
+  "wav_sha256": "21d86c1c312f1eb0ff58a1860b5a4ef4ca1db79e502d0d25eb9b31445a4953f0",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

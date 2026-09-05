@@ -96,6 +96,36 @@ static void CampaignSpeech(void)
     }
 }
 
+static void VoicesAfterTwentyYears(void)
+{
+    CcSimInit(&sim, 42U);
+    before = sim;
+    CcCommand command = {.kind = CC_COMMAND_PARTY_WIPE, .target_id = (CcId)sim.current_day};
+    char error[192];
+    CC_CHECK(CcSimApply(&sim, &command, error, sizeof(error)));
+    CC_CHECK(sim.current_day == before.current_day + CC_PARTY_WIPE_DAYS);
+    for (int32_t i = 0; i < sim.character_count; ++i) {
+        const CcCharacter *person = &sim.characters[i];
+        const CcCharacter *old = CcSimCharacter(&before, person->id);
+        if (old != NULL) CC_CHECK(CcSpeechCharacterVoice(&sim, person) == CcSpeechCharacterVoice(&before, old));
+        if (person->generation > 0) CC_CHECK(CcSpeechCharacterVoice(&sim, person) >= 5U);
+        CC_CHECK(CcSpeechVoiceAt(CcSpeechCharacterVoice(&sim, person)) != NULL);
+    }
+    before = sim;
+    for (int32_t i = 0; i < sim.situation_count; ++i) {
+        const CcSituation *situation = &sim.situations[i];
+        const CcCharacter *person = CcSimSituationConversationCharacter(&sim, situation,
+            CcSimSituationOfferSettlementId(&sim, situation));
+        CcSpeech speech;
+        if (CcSpeechCharacter(&sim, situation, person, &speech)) {
+            char expected[CC_SPEECH_TEXT_CAPACITY];
+            CC_CHECK(CcStoryCharacterText(&sim, situation, person, expected, sizeof(expected)));
+            CC_CHECK(strcmp(expected, speech.text) == 0 && speech.speaker_id == person->id);
+        }
+    }
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+}
+
 static void EverydaySpeech(void)
 {
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
@@ -134,6 +164,7 @@ int main(void)
     CharacterIdentity();
     ExactWords();
     CampaignSpeech();
+    VoicesAfterTwentyYears();
     EverydaySpeech();
     return 0;
 }

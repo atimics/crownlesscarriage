@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "66deb74cf96d8227",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Stay close to me. Keep your lamp up and watch the roof.",
+  "id": "lower_silverworks.jory.promised",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 1725871948,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "d00dbf003d7e8626a92f4e4770314badec124585576d0836bcac8a3947cb7f6c",
+  "wav_sha256": "f92c6a696f64d6522d9db326dec2eff51b393475f3b4005502fc829d20cac5e2",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

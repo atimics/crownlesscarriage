@@ -1,0 +1,10 @@
+{
+  "id": "jory-v1",
+  "name": "Jory Fen",
+  "description": "A man with a rough mid-range voice and a light Yorkshire accent. Direct, thoughtful, and slightly breathy.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 3664234305,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c"
+}

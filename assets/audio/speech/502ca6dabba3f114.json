@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "502ca6dabba3f114",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "We cannot use the town store. The tax collector waits there with two guards.",
+  "id": "situation.night_road.offer.affected",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 1345103578,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "acae2b7448a134c137ecf575a22bb4f6aaacf4625c86c9c9098c10eb3220f62b",
+  "wav_sha256": "9f97264f0315447f6f3faa4182b26e63d8cb7b86b4f1d9cb695e1bb0f6b0ec99",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

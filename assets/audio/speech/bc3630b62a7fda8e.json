@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "bc3630b62a7fda8e",
+  "voice": "tomas-v1",
+  "language": "en",
+  "delivery": "worried",
+  "text": "The deadline passed. I cannot hold the offer open.",
+  "id": "character.failed.sponsor",
+  "speaker": "Tomas Rill",
+  "model": "chatterbox",
+  "seed": 3157668022,
+  "reference_sha256": "09bbb99862b976d7355261eac3929cc3648ea40a04b8d0682e322bb4b31f9980",
+  "sample_rate": 24000,
+  "master_sha256": "0fbee0ef5e03579710ecd046db760e5e753d980216c8335119db818d144185ca",
+  "wav_sha256": "66ee3ccc84647699d364a5f78a94baaf2175e5157a4287072e1ca047047c5e41",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

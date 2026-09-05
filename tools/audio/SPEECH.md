@@ -104,3 +104,42 @@ responses, cancellation, late completion, cache reuse, and playback lifetime:
 ```sh
 ctest --test-dir <build> -R 'speech_delivery|audio_playback_lifetime' --output-on-failure
 ```
+
+## Campaign pack
+
+`--campaign` exports representative campaign states and every named authored
+performance, including relationship branches. It covers first meetings,
+questions, promises, withdrawal, success, failure, and mine discovery. The
+version-one pack contains 84 unique recordings. Runtime names and quantities
+come from the same speech builders. A changed line gets a new key.
+
+```sh
+<build>/crownless_audio_export --campaign out/campaign-speech.json
+python tools/audio/speech_pack.py out/campaign-speech.json --device mps --limit 1000
+ctest --test-dir <build> -R campaign_speech_pack --output-on-failure
+```
+
+CMake copies campaign recordings into native bundles and the browser's
+`speech` directory. Browser clients download each clip on demand. Cast references
+stay in the source tree for the generation worker. Each cast receipt records
+its description, model, seed, text, and WAV fingerprint. Each speech receipt
+links to that reference fingerprint and records the voice texture step.
+
+The asset inventory allows 20 MiB for the voice pack, including receipts,
+with at most 16 cast references and 128 campaign clips. Art and music keep
+their own size limits. `make art-assets-check` checks all three budgets.
+
+The references were generated from the descriptions in `cast.json` with
+[Qwen3-TTS VoiceDesign](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign).
+Dialogue was generated with [Chatterbox](https://github.com/resemble-ai/chatterbox)
+and processed with the existing pixel voice texture. Generation is local.
+Listening review continues through playtests; the automated checks verify
+record identity, audio format, duration, and fingerprints.
+
+For a reviewed replacement, select its record in a small script and pass
+`--take 1`. A positive take replaces only the selected recordings. The receipt
+keeps the take number and its seed. Keep the cast reference fixed.
+
+For a fast voice, `--cfg-weight 0.3` can slow the delivery, following the
+[Chatterbox tuning guide](https://github.com/resemble-ai/chatterbox#original-chatterbox-tips).
+The receipt records this setting.

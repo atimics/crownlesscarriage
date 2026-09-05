@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "eba38818a1536ae5",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Tell Mara what Bren heard. Do not tell her it came from me.",
+  "id": "lower_silverworks.jory.decision.former",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 3953362968,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "55a70fc676a1229ce9204b59f2a3f0a6604a83d18b6a9bb8fd44d186247c634d",
+  "wav_sha256": "eb9e7a1ee52e0596d7c8c30559777b3c0371f553e3894339dad09029fbd08f9d",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

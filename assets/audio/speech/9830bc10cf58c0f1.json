@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "9830bc10cf58c0f1",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "Help me find Cera. We can deal with the old wall after she is safe.",
+  "id": "lower_silverworks.jory.offer",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 2553330704,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "ba5fe76f26161ef557b58a5af0503ec088cf8bfe50d6e896984e8aef3f8c69ef",
+  "wav_sha256": "09176bbcbac20e1391103f08a4f82e67a5f012a5d3b3c2b26a44212ed66967aa",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

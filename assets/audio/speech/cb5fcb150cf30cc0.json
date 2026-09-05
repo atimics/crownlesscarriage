@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "cb5fcb150cf30cc0",
+  "voice": "mara-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "They need food. I have the boxes ready.",
+  "id": "empty_granary.mara.heard",
+  "speaker": "Mara Venn",
+  "model": "chatterbox",
+  "seed": 3412052757,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sample_rate": 24000,
+  "master_sha256": "618e9f8debfb764e9d39449c6c100e13a9793c4fbb794516f464697ea24b6ed1",
+  "wav_sha256": "a7d1c0599e22c0b7a51b3c228bee991f45cb976a924277fd433a5b0ab769a846",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

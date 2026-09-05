@@ -18,12 +18,14 @@ def main():
     parser.add_argument('--engine', choices=('chatterbox', 'qwen'), default='chatterbox')
     parser.add_argument('--limit', type=int, default=32)
     parser.add_argument('--voice', default='')
+    parser.add_argument('--cfg-weight', type=float, default=0.5)
+    parser.add_argument('--take', type=int, default=0, help='Positive values replace selected clips with a fresh take')
     parser.add_argument('--allow-download', action='store_true')
     parser.add_argument('--design-cast', action='store_true')
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
     cast = load_cast(args.cast)
-    if args.limit < 1 or (args.voice and args.voice not in cast):
+    if args.limit < 1 or not 0 <= args.cfg_weight <= 1 or not 0 <= args.take <= 1000 or (args.voice and args.voice not in cast):
         parser.error('Choose a positive limit and an existing voice')
     if args.design_cast:
         from speech_engine import design_cast
@@ -42,9 +44,9 @@ def main():
         print(f'Checked {len(unique)} unique speech records; selected {len(records)}')
         return
     from speech_engine import SpeechEngine
-    pending = [record for record in records if cached_record(args.output, record) is None]
+    pending = [record for record in records if args.take > 0 or cached_record(args.output, record) is None]
     if pending:
-        engine = SpeechEngine(args.device, args.references, args.engine, args.allow_download)
+        engine = SpeechEngine(args.device, args.references, args.engine, args.allow_download, args.take, args.cfg_weight)
         for record in pending:
             engine(record, args.output / (record['key'] + '.wav'))
             print(f"Prepared {record['voice']}: {record['text']}", flush=True)

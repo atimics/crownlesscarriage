@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "bce093418a5faada",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "urgent",
+  "text": "Nobody whistles below now. Something learned to whistle back.",
+  "id": "lower_silverworks.jory.breaking",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 3168834369,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "67c5335a8a6818a3c9bbdae1277acd95cb640480021fe037205a6aaa1fbd86f3",
+  "wav_sha256": "f9c01060d1fc1dfb68735727d8297ebd030cb557603988e07418ad84a1490d26",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "key": "a049f64274b92c87",
+  "voice": "jory-v1",
+  "language": "en",
+  "delivery": "plain",
+  "text": "That is what happened. I do not know what else to tell you.",
+  "id": "character.heard.affected",
+  "speaker": "Jory Fen",
+  "model": "chatterbox",
+  "seed": 2689201730,
+  "reference_sha256": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+  "sample_rate": 24000,
+  "master_sha256": "395507f256112e713273bd972b348978d7ee2f3b58252fada69608d6a9946c39",
+  "wav_sha256": "b4980baaea2b920b664d273163d30ce888ce0ec9d67b2fdc8c22872664c96b97",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}
