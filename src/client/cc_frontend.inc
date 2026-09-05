@@ -177,12 +177,13 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
                 state->company.owner && !state->company.crew[i].self};
         items[count++] = (FrontendItem){FRONTEND_ACTION_WORLD_ENTER, {x + 464, y, 384, 44},
             state->company_return == FRONTEND_PAUSED ? "Return to the road" : "Enter world", true};
-        items[count++] = (FrontendItem){FRONTEND_ACTION_INVITE_COPY, {x + 464, y + 54, 384, 40}, "Copy invitation", state->company.owner};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_INVITE_COPY, {x + 464, y + 54, 384, 40}, "Invite crew", state->company.owner};
         items[count++] = (FrontendItem){FRONTEND_ACTION_INVITE_ROTATE, {x + 464, y + 102, 384, 40}, "New invitation", state->company.owner};
         items[count++] = (FrontendItem){FRONTEND_ACTION_HOST_PAUSE, {x + 464, y + 150, 384, 40},
             state->company.paused ? "Resume shared world" : "Pause shared world", state->company.owner};
         items[count++] = (FrontendItem){FRONTEND_ACTION_DELETE, {x + 464, y + 198, 384, 40}, "Delete world", state->company.owner};
         items[count++] = (FrontendItem){FRONTEND_ACTION_CANCEL, {x + 464, y + 246, 384, 40}, "Back", true};
+        items[count++] = (FrontendItem){FRONTEND_ACTION_COMPANY, {x, y + 288, 440, 36}, "Refresh crew", true};
         return count;
     }
     if (state->screen == FRONTEND_SOUND) {

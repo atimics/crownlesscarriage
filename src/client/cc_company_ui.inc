@@ -197,9 +197,11 @@ static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
     }
     if (action == FRONTEND_ACTION_COMPANY) {
         char id[33];
-        CcCoopClientWorldId(id, sizeof(id));
+        bool refreshing = state->screen == FRONTEND_COMPANY;
+        if (refreshing) (void)snprintf(id, sizeof(id), "%s", state->company.id);
+        else CcCoopClientWorldId(id, sizeof(id));
         if (CcCompanyLoad(&state->company, id, state->feedback, sizeof(state->feedback))) {
-            state->company_return = FRONTEND_PAUSED;
+            if (!refreshing) state->company_return = FRONTEND_PAUSED;
             FrontendOpen(state, FRONTEND_COMPANY);
         }
         return true;

@@ -47,7 +47,7 @@ async function main() {
     await ownerControls.button('Create world').click();
     await owner.waitForFunction(() => Module.crownlessScreen === 'company');
     assert.equal(await owner.locator('input').count(), 0);
-    await ownerControls.button('Copy invitation').click();
+    await ownerControls.button('Invite crew').click();
     const invitation = await owner.getByRole('textbox', {name:'Invitation', exact:true}).inputValue();
     const worldId = new URL(invitation).hash.slice('#join='.length).split('.')[0];
     await fs.mkdir('browser-results', {recursive:true});
@@ -59,6 +59,8 @@ async function main() {
     await crewControls.button('Join company').tap();
     await crew.waitForFunction(() => Module.crownlessScreen === 'company');
     await ownerControls.button('Back').click();
+    await ownerControls.button('Refresh crew').click();
+    await owner.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Bren'));
     await owner.screenshot({path:'browser-results/in-game-company.png'});
     const token = await crew.evaluate(() => localStorage.getItem('cc-coop-token'));
     async function state() {
