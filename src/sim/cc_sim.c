@@ -10827,6 +10827,10 @@ static void AdvanceDragonCampaign(CcSim *sim)
         campaign->supplies[good] = sim->dragon.hoard_goods[good];
         sim->dragon.hoard_goods[good] = 0;
     }
+    /* Relic law: capture the victim's age and stage before the stage flip,
+       so the bane can be priced by the dragon it killed. */
+    int32_t slain_age_years = sim->dragon.age_days / 365;
+    CcDragonLifeStage slain_stage = sim->dragon.life_stage;
     sim->dragon.slain = true;
     sim->dragon.slain_day = sim->current_day;
     sim->dragon.life_stage = CC_DRAGON_STAGE_AFTERDRAGON;
@@ -10884,23 +10888,32 @@ static void AdvanceDragonCampaign(CcSim *sim)
             sim, campaign->origin_settlement_id);
         CcTreasure *relic = origin != NULL ? AllocateTreasure(sim) : NULL;
         if (relic != NULL) {
+            const char *epithet =
+                slain_stage == CC_DRAGON_STAGE_DEEP_WYRM ? ", Wyrmsbane" :
+                slain_stage == CC_DRAGON_STAGE_CROWNED ?
+                    ", the Crown's End" : "";
             (void)snprintf(relic->name, sizeof(relic->name),
-                           "Bane of %.24s", sim->dragon.name);
+                           "Bane of %.24s%s", sim->dragon.name, epithet);
             relic->maker_settlement_id = origin->id;
             relic->owner_id = hero != NULL ? hero->id : origin->id;
             relic->location_id = origin->id;
             relic->gold_content = 3;
             relic->gem_content = 2;
             relic->craft_work = MaximumI32(1, attack - defense);
+            /* The older the victim, the greater the trophy: one age step
+               per decade of the slain dragon's life, capped at a
+               millennium. A whelp's bane is trinket; a wyrm's bane
+               outranks the Wyrmheart it was taken from. */
             relic->appraised_value = relic->gold_content * 40 +
-                relic->gem_content * 70 + relic->craft_work * 10;
+                relic->gem_content * 70 + relic->craft_work * 10 +
+                MinimumI32(slain_age_years / 10, 100) * 15;
             relic->created_day = sim->current_day;
             char relic_text[CC_EVENT_TEXT_CAPACITY];
             (void)snprintf(relic_text, sizeof(relic_text),
-                           "From the hoard-fire %.20s raises %.20s, bane of %.20s, day %d.",
+                           "From the hoard-fire %.20s raises %.20s, bane of %.20s, slain at %d years, day %d.",
                            hero != NULL ? hero->name : "the host",
                            relic->name, sim->dragon.name,
-                           sim->current_day);
+                           slain_age_years, sim->current_day);
             (void)PushEvent(sim, CC_EVENT_TREASURE_CRAFTED,
                             relic->id, origin->id, battle_event_id,
                             relic->appraised_value, relic_text);

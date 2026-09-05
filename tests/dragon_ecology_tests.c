@@ -275,6 +275,12 @@ int main(void)
             CC_CHECK(t->gold_content == 3);
             CC_CHECK(t->owner_id ==
                      bane.dragon_campaign.hero_character_id);
+            /* Issue #200: the bane carries its victim's stage in its name
+               and its victim's age in its price. */
+            CC_CHECK(strstr(t->name, "the Crown's End") != NULL);
+            int32_t material_value = t->gold_content * 40 +
+                t->gem_content * 70 + t->craft_work * 10;
+            CC_CHECK(t->appraised_value > material_value);
         }
     }
     CC_CHECK(bane_found);
