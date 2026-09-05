@@ -2848,7 +2848,7 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
                  TextFormat("%s  /  LOCAL SITE",
                             CcLocalSiteName(sim, local->site_kind)) :
              finding_road ?
-             TextFormat("%s  ->  ROAD AHEAD",
+             TextFormat("%s  /  CHOOSE A ROAD",
                         origin != NULL ? origin->name : "Town") :
              road ?
              TextFormat("%s  ->  %s",
@@ -4266,15 +4266,14 @@ static ContextActionSet BuildContextActions(
                 RouteOtherEnd(route, sim->player.location_id),
                 &preview, NULL, 0U);
             (void)snprintf(detail, sizeof(detail),
-                "%d WATCHES / %d CROWNS", preview.travel_watches,
-                (int32_t)preview.provision_cost);
+                "%d HOURS ON THE ROAD", preview.travel_watches * 8);
             AddDetailedContextAction(&set, CONTEXT_ACTION_TRAVEL,
                 label, i == selected ? "ENTER" : "", detail, true,
                 i == selected);
             set.items[set.count - 1].amount = i;
         }
         AddDetailedContextAction(
-            &set, CONTEXT_ACTION_CLOSE_VIEW, "Turn back to town", "BKSP",
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Return to town", "BKSP",
             "RETURN THROUGH THE GATE", true, false);
         return set;
     }
@@ -4717,12 +4716,15 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
                                                 Fade(MUTED, 0.48f));
         }
         if (action->detail[0] != '\0') {
-            int detail_width = CcOverlayMeasureText(action->detail, 7);
+            int detail_size = view == VIEW_ROADS ? AdventureTextSize(11) : 7;
+            while (detail_size > 10 &&
+                CcOverlayMeasureText(action->detail, detail_size) > (int)bounds.width - 18) --detail_size;
+            int detail_width = CcOverlayMeasureText(action->detail, detail_size);
             CcOverlayDrawText(action->detail,
                               (int)(bounds.x +
                                     (bounds.width - (float)detail_width) *
                                         0.5f),
-                              (int)bounds.y + 38, 7,
+                              (int)bounds.y + 38, detail_size,
                               action->enabled ? Fade(MUTED, 0.92f) :
                                                 Fade(MUTED, 0.46f));
         }
@@ -11143,7 +11145,7 @@ int main(int argc, char **argv)
                 view = sim.dungeon_expedition.active ? VIEW_DUNGEON : VIEW_LOCAL;
             }
         }
-        local.adventure_ui = normal_play || capture_ux;
+        local.adventure_ui = normal_play || capture_ux || capture_road_fork;
         if (normal_play && AdventureScene(&local)) local.course.automatic_alarm = false;
         adventure_preferences = local.adventure_ui ? &preferences : NULL;
         CcLocalRendererSetInteractionUI(AdventureScene(&local));
@@ -11251,7 +11253,7 @@ int main(int argc, char **argv)
                 UpdateActionReel(&local, &action_reel, message,
                                  sizeof(message));
             }
-        } else if (render_benchmark || capture_ux) {
+        } else if (render_benchmark || capture_ux || capture_road_fork) {
             ClientInputClearPressed();
         } else {
             if (!menu_frame && !audio_clicked) HandleInput(&journal, &sim, &selected, &selected_situation,
@@ -11417,9 +11419,9 @@ int main(int argc, char **argv)
         }
         if (!persistence_blocked && !capture_gameplay_reel &&
             !capture_road_departure &&
-            view == VIEW_LOCAL &&
+            (view == VIEW_LOCAL || view == VIEW_ROADS) &&
             !LocalCombatActive(&local) &&
-            message_age < (local.adventure_ui ? 7.0f : 2.2f) &&
+            (view == VIEW_ROADS || message_age < (local.adventure_ui ? 7.0f : 2.2f)) &&
             message[0] != '\0' &&
             !local.journey_travel_active) {
             if (local.adventure_ui) DrawAdventureFeedback(message);

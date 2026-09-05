@@ -127,6 +127,25 @@ class Worlds:
         self.seen, self.last_tick, self.failed = {}, {}, set()
         self.visits, self.poses = {}, {}
         self.pose_sequence = 0
+        self.refresh_saved_worlds()
+
+    def refresh_saved_worlds(self):
+        """Publish the campaign and its view together after an engine upgrade."""
+        for row in self.db.execute("SELECT id,state,view FROM worlds").fetchall():
+            try:
+                with self.engine.open(saved=row["state"]) as sim:
+                    view = sim.snapshot()
+                    if view == json.loads(row["view"]):
+                        continue
+                    saved = sim.save()
+                with self.transaction():
+                    self.db.execute(
+                        "UPDATE worlds SET state=?,view=?,revision=revision+1,"
+                        "action_revision=action_revision+1 WHERE id=?",
+                        (saved, json.dumps(view), row["id"]))
+            except Exception:
+                self.failed.add(row["id"])
+                logging.exception("World %s needs recovery after the engine upgrade", row["id"])
 
     def close(self):
         with self.lock:

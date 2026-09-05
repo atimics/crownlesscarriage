@@ -1291,6 +1291,7 @@ static void CheckPreJourneySchema3Compatibility(char *error,
     RemoveDatabase(journey_path);
     CcSim legacy_journey;
     CcSimInit(&legacy_journey, UINT32_C(0x1e9ac4));
+    legacy_journey.schema_version = 40U;
     const CcSituation *situation = NULL;
     for (int32_t i = 0; i < legacy_journey.situation_count; ++i) {
         if (legacy_journey.situations[i].status == CC_SITUATION_ACTIVE) {

@@ -52,7 +52,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 40
+#define CC_SIM_SCHEMA_VERSION 41
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -1364,7 +1364,7 @@ typedef struct CcJourneyEncounter {
     int32_t elapsed_subticks;
     int32_t total_subticks;
     int32_t encounter_subticks;
-    int32_t fare_reserved;
+    int32_t fare_reserved; /* Historical departure charge; new journeys use zero. */
     CcJourneyPace pace;
     bool encounter_triggered;
     bool ambush_pending;
@@ -1377,7 +1377,7 @@ typedef struct CcJourneyEncounter {
 typedef struct CcTravelPreview {
     CcId route_id;
     CcId destination_id;
-    CcMoney provision_cost;
+    CcMoney provision_cost; /* Zero for free departures from schema 41 onward. */
     int32_t travel_days;
     int32_t claimed_condition;
     int32_t claimed_danger;
