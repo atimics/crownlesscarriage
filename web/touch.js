@@ -3,6 +3,7 @@
   const canvas = document.querySelector('#canvas');
   const panel = document.querySelector('#touch-panel');
   if (!canvas || !panel) return;
+  if (Module.ccCoop?.preview) return;
   const actions = document.querySelector('#touch-actions');
   const title = document.querySelector('#touch-title');
   const detail = document.querySelector('#touch-detail');

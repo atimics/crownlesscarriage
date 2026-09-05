@@ -137,10 +137,13 @@
       #touch-shortcuts { margin-top: 16px; }
       #touch-panel summary { cursor: pointer; min-height: 44px; padding: 10px 0; color: #c5bba6; }
       #touch-reading { white-space: pre-line; color: #d4c9b3; overflow-wrap: anywhere; }
+      .touch-mode #company-bar { position: static !important; flex-wrap: wrap; align-items: center; gap: 8px; padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left)) !important; }
+      .touch-mode #company-bar a { display: flex; align-items: center; min-height: 44px; }
+      .touch-mode #company-bar span { flex: 1 1 130px; }
       #exit-fullscreen { display: none; position: absolute; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); z-index: 2; }
       #stage:fullscreen #exit-fullscreen, #stage.expanded #exit-fullscreen { display: block; }
       body.expanded { overflow: hidden; }
-      #stage.expanded { position: fixed; inset: 0; z-index: 10; width: 100%; height: 100dvh; border: 0; border-radius: 0; display: grid; place-items: center; }
+      #stage.expanded { position: fixed; inset: 0; z-index: 10000; width: 100%; height: 100dvh; border: 0; border-radius: 0; display: grid; place-items: center; }
       #stage.expanded canvas { width: min(100vw, calc(100dvh * 16 / 9)); height: auto; }
       .touch-mode #stage:fullscreen, .touch-mode #stage.expanded {
         display: flex; flex-direction: column; justify-content: start;
@@ -166,10 +169,11 @@
         .touch-mode h1 { font-size: 1.1rem; }
         .touch-mode #stage, .touch-mode #stage:fullscreen, .touch-mode #stage.expanded {
           display: grid; grid-template-columns: minmax(0, 1fr) 250px; place-items: center;
-          height: calc(100dvh - 70px); overflow: hidden;
+          height: calc(100dvh - 70px - var(--company-bar-height, 0px)); overflow: hidden;
         }
         .touch-mode #stage:fullscreen, .touch-mode #stage.expanded { height: 100dvh; padding-top: 0; }
-        .touch-mode #stage canvas { width: min(100%, calc((100dvh - 70px) * 16 / 9)); height: auto; }
+        .touch-mode #stage canvas { width: min(100%, calc((100dvh - 70px - var(--company-bar-height, 0px)) * 16 / 9)); height: auto; }
+        .touch-mode #stage:fullscreen canvas, .touch-mode #stage.expanded canvas { width: min(100%, calc(100dvh * 16 / 9)); }
         .touch-mode #touch-panel { height: 100%; overflow-y: auto; overscroll-behavior: contain; border-top: 0; border-left: 1px solid #514a3d; padding: 12px; }
         .touch-mode #stage:fullscreen #touch-panel, .touch-mode #stage.expanded #touch-panel { padding-top: 60px; }
         .touch-mode #touch-actions { grid-template-columns: 1fr; }

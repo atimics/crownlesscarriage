@@ -331,7 +331,9 @@ static void DrawFrontend(const FrontendState *state,
         state->screen == FRONTEND_DELETE ? "Delete this world?" :
         CcCoopClientActive() ? "Company menu" : "Journey paused";
     ClientTouchHeading(title, state->feedback[0] != '\0' ? state->feedback :
-        state->screen == FRONTEND_DELETE ? "This removes your world and its progress. Your next Play begins a new world." :
+        state->screen == FRONTEND_DELETE ? CcCoopClientActive() ?
+            "This removes the shared world and progress for everyone in the company." :
+            "This removes your world and its progress. Your next Play begins a new world." :
         state->screen == FRONTEND_TITLE ? "Choose Offline or Online, then Play. Your world is saved on this device." :
         "Resume your journey, save your world, or change your settings.");
     FrontendCenteredText(title, top + 76, 28, INK);
