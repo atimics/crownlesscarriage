@@ -131,6 +131,32 @@
     }
     return now - peersAt <= 3000 ? peers : [];
   }
+  function exchangeMemory(scene, pose, crew, stride, name_offset, appearance_offset, pose_offset) {
+    if (!Module.ccCoop) return 0;
+    const peers = Module.ccCoop.exchange(scene, function() {
+        return Array.from(HEAPF32.subarray(pose >> 2, (pose >> 2) + 83), function(value) {
+            return Math.round(value * 1000) / 1000;
+        });
+    });
+    peers.forEach(function(peer, i) {
+        const base = crew + i * stride;
+        stringToUTF8(peer.id, base, 17);
+        stringToUTF8(peer.name, base + name_offset, 32);
+        HEAPU32[(base + appearance_offset) >> 2] = peer.appearance;
+        HEAPF32.set(peer.pose, (base + pose_offset) >> 2);
+    });
+    return peers.length;
+  }
+  function drawnMemory(crew, count, stride, name_offset, appearance_offset, pose_offset) {
+    const drawn = [];
+    for (let i = 0; i < count; ++i) {
+        const base = crew + i * stride;
+        drawn.push({id:UTF8ToString(base), name:UTF8ToString(base + name_offset),
+            appearance:HEAPU32[(base + appearance_offset) >> 2],
+            position:Array.from(HEAPF32.subarray((base + pose_offset) >> 2, ((base + pose_offset) >> 2) + 3))});
+    }
+    document.body.dataset.crewDrawn = JSON.stringify(drawn);
+  }
   function leave() {
     if (leaving || !visit || !state) return;
     leaving = true; peers = [];
@@ -151,7 +177,7 @@
     location.assign(location.pathname.startsWith('/game/') ? '/' : 'https://crownless.ratimics.com/');
   }
   Module.ccCoop = { enabled, preview, connect, apply, poll, deleteWorld, openLobby,
-    exchange, leave, seat:() => Math.max(0, state?.crew.findIndex(member => member.id === state.member) || 0),
+    exchange, exchangeMemory, drawnMemory, leave, seat:() => Math.max(0, state?.crew.findIndex(member => member.id === state.member) || 0),
     avatar:() => CcAvatar.pack(avatar), checkpoint:captureSession, hasSession:() => restoredSession,
     owner() { return Boolean(state?.owner); },
     ready(error) { startupError = error; document.body.dataset.companyReady = error ? 'error' : 'ready'; if (error) say(error); },
