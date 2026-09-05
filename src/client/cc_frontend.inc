@@ -576,7 +576,7 @@ static void DrawFrontend(const FrontendState *state,
         state->screen == FRONTEND_DELETE ? "Delete this world?" :
         CcCoopClientActive() ? "Company menu" : "Journey paused";
     ClientTouchHeading(title, state->feedback[0] != '\0' ? state->feedback :
-        state->screen == FRONTEND_DELETE ? CcCoopClientActive() ?
+        state->screen == FRONTEND_DELETE ? CcCoopClientActive() || state->deleting_company ?
             "This removes the shared world and progress for everyone in the company." :
             "This removes your world and its progress. Your next Play begins a new world." :
         state->screen == FRONTEND_TITLE ? "Choose Offline or Online, then Play. Your world is saved on this device." :
@@ -638,8 +638,9 @@ static void DrawFrontend(const FrontendState *state,
             size_t field_capacity;
             char *value = FrontendCompanyField((FrontendState *)state, item.action, &field_capacity);
             (void)field_capacity;
-            (void)snprintf(field_label, sizeof(field_label), "%s: %s%s", item.label,
-                item.action == FRONTEND_ACTION_FIELD_PASS && value[0] != '\0' ? "••••••••" : value,
+            const char *visible = item.action == FRONTEND_ACTION_FIELD_PASS && value[0] != '\0' ? "********" : value;
+            if (strlen(visible) > 66) visible += strlen(visible) - 66;
+            (void)snprintf(field_label, sizeof(field_label), "%s: %s%s", item.label, visible,
                 state->text_field == item.action ? "_" : "");
             label = field_label;
         }

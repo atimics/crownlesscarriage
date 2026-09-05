@@ -94,12 +94,16 @@ bool CcCoopAdvance(CcSim *sim, int32_t ticks, char *error, size_t capacity)
     CcSim *candidate = malloc(sizeof(*candidate));
     if (candidate == NULL) return false;
     *candidate = *sim;
-    /* Stop the host at the same roadside choices as the local client. */
+    /* Watches flow into a short break or overnight camp automatically. */
     for (int32_t tick = 0; tick < ticks; ++tick) {
-        if (CcSimJourneyRoadSiteStop(candidate) != NULL) break;
+        if (candidate->journey.active && candidate->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+            CcCommand rest = {.kind = CcSimJourneyStop(candidate) == CC_JOURNEY_STOP_MIDDAY ?
+                CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP};
+            if (!CcSimApply(candidate, &rest, error, capacity)) { free(candidate); return false; }
+        }
         CcSimAdvanceRuntimeTicks(candidate, 1);
         if (!candidate->journey.active ||
-            candidate->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) break;
+            candidate->journey.phase == CC_JOURNEY_PHASE_BLOCKED) break;
     }
     bool ok = CcSimValidate(candidate, error, capacity);
     if (ok) *sim = *candidate;

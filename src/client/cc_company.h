@@ -24,7 +24,9 @@ bool CcCompanyJoin(CcCompany *company, const char *player, const char *invitatio
 bool CcCompanyInvite(CcCompany *company, bool rotate, char *error, size_t capacity);
 bool CcCompanyHost(CcCompany *company, const char *action, const char *member, char *error, size_t capacity);
 bool CcCompanyRequest(const char *path, const char *body, char **result, char *error, size_t capacity);
+bool CcCompanyRequestStatus(const char *path, const char *body, char **result, int *status, char *error, size_t capacity);
 bool CcCompanyJsonText(const char *json, const char *path, char *text, size_t capacity);
 long long CcCompanyJsonNumber(const char *json, const char *path);
 char *CcCompanyJsonQuote(const char *text);
+char *CcCompanyJsonValue(const char *json, const char *path);
 #endif

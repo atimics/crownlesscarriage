@@ -7,6 +7,29 @@
 static char company_identity_path[768];
 static char pending_create[33];
 
+char *CcCompanyJsonValue(const char *json, const char *path)
+{
+    sqlite3 *db = NULL;
+    sqlite3_stmt *query = NULL;
+    char *result = NULL;
+    if (json != NULL && sqlite3_open(":memory:", &db) == SQLITE_OK &&
+        sqlite3_prepare_v2(db, "SELECT json_extract(?1,?2)", -1, &query, NULL) == SQLITE_OK) {
+        sqlite3_bind_text(query, 1, json, -1, SQLITE_STATIC);
+        sqlite3_bind_text(query, 2, path, -1, SQLITE_STATIC);
+        if (sqlite3_step(query) == SQLITE_ROW && sqlite3_column_type(query, 0) != SQLITE_NULL) {
+            const char *value = (const char *)sqlite3_column_text(query, 0);
+            if (value != NULL) {
+                size_t length = strlen(value) + 1;
+                result = malloc(length);
+                if (result != NULL) memcpy(result, value, length);
+            }
+        }
+    }
+    sqlite3_finalize(query);
+    sqlite3_close(db);
+    return result;
+}
+
 bool CcCompanyJsonText(const char *json, const char *path, char *text, size_t capacity)
 {
     sqlite3 *db = NULL;
@@ -80,7 +103,7 @@ EM_JS(int, CompanyRandom, (char *text, int bytes), {
     stringToUTF8(value, text, bytes * 2 + 1);
     return 1;
 });
-EM_ASYNC_JS(int, CompanyRequest, (const char *path, const char *body, char **result, char *error, int capacity), {
+EM_ASYNC_JS(int, CompanyRequest, (const char *path, const char *body, char **result, int *status, char *error, int capacity), {
     try {
         let token = localStorage.getItem('cc-coop-token');
         if (!/^[a-f0-9]{64}$/.test(token || '')) {
@@ -91,6 +114,7 @@ EM_ASYNC_JS(int, CompanyRequest, (const char *path, const char *body, char **res
             headers: {Authorization: 'Bearer ' + token, 'Content-Type': 'application/json'},
             body: body ? UTF8ToString(body) : undefined, signal: AbortSignal.timeout(12000)});
         const data = await response.text();
+        HEAP32[status >> 2] = response.status;
         const parsed = JSON.parse(data);
         if (!response.ok) throw new Error(parsed.error || 'Reconnect to the host.');
         if (data.length > 12 * 1024 * 1024) throw new Error('The host response is too large.');
@@ -102,10 +126,11 @@ EM_ASYNC_JS(int, CompanyRequest, (const char *path, const char *body, char **res
     } catch (failure) { stringToUTF8(failure.message, error, capacity); return 0; }
 });
 #pragma clang diagnostic pop
-bool CcCompanyRequest(const char *path, const char *body, char **result, char *error, size_t capacity)
+bool CcCompanyRequestStatus(const char *path, const char *body, char **result, int *status, char *error, size_t capacity)
 {
     *result = NULL;
-    return CompanyRequest(path, body, result, error, (int)capacity) != 0;
+    *status = 0;
+    return CompanyRequest(path, body, result, status, error, (int)capacity) != 0;
 }
 #else
 #include <curl/curl.h>
@@ -159,10 +184,11 @@ static bool CompanyIdentity(char *token)
     return ok;
 }
 
-bool CcCompanyRequest(const char *path, const char *body, char **result, char *error, size_t capacity)
+bool CcCompanyRequestStatus(const char *path, const char *body, char **result, int *http_status, char *error, size_t capacity)
 {
     char token[66], authorization[96], url[512];
     *result = NULL;
+    *http_status = 0;
     if (!CompanyIdentity(token)) {
         (void)snprintf(error, capacity, "Check access to your saved company identity.");
         return false;
@@ -188,6 +214,7 @@ bool CcCompanyRequest(const char *path, const char *body, char **result, char *e
     CURLcode status = curl_easy_perform(curl);
     long code = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+    *http_status = (int)code;
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
     bool ok = status == CURLE_OK && code >= 200 && code < 300 && response.data != NULL;
@@ -200,6 +227,12 @@ bool CcCompanyRequest(const char *path, const char *body, char **result, char *e
     return ok;
 }
 #endif
+
+bool CcCompanyRequest(const char *path, const char *body, char **result, char *error, size_t capacity)
+{
+    int status;
+    return CcCompanyRequestStatus(path, body, result, &status, error, capacity);
+}
 
 static bool CompanyRead(CcCompany *company, const char *json)
 {

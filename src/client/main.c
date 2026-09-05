@@ -10662,11 +10662,26 @@ int main(int argc, char **argv)
         }
     }
 #endif
+    const char *shared_world = "";
+#if !defined(PLATFORM_WEB)
+    for (int32_t i = 1; i + 1 < argc; ++i)
+        if (strcmp(argv[i], "--shared-world") == 0) shared_world = argv[i + 1];
+#endif
+    char program_path[1024];
+    (void)snprintf(program_path, sizeof(program_path), "%s%s", GetApplicationDirectory(), GetFileName(argv[0]));
+    CcCoopClientConfigure(program_path, save_path, shared_world);
     char company_identity[768];
     (void)snprintf(company_identity, sizeof(company_identity), "%s.company-identity", save_path);
     CcCompanyConfigure(company_identity);
-    if (CcCoopClientActive())
+    if (CcCoopClientActive()) {
+#if defined(PLATFORM_WEB)
         (void)snprintf(save_path, sizeof(save_path), "/tmp/crownless-coop.ccsave");
+#else
+        char local_campaign[640];
+        (void)snprintf(local_campaign, sizeof(local_campaign), "%s", save_path);
+        (void)snprintf(save_path, sizeof(save_path), "%.560s.shared-%.32s", local_campaign, shared_world);
+#endif
+    }
     char session_path[704];
     char lock_path[704];
     char preferences_path[704];
@@ -11447,7 +11462,8 @@ int main(int argc, char **argv)
             CcLocalRendererShutdown();
             UnloadRenderTexture(local_target);
             ReleaseMapTextures(&map_textures);
-            CloseWindow();
+            CcCoopClientShutdown();
+    CloseWindow();
             return 1;
         }
         local.agent = walk_cycle_frames[0];
@@ -11575,7 +11591,8 @@ int main(int argc, char **argv)
         CcLocalRendererShutdown();
         UnloadRenderTexture(local_target);
         ReleaseMapTextures(&map_textures);
-        CloseWindow();
+        CcCoopClientShutdown();
+    CloseWindow();
         CcClientInstanceLockRelease(&instance_lock);
         return 1;
     }
@@ -11637,6 +11654,10 @@ int main(int argc, char **argv)
     };
     if (resuming_campaign && journal == NULL) {
         (void)snprintf(frontend.feedback, sizeof(frontend.feedback), "%s", startup_message);
+    }
+    if (normal_play && !CcCoopClientActive()) {
+        CompanyInvitation(frontend.invitation, sizeof(frontend.invitation));
+        if (frontend.invitation[0] != '\0') FrontendOpen(&frontend, FRONTEND_JOIN_WORLD);
     }
     CcSoundscape soundscape = {0};
     CcAudioSetMode(preferences.audio_mode);
@@ -12137,7 +12158,13 @@ int main(int argc, char **argv)
         ClientBrowserFrontend(frontend.screen == FRONTEND_TITLE ? "title" :
             frontend.screen == FRONTEND_PAUSED ? "paused" :
             frontend.screen == FRONTEND_DELETE ? "delete" :
-            frontend.screen == FRONTEND_AVATAR ? "avatar" : "playing", frontend.focus, (int)frontend.avatar);
+            frontend.screen == FRONTEND_AVATAR ? "avatar" :
+            frontend.screen == FRONTEND_SOUND ? "sound" :
+            frontend.screen == FRONTEND_WORLDS ? "worlds" :
+            frontend.screen == FRONTEND_CREATE_WORLD ? "create" :
+            frontend.screen == FRONTEND_JOIN_WORLD ? "join" :
+            frontend.screen == FRONTEND_COMPANY ? "company" :
+            frontend.screen == FRONTEND_REMOVE_MEMBER ? "remove" : "playing", frontend.focus, (int)frontend.avatar);
 #endif
         ClientTouchEnd();
         EndDrawing();
@@ -12233,6 +12260,7 @@ int main(int argc, char **argv)
     CcLocalRendererShutdown();
     UnloadRenderTexture(local_target);
     ReleaseMapTextures(&map_textures);
+    CcCoopClientShutdown();
     CloseWindow();
     CcClientInstanceLockRelease(&instance_lock);
     if (render_benchmark) {

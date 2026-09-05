@@ -1441,7 +1441,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         camera = SnapCameraToArtPixels(camera, target.texture.height);
     }
     if (carriage != NULL && carriage->visible) {
-        camera = PonyConversationCamera(camera, carriage->position, carriage->heading_yaw);
+        camera = PonyConversationCamera(camera, carriage->position, carriage->heading_yaw, sim);
         focus = camera.target;
     }
     RememberPresentedCamera(CC_LOCAL_SCENE_STREET, camera, agent,

@@ -161,8 +161,6 @@ static void CheckSharedDepartureAndRoadStop(void)
         ((int64_t)host->journey.total_subticks * site->progress_milli + 999) / 1000);
     CC_CHECK(CcSimJourneyRoadSiteStop(host) == site);
     uint64_t stopped = CcSimHash(host);
-    CC_CHECK(CcCoopAdvance(host, 3600, error, sizeof(error)));
-    CC_CHECK(CcSimHash(host) == stopped);
     CC_CHECK(CcCoopApply(host, "skip_watch", 0U, 0, 0, error, sizeof(error)));
     CC_CHECK(CcSimHash(host) == stopped);
     unsigned char *bytes = NULL;
@@ -171,10 +169,12 @@ static void CheckSharedDepartureAndRoadStop(void)
     CC_CHECK(CcCoopDecode(guest, bytes, length, error, sizeof(error)));
     CcCoopFree(bytes);
     CC_CHECK(CcSimHash(guest) == stopped && CcSimJourneyRoadSiteStop(guest) != NULL);
-    CC_CHECK(CcCoopApply(host, "pass_road_site", site->id, 0, 0, error, sizeof(error)));
+    CC_CHECK(CcCoopApply(guest, "pass_road_site", site->id, 0, 0, error, sizeof(error)));
     int32_t before = host->carriage.progress_milli;
     CC_CHECK(CcCoopAdvance(host, 60, error, sizeof(error)));
     CC_CHECK(host->carriage.progress_milli > before);
+    CC_CHECK(CcCoopAdvance(host, 3600, error, sizeof(error)));
+    CC_CHECK(!host->journey.active || host->journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
     CC_CHECK(CcSimJourneyRoadSiteStop(host) != site);
     CcCoopDestroy(host);
     CcCoopDestroy(guest);

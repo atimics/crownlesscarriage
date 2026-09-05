@@ -496,8 +496,10 @@ class Worlds:
                                 self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1,action_revision=action_revision+1 WHERE id=?",
                                                 (sim.save(), json.dumps(sim.snapshot()), world))
                                 self.db.execute("UPDATE away_clocks SET owed_days=owed_days-? WHERE world=?", (days, world))
-                        elif online and ticks > 0 and before["journey"]["active"] and before["journey"]["phase"] == 1:
+                        elif online and ticks > 0 and before["journey"]["active"] and before["journey"]["phase"] in (1, 3):
                             with self.engine.open(saved=saved["state"]) as sim:
+                                if before["journey"].get("road_site"):
+                                    ticks = max(1, ticks // 2)
                                 sim.advance(ticks)
                                 self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1 WHERE id=?",
                                                 (sim.save(), json.dumps(sim.snapshot()), world))

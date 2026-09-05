@@ -32,14 +32,15 @@ EM_JS(void, CompanyField, (int action, const char *label, const char *value, int
         capacity, secret:!!secret, x, y, width, height});
 });
 EM_JS(void, CompanyFieldsEnd, (), { Module.renderCrownlessFields?.(Module.crownlessFields); });
-EM_JS(void, CompanyCurrentWorld, (char *world), {
-    stringToUTF8(new URLSearchParams(location.search).get('world') || '', world, 33);
-});
-EM_JS(void, CompanyEnterWorld, (const char *world), {
-    location.assign(location.pathname + '?world=' + UTF8ToString(world));
-});
 EM_JS(void, CompanyInvitation, (char *invitation, int capacity), {
     stringToUTF8(new URLSearchParams(location.hash.slice(1)).get('join') || '', invitation, capacity);
+});
+EM_JS(int, CompanySharedHost, (), {
+    if (location.hostname.endsWith('.github.io')) {
+        location.assign('https://crownless.ratimics.com/game/index.html?lobby=1');
+        return 0;
+    }
+    return 1;
 });
 EM_JS(void, CompanyCopyInvitation, (const char *invitation), {
     const text = location.origin + '/#join=' + UTF8ToString(invitation);
@@ -47,11 +48,7 @@ EM_JS(void, CompanyCopyInvitation, (const char *invitation), {
 });
 #pragma clang diagnostic pop
 #else
-static void CompanyCurrentWorld(char *world) { world[0] = '\0'; }
-static void CompanyEnterWorld(const char *world)
-{
-    OpenURL(TextFormat("https://crownless.ratimics.com/game/index.html?world=%s", world));
-}
+static int CompanySharedHost(void) { return 1; }
 static void CompanyInvitation(char *invitation, int capacity) { (void)capacity; invitation[0] = '\0'; }
 static void CompanyCopyInvitation(const char *invitation)
 {
@@ -137,6 +134,7 @@ static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
     }
     if (FrontendIsCompanyField(action)) { state->text_field = action; return true; }
     if (action == FRONTEND_ACTION_WORLD_LIST) {
+        if (!CompanySharedHost()) return true;
         FrontendOpen(state, FRONTEND_WORLDS);
         state->world_page = 0;
         (void)CcCompanyList(&state->company, state->feedback, sizeof(state->feedback));
@@ -179,7 +177,7 @@ static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
     }
     if (action == FRONTEND_ACTION_COMPANY) {
         char id[33];
-        CompanyCurrentWorld(id);
+        CcCoopClientWorldId(id, sizeof(id));
         if (CcCompanyLoad(&state->company, id, state->feedback, sizeof(state->feedback))) {
             state->company_return = FRONTEND_PAUSED;
             FrontendOpen(state, FRONTEND_COMPANY);
@@ -194,7 +192,7 @@ static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
         }
         if (action == FRONTEND_ACTION_WORLD_ENTER) {
             if (CcCoopClientActive()) FrontendOpen(state, FRONTEND_PLAYING);
-            else CompanyEnterWorld(state->company.id);
+            else CcCoopClientEnterWorld(state->company.id);
             return true;
         }
         if (action == FRONTEND_ACTION_INVITE_COPY || action == FRONTEND_ACTION_INVITE_ROTATE) {

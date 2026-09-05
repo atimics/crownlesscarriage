@@ -157,8 +157,13 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock, float
     }
 }
 
-static Camera3D PonyConversationCamera(Camera3D road, Vector3 carriage, float yaw)
+static Camera3D PonyConversationCamera(Camera3D road, Vector3 carriage, float yaw, const CcSim *sim)
 {
+    static float nearby_weight;
+    float nearby = CcSimJourneyRoadSiteStop(sim) != NULL ? 1.0f : 0.0f;
+    float easing = fminf(1.0f, GetFrameTime() * 2.0f);
+    nearby_weight = reduced_motion_enabled ? nearby : nearby_weight + (nearby - nearby_weight) * easing;
+    road.fovy *= 1.0f - 0.12f * nearby_weight;
     float target = pony_conversation_active ? 1.0f : 0.0f;
     float step = fminf(GetFrameTime(), 0.1f) * 4.0f;
     if (reduced_motion_enabled) pony_conversation_weight = target;
@@ -856,7 +861,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                                       target.texture.height);
     Camera3D camera = CcLocalCombatCameraInternal(
         base_camera, agent, course, clock, true, target.texture.height);
-    if (travelling) camera = PonyConversationCamera(camera, carriage_base, 0.5f * PI);
+    if (travelling) camera = PonyConversationCamera(camera, carriage_base, 0.5f * PI, sim);
     if (!travelling) {
         camera = KeepHeroInsideStreetFrame(
             camera,
