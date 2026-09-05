@@ -1602,7 +1602,20 @@ typedef struct CreatureRenderPalette {
     Color metal;
     Color accent;
     Color eye;
+    Color hair;
 } CreatureRenderPalette;
+
+static Color DragonCourtHairColor(const CcDragon *dragon)
+{
+    static const Color colors[CC_DRAGON_HAIR_COLOR_COUNT] = {
+        {158, 68, 218, 255}, {220, 57, 73, 255}, {53, 125, 229, 255},
+    };
+    CcDragonHairColor hair = dragon != NULL ? dragon->hair_color : CC_DRAGON_HAIR_PURPLE;
+    if (hair < CC_DRAGON_HAIR_PURPLE || hair >= CC_DRAGON_HAIR_COLOR_COUNT) {
+        hair = CC_DRAGON_HAIR_PURPLE;
+    }
+    return colors[hair];
+}
 
 static bool IsDragonCreatureVariant(CcCreatureVariant variant)
 {
@@ -1757,21 +1770,25 @@ static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
             colors[8] = (Color){255, 174, 31, 255};
             break;
         case CC_CREATURE_DRAGON:
-            colors[0] = (Color){71, 100, 73, 255};
-            colors[1] = (Color){30, 48, 42, 255};
-            colors[2] = (Color){91, 117, 76, 255};
-            colors[3] = (Color){66, 54, 48, 255};
-            colors[5] = (Color){190, 154, 94, 255};
-            colors[7] = (Color){157, 57, 43, 255};
-            colors[8] = (Color){245, 190, 48, 255};
+            colors[0] = (Color){62, 103, 89, 255};
+            colors[1] = (Color){31, 48, 45, 255};
+            colors[2] = (Color){137, 145, 95, 255};
+            colors[5] = (Color){225, 183, 111, 255};
+            colors[7] = (Color){167, 67, 55, 255};
+            colors[8] = (Color){252, 184, 68, 255};
             break;
         case CC_CREATURE_GOBLIN_SCAVENGER:
         default:
             break;
     }
+    Color court_color = primary.a > 0 ? primary : DragonCourtHairColor(NULL);
+    if (variant <= CC_CREATURE_GOBLIN_TRIBUTE_BEARER || IsDragonCreatureVariant(variant)) {
+        colors[7] = court_color;
+    }
     return (CreatureRenderPalette){
         colors[0], colors[1], colors[2], colors[3], colors[4],
-        colors[5], colors[6], colors[7], colors[8]
+        colors[5], colors[6], colors[7], colors[8],
+        court_color
     };
 }
 
@@ -1885,9 +1902,11 @@ static float CreatureRigMovement(CcCreaturePose pose)
     return pose == CC_CREATURE_POSE_THREAT ? 0.28f : 0.0f;
 }
 
+#include "client/local3d/creature_detail.inc"
+
 static void DrawCreatureMuscleLimbs(const CcCreatureRigPose *rig,
                                     const CreatureRenderPalette *palette,
-                                    float yaw, float scale)
+                                    float yaw, float scale, CcCreatureVariant variant)
 {
     bool goblin = rig->profile == CC_CREATURE_RIG_GOBLIN;
     for (int32_t limb = 0; limb < rig->limb_count; ++limb) {
@@ -1910,6 +1929,10 @@ static void DrawCreatureMuscleLimbs(const CcCreatureRigPose *rig,
                  (0.42f - (float)segment * 0.06f));
             Vector3 start = FromLimbVector(leg->joints[segment]);
             Vector3 end = FromLimbVector(leg->joints[segment + 1]);
+            if (variant == CC_CREATURE_DRAGON_WHELP) {
+                start.y -= 0.28f * scale * (1.0f - (float)segment / (float)leg->segment_count);
+                end.y -= 0.28f * scale * (1.0f - (float)(segment + 1) / (float)leg->segment_count);
+            }
             Color color = segment == 0 ? upper : lower;
             DrawCylinderEx(start, end, radius, radius * 0.78f, 7, color);
             if (segment + 1 < leg->segment_count) {
@@ -1924,6 +1947,8 @@ static void DrawCreatureMuscleLimbs(const CcCreatureRigPose *rig,
                             (Vector3){0.22f * scale, 0.10f * scale,
                                       0.30f * scale},
                             yaw, palette->leather);
+        } else if (IsDragonCreatureVariant(variant)) {
+            DrawDragonClaws(foot, yaw, scale, palette);
         } else {
             Color hoof = rig->profile == CC_CREATURE_RIG_DRAGON ?
                 palette->accent : palette->leather;
@@ -1946,8 +1971,9 @@ static void DrawGoblinRig(CcCreatureVariant variant,
     Vector3 chest = LocalPoint(pelvis, 0.0f, 0.36f * scale,
                                0.018f * wave * scale, yaw);
     Vector3 neck = LocalPoint(pelvis, 0.0f, 0.58f * scale, 0.0f, yaw);
-    Vector3 head = LocalPoint(pelvis, 0.0f, 0.76f * scale, 0.025f, yaw);
+    Vector3 head = LocalPoint(pelvis, 0.0f, 0.76f * scale, 0.025f * scale, yaw);
     float muscle = 1.0f + rig->mean_activation * 0.48f;
+    Vector3 hands[2];
 
     DrawOrientedBox(pelvis, (Vector3){0.0f, 0.10f * scale, 0.0f},
                     (Vector3){0.38f * scale, 0.22f * scale,
@@ -1957,23 +1983,57 @@ static void DrawGoblinRig(CcCreatureVariant variant,
                    0.25f * scale * muscle, 7, palette->cloth);
     DrawCylinderEx(chest, neck, 0.20f * scale, 0.10f * scale, 7,
                    palette->cloth);
-    DrawCharacterEllipsoid(head,
-                           (Vector3){0.25f * scale, 0.24f * scale,
-                                     0.22f * scale},
-                           palette->skin);
+    DrawCreatureEllipsoid(head,
+        (Vector3){0.25f * scale, 0.24f * scale, 0.22f * scale}, yaw, palette->skin);
+    Vector3 jaw = LocalPoint(head, 0, -0.105f * scale, 0.12f * scale, yaw);
+    DrawCreatureEllipsoid(jaw, (Vector3){0.19f * scale, 0.115f * scale, 0.15f * scale},
+                           yaw, palette->skin);
+    Color face_shadow = ShadeColor(palette->skin, 0.54f);
+    Color eye_dark = {20, 27, 17, 255};
+    Vector3 nose = LocalPoint(head, 0, -0.015f * scale, 0.235f * scale, yaw);
+    DrawCreatureEllipsoid(nose, (Vector3){0.059f * scale, 0.10f * scale, 0.08f * scale},
+                           yaw, palette->skin);
+    Vector3 nose_tip = LocalPoint(head, 0, -0.07f * scale, 0.30f * scale, yaw);
+    DrawCreatureEllipsoid(nose_tip, (Vector3){0.073f * scale, 0.055f * scale, 0.076f * scale},
+                           yaw, BlendColor(palette->skin, palette->horn, 0.16f));
     for (int32_t side = -1; side <= 1; side += 2) {
         Vector3 ear_root = LocalPoint(
-            head, (float)side * 0.18f * scale, 0.02f * scale,
-            0.0f, yaw);
+            head, (float)side * 0.18f * scale, 0.075f * scale, 0.0f, yaw);
         Vector3 ear_tip = LocalPoint(
-            head, (float)side * 0.39f * scale, 0.04f * scale,
-            -0.01f * scale, yaw);
-        DrawCylinderEx(ear_root, ear_tip, 0.075f * scale, 0.012f * scale,
-                       5, palette->skin);
+            head, (float)side * 0.48f * scale,
+            (side < 0 ? 0.12f : 0.18f) * scale, -0.055f * scale, yaw);
+        Vector3 ear_bottom = LocalPoint(head, (float)side * 0.19f * scale,
+                                        -0.09f * scale, -0.03f * scale, yaw);
+        DrawDoubleSidedTriangle(ear_root, ear_tip, ear_bottom, palette->skin);
+        DrawCylinderEx(ear_root, ear_tip, 0.036f * scale, 0.009f * scale, 5, palette->skin);
+        Vector3 ear_inner = LocalPoint(head, (float)side * 0.25f * scale,
+                                       0.025f * scale, 0.008f * scale, yaw);
+        DrawDoubleSidedTriangle(ear_inner, Vector3Lerp(ear_inner, ear_tip, 0.79f),
+                                Vector3Lerp(ear_inner, ear_bottom, 0.65f), face_shadow);
         Vector3 eye = LocalPoint(
-            head, (float)side * 0.080f * scale, 0.035f * scale,
-            0.205f * scale, yaw);
-        DrawCharacterSphere(eye, 0.032f * scale, palette->eye);
+            head, (float)side * 0.104f * scale, 0.04f * scale, 0.206f * scale, yaw);
+        DrawCreatureEllipsoid(eye, (Vector3){0.061f * scale, 0.048f * scale, 0.031f * scale},
+                               yaw, face_shadow);
+        Vector3 iris = LocalPoint(eye, 0, 0, 0.018f * scale, yaw);
+        DrawCreatureEllipsoid(iris, (Vector3){0.048f * scale, 0.035f * scale, 0.020f * scale},
+                               yaw, palette->eye);
+        Vector3 pupil = LocalPoint(iris, 0, 0, 0.018f * scale, yaw);
+        DrawCreatureEllipsoid(pupil, (Vector3){0.016f * scale, 0.026f * scale, 0.008f * scale},
+                               yaw, eye_dark);
+        Vector3 brow_inner = LocalPoint(head, (float)side * 0.05f * scale,
+                                        0.085f * scale, 0.226f * scale, yaw);
+        Vector3 brow_outer = LocalPoint(head, (float)side * 0.19f * scale,
+                                        0.12f * scale, 0.17f * scale, yaw);
+        DrawCylinderEx(brow_inner, brow_outer, 0.029f * scale, 0.021f * scale, 5, face_shadow);
+        Vector3 mouth_corner = LocalPoint(head, (float)side * 0.14f * scale,
+                                          -0.14f * scale, 0.218f * scale, yaw);
+        Vector3 mouth_middle = LocalPoint(head, 0, -0.158f * scale, 0.265f * scale, yaw);
+        DrawCylinderEx(mouth_corner, mouth_middle, 0.012f * scale, 0.010f * scale, 5, eye_dark);
+        Vector3 tusk = LocalPoint(head, (float)side * 0.098f * scale,
+                                  -0.16f * scale, 0.258f * scale, yaw);
+        Vector3 tusk_tip = LocalPoint(tusk, (float)side * 0.013f * scale,
+                                      0.068f * scale, 0.016f * scale, yaw);
+        DrawCylinderEx(tusk, tusk_tip, 0.021f * scale, 0, 5, palette->horn);
 
         float arm_wave = wave * (float)-side;
         Vector3 shoulder = LocalPoint(
@@ -1985,32 +2045,50 @@ static void DrawGoblinRig(CcCreatureVariant variant,
         Vector3 hand = LocalPoint(
             chest, (float)side * 0.31f * scale, -0.48f * scale,
             arm_wave * 0.18f * scale, yaw);
+        if (variant == CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
+            hand = LocalPoint(chest, (float)side * 0.27f * scale,
+                               -0.28f * scale, 0.39f * scale, yaw);
+            elbow = LocalPoint(chest, (float)side * 0.34f * scale,
+                                -0.31f * scale, 0.08f * scale, yaw);
+        }
+        hands[side < 0 ? 0 : 1] = hand;
         DrawCylinderEx(shoulder, elbow, 0.082f * scale * muscle,
                        0.068f * scale, 7, palette->cloth);
         DrawCylinderEx(elbow, hand, 0.068f * scale,
                        0.055f * scale, 7, palette->skin);
         DrawCharacterSphere(hand, 0.078f * scale, palette->skin);
+        Vector3 cuff = Vector3Lerp(elbow, hand, 0.78f);
+        DrawCylinderEx(cuff, hand, 0.071f * scale, 0.065f * scale, 6, palette->leather);
     }
+    DrawOrientedBox(pelvis, (Vector3){0, 0.11f * scale, 0.158f * scale},
+                    (Vector3){0.09f * scale, 0.085f * scale, 0.024f * scale}, yaw, palette->horn);
+    DrawCreatureEllipsoid(neck, (Vector3){0.145f * scale, 0.066f * scale, 0.13f * scale},
+                           yaw, palette->accent);
+    DrawGoblinHair(variant, head, yaw, scale,
+                   0.035f * wave * rig->movement, palette->hair);
 
     if (variant == CC_CREATURE_GOBLIN_RAIDER) {
-        Vector3 helmet_tip = LocalPoint(head, 0.0f, 0.37f * scale,
-                                        0.0f, yaw);
-        DrawCylinderEx(head, helmet_tip, 0.23f * scale, 0.025f * scale,
-                       6, palette->metal);
+        Vector3 helmet = LocalPoint(head, 0, 0.21f * scale, -0.01f * scale, yaw);
+        DrawCreatureEllipsoid(helmet, (Vector3){0.26f * scale, 0.13f * scale, 0.245f * scale},
+                               yaw, palette->metal);
         DrawOrientedBox(chest, (Vector3){0.0f, 0.0f, 0.17f * scale},
                         (Vector3){0.38f * scale, 0.30f * scale,
                                   0.07f * scale},
                         yaw, palette->metal);
-        Vector3 spear_hand = LocalPoint(chest, 0.32f * scale,
-                                        -0.38f * scale, 0.10f * scale, yaw);
-        Vector3 spear_tip = LocalPoint(chest, 0.32f * scale,
-                                       0.78f * scale, 0.08f * scale, yaw);
-        DrawCylinderEx(spear_hand, spear_tip, 0.025f * scale,
+        Vector3 spear_hand = hands[1];
+        Vector3 spear_bottom = LocalPoint(spear_hand, 0, -0.42f * scale, 0, yaw);
+        Vector3 spear_tip = LocalPoint(spear_hand, 0, 1.16f * scale, 0, yaw);
+        DrawCylinderEx(spear_bottom, spear_tip, 0.025f * scale,
                        0.018f * scale, 6, palette->leather);
-        Vector3 blade_tip = LocalPoint(chest, 0.32f * scale,
-                                       1.02f * scale, 0.08f * scale, yaw);
+        Vector3 blade_tip = LocalPoint(spear_tip, 0, 0.24f * scale, 0, yaw);
         DrawCylinderEx(spear_tip, blade_tip, 0.075f * scale, 0.0f, 5,
                        palette->metal);
+        DrawDoubleSidedTriangle(spear_tip,
+            LocalPoint(spear_tip, -0.23f * scale, -0.10f * scale, 0, yaw),
+            LocalPoint(spear_tip, 0, -0.21f * scale, 0, yaw), palette->accent);
+        Vector3 pauldron = LocalPoint(chest, -0.28f * scale, 0.025f * scale, 0, yaw);
+        DrawCreatureEllipsoid(pauldron, (Vector3){0.14f * scale, 0.105f * scale, 0.16f * scale},
+                               yaw, palette->metal);
     } else if (variant == CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
         DrawOrientedBox(chest,
                         (Vector3){0.0f, -0.22f * scale, 0.30f * scale},
@@ -2028,6 +2106,18 @@ static void DrawGoblinRig(CcCreatureVariant variant,
                         (Vector3){0.40f * scale, 0.42f * scale,
                                   0.18f * scale},
                         yaw, palette->secondary);
+        Vector3 roll_left = LocalPoint(chest, -0.23f * scale, 0.20f * scale, -0.24f * scale, yaw);
+        Vector3 roll_right = LocalPoint(chest, 0.23f * scale, 0.20f * scale, -0.24f * scale, yaw);
+        DrawCylinderEx(roll_left, roll_right, 0.10f * scale, 0.10f * scale, 7, palette->hide);
+        Vector3 strap_top = LocalPoint(chest, -0.18f * scale, 0.19f * scale, 0.05f * scale, yaw);
+        Vector3 strap_bottom = LocalPoint(pelvis, 0.14f * scale, 0.16f * scale, 0.17f * scale, yaw);
+        DrawCylinderEx(strap_top, strap_bottom, 0.029f * scale, 0.029f * scale, 5, palette->leather);
+        Vector3 hook_bottom = LocalPoint(hands[1], 0, -0.25f * scale, 0.02f * scale, yaw);
+        Vector3 hook_bend = LocalPoint(hook_bottom, 0, -0.08f * scale, 0.11f * scale, yaw);
+        Vector3 hook_tip = LocalPoint(hook_bottom, 0, 0.04f * scale, 0.16f * scale, yaw);
+        DrawCylinderEx(hands[1], hook_bottom, 0.024f * scale, 0.022f * scale, 6, palette->leather);
+        DrawCylinderEx(hook_bottom, hook_bend, 0.024f * scale, 0.020f * scale, 6, palette->metal);
+        DrawCylinderEx(hook_bend, hook_tip, 0.020f * scale, 0.005f * scale, 6, palette->metal);
     }
 }
 
@@ -2201,13 +2291,6 @@ static void DrawFarmAnimalRig(CcCreatureVariant variant,
                            palette->accent);
 }
 
-static void DrawDoubleSidedTriangle(Vector3 a, Vector3 b, Vector3 c,
-                                    Color color)
-{
-    DrawTriangle3D(a, b, c, color);
-    DrawTriangle3D(c, b, a, color);
-}
-
 static void DrawDragonRig(CcCreatureVariant variant,
                           const CcCreatureRigPose *rig,
                           const CreatureRenderPalette *palette,
@@ -2215,29 +2298,21 @@ static void DrawDragonRig(CcCreatureVariant variant,
 {
     Vector3 body = FromLimbVector(rig->body);
     float tension = 1.0f + rig->mean_activation * 0.30f;
+    float wing_breath = sinf(rig->phase * 2.0f * PI) * rig->movement * 0.10f * scale;
 
     if (variant == CC_CREATURE_DRAGON_WHELP) {
-        DrawCharacterEllipsoid(
+        body.y -= 0.28f * scale;
+        DrawCreatureEllipsoid(
             body, (Vector3){0.62f * scale * tension, 0.48f * scale,
-                            0.72f * scale}, palette->skin);
+                            0.72f * scale}, yaw, palette->skin);
         Vector3 head = LocalPoint(body, 0.0f, 0.22f * scale,
                                   0.88f * scale, yaw);
         DrawCylinderEx(body, head, 0.24f * scale, 0.20f * scale, 7,
                        palette->hide);
-        DrawCharacterEllipsoid(
+        DrawDragonFace(
             head, (Vector3){0.48f * scale, 0.40f * scale,
-                            0.52f * scale}, palette->skin);
-        Vector3 jaw = LocalPoint(head, 0.0f, -0.20f * scale,
-                                 0.34f * scale, yaw);
-        DrawOrientedBox(jaw, (Vector3){0},
-                        (Vector3){0.54f * scale, 0.16f * scale,
-                                  0.38f * scale},
-                        yaw, palette->accent);
+                            0.52f * scale}, yaw, scale, palette, true);
         for (int32_t side = -1; side <= 1; side += 2) {
-            Vector3 eye = LocalPoint(
-                head, (float)side * 0.31f * scale, 0.10f * scale,
-                0.34f * scale, yaw);
-            DrawCharacterSphere(eye, 0.090f * scale, palette->eye);
             Vector3 fin_root = LocalPoint(
                 head, (float)side * 0.30f * scale, 0.14f * scale,
                 0.02f, yaw);
@@ -2254,13 +2329,15 @@ static void DrawDragonRig(CcCreatureVariant variant,
                 body, (float)side * 0.36f * scale, 0.30f * scale,
                 -0.04f * scale, yaw);
             Vector3 wing_tip = LocalPoint(
-                body, (float)side * 0.92f * scale, 0.62f * scale,
-                -0.24f * scale, yaw);
+                body, (float)side * 1.02f * scale, 0.40f * scale,
+                -0.50f * scale, yaw);
+            Vector3 wing_joint = LocalPoint(
+                body, (float)side * 0.72f * scale, 0.65f * scale + wing_breath,
+                -0.18f * scale, yaw);
             Vector3 wing_back = LocalPoint(
                 body, (float)side * 0.42f * scale, 0.20f * scale,
                 -0.70f * scale, yaw);
-            DrawDoubleSidedTriangle(wing_root, wing_tip, wing_back,
-                                    ShadeColor(palette->accent, 0.90f));
+            DrawDragonWing(wing_root, wing_joint, wing_tip, wing_back, scale, palette, false);
         }
         Vector3 tail_a = LocalPoint(body, 0.0f, 0.02f * scale,
                                     -0.50f * scale, yaw);
@@ -2268,10 +2345,9 @@ static void DrawDragonRig(CcCreatureVariant variant,
                                     -1.12f * scale, yaw);
         Vector3 tail_c = LocalPoint(body, -0.08f * scale, -0.13f * scale,
                                     -1.62f * scale, yaw);
-        DrawCylinderEx(tail_a, tail_b, 0.20f * scale, 0.10f * scale, 7,
-                       palette->skin);
-        DrawCylinderEx(tail_b, tail_c, 0.10f * scale, 0.018f * scale, 6,
-                       palette->secondary);
+        Vector3 tail[] = {tail_a, tail_b, tail_c};
+        const float radii[] = {0.20f, 0.10f, 0.018f};
+        DrawCreatureTube(tail, radii, 3, scale, palette->skin, palette->hide);
         for (int32_t crest = 0; crest < 3; ++crest) {
             const float crest_index = (float)crest;
             Vector3 root = LocalPoint(
@@ -2286,35 +2362,21 @@ static void DrawDragonRig(CcCreatureVariant variant,
     }
 
     if (variant == CC_CREATURE_DRAGON_WANDERER) {
-        DrawOrientedBox(body, (Vector3){0.0f, 0.04f * scale, 0.0f},
-                        (Vector3){0.68f * scale * tension,
-                                  0.46f * scale,
-                                  3.00f * scale},
-                        yaw, palette->skin);
+        DrawCreatureEllipsoid(body,
+            (Vector3){0.43f * scale * tension, 0.38f * scale, 1.55f * scale}, yaw, palette->skin);
         Vector3 neck_a = LocalPoint(body, 0.0f, 0.22f * scale,
                                     1.28f * scale, yaw);
         Vector3 neck_b = LocalPoint(body, -0.10f * scale, 0.48f * scale,
                                     2.34f * scale, yaw);
         Vector3 head = LocalPoint(body, 0.08f * scale, 0.54f * scale,
                                   3.54f * scale, yaw);
-        DrawCylinderEx(neck_a, neck_b, 0.25f * scale, 0.18f * scale, 7,
-                       palette->hide);
-        DrawCylinderEx(neck_b, head, 0.18f * scale, 0.10f * scale, 7,
-                       palette->skin);
-        DrawCharacterEllipsoid(
+        Vector3 neck[] = {neck_a, neck_b, head};
+        const float neck_radii[] = {0.25f, 0.18f, 0.10f};
+        DrawCreatureTube(neck, neck_radii, 3, scale, palette->skin, palette->hide);
+        DrawDragonFace(
             head, (Vector3){0.27f * scale, 0.22f * scale,
-                            0.76f * scale}, palette->skin);
-        Vector3 jaw = LocalPoint(head, 0.0f, -0.15f * scale,
-                                 0.58f * scale, yaw);
-        DrawOrientedBox(jaw, (Vector3){0},
-                        (Vector3){0.40f * scale, 0.13f * scale,
-                                  0.76f * scale},
-                        yaw, palette->accent);
+                            0.76f * scale}, yaw, scale, palette, false);
         for (int32_t side = -1; side <= 1; side += 2) {
-            Vector3 eye = LocalPoint(
-                head, (float)side * 0.20f * scale, 0.07f * scale,
-                0.38f * scale, yaw);
-            DrawCharacterSphere(eye, 0.045f * scale, palette->eye);
             Vector3 horn_root = LocalPoint(
                 head, (float)side * 0.18f * scale, 0.17f * scale,
                 -0.08f * scale, yaw);
@@ -2328,7 +2390,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
                 body, (float)side * 0.30f * scale, 0.30f * scale,
                 0.72f * scale, yaw);
             Vector3 wing_joint = LocalPoint(
-                body, (float)side * 1.40f * scale, 1.36f * scale,
+                body, (float)side * 1.40f * scale, 1.36f * scale + wing_breath,
                 -0.22f * scale, yaw);
             Vector3 wing_tip = LocalPoint(
                 body, (float)side * 2.72f * scale, 1.04f * scale,
@@ -2336,14 +2398,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
             Vector3 wing_back = LocalPoint(
                 body, (float)side * 1.35f * scale, 0.12f * scale,
                 -2.34f * scale, yaw);
-            DrawCylinderEx(wing_root, wing_joint, 0.075f * scale,
-                           0.040f * scale, 6, palette->skin);
-            DrawCylinderEx(wing_joint, wing_tip, 0.045f * scale,
-                           0.014f * scale, 6, palette->skin);
-            DrawDoubleSidedTriangle(wing_root, wing_joint, wing_back,
-                                    ShadeColor(palette->accent, 0.86f));
-            DrawDoubleSidedTriangle(wing_joint, wing_tip, wing_back,
-                                    ShadeColor(palette->secondary, 0.92f));
+            DrawDragonWing(wing_root, wing_joint, wing_tip, wing_back, scale, palette, false);
         }
         Vector3 tail_a = LocalPoint(body, 0.0f, 0.04f * scale,
                                     -1.42f * scale, yaw);
@@ -2351,10 +2406,9 @@ static void DrawDragonRig(CcCreatureVariant variant,
                                     -3.12f * scale, yaw);
         Vector3 tail_c = LocalPoint(body, -0.18f * scale, -0.22f * scale,
                                     -5.68f * scale, yaw);
-        DrawCylinderEx(tail_a, tail_b, 0.24f * scale, 0.13f * scale, 7,
-                       palette->skin);
-        DrawCylinderEx(tail_b, tail_c, 0.13f * scale, 0.018f * scale, 7,
-                       palette->secondary);
+        Vector3 tail[] = {tail_a, tail_b, tail_c};
+        const float radii[] = {0.24f, 0.13f, 0.018f};
+        DrawCreatureTube(tail, radii, 3, scale, palette->skin, palette->hide);
         for (int32_t blade = 0; blade < 3; ++blade) {
             const float blade_index = (float)blade;
             Vector3 root = LocalPoint(
@@ -2399,39 +2453,20 @@ static void DrawDragonRig(CcCreatureVariant variant,
         };
         const int32_t serpent_count =
             (int32_t)(sizeof(serpent) / sizeof(serpent[0]));
-        for (int32_t index = 0; index < serpent_count - 1; ++index) {
-            DrawCylinderEx(
-                serpent[index], serpent[index + 1],
-                serpent_radii[index] * scale * tension,
-                serpent_radii[index + 1] * scale, 10,
-                index % 3 == 0 ? palette->hide : palette->skin);
-        }
+        DrawCreatureTube(serpent, serpent_radii, serpent_count, scale, palette->skin, palette->hide);
         Vector3 neck_a = LocalPoint(body, -0.22f * scale, 0.92f * scale,
                                     4.62f * scale, yaw);
         Vector3 neck_b = LocalPoint(body, 0.18f * scale, 1.16f * scale,
                                     5.52f * scale, yaw);
         Vector3 head = LocalPoint(body, 0.0f, 1.08f * scale,
                                   6.82f * scale, yaw);
-        DrawCylinderEx(serpent[0], neck_a, 0.82f * scale,
-                       0.65f * scale, 10, palette->skin);
-        DrawCylinderEx(neck_a, neck_b, 0.65f * scale,
-                       0.46f * scale, 10, palette->hide);
-        DrawCylinderEx(neck_b, head, 0.46f * scale,
-                       0.27f * scale, 10, palette->skin);
-        DrawCharacterEllipsoid(
+        Vector3 neck[] = {serpent[0], neck_a, neck_b, head};
+        const float neck_radii[] = {0.82f, 0.65f, 0.46f, 0.27f};
+        DrawCreatureTube(neck, neck_radii, 4, scale, palette->skin, palette->hide);
+        DrawDragonFace(
             head, (Vector3){0.62f * scale, 0.44f * scale,
-                            1.05f * scale}, palette->skin);
-        Vector3 jaw = LocalPoint(head, 0.0f, -0.24f * scale,
-                                 0.82f * scale, yaw);
-        DrawOrientedBox(jaw, (Vector3){0},
-                        (Vector3){0.84f * scale, 0.24f * scale,
-                                  1.18f * scale},
-                        yaw, palette->accent);
+                            1.05f * scale}, yaw, scale, palette, false);
         for (int32_t side = -1; side <= 1; side += 2) {
-            Vector3 eye = LocalPoint(
-                head, (float)side * 0.43f * scale, 0.13f * scale,
-                0.68f * scale, yaw);
-            DrawCharacterSphere(eye, 0.075f * scale, palette->eye);
             for (int32_t crown = 0; crown < 3; ++crown) {
                 float amount = (float)crown;
                 Vector3 horn_root = LocalPoint(
@@ -2460,27 +2495,15 @@ static void DrawDragonRig(CcCreatureVariant variant,
                 body, (float)side * 0.72f * scale, 0.74f * scale,
                 2.38f * scale, yaw);
             Vector3 wing_joint = LocalPoint(
-                body, (float)side * 2.46f * scale, 2.50f * scale,
+                body, (float)side * 2.46f * scale, 2.50f * scale + wing_breath,
                 1.12f * scale, yaw);
             Vector3 wing_tip = LocalPoint(
                 body, (float)side * 4.25f * scale, 1.02f * scale,
                 -0.42f * scale, yaw);
-            Vector3 wing_notch = LocalPoint(
-                body, (float)side * 1.38f * scale, 0.50f * scale,
-                -0.82f * scale, yaw);
             Vector3 wing_back = LocalPoint(
                 body, (float)side * 2.58f * scale, 0.12f * scale,
                 -2.40f * scale, yaw);
-            DrawCylinderEx(wing_root, wing_joint, 0.19f * scale,
-                           0.10f * scale, 8, palette->skin);
-            DrawCylinderEx(wing_joint, wing_tip, 0.11f * scale,
-                           0.025f * scale, 8, palette->skin);
-            DrawDoubleSidedTriangle(wing_root, wing_joint, wing_back,
-                                    ShadeColor(palette->secondary, 0.82f));
-            DrawDoubleSidedTriangle(wing_joint, wing_tip, wing_notch,
-                                    ShadeColor(palette->accent, 0.76f));
-            DrawDoubleSidedTriangle(wing_joint, wing_notch, wing_back,
-                                    ShadeColor(palette->secondary, 0.90f));
+            DrawDragonWing(wing_root, wing_joint, wing_tip, wing_back, scale, palette, true);
 
             Vector3 arm_root = LocalPoint(
                 body, (float)side * 0.58f * scale, 0.18f * scale,
@@ -2516,12 +2539,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
                    -2.65f * scale, yaw),
     };
     const float crowned_radii[] = {0.64f, 0.68f, 0.58f, 0.46f};
-    for (int32_t index = 0; index < 3; ++index) {
-        DrawCylinderEx(crowned[index], crowned[index + 1],
-                       crowned_radii[index] * scale * tension,
-                       crowned_radii[index + 1] * scale, 10,
-                       index == 0 ? palette->hide : palette->skin);
-    }
+    DrawCreatureTube(crowned, crowned_radii, 4, scale, palette->skin, palette->hide);
     Vector3 neck_a = LocalPoint(body, -0.12f * scale, 0.38f * scale,
                                 2.38f * scale, yaw);
     Vector3 neck_b = LocalPoint(body, 0.16f * scale, 0.52f * scale,
@@ -2530,27 +2548,13 @@ static void DrawDragonRig(CcCreatureVariant variant,
                                 4.08f * scale, yaw);
     Vector3 head = LocalPoint(body, 0.0f, 0.46f * scale,
                               5.28f * scale, yaw);
-    DrawCylinderEx(crowned[0], neck_a, 0.64f * scale,
-                   0.43f * scale, 9, palette->hide);
-    DrawCylinderEx(neck_a, neck_b, 0.43f * scale,
-                   0.35f * scale, 9, palette->skin);
-    DrawCylinderEx(neck_b, neck_c, 0.35f * scale,
-                   0.27f * scale, 9, palette->skin);
-    DrawCylinderEx(neck_c, head, 0.27f * scale,
-                   0.18f * scale, 9, palette->skin);
-    DrawCharacterEllipsoid(
+    Vector3 neck[] = {crowned[0], neck_a, neck_b, neck_c, head};
+    const float neck_radii[] = {0.64f, 0.43f, 0.35f, 0.27f, 0.18f};
+    DrawCreatureTube(neck, neck_radii, 5, scale, palette->skin, palette->hide);
+    DrawDragonFace(
         head, (Vector3){0.40f * scale, 0.30f * scale,
-                        0.72f * scale}, palette->skin);
-    Vector3 jaw = LocalPoint(head, 0.0f, -0.16f * scale,
-                             0.56f * scale, yaw);
-    DrawOrientedBox(jaw, (Vector3){0.0f, 0.0f, 0.0f},
-                    (Vector3){0.56f * scale, 0.16f * scale,
-                              0.78f * scale},
-                    yaw, palette->accent);
+                        0.72f * scale}, yaw, scale, palette, false);
     for (int32_t side = -1; side <= 1; side += 2) {
-        Vector3 eye = LocalPoint(head, (float)side * 0.27f * scale,
-                                 0.09f * scale, 0.48f * scale, yaw);
-        DrawCharacterSphere(eye, 0.057f * scale, palette->eye);
         Vector3 horn_root = LocalPoint(head, (float)side * 0.24f * scale,
                                        0.29f * scale, 0.05f * scale, yaw);
         Vector3 horn_tip = LocalPoint(head, (float)side * 0.72f * scale,
@@ -2561,18 +2565,13 @@ static void DrawDragonRig(CcCreatureVariant variant,
         Vector3 wing_root = LocalPoint(body, (float)side * 0.58f * scale,
                                        0.48f * scale, 1.18f * scale, yaw);
         Vector3 wing_joint = LocalPoint(
-            body, (float)side * 1.82f * scale, 1.18f * scale,
+            body, (float)side * 1.82f * scale, 1.18f * scale + wing_breath,
             0.36f * scale, yaw);
         Vector3 wing_tip = LocalPoint(body, (float)side * 2.45f * scale,
                                       0.34f * scale, -1.08f * scale, yaw);
         Vector3 wing_back = LocalPoint(body, (float)side * 2.05f * scale,
                                        0.18f * scale, -2.12f * scale, yaw);
-        DrawCylinderEx(wing_root, wing_joint, 0.14f * scale,
-                       0.078f * scale, 7, palette->skin);
-        DrawDoubleSidedTriangle(wing_root, wing_joint, wing_back,
-                                ShadeColor(palette->secondary, 0.82f));
-        DrawDoubleSidedTriangle(wing_joint, wing_tip, wing_back,
-                                ShadeColor(palette->accent, 0.86f));
+        DrawDragonWing(wing_root, wing_joint, wing_tip, wing_back, scale, palette, false);
 
         for (int32_t pair = 0; pair < 2; ++pair) {
             float longitudinal = pair == 0 ? 1.35f : -1.72f;
@@ -2587,10 +2586,13 @@ static void DrawDragonRig(CcCreatureVariant variant,
                 body, (float)side * 0.84f * scale, -0.92f * scale,
                 (longitudinal + (pair == 0 ? 0.38f : -0.38f)) * scale,
                 yaw);
+            const CcCreatureRigLimbPose *limb = &rig->limbs[pair * 2 + (side > 0 ? 1 : 0)];
+            leg_foot.y = limb->joints[limb->segment_count].y;
             DrawCylinderEx(leg_root, leg_knee, 0.17f * scale,
                            0.11f * scale, 7, palette->skin);
             DrawCylinderEx(leg_knee, leg_foot, 0.11f * scale,
                            0.045f * scale, 7, palette->secondary);
+            DrawDragonClaws(leg_foot, yaw, scale, palette);
         }
     }
     Vector3 tail[] = {
@@ -2611,11 +2613,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
     const float tail_radii[] = {
         0.46f, 0.42f, 0.34f, 0.25f, 0.16f, 0.085f, 0.022f,
     };
-    for (int32_t index = 0; index < 6; ++index) {
-        DrawCylinderEx(tail[index], tail[index + 1],
-                       tail_radii[index] * scale,
-                       tail_radii[index + 1] * scale, 9, palette->skin);
-    }
+    DrawCreatureTube(tail, tail_radii, 7, scale, palette->skin, palette->hide);
     for (int32_t spine = 0; spine < 8; ++spine) {
         float amount = (float)spine / 7.0f;
         Vector3 root = LocalPoint(body, 0.0f,
@@ -2810,7 +2808,7 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
     }
     if (variant != CC_CREATURE_DRAGON &&
         variant != CC_CREATURE_DRAGON_DEEP_WYRM) {
-        DrawCreatureMuscleLimbs(rig, &palette, yaw, scale);
+        DrawCreatureMuscleLimbs(rig, &palette, yaw, scale, variant);
     }
     if (variant <= CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
         DrawGoblinRig(variant, rig, &palette, yaw, scale);
@@ -2861,7 +2859,11 @@ static void SetWorldForegroundReveal(float amount, float cut_height)
         (active == 0.0f || visual_style.foreground_cut_height == cut_height)) {
         return;
     }
+    // Queued walls already use world coordinates, including their terrain lift.
+    rlPushMatrix();
+    rlLoadIdentity();
     rlDrawRenderBatchActive();
+    rlPopMatrix();
     visual_style.foreground_reveal_valid = true;
     visual_style.foreground_reveal = active;
     visual_style.foreground_cut_height = cut_height;

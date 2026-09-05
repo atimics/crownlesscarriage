@@ -199,6 +199,11 @@ def validate(require_review_previews: bool = False) -> int:
                     for primitive in primitives):
                 failures.append(
                     f"{asset_id}: runtime identity mesh lacks COLOR_0")
+            if kind == "molded_hair":
+                if len(primitives) != 1:
+                    failures.append(f"{asset_id}: hair must use one draw call")
+                if stats.triangles > 768:
+                    failures.append(f"{asset_id}: hair exceeds 768 triangles")
         if stats.triangles > 2500:
             failures.append(f"{asset_id}: {stats.triangles} triangles > 2500")
         if not any(node.get("extras") for node in gltf.get("nodes", [])):

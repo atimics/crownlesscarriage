@@ -213,6 +213,32 @@ static void TestGenericTissues(void)
     Require(fabsf(rig.total_mass - 16.0f) < 0.001f,
             "bone masses did not aggregate");
 
+    const float paused_steps[] = {0.0f, -0.01f, NAN, INFINITY};
+    for (size_t step = 0; step < sizeof(paused_steps) / sizeof(paused_steps[0]);
+         ++step) {
+        CcBiomechRig pending = rig;
+        pending.root.gravity = (CcBiomechVec3){0};
+        pending.root.linear_damping = 0.0f;
+        CcBiomechRigApplyBodyForce(&pending, (CcBiomechVec3){96.0f, 0.0f, 0.0f});
+        CcBiomechRigApplyTorque(&pending, joint, 0.60f);
+        CcBiomechRigStepBody(&pending, paused_steps[step]);
+        CcBiomechRigStep(&pending, paused_steps[step]);
+        Require(pending.root.position.x == 0.0f &&
+                    pending.joints[joint].angle == 0.0f &&
+                    pending.root.accumulated_force.x == 96.0f &&
+                    pending.joints[joint].external_torque == 0.60f,
+                "paused physics must preserve the pose and queued forces");
+        CcBiomechRigStepBody(&pending, 1.0f / 60.0f);
+        CcBiomechRigStep(&pending, 1.0f / 60.0f);
+        Require(fabsf(pending.root.velocity.x - 0.10f) < 0.00001f &&
+                    fabsf(pending.joints[joint].angular_velocity - 0.10f) <
+                        0.00001f,
+                "resumed physics must apply the queued force and torque");
+        Require(pending.root.accumulated_force.x == 0.0f &&
+                    pending.joints[joint].external_torque == 0.0f,
+                "a completed step must consume its queued forces");
+    }
+
     CcBiomechRigSetBodyState(&rig, (CcBiomechVec3){0.0f, 2.0f, 0.0f},
                              (CcBiomechVec3){0});
     for (int32_t frame = 0; frame < 60; ++frame) {
@@ -431,6 +457,97 @@ static void TestRagdollAnatomyAndVolume(void)
     }
 }
 
+static void TestHingeSplayPreservesLength(void)
+{
+    const float splay_limits[] = {0.10f, 1.30f};
+    for (size_t limit = 0; limit < sizeof(splay_limits) / sizeof(splay_limits[0]);
+         ++limit) {
+        for (int32_t direction = -1; direction <= 1; direction += 2) {
+            for (int32_t aligned = 0; aligned <= 1; ++aligned) {
+                CcBiomechRagdoll ragdoll;
+                CcBiomechRagdollInit(&ragdoll);
+                ragdoll.active = true;
+                ragdoll.gravity = (CcBiomechVec3){0};
+                int32_t joint = CcBiomechRagdollAddParticle(
+                    &ragdoll, (CcBiomechVec3){0}, 0.0f, 0.0f);
+                int32_t axis = CcBiomechRagdollAddParticle(
+                    &ragdoll, (CcBiomechVec3){1.0f, 0.0f, 0.0f}, 0.0f, 0.0f);
+                int32_t parent = CcBiomechRagdollAddParticle(
+                    &ragdoll, (CcBiomechVec3){0.0f, 1.0f, 0.0f}, 0.0f, 0.0f);
+                int32_t child = CcBiomechRagdollAddParticle(
+                    &ragdoll, (CcBiomechVec3){0.0f, -1.0f, 0.0f}, 1.0f, 0.0f);
+                Require(CcBiomechRagdollAddHingeConstraint(
+                    &ragdoll, parent, joint, child, joint, axis,
+                    0.0f, 3.14159265f, splay_limits[limit], 0.0f) >= 0,
+                    "splay fixture must initialize");
+                float y = aligned ? 0.0f : -0.005f;
+                ragdoll.particles[child].position = (CcBiomechVec3){
+                    (float)direction * sqrtf(1.0f - y * y), y, 0.0f};
+                ragdoll.particles[child].previous_position =
+                    ragdoll.particles[child].position;
+                CcBiomechRagdollStep(&ragdoll, 1.0f / 60.0f, 1, NULL, NULL);
+                CcBiomechVec3 arm = ragdoll.particles[child].position;
+                Require(fabsf(BiomechDistance(arm, (CcBiomechVec3){0}) - 1.0f)
+                            < 0.00001f,
+                        "hinge splay correction must preserve bone length");
+                Require(fabsf(arm.x) <= sinf(splay_limits[limit]) + 0.00001f,
+                        "an aligned limb must rotate within its splay limit");
+            }
+        }
+    }
+}
+
+static bool SegmentLedge(void *context, CcBiomechVec3 previous_position,
+                         CcBiomechVec3 position, float radius,
+                         CcBiomechVec3 *corrected_position,
+                         CcBiomechVec3 *surface_normal)
+{
+    (void)previous_position;
+    float ledge_x = *(const float *)context;
+    if (radius < 0.10f || fabsf(position.x - ledge_x) > 0.001f ||
+        position.y >= radius) return false;
+    *corrected_position = position;
+    corrected_position->y = radius;
+    *surface_normal = (CcBiomechVec3){0.0f, 1.0f, 0.0f};
+    return true;
+}
+
+static void TestSegmentContactProjection(void)
+{
+    const float masses[][2] = {{0.2f, 0.2f}, {0.1f, 0.4f},
+                                {0.0f, 0.3f}, {0.3f, 0.0f}};
+    for (size_t mass = 0; mass < sizeof(masses) / sizeof(masses[0]); ++mass) {
+        for (int32_t sample = 1; sample <= 3; ++sample) {
+            CcBiomechRagdoll ragdoll;
+            CcBiomechRagdollInit(&ragdoll);
+            ragdoll.gravity = (CcBiomechVec3){0};
+            ragdoll.active = true;
+            int32_t a = CcBiomechRagdollAddParticle(
+                &ragdoll, (CcBiomechVec3){0}, masses[mass][0], 0.02f);
+            int32_t b = CcBiomechRagdollAddParticle(
+                &ragdoll, (CcBiomechVec3){4.0f, 0.0f, 0.0f},
+                masses[mass][1], 0.02f);
+            Require(CcBiomechRagdollAddCollisionSegment(&ragdoll, a, b, 0.12f)
+                        >= 0, "segment contact fixture must initialize");
+            float ledge_x = (float)sample;
+            CcBiomechRagdollStep(&ragdoll, 1.0f / 60.0f, 1,
+                                 SegmentLedge, &ledge_x);
+            float amount = ledge_x / 4.0f;
+            float contact_height = ragdoll.particles[a].position.y *
+                                       (1.0f - amount) +
+                                   ragdoll.particles[b].position.y * amount;
+            Require(fabsf(contact_height - 0.12f) < 0.00001f,
+                    "one contact pass must place the limb on the ledge");
+            for (int32_t particle = 0; particle < 2; ++particle) {
+                if (masses[mass][particle] == 0.0f) {
+                    Require(ragdoll.particles[particle].position.y == 0.0f,
+                            "a fixed endpoint must retain its position");
+                }
+            }
+        }
+    }
+}
+
 static void SetRagdollSupportContact(CcBiomechRagdollParticle *particle,
                                      float x, float support_height, float z)
 {
@@ -470,6 +587,62 @@ static void TestRagdollSupportPlane(void)
     SetRagdollSupportContact(&gait.ragdoll.particles[5], 0.05f, 0.0f, 0.02f);
     Require(CcHumanoidGaitRagdollSupportContactCount(&gait) < 3,
             "clustered contacts created false broad support");
+}
+
+static bool MixedSupportProbe(void *context, CcBiomechVec3 previous_position,
+                              CcBiomechVec3 position, float radius,
+                              CcBiomechVec3 *corrected_position,
+                              CcBiomechVec3 *surface_normal)
+{
+    (void)previous_position;
+    (void)radius;
+    bool floor_contact = *(const bool *)context;
+    if (position.x > -1.0f && position.x < 1.0f) return false;
+    if (position.x < -1.0f && !floor_contact) return false;
+    *corrected_position = position;
+    *surface_normal = position.x < -1.0f ?
+        (CcBiomechVec3){0.0f, 1.0f, 0.0f} :
+        (CcBiomechVec3){-0.815f, 0.580f, 0.0f};
+    return true;
+}
+
+static void TestMixedSupportRebound(void)
+{
+    const float delta_time = 1.0f / 60.0f;
+    for (int32_t floor = 0; floor <= 1; ++floor) {
+        CcBiomechRagdoll ragdoll;
+        CcBiomechRagdollInit(&ragdoll);
+        ragdoll.active = true;
+        ragdoll.gravity = (CcBiomechVec3){0};
+        ragdoll.damping = 0.0f;
+        ragdoll.contact_damping = 0.0f;
+        ragdoll.resting_contact_damping = 0.0f;
+        ragdoll.collision_friction = 0.0f;
+        Require(CcBiomechRagdollAddParticle(
+                    &ragdoll, (CcBiomechVec3){-2.0f, 0.0f, 0.0f}, 1.0f, 0.0f) >= 0 &&
+                CcBiomechRagdollAddParticle(
+                    &ragdoll, (CcBiomechVec3){2.0f, 0.0f, 0.0f}, 1.0f, 0.0f) >= 0,
+                "mixed support contacts must initialize");
+        int32_t knee = CcBiomechRagdollAddParticle(
+            &ragdoll, (CcBiomechVec3){0.0f, 1.0f, 0.0f}, 1.0f, 0.0f);
+        int32_t balance = CcBiomechRagdollAddParticle(
+            &ragdoll, (CcBiomechVec3){0.0f, 2.0f, 0.0f}, 1.0f, 0.0f);
+        Require(knee >= 0 && balance >= 0, "moving body particles must initialize");
+        ragdoll.particles[knee].previous_position.x = -1.2f * delta_time;
+        ragdoll.particles[knee].previous_position.y -= 0.7f * delta_time;
+        ragdoll.particles[balance].previous_position.x = 1.2f * delta_time;
+        ragdoll.particles[balance].previous_position.y += 0.7f * delta_time;
+        bool floor_contact = floor != 0;
+        CcBiomechRagdollStep(&ragdoll, delta_time, 1,
+                             MixedSupportProbe, &floor_contact);
+        CcBiomechVec3 velocity = CcBiomechRagdollParticleVelocity(
+            &ragdoll, knee, delta_time);
+        Require(fabsf(velocity.x - 1.2f) < 0.00001f,
+                "support damping must preserve motion along the floor");
+        Require(floor_contact ? velocity.y <= 0.201f :
+                    fabsf(velocity.y - 0.7f) < 0.00001f,
+                "floor contacts must bound rebound beside sloped contacts");
+    }
 }
 
 static void TestBiomechanicalClimb(void)
@@ -1272,7 +1445,10 @@ int main(void)
     TestGenericTissues();
     TestGenericRagdoll();
     TestRagdollAnatomyAndVolume();
+    TestHingeSplayPreservesLength();
+    TestSegmentContactProjection();
     TestRagdollSupportPlane();
+    TestMixedSupportRebound();
     TestBiomechanicalClimb();
     TestClimbSupportLoss();
     TestHumanoidController();

@@ -7,7 +7,7 @@
 	blender-creature-assets blender-creature-assets-check \
 	blender-world-kit blender-world-kit-check blender-world-kit-review-check \
 	blender-character-experiments blender-character-animations blender-character-animations-check \
-	blender-character-hair-v08 \
+	blender-character-hair-v08 blender-hair-assets blender-hair-review \
 	blender-painted-market-pilot \
 	blender-character-engine \
 	art-check \
@@ -154,6 +154,14 @@ blender-creature-assets-check:
 
 blender-world-kit:
 	$(BLENDER) --background --python-exit-code 1 --factory-startup --python tools/blender/build_world_kit.py
+
+blender-hair-assets:
+	$(BLENDER) --background --python-exit-code 1 --python tools/blender/build_world_kit.py -- --hair-only
+	python3 tools/blender/validate_world_kit.py
+	python3 tools/blender/validate_character_surfaces.py
+
+blender-hair-review:
+	$(BLENDER) --background --python-exit-code 1 --python tools/blender/render_hair_review.py -- --output out/hair-review/styles.png
 
 blender-world-kit-check:
 	python3 tools/blender/validate_world_kit.py

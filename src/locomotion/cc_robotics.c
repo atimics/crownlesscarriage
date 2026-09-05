@@ -10,11 +10,6 @@ static float Clamp(float value, float minimum, float maximum)
     return fmaxf(minimum, fminf(value, maximum));
 }
 
-static float PlanarLength(CcLimbVec3 value)
-{
-    return sqrtf(value.x * value.x + value.z * value.z);
-}
-
 static CcLimbVec3 Add(CcLimbVec3 first, CcLimbVec3 second)
 {
     return (CcLimbVec3){first.x + second.x, first.y + second.y,
@@ -76,9 +71,10 @@ typedef struct ClimbSearchNode {
 
 static bool ClimbPointMatches(const ClimbSearchNode *node,
                               CcLimbVec3 point, CcLimbVec3 normal,
-                              float tolerance)
+                              float tolerance_squared)
 {
-    return Length(Subtract(node->point, point)) <= tolerance &&
+    CcLimbVec3 delta = Subtract(node->point, point);
+    return Dot(delta, delta) <= tolerance_squared &&
            Dot(node->normal, normal) >= 0.72f;
 }
 
@@ -131,15 +127,18 @@ static bool AppendClimbRoute(const ClimbSearchNode *search,
 int32_t CcRobotSampleLink(CcLimbVec3 start, CcLimbVec3 end, float radius,
                           CcRobotCollisionPoint *points, int32_t capacity)
 {
-    if (points == NULL || capacity <= 0 || radius <= 0.0f) return 0;
+    if (points == NULL || capacity < 2 || !isfinite(radius) ||
+        radius <= 0.0f) return 0;
     float x = end.x - start.x;
     float y = end.y - start.y;
     float z = end.z - start.z;
     float length = sqrtf(x * x + y * y + z * z);
-    int32_t interval_count = (int32_t)ceilf(length / (radius * 1.80f));
+    float intervals = ceilf(length / (radius * 1.80f));
+    // Check storage and integer bounds before converting the sample count.
+    if (!isfinite(intervals) || (double)intervals >= (double)capacity) return 0;
+    int32_t interval_count = (int32_t)intervals;
     if (interval_count < 1) interval_count = 1;
     int32_t point_count = interval_count + 1;
-    if (point_count > capacity) return 0;
     for (int32_t sample = 0; sample < point_count; ++sample) {
         float amount = point_count > 1 ?
             (float)sample / (float)(point_count - 1) : 0.0f;
@@ -206,11 +205,12 @@ bool CcRobotPredictiveAvoidance(
         0.0f,
         first_velocity.z - second_velocity.z,
     };
-    float current_distance = PlanarLength(position);
+    float current_distance_squared = Dot(position, position);
+    float clearance_squared = minimum_clearance * minimum_clearance;
     float velocity_squared = velocity.x * velocity.x +
                              velocity.z * velocity.z;
     float closest_time = 0.0f;
-    if (current_distance >= minimum_clearance) {
+    if (current_distance_squared >= clearance_squared) {
         if (velocity_squared <= 0.000001f) return false;
         float closing = position.x * velocity.x + position.z * velocity.z;
         if (closing >= 0.0f) return false;
@@ -221,15 +221,13 @@ bool CcRobotPredictiveAvoidance(
         0.0f,
         position.z + velocity.z * closest_time,
     };
-    float closest_distance = PlanarLength(closest);
-    if (closest_distance >= minimum_clearance) return false;
+    float closest_distance_squared = Dot(closest, closest);
+    if (closest_distance_squared >= clearance_squared) return false;
+    float closest_distance = sqrtf(closest_distance_squared);
 
+    // Overlapping pairs use time zero, so closest is their current separation.
     CcLimbVec3 normal = closest;
     float normal_length = closest_distance;
-    if (current_distance < minimum_clearance && current_distance > 0.0001f) {
-        normal = position;
-        normal_length = current_distance;
-    }
     if (normal_length > 0.0001f) {
         normal.x /= normal_length;
         normal.z /= normal_length;
@@ -301,6 +299,7 @@ bool CcRobotPlanFreeClimb(CcLimbVec3 start_point,
         .open = true,
     };
     const float merge_distance = step_length * 0.32f;
+    const float merge_distance_squared = merge_distance * merge_distance;
     const float search_radius = fminf(maximum_reach * 0.82f,
                                       step_length * 0.78f);
 
@@ -403,7 +402,8 @@ bool CcRobotPlanFreeClimb(CcLimbVec3 start_point,
             int32_t matching_index = -1;
             for (int32_t index = 0; index < node_count; ++index) {
                 if (ClimbPointMatches(&search[index], candidate_point,
-                                      candidate_normal, merge_distance)) {
+                                      candidate_normal,
+                                      merge_distance_squared)) {
                     matching_index = index;
                     break;
                 }
