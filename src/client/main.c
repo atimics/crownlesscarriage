@@ -2291,13 +2291,14 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
     RestoreAthleticProfile(&local->agent.athletics, &session.athletics);
     bool market = session.scene == CC_CLIENT_SESSION_MARKET;
     CcLocalSiteKind site = LocalSiteForClientScene(session.scene);
+    /* Movement can save the hero inside the old half-unit edge margin. */
     bool in_bounds = market ?
         session.position_x >= 0.5f && session.position_x <= 12.0f &&
         session.position_z >= 0.5f && session.position_z <= 8.0f :
-        session.position_x >= 0.5f &&
-        session.position_x <= CC_LOCAL_WORLD_WIDTH - 0.5f &&
-        session.position_z >= 0.5f &&
-        session.position_z <= CC_LOCAL_WORLD_DEPTH - 0.5f;
+        session.position_x >= 0.0f &&
+        session.position_x <= CC_LOCAL_WORLD_WIDTH &&
+        session.position_z >= 0.0f &&
+        session.position_z <= CC_LOCAL_WORLD_DEPTH;
     if (!in_bounds) return false;
     RepositionHero(local,
                    (Vector2){session.position_x, session.position_z}, market);
@@ -7659,6 +7660,60 @@ static int RunTownSessionStartupRegression(void)
             legacy_restored.agent.facing_yaw, 0.35f)) {
         return SessionStartupTestFailed(
             session_path, "Legacy session did not return to the authored town.");
+    }
+
+    /* These edge positions can be saved after normal town movement. */
+    const Vector2 edge_positions[] = {
+        {28.9274921f, 0.340259194f},
+        {0.34f, 22.75f},
+        {CC_LOCAL_WORLD_WIDTH - 0.34f, 22.75f},
+        {31.25f, CC_LOCAL_WORLD_DEPTH - 0.34f},
+        {0.0f, 0.0f},
+        {CC_LOCAL_WORLD_WIDTH, CC_LOCAL_WORLD_DEPTH}
+    };
+    for (size_t i = 0; i < sizeof(edge_positions) / sizeof(edge_positions[0]);
+         ++i) {
+        RepositionHero(&saved, edge_positions[i], false);
+        saved.agent.athletics = expected_athletics;
+        saved.agent.facing_yaw = 0.982618093f;
+        if (!SaveLocalSession(session_path, &sim, &saved,
+                              error, sizeof(error))) {
+            return SessionStartupTestFailed(session_path, error);
+        }
+        view = VIEW_ROADS;
+        if (!RestoreClientStartupSession(
+                session_path, &sim, &restored, &view, &selected) ||
+            view != VIEW_LOCAL || restored.open_world ||
+            !SessionTestFloatMatches(restored.agent.position.x,
+                                     edge_positions[i].x) ||
+            !SessionTestFloatMatches(restored.agent.position.z,
+                                     edge_positions[i].y) ||
+            !SessionTestFloatMatches(restored.agent.facing_yaw,
+                                     saved.agent.facing_yaw) ||
+            !AthleticProfilesMatch(&restored.agent.athletics,
+                                   &expected_athletics)) {
+            return SessionStartupTestFailed(
+                session_path, "Saved town edge position needs recovery.");
+        }
+    }
+
+    const Vector2 outside_positions[] = {
+        {-0.01f, 22.75f}, {CC_LOCAL_WORLD_WIDTH + 0.01f, 22.75f},
+        {31.25f, -0.01f}, {31.25f, CC_LOCAL_WORLD_DEPTH + 0.01f}
+    };
+    for (size_t i = 0;
+         i < sizeof(outside_positions) / sizeof(outside_positions[0]); ++i) {
+        stored.position_x = outside_positions[i].x;
+        stored.position_z = outside_positions[i].y;
+        if (!CcClientSessionWrite(session_path, &stored,
+                                  error, sizeof(error))) {
+            return SessionStartupTestFailed(session_path, error);
+        }
+        if (RestoreClientStartupSession(
+                session_path, &sim, &restored, &view, &selected)) {
+            return SessionStartupTestFailed(
+                session_path, "Town restore accepted an outside position.");
+        }
     }
 
     CcLocalBindOpenWorld(NULL);
