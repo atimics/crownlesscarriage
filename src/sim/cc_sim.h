@@ -1590,6 +1590,7 @@ typedef struct CcSim {
     CcGossip gossip[CC_MAX_GOSSIP];
     CcGossipCarrier gossip_carriers[CC_MAX_GOSSIP_CARRIERS];
     CcId gossip_last_event_id;
+    uint32_t posted_situation_mask;
     CcJourneyEncounter journey;
     CcCarriageState carriage;
     CcDelayedEcho delayed_echo;
@@ -1639,7 +1640,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 172824,
+_Static_assert(sizeof(CcSim) == 172832,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

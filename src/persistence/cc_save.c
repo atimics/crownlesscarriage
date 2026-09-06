@@ -159,6 +159,9 @@ static bool EnsurePlayerKnowledgeColumns(sqlite3 *database,
 {
     return EnsureColumn(database, "gossip_carrier", "told_player",
             "ALTER TABLE gossip_carrier ADD COLUMN told_player INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "gossip_state", "posted_situation_mask",
+            "ALTER TABLE gossip_state ADD COLUMN posted_situation_mask INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) && EnsureColumn(database, "map_object", "recorded_from_kingdom_id",
             "ALTER TABLE map_object ADD COLUMN recorded_from_kingdom_id INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
@@ -1365,7 +1368,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " accessible INTEGER NOT NULL);";
     const char *gossip_schema =
         "CREATE TABLE IF NOT EXISTS gossip_state ("
-        " id INTEGER PRIMARY KEY CHECK(id=1), last_event_id INTEGER NOT NULL);"
+        " id INTEGER PRIMARY KEY CHECK(id=1), last_event_id INTEGER NOT NULL,"
+        " posted_situation_mask INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS gossip_account ("
         " slot INTEGER PRIMARY KEY, event_id INTEGER NOT NULL, origin_id INTEGER NOT NULL,"
         " heard_event_id INTEGER NOT NULL, day INTEGER NOT NULL, heard_day INTEGER NOT NULL,"
@@ -3078,9 +3082,12 @@ static bool SaveGossip(sqlite3 *database, const CcSim *sim,
 {
     if (sim->schema_version < 44U) return true;
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "INSERT INTO gossip_state VALUES(1,?);",
+    if (!Prepare(database,
+                  "INSERT INTO gossip_state (id,last_event_id,posted_situation_mask)"
+                  " VALUES(1,?,?);",
                   &statement, error, error_capacity)) return false;
     BindId(statement, 1, sim->gossip_last_event_id);
+    BindId(statement, 2, sim->posted_situation_mask);
     bool ok = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!ok || !Prepare(database,
@@ -3147,10 +3154,14 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
 {
     if (sim->schema_version < 44U) return true;
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "SELECT last_event_id FROM gossip_state WHERE id=1;",
+    if (!Prepare(database,
+                  "SELECT last_event_id,posted_situation_mask FROM gossip_state WHERE id=1;",
                   &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) goto invalid;
     sim->gossip_last_event_id = (CcId)sqlite3_column_int64(statement, 0);
+    sqlite3_int64 posted_mask = sqlite3_column_int64(statement, 1);
+    if (posted_mask < 0 || posted_mask > UINT32_MAX) goto invalid;
+    sim->posted_situation_mask = (uint32_t)posted_mask;
     if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
     sqlite3_finalize(statement);
     if (!Prepare(database,

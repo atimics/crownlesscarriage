@@ -5822,20 +5822,13 @@ static void PostPendingSituationNotices(CcSim *sim)
     if (sim->schema_version < 48U) return;
     for (int32_t s = 0; s < sim->situation_count; ++s) {
         CcSituation *situation = &sim->situations[s];
+        uint32_t bit = UINT32_C(1) << (uint32_t)s;
+        if ((sim->posted_situation_mask & bit) != 0U) continue;
         if (situation->status != CC_SITUATION_ACTIVE ||
             situation->kind == CC_SITUATION_MONSTER_EXPEDITION ||
             !CcSimSituationCanAccept(sim, situation)) continue;
-        bool posted = false;
-        for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
-            const CcEvent *notice = CcSimEvent(sim, sim->gossip[i].event_id);
-            if (sim->gossip[i].event_id != 0U &&
-                sim->gossip[i].kind == CC_EVENT_NOTICE_POSTED &&
-                notice != NULL && notice->subject_id == situation->id) {
-                posted = true;
-                break;
-            }
-        }
-        if (!posted) PostSituationNotice(sim, situation);
+        PostSituationNotice(sim, situation);
+        sim->posted_situation_mask |= bit;
     }
 }
 
@@ -11375,6 +11368,7 @@ static CcSituation *AllocateSituation(CcSim *sim)
     }
     if (oldest < 0) return NULL;
     ForgetRetiredSituation(sim, sim->situations[oldest].id);
+    sim->posted_situation_mask &= ~(UINT32_C(1) << (uint32_t)oldest);
     sim->situations[oldest] = (CcSituation){0};
     return &sim->situations[oldest];
 }
@@ -18470,6 +18464,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         sim->monster_count < 0 || sim->monster_count > CC_MAX_MONSTERS ||
         sim->dungeon_count < 0 || sim->dungeon_count > CC_MAX_DUNGEONS ||
         sim->situation_count < 0 || sim->situation_count > CC_MAX_SITUATIONS ||
+        (sim->situation_count < 32 &&
+         (sim->posted_situation_mask &
+          ~((UINT32_C(1) << (uint32_t)sim->situation_count) - 1U)) != 0U) ||
         sim->front_count < 0 || sim->front_count > CC_MAX_FRONTS ||
         sim->quest_outcome_count < 0 ||
         sim->quest_outcome_count > CC_MAX_QUEST_OUTCOMES ||
@@ -21185,6 +21182,7 @@ uint64_t CcSimHash(const CcSim *sim)
     }
     if (sim->schema_version >= 44U) {
         HASH_VALUE(sim->gossip_last_event_id);
+        HASH_VALUE(sim->posted_situation_mask);
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
             const CcGossip *story = &sim->gossip[i];
             HASH_VALUE(story->event_id); HASH_VALUE(story->origin_id);
