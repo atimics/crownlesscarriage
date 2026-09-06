@@ -9482,6 +9482,31 @@ static CcShipment *AllocateShipment(CcSim *sim)
     return shipment;
 }
 
+/* What a town is short of once its own stock and everything already rolling
+   towards it are counted. Four planners asked this question by hand and had to
+   agree on all three terms; now they ask here. */
+static int32_t SettlementUnmetNeed(const CcSim *sim, const CcSettlement *place,
+                                   CcGood good)
+{
+    if (place == NULL) return 0;
+    return EffectiveReserveTarget(sim, place, good) - place->stock[good] -
+           CcSimIncomingGood(sim, place->id, good);
+}
+
+/* What a buyer can actually bring to a purchase: the right purse for the good,
+   plus whatever the iron ledger will lend against it. A town at war spends
+   from the war chest, and only essentials draw credit. */
+static CcMoney BuyerPurchasingPower(CcSim *sim, const CcSettlement *buyer,
+                                    CcGood good)
+{
+    if (buyer == NULL) return 0;
+    CcMoney coins = WarWeeklyNeed(sim, buyer, good) > 0 ?
+        buyer->war_chest : buyer->market_coins;
+    if (!IronLedgerWillFund(buyer, good)) return coins;
+    return coins + IronLedgerCreditAvailable(
+        sim, KingdomMutable(sim, buyer->kingdom_id));
+}
+
 static int32_t TradeSurplus(const CcSim *sim,
                             const CcSettlement *origin,
                             const CcSettlement *destination,
@@ -9550,9 +9575,7 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
     }
     int32_t surplus = TradeSurplus(
         sim, origin, final_destination, good);
-    int32_t incoming = CcSimIncomingGood(sim, final_destination->id, good);
-    int32_t need = EffectiveReserveTarget(sim, final_destination, good) -
-                   final_destination->stock[good] - incoming;
+    int32_t need = SettlementUnmetNeed(sim, final_destination, good);
     int32_t effective_capacity = TradeRouteCapacity(sim, route);
     int32_t available_capacity = effective_capacity - route_used[route_slot];
     int32_t cargo_capacity = MinimumI32(
@@ -9693,10 +9716,7 @@ static void PlanLegacyTrade(CcSim *sim)
                  destination < sim->settlement_count; ++destination) {
                 CcSettlement *to = &sim->settlements[destination];
                 if (CcSettlementIsAbandoned(to)) continue;
-                int32_t need = EffectiveReserveTarget(
-                                   sim, to, (CcGood)good) - to->stock[good] -
-                               CcSimIncomingGood(
-                                   sim, to->id, (CcGood)good);
+                int32_t need = SettlementUnmetNeed(sim, to, (CcGood)good);
                 if (need < minimum_load) continue;
                 for (int32_t source = 0;
                      source < sim->settlement_count; ++source) {
@@ -9716,21 +9736,12 @@ static void PlanLegacyTrade(CcSim *sim)
                             &path_capacity, route_used, false, 0U,
                             false, FreightCargoSlots(
                                 (CcGood)good, minimum_load))) continue;
-                    bool military_supply = WarWeeklyNeed(
-                        sim, to, (CcGood)good) > 0;
-                    CcMoney buyer_coins = military_supply ?
-                        to->war_chest : to->market_coins;
-                    CcKingdom *buyer_kingdom = KingdomMutable(
-                        sim, to->kingdom_id);
-                    bool essential_credit = IronLedgerWillFund(
-                        to, (CcGood)good);
-                    CcMoney credit_available = essential_credit ?
-                        IronLedgerCreditAvailable(sim, buyer_kingdom) : 0;
                     CcMoney minimum_cost =
                         (CcMoney)minimum_load *
                             MaximumI32(1, from->price[good]) +
                         TradeRouteToll(sim, &sim->routes[route_slot]);
-                    if (buyer_coins + credit_available < minimum_cost) {
+                    if (BuyerPurchasingPower(sim, to, (CcGood)good) <
+                        minimum_cost) {
                         continue;
                     }
                     int32_t score = need * 3 + surplus +
@@ -9853,8 +9864,7 @@ static void BlockRoyalTradeDemand(
             CcSettlement *to = &sim->settlements[destination];
             if (CcSettlementIsAbandoned(to) ||
                 to->kingdom_id != carriage->kingdom_id) continue;
-            int32_t need = EffectiveReserveTarget(sim, to, cargo_good) -
-                to->stock[good] - CcSimIncomingGood(sim, to->id, cargo_good);
+            int32_t need = SettlementUnmetNeed(sim, to, cargo_good);
             if (need < minimum_load) continue;
             for (int32_t source = 0;
                  source < sim->settlement_count; ++source) {
@@ -9888,19 +9898,11 @@ static void BlockRoyalTradeDemand(
                     NULL, NULL, NULL, NULL, NULL, true,
                     carriage->kingdom_id, false, required_slots);
                 if (source_path_open && delivery_path_open) continue;
-                bool military_supply = WarWeeklyNeed(
-                    sim, to, cargo_good) > 0;
-                CcMoney buyer_coins = military_supply ?
-                    to->war_chest : to->market_coins;
-                CcKingdom *buyer_kingdom = KingdomMutable(
-                    sim, to->kingdom_id);
-                CcMoney credit_available = IronLedgerWillFund(
-                    to, cargo_good) ?
-                    IronLedgerCreditAvailable(sim, buyer_kingdom) : 0;
                 CcMoney minimum_cost =
                     (CcMoney)minimum_load *
                         MaximumI32(1, from->price[good]) + 3;
-                if (buyer_coins + credit_available < minimum_cost) continue;
+                if (BuyerPurchasingPower(sim, to, cargo_good) <
+                    minimum_cost) continue;
                 int32_t score = RoyalTradeScore(
                     sim, archive_chain, to, cargo_good,
                     need, surplus, 0, 0);
@@ -9972,10 +9974,7 @@ static void PlanTrade(CcSim *sim)
                 CcSettlement *to = &sim->settlements[destination];
                 if (CcSettlementIsAbandoned(to) ||
                     to->kingdom_id != carriage->kingdom_id) continue;
-                int32_t need = EffectiveReserveTarget(
-                                   sim, to, (CcGood)good) - to->stock[good] -
-                               CcSimIncomingGood(
-                                   sim, to->id, (CcGood)good);
+                int32_t need = SettlementUnmetNeed(sim, to, (CcGood)good);
                 if (need < minimum_load) continue;
                 for (int32_t source = 0;
                      source < sim->settlement_count; ++source) {
@@ -10028,16 +10027,6 @@ static void PlanTrade(CcSim *sim)
                             CC_GOOD_FOOD, NULL, NULL,
                             &reposition_cost, NULL, NULL, true,
                             carriage->kingdom_id, false, 1)) continue;
-                    bool military_supply = WarWeeklyNeed(
-                        sim, to, (CcGood)good) > 0;
-                    CcMoney buyer_coins = military_supply ?
-                        to->war_chest : to->market_coins;
-                    CcKingdom *buyer_kingdom = KingdomMutable(
-                        sim, to->kingdom_id);
-                    bool essential_credit = IronLedgerWillFund(
-                        to, (CcGood)good);
-                    CcMoney credit_available = essential_credit ?
-                        IronLedgerCreditAvailable(sim, buyer_kingdom) : 0;
                     int32_t required_units = urgent ? minimum_load :
                         MaximumI32(minimum_load,
                             (minimum_cargo_slots - 1) *
@@ -10048,7 +10037,8 @@ static void PlanTrade(CcSim *sim)
                         RoyalTradeRouteToll(
                             sim, &sim->routes[route_slot],
                             carriage->kingdom_id);
-                    if (buyer_coins + credit_available < minimum_cost) {
+                    if (BuyerPurchasingPower(sim, to, (CcGood)good) <
+                        minimum_cost) {
                         continue;
                     }
                     int32_t score = RoyalTradeScore(
@@ -18213,104 +18203,67 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
           (version->source_character_id & CC_ID_SERIAL_MASK) < sim->next_entity_serial));
 }
 
+/* The save compatibility contract from cc_sim.h, as data. Each row is a
+   closed range of schema versions paired with a closed range of generator
+   versions that we still accept; a save is loadable when it falls inside any
+   row. This replaced ninety lines of chained equality tests that grew by two
+   every time either version was bumped.
+
+   Adding a version means editing one row, or adding one. Keep it that way. */
+#define CC_OLDEST_SUPPORTED_SCHEMA 2U
+#define CC_NEWEST_LEGACY_SCHEMA 46U
+
+typedef struct CcVersionPairing {
+    uint32_t schema_low;
+    uint32_t schema_high;
+    uint32_t generator_low;
+    uint32_t generator_high;
+} CcVersionPairing;
+
+static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
+    /* The current pair. */
+    { CC_SIM_SCHEMA_VERSION, CC_SIM_SCHEMA_VERSION,
+      CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    /* Schemas old enough that the current generator still reads them, and the
+       run of recent schemas the current generator wrote. Note the gap: 28
+       through 31 are deliberately absent, because those schemas only ever
+       shipped alongside their own generators, listed below. */
+    { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 46U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    /* Schemas pinned to the generator they shipped with. */
+    { 31U, 31U, 24U, 24U },
+    { 27U, 27U, 21U, 23U },
+    { 28U, 28U, 22U, 22U },
+    { 29U, 29U, 23U, 23U },
+    { 30U, 30U, 23U, 23U },
+    /* Every legacy schema remains readable by the generators that predate the
+       versioning split. */
+    { CC_OLDEST_SUPPORTED_SCHEMA, CC_NEWEST_LEGACY_SCHEMA, 2U, 21U },
+};
+
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim == NULL) {
         SetError(error, error_capacity, "Simulation is missing.");
         return false;
     }
-    bool legacy_schema = sim->schema_version == 2U ||
-                         sim->schema_version == 3U ||
-                         sim->schema_version == 4U ||
-                         sim->schema_version == 5U ||
-                         sim->schema_version == 6U ||
-                         sim->schema_version == 7U ||
-                         sim->schema_version == 8U ||
-                         sim->schema_version == 9U ||
-                         sim->schema_version == 10U ||
-                         sim->schema_version == 11U ||
-                         sim->schema_version == 12U ||
-                         sim->schema_version == 13U ||
-                         sim->schema_version == 14U ||
-                         sim->schema_version == 15U ||
-                         sim->schema_version == 16U ||
-                         sim->schema_version == 17U ||
-                         sim->schema_version == 18U ||
-                         sim->schema_version == 19U ||
-                         sim->schema_version == 20U ||
-                         sim->schema_version == 21U ||
-                         sim->schema_version == 22U ||
-                         sim->schema_version == 23U ||
-                         sim->schema_version == 24U ||
-                         sim->schema_version == 25U ||
-                         sim->schema_version == 26U ||
-                         sim->schema_version == 27U ||
-                         sim->schema_version == 28U ||
-                         sim->schema_version == 29U ||
-                         sim->schema_version == 30U ||
-                         sim->schema_version == 31U ||
-                         sim->schema_version == 32U ||
-                         sim->schema_version == 33U ||
-                         sim->schema_version == 34U ||
-                         sim->schema_version == 35U ||
-                         sim->schema_version == 36U ||
-                         sim->schema_version == 37U ||
-                         sim->schema_version == 38U ||
-                         sim->schema_version == 39U ||
-                         sim->schema_version == 40U ||
-                         sim->schema_version == 41U ||
-                         sim->schema_version == 42U ||
-                         sim->schema_version == 43U ||
-                         sim->schema_version == 44U ||
-                         sim->schema_version == 45U ||
-                         sim->schema_version == 46U;
-    bool supported_generator =
-        (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
-         sim->generator_version == CC_GENERATOR_VERSION) ||
-        (legacy_schema && sim->schema_version <= 27U &&
-         sim->generator_version == CC_GENERATOR_VERSION) ||
-        (sim->schema_version == 45U && sim->generator_version == 25U) ||
-        (sim->schema_version == 46U && sim->generator_version == 25U) ||
-        (sim->schema_version == 44U && sim->generator_version == 25U) ||
-        (sim->schema_version == 43U && sim->generator_version == 25U) ||
-        (sim->schema_version == 42U && sim->generator_version == 25U) ||
-        (sim->schema_version == 41U && sim->generator_version == 25U) ||
-        (sim->schema_version == 40U && sim->generator_version == 25U) ||
-        (sim->schema_version == 39U && sim->generator_version == 25U) ||
-        (sim->schema_version == 38U && sim->generator_version == 25U) ||
-        (sim->schema_version == 37U && sim->generator_version == 25U) ||
-        (sim->schema_version == 36U && sim->generator_version == 25U) ||
-        (sim->schema_version == 35U && sim->generator_version == 25U) ||
-        (sim->schema_version == 34U && sim->generator_version == 25U) ||
-        (sim->schema_version == 33U && sim->generator_version == 25U) ||
-        (sim->schema_version == 32U && sim->generator_version == 25U) ||
-        (sim->schema_version == 31U && sim->generator_version == 24U) ||
-        (sim->schema_version == 27U && sim->generator_version == 21U) ||
-        (sim->schema_version == 27U && sim->generator_version == 22U) ||
-        (sim->schema_version == 27U && sim->generator_version == 23U) ||
-        (sim->schema_version == 28U && sim->generator_version == 22U) ||
-        (sim->schema_version == 29U && sim->generator_version == 23U) ||
-        (sim->schema_version == 30U && sim->generator_version == 23U) ||
-        (legacy_schema && (sim->generator_version == 2U ||
-                           sim->generator_version == 3U ||
-                           sim->generator_version == 4U ||
-                           sim->generator_version == 5U ||
-                           sim->generator_version == 6U ||
-                           sim->generator_version == 7U ||
-                           sim->generator_version == 8U ||
-                           sim->generator_version == 9U ||
-                           sim->generator_version == 10U ||
-                           sim->generator_version == 11U ||
-                           sim->generator_version == 12U ||
-                           sim->generator_version == 13U ||
-                           sim->generator_version == 14U ||
-                           sim->generator_version == 15U ||
-                           sim->generator_version == 16U ||
-                           sim->generator_version == 17U ||
-                           sim->generator_version == 18U ||
-                           sim->generator_version == 19U ||
-                           sim->generator_version == 20U ||
-                           sim->generator_version == 21U));
+    bool legacy_schema =
+        sim->schema_version >= CC_OLDEST_SUPPORTED_SCHEMA &&
+        sim->schema_version <= CC_NEWEST_LEGACY_SCHEMA;
+    bool supported_generator = false;
+    for (size_t pairing = 0;
+         pairing < sizeof(CC_SUPPORTED_VERSIONS) /
+                   sizeof(CC_SUPPORTED_VERSIONS[0]);
+         ++pairing) {
+        const CcVersionPairing *supported = &CC_SUPPORTED_VERSIONS[pairing];
+        if (sim->schema_version >= supported->schema_low &&
+            sim->schema_version <= supported->schema_high &&
+            sim->generator_version >= supported->generator_low &&
+            sim->generator_version <= supported->generator_high) {
+            supported_generator = true;
+            break;
+        }
+    }
     if ((!legacy_schema && sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
         !supported_generator) {
         SetError(error, error_capacity, "Simulation version is unsupported.");

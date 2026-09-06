@@ -1622,6 +1622,24 @@ typedef struct CcSim {
     int32_t last_monster_level[CC_MAX_MONSTERS];
 } CcSim;
 
+/* Every field of CcSim is spelled out by hand in four other places: CcSimHash,
+   the cc_save.c write path, the cc_save.c read path and its migration branch,
+   and CcSimValidate. Nothing links them, and every way of forgetting one is
+   silent -- an unhashed field makes the "the world did not change" assertions
+   throughout the tests pass when they should fail, and lets a save round trip
+   compare equal on a field that was never written.
+
+   So pin the size. Adding or removing a field trips this instead, and the
+   message names what to go and update. Recompute with a printf of sizeof and
+   update the number in the same commit as the field.
+
+   The value is identical on arm64, x86_64 and wasm32: CcSim holds only
+   fixed-width integers, bools, enums, char arrays and nested structs of the
+   same, so there is no pointer or size_t to make it vary by target. */
+_Static_assert(sizeof(CcSim) == 172824,
+               "CcSim changed size: update CcSimHash, the cc_save.c read and "
+               "write paths, and CcSimValidate, then update this size.");
+
 const char *CcPonyName(int32_t pony);
 const char *CcPonyPersonality(int32_t pony);
 void CcPonyQuestText(const CcSim *sim, int32_t pony, char *text, size_t capacity);
