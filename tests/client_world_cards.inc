@@ -225,8 +225,8 @@ static int RunWorldCardRegression(void)
         CARD_INPUT();
         const CcCharacter *giver = SituationGiver(&sim, notice);
         CARD_CHECK(giver != NULL && strstr(message, giver->name) != NULL &&
-            strstr(message, "promise in person") != NULL && CcSimHash(&sim) == before,
-            "Reading a notice must point at the giver by name and preserve the campaign.");
+            CcSimHash(&sim) == before,
+            "Reading a notice must name the giver and preserve the campaign.");
         message[0] = '\0';
         ResetLocalState(&local);
         local.adventure_ui = true;

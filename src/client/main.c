@@ -776,7 +776,7 @@ static void SituationFindLine(const CcSim *sim, const CcSituation *situation,
     }
     const CcCharacter *giver = SituationGiver(sim, situation);
     const char *name = giver != NULL ? giver->name : "the sponsor";
-    (void)snprintf(line, capacity, "Find %s in %s and promise in person.",
+    (void)snprintf(line, capacity, "Find %s in %s.",
         name, SituationGiverPlace(sim, situation));
 }
 
