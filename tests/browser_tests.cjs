@@ -246,7 +246,16 @@ async function main() {
     assert.equal(await page.evaluate(() => Module.crownlessCampaignRestored), false);
     await page.locator('#canvas').focus();
     await page.keyboard.press('Enter');
-    await page.waitForFunction(() => Module.crownlessScreen === 'playing');
+    /* Starting a fresh campaign writes the journal and the first save before
+       the screen flips to playing; loaded CI runners sometimes exceed 30s. */
+    try {
+        await page.waitForFunction(() => Module.crownlessScreen === 'playing',
+            undefined, {timeout: 120000});
+    } catch {
+        const screen = await page.evaluate(() => Module.crownlessScreen);
+        throw new Error(
+            `A fresh campaign stalled on screen '${screen}' after Enter at title.`);
+    }
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision + 2);
     const phone = await browser.newContext({viewport: {width: 390, height: 844},
       hasTouch: true, isMobile: true, deviceScaleFactor: 3});
