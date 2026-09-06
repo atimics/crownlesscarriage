@@ -48,6 +48,23 @@ The endpoint row also includes trajectory summaries:
 These distinguish a world that ends in decline from one that spent most of its
 history in decline.
 
+## Player-agency treatment
+
+`crownless_agent_sweep` runs a paired control and agent world from the same
+seed. The agent is currently a narrow road-steward policy: it uses real travel,
+rest, encounter-withdrawal, and cash route-repair commands, with the starting
+company purse as its only repair budget. It never mutates route or settlement
+state directly.
+
+```sh
+out/build/release/crownless_agent_sweep --seeds 8 --years 10
+```
+
+The output compares population, prosperity, hunger, active settlements, and
+closed routes, and records repairs, failed repair attempts, and travel. This is
+the first intervention arm; relief-quest ranking and cargo delivery should be
+added as separate policies rather than conflated with road repair.
+
 The metrics also include political and faction exposure:
 
 - annual hunger thresholds and exact daily war/alliance exposure;
