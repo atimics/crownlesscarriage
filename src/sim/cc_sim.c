@@ -5708,11 +5708,8 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
                 sim, CC_EVENT_KINGDOM_ACTION, settlement->id,
                 settlement->id, LatestLocalCause(sim, settlement->id),
                 -1, text);
-            RelocateFallenTown(
-                sim, settlement, refugee_households,
-                abandoned != NULL ? abandoned->id : 0U);
-            SeizeFallenTown(
-                sim, settlement, abandoned != NULL ? abandoned->id : 0U);
+            RelocateFallenTown(sim, settlement, refugee_households, abandoned->id);
+            SeizeFallenTown(sim, settlement, abandoned->id);
             return;
         }
     }
@@ -12866,20 +12863,20 @@ static void AdvanceWarSociety(CcSim *sim)
     if (feud) {
         (void)snprintf(
             text, sizeof(text),
-            "War between %.16s and %.16s: %.20s blames %.20s for the burned granaries; they will not speak again.",
+            "War between %.12s and %.12s: %.16s blames %.16s for the burned granaries.",
             sim->kingdoms[warring[0]].name,
             sim->kingdoms[warring[1]].name, from->name, to->name);
     } else {
         (void)snprintf(
             text, sizeof(text),
-            "Under the levies of the %.16s war, %.20s and %.20s stand watch together and count each other among the living.",
+            "Under the %.12s war, %.16s and %.16s stand watch together and are glad.",
             sim->kingdoms[warring[0]].name, from->name, to->name);
     }
     CcEvent *event = PushSocialEvent(
         sim, CC_EVENT_RELATIONSHIP_CHANGED, stage->id, stage->id,
         LatestLocalCause(sim, stage->id), from->id, to->id, 0U,
         sim->player.id, feud ? -2 : 2, text);
-    if (event != NULL) bond->cause_event_id = event->id;
+    bond->cause_event_id = event->id;
 }
 
 static void UpdateRoyalDiplomacy(CcSim *sim)
