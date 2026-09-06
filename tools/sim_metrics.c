@@ -24,17 +24,67 @@ typedef struct CcMetricsHistory {
     int32_t years_with_abandoned_settlement;
     int32_t route_closures;
     int32_t settlement_abandonments;
+    int32_t years_hunger_40_plus;
+    int32_t years_hunger_60_plus;
+    int32_t years_at_war;
+    int32_t years_allied;
+    int32_t years_dragon_campaign;
+    int32_t years_goblin_raid;
+    int32_t years_bandit_raid;
+    int32_t years_bandit_influence_70_plus;
+    int32_t days_at_war;
+    int32_t days_allied;
+    int32_t days_dragon_campaign;
+    int32_t days_goblin_raid;
+    int32_t days_bandit_raid;
+    int32_t days_bandit_influence_70_plus;
+    int32_t dragon_stage_days[7];
     bool route_was_closed[CC_MAX_ROUTES];
     bool settlement_was_abandoned[CC_MAX_SETTLEMENTS];
 } CcMetricsHistory;
+
+static void UpdateDailyHistory(const CcSim *sim, CcMetricsHistory *history)
+{
+    bool at_war = false;
+    bool allied = false;
+    for (int32_t first = 0; first < sim->kingdom_count; ++first) {
+        for (int32_t second = first + 1;
+             second < sim->kingdom_count; ++second) {
+            at_war |= sim->diplomacy[first][second] == CC_DIPLOMACY_WAR;
+            allied |= sim->diplomacy[first][second] == CC_DIPLOMACY_ALLIANCE;
+        }
+    }
+    if (at_war) history->days_at_war += 1;
+    if (allied) history->days_allied += 1;
+    if (sim->dragon_campaign.phase != CC_DRAGON_CAMPAIGN_IDLE) {
+        history->days_dragon_campaign += 1;
+    }
+    if (sim->goblins.raid_motive != CC_GOBLIN_RAID_NONE) {
+        history->days_goblin_raid += 1;
+    }
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        if (sim->bandits[i].raid_phase != CC_BANDIT_RAID_IDLE) {
+            history->days_bandit_raid += 1;
+        }
+        if (sim->bandits[i].influence >= 70) {
+            history->days_bandit_influence_70_plus += 1;
+        }
+    }
+    if (sim->dragon.life_stage >= CC_DRAGON_STAGE_EGG &&
+        sim->dragon.life_stage <= CC_DRAGON_STAGE_AFTERDRAGON) {
+        history->dragon_stage_days[sim->dragon.life_stage] += 1;
+    }
+}
 
 static void UpdateHistory(const CcSim *sim, CcMetricsHistory *history)
 {
     int32_t active_settlements = 0;
     int32_t closed_routes = 0;
+    int32_t hunger_total = 0;
     bool has_abandoned_settlement = false;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         bool abandoned = CcSettlementIsAbandoned(&sim->settlements[i]);
+        hunger_total += sim->settlements[i].hunger;
         if (!abandoned) active_settlements += 1;
         else has_abandoned_settlement = true;
         if (abandoned && !history->settlement_was_abandoned[i]) {
@@ -61,6 +111,37 @@ static void UpdateHistory(const CcSim *sim, CcMetricsHistory *history)
     }
     if (has_abandoned_settlement) {
         history->years_with_abandoned_settlement += 1;
+    }
+    if (hunger_total / sim->settlement_count >= 40) {
+        history->years_hunger_40_plus += 1;
+    }
+    if (hunger_total / sim->settlement_count >= 60) {
+        history->years_hunger_60_plus += 1;
+    }
+    bool at_war = false;
+    bool allied = false;
+    for (int32_t first = 0; first < sim->kingdom_count; ++first) {
+        for (int32_t second = first + 1;
+             second < sim->kingdom_count; ++second) {
+            at_war |= sim->diplomacy[first][second] == CC_DIPLOMACY_WAR;
+            allied |= sim->diplomacy[first][second] == CC_DIPLOMACY_ALLIANCE;
+        }
+    }
+    if (at_war) history->years_at_war += 1;
+    if (allied) history->years_allied += 1;
+    if (sim->dragon_campaign.phase != CC_DRAGON_CAMPAIGN_IDLE) {
+        history->years_dragon_campaign += 1;
+    }
+    if (sim->goblins.raid_motive != CC_GOBLIN_RAID_NONE) {
+        history->years_goblin_raid += 1;
+    }
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        if (sim->bandits[i].raid_phase != CC_BANDIT_RAID_IDLE) {
+            history->years_bandit_raid += 1;
+        }
+        if (sim->bandits[i].influence >= 70) {
+            history->years_bandit_influence_70_plus += 1;
+        }
     }
 }
 
@@ -209,7 +290,9 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         sim->goblins.hoard_defenses);
     (void)printf(
         ",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
-        "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+        "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
+        "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
+        "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
         wars, alliances, active_couriers, lost_couriers,
         distorted_couriers, sim->dragon.slain ? 1 : 0,
         sim->dragon_campaign.attempts,
@@ -234,7 +317,37 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         history->years_all_routes_closed,
         history->years_with_abandoned_settlement,
         history->route_closures,
-        history->settlement_abandonments);
+        history->settlement_abandonments,
+        history->years_hunger_40_plus,
+        history->years_hunger_60_plus,
+        history->years_at_war,
+        history->years_allied,
+        history->years_dragon_campaign,
+        history->years_goblin_raid,
+        history->years_bandit_raid,
+        history->years_bandit_influence_70_plus,
+        sim->goblins.members,
+        sim->goblins.devotion,
+        sim->goblins.cohesion,
+        sim->goblins.expeditions_intercepted,
+        sim->bandit_count > 0 ? sim->bandits[0].members : 0,
+        sim->bandit_count > 0 ? sim->bandits[0].supplies : 0,
+        sim->bandit_count > 0 ? sim->bandits[0].influence : 0,
+        sim->bandit_count > 0 ? sim->bandits[0].raids_completed : 0,
+        (int32_t)sim->dragon_campaign.phase,
+        history->days_at_war,
+        history->days_allied,
+        history->days_dragon_campaign,
+        history->days_goblin_raid,
+        history->days_bandit_raid,
+        history->days_bandit_influence_70_plus,
+        history->dragon_stage_days[CC_DRAGON_STAGE_EGG],
+        history->dragon_stage_days[CC_DRAGON_STAGE_WHELP],
+        history->dragon_stage_days[CC_DRAGON_STAGE_WANDERER],
+        history->dragon_stage_days[CC_DRAGON_STAGE_CROWNED],
+        history->dragon_stage_days[CC_DRAGON_STAGE_DEEP_WYRM],
+        history->dragon_stage_days[CC_DRAGON_STAGE_UNCROWNED],
+        history->dragon_stage_days[CC_DRAGON_STAGE_AFTERDRAGON]);
 }
 
 int main(int argc, char **argv)
@@ -288,7 +401,17 @@ int main(int argc, char **argv)
         "total_population,climate_factor,dragon_campaign_experience,"
         "minimum_active_settlements,maximum_closed_routes,"
         "years_all_routes_closed,years_with_abandoned_settlement,"
-        "route_closures,settlement_abandonments");
+        "route_closures,settlement_abandonments,years_hunger_40_plus,"
+        "years_hunger_60_plus,years_at_war,years_allied,"
+        "years_dragon_campaign,years_goblin_raid,years_bandit_raid,"
+        "years_bandit_influence_70_plus,goblin_members_end,"
+        "goblin_devotion_end,goblin_cohesion_end,goblin_interceptions_end,"
+        "bandit_members_end,bandit_supplies_end,bandit_influence_end,"
+        "bandit_raids_end,dragon_campaign_phase_end,days_at_war,"
+        "days_allied,days_dragon_campaign,days_goblin_raid,days_bandit_raid,"
+        "days_bandit_influence_70_plus,dragon_egg_days,dragon_whelp_days,"
+        "dragon_wanderer_days,dragon_crowned_days,dragon_deep_wyrm_days,"
+        "dragon_uncrowned_days,dragon_afterdragon_days");
     char error[192];
     for (int32_t seed_number = first_seed;
          seed_number < first_seed + seeds; ++seed_number) {
@@ -304,7 +427,10 @@ int main(int argc, char **argv)
             history.route_was_closed[i] = sim.routes[i].closed;
         }
         for (int32_t year = 1; year <= years; ++year) {
-            CcSimAdvanceDays(&sim, 365);
+            for (int32_t day = 0; day < 365; ++day) {
+                CcSimAdvanceDays(&sim, 1);
+                UpdateDailyHistory(&sim, &history);
+            }
             UpdateHistory(&sim, &history);
             if (!CcSimValidate(&sim, error, sizeof(error))) {
                 (void)fprintf(stderr,

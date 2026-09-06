@@ -47,3 +47,15 @@ The endpoint row also includes trajectory summaries:
 
 These distinguish a world that ends in decline from one that spent most of its
 history in decline.
+
+The metrics also include political and faction exposure:
+
+- annual hunger thresholds and exact daily war/alliance exposure;
+- exact daily dragon-campaign, goblin-raid, and bandit-raid exposure;
+- daily bandit high-influence exposure;
+- days spent in each dragon life stage;
+- end-state goblin membership, devotion, cohesion, defenses, and interceptions;
+- end-state bandit membership, supplies, influence, and completed raids.
+
+Use `tools/analyze_sweep.py` for group comparisons and
+`tools/plot_archetypes.py` for report charts.
