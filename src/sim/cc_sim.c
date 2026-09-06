@@ -5360,6 +5360,90 @@ static void MaintainSettlementStonework(CcSim *sim,
         text);
 }
 
+/* The fall of a town is not the end of its people: the remaining
+ * households walk to the strongest living host, preferring their own
+ * kingdom and near neighbors, and the named cast flees with them. */
+/* Office holders (rulers, monastery patrons) must keep their home inside
+ * the kingdom they serve; they may only flee within their own country. */
+static bool CharacterHoldsOffice(const CcSim *sim, CcId character_id)
+{
+    if (sim == NULL || character_id == 0U) return false;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        if (sim->kingdoms[i].ruler_character_id == character_id ||
+            sim->kingdoms[i].monastery_patron_id == character_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static CcSettlement *FallenTownHost(CcSim *sim, const CcSettlement *ruin,
+                                    CcId kingdom_requirement)
+{
+    if (sim == NULL || ruin == NULL) return NULL;
+    CcSettlement *host = NULL;
+    int32_t host_score = INT32_MIN;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (place == ruin || CcSettlementIsAbandoned(place)) continue;
+        if (kingdom_requirement != 0U &&
+            place->kingdom_id != kingdom_requirement) continue;
+        int32_t score = place->prosperity - place->hunger;
+        if (place->kingdom_id == ruin->kingdom_id) score += 200;
+        for (int32_t route = 0; route < sim->route_count; ++route) {
+            const CcRoute *road = &sim->routes[route];
+            if ((road->from_id == ruin->id && road->to_id == place->id) ||
+                (road->to_id == ruin->id && road->from_id == place->id)) {
+                score += 100;
+                break;
+            }
+        }
+        if (host == NULL || score > host_score) {
+            host = place;
+            host_score = score;
+        }
+    }
+    return host;
+}
+
+static void RelocateFallenTown(CcSim *sim, CcSettlement *ruin,
+                               int32_t households, CcId cause_event_id)
+{
+    if (sim == NULL || ruin == NULL || households <= 0) return;
+    CcSettlement *host = FallenTownHost(sim, ruin, 0U);
+    if (host == NULL) return;
+    host->population += households;
+    host->hunger = ClampI32(
+        host->hunger + MinimumI32(15, households / 5), 0, 100);
+    int32_t relocated = 0;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        CcCharacter *person = &sim->characters[i];
+        if (person->home_settlement_id != ruin->id) continue;
+        CcSettlement *seat = host;
+        if (CharacterHoldsOffice(sim, person->id) &&
+            host->kingdom_id != ruin->kingdom_id) {
+            seat = FallenTownHost(sim, ruin, ruin->kingdom_id);
+            if (seat == NULL) continue; /* the crown stays in its country */
+        }
+        person->home_settlement_id = seat->id;
+        person->current_settlement_id = seat->id;
+        person->role = CC_CHARACTER_REFUGEE;
+        person->goal = CC_CHARACTER_GOAL_SURVIVE_CRISIS;
+        person->activity = CC_CHARACTER_ACTIVITY_SEEKING_AID;
+        relocated += 1;
+    }
+    if (relocated == 0) return;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "The fall of %s drives %d households and %d named residents to %s.",
+        ruin->name, households, relocated, host->name);
+    (void)PushEvent(
+        sim, CC_EVENT_KINGDOM_ACTION, host->id, host->id,
+        cause_event_id != 0U ? cause_event_id :
+            LatestLocalCause(sim, host->id), households, text);
+}
+
 static void UpdateSettlement(CcSim *sim, int32_t index,
                              CcId scriptorium_id)
 {
@@ -5518,6 +5602,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         settlement->population = MaximumI32(
             0, settlement->population + population_delta);
         if (settlement->population < 80 && settlement->hunger >= 65) {
+            int32_t refugee_households = settlement->population;
             CcKingdom *kingdom = KingdomMutable(sim, settlement->kingdom_id);
             if (kingdom != NULL) {
                 kingdom->treasury += settlement->market_coins +
@@ -5545,10 +5630,13 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
                 text, sizeof(text),
                 "%s is abandoned after famine reduces its last households to refugees.",
                 settlement->name);
-            (void)PushEvent(
+            CcEvent *abandoned = PushEvent(
                 sim, CC_EVENT_KINGDOM_ACTION, settlement->id,
                 settlement->id, LatestLocalCause(sim, settlement->id),
                 -1, text);
+            RelocateFallenTown(
+                sim, settlement, refugee_households,
+                abandoned != NULL ? abandoned->id : 0U);
             return;
         }
     }
@@ -10626,6 +10714,21 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     successor.id = NextId(sim, CC_ENTITY_CHARACTER);
     successor.home_settlement_id = dead.home_settlement_id;
     successor.current_settlement_id = dead.home_settlement_id;
+    /* A heir is not born into a ghost town: when the family seat is a
+     * ruin, the successor is born wherever the family fled. */
+    {
+        const CcSettlement *seat = CcSimSettlement(sim, dead.home_settlement_id);
+        if (seat != NULL && CcSettlementIsAbandoned(seat)) {
+            CcSettlement *fled_to = FallenTownHost(
+                sim, seat,
+                CharacterHoldsOffice(sim, dead.id) ?
+                    seat->kingdom_id : 0U);
+            if (fled_to != NULL) {
+                successor.home_settlement_id = fled_to->id;
+                successor.current_settlement_id = fled_to->id;
+            }
+        }
+    }
     successor.role = dead.role;
     successor.goal = dead.goal;
     successor.activity = CC_CHARACTER_ACTIVITY_WORKING;
@@ -10644,10 +10747,14 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     TransferHistoricalTitles(sim, &dead, &sim->characters[slot]);
 
     char birth_text[CC_EVENT_TEXT_CAPACITY];
-    (void)snprintf(birth_text, sizeof(birth_text),
-                   "%s was born into the family of %s in %s.",
-                   successor.name, dead.name,
-                   home != NULL ? home->name : "a forgotten place");
+    {
+        const CcSettlement *birthplace = CcSimSettlement(
+            sim, successor.home_settlement_id);
+        (void)snprintf(birth_text, sizeof(birth_text),
+                       "%s was born into the family of %s in %s.",
+                       successor.name, dead.name,
+                       birthplace != NULL ? birthplace->name : "a forgotten place");
+    }
     (void)PushEvent(sim, CC_EVENT_CHARACTER_BORN, successor.id,
                     successor.home_settlement_id, 0U, 12, birth_text);
     RecastSituationsAfterDeath(sim, dead.id);
