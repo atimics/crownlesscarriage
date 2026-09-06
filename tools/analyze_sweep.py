@@ -47,6 +47,10 @@ METRICS = [
     "days_bandit_influence_70_plus", "smuggler_routes",
     # scriptorium / monastery
     "iron_ledger_reserve", "treasure_count",
+    # scriptorium
+    "archive_scribes", "lore_stored", "lore_lost_total",
+    "archive_stewardship", "archive_last_recorded_day", "lore_ceiling",
+    "archive_tool_wear", "archive_abbot_present",
 ]
 
 

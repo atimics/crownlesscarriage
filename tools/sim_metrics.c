@@ -292,7 +292,8 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         ",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
         "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
         "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
-        "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+        "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
+        "%d,%d,%d,%d,%d,%d,%d,%d\n",
         wars, alliances, active_couriers, lost_couriers,
         distorted_couriers, sim->dragon.slain ? 1 : 0,
         sim->dragon_campaign.attempts,
@@ -347,7 +348,15 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         history->dragon_stage_days[CC_DRAGON_STAGE_CROWNED],
         history->dragon_stage_days[CC_DRAGON_STAGE_DEEP_WYRM],
         history->dragon_stage_days[CC_DRAGON_STAGE_UNCROWNED],
-        history->dragon_stage_days[CC_DRAGON_STAGE_AFTERDRAGON]);
+        history->dragon_stage_days[CC_DRAGON_STAGE_AFTERDRAGON],
+        sim->archives.scribes,
+        sim->archives.lore_stored,
+        sim->archives.lore_lost_total,
+        sim->archives.stewardship_rank,
+        sim->archives.last_recorded_day,
+        sim->archives.lore_ceiling,
+        sim->archives.kit_tool_wear,
+        sim->archives.abbot_character_id != 0U ? 1 : 0);
 }
 
 int main(int argc, char **argv)
@@ -411,7 +420,10 @@ int main(int argc, char **argv)
         "days_allied,days_dragon_campaign,days_goblin_raid,days_bandit_raid,"
         "days_bandit_influence_70_plus,dragon_egg_days,dragon_whelp_days,"
         "dragon_wanderer_days,dragon_crowned_days,dragon_deep_wyrm_days,"
-        "dragon_uncrowned_days,dragon_afterdragon_days");
+        "dragon_uncrowned_days,dragon_afterdragon_days,archive_scribes,"
+        "lore_stored,lore_lost_total,archive_stewardship,"
+        "archive_last_recorded_day,lore_ceiling,archive_tool_wear,"
+        "archive_abbot_present");
     char error[192];
     for (int32_t seed_number = first_seed;
          seed_number < first_seed + seeds; ++seed_number) {

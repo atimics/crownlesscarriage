@@ -55,7 +55,9 @@ The metrics also include political and faction exposure:
 - daily bandit high-influence exposure;
 - days spent in each dragon life stage;
 - end-state goblin membership, devotion, cohesion, defenses, and interceptions;
-- end-state bandit membership, supplies, influence, and completed raids.
+- end-state bandit membership, supplies, influence, and completed raids;
+- direct scriptorium state: scribes, stored/lost lore, stewardship, recording
+  date, lore ceiling, tool wear, and abbot presence.
 
 Use `tools/analyze_sweep.py` for group comparisons and
 `tools/plot_archetypes.py` for report charts.
