@@ -206,31 +206,27 @@ static int RunWorldCardRegression(void)
             CARD_CHECK(CcSimHash(&sim) == before,
                 "A local site return must preserve the campaign and cargo.");
         }
-        /* A denied accept click must explain itself instead of doing nothing. */
+        /* The board is a dated directory of people to find, not an accept
+           machine. The promise is made in person with the giver. */
         view = VIEW_SITUATIONS;
         return_view = VIEW_LOCAL;
         selected_situation = FirstActiveSituationIndex(&sim);
-        CARD_CHECK(selected_situation >= 0, "The campaign needs an opening promise.");
+        CARD_CHECK(selected_situation >= 0, "The campaign needs an opening notice.");
+        const CcSituation *notice = SelectedActiveSituation(&sim, selected_situation);
+        CARD_CHECK(notice != NULL && CcSimSituationCanAccept(&sim, notice),
+            "The opening notice must offer work.");
         ContextActionSet paper_cards = BuildContextActions(
             &sim, &local, view, selected, selected_situation);
-        int32_t accept_card = WorldCardIndex(
-            &paper_cards, CONTEXT_ACTION_ACCEPT_PROMISE, 0);
-        CARD_CHECK(accept_card >= 0, "The papers must show the accept card.");
-        RepositionHero(&local, (Vector2){CC_LOCAL_NOTICE_X + 9.0f, CC_LOCAL_NOTICE_Z}, false);
-        paper_cards = BuildContextActions(
-            &sim, &local, view, selected, selected_situation);
-        accept_card = WorldCardIndex(&paper_cards, CONTEXT_ACTION_ACCEPT_PROMISE, 0);
-        CARD_CHECK(accept_card >= 0 && !paper_cards.items[accept_card].enabled,
-            "Accepting must wait at the notice board.");
+        CARD_CHECK(WorldCardIndex(&paper_cards, CONTEXT_ACTION_CLOSE_VIEW, 0) >= 0,
+            "The board must offer paging and closing.");
         before = CcSimHash(&sim);
-        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected,
-            CONTEXT_ACTION_ACCEPT_PROMISE, 0, false),
-            "The papers need a clickable accept card.");
         message[0] = '\0';
+        queued_key_press[KEY_ENTER] = true;
         CARD_INPUT();
-        CARD_CHECK(strstr(message, "Visit the local board") != NULL &&
-            CcSimHash(&sim) == before,
-            "A denied accept must point to the board and preserve the campaign.");
+        const CcCharacter *giver = SituationGiver(&sim, notice);
+        CARD_CHECK(giver != NULL && strstr(message, giver->name) != NULL &&
+            strstr(message, "promise in person") != NULL && CcSimHash(&sim) == before,
+            "Reading a notice must point at the giver by name and preserve the campaign.");
         message[0] = '\0';
         ResetLocalState(&local);
         local.adventure_ui = true;

@@ -367,12 +367,6 @@ bool CcClientMapCommandEnabled(bool viewing_map, bool road_local,
            (!road_local && !market_interior && carriage_distance < 1.35f);
 }
 
-bool CcClientPromiseCanBeAccepted(bool market_interior,
-                                  float notice_distance)
-{
-    return !market_interior && notice_distance < 1.15f;
-}
-
 bool CcClientInteractionActivated(bool requested, float distance,
                                   float maximum_distance)
 {
