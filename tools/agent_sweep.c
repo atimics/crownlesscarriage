@@ -12,6 +12,8 @@ typedef struct AgentStats {
     int32_t repair_failures;
     int32_t travel_attempts;
     int32_t travel_successes;
+    int32_t jobs_accepted;
+    int32_t jobs_completed;
 } AgentStats;
 
 
@@ -39,6 +41,28 @@ static CcId BestDestination(const CcSim *sim)
     return destination;
 }
 
+static bool AcceptRouteJobAtLocation(CcSim *sim, AgentStats *stats)
+{
+    char error[192];
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        const CcSituation *situation = &sim->situations[i];
+        if (situation->status != CC_SITUATION_ACTIVE ||
+            situation->kind != CC_SITUATION_ROUTE_REPAIR ||
+            CcSimSituationOfferSettlementId(sim, situation) !=
+                sim->player.location_id ||
+            !CcSimSituationCanAccept(sim, situation)) continue;
+        CcCommand accept = {
+            .kind = CC_COMMAND_ACCEPT_SITUATION,
+            .target_id = situation->id
+        };
+        if (CcSimApply(sim, &accept, error, sizeof(error))) {
+            stats->jobs_accepted += 1;
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool RepairAtLocation(CcSim *sim, AgentStats *stats)
 {
     if (sim->player.coins < 18) return false;
@@ -55,6 +79,10 @@ static bool RepairAtLocation(CcSim *sim, AgentStats *stats)
         };
         if (CcSimApply(sim, &repair, error, sizeof(error))) {
             stats->repairs += 1;
+            if (sim->resolved_journey_situation_id == 0U &&
+                sim->player.accepted_situation_id == 0U) {
+                stats->jobs_completed += 1;
+            }
             return true;
         }
         stats->repair_failures += 1;
@@ -122,6 +150,7 @@ static void AdvanceAgent(CcSim *sim, AgentStats *stats)
         }
         return;
     }
+    if (AcceptRouteJobAtLocation(sim, stats)) return;
     if (RepairAtLocation(sim, stats)) return;
     if (!TravelTowardWork(sim, stats)) CcSimAdvanceDays(sim, 1);
 }
@@ -152,7 +181,7 @@ int main(int argc, char **argv)
     (void)puts("seed,control_population,agent_population,control_prosperity,agent_prosperity,"
                "control_hunger,agent_hunger,control_active_settlements,agent_active_settlements,"
                "control_closed_routes,agent_closed_routes,repairs,repair_failures,"
-               "travel_attempts,travel_successes");
+               "travel_attempts,travel_successes,jobs_accepted,jobs_completed\n");
     for (int32_t seed = 1; seed <= seeds; ++seed) {
         uint32_t world_seed = (uint32_t)seed * UINT32_C(0x9e3779b9);
         CcSim control;
@@ -200,7 +229,7 @@ int main(int argc, char **argv)
         char error[192];
         if (!CcSimValidate(&control, error, sizeof(error)) ||
             !CcSimValidate(&agent, error, sizeof(error))) return EXIT_FAILURE;
-        (void)printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+        (void)printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
                      seed, control_population, agent_population,
                      control_prosperity / control.settlement_count,
                      agent_prosperity / agent.settlement_count,
@@ -208,7 +237,8 @@ int main(int argc, char **argv)
                      agent_hunger / agent.settlement_count,
                      control_active, agent_active, control_closed, agent_closed,
                      stats.repairs, stats.repair_failures,
-                     stats.travel_attempts, stats.travel_successes);
+                     stats.travel_attempts, stats.travel_successes,
+                     stats.jobs_accepted, stats.jobs_completed);
     }
     return EXIT_SUCCESS;
 }

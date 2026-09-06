@@ -61,9 +61,11 @@ out/build/release/crownless_agent_sweep --seeds 8 --years 10
 ```
 
 The output compares population, prosperity, hunger, active settlements, and
-closed routes, and records repairs, failed repair attempts, and travel. This is
-the first intervention arm; relief-quest ranking and cargo delivery should be
-added as separate policies rather than conflated with road repair.
+closed routes, and records repairs, failed repair attempts, travel, accepted
+jobs, and completed jobs. The agent now accepts route-repair charters before
+repairing them, so repair rewards can fund later work. Relief-quest ranking and
+cargo delivery should remain separate policies rather than being conflated with
+road repair.
 
 The metrics also include political and faction exposure:
 
