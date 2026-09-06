@@ -21182,7 +21182,11 @@ uint64_t CcSimHash(const CcSim *sim)
     }
     if (sim->schema_version >= 44U) {
         HASH_VALUE(sim->gossip_last_event_id);
-        HASH_VALUE(sim->posted_situation_mask);
+        /* Schema 48 fields hash only for schema 48 saves, so older
+           campaigns keep the hash they were stored with. */
+        if (sim->schema_version >= 48U) {
+            HASH_VALUE(sim->posted_situation_mask);
+        }
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
             const CcGossip *story = &sim->gossip[i];
             HASH_VALUE(story->event_id); HASH_VALUE(story->origin_id);
@@ -21202,7 +21206,9 @@ uint64_t CcSimHash(const CcSim *sim)
         for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
             HASH_VALUE(sim->gossip_carriers[i].id);
             HASH_VALUE(sim->gossip_carriers[i].stories);
-            HASH_VALUE(sim->gossip_carriers[i].told_player);
+            if (sim->schema_version >= 48U) {
+                HASH_VALUE(sim->gossip_carriers[i].told_player);
+            }
             for (int32_t slot = 0; slot < CC_MAX_GOSSIP; ++slot) {
                 if ((sim->gossip_carriers[i].stories & (UINT32_C(1) << (uint32_t)slot)) != 0U) {
                     hash = HashGossipVersion(hash, &sim->gossip_carriers[i].versions[slot]);
