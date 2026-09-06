@@ -17,7 +17,55 @@ static bool ParsePositive(const char *text, int32_t *value)
     return true;
 }
 
-static void PrintYear(const CcSim *sim, int32_t seed_number, int32_t year)
+typedef struct CcMetricsHistory {
+    int32_t minimum_active_settlements;
+    int32_t maximum_closed_routes;
+    int32_t years_all_routes_closed;
+    int32_t years_with_abandoned_settlement;
+    int32_t route_closures;
+    int32_t settlement_abandonments;
+    bool route_was_closed[CC_MAX_ROUTES];
+    bool settlement_was_abandoned[CC_MAX_SETTLEMENTS];
+} CcMetricsHistory;
+
+static void UpdateHistory(const CcSim *sim, CcMetricsHistory *history)
+{
+    int32_t active_settlements = 0;
+    int32_t closed_routes = 0;
+    bool has_abandoned_settlement = false;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        bool abandoned = CcSettlementIsAbandoned(&sim->settlements[i]);
+        if (!abandoned) active_settlements += 1;
+        else has_abandoned_settlement = true;
+        if (abandoned && !history->settlement_was_abandoned[i]) {
+            history->settlement_abandonments += 1;
+        }
+        history->settlement_was_abandoned[i] = abandoned;
+    }
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        bool closed = sim->routes[i].closed;
+        if (closed) closed_routes += 1;
+        if (closed && !history->route_was_closed[i]) {
+            history->route_closures += 1;
+        }
+        history->route_was_closed[i] = closed;
+    }
+    if (active_settlements < history->minimum_active_settlements) {
+        history->minimum_active_settlements = active_settlements;
+    }
+    if (closed_routes > history->maximum_closed_routes) {
+        history->maximum_closed_routes = closed_routes;
+    }
+    if (closed_routes == sim->route_count) {
+        history->years_all_routes_closed += 1;
+    }
+    if (has_abandoned_settlement) {
+        history->years_with_abandoned_settlement += 1;
+    }
+}
+
+static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
+                      int32_t seed_number, int32_t year)
 {
     int32_t hunger_total = 0;
     int32_t hunger_maximum = 0;
@@ -161,7 +209,7 @@ static void PrintYear(const CcSim *sim, int32_t seed_number, int32_t year)
         sim->goblins.hoard_defenses);
     (void)printf(
         ",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
-        "%d,%d,%d,%d,%d\n",
+        "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
         wars, alliances, active_couriers, lost_couriers,
         distorted_couriers, sim->dragon.slain ? 1 : 0,
         sim->dragon_campaign.attempts,
@@ -180,7 +228,13 @@ static void PrintYear(const CcSim *sim, int32_t seed_number, int32_t year)
         sim->dragon.whelps_dispersed,
         sim->dragon.afterdeath_days,
         active_settlements, abandoned_settlements, total_population,
-        CcSimClimateFactor(sim), CcDragonCampaignExperience(sim));
+        CcSimClimateFactor(sim), CcDragonCampaignExperience(sim),
+        history->minimum_active_settlements,
+        history->maximum_closed_routes,
+        history->years_all_routes_closed,
+        history->years_with_abandoned_settlement,
+        history->route_closures,
+        history->settlement_abandonments);
 }
 
 int main(int argc, char **argv)
@@ -231,14 +285,27 @@ int main(int argc, char **argv)
         "dragon_territory_stability,dragon_regional_influence,dragon_eggs,"
         "dragon_hunts,dragon_broods,dragon_whelps_dispersed,"
         "dragon_afterdeath_days,active_settlements,abandoned_settlements,"
-        "total_population,climate_factor,dragon_campaign_experience");
+        "total_population,climate_factor,dragon_campaign_experience,"
+        "minimum_active_settlements,maximum_closed_routes,"
+        "years_all_routes_closed,years_with_abandoned_settlement,"
+        "route_closures,settlement_abandonments");
     char error[192];
     for (int32_t seed_number = first_seed;
          seed_number < first_seed + seeds; ++seed_number) {
         CcSim sim;
+        CcMetricsHistory history = {0};
         CcSimInit(&sim, (uint32_t)seed_number * UINT32_C(0x9e3779b9));
+        history.minimum_active_settlements = sim.settlement_count;
+        for (int32_t i = 0; i < sim.settlement_count; ++i) {
+            history.settlement_was_abandoned[i] =
+                CcSettlementIsAbandoned(&sim.settlements[i]);
+        }
+        for (int32_t i = 0; i < sim.route_count; ++i) {
+            history.route_was_closed[i] = sim.routes[i].closed;
+        }
         for (int32_t year = 1; year <= years; ++year) {
             CcSimAdvanceDays(&sim, 365);
+            UpdateHistory(&sim, &history);
             if (!CcSimValidate(&sim, error, sizeof(error))) {
                 (void)fprintf(stderr,
                               "Seed %d failed in year %d: %s\n",
@@ -246,7 +313,7 @@ int main(int argc, char **argv)
                 return EXIT_FAILURE;
             }
             if (!final_only || year == years) {
-                PrintYear(&sim, seed_number, year);
+                PrintYear(&sim, &history, seed_number, year);
             }
         }
     }

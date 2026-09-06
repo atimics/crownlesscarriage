@@ -44,6 +44,11 @@ def main():
     alliances = ints(rows, "alliances")
     closed = ints(rows, "closed_routes")
     crown = ints(rows, "dragon_crown_strength")
+    min_active = ints(rows, "minimum_active_settlements")
+    max_closed = ints(rows, "maximum_closed_routes")
+    years_all_closed = ints(rows, "years_all_routes_closed")
+    years_abandoned = ints(rows, "years_with_abandoned_settlement")
+    route_closures = ints(rows, "route_closures")
 
     # 1. Dragon outcomes and life stage
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.6))
@@ -114,7 +119,23 @@ def main():
     fig.savefig(os.path.join(args.out, "diplomacy.png"), dpi=120)
     plt.close(fig)
 
-    # 5. Scatter: population vs legitimacy, colored by dragon fate
+    # 5. Trajectory summaries
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.4))
+    axes[0].hist(years_all_closed, bins=24, color="#d97742",
+                 edgecolor="white")
+    axes[0].set_title("Years with every route closed")
+    axes[0].set_xlabel("years out of 1000")
+    axes[0].set_ylabel("worlds")
+    axes[1].scatter(route_closures, min_active, s=18, alpha=0.55,
+                    color="#7a6ff0", edgecolors="none")
+    axes[1].set_title("Route closure churn vs settlement floor")
+    axes[1].set_xlabel("route closure transitions")
+    axes[1].set_ylabel("minimum active settlements")
+    fig.tight_layout()
+    fig.savefig(os.path.join(args.out, "trajectory.png"), dpi=120)
+    plt.close(fig)
+
+    # 6. Scatter: population vs legitimacy, colored by dragon fate
     fig, ax = plt.subplots(figsize=(7.5, 5.4))
     colors = ["#4c8bf5" if s == 0 else "#e05252" for s in slain]
     ax.scatter(pop, legit, c=colors, s=18, alpha=0.55, edgecolors="none")
@@ -125,7 +146,7 @@ def main():
     fig.savefig(os.path.join(args.out, "pop_legit.png"), dpi=120)
     plt.close(fig)
 
-    # 6. Scatter: prosperity vs hunger, colored by dragon crown strength
+    # 7. Scatter: prosperity vs hunger, colored by dragon crown strength
     fig, ax = plt.subplots(figsize=(7.5, 5.4))
     sc = ax.scatter(prosper, hunger, c=crown, s=18, alpha=0.6,
                     cmap="viridis", edgecolors="none")

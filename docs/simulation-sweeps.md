@@ -35,3 +35,15 @@ A sweep's endpoint CSV contains only successful endpoint rows. Failed seeds rema
 the terminal report with their validation error; this keeps aggregate results
 usable while making failures impossible to overlook. The sweep uses
 `--final-only`; yearly validation still runs for every checkpoint.
+
+The endpoint row also includes trajectory summaries:
+
+- `minimum_active_settlements`: lowest active-settlement count reached;
+- `maximum_closed_routes`: highest simultaneous route closure count;
+- `years_all_routes_closed`: annual checkpoints where every route was closed;
+- `years_with_abandoned_settlement`: annual checkpoints with at least one abandoned settlement;
+- `route_closures`: closed-route transitions over the run;
+- `settlement_abandonments`: settlement-abandonment transitions over the run.
+
+These distinguish a world that ends in decline from one that spent most of its
+history in decline.
