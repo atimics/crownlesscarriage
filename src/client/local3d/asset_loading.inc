@@ -296,6 +296,9 @@ typedef enum CreatureGaitSlot {
     CREATURE_GAIT_SLOT_COUNT
 } CreatureGaitSlot;
 
+/* Further than a harnessed animal could travel between two frames. */
+#define CC_CREATURE_GAIT_TELEPORT_RANGE 8.0f
+
 typedef struct CreatureGaitCache {
     CcCreatureRigController controller;
     CcCreatureRigWorldCommand command;
@@ -1831,6 +1834,16 @@ void CcLocalCreatureGaitsFixedStepInternal(float delta_time)
         CcLimbVec3 previous = cache->controller.ground_position;
         float fraction = cache->pending_seconds > delta_time ?
             delta_time / cache->pending_seconds : 1.0f;
+        /* Smoothing the approach is right while the team is walking. Across a
+           jump it is not: a carriage crossing between the town and the road
+           moves further in one frame than a pony could walk, and feeding the
+           rig a slowly advancing target left it trailing the drawn carriage by
+           tens of units. Hand a jump straight through so the controller's own
+           reframe carries the pose over intact, rather than re-seating the rig
+           here and losing the gait with it. */
+        float jump = Vector3Distance(
+            FromLimbVector(command.ground_position), FromLimbVector(previous));
+        if (jump > CC_CREATURE_GAIT_TELEPORT_RANGE) fraction = 1.0f;
         command.ground_position = (CcLimbVec3){
             previous.x + (command.ground_position.x - previous.x) * fraction,
             previous.y + (command.ground_position.y - previous.y) * fraction,
@@ -2699,6 +2712,40 @@ static CcQuadrupedMorphology QuadrupedMorphologyForCreature(
     return CC_QUADRUPED_MORPHOLOGY_COUNT;
 }
 
+/* A posed creature bone stays near its own model origin: the horse rig spans
+   under two units. Anything past this is a broken transform, not a pose, and
+   drawing it stretches the skinned mesh off screen. */
+#define CC_CREATURE_BONE_SANE_RANGE 64.0f
+
+static bool CreatureBoneTranslationSane(Vector3 translation)
+{
+    return isfinite(translation.x) && isfinite(translation.y) &&
+           isfinite(translation.z) &&
+           fabsf(translation.x) <= CC_CREATURE_BONE_SANE_RANGE &&
+           fabsf(translation.y) <= CC_CREATURE_BONE_SANE_RANGE &&
+           fabsf(translation.z) <= CC_CREATURE_BONE_SANE_RANGE;
+}
+
+static void ReportCreatureBoneBreak(CcCreatureVariant variant,
+                                    int32_t quadruped_bone, bool controlled,
+                                    bool moving, Vector3 translation)
+{
+    /* One line per variant+bone. A broken transform repeats every frame and
+       the first report is the one that names the cause. */
+    static uint64_t reported[CC_CREATURE_VARIANT_COUNT];
+    if (variant < 0 || variant >= CC_CREATURE_VARIANT_COUNT) return;
+    if (quadruped_bone < 0 || quadruped_bone >= 64) return;
+    uint64_t bit = (uint64_t)1 << quadruped_bone;
+    if ((reported[variant] & bit) != 0) return;
+    reported[variant] |= bit;
+    TraceLog(LOG_WARNING,
+             "CREATURE: variant %d bone %s left its model (%.2f, %.2f, %.2f) "
+             "controlled=%d moving=%d; clamped to bind pose",
+             (int)variant, CcQuadrupedBoneName((CcQuadrupedBone)quadruped_bone),
+             (double)translation.x, (double)translation.y,
+             (double)translation.z, (int)controlled, (int)moving);
+}
+
 static bool PoseQuadrupedCreature(CreatureModelCache *creature,
                                   CcCreatureVariant variant, float phase,
                                   bool moving,
@@ -2709,29 +2756,48 @@ static bool PoseQuadrupedCreature(CreatureModelCache *creature,
     CcQuadrupedPose rest = {0};
     CcQuadrupedPose target = {0};
     CcQuadrupedPoseResolve(morphology, 0.0f, false, &rest);
-    if (controlled_pose != NULL && controlled_pose->valid) {
+    bool controlled = controlled_pose != NULL && controlled_pose->valid;
+    if (controlled) {
         CcQuadrupedPoseResolveFromRig(morphology, controlled_pose, &target);
     } else {
         CcQuadrupedPoseResolve(morphology, phase, moving, &target);
     }
     if (!rest.valid || !target.valid) return false;
 
+    /* Check the whole mapping before writing any of it. Bailing part way
+       through left the skeleton holding this frame's pose on the bones
+       already written and the previous frame's on the rest, which tears the
+       mesh between them. */
     for (int32_t bone = 0; bone < creature->model.skeleton.boneCount;
          ++bone) {
         int32_t quadruped_bone = creature->quadruped_bone[bone];
         if (quadruped_bone < 0 ||
             quadruped_bone >= CC_QUADRUPED_BONE_COUNT) return false;
+    }
+
+    for (int32_t bone = 0; bone < creature->model.skeleton.boneCount;
+         ++bone) {
+        int32_t quadruped_bone = creature->quadruped_bone[bone];
         const CcQuadrupedBonePose *rest_bone = &rest.bones[quadruped_bone];
         const CcQuadrupedBonePose *target_bone =
             &target.bones[quadruped_bone];
         Quaternion delta = HeroRotationBetween(
             FromLimbVector(rest_bone->up),
             FromLimbVector(target_bone->up));
-        creature->pose[bone].translation = FromLimbVector(target_bone->head);
-        creature->pose[bone].rotation = QuaternionMultiply(
-            delta, creature->model.skeleton.bindPose[bone].rotation);
-        creature->pose[bone].scale =
-            creature->model.skeleton.bindPose[bone].scale;
+        Transform bind = creature->model.skeleton.bindPose[bone];
+        Vector3 translation = FromLimbVector(target_bone->head);
+        Quaternion rotation = QuaternionMultiply(delta, bind.rotation);
+        if (!CreatureBoneTranslationSane(translation) ||
+            !isfinite(rotation.x) || !isfinite(rotation.y) ||
+            !isfinite(rotation.z) || !isfinite(rotation.w)) {
+            ReportCreatureBoneBreak(variant, quadruped_bone, controlled,
+                                    moving, translation);
+            translation = bind.translation;
+            rotation = bind.rotation;
+        }
+        creature->pose[bone].translation = translation;
+        creature->pose[bone].rotation = rotation;
+        creature->pose[bone].scale = bind.scale;
     }
     UpdateModelAnimation(creature->model, creature->animation, 0.0f);
     CcLocalRendererRecordCreatureSkinUpdate(creature->model.meshCount);
@@ -2866,6 +2932,21 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
         if (!CcCreatureRigPoseResolve(
                 CreatureRigProfileForVariant(variant), rig_phase, rig_movement,
                 ToLimbVector(position), yaw, scale, &generated_rig)) {
+            /* Nothing is drawn past this point, so the creature simply is not
+               there. Say so once per variant rather than leaving a carriage
+               rolling through town with no team in front of it. */
+            static bool reported[CC_CREATURE_VARIANT_COUNT];
+            if (variant >= 0 && variant < CC_CREATURE_VARIANT_COUNT &&
+                !reported[variant]) {
+                reported[variant] = true;
+                TraceLog(LOG_WARNING,
+                         "CREATURE: variant %d not drawn; rig pose failed at "
+                         "(%.2f, %.2f, %.2f) yaw %.2f scale %.2f phase %.2f "
+                         "movement %.2f",
+                         (int)variant, (double)position.x, (double)position.y,
+                         (double)position.z, (double)yaw, (double)scale,
+                         (double)rig_phase, (double)rig_movement);
+            }
             return false;
         }
         rig = &generated_rig;
