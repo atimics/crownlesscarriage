@@ -19,16 +19,19 @@ The metrics seed number is converted to a deterministic world seed by:
 world_seed = (seed_number * 0x9E3779B9) & 0xFFFFFFFF
 ```
 
-The metrics runner also accepts one explicit seed:
+The metrics runner also accepts one explicit seed. `--final-only` keeps
+validation after every year but emits only the endpoint row, which avoids doing
+annual metrics aggregation and CSV formatting during large sweeps:
 
 ```sh
-out/build/play/crownless_sim_metrics --seed 10 --years 1000
+out/build/play/crownless_sim_metrics --seed 10 --years 1000 --final-only
 ```
 
 The chronicle runner accepts a raw world seed, not a metrics seed number. To
 chronicle metrics seed 10, use world seed
 `(10 * 0x9E3779B9) & 0xFFFFFFFF = 774553914`.
 
-A sweep's endpoint CSV contains only successful seeds. Failed seeds remain in
+A sweep's endpoint CSV contains only successful endpoint rows. Failed seeds remain in
 the terminal report with their validation error; this keeps aggregate results
-usable while making failures impossible to overlook.
+usable while making failures impossible to overlook. The sweep uses
+`--final-only`; yearly validation still runs for every checkpoint.

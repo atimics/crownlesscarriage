@@ -188,6 +188,7 @@ int main(int argc, char **argv)
     int32_t seeds = 100;
     int32_t years = 10;
     int32_t first_seed = 1;
+    bool final_only = false;
     for (int32_t argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--seed") == 0 && argument + 1 < argc) {
             if (!ParsePositive(argv[++argument], &first_seed)) return EXIT_FAILURE;
@@ -197,9 +198,12 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[argument], "--years") == 0 &&
                    argument + 1 < argc) {
             if (!ParsePositive(argv[++argument], &years)) return EXIT_FAILURE;
+        } else if (strcmp(argv[argument], "--final-only") == 0) {
+            final_only = true;
         } else {
             (void)fprintf(stderr,
-                          "Usage: %s [--seed NUMBER | --seeds COUNT] [--years COUNT]\n",
+                          "Usage: %s [--seed NUMBER | --seeds COUNT]"
+                          " [--years COUNT] [--final-only]\n",
                           argv[0]);
             return EXIT_FAILURE;
         }
@@ -241,7 +245,9 @@ int main(int argc, char **argv)
                               seed_number, year, error);
                 return EXIT_FAILURE;
             }
-            PrintYear(&sim, seed_number, year);
+            if (!final_only || year == years) {
+                PrintYear(&sim, seed_number, year);
+            }
         }
     }
     return EXIT_SUCCESS;
