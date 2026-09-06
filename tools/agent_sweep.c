@@ -63,6 +63,47 @@ static bool AcceptRouteJobAtLocation(CcSim *sim, AgentStats *stats)
     return false;
 }
 
+static bool AcceptReliefJobAtLocation(CcSim *sim, AgentStats *stats)
+{
+    char error[192];
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        const CcSituation *situation = &sim->situations[i];
+        if (situation->status != CC_SITUATION_ACTIVE ||
+            situation->kind != CC_SITUATION_RELIEF_DELIVERY ||
+            CcSimSituationOfferSettlementId(sim, situation) !=
+                sim->player.location_id ||
+            !CcSimSituationCanAccept(sim, situation)) continue;
+        CcCommand accept = {
+            .kind = CC_COMMAND_ACCEPT_SITUATION,
+            .target_id = situation->id
+        };
+        if (CcSimApply(sim, &accept, error, sizeof(error))) {
+            stats->jobs_accepted += 1;
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool DeliverAcceptedRelief(CcSim *sim, AgentStats *stats)
+{
+    const CcSituation *situation = CcSimAcceptedSituation(sim);
+    if (situation == NULL || situation->kind != CC_SITUATION_RELIEF_DELIVERY ||
+        sim->player.location_id != situation->target_id ||
+        sim->resolved_journey_situation_id != situation->id) return false;
+    int32_t amount = situation->quantity - situation->progress;
+    if (amount <= 0) return false;
+    CcCommand deliver = {
+        .kind = CC_COMMAND_TRADE,
+        .good = CC_GOOD_FOOD,
+        .amount = -amount
+    };
+    char error[192];
+    if (!CcSimApply(sim, &deliver, error, sizeof(error))) return false;
+    stats->jobs_completed += 1;
+    return true;
+}
+
 static bool RepairAtLocation(CcSim *sim, AgentStats *stats)
 {
     if (sim->player.coins < 18) return false;
@@ -92,7 +133,14 @@ static bool RepairAtLocation(CcSim *sim, AgentStats *stats)
 
 static bool TravelTowardWork(CcSim *sim, AgentStats *stats)
 {
-    CcId destination = BestDestination(sim);
+    CcId destination = 0U;
+    const CcSituation *accepted = CcSimAcceptedSituation(sim);
+    if (accepted != NULL &&
+        (accepted->kind == CC_SITUATION_RELIEF_DELIVERY ||
+         accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
+        destination = accepted->target_id;
+    }
+    if (destination == 0U) destination = BestDestination(sim);
     if (destination == 0U) return false;
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRoute *route = &sim->routes[i];
@@ -150,7 +198,9 @@ static void AdvanceAgent(CcSim *sim, AgentStats *stats)
         }
         return;
     }
+    if (DeliverAcceptedRelief(sim, stats)) return;
     if (AcceptRouteJobAtLocation(sim, stats)) return;
+    if (AcceptReliefJobAtLocation(sim, stats)) return;
     if (RepairAtLocation(sim, stats)) return;
     if (!TravelTowardWork(sim, stats)) CcSimAdvanceDays(sim, 1);
 }
