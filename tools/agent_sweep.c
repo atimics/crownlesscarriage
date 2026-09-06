@@ -12,11 +12,6 @@ typedef struct AgentStats {
     int32_t repair_failures;
     int32_t travel_attempts;
     int32_t travel_successes;
-    int32_t jobs_accepted;
-    int32_t jobs_completed;
-    int32_t combats_initiated;
-    int32_t combats_won;
-    int32_t combats_lost;
 } AgentStats;
 
 
@@ -44,84 +39,6 @@ static CcId BestDestination(const CcSim *sim)
     return destination;
 }
 
-static bool AcceptRouteJobAtLocation(CcSim *sim, AgentStats *stats)
-{
-    char error[192];
-    for (int32_t i = 0; i < sim->situation_count; ++i) {
-        const CcSituation *situation = &sim->situations[i];
-        if (situation->status != CC_SITUATION_ACTIVE ||
-            situation->kind != CC_SITUATION_ROUTE_REPAIR ||
-            CcSimSituationOfferSettlementId(sim, situation) !=
-                sim->player.location_id ||
-            !CcSimSituationCanAccept(sim, situation)) continue;
-        CcCommand accept = {
-            .kind = CC_COMMAND_ACCEPT_SITUATION,
-            .target_id = situation->id
-        };
-        if (CcSimApply(sim, &accept, error, sizeof(error))) {
-            stats->jobs_accepted += 1;
-            return true;
-        }
-    }
-    return false;
-}
-
-static bool AcceptReliefJobAtLocation(CcSim *sim, AgentStats *stats)
-{
-    char error[192];
-    for (int32_t i = 0; i < sim->situation_count; ++i) {
-        const CcSituation *situation = &sim->situations[i];
-        if (situation->status != CC_SITUATION_ACTIVE ||
-            situation->kind != CC_SITUATION_RELIEF_DELIVERY ||
-            CcSimSituationOfferSettlementId(sim, situation) !=
-                sim->player.location_id ||
-            !CcSimSituationCanAccept(sim, situation)) continue;
-        bool reachable = false;
-        for (int32_t route = 0; route < sim->route_count; ++route) {
-            const CcRoute *road = &sim->routes[route];
-            if (!road->closed &&
-                ((road->from_id == sim->player.location_id &&
-                  road->to_id == situation->target_id) ||
-                 (road->to_id == sim->player.location_id &&
-                  road->from_id == situation->target_id)) &&
-                sim->current_day + road->travel_days + 100 <
-                    situation->deadline_day) {
-                reachable = true;
-                break;
-            }
-        }
-        if (!reachable) continue;
-        CcCommand accept = {
-            .kind = CC_COMMAND_ACCEPT_SITUATION,
-            .target_id = situation->id
-        };
-        if (CcSimApply(sim, &accept, error, sizeof(error))) {
-            stats->jobs_accepted += 1;
-            return true;
-        }
-    }
-    return false;
-}
-
-static bool DeliverAcceptedRelief(CcSim *sim, AgentStats *stats)
-{
-    const CcSituation *situation = CcSimAcceptedSituation(sim);
-    if (situation == NULL || situation->kind != CC_SITUATION_RELIEF_DELIVERY ||
-        sim->player.location_id != situation->target_id ||
-        sim->resolved_journey_situation_id != situation->id) return false;
-    int32_t amount = situation->quantity - situation->progress;
-    if (amount <= 0) return false;
-    CcCommand deliver = {
-        .kind = CC_COMMAND_TRADE,
-        .good = CC_GOOD_FOOD,
-        .amount = -amount
-    };
-    char error[192];
-    if (!CcSimApply(sim, &deliver, error, sizeof(error))) return false;
-    stats->jobs_completed += 1;
-    return true;
-}
-
 static bool RepairAtLocation(CcSim *sim, AgentStats *stats)
 {
     if (sim->player.coins < 18) return false;
@@ -138,10 +55,6 @@ static bool RepairAtLocation(CcSim *sim, AgentStats *stats)
         };
         if (CcSimApply(sim, &repair, error, sizeof(error))) {
             stats->repairs += 1;
-            if (sim->resolved_journey_situation_id == 0U &&
-                sim->player.accepted_situation_id == 0U) {
-                stats->jobs_completed += 1;
-            }
             return true;
         }
         stats->repair_failures += 1;
@@ -151,14 +64,7 @@ static bool RepairAtLocation(CcSim *sim, AgentStats *stats)
 
 static bool TravelTowardWork(CcSim *sim, AgentStats *stats)
 {
-    CcId destination = 0U;
-    const CcSituation *accepted = CcSimAcceptedSituation(sim);
-    if (accepted != NULL &&
-        (accepted->kind == CC_SITUATION_RELIEF_DELIVERY ||
-         accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
-        destination = accepted->target_id;
-    }
-    if (destination == 0U) destination = BestDestination(sim);
+    CcId destination = BestDestination(sim);
     if (destination == 0U) return false;
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRoute *route = &sim->routes[i];
@@ -192,59 +98,30 @@ static bool TravelTowardWork(CcSim *sim, AgentStats *stats)
 
 static void AdvanceAgent(CcSim *sim, AgentStats *stats)
 {
-    char error[192];
     if (sim->journey.active) {
         if (sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
-            CcCommand command = {0};
-            if (sim->journey.danger >= 30 &&
-                sim->journey.danger <= 70 &&
-                sim->journey.bargain_cost > 0) {
-                command.kind = CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT;
-                stats->combats_initiated += 1;
-                if (CcSimApply(sim, &command, error, sizeof(error)) &&
-                    sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT) {
-                    stats->combats_won += 1;
-                } else {
-                    stats->combats_lost += 1;
-                }
-            } else if (sim->journey.danger > 70 ||
-                       sim->journey.bargain_cost <= 0) {
-                command.kind = CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE;
-                if (!CcSimApply(sim, &command, error, sizeof(error))) {
-                    command.kind = CC_COMMAND_WITHDRAW_ENCOUNTER;
-                    (void)CcSimApply(sim, &command, error, sizeof(error));
-                }
-            } else {
-                command.kind = CC_COMMAND_WITHDRAW_ENCOUNTER;
-                (void)CcSimApply(sim, &command, error, sizeof(error));
+            CcCommand withdraw = {
+                .kind = CC_COMMAND_WITHDRAW_ENCOUNTER,
+                .amount = 0
+            };
+            char error[192];
+            if (!CcSimApply(sim, &withdraw, error, sizeof(error))) {
+                return;
             }
         } else if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
             CcCommand rest = {
                 .kind = CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
                     CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP
             };
+            char error[192];
             if (!CcSimApply(sim, &rest, error, sizeof(error))) {
                 CcSimAdvanceDays(sim, 1);
             }
         } else {
-            CcSimAdvanceRuntimeTicks(
-                sim, CC_WORLD_TICKS_PER_SECOND * 60);
+            CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
         }
         return;
     }
-    const CcSituation *accepted = CcSimAcceptedSituation(sim);
-    if (accepted != NULL && accepted->deadline_day <= sim->current_day + 7) {
-        CcCommand abandon = {
-            .kind = CC_COMMAND_ABANDON_SITUATION,
-            .target_id = accepted->id
-        };
-        char abandon_error[192];
-        (void)CcSimApply(sim, &abandon, abandon_error, sizeof(abandon_error));
-        return;
-    }
-    if (DeliverAcceptedRelief(sim, stats)) return;
-    if (AcceptRouteJobAtLocation(sim, stats)) return;
-    if (AcceptReliefJobAtLocation(sim, stats)) return;
     if (RepairAtLocation(sim, stats)) return;
     if (!TravelTowardWork(sim, stats)) CcSimAdvanceDays(sim, 1);
 }
@@ -275,8 +152,7 @@ int main(int argc, char **argv)
     (void)puts("seed,control_population,agent_population,control_prosperity,agent_prosperity,"
                "control_hunger,agent_hunger,control_active_settlements,agent_active_settlements,"
                "control_closed_routes,agent_closed_routes,repairs,repair_failures,"
-               "travel_attempts,travel_successes,jobs_accepted,jobs_completed,"
-               "combats_initiated,combats_won,combats_lost\n");
+               "travel_attempts,travel_successes");
     for (int32_t seed = 1; seed <= seeds; ++seed) {
         uint32_t world_seed = (uint32_t)seed * UINT32_C(0x9e3779b9);
         CcSim control;
@@ -288,22 +164,11 @@ int main(int argc, char **argv)
         while (control.current_day < target_day) CcSimAdvanceDays(&control, 1);
         int64_t agent_steps = 0;
         while (agent.current_day < target_day || agent.journey.active) {
-            int32_t day_before = agent.current_day;
-            bool journey_before = agent.journey.active;
             AdvanceAgent(&agent, &stats);
-            if (!journey_before && !agent.journey.active &&
-                agent.current_day == day_before) {
-                CcSimAdvanceDays(&agent, 1);
-            }
             agent_steps += 1;
-            if (agent_steps > (int64_t)years * 365 * 100) {
-                (void)fprintf(stderr,
-                              "agent stalled at seed %d day %d phase=%d active=%d encounter=%d location=%" PRIu64 "\n",
-                              seed, agent.current_day,
-                              (int32_t)agent.journey.phase,
-                              agent.journey.active ? 1 : 0,
-                              agent.journey.encounter_triggered ? 1 : 0,
-                              agent.player.location_id);
+            if (agent_steps > (int64_t)years * 365 * 10000) {
+                (void)fprintf(stderr, "agent stalled at seed %d day %d\n",
+                              seed, agent.current_day);
                 return EXIT_FAILURE;
             }
             if (agent.current_day > target_day + 365) break;
@@ -333,26 +198,9 @@ int main(int argc, char **argv)
             agent_closed += agent.routes[i].closed;
         }
         char error[192];
-        if (!CcSimValidate(&control, error, sizeof(error))) {
-            (void)fprintf(stderr, "control seed %d invalid at day %d: %s\n",
-                          seed, control.current_day, error);
-            return EXIT_FAILURE;
-        }
-        if (!CcSimValidate(&agent, error, sizeof(error))) {
-            (void)fprintf(stderr, "agent seed %d invalid at day %d: %s accepted=%" PRIu64 " situations=%d\n",
-                          seed, agent.current_day, error,
-                          agent.player.accepted_situation_id,
-                          agent.situation_count);
-            (void)fprintf(stderr,
-                          "player loc=%" PRIu64 " cargo=%d/%d coins=%" PRId64 " rep=%d treasure=%d maps=%d/%d\n",
-                          agent.player.location_id,
-                          CcPlayerCargoUsed(&agent.player), agent.player.cargo_capacity,
-                          agent.player.coins, agent.player.reputation,
-                          agent.player.treasure_cargo_slots,
-                          CcPlayerMapCount(&agent), agent.player.map_capacity);
-            return EXIT_FAILURE;
-        }
-        (void)printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+        if (!CcSimValidate(&control, error, sizeof(error)) ||
+            !CcSimValidate(&agent, error, sizeof(error))) return EXIT_FAILURE;
+        (void)printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
                      seed, control_population, agent_population,
                      control_prosperity / control.settlement_count,
                      agent_prosperity / agent.settlement_count,
@@ -360,10 +208,7 @@ int main(int argc, char **argv)
                      agent_hunger / agent.settlement_count,
                      control_active, agent_active, control_closed, agent_closed,
                      stats.repairs, stats.repair_failures,
-                     stats.travel_attempts, stats.travel_successes,
-                     stats.jobs_accepted, stats.jobs_completed,
-                     stats.combats_initiated, stats.combats_won,
-                     stats.combats_lost);
+                     stats.travel_attempts, stats.travel_successes);
     }
     return EXIT_SUCCESS;
 }
