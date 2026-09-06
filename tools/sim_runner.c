@@ -322,7 +322,16 @@ int main(int argc, char **argv)
         PrintChronicleNewEvents(&sim);
     }
     for (int32_t year = 0; year < years; ++year) {
-        CcSimAdvanceDays(&sim, 365);
+        if (chronicle) {
+            /* Monthly scans: a busy year pushes more than the event ring
+             * holds, so a yearly window would lose mid-year events. */
+            for (int32_t month = 0; month < 12; ++month) {
+                CcSimAdvanceDays(&sim, month == 11 ? 35 : 30);
+                PrintChronicleNewEvents(&sim);
+            }
+        } else {
+            CcSimAdvanceDays(&sim, 365);
+        }
         if (!CcSimValidate(&sim, error, sizeof(error))) {
             (void)fprintf(stderr, "validation failed in year %d: %s\n", year + 1, error);
             if (detail) PrintSummary(&sim, true);

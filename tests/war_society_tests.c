@@ -140,9 +140,66 @@ static void CheckWarCampContest(char *error, size_t capacity)
     (void)remove(path);
 }
 
+/* War society: feuds and trusts are struck while kingdoms war, and never
+ * while they are at peace. */
+static void CheckWarSocietyEvents(char *error, size_t capacity)
+{
+    /* Count relationship events over a year of forced war and a year of
+     * forced peace on the same seed. */
+    int32_t war_events = 0;
+    int32_t peace_events = 0;
+    for (int32_t variant = 0; variant < 2; ++variant) {
+        CcSim sim;
+        CcSimInit(&sim, UINT32_C(0x60c11c));
+        for (int32_t i = 0; i < sim.kingdom_count; ++i) {
+            for (int32_t j = 0; j < sim.kingdom_count; ++j) {
+                sim.diplomacy[i][j] = i == j ?
+                    CC_DIPLOMACY_PEACE :
+                    (variant == 0 ? CC_DIPLOMACY_WAR : CC_DIPLOMACY_PEACE);
+            }
+        }
+        CcSimAdvanceDays(&sim, 365);
+        for (int32_t i = 0; i < sim.event_count; ++i) {
+            const CcEvent *event = CcSimRecentEvent(&sim, i);
+            if (event == NULL ||
+                event->kind != CC_EVENT_RELATIONSHIP_CHANGED) continue;
+            if (strstr(event->text, "war") == NULL &&
+                strstr(event->text, "War") == NULL) continue;
+            if (variant == 0) war_events += 1;
+            else peace_events += 1;
+        }
+        CC_CHECK(CcSimValidate(&sim, error, capacity));
+    }
+    CC_CHECK(war_events > 0);
+    CC_CHECK(peace_events == 0);
+
+    /* Every bond produced by war society connects two living characters
+     * and the relationship table reflects it. */
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x60c11c));
+    for (int32_t i = 0; i < sim.kingdom_count; ++i) {
+        for (int32_t j = 0; j < sim.kingdom_count; ++j) {
+            sim.diplomacy[i][j] = i == j ?
+                CC_DIPLOMACY_PEACE : CC_DIPLOMACY_WAR;
+        }
+    }
+    CcSimAdvanceDays(&sim, 365);
+    int32_t bonded = 0;
+    for (int32_t i = 0; i < sim.relationship_count; ++i) {
+        const CcRelationship *bond = &sim.relationships[i];
+        if (CcSimCharacter(&sim, bond->from_character_id) == NULL ||
+            CcSimCharacter(&sim, bond->to_character_id) == NULL) continue;
+        if (bond->affinity < -3 || bond->affinity > 3 ||
+            bond->trust < -3 || bond->trust > 3) continue;
+        bonded += 1;
+    }
+    CC_CHECK(bonded > 0);
+}
+
 int main(void)
 {
     char error[192];
+    CheckWarSocietyEvents(error, sizeof(error));
     CheckWarCampContest(error, sizeof(error));
 
     /* Fall Thornford (full cast world) and follow the refugees. */
@@ -283,6 +340,6 @@ int main(void)
     CC_CHECK(restored_refugees == refugees);
     (void)remove(path);
 
-    puts("Refugee relocation tests passed");
+    puts("War society from ruins tests passed");
     return 0;
 }
