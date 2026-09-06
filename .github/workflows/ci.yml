@@ -126,6 +126,9 @@ jobs:
           python3 tools/sim_sweep.py
           --binary build/crownless_sim_metrics
           --first-seed 1 --seeds 32 --years 32 --jobs 4
+      - name: Player agency road-steward smoke test
+        if: matrix.os == 'ubuntu-latest' && matrix.build_type == 'Release'
+        run: ./build/crownless_agent_sweep --seeds 8 --years 10
 
   long-simulation-sweep:
     name: Long simulation sweep
