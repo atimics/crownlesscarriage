@@ -244,8 +244,7 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_ABANDON_PROMISE,
     CONTEXT_ACTION_NEXT_PROMISE,
     CONTEXT_ACTION_CLOSE_VIEW,
-    CONTEXT_ACTION_GOSSIP_SOURCE,
-    CONTEXT_ACTION_GOSSIP_NEXT,
+    CONTEXT_ACTION_GOSSIP_CHAT,
     CONTEXT_ACTION_GOSSIP_SHARE,
     CONTEXT_ACTION_FIGHT,
     CONTEXT_ACTION_PAY,
@@ -4110,11 +4109,10 @@ static ContextActionSet BuildContextActions(
         const CcGossip *story = CcSimPersonalGossip(sim, local->conversation_character_id,
             local->conversation_gossip_offset, NULL);
         if (story != NULL) {
-            AddDetailedContextAction(&set, CONTEXT_ACTION_GOSSIP_SOURCE,
-                "Who told you?", "1", "", true, false);
-            if (CcSimPersonalGossip(sim, local->conversation_character_id, 1, NULL) != NULL)
-                AddDetailedContextAction(&set, CONTEXT_ACTION_GOSSIP_NEXT,
-                    "Other news?", "2", "", true, false);
+            /* One chat verb draws the fragments in turn: the account, who told
+               them, then the next account. No interrogation buttons. */
+            AddDetailedContextAction(&set, CONTEXT_ACTION_GOSSIP_CHAT,
+                "Chat", "1", "HEAR THEIR NEWS", true, false);
         }
         if (CcSimCharacter(sim, local->conversation_character_id) != NULL)
             AddDetailedContextAction(&set, CONTEXT_ACTION_GOSSIP_SHARE,
@@ -8613,12 +8611,16 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             for (int32_t i = 0; i < replies.count; ++i)
                 if (ClientKeyPressed(KEY_ONE + i)) context_action = replies.items[i].kind;
             if (context_action == CONTEXT_ACTION_CLOSE_VIEW) { *view = VIEW_LOCAL; return; }
-            if (context_action == CONTEXT_ACTION_GOSSIP_SOURCE) local->conversation_gossip_source = true;
-            if (context_action == CONTEXT_ACTION_GOSSIP_NEXT) {
-                local->conversation_gossip_source = false;
-                local->conversation_gossip_offset += 1;
-                if (CcSimPersonalGossip(sim, local->conversation_character_id,
-                    local->conversation_gossip_offset, NULL) == NULL) local->conversation_gossip_offset = 0;
+            if (context_action == CONTEXT_ACTION_GOSSIP_CHAT) {
+                if (!local->conversation_gossip_source) {
+                    local->conversation_gossip_source = true;
+                } else {
+                    local->conversation_gossip_source = false;
+                    local->conversation_gossip_offset += 1;
+                    if (CcSimPersonalGossip(sim, local->conversation_character_id,
+                        local->conversation_gossip_offset, NULL) == NULL)
+                        local->conversation_gossip_offset = 0;
+                }
             }
             if (context_action == CONTEXT_ACTION_GOSSIP_SHARE) {
                 (void)ApplyCommand(*journal, sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
@@ -8626,7 +8628,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 local->conversation_gossip_offset = 0;
                 local->conversation_gossip_source = false;
             }
-            if (context_action == CONTEXT_ACTION_GOSSIP_SOURCE || context_action == CONTEXT_ACTION_GOSSIP_NEXT ||
+            if (context_action == CONTEXT_ACTION_GOSSIP_CHAT ||
                 context_action == CONTEXT_ACTION_GOSSIP_SHARE) {
                 CcAudioClearSpeech();
                 CcSpeech answer;
