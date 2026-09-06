@@ -10722,6 +10722,23 @@ static void RecastSituationsAfterDeath(CcSim *sim, CcId character_id)
     }
 }
 
+static int32_t SuccessionClaimStrength(const CcSim *sim,
+                                       const CcKingdom *kingdom,
+                                       const CcCharacter *claimant,
+                                       bool cradle)
+{
+    const CcSettlement *home = CcSimSettlement(
+        sim, claimant->home_settlement_id);
+    int32_t score = claimant->courage;
+    if (home != NULL && home->function == CC_SETTLEMENT_CAPITAL) score += 40;
+    if (claimant->role == CC_CHARACTER_OFFICIAL) score += 30;
+    if (cradle) {
+        score -= MinimumI32(5, kingdom->pretender_crises);
+        if (!kingdom->anointed) score -= 10;
+    }
+    return score;
+}
+
 static void TransferHistoricalTitles(CcSim *sim,
                                      const CcCharacter *dead,
                                      const CcCharacter *successor)
@@ -10739,18 +10756,68 @@ static void TransferHistoricalTitles(CcSim *sim,
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         CcKingdom *kingdom = &sim->kingdoms[i];
         if (kingdom->ruler_character_id == dead->id) {
-            kingdom->ruler_character_id = successor->id;
+            /* A kingdom in pretender crisis, or one whose crown is not
+             * yet lawful, does not let the cradle inherit unopposed:
+             * the strongest adult claimant may proclaim the rule
+             * instead. Gated on schema 48 for replay determinism. */
+            bool contested = sim->schema_version >= 48U &&
+                (kingdom->pretender_crises > 0 || !kingdom->anointed);
+            CcCharacter *claimant = contested ?
+                BestOfficeHolder(sim, i, successor->id, false) : NULL;
+            const CcCharacter *winner = successor;
+            if (claimant != NULL) {
+                int32_t cradle_score = SuccessionClaimStrength(
+                    sim, kingdom, successor, true);
+                int32_t claim_score = SuccessionClaimStrength(
+                    sim, kingdom, claimant, false);
+                if (claim_score > cradle_score ||
+                    (claim_score == cradle_score &&
+                     claimant->id < successor->id)) {
+                    winner = claimant;
+                }
+            }
+            kingdom->ruler_character_id = winner->id;
             kingdom->anointed_by_character_id = 0U;
             /* A new ruler is not anointed; the abbey must sanction the
              * succession before the crown becomes lawful again. */
             kingdom->anointed = false;
             char text[CC_EVENT_TEXT_CAPACITY];
-            (void)snprintf(text, sizeof(text),
-                           "%.20s succeeds %.20s as ruler of %.20s.",
-                           successor->name, dead->name, kingdom->name);
-            (void)PushEvent(sim, CC_EVENT_ROYAL_SUCCESSION,
-                            successor->id, successor->home_settlement_id,
-                            0U, 25, text);
+            if (claimant == NULL) {
+                (void)snprintf(text, sizeof(text),
+                               "%.20s succeeds %.20s as ruler of %.20s.",
+                               successor->name, dead->name, kingdom->name);
+                (void)PushEvent(sim, CC_EVENT_ROYAL_SUCCESSION,
+                                successor->id, successor->home_settlement_id,
+                                0U, 25, text);
+            } else {
+                char contest_text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(
+                    contest_text, sizeof(contest_text),
+                    "%.16s's succession is contested: the cradle of "
+                    "%.16s against %.16s's word.",
+                    kingdom->name, successor->name, claimant->name);
+                (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, kingdom->id,
+                                kingdom->id, 0U, 0, contest_text);
+                if (winner == claimant) {
+                    (void)snprintf(
+                        text, sizeof(text),
+                        "%.24s proclaims the rule of %.16s in place of "
+                        "the cradle of %.16s.",
+                        claimant->name, kingdom->name, successor->name);
+                    (void)PushEvent(
+                        sim, CC_EVENT_ROYAL_SUCCESSION, claimant->id,
+                        claimant->home_settlement_id, 0U, 25, text);
+                } else {
+                    (void)snprintf(
+                        text, sizeof(text),
+                        "%.16s claims %.16s by blood; the cradle keeps "
+                        "the crown under the regency of the abbey.",
+                        successor->name, kingdom->name);
+                    (void)PushEvent(
+                        sim, CC_EVENT_ROYAL_SUCCESSION, successor->id,
+                        successor->home_settlement_id, 0U, 25, text);
+                }
+            }
         }
         if (kingdom->monastery_patron_id == dead->id) {
             kingdom->monastery_patron_id = successor->id;
@@ -18263,12 +18330,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 43U ||
                          sim->schema_version == 44U ||
                          sim->schema_version == 45U ||
-                         sim->schema_version == 46U;
+                         sim->schema_version == 46U ||
+                         sim->schema_version == 47U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 47U && sim->generator_version == 25U) ||
         (sim->schema_version == 45U && sim->generator_version == 25U) ||
         (sim->schema_version == 46U && sim->generator_version == 25U) ||
         (sim->schema_version == 44U && sim->generator_version == 25U) ||
