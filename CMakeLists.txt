@@ -1,8 +1,13 @@
 cmake_minimum_required(VERSION 3.24)
 
-if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+# An empty cache entry still counts as DEFINED, and a plain set(CACHE) will not
+# overwrite one, so a build directory that once configured without a target
+# would keep inheriting the host version forever. Test both, and FORCE past the
+# stale entry. An explicit -DCMAKE_OSX_DEPLOYMENT_TARGET short-circuits the
+# guard, so it is still respected.
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING
-        "Oldest supported macOS version")
+        "Oldest supported macOS version" FORCE)
 endif()
 
 project(crownless_carriage VERSION 0.1.0 LANGUAGES C)
