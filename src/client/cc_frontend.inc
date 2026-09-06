@@ -134,8 +134,8 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
     float x = panel.x + 36.0f;
     float y = panel.y + 148.0f;
     if (state->screen == FRONTEND_INVITATION) {
-        items[0] = (FrontendItem){FRONTEND_ACTION_FIELD_INVITATION, {x, y + 32, 848, 46}, "Invitation", true};
-        items[1] = (FrontendItem){FRONTEND_ACTION_INVITE_COPY, {x, y + 150, 412, 46}, "Copy invitation", true};
+        items[0] = (FrontendItem){FRONTEND_ACTION_FIELD_INVITATION, {x, y + 32, 848, 76}, "Invitation", true};
+        items[1] = (FrontendItem){FRONTEND_ACTION_INVITE_COPY, {x, y + 150, 412, 46}, "Share invitation", true};
         items[2] = (FrontendItem){FRONTEND_ACTION_CANCEL, {x + 436, y + 150, 412, 46}, "Back", true};
         return 3;
     }
@@ -654,6 +654,24 @@ static void DrawFrontend(const FrontendState *state,
             char *value = FrontendCompanyField((FrontendState *)state, item.action, &field_capacity);
             (void)field_capacity;
             const char *visible = item.action == FRONTEND_ACTION_FIELD_PASS && value[0] != '\0' ? "********" : value;
+            if (state->screen == FRONTEND_INVITATION && item.action == FRONTEND_ACTION_FIELD_INVITATION) {
+                /* The link must be readable in full; wrap it instead of clipping the world id. */
+                size_t length = strlen(visible);
+                int rows = (int)((length + 67U) / 68U);
+                if (rows < 1) rows = 1;
+                int row_size = 14 + preferences->text_size;
+                int text_top = (int)(item.bounds.y + (item.bounds.height - (float)(rows * (row_size + 4) - 4)) * 0.5f);
+                for (int row = 0; row < rows; ++row) {
+                    char line[72];
+                    (void)snprintf(line, sizeof(line), "%.68s", visible + (size_t)row * 68U);
+                    int size = row_size;
+                    while (size > 10 && MeasureText(line, size) > (int)item.bounds.width - 24) --size;
+                    DrawText(line, (int)(item.bounds.x + (item.bounds.width - (float)MeasureText(line, size)) * 0.5f),
+                        text_top + row * (row_size + 4), size, INK);
+                }
+                ClientTouchAdd(item.bounds, value, item.enabled, selected);
+                continue;
+            }
             if (strlen(visible) > 66) visible += strlen(visible) - 66;
             (void)snprintf(field_label, sizeof(field_label), "%.24s: %.66s%s", item.label, visible,
                 state->text_field == item.action ? "_" : "");
