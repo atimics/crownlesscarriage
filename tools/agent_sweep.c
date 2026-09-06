@@ -14,6 +14,9 @@ typedef struct AgentStats {
     int32_t travel_successes;
     int32_t jobs_accepted;
     int32_t jobs_completed;
+    int32_t combats_initiated;
+    int32_t combats_won;
+    int32_t combats_lost;
 } AgentStats;
 
 
@@ -174,22 +177,37 @@ static bool TravelTowardWork(CcSim *sim, AgentStats *stats)
 
 static void AdvanceAgent(CcSim *sim, AgentStats *stats)
 {
+    char error[192];
     if (sim->journey.active) {
         if (sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
-            CcCommand withdraw = {
-                .kind = CC_COMMAND_WITHDRAW_ENCOUNTER,
-                .amount = 0
-            };
-            char error[192];
-            if (!CcSimApply(sim, &withdraw, error, sizeof(error))) {
-                return;
+            CcCommand command = {0};
+            if (sim->journey.danger >= 30 &&
+                sim->journey.danger <= 70 &&
+                sim->journey.bargain_cost > 0) {
+                command.kind = CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT;
+                stats->combats_initiated += 1;
+                if (CcSimApply(sim, &command, error, sizeof(error)) &&
+                    sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT) {
+                    stats->combats_won += 1;
+                } else {
+                    stats->combats_lost += 1;
+                }
+            } else if (sim->journey.danger > 70 ||
+                       sim->journey.bargain_cost <= 0) {
+                command.kind = CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE;
+                if (!CcSimApply(sim, &command, error, sizeof(error))) {
+                    command.kind = CC_COMMAND_WITHDRAW_ENCOUNTER;
+                    (void)CcSimApply(sim, &command, error, sizeof(error));
+                }
+            } else {
+                command.kind = CC_COMMAND_WITHDRAW_ENCOUNTER;
+                (void)CcSimApply(sim, &command, error, sizeof(error));
             }
         } else if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
             CcCommand rest = {
                 .kind = CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
                     CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP
             };
-            char error[192];
             if (!CcSimApply(sim, &rest, error, sizeof(error))) {
                 CcSimAdvanceDays(sim, 1);
             }
@@ -231,7 +249,8 @@ int main(int argc, char **argv)
     (void)puts("seed,control_population,agent_population,control_prosperity,agent_prosperity,"
                "control_hunger,agent_hunger,control_active_settlements,agent_active_settlements,"
                "control_closed_routes,agent_closed_routes,repairs,repair_failures,"
-               "travel_attempts,travel_successes,jobs_accepted,jobs_completed\n");
+               "travel_attempts,travel_successes,jobs_accepted,jobs_completed,"
+               "combats_initiated,combats_won,combats_lost\n");
     for (int32_t seed = 1; seed <= seeds; ++seed) {
         uint32_t world_seed = (uint32_t)seed * UINT32_C(0x9e3779b9);
         CcSim control;
@@ -279,7 +298,7 @@ int main(int argc, char **argv)
         char error[192];
         if (!CcSimValidate(&control, error, sizeof(error)) ||
             !CcSimValidate(&agent, error, sizeof(error))) return EXIT_FAILURE;
-        (void)printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+        (void)printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
                      seed, control_population, agent_population,
                      control_prosperity / control.settlement_count,
                      agent_prosperity / agent.settlement_count,
@@ -288,7 +307,9 @@ int main(int argc, char **argv)
                      control_active, agent_active, control_closed, agent_closed,
                      stats.repairs, stats.repair_failures,
                      stats.travel_attempts, stats.travel_successes,
-                     stats.jobs_accepted, stats.jobs_completed);
+                     stats.jobs_accepted, stats.jobs_completed,
+                     stats.combats_initiated, stats.combats_won,
+                     stats.combats_lost);
     }
     return EXIT_SUCCESS;
 }
