@@ -35,6 +35,7 @@ static uint32_t RoadHouseSeed(const CcSim *sim, CcId route_id);
 static const char *GeneratedRoadHouseName(const CcSim *sim, CcId route_id);
 static const CcSettlement *Scriptorium(const CcSim *sim);
 static void AssignHistoryOffices(CcSim *sim, bool announce);
+static void GrowBanditCamp(CcBanditGroup *bandits);
 
 static int32_t ClampI32(int32_t value, int32_t minimum, int32_t maximum)
 {
@@ -5360,6 +5361,163 @@ static void MaintainSettlementStonework(CcSim *sim,
         text);
 }
 
+/* The fall of a town is not the end of its people: the remaining
+ * households walk to the strongest living host, preferring their own
+ * kingdom and near neighbors, and the named cast flees with them. */
+/* Office holders (rulers, monastery patrons) must keep their home inside
+ * the kingdom they serve; they may only flee within their own country. */
+static bool CharacterHoldsOffice(const CcSim *sim, CcId character_id)
+{
+    if (sim == NULL || character_id == 0U) return false;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        if (sim->kingdoms[i].ruler_character_id == character_id ||
+            sim->kingdoms[i].monastery_patron_id == character_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static CcSettlement *FallenTownHost(CcSim *sim, const CcSettlement *ruin,
+                                    CcId kingdom_requirement)
+{
+    if (sim == NULL || ruin == NULL) return NULL;
+    CcSettlement *host = NULL;
+    int32_t host_score = INT32_MIN;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (place == ruin || CcSettlementIsAbandoned(place)) continue;
+        if (kingdom_requirement != 0U &&
+            place->kingdom_id != kingdom_requirement) continue;
+        int32_t score = place->prosperity - place->hunger;
+        if (place->kingdom_id == ruin->kingdom_id) score += 200;
+        for (int32_t route = 0; route < sim->route_count; ++route) {
+            const CcRoute *road = &sim->routes[route];
+            if ((road->from_id == ruin->id && road->to_id == place->id) ||
+                (road->to_id == ruin->id && road->from_id == place->id)) {
+                score += 100;
+                break;
+            }
+        }
+        if (host == NULL || score > host_score) {
+            host = place;
+            host_score = score;
+        }
+    }
+    return host;
+}
+
+static void RelocateFallenTown(CcSim *sim, CcSettlement *ruin,
+                               int32_t households, CcId cause_event_id)
+{
+    if (sim == NULL || ruin == NULL || households <= 0) return;
+    if (sim->schema_version < 47U) return;
+    CcSettlement *host = FallenTownHost(sim, ruin, 0U);
+    if (host == NULL) return;
+    host->population += households;
+    host->hunger = ClampI32(
+        host->hunger + MinimumI32(15, households / 5), 0, 100);
+    int32_t relocated = 0;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        CcCharacter *person = &sim->characters[i];
+        if (person->home_settlement_id != ruin->id) continue;
+        CcSettlement *seat = host;
+        if (CharacterHoldsOffice(sim, person->id) &&
+            host->kingdom_id != ruin->kingdom_id) {
+            seat = FallenTownHost(sim, ruin, ruin->kingdom_id);
+            if (seat == NULL) continue; /* the crown stays in its country */
+        }
+        person->home_settlement_id = seat->id;
+        person->current_settlement_id = seat->id;
+        person->role = CC_CHARACTER_REFUGEE;
+        person->goal = CC_CHARACTER_GOAL_SURVIVE_CRISIS;
+        person->activity = CC_CHARACTER_ACTIVITY_SEEKING_AID;
+        relocated += 1;
+    }
+    if (relocated == 0) return;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "The fall of %s drives %d households and %d named residents to %s.",
+        ruin->name, households, relocated, host->name);
+    (void)PushEvent(
+        sim, CC_EVENT_KINGDOM_ACTION, host->id, host->id,
+        cause_event_id != 0U ? cause_event_id :
+            LatestLocalCause(sim, host->id), households, text);
+}
+
+/* The fall of a town is a contest: while the refugees walk, the strongest
+ * outlaw company claims the ruin as a war camp. Only one camp may be held,
+ * and only while the band is strong; when its strength fails, the ruin
+ * stands open for reclamation again. */
+static bool BanditHoldsSettlement(const CcSim *sim, CcId settlement_id)
+{
+    if (sim == NULL || settlement_id == 0U) return false;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        if (sim->bandits[i].camp_settlement_id == settlement_id) return true;
+    }
+    return false;
+}
+
+static void SeizeFallenTown(CcSim *sim, CcSettlement *ruin,
+                            CcId cause_event_id)
+{
+    if (sim == NULL || ruin == NULL || sim->bandit_count <= 0) return;
+    if (sim->schema_version < 47U) return;
+    if (BanditHoldsSettlement(sim, ruin->id)) return;
+    CcBanditGroup *claimant = NULL;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        CcBanditGroup *bandits = &sim->bandits[i];
+        if (bandits->influence < 50 ||
+            bandits->camp_settlement_id != 0U) continue;
+        if (claimant == NULL || bandits->influence > claimant->influence) {
+            claimant = bandits;
+        }
+    }
+    if (claimant == NULL) return;
+    claimant->camp_settlement_id = ruin->id;
+    claimant->members = ClampI32(claimant->members + 10, 4, 120);
+    claimant->supplies = ClampI32(claimant->supplies + 10, 0, 100);
+    claimant->influence = MaximumI32(
+        claimant->influence,
+        (claimant->members + claimant->supplies) / 2 +
+        MinimumI32(20, claimant->raids_completed / 3));
+    GrowBanditCamp(claimant);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s takes fallen %s as a war camp; its banner hangs over the ruins.",
+        claimant->name, ruin->name);
+    (void)PushEvent(
+        sim, CC_EVENT_KINGDOM_ACTION, claimant->id, ruin->id,
+        cause_event_id != 0U ? cause_event_id :
+            LatestLocalCause(sim, ruin->id), claimant->members, text);
+}
+
+static void ReleaseAbandonedCamps(CcSim *sim)
+{
+    if (sim == NULL) return;
+    if (sim->schema_version < 47U) return;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        CcBanditGroup *bandits = &sim->bandits[i];
+        if (bandits->camp_settlement_id == 0U || bandits->influence >= 30) {
+            continue;
+        }
+        const CcSettlement *camp = CcSimSettlement(
+            sim, bandits->camp_settlement_id);
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(
+            text, sizeof(text),
+            "%s abandons its war camp at %s; the ruin stands open again.",
+            bandits->name,
+            camp != NULL ? camp->name : "the frontier");
+        (void)PushEvent(
+            sim, CC_EVENT_KINGDOM_ACTION, bandits->id,
+            bandits->camp_settlement_id, 0U, bandits->influence, text);
+        bandits->camp_settlement_id = 0U;
+    }
+}
+
 static void UpdateSettlement(CcSim *sim, int32_t index,
                              CcId scriptorium_id)
 {
@@ -5518,6 +5676,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         settlement->population = MaximumI32(
             0, settlement->population + population_delta);
         if (settlement->population < 80 && settlement->hunger >= 65) {
+            int32_t refugee_households = settlement->population;
             CcKingdom *kingdom = KingdomMutable(sim, settlement->kingdom_id);
             if (kingdom != NULL) {
                 kingdom->treasury += settlement->market_coins +
@@ -5545,10 +5704,12 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
                 text, sizeof(text),
                 "%s is abandoned after famine reduces its last households to refugees.",
                 settlement->name);
-            (void)PushEvent(
+            CcEvent *abandoned = PushEvent(
                 sim, CC_EVENT_KINGDOM_ACTION, settlement->id,
                 settlement->id, LatestLocalCause(sim, settlement->id),
                 -1, text);
+            RelocateFallenTown(sim, settlement, refugee_households, abandoned->id);
+            SeizeFallenTown(sim, settlement, abandoned->id);
             return;
         }
     }
@@ -6474,6 +6635,9 @@ static void AdvanceRuins(CcSim *sim)
         CcSettlement *ruin = &sim->settlements[slot];
         if (!CcSettlementIsAbandoned(ruin) ||
             (week + slot * 37) % (8 * 52) != 0) continue;
+        /* A war camp cannot be resettled while its outlaws hold it; the
+         * kingdom must wait for the band to starve. */
+        if (BanditHoldsSettlement(sim, ruin->id)) continue;
 
         CcSettlement *donor = NULL;
         int32_t donor_score = INT32_MIN;
@@ -6705,8 +6869,12 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
     bandits->raid_days_remaining = 2;
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "%s scouts %s for a %s raid from the no-man's-land camp.",
-                   bandits->name, target->name, CcGoodName(good));
+                   "%s scouts %s for a %s raid from %s.",
+                   bandits->name, target->name, CcGoodName(good),
+                   bandits->camp_settlement_id != 0U &&
+                           CcSimSettlement(
+                               sim, bandits->camp_settlement_id) != NULL ?
+                       "its war camp" : "the no-man's-land camp");
     (void)PushEvent(sim, CC_EVENT_BANDIT_RAID_DEPARTED, bandits->id,
                     bandits->route_id, LatestLocalCause(sim, target->id),
                     bandits->members, text);
@@ -6716,6 +6884,7 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
 
 static void AdvanceBanditRaids(CcSim *sim)
 {
+    ReleaseAbandonedCamps(sim);
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         CcBanditGroup *bandits = &sim->bandits[i];
         if (bandits->raid_phase == CC_BANDIT_RAID_IDLE) continue;
@@ -10626,6 +10795,21 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     successor.id = NextId(sim, CC_ENTITY_CHARACTER);
     successor.home_settlement_id = dead.home_settlement_id;
     successor.current_settlement_id = dead.home_settlement_id;
+    /* A heir is not born into a ghost town: when the family seat is a
+     * ruin, the successor is born wherever the family fled. */
+    if (sim->schema_version >= 47U) {
+        const CcSettlement *seat = CcSimSettlement(sim, dead.home_settlement_id);
+        if (seat != NULL && CcSettlementIsAbandoned(seat)) {
+            CcSettlement *fled_to = FallenTownHost(
+                sim, seat,
+                CharacterHoldsOffice(sim, dead.id) ?
+                    seat->kingdom_id : 0U);
+            if (fled_to != NULL) {
+                successor.home_settlement_id = fled_to->id;
+                successor.current_settlement_id = fled_to->id;
+            }
+        }
+    }
     successor.role = dead.role;
     successor.goal = dead.goal;
     successor.activity = CC_CHARACTER_ACTIVITY_WORKING;
@@ -10644,10 +10828,14 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     TransferHistoricalTitles(sim, &dead, &sim->characters[slot]);
 
     char birth_text[CC_EVENT_TEXT_CAPACITY];
-    (void)snprintf(birth_text, sizeof(birth_text),
-                   "%s was born into the family of %s in %s.",
-                   successor.name, dead.name,
-                   home != NULL ? home->name : "a forgotten place");
+    {
+        const CcSettlement *birthplace = CcSimSettlement(
+            sim, successor.home_settlement_id);
+        (void)snprintf(birth_text, sizeof(birth_text),
+                       "%s was born into the family of %s in %s.",
+                       successor.name, dead.name,
+                       birthplace != NULL ? birthplace->name : "a forgotten place");
+    }
     (void)PushEvent(sim, CC_EVENT_CHARACTER_BORN, successor.id,
                     successor.home_settlement_id, 0U, 12, birth_text);
     RecastSituationsAfterDeath(sim, dead.id);
@@ -12590,6 +12778,107 @@ static void AdvanceDragonCampaign(CcSim *sim)
         sim, campaign->origin_settlement_id);
 }
 
+/* While kingdoms war, their subjects learn each other: hard feuds and
+ * hard-won trusts are struck between the people who must fight, trade, and
+ * shelter across the line. Sparse by design - at most one bond every
+ * eighth week of war - so the quiet world stays quiet. */
+static void AdvanceWarSociety(CcSim *sim)
+{
+    if (sim == NULL) return;
+    if (sim->schema_version < 47U) return;
+    int32_t warring[2] = {-1, -1};
+    for (int32_t i = 0; i < sim->kingdom_count && warring[1] < 0; ++i) {
+        for (int32_t j = i + 1; j < sim->kingdom_count; ++j) {
+            if (sim->diplomacy[i][j] == CC_DIPLOMACY_WAR) {
+                warring[0] = i;
+                warring[1] = j;
+                break;
+            }
+        }
+    }
+    if (warring[1] < 0) return;
+    if ((sim->world_seed ^ (uint32_t)sim->current_day) % 8U != 0U) return;
+
+    CcSettlement *stages[CC_MAX_SETTLEMENTS];
+    int32_t stage_count = 0;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) continue;
+        if (place->kingdom_id != sim->kingdoms[warring[0]].id &&
+            place->kingdom_id != sim->kingdoms[warring[1]].id) continue;
+        if (stage_count < CC_MAX_SETTLEMENTS) stages[stage_count++] = place;
+    }
+    if (stage_count == 0) return;
+    CcSettlement *stage = stages[(sim->world_seed / 7U +
+        (uint32_t)sim->current_day / 13U) % (uint32_t)stage_count];
+
+    CcCharacter *candidates[CC_MAX_CHARACTERS];
+    int32_t candidate_count = 0;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        CcCharacter *person = &sim->characters[i];
+        if (person->home_settlement_id != stage->id ||
+            CcCharacterAgeYears(sim, person) < 16) continue;
+        const CcSettlement *home = CcSimSettlement(
+            sim, person->home_settlement_id);
+        if (home == NULL || home->kingdom_id == 0U) continue;
+        if (candidate_count < CC_MAX_CHARACTERS) {
+            candidates[candidate_count++] = person;
+        }
+    }
+    if (candidate_count < 2) return;
+
+    uint32_t roll = (uint32_t)(sim->world_seed ^ (uint32_t)sim->current_day ^
+                               (uint32_t)(stage->id >> 4));
+    int32_t from_index = (int32_t)(roll % (uint32_t)candidate_count);
+    int32_t to_index = (int32_t)((roll / 29U) % (uint32_t)candidate_count);
+    if (to_index == from_index) {
+        to_index = (from_index + 1) % candidate_count;
+    }
+    CcCharacter *from = candidates[from_index];
+    CcCharacter *to = candidates[to_index];
+    if (from == NULL || to == NULL || from == to) return;
+
+    uint32_t bond_roll = (uint32_t)(sim->world_seed ^ (uint32_t)sim->current_day ^
+                                    (uint32_t)(from->id >> 4) ^
+                                    (uint32_t)(to->id >> 4));
+    bool feud = (bond_roll & 1U) != 0U;
+    const CcRelationship *existing = CcSimRelationship(sim, from->id, to->id);
+    if (existing != NULL &&
+        (feud ? existing->affinity <= -3 : existing->affinity >= 3)) {
+        /* Nothing left to say in that direction this week; the quiet
+         * world stays quiet. */
+        return;
+    }
+    CcRelationship *bond = EnsureRelationship(
+        sim, from->id, to->id,
+        feud ? CC_RELATIONSHIP_HISTORY_PROFESSIONAL_RIVALS :
+               CC_RELATIONSHIP_HISTORY_COWORKERS,
+        feud ? -2 : 2, feud ? -2 : 2, 0, 0U);
+    if (bond == NULL) return;
+    if (bond->cause_event_id != 0U) {
+        bond->affinity = ClampI32(bond->affinity + (feud ? -1 : 1), -3, 3);
+        bond->trust = ClampI32(bond->trust + (feud ? -1 : 1), -3, 3);
+    }
+    char text[CC_EVENT_TEXT_CAPACITY];
+    if (feud) {
+        (void)snprintf(
+            text, sizeof(text),
+            "War between %.12s and %.12s: %.16s blames %.16s for the burned granaries.",
+            sim->kingdoms[warring[0]].name,
+            sim->kingdoms[warring[1]].name, from->name, to->name);
+    } else {
+        (void)snprintf(
+            text, sizeof(text),
+            "Under the %.12s war, %.16s and %.16s stand watch together and are glad.",
+            sim->kingdoms[warring[0]].name, from->name, to->name);
+    }
+    CcEvent *event = PushSocialEvent(
+        sim, CC_EVENT_RELATIONSHIP_CHANGED, stage->id, stage->id,
+        LatestLocalCause(sim, stage->id), from->id, to->id, 0U,
+        sim->player.id, feud ? -2 : 2, text);
+    bond->cause_event_id = event->id;
+}
+
 static void UpdateRoyalDiplomacy(CcSim *sim)
 {
     if (sim == NULL || sim->current_day % 28 != 0) return;
@@ -12810,10 +13099,82 @@ static void UpdateThreats(CcSim *sim)
         bandits->supplies = ClampI32(
             bandits->supplies - MaximumI32(1, bandits->members / 40),
             0, 100);
+        if (sim->schema_version >= 47U && route != NULL &&
+            route->smuggler_route) {
+            /* Night-road tolls keep a camp fed without charters: the tolls
+             * the bands already take in the story become their upkeep. */
+            bandits->supplies = ClampI32(bandits->supplies + 2, 0, 100);
+        }
         bandits->influence = ClampI32(
             (bandits->members + bandits->supplies) / 2 +
             MinimumI32(20, bandits->raids_completed / 3), 0, 100);
         GrowBanditCamp(bandits);
+        /* A strong idle band hunts on its own: when supplies run low it
+         * raids, as it would under the player's charter. A war camp
+         * extends its reach to every road that touches the ruin. */
+        if (sim->schema_version >= 47U &&
+            bandits->raid_phase == CC_BANDIT_RAID_IDLE &&
+            bandits->members >= 12 && bandits->supplies < 30 &&
+            (sim->world_seed ^ (uint32_t)sim->current_day) % 4U == 0U) {
+            CcSettlement *target = NULL;
+            int32_t best_score = INT32_MIN;
+            for (int32_t route_index = 0;
+                 route_index < sim->route_count; ++route_index) {
+                const CcRoute *candidate = &sim->routes[route_index];
+                bool from_camp =
+                    bandits->camp_settlement_id != 0U &&
+                    (candidate->from_id == bandits->camp_settlement_id ||
+                     candidate->to_id == bandits->camp_settlement_id);
+                bool from_route = candidate->id == bandits->route_id;
+                if (!from_camp && !from_route) continue;
+                for (int32_t endpoint = 0; endpoint < 2; ++endpoint) {
+                    CcSettlement *place = CcSimSettlementMutable(
+                        sim, endpoint == 0 ? candidate->from_id :
+                                             candidate->to_id);
+                    if (place == NULL || CcSettlementIsAbandoned(place)) {
+                        continue;
+                    }
+                    int32_t score = -place->security * 2;
+                    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+                        score += place->stock[good];
+                    }
+                    if (score > best_score) {
+                        target = place;
+                        best_score = score;
+                    }
+                }
+            }
+            if (target != NULL) {
+                CcGood good = CC_GOOD_FOOD;
+                for (int32_t candidate = 1; candidate < CC_GOOD_COUNT;
+                     ++candidate) {
+                    if (target->stock[candidate] > target->stock[good]) {
+                        good = (CcGood)candidate;
+                    }
+                }
+                if (target->stock[good] >= 4) {
+                    bandits->raid_phase = CC_BANDIT_RAID_SCOUTING;
+                    bandits->raid_target_id = target->id;
+                    bandits->raid_good = good;
+                    bandits->raid_quantity = 0;
+                    bandits->raid_days_remaining = 2;
+                    char text[CC_EVENT_TEXT_CAPACITY];
+                    (void)snprintf(
+                        text, sizeof(text),
+                        "%s scouts %s for a %s raid from %s.",
+                        bandits->name, target->name, CcGoodName(good),
+                        bandits->camp_settlement_id != 0U &&
+                                CcSimSettlement(
+                                    sim, bandits->camp_settlement_id) != NULL ?
+                            "its war camp" : "the no-man's-land camp");
+                    (void)PushEvent(
+                        sim, CC_EVENT_BANDIT_RAID_DEPARTED, bandits->id,
+                        bandits->route_id,
+                        LatestLocalCause(sim, target->id),
+                        bandits->members, text);
+                }
+            }
+        }
         CcRoute *mutable_route = RouteMutable(sim, bandits->route_id);
         if (mutable_route != NULL && sim->current_day % 28 == 0) {
             mutable_route->security = ClampI32(mutable_route->security -
@@ -13950,6 +14311,7 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
             UpdateThreats(sim);
             UpdateRoutesAndGovernments(sim);
             UpdateRoyalDiplomacy(sim);
+            AdvanceWarSociety(sim);
             PlanTrade(sim);
             GenerateSituations(sim);
             PlanGoblinTribute(sim);
@@ -17900,13 +18262,15 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 42U ||
                          sim->schema_version == 43U ||
                          sim->schema_version == 44U ||
-                         sim->schema_version == 45U;
+                         sim->schema_version == 45U ||
+                         sim->schema_version == 46U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (sim->schema_version == 45U && sim->generator_version == 25U) ||
+        (sim->schema_version == 46U && sim->generator_version == 25U) ||
         (sim->schema_version == 44U && sim->generator_version == 25U) ||
         (sim->schema_version == 43U && sim->generator_version == 25U) ||
         (sim->schema_version == 42U && sim->generator_version == 25U) ||
@@ -18809,6 +19173,11 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 (bandits->service_mask & ~known_services) != 0U ||
                 ServiceMaskCount(bandits->service_mask) >
                     CcBanditCampServiceCapacity(bandits->camp_size) ||
+                (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+                 (bandits->camp_settlement_id != 0U) !=
+                     (CcSimSettlement(sim, bandits->camp_settlement_id) != NULL &&
+                      CcSettlementIsAbandoned(
+                          CcSimSettlement(sim, bandits->camp_settlement_id)))) ||
                 bandits->raid_phase < CC_BANDIT_RAID_IDLE ||
                 bandits->raid_phase > CC_BANDIT_RAID_RETURNING ||
                 bandits->raids_completed < 0 ||
@@ -20161,6 +20530,9 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->raid_good); HASH_VALUE(item->raid_quantity);
             HASH_VALUE(item->raid_days_remaining);
             HASH_VALUE(item->raids_completed);
+            if (sim->schema_version >= 47U) {
+                HASH_VALUE(item->camp_settlement_id);
+            }
         }
         HASH_VALUE(sim->last_bandit_level[i]);
     }

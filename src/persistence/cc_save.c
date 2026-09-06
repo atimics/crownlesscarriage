@@ -236,6 +236,9 @@ static bool EnsureRealmColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "bandit_group", "raids_completed",
             "ALTER TABLE bandit_group ADD COLUMN raids_completed INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "bandit_group", "camp_settlement_id",
+            "ALTER TABLE bandit_group ADD COLUMN camp_settlement_id INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity);
 }
 
@@ -1034,7 +1037,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " camp_size INTEGER NOT NULL, service_mask INTEGER NOT NULL,"
         " raid_phase INTEGER NOT NULL, raid_target_id INTEGER NOT NULL,"
         " raid_good INTEGER NOT NULL, raid_quantity INTEGER NOT NULL,"
-        " raid_days_remaining INTEGER NOT NULL, raids_completed INTEGER NOT NULL);";
+        " raid_days_remaining INTEGER NOT NULL, raids_completed INTEGER NOT NULL,"
+        " camp_settlement_id INTEGER NOT NULL DEFAULT 0);";
     const char *situation_schema =
         "CREATE TABLE IF NOT EXISTS situation ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, kind INTEGER NOT NULL,"
@@ -2269,7 +2273,7 @@ static bool SaveThreats(sqlite3 *database, const CcSim *sim,
                         char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "INSERT INTO bandit_group VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+    if (!Prepare(database, "INSERT INTO bandit_group VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         const CcBanditGroup *b = &sim->bandits[i];
@@ -2285,6 +2289,7 @@ static bool SaveThreats(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 14, b->raid_quantity);
         BindInt(statement, 15, b->raid_days_remaining);
         BindInt(statement, 16, b->raids_completed);
+        BindId(statement, 17, b->camp_settlement_id);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -4435,6 +4440,7 @@ static bool ReadThreats(sqlite3 *database, CcSim *sim,
         b->raid_quantity = sqlite3_column_int(statement, 13);
         b->raid_days_remaining = sqlite3_column_int(statement, 14);
         b->raids_completed = sqlite3_column_int(statement, 15);
+        b->camp_settlement_id = (CcId)sqlite3_column_int64(statement, 16);
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -5906,8 +5912,11 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     if ((legacy_version == 38U || legacy_version == 39U ||
          legacy_version == 40U || legacy_version == 41U ||
          legacy_version == 42U || legacy_version == 43U ||
-         legacy_version == 44U || legacy_version == 45U) &&
+         legacy_version == 44U || legacy_version == 45U ||
+         legacy_version == 46U) &&
         sim->generator_version == 25U) {
+        /* Schema 47 adds bandit war camps (camp_settlement_id, default
+         * 0 = no camp); older saves need no data migration. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }
