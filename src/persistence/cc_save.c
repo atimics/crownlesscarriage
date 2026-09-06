@@ -5913,10 +5913,12 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
          legacy_version == 40U || legacy_version == 41U ||
          legacy_version == 42U || legacy_version == 43U ||
          legacy_version == 44U || legacy_version == 45U ||
-         legacy_version == 46U) &&
+         legacy_version == 46U || legacy_version == 47U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
-         * 0 = no camp); older saves need no data migration. */
+         * 0 = no camp); schema 48 adds crisis-contested successions
+         * (The Claim); neither adds new fields, so older saves need
+         * no data migration. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }
