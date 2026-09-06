@@ -62,10 +62,12 @@ out/build/release/crownless_agent_sweep --seeds 8 --years 10
 
 The output compares population, prosperity, hunger, active settlements, and
 closed routes, and records repairs, failed repair attempts, travel, accepted
-jobs, and completed jobs. The agent now accepts route-repair charters before
-repairing them, so repair rewards can fund later work. Relief-quest ranking and
-cargo delivery should remain separate policies rather than being conflated with
-road repair.
+jobs, completed jobs, and combat decisions/outcomes. The agent now accepts
+route-repair charters before repairing them, so repair rewards can fund later
+work. Relief-quest ranking and cargo delivery remain separate policies rather
+than being conflated with road repair. During a journey encounter, it fights
+moderate danger with a positive bargain value, negotiates high danger or poor
+value, and withdraws from low-value encounters.
 
 The metrics also include political and faction exposure:
 
