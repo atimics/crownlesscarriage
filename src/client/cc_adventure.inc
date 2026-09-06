@@ -914,7 +914,7 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
     CcOverlayDrawText(detail, 24, 67, AdventureTextSize(12), MUTED);
 }
 
-static void DrawAdventurePromises(const CcSim *sim, const LocalState *local, int32_t selected)
+static void DrawAdventurePromises(const CcSim *sim, int32_t selected)
 {
     Rectangle panel = AdventurePanel();
     panel.height -= 60.0f;
@@ -929,7 +929,9 @@ static void DrawAdventurePromises(const CcSim *sim, const LocalState *local, int
     }
     bool accepted = promise->id == sim->player.accepted_situation_id;
     bool offer = CcSimSituationCanAccept(sim, promise);
-    CcOverlayDrawText(accepted ? "Accepted promise" : offer ? "Offer" : "Lead",
+    CcOverlayDrawText(accepted ? "Accepted promise" :
+        offer ? TextFormat("%s — posted day %d",
+            SituationPostingKind(promise->kind), promise->created_day) : "Lead",
         x, y, AdventureTextSize(15), accepted ? TEAL : CC_GOLD);
     y += 38;
     CcOverlayDrawText(SituationTitle(promise->kind), x, y, AdventureTextSize(24), INK);
@@ -943,17 +945,17 @@ static void DrawAdventurePromises(const CcSim *sim, const LocalState *local, int
                 CcGoodName(promise->good), promise->progress, promise->quantity), x, y, AdventureTextSize(17), INK);
             y += 38;
         }
-        CcOverlayDrawText(TextFormat("Due day %d  /  Reward %" PRId64 " crowns", promise->deadline_day, promise->reward),
+        CcOverlayDrawText(accepted ?
+            TextFormat("Promised day %d  /  due day %d  /  reward %" PRId64 " crowns",
+                promise->created_day, promise->deadline_day, promise->reward) :
+            TextFormat("Due day %d  /  reward %" PRId64 " crowns",
+                promise->deadline_day, promise->reward),
             x, y, AdventureTextSize(17), TEAL);
         y += 42;
     }
     char next[192] = "";
     SituationNextAction(sim, promise, next, sizeof(next));
-    if (offer && !accepted && !local->open_world &&
-        !CcClientPromiseCanBeAccepted(local->market_interior, GridDistance(LocalPosition(local), LOCAL_NOTICE))) {
-        (void)snprintf(next, sizeof(next), "Visit the %s to accept this promise.",
-            CcLocalPlaceProfileForSettlement(CcSimSettlement(sim, sim->player.location_id))->notice_board);
-    }
+    if (offer && !accepted) SituationFindLine(sim, promise, next, sizeof(next));
     (void)AdventureWrap(next, x, y, width, AdventureTextSize(17), MUTED);
 }
 

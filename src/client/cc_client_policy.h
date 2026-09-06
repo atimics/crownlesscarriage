@@ -71,8 +71,6 @@ bool CcClientRoadHasNextBranch(int32_t branch_ordinal,
 bool CcClientMapCommandEnabled(bool viewing_map, bool road_local,
                                bool market_interior,
                                float carriage_distance);
-bool CcClientPromiseCanBeAccepted(bool market_interior,
-                                  float notice_distance);
 bool CcClientInteractionActivated(bool requested, float distance,
                                   float maximum_distance);
 CcClientCampaignAccess CcClientCampaignAccessFor(bool normal_play,
