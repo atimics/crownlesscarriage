@@ -8387,8 +8387,16 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     ContextAction pressed_action = PressedContextAction(
         sim, local, *view, *selected, *selected_situation);
     if (pressed_action.kind != CONTEXT_ACTION_NONE && !pressed_action.enabled) {
-        (void)snprintf(message, message_capacity,
-            "%s Double-tap [N] to return to the caravan.", pressed_action.detail);
+        if (*view == VIEW_SITUATIONS &&
+            pressed_action.kind == CONTEXT_ACTION_ACCEPT_PROMISE) {
+            /* The papers are open away from the board; explain instead of the
+               caravan tip, which the promise view cannot act on. */
+            (void)snprintf(message, message_capacity,
+                "Visit the local board to make that promise.");
+        } else {
+            (void)snprintf(message, message_capacity,
+                "%s Double-tap [N] to return to the caravan.", pressed_action.detail);
+        }
         return;
     }
     ContextActionKind context_action = pressed_action.kind;
@@ -12191,7 +12199,7 @@ int main(int argc, char **argv)
         }
         if (!persistence_blocked && !capture_gameplay_reel &&
             !capture_road_departure &&
-            (view == VIEW_LOCAL || view == VIEW_ROADS) &&
+            (view == VIEW_LOCAL || view == VIEW_ROADS || view == VIEW_SITUATIONS) &&
             !LocalCombatActive(&local) &&
             (view == VIEW_ROADS || message_age < (local.adventure_ui ? 7.0f : 2.2f)) &&
             message[0] != '\0' &&
@@ -12204,7 +12212,8 @@ int main(int argc, char **argv)
             float opacity = message_age > 1.6f ?
                 1.0f - (message_age - 1.6f) / 0.6f : 1.0f;
             float x = ((float)GetScreenWidth() - (float)width) * 0.5f;
-            float toast_y = (float)GetScreenHeight() - 107.0f;
+            float toast_y = (float)GetScreenHeight() -
+                (view == VIEW_SITUATIONS ? 128.0f : 107.0f);
             DrawRectangleRounded((Rectangle){x, toast_y,
                                               (float)width, 28.0f},
                                  0.22f, 5,
