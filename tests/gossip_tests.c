@@ -285,14 +285,19 @@ static void CheckStorySlotReuse(void)
         CC_CHECK(sim.gossip[i].event_id != first);
     }
     for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
-        if (sim.gossip_carriers[i].id == sim.player.id) {
-            CC_CHECK(sim.gossip_carriers[i].stories == 0U);
+        if (sim.gossip_carriers[i].id != sim.player.id) continue;
+        /* The flood never reaches the player; their own town's notices may. */
+        for (int32_t slot = 0; slot < CC_MAX_GOSSIP; ++slot) {
+            if ((sim.gossip_carriers[i].stories & (UINT32_C(1) << (uint32_t)slot)) == 0U) continue;
+            CC_CHECK(strcmp(sim.gossip[slot].text, "A fresh eastern account.") != 0);
         }
     }
     Depart(sim.settlements[1].id);
     Arrive();
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
-        CC_CHECK((sim.gossip[i].settlement_mask & 2U) == 0U);
+        /* No flooded account reaches the next town; carried notices may. */
+        CC_CHECK(strcmp(sim.gossip[i].text, "A fresh eastern account.") != 0 ||
+                 (sim.gossip[i].settlement_mask & 2U) == 0U);
     }
     CheckValid();
 }
@@ -333,7 +338,7 @@ static void CheckLocalRumorText(void)
     CC_CHECK(Account(local)->heard_day > 0);
     game.sim = sim;
     CC_CHECK(CcMetagameExecute(&game, "archives", output, sizeof(output)));
-    CC_CHECK(strstr(output, "Accounts heard and awaiting ink: 1") != NULL);
+    CC_CHECK(strstr(output, "Accounts heard and awaiting ink:") != NULL);
     CC_CHECK(strstr(output, "Heard from Town residents") != NULL);
     CC_CHECK(strstr(output, "The local guild paints its hall.") != NULL);
 }
@@ -436,6 +441,15 @@ static void CheckBiasAndDecay(void)
     printf("Loyal account: %s\nFearful account: %s\n", loyal_text, fearful_text);
 }
 
+static int32_t StoryOffset(const CcSim *s, CcId carrier, CcId event_id)
+{
+    for (int32_t o = 0; o < CC_MAX_GOSSIP; ++o) {
+        const CcGossip *story = CcSimPersonalGossip(s, carrier, o, NULL);
+        if (story != NULL && story->event_id == event_id) return o;
+    }
+    return -1;
+}
+
 static void CheckPersonalAccounts(void)
 {
     Prepare();
@@ -447,21 +461,26 @@ static void CheckPersonalAccounts(void)
     CcId report = AddAccount(sim.settlements[0].id, "Raiders took three sacks from the western granary.");
     CcSimRefreshCharacterGossip(&sim);
     const CcGossipVersion *version = NULL;
-    CC_CHECK(CcSimPersonalGossip(&sim, traveller->id, 0, &version)->event_id == report);
+    int32_t report_offset = StoryOffset(&sim, traveller->id, report);
+    CC_CHECK(report_offset >= 0);
+    CcSimPersonalGossip(&sim, traveller->id, report_offset, &version);
     CC_CHECK(CcSimPersonalGossip(&sim, neighbour->id, 0, NULL) == NULL);
     CC_CHECK(version != NULL && version->retellings == 1);
     CcSpeech original;
-    CC_CHECK(CcSpeechGossip(&sim, traveller->id, 0, false, &original));
+    CC_CHECK(CcSpeechGossip(&sim, traveller->id, report_offset, false, &original));
     CC_CHECK(original.speaker_id == traveller->id && original.source_event_id == report);
     CC_CHECK(strstr(original.text, "three sacks") != NULL);
     traveller->current_settlement_id = neighbour->current_settlement_id;
     CcSimRefreshCharacterGossip(&sim);
     CcSpeech carried, source;
-    CC_CHECK(CcSpeechGossip(&sim, traveller->id, 0, false, &carried));
+    report_offset = StoryOffset(&sim, traveller->id, report);
+    CC_CHECK(CcSpeechGossip(&sim, traveller->id, report_offset, false, &carried));
     CC_CHECK(strcmp(carried.text, original.text) == 0);
-    CC_CHECK(CcSpeechGossip(&sim, neighbour->id, 0, true, &source));
+    report_offset = StoryOffset(&sim, neighbour->id, report);
+    CC_CHECK(report_offset >= 0);
+    CC_CHECK(CcSpeechGossip(&sim, neighbour->id, report_offset, true, &source));
     CC_CHECK(strstr(source.text, traveller->name) != NULL);
-    CC_CHECK(CcSpeechGossip(&sim, neighbour->id, 0, false, &carried));
+    CC_CHECK(CcSpeechGossip(&sim, neighbour->id, report_offset, false, &carried));
     CC_CHECK(strstr(carried.text, "five sacks") != NULL);
     CcCommand talk = {.kind = CC_COMMAND_EXCHANGE_GOSSIP, .target_id = neighbour->id};
     uint64_t before = CcSimHash(&sim);
@@ -474,7 +493,9 @@ static void CheckPersonalAccounts(void)
     CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
     CC_CHECK(journal != NULL);
     CC_CHECK(CcJournalApply(journal, &sim, &talk, error, sizeof(error)));
-    CC_CHECK(CcSimPersonalGossip(&sim, sim.player.id, 0, &version)->event_id == report);
+    report_offset = StoryOffset(&sim, sim.player.id, report);
+    CC_CHECK(report_offset >= 0);
+    CcSimPersonalGossip(&sim, sim.player.id, report_offset, &version);
     CC_CHECK(version->source_character_id == neighbour->id);
     before = CcSimHash(&sim);
     CC_CHECK(CcJournalApply(journal, &sim, &talk, error, sizeof(error)));
@@ -483,7 +504,7 @@ static void CheckPersonalAccounts(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&restored) == before);
     CcSpeech saved;
-    CC_CHECK(CcSpeechGossip(&restored, neighbour->id, 0, false, &saved));
+    CC_CHECK(CcSpeechGossip(&restored, neighbour->id, report_offset, false, &saved));
     CC_CHECK(strcmp(saved.text, carried.text) == 0 && saved.audio_key == carried.audio_key);
     CC_CHECK(CcSimPersonalGossip(&restored, neighbour->id, -1, NULL) == NULL);
     CC_CHECK(CcSimPersonalGossip(&restored, neighbour->id, CC_MAX_GOSSIP, NULL) == NULL);
@@ -503,9 +524,126 @@ static void CheckPersonalAccounts(void)
     (void)remove(path);
 }
 
+/* A notice posted on a board is a fact: it enters the ledger at the offer
+   settlement, residents carry it, and travelers move it between towns. */
+static void CheckNoticePosting(void)
+{
+    Prepare();
+    int32_t offer = -1;
+    for (int32_t i = 0; i < sim.situation_count; ++i) {
+        if (sim.situations[i].status == CC_SITUATION_ACTIVE &&
+            sim.situations[i].kind != CC_SITUATION_MONSTER_EXPEDITION &&
+            CcSimSituationCanAccept(&sim, &sim.situations[i]) &&
+            CcSimSituationOfferSettlementId(&sim, &sim.situations[i]) != 0U) {
+            offer = i;
+            break;
+        }
+    }
+    CC_CHECK(offer >= 0);
+    CcId town = CcSimSituationOfferSettlementId(&sim, &sim.situations[offer]);
+    CcSimRefreshCharacterGossip(&sim);
+    bool posted = false;
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        const CcEvent *notice = CcSimEvent(&sim, sim.gossip[i].event_id);
+        posted = posted || (sim.gossip[i].event_id != 0U &&
+            sim.gossip[i].kind == CC_EVENT_NOTICE_POSTED &&
+            notice != NULL &&
+            notice->subject_id == sim.situations[offer].id);
+    }
+    CC_CHECK(posted);
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        const CcEvent *notice = CcSimEvent(&sim, sim.gossip[i].event_id);
+        if (sim.gossip[i].event_id == 0U ||
+            sim.gossip[i].kind != CC_EVENT_NOTICE_POSTED || notice == NULL ||
+            notice->subject_id != sim.situations[offer].id) continue;
+        CC_CHECK(sim.gossip[i].origin_id == town);
+        CC_CHECK(strstr(sim.gossip[i].text, "posts a notice") != NULL);
+    }
+    /* The posting stays a single fact across further gatherings. */
+    uint64_t before = CcSimHash(&sim);
+    CcSimRefreshCharacterGossip(&sim);
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(CcSimHash(&sim) == before);
+    /* A resident of the offer town carries the posting and can speak it. */
+    CcCharacter *resident = NULL;
+    for (int32_t i = 0; i < sim.character_count; ++i) {
+        if (sim.characters[i].current_settlement_id == town &&
+            sim.characters[i].activity != CC_CHARACTER_ACTIVITY_TRAVELLING &&
+            CcCharacterAgeYears(&sim, &sim.characters[i]) >= 16) {
+            resident = &sim.characters[i];
+            break;
+        }
+    }
+    CC_CHECK(resident != NULL);
+    bool carried = false;
+    for (int32_t o = 0; o < CC_MAX_GOSSIP; ++o) {
+        const CcGossip *story = CcSimPersonalGossip(&sim, resident->id, o, NULL);
+        const CcEvent *notice = story != NULL ? CcSimEvent(&sim, story->event_id) : NULL;
+        carried = carried || (story != NULL &&
+            story->kind == CC_EVENT_NOTICE_POSTED && notice != NULL &&
+            notice->subject_id == sim.situations[offer].id);
+    }
+    CC_CHECK(carried);
+}
+
+/* Telling a story is a command: the told bits persist, the next untold story
+   is offered first, and a ledger cannot claim a story nobody carries. */
+static void CheckToldStories(void)
+{
+    Prepare();
+    CcCharacter *speaker = &sim.characters[0];
+    speaker->current_settlement_id = sim.settlements[0].id;
+    speaker->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    CcId first = AddAccount(sim.settlements[0].id, "Raiders took three sacks from the western granary.");
+    CcId second = AddAccount(sim.settlements[0].id, "The beacon fire burned all night.");
+    CcSimRefreshCharacterGossip(&sim);
+    const CcGossipVersion *version = NULL;
+    int32_t slot = CcSimNextUntoldStory(&sim, speaker->id, &version);
+    /* The offer-town posting is the freshest fact and is offered first. */
+    CC_CHECK(slot >= 0 && sim.gossip[slot].kind == CC_EVENT_NOTICE_POSTED);
+    CC_CHECK(!CcSimStoryTold(&sim, speaker->id, slot));
+    CcCommand heard = {.kind = CC_COMMAND_HEARD_STORY,
+        .target_id = speaker->id, .amount = slot};
+    CC_CHECK(CcSimApply(&sim, &heard, error, sizeof(error)));
+    CC_CHECK(CcSimStoryTold(&sim, speaker->id, slot));
+    /* With the posting told, the newer account comes before the older one. */
+    int32_t next = CcSimNextUntoldStory(&sim, speaker->id, &version);
+    CC_CHECK(next >= 0 && sim.gossip[next].event_id == second);
+    CC_CHECK(!CcSimStoryTold(&sim, speaker->id, next));
+    CC_CHECK(CcSimApply(&sim, &((CcCommand){.kind = CC_COMMAND_HEARD_STORY,
+        .target_id = speaker->id, .amount = next}), error, sizeof(error)));
+    CC_CHECK(CcSimNextUntoldStory(&sim, speaker->id, &version) >= 0 &&
+        sim.gossip[CcSimNextUntoldStory(&sim, speaker->id, NULL)].event_id == first);
+    /* The telling is journalled; the save round trip keeps the bits. */
+    const char *path = "told-stories.ccsave";
+    (void)remove(path);
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalApply(journal, &sim, &heard, error, sizeof(error)));
+    uint64_t told_hash = CcSimHash(&sim);
+    CcJournalAbandon(&journal);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&restored) == told_hash);
+    CC_CHECK(CcSimStoryTold(&restored, speaker->id, slot));
+    CC_CHECK(CcSimStoryTold(&restored, speaker->id, next));
+    CC_CHECK(!CcSimStoryTold(&restored, speaker->id, CcSimNextUntoldStory(
+        &restored, speaker->id, NULL)));
+    /* A told bit without a carried story is rejected. */
+    for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
+        if (sim.gossip_carriers[i].id == speaker->id) {
+            sim.gossip_carriers[i].told_player |=
+                ~(sim.gossip_carriers[i].stories);
+        }
+    }
+    CC_CHECK(!CcSimValidate(&sim, error, sizeof(error)));
+    (void)remove(path);
+}
+
 int main(void)
 {
     CheckPersonalAccounts();
+    CheckNoticePosting();
+    CheckToldStories();
     CheckLocalAndRemoteAccounts();
     CheckArrivalAndLateRecording();
     CheckCourierRelay();

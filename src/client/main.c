@@ -111,7 +111,7 @@ typedef struct LocalState {
     uint64_t conversation_object;
     char conversation_name[64];
     char conversation_line[192];
-    int32_t conversation_gossip_offset;
+    int32_t conversation_gossip_slot;
     bool conversation_gossip_source;
     Vector3 conversation_position;
     int32_t book_page;
@@ -1159,6 +1159,8 @@ static void ResetLocalState(LocalState *local)
     local->interaction = (CcInteractionState){0};
     local->card_page = 0;
     local->carriage_stopped = false;
+    local->conversation_gossip_slot = -1;
+    local->conversation_gossip_source = false;
     local->conversation_name[0] = '\0';
     local->conversation_line[0] = '\0';
     local->trade_quantity = 1;
@@ -4179,7 +4181,7 @@ static ContextActionSet BuildContextActions(
     }
     if (local->adventure_ui && view == VIEW_CHARACTER && local->conversation_situation_id == 0U) {
         const CcGossip *story = CcSimPersonalGossip(sim, local->conversation_character_id,
-            local->conversation_gossip_offset, NULL);
+            0, NULL);
         if (story != NULL) {
             /* One chat verb draws the fragments in turn: the account, who told
                them, then the next account. No interrogation buttons. */
@@ -5954,8 +5956,21 @@ static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
     const CcSituation *situation = CcSimSituation(sim, local->conversation_situation_id);
     const CcCharacter *person = CcSimCharacter(sim, local->conversation_character_id);
     if (CcSpeechCharacter(sim, situation, person, speech)) return true;
-    if (CcSpeechGossip(sim, local->conversation_character_id, local->conversation_gossip_offset,
-        local->conversation_gossip_source, speech)) return true;
+    const CcGossipCarrier *carrier = CcSimGossipCarrier(
+        sim, local->conversation_character_id);
+    int32_t slot = local->conversation_gossip_slot;
+    if (slot < 0) {
+        const CcGossipVersion *version = NULL;
+        slot = CcSimNextUntoldStory(sim, local->conversation_character_id,
+                                    &version);
+    }
+    if (slot >= 0 && carrier != NULL) {
+        const CcGossip *story = CcSimGossipStory(sim, slot);
+        if (story != NULL &&
+            CcSpeechStory(sim, local->conversation_character_id, story,
+                &carrier->versions[slot], local->conversation_gossip_source,
+                speech)) return true;
+    }
     const CcLocalPlaceProfile *place = CcLocalPlaceProfileForSettlement(
         CcSimSettlement(sim, sim->player.location_id));
     const char *name = person != NULL ? person->name :
@@ -8696,20 +8711,45 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 if (ClientKeyPressed(KEY_ONE + i)) context_action = replies.items[i].kind;
             if (context_action == CONTEXT_ACTION_CLOSE_VIEW) { *view = VIEW_LOCAL; return; }
             if (context_action == CONTEXT_ACTION_GOSSIP_CHAT) {
-                if (!local->conversation_gossip_source) {
-                    local->conversation_gossip_source = true;
-                } else {
+                if (local->conversation_gossip_slot >= 0 &&
+                    local->conversation_gossip_source) {
+                    /* The source was drawn; move to the next untold account. */
+                    const CcGossipVersion *version = NULL;
+                    int32_t next = CcSimNextUntoldStory(
+                        sim, local->conversation_character_id, &version);
+                    local->conversation_gossip_slot = next;
                     local->conversation_gossip_source = false;
-                    local->conversation_gossip_offset += 1;
-                    if (CcSimPersonalGossip(sim, local->conversation_character_id,
-                        local->conversation_gossip_offset, NULL) == NULL)
-                        local->conversation_gossip_offset = 0;
+                    if (next < 0) {
+                        (void)snprintf(message, message_capacity,
+                            "That is all I have that would interest you.");
+                    }
+                } else {
+                    /* Draw who told them, and mark the story told. */
+                    const CcGossipVersion *version = NULL;
+                    int32_t slot = local->conversation_gossip_slot >= 0 ?
+                        local->conversation_gossip_slot :
+                        CcSimNextUntoldStory(
+                            sim, local->conversation_character_id, &version);
+                    if (slot < 0) {
+                        (void)snprintf(message, message_capacity,
+                            "That is all I have that would interest you.");
+                    } else {
+                        local->conversation_gossip_slot = slot;
+                        local->conversation_gossip_source = true;
+                        CcCommand heard = {
+                            .kind = CC_COMMAND_HEARD_STORY,
+                            .target_id = local->conversation_character_id,
+                            .amount = slot
+                        };
+                        (void)ApplyCommand(*journal, sim, heard,
+                                          message, message_capacity);
+                    }
                 }
             }
             if (context_action == CONTEXT_ACTION_GOSSIP_SHARE) {
                 (void)ApplyCommand(*journal, sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
                     .target_id = local->conversation_character_id}, message, message_capacity);
-                local->conversation_gossip_offset = 0;
+                local->conversation_gossip_slot = -1;
                 local->conversation_gossip_source = false;
             }
             if (context_action == CONTEXT_ACTION_GOSSIP_CHAT ||
@@ -10224,7 +10264,14 @@ static void UpdateFieldVoices(const CcSim *sim, LocalState *local, ClientView vi
         const CcInteractionTarget *target = &local->interactions.targets[i];
         if (target->key.kind != CC_INTERACTION_PERSON || !target->visible || !target->available ||
             GridDistance(LocalPosition(local), (Vector2){target->x, target->z}) > 2.5f) continue;
-        if (CcSpeechGossip(sim, target->character_id, 0, false, &speech) ||
+        const CcGossipVersion *heard_version = NULL;
+        int32_t heard_slot = CcSimNextUntoldStory(sim, target->character_id,
+                                                  &heard_version);
+        const CcGossip *heard_story = heard_slot >= 0 ?
+            CcSimGossipStory(sim, heard_slot) : NULL;
+        if ((heard_slot >= 0 && heard_story != NULL && heard_version != NULL &&
+             CcSpeechStory(sim, target->character_id, heard_story,
+                           heard_version, false, &speech)) ||
             CcSpeechGreeting(sim, sim->player.location_id, target->key.object,
             target->name, place->primary_hall, &speech)) {
             const CcCharacter *person = CcSimCharacter(sim, target->character_id);

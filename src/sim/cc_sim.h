@@ -56,7 +56,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 47
+#define CC_SIM_SCHEMA_VERSION 48
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -329,7 +329,8 @@ typedef enum CcEventKind {
     CC_EVENT_DRAGON_TERRITORY_LOST = 129,
     CC_EVENT_ROYAL_CARRIAGE_BLOCKED = 130,
     CC_EVENT_ROYAL_CARRIAGE_REROUTED = 131,
-    CC_EVENT_PARTY_WIPED = 132
+    CC_EVENT_PARTY_WIPED = 132,
+    CC_EVENT_NOTICE_POSTED = 133
 } CcEventKind;
 
 typedef struct CcArchives {
@@ -370,6 +371,7 @@ typedef struct CcGossip {
 typedef struct CcGossipCarrier {
     CcId id;
     uint32_t stories;
+    uint32_t told_player;
     CcGossipVersion versions[CC_MAX_GOSSIP];
 } CcGossipCarrier;
 
@@ -445,7 +447,8 @@ typedef enum CcCommandKind {
     CC_COMMAND_SWAP_PONY = 45,
     CC_COMMAND_LEAVE_PONY = 46,
     CC_COMMAND_PARTY_WIPE = 47,
-    CC_COMMAND_EXCHANGE_GOSSIP = 48
+    CC_COMMAND_EXCHANGE_GOSSIP = 48,
+    CC_COMMAND_HEARD_STORY = 49
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1675,6 +1678,10 @@ int32_t CcSimGossipCarrierCapacity(const CcSim *sim);
 const CcGossipCarrier *CcSimGossipCarrier(const CcSim *sim, CcId id);
 const CcGossip *CcSimPersonalGossip(const CcSim *sim, CcId id, int32_t offset,
                                   const CcGossipVersion **version);
+const CcGossip *CcSimGossipStory(const CcSim *sim, int32_t slot);
+int32_t CcSimNextUntoldStory(const CcSim *sim, CcId id,
+                             const CcGossipVersion **version);
+bool CcSimStoryTold(const CcSim *sim, CcId id, int32_t slot);
 void CcSimRefreshCharacterGossip(CcSim *sim);
 void CcGossipText(const CcSim *sim, const CcGossip *story,
                   const CcGossipVersion *version, char *text, size_t capacity);

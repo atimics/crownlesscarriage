@@ -157,7 +157,9 @@ static bool EnsurePlayerKnowledgeColumns(sqlite3 *database,
                                          char *error,
                                          size_t error_capacity)
 {
-    return EnsureColumn(database, "map_object", "recorded_from_kingdom_id",
+    return EnsureColumn(database, "gossip_carrier", "told_player",
+            "ALTER TABLE gossip_carrier ADD COLUMN told_player INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) && EnsureColumn(database, "map_object", "recorded_from_kingdom_id",
             "ALTER TABLE map_object ADD COLUMN recorded_from_kingdom_id INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
         EnsureColumn(database, "map_object", "recorded_to_kingdom_id",
@@ -1370,7 +1372,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " settlement_mask INTEGER NOT NULL, recorded INTEGER NOT NULL,"
         " text TEXT NOT NULL, heard_from TEXT NOT NULL, kind INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS gossip_carrier ("
-        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL, stories INTEGER NOT NULL);"
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL, stories INTEGER NOT NULL,"
+        " told_player INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS gossip_version ("
         " holder_kind INTEGER NOT NULL, holder_slot INTEGER NOT NULL, gossip_slot INTEGER NOT NULL,"
         " source_character_id INTEGER NOT NULL, retellings INTEGER NOT NULL,"
@@ -3101,12 +3104,13 @@ static bool SaveGossip(sqlite3 *database, const CcSim *sim,
     }
     sqlite3_finalize(statement);
     if (!ok || !Prepare(database,
-            "INSERT INTO gossip_carrier VALUES(?,?,?);",
+            "INSERT INTO gossip_carrier VALUES(?,?,?,?);",
             &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim) && ok; ++i) {
         BindInt(statement, 1, i);
         BindId(statement, 2, sim->gossip_carriers[i].id);
         BindId(statement, 3, sim->gossip_carriers[i].stories);
+        BindId(statement, 4, sim->gossip_carriers[i].told_player);
         ok = StepDone(database, statement, error, error_capacity) &&
              ResetStatement(database, statement, error, error_capacity);
     }
@@ -3178,15 +3182,18 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
     }
     if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
     sqlite3_finalize(statement);
-    if (!Prepare(database, "SELECT slot,id,stories FROM gossip_carrier ORDER BY slot;",
+    if (!Prepare(database, "SELECT slot,id,stories,told_player FROM gossip_carrier ORDER BY slot;",
                   &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
         if (sqlite3_step(statement) != SQLITE_ROW ||
             sqlite3_column_int64(statement, 0) != i) goto invalid;
         sqlite3_int64 stories = sqlite3_column_int64(statement, 2);
-        if (stories < 0 || stories > UINT32_MAX) goto invalid;
+        sqlite3_int64 told = sqlite3_column_int64(statement, 3);
+        if (stories < 0 || stories > UINT32_MAX ||
+            told < 0 || told > UINT32_MAX) goto invalid;
         sim->gossip_carriers[i].id = (CcId)sqlite3_column_int64(statement, 1);
         sim->gossip_carriers[i].stories = (uint32_t)stories;
+        sim->gossip_carriers[i].told_player = (uint32_t)told;
     }
     if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
     sqlite3_finalize(statement);
@@ -5913,10 +5920,11 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
          legacy_version == 40U || legacy_version == 41U ||
          legacy_version == 42U || legacy_version == 43U ||
          legacy_version == 44U || legacy_version == 45U ||
-         legacy_version == 46U) &&
+         legacy_version == 46U || legacy_version == 47U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
-         * 0 = no camp); older saves need no data migration. */
+         * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
+         * default 0); older saves need no data migration. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }
