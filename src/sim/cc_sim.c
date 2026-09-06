@@ -35,6 +35,7 @@ static uint32_t RoadHouseSeed(const CcSim *sim, CcId route_id);
 static const char *GeneratedRoadHouseName(const CcSim *sim, CcId route_id);
 static const CcSettlement *Scriptorium(const CcSim *sim);
 static void AssignHistoryOffices(CcSim *sim, bool announce);
+static void GrowBanditCamp(CcBanditGroup *bandits);
 
 static int32_t ClampI32(int32_t value, int32_t minimum, int32_t maximum)
 {
@@ -5444,6 +5445,76 @@ static void RelocateFallenTown(CcSim *sim, CcSettlement *ruin,
             LatestLocalCause(sim, host->id), households, text);
 }
 
+/* The fall of a town is a contest: while the refugees walk, the strongest
+ * outlaw company claims the ruin as a war camp. Only one camp may be held,
+ * and only while the band is strong; when its strength fails, the ruin
+ * stands open for reclamation again. */
+static bool BanditHoldsSettlement(const CcSim *sim, CcId settlement_id)
+{
+    if (sim == NULL || settlement_id == 0U) return false;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        if (sim->bandits[i].camp_settlement_id == settlement_id) return true;
+    }
+    return false;
+}
+
+static void SeizeFallenTown(CcSim *sim, CcSettlement *ruin,
+                            CcId cause_event_id)
+{
+    if (sim == NULL || ruin == NULL || sim->bandit_count <= 0) return;
+    if (BanditHoldsSettlement(sim, ruin->id)) return;
+    CcBanditGroup *claimant = NULL;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        CcBanditGroup *bandits = &sim->bandits[i];
+        if (bandits->influence < 50 ||
+            bandits->camp_settlement_id != 0U) continue;
+        if (claimant == NULL || bandits->influence > claimant->influence) {
+            claimant = bandits;
+        }
+    }
+    if (claimant == NULL) return;
+    claimant->camp_settlement_id = ruin->id;
+    claimant->members = ClampI32(claimant->members + 10, 4, 120);
+    claimant->supplies = ClampI32(claimant->supplies + 10, 0, 100);
+    claimant->influence = MaximumI32(
+        claimant->influence,
+        (claimant->members + claimant->supplies) / 2 +
+        MinimumI32(20, claimant->raids_completed / 3));
+    GrowBanditCamp(claimant);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s takes fallen %s as a war camp; its banner hangs over the ruins.",
+        claimant->name, ruin->name);
+    (void)PushEvent(
+        sim, CC_EVENT_KINGDOM_ACTION, claimant->id, ruin->id,
+        cause_event_id != 0U ? cause_event_id :
+            LatestLocalCause(sim, ruin->id), claimant->members, text);
+}
+
+static void ReleaseAbandonedCamps(CcSim *sim)
+{
+    if (sim == NULL) return;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        CcBanditGroup *bandits = &sim->bandits[i];
+        if (bandits->camp_settlement_id == 0U || bandits->influence >= 30) {
+            continue;
+        }
+        const CcSettlement *camp = CcSimSettlement(
+            sim, bandits->camp_settlement_id);
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(
+            text, sizeof(text),
+            "%s abandons its war camp at %s; the ruin stands open again.",
+            bandits->name,
+            camp != NULL ? camp->name : "the frontier");
+        (void)PushEvent(
+            sim, CC_EVENT_KINGDOM_ACTION, bandits->id,
+            bandits->camp_settlement_id, 0U, bandits->influence, text);
+        bandits->camp_settlement_id = 0U;
+    }
+}
+
 static void UpdateSettlement(CcSim *sim, int32_t index,
                              CcId scriptorium_id)
 {
@@ -5637,6 +5708,8 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
             RelocateFallenTown(
                 sim, settlement, refugee_households,
                 abandoned != NULL ? abandoned->id : 0U);
+            SeizeFallenTown(
+                sim, settlement, abandoned != NULL ? abandoned->id : 0U);
             return;
         }
     }
@@ -6562,6 +6635,9 @@ static void AdvanceRuins(CcSim *sim)
         CcSettlement *ruin = &sim->settlements[slot];
         if (!CcSettlementIsAbandoned(ruin) ||
             (week + slot * 37) % (8 * 52) != 0) continue;
+        /* A war camp cannot be resettled while its outlaws hold it; the
+         * kingdom must wait for the band to starve. */
+        if (BanditHoldsSettlement(sim, ruin->id)) continue;
 
         CcSettlement *donor = NULL;
         int32_t donor_score = INT32_MIN;
@@ -6793,8 +6869,12 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
     bandits->raid_days_remaining = 2;
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "%s scouts %s for a %s raid from the no-man's-land camp.",
-                   bandits->name, target->name, CcGoodName(good));
+                   "%s scouts %s for a %s raid from %s.",
+                   bandits->name, target->name, CcGoodName(good),
+                   bandits->camp_settlement_id != 0U &&
+                           CcSimSettlement(
+                               sim, bandits->camp_settlement_id) != NULL ?
+                       "its war camp" : "the no-man's-land camp");
     (void)PushEvent(sim, CC_EVENT_BANDIT_RAID_DEPARTED, bandits->id,
                     bandits->route_id, LatestLocalCause(sim, target->id),
                     bandits->members, text);
@@ -6804,6 +6884,7 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
 
 static void AdvanceBanditRaids(CcSim *sim)
 {
+    ReleaseAbandonedCamps(sim);
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         CcBanditGroup *bandits = &sim->bandits[i];
         if (bandits->raid_phase == CC_BANDIT_RAID_IDLE) continue;
@@ -18007,13 +18088,15 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 42U ||
                          sim->schema_version == 43U ||
                          sim->schema_version == 44U ||
-                         sim->schema_version == 45U;
+                         sim->schema_version == 45U ||
+                         sim->schema_version == 46U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (sim->schema_version == 45U && sim->generator_version == 25U) ||
+        (sim->schema_version == 46U && sim->generator_version == 25U) ||
         (sim->schema_version == 44U && sim->generator_version == 25U) ||
         (sim->schema_version == 43U && sim->generator_version == 25U) ||
         (sim->schema_version == 42U && sim->generator_version == 25U) ||
@@ -18916,6 +18999,11 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 (bandits->service_mask & ~known_services) != 0U ||
                 ServiceMaskCount(bandits->service_mask) >
                     CcBanditCampServiceCapacity(bandits->camp_size) ||
+                (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+                 (bandits->camp_settlement_id != 0U) !=
+                     (CcSimSettlement(sim, bandits->camp_settlement_id) != NULL &&
+                      CcSettlementIsAbandoned(
+                          CcSimSettlement(sim, bandits->camp_settlement_id)))) ||
                 bandits->raid_phase < CC_BANDIT_RAID_IDLE ||
                 bandits->raid_phase > CC_BANDIT_RAID_RETURNING ||
                 bandits->raids_completed < 0 ||
@@ -20268,6 +20356,9 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->raid_good); HASH_VALUE(item->raid_quantity);
             HASH_VALUE(item->raid_days_remaining);
             HASH_VALUE(item->raids_completed);
+            if (sim->schema_version >= 47U) {
+                HASH_VALUE(item->camp_settlement_id);
+            }
         }
         HASH_VALUE(sim->last_bandit_level[i]);
     }

@@ -28,9 +28,122 @@ static void FallSettlement(CcSim *sim, int32_t slot)
     failed->consumption[CC_GOOD_FOOD] = 7;
 }
 
+/* Seizure, reclamation block, and release of war camps. */
+static void CheckWarCampContest(char *error, size_t capacity)
+{
+    /* A strong band takes a fallen town. */
+    CcSim seize;
+    CcSimInit(&seize, UINT32_C(0x60c11b));
+    seize.bandits[0].members = 70;
+    seize.bandits[0].supplies = 40;
+    seize.bandits[0].influence = 55;
+    int32_t fall_slot = -1;
+    for (int32_t i = 0; i < seize.settlement_count; ++i) {
+        if (strcmp(seize.settlements[i].name, "Thornford") == 0) {
+            fall_slot = i;
+            break;
+        }
+    }
+    CC_CHECK(fall_slot >= 0);
+    FallSettlement(&seize, fall_slot);
+    CcSimAdvanceDays(&seize, 28);
+    CC_CHECK(CcSettlementIsAbandoned(&seize.settlements[fall_slot]));
+    CC_CHECK(seize.bandits[0].camp_settlement_id ==
+             seize.settlements[fall_slot].id);
+    CC_CHECK(seize.bandits[0].influence >= 50);
+    CC_CHECK(CountEvents(&seize, CC_EVENT_KINGDOM_ACTION,
+                         "war camp") == 1);
+    CC_CHECK(CcSimValidate(&seize, error, capacity));
+
+    /* A weak band does not claim the ruin. */
+    CcSim weak;
+    CcSimInit(&weak, UINT32_C(0x60c11b));
+    weak.bandits[0].members = 25;
+    weak.bandits[0].supplies = 15;
+    weak.bandits[0].influence = 20;
+    FallSettlement(&weak, fall_slot);
+    CcSimAdvanceDays(&weak, 28);
+    CC_CHECK(CcSettlementIsAbandoned(&weak.settlements[fall_slot]));
+    CC_CHECK(weak.bandits[0].camp_settlement_id == 0U);
+    CC_CHECK(CountEvents(&weak, CC_EVENT_KINGDOM_ACTION,
+                         "war camp") == 0);
+
+    /* A held ruin cannot be resettled while the band is strong. */
+    CcSim contested;
+    CcSimInit(&contested, UINT32_C(0xba1a5eed));
+    contested.settlement_count = 2;
+    contested.route_count = 1;
+    contested.shipment_count = 0;
+    contested.courier_count = 0;
+    contested.bandit_count = 0;
+    contested.monster_count = 0;
+    contested.dungeon_count = 0;
+    contested.situation_count = 0;
+    contested.dragon.slain = true;
+    contested.goblins.tribute_cooldown_days = 10000;
+    contested.hoard_raiders.cooldown_days = 10000;
+    CcSettlement *donor = &contested.settlements[0];
+    CcSettlement *held_ruin = &contested.settlements[1];
+    held_ruin->population = 0;
+    held_ruin->security = 0;
+    held_ruin->prosperity = 0;
+    held_ruin->hunger = 100;
+    held_ruin->service_mask = 0U;
+    held_ruin->service_project = CC_SERVICE_NONE;
+    held_ruin->service_project_days = 0;
+    donor->population = 2000;
+    donor->hunger = 0;
+    donor->prosperity = 90;
+    donor->stock[CC_GOOD_FOOD] = 100;
+    donor->stock[CC_GOOD_TOOLS] = 10;
+    donor->market_coins = 100;
+    contested.bandit_count = 1;
+    contested.bandits[0].camp_settlement_id = held_ruin->id;
+    contested.bandits[0].influence = 60;
+    contested.current_day = 379 * 7 - 7;
+    CcSimAdvanceDays(&contested, 7);
+    CC_CHECK(CcSettlementIsAbandoned(held_ruin));
+    CC_CHECK(held_ruin->population == 0);
+    CC_CHECK(donor->population == 2000);
+
+    /* When the band starves, the camp is abandoned and the ruin is
+     * open for settlers again. */
+    contested.bandits[0].influence = 20;
+    CcSimAdvanceDays(&contested, 1);
+    CC_CHECK(contested.bandits[0].camp_settlement_id == 0U);
+    CC_CHECK(CountEvents(&contested, CC_EVENT_KINGDOM_ACTION,
+                         "stands open again") == 1);
+    contested.current_day = 795 * 7 - 7;
+    CcSimAdvanceDays(&contested, 7);
+    CC_CHECK(!CcSettlementIsAbandoned(held_ruin));
+    CC_CHECK(held_ruin->population == 180);
+
+    /* Save round trip keeps the camp; an old-schema save reads it as 0. */
+    const char *path = "/tmp/crownless-war-camp.ccsave";
+    (void)remove(path);
+    CcSim saved;
+    CcSimInit(&saved, UINT32_C(0x60c11b));
+    saved.bandits[0].members = 70;
+    saved.bandits[0].supplies = 40;
+    saved.bandits[0].influence = 55;
+    FallSettlement(&saved, fall_slot);
+    CcSimAdvanceDays(&saved, 28);
+    CC_CHECK(saved.bandits[0].camp_settlement_id != 0U);
+    uint64_t hash = CcSimHash(&saved);
+    CC_CHECK(CcSaveWrite(path, &saved, error, capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, capacity));
+    CC_CHECK(CcSimHash(&restored) == hash);
+    CC_CHECK(restored.bandits[0].camp_settlement_id ==
+             saved.bandits[0].camp_settlement_id);
+    CC_CHECK(CcSaveWrite(path, &restored, error, capacity));
+    (void)remove(path);
+}
+
 int main(void)
 {
     char error[192];
+    CheckWarCampContest(error, sizeof(error));
 
     /* Fall Thornford (full cast world) and follow the refugees. */
     CcSim fall;
