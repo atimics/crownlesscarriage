@@ -179,7 +179,7 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
     switch (target->key.kind) {
         case CC_INTERACTION_PERSON:
             local->conversation_object = target->key.object;
-            local->conversation_gossip_offset = 0;
+            local->conversation_gossip_slot = -1;
             local->conversation_gossip_source = false;
             local->conversation_character_id = target->character_id;
             local->conversation_situation_id = target->situation_id;

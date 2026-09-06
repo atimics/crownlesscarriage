@@ -68,11 +68,15 @@ static int RunAdventureInputRegression(void)
         "The conversation must offer chat, an exchange, and farewell.");
     UX_KEY(KEY_ONE);
     UX_CHECK(ClientConversationSpeech(&sim, &local, &source) && source.source_event_id == report.source_event_id &&
-        strcmp(report.text, source.text) != 0 && CcSimHash(&sim) == heard,
-        "Chat must draw who told them next and preserve the world.");
+        strcmp(report.text, source.text) != 0,
+        "Chat must draw who told them next.");
+    UX_CHECK(local.conversation_gossip_slot >= 0 &&
+        CcSimStoryTold(&sim, local.conversation_character_id, local.conversation_gossip_slot),
+        "Hearing the source must mark the story told.");
     UX_KEY(KEY_ONE);
-    UX_CHECK(!local.conversation_gossip_source && CcSimHash(&sim) == heard,
+    UX_CHECK(!local.conversation_gossip_source,
         "A further chat must draw the next account.");
+    heard = CcSimHash(&sim);
     int32_t share_key = KEY_ONE;
     for (int32_t i = 0; i < replies.count; ++i)
         if (replies.items[i].kind == CONTEXT_ACTION_GOSSIP_SHARE) share_key = KEY_ONE + i;
@@ -91,7 +95,8 @@ static int RunAdventureInputRegression(void)
         feedback, sizeof(feedback), &feedback_age);
     client_test_pointer_active = false;
     ClientInputClearPressed();
-    UX_CHECK(local.conversation_gossip_source && CcSimHash(&sim) == heard,
+    UX_CHECK(local.conversation_gossip_source &&
+        CcSimStoryTold(&sim, local.conversation_character_id, local.conversation_gossip_slot),
         "The chat card must match the keyboard reply.");
     UX_KEY(KEY_ESCAPE);
     local.course.alarm_active = false;

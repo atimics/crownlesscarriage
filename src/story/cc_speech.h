@@ -63,6 +63,9 @@ bool CcSpeechGreeting(const CcSim *sim, CcId place_id, CcId object_id,
                        const char *speaker, const char *service, CcSpeech *speech);
 bool CcSpeechGossip(const CcSim *sim, CcId character_id, int32_t offset,
                       bool source, CcSpeech *speech);
+bool CcSpeechStory(const CcSim *sim, CcId character_id,
+                   const CcGossip *story, const CcGossipVersion *version,
+                   bool source, CcSpeech *speech);
 bool CcSpeechRoad(const CcSim *sim, CcSpeech *speech);
 bool CcSpeechPlayerChoice(const CcSim *sim, const CcSituation *situation,
                            CcStoryPlayerChoice choice, uint32_t voice_index,

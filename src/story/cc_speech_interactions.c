@@ -29,22 +29,20 @@ bool CcSpeechGreeting(const CcSim *sim, CcId place_id, CcId object_id,
         CC_SPEECH_PLAIN, CC_SPEECH_CONVERSATION, 0);
 }
 
-bool CcSpeechGossip(const CcSim *sim, CcId character_id, int32_t offset,
-                      bool source, CcSpeech *speech)
+bool CcSpeechStory(const CcSim *sim, CcId character_id,
+                   const CcGossip *story, const CcGossipVersion *version,
+                   bool source, CcSpeech *speech)
 {
     if (speech == NULL) return false;
     *speech = (CcSpeech){0};
-    if (sim == NULL) return false;
-    const CcCharacter *person = CcSimCharacter(sim, character_id);
-    if (person == NULL) return false;
-    const CcGossipVersion *version = NULL;
-    const CcGossip *story = CcSimPersonalGossip(sim, character_id, offset, &version);
-    if (story == NULL) return false;
+    if (sim == NULL || story == NULL || version == NULL) return false;
+    const CcCharacter *speaker = CcSimCharacter(sim, character_id);
+    if (speaker == NULL) return false;
     char text[CC_SPEECH_TEXT_CAPACITY];
     if (source) {
         const CcCharacter *teller = CcSimCharacter(sim, version->source_character_id);
         const CcSettlement *origin = CcSimSettlement(sim, story->origin_id);
-        if (teller != NULL && teller->id != person->id) {
+        if (teller != NULL && teller->id != speaker->id) {
             (void)snprintf(text, sizeof(text), "%s told me. The account concerns %s, on day %d.",
                 teller->name, origin != NULL ? origin->name : "the road", story->day);
         } else {
@@ -57,8 +55,22 @@ bool CcSpeechGossip(const CcSim *sim, CcId character_id, int32_t offset,
         (void)snprintf(text, sizeof(text), "I heard this: %s", account);
     }
     return CcSpeechCompose(speech, source ? "gossip.source" : "gossip.account",
-        person->id, person->name, CcSpeechCharacterVoice(sim, person), text,
+        speaker->id, speaker->name, CcSpeechCharacterVoice(sim, speaker), text,
         CC_SPEECH_PLAIN, CC_SPEECH_CONVERSATION, story->event_id);
+}
+
+bool CcSpeechGossip(const CcSim *sim, CcId character_id, int32_t offset,
+                      bool source, CcSpeech *speech)
+{
+    if (speech == NULL) return false;
+    *speech = (CcSpeech){0};
+    if (sim == NULL) return false;
+    const CcCharacter *person = CcSimCharacter(sim, character_id);
+    if (person == NULL) return false;
+    const CcGossipVersion *version = NULL;
+    const CcGossip *story = CcSimPersonalGossip(sim, character_id, offset, &version);
+    if (story == NULL || version == NULL) return false;
+    return CcSpeechStory(sim, character_id, story, version, source, speech);
 }
 
 bool CcSpeechRoad(const CcSim *sim, CcSpeech *speech)
