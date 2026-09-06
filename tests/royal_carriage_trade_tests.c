@@ -134,6 +134,15 @@ static void ConfigureCapacityWaitScenario(CcSim *sim)
     sim->royal_route_slots_used[3] = 3;
 }
 
+static void CheckSeedTenLongRun(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(774553914));
+    CcSimAdvanceDays(&sim, 365 * 120);
+    char error[256];
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+}
+
 static void CheckChangedDestination(void)
 {
     static CcSim sim;
@@ -152,6 +161,7 @@ static void CheckChangedDestination(void)
 
 int main(void)
 {
+    CheckSeedTenLongRun();
     CheckChangedDestination();
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0xc4111a9e));
