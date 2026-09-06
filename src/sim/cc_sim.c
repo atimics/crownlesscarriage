@@ -9138,8 +9138,15 @@ static void AdvanceRoyalCarriages(CcSim *sim)
             carriage->departure_day = sim->current_day;
             reached_market = true;
         } else {
-            (void)StartRoyalRepositioningLeg(
-                sim, carriage, carriage->target_id);
+            if (!StartRoyalRepositioningLeg(
+                    sim, carriage, carriage->target_id) &&
+                carriage->mode == CC_ROYAL_CARRIAGE_REPOSITIONING) {
+                // The completed leg may leave no legal next leg. Do not retain
+                // the completed leg's route while waiting for the next plan.
+                ParkRoyalCarriage(carriage, carriage->location_id);
+                carriage->departure_day = sim->current_day;
+                reached_market = true;
+            }
         }
     }
     if (reached_market && !HasRoyalCapacityWait(sim)) PlanTrade(sim);
@@ -19006,11 +19013,19 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 if (error != NULL && error_capacity > 0U) {
                     (void)snprintf(
                         error, error_capacity,
-                        "Royal carriage %d state is invalid"
-                        " (mode=%d route=%d timing=%d link=%d).",
+                        "Royal carriage %d invalid"
+                        " (m=%d rc=%d tm=%d lk=%d"
+                        " slots=%d/%d/%d r=%d->%d"
+                        " dep=%d arr=%d).",
                         i, (int32_t)carriage->mode,
                         route_connects ? 1 : 0, trip_timing ? 1 : 0,
-                        shipment != NULL ? 1 : 0);
+                        shipment != NULL ? 1 : 0,
+                        SettlementSlotById(sim, carriage->location_id),
+                        SettlementSlotById(sim, carriage->destination_id),
+                        SettlementSlotById(sim, carriage->target_id),
+                        route != NULL ? SettlementSlotById(sim, route->from_id) : -1,
+                        route != NULL ? SettlementSlotById(sim, route->to_id) : -1,
+                        carriage->departure_day, carriage->arrival_day);
                 }
                 return false;
             }

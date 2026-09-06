@@ -187,15 +187,19 @@ int main(int argc, char **argv)
 {
     int32_t seeds = 100;
     int32_t years = 10;
+    int32_t first_seed = 1;
     for (int32_t argument = 1; argument < argc; ++argument) {
-        if (strcmp(argv[argument], "--seeds") == 0 && argument + 1 < argc) {
+        if (strcmp(argv[argument], "--seed") == 0 && argument + 1 < argc) {
+            if (!ParsePositive(argv[++argument], &first_seed)) return EXIT_FAILURE;
+            seeds = 1;
+        } else if (strcmp(argv[argument], "--seeds") == 0 && argument + 1 < argc) {
             if (!ParsePositive(argv[++argument], &seeds)) return EXIT_FAILURE;
         } else if (strcmp(argv[argument], "--years") == 0 &&
                    argument + 1 < argc) {
             if (!ParsePositive(argv[++argument], &years)) return EXIT_FAILURE;
         } else {
             (void)fprintf(stderr,
-                          "Usage: %s [--seeds COUNT] [--years COUNT]\n",
+                          "Usage: %s [--seed NUMBER | --seeds COUNT] [--years COUNT]\n",
                           argv[0]);
             return EXIT_FAILURE;
         }
@@ -225,7 +229,8 @@ int main(int argc, char **argv)
         "dragon_afterdeath_days,active_settlements,abandoned_settlements,"
         "total_population,climate_factor,dragon_campaign_experience");
     char error[192];
-    for (int32_t seed_number = 1; seed_number <= seeds; ++seed_number) {
+    for (int32_t seed_number = first_seed;
+         seed_number < first_seed + seeds; ++seed_number) {
         CcSim sim;
         CcSimInit(&sim, (uint32_t)seed_number * UINT32_C(0x9e3779b9));
         for (int32_t year = 1; year <= years; ++year) {
