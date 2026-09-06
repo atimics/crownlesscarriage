@@ -244,6 +244,10 @@ if(CC_BUILD_BENCHMARKS)
     add_executable(crownless_sim_metrics tools/sim_metrics.c)
     target_link_libraries(crownless_sim_metrics PRIVATE crownless_sim)
     cc_strict_warnings(crownless_sim_metrics)
+
+    add_executable(crownless_agent_sweep tools/agent_sweep.c)
+    target_link_libraries(crownless_agent_sweep PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_agent_sweep)
 endif()
 
 if(CC_BUILD_CLIENT)

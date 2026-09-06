@@ -5,6 +5,9 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 0'
 
 permissions:
   contents: read
@@ -117,6 +120,45 @@ jobs:
       - name: Quick benchmark smoke test
         if: matrix.build_type == 'Release'
         run: ./build/crownless_benchmark --quick
+      - name: Simulation sweep smoke test
+        if: matrix.os == 'ubuntu-latest' && matrix.build_type == 'Release'
+        run: >-
+          python3 tools/sim_sweep.py
+          --binary build/crownless_sim_metrics
+          --first-seed 1 --seeds 32 --years 32 --jobs 4
+      - name: Player agency road-steward smoke test
+        if: matrix.os == 'ubuntu-latest' && matrix.build_type == 'Release'
+        run: ./build/crownless_agent_sweep --seeds 8 --years 10
+
+  long-simulation-sweep:
+    name: Long simulation sweep
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SQLite development files
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+      - name: Configure release headless build
+        run: >-
+          cmake -S . -B build-sweep
+          -DCMAKE_BUILD_TYPE=Release
+          -DCC_BUILD_CLIENT=OFF
+          -DCC_WARNINGS_AS_ERRORS=ON
+      - name: Build metrics runner
+        run: cmake --build build-sweep --target crownless_sim_metrics --parallel
+      - name: Run 1000 by 1000 validated sweep
+        run: >-
+          python3 tools/sim_sweep.py
+          --binary build-sweep/crownless_sim_metrics
+          --first-seed 1 --seeds 1000 --years 1000 --jobs 8
+          --output build-sweep/sweep-endpoints.csv
+      - name: Upload sweep endpoints
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-sweep-endpoints
+          path: build-sweep/sweep-endpoints.csv
+          if-no-files-found: error
 
   client:
     name: Full client / ${{ matrix.os }}

@@ -14,7 +14,7 @@ SEED_MULTIPLIER = 0x9E3779B9
 
 def run_seed(binary, seed, years):
     result = subprocess.run(
-        [binary, "--seed", str(seed), "--years", str(years)],
+        [binary, "--seed", str(seed), "--years", str(years), "--final-only"],
         capture_output=True,
         text=True,
         check=False,
@@ -22,9 +22,9 @@ def run_seed(binary, seed, years):
     if result.returncode != 0:
         return seed, None, result.stderr.strip() or "metrics runner failed"
     rows = list(csv.DictReader(io.StringIO(result.stdout)))
-    if len(rows) != years:
-        return seed, None, "expected %d rows, got %d" % (years, len(rows))
-    return seed, rows[-1], None
+    if len(rows) != 1 or int(rows[0]["year"]) != years:
+        return seed, None, "expected final row for year %d, got %d rows" % (years, len(rows))
+    return seed, rows[0], None
 
 
 def describe(rows, name):
