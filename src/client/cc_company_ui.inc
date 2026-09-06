@@ -42,8 +42,14 @@ EM_JS(int, CompanySharedHost, (), {
     }
     return 1;
 });
-EM_ASYNC_JS(int, CompanyCopyInvitation, (const char *invitation), {
-    try { await navigator.clipboard.writeText(UTF8ToString(invitation)); return 1; }
+/* 2 shared through the browser, 1 copied, 3 share dismissed, 0 nothing worked. */
+EM_ASYNC_JS(int, CompanyShareInvitation, (const char *invitation), {
+    const url = UTF8ToString(invitation);
+    if (navigator.share) {
+        try { await navigator.share({title: 'Crownless Carriage', url}); return 2; }
+        catch (error) { if (error && error.name === 'AbortError') return 3; }
+    }
+    try { await navigator.clipboard.writeText(url); return 1; }
     catch { return 0; }
 });
 EM_JS(void, CompanyInvitationLink, (const char *code, char *link, int capacity), {
@@ -52,11 +58,11 @@ EM_JS(void, CompanyInvitationLink, (const char *code, char *link, int capacity),
 #pragma clang diagnostic pop
 #else
 static void CompanyInvitation(char *invitation, int capacity) { (void)capacity; invitation[0] = '\0'; }
-static int CompanyCopyInvitation(const char *invitation)
+static int CompanyShareInvitation(const char *invitation)
 {
     SetClipboardText(invitation);
     const char *copied = GetClipboardText();
-    return copied != NULL && strcmp(copied, invitation) == 0;
+    return copied != NULL && strcmp(copied, invitation) == 0 ? 1 : 0;
 }
 static void CompanyInvitationLink(const char *code, char *link, int capacity)
 {
@@ -117,12 +123,24 @@ static bool FrontendCompanyTextInput(FrontendState *state)
     return true;
 }
 
+/* Hand the invitation link to the traveller's share sheet or clipboard. When neither
+   is available the link is shown in full so it can be selected by hand. */
+static void FrontendCompanyShare(FrontendState *state)
+{
+    int result = CompanyShareInvitation(state->invitation);
+    if (result == 0 || result == 3) FrontendOpen(state, FRONTEND_INVITATION);
+    (void)snprintf(state->feedback, sizeof(state->feedback), "%s",
+        result == 2 ? "Invitation shared." :
+        result == 1 ? "Invitation link copied." :
+        result == 3 ? "Sharing was dismissed. The link is below." :
+        "Select the invitation link below and copy it.");
+}
+
 static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
 {
     if (state->screen == FRONTEND_INVITATION) {
         if (action == FRONTEND_ACTION_INVITE_COPY) {
-            (void)snprintf(state->feedback, sizeof(state->feedback), "%s", CompanyCopyInvitation(state->invitation) ?
-                "Invitation copied." : "Select the invitation field to copy the link.");
+            FrontendCompanyShare(state);
             return true;
         }
         if (action == FRONTEND_ACTION_CANCEL) { FrontendOpen(state, FRONTEND_COMPANY); return true; }
@@ -221,7 +239,7 @@ static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
             if (CcCompanyInvite(&state->company, action == FRONTEND_ACTION_INVITE_ROTATE,
                 state->feedback, sizeof(state->feedback))) {
                 CompanyInvitationLink(state->company.invitation, state->invitation, sizeof(state->invitation));
-                FrontendOpen(state, FRONTEND_INVITATION);
+                FrontendCompanyShare(state);
             }
             return true;
         }

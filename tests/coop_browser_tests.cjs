@@ -26,6 +26,10 @@ async function main() {
       viewport: {width: 390, height: 844}, hasTouch: true, isMobile: true});
     owner = await a.newPage(); crew = await b.newPage();
     const ownerControls = gameControls(owner), crewControls = gameControls(crew, true);
+    /* The host hands the invitation link to the share sheet. Headless Chromium has none, so record it. */
+    await owner.addInitScript(() => {
+      Object.defineProperty(navigator, 'share', {configurable: true, value: async data => { window.sharedInvitation = data.url; }});
+    });
     await owner.goto(origin);
     assert.equal(await owner.getByRole('link').count(), 1);
     await owner.getByRole('link', {name:'Start', exact:true}).click();
@@ -48,10 +52,23 @@ async function main() {
     await owner.waitForFunction(() => Module.crownlessScreen === 'company');
     assert.equal(await owner.locator('input').count(), 0);
     await ownerControls.button('Invite crew').click();
-    const invitation = await owner.getByRole('textbox', {name:'Invitation', exact:true}).inputValue();
+    await owner.waitForFunction(() => typeof window.sharedInvitation === 'string');
+    const invitation = await owner.evaluate(() => window.sharedInvitation);
+    assert.equal(await owner.evaluate(() => Module.crownlessScreen), 'company');
+    await owner.waitForFunction(() => Module.crownlessTouchFrame.detail.includes('Invitation shared'));
     const worldId = new URL(invitation).hash.slice('#join='.length).split('.')[0];
+    assert.match(invitation, /^http:\/\/127\.0\.0\.1:8788\/#join=[a-f0-9]{32}\.[a-f0-9]{64}$/);
     await fs.mkdir('browser-results', {recursive:true});
     await owner.screenshot({path:'browser-results/in-game-invitation.png'});
+    /* Without a share sheet or clipboard the link is still shown in full for hand copying. */
+    await owner.evaluate(() => {
+      Object.defineProperty(navigator, 'share', {configurable: true, value: undefined});
+      Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {writeText: async () => { throw new Error('blocked'); }}});
+    });
+    await ownerControls.button('Invite crew').click();
+    await owner.waitForFunction(() => Module.crownlessScreen === 'invitation');
+    assert.equal(await owner.getByRole('textbox', {name:'Invitation', exact:true}).inputValue(), invitation);
+    await owner.screenshot({path:'browser-results/in-game-invitation-link.png'});
     await crew.goto(invitation);
     await crew.getByRole('link', {name:'Start', exact:true}).click();
     await crew.waitForFunction(() => window.Module?.crownlessScreen === 'join', undefined, {timeout:120000});
