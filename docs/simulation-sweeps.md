@@ -58,11 +58,16 @@ state directly.
 
 ```sh
 out/build/release/crownless_agent_sweep --seeds 8 --years 10
+# Run one exact metrics seed:
+out/build/release/crownless_agent_sweep --seed 47 --years 100 --wip-limit 1
 ```
 
 The output compares population, prosperity, hunger, active settlements, and
 closed routes, and records repairs, failed repair attempts, travel, accepted
-jobs, completed jobs, and combat decisions/outcomes. The agent now accepts
+jobs, completed jobs, and combat decisions/outcomes. The agent has an explicit
+WIP limit (default 1), and emits an objective loss score: expired jobs cost 10,
+abandoned jobs cost 10, unresolved lifecycle records cost 20, and lost combats
+cost 5. An objective pass is a zero-loss row. The agent now accepts
 route-repair charters before repairing them, so repair rewards can fund later
 work. Relief-quest ranking and cargo delivery remain separate policies rather
 than being conflated with road repair. During a journey encounter, it fights

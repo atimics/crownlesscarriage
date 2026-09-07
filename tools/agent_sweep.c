@@ -17,6 +17,14 @@ typedef struct AgentStats {
     int32_t combats_initiated;
     int32_t combats_won;
     int32_t combats_lost;
+    int32_t route_jobs_accepted;
+    int32_t relief_jobs_accepted;
+    int32_t jobs_resolved;
+    int32_t jobs_expired;
+    int32_t jobs_abandoned;
+    int32_t jobs_unresolved;
+    CcId tracked_job_id;
+    int32_t wip_limit;
 } AgentStats;
 
 
@@ -44,6 +52,28 @@ static CcId BestDestination(const CcSim *sim)
     return destination;
 }
 
+static void ObserveJobLifecycle(CcSim *sim, AgentStats *stats)
+{
+    if (stats->tracked_job_id == 0U ||
+        sim->player.accepted_situation_id == stats->tracked_job_id) return;
+    const CcSituation *situation = CcSimSituation(
+        sim, stats->tracked_job_id);
+    if (situation == NULL) {
+        stats->jobs_unresolved += 1;
+    } else if (situation->status == CC_SITUATION_RESOLVED) {
+        stats->jobs_resolved += 1;
+    } else if (situation->status == CC_SITUATION_FAILED) {
+        if (situation->end_reason == CC_QUEST_END_EXPIRED) {
+            stats->jobs_expired += 1;
+        } else {
+            stats->jobs_abandoned += 1;
+        }
+    } else {
+        stats->jobs_unresolved += 1;
+    }
+    stats->tracked_job_id = 0U;
+}
+
 static bool AcceptRouteJobAtLocation(CcSim *sim, AgentStats *stats)
 {
     char error[192];
@@ -53,13 +83,20 @@ static bool AcceptRouteJobAtLocation(CcSim *sim, AgentStats *stats)
             situation->kind != CC_SITUATION_ROUTE_REPAIR ||
             CcSimSituationOfferSettlementId(sim, situation) !=
                 sim->player.location_id ||
-            !CcSimSituationCanAccept(sim, situation)) continue;
+            !CcSimSituationCanAccept(sim, situation) ||
+            sim->player.coins < 18) continue;
+        const CcRoute *target_route = CcSimRoute(sim, situation->target_id);
+        if (target_route == NULL || !target_route->closed ||
+            (target_route->from_id != sim->player.location_id &&
+             target_route->to_id != sim->player.location_id)) continue;
         CcCommand accept = {
             .kind = CC_COMMAND_ACCEPT_SITUATION,
             .target_id = situation->id
         };
         if (CcSimApply(sim, &accept, error, sizeof(error))) {
             stats->jobs_accepted += 1;
+            stats->route_jobs_accepted += 1;
+            stats->tracked_job_id = situation->id;
             return true;
         }
     }
@@ -68,6 +105,7 @@ static bool AcceptRouteJobAtLocation(CcSim *sim, AgentStats *stats)
 
 static bool AcceptReliefJobAtLocation(CcSim *sim, AgentStats *stats)
 {
+    if (stats->tracked_job_id != 0U || stats->wip_limit < 1) return false;
     char error[192];
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *situation = &sim->situations[i];
@@ -97,6 +135,8 @@ static bool AcceptReliefJobAtLocation(CcSim *sim, AgentStats *stats)
         };
         if (CcSimApply(sim, &accept, error, sizeof(error))) {
             stats->jobs_accepted += 1;
+            stats->relief_jobs_accepted += 1;
+            stats->tracked_job_id = situation->id;
             return true;
         }
     }
@@ -124,10 +164,15 @@ static bool DeliverAcceptedRelief(CcSim *sim, AgentStats *stats)
 
 static bool RepairAtLocation(CcSim *sim, AgentStats *stats)
 {
-    if (sim->player.coins < 18) return false;
+    if (sim->player.coins < 18 || stats->tracked_job_id != 0U ||
+        stats->wip_limit < 1) return false;
     char error[192];
+    const CcSituation *accepted = CcSimAcceptedSituation(sim);
+    CcId required_route = accepted != NULL &&
+        accepted->kind == CC_SITUATION_ROUTE_REPAIR ? accepted->target_id : 0U;
     for (int32_t i = 0; i < sim->route_count; ++i) {
         CcRoute *route = &sim->routes[i];
+        if (required_route != 0U && route->id != required_route) continue;
         if (!route->closed ||
             (route->from_id != sim->player.location_id &&
              route->to_id != sim->player.location_id)) continue;
@@ -192,6 +237,7 @@ static bool TravelTowardWork(CcSim *sim, AgentStats *stats)
 
 static void AdvanceAgent(CcSim *sim, AgentStats *stats)
 {
+    ObserveJobLifecycle(sim, stats);
     char error[192];
     if (sim->journey.active) {
         if (sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
@@ -261,14 +307,21 @@ static bool ParsePositive(const char *text, int32_t *value)
 int main(int argc, char **argv)
 {
     int32_t seeds = 8;
+    int32_t first_seed = 1;
     int32_t years = 10;
+    int32_t wip_limit = 1;
     for (int32_t i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--seeds") == 0 && i + 1 < argc) {
+        if (strcmp(argv[i], "--wip-limit") == 0 && i + 1 < argc) {
+            if (!ParsePositive(argv[++i], &wip_limit)) return EXIT_FAILURE;
+        } else if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc) {
+            if (!ParsePositive(argv[++i], &first_seed)) return EXIT_FAILURE;
+            seeds = 1;
+        } else if (strcmp(argv[i], "--seeds") == 0 && i + 1 < argc) {
             if (!ParsePositive(argv[++i], &seeds)) return EXIT_FAILURE;
         } else if (strcmp(argv[i], "--years") == 0 && i + 1 < argc) {
             if (!ParsePositive(argv[++i], &years)) return EXIT_FAILURE;
         } else {
-            (void)fprintf(stderr, "Usage: %s [--seeds COUNT] [--years COUNT]\n", argv[0]);
+            (void)fprintf(stderr, "Usage: %s [--seed NUMBER | --seeds COUNT] [--years COUNT] [--wip-limit COUNT]\n", argv[0]);
             return EXIT_FAILURE;
         }
     }
@@ -276,14 +329,18 @@ int main(int argc, char **argv)
                "control_hunger,agent_hunger,control_active_settlements,agent_active_settlements,"
                "control_closed_routes,agent_closed_routes,repairs,repair_failures,"
                "travel_attempts,travel_successes,jobs_accepted,jobs_completed,"
-               "combats_initiated,combats_won,combats_lost\n");
-    for (int32_t seed = 1; seed <= seeds; ++seed) {
+               "combats_initiated,combats_won,combats_lost,"
+               "route_jobs_accepted,relief_jobs_accepted,jobs_resolved,"
+               "jobs_expired,jobs_abandoned,jobs_unresolved,"
+               "objective_loss,objective_pass\n");
+    for (int32_t seed = first_seed;
+         seed < first_seed + seeds; ++seed) {
         uint32_t world_seed = (uint32_t)seed * UINT32_C(0x9e3779b9);
         CcSim control;
         CcSim agent;
         CcSimInit(&control, world_seed);
         CcSimInit(&agent, world_seed);
-        AgentStats stats = {0};
+        AgentStats stats = {.wip_limit = wip_limit};
         int32_t target_day = control.current_day + years * 365;
         while (control.current_day < target_day) CcSimAdvanceDays(&control, 1);
         int64_t agent_steps = 0;
@@ -332,6 +389,7 @@ int main(int argc, char **argv)
             control_closed += control.routes[i].closed;
             agent_closed += agent.routes[i].closed;
         }
+        ObserveJobLifecycle(&agent, &stats);
         char error[192];
         if (!CcSimValidate(&control, error, sizeof(error))) {
             (void)fprintf(stderr, "control seed %d invalid at day %d: %s\n",
@@ -350,9 +408,24 @@ int main(int argc, char **argv)
                           agent.player.coins, agent.player.reputation,
                           agent.player.treasure_cargo_slots,
                           CcPlayerMapCount(&agent), agent.player.map_capacity);
+            for (int32_t i = 0; i < agent.treasure_count; ++i) {
+                const CcTreasure *treasure = &agent.treasures[i];
+                (void)fprintf(stderr,
+                              "treasure[%d] name=%.40s id=%" PRIu64 " owner=%" PRIu64
+                              " location=%" PRIu64 " maker=%" PRIu64
+                              " gold=%d gems=%d work=%d value=%d created=%d destroyed=%d\n",
+                              i, treasure->name, treasure->id, treasure->owner_id,
+                              treasure->location_id, treasure->maker_settlement_id,
+                              treasure->gold_content, treasure->gem_content,
+                              treasure->craft_work, treasure->appraised_value,
+                              treasure->created_day, treasure->destroyed ? 1 : 0);
+            }
             return EXIT_FAILURE;
         }
-        (void)printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+        int32_t objective_loss = stats.jobs_expired * 10 +
+            stats.jobs_abandoned * 10 + stats.jobs_unresolved * 20 +
+            stats.combats_lost * 5;
+        (void)printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
                      seed, control_population, agent_population,
                      control_prosperity / control.settlement_count,
                      agent_prosperity / agent.settlement_count,
@@ -363,7 +436,11 @@ int main(int argc, char **argv)
                      stats.travel_attempts, stats.travel_successes,
                      stats.jobs_accepted, stats.jobs_completed,
                      stats.combats_initiated, stats.combats_won,
-                     stats.combats_lost);
+                     stats.combats_lost,
+                     stats.route_jobs_accepted, stats.relief_jobs_accepted,
+                     stats.jobs_resolved, stats.jobs_expired,
+                     stats.jobs_abandoned, stats.jobs_unresolved,
+                     objective_loss, objective_loss == 0 ? 1 : 0);
     }
     return EXIT_SUCCESS;
 }

@@ -16525,8 +16525,12 @@ static void RollEncounterLoot(CcSim *sim, CcBanditGroup *bandits,
             const int32_t value = RollD6(sim) + RollD6(sim);
             (void)snprintf(trophy->name, sizeof(trophy->name),
                            "Outlaw Trophy of %.16s", bandits->name);
+            trophy->maker_settlement_id = sim->player.location_id;
             trophy->owner_id = sim->player.id;
             trophy->location_id = sim->player.location_id;
+            trophy->gold_content = 1;
+            trophy->gem_content = 1;
+            trophy->craft_work = 1;
             trophy->appraised_value = value;
             trophy->created_day = sim->current_day;
             sim->player.treasure_cargo_slots += 1;
