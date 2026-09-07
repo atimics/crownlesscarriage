@@ -81,16 +81,42 @@ which is worth doing, but measured no change in the WebKit total: the ~400 MB
 that disappears when audio is blocked entirely belongs to the playing track's
 media pipeline, not to warming.
 
+## Skipping unchanged uploads
+
+`web/gl-uploads.js` keeps a copy of what each vertex buffer already holds and
+drops an upload whose bytes have not changed. Measured on the same scene:
+
+| Per frame | Before | After |
+| --- | --- | --- |
+| `bufferSubData` calls | 157.7 | 100.4 |
+| Uploaded bytes | 3.16 MB | 2.50 MB |
+
+Fifty-seven uploads and 687 KB a frame stop leaving the page. Screenshots are
+unchanged: comparing a run with the shim against one without moves fewer pixels
+than two runs of the same build move between themselves, because the game
+animates. On `opening.png` two runs of the same build differ by 13.8% of pixels
+and the two builds by 0.01%.
+
+**It did not move the WebKit total.** The web process still plateaus at 2.07 GB,
+the same figure as before, reached after a few hundred frames. Cutting a fifth
+of the bytes changed how fast the allocator gets there, not where it stops. The
+plateau also does not follow the viewport, since the game holds its backbuffer
+at 1280x720 whatever the window does.
+
+So the traffic and the plateau are separate problems, and only the first one is
+now understood. Headless WebKit is not Safari and has no GPU process; before
+more renderer work is spent on this, the 2 GB figure wants confirming against
+Safari's own Web Inspector on a real machine.
+
 ## What is left
 
-Cutting the per-frame traffic is the fix, and it is a renderer change rather
-than a memory change:
+Cutting the per-frame traffic further is a renderer change rather than a memory
+change:
 
 1. Group draws that share shader state so the batch is flushed a few times a
    frame instead of thirty-nine.
-2. Skip uploads whose contents did not change since the last frame.
-3. Merge the scenery drawn one model at a time into the cached meshes that
+2. Merge the scenery drawn one model at a time into the cached meshes that
    terrain already uses, cutting draws and the state changes around them.
 
-Each of these changes draw order or geometry residency in a scene with reveal
-cutaways, so each wants a graphics capture pass beside it.
+Both change draw order or geometry residency in a scene with reveal cutaways,
+so both want a graphics capture pass beside them.

@@ -159,9 +159,12 @@ async function main() {
     /* A playing frame's graphics traffic. Safari holds the memory its allocator
        reaches streaming this, so the ceilings guard the browser's cost, not the
        game's own heap, which stays around fifty megabytes either way. */
-    const opening = await page.evaluate(() => ({...window.frameBudget}));
+    const reading = () => page.evaluate(() => ({...window.frameBudget,
+      skippedUploads: window.crownlessUploads.skipped,
+      skippedBytes: window.crownlessUploads.skippedBytes}));
+    const opening = await reading();
     await page.waitForTimeout(4000);
-    const closing = await page.evaluate(() => ({...window.frameBudget}));
+    const closing = await reading();
     const drawn = closing.frames - opening.frames;
     assert(drawn >= 20, `A playing game should draw frames; it drew ${drawn}`);
     const perFrame = Object.fromEntries(Object.keys(opening)
@@ -169,12 +172,17 @@ async function main() {
       .map(key => [key, (closing[key] - opening[key]) / drawn]));
     await fs.writeFile(path.join(output, 'frame-budget.json'),
       JSON.stringify({frames: drawn, perFrame}, null, 2));
-    const ceilings = {uploadCalls: 200, uploadBytes: 4 * 1024 * 1024, draws: 450,
+    const ceilings = {uploadCalls: 130, uploadBytes: 3 * 1024 * 1024, draws: 450,
       vertices: 720000, textureBinds: 700, programBinds: 900};
     for (const [name, ceiling] of Object.entries(ceilings)) {
       assert(perFrame[name] <= ceiling,
         `Each frame should stay under ${ceiling} ${name}, not ${perFrame[name].toFixed(1)}`);
     }
+    /* The batch resends unchanged normals and texture coordinates every flush.
+       Skipping them is a third of the uploads; a frame that skips none has lost
+       the shadow copy in web/gl-uploads.js. */
+    assert(perFrame.skippedUploads >= 25,
+      `Unchanged uploads should be skipped, not ${perFrame.skippedUploads.toFixed(1)} a frame`);
     const shaders = await page.evaluate(() => window.shaderLinks);
     assert(shaders.every(shader => shader.linked), JSON.stringify(shaders));
     assert(shaders.every(shader => shader.vectors <= 256), JSON.stringify(shaders));
