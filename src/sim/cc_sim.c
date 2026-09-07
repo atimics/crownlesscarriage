@@ -7880,6 +7880,13 @@ static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
     return true;
 }
 
+static void MaintainRouteFromCompletedShipment(CcSim *sim, CcId route_id)
+{
+    CcRoute *route = RouteMutable(sim, route_id);
+    if (route == NULL || route->condition >= 58) return;
+    route->condition += 1;
+}
+
 static void UpdateShipments(CcSim *sim)
 {
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
@@ -7929,6 +7936,7 @@ static void UpdateShipments(CcSim *sim)
                             shipment->quantity, text);
             continue;
         }
+        MaintainRouteFromCompletedShipment(sim, shipment->route_id);
         CcSettlement *hop = CcSimSettlementMutable(sim, shipment->destination_id);
         if (shipment->destination_id != final_id && hop != NULL) {
             int32_t local_need = EffectiveReserveTarget(
@@ -11775,29 +11783,40 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
         }
 
         if (sim->current_day % 28 == 0 && kingdom->treasury >= 12) {
+            CcRoute *weakest_route = NULL;
+            CcSettlement *maintenance_base = NULL;
             for (int32_t route_index = 0; route_index < sim->route_count; ++route_index) {
                 CcRoute *route = &sim->routes[route_index];
-                CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
-                if (route->closed || route->condition >= 58 || to == NULL ||
-                    CcSettlementIsAbandoned(to) ||
-                    to->kingdom_id != kingdom->id ||
-                    to->stock[CC_GOOD_WOOD] < 1 ||
-                    to->stock[CC_GOOD_STONE] < 1) continue;
+                CcSettlement *base = RepairBaseForKingdom(
+                    sim, route, kingdom->id);
+                if (route->closed || route->condition >= 58 || base == NULL ||
+                    base->stock[CC_GOOD_WOOD] < 1 ||
+                    base->stock[CC_GOOD_STONE] < 1) continue;
+                if (weakest_route != NULL &&
+                    (route->condition > weakest_route->condition ||
+                     (route->condition == weakest_route->condition &&
+                      route->id > weakest_route->id))) continue;
+                weakest_route = route;
+                maintenance_base = base;
+            }
+            if (weakest_route != NULL && maintenance_base != NULL) {
                 kingdom->treasury -= 12;
-                to->market_coins += 12;
-                to->stock[CC_GOOD_WOOD] -= 1;
-                to->stock[CC_GOOD_STONE] -= 1;
-                route->condition = ClampI32(route->condition + 16, 0, 100);
-                route->security = ClampI32(route->security + 2, 0, 100);
-                if (route->condition < 45) {
+                maintenance_base->market_coins += 12;
+                maintenance_base->stock[CC_GOOD_WOOD] -= 1;
+                maintenance_base->stock[CC_GOOD_STONE] -= 1;
+                weakest_route->condition = ClampI32(
+                    weakest_route->condition + 16, 0, 100);
+                weakest_route->security = ClampI32(
+                    weakest_route->security + 2, 0, 100);
+                if (weakest_route->condition < 45) {
                     char text[CC_EVENT_TEXT_CAPACITY];
                     (void)snprintf(text, sizeof(text),
                                    "%s maintains a strategic road before it fails.",
                                    kingdom->name);
-                    (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, kingdom->id, route->id,
-                                    0U, route->condition, text);
+                    (void)PushEvent(
+                        sim, CC_EVENT_KINGDOM_ACTION, kingdom->id,
+                        weakest_route->id, 0U, weakest_route->condition, text);
                 }
-                break;
             }
         }
 
