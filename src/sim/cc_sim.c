@@ -11191,6 +11191,9 @@ static void ForgetRetiredSituation(CcSim *sim, CcId situation_id)
         sim->resolved_journey_situation_id = 0U;
         sim->resolved_journey_outcome = CC_JOURNEY_OUTCOME_NONE;
     }
+    if (sim->player.accepted_situation_id == situation_id) {
+        sim->player.accepted_situation_id = 0U;
+    }
     for (int32_t i = 0; i < sim->character_count; ++i) {
         CcCharacter *character = &sim->characters[i];
         CcCharacterMemory kept_memories[CC_CHARACTER_MEMORY_CAPACITY] = {0};
@@ -11699,7 +11702,8 @@ static void ExpireSituations(CcSim *sim)
                 affected->player_disposition = ClampI32(
                     affected->player_disposition - 12, -100, 100);
             }
-            sim->player.reputation -= 1;
+            sim->player.reputation = ClampI32(
+                sim->player.reputation - 1, -100, 100);
         }
         FinishFrontAfterSituation(sim, situation, failure_id);
         ArchiveSituationOutcome(sim, situation, failure_id);
