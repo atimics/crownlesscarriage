@@ -43,6 +43,35 @@ async function main() {
   await page.addInitScript(() => {
     window.shaderLinks = [];
     const prototype = WebGL2RenderingContext.prototype;
+    /* Per-frame graphics work, counted where the browser pays for it. The heap
+       the game can see stays small; what reloads a tab is the traffic through
+       these calls every frame. */
+    const budget = window.frameBudget = {frames: 0, uploadCalls: 0, uploadBytes: 0,
+      draws: 0, vertices: 0, textureBinds: 0, programBinds: 0};
+    const frame = window.requestAnimationFrame;
+    window.requestAnimationFrame = function(callback) {
+      return frame.call(window, time => { budget.frames++; return callback(time); });
+    };
+    const upload = prototype.bufferSubData;
+    prototype.bufferSubData = function(target, offset, source, sourceOffset, length) {
+      budget.uploadCalls++;
+      budget.uploadBytes += arguments.length >= 5 ? length : (source && source.byteLength) || 0;
+      return upload.apply(this, arguments);
+    };
+    const elements = prototype.drawElements;
+    prototype.drawElements = function(mode, count) {
+      budget.draws++; budget.vertices += count;
+      return elements.apply(this, arguments);
+    };
+    const arrays = prototype.drawArrays;
+    prototype.drawArrays = function(mode, first, count) {
+      budget.draws++; budget.vertices += count;
+      return arrays.apply(this, arguments);
+    };
+    const texture = prototype.bindTexture;
+    prototype.bindTexture = function() { budget.textureBinds++; return texture.apply(this, arguments); };
+    const program = prototype.useProgram;
+    prototype.useProgram = function() { budget.programBinds++; return program.apply(this, arguments); };
     const link = prototype.linkProgram;
     prototype.linkProgram = function(program) {
       link.call(this, program);
@@ -127,6 +156,25 @@ async function main() {
       .some(media => !media.paused && media.readyState >= 3), {timeout: 60000});
     assert(await page.locator('[data-crownless-music]').count() <= 4,
       'The game uses at most three playing songs and one prepared song');
+    /* A playing frame's graphics traffic. Safari holds the memory its allocator
+       reaches streaming this, so the ceilings guard the browser's cost, not the
+       game's own heap, which stays around fifty megabytes either way. */
+    const opening = await page.evaluate(() => ({...window.frameBudget}));
+    await page.waitForTimeout(4000);
+    const closing = await page.evaluate(() => ({...window.frameBudget}));
+    const drawn = closing.frames - opening.frames;
+    assert(drawn >= 20, `A playing game should draw frames; it drew ${drawn}`);
+    const perFrame = Object.fromEntries(Object.keys(opening)
+      .filter(key => key !== 'frames')
+      .map(key => [key, (closing[key] - opening[key]) / drawn]));
+    await fs.writeFile(path.join(output, 'frame-budget.json'),
+      JSON.stringify({frames: drawn, perFrame}, null, 2));
+    const ceilings = {uploadCalls: 200, uploadBytes: 4 * 1024 * 1024, draws: 450,
+      vertices: 720000, textureBinds: 700, programBinds: 900};
+    for (const [name, ceiling] of Object.entries(ceilings)) {
+      assert(perFrame[name] <= ceiling,
+        `Each frame should stay under ${ceiling} ${name}, not ${perFrame[name].toFixed(1)}`);
+    }
     const shaders = await page.evaluate(() => window.shaderLinks);
     assert(shaders.every(shader => shader.linked), JSON.stringify(shaders));
     assert(shaders.every(shader => shader.vectors <= 256), JSON.stringify(shaders));

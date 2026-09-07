@@ -46,6 +46,16 @@
     })).catch(() => {});
     return data;
   }
+  /* Warming only needs the song on disk. Reading it into memory first costs a
+     copy of every track in the library, and browsers that keep that memory
+     reload the tab long before the library is warm. */
+  async function warmToCache(url, storage, signal) {
+    const response = await fetch(url, { signal, priority: 'low', cache: 'default' });
+    if (!response.ok || Number(response.headers.get('content-length')) > audioLimit)
+      throw new Error('Music unavailable');
+    await storage.put(url, response);
+    return null;
+  }
   function scheduleWarm(delay = 250) {
     clearTimeout(warmTimer);
     if (stopped || net.request || warmJob || (tracks && nextTrack >= tracks.length)) return;
@@ -74,7 +84,7 @@
       }
       const saved = await match(storage, url);
       if (saved) return null;
-      return get(url, audioLimit, controller.signal, 'low');
+      return warmToCache(url, storage, controller.signal);
     })();
     try {
       await job.promise;
