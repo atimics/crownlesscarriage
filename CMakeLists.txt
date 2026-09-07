@@ -1059,7 +1059,11 @@ if(BUILD_TESTING)
         add_test(NAME robotics_benchmark COMMAND crownless_robotics_benchmark)
         set_tests_properties(robotics_benchmark PROPERTIES RUN_SERIAL TRUE)
         set(CC_BENCHMARK_TEST_ARGUMENTS --quick)
-        if(CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+        # The simulation budget is calibrated on the Linux CI runner. Keep
+        # the benchmark smoke test on Apple hosts, but do not compare CPU-time
+        # thresholds across different architectures and host schedulers.
+        if(CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$" AND
+           NOT APPLE)
             list(APPEND CC_BENCHMARK_TEST_ARGUMENTS --assert-budget)
         endif()
         add_test(NAME headless_performance_budget
