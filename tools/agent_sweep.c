@@ -76,6 +76,21 @@ static bool AcceptReliefJobAtLocation(CcSim *sim, AgentStats *stats)
             CcSimSituationOfferSettlementId(sim, situation) !=
                 sim->player.location_id ||
             !CcSimSituationCanAccept(sim, situation)) continue;
+        bool reachable = false;
+        for (int32_t route = 0; route < sim->route_count; ++route) {
+            const CcRoute *road = &sim->routes[route];
+            if (!road->closed &&
+                ((road->from_id == sim->player.location_id &&
+                  road->to_id == situation->target_id) ||
+                 (road->to_id == sim->player.location_id &&
+                  road->from_id == situation->target_id)) &&
+                sim->current_day + road->travel_days + 100 <
+                    situation->deadline_day) {
+                reachable = true;
+                break;
+            }
+        }
+        if (!reachable) continue;
         CcCommand accept = {
             .kind = CC_COMMAND_ACCEPT_SITUATION,
             .target_id = situation->id
@@ -212,8 +227,19 @@ static void AdvanceAgent(CcSim *sim, AgentStats *stats)
                 CcSimAdvanceDays(sim, 1);
             }
         } else {
-            CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+            CcSimAdvanceRuntimeTicks(
+                sim, CC_WORLD_TICKS_PER_SECOND * 60);
         }
+        return;
+    }
+    const CcSituation *accepted = CcSimAcceptedSituation(sim);
+    if (accepted != NULL && accepted->deadline_day <= sim->current_day + 7) {
+        CcCommand abandon = {
+            .kind = CC_COMMAND_ABANDON_SITUATION,
+            .target_id = accepted->id
+        };
+        char abandon_error[192];
+        (void)CcSimApply(sim, &abandon, abandon_error, sizeof(abandon_error));
         return;
     }
     if (DeliverAcceptedRelief(sim, stats)) return;
@@ -262,11 +288,22 @@ int main(int argc, char **argv)
         while (control.current_day < target_day) CcSimAdvanceDays(&control, 1);
         int64_t agent_steps = 0;
         while (agent.current_day < target_day || agent.journey.active) {
+            int32_t day_before = agent.current_day;
+            bool journey_before = agent.journey.active;
             AdvanceAgent(&agent, &stats);
+            if (!journey_before && !agent.journey.active &&
+                agent.current_day == day_before) {
+                CcSimAdvanceDays(&agent, 1);
+            }
             agent_steps += 1;
-            if (agent_steps > (int64_t)years * 365 * 10000) {
-                (void)fprintf(stderr, "agent stalled at seed %d day %d\n",
-                              seed, agent.current_day);
+            if (agent_steps > (int64_t)years * 365 * 100) {
+                (void)fprintf(stderr,
+                              "agent stalled at seed %d day %d phase=%d active=%d encounter=%d location=%" PRIu64 "\n",
+                              seed, agent.current_day,
+                              (int32_t)agent.journey.phase,
+                              agent.journey.active ? 1 : 0,
+                              agent.journey.encounter_triggered ? 1 : 0,
+                              agent.player.location_id);
                 return EXIT_FAILURE;
             }
             if (agent.current_day > target_day + 365) break;
@@ -296,8 +333,25 @@ int main(int argc, char **argv)
             agent_closed += agent.routes[i].closed;
         }
         char error[192];
-        if (!CcSimValidate(&control, error, sizeof(error)) ||
-            !CcSimValidate(&agent, error, sizeof(error))) return EXIT_FAILURE;
+        if (!CcSimValidate(&control, error, sizeof(error))) {
+            (void)fprintf(stderr, "control seed %d invalid at day %d: %s\n",
+                          seed, control.current_day, error);
+            return EXIT_FAILURE;
+        }
+        if (!CcSimValidate(&agent, error, sizeof(error))) {
+            (void)fprintf(stderr, "agent seed %d invalid at day %d: %s accepted=%" PRIu64 " situations=%d\n",
+                          seed, agent.current_day, error,
+                          agent.player.accepted_situation_id,
+                          agent.situation_count);
+            (void)fprintf(stderr,
+                          "player loc=%" PRIu64 " cargo=%d/%d coins=%" PRId64 " rep=%d treasure=%d maps=%d/%d\n",
+                          agent.player.location_id,
+                          CcPlayerCargoUsed(&agent.player), agent.player.cargo_capacity,
+                          agent.player.coins, agent.player.reputation,
+                          agent.player.treasure_cargo_slots,
+                          CcPlayerMapCount(&agent), agent.player.map_capacity);
+            return EXIT_FAILURE;
+        }
         (void)printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
                      seed, control_population, agent_population,
                      control_prosperity / control.settlement_count,
