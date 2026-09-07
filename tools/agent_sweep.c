@@ -261,14 +261,18 @@ static bool ParsePositive(const char *text, int32_t *value)
 int main(int argc, char **argv)
 {
     int32_t seeds = 8;
+    int32_t first_seed = 1;
     int32_t years = 10;
     for (int32_t i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--seeds") == 0 && i + 1 < argc) {
+        if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc) {
+            if (!ParsePositive(argv[++i], &first_seed)) return EXIT_FAILURE;
+            seeds = 1;
+        } else if (strcmp(argv[i], "--seeds") == 0 && i + 1 < argc) {
             if (!ParsePositive(argv[++i], &seeds)) return EXIT_FAILURE;
         } else if (strcmp(argv[i], "--years") == 0 && i + 1 < argc) {
             if (!ParsePositive(argv[++i], &years)) return EXIT_FAILURE;
         } else {
-            (void)fprintf(stderr, "Usage: %s [--seeds COUNT] [--years COUNT]\n", argv[0]);
+            (void)fprintf(stderr, "Usage: %s [--seed NUMBER | --seeds COUNT] [--years COUNT]\n", argv[0]);
             return EXIT_FAILURE;
         }
     }
@@ -277,7 +281,8 @@ int main(int argc, char **argv)
                "control_closed_routes,agent_closed_routes,repairs,repair_failures,"
                "travel_attempts,travel_successes,jobs_accepted,jobs_completed,"
                "combats_initiated,combats_won,combats_lost\n");
-    for (int32_t seed = 1; seed <= seeds; ++seed) {
+    for (int32_t seed = first_seed;
+         seed < first_seed + seeds; ++seed) {
         uint32_t world_seed = (uint32_t)seed * UINT32_C(0x9e3779b9);
         CcSim control;
         CcSim agent;
@@ -350,6 +355,18 @@ int main(int argc, char **argv)
                           agent.player.coins, agent.player.reputation,
                           agent.player.treasure_cargo_slots,
                           CcPlayerMapCount(&agent), agent.player.map_capacity);
+            for (int32_t i = 0; i < agent.treasure_count; ++i) {
+                const CcTreasure *treasure = &agent.treasures[i];
+                (void)fprintf(stderr,
+                              "treasure[%d] name=%.40s id=%" PRIu64 " owner=%" PRIu64
+                              " location=%" PRIu64 " maker=%" PRIu64
+                              " gold=%d gems=%d work=%d value=%d created=%d destroyed=%d\n",
+                              i, treasure->name, treasure->id, treasure->owner_id,
+                              treasure->location_id, treasure->maker_settlement_id,
+                              treasure->gold_content, treasure->gem_content,
+                              treasure->craft_work, treasure->appraised_value,
+                              treasure->created_day, treasure->destroyed ? 1 : 0);
+            }
             return EXIT_FAILURE;
         }
         (void)printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",

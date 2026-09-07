@@ -58,6 +58,8 @@ state directly.
 
 ```sh
 out/build/release/crownless_agent_sweep --seeds 8 --years 10
+# Run one exact metrics seed:
+out/build/release/crownless_agent_sweep --seed 47 --years 100
 ```
 
 The output compares population, prosperity, hunger, active settlements, and
