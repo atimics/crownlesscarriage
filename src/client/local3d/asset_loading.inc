@@ -1886,6 +1886,11 @@ static CcLimbVec3 CreaturePoseDirectionForDraw(CcLimbVec3 v, float yaw)
                         -v.x * sinf(yaw) + v.z * cosf(yaw)};
 }
 
+/* A creature that is drawn more than this far from where its gait controller
+   stands has been moved rather than walked. Its stride is about two units, so
+   this is a jump no step could cover. */
+#define CC_CREATURE_GAIT_REANCHOR_RANGE 3.0f
+
 bool CcLocalCreatureGaitPoseInternal(
     int32_t slot, CcCreatureRigProfile profile,
     CcCreatureRigGait gait, float clock, float initial_phase,
@@ -1895,9 +1900,19 @@ bool CcLocalCreatureGaitPoseInternal(
     if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || pose == NULL ||
         !isfinite(clock) || !isfinite(scale) || scale <= 0.0f) return false;
     CreatureGaitCache *cache = &creature_gaits[slot];
+    /* The controller walks toward where it is told to be, and the drawn pose
+       is measured from there. A creature that is placed somewhere else between
+       one frame and the next -- a team put on the road at departure, a scene
+       re-anchored around the carriage -- leaves the controller behind, and
+       every joint is then drawn the whole jump away from the body it belongs
+       to. Start again at the new place instead of reaching back to the old one. */
+    bool jumped = cache->ready &&
+        Vector3Distance(ground_position,
+                        FromLimbVector(cache->controller.ground_position)) >
+            CC_CREATURE_GAIT_REANCHOR_RANGE * scale;
     bool reset = !cache->ready || cache->profile != profile ||
         cache->scene != scene || cache->scale != scale || clock < cache->last_clock ||
-        clock - cache->last_clock > 0.35f;
+        clock - cache->last_clock > 0.35f || jumped;
     if (reset) {
         *cache = (CreatureGaitCache){0};
         if (!CcCreatureRigControllerInit(&cache->controller, profile,
