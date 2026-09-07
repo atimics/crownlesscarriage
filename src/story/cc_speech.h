@@ -61,6 +61,12 @@ bool CcSpeechPath(const CcSpeech *speech, char *path, size_t capacity);
 bool CcSpeechJson(const CcSpeech *speech, char *json, size_t capacity);
 bool CcSpeechGreeting(const CcSim *sim, CcId place_id, CcId object_id,
                        const char *speaker, const char *service, CcSpeech *speech);
+/* Realize a held gossip account in the speaker's register instead of
+   quoting the shared account text. Returns false for accounts the lexicon
+   does not know, so the caller keeps the direct-quote path. */
+bool CcSpeechRealizeGossip(const CcSim *sim, const CcCharacter *speaker,
+                           const CcGossip *story, const CcGossipVersion *version,
+                           char *text, size_t capacity);
 bool CcSpeechGossip(const CcSim *sim, CcId character_id, int32_t offset,
                       bool source, CcSpeech *speech);
 bool CcSpeechStory(const CcSim *sim, CcId character_id,

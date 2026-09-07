@@ -5783,7 +5783,9 @@ static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
          event->kind == CC_EVENT_CHARACTER_DIED ||
          (sim->schema_version >= 46U &&
           (event->kind == CC_EVENT_HARVEST_FAILED || event->kind == CC_EVENT_ROUTE_CLOSED ||
-           event->kind == CC_EVENT_BANDIT_PRESSURE || event->kind == CC_EVENT_MONSTER_PRESSURE)));
+           event->kind == CC_EVENT_BANDIT_PRESSURE || event->kind == CC_EVENT_MONSTER_PRESSURE)) ||
+         (sim->schema_version >= 49U &&
+          event->kind == CC_EVENT_SHORTAGE));
 }
 
 /* A notice posted on a board is a fact like any other: it enters the ledger
@@ -18464,7 +18466,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 47U
+#define CC_NEWEST_LEGACY_SCHEMA 48U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18482,7 +18484,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 47U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 48U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },

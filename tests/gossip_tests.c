@@ -62,6 +62,29 @@ static CcId AddAccount(CcId origin, const char *text)
     return event->id;
 }
 
+/* The sim strikes shortage notices in one authored format; the fixture
+   mirrors it so the lexicon reads real slots back out. */
+static CcId AddShortage(CcId origin, int32_t weeks, int32_t level)
+{
+    CC_CHECK(sim.event_count < CC_MAX_EVENTS);
+    CcEvent *event = &sim.events[sim.event_write_index];
+    *event = (CcEvent){
+        .id = CcMakeId(CC_ENTITY_EVENT, sim.next_entity_serial++),
+        .day = sim.current_day,
+        .kind = CC_EVENT_SHORTAGE,
+        .subject_id = origin,
+        .location_id = origin,
+        .magnitude = 40
+    };
+    const CcSettlement *place = CcSimSettlement(&sim, origin);
+    (void)snprintf(event->text, sizeof(event->text),
+        "%s has %d weeks of food; hunger reaches pressure level %d.",
+        place != NULL ? place->name : "A town", weeks, level);
+    sim.event_write_index = (sim.event_write_index + 1) % CC_MAX_EVENTS;
+    sim.event_count += 1;
+    return event->id;
+}
+
 static CcGossip *Account(CcId id)
 {
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
@@ -639,6 +662,125 @@ static void CheckToldStories(void)
     (void)remove(path);
 }
 
+/* A famine account is realized in the speaker's own register. The road,
+   scout and ledger voices state the same claim differently, keep the slots
+   their register holds, and lose the count when deep hearsay no longer
+   carries it. Other accounts stay direct quotes until their lexicon lands. */
+static CcGossipCarrier *CarrierOf(CcId id)
+{
+    for (int32_t i = 0; i < CcSimGossipCarrierCapacity(&sim); ++i) {
+        if (sim.gossip_carriers[i].id == id) {
+            return &sim.gossip_carriers[i];
+        }
+    }
+    return NULL;
+}
+
+static int32_t GossipSlotOf(CcId event_id)
+{
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        if (sim.gossip[i].event_id == event_id) return i;
+    }
+    return -1;
+}
+
+static void CheckShortageRegisters(void)
+{
+    Prepare();
+    CcCharacter *traveller = &sim.characters[0];
+    CcCharacter *official = &sim.characters[1];
+    CcCharacter *scout = &sim.characters[2];
+    traveller->role = CC_CHARACTER_TRAVELLER;
+    official->role = CC_CHARACTER_OFFICIAL;
+    scout->role = CC_CHARACTER_SCOUT;
+    CcId place = sim.settlements[0].id;
+    traveller->current_settlement_id = place;
+    official->current_settlement_id = place;
+    scout->current_settlement_id = place;
+    traveller->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    official->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    scout->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    CcId famine = AddShortage(place, 3, 1);
+    CcSimRefreshCharacterGossip(&sim);
+    const char *town = sim.settlements[0].name;
+    CcSpeech road, ledger, lookouts;
+    int32_t road_offset = StoryOffset(&sim, traveller->id, famine);
+    int32_t ledger_offset = StoryOffset(&sim, official->id, famine);
+    int32_t scout_offset = StoryOffset(&sim, scout->id, famine);
+    CC_CHECK(road_offset >= 0 && ledger_offset >= 0 && scout_offset >= 0);
+    CC_CHECK(CcSpeechGossip(&sim, traveller->id, road_offset, false, &road));
+    CC_CHECK(CcSpeechGossip(&sim, official->id, ledger_offset, false, &ledger));
+    CC_CHECK(CcSpeechGossip(&sim, scout->id, scout_offset, false, &lookouts));
+    /* Each register names the town; each keeps the count it holds. */
+    CC_CHECK(strstr(road.text, town) != NULL);
+    CC_CHECK(strstr(ledger.text, town) != NULL);
+    CC_CHECK(strstr(lookouts.text, town) != NULL);
+    CC_CHECK(strstr(road.text, "3 weeks") != NULL);
+    CC_CHECK(strstr(ledger.text, "3 weeks") != NULL);
+    CC_CHECK(strstr(lookouts.text, "3 weeks") != NULL);
+    CC_CHECK(strstr(ledger.text, "pressure level 1") != NULL);
+    CC_CHECK(strstr(lookouts.text, "level 1") != NULL);
+    CC_CHECK(strcmp(road.text, ledger.text) != 0);
+    CC_CHECK(strcmp(ledger.text, lookouts.text) != 0);
+    printf("Road: %s\nLedger: %s\nScout: %s\n", road.text, ledger.text,
+           lookouts.text);
+    /* Deep hearsay loses the count on the road; the worry survives. */
+    CcGossipCarrier *carrier = CarrierOf(traveller->id);
+    CC_CHECK(carrier != NULL);
+    int32_t slot = GossipSlotOf(famine);
+    CC_CHECK(slot >= 0);
+    carrier->versions[slot].retellings = 4;
+    CcSpeech deep;
+    CC_CHECK(CcSpeechGossip(&sim, traveller->id, road_offset, false, &deep));
+    CC_CHECK(strstr(deep.text, town) != NULL);
+    CC_CHECK(strstr(deep.text, "weeks") == NULL);
+    CC_CHECK(strstr(deep.text, "food") != NULL ||
+             strstr(deep.text, "hungry") != NULL);
+    printf("Deep hearsay: %s\n", deep.text);
+    /* The telling is stable: same account, same speaker, same words. */
+    CcSpeech again;
+    CC_CHECK(CcSpeechGossip(&sim, traveller->id, road_offset, false, &again));
+    CC_CHECK(strcmp(again.text, deep.text) == 0 &&
+            again.audio_key == deep.audio_key);
+    const char *path_saved = "register-lexicon.ccsave";
+    (void)remove(path_saved);
+    CheckValid();
+    CC_CHECK(CcSaveWrite(path_saved, &sim, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path_saved, &restored, error, sizeof(error)));
+    CcSpeech saved;
+    CC_CHECK(CcSpeechGossip(&restored, traveller->id, road_offset, false,
+                            &saved));
+    CC_CHECK(strcmp(saved.text, deep.text) == 0);
+    (void)remove(path_saved);
+    /* Accounts without a register remain direct quotes. */
+    CcId raiders = AddAccount(place, "Raiders took three sacks from the "
+                                "western granary.");
+    CcSimRefreshCharacterGossip(&sim);
+    int32_t raid_offset = StoryOffset(&sim, traveller->id, raiders);
+    CC_CHECK(raid_offset >= 0);
+    CcSpeech quote;
+    CC_CHECK(CcSpeechGossip(&sim, traveller->id, raid_offset, false, &quote));
+    CC_CHECK(strncmp(quote.text, "I heard this: ", 13) == 0);
+    /* Famine accounts ride the schema gate so older journals replay. */
+    Prepare();
+    traveller = &sim.characters[0];
+    traveller->role = CC_CHARACTER_TRAVELLER;
+    traveller->current_settlement_id = sim.settlements[0].id;
+    traveller->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    sim.schema_version = 48U;
+    CcId legacy_famine = AddShortage(sim.settlements[0].id, 2, 1);
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(StoryOffset(&sim, traveller->id, legacy_famine) < 0);
+    /* The ledger cursor already scanned the event, so it stays skipped;
+       accounts struck after the gate become gossip. */
+    sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcId current_famine = AddShortage(sim.settlements[0].id, 2, 2);
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(StoryOffset(&sim, traveller->id, legacy_famine) < 0);
+    CC_CHECK(StoryOffset(&sim, traveller->id, current_famine) >= 0);
+    CheckValid();
+}
+
 int main(void)
 {
     CheckPersonalAccounts();
@@ -655,6 +797,7 @@ int main(void)
     CheckLocalRumorText();
     CheckIncompleteSave();
     CheckBiasAndDecay();
+    CheckShortageRegisters();
     puts("Traveler gossip network passed.");
     return 0;
 }

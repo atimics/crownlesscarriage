@@ -99,6 +99,7 @@ add_library(crownless_story
     src/story/cc_story.c
     src/story/cc_speech.c
     src/story/cc_speech_interactions.c
+    src/story/cc_speech_lexicon.c
     src/story/cc_speech_json.c
 )
 target_include_directories(crownless_story PUBLIC src)

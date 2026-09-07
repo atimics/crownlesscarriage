@@ -121,6 +121,28 @@ Gossip drawn by the Chat verb:
 - Who told them: "%s told me. The account concerns %s, on day %d." or, when the
   teller is the speaker: "People were talking about %s. The account is from day %d."
 
+Famine accounts, realized in the speaker's register (cc_speech_lexicon.c). A
+notable shortage notice ("%s has %d weeks of food; hunger reaches pressure
+level %d.") reaches the account each holder carries, and the holder's role
+chooses the voice that states it:
+- Traveller, courier, refugee, laborer (the road register), fresh telling:
+  "%s is down to %d weeks of food." or "Word from %s: the granary is down to
+  %d weeks."
+- The road register after four retellings, when the count has fallen away:
+  "They say %s is running out of food." or "The word along the road is that
+  %s is going hungry."
+- Scout: "The granary at %s holds %d weeks of food. Hunger there has reached
+  level %d." or "Counting the granary at %s: %d weeks left, with hunger at
+  level %d."
+- Official (the ledger register): "The stores at %s stand at %d weeks of food.
+  The ledger calls it pressure level %d, from day %d." or "By the ledger, %s
+  holds %d weeks of food at pressure level %d, as of day %d."
+- Every register keeps the gossip stance suffixes ("Loyal voices credit the
+  crown." / "Some blame the court." / "They fear worse is coming.")
+The variant choice is a stable hash of the account and the speaker, so the
+same telling always says the same words. Accounts of other kinds remain direct
+quotes until their lexicon lands.
+
 Trade counter speech: "For %d %s, the price is %c crowns." /
 "I can pay %c crowns for %d %s." /
 "You have brought %d %s for the delivery. Let us settle it."

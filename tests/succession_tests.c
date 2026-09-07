@@ -137,13 +137,13 @@ static void CheckCradleFavored(char *error, size_t capacity)
     CheckReferences(&sim);
 }
 
-/* Save round-trip at schema 48, and a save stamped 47 loads with the
+/* Save round-trip at schema 49, and a save stamped 48 loads with the
  * schema re-stamp (mirrors travel_departure_tests' CheckJourneySaves). */
 static void CheckSuccessionSaves(void)
 {
     char error[256];
     const char *path = "succession-claim.ccsave";
-    for (uint32_t version = 47U; version <= CC_SIM_SCHEMA_VERSION; ++version) {
+    for (uint32_t version = 48U; version <= CC_SIM_SCHEMA_VERSION; ++version) {
         CcSim sim;
         CcSim restored;
         CcSimInit(&sim, UINT32_C(0x50cc0e5));
