@@ -1426,6 +1426,11 @@ if(BUILD_TESTING)
         cc_strict_warnings(creature_frame_tests)
         add_test(NAME fixed_creature_gait_timing COMMAND creature_frame_tests)
 
+        add_executable(creature_teleport_tests tests/creature_teleport_tests.c)
+        target_link_libraries(creature_teleport_tests PRIVATE crownless_local_renderer raylib)
+        cc_strict_warnings(creature_teleport_tests)
+        add_test(NAME creature_pose_after_a_jump COMMAND creature_teleport_tests)
+
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c
         )
