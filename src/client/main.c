@@ -1099,6 +1099,18 @@ static ConvoyUpdateResult UpdateDrivenConvoy(LocalState *local,
 {
     CcLocalConvoyState *convoy = &local->convoy;
     bool stopped = local->carriage_stopped || IsKeyDown(KEY_SPACE);
+    if (getenv("CC_DEBUG_TEAM") != NULL) {
+        static int32_t ticks;
+        if ((ticks++ % 30) == 0) {
+            (void)fprintf(stderr,
+                "[convoy] phase=%d pace=%.3f stopped=%d carriage_stopped=%d "
+                "progress=%.3f town=(%.1f %.1f)\n",
+                (int)convoy->phase, (double)convoy->pace, (int)stopped,
+                (int)local->carriage_stopped, (double)convoy->phase_progress,
+                (double)convoy->town_position.x,
+                (double)convoy->town_position.z);
+        }
+    }
     bool journey_halt = local->journey_travel_active && sim != NULL &&
         sim->journey.active &&
         sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING &&
