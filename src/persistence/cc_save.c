@@ -5931,11 +5931,13 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
          legacy_version == 40U || legacy_version == 41U ||
          legacy_version == 42U || legacy_version == 43U ||
          legacy_version == 44U || legacy_version == 45U ||
-         legacy_version == 46U || legacy_version == 47U) &&
+         legacy_version == 46U || legacy_version == 47U ||
+         legacy_version == 48U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
-         * default 0); older saves need no data migration. */
+         * default 0). Schema 49 makes notable famine accounts gossip; the
+         * change is derived from events, so older saves need no migration. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }

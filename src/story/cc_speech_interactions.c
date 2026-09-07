@@ -50,9 +50,15 @@ bool CcSpeechStory(const CcSim *sim, CcId character_id,
                 origin != NULL ? origin->name : "town", story->day);
         }
     } else {
-        char account[CC_EVENT_TEXT_CAPACITY];
-        CcGossipText(sim, story, version, account, sizeof(account));
-        (void)snprintf(text, sizeof(text), "I heard this: %s", account);
+        char realized[CC_SPEECH_TEXT_CAPACITY];
+        if (CcSpeechRealizeGossip(sim, speaker, story, version,
+                                  realized, sizeof(realized))) {
+            (void)snprintf(text, sizeof(text), "%s", realized);
+        } else {
+            char account[CC_EVENT_TEXT_CAPACITY];
+            CcGossipText(sim, story, version, account, sizeof(account));
+            (void)snprintf(text, sizeof(text), "I heard this: %s", account);
+        }
     }
     return CcSpeechCompose(speech, source ? "gossip.source" : "gossip.account",
         speaker->id, speaker->name, CcSpeechCharacterVoice(sim, speaker), text,
