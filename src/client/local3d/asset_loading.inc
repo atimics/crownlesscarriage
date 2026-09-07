@@ -81,6 +81,16 @@ static const Vector3 carriage_wheel_centers[4] = {
     {1.05f, 0.62f, 0.94f}, {1.05f, 0.62f, -0.94f},
 };
 
+/* The shipped tyres measure 0.808 and 0.628 across their radius and sit with
+   their bottoms on the ground, so the front pair is the tall one and each hub
+   hangs at the height its wheel rolls on. One number both picks a wheel's
+   meshes out of the model and turns them: a wheel measured at one size and
+   rolled at another slips. */
+float CcLocalCarriageWheelRadiusInternal(int32_t wheel)
+{
+    return wheel < 2 ? 0.81f : 0.63f;
+}
+
 static void ClassifyCarriageWheels(const Model *model)
 {
     memset(carriage_wheel_mesh, 0, sizeof(carriage_wheel_mesh));
@@ -88,7 +98,7 @@ static void ClassifyCarriageWheels(const Model *model)
         BoundingBox bounds = GetMeshBoundingBox(model->meshes[mesh]);
         for (int wheel = 0; wheel < 4; ++wheel) {
             Vector3 center = carriage_wheel_centers[wheel];
-            float radius = wheel < 2 ? 0.81f : 0.63f;
+            float radius = CcLocalCarriageWheelRadiusInternal(wheel);
             if (bounds.min.x >= center.x - radius &&
                 bounds.max.x <= center.x + radius &&
                 bounds.min.y >= center.y - radius &&
