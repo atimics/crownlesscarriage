@@ -181,6 +181,26 @@ def read_indices(document: dict, binary: bytes,
             read_accessor(document, binary, primitive["indices"])]
 
 
+WHEEL_NAME_PREFIX = "GEO_Wheel_"
+
+
+def wheel_group_name(node_name: str) -> str | None:
+    """Return the per-wheel group name for an authored carriage wheel node.
+
+    The carriage keeps each wheel's parts as GEO_Wheel_<x>_<z>_<Part>
+    nodes so the client can classify them by bounds and spin them. Batching
+    those parts into the body would bake them into one static mesh and the
+    wheels could never turn, so the batcher keeps every wheel part out of
+    the shared groups and groups them per wheel instead.
+    """
+    if not node_name.startswith(WHEEL_NAME_PREFIX):
+        return None
+    tokens = node_name.split("_")
+    if len(tokens) < 4:
+        return None
+    return "_".join(tokens[:4])
+
+
 def collect_groups(document: dict, binary: bytes) -> tuple[dict, dict]:
     if document.get("skins") or document.get("animations"):
         raise ValueError("batch_static_glb only accepts rigid models")
@@ -205,6 +225,7 @@ def collect_groups(document: dict, binary: bytes) -> tuple[dict, dict]:
             mesh = meshes[node["mesh"]]
             normal_transform = normal_matrix(world)
             reverse_winding = determinant3([row[:3] for row in world[:3]]) < 0.0
+            wheel_name = wheel_group_name(node.get("name", ""))
             for primitive in mesh.get("primitives", []):
                 if primitive.get("mode", 4) != 4:
                     raise ValueError("only triangle primitives can be batched")
@@ -217,7 +238,10 @@ def collect_groups(document: dict, binary: bytes) -> tuple[dict, dict]:
                         f"unsupported attributes: {sorted(unsupported)}")
                 layout = tuple(sorted(attributes))
                 material = int(primitive.get("material", -1))
-                key = (material, layout)
+                if wheel_name is not None:
+                    key = (1, wheel_name, material, layout)
+                else:
+                    key = (0, "", material, layout)
                 group = groups.setdefault(key, {
                     "attributes": {semantic: [] for semantic in layout},
                     "indices": [],
@@ -302,8 +326,16 @@ def build_document(source: dict, groups: dict, metadata: dict,
     views: list[dict] = []
     accessors: list[dict] = []
     primitives: list[dict] = []
+    wheel_primitives: dict[str, list[dict]] = {}
 
-    for (material, layout), group in sorted(groups.items()):
+    for key, group in sorted(groups.items()):
+        is_wheel = key[0] == 1
+        wheel_name = key[1]
+        material = key[2]
+        layout = key[3]
+        destination = (
+            wheel_primitives.setdefault(wheel_name, [])
+            if is_wheel else primitives)
         primitive_attributes: dict[str, int] = {}
         attributes = group["attributes"]
         for semantic in layout:
@@ -347,7 +379,7 @@ def build_document(source: dict, groups: dict, metadata: dict,
         }
         if material >= 0:
             primitive["material"] = material
-        primitives.append(primitive)
+        destination.append(primitive)
 
     generator = source.get("asset", {}).get("generator", "")
     asset = dict(source.get("asset", {"version": "2.0"}))
@@ -359,15 +391,23 @@ def build_document(source: dict, groups: dict, metadata: dict,
         "cc_library_version": metadata.get("cc_library_version", "web"),
         "cc_paint_material": "mixed",
     }
+    meshes = [{"name": "GEO_BATCHED", "primitives": primitives}]
+    nodes = [{"name": "GEO_BATCHED", "mesh": 0, "extras": extras}]
+    for wheel_name in sorted(wheel_primitives):
+        wheel_extras = dict(extras)
+        wheel_extras["cc_role"] = "carriage_wheel"
+        meshes.append({"name": wheel_name, "primitives": wheel_primitives[wheel_name]})
+        nodes.append({"name": wheel_name, "mesh": len(meshes) - 1,
+                      "extras": wheel_extras})
     document = {
         "asset": asset,
         "buffers": [{"byteLength": len(binary)}],
         "bufferViews": views,
         "accessors": accessors,
         "materials": source.get("materials", []),
-        "meshes": [{"name": "GEO_BATCHED", "primitives": primitives}],
-        "nodes": [{"name": "GEO_BATCHED", "mesh": 0, "extras": extras}],
-        "scenes": [{"name": "Scene", "nodes": [0]}],
+        "meshes": meshes,
+        "nodes": nodes,
+        "scenes": [{"name": "Scene", "nodes": list(range(len(nodes)))}],
         "scene": 0,
     }
     for key in ("extensionsUsed", "extensionsRequired", "extensions",
