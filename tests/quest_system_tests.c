@@ -226,12 +226,85 @@ static int TestDangerFailure(void)
     return 0;
 }
 
+/* A crew that resolves a quest and drives away leaves an echo nobody is
+   present to hear. A year of away time recycles the situation slot and
+   overwrites the outcome archive, and the echo must leave with its subject:
+   an echo about a quest the world no longer holds cannot be saved, and the
+   away clock would never advance the world again. */
+static int TestUnheardEchoExpiresWithItsSubject(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x51a7f00d));
+    char error[256];
+    CcSituation *repair = FindSituation(
+        &sim, CC_SITUATION_ROUTE_REPAIR);
+    CC_CHECK(repair != NULL);
+    CcId repair_id = repair->id;
+    sim.player.location_id = CcSimSituationOfferSettlementId(&sim, repair);
+    sim.carriage.location_id = sim.player.location_id;
+    sim.player.cargo[CC_GOOD_TOOLS] = 2;
+    sim.player.cargo[CC_GOOD_WOOD] = 2;
+    sim.player.cargo[CC_GOOD_STONE] = 2;
+    CcCommand accept = {
+        .kind = CC_COMMAND_ACCEPT_SITUATION,
+        .target_id = repair_id
+    };
+    CC_CHECK(CcSimApply(&sim, &accept, error, sizeof(error)));
+    CcCommand repair_command = {
+        .kind = CC_COMMAND_REPAIR_ROUTE,
+        .target_id = repair->target_id,
+        .amount = 1
+    };
+    CC_CHECK(CcSimApply(&sim, &repair_command, error, sizeof(error)));
+    CC_CHECK(sim.delayed_echo.active);
+    CC_CHECK(sim.delayed_echo.situation_id == repair_id);
+
+    CcId elsewhere = 0U;
+    for (int32_t i = 0; i < sim.settlement_count; ++i) {
+        if (sim.settlements[i].id != sim.delayed_echo.settlement_id) {
+            elsewhere = sim.settlements[i].id;
+            break;
+        }
+    }
+    CC_CHECK(elsewhere != 0U);
+    sim.player.location_id = elsewhere;
+    sim.carriage.location_id = elsewhere;
+
+    /* Two away-clock batches, the size the shared host advances at once.
+       The second one is where the situation slot and the archived outcome
+       both go. */
+    for (int32_t batch = 0; batch < 2; ++batch) {
+        CcSimAdvanceDays(&sim, 365);
+        CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+    }
+    CC_CHECK(CcSimSituation(&sim, repair_id) == NULL);
+    CC_CHECK(CcSimQuestOutcome(&sim, repair_id) == NULL);
+    CC_CHECK(!sim.delayed_echo.active ||
+             sim.delayed_echo.situation_id != repair_id);
+    for (int32_t i = 0; i < sim.pending_echo_count; ++i) {
+        CC_CHECK(sim.pending_echoes[i].situation_id != repair_id);
+    }
+    /* Every surviving echo still has something to be about. */
+    if (sim.delayed_echo.active) {
+        CC_CHECK(CcSimSituation(&sim, sim.delayed_echo.situation_id) != NULL ||
+                 CcSimQuestOutcome(
+                     &sim, sim.delayed_echo.situation_id) != NULL);
+    }
+    for (int32_t i = 0; i < sim.pending_echo_count; ++i) {
+        CcId subject = sim.pending_echoes[i].situation_id;
+        CC_CHECK(CcSimSituation(&sim, subject) != NULL ||
+                 CcSimQuestOutcome(&sim, subject) != NULL);
+    }
+    return 0;
+}
+
 int main(void)
 {
     CC_CHECK(TestClockIdempotency() == 0);
     CC_CHECK(TestFrontGroupingAndUrgency() == 0);
     CC_CHECK(TestResolutionEvidenceOutcomesAndEchoQueue() == 0);
     CC_CHECK(TestDangerFailure() == 0);
+    CC_CHECK(TestUnheardEchoExpiresWithItsSubject() == 0);
     (void)printf("Quest fronts and clocks tests passed\n");
     return 0;
 }

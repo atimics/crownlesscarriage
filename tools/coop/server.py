@@ -570,8 +570,13 @@ class Application:
     def route(self, env):
         method, path = env["REQUEST_METHOD"], env.get("PATH_INFO", "/")
         if path == "/healthz":
-            return (503 if self.worlds.failed else 200), {"status": "recovery" if self.worlds.failed else "ready", "protocol": PROTOCOL,
-                "revision": os.environ.get("CROWNLESS_REVISION", "development")}, None
+            # Liveness is about this process, not its saves. A world that needs
+            # recovery is reported and refused on its own routes; taking the
+            # host out of the load balancer for it would strand every other
+            # carriage, and the damage outlives a redeploy.
+            return 200, {"status": "ready", "protocol": PROTOCOL,
+                "revision": os.environ.get("CROWNLESS_REVISION", "development"),
+                "worlds_needing_recovery": len(self.worlds.failed)}, None
         if not path.startswith("/api/"):
             require(method in ("GET", "HEAD"), "Use GET for game files.", 405)
             if path in ("/", "/avatar.js"):

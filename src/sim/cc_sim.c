@@ -10997,6 +10997,31 @@ static CcFront *AllocateFront(CcSim *sim)
     return &sim->fronts[oldest];
 }
 
+static void PromotePendingEcho(CcSim *sim);
+
+/* An echo is a memory of a quest. Once the quest has left both the situation
+   table and the outcome archive there is nothing for the echo to be about, so
+   it is forgotten with its subject rather than left pointing at a slot the
+   world has reused. */
+static void ForgetEchoesAboutSubject(CcSim *sim, CcId subject_id)
+{
+    if (sim == NULL || subject_id == 0U) return;
+    if (sim->delayed_echo.active &&
+        sim->delayed_echo.situation_id == subject_id) {
+        sim->delayed_echo = (CcDelayedEcho){0};
+    }
+    int32_t kept = 0;
+    for (int32_t i = 0; i < sim->pending_echo_count; ++i) {
+        if (sim->pending_echoes[i].situation_id == subject_id) continue;
+        sim->pending_echoes[kept++] = sim->pending_echoes[i];
+    }
+    for (int32_t i = kept; i < sim->pending_echo_count; ++i) {
+        sim->pending_echoes[i] = (CcDelayedEcho){0};
+    }
+    sim->pending_echo_count = kept;
+    PromotePendingEcho(sim);
+}
+
 static CcQuestOutcomeRecord *AllocateQuestOutcome(CcSim *sim)
 {
     if (sim->quest_outcome_count < CC_MAX_QUEST_OUTCOMES) {
@@ -11010,7 +11035,11 @@ static CcQuestOutcomeRecord *AllocateQuestOutcome(CcSim *sim)
         if (sim->quest_outcomes[i].resolved_day <
             sim->quest_outcomes[oldest].resolved_day) oldest = i;
     }
+    CcId forgotten = sim->quest_outcomes[oldest].situation_id;
     sim->quest_outcomes[oldest] = (CcQuestOutcomeRecord){0};
+    if (CcSimSituation(sim, forgotten) == NULL) {
+        ForgetEchoesAboutSubject(sim, forgotten);
+    }
     return &sim->quest_outcomes[oldest];
 }
 
@@ -11307,8 +11336,9 @@ void CcSimUpgradeQuestArchitecture(CcSim *sim)
 static void ForgetRetiredSituation(CcSim *sim, CcId situation_id)
 {
     if (sim == NULL || situation_id == 0U) return;
-    /* Quest history lives in the outcome archive. Journey references belong
-       to the situation slot and expire when that slot is reused. */
+    /* Quest history lives in the outcome archive. Journey references and
+       echoes belong to the situation slot and expire when that slot is
+       reused and the archive no longer holds the quest. */
     if (sim->journey.situation_id == situation_id) {
         sim->journey.situation_id = 0U;
     }
@@ -11348,6 +11378,9 @@ static void ForgetRetiredSituation(CcSim *sim, CcId situation_id)
         character->knowledge_count = knowledge_count;
         character->knowledge_write_index =
             knowledge_count % CC_CHARACTER_KNOWLEDGE_CAPACITY;
+    }
+    if (CcSimQuestOutcome(sim, situation_id) == NULL) {
+        ForgetEchoesAboutSubject(sim, situation_id);
     }
 }
 
