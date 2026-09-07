@@ -963,6 +963,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " condition INTEGER NOT NULL, trips_completed INTEGER NOT NULL,"
         " cargo_losses INTEGER NOT NULL);";
     const char *royal_route_usage_schema =
+        "CREATE TABLE IF NOT EXISTS common_pony_herd ("
+        " slot INTEGER PRIMARY KEY, adults INTEGER NOT NULL, foals INTEGER NOT NULL,"
+        " condition INTEGER NOT NULL, hunger INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS royal_route_usage ("
         " slot INTEGER PRIMARY KEY, route_id INTEGER NOT NULL UNIQUE,"
         " trade_week INTEGER NOT NULL, slots_used INTEGER NOT NULL);";
@@ -1500,6 +1503,30 @@ static bool SaveTownRecovery(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 1, i);
         BindInt(statement, 2, sim->settlements[i].fire_damage);
         BindInt(statement, 3, sim->settlements[i].last_fire_day);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool SaveCommonPonies(sqlite3 *database, const CcSim *sim,
+                              char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 47U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "INSERT INTO common_pony_herd VALUES(?,?,?,?,?);",
+        &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        BindInt(statement, 1, i);
+        BindInt(statement, 2, place->pony_adults);
+        BindInt(statement, 3, place->pony_foals);
+        BindInt(statement, 4, place->pony_condition);
+        BindInt(statement, 5, place->pony_hunger);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement);
@@ -3242,6 +3269,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM player_site_knowledge;"
             "DELETE FROM faction; DELETE FROM shipment;"
             "DELETE FROM royal_carriage;"
+            "DELETE FROM common_pony_herd;"
             "DELETE FROM royal_route_usage;"
             "DELETE FROM shipment_intent; DELETE FROM diplomacy; DELETE FROM courier;"
             "DELETE FROM bandit_group; DELETE FROM monster_population;"
@@ -3273,6 +3301,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveGossip(database, sim, error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
+        SaveCommonPonies(database, sim, error, error_capacity) &&
         SaveTownRecovery(database, sim, error, error_capacity) &&
         SavePonies(database, sim, error, error_capacity) &&
         SaveHorseTeam(database, sim, error, error_capacity) &&
@@ -4311,6 +4340,31 @@ static bool ReadShipments(sqlite3 *database, CcSim *sim,
     sqlite3_finalize(statement);
     if (intents != sim->shipment_count) {
         SetError(error, error_capacity, "Shipment intent rows are incomplete.");
+        return false;
+    }
+    return true;
+}
+
+static bool ReadCommonPonies(sqlite3 *database, CcSim *sim,
+                              char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 47U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "SELECT slot,adults,foals,condition,hunger FROM common_pony_herd ORDER BY slot;",
+        &statement, error, error_capacity)) return false;
+    int32_t rows = 0;
+    int result;
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        if (rows >= sim->settlement_count || sqlite3_column_int(statement, 0) != rows) break;
+        CcSettlement *place = &sim->settlements[rows++];
+        place->pony_adults = sqlite3_column_int(statement, 1);
+        place->pony_foals = sqlite3_column_int(statement, 2);
+        place->pony_condition = sqlite3_column_int(statement, 3);
+        place->pony_hunger = sqlite3_column_int(statement, 4);
+    }
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE || rows != sim->settlement_count) {
+        SetError(error, error_capacity, "Common pony herds are incomplete.");
         return false;
     }
     return true;
@@ -5899,14 +5953,14 @@ static void InitializeExtendedGoods(CcSim *sim)
     CcSimInitializePaperEconomy(sim);
 }
 
-static bool UpgradeLegacyRuntime(CcSim *sim,
+static bool UpgradeLegacyRuntimeBeforePonies(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
     if ((legacy_version == 38U || legacy_version == 39U ||
          legacy_version == 40U || legacy_version == 41U ||
          legacy_version == 42U || legacy_version == 43U ||
-         legacy_version == 44U || legacy_version == 45U) &&
+         legacy_version == 44U || legacy_version == 45U || legacy_version == 46U) &&
         sim->generator_version == 25U) {
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
@@ -6406,6 +6460,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadSituations(database, sim, error, error_capacity) &&
               ReadSituationCasts(database, sim, error, error_capacity) &&
               ReadCharacters(database, sim, error, error_capacity) &&
+              ReadCommonPonies(database, sim, error, error_capacity) &&
               ReadQuestArchitecture(database, sim, error, error_capacity) &&
               ReadEvents(database, sim, error, error_capacity) &&
               ReadLegends(database, sim, error, error_capacity) &&
@@ -6452,6 +6507,14 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
         SetError(error, error_capacity, validation);
         return false;
     }
+    return true;
+}
+
+static bool UpgradeLegacyRuntime(CcSim *sim, char *error, size_t error_capacity)
+{
+    uint32_t previous = sim->schema_version;
+    if (!UpgradeLegacyRuntimeBeforePonies(sim, error, error_capacity)) return false;
+    if (previous < 47U) CcSimUpgradeCommonPonies(sim);
     return true;
 }
 

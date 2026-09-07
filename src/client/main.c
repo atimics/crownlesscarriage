@@ -4064,7 +4064,7 @@ static ContextActionSet BuildContextActions(
                 sim->pony_company.ponies[pony].seen ? TextFormat("Talk to %s", CcPonyName(pony)) : "Meet a rainbow pony",
                 "", "Stop for a conversation", true, false);
         } else if (sim->pony_company.ponies[pony].ready) {
-            for (int32_t seat = 0; seat < 2; ++seat) {
+            for (int32_t seat = 0; seat < CcSimHorseTeamCount(sim); ++seat) {
                 AddDetailedContextAction(&set, CONTEXT_ACTION_PONY_SWAP,
                     TextFormat("Release %s", CcPonyName(sim->pony_company.team[seat])), "",
                     TextFormat("Invite %s", CcPonyName(pony)), true, false);
@@ -5792,7 +5792,7 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
     DrawPanel((Rectangle){866.0f, 174.0f, 362.0f, 454.0f},
               Fade(BACKGROUND, 0.76f));
     CcOverlayDrawText("TEAM & DEPARTURE", 888, 194, 15, CC_VIOLET);
-    for (int32_t horse = 0; horse < CC_CARRIAGE_HORSE_COUNT; ++horse) {
+    for (int32_t horse = 0; horse < CcSimHorseTeamCount(sim); ++horse) {
         int32_t y = 232 + horse * 70;
         CcOverlayDrawText(CcPonyName(sim->pony_company.team[horse]), 888, y, 13, INK);
         CcOverlayDrawText(

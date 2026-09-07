@@ -115,8 +115,9 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock, float
         CC_CREATURE_HORSE, clock * cadence + PI, moving);
     float lateral_spacing =
         CcLocalRoadHorseLateralSpacingInternal(bridge_checkpoint);
-    for (int32_t horse = -1; horse <= 1; horse += 2) {
-        Color coat = PONY_COLORS[sim->pony_company.team[horse < 0 ? 0 : 1]][0];
+    int32_t horse_count = CcSimHorseTeamCount(sim);
+    for (int32_t horse = horse_count == 1 ? 0 : -1; horse <= (horse_count == 1 ? 0 : 1); horse += 2) {
+        Color coat = PONY_COLORS[sim->pony_company.team[horse <= 0 ? 0 : 1]][0];
         Vector3 horse_base = LocalPoint(
             base, (float)horse * lateral_spacing, 0.0f,
             CcLocalRoadHorseLongitudinalOffsetInternal(), yaw);
@@ -309,7 +310,7 @@ static void DrawStableHorseTeam(const CcSim *sim, float clock)
             rail_cap = WORLD_VIOLET;
             break;
     }
-    for (int32_t horse = 0; horse < 2; ++horse) {
+    for (int32_t horse = 0; horse < CcSimHorseTeamCount(sim); ++horse) {
         Vector3 base = TerrainWorldPoint(stalls[horse].x, stalls[horse].y);
         Color coat = PONY_COLORS[sim->pony_company.team[horse]][0];
         CcCreaturePose pose = CcCreatureSteppedPose(

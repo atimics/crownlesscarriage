@@ -645,10 +645,11 @@ static int32_t AdventureBookLastPage(const CcSim *sim, const LocalState *local)
 
 static int32_t AdventureBookPony(const CcSim *sim, int32_t row)
 {
-    if (row < 2) return sim->pony_company.team[row];
+    int32_t with_you = CcSimHorseTeamCount(sim);
+    if (row < with_you) return sim->pony_company.team[row];
     for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
         if (i == sim->pony_company.team[0] || i == sim->pony_company.team[1]) continue;
-        if (row-- == 2) return i;
+        if (row-- == with_you) return i;
     }
     return -1;
 }

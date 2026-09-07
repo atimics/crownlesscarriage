@@ -35,7 +35,7 @@
 #define CC_MAX_RELATIONSHIPS 48
 #define CC_MAX_EVENTS 256
 #define CC_CARRIAGE_HORSE_COUNT 2
-#define CC_MAX_STABLE_HORSES 6
+#define CC_MAX_STABLE_HORSES 7
 #define CC_NAME_CAPACITY 32
 #define CC_MAP_NAME_CAPACITY 48
 #define CC_EVENT_TEXT_CAPACITY 144
@@ -56,7 +56,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 46
+#define CC_SIM_SCHEMA_VERSION 47
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -539,6 +539,10 @@ typedef struct CcSettlement {
     int32_t sheep_lambs;
     int32_t sheep_condition;
     int32_t sheep_hunger;
+    int32_t pony_adults;
+    int32_t pony_foals;
+    int32_t pony_condition;
+    int32_t pony_hunger;
 } CcSettlement;
 
 typedef enum CcTownCondition {
@@ -1688,6 +1692,11 @@ int32_t CcSimRoadHouseProgressMilli(const CcSim *sim, CcId route_id,
                                     int32_t journey_watch_count);
 CcMoney CcSimRoadHouseCost(const CcSim *sim, CcId route_id);
 bool CcSimJourneyRoadHouseAvailable(const CcSim *sim);
+int32_t CcSimHorseTeamCount(const CcSim *sim);
+int32_t CcSimStableHorseCapacity(const CcSim *sim);
+void CcSimUpgradeCommonPonies(CcSim *sim);
+void CcSimAdvancePonyHerds(CcSim *sim);
+int32_t CcSimCommonPonyCount(const CcSim *sim);
 int32_t CcSimHorseCount(const CcSim *sim);
 const CcHorse *CcSimHorseAt(const CcSim *sim, int32_t index);
 const CcHorse *CcSimHorse(const CcSim *sim, CcId horse_id);

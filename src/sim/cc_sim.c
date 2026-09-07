@@ -373,10 +373,20 @@ void CcSimInitializeHorseStableSystem(CcSim *sim)
     }
 }
 
+int32_t CcSimHorseTeamCount(const CcSim *sim)
+{
+    return sim != NULL && sim->schema_version >= 47U ? 1 : CC_CARRIAGE_HORSE_COUNT;
+}
+
+int32_t CcSimStableHorseCapacity(const CcSim *sim)
+{
+    return sim != NULL && sim->schema_version >= 47U ? CC_MAX_STABLE_HORSES : 6;
+}
+
 int32_t CcSimHorseCount(const CcSim *sim)
 {
     if (sim == NULL) return 0;
-    return CC_CARRIAGE_HORSE_COUNT + sim->stable_horse_count;
+    return CcSimHorseTeamCount(sim) + sim->stable_horse_count;
 }
 
 const CcHorse *CcSimHorseAt(const CcSim *sim, int32_t index)
@@ -384,8 +394,8 @@ const CcHorse *CcSimHorseAt(const CcSim *sim, int32_t index)
     if (sim == NULL || index < 0 || index >= CcSimHorseCount(sim)) {
         return NULL;
     }
-    if (index < CC_CARRIAGE_HORSE_COUNT) return &sim->horse_team[index];
-    return &sim->stable_horses[index - CC_CARRIAGE_HORSE_COUNT];
+    if (index < CcSimHorseTeamCount(sim)) return &sim->horse_team[index];
+    return &sim->stable_horses[index - CcSimHorseTeamCount(sim)];
 }
 
 const CcHorse *CcSimHorse(const CcSim *sim, CcId horse_id)
@@ -401,7 +411,7 @@ const CcHorse *CcSimHorse(const CcSim *sim, CcId horse_id)
 static CcHorse *HorseMutable(CcSim *sim, CcId horse_id)
 {
     if (sim == NULL || horse_id == 0U) return NULL;
-    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
         if (sim->horse_team[i].id == horse_id) return &sim->horse_team[i];
     }
     for (int32_t i = 0; i < sim->stable_horse_count; ++i) {
@@ -436,7 +446,7 @@ int32_t CcSimHorseTeamReadiness(const CcSim *sim)
 {
     if (sim == NULL) return 0;
     int32_t readiness = 100;
-    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
         const CcHorse *horse = &sim->horse_team[i];
         if (CcIdKind(horse->id) != CC_ENTITY_HORSE) return 0;
         int32_t value = horse->health - horse->fatigue / 2 -
@@ -4582,6 +4592,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcSimInitializeRoadSites(sim);
     CcSimInitializeRoyalCarriages(sim);
     CcPoniesInit(sim);
+    CcSimUpgradeCommonPonies(sim);
 }
 
 static CcDungeon *DungeonByIdMutable(CcSim *sim, CcId id)
@@ -5108,6 +5119,87 @@ static void AdvanceServiceProjects(CcSim *sim)
         (void)PushEvent(sim, CC_EVENT_SERVICE_OPENED, settlement->id,
                         settlement->id, LatestLocalCause(sim, settlement->id),
                         (int32_t)service, text);
+    }
+}
+
+void CcSimUpgradeCommonPonies(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 47U) return;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        bool farm = CcSettlementHasService(place, CC_SERVICE_FARM);
+        bool stable = CcSettlementHasService(place, CC_SERVICE_STABLE);
+        if (CcSettlementIsAbandoned(place) || (!farm && !stable)) continue;
+        place->pony_adults = farm ? 10 : 4;
+        place->pony_foals = farm ? 3 : 1;
+        place->pony_condition = 80;
+        place->pony_hunger = 10;
+    }
+    if (sim->horse_team[1].id != 0U && sim->stable_horse_count < CC_MAX_STABLE_HORSES) {
+        CcId stable_id = 0U;
+        for (int32_t i = 0; i < sim->settlement_count; ++i) {
+            const CcSettlement *place = &sim->settlements[i];
+            if (!CcSettlementIsAbandoned(place) && CcSettlementHasService(place, CC_SERVICE_STABLE)) {
+                if (stable_id == 0U || place->id == sim->player.location_id) stable_id = place->id;
+            }
+        }
+        if (stable_id != 0U) {
+            CcHorse *reserve = &sim->stable_horses[sim->stable_horse_count++];
+            *reserve = sim->horse_team[1];
+            reserve->stable_settlement_id = stable_id;
+            sim->horse_team[1] = (CcHorse){0};
+        }
+    }
+    int32_t released = sim->pony_company.team[1];
+    if (released >= 0 && released < CC_PONY_COUNT && sim->route_count > 0) {
+        CcPony *pony = &sim->pony_company.ponies[released];
+        pony->route_id = sim->routes[0].id;
+        pony->last_seen_route = pony->route_id;
+        pony->last_met_day = sim->current_day;
+    }
+    sim->pony_company.team[1] = -1;
+}
+
+int32_t CcSimCommonPonyCount(const CcSim *sim)
+{
+    if (sim == NULL) return 0;
+    int32_t count = 0;
+    for (int32_t i = 0; i < sim->settlement_count; ++i)
+        count += sim->settlements[i].pony_adults + sim->settlements[i].pony_foals;
+    return count;
+}
+
+void CcSimAdvancePonyHerds(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 47U) return;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        int32_t herd = place->pony_adults + place->pony_foals;
+        if (herd == 0) continue;
+        int32_t feed = MaximumI32(1, (herd + 7) / 8);
+        bool fed = CcNutritionConsume(place->stock, CC_NUTRITION_ANIMAL,
+            feed * CC_NUTRITION_PER_RATION) == feed * CC_NUTRITION_PER_RATION;
+        place->pony_hunger = ClampI32(place->pony_hunger + (fed ? -12 : 18), 0, 100);
+        place->pony_condition = ClampI32(place->pony_condition + (fed ? 3 : -8), 0, 100);
+        if (place->pony_hunger >= 85) {
+            if (place->pony_foals > 0) place->pony_foals--;
+            else if (place->pony_adults > 0) place->pony_adults--;
+            continue;
+        }
+        if (sim->current_day % 112 == 0 && place->pony_condition >= 65 && place->pony_hunger <= 30) {
+            int32_t matured = MinimumI32(place->pony_foals, MaximumI32(1, place->pony_foals / 3));
+            place->pony_foals -= matured;
+            place->pony_adults += matured;
+            int32_t room = MaximumI32(0, MaximumI32(6, place->population / 80) - herd);
+            int32_t births = place->pony_adults >= 2 ? MinimumI32(room, MaximumI32(1, place->pony_adults / 8)) : 0;
+            place->pony_foals += births;
+            if (births > 0 || matured > 0) {
+                char text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(text, sizeof(text), "%s raises %d common pony foals; %d join the working herd.",
+                    place->name, births, matured);
+                (void)PushEvent(sim, CC_EVENT_HORSE_BRED, place->id, place->id, 0U, births, text);
+            }
+        }
     }
 }
 
@@ -13633,7 +13725,7 @@ static CcId HorseFoalingLocation(const CcSim *sim, const CcHorse *mare)
     if (mare->stable_settlement_id != 0U) {
         return mare->stable_settlement_id;
     }
-    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
         if (sim->horse_team[i].id == mare->id && !sim->journey.active) {
             return sim->player.location_id;
         }
@@ -13648,7 +13740,7 @@ static void TryBirthFoal(CcSim *sim, CcHorse *mare)
     CcId location_id = HorseFoalingLocation(sim, mare);
     const CcSettlement *place = CcSimSettlement(sim, location_id);
     if (!CcSettlementHasService(place, CC_SERVICE_STABLE)) return;
-    if (sim->stable_horse_count >= CC_MAX_STABLE_HORSES) {
+    if (sim->stable_horse_count >= CcSimStableHorseCapacity(sim)) {
         mare->pregnancy_days_remaining = 1;
         return;
     }
@@ -13764,7 +13856,7 @@ static void AdvanceLegacyHorseTeam(CcSim *sim)
     }
 
     int32_t boarded_at_start = sim->stable_horse_count;
-    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
         CcHorse *horse = &sim->horse_team[i];
         AdvanceHorseLifecycle(sim, horse);
         if (travelling) {
@@ -13840,7 +13932,7 @@ static void AdvanceHorseTeam(CcSim *sim)
     }
 
     int32_t boarded_at_start = sim->stable_horse_count;
-    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
         CcHorse *horse = &sim->horse_team[i];
         AdvanceHorseLifecycle(sim, horse);
         if (!on_journey) {
@@ -13926,6 +14018,7 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
             for (int32_t settlement = 0; settlement < sim->settlement_count; ++settlement) {
                 UpdateSettlement(sim, settlement, scriptorium_id);
             }
+            CcSimAdvancePonyHerds(sim);
             AdvanceRuins(sim);
             if (sim->schema_version >= 22U) AdvanceArchives(sim);
             UpdateThreats(sim);
@@ -15745,7 +15838,7 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         return false;
     }
     if (sim->schema_version >= 15U) {
-        for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+        for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
             int32_t due = sim->horse_team[i].pregnancy_days_remaining;
             if (due > 0 && due <= 30) {
                 SetError(error, error_capacity,
@@ -15815,7 +15908,7 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         }
     }
     if (sim->schema_version >= 14U) {
-        for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+        for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
             sim->horse_team[i].hunger = ClampI32(
                 sim->horse_team[i].hunger -
                     preview.horse_feed_required * 12, 0, 100);
@@ -16233,7 +16326,7 @@ static void ApplyTravelWatchStrain(CcSim *sim)
         sim->journey.pace == CC_JOURNEY_PACE_STEADY ? 1 : 0;
     sim->carriage.condition = ClampI32(
         sim->carriage.condition - road_wear - pace_wear, 0, 100);
-    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
         CcHorse *horse = &sim->horse_team[i];
         int32_t strength_strain = sim->schema_version >= 15U ?
             cargo_strain * MaximumI32(50, 150 - horse->strength) / 100 :
@@ -16253,7 +16346,7 @@ static void RecoverJourneyTeam(CcSim *sim, int32_t fatigue_recovery,
                                int32_t hunger_recovery)
 {
     if (sim->schema_version < 14U) return;
-    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
         CcHorse *horse = &sim->horse_team[i];
         horse->fatigue = ClampI32(
             horse->fatigue - fatigue_recovery, 0, 100);
@@ -16357,7 +16450,7 @@ static bool ApplyJourneyStopAction(CcSim *sim, const CcCommand *command,
             text, sizeof(text),
             "The company waters the team, checks the wheels, and reads the road before the afternoon watch.");
     } else if (command->kind == CC_COMMAND_PRESS_ON && midday) {
-        for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+        for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
             sim->horse_team[i].fatigue = ClampI32(
                 sim->horse_team[i].fatigue + 4, 0, 100);
         }
@@ -17184,7 +17277,7 @@ static bool HorsePresentAtStable(const CcSim *sim, const CcHorse *horse,
                                  CcId settlement_id)
 {
     if (sim == NULL || horse == NULL || sim->journey.active) return false;
-    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
         if (sim->horse_team[i].id == horse->id) {
             return sim->player.location_id == settlement_id;
         }
@@ -17246,7 +17339,7 @@ static bool ApplyBreedHorses(CcSim *sim, const CcCommand *command,
                  "One of those horses is not ready to breed again.");
         return false;
     }
-    if (ReservedStableHorseSlots(sim) >= CC_MAX_STABLE_HORSES) {
+    if (ReservedStableHorseSlots(sim) >= CcSimStableHorseCapacity(sim)) {
         SetError(error, error_capacity,
                  "The company has no stable space reserved for another foal.");
         return false;
@@ -17291,7 +17384,7 @@ static bool ApplyAssignHorse(CcSim *sim, const CcCommand *command,
         return false;
     }
     int32_t team_slot = command->amount - 1;
-    if (team_slot < 0 || team_slot >= CC_CARRIAGE_HORSE_COUNT) {
+    if (team_slot < 0 || team_slot >= CcSimHorseTeamCount(sim)) {
         SetError(error, error_capacity, "Choose carriage team slot 1 or 2.");
         return false;
     }
@@ -17799,7 +17892,7 @@ static bool ValidateIdentityState(const CcSim *sim,
     if (sim->schema_version >= 7U)
         TRACK_ID(sim->hoard_raiders.id, CC_ENTITY_HOARD_RAIDERS);
     if (sim->schema_version >= 14U) {
-        for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i)
+        for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i)
             TRACK_ID(sim->horse_team[i].id, CC_ENTITY_HORSE);
     }
     if (sim->schema_version >= 15U) {
@@ -17881,12 +17974,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 42U ||
                          sim->schema_version == 43U ||
                          sim->schema_version == 44U ||
-                         sim->schema_version == 45U;
+                         sim->schema_version == 45U ||
+                         sim->schema_version == 46U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 46U && sim->generator_version == 25U) ||
         (sim->schema_version == 45U && sim->generator_version == 25U) ||
         (sim->schema_version == 44U && sim->generator_version == 25U) ||
         (sim->schema_version == 43U && sim->generator_version == 25U) ||
@@ -18005,7 +18100,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         sim->relationship_count < 0 ||
         sim->relationship_count > CC_MAX_RELATIONSHIPS ||
         sim->stable_horse_count < 0 ||
-        sim->stable_horse_count > CC_MAX_STABLE_HORSES ||
+        sim->stable_horse_count > CcSimStableHorseCapacity(sim) ||
         sim->event_count < 0 || sim->event_count > CC_MAX_EVENTS ||
         sim->event_write_index < 0 ||
         sim->event_write_index >= CC_MAX_EVENTS) {
@@ -18013,6 +18108,18 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         return false;
     }
     if (!ValidateIdentityState(sim, error, error_capacity)) return false;
+    if (sim->schema_version >= 47U) {
+        for (int32_t i = 0; i < sim->settlement_count; ++i) {
+            const CcSettlement *place = &sim->settlements[i];
+            if (place->pony_adults < 0 || place->pony_adults > CC_SIM_MAX_UNITS ||
+                place->pony_foals < 0 || place->pony_foals > CC_SIM_MAX_UNITS ||
+                place->pony_condition < 0 || place->pony_condition > 100 ||
+                place->pony_hunger < 0 || place->pony_hunger > 100) {
+                SetError(error, error_capacity, "A common pony herd is invalid.");
+                return false;
+            }
+        }
+    }
     if (sim->schema_version >= 44U) {
         uint32_t stories = 0U;
         uint32_t towns = (UINT32_C(1) << (uint32_t)sim->settlement_count) - 1U;
@@ -19664,7 +19771,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             const CcHorse *dam = CcSimHorse(sim, horse->dam_id);
             const CcHorse *pregnancy_sire = CcSimHorse(
                 sim, horse->pregnant_by_id);
-            bool on_team = i < CC_CARRIAGE_HORSE_COUNT;
+            bool on_team = i < CcSimHorseTeamCount(sim);
             if (CcIdKind(horse->id) != CC_ENTITY_HORSE ||
                 !ValidBoundedText(horse->name, sizeof(horse->name)) ||
                 horse->age_days < 0 || horse->age_days > CC_SIM_MAX_DAY ||
@@ -20712,6 +20819,14 @@ uint64_t CcSimHash(const CcSim *sim)
     if (sim->schema_version >= 40U) {
         HASH_VALUE(sim->pony_company.team[0]);
         HASH_VALUE(sim->pony_company.team[1]);
+        if (sim->schema_version >= 47U) {
+            for (int32_t i = 0; i < sim->settlement_count; ++i) {
+                HASH_VALUE(sim->settlements[i].pony_adults);
+                HASH_VALUE(sim->settlements[i].pony_foals);
+                HASH_VALUE(sim->settlements[i].pony_condition);
+                HASH_VALUE(sim->settlements[i].pony_hunger);
+            }
+        }
         HASH_VALUE(sim->pony_company.encounter);
         for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
             const CcPony *pony = &sim->pony_company.ponies[i];
