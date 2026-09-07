@@ -114,6 +114,17 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock, float
         CC_CREATURE_HORSE, clock * cadence + PI, moving);
     float lateral_spacing =
         CcLocalRoadHorseLateralSpacingInternal(bridge_checkpoint);
+    if (getenv("CC_DEBUG_TEAM") != NULL) {
+        static float next_report;
+        if (clock > next_report || clock < next_report - 1.0f) {
+            next_report = clock + 0.5f;
+            (void)fprintf(stderr,
+                "[team] pace=%.3f gait=%d moving=%d cadence=%.2f "
+                "base=(%.1f %.1f) yaw=%.2f\n",
+                (double)pace, (int)convoy_gait, (int)moving, (double)cadence,
+                (double)base.x, (double)base.z, (double)yaw);
+        }
+    }
     for (int32_t horse = -1; horse <= 1; horse += 2) {
         Color coat = PONY_COLORS[sim->pony_company.team[horse < 0 ? 0 : 1]][0];
         Vector3 horse_base = LocalPoint(
