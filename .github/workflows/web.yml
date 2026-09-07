@@ -165,17 +165,31 @@ jobs:
           EXPECTED_REVISION: ${{ github.sha }}
         run: |
           python3 - <<'PY'
-          import json, os, urllib.request
+          import json, os, time, urllib.error, urllib.request
+          # The host stops when nobody is playing, so the first request after a
+          # deploy pays for a cold boot and for reading every world off the
+          # volume. Wait for the machine rather than failing a good deploy.
+          def health(origin, deadline):
+              last = None
+              while True:
+                  request = urllib.request.Request(
+                      origin + '/healthz',
+                      headers={'User-Agent': 'Crownless-Deploy/1.0', 'Accept': 'application/json'},
+                  )
+                  try:
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          return json.load(response)
+                  except (urllib.error.URLError, TimeoutError, ConnectionError, json.JSONDecodeError) as error:
+                      last = error
+                      if time.monotonic() >= deadline:
+                          raise AssertionError(f'{origin} never answered: {last!r}')
+                      print(f'{origin} is still waking up ({error!r}); asking again.')
+                      time.sleep(5)
           for origin in ('https://crownless-ratimics.fly.dev', 'https://crownless.ratimics.com'):
-              request = urllib.request.Request(
-                  origin + '/healthz',
-                  headers={'User-Agent': 'Crownless-Deploy/1.0', 'Accept': 'application/json'},
-              )
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  health = json.load(response)
-              assert health['status'] == 'ready', health
-              assert health['revision'] == os.environ['EXPECTED_REVISION'], health
-              stranded = health.get('worlds_needing_recovery', 0)
+              reading = health(origin, time.monotonic() + 180)
+              assert reading['status'] == 'ready', reading
+              assert reading['revision'] == os.environ['EXPECTED_REVISION'], reading
+              stranded = reading.get('worlds_needing_recovery', 0)
               if stranded:
                   print(f'::warning::{origin} is serving with {stranded} world(s) needing recovery.')
               print(origin + ' is healthy at the deployed revision.')
