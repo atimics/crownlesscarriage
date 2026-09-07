@@ -125,6 +125,9 @@ typedef struct CcLocalConvoyState {
     float pace;
     float lateral_offset;
     float runtime_tick_accumulator;
+    /* Ground covered along the town lane, in world units. The renderer rolls
+       the wheels and steps the team from this and nothing else. */
+    float travelled;
 } CcLocalConvoyState;
 
 typedef struct CcLocalWorldCarriageState {
@@ -136,6 +139,9 @@ typedef struct CcLocalWorldCarriageState {
     float camera_target;
     float camera_heading_yaw;
     float arrival_travel_weight;
+    /* Ground covered along the route, in world units, measured from the
+       journey's origin so that it grows whichever way the route is walked. */
+    float travelled;
     CcId route_id;
     bool visible;
     bool hero_embarked;
@@ -612,6 +618,11 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                        float clock, RenderTexture2D target,
                        Rectangle destination);
 float CcLocalRoadCarriageX(int32_t progress_milli);
+float CcLocalRoadCarriageTravelInternal(int32_t progress_milli);
+float CcLocalCarriageWheelRadiusInternal(int32_t wheel);
+float CcLocalCarriageWheelAngleInternal(float travelled, float radius);
+float CcLocalRoadTeamStrideInternal(void);
+float CcLocalRoadTeamGaitPhaseInternal(float travelled);
 uint32_t CcLocalRoadWildernessSeedInternal(uint32_t world_seed,
                                            CcId route_id,
                                            int32_t segment_index);

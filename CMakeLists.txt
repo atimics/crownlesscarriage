@@ -1435,6 +1435,14 @@ if(BUILD_TESTING)
         cc_strict_warnings(creature_teleport_tests)
         add_test(NAME creature_pose_after_a_jump COMMAND creature_teleport_tests)
 
+        add_executable(travel_animation_tests tests/travel_animation_tests.c)
+        target_link_libraries(travel_animation_tests PRIVATE
+            crownless_local_renderer crownless_client_policy raylib
+        )
+        cc_strict_warnings(travel_animation_tests)
+        add_test(NAME travel_animation_follows_the_road
+                 COMMAND travel_animation_tests)
+
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c
         )

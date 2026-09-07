@@ -1010,7 +1010,7 @@ static float WrapLocalAngle(float angle)
 
 static void SampleConvoyPath(const Vector2 *points, int32_t count,
                              float progress, Vector2 *position,
-                             float *heading)
+                             float *heading, float *travelled)
 {
     if (points == NULL || count < 2 || position == NULL || heading == NULL) {
         return;
@@ -1022,6 +1022,9 @@ static void SampleConvoyPath(const Vector2 *points, int32_t count,
         length += sqrtf(x * x + y * y);
     }
     float remaining = ClampUnit(progress) * length;
+    /* The path is walked by arc length, so this is the ground the wheels have
+       rolled over and the team has stepped through. */
+    if (travelled != NULL) *travelled = remaining;
     for (int32_t i = 0; i + 1 < count; ++i) {
         Vector2 delta = {points[i + 1].x - points[i].x,
                          points[i + 1].y - points[i].y};
@@ -1071,7 +1074,7 @@ static void SetConvoyTownPose(CcLocalConvoyState *convoy, float delta_time)
     Vector2 position = {0};
     float heading = convoy->town_heading_yaw;
     SampleConvoyPath(path, count, convoy->phase_progress,
-                     &position, &heading);
+                     &position, &heading, &convoy->travelled);
     float turn = WrapLocalAngle(heading - convoy->town_heading_yaw);
     float turn_weight = delta_time > 0.0f ?
         ClampUnit(delta_time * 4.5f) : 1.0f;
@@ -1595,6 +1598,7 @@ static bool SetOpenWorldCarriageOnRoute(
     local->world_carriage.heading_yaw = heading;
     local->world_carriage.route_amount =
         route->from_id == origin_id ? amount : 1.0f - amount;
+    local->world_carriage.travelled = amount * length;
     local->world_carriage.pace = pace;
     local->world_carriage.route_id = route_id;
     local->world_carriage.visible = true;
@@ -1632,6 +1636,7 @@ static void SetOpenWorldCarriageAtSettlement(const CcSim *sim,
     };
     local->world_carriage.heading_yaw = 0.0f;
     local->world_carriage.route_amount = 0.0f;
+    local->world_carriage.travelled = 0.0f;
     local->world_carriage.route_id = 0U;
     local->world_carriage.visible = true;
 }
@@ -1692,6 +1697,8 @@ static void PositionOpenWorldDeparture(const CcSim *sim, LocalState *local)
     local->world_carriage.heading_yaw = heading;
     local->world_carriage.route_amount = forward ? journey_amount :
                                                   1.0f - journey_amount;
+    local->world_carriage.travelled =
+        journey_amount * CcWorldRouteLength(route);
     local->world_carriage.pace = local->departure.phase ==
             CC_CLIENT_DEPARTURE_READY ? 0.0f : local->convoy.pace;
     local->agent.position = local->world_carriage.position;
@@ -1742,6 +1749,8 @@ static bool PositionOpenWorldArrival(const CcSim *sim, LocalState *local)
     local->world_carriage.heading_yaw = heading;
     local->world_carriage.route_amount = origin_id == route->from_id ?
         journey_amount : 1.0f - journey_amount;
+    local->world_carriage.travelled =
+        journey_amount * CcWorldRouteLength(route);
     local->world_carriage.pace = local->convoy.pace;
     local->world_carriage.route_id = route->route_id;
     local->world_carriage.visible = true;
@@ -1919,6 +1928,9 @@ static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local)
     local->world_carriage.heading_yaw = heading;
     local->world_carriage.route_amount =
         route->from_id == sim->journey.origin_id ? amount : 1.0f - amount;
+    /* Measured from the origin, not from the route's own start, so that a
+       route walked the other way still counts up. */
+    local->world_carriage.travelled = amount * CcWorldRouteLength(route);
     local->world_carriage.pace =
         sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
             CcSimJourneyRoadSiteStop(sim) == NULL ?
