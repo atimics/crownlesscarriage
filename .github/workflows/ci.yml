@@ -160,6 +160,28 @@ jobs:
           path: build-sweep/sweep-endpoints.csv
           if-no-files-found: error
 
+  long-player-agency-sweep:
+    name: Long player-agency sweep
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SQLite development files
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+      - name: Configure release headless build
+        run: >-
+          cmake -S . -B build-agent
+          -DCMAKE_BUILD_TYPE=Release
+          -DCC_BUILD_CLIENT=OFF
+          -DCC_WARNINGS_AS_ERRORS=ON
+      - name: Build player-agency runner
+        run: cmake --build build-agent --target crownless_agent_sweep --parallel
+      - name: Run 100 by 100 paired control and agent sweep
+        run: >-
+          build-agent/crownless_agent_sweep
+          --seeds 100 --years 100
+
   client:
     name: Full client / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
