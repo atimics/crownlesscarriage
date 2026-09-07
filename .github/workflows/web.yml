@@ -175,5 +175,8 @@ jobs:
                   health = json.load(response)
               assert health['status'] == 'ready', health
               assert health['revision'] == os.environ['EXPECTED_REVISION'], health
+              stranded = health.get('worlds_needing_recovery', 0)
+              if stranded:
+                  print(f'::warning::{origin} is serving with {stranded} world(s) needing recovery.')
               print(origin + ' is healthy at the deployed revision.')
           PY
