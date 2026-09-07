@@ -395,6 +395,14 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
         state->avatar = CcCoopClientActive() ? CcCoopClientAppearance() :
             adventure_preferences != NULL ? adventure_preferences->avatar : 0U;
         CcLocalAgentInit(&frontend_avatar_preview, (Vector2){0, 0}, false);
+        /* The preview stands on its own level floor in every town and room. */
+        frontend_avatar_preview.position = (Vector3){0};
+        frontend_avatar_preview.facing_yaw = 0.0f;
+        CcHumanoidGaitInit(&frontend_avatar_preview.humanoid,
+            (CcLimbVec3){0}, 0.0f, NULL, NULL);
+        frontend_avatar_preview.render_pose = frontend_avatar_preview.humanoid.pose;
+        frontend_avatar_preview.cape = (CcLocalCapeState){0};
+        frontend_avatar_preview.render_cape = (CcLocalCapeState){0};
         FrontendOpen(state, FRONTEND_AVATAR);
     } else if (action >= FRONTEND_ACTION_SKIN && action <= FRONTEND_ACTION_COAT) {
         FrontendChangeAvatar(state, (int)(action - FRONTEND_ACTION_SKIN), 1);
@@ -624,7 +632,8 @@ static void DrawFrontend(const FrontendState *state,
             state->screen == FRONTEND_COMPANY ? "Your company and its shared road." :
             state->company.world_count == 0 ? "Create a world or join with an invitation." : "Choose a saved journey.", top + 120, 14, MUTED);
     } else {
-        FrontendCenteredText(CcCoopClientActive() ? "ONLINE  /  THE COMPANY KEEPS PLAYING" :
+        FrontendCenteredText(CcCoopClientActive() ?
+            (CcCoopClientPaused() ? "ONLINE  /  SHARED WORLD PAUSED" : "ONLINE  /  THE COMPANY KEEPS PLAYING") :
             TextFormat("OFFLINE  /  DAY %d", sim->current_day),
                              top + 120, 12, MUTED);
     }
@@ -765,6 +774,8 @@ static int RunFrontendRegression(void)
     adventure_preferences = &avatar_preferences;
     FRONTEND_ACT(FRONTEND_ACTION_AVATAR);
     FRONTEND_CHECK(state.screen == FRONTEND_AVATAR && state.avatar_return == FRONTEND_TITLE);
+    FRONTEND_CHECK(frontend_avatar_preview.humanoid.feet[0].planted_point.y == 0.0f &&
+        frontend_avatar_preview.humanoid.feet[1].planted_point.y == 0.0f);
     FRONTEND_ACT(FRONTEND_ACTION_COAT);
     FRONTEND_ACT(FRONTEND_ACTION_CANCEL_AVATAR);
     FRONTEND_CHECK(state.screen == FRONTEND_TITLE && avatar_preferences.avatar == 0U);
