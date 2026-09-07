@@ -2027,11 +2027,11 @@ static bool IsWinter(const CcSim *sim)
     return sim != NULL && (sim->current_day / 7) % 52 >= 39;
 }
 
-static int32_t WarWeeklyNeed(const CcSim *sim, const CcSettlement *place,
-                             CcGood good)
+static int32_t WarWeeklyNeedForBurden(const CcSim *sim,
+                                      const CcSettlement *place,
+                                      CcGood good, int32_t burden)
 {
     if (!IsWarSeat(place)) return 0;
-    int32_t burden = CcSimWarBurdenAtSettlement(sim, place->id);
     if (burden < 20) return 0;
     if (good == CC_GOOD_FOOD) {
         return MinimumI32(place->consumption[CC_GOOD_FOOD],
@@ -2049,6 +2049,13 @@ static int32_t WarWeeklyNeed(const CcSim *sim, const CcSettlement *place,
         return 1 + burden / 50;
     }
     return 0;
+}
+
+static int32_t WarWeeklyNeed(const CcSim *sim, const CcSettlement *place,
+                             CcGood good)
+{
+    return WarWeeklyNeedForBurden(
+        sim, place, good, CcSimWarBurdenAtSettlement(sim, place->id));
 }
 
 static int32_t WarExtraConsumption(const CcSim *sim,
@@ -2237,11 +2244,17 @@ static int32_t RunBakery(CcSim *sim, CcSettlement *place,
     return baked;
 }
 
-static int32_t WarWeeklyWage(const CcSim *sim, const CcSettlement *place)
+static int32_t WarWeeklyWageForBurden(const CcSettlement *place,
+                                      int32_t burden)
 {
     if (!IsWarSeat(place)) return 0;
-    int32_t burden = CcSimWarBurdenAtSettlement(sim, place->id);
     return burden >= 20 ? 1 + burden / 18 : 0;
+}
+
+static int32_t WarWeeklyWage(const CcSim *sim, const CcSettlement *place)
+{
+    return WarWeeklyWageForBurden(
+        place, CcSimWarBurdenAtSettlement(sim, place->id));
 }
 
 int32_t CcSimWarSupplyCrisisAtSettlement(const CcSim *sim,
@@ -2250,10 +2263,13 @@ int32_t CcSimWarSupplyCrisisAtSettlement(const CcSim *sim,
     const CcSettlement *place = CcSimSettlement(sim, settlement_id);
     if (sim == NULL || !IsWarSeat(place)) return 0;
     int32_t burden = CcSimWarBurdenAtSettlement(sim, settlement_id);
-    int32_t food_need = WarWeeklyNeed(sim, place, CC_GOOD_FOOD);
-    int32_t tool_need = WarWeeklyNeed(sim, place, CC_GOOD_TOOLS);
-    int32_t weapon_need = WarWeeklyNeed(sim, place, CC_GOOD_WEAPONS);
-    int32_t wage = WarWeeklyWage(sim, place);
+    int32_t food_need = WarWeeklyNeedForBurden(
+        sim, place, CC_GOOD_FOOD, burden);
+    int32_t tool_need = WarWeeklyNeedForBurden(
+        sim, place, CC_GOOD_TOOLS, burden);
+    int32_t weapon_need = WarWeeklyNeedForBurden(
+        sim, place, CC_GOOD_WEAPONS, burden);
+    int32_t wage = WarWeeklyWageForBurden(place, burden);
     if (burden < 20 || food_need < 1 || wage < 1) return 0;
     int32_t food_gap = MaximumI32(
         0, food_need * 3 -
