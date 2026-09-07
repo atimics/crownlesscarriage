@@ -24,6 +24,7 @@ typedef struct AgentStats {
     int32_t jobs_abandoned;
     int32_t jobs_unresolved;
     CcId tracked_job_id;
+    int32_t wip_limit;
 } AgentStats;
 
 
@@ -104,6 +105,7 @@ static bool AcceptRouteJobAtLocation(CcSim *sim, AgentStats *stats)
 
 static bool AcceptReliefJobAtLocation(CcSim *sim, AgentStats *stats)
 {
+    if (stats->tracked_job_id != 0U || stats->wip_limit < 1) return false;
     char error[192];
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *situation = &sim->situations[i];
@@ -162,7 +164,8 @@ static bool DeliverAcceptedRelief(CcSim *sim, AgentStats *stats)
 
 static bool RepairAtLocation(CcSim *sim, AgentStats *stats)
 {
-    if (sim->player.coins < 18) return false;
+    if (sim->player.coins < 18 || stats->tracked_job_id != 0U ||
+        stats->wip_limit < 1) return false;
     char error[192];
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
     CcId required_route = accepted != NULL &&
@@ -306,8 +309,11 @@ int main(int argc, char **argv)
     int32_t seeds = 8;
     int32_t first_seed = 1;
     int32_t years = 10;
+    int32_t wip_limit = 1;
     for (int32_t i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc) {
+        if (strcmp(argv[i], "--wip-limit") == 0 && i + 1 < argc) {
+            if (!ParsePositive(argv[++i], &wip_limit)) return EXIT_FAILURE;
+        } else if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc) {
             if (!ParsePositive(argv[++i], &first_seed)) return EXIT_FAILURE;
             seeds = 1;
         } else if (strcmp(argv[i], "--seeds") == 0 && i + 1 < argc) {
@@ -315,7 +321,7 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[i], "--years") == 0 && i + 1 < argc) {
             if (!ParsePositive(argv[++i], &years)) return EXIT_FAILURE;
         } else {
-            (void)fprintf(stderr, "Usage: %s [--seed NUMBER | --seeds COUNT] [--years COUNT]\n", argv[0]);
+            (void)fprintf(stderr, "Usage: %s [--seed NUMBER | --seeds COUNT] [--years COUNT] [--wip-limit COUNT]\n", argv[0]);
             return EXIT_FAILURE;
         }
     }
@@ -325,7 +331,8 @@ int main(int argc, char **argv)
                "travel_attempts,travel_successes,jobs_accepted,jobs_completed,"
                "combats_initiated,combats_won,combats_lost,"
                "route_jobs_accepted,relief_jobs_accepted,jobs_resolved,"
-               "jobs_expired,jobs_abandoned,jobs_unresolved\n");
+               "jobs_expired,jobs_abandoned,jobs_unresolved,"
+               "objective_loss,objective_pass\n");
     for (int32_t seed = first_seed;
          seed < first_seed + seeds; ++seed) {
         uint32_t world_seed = (uint32_t)seed * UINT32_C(0x9e3779b9);
@@ -333,7 +340,7 @@ int main(int argc, char **argv)
         CcSim agent;
         CcSimInit(&control, world_seed);
         CcSimInit(&agent, world_seed);
-        AgentStats stats = {0};
+        AgentStats stats = {.wip_limit = wip_limit};
         int32_t target_day = control.current_day + years * 365;
         while (control.current_day < target_day) CcSimAdvanceDays(&control, 1);
         int64_t agent_steps = 0;
@@ -415,7 +422,10 @@ int main(int argc, char **argv)
             }
             return EXIT_FAILURE;
         }
-        (void)printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+        int32_t objective_loss = stats.jobs_expired * 10 +
+            stats.jobs_abandoned * 10 + stats.jobs_unresolved * 20 +
+            stats.combats_lost * 5;
+        (void)printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
                      seed, control_population, agent_population,
                      control_prosperity / control.settlement_count,
                      agent_prosperity / agent.settlement_count,
@@ -429,7 +439,8 @@ int main(int argc, char **argv)
                      stats.combats_lost,
                      stats.route_jobs_accepted, stats.relief_jobs_accepted,
                      stats.jobs_resolved, stats.jobs_expired,
-                     stats.jobs_abandoned, stats.jobs_unresolved);
+                     stats.jobs_abandoned, stats.jobs_unresolved,
+                     objective_loss, objective_loss == 0 ? 1 : 0);
     }
     return EXIT_SUCCESS;
 }
