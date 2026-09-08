@@ -52,7 +52,7 @@ bool CcCoopApply(CcSim *sim, const char *action, CcId target,
     }
     CcCommand command = { .target_id = target, .good = (CcGood)good, .amount = amount };
     if (action != NULL) {
-        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_MINE_PACK; ++i) {
+        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_CLEAR_ROAD_SITE; ++i) {
             if (strcmp(action, CcCoopActionName((CcCommandKind)i)) == 0) command.kind = (CcCommandKind)i;
         }
     }
@@ -172,7 +172,8 @@ bool CcCoopSnapshot(const CcSim *sim, char *text, size_t capacity)
     if (road_site != NULL) {
         Put(&json, "{\"id\":\"%" PRIu64 "\",\"name\":", road_site->id);
         Quote(&json, road_site->name);
-        Put(&json, "}");
+        Put(&json, ",\"accessible\":%s,\"blocker\":%d,\"condition\":%d}",
+            road_site->accessible ? "true" : "false", (int)road_site->blocker, road_site->condition);
     } else Put(&json, "null");
     Put(&json, "},");
     Put(&json, "\"goods\":[");

@@ -156,10 +156,116 @@ static void CheckPersistence(void)
     }
 }
 
+static void CheckClearing(void)
+{
+    const char *path = "road-clearing-test.ccsave";
+    for (int32_t slot = 0; slot < CC_MAX_ROAD_SITES; ++slot) {
+        for (int32_t reverse = 0; reverse < 2; ++reverse) {
+            PrepareStop(slot, reverse != 0);
+            CcRoadSite *site = &sim.road_sites[slot];
+            bool tree = site->blocker == CC_ROAD_SITE_BLOCKER_TREE;
+            sim.player.cargo[CC_GOOD_TOOLS] = 2;
+            sim.player.cargo[CC_GOOD_WOOD] = 1;
+            int32_t condition = site->condition;
+            int32_t progress = sim.carriage.progress_milli;
+            int32_t elapsed = sim.journey.elapsed_subticks;
+            /* Cross midnight to cover a world tick during the work. */
+            sim.clock.minute_subticks = CC_WORLD_DAY_SUBTICKS - 1;
+            int64_t time = (int64_t)sim.current_day * CC_WORLD_DAY_SUBTICKS +
+                sim.clock.minute_subticks;
+            CcCommand clear = {.kind = CC_COMMAND_CLEAR_ROAD_SITE,
+                .target_id = site->id};
+            (void)remove(path);
+            CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+            CC_CHECK(journal != NULL);
+            CC_CHECK(CcJournalApply(journal, &sim, &clear, error, sizeof(error)));
+            CC_CHECK(site->accessible && site->blocker == CC_ROAD_SITE_BLOCKER_NONE);
+            int32_t expected = condition + (tree ? 3 : 6);
+            CC_CHECK(site->condition == (expected > 100 ? 100 : expected));
+            CC_CHECK(sim.player.cargo[CC_GOOD_TOOLS] == (tree ? 2 : 0));
+            CC_CHECK(sim.player.cargo[CC_GOOD_WOOD] == (tree ? 0 : 1));
+            CC_CHECK(sim.carriage.progress_milli == progress);
+            CC_CHECK(sim.journey.elapsed_subticks == elapsed);
+            CC_CHECK((int64_t)sim.current_day * CC_WORLD_DAY_SUBTICKS +
+                sim.clock.minute_subticks == time + (tree ? 1 : 2) * CC_WORLD_WATCH_SUBTICKS);
+            CC_CHECK(CcSimJourneyRoadSiteStop(&sim) == site);
+            const CcEvent *event = CcSimEvent(&sim, sim.journey.parent_event_id);
+            CC_CHECK(event != NULL && strstr(event->text, tree ? "fallen tree" : "rocks") != NULL);
+            CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+            uint64_t hash = CcSimHash(&sim);
+            CC_CHECK(!CcJournalApply(journal, &sim, &clear, error, sizeof(error)));
+            CC_CHECK(CcSimHash(&sim) == hash);
+            CC_CHECK(CcJournalFlush(journal, &sim, error, sizeof(error)));
+            CcJournalAbandon(&journal);
+            journal = CcJournalResume(path, &restored, error, sizeof(error));
+            CC_CHECK(journal != NULL && CcSimHash(&restored) == hash);
+            CC_CHECK(restored.road_sites[slot].accessible);
+            CC_CHECK(restored.road_sites[slot].blocker == CC_ROAD_SITE_BLOCKER_NONE);
+            CC_CHECK(restored.road_sites[slot].condition == site->condition);
+            CC_CHECK(CcJournalClose(&journal, &restored, error, sizeof(error)));
+            CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+            CC_CHECK(CcSimHash(&restored) == hash && restored.road_sites[slot].accessible);
+            (void)remove(path);
+        }
+    }
+    for (int32_t slot = 0; slot < CC_MAX_ROAD_SITES; ++slot) {
+        PrepareStop(slot, false);
+        CcCommand clear = {.kind = CC_COMMAND_CLEAR_ROAD_SITE,
+            .target_id = sim.road_sites[slot].id};
+        sim.player.cargo[CC_GOOD_TOOLS] = 0;
+        uint64_t hash = CcSimHash(&sim);
+        CC_CHECK(!CcSimApply(&sim, &clear, error, sizeof(error)));
+        CC_CHECK(CcSimHash(&sim) == hash);
+        sim.player.cargo[CC_GOOD_TOOLS] = 1;
+        sim.player.cargo[CC_GOOD_WOOD] = 0;
+        hash = CcSimHash(&sim);
+        CC_CHECK(!CcSimApply(&sim, &clear, error, sizeof(error)));
+        CC_CHECK(CcSimHash(&sim) == hash);
+        sim.player.cargo[CC_GOOD_TOOLS] = 2;
+        sim.player.cargo[CC_GOOD_WOOD] = 1;
+        clear.target_id = sim.road_sites[(slot + 1) % CC_MAX_ROAD_SITES].id;
+        hash = CcSimHash(&sim);
+        CC_CHECK(!CcSimApply(&sim, &clear, error, sizeof(error)));
+        CC_CHECK(CcSimHash(&sim) == hash);
+        clear.target_id = sim.road_sites[slot].id;
+        sim.carriage.progress_milli -= 21;
+        hash = CcSimHash(&sim);
+        CC_CHECK(!CcSimApply(&sim, &clear, error, sizeof(error)));
+        CC_CHECK(CcSimHash(&sim) == hash);
+    }
+}
+
+static void CheckPre62Save(void)
+{
+    const char *path = "road-clearing-legacy-test.ccsave";
+    PrepareStop(0, false);
+    sim.schema_version = 61U;
+    sim.player.cargo[CC_GOOD_TOOLS] = 2;
+    sim.player.cargo[CC_GOOD_WOOD] = 1;
+    uint64_t hash = CcSimHash(&sim);
+    CcCommand clear = {.kind = CC_COMMAND_CLEAR_ROAD_SITE,
+        .target_id = sim.road_sites[0].id};
+    CC_CHECK(!CcSimApply(&sim, &clear, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == hash);
+    (void)remove(path);
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 61U;
+    CC_CHECK(CcSimHash(&restored) == hash);
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSimApply(&restored, &clear, error, sizeof(error)));
+    CC_CHECK(restored.road_sites[0].accessible);
+    CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
+    (void)remove(path);
+}
+
 int main(void)
 {
     CheckChoices();
     CheckPersistence();
+    CheckClearing();
+    CheckPre62Save();
     (void)puts("Roadside camps: both directions, costs, pass, replay and save upgrade passed");
     return 0;
 }

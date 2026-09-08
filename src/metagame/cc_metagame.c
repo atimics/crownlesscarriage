@@ -1624,7 +1624,7 @@ static void DescribeHelp(char *output, size_t capacity)
            "  archive-map NUMBER, retrieve-map NUMBER (in Gloamgate)\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
            "Act on the road and world:\n"
-           "  road break|press-on|camp|lodge\n"
+           "  road break|press-on|camp|lodge|clear|pass\n"
            "  road fight|bargain|supper|turn-back, repair NUMBER tools|cash\n"
            "  stable breed MARE STALLION, stable team SLOT HORSE\n"
            "  mine visit|look|move DIRECTION|use|pack GOOD|unpack GOOD\n"
@@ -2259,6 +2259,12 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         if (!FinishTravel(metagame, output, output_capacity)) return false;
     } else if (strcmp(command, "road") == 0) {
+        if (first != NULL && strcmp(first, "clear") == 0) {
+            const CcRoadSite *site = CcSimJourneyRoadSiteStop(&metagame->sim);
+            CcCommand clear = {.kind = CC_COMMAND_CLEAR_ROAD_SITE,
+                .target_id = site != NULL ? site->id : 0};
+            return ApplyCommand(metagame, &clear, output, output_capacity);
+        }
         if (first != NULL && strcmp(first,"pass") == 0) {
             const CcRoadSite *site=CcSimJourneyRoadSiteStop(&metagame->sim);
             CcCommand pass={.kind=CC_COMMAND_PASS_ROAD_SITE,.target_id=site != NULL ? site->id : 0};
@@ -2593,7 +2599,7 @@ static void DescribeAgentActions(const CcMetagame *metagame,
            "  buy GOOD COUNT, sell GOOD COUNT, buy-map NUMBER, sell-map NUMBER\n"
            "  archive-map NUMBER, retrieve-map NUMBER\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
-           "  road break|press-on|camp|lodge\n"
+           "  road break|press-on|camp|lodge|clear|pass\n"
            "  road fight|bargain|supper|turn-back, repair NUMBER tools|cash\n"
            "  underroad enter|look|move NUMBER|search|open|parley|evade|force|retreat\n"
            "  dungeon public|smuggler|close, wait DAYS\n"
@@ -2695,7 +2701,7 @@ static bool AgentCommandAllowed(const CcMetagame *metagame,
     if (command == NULL) return false;
     if (metagame->sim.journey.active) {
         if (strcmp(command,"mine") == 0) return true;
-        if (strcmp(command,"road") == 0 && first != NULL && strcmp(first,"pass") == 0)
+        if (strcmp(command,"road") == 0 && first != NULL && (strcmp(first,"pass") == 0 || strcmp(first,"clear") == 0))
             return CcSimJourneyRoadSiteStop(&metagame->sim) != NULL;
         return strcmp(command, "look") == 0 || strcmp(command, "roads") == 0 ||
             strcmp(command, "routes") == 0 || strcmp(command, "cargo") == 0 ||

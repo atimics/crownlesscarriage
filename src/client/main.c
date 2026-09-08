@@ -266,6 +266,7 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_LODGE_ROAD_HOUSE,
     CONTEXT_ACTION_CAMP_ROAD_SITE,
     CONTEXT_ACTION_PASS_ROAD_SITE,
+    CONTEXT_ACTION_CLEAR_ROAD_SITE,
     CONTEXT_ACTION_JUMP,
     CONTEXT_ACTION_RAISE_ALARM,
     CONTEXT_ACTION_SELECT_TARGET,
@@ -4513,6 +4514,16 @@ static ContextActionSet BuildContextActions(
 
     if (local->journey_travel_active) {
         const CcRoadSite *road_stop = CcSimJourneyRoadSiteStop(sim);
+        if (road_stop != NULL && !road_stop->accessible) {
+            bool tree = road_stop->blocker == CC_ROAD_SITE_BLOCKER_TREE;
+            AddDetailedContextAction(&set, CONTEXT_ACTION_CLEAR_ROAD_SITE,
+                tree ? "Clear fallen tree" : "Clear rocks", "",
+                tree ? "1 TOOL / USE 1 WOOD / 1 WATCH" : "USE 2 TOOLS / 2 WATCHES",
+                sim->player.cargo[CC_GOOD_TOOLS] >= (tree ? 1 : 2) &&
+                (!tree || sim->player.cargo[CC_GOOD_WOOD] >= 1), false);
+            set.items[set.count - 1].target = (CcInteractionKey){
+                sim->player.location_id, road_stop->id, CC_INTERACTION_ACTION};
+        }
         if (road_stop != NULL && road_stop == CcMineSite(sim) &&
             sim->journey.elapsed_subticks == CcMineBranchSubtick(sim)) {
             const CcRoute *route=CcSimRoute(sim,road_stop->route_id);
@@ -8591,6 +8602,14 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
 
+    if (context_action == CONTEXT_ACTION_CLEAR_ROAD_SITE) {
+        const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+        if (site != NULL) {
+            CcCommand command = {.kind = CC_COMMAND_CLEAR_ROAD_SITE, .target_id = site->id};
+            (void)ApplyCommand(*journal, sim, command, message, message_capacity);
+        }
+        return;
+    }
     if (context_action == CONTEXT_ACTION_VISIT_MINE || context_action == CONTEXT_ACTION_PASS_ROAD_SITE) {
         const CcRoadSite *site=CcSimJourneyRoadSiteStop(sim);
         if(site != NULL) {

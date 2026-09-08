@@ -57,7 +57,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 61
+#define CC_SIM_SCHEMA_VERSION 62
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -519,7 +519,8 @@ typedef enum CcCommandKind {
     CC_COMMAND_VISIT_MINE = 50,
     CC_COMMAND_MINE_STEP = 51,
     CC_COMMAND_MINE_USE = 52,
-    CC_COMMAND_MINE_PACK = 53
+    CC_COMMAND_MINE_PACK = 53,
+    CC_COMMAND_CLEAR_ROAD_SITE = 54
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -689,6 +690,7 @@ typedef enum CcRoadSiteKind {
 typedef enum CcRoadSiteBlocker {
     CC_ROAD_SITE_BLOCKER_TREE = 0,
     CC_ROAD_SITE_BLOCKER_ROCKS,
+    CC_ROAD_SITE_BLOCKER_NONE,
     CC_ROAD_SITE_BLOCKER_COUNT
 } CcRoadSiteBlocker;
 

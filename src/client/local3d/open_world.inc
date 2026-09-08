@@ -1022,7 +1022,7 @@ static void DrawOpenWorldRoadSites(
         DrawOpenWorldRibbonSegment(
             manifest, placement->bend, end,
             4.2f, 0.12f, track, true, true);
-        DrawOpenWorldRoadSiteBlocker(manifest, placement);
+        if (!site->accessible) DrawOpenWorldRoadSiteBlocker(manifest, placement);
     }
 }
 

@@ -17485,6 +17485,50 @@ const CcRoadSite *CcSimJourneyRoadSiteStop(const CcSim *sim)
     return NULL;
 }
 
+static bool ApplyClearRoadSite(CcSim *sim, const CcCommand *command,
+                               char *error, size_t error_capacity)
+{
+    const CcRoadSite *stop = CcSimJourneyRoadSiteStop(sim);
+    if (sim->schema_version < 62U || stop == NULL ||
+        stop->id != command->target_id) {
+        SetError(error, error_capacity, "Reach this roadside stop first.");
+        return false;
+    }
+    if (stop->accessible) {
+        SetError(error, error_capacity, "This road site is already open.");
+        return false;
+    }
+    bool tree = stop->blocker == CC_ROAD_SITE_BLOCKER_TREE;
+    int32_t tools = tree ? 1 : 2;
+    if (sim->player.cargo[CC_GOOD_TOOLS] < tools ||
+        (tree && sim->player.cargo[CC_GOOD_WOOD] < 1)) {
+        SetError(error, error_capacity, tree ?
+            "Clearing a tree needs one axe tool and one Wood for supports." :
+            "Clearing rocks uses two Tools.");
+        return false;
+    }
+    CcRoadSite *site = &sim->road_sites[stop - sim->road_sites];
+    if (tree) sim->player.cargo[CC_GOOD_WOOD] -= 1;
+    else sim->player.cargo[CC_GOOD_TOOLS] -= 2;
+    int32_t watches = tree ? 1 : 2;
+    for (int32_t watch = 0; watch < watches; ++watch) {
+        AdvanceJourneyRestWatch(sim);
+        site->condition = ClampI32(site->condition + 3, 0, 100);
+    }
+    site->blocker = CC_ROAD_SITE_BLOCKER_NONE;
+    site->accessible = true;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), tree ?
+        "The company axes the fallen tree at %.40s in one watch, using one Wood for supports. The way opens; condition is %d." :
+        "The company breaks the rocks at %.40s in two watches, using two Tools. The way opens; condition is %d.",
+        site->name, site->condition);
+    CcEvent *event = PushEvent(sim, CC_EVENT_JOURNEY_BREAK,
+        sim->player.id, site->id, sim->journey.parent_event_id, watches, text);
+    sim->journey.parent_event_id = event->id;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool ApplyRoadSiteStop(CcSim *sim, const CcCommand *command,
                               char *error, size_t error_capacity)
 {
@@ -18724,6 +18768,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_LODGE_ROAD_HOUSE:
             return ApplyJourneyStopAction(
                 sim, command, error, error_capacity);
+        case CC_COMMAND_CLEAR_ROAD_SITE:
+            return ApplyClearRoadSite(sim, command, error, error_capacity);
         case CC_COMMAND_CAMP_ROAD_SITE:
         case CC_COMMAND_PASS_ROAD_SITE:
             return ApplyRoadSiteStop(sim, command, error, error_capacity);
@@ -19041,7 +19087,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 60U
+#define CC_NEWEST_LEGACY_SCHEMA 61U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -19059,7 +19105,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 60U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 61U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -19583,7 +19629,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 (site->side != -1 && site->side != 1) ||
                 site->spur_length < 12 || site->spur_length > 48 ||
                 site->condition < 0 || site->condition > 100 ||
-                site->accessible) {
+                (site->accessible != (site->blocker == CC_ROAD_SITE_BLOCKER_NONE))) {
                 SetError(error, error_capacity,
                          "Road district site data is invalid.");
                 return false;
