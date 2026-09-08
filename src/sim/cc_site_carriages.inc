@@ -109,7 +109,7 @@ static void UnloadSiteCarriage(CcSim *sim, CcRoyalCarriage *carriage, CcRoadProd
     stock[shipment->good] += quantity;
     if (site != NULL && accounting != NULL)
         accounting->sites[site - sim->road_sites].freight_received[shipment->good] += (uint64_t)quantity;
-    if (town != NULL && accounting != NULL) {
+    if (site == NULL && accounting != NULL) {
         const CcRoadSite *source = CcSimRoadSite(sim, shipment->origin_id);
         if (source != NULL)
             accounting->sites[source - sim->road_sites].freight_delivered[shipment->good] += (uint64_t)quantity;
