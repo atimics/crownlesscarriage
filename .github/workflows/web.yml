@@ -25,7 +25,7 @@ jobs:
           version: 5.0.4
           actions-cache-folder: emsdk-cache
       - name: Configure
-        run: emcmake cmake --preset web
+        run: emcmake cmake --preset web -DCC_BUILD_GRAPHICS_PROBES=ON
       - name: Build
         run: cmake --build --preset web
       - name: Check incremental asset refresh
@@ -53,6 +53,11 @@ jobs:
           test -f out/build/web/site/assets/exports/glb/state_market_recovery_v01.glb &&
           test -f out/build/web/site/assets/maps/gloamgate_to_alderwatch.png &&
           test -f out/build/web/site/assets/maps/collectible_map_atlas.png
+      - name: Upload the GPU matrix probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-upload-probe
+          path: out/build/web/matrix-probe
       - name: Upload the shared world game
         uses: actions/upload-artifact@v4
         with:
@@ -79,6 +84,12 @@ jobs:
         with:
           name: shared-world-game
           path: out/build/web/site
+      - name: Download the GPU matrix probe
+        if: matrix.suite == 'single-player'
+        uses: actions/download-artifact@v4
+        with:
+          name: matrix-upload-probe
+          path: out/build/web/matrix-probe
       - name: Install browser test runtime
         run: |
           npm install --prefix "$RUNNER_TEMP/crownless-browser" --no-package-lock playwright@1.62.1
@@ -88,6 +99,7 @@ jobs:
         env:
           CC_PLAYWRIGHT_MODULE: ${{ runner.temp }}/crownless-browser/node_modules/playwright
         run: |
+          node tests/matrix_upload_browser.cjs out/build/web/matrix-probe browser-results
           node tests/music_browser_tests.cjs browser-results
           node tests/browser_tests.cjs out/build/web/site browser-results
       - name: Build the shared carriage host

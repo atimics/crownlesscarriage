@@ -1,0 +1,18 @@
+{
+  "frames": 23,
+  "perFrame": {
+    "uploadCalls": 160,
+    "uploadBytes": 3409772.8695652173,
+    "draws": 351,
+    "vertices": 569905.0434782609,
+    "textureBinds": 553.2608695652174,
+    "programBinds": 721.5217391304348,
+    "skippedUploads": 0,
+    "skippedBytes": 0
+  },
+  "frameMs": {
+    "median": 150,
+    "p95": 333.2999999999993,
+    "p99": 333.3000000000011
+  }
+}

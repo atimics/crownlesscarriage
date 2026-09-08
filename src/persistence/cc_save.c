@@ -273,6 +273,18 @@ static bool EnsureAnimalColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "settlement", "sheep_hunger",
             "ALTER TABLE settlement ADD COLUMN sheep_hunger INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "pony_adults",
+            "ALTER TABLE settlement ADD COLUMN pony_adults INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "pony_foals",
+            "ALTER TABLE settlement ADD COLUMN pony_foals INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "pony_condition",
+            "ALTER TABLE settlement ADD COLUMN pony_condition INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "pony_hunger",
+            "ALTER TABLE settlement ADD COLUMN pony_hunger INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity);
 }
 
@@ -1008,7 +1020,11 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " sheep_adults INTEGER NOT NULL DEFAULT 0,"
         " sheep_lambs INTEGER NOT NULL DEFAULT 0,"
         " sheep_condition INTEGER NOT NULL DEFAULT 0,"
-        " sheep_hunger INTEGER NOT NULL DEFAULT 0);"
+        " sheep_hunger INTEGER NOT NULL DEFAULT 0,"
+        " pony_adults INTEGER NOT NULL DEFAULT 0,"
+        " pony_foals INTEGER NOT NULL DEFAULT 0,"
+        " pony_condition INTEGER NOT NULL DEFAULT 0,"
+        " pony_hunger INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS horse_team ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE,"
         " name TEXT NOT NULL, age_days INTEGER NOT NULL,"
@@ -1525,7 +1541,7 @@ static bool SaveSettlements(sqlite3 *database, const CcSim *sim,
                             char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    const char *sql = "INSERT INTO settlement VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+    const char *sql = "INSERT INTO settlement VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *s = &sim->settlements[i];
@@ -1555,6 +1571,10 @@ static bool SaveSettlements(sqlite3 *database, const CcSim *sim,
         BindInt(statement, column++, s->sheep_lambs);
         BindInt(statement, column++, s->sheep_condition);
         BindInt(statement, column++, s->sheep_hunger);
+        BindInt(statement, column++, s->pony_adults);
+        BindInt(statement, column++, s->pony_foals);
+        BindInt(statement, column++, s->pony_condition);
+        BindInt(statement, column++, s->pony_hunger);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -3630,6 +3650,12 @@ static bool ReadSettlements(sqlite3 *database, CcSim *sim,
             s->sheep_lambs = sqlite3_column_int(statement, column++);
             s->sheep_condition = sqlite3_column_int(statement, column++);
             s->sheep_hunger = sqlite3_column_int(statement, column++);
+        }
+        if (sim->schema_version >= 51U) {
+            s->pony_adults = sqlite3_column_int(statement, column++);
+            s->pony_foals = sqlite3_column_int(statement, column++);
+            s->pony_condition = sqlite3_column_int(statement, column++);
+            s->pony_hunger = sqlite3_column_int(statement, column++);
         }
         rows += 1;
     }
@@ -5923,8 +5949,8 @@ static void InitializeExtendedGoods(CcSim *sim)
     CcSimInitializePaperEconomy(sim);
 }
 
-static bool UpgradeLegacyRuntime(CcSim *sim,
-                                 char *error, size_t error_capacity)
+static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
+                                       char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
     if ((legacy_version == 38U || legacy_version == 39U ||
@@ -5933,17 +5959,20 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
          legacy_version == 44U || legacy_version == 45U ||
          legacy_version == 46U || legacy_version == 47U ||
          legacy_version == 48U || legacy_version == 49U ||
-         legacy_version == 50U) &&
+         legacy_version == 50U || legacy_version == 51U ||
+         legacy_version == 52U || legacy_version == 53U ||
+         legacy_version == 54U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
          * default 0). Schema 49 makes notable famine accounts gossip and
          * schema 50 adds goblin raids, cult rallies, dragon omens and dragon
          * fires; both changes are derived from events, so older saves need
-         * no data migration. Schema 51 lets dragon succession (whelp
-         * dispersal, heir hatching, dynasty endings) gossip regardless of
-         * magnitude and stops dropping facts whose origin town is abandoned;
-         * both are read-time rules, so older saves need no data migration. */
+         * no data migration. Schema 51 seeds pony herds and schema 52
+         * unharnesses the second animal in the caller below. Schema 53 changes
+         * hoard-return food rules; schema 54 adds paper decay. Schema 55 adds
+         * dragon succession gossip and reports gathered at ruins. Historical
+         * journal replay uses the original rule gates before this upgrade. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }
@@ -6393,6 +6422,16 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     CcSimInitializeAnimalEconomy(sim);
     CcSimInitializeCharacters(sim);
     FinishLegacyRuntimeUpgrade(sim);
+    return true;
+}
+
+static bool UpgradeLegacyRuntime(CcSim *sim,
+                                 char *error, size_t error_capacity)
+{
+    uint32_t legacy_version = sim->schema_version;
+    if (!UpgradeLegacyRuntimeSchema(sim, error, error_capacity)) return false;
+    if (legacy_version < 51U) CcSimSeedCommonPonyHerds(sim);
+    if (legacy_version < 52U) CcSimUnharnessSecondDraftAnimal(sim);
     return true;
 }
 

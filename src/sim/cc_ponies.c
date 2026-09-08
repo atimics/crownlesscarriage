@@ -56,6 +56,10 @@ void CcPoniesInit(CcSim *sim)
     uint32_t seed = sim->world_seed ^ UINT32_C(0x7261696e);
     company->team[0] = (int32_t)(PonyRandom(&seed) % CC_PONY_COUNT);
     company->team[1] = (company->team[0] + 1 + (int32_t)(PonyRandom(&seed) % 6U)) % CC_PONY_COUNT;
+    /* Draw the second pony either way so the seed walks the same sequence,
+       then empty the seat. -1 never matches a real index, so the loop below
+       leaves that pony out on the roads where CcPoniesValidate wants it. */
+    if (sim->schema_version >= 52U) company->team[1] = -1;
     for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
         CcPony *pony = &company->ponies[i];
         pony->route_id = sim->routes[PonyRandom(&seed) % (uint32_t)sim->route_count].id;
@@ -74,8 +78,13 @@ void CcPoniesInit(CcSim *sim)
 bool CcPoniesValidate(const CcSim *sim)
 {
     const CcPonyCompany *c = &sim->pony_company;
-    if (c->team[0] < 0 || c->team[0] >= CC_PONY_COUNT || c->team[1] < 0 ||
-        c->team[1] >= CC_PONY_COUNT || c->team[0] == c->team[1] ||
+    /* An empty second seat is representable at any schema. Only 52 and later
+       create one, but a campaign stamped with an older version still holds a
+       valid company. */
+    bool second_seat = c->team[1] == -1 ||
+        (c->team[1] >= 0 && c->team[1] < CC_PONY_COUNT &&
+         c->team[0] != c->team[1]);
+    if (c->team[0] < 0 || c->team[0] >= CC_PONY_COUNT || !second_seat ||
         c->encounter < -1 || c->encounter >= CC_PONY_COUNT) return false;
     for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
         const CcPony *p = &c->ponies[i];
@@ -150,8 +159,11 @@ bool CcPoniesApply(CcSim *sim, const CcCommand *cmd, char *error, size_t capacit
         return true;
     }
     if (cmd->kind == CC_COMMAND_SWAP_PONY) {
-        failure = "Help the pony, then choose one of your two companions.";
-        if (!p->ready || cmd->amount < 0 || cmd->amount > 1) goto fail;
+        failure = CcSimHorseTeamCount(sim) > 1 ?
+            "Help the pony, then choose one of your two companions." :
+            "Help the pony, then take it into harness.";
+        if (!p->ready || cmd->amount < 0 ||
+            cmd->amount >= CcSimHorseTeamCount(sim)) goto fail;
         CcPony *released = &c->ponies[c->team[cmd->amount]];
         if (released->releases >= 1000000 || sim->route_count < 2) goto fail;
         int32_t road = 0;
