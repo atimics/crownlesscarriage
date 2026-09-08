@@ -6704,8 +6704,7 @@ static void AdvanceArchives(CcSim *sim)
             archives->dead_since_day = 0;
         }
         /* After five years, connected solvent crowns restore one scribe. */
-        if (target_scribes <= 0 && archives->dead_since_day > 0 &&
-            sim->current_day - archives->dead_since_day >= 1825) {
+        if (CcSimArchiveRecoveryWindow(sim).gate == CC_ARCHIVE_RECOVERY_DUE) {
             crown_funding = FundArchiveRecovery(sim);
             if (crown_funding > 0) target_scribes = 1;
         }

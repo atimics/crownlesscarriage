@@ -17,6 +17,43 @@ static void Blocked(CcArchiveFundingBlocker blocker, const char *name)
     CC_CHECK(plan.total == 0 && plan.donor_count == 0 && plan.blocker == blocker);
     CC_CHECK(strcmp(CcArchiveFundingBlockerName(plan.blocker), name) == 0);
 }
+static void CheckTiming(int32_t day, CcArchiveRecoveryGate gate, int64_t earliest)
+{
+    sim.current_day = day;
+    before = sim;
+    CcArchiveRecoveryWindow window = CcSimArchiveRecoveryWindow(&sim);
+    CC_CHECK(window.gate == gate && window.first_eligible_day == earliest);
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+}
+static void TimingCases(void)
+{
+    CcSimInit(&sim, 42U);
+    sim.archives.scribes = 0;
+    sim.iron_ledger_reserve = 0;
+    sim.archives.dead_since_day = 7;
+    CheckTiming(1831, CC_ARCHIVE_RECOVERY_WAITING, 1834);
+    CheckTiming(1832, CC_ARCHIVE_RECOVERY_CALENDAR, 1834);
+    CheckTiming(1834, CC_ARCHIVE_RECOVERY_DUE, 1834);
+    sim.iron_ledger_reserve = 50;
+    CheckTiming(1834, CC_ARCHIVE_RECOVERY_LEDGER_FUNDED, -1);
+    sim.iron_ledger_reserve = 0;
+    sim.archives.scribes = 1;
+    CheckTiming(1834, CC_ARCHIVE_RECOVERY_STAFFED, -1);
+    sim.archives.scribes = 0;
+    sim.archives.dead_since_day = 0;
+    CheckTiming(1834, CC_ARCHIVE_RECOVERY_SILENCE_UNDATED, -1);
+    sim.schema_version = 55;
+    CheckTiming(1834, CC_ARCHIVE_RECOVERY_UNAVAILABLE, -1);
+    sim.schema_version = 56;
+    sim.archives.dead_since_day = CC_SIM_MAX_DAY;
+    int64_t last = ((int64_t)CC_SIM_MAX_DAY + 1825 + 6) / 7 * 7;
+    CheckTiming(CC_SIM_MAX_DAY, CC_ARCHIVE_RECOVERY_WAITING, last);
+    CC_CHECK(CcSimArchiveRecoveryWindow(NULL).gate == CC_ARCHIVE_RECOVERY_UNAVAILABLE);
+    const char *names[] = {"due", "unavailable", "staffed", "ledger_funded", "silence_undated", "waiting", "calendar"};
+    for (int i = 0; i < 7; ++i)
+        CC_CHECK(strcmp(CcArchiveRecoveryGateName((CcArchiveRecoveryGate)i), names[i]) == 0);
+    CC_CHECK(strcmp(CcArchiveRecoveryGateName((CcArchiveRecoveryGate)99), "unknown") == 0);
+}
 int main(void)
 {
     CcSimInit(&sim, 42U);
@@ -59,6 +96,7 @@ int main(void)
     CC_CHECK(CcSimArchiveFundingPlan(NULL).blocker == CC_ARCHIVE_FUNDING_UNAVAILABLE);
     CC_CHECK(strcmp(CcArchiveFundingBlockerName(CC_ARCHIVE_FUNDING_READY), "ready") == 0);
     CC_CHECK(strcmp(CcArchiveFundingBlockerName((CcArchiveFundingBlocker)99), "unknown") == 0);
+    TimingCases();
     puts("Verified host funding, connected donors, exact odd shares, solvency, and legacy cap");
     return 0;
 }

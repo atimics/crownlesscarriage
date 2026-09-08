@@ -4,9 +4,9 @@ This supports exact funding diagnostics in #266 and recovery work in #446. Base:
 
 `CcSimArchiveFundingPlan` reports the archive seat, selected donor kingdoms, each share, the total treasury top-up, and its evaluated blocker. The existing recovery transfer consumes this plan. JSON adds `archive_funding` with `treasury_top_up_plan_snapshot` semantics.
 
-The plan evaluates held funds and the existing route rules. Recovery silence and weekly timing remain separate gates in the archive step. Under schema 58 and later, a solvent host treasury can fund the archive directly. Otherwise the existing search requires two solvent kingdoms connected through open roads and inhabited endpoints. The first selected kingdom pays the larger share of an odd top-up. The schema-57 ten-coin cap remains in place.
+The plan evaluates held funds and the existing route rules. `CcSimArchiveRecoveryWindow` separately evaluates silence and weekly timing. The archive step and JSON both use that query. Under schema 58 and later, a solvent host treasury can fund the archive directly. Otherwise the existing search requires two solvent kingdoms connected through open roads and inhabited endpoints. The first selected kingdom pays the larger share of an odd top-up. The schema-57 ten-coin cap remains in place.
 
-The blocker identifies the exact evaluated return path: `unavailable` for unsupported query state, `archive_seat` for an absent seat, `ledger_funded` when the ledger already meets the target, `top_up_limit` for the earlier contribution cap, or `connected_solvent_donors` when the search finds fewer than two eligible donors. `ready` accompanies a positive plan. Timing remains a separate gate.
+The blocker identifies the exact evaluated return path: `unavailable` for unsupported query state, `archive_seat` for an absent seat, `ledger_funded` when the ledger already meets the target, `top_up_limit` for the earlier contribution cap, or `connected_solvent_donors` when the search finds fewer than two eligible donors. `ready` accompanies a positive plan. Timing remains a separate gate. Its `recovery_timing` snapshot reports `unavailable`, `staffed`, `ledger_funded`, `silence_undated`, `waiting`, `calendar`, or `due`. `first_eligible_day` is the calculated first weekly date after the recorded silence wait; it is null while that wait has no applicable start. The calculation uses a wide integer, including at the simulation clock limit. Funding, supplies, and staffing still determine the eventual recovery outcome.
 
 ## Validation
 
@@ -14,6 +14,7 @@ The blocker identifies the exact evaluated return path: `unavailable` for unsupp
 - Static analysis passed with one reviewed baseline item.
 - Controlled tests verify host funding, missing host solvency, connected donors, exact 3/2 shares, a second donor below the threshold, restored solvency, the legacy cap, a full ledger, and an absent seat. Tests assert each blocker and its name. Each query preserves the entire simulation state.
 - Existing material-chain tests cover the recovery wait, actual treasury transfers, conservation, and restoration events through the normal archive step.
+- Timing tests cover the wait boundary, calendar alignment, staffed and funded controls, an undated silence, unsupported rules, and arithmetic at the clock limit.
 - JSON tests check donor totals, string identities, and save/load equality.
 - All existing JSON fields and simulation hashes match at 82 checkpoints across two 40-year runs. Only the new `archive_funding` field is removed for comparison. See `parity.json`.
 

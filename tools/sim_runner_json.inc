@@ -30,7 +30,13 @@ static void JsonArchiveFunding(const CcSim *sim)
         printf("%s{\"kingdom_id\":\"%" PRIu64 "\",\"amount\":%" PRId64 "}",
             i ? "," : "", plan.donor_ids[i], plan.shares[i]);
     printf("],\"blocker\":"); JsonString(CcArchiveFundingBlockerName(plan.blocker));
-    putchar('}');
+    CcArchiveRecoveryWindow window = CcSimArchiveRecoveryWindow(sim);
+    printf(",\"recovery_timing\":{\"semantics\":\"held_state_timing_snapshot\",\"gate\":");
+    JsonString(CcArchiveRecoveryGateName(window.gate));
+    printf(",\"first_eligible_day\":");
+    if (window.first_eligible_day < 0) printf("null");
+    else printf("%" PRId64, window.first_eligible_day);
+    printf("}}");
 }
 
 static void JsonStock(const int32_t *values)

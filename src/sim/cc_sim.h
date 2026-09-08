@@ -466,6 +466,21 @@ typedef struct CcWelfareSnapshot {
     double population_weighted_security;
 } CcWelfareSnapshot;
 
+typedef enum CcArchiveRecoveryGate {
+    CC_ARCHIVE_RECOVERY_DUE = 0,
+    CC_ARCHIVE_RECOVERY_UNAVAILABLE,
+    CC_ARCHIVE_RECOVERY_STAFFED,
+    CC_ARCHIVE_RECOVERY_LEDGER_FUNDED,
+    CC_ARCHIVE_RECOVERY_SILENCE_UNDATED,
+    CC_ARCHIVE_RECOVERY_WAITING,
+    CC_ARCHIVE_RECOVERY_CALENDAR
+} CcArchiveRecoveryGate;
+
+typedef struct CcArchiveRecoveryWindow {
+    CcArchiveRecoveryGate gate;
+    int64_t first_eligible_day;
+} CcArchiveRecoveryWindow;
+
 typedef enum CcArchiveFundingBlocker {
     CC_ARCHIVE_FUNDING_READY = 0,
     CC_ARCHIVE_FUNDING_UNAVAILABLE,
@@ -2159,6 +2174,8 @@ CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim);
 /* Treasury top-up under current funds and routes; recovery timing is separate. */
 CcArchiveFundingPlan CcSimArchiveFundingPlan(const CcSim *sim);
 const char *CcArchiveFundingBlockerName(CcArchiveFundingBlocker blocker);
+CcArchiveRecoveryWindow CcSimArchiveRecoveryWindow(const CcSim *sim);
+const char *CcArchiveRecoveryGateName(CcArchiveRecoveryGate gate);
 const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker);
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
                                   CcFoodEconomy *economy);

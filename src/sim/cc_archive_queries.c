@@ -205,3 +205,33 @@ const char *CcArchiveFundingBlockerName(CcArchiveFundingBlocker blocker)
     }
     return "unknown";
 }
+
+CcArchiveRecoveryWindow CcSimArchiveRecoveryWindow(const CcSim *sim)
+{
+    CcArchiveRecoveryWindow window = {CC_ARCHIVE_RECOVERY_UNAVAILABLE, -1};
+    if (sim == NULL || sim->schema_version < 56U) return window;
+    if (sim->archives.scribes > 0) window.gate = CC_ARCHIVE_RECOVERY_STAFFED;
+    else if (sim->iron_ledger_reserve >= 50) window.gate = CC_ARCHIVE_RECOVERY_LEDGER_FUNDED;
+    else if (sim->archives.dead_since_day <= 0) window.gate = CC_ARCHIVE_RECOVERY_SILENCE_UNDATED;
+    else {
+        int64_t wait_end = (int64_t)sim->archives.dead_since_day + 1825;
+        window.first_eligible_day = ((wait_end + 6) / 7) * 7;
+        window.gate = sim->current_day < wait_end ? CC_ARCHIVE_RECOVERY_WAITING :
+            sim->current_day % 7 != 0 ? CC_ARCHIVE_RECOVERY_CALENDAR : CC_ARCHIVE_RECOVERY_DUE;
+    }
+    return window;
+}
+
+const char *CcArchiveRecoveryGateName(CcArchiveRecoveryGate gate)
+{
+    switch (gate) {
+        case CC_ARCHIVE_RECOVERY_DUE: return "due";
+        case CC_ARCHIVE_RECOVERY_UNAVAILABLE: return "unavailable";
+        case CC_ARCHIVE_RECOVERY_STAFFED: return "staffed";
+        case CC_ARCHIVE_RECOVERY_LEDGER_FUNDED: return "ledger_funded";
+        case CC_ARCHIVE_RECOVERY_SILENCE_UNDATED: return "silence_undated";
+        case CC_ARCHIVE_RECOVERY_WAITING: return "waiting";
+        case CC_ARCHIVE_RECOVERY_CALENDAR: return "calendar";
+    }
+    return "unknown";
+}
