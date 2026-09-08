@@ -23,6 +23,13 @@ with tempfile.TemporaryDirectory() as directory:
         assert [row['day'] for row in rows] == [1, 366, 731]
         assert all(row['threats']['semantics'] == 'snapshot' for row in rows)
         for row in rows:
+            recruit = row['archive_recruitment']
+            assert recruit['semantics'] == 'recruitment_quote_snapshot'
+            assert isinstance(recruit['person_id'], str)
+            if recruit['gate'] == 'ready':
+                assert recruit['person_id'] != '0'
+                assert recruit['ready_day'] == recruit['arrival_day'] + recruit['training_days']
+                assert recruit['wages'] == 50
             supply = row['archive_supply']
             assert supply['semantics'] == 'held_booking_quote_snapshot'
             assert supply['cost_scope'] == 'goods_and_first_loaded_leg'
@@ -59,6 +66,7 @@ with tempfile.TemporaryDirectory() as directory:
             assert loaded['road_network'] == rows[-1]['road_network']
             assert loaded['archive_work'] == rows[-1]['archive_work']
             assert loaded['archive_funding'] == rows[-1]['archive_funding']
+            assert loaded['archive_recruitment'] == rows[-1]['archive_recruitment']
             assert loaded['archive_supply'] == rows[-1]['archive_supply']
             assert loaded['archive_seat_plan'] == rows[-1]['archive_seat_plan']
             assert loaded['carriages'] == rows[-1]['carriages']
