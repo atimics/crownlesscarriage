@@ -1,0 +1,801 @@
+{"kind":"place","id":144115188075855876,"name":"Thornford"}
+{"kind":"place","id":144115188075855877,"name":"Gloamgate"}
+{"kind":"place","id":144115188075855878,"name":"Alderwatch"}
+{"kind":"place","id":144115188075855879,"name":"Silverwick"}
+{"kind":"place","id":144115188075855880,"name":"Rosespire"}
+{"kind":"place","id":144115188075855881,"name":"Hollowbarrow"}
+{"kind":"dragon","id":1008806316530991149,"name":"Varkesh the Unappeased"}
+{"kind":"initial_state","day":1,"stage":"Crowned dragon","memory":100,"crown":25,"territory":72,"continuity":29200,"debt":0,"treasures":0,"serial":99}
+{"kind":"created","day":21,"id":1152921504606847123,"name":"Rosespire Sun Reliquary","created_day":21,"value":140,"owner":144115188075855880,"location":144115188075855880,"maker":144115188075855880,"destroyed":false}
+{"kind":"event","day":21,"text":"A royal carriage rides empty toward Rosespire to collect a needed load."}
+{"kind":"event","day":21,"text":"A royal carriage rides empty toward Thornford to collect a needed load."}
+{"kind":"event","day":21,"text":"Ashen Throne moves 2 crowns from its treasury into Alderwatch's war chest."}
+{"kind":"event","day":21,"text":"Petra Lark anoints Ilyra Senn of Willow Republic; the crown becomes lawful."}
+{"kind":"event","day":21,"text":"Rosespire's mill uses 1 Wood to make 4 Paper."}
+{"kind":"event","day":21,"text":"Rosespire finishes Rosespire Sun Reliquary from 1 Raw Gold, 1 Gems, and 3 weeks of work."}
+{"kind":"event","day":21,"text":"Rosespire's smithy uses 3 Iron and 2 Wood to make 0 Tools and 1 Weapons."}
+{"kind":"event","day":21,"text":"Gloamgate's smithy uses 3 Iron and 2 Wood to make 0 Tools and 1 Weapons."}
+{"kind":"moved_or_destroyed","day":101,"id":1152921504606847123,"name":"Rosespire Sun Reliquary","created_day":21,"value":140,"owner":936748722493063212,"location":144115188075855880,"maker":144115188075855880,"destroyed":false}
+{"kind":"moved_or_destroyed","day":104,"id":1152921504606847123,"name":"Rosespire Sun Reliquary","created_day":21,"value":140,"owner":936748722493063212,"location":144115188075855879,"maker":144115188075855880,"destroyed":false}
+{"kind":"moved_or_destroyed","day":108,"id":1152921504606847123,"name":"Rosespire Sun Reliquary","created_day":21,"value":140,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855880,"destroyed":false}
+{"kind":"stage","day":92711,"stage":"Deep Wyrm","memory":100,"crown":74,"territory":100,"continuity":119530,"debt":0,"treasures":2,"serial":158865}
+{"kind":"created","day":92711,"id":1152921504607005840,"name":"Wyrmheart of Varkesh the Unappeas","created_day":92711,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":92711,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":365001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":381992,"debt":0,"treasures":2,"serial":466315}
+{"kind":"checkpoint","day":730001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":734644,"debt":0,"treasures":2,"serial":875690}
+{"kind":"checkpoint","day":1095001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":1089256,"debt":0,"treasures":2,"serial":1285743}
+{"kind":"checkpoint","day":1460001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":1444848,"debt":0,"treasures":2,"serial":1686778}
+{"kind":"checkpoint","day":1825001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":1799656,"debt":0,"treasures":2,"serial":2083642}
+{"kind":"checkpoint","day":2190001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":2153680,"debt":0,"treasures":2,"serial":2480100}
+{"kind":"checkpoint","day":2555001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":2507704,"debt":0,"treasures":2,"serial":2877407}
+{"kind":"stage","day":2660966,"stage":"Uncrowned dragon","memory":93,"crown":80,"territory":0,"continuity":2608713,"debt":0,"treasures":2,"serial":2993057}
+{"kind":"event","day":2660966,"text":"Relief charter issued; reward 18 crowns before day 2661001."}
+{"kind":"event","day":2660966,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":2660966,"text":"Varkesh the Unappeased takes 2 cows, 2 sheep, and 0 rations from Thornford."}
+{"kind":"event","day":2660966,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":2664704,"stage":"Crowned dragon","memory":100,"crown":87,"territory":50,"continuity":2611597,"debt":0,"treasures":2,"serial":2997346}
+{"kind":"event","day":2664704,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":2664704,"text":"Road compact issued; reward 24 crowns before day 2664753."}
+{"kind":"event","day":2664704,"text":"Road compact issued; reward 24 crowns before day 2664753."}
+{"kind":"event","day":2664704,"text":"Relief charter issued; reward 18 crowns before day 2664739."}
+{"kind":"event","day":2664704,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":2664704,"text":"Ashen Throne Court leads public support in Ashen Throne at 51%."}
+{"kind":"event","day":2664704,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":2664704,"text":"Rosespire defers public masonry repairs for want of 2 Stone."}
+{"kind":"event","day":2664704,"text":"Rosespire's bakery mills 8 Wheat into 8 Bread."}
+{"kind":"event","day":2664704,"text":"Alderwatch defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":2664704,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":2664704,"text":"Gloamgate defers public masonry repairs for want of 1 Stone."}
+{"kind":"stage","day":2665432,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":75,"continuity":2612325,"debt":0,"treasures":3,"serial":2998103}
+{"kind":"created","day":2665432,"id":1152921504609845065,"name":"Wyrmheart of Varkesh the Unappeas","created_day":2665432,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":2665432,"text":"Quiet commission issued; reward 24 crowns before day 2665460."}
+{"kind":"event","day":2665432,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":2665432,"text":"Road compact issued; reward 24 crowns before day 2665481."}
+{"kind":"event","day":2665432,"text":"Road compact issued; reward 24 crowns before day 2665481."}
+{"kind":"event","day":2665432,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":2665432,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":2665432,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":2665432,"text":"Rosespire's bakery mills 8 Wheat into 8 Bread."}
+{"kind":"event","day":2665432,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":2665432,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":2920001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":2865130,"debt":0,"treasures":3,"serial":3213938}
+{"kind":"checkpoint","day":3285001,"stage":"Deep Wyrm","memory":93,"crown":80,"territory":100,"continuity":3229934,"debt":0,"treasures":3,"serial":3520343}
+{"kind":"checkpoint","day":3650001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":3594738,"debt":0,"treasures":3,"serial":3826718}
+{"kind":"checkpoint","day":4015001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":3959542,"debt":0,"treasures":3,"serial":4133064}
+{"kind":"stage","day":4132422,"stage":"Uncrowned dragon","memory":92,"crown":80,"territory":0,"continuity":4074751,"debt":0,"treasures":3,"serial":4231578}
+{"kind":"event","day":4132422,"text":"Quiet commission issued; reward 24 crowns before day 4132450."}
+{"kind":"event","day":4132422,"text":"Relief charter issued; reward 18 crowns before day 4132457."}
+{"kind":"event","day":4132422,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":4136020,"stage":"Crowned dragon","memory":93,"crown":80,"territory":50,"continuity":4076207,"debt":0,"treasures":3,"serial":4234583}
+{"kind":"event","day":4136020,"text":"Relief charter issued; reward 18 crowns before day 4136055."}
+{"kind":"event","day":4136020,"text":"Indigo March Court leads public support in Indigo March at 100%."}
+{"kind":"event","day":4136020,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 70."}
+{"kind":"event","day":4136020,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":4136020,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":4136020,"text":"Rosespire's bakery mills 24 Wheat into 24 Bread."}
+{"kind":"event","day":4136020,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":4136020,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":4136972,"stage":"Deep Wyrm","memory":93,"crown":80,"territory":75,"continuity":4077159,"debt":0,"treasures":4,"serial":4235385}
+{"kind":"created","day":4136972,"id":1152921504611082352,"name":"Wyrmheart of Varkesh the Unappeas","created_day":4136972,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":4136972,"text":"Quiet commission issued; reward 24 crowns before day 4137000."}
+{"kind":"event","day":4136972,"text":"Indigo March Court leads public support in Indigo March at 100%."}
+{"kind":"event","day":4136972,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 70."}
+{"kind":"event","day":4136972,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":4136972,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":4136972,"text":"Rosespire's bakery mills 19 Wheat into 19 Bread."}
+{"kind":"event","day":4136972,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":4136972,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":4380001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":4319992,"debt":0,"treasures":4,"serial":4439419}
+{"kind":"checkpoint","day":4745001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":4683816,"debt":0,"treasures":4,"serial":4745897}
+{"kind":"checkpoint","day":5110001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":5046856,"debt":0,"treasures":4,"serial":5052651}
+{"kind":"stage","day":5466006,"stage":"Uncrowned dragon","memory":93,"crown":80,"territory":0,"continuity":5399669,"debt":0,"treasures":4,"serial":5351496}
+{"kind":"event","day":5466006,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":5470276,"stage":"Crowned dragon","memory":94,"crown":81,"territory":50,"continuity":5401097,"debt":0,"treasures":4,"serial":5355055}
+{"kind":"event","day":5470276,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":5470276,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":5470276,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":5470276,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":5470276,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":5470276,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":5470276,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":5471116,"stage":"Deep Wyrm","memory":95,"crown":82,"territory":75,"continuity":5401937,"debt":0,"treasures":5,"serial":5355756}
+{"kind":"created","day":5471116,"id":1152921504612202725,"name":"Wyrmheart of Varkesh the Unappeas","created_day":5471116,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":5471116,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":5471116,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":5471116,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":5471116,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":5471116,"text":"Rosespire's bakery mills 8 Wheat into 8 Bread."}
+{"kind":"event","day":5471116,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":5471116,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":5475001,"stage":"Deep Wyrm","memory":96,"crown":83,"territory":100,"continuity":5405822,"debt":0,"treasures":5,"serial":5358987}
+{"kind":"checkpoint","day":5840001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":5770626,"debt":0,"treasures":5,"serial":5665339}
+{"kind":"checkpoint","day":6205001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":6135234,"debt":0,"treasures":5,"serial":5971916}
+{"kind":"checkpoint","day":6570001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":6499646,"debt":0,"treasures":5,"serial":6278212}
+{"kind":"checkpoint","day":6935001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":6861510,"debt":0,"treasures":5,"serial":6585988}
+{"kind":"checkpoint","day":7300001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":7218670,"debt":0,"treasures":5,"serial":6894459}
+{"kind":"checkpoint","day":7665001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":7581318,"debt":0,"treasures":5,"serial":7201508}
+{"kind":"stage","day":8026983,"stage":"Uncrowned dragon","memory":92,"crown":80,"territory":0,"continuity":7941089,"debt":0,"treasures":5,"serial":7505268}
+{"kind":"event","day":8026983,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"checkpoint","day":8030001,"stage":"Uncrowned dragon","memory":93,"crown":80,"territory":33,"continuity":7942118,"debt":0,"treasures":5,"serial":7507792}
+{"kind":"stage","day":8030456,"stage":"Crowned dragon","memory":93,"crown":80,"territory":50,"continuity":7942573,"debt":0,"treasures":5,"serial":7508186}
+{"kind":"event","day":8030456,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":8030456,"text":"Road compact issued; reward 24 crowns before day 8030505."}
+{"kind":"event","day":8030456,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":8030456,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":8030456,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":8030456,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":8030456,"text":"Rosespire's bakery mills 8 Wheat into 8 Bread."}
+{"kind":"event","day":8030456,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":8030456,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":8031268,"stage":"Deep Wyrm","memory":93,"crown":80,"territory":75,"continuity":7943385,"debt":0,"treasures":6,"serial":7508862}
+{"kind":"created","day":8031268,"id":1152921504614355831,"name":"Wyrmheart of Varkesh the Unappeas","created_day":8031268,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":8031268,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":8031268,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":8031268,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":8031268,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":8031268,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":8031268,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":8031268,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":8395001,"stage":"Deep Wyrm","memory":96,"crown":83,"territory":100,"continuity":8306530,"debt":0,"treasures":6,"serial":7814139}
+{"kind":"checkpoint","day":8760001,"stage":"Deep Wyrm","memory":98,"crown":85,"territory":100,"continuity":8669374,"debt":0,"treasures":6,"serial":8120897}
+{"kind":"checkpoint","day":9125001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":9032610,"debt":0,"treasures":6,"serial":8427546}
+{"kind":"checkpoint","day":9490001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":9392318,"debt":0,"treasures":6,"serial":8736018}
+{"kind":"checkpoint","day":9855001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":9748890,"debt":0,"treasures":6,"serial":9044927}
+{"kind":"checkpoint","day":10220001,"stage":"Deep Wyrm","memory":92,"crown":80,"territory":99,"continuity":10107814,"debt":0,"treasures":6,"serial":9353359}
+{"kind":"checkpoint","day":10585001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":10472618,"debt":0,"treasures":6,"serial":9659712}
+{"kind":"stage","day":10885364,"stage":"Uncrowned dragon","memory":92,"crown":80,"territory":0,"continuity":10768025,"debt":0,"treasures":6,"serial":9912394}
+{"kind":"event","day":10885364,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":10885364,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":10885364,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":10885364,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":10885364,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":10885364,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":10885364,"text":"Varkesh the Unappeased takes 2 cows, 2 sheep, and 0 rations from Thornford."}
+{"kind":"event","day":10885364,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":10888192,"stage":"Crowned dragon","memory":93,"crown":80,"territory":50,"continuity":10769593,"debt":0,"treasures":6,"serial":9914758}
+{"kind":"event","day":10888192,"text":"Quiet commission issued; reward 24 crowns before day 10888220."}
+{"kind":"event","day":10888192,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":10888192,"text":"Road compact issued; reward 24 crowns before day 10888241."}
+{"kind":"event","day":10888192,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":10888192,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":10888192,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":10888192,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":10888192,"text":"Rosespire defers public masonry repairs for want of 2 Stone."}
+{"kind":"event","day":10888192,"text":"Rosespire's bakery mills 8 Wheat into 8 Bread."}
+{"kind":"event","day":10888192,"text":"Gloamgate defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":10888192,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":10888192,"text":"Thornford defers public masonry repairs for want of 1 Stone."}
+{"kind":"stage","day":10889256,"stage":"Deep Wyrm","memory":93,"crown":80,"territory":75,"continuity":10770657,"debt":0,"treasures":7,"serial":9915648}
+{"kind":"created","day":10889256,"id":1152921504616762607,"name":"Wyrmheart of Varkesh the Unappeas","created_day":10889256,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":10889256,"text":"Nara names Rosespire for Tools and Weapons. The Cinder Tithe musters until tomorrow."}
+{"kind":"event","day":10889256,"text":"Road compact issued; reward 24 crowns before day 10889305."}
+{"kind":"event","day":10889256,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":10889256,"text":"Relief charter issued; reward 18 crowns before day 10889291."}
+{"kind":"event","day":10889256,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":10889256,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":10889256,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":10889256,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":10889256,"text":"Rosespire's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":10889256,"text":"Rosespire's bakery mills 8 Wheat into 8 Bread."}
+{"kind":"event","day":10889256,"text":"Gloamgate's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":10889256,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"checkpoint","day":10950001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":10831402,"debt":0,"treasures":7,"serial":9966618}
+{"kind":"checkpoint","day":11315001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":11192286,"debt":0,"treasures":7,"serial":10273733}
+{"kind":"checkpoint","day":11680001,"stage":"Deep Wyrm","memory":93,"crown":80,"territory":100,"continuity":11553954,"debt":0,"treasures":7,"serial":10581380}
+{"kind":"checkpoint","day":12045001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":11916406,"debt":0,"treasures":7,"serial":10888503}
+{"kind":"checkpoint","day":12410001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":12275722,"debt":0,"treasures":7,"serial":11196904}
+{"kind":"checkpoint","day":12775001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":12636802,"debt":0,"treasures":7,"serial":11504527}
+{"kind":"checkpoint","day":13140001,"stage":"Deep Wyrm","memory":92,"crown":80,"territory":100,"continuity":13000822,"debt":0,"treasures":7,"serial":11811259}
+{"kind":"checkpoint","day":13505001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":13361706,"debt":0,"treasures":7,"serial":12118883}
+{"kind":"stage","day":13851711,"stage":"Uncrowned dragon","memory":92,"crown":80,"territory":0,"continuity":13706205,"debt":0,"treasures":7,"serial":12409857}
+{"kind":"event","day":13851711,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":13856864,"stage":"Crowned dragon","memory":93,"crown":80,"territory":50,"continuity":13707633,"debt":0,"treasures":7,"serial":12414153}
+{"kind":"event","day":13856864,"text":"Road compact issued; reward 24 crowns before day 13856913."}
+{"kind":"event","day":13856864,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":13856864,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":13856864,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":13856864,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":13856864,"text":"Rosespire defers public masonry repairs for want of 2 Stone."}
+{"kind":"event","day":13856864,"text":"Rosespire's bakery mills 6 Wheat into 6 Bread."}
+{"kind":"event","day":13856864,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":13856864,"text":"Gloamgate defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":13856864,"text":"Thornford defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":13856864,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":13857648,"stage":"Deep Wyrm","memory":94,"crown":81,"territory":75,"continuity":13708417,"debt":0,"treasures":8,"serial":12414799}
+{"kind":"created","day":13857648,"id":1152921504619261759,"name":"Wyrmheart of Varkesh the Unappeas","created_day":13857648,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":13857648,"text":"Nara names Rosespire for Tools and Weapons. The Cinder Tithe musters until tomorrow."}
+{"kind":"event","day":13857648,"text":"Road compact issued; reward 24 crowns before day 13857697."}
+{"kind":"event","day":13857648,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":13857648,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":13857648,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":13857648,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":13857648,"text":"Rosespire defers public masonry repairs for want of 2 Stone."}
+{"kind":"event","day":13857648,"text":"Rosespire's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":13857648,"text":"Rosespire's bakery mills 6 Wheat into 6 Bread."}
+{"kind":"event","day":13857648,"text":"Gloamgate defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":13857648,"text":"Gloamgate's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":13857648,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"checkpoint","day":13870001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":13720574,"debt":0,"treasures":8,"serial":12425196}
+{"kind":"checkpoint","day":14235001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":14081066,"debt":0,"treasures":8,"serial":12733101}
+{"kind":"checkpoint","day":14600001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":14442342,"debt":0,"treasures":8,"serial":13040270}
+{"kind":"checkpoint","day":14965001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":14805382,"debt":0,"treasures":8,"serial":13347279}
+{"kind":"checkpoint","day":15330001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":15163326,"debt":0,"treasures":8,"serial":13655610}
+{"kind":"checkpoint","day":15695001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":15526562,"debt":0,"treasures":8,"serial":13962819}
+{"kind":"checkpoint","day":16060001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":15889525,"debt":0,"treasures":8,"serial":14269116}
+{"kind":"checkpoint","day":16425001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":16254329,"debt":0,"treasures":8,"serial":14575535}
+{"kind":"checkpoint","day":16790001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":16616193,"debt":0,"treasures":8,"serial":14882391}
+{"kind":"stage","day":17112760,"stage":"Uncrowned dragon","memory":93,"crown":80,"territory":0,"continuity":16936936,"debt":0,"treasures":8,"serial":15153204}
+{"kind":"event","day":17112760,"text":"Road compact issued; reward 24 crowns before day 17112809."}
+{"kind":"event","day":17112760,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":17112760,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":17112760,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":17112760,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":17112760,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":17112760,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":17112760,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":17118136,"stage":"Crowned dragon","memory":94,"crown":81,"territory":50,"continuity":16938476,"debt":0,"treasures":8,"serial":15157717}
+{"kind":"event","day":17118136,"text":"Road compact issued; reward 24 crowns before day 17118185."}
+{"kind":"event","day":17118136,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":17118136,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":17118136,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":17118136,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":17118136,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":17118136,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":17118136,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":17118920,"stage":"Deep Wyrm","memory":95,"crown":82,"territory":75,"continuity":16939260,"debt":0,"treasures":9,"serial":15158367}
+{"kind":"created","day":17118920,"id":1152921504622005332,"name":"Wyrmheart of Varkesh the Unappeas","created_day":17118920,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":17118920,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":17118920,"text":"Road compact issued; reward 24 crowns before day 17118969."}
+{"kind":"event","day":17118920,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":17118920,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":17118920,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":17118920,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":17118920,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":17118920,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":17118920,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":17155001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":16974361,"debt":0,"treasures":9,"serial":15188714}
+{"kind":"checkpoint","day":17520001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":17331717,"debt":0,"treasures":9,"serial":15496998}
+{"kind":"checkpoint","day":17885001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":17686917,"debt":0,"treasures":9,"serial":15805841}
+{"kind":"checkpoint","day":18250001,"stage":"Deep Wyrm","memory":97,"crown":84,"territory":100,"continuity":18044665,"debt":0,"treasures":9,"serial":16114150}
+{"kind":"checkpoint","day":18615001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":18406725,"debt":0,"treasures":9,"serial":16421986}
+{"kind":"checkpoint","day":18980001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":18769177,"debt":0,"treasures":9,"serial":16729976}
+{"kind":"checkpoint","day":19345001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":19129277,"debt":0,"treasures":9,"serial":17037923}
+{"kind":"checkpoint","day":19710001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":19494081,"debt":0,"treasures":9,"serial":17344282}
+{"kind":"checkpoint","day":20075001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":19858885,"debt":0,"treasures":9,"serial":17650627}
+{"kind":"checkpoint","day":20440001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":20223885,"debt":0,"treasures":9,"serial":17957054}
+{"kind":"stage","day":20461531,"stage":"Uncrowned dragon","memory":100,"crown":87,"territory":0,"continuity":20243400,"debt":0,"treasures":9,"serial":17975121}
+{"kind":"event","day":20461531,"text":"Varkesh the Unappeased takes 2 cows, 2 sheep, and 0 rations from Thornford."}
+{"kind":"event","day":20461531,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":20464136,"stage":"Crowned dragon","memory":100,"crown":87,"territory":50,"continuity":20245164,"debt":0,"treasures":9,"serial":17977300}
+{"kind":"event","day":20464136,"text":"Road compact issued; reward 24 crowns before day 20464185."}
+{"kind":"event","day":20464136,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":20464136,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":20464136,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":20464136,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":20464136,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":20464136,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":20464136,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":20465200,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":75,"continuity":20246228,"debt":0,"treasures":10,"serial":17978184}
+{"kind":"created","day":20465200,"id":1152921504624825146,"name":"Wyrmheart of Varkesh the Unappeas","created_day":20465200,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":20465200,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":20465200,"text":"Road compact issued; reward 24 crowns before day 20465249."}
+{"kind":"event","day":20465200,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":20465200,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":20465200,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":20465200,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":20465200,"text":"Rosespire defers public masonry repairs for want of 2 Stone."}
+{"kind":"event","day":20465200,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":20465200,"text":"Gloamgate defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":20465200,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":20465200,"text":"Thornford defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":20465200,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":20805001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":20581129,"debt":0,"treasures":10,"serial":18264701}
+{"kind":"checkpoint","day":21170001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":20944365,"debt":0,"treasures":10,"serial":18571325}
+{"kind":"checkpoint","day":21535001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":21308973,"debt":0,"treasures":10,"serial":18877774}
+{"kind":"checkpoint","day":21900001,"stage":"Deep Wyrm","memory":92,"crown":80,"territory":100,"continuity":21673385,"debt":0,"treasures":10,"serial":19184088}
+{"kind":"checkpoint","day":22265001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":22034857,"debt":0,"treasures":10,"serial":19491235}
+{"kind":"stage","day":22399355,"stage":"Uncrowned dragon","memory":100,"crown":87,"territory":0,"continuity":22164452,"debt":0,"treasures":10,"serial":19604442}
+{"kind":"event","day":22399355,"text":"Varkesh the Unappeased takes 2 cows, 2 sheep, and 0 rations from Thornford."}
+{"kind":"event","day":22399355,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":22402380,"stage":"Crowned dragon","memory":100,"crown":87,"territory":50,"continuity":22166272,"debt":0,"treasures":10,"serial":19606989}
+{"kind":"event","day":22402380,"text":"Nara names Rosespire for Food. The Cinder Tithe musters until tomorrow."}
+{"kind":"event","day":22402380,"text":"Relief charter issued; reward 18 crowns before day 22402415."}
+{"kind":"event","day":22402380,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":22402380,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":22402380,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":22402380,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":22402380,"text":"Rosespire's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":22402380,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":22402380,"text":"Gloamgate's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":22402380,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":22402380,"text":"Thornford's hand crews cut 3 Wood without working tools."}
+{"kind":"event","day":22402380,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":22403108,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":75,"continuity":22167000,"debt":0,"treasures":11,"serial":19607597}
+{"kind":"created","day":22403108,"id":1152921504626454566,"name":"Wyrmheart of Varkesh the Unappeas","created_day":22403108,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":22403108,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":22403108,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":22403108,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":22403108,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":22403108,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":22403108,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":22403108,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":22630001,"stage":"Deep Wyrm","memory":93,"crown":80,"territory":100,"continuity":22393697,"debt":0,"treasures":11,"serial":19798069}
+{"kind":"checkpoint","day":22995001,"stage":"Deep Wyrm","memory":98,"crown":85,"territory":100,"continuity":22758501,"debt":0,"treasures":11,"serial":20104458}
+{"kind":"checkpoint","day":23360001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":23123109,"debt":0,"treasures":11,"serial":20410699}
+{"kind":"checkpoint","day":23725001,"stage":"Deep Wyrm","memory":93,"crown":80,"territory":100,"continuity":23480661,"debt":0,"treasures":11,"serial":20718503}
+{"kind":"checkpoint","day":24090001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":23841741,"debt":0,"treasures":11,"serial":21025487}
+{"kind":"checkpoint","day":24455001,"stage":"Deep Wyrm","memory":98,"crown":85,"territory":100,"continuity":24203409,"debt":0,"treasures":11,"serial":21333138}
+{"kind":"checkpoint","day":24820001,"stage":"Deep Wyrm","memory":94,"crown":81,"territory":100,"continuity":24568409,"debt":0,"treasures":11,"serial":21639437}
+{"kind":"checkpoint","day":25185001,"stage":"Deep Wyrm","memory":96,"crown":83,"territory":100,"continuity":24931645,"debt":0,"treasures":11,"serial":21946195}
+{"kind":"checkpoint","day":25550001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":25293313,"debt":0,"treasures":11,"serial":22253868}
+{"kind":"stage","day":25614652,"stage":"Uncrowned dragon","memory":100,"crown":87,"territory":0,"continuity":25354968,"debt":0,"treasures":11,"serial":22308334}
+{"kind":"event","day":25614652,"text":"Quiet commission issued; reward 24 crowns before day 25614680."}
+{"kind":"event","day":25614652,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":25614652,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":25614652,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":25614652,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":25614652,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":25614652,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":25614652,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":25623584,"stage":"Crowned dragon","memory":100,"crown":87,"territory":50,"continuity":25356564,"debt":0,"treasures":11,"serial":22315812}
+{"kind":"event","day":25623584,"text":"Road compact issued; reward 24 crowns before day 25623633."}
+{"kind":"event","day":25623584,"text":"Indigo March Court leads public support in Indigo March at 100%."}
+{"kind":"event","day":25623584,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 70."}
+{"kind":"event","day":25623584,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":25623584,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":25623584,"text":"Rosespire defers public masonry repairs for want of 2 Stone."}
+{"kind":"event","day":25623584,"text":"Rosespire's bakery mills 6 Wheat into 6 Bread."}
+{"kind":"event","day":25623584,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":25623584,"text":"Gloamgate defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":25623584,"text":"Thornford defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":25623584,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":25624564,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":75,"continuity":25357544,"debt":0,"treasures":12,"serial":22316641}
+{"kind":"created","day":25624564,"id":1152921504629163610,"name":"Wyrmheart of Varkesh the Unappeas","created_day":25624564,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":25624564,"text":"Indigo March Court leads public support in Indigo March at 100%."}
+{"kind":"event","day":25624564,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":25624564,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":25624564,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":25624564,"text":"Rosespire's bakery mills 3 Wheat into 3 Bread."}
+{"kind":"event","day":25624564,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":25624564,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":25915001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":25647589,"debt":0,"treasures":12,"serial":22560631}
+{"kind":"checkpoint","day":26280001,"stage":"Deep Wyrm","memory":96,"crown":83,"territory":100,"continuity":26006121,"debt":0,"treasures":12,"serial":22868398}
+{"kind":"checkpoint","day":26645001,"stage":"Deep Wyrm","memory":94,"crown":81,"territory":100,"continuity":26371121,"debt":0,"treasures":12,"serial":23174696}
+{"kind":"checkpoint","day":27010001,"stage":"Deep Wyrm","memory":91,"crown":79,"territory":100,"continuity":26733377,"debt":0,"treasures":12,"serial":23481692}
+{"kind":"stage","day":27351604,"stage":"Uncrowned dragon","memory":93,"crown":80,"territory":0,"continuity":27072768,"debt":0,"treasures":12,"serial":23768427}
+{"kind":"event","day":27351604,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":27351604,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":27351604,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":27351604,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":27351604,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":27351604,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":27351604,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":27356056,"stage":"Crowned dragon","memory":93,"crown":80,"territory":50,"continuity":27074700,"debt":0,"treasures":12,"serial":23772165}
+{"kind":"event","day":27356056,"text":"Nara names Rosespire for Food. The Cinder Tithe musters until tomorrow."}
+{"kind":"event","day":27356056,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":27356056,"text":"Road compact issued; reward 24 crowns before day 27356105."}
+{"kind":"event","day":27356056,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":27356056,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":27356056,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":27356056,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":27356056,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":27356056,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":27356056,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":27356784,"stage":"Deep Wyrm","memory":93,"crown":80,"territory":75,"continuity":27075428,"debt":0,"treasures":13,"serial":23772786}
+{"kind":"created","day":27356784,"id":1152921504630619747,"name":"Wyrmheart of Varkesh the Unappeas","created_day":27356784,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":27356784,"text":"Road compact issued; reward 24 crowns before day 27356833."}
+{"kind":"event","day":27356784,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":27356784,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":27356784,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":27356784,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":27356784,"text":"Rosespire defers public masonry repairs for want of 2 Stone."}
+{"kind":"event","day":27356784,"text":"Rosespire's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":27356784,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":27356784,"text":"Gloamgate defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":27356784,"text":"Gloamgate's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":27356784,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":27356784,"text":"Thornford defers public masonry repairs for want of 1 Stone."}
+{"kind":"checkpoint","day":27375001,"stage":"Deep Wyrm","memory":97,"crown":84,"territory":100,"continuity":27093645,"debt":0,"treasures":13,"serial":23788067}
+{"kind":"checkpoint","day":27740001,"stage":"Deep Wyrm","memory":93,"crown":80,"territory":100,"continuity":27458449,"debt":0,"treasures":13,"serial":24094490}
+{"kind":"stage","day":28099932,"stage":"Uncrowned dragon","memory":93,"crown":80,"territory":0,"continuity":27816364,"debt":0,"treasures":13,"serial":24396617}
+{"kind":"event","day":28099932,"text":"Nara names Thornford for Food. The Cinder Tithe musters until tomorrow."}
+{"kind":"event","day":28099932,"text":"Quiet commission issued; reward 24 crowns before day 28099960."}
+{"kind":"event","day":28099932,"text":"Relief charter issued; reward 18 crowns before day 28099967."}
+{"kind":"event","day":28099932,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":28099932,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":28099932,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":28099932,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":28099932,"text":"Rosespire's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":28099932,"text":"Rosespire's bakery mills 8 Wheat into 8 Bread."}
+{"kind":"event","day":28099932,"text":"Gloamgate's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":28099932,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":28099932,"text":"Thornford's hand crews cut 3 Wood without working tools."}
+{"kind":"stage","day":28102984,"stage":"Crowned dragon","memory":93,"crown":80,"territory":50,"continuity":27818212,"debt":0,"treasures":13,"serial":24399179}
+{"kind":"event","day":28102984,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":28102984,"text":"Road compact issued; reward 24 crowns before day 28103033."}
+{"kind":"event","day":28102984,"text":"Indigo March Court leads public support in Indigo March at 100%."}
+{"kind":"event","day":28102984,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 70."}
+{"kind":"event","day":28102984,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":28102984,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":28102984,"text":"Rosespire's bakery mills 10 Wheat into 10 Bread."}
+{"kind":"event","day":28102984,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":28102984,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":28103852,"stage":"Deep Wyrm","memory":93,"crown":80,"territory":75,"continuity":27819080,"debt":0,"treasures":14,"serial":24399908}
+{"kind":"created","day":28103852,"id":1152921504631246875,"name":"Wyrmheart of Varkesh the Unappeas","created_day":28103852,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":28103852,"text":"Quiet commission issued; reward 24 crowns before day 28103880."}
+{"kind":"event","day":28103852,"text":"Indigo March Court leads public support in Indigo March at 100%."}
+{"kind":"event","day":28103852,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 70."}
+{"kind":"event","day":28103852,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":28103852,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":28103852,"text":"Rosespire's bakery mills 17 Wheat into 17 Bread."}
+{"kind":"event","day":28103852,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":28103852,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":28105001,"stage":"Deep Wyrm","memory":94,"crown":81,"territory":100,"continuity":27820229,"debt":0,"treasures":14,"serial":24400869}
+{"kind":"checkpoint","day":28470001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":28184837,"debt":0,"treasures":14,"serial":24707200}
+{"kind":"checkpoint","day":28835001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":28547681,"debt":0,"treasures":14,"serial":25014742}
+{"kind":"checkpoint","day":29200001,"stage":"Deep Wyrm","memory":92,"crown":80,"territory":97,"continuity":28908761,"debt":0,"treasures":14,"serial":25321903}
+{"kind":"checkpoint","day":29565001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":29266509,"debt":0,"treasures":14,"serial":25630410}
+{"kind":"checkpoint","day":29930001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":29631117,"debt":0,"treasures":14,"serial":25937481}
+{"kind":"stage","day":30115707,"stage":"Uncrowned dragon","memory":93,"crown":80,"territory":0,"continuity":29814808,"debt":0,"treasures":14,"serial":26093255}
+{"kind":"event","day":30115707,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":30119236,"stage":"Crowned dragon","memory":94,"crown":81,"territory":50,"continuity":29817356,"debt":0,"treasures":14,"serial":26096208}
+{"kind":"event","day":30119236,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":30119236,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":30119236,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":30119236,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":30119236,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":30119236,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":30119236,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":30119936,"stage":"Deep Wyrm","memory":94,"crown":81,"territory":75,"continuity":29818056,"debt":0,"treasures":15,"serial":26096802}
+{"kind":"created","day":30119936,"id":1152921504632943764,"name":"Wyrmheart of Varkesh the Unappeas","created_day":30119936,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":30119936,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":30119936,"text":"Road compact issued; reward 24 crowns before day 30119985."}
+{"kind":"event","day":30119936,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":30119936,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":30119936,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":30119936,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":30119936,"text":"Rosespire defers public masonry repairs for want of 2 Stone."}
+{"kind":"event","day":30119936,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":30119936,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":30119936,"text":"Gloamgate defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":30119936,"text":"Thornford defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":30119936,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":30295001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":29993121,"debt":0,"treasures":15,"serial":26243796}
+{"kind":"checkpoint","day":30660001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":30355965,"debt":0,"treasures":15,"serial":26550698}
+{"kind":"checkpoint","day":31025001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":30720769,"debt":0,"treasures":15,"serial":26857030}
+{"kind":"checkpoint","day":31390001,"stage":"Deep Wyrm","memory":94,"crown":81,"territory":100,"continuity":31081653,"debt":0,"treasures":15,"serial":27164639}
+{"kind":"checkpoint","day":31755001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":31439597,"debt":0,"treasures":15,"serial":27472426}
+{"kind":"checkpoint","day":32120001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":31804205,"debt":0,"treasures":15,"serial":27778721}
+{"kind":"stage","day":32373963,"stage":"Uncrowned dragon","memory":92,"crown":80,"territory":0,"continuity":32055760,"debt":0,"treasures":15,"serial":27991752}
+{"kind":"event","day":32373963,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":32377576,"stage":"Crowned dragon","memory":93,"crown":80,"territory":50,"continuity":32057244,"debt":0,"treasures":15,"serial":27994793}
+{"kind":"event","day":32377576,"text":"Road compact issued; reward 24 crowns before day 32377625."}
+{"kind":"event","day":32377576,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":32377576,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":32377576,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":32377576,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":32377576,"text":"Rosespire's bakery mills 6 Wheat into 6 Bread."}
+{"kind":"event","day":32377576,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":32377576,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":32378332,"stage":"Deep Wyrm","memory":93,"crown":80,"territory":75,"continuity":32058000,"debt":0,"treasures":16,"serial":27995428}
+{"kind":"created","day":32378332,"id":1152921504634842394,"name":"Wyrmheart of Varkesh the Unappeas","created_day":32378332,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":32378332,"text":"Nara names Rosespire for Tools and Weapons. The Cinder Tithe musters until tomorrow."}
+{"kind":"event","day":32378332,"text":"Quiet commission issued; reward 24 crowns before day 32378360."}
+{"kind":"event","day":32378332,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":32378332,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":32378332,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":32378332,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":32378332,"text":"Rosespire's bakery mills 6 Wheat into 6 Bread."}
+{"kind":"event","day":32378332,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":32378332,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":32485001,"stage":"Deep Wyrm","memory":97,"crown":84,"territory":100,"continuity":32164473,"debt":0,"treasures":16,"serial":28085373}
+{"kind":"checkpoint","day":32850001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":32528885,"debt":0,"treasures":16,"serial":28391723}
+{"kind":"checkpoint","day":33215001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":32892513,"debt":0,"treasures":16,"serial":28698543}
+{"kind":"checkpoint","day":33580001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":33256925,"debt":0,"treasures":16,"serial":29004874}
+{"kind":"checkpoint","day":33945001,"stage":"Deep Wyrm","memory":95,"crown":82,"territory":100,"continuity":33621729,"debt":0,"treasures":16,"serial":29311230}
+{"kind":"checkpoint","day":34310001,"stage":"Deep Wyrm","memory":91,"crown":79,"territory":100,"continuity":33979869,"debt":0,"treasures":16,"serial":29619360}
+{"kind":"checkpoint","day":34675001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":34338793,"debt":0,"treasures":16,"serial":29927305}
+{"kind":"checkpoint","day":35040001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":34702029,"debt":0,"treasures":16,"serial":30234351}
+{"kind":"stage","day":35278698,"stage":"Uncrowned dragon","memory":92,"crown":80,"territory":0,"continuity":34937730,"debt":0,"treasures":16,"serial":30434938}
+{"kind":"event","day":35278698,"text":"Nara names Thornford for Food. The Cinder Tithe musters until tomorrow."}
+{"kind":"event","day":35278698,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":35283192,"stage":"Crowned dragon","memory":94,"crown":81,"territory":50,"continuity":34939130,"debt":0,"treasures":16,"serial":30438701}
+{"kind":"event","day":35283192,"text":"Quiet commission issued; reward 24 crowns before day 35283220."}
+{"kind":"event","day":35283192,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":35283192,"text":"Road compact issued; reward 24 crowns before day 35283241."}
+{"kind":"event","day":35283192,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":35283192,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":35283192,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":35283192,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":35283192,"text":"Rosespire's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":35283192,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":35283192,"text":"Gloamgate's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":35283192,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":35283192,"text":"Thornford's hand crews cut 3 Wood without working tools."}
+{"kind":"stage","day":35283948,"stage":"Deep Wyrm","memory":94,"crown":81,"territory":75,"continuity":34939886,"debt":0,"treasures":17,"serial":30439336}
+{"kind":"created","day":35283948,"id":1152921504637286302,"name":"Wyrmheart of Varkesh the Unappeas","created_day":35283948,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":35283948,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":35283948,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":35283948,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":35283948,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":35283948,"text":"Rosespire's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":35283948,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":35283948,"text":"Gloamgate's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":35283948,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":35283948,"text":"Thornford's hand crews cut 3 Wood without working tools."}
+{"kind":"event","day":35283948,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":35405001,"stage":"Deep Wyrm","memory":96,"crown":83,"territory":100,"continuity":35059763,"debt":0,"treasures":17,"serial":30541388}
+{"kind":"checkpoint","day":35770001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":35420647,"debt":0,"treasures":17,"serial":30848623}
+{"kind":"checkpoint","day":36135001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":35781335,"debt":0,"treasures":17,"serial":31156150}
+{"kind":"checkpoint","day":36500001,"stage":"Deep Wyrm","memory":96,"crown":83,"territory":100,"continuity":36145943,"debt":0,"treasures":17,"serial":31462431}
+{"kind":"stage","day":36815632,"stage":"Uncrowned dragon","memory":94,"crown":81,"territory":0,"continuity":36459558,"debt":0,"treasures":17,"serial":31727335}
+{"kind":"event","day":36815632,"text":"Quiet commission issued; reward 24 crowns before day 36815660."}
+{"kind":"event","day":36815632,"text":"Road compact issued; reward 24 crowns before day 36815681."}
+{"kind":"event","day":36815632,"text":"Indigo March Court leads public support in Indigo March at 100%."}
+{"kind":"event","day":36815632,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 70."}
+{"kind":"event","day":36815632,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":36815632,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":36815632,"text":"Rosespire defers public masonry repairs for want of 2 Stone."}
+{"kind":"event","day":36815632,"text":"Rosespire's bakery mills 2 Wheat into 2 Bread."}
+{"kind":"event","day":36815632,"text":"Gloamgate defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":36815632,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":36815632,"text":"Thornford defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":36815632,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":36818656,"stage":"Crowned dragon","memory":99,"crown":86,"territory":50,"continuity":36461182,"debt":0,"treasures":17,"serial":31729923}
+{"kind":"event","day":36818656,"text":"Road compact issued; reward 24 crowns before day 36818705."}
+{"kind":"event","day":36818656,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":36818656,"text":"Relief charter issued; reward 18 crowns before day 36818691."}
+{"kind":"event","day":36818656,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":36818656,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":36818656,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":36818656,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":36818656,"text":"Rosespire defers public masonry repairs for want of 2 Stone."}
+{"kind":"event","day":36818656,"text":"Rosespire's bakery mills 2 Wheat into 2 Bread."}
+{"kind":"event","day":36818656,"text":"Gloamgate defers public masonry repairs for want of 1 Stone."}
+{"kind":"event","day":36818656,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":36818656,"text":"Thornford defers public masonry repairs for want of 1 Stone."}
+{"kind":"stage","day":36819356,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":75,"continuity":36461882,"debt":0,"treasures":18,"serial":31730504}
+{"kind":"created","day":36819356,"id":1152921504638577473,"name":"Wyrmheart of Varkesh the Unappeas","created_day":36819356,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":36819356,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":36819356,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":36819356,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":36819356,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":36819356,"text":"Rosespire's bakery mills 2 Wheat into 2 Bread."}
+{"kind":"event","day":36819356,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":36819356,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":36865001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":36507331,"debt":0,"treasures":18,"serial":31769168}
+{"kind":"checkpoint","day":37230001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":36863903,"debt":0,"treasures":18,"serial":32077732}
+{"kind":"stage","day":37323215,"stage":"Uncrowned dragon","memory":93,"crown":80,"territory":0,"continuity":36954906,"debt":0,"treasures":18,"serial":32156158}
+{"kind":"event","day":37323215,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":37328984,"stage":"Crowned dragon","memory":94,"crown":81,"territory":50,"continuity":36956642,"debt":0,"treasures":18,"serial":32160989}
+{"kind":"event","day":37328984,"text":"Road compact issued; reward 24 crowns before day 37329033."}
+{"kind":"event","day":37328984,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":37328984,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":37328984,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":37328984,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":37328984,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":37328984,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":37328984,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":37329768,"stage":"Deep Wyrm","memory":94,"crown":81,"territory":75,"continuity":36957426,"debt":0,"treasures":19,"serial":32161638}
+{"kind":"created","day":37329768,"id":1152921504639008601,"name":"Wyrmheart of Varkesh the Unappeas","created_day":37329768,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":37329768,"text":"Nara names Thornford for Food. The Cinder Tithe musters until tomorrow."}
+{"kind":"event","day":37329768,"text":"Road compact issued; reward 24 crowns before day 37329817."}
+{"kind":"event","day":37329768,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":37329768,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":37329768,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":37329768,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":37329768,"text":"Rosespire's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":37329768,"text":"Rosespire's bakery mills 6 Wheat into 6 Bread."}
+{"kind":"event","day":37329768,"text":"Gloamgate's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":37329768,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":37329768,"text":"Thornford's hand crews cut 3 Wood without working tools."}
+{"kind":"event","day":37329768,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":37595001,"stage":"Deep Wyrm","memory":94,"crown":81,"territory":100,"continuity":37221483,"debt":0,"treasures":19,"serial":32384628}
+{"kind":"checkpoint","day":37960001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":37581387,"debt":0,"treasures":19,"serial":32692570}
+{"kind":"checkpoint","day":38325001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":37946191,"debt":0,"treasures":19,"serial":32998934}
+{"kind":"checkpoint","day":38690001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":38307075,"debt":0,"treasures":19,"serial":33305844}
+{"kind":"checkpoint","day":39055001,"stage":"Deep Wyrm","memory":92,"crown":80,"territory":100,"continuity":38667763,"debt":0,"treasures":19,"serial":33613328}
+{"kind":"stage","day":39396419,"stage":"Uncrowned dragon","memory":94,"crown":81,"territory":0,"continuity":39004030,"debt":0,"treasures":19,"serial":33900819}
+{"kind":"event","day":39396419,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":39399052,"stage":"Crowned dragon","memory":94,"crown":81,"territory":50,"continuity":39005738,"debt":0,"treasures":19,"serial":33903039}
+{"kind":"event","day":39399052,"text":"Quiet commission issued; reward 24 crowns before day 39399080."}
+{"kind":"event","day":39399052,"text":"Indigo March Court leads public support in Indigo March at 100%."}
+{"kind":"event","day":39399052,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 70."}
+{"kind":"event","day":39399052,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":39399052,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":39399052,"text":"Rosespire's bakery mills 3 Wheat into 3 Bread."}
+{"kind":"event","day":39399052,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":39399052,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":39399836,"stage":"Deep Wyrm","memory":95,"crown":82,"territory":75,"continuity":39006522,"debt":0,"treasures":20,"serial":33903704}
+{"kind":"created","day":39399836,"id":1152921504640750673,"name":"Wyrmheart of Varkesh the Unappeas","created_day":39399836,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":39399836,"text":"Indigo March Court leads public support in Indigo March at 100%."}
+{"kind":"event","day":39399836,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 70."}
+{"kind":"event","day":39399836,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":39399836,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":39399836,"text":"Rosespire's bakery mills 14 Wheat into 14 Bread."}
+{"kind":"event","day":39399836,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":39399836,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":39420001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":39026491,"debt":0,"treasures":20,"serial":33920627}
+{"kind":"checkpoint","day":39785001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":39390707,"debt":0,"treasures":20,"serial":34227349}
+{"kind":"stage","day":39830280,"stage":"Uncrowned dragon","memory":93,"crown":80,"territory":0,"continuity":39433970,"debt":0,"treasures":20,"serial":34265353}
+{"kind":"event","day":39830280,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":39830280,"text":"Road compact issued; reward 24 crowns before day 39830329."}
+{"kind":"event","day":39830280,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":39830280,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":39830280,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":39830280,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":39830280,"text":"Rosespire's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":39830280,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":39830280,"text":"Gloamgate's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":39830280,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":39830280,"text":"Thornford's hand crews cut 3 Wood without working tools."}
+{"kind":"event","day":39830280,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":39833836,"stage":"Crowned dragon","memory":94,"crown":81,"territory":50,"continuity":39435426,"debt":0,"treasures":20,"serial":34268331}
+{"kind":"event","day":39833836,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":39833836,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":39833836,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":39833836,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":39833836,"text":"Rosespire's bakery mills 8 Wheat into 8 Bread."}
+{"kind":"event","day":39833836,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":39833836,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":39834536,"stage":"Deep Wyrm","memory":94,"crown":81,"territory":75,"continuity":39436126,"debt":0,"treasures":21,"serial":34268922}
+{"kind":"created","day":39834536,"id":1152921504641115886,"name":"Wyrmheart of Varkesh the Unappeas","created_day":39834536,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":39834536,"text":"Nara names Thornford for Food. The Cinder Tithe musters until tomorrow."}
+{"kind":"event","day":39834536,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":39834536,"text":"Road compact issued; reward 24 crowns before day 39834585."}
+{"kind":"event","day":39834536,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":39834536,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":39834536,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":39834536,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":39834536,"text":"Rosespire's bakery mills 8 Wheat into 8 Bread."}
+{"kind":"event","day":39834536,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":39834536,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":40150001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":39749239,"debt":0,"treasures":21,"serial":34534975}
+{"kind":"checkpoint","day":40515001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":40112279,"debt":0,"treasures":21,"serial":34842034}
+{"kind":"checkpoint","day":40880001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":40474927,"debt":0,"treasures":21,"serial":35149245}
+{"kind":"checkpoint","day":41245001,"stage":"Deep Wyrm","memory":94,"crown":81,"territory":100,"continuity":40834439,"debt":0,"treasures":21,"serial":35457319}
+{"kind":"checkpoint","day":41610001,"stage":"Deep Wyrm","memory":97,"crown":84,"territory":100,"continuity":41199243,"debt":0,"treasures":21,"serial":35763651}
+{"kind":"checkpoint","day":41975001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":41556991,"debt":0,"treasures":21,"serial":36071511}
+{"kind":"checkpoint","day":42340001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":41916307,"debt":0,"treasures":21,"serial":36379485}
+{"kind":"checkpoint","day":42705001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":42278759,"debt":0,"treasures":21,"serial":36686509}
+{"kind":"checkpoint","day":43070001,"stage":"Deep Wyrm","memory":97,"crown":84,"territory":100,"continuity":42643367,"debt":0,"treasures":21,"serial":36992854}
+{"kind":"checkpoint","day":43435001,"stage":"Deep Wyrm","memory":95,"crown":82,"territory":100,"continuity":43007387,"debt":0,"treasures":21,"serial":37299498}
+{"kind":"checkpoint","day":43800001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":43372191,"debt":0,"treasures":21,"serial":37605867}
+{"kind":"stage","day":43807694,"stage":"Uncrowned dragon","memory":92,"crown":80,"territory":0,"continuity":43378064,"debt":0,"treasures":21,"serial":37612315}
+{"kind":"event","day":43807694,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":43807694,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":43812020,"stage":"Crowned dragon","memory":93,"crown":80,"territory":50,"continuity":43379464,"debt":0,"treasures":21,"serial":37615949}
+{"kind":"event","day":43812020,"text":"Relief charter issued; reward 18 crowns before day 43812055."}
+{"kind":"event","day":43812020,"text":"Indigo March Court leads public support in Indigo March at 83%."}
+{"kind":"event","day":43812020,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 70."}
+{"kind":"event","day":43812020,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":43812020,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":43812020,"text":"Rosespire's bakery mills 21 Wheat into 21 Bread."}
+{"kind":"event","day":43812020,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":43812020,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":43812972,"stage":"Deep Wyrm","memory":93,"crown":80,"territory":75,"continuity":43380416,"debt":0,"treasures":22,"serial":37616747}
+{"kind":"created","day":43812972,"id":1152921504644463711,"name":"Wyrmheart of Varkesh the Unappeas","created_day":43812972,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":43812972,"text":"Quiet commission issued; reward 24 crowns before day 43813000."}
+{"kind":"event","day":43812972,"text":"Indigo March Court leads public support in Indigo March at 100%."}
+{"kind":"event","day":43812972,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 70."}
+{"kind":"event","day":43812972,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":43812972,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":43812972,"text":"Rosespire's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":43812972,"text":"Rosespire's bakery mills 16 Wheat into 16 Bread."}
+{"kind":"event","day":43812972,"text":"Gloamgate's hand crews cut 1 Wood without working tools."}
+{"kind":"event","day":43812972,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":43812972,"text":"Thornford's hand crews cut 3 Wood without working tools."}
+{"kind":"event","day":43812972,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"stage","day":43985802,"stage":"Uncrowned dragon","memory":94,"crown":81,"territory":0,"continuity":43549074,"debt":0,"treasures":22,"serial":37762523}
+{"kind":"event","day":43985802,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":43985802,"text":"Quiet commission issued; reward 24 crowns before day 43985830."}
+{"kind":"event","day":43985802,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":43989092,"stage":"Crowned dragon","memory":94,"crown":81,"territory":50,"continuity":43551268,"debt":0,"treasures":22,"serial":37765309}
+{"kind":"event","day":43989092,"text":"Quiet commission issued; reward 24 crowns before day 43989120."}
+{"kind":"event","day":43989092,"text":"Indigo March Court leads public support in Indigo March at 100%."}
+{"kind":"event","day":43989092,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 70."}
+{"kind":"event","day":43989092,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":43989092,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":43989092,"text":"Rosespire's bakery mills 5 Wheat into 5 Bread."}
+{"kind":"event","day":43989092,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":43989092,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":43990072,"stage":"Deep Wyrm","memory":94,"crown":81,"territory":75,"continuity":43552248,"debt":0,"treasures":23,"serial":37766143}
+{"kind":"created","day":43990072,"id":1152921504644613105,"name":"Wyrmheart of Varkesh the Unappeas","created_day":43990072,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":43990072,"text":"Nara names Rosespire for Tools and Weapons. The Cinder Tithe musters until tomorrow."}
+{"kind":"event","day":43990072,"text":"Supply crisis begins: Food and passage are failing together; every remedy will choose who holds the road."}
+{"kind":"event","day":43990072,"text":"Quiet commission issued; reward 24 crowns before day 43990100."}
+{"kind":"event","day":43990072,"text":"Road compact issued; reward 24 crowns before day 43990121."}
+{"kind":"event","day":43990072,"text":"Indigo March Court leads public support in Indigo March at 100%."}
+{"kind":"event","day":43990072,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 70."}
+{"kind":"event","day":43990072,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":43990072,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":43990072,"text":"Rosespire's bakery mills 4 Wheat into 4 Bread."}
+{"kind":"event","day":43990072,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":43990072,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":44165001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":43726001,"debt":0,"treasures":23,"serial":37913558}
+{"kind":"checkpoint","day":44530001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":44087277,"debt":0,"treasures":23,"serial":38220841}
+{"kind":"checkpoint","day":44895001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":44451885,"debt":0,"treasures":23,"serial":38527201}
+{"kind":"checkpoint","day":45260001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":44816689,"debt":0,"treasures":23,"serial":38833543}
+{"kind":"checkpoint","day":45625001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":45181493,"debt":0,"treasures":23,"serial":39139930}
+{"kind":"checkpoint","day":45990001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":45544533,"debt":0,"treasures":23,"serial":39446379}
+{"kind":"checkpoint","day":46355001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":45909337,"debt":0,"treasures":23,"serial":39752530}
+{"kind":"checkpoint","day":46720001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":46267673,"debt":0,"treasures":23,"serial":40060380}
+{"kind":"inventory","day":46720001,"id":1152921504606847123,"name":"Rosespire Sun Reliquary","created_day":21,"value":140,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855880,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504607005840,"name":"Wyrmheart of Varkesh the Unappeas","created_day":92711,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504609845065,"name":"Wyrmheart of Varkesh the Unappeas","created_day":2665432,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504611082352,"name":"Wyrmheart of Varkesh the Unappeas","created_day":4136972,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504612202725,"name":"Wyrmheart of Varkesh the Unappeas","created_day":5471116,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504614355831,"name":"Wyrmheart of Varkesh the Unappeas","created_day":8031268,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504616762607,"name":"Wyrmheart of Varkesh the Unappeas","created_day":10889256,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504619261759,"name":"Wyrmheart of Varkesh the Unappeas","created_day":13857648,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504622005332,"name":"Wyrmheart of Varkesh the Unappeas","created_day":17118920,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504624825146,"name":"Wyrmheart of Varkesh the Unappeas","created_day":20465200,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504626454566,"name":"Wyrmheart of Varkesh the Unappeas","created_day":22403108,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504629163610,"name":"Wyrmheart of Varkesh the Unappeas","created_day":25624564,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504630619747,"name":"Wyrmheart of Varkesh the Unappeas","created_day":27356784,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504631246875,"name":"Wyrmheart of Varkesh the Unappeas","created_day":28103852,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504632943764,"name":"Wyrmheart of Varkesh the Unappeas","created_day":30119936,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504634842394,"name":"Wyrmheart of Varkesh the Unappeas","created_day":32378332,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504637286302,"name":"Wyrmheart of Varkesh the Unappeas","created_day":35283948,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504638577473,"name":"Wyrmheart of Varkesh the Unappeas","created_day":36819356,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504639008601,"name":"Wyrmheart of Varkesh the Unappeas","created_day":37329768,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504640750673,"name":"Wyrmheart of Varkesh the Unappeas","created_day":39399836,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504641115886,"name":"Wyrmheart of Varkesh the Unappeas","created_day":39834536,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504644463711,"name":"Wyrmheart of Varkesh the Unappeas","created_day":43812972,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":46720001,"id":1152921504644613105,"name":"Wyrmheart of Varkesh the Unappeas","created_day":43990072,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"checkpoint","day":47085001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":46631301,"debt":0,"treasures":23,"serial":40367473}
+{"kind":"checkpoint","day":47450001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":46994145,"debt":0,"treasures":23,"serial":40673884}
+{"kind":"checkpoint","day":47815001,"stage":"Deep Wyrm","memory":99,"crown":86,"territory":100,"continuity":47356597,"debt":0,"treasures":23,"serial":40980971}
+{"kind":"checkpoint","day":48180001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":47721205,"debt":0,"treasures":23,"serial":41287398}
+{"kind":"checkpoint","day":48545001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":48085225,"debt":0,"treasures":23,"serial":41593877}
+{"kind":"checkpoint","day":48910001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":48444737,"debt":0,"treasures":23,"serial":41901473}
+{"kind":"checkpoint","day":49275001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":48804445,"debt":0,"treasures":23,"serial":42210042}
+{"kind":"checkpoint","day":49640001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":49167093,"debt":0,"treasures":23,"serial":42517223}
+{"kind":"stage","day":49672503,"stage":"Uncrowned dragon","memory":93,"crown":80,"territory":0,"continuity":49197580,"debt":0,"treasures":23,"serial":42544494}
+{"kind":"event","day":49672503,"text":"Varkesh the Unappeased becomes Uncrowned dragon: five landless years break the dragon crown."}
+{"kind":"stage","day":49675948,"stage":"Crowned dragon","memory":94,"crown":81,"territory":50,"continuity":49199148,"debt":0,"treasures":23,"serial":42547391}
+{"kind":"event","day":49675948,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":49675948,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":49675948,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":49675948,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":49675948,"text":"Rosespire's bakery mills 6 Wheat into 6 Bread."}
+{"kind":"event","day":49675948,"text":"Gloamgate's bakery mills 1 Wheat into 1 Bread."}
+{"kind":"event","day":49675948,"text":"Varkesh the Unappeased becomes Crowned dragon: hoard, goblin court, and territory hold together."}
+{"kind":"stage","day":49676732,"stage":"Deep Wyrm","memory":94,"crown":81,"territory":75,"continuity":49199932,"debt":0,"treasures":24,"serial":42548049}
+{"kind":"created","day":49676732,"id":1152921504649395016,"name":"Wyrmheart of Varkesh the Unappeas","created_day":49676732,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"event","day":49676732,"text":"Quiet commission issued; reward 24 crowns before day 49676760."}
+{"kind":"event","day":49676732,"text":"Indigo March Commons leads public support in Indigo March at 100%."}
+{"kind":"event","day":49676732,"text":"Rosespire lacks pay, wheat, tools, or weapons for its garrison; supply crisis reaches 99."}
+{"kind":"event","day":49676732,"text":"Ashen Throne Court leads public support in Ashen Throne at 100%."}
+{"kind":"event","day":49676732,"text":"Willow Republic Court leads public support in Willow Republic at 100%."}
+{"kind":"event","day":49676732,"text":"Rosespire's bakery mills 8 Wheat into 8 Bread."}
+{"kind":"event","day":49676732,"text":"Gloamgate has 0 weeks of food; hunger reaches pressure level 1."}
+{"kind":"event","day":49676732,"text":"Varkesh the Unappeased becomes Deep Wyrm: centuries of possession bind wyrm, hoard, and mountain."}
+{"kind":"checkpoint","day":50005001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":49522909,"debt":0,"treasures":24,"serial":42825180}
+{"kind":"checkpoint","day":50370001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":98,"continuity":49884185,"debt":0,"treasures":24,"serial":43132368}
+{"kind":"checkpoint","day":50735001,"stage":"Deep Wyrm","memory":100,"crown":87,"territory":100,"continuity":50245657,"debt":0,"treasures":24,"serial":43440059}
+{"kind":"checkpoint","day":51100001,"stage":"Deep Wyrm","memory":95,"crown":82,"territory":100,"continuity":50610461,"debt":0,"treasures":24,"serial":43746476}
+{"kind":"inventory","day":51100001,"id":1152921504606847123,"name":"Rosespire Sun Reliquary","created_day":21,"value":140,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855880,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504607005840,"name":"Wyrmheart of Varkesh the Unappeas","created_day":92711,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504609845065,"name":"Wyrmheart of Varkesh the Unappeas","created_day":2665432,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504611082352,"name":"Wyrmheart of Varkesh the Unappeas","created_day":4136972,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504612202725,"name":"Wyrmheart of Varkesh the Unappeas","created_day":5471116,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504614355831,"name":"Wyrmheart of Varkesh the Unappeas","created_day":8031268,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504616762607,"name":"Wyrmheart of Varkesh the Unappeas","created_day":10889256,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504619261759,"name":"Wyrmheart of Varkesh the Unappeas","created_day":13857648,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504622005332,"name":"Wyrmheart of Varkesh the Unappeas","created_day":17118920,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504624825146,"name":"Wyrmheart of Varkesh the Unappeas","created_day":20465200,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504626454566,"name":"Wyrmheart of Varkesh the Unappeas","created_day":22403108,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504629163610,"name":"Wyrmheart of Varkesh the Unappeas","created_day":25624564,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504630619747,"name":"Wyrmheart of Varkesh the Unappeas","created_day":27356784,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504631246875,"name":"Wyrmheart of Varkesh the Unappeas","created_day":28103852,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504632943764,"name":"Wyrmheart of Varkesh the Unappeas","created_day":30119936,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504634842394,"name":"Wyrmheart of Varkesh the Unappeas","created_day":32378332,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504637286302,"name":"Wyrmheart of Varkesh the Unappeas","created_day":35283948,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504638577473,"name":"Wyrmheart of Varkesh the Unappeas","created_day":36819356,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504639008601,"name":"Wyrmheart of Varkesh the Unappeas","created_day":37329768,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504640750673,"name":"Wyrmheart of Varkesh the Unappeas","created_day":39399836,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504641115886,"name":"Wyrmheart of Varkesh the Unappeas","created_day":39834536,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504644463711,"name":"Wyrmheart of Varkesh the Unappeas","created_day":43812972,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504644613105,"name":"Wyrmheart of Varkesh the Unappeas","created_day":43990072,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
+{"kind":"inventory","day":51100001,"id":1152921504649395016,"name":"Wyrmheart of Varkesh the Unappeas","created_day":49676732,"value":1420,"owner":1008806316530991149,"location":144115188075855881,"maker":144115188075855881,"destroyed":false}
