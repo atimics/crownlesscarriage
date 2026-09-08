@@ -43,8 +43,15 @@ static int RunMineInputRegression(void)
         if(phase==CC_MINE_LEVEL) MINE_CHECK(offset.y>fabsf(offset.z),"Dungeon camera must look mostly down.");
     }
     ContextActionSet actions=BuildContextActions(&sim,&local,view,0,0);
-    MINE_CHECK(actions.count==2 && actions.items[0].kind==CONTEXT_ACTION_VISIT_MINE,"Mine branch needs entry and continue cards.");
-    Rectangle button=ContextActionBounds(0,2,false);
+    int32_t visit = -1, pass = -1, clear = -1;
+    for (int32_t i = 0; i < actions.count; ++i) {
+        if (actions.items[i].kind == CONTEXT_ACTION_VISIT_MINE) visit = i;
+        if (actions.items[i].kind == CONTEXT_ACTION_PASS_ROAD_SITE) pass = i;
+        if (actions.items[i].kind == CONTEXT_ACTION_CLEAR_ROAD_SITE) clear = i;
+    }
+    MINE_CHECK(visit >= 0 && pass >= 0 && clear >= 0,
+        "Mine branch needs entry, continue and clearing cards.");
+    Rectangle button=ContextActionBounds(visit,actions.count,false);
     client_test_pointer_active=true;client_test_pointer=(Vector2){button.x+button.width/2,button.y+button.height/2};
     queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
     MINE_CHECK(sim.mine.phase==CC_MINE_YARD,"Clicking the branch must open the yard.");
