@@ -1,0 +1,12 @@
+{
+  "nutrition": {
+    "rows": 13824,
+    "parent_sha256": "1c2e50d4317c346ca82be4eeb9e50168b27d350e5728d226cf656f75683e1620",
+    "current_sha256": "1c2e50d4317c346ca82be4eeb9e50168b27d350e5728d226cf656f75683e1620"
+  },
+  "annual_states": {
+    "rows": 720,
+    "parent_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10",
+    "current_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10"
+  }
+}

@@ -91,8 +91,15 @@ cc_strict_warnings(crownless_locomotion)
 add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
+    src/sim/cc_route_rules.c
+    src/sim/cc_journey_departure.c
+    src/sim/cc_journey_encounter.c
+    src/sim/cc_journey_runtime.c
     src/sim/cc_production.c
+    src/sim/cc_food_economy.c
+    src/sim/cc_goods.c
     src/sim/cc_journey.c
+    src/sim/cc_journey_commands.c
     src/sim/cc_mine.c
     src/sim/cc_ponies.c
 )

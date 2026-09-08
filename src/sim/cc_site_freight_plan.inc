@@ -32,9 +32,9 @@ static bool PlanSiteSupply(const CcSim *sim, const CcRoadSite *site,
     if (need <= 0) return false;
     int32_t floor = town->reserve_target[good];
     if (good == CC_GOOD_FOOD || good == CC_GOOD_WHEAT)
-        floor = MaximumI32(floor, WeeklyFoodUse(sim, town) * 6);
+        floor = MaximumI32(floor, CcEconomyWeeklyFoodUse(sim, town) * 6);
     int32_t quantity = MinimumI32(need, MinimumI32(town->stock[good] - floor,
-        MinimumI32(SiteSupplyRoom(sim, site, good), slots * FreightUnitsPerCargoSlot(good))));
+        MinimumI32(SiteSupplyRoom(sim, site, good), slots * CcGoodsFreightUnitsPerCargoSlot(good))));
     if (quantity <= 0) return false;
     plan->kind = CC_SITE_FREIGHT_SUPPLY; plan->gate = CC_SITE_FREIGHT_READY;
     plan->good = good; plan->quantity = quantity;
@@ -86,7 +86,7 @@ CcSiteFreightPlan CcSimPlanSiteFreight(const CcSim *sim, CcId carriage_id, CcId 
         CcGood good = recipe.output;
         int32_t floor = SiteOutputFloor(sim, site, good);
         int32_t quantity = MinimumI32(site->stock[good] - floor,
-            MinimumI32(CC_SIM_MAX_UNITS - town->stock[good], slots * FreightUnitsPerCargoSlot(good)));
+            MinimumI32(CC_SIM_MAX_UNITS - town->stock[good], slots * CcGoodsFreightUnitsPerCargoSlot(good)));
         if (quantity > 0) {
             plan.kind = CC_SITE_FREIGHT_PICKUP; plan.gate = CC_SITE_FREIGHT_READY;
             plan.good = good; plan.quantity = quantity; return plan;
