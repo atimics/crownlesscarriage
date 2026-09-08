@@ -9494,11 +9494,11 @@ static CcMusicContext LocalMusicContext(const CcSim *sim, const LocalState *loca
 
 static Rectangle LocalViewportBounds(void)
 {
-    Rectangle bounds = CcLocalViewportBounds(GetScreenWidth(), GetScreenHeight());
+    Rectangle bounds = CcLocalViewportBounds(ContextViewportWidth(), ContextViewportHeight());
     if (adventure_preferences != NULL) {
-        float available = (float)GetScreenHeight() - 200.0f;
-        float scale = fminf(((float)GetScreenWidth() - 20.0f) / 630.0f, available / 320.0f);
-        bounds = (Rectangle){((float)GetScreenWidth() - 630.0f * scale) * 0.5f,
+        float available = (float)ContextViewportHeight() - 200.0f;
+        float scale = fminf(((float)ContextViewportWidth() - 20.0f) / 630.0f, available / 320.0f);
+        bounds = (Rectangle){((float)ContextViewportWidth() - 630.0f * scale) * 0.5f,
             88.0f, 630.0f * scale, 320.0f * scale};
     }
     return bounds;
@@ -10306,7 +10306,7 @@ int main(int argc, char **argv)
         local.adventure_ui = presentation.adventure_ui;
         if (normal_play && AdventureScene(&local)) local.course.automatic_alarm = false;
         adventure_preferences = local.adventure_ui ? &preferences : NULL;
-        CcLocalRendererSetInteractionUI(AdventureScene(&local));
+        CcLocalRendererSetInteractionUI(local.adventure_ui);
         ClientTouchBegin();
         const CcSettlement *touch_place = CcSimSettlement(&sim, sim.player.location_id);
         ClientTouchHeading(touch_place != NULL ? touch_place->name : "The road",
