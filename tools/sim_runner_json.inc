@@ -45,6 +45,12 @@ static void JsonArchiveRecruitmentOrder(const CcSim *sim)
     printf(",\"leg_arrival_day\":%d", o->leg_arrival_day);
     printf(",\"provisioned_days\":%d", o->provisioned_days);
     printf(",\"arrived_day\":%d", o->arrived_day);
+    printf(",\"archive_training_week\":%d", sim->archive_training_week);
+    printf(",\"labor_days\":%d", o->labor_days);
+    printf(",\"trainer_labor_days\":%d", o->trainer_labor_days);
+    printf(",\"last_work_day\":%d", o->last_work_day);
+    printf(",\"wages_paid\":%d", o->wages_paid);
+    printf(",\"training_gate\":"); JsonString(CcArchiveRecruitmentGateName(CcSimArchiveRecruitmentTrainingGate(sim)));
     printf(",\"journey_gate\":"); JsonString(CcArchiveRecruitmentGateName(CcSimArchiveRecruitmentJourneyGate(sim)));
     printf("}");
 }

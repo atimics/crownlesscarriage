@@ -51,4 +51,12 @@ typedef enum CcArchiveJourneyStep {
 /* Daily progress; road_roll is used at a due road arrival, with courier risk. */
 CcArchiveJourneyStep CcSimAdvanceArchiveRecruitmentJourney(CcSim *sim, uint32_t road_roll);
 CcArchiveRecruitmentGate CcSimArchiveRecruitmentJourneyGate(const CcSim *sim);
+typedef enum CcArchiveTrainingStep {
+    CC_ARCHIVE_TRAINING_WAIT,
+    CC_ARCHIVE_TRAINING_WORKED,
+    CC_ARCHIVE_TRAINING_COMPLETE,
+    CC_ARCHIVE_TRAINING_FAILED
+} CcArchiveTrainingStep;
+CcArchiveRecruitmentGate CcSimArchiveRecruitmentTrainingGate(const CcSim *sim);
+CcArchiveTrainingStep CcSimAdvanceArchiveRecruitmentTraining(CcSim *sim);
 #endif

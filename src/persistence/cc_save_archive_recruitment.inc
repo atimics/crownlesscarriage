@@ -1,3 +1,55 @@
+static bool SaveRecruitmentTraining(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 80U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "INSERT INTO archive_recruitment_training VALUES(1,?,?,?,?,?);", &statement, error, error_capacity)) return false;
+    sqlite3_bind_int64(statement, 1, sim->archive_recruitment.labor_days);
+    sqlite3_bind_int64(statement, 2, sim->archive_recruitment.trainer_labor_days);
+    sqlite3_bind_int64(statement, 3, sim->archive_recruitment.last_work_day);
+    sqlite3_bind_int64(statement, 4, sim->archive_recruitment.wages_paid);
+    sqlite3_bind_int64(statement, 5, sim->archive_training_week);
+    bool ok = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement); return ok;
+}
+static bool ReadRecruitmentTraining(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 80U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "SELECT * FROM archive_recruitment_training ORDER BY id;", &statement, error, error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW || sqlite3_column_int64(statement, 0) != 1) {
+        SetError(error, error_capacity, "Recruitment training row is missing.");
+        sqlite3_finalize(statement); return false;
+    }
+    if (sqlite3_column_int64(statement, 1) < 0 || sqlite3_column_int64(statement, 1) > INT32_MAX) {
+        SetError(error, error_capacity, "Recruitment training integer exceeds its range.");
+        sqlite3_finalize(statement); return false;
+    }
+    sim->archive_recruitment.labor_days = (int32_t)sqlite3_column_int64(statement, 1);
+    if (sqlite3_column_int64(statement, 2) < 0 || sqlite3_column_int64(statement, 2) > INT32_MAX) {
+        SetError(error, error_capacity, "Recruitment training integer exceeds its range.");
+        sqlite3_finalize(statement); return false;
+    }
+    sim->archive_recruitment.trainer_labor_days = (int32_t)sqlite3_column_int64(statement, 2);
+    if (sqlite3_column_int64(statement, 3) < 0 || sqlite3_column_int64(statement, 3) > INT32_MAX) {
+        SetError(error, error_capacity, "Recruitment training integer exceeds its range.");
+        sqlite3_finalize(statement); return false;
+    }
+    sim->archive_recruitment.last_work_day = (int32_t)sqlite3_column_int64(statement, 3);
+    if (sqlite3_column_int64(statement, 4) < 0 || sqlite3_column_int64(statement, 4) > INT32_MAX) {
+        SetError(error, error_capacity, "Recruitment training integer exceeds its range.");
+        sqlite3_finalize(statement); return false;
+    }
+    sim->archive_recruitment.wages_paid = (int32_t)sqlite3_column_int64(statement, 4);
+    if (sqlite3_column_int64(statement, 5) < 0 || sqlite3_column_int64(statement, 5) > INT32_MAX) {
+        SetError(error, error_capacity, "Archive training week exceeds its range.");
+        sqlite3_finalize(statement); return false;
+    }
+    sim->archive_training_week = (int32_t)sqlite3_column_int64(statement, 5);
+    bool ok = sqlite3_step(statement) == SQLITE_DONE;
+    if (!ok) SetError(error, error_capacity, "Recruitment training has extra rows.");
+    sqlite3_finalize(statement); return ok;
+}
+
 static bool SaveRecruitmentJourney(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim->schema_version < 79U) return true;
@@ -75,7 +127,8 @@ static bool SaveArchiveRecruitment(sqlite3 *database, const CcSim *sim, char *er
     sqlite3_bind_int64(statement, 23, (sqlite3_int64)order->ready_estimate);
     bool ok = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
-    return ok && SaveRecruitmentJourney(database, sim, error, error_capacity);
+    return ok && SaveRecruitmentJourney(database, sim, error, error_capacity) &&
+        SaveRecruitmentTraining(database, sim, error, error_capacity);
 }
 
 static bool ReadArchiveRecruitment(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
@@ -145,5 +198,6 @@ static bool ReadArchiveRecruitment(sqlite3 *database, CcSim *sim, char *error, s
     order->ready_estimate = (int64_t)sqlite3_column_int64(statement, 23);
     bool ok = sqlite3_step(statement) == SQLITE_DONE;
     if (!ok) SetError(error, error_capacity, "Recruitment reservation has extra rows.");
-    sqlite3_finalize(statement); return ok && ReadRecruitmentJourney(database, sim, error, error_capacity);
+    sqlite3_finalize(statement); return ok && ReadRecruitmentJourney(database, sim, error, error_capacity) &&
+        ReadRecruitmentTraining(database, sim, error, error_capacity);
 }

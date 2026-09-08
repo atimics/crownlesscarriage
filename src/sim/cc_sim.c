@@ -14626,6 +14626,9 @@ static void AdvanceTravellerNeeds(CcSim *sim)
 {
     for (int32_t i = 0; i < sim->character_count; ++i) {
         CcCharacter *person = &sim->characters[i];
+        if (sim->schema_version >= 80U &&
+            (sim->archive_recruitment.person_id == person->id || sim->archive_recruitment.trainer_id == person->id) &&
+            CcSimArchiveRecruitmentTrainingGate(sim) == CC_ARCHIVE_RECRUIT_READY) continue;
         if (sim->schema_version >= 79U && sim->archive_recruitment.status == 2 &&
             sim->archive_recruitment.person_id == person->id) continue;
         if ((person->role != CC_CHARACTER_TRAVELLER &&
@@ -14755,6 +14758,25 @@ static void AdvanceArchiveRecruitJourney(CcSim *sim)
         0, 0, 1, text);
 }
 
+static void AdvanceArchiveRecruitTraining(CcSim *sim)
+{
+    CcArchiveTrainingStep step = CcSimAdvanceArchiveRecruitmentTraining(sim);
+    if (step == CC_ARCHIVE_TRAINING_WAIT) return;
+    const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    const CcCharacter *person = CcSimCharacter(sim, o->person_id);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    if (step == CC_ARCHIVE_TRAINING_FAILED)
+        (void)snprintf(text, sizeof(text), "The named recruit dies before archive training is complete.");
+    else if (step == CC_ARCHIVE_TRAINING_COMPLETE)
+        (void)snprintf(text, sizeof(text), "%s completes %d archive work days and receives %d crowns.",
+            person != NULL ? person->name : "The recruit", o->labor_days, o->wages_paid);
+    else
+        (void)snprintf(text, sizeof(text), "%s completes archive training day %d of %d.",
+            person != NULL ? person->name : "The recruit", o->labor_days, o->training_days);
+    (void)PushSocialEvent(sim, CC_EVENT_CHARACTER_INTERACTION, o->person_id, o->seat_id,
+        0, o->person_id, o->trainer_id, o->person_id, 0, o->labor_days, text);
+}
+
 void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
     CcNutritionAccounting *accounting, CcSmithyAccounting *smithy,
     CcRoadProductionAccounting *sites)
@@ -14768,6 +14790,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         if (sim->schema_version >= 26U) AdvanceCharacterLifecycles(sim);
         if (sim->schema_version >= 60U) AdvanceTravellerNeeds(sim);
         AdvanceArchiveRecruitJourney(sim);
+        AdvanceArchiveRecruitTraining(sim);
         HearLocalGossip(sim);
         CcSimRefreshCharacterGossip(sim);
         if (!sim->journey.active) {
