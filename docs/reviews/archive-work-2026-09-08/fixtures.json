@@ -1,0 +1,74 @@
+[
+  {
+    "semantics": "held_supply_plan_snapshot",
+    "seat_id": "144115188075855877",
+    "nominal_scribes": 3,
+    "eligible_scribes": 2,
+    "wheat_required": 4,
+    "recording_ready": true
+  },
+  {
+    "semantics": "held_supply_plan_snapshot",
+    "seat_id": "144115188075855877",
+    "nominal_scribes": 3,
+    "eligible_scribes": 0,
+    "wheat_required": 0,
+    "recording_ready": false
+  },
+  {
+    "semantics": "held_supply_plan_snapshot",
+    "seat_id": "144115188075855877",
+    "nominal_scribes": 3,
+    "eligible_scribes": 2,
+    "wheat_required": 4,
+    "recording_ready": true
+  },
+  {
+    "semantics": "held_supply_plan_snapshot",
+    "seat_id": "144115188075855877",
+    "nominal_scribes": 3,
+    "eligible_scribes": 2,
+    "wheat_required": 4,
+    "recording_ready": false
+  },
+  {
+    "semantics": "held_supply_plan_snapshot",
+    "seat_id": "144115188075855877",
+    "nominal_scribes": 3,
+    "eligible_scribes": 2,
+    "wheat_required": 4,
+    "recording_ready": false
+  },
+  {
+    "semantics": "held_supply_plan_snapshot",
+    "seat_id": "144115188075855877",
+    "nominal_scribes": 0,
+    "eligible_scribes": 0,
+    "wheat_required": 0,
+    "recording_ready": false
+  },
+  {
+    "semantics": "held_supply_plan_snapshot",
+    "seat_id": "0",
+    "nominal_scribes": 3,
+    "eligible_scribes": 0,
+    "wheat_required": 0,
+    "recording_ready": false
+  },
+  {
+    "semantics": "held_supply_plan_snapshot",
+    "seat_id": "144115188075855877",
+    "nominal_scribes": 3,
+    "eligible_scribes": 0,
+    "wheat_required": 0,
+    "recording_ready": false
+  },
+  {
+    "semantics": "held_supply_plan_snapshot",
+    "seat_id": "0",
+    "nominal_scribes": 3,
+    "eligible_scribes": 3,
+    "wheat_required": 0,
+    "recording_ready": true
+  }
+]

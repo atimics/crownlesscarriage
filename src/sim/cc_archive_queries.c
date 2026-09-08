@@ -93,3 +93,19 @@ const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker)
     return "unknown";
 }
 
+
+CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim)
+{
+    CcArchiveWorkPlan plan = {0};
+    if (sim == NULL) return plan;
+    plan.eligible_scribes = sim->archives.scribes;
+    plan.recording_ready = plan.eligible_scribes > 0;
+    if (sim->schema_version < 34U) return plan;
+    const CcSettlement *seat = CcArchiveSeat(sim);
+    plan.seat_id = seat != NULL ? seat->id : 0U;
+    plan.eligible_scribes = MinimumI32(sim->archives.scribes, CcArchiveSpareGrain(sim, seat) / 2);
+    plan.wheat_required = plan.eligible_scribes * 2;
+    plan.recording_ready = plan.eligible_scribes > 0 &&
+        seat->stock[CC_GOOD_PAPER] > 0 && seat->stock[CC_GOOD_TOOLS] > 0;
+    return plan;
+}
