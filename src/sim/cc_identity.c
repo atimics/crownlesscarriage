@@ -17,11 +17,22 @@ static void SetError(char *error, size_t capacity, const char *message)
      CC_CARRIAGE_HORSE_COUNT + \
      CC_MAX_STABLE_HORSES + CC_MAX_KINGDOMS + 4)
 
+/* At most half the slots can be occupied, including a full entity pool. */
+#define CC_IDENTITY_BUCKETS (CC_MAX_TRACKED_IDENTITIES * 2 + 1)
+
 typedef struct CcIdentityLedger {
-    CcId ids[CC_MAX_TRACKED_IDENTITIES];
+    CcId ids[CC_IDENTITY_BUCKETS];
     int32_t count;
     uint64_t greatest_serial;
 } CcIdentityLedger;
+
+static size_t IdentityBucket(CcId id)
+{
+    uint64_t mixed = id ^ (id >> 33U);
+    mixed *= UINT64_C(0xff51afd7ed558ccd);
+    mixed ^= mixed >> 33U;
+    return (size_t)(mixed % CC_IDENTITY_BUCKETS);
+}
 
 static bool TrackIdentity(CcIdentityLedger *ledger, CcId id,
                           CcEntityKind expected_kind,
@@ -33,14 +44,17 @@ static bool TrackIdentity(CcIdentityLedger *ledger, CcId id,
         SetError(error, error_capacity, "Simulation identity is invalid.");
         return false;
     }
-    for (int32_t i = 0; i < ledger->count; ++i) {
-        if (ledger->ids[i] == id) {
+    size_t bucket = IdentityBucket(id);
+    while (ledger->ids[bucket] != 0U) {
+        if (ledger->ids[bucket] == id) {
             SetError(error, error_capacity,
                      "Simulation identities are not unique.");
             return false;
         }
+        bucket = (bucket + 1U) % CC_IDENTITY_BUCKETS;
     }
-    ledger->ids[ledger->count++] = id;
+    ledger->ids[bucket] = id;
+    ledger->count++;
     if (serial > ledger->greatest_serial) ledger->greatest_serial = serial;
     return true;
 }

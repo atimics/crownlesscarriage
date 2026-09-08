@@ -1420,6 +1420,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(character_lifetime_tests)
     add_test(NAME received_account_lifetimes COMMAND character_lifetime_tests)
 
+    add_executable(identity_ledger_tests tests/identity_ledger_tests.c)
+    target_link_libraries(identity_ledger_tests PRIVATE crownless_sim)
+    cc_strict_warnings(identity_ledger_tests)
+    add_test(NAME identity_ledger_collisions COMMAND identity_ledger_tests)
+
     add_executable(persistence_fields_tests tests/persistence_fields_tests.c)
     target_link_libraries(persistence_fields_tests PRIVATE crownless_persistence)
     cc_strict_warnings(persistence_fields_tests)
