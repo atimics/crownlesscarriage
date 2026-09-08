@@ -53,10 +53,21 @@ static void CheckYear(uint32_t seed)
             for (int32_t j = 0; j < recipe.input_count; ++j)
                 CC_CHECK(sim.road_sites[i].stock[recipe.inputs[j].good] >= recipe.inputs[j].reserve);
         }
-        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            uint64_t aboard = 0;
+            for (int32_t j = 0; j < sim.shipment_count; ++j) {
+                const CcShipment *cargo = &sim.shipments[j];
+                if ((cargo->origin_id == sim.road_sites[i].id || cargo->destination_id == sim.road_sites[i].id) &&
+                    (cargo->status == CC_SHIPMENT_TRAVELLING || cargo->status == CC_SHIPMENT_BLOCKED) &&
+                    cargo->good == (CcGood)good) aboard += (uint64_t)cargo->quantity;
+            }
+            CC_CHECK(totals.sites[i].freight_sent[good] + totals.sites[i].freight_shipped[good] ==
+                totals.sites[i].freight_received[good] + totals.sites[i].freight_delivered[good] +
+                totals.sites[i].freight_lost[good] + aboard);
             CC_CHECK((int64_t)sim.road_sites[i].stock[good] == initial[i][good] +
                 (int64_t)totals.sites[i].output[good] - (int64_t)totals.sites[i].input[good] +
                 (int64_t)totals.sites[i].freight_received[good] - (int64_t)totals.sites[i].freight_shipped[good]);
+        }
     }
     const char *path = "road-production.ccsave";
     (void)remove(path);
