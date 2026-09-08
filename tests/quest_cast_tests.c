@@ -84,6 +84,19 @@ int main(void)
     CC_CHECK(replacement->role == CC_CHARACTER_TRAVELLER && replacement->goal == CC_CHARACTER_GOAL_CARRY_NEWS && replacement->faction_id == 0U);
     Valid();
     RoundTrip();
+    for (int unavailable = 0; unavailable < 3; ++unavailable) {
+        sim = before;
+        replacement = (CcCharacter *)CcSimCharacter(&sim, replacement_id);
+        replacement->current_settlement_id = offer;
+        replacement->faction_id = 0U;
+        if (unavailable == 0) replacement->bandit_group_id = sim.bandits[0].id;
+        if (unavailable == 1) replacement->activity = CC_CHARACTER_ACTIVITY_TRAVELLING;
+        if (unavailable == 2) replacement->birth_day = sim.current_day - 10 * 365;
+        CcSimAdvanceDays(&sim, 1);
+        quest = CcSimSituation(&sim, quest_id);
+        CC_CHECK(quest != NULL && quest->status == CC_SITUATION_FAILED);
+        Valid();
+    }
     /* Replaying a current journal keeps the same cast and history. */
     CcSimInit(&sim, 42U);
     const char *path = "quest-cast-test.ccsave";
@@ -109,6 +122,26 @@ int main(void)
     CcSaveFreeBuffer(bytes);
     sim.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+    FILE *source = fopen(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-73-generator-25-cast-journal.ccsave", "rb");
+    FILE *copy = fopen(path, "wb");
+    CC_CHECK(source != NULL && copy != NULL);
+    unsigned char buffer[8192];
+    size_t count;
+    while ((count = fread(buffer, 1, sizeof(buffer), source)) > 0)
+        CC_CHECK(fwrite(buffer, 1, count, copy) == count);
+    CC_CHECK(ferror(source) == 0);
+    CC_CHECK(fclose(source) == 0 && fclose(copy) == 0);
+    journal = CcJournalResume(path, &sim, error, sizeof(error));
+    if (journal == NULL) fprintf(stderr, "%s\n", error);
+    CC_CHECK(journal != NULL && sim.schema_version == CC_SIM_SCHEMA_VERSION);
+    sim.schema_version = 73U;
+    CC_CHECK(CcSimHash(&sim) == UINT64_C(17607823286729841219));
+    sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    Valid();
+    CC_CHECK(CcJournalClose(&journal, &sim, error, sizeof(error)));
+    (void)remove(path);
+    (void)remove("quest-cast-test.ccsave-wal");
+    (void)remove("quest-cast-test.ccsave-shm");
     puts("Quest casting, closure, save migration, and replay passed.");
     return 0;
 }
