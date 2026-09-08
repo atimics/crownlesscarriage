@@ -9,10 +9,16 @@ int main(void)
     sim.settlement_count = 3;
     sim.settlements[0].population = 100;
     sim.settlements[0].hunger = 10;
+    sim.settlements[0].prosperity = 30;
+    sim.settlements[0].security = 40;
     sim.settlements[1].population = 300;
     sim.settlements[1].hunger = 20;
+    sim.settlements[1].prosperity = 80;
+    sim.settlements[1].security = 90;
     sim.settlements[2].population = 0;
     sim.settlements[2].hunger = 100;
+    sim.settlements[2].prosperity = 0;
+    sim.settlements[2].security = 0;
     CcSim before = sim;
     uint64_t hash = CcSimHash(&sim);
     CcHungerSnapshot hunger = CcSimHungerSnapshot(&sim);
@@ -22,6 +28,12 @@ int main(void)
     CC_CHECK(hunger.average == 15);
     CC_CHECK(hunger.maximum == 20);
     CC_CHECK(hunger.population_weighted == 17);
+    CcWelfareSnapshot welfare = CcSimWelfareSnapshot(&sim);
+    CC_CHECK(welfare.inhabited_settlements == 2 && welfare.abandoned_settlements == 1);
+    CC_CHECK(welfare.population == 400);
+    CC_CHECK(welfare.hunger == 15.0 && welfare.population_weighted_hunger == 17.5);
+    CC_CHECK(welfare.prosperity == 55.0 && welfare.population_weighted_prosperity == 67.5);
+    CC_CHECK(welfare.security == 65.0 && welfare.population_weighted_security == 77.5);
     CC_CHECK(CcSimHash(&sim) == hash);
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
 
@@ -41,6 +53,12 @@ int main(void)
     CC_CHECK(hunger.average == -1);
     CC_CHECK(hunger.maximum == -1);
     CC_CHECK(hunger.population_weighted == -1);
+    welfare = CcSimWelfareSnapshot(&sim);
+    CC_CHECK(welfare.population == 0 && welfare.abandoned_settlements == 3);
+    CC_CHECK(welfare.hunger == -1 && welfare.prosperity == -1 && welfare.security == -1);
+    CC_CHECK(welfare.population_weighted_hunger == -1 &&
+             welfare.population_weighted_prosperity == -1 &&
+             welfare.population_weighted_security == -1);
     CC_CHECK(sim.settlements[2].hunger == 100);
 
     sim.settlement_count = 0;
@@ -48,5 +66,7 @@ int main(void)
     CC_CHECK(hunger.average == -1 && hunger.abandoned_settlements == 0);
     hunger = CcSimHungerSnapshot(NULL);
     CC_CHECK(hunger.average == -1 && hunger.population == 0);
+    welfare = CcSimWelfareSnapshot(NULL);
+    CC_CHECK(welfare.hunger == -1 && welfare.population == 0);
     return 0;
 }

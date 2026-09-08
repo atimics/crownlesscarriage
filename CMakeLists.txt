@@ -1302,6 +1302,10 @@ if(BUILD_TESTING)
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/hunger_report_tests.py
                          $<TARGET_FILE:crownless_sim_runner>
                          $<TARGET_FILE:crownless_sim_metrics>)
+        add_test(NAME welfare_report_agreement
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/welfare_report_tests.py
+                         $<TARGET_FILE:crownless_sim_metrics>)
     endif()
 
     add_executable(character_name_tests tests/character_name_tests.c)

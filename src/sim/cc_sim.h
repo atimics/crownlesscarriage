@@ -453,6 +453,19 @@ typedef struct CcHungerSnapshot {
     int32_t population_weighted;
 } CcHungerSnapshot;
 
+/* Inhabited-town welfare. Means are -1 when the population is empty. */
+typedef struct CcWelfareSnapshot {
+    int32_t inhabited_settlements;
+    int32_t abandoned_settlements;
+    int64_t population;
+    double hunger;
+    double prosperity;
+    double security;
+    double population_weighted_hunger;
+    double population_weighted_prosperity;
+    double population_weighted_security;
+} CcWelfareSnapshot;
+
 typedef struct CcMaterialChainSnapshot {
     CcId scriptorium_id;
     CcMaterialChainBlocker blocker;
@@ -1997,6 +2010,7 @@ int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimActiveFrontCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
 CcHungerSnapshot CcSimHungerSnapshot(const CcSim *sim);
+CcWelfareSnapshot CcSimWelfareSnapshot(const CcSim *sim);
 CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
 const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker);
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
