@@ -8,8 +8,9 @@ The move preserves path costs, available capacity, permission modes, the schema-
 
 ## Validation
 
-- Strict release headless build and all 111 tests passed.
+- Strict release headless build and all 112 tests passed.
 - Static analysis passed with one reviewed baseline item.
+- The registered `trade_path_rules` test uses a controlled four-settlement graph. It checks equal-cost bottleneck selection, route usage, required load size, alternate paths, closure cost and capacity, the schema-72/73 zero-condition boundary, abandoned intermediate towns, borders, war, and royal permission modes. Every query preserves simulation state; failed paths preserve output values. These fixtures isolate the graph rules.
 - `probe.c` compares 27,648 queries against the original private path finder. It covers two seeds, schema profiles 72 and 73, generated roads, mixed closed/zero-condition roads, and all-closed roads. Every settlement pair is queried with each royal owner or ordinary trade, border modes, relation modes, required slot counts 1 and 3, and empty or saturated route usage.
 - The comparison checks success, first route, first stop, total cost, and available path capacity. Failed queries preserve every caller output. Each complete fixture preserves the entire simulation state. `query-parity.json` records the count and output digest.
 - Two 40-year simulations produced 82 complete JSON checkpoints matching the base byte for byte, including hashes. See `simulation-parity.json`.
