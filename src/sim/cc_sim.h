@@ -57,7 +57,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 74
+#define CC_SIM_SCHEMA_VERSION 75
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -498,6 +498,27 @@ typedef struct CcArchiveFundingPlan {
     CcMoney shares[2];
     CcMoney total;
 } CcArchiveFundingPlan;
+
+typedef enum CcArchiveSupplyGate {
+    CC_ARCHIVE_SUPPLY_READY = 0,
+    CC_ARCHIVE_SUPPLY_UNAVAILABLE,
+    CC_ARCHIVE_SUPPLY_SEAT,
+    CC_ARCHIVE_SUPPLY_STOCKED,
+    CC_ARCHIVE_SUPPLY_INCOMING,
+    CC_ARCHIVE_SUPPLY_CARRIAGE,
+    CC_ARCHIVE_SUPPLY_SOURCE,
+    CC_ARCHIVE_SUPPLY_ROUTE,
+    CC_ARCHIVE_SUPPLY_FUNDS
+} CcArchiveSupplyGate;
+
+typedef struct CcArchiveSupplyPlan {
+    CcArchiveSupplyGate gate;
+    CcId seat_id, carriage_id, source_id, first_route_id, first_hop_id;
+    CcGood good;
+    int32_t quantity, path_capacity, path_cost, reposition_cost;
+    CcMoney goods_cost, first_leg_toll, total_charge;
+    int64_t first_dispatch_day;
+} CcArchiveSupplyPlan;
 
 typedef struct CcArchiveWorkPlan {
     CcId seat_id;
@@ -2170,6 +2191,10 @@ CcRitualOfferingPlan CcSimRitualOfferingPlan(const CcSim *sim);
 
 CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
 /* Evaluate the current staffing and held supplies without advancing archive work. */
+/* Held-state booking quote. Costs cover goods and the first loaded leg.
+   Dispatch must recheck the quote when the carriage reaches its supplier. */
+CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id);
+const char *CcArchiveSupplyGateName(CcArchiveSupplyGate gate);
 CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim);
 /* Treasury top-up under current funds and routes; recovery timing is separate. */
 CcArchiveFundingPlan CcSimArchiveFundingPlan(const CcSim *sim);

@@ -12,6 +12,27 @@ static void JsonString(const char *value)
 
 #include "sim_runner_network.inc"
 
+static void JsonArchiveSupply(const CcSim *sim)
+{
+    printf("{\"semantics\":\"held_booking_quote_snapshot\",\"cost_scope\":\"goods_and_first_loaded_leg\",\"quotes\":[");
+    for (int i = 0; i < sim->royal_carriage_count; ++i) {
+        CcId carriage_id = sim->royal_carriages[i].id;
+        CcArchiveSupplyPlan plan = CcSimArchiveSupplyPlan(sim, carriage_id);
+        printf("%s{\"carriage_id\":\"%" PRIu64 "\",\"gate\":", i ? "," : "", carriage_id);
+        JsonString(CcArchiveSupplyGateName(plan.gate));
+        printf(",\"seat_id\":\"%" PRIu64 "\",\"source_id\":\"%" PRIu64
+               "\",\"first_route_id\":\"%" PRIu64 "\",\"first_hop_id\":\"%" PRIu64 "\",\"good\":",
+               plan.seat_id, plan.source_id, plan.first_route_id, plan.first_hop_id);
+        if (plan.good == CC_GOOD_COUNT) printf("null"); else JsonString(CcGoodName(plan.good));
+        printf(",\"quantity\":%d,\"path_capacity\":%d,\"path_cost\":%d,\"reposition_cost\":%d,"
+               "\"goods_cost\":%" PRId64 ",\"first_leg_toll\":%" PRId64 ",\"total_charge\":%" PRId64,
+               plan.quantity, plan.path_capacity, plan.path_cost, plan.reposition_cost,
+               plan.goods_cost, plan.first_leg_toll, plan.total_charge);
+        printf(",\"first_dispatch_day\":%" PRId64 "}", plan.first_dispatch_day);
+    }
+    printf("]}");
+}
+
 static void JsonArchiveWork(const CcSim *sim)
 {
     CcArchiveWorkPlan plan = CcSimArchiveWorkPlan(sim);
@@ -226,6 +247,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         sim->dragon.crown_strength, sim->dragon.egg_count);
     printf(",\"archive_work\":"); JsonArchiveWork(sim);
     printf(",\"archive_funding\":"); JsonArchiveFunding(sim);
+    printf(",\"archive_supply\":"); JsonArchiveSupply(sim);
     printf(",\"road_network\":"); JsonRoadNetwork(sim);
     printf(",\"threats\":"); JsonThreatSnapshot(sim);
     printf(",\"retained_history\":"); JsonRetainedHistory(sim);
