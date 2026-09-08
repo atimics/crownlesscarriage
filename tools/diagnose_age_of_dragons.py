@@ -41,8 +41,14 @@ def main():
     root = args.source_root.resolve()
     manifest = json.loads(args.manifest.read_text())
     original = (root / 'src/sim/cc_sim.c').read_text()
+    recorded = subprocess.run(['git', '-C', str(root), 'show',
+                               manifest['source'] + ':src/sim/cc_sim.c'],
+                              check=True, capture_output=True, text=True).stdout
+    if original != recorded:
+        raise ValueError('The simulation source differs from the recorded sweep commit')
     failures = [r for r in manifest['runs'] if not r['passed']]
     report = dict(source=manifest['source'], original_source_sha256=hashlib.sha256(original.encode()).hexdigest(),
+                  library_sha256=hashlib.sha256((args.build / 'libcrownless_sim.a').read_bytes()).hexdigest(),
                   method='The temporary build prints the true clauses of two validation checks. Simulation updates are unchanged.', runs=[])
     with tempfile.TemporaryDirectory(prefix='age-diagnostic-') as tmp:
         temporary = Path(tmp)

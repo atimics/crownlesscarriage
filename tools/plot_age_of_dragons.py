@@ -100,6 +100,8 @@ def save(fig, folder, name, footer):
     fig.text(.065, .035, footer, fontsize=10, color=INK, linespacing=1.5)
     fig.savefig(folder / f'{name}.png', dpi=150, facecolor=PAPER)
     fig.savefig(folder / f'{name}.svg', facecolor=PAPER)
+    svg = folder / f'{name}.svg'
+    svg.write_text('\n'.join(line.rstrip() for line in svg.read_text().splitlines()) + '\n')
     plt.close(fig)
 
 
@@ -135,7 +137,7 @@ def hero(rows, manifest, folder):
         raise ValueError('Dragon stage days must cover the complete run')
     order = np.argsort(stages[3] + stages[4], kind='stable')
     ax[2].stackplot(np.arange(1, len(rows)+1), stages[:, order], colors=STAGE_COLORS, labels=STAGES)
-    ax[2].set(title='A thousand dragon lifetimes', xlabel='World rank by crowned + deep wyrm exposure', ylabel='Share of simulated days (%)', ylim=(0, 100), xlim=(1, max(2, len(rows))))
+    ax[2].set(title='Time under each dragon stage', xlabel='World rank by crowned + deep wyrm exposure', ylabel='Share of simulated days (%)', ylim=(0, 100), xlim=(1, max(2, len(rows))))
     ax[2].legend(ncol=4, fontsize=7, loc='upper center', bbox_to_anchor=(.5, -.24), frameon=False)
     scatter(ax[3], values(rows, 'days_bandit_influence_70_plus') / total_days * 100,
             values(rows, 'years_population_weighted_hunger_40_plus') / years * 100,
@@ -203,6 +205,51 @@ def comparison(a, b, manifests, folder):
          "This comparison measures the complete pending stack. It combines archive funding, supply booking, dispatch, and shared freight changes.")
 
 
+def archive_probe(folder):
+    manifest = json.loads((folder / 'archive-probe-manifest.json').read_text())
+    arms = {}
+    for name in ('main', 'candidate'):
+        path = folder / name / 'archive-probe.csv'
+        if hashlib.sha256(path.read_bytes()).hexdigest() != manifest['arms'][name]['csv_sha256']:
+            raise ValueError(f'Archive probe hash mismatch: {path}')
+        with path.open() as stream:
+            arms[name] = list(csv.DictReader(stream))
+    fig, axes = frame('The archive competes for its own purse',
+                      '32 paired worlds · first 100 years · weekly observations after each update · shared ledger funds staffing and supply purchases',
+                      nrows=1, ncols=3)
+    fig.set_size_inches(18, 7)
+    fig.texts[0].set_y(.955)
+    fig.texts[1].set_y(.887)
+    fig.texts[2].set_y(.835)
+    fig.subplots_adjust(bottom=.25, top=.70)
+    keys = ['scribes', 'binding', 'tools', 'grain', 'paper', 'ready']
+    labels = ['No scribes', 'Binding materials', 'Tools', 'Spare grain', 'Paper', 'Ready']
+    colors = [RUST, '#a27e57', '#d7b76c', '#94a37a', '#75aaa3', TEAL]
+    bottom = np.zeros(2)
+    for key, label, color in zip(keys, labels, colors):
+        shares = np.array([manifest['arms'][name]['blocker_percent'][key] for name in arms])
+        axes[0].bar(['Main', 'Candidate'], shares, bottom=bottom, label=label, color=color, width=.6)
+        for i, share in enumerate(shares):
+            if share > 5:
+                axes[0].text(i, bottom[i] + share/2, f'{share:.1f}%', ha='center', va='center', color='white', weight='bold')
+        bottom += shares
+    axes[0].set(title='The first reported blocker', ylabel='Weekly observations (%)', ylim=(0, 100))
+    axes[0].legend(ncol=2, loc='upper center', bbox_to_anchor=(.5, -.1), frameon=False, fontsize=9)
+    for name, color, style in [('main', RUST, '--'), ('candidate', TEAL, '-')]:
+        years = list(range(1, 101))
+        yearly = [[r for r in arms[name] if int(r['year']) == y] for y in years]
+        low = [100 * sum(int(r['ledger_below_50']) for r in rows) / sum(int(r['samples']) for r in rows) for rows in yearly]
+        lore = [np.mean(values(rows, 'lore_stored')) for rows in yearly]
+        axes[1].plot(years, low, color=color, linestyle=style, linewidth=2, label=name)
+        axes[2].plot(years, lore, color=color, linestyle=style, linewidth=2, label=name)
+    axes[1].set(title='Ledger below the staffing threshold', xlabel='Year', ylabel='Weekly observations with reserve <50 (%)')
+    axes[2].set(title='Knowledge retained', xlabel='Year', ylabel='Mean stored lore per world')
+    axes[1].legend(frameon=False)
+    save(fig, folder, 'archive-funding-pressure',
+         'Each arm has 166,848 weekly observations; 448 sampled state hashes match its main sweep. Blockers follow the query’s priority order.\n'
+         'The funding link is a hypothesis supported by these observations and the spending rules. A budget separation experiment can test it.')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('folder', type=Path)
@@ -229,6 +276,8 @@ def main():
     hero(ends['candidate'], manifests['candidate'], args.folder)
     histories(histories_data, manifests, args.folder)
     comparison(ends['main'], ends['candidate'], manifests, args.folder)
+    if (args.folder / 'archive-probe-manifest.json').exists():
+        archive_probe(args.folder)
 
 
 if __name__ == '__main__':
