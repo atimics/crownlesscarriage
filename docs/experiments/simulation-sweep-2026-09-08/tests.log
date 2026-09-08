@@ -1,0 +1,183 @@
+Test project /private/tmp/crownless-sweep-build-20260908
+      Start  1: war_society_from_ruins
+      Start  2: crisis_contested_succession
+      Start  3: situation_music_and_fades
+      Start  4: streamed_music_and_offline_fallback
+      Start  5: soundscape_timing_and_samples
+      Start  6: audio_exports_and_voice_assets
+      Start  7: campaign_speech_pack
+      Start  8: speech_worker_and_cache
+ 1/65 Test  #3: situation_music_and_fades .............   Passed    0.22 sec
+      Start  9: license_page_contract
+ 2/65 Test  #9: license_page_contract .................   Passed    0.01 sec
+      Start 12: benchmark_rejects_day_overflow
+ 3/65 Test  #4: streamed_music_and_offline_fallback ...   Passed    0.47 sec
+      Start 13: deterministic_simulation
+ 4/65 Test  #1: war_society_from_ruins ................   Passed    0.87 sec
+      Start 14: authored_story_beats
+ 5/65 Test  #5: soundscape_timing_and_samples .........   Passed    1.07 sec
+      Start 15: speech_identity_and_words
+ 6/65 Test  #7: campaign_speech_pack ..................   Passed    1.28 sec
+      Start 16: quest_fronts_and_clocks
+ 7/65 Test #12: benchmark_rejects_day_overflow ........   Passed    1.28 sec
+      Start 17: encounter_loot_tables
+ 8/65 Test  #8: speech_worker_and_cache ...............***Failed    1.77 sec
+.....Speech 54ae7021d6c4bc3c failed: ValueError: test model failure
+.EE
+======================================================================
+ERROR: test_http_retries_when_generation_finishes_during_a_cache_miss (__main__.SpeechWorkerTests.test_http_retries_when_generation_finishes_during_a_cache_miss)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/crownless-sweep-20260908/tests/speech_worker_tests.py", line 145, in test_http_retries_when_generation_finishes_during_a_cache_miss
+    server = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(jobs))
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/socketserver.py", line 457, in __init__
+    self.server_bind()
+    ~~~~~~~~~~~~~~~~^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/http/server.py", line 148, in server_bind
+    socketserver.TCPServer.server_bind(self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/socketserver.py", line 478, in server_bind
+    self.socket.bind(self.server_address)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+======================================================================
+ERROR: test_http_returns_only_complete_recordings (__main__.SpeechWorkerTests.test_http_returns_only_complete_recordings)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/crownless-sweep-20260908/tests/speech_worker_tests.py", line 163, in test_http_returns_only_complete_recordings
+    server = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(jobs))
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/socketserver.py", line 457, in __init__
+    self.server_bind()
+    ~~~~~~~~~~~~~~~~^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/http/server.py", line 148, in server_bind
+    socketserver.TCPServer.server_bind(self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/socketserver.py", line 478, in server_bind
+    self.socket.bind(self.server_address)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+----------------------------------------------------------------------
+Ran 8 tests in 1.688s
+
+FAILED (errors=2)
+
+      Start 18: local_session_round_trip
+ 9/65 Test #14: authored_story_beats ..................   Passed    0.98 sec
+      Start 19: roadside_camp_choices
+10/65 Test  #6: audio_exports_and_voice_assets ........   Passed    2.06 sec
+      Start 20: free_road_departures
+11/65 Test #15: speech_identity_and_words .............   Passed    1.18 sec
+      Start 21: web_speech_delivery
+12/65 Test #16: quest_fronts_and_clocks ...............   Passed    1.06 sec
+      Start 22: browser_persistence_contract
+13/65 Test #22: browser_persistence_contract ..........   Passed    0.06 sec
+      Start 23: browser_shared_carriage_contract
+14/65 Test #23: browser_shared_carriage_contract ......   Passed    0.06 sec
+      Start 24: browser_music_download_and_cache
+15/65 Test #17: encounter_loot_tables .................   Passed    1.06 sec
+      Start 25: music_catalog_metadata
+16/65 Test #25: music_catalog_metadata ................   Passed    0.03 sec
+      Start 26: bundled_music_and_host_catalog
+17/65 Test #26: bundled_music_and_host_catalog ........   Passed    0.09 sec
+      Start 27: webgl2_skinning_uniform_budget
+18/65 Test #18: local_session_round_trip ..............   Passed    0.96 sec
+      Start 28: simulation_runner_resume
+19/65 Test #27: webgl2_skinning_uniform_budget ........   Passed    0.05 sec
+      Start 29: letter_probe_contracts
+20/65 Test #21: web_speech_delivery ...................   Passed    0.76 sec
+      Start 30: interaction_planner
+21/65 Test #19: roadside_camp_choices .................   Passed    1.19 sec
+      Start 31: shared_carriage_bridge
+22/65 Test #28: simulation_runner_resume ..............   Passed    0.72 sec
+      Start 32: shared_carriage_server
+23/65 Test #20: free_road_departures ..................   Passed    1.43 sec
+      Start 33: daily_play_policy
+24/65 Test #29: letter_probe_contracts ................   Passed    0.94 sec
+      Start 34: horse_cattle_and_flock_economy
+25/65 Test #30: interaction_planner ...................   Passed    0.77 sec
+      Start 35: horse_stable_breeding
+26/65 Test #33: daily_play_policy .....................   Passed    0.72 sec
+      Start 36: osr_long_run_balance
+27/65 Test #34: horse_cattle_and_flock_economy ........   Passed    0.90 sec
+      Start 37: rainbow_pony_companions
+28/65 Test #35: horse_stable_breeding .................   Passed    0.98 sec
+      Start 38: sqlite_round_trip
+29/65 Test #37: rainbow_pony_companions ...............   Passed    0.58 sec
+      Start 39: royal_carriage_trade
+30/65 Test #38: sqlite_round_trip .....................***Failed    0.52 sec
+/private/tmp/crownless-sweep-20260908/tests/persistence_tests.c:2735: check failed: !valid && rejected_on_version
+
+      Start 40: persistent_route_knowledge
+31/65 Test #13: deterministic_simulation ..............   Passed    5.13 sec
+      Start 41: persistent_underroad_expeditions
+32/65 Test #40: persistent_route_knowledge ............   Passed    0.48 sec
+      Start 42: empty_granary_scenario
+33/65 Test #41: persistent_underroad_expeditions ......   Passed    0.23 sec
+      Start 43: living_world_feedback
+34/65 Test #42: empty_granary_scenario ................   Passed    0.21 sec
+      Start 44: causal_history_retention
+35/65 Test #31: shared_carriage_bridge ................   Passed    2.92 sec
+      Start 45: goblin_dragon_causal_cycle
+36/65 Test #39: royal_carriage_trade ..................   Passed    1.06 sec
+      Start 46: goblin_society_choices
+37/65 Test #43: living_world_feedback .................   Passed    0.53 sec
+      Start 47: dragon_crown_ecology
+38/65 Test #45: goblin_dragon_causal_cycle ............   Passed    0.59 sec
+      Start 48: physical_material_economy
+39/65 Test #46: goblin_society_choices ................   Passed    0.61 sec
+      Start 49: material_chain_proofs
+40/65 Test #47: dragon_crown_ecology ..................   Passed    0.59 sec
+      Start 50: traveler_gossip_network
+41/65 Test #48: physical_material_economy .............   Passed    0.54 sec
+      Start 51: grain_food_economy
+42/65 Test #44: causal_history_retention ..............   Passed    1.26 sec
+      Start 52: text_first_metagame
+43/65 Test #49: material_chain_proofs .................   Passed    0.52 sec
+      Start 53: distinct_local_places
+44/65 Test #36: osr_long_run_balance ..................   Passed    3.40 sec
+      Start 54: town_evolution
+45/65 Test #51: grain_food_economy ....................   Passed    0.60 sec
+      Start 55: finite_world_streaming
+46/65 Test #32: shared_carriage_server ................   Passed    4.28 sec
+      Start 56: simulation_shape_metrics
+47/65 Test #50: traveler_gossip_network ...............   Passed    0.80 sec
+      Start 57: generalized_limb_system
+48/65 Test #56: simulation_shape_metrics ..............   Passed    0.22 sec
+      Start 58: continuous_character_collision
+49/65 Test #52: text_first_metagame ...................   Passed    0.81 sec
+      Start 59: generalized_biomechanical_system
+50/65 Test #53: distinct_local_places .................   Passed    0.69 sec
+      Start 60: verified_footing_course
+51/65 Test #54: town_evolution ........................   Passed    0.68 sec
+      Start 61: creature_skeletal_muscular_system
+52/65 Test #55: finite_world_streaming ................   Passed    0.83 sec
+      Start 62: blender_humanoid_skin_contract
+53/65 Test #57: generalized_limb_system ...............   Passed    0.81 sec
+      Start 63: blender_quadruped_skin_contract
+54/65 Test #58: continuous_character_collision ........   Passed    0.79 sec
+      Start 64: layered_motion_contract
+55/65 Test #59: generalized_biomechanical_system ......   Passed    0.89 sec
+      Start 65: generated_creature_catalog
+56/65 Test #60: verified_footing_course ...............   Passed    1.05 sec
+57/65 Test #61: creature_skeletal_muscular_system .....   Passed    0.99 sec
+58/65 Test #62: blender_humanoid_skin_contract ........   Passed    0.91 sec
+59/65 Test #63: blender_quadruped_skin_contract .......   Passed    1.04 sec
+60/65 Test #64: layered_motion_contract ...............   Passed    1.05 sec
+61/65 Test #65: generated_creature_catalog ............   Passed    1.04 sec
+62/65 Test #24: browser_music_download_and_cache ......   Passed    8.19 sec
+63/65 Test  #2: crisis_contested_succession ...........   Passed   18.19 sec
+      Start 10: robotics_benchmark
+64/65 Test #10: robotics_benchmark ....................   Passed    0.24 sec
+      Start 11: headless_performance_budget
+65/65 Test #11: headless_performance_budget ...........   Passed    0.15 sec
+
+97% tests passed, 2 tests failed out of 65
+
+Total Test time (real) =  18.59 sec
+
+The following tests FAILED:
+	  8 - speech_worker_and_cache (Failed)
+	 38 - sqlite_round_trip (Failed)
+Errors while running CTest

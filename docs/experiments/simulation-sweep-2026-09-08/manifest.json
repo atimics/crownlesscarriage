@@ -1,0 +1,5392 @@
+{
+  "source": "06e5701c6d6c09bc25430685a9fd917b81a42972",
+  "seeds": 128,
+  "jobs": 8,
+  "seconds": 88.74886145815253,
+  "runs": [
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "1",
+        "--years",
+        "1000"
+      ],
+      "seconds": 2.9725522911176085,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "2",
+        "--years",
+        "1000"
+      ],
+      "seconds": 2.980397957842797,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "3",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.382402792107314,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "4",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.567984249908477,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "5",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.5779057922773063,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "6",
+        "--years",
+        "1000"
+      ],
+      "seconds": 2.9561758753843606,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "7",
+        "--years",
+        "1000"
+      ],
+      "seconds": 2.999019749928266,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "8",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.2453860421665013,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "9",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.7675465419888496,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "10",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.3201558338478208,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "11",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.5560570410452783,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "12",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.8467474160715938,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "13",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.999293541070074,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "14",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.6577912918291986,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "15",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.5934491250664,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "16",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.585057749878615,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "17",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.3240391253493726,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "18",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.2644093330018222,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "19",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.978406415786594,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "20",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.3605516250245273,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "21",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.7347473329864442,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "22",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.662162917200476,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "23",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.7772967498749495,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "24",
+        "--years",
+        "1000"
+      ],
+      "seconds": 2.8759749168530107,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "25",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.1915200827643275,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "26",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.651131082791835,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "27",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.523953290656209,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "28",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.1308453753590584,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "29",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.0671563749201596,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "30",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.6583331250585616,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "31",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.412571666762233,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "32",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.7110611251555383,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "33",
+        "--years",
+        "1000"
+      ],
+      "seconds": 2.972662374842912,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "34",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.116177790798247,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "35",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.322125084232539,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "36",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.10796970827505,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "37",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.4055841672234237,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "38",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.4206969160586596,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "39",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.296744332648814,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "40",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.431076082866639,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "41",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.27763529215008,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "42",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.3202585838735104,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "43",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.875343957915902,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "44",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.4161799997091293,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "45",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.096093667205423,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "46",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.3371041659265757,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "47",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.561401375103742,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "48",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.232160583138466,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "49",
+        "--years",
+        "1000"
+      ],
+      "seconds": 5.287699916400015,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "50",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.4716507089324296,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "51",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.510031416080892,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "52",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.4314272082410753,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "53",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.4681427502073348,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "54",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.6851791250519454,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "55",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.5010865828953683,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "56",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.009043207857758,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "57",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.246579207945615,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "58",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.116549542173743,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "59",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.9059427906759083,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "60",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.024001874960959,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "61",
+        "--years",
+        "1000"
+      ],
+      "seconds": 2.9351005419157445,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "62",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.729239957872778,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "63",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.205352208111435,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "64",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.219069041777402,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "65",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.5774892498739064,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "66",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.0648594577796757,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "67",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.3601784170605242,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "68",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.259834709111601,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "69",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.735915666911751,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "70",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.7147565837949514,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "71",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.497895292006433,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "72",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.2344091669656336,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "73",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.515721875242889,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "74",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.9159955410286784,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "75",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.6208111247979105,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "76",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.7838159590028226,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "77",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.4474334167316556,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "78",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.243344665970653,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "79",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.638231416232884,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "80",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.708821666892618,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "81",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.154577833134681,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "82",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.248905249871314,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "83",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.316761000081897,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "84",
+        "--years",
+        "1000"
+      ],
+      "seconds": 2.9920178749598563,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "85",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.253988916985691,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "86",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.906280833762139,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "87",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.376241708640009,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "88",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.3678940827958286,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "89",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.612138125114143,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "90",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.935290791094303,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "91",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.265525666996837,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "92",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.552672457881272,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "93",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.3489362909458578,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "94",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.196411999873817,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "95",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.309140041936189,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "96",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.041083000134677,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "97",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.00773987499997,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "98",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.768305541947484,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "99",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.5756262079812586,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "100",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.044172000139952,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "101",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.7796737919561565,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "102",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.116065124981105,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "103",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.453960165847093,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "104",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.20012529194355,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "105",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.3892735838890076,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "106",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.2851182501763105,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "107",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.028517707716674,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "108",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.9057166250422597,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "109",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.7441104580648243,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "110",
+        "--years",
+        "1000"
+      ],
+      "seconds": 2.7852874170057476,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "111",
+        "--years",
+        "1000"
+      ],
+      "seconds": 2.8044020421802998,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "112",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.0708759999834,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "113",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.5143309580162168,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "114",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.0401951670646667,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "115",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.4383364161476493,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "116",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.2318531670607626,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "117",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.705301333218813,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "118",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.324270624667406,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "119",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.831955207977444,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "120",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.4856398752890527,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "121",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.3404577085748315,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "122",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.5848565422929823,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "123",
+        "--years",
+        "1000"
+      ],
+      "seconds": 4.195008917246014,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "124",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.4478832501918077,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "125",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.4328977498225868,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "126",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.3709364160895348,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "127",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.2469399999827147,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_sim_metrics",
+        "--seed",
+        "128",
+        "--years",
+        "1000"
+      ],
+      "seconds": 3.460901875048876,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1000,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "1",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.3701494582928717,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "2",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.20469704223796725,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "3",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.21875099977478385,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "4",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2153854169882834,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "5",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2542604161426425,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "6",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23603241704404354,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "7",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22476449981331825,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "8",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.21812070813030005,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "9",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23774150013923645,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "10",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.1908107502385974,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "11",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24691137485206127,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "12",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2207745830528438,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "13",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22266166703775525,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "14",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2418329161591828,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "15",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24716933304443955,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "16",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24708129232749343,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "17",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.21219624998047948,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "18",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2083998341113329,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "19",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24030249984934926,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "20",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22575675044208765,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "21",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.247726125176996,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "22",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23202583333477378,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "23",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23458045907318592,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "24",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.19397070817649364,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "25",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23882324993610382,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "26",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24939087498933077,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "27",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24286737525835633,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "28",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23668850027024746,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "29",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2012606249190867,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "30",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22584129078313708,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "31",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22490379214286804,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "32",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23149370774626732,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "33",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.21347758267074823,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "34",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.18659808300435543,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "35",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.19568570936098695,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "36",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2407074999064207,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "37",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.1931681246496737,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "38",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2062192503362894,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "39",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22444516699761152,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "40",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23192404117435217,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "41",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24476458365097642,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "42",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2191859157755971,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "43",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24433849984779954,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "44",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23406970920041203,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "45",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23392891697585583,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "46",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24237179197371006,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "47",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.20822916692122817,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "48",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23080624965950847,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "49",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2305899579077959,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "50",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.19312966568395495,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "51",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24732270883396268,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "52",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24621991720050573,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "53",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.19142766669392586,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "54",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.19520512502640486,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "55",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.20960329193621874,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "56",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22206637496128678,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "57",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2221228750422597,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "58",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24235895788297057,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "59",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2254601251333952,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "60",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.25276995822787285,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "61",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22384183388203382,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "62",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24134345818310976,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "63",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24245187500491738,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "64",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22773320879787207,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "65",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24567820876836777,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "66",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.20027224998921156,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "67",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.20739220827817917,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "68",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24165812507271767,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "69",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2128268340602517,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "70",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.20018224976956844,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "71",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22982470924034715,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "72",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2374171670526266,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "73",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.1736739999614656,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "74",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.25088095804676414,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "75",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2306975405663252,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "76",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24196445802226663,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "77",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2132267919369042,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "78",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2168569997884333,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "79",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2314068330451846,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "80",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.19325875025242567,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "81",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.21237350022420287,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "82",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22885370813310146,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "83",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.20778245804831386,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "84",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.1969809173606336,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "85",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2428554161451757,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "86",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.18604358285665512,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "87",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23220441676676273,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "88",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22040554182603955,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "89",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.21963329194113612,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "90",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2325238329358399,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "91",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23246129229664803,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "92",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.20032958313822746,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "93",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.21824433375149965,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "94",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.18765845894813538,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "95",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23880970804020762,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "96",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.255131124984473,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "97",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23565095802769065,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "98",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22908595809713006,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "99",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.1956458748318255,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "100",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24453362496569753,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "101",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24520466569811106,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "102",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.19364245934411883,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "103",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2001269580796361,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "104",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.1975845000706613,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "105",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23448762530460954,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "106",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24088358273729682,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "107",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22626679204404354,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "108",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24551304103806615,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "109",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23810820793733,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "110",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.20387979177758098,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "111",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.20987500017508864,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "112",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.22129762498661876,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "113",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.19024141691625118,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "114",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23666512500494719,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "115",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24160320917144418,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "116",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.21444562496617436,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "117",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.19017420895397663,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "118",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2294343332760036,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "119",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.21721937507390976,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "120",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.20055854227393866,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "121",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.16386600024998188,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "122",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23076729057356715,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "123",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.2396779996342957,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "124",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24320379178971052,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "125",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24634862504899502,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "126",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.18361470801755786,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "127",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.23233799962326884,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "128",
+        "--years",
+        "10"
+      ],
+      "seconds": 0.24628400010988116,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "1",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.0347158750519156,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "2",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3400013749487698,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "3",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3525247499346733,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "4",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.534004416782409,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "5",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2605937919579446,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "6",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2415014579892159,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "7",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3176617920398712,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "8",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3931952500715852,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "9",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.61387600004673,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "10",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.1205558329820633,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "11",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.273733583278954,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "12",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2925191246904433,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "13",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.5357793332077563,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "14",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4108894160017371,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "15",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3995252503082156,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "16",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3820871668867767,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "17",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.1975149167701602,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "18",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2736214576289058,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "19",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.386989917140454,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "20",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.302706209011376,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "21",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.498801457695663,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "22",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4027124168351293,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "23",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.521254874765873,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "24",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2500868327915668,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "25",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4783687922172248,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "26",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3621414159424603,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "27",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2839974169619381,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "28",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2568253339268267,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "29",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3539973753504455,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "30",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4489879589527845,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "31",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4587272079661489,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "32",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4965253341943026,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "33",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.1770085422322154,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "34",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.1308524999767542,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "35",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.1934842499904335,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "36",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2305938750505447,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "37",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.0239402502775192,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "38",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2996696252375841,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "39",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4173511248081923,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "40",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2793960408307612,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "41",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.5131224589422345,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "42",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.1798256249167025,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "43",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4780101249925792,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "44",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2604712499305606,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "45",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2994977915659547,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "46",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4382086247205734,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "47",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4542056662030518,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "48",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2802166659384966,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "49",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.506320666987449,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "50",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3372964998707175,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "51",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4210632909089327,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "52",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4799772500991821,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "53",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2824339582584798,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "54",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3347302908077836,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "55",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3545981249772012,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "56",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.308649083133787,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "57",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.0907405000180006,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "58",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3253099173307419,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "59",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4493394172750413,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "60",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3236243748106062,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "61",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.1915654581971467,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "62",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4832464577630162,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "63",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.487646917346865,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "64",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2717650830745697,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "65",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4186631659977138,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "66",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2223320002667606,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "67",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3293862082064152,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "68",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4622387075796723,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "69",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2664747079834342,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "70",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.0624690419062972,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "71",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4790471666492522,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "72",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2427087081596255,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "73",
+        "--years",
+        "100"
+      ],
+      "seconds": 0.98730045882985,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "74",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.5775102502666414,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "75",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.276018874719739,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "76",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.558686917182058,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "77",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.1872436250559986,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "78",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4079382079653442,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "79",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3972685420885682,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "80",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.346958083100617,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "81",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3938672081567347,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "82",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.6132475836202502,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "83",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3760102922096848,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "84",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2577217081561685,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "85",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3040032079443336,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "86",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.205359083134681,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "87",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.569204915780574,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "88",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3681097910739481,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "89",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2524009170010686,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "90",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.0695947920903563,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "91",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3438525418750942,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "92",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4806370832957327,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "93",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.1628399998880923,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "94",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4123324579559267,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "95",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3925989996641874,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "96",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4271154580637813,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "97",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.587066125124693,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "98",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.40982066700235,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "99",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4755247090943158,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "100",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4037526659667492,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "101",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3908885829150677,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "102",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2630494995974004,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "103",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3208209997974336,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "104",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.414669250138104,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "105",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4928747499361634,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "106",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4370271670632064,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "107",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3504619589075446,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "108",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4439242919906974,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "109",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.509817374870181,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "110",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.1163019170053303,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "111",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2672498342581093,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "112",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.5731543749570847,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "113",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4548954581841826,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "114",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3735862923786044,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "115",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.383170375134796,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "116",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4152294578962028,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "117",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2684436668641865,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "118",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3478069589473307,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "119",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4627847080118954,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "120",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.4449653327465057,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "121",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.131923584267497,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "122",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2653806246817112,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "123",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3669980838894844,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "124",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3556337081827223,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "125",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.5466131661087275,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "126",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.2499760407954454,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "127",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.5675014164298773,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/private/tmp/crownless-sweep-build-20260908/crownless_agent_sweep",
+        "--seed",
+        "128",
+        "--years",
+        "100"
+      ],
+      "seconds": 1.3071744167245924,
+      "returncode": 0,
+      "passed": true,
+      "rows": 1,
+      "stderr": ""
+    }
+  ],
+  "hashes": {
+    "agent-10.csv": "039eb9b21c55a3e3c4b766631cf6cda82e3bceb2269d5e8ab0c075b078ca02ac",
+    "agent-100.csv": "241f50525158086d5728e172e04164f4b8825bf127c21a0c790748a2b018222a",
+    "annual.csv.gz": "8b289b8f0c164f4594ce9fdc43dc00c73e935ba9bb457598b351f1d12a671634",
+    "endpoints.csv": "d5c2d06ab2b1ab1eb02b73f91e35ce49b16b086f6fc5dc5102eb1d7746d1169e",
+    "crownless_sim_metrics": "ac10d8048547f50dbb4e02564740eecbfcfaf81e85e61844445168067285cd2a",
+    "crownless_agent_sweep": "82fb1e88396a7bc8fd81716ec532044edf4ac8c335f6ec488946974ae00a4c89"
+  }
+}
