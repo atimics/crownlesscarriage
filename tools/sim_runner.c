@@ -102,6 +102,18 @@ static void PrintSummary(const CcSim *sim, bool detail)
             maximum_generation = sim->characters[i].generation;
         }
     }
+    int32_t maximum_bandit_influence = 0, maximum_monster_pressure = 0;
+    for (int32_t i = 0; i < sim->bandit_count; ++i)
+        if (sim->bandits[i].influence > maximum_bandit_influence)
+            maximum_bandit_influence = sim->bandits[i].influence;
+    for (int32_t i = 0; i < sim->monster_count; ++i)
+        if (sim->monsters[i].pressure > maximum_monster_pressure)
+            maximum_monster_pressure = sim->monsters[i].pressure;
+    char bandit_max[16] = "unavailable", monster_max[16] = "unavailable";
+    if (sim->bandit_count > 0)
+        (void)snprintf(bandit_max, sizeof(bandit_max), "%d", maximum_bandit_influence);
+    if (sim->monster_count > 0)
+        (void)snprintf(monster_max, sizeof(monster_max), "%d", maximum_monster_pressure);
     CcMaterialChainSnapshot chain = CcSimMaterialChainSnapshot(sim);
     (void)printf("day=%d hash=%016" PRIx64
                  " average_hunger=%d maximum_hunger=%d"
@@ -110,7 +122,8 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  " blocked_shipments=%d royal_carriages=%d/%d/%d/%d/%d"
                  " royal_trips=%d royal_losses=%d"
                  " open_routes=%d/%d legitimacy=%d live_situations=%d"
-                 " bandit_influence=%d monster_pressure=%d"
+                 " bandit_groups=%d bandit_influence_max=%s"
+                 " monster_groups=%d monster_pressure_max=%s"
                  " night_roads=%d monastery_reserve=%" PRId64
                  " monastery_debt=%" PRId64
                  " hoard_raids=%d goblin_guards=%d goblin_members=%d"
@@ -140,8 +153,8 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  royal_trips, royal_losses,
                  open_routes, sim->route_count, legitimacy / sim->kingdom_count,
                  CcSimActiveSituationCount(sim),
-                 sim->bandit_count > 0 ? sim->bandits[0].influence : 0,
-                 sim->monster_count > 0 ? sim->monsters[0].pressure : 0,
+                 sim->bandit_count, bandit_max,
+                 sim->monster_count, monster_max,
                  smuggler_routes, sim->iron_ledger_reserve, debt,
                  sim->hoard_raiders.raids_completed,
                  sim->goblins.hoard_defenses, sim->goblins.members,

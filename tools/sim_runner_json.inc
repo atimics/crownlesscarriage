@@ -43,6 +43,30 @@ static void JsonHerd(const CcHerdAccounting *herd, int32_t adults, int32_t young
     putchar('}');
 }
 
+static void JsonThreatSnapshot(const CcSim *sim)
+{
+    printf("{\"semantics\":\"snapshot\",\"bandit_groups\":[");
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        const CcBanditGroup *group = &sim->bandits[i];
+        printf("%s{\"id\":\"%" PRIu64 "\",\"route_id\":\"%" PRIu64
+               "\",\"camp_settlement_id\":\"%" PRIu64 "\",\"name\":",
+               i ? "," : "", group->id, group->route_id, group->camp_settlement_id);
+        JsonString(group->name);
+        printf(",\"members\":%d,\"supplies\":%d,\"influence\":%d,\"raid_phase\":%d}",
+               group->members, group->supplies, group->influence, (int)group->raid_phase);
+    }
+    printf("],\"monster_groups\":[");
+    for (int32_t i = 0; i < sim->monster_count; ++i) {
+        const CcMonsterPopulation *group = &sim->monsters[i];
+        printf("%s{\"id\":\"%" PRIu64 "\",\"dungeon_id\":\"%" PRIu64 "\",\"name\":",
+               i ? "," : "", group->id, group->dungeon_id);
+        JsonString(group->name);
+        printf(",\"population\":%d,\"pressure\":%d,\"hunting_pressure\":%d}",
+               group->population, group->pressure, group->hunting_pressure);
+    }
+    printf("]}");
+}
+
 static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t year,
     const char *fixture, const char *dragon_policy, const CcNutritionAccounting *nutrition,
     const CcSmithyAccounting *smithy, const CcRoadProductionAccounting *sites,
@@ -55,6 +79,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         sim->dragon.id, sim->dragon.slain ? "true" : "false", sim->dragon.slain_day,
         (int)sim->dragon.life_stage, (int)sim->dragon.activity, sim->dragon.body_condition,
         sim->dragon.crown_strength, sim->dragon.egg_count);
+    printf(",\"threats\":"); JsonThreatSnapshot(sim);
     printf(",\"world_seed\":%" PRIu32 ",\"schema\":%" PRIu32 ",\"generator\":%" PRIu32
            ",\"accounting_start_day\":%d,\"elapsed_years\":%d,\"day\":%d,\"state_hash\":\"%016" PRIx64 "\",\"goods\":[",
         sim->world_seed, sim->schema_version, sim->generator_version, start_day, year, sim->current_day, CcSimHash(sim));

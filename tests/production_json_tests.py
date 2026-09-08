@@ -20,6 +20,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert report == run(*base, '--json')
         rows = [json.loads(line) for line in report.splitlines()]
         assert [row['day'] for row in rows] == [1, 366, 731]
+        assert all(row['threats']['semantics'] == 'snapshot' for row in rows)
         policy = 'slain-at-day-1' if '--dragon-slain-day-one' in fixture else 'natural-history'
         assert all(row['dragon_policy'] == policy and row['comparison_scope'] == 'whole-policy' for row in rows)
         text = run(*base, '--save', str(root / 'text.ccsave'))
@@ -28,6 +29,7 @@ with tempfile.TemporaryDirectory() as directory:
         for name in ['json', 'text']:
             loaded = json.loads(run('--load', str(root / f'{name}.ccsave'), '--years', '0', '--json'))
             assert loaded['state_hash'] == rows[-1]['state_hash']
+            assert loaded['threats'] == rows[-1]['threats']
             assert loaded['accounting_start_day'] == 731
             assert loaded['dragon_policy'] == 'loaded-save'
             assert all(sum(site['input']) == 0 for site in loaded['sites'])

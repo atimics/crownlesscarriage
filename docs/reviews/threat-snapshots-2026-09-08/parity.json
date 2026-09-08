@@ -1,0 +1,12 @@
+[
+  {
+    "seed": "42",
+    "annual_hashes": 40,
+    "match": true
+  },
+  {
+    "seed": "0x5eed0001",
+    "annual_hashes": 40,
+    "match": true
+  }
+]
