@@ -255,6 +255,7 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_CONFIRM_MAP_SALE,
     CONTEXT_ACTION_REPAIR_ROUTE,
     CONTEXT_ACTION_PAY_COLLECTOR,
+    CONTEXT_ACTION_APPROACH_COLLECTOR,
     CONTEXT_ACTION_OFFER_PROVISIONS,
     CONTEXT_ACTION_RETURN_TO_CHOICE,
     CONTEXT_ACTION_SKIP_TRAVEL,
@@ -315,6 +316,7 @@ typedef struct ContextAction {
 typedef struct ContextActionSet {
     ContextAction items[CC_INTERACTION_CAPACITY + CC_GOOD_COUNT + 8];
     int32_t count;
+    bool combat;
 } ContextActionSet;
 
 typedef enum CommandActionKind {
@@ -4041,6 +4043,7 @@ static const char *CombatSkillDetail(const CcLocalAgent *player,
 {
     float cooldown = CcLocalCombatSkillCooldown(player, skill);
     if (cooldown > 0.0f) return TextFormat("READY IN %.1fs", cooldown);
+    if (player->combat.queued_skill == (int32_t)skill) return "QUEUED";
     if (needs_target && !has_target) return "CHOOSE TARGET";
     if (skill == CC_COMBAT_SKILL_SECOND_WIND) {
         return TextFormat("POSTURE %d",
@@ -4067,33 +4070,36 @@ static void AddCombatActions(ContextActionSet *set,
                              const LocalState *local,
                              bool allow_withdraw)
 {
+    if (set != NULL) set->combat = true;
     int32_t target = SelectedCombatTargetIndex(local);
     bool has_target = target >= 0;
     const CcCombatState *combat = &local->agent.combat;
     for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
-        if (local->course.raiders[i].combat.life_state != CC_LIFE_ALIVE) {
-            continue;
-        }
+        bool available = CcLocalCourseCanPlayerEngage(
+            &local->course, &local->agent, i);
         int32_t previous_count = set != NULL ? set->count : 0;
         AddDetailedContextAction(
             set, CONTEXT_ACTION_SELECT_TARGET,
             local->course.raider_names[i], i == target ? "TARGET" : "",
-            CcLocalRaiderRoleName(local->course.raider_roles[i]),
-            true, i == target);
+            available ? CcLocalRaiderRoleName(local->course.raider_roles[i]) :
+                local->course.raiders[i].combat.life_state == CC_LIFE_ALIVE ?
+                    "MOVE CLOSER" : "DOWN",
+            available, i == target);
         if (set != NULL && set->count > previous_count) {
             set->items[set->count - 1].amount = i;
         }
     }
 
-    if (has_target) {
+    {
         AddDetailedContextAction(
             set, CONTEXT_ACTION_BASIC_STRIKE, "Attack", "SPACE",
-            local->course.raider_names[target], true, false);
+            has_target ? local->course.raider_names[target] : "CHOOSE TARGET",
+            has_target, false);
         AddDetailedContextAction(
             set, CONTEXT_ACTION_TOGGLE_GUARD, "Guard", "X",
             local->agent.humanoid.guard_requested ?
                 "GUARD UP" : "GUARD DOWN",
-            true, local->agent.humanoid.guard_requested);
+            has_target, local->agent.humanoid.guard_requested);
         AddDetailedContextAction(
             set, CONTEXT_ACTION_SKILL_CRUSHING, "Crushing blow", "1",
             CombatSkillDetail(&local->agent,
@@ -4540,6 +4546,11 @@ static ContextActionSet BuildContextActions(
                                             CcGoodName(good)));
             }
         }
+        if (GridDistance(LocalPosition(local), collector) >= 1.55f) {
+            AddDetailedContextAction(&set, CONTEXT_ACTION_APPROACH_COLLECTOR,
+                "Approach captain", "F", "WALK TO THE BRIDGE", true,
+                local->agent.exact_target_valid);
+        }
         AddContextAction(&set, CONTEXT_ACTION_RETURN_TO_CHOICE,
                          "Return to carriage");
         return set;
@@ -4762,17 +4773,24 @@ static int32_t ContextCardsPerPage(void)
     return count < 1 ? 1 : count > 4 ? 4 : count;
 }
 
-static int32_t ContextCardFirst(const LocalState *local, int32_t count)
+static int32_t ContextActionPageSize(const ContextActionSet *actions)
 {
-    int32_t per_page = ContextCardsPerPage();
-    int32_t pages = (count + per_page - 1) / per_page;
+    return actions->combat && ContextViewportWidth() >= 900 ?
+        10 : ContextCardsPerPage();
+}
+
+static int32_t ContextCardFirst(const LocalState *local, const ContextActionSet *actions)
+{
+    int32_t per_page = ContextActionPageSize(actions);
+    int32_t pages = (actions->count + per_page - 1) / per_page;
     return pages > 0 ? (local->card_page % pages) * per_page : 0;
 }
 
-static int32_t ContextCardCount(int32_t count, int32_t first)
+static int32_t ContextCardCount(const ContextActionSet *actions, int32_t first)
 {
-    int32_t remaining = count - first;
-    return remaining < ContextCardsPerPage() ? remaining : ContextCardsPerPage();
+    int32_t remaining = actions->count - first;
+    int32_t per_page = ContextActionPageSize(actions);
+    return remaining < per_page ? remaining : per_page;
 }
 
 static Rectangle ContextPageBounds(bool next)
@@ -4781,13 +4799,20 @@ static Rectangle ContextPageBounds(bool next)
         (float)ContextViewportHeight() - 88.0f, 44.0f, 64.0f};
 }
 
-static Rectangle ContextActionBounds(int32_t index, int32_t count)
+static Rectangle ContextActionBounds(int32_t index, int32_t count, bool combat)
 {
+    int32_t row = 0;
+    if (combat && ContextViewportWidth() >= 900) {
+        row = index / 5;
+        index %= 5;
+        count = 5;
+    }
     float width = fminf(220.0f, ((float)ContextViewportWidth() - 128.0f -
         (float)(count - 1) * 8.0f) / (float)(count > 0 ? count : 1));
     float total = (float)count * width + (float)(count - 1) * 8.0f;
     return (Rectangle){((float)ContextViewportWidth() - total) * 0.5f +
-        (float)index * (width + 8.0f), (float)ContextViewportHeight() - 94.0f, width, 74.0f};
+        (float)index * (width + 8.0f), (float)ContextViewportHeight() - 94.0f -
+            (combat && ContextViewportWidth() >= 900 ? (float)(1 - row) * 82.0f : 0.0f), width, 74.0f};
 }
 
 static ContextAction WorldContextActionAt(const CcSim *sim, const LocalState *local,
@@ -4854,8 +4879,8 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
                               (actions.count > 6 ? 160 : 94),
                           9, MUTED);
     }
-    int32_t first = ContextCardFirst(local, actions.count);
-    int32_t shown = ContextCardCount(actions.count, first);
+    int32_t first = ContextCardFirst(local, &actions);
+    int32_t shown = ContextCardCount(&actions, first);
     if (actions.count > shown) {
         Rectangle previous = ContextPageBounds(false), next = ContextPageBounds(true);
         ClientTouchAdd(previous, "Previous objects", true, false);
@@ -4869,7 +4894,7 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
             GetScreenHeight() - 111, 11, MUTED);
     }
     for (int32_t i = first; i < first + shown; ++i) {
-        Rectangle bounds = ContextActionBounds(i - first, shown);
+        Rectangle bounds = ContextActionBounds(i - first, shown, actions.combat);
         const ContextAction *action = &actions.items[i];
         ClientTouchAdd(bounds, action->kind == CONTEXT_ACTION_WORLD_TARGET ?
             TextFormat("%s %s", action->detail, action->label) : action->label,
@@ -4982,10 +5007,10 @@ static ContextAction PressedContextAction(
     ContextActionSet actions = BuildContextActions(
         sim, local, view, selected, selected_situation);
     Vector2 mouse = ClientPointerPosition();
-    int32_t first = ContextCardFirst(local, actions.count);
-    int32_t shown = ContextCardCount(actions.count, first);
+    int32_t first = ContextCardFirst(local, &actions);
+    int32_t shown = ContextCardCount(&actions, first);
     for (int32_t i = first; i < first + shown; ++i) {
-        if (CheckCollisionPointRec(mouse, ContextActionBounds(i - first, shown))) {
+        if (CheckCollisionPointRec(mouse, ContextActionBounds(i - first, shown, actions.combat))) {
             ContextAction pressed = actions.items[i];
             if (right && pressed.kind != CONTEXT_ACTION_BUY_CARGO) return none;
             if (right) pressed.amount = -1;
@@ -5007,12 +5032,12 @@ static bool PointerOverContextAction(
 {
     ContextActionSet actions = BuildContextActions(
         sim, local, view, selected, selected_situation);
-    int32_t first = ContextCardFirst(local, actions.count);
-    int32_t shown = ContextCardCount(actions.count, first);
+    int32_t first = ContextCardFirst(local, &actions);
+    int32_t shown = ContextCardCount(&actions, first);
     if (actions.count > shown && (CheckCollisionPointRec(mouse, ContextPageBounds(false)) ||
         CheckCollisionPointRec(mouse, ContextPageBounds(true)))) return true;
     for (int32_t index = 0; index < shown; ++index) {
-        if (CheckCollisionPointRec(mouse, ContextActionBounds(index, shown))) return true;
+        if (CheckCollisionPointRec(mouse, ContextActionBounds(index, shown, actions.combat))) return true;
     }
     return false;
 }
@@ -5083,7 +5108,8 @@ static void DrawCombatStatusLine(const LocalState *local,
     int width = CcOverlayMeasureText(shown, 9) + 30;
     if (width > 760) width = 760;
     float x = ((float)GetScreenWidth() - (float)width) * 0.5f;
-    float y = (float)GetScreenHeight() - 99.0f;
+    float y = (float)GetScreenHeight() -
+        (ContextViewportWidth() >= 900 ? 210.0f : 128.0f);
     Color accent = target != NULL ? TEAL : CC_GOLD;
     DrawRectangleRounded((Rectangle){x, y, (float)width, 27.0f},
                          0.20f, 5, Fade(PANEL_DEEP, 0.96f));
@@ -8496,12 +8522,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
     }
     ContextActionSet available_cards = BuildContextActions(sim, local, *view, *selected, *selected_situation);
-    if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) && available_cards.count > ContextCardsPerPage()) {
+    if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) && available_cards.count > ContextActionPageSize(&available_cards)) {
         Vector2 pointer = ClientPointerPosition();
         bool previous = CheckCollisionPointRec(pointer, ContextPageBounds(false));
         bool next = CheckCollisionPointRec(pointer, ContextPageBounds(true));
         if (previous || next) {
-            int32_t pages = (available_cards.count + ContextCardsPerPage() - 1) / ContextCardsPerPage();
+            int32_t pages = (available_cards.count + ContextActionPageSize(&available_cards) - 1) / ContextActionPageSize(&available_cards);
             local->card_page = (local->card_page + pages + (next ? 1 : -1)) % pages;
             return;
         }
@@ -8511,7 +8537,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         sim, local, *view, *selected, *selected_situation);
     if (pressed_action.kind != CONTEXT_ACTION_NONE && !pressed_action.enabled) {
         (void)snprintf(message, message_capacity,
-            "%s Double-tap [N] to return to the caravan.", pressed_action.detail);
+            available_cards.combat ? "%s" :
+                "%s Double-tap [N] to return to the caravan.", pressed_action.detail);
         return;
     }
     ContextActionKind context_action = pressed_action.kind;
@@ -9355,7 +9382,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     struck ? TextFormat(
                         "Striking %s.",
                         local->course.raider_names[target]) :
-                        "Recovering — wait for an opening.");
+                        "Closing in. Attack follows the next opening.");
             } else if (LocalCombatActive(local)) {
                 (void)snprintf(message, message_capacity,
                                "Choose an outlaw before attacking.");
@@ -9524,6 +9551,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 *view = VIEW_ENCOUNTER;
                 (void)snprintf(message, message_capacity,
                                "Back at the carriage.");
+                return;
+            }
+            if ((context_action == CONTEXT_ACTION_APPROACH_COLLECTOR ||
+                 ClientKeyPressed(KEY_F)) &&
+                GridDistance(LocalPosition(local), collector) >= 1.55f) {
+                bool walking = CcLocalAgentSetExactTarget(&local->agent,
+                    (Vector3){collector.x, 0.0f, collector.y}, false);
+                (void)snprintf(message, message_capacity, "%s",
+                    walking ? "Walking to the captain." : "Choose a clear path to the captain.");
                 return;
             }
             if (context_action == CONTEXT_ACTION_OFFER_PROVISIONS &&
@@ -10131,6 +10167,7 @@ static int ClientRegressionFailure(const char *message)
 
 #include "../../tests/client_interaction_flow.inc"
 #include "../../tests/client_world_cards.inc"
+#include "../../tests/client_bridge_scene.inc"
 #include "../../tests/map_texture_lifetime.inc"
 
 static int RunMapSaleInputRegression(void)
@@ -10457,6 +10494,7 @@ int main(int argc, char **argv)
 #if defined(CC_CLIENT_SELF_TESTS)
     if (argc == 2 && strcmp(argv[1], "--test-map-texture-lifetime") == 0) return RunMapTextureLifetimeRegression();
     if (argc == 2 && strcmp(argv[1], "--test-travel-audio") == 0) return RunTravelAudioRegression();
+    if (argc == 2 && strcmp(argv[1], "--test-bridge-scene") == 0) return RunBridgeSceneRegression();
     if (argc == 2 && strcmp(argv[1], "--test-world-cards") == 0) return RunWorldCardRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-input") == 0) return RunAdventureInputRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-trade") == 0) return RunAdventureTradeTermsRegression();
@@ -11537,6 +11575,9 @@ int main(int argc, char **argv)
     }
     if (capture_road || capture_parley) {
         BeginRoadLocalState(&sim, &local, capture_road);
+        if (capture_road && argc >= 4 && strcmp(argv[3], "focused") == 0) {
+            (void)CcLocalCourseSelectPlayerTarget(&local.course, &local.agent, 0);
+        }
     }
     if (capture_travel || capture_route_sight) {
         BeginRoadTravelState(&sim, &local);
@@ -12036,7 +12077,7 @@ int main(int argc, char **argv)
             }
             if (CcCoopClientDead()) CcLocalAgentDie(&local.agent);
         }
-        local.adventure_ui = normal_play || capture_ux || capture_road_fork;
+        local.adventure_ui = normal_play || capture_ux || capture_road_fork || capture_road || capture_parley;
         if (normal_play && AdventureScene(&local)) local.course.automatic_alarm = false;
         adventure_preferences = local.adventure_ui ? &preferences : NULL;
         CcLocalRendererSetInteractionUI(AdventureScene(&local));

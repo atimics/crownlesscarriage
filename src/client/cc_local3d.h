@@ -618,6 +618,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                        float clock, RenderTexture2D target,
                        Rectangle destination);
 float CcLocalRoadCarriageX(int32_t progress_milli);
+float CcLocalRoadEncounterCarriageXInternal(void);
 float CcLocalRoadCarriageTravelInternal(int32_t progress_milli);
 float CcLocalCarriageWheelRadiusInternal(int32_t wheel);
 float CcLocalCarriageWheelAngleInternal(float travelled, float radius);

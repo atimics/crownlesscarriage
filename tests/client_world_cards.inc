@@ -14,9 +14,9 @@ static bool WorldCardPoint(CcSim *sim, LocalState *local, ClientView view,
     if (index < 0) return false;
     client_test_pointer_active = true;
     if (!world) {
-        local->card_page = index / ContextCardsPerPage();
-        int32_t first = ContextCardFirst(local, cards.count);
-        Rectangle card = ContextActionBounds(index - first, ContextCardCount(cards.count, first));
+        local->card_page = index / ContextActionPageSize(&cards);
+        int32_t first = ContextCardFirst(local, &cards);
+        Rectangle card = ContextActionBounds(index - first, ContextCardCount(&cards, first), cards.combat);
         client_test_pointer = (Vector2){card.x + card.width * 0.5f, card.y + card.height * 0.5f};
     } else {
         BuildWorldActionTargets(sim, local, view, selected, 0, (RenderTexture2D){0}, (Rectangle){0});
@@ -151,7 +151,7 @@ static int RunWorldCardRegression(void)
         unavailable->available = false;
         (void)snprintf(unavailable->reason, sizeof(unavailable->reason), "Choose a clear approach.");
         cards = BuildContextActions(&sim, &local, view, selected, 0);
-        Rectangle disabled_card = ContextActionBounds(0, ContextCardCount(cards.count, 0));
+        Rectangle disabled_card = ContextActionBounds(0, ContextCardCount(&cards, 0), cards.combat);
         client_test_pointer_active = true;
         client_test_pointer = (Vector2){disabled_card.x + 12, disabled_card.y + 12};
         queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
@@ -161,7 +161,7 @@ static int RunWorldCardRegression(void)
         unavailable->available = true;
         message[0] = '\0';
 
-        CARD_CHECK(cards.count == 4 && ContextCardCount(cards.count, 0) == 4,
+        CARD_CHECK(cards.count == 4 && ContextCardCount(&cards, 0) == 4,
             "Town controls must show the nearest four options together.");
         /* Card identity remains valid when the object is outside the camera. */
         CcInteractionTarget *door = NULL;
@@ -176,8 +176,8 @@ static int RunWorldCardRegression(void)
         CARD_CHECK(door_card >= 0, "Door needs a card.");
         if (mode == 0) {
             local.card_page = door_card / ContextCardsPerPage();
-            int32_t first = ContextCardFirst(&local, cards.count);
-            Rectangle bounds = ContextActionBounds(door_card - first, ContextCardCount(cards.count, first));
+            int32_t first = ContextCardFirst(&local, &cards);
+            Rectangle bounds = ContextActionBounds(door_card - first, ContextCardCount(&cards, first), cards.combat);
             client_test_pointer = (Vector2){bounds.x + 20, bounds.y + 25};
         } else {
             door->visible = true; door->camera_distance = 8;
