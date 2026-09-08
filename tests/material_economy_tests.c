@@ -790,6 +790,13 @@ int main(void)
     CcSimAdvanceDays(&between, 1);
     CC_CHECK(store->stock[CC_GOOD_PAPER] == 400);
 
+    store = IsolatedSettlement(&paper);
+    paper.schema_version = 53U;
+    store->stock[CC_GOOD_PAPER] = 400;
+    paper.current_day = 90;
+    CcSimAdvanceDays(&paper, 1);
+    CC_CHECK(store->stock[CC_GOOD_PAPER] == 400);
+
     puts("Material economy tests passed");
     return 0;
 }
