@@ -1074,12 +1074,21 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/license_page_tests.cmake
     )
 
+    if(APPLE)
+        add_test(NAME macos_configuration_contract
+            COMMAND ${CMAKE_COMMAND}
+                -DCC_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                -DCC_TEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/macos-contract
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/macos_configuration_tests.cmake)
+        set_tests_properties(macos_configuration_contract PROPERTIES TIMEOUT 180)
+    endif()
+
     if(APPLE AND CC_BUILD_CLIENT)
         add_test(
             NAME macos_deployment_target
             COMMAND ${CMAKE_COMMAND}
                 -DCC_BINARY=$<TARGET_FILE:crownless_carriage>
-                -DCC_EXPECTED_MINOS=14.0
+                -DCC_EXPECTED_MINOS=${CMAKE_OSX_DEPLOYMENT_TARGET}
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/macos_deployment_target_tests.cmake
         )
     endif()
