@@ -25,19 +25,21 @@ with tempfile.TemporaryDirectory() as directory:
         for row in rows:
             assert row['archive_recruitment_order']['semantics'] == 'stored_reservation'
             staff = row['archive_staff']
-            assert staff['active'] is False and staff['legacy_scribes'] == 0
-            assert staff['person_ids'] == ['0'] * 4
-            assert staff['appointment_gate'] == 'unavailable'
+            assert 0 <= staff['legacy_scribes'] <= 4
+            names = [person for person in staff['person_ids'] if person != '0']
+            assert len(names) == len(set(names)) and len(names) + staff['legacy_scribes'] <= 4
+            if not staff['active']:
+                assert names == [] and staff['legacy_scribes'] == 0
             order = row['archive_recruitment_order']
-            assert order['status'] == 0
-            assert order['journey_gate'] == 'unavailable'
-            assert order['training_gate'] == 'unavailable'
-            for field in ['labor_days', 'trainer_labor_days', 'last_work_day', 'wages_paid', 'archive_training_week']:
-                assert order[field] == 0
-            for field in ['current_id', 'leg_route_id', 'leg_hop_id']:
-                assert order[field] == '0'
-            for field in ['leg_arrival_day', 'provisioned_days', 'arrived_day']:
-                assert order[field] == 0
+            assert 0 <= order['status'] <= 5
+            assert 0 <= order['labor_days'] <= order['training_days']
+            assert 0 <= order['trainer_labor_days'] <= order['labor_days']
+            if order['status'] == 0:
+                assert order['journey_gate'] == 'unavailable' and order['training_gate'] == 'unavailable'
+                assert order['person_id'] == '0' and order['wages_paid'] == 0
+            else:
+                assert order['person_id'] != '0'
+                assert order['purse'] + order['wages_paid'] == 50
             recruit = row['archive_recruitment']
             assert recruit['semantics'] == 'recruitment_quote_snapshot'
             assert isinstance(recruit['person_id'], str)

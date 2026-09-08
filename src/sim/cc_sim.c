@@ -2282,6 +2282,7 @@ CcMoney CcSimTrackedGold(const CcSim *sim)
                     sim->goblins.lair_coins +
                     sim->hoard_raiders.carried_treasure +
                     sim->dragon_campaign.recovered_coins;
+    if (sim->schema_version >= 82U) total += sim->archive_recruitment.purse;
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         total += sim->kingdoms[i].treasury;
     }
@@ -2307,6 +2308,11 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
                     sim->goblins.lair_stock[good] +
                     sim->dragon.hoard_goods[good] +
                     sim->dragon_campaign.supplies[good];
+    if (sim->schema_version >= 82U) {
+        if (good == CC_GOOD_WHEAT) total += sim->archive_recruitment.wheat + sim->archive_recruitment.travel_wheat;
+        else if (good == CC_GOOD_PAPER) total += sim->archive_recruitment.paper;
+        else if (good == CC_GOOD_TOOLS) total += sim->archive_recruitment.tools;
+    }
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         total += sim->settlements[i].stock[good];
         if (good == CC_GOOD_IRON) total += sim->settlements[i].iron_deposit;
@@ -6545,6 +6551,42 @@ static CcMoney FundArchiveRecovery(CcSim *sim)
     return plan.total;
 }
 
+bool CcSimAutoArchiveRecruitment(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 82U || sim->current_day % 7 != 0) return false;
+    bool refunded = false;
+    const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    const CcCharacter *person = CcSimCharacter(sim, o->person_id);
+    bool ended = o->status == 4 || (o->status == 5 &&
+        (person == NULL || person->death_day <= sim->current_day));
+    if (ended) {
+        CcId id = o->person_id, seat = o->seat_id;
+        if (!CcSimCancelArchiveRecruitment(sim)) return false;
+        refunded = true;
+        const CcCharacter *abbot = CcSimCharacter(sim, sim->archives.abbot_character_id);
+        CcId actor = abbot != NULL && abbot->death_day > sim->current_day ? abbot->id : 0;
+        (void)PushSocialEvent(sim, CC_EVENT_CHARACTER_INTERACTION, id, seat, 0,
+            actor, id, 0, 0, 1, "The archive returns the unused resources from an ended recruitment order.");
+    }
+    if (sim->archive_recruitment.status != 0) return refunded;
+    int32_t desired = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
+        sim->iron_ledger_reserve >= 150 ? 2 : sim->iron_ledger_reserve >= 50 ? 1 : 0;
+    bool recovery = CcSimArchiveRecoveryWindow(sim).gate == CC_ARCHIVE_RECOVERY_DUE;
+    if (!recovery && desired <= CcSimArchiveStaffSlots(sim)) return refunded;
+    CcArchiveRecruitmentPlan plan = CcSimArchiveRecruitmentPlan(sim);
+    if (plan.gate != CC_ARCHIVE_RECRUIT_READY || !CcSimBeginArchiveRecruitment(sim)) return refunded;
+    CcId sponsor = plan.patron_ids[0] != 0 ? plan.patron_ids[0] : sim->archives.abbot_character_id;
+    const CcCharacter *authority = CcSimCharacter(sim, sponsor);
+    if (authority == NULL || authority->death_day <= sim->current_day) sponsor = 0;
+    person = CcSimCharacter(sim, plan.person_id);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "The archive commissions %.30s. It holds %d crowns and the quoted supplies for their journey and training.",
+        person != NULL ? person->name : "a named recruit", (int)plan.wages);
+    (void)PushSocialEvent(sim, CC_EVENT_CHARACTER_INTERACTION, plan.person_id, plan.seat_id, 0,
+        sponsor, plan.person_id, plan.person_id, plan.patron_ids[1], (int32_t)plan.wages, text);
+    return true;
+}
+
 static void AdvanceArchives(CcSim *sim)
 {
     if (sim == NULL || sim->current_day % 7 != 0) return;
@@ -6560,7 +6602,8 @@ static void AdvanceArchives(CcSim *sim)
         target_scribes = archives->scribes;
     }
     bool recruitment_reserved = named_staff || (sim->schema_version >= 78U && sim->archive_recruitment.status != 0);
-    if (recruitment_reserved) target_scribes = MinimumI32(target_scribes, archives->scribes);
+    if (recruitment_reserved || sim->schema_version >= 82U)
+        target_scribes = MinimumI32(target_scribes, archives->scribes);
     /* Date the first weekly sample with zero scribes. */
     CcMoney crown_funding = 0;
     if (sim->schema_version >= 56U) {
@@ -6571,8 +6614,9 @@ static void AdvanceArchives(CcSim *sim)
         } else {
             archives->dead_since_day = 0;
         }
-        /* After five years, connected solvent crowns restore one scribe. */
-        if (!recruitment_reserved && CcSimArchiveRecoveryWindow(sim).gate == CC_ARCHIVE_RECOVERY_DUE) {
+        if (sim->schema_version >= 82U) {
+            (void)CcSimAutoArchiveRecruitment(sim);
+        } else if (!recruitment_reserved && CcSimArchiveRecoveryWindow(sim).gate == CC_ARCHIVE_RECOVERY_DUE) {
             crown_funding = FundArchiveRecovery(sim);
             if (crown_funding > 0) target_scribes = 1;
         }

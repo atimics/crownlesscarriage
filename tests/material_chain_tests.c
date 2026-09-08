@@ -516,6 +516,9 @@ static void CheckArchiveRecoversAfterSilence(void)
 {
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0x6d111c4a));
+    /* Preserve the schema 81 treasury-reset replay contract. Schema 82
+       recruitment is covered by archive_automatic_tests. */
+    sim.schema_version = 81U;
     CC_CHECK(sim.route_count >= 2 && sim.kingdom_count >= 2);
     SetCrowns(&sim, 0);
     sim.iron_ledger_reserve = 0;
@@ -602,6 +605,7 @@ static void CheckArchiveRecoversAfterSilence(void)
        is the old behaviour and it does not claim the crowns paid for it. */
     CcSim ledger;
     CcSimInit(&ledger, UINT32_C(0x6d111c4a));
+    ledger.schema_version = 81U;
     SetCrowns(&ledger, 0);
     ledger.iron_ledger_reserve = 0;
     ledger.archives.scribes = 0;
