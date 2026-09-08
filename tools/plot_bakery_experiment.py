@@ -4,6 +4,7 @@ import argparse
 import concurrent.futures
 import csv
 import gzip
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -97,7 +98,9 @@ def main():
                 "world_age_days": 365000, "follow_up_days": 365,
                 "initial_rebuilds": sum(int(data[s, "bakery", 0]["initial_rebuild"]) for s in seeds),
                 "memory_day365_percent": float(values("bakery", "remembered")[:, -1].mean() * 100),
-                "effects": summary}
+                "effects": summary,
+                "source_files_sha256": {name: hashlib.sha256(Path(name).read_bytes()).hexdigest()
+                    for name in ["src/sim/cc_sim.c", "src/sim/cc_sim.h", "tools/bakery_experiment.c"]}}
     (args.output / "results.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps(manifest, indent=2))
 

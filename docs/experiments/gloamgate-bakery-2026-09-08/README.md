@@ -34,7 +34,8 @@ existing completion rule, including its two-point prosperity gain on opening.
 We grew 32 worlds for 365,000 days each, then followed Gloamgate for another 365
 days in three paired branches. The seed is the ordinal multiplied by 2654435761,
 wrapped to 32 bits. The starting code comes from main at
-`0ce44461cff0ad7cadfbba5294dd9807f9d4c817`; this PR contains the intervention.
+`0ce44461cff0ad7cadfbba5294dd9807f9d4c817`. The final run includes main through
+`4ac989a` and this PR's intervention. `results.json` stores source-file hashes.
 
 Each branch uses the same grown world. A controlled arrival places the company
 and its parked carriage at Gloamgate with 100 crowns and one full cargo load.
@@ -150,6 +151,6 @@ crown conservation. The focused tests cover cargo conservation, town materials,
 promised wheat, stale offers, repeat gifts, rebuilding, saved memory, journal
 replay, and schema-71 migration.
 
-Local validation: all 98 headless tests passed. The three relevant native tests
+Local validation: all 100 headless tests passed. The four relevant native tests
 passed, including confirmation through the Bakery tab. Static analysis passed.
 Both offers were captured at 1040 by 620 and visually checked.
