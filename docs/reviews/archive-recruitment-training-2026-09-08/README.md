@@ -51,7 +51,10 @@ parent `2b340741acdc2b98cf44dd4aaddb35fc0ae05257`. All 82 annual schema 79
 checkpoints match. `legacy-parity.json` records them.
 
 The strict headless build and all 123 tests passed. Static analysis passed
-with one reviewed baseline item.
+with one reviewed baseline item. The native play build and seven focused
+checks passed: training, journey, reservation, shared carriage bridge, bridge
+scene input, world card input parity and adventure input flow. These checks
+ran against code commit `b5a483f`.
 
 ## Next work
 
