@@ -5889,9 +5889,13 @@ static void GatherGossip(CcSim *sim)
         }
         uint32_t bit = UINT32_C(1) << (uint32_t)slot;
         for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
+            /* Only a carrier that held the story can hold its version; skip
+               rewriting the zeros the rest already carry. */
+            if ((sim->gossip_carriers[i].stories & bit) != 0U) {
+                sim->gossip_carriers[i].versions[slot] = (CcGossipVersion){0};
+            }
             sim->gossip_carriers[i].stories &= ~bit;
             sim->gossip_carriers[i].told_player &= ~bit;
-            sim->gossip_carriers[i].versions[slot] = (CcGossipVersion){0};
         }
         sim->gossip[slot] = (CcGossip){
             .event_id = event->id, .origin_id = sim->settlements[origin].id,
