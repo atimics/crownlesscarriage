@@ -321,6 +321,7 @@ int main(int argc, char **argv)
     const char *save_path = NULL;
     bool json_report = false;
     bool opened_pilots = false;
+    bool dragon_slain_day_one = false;
     CcNutritionAccounting nutrition = {0};
     int32_t route_open_days[CC_MAX_ROUTES] = {0};
     bool detail = false;
@@ -349,6 +350,8 @@ int main(int argc, char **argv)
             checkpoint_every = (int32_t)strtol(argv[++argument], NULL, 10);
         } else if (strcmp(argv[argument], "--json") == 0) {
             json_report = true;
+        } else if (strcmp(argv[argument], "--dragon-slain-day-one") == 0) {
+            dragon_slain_day_one = true;
         } else if (strcmp(argv[argument], "--opened-production-pilots") == 0) {
             opened_pilots = true;
         } else if (strcmp(argv[argument], "--detail") == 0) {
@@ -366,8 +369,8 @@ int main(int argc, char **argv)
 
     CcSim sim;
     char error[256];
-    if ((json_report && chronicle) || (opened_pilots && load_path != NULL)) {
-        fputs("Choose JSON or chronicle output; use a fresh seed for opened pilots.\n", stderr);
+    if ((json_report && chronicle) || ((opened_pilots || dragon_slain_day_one) && load_path != NULL)) {
+        fputs("Choose JSON or chronicle output; use a fresh seed for controlled fixtures.\n", stderr);
         return 1;
     }
     if (json_report) { smithy_report = true; site_report = true; }
@@ -399,6 +402,20 @@ int main(int argc, char **argv)
                 site->stock[recipe.inputs[j].good] = recipe.inputs[j].reserve + 4 * recipe.inputs[j].units;
         }
     }
+    if (dragon_slain_day_one) {
+        sim.dragon.slain = true;
+        sim.dragon.slain_day = 1;
+        sim.dragon.life_stage = CC_DRAGON_STAGE_AFTERDRAGON;
+        sim.dragon.activity = CC_DRAGON_ACTIVITY_AFTERMATH;
+        sim.dragon.body_condition = 0;
+        sim.dragon.crown_strength = 0;
+    }
+    if (!CcSimValidate(&sim, error, sizeof(error))) {
+        fprintf(stderr, "initial validation failed: %s\n", error);
+        return 1;
+    }
+    const char *dragon_policy = dragon_slain_day_one ? "slain-at-day-1" :
+        load_path != NULL ? "loaded-save" : "natural-history";
     const int32_t start_day = sim.current_day;
     const char *fixture = opened_pilots ? "opened-production-pilots" : load_path != NULL ? "loaded-save" : "baseline";
     /* --years counts further years when resuming a saved world. */
@@ -417,7 +434,7 @@ int main(int argc, char **argv)
         }
         PrintChronicleNewEvents(&sim);
     }
-    if (json_report) PrintProductionJson(&sim, start_day, 0, fixture, &nutrition, &smithy, &sites, route_open_days);
+    if (json_report) PrintProductionJson(&sim, start_day, 0, fixture, dragon_policy, &nutrition, &smithy, &sites, route_open_days);
     for (int32_t year = 0; year < years; ++year) {
         if (json_report) {
             for (int32_t day = 0; day < 365; ++day) {
@@ -449,7 +466,7 @@ int main(int argc, char **argv)
         }
         if (json_report) {
             if (year == 0 || year + 1 == years || (year + 1) % report_every == 0)
-                PrintProductionJson(&sim, start_day, year + 1, fixture, &nutrition, &smithy, &sites, route_open_days);
+                PrintProductionJson(&sim, start_day, year + 1, fixture, dragon_policy, &nutrition, &smithy, &sites, route_open_days);
         } else if (chronicle) {
             (void)printf("== year %d (day %d) ==\n", year + 1, sim.current_day);
             PrintChronicleNewEvents(&sim);

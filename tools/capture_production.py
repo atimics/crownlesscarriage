@@ -31,31 +31,34 @@ def main() -> None:
     if cache.exists():
         build_mode = next((line.split('=', 1)[1] for line in cache.read_text().splitlines()
                            if line.startswith('CMAKE_BUILD_TYPE:STRING=')), None)
-    manifest = {'protocol': 2, 'commit': commit, 'working_tree_status': status,
+    manifest = {'protocol': 3, 'commit': commit, 'working_tree_status': status,
                 'runner_sha256': digest(runner), 'build_mode': build_mode,
                 'seed': args.seed, 'seed_index': None, 'seed_mapping': 'direct numeric seed',
                 'years': args.years, 'runs': []}
     for fixture in ['baseline', 'opened-production-pilots']:
-        runs = []
-        for repeat in range(2):
-            report = output / f'{fixture}-{repeat}.jsonl'
-            save = output / f'{fixture}-{repeat}.ccsave'
-            command = [str(runner), '--json', '--seed', str(args.seed), '--years', str(args.years),
-                       '--report-every', '1', '--save', str(save)]
-            if fixture == 'opened-production-pilots':
-                command.append('--opened-production-pilots')
-            with report.open('w') as stream:
-                subprocess.run(command, stdout=stream, check=True, cwd=ROOT)
-            records = [json.loads(line) for line in report.read_text().splitlines()]
-            expected_days = [1 + 365 * year for year in range(args.years + 1)]
-            if [record['day'] for record in records] != expected_days:
-                raise RuntimeError('Capture checkpoint days differ from the requested protocol.')
-            runs.append({'command': command, 'report': report.name, 'report_sha256': digest(report),
-                         'save': save.name, 'save_sha256': digest(save),
-                         'checkpoint_days': expected_days, 'final_state_hash': records[-1]['state_hash']})
-        if runs[0]['report_sha256'] != runs[1]['report_sha256']:
-            raise RuntimeError(f'{fixture} repeats produced different reports.')
-        manifest['runs'].append({'fixture': fixture, 'repeat_match': True, 'captures': runs})
+        for policy in ['natural-history', 'slain-at-day-1']:
+            runs = []
+            for repeat in range(2):
+                report = output / f'{fixture}-{policy}-{repeat}.jsonl'
+                save = output / f'{fixture}-{policy}-{repeat}.ccsave'
+                command = [str(runner), '--json', '--seed', str(args.seed), '--years', str(args.years),
+                           '--report-every', '1', '--save', str(save)]
+                if fixture == 'opened-production-pilots':
+                    command.append('--opened-production-pilots')
+                if policy == 'slain-at-day-1':
+                    command.append('--dragon-slain-day-one')
+                with report.open('w') as stream:
+                    subprocess.run(command, stdout=stream, check=True, cwd=ROOT)
+                records = [json.loads(line) for line in report.read_text().splitlines()]
+                expected_days = [1 + 365 * year for year in range(args.years + 1)]
+                if [record['day'] for record in records] != expected_days:
+                    raise RuntimeError('Capture checkpoint days differ from the requested protocol.')
+                runs.append({'command': command, 'report': report.name, 'report_sha256': digest(report),
+                             'save': save.name, 'save_sha256': digest(save),
+                             'checkpoint_days': expected_days, 'final_state_hash': records[-1]['state_hash']})
+            if runs[0]['report_sha256'] != runs[1]['report_sha256']:
+                raise RuntimeError(f'{fixture} repeats produced different reports.')
+            manifest['runs'].append({'fixture': fixture, 'dragon_policy': policy, 'comparison_scope': 'whole-policy', 'repeat_match': True, 'captures': runs})
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     print(output / 'manifest.json')
 
