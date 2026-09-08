@@ -87,5 +87,28 @@ int main(void)
     CC_CHECK(blocked.routes[0].closed);
     CC_CHECK(sim.routes[0].condition >= 45);
     CC_CHECK(CcSimSettlement(&sim, sim.routes[0].from_id)->stock[CC_GOOD_TOOLS] == 0);
+    /* A complete repair kit wins over a larger but incomplete stockpile. */
+    Fixture();
+    from = CcSimSettlementMutable(&sim, sim.routes[0].from_id);
+    to = CcSimSettlementMutable(&sim, sim.routes[0].to_id);
+    memset(from->stock, 0, sizeof(from->stock));
+    from->stock[CC_GOOD_WOOD] = 1000;
+    to->stock[CC_GOOD_BREAD] = 40;
+    to->stock[CC_GOOD_WOOD] = 8;
+    to->stock[CC_GOOD_STONE] = 8;
+    to->stock[CC_GOOD_TOOLS] = 4;
+    plan = CcSimRoadRecoveryPlan(&sim, sim.routes[0].id);
+    CC_CHECK(plan.blocked == 0U && plan.supplier_id == to->id);
+    CC_CHECK(plan.labor_base_id == from->id);
+    sim.schema_version = 59U;
+    plan = CcSimRoadRecoveryPlan(&sim, sim.routes[0].id);
+    CC_CHECK(plan.supplier_id == from->id && plan.blocked != 0U);
+    sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    sim.current_day = 111;
+    blocked = sim; blocked.schema_version = 59U;
+    CcSimAdvanceDays(&sim, 1); CcSimAdvanceDays(&blocked, 1);
+    CC_CHECK(!sim.routes[0].closed && blocked.routes[0].closed);
+    CC_CHECK(CcSimSettlement(&sim, sim.routes[0].to_id)->stock[CC_GOOD_TOOLS] <
+        CcSimSettlement(&blocked, blocked.routes[0].to_id)->stock[CC_GOOD_TOOLS]);
     return 0;
 }

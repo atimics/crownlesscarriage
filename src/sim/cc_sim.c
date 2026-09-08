@@ -14014,6 +14014,17 @@ static int32_t RouteRecoveryScore(const CcSim *sim, const CcRoute *route,
            (100 - route->condition);
 }
 
+static uint32_t RoadRecoverySupplyBlocks(const CcSettlement *supplier)
+{
+    uint32_t blocked = 0U;
+    if (NutritionRations(supplier->stock, CC_NUTRITION_CIVILIAN) < 4)
+        blocked |= CC_ROAD_RECOVERY_FOOD;
+    if (supplier->stock[CC_GOOD_WOOD] < 2) blocked |= CC_ROAD_RECOVERY_WOOD;
+    if (supplier->stock[CC_GOOD_STONE] < 2) blocked |= CC_ROAD_RECOVERY_STONE;
+    if (supplier->stock[CC_GOOD_TOOLS] < 1) blocked |= CC_ROAD_RECOVERY_TOOLS;
+    return blocked;
+}
+
 CcRoadRecoveryPlan CcSimRoadRecoveryPlan(const CcSim *sim, CcId route_id)
 {
     CcRoadRecoveryPlan plan = {.route_id = route_id, .population = -1,
@@ -14047,6 +14058,9 @@ CcRoadRecoveryPlan CcSimRoadRecoveryPlan(const CcSim *sim, CcId route_id)
         NutritionRations(to->stock, CC_NUTRITION_CIVILIAN) +
             to->stock[CC_GOOD_TOOLS] + to->stock[CC_GOOD_WOOD] +
             to->stock[CC_GOOD_STONE] ? from : to;
+    const CcSettlement *alternative = supplier == from ? to : from;
+    if (sim->schema_version >= 60U && RoadRecoverySupplyBlocks(supplier) != 0U &&
+        RoadRecoverySupplyBlocks(alternative) == 0U) supplier = alternative;
     plan.labor_base_id = labor_base->id;
     plan.supplier_id = supplier->id;
     plan.population = labor_base->population;
@@ -14057,10 +14071,7 @@ CcRoadRecoveryPlan CcSimRoadRecoveryPlan(const CcSim *sim, CcId route_id)
     plan.effort = 6 + distress / 20 + (route->smuggler_route ? 1 : 0);
     plan.people_used = MaximumI32(1, labor_base->population / 500);
     if (plan.population < 220) plan.blocked |= CC_ROAD_RECOVERY_PEOPLE;
-    if (plan.food_rations < 4) plan.blocked |= CC_ROAD_RECOVERY_FOOD;
-    if (plan.wood < 2) plan.blocked |= CC_ROAD_RECOVERY_WOOD;
-    if (plan.stone < 2) plan.blocked |= CC_ROAD_RECOVERY_STONE;
-    if (plan.tools < 1) plan.blocked |= CC_ROAD_RECOVERY_TOOLS;
+    plan.blocked |= RoadRecoverySupplyBlocks(supplier);
     return plan;
 }
 
@@ -18968,7 +18979,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 58U
+#define CC_NEWEST_LEGACY_SCHEMA 59U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18986,7 +18997,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 58U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 59U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
