@@ -249,6 +249,10 @@ if(CC_BUILD_BENCHMARKS)
     target_link_libraries(crownless_sim_metrics PRIVATE crownless_sim)
     cc_strict_warnings(crownless_sim_metrics)
 
+    add_executable(crownless_grain_experiment tools/grain_experiment.c)
+    target_link_libraries(crownless_grain_experiment PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_grain_experiment)
+
     add_executable(crownless_bakery_experiment tools/bakery_experiment.c)
     target_link_libraries(crownless_bakery_experiment PRIVATE crownless_sim)
     cc_strict_warnings(crownless_bakery_experiment)
@@ -1192,6 +1196,11 @@ if(BUILD_TESTING)
     add_test(NAME local_session_round_trip COMMAND client_session_tests)
 
     add_executable(road_stop_tests tests/road_stop_tests.c)
+    add_executable(grain_supply_tests tests/grain_supply_tests.c)
+    target_link_libraries(grain_supply_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(grain_supply_tests)
+    add_test(NAME grain_supply_and_disruption COMMAND grain_supply_tests)
+
     add_executable(bakery_support_tests tests/bakery_support_tests.c)
     target_link_libraries(bakery_support_tests PRIVATE crownless_persistence)
     cc_strict_warnings(bakery_support_tests)

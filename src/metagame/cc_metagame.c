@@ -2258,6 +2258,21 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         };
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         if (!FinishTravel(metagame, output, output_capacity)) return false;
+    } else if (strcmp(command, "grain") == 0) {
+        CcId town = metagame->sim.player.location_id;
+        if (first != NULL && (strcmp(first, "fund") == 0 || strcmp(first, "end") == 0)) {
+            CcCommand action = {.kind = CC_COMMAND_FUND_GRAIN_SUPPLY, .target_id = town,
+                .amount = strcmp(first, "end") == 0 ? -1 : 0};
+            if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
+        }
+        const CcGrainSupply *supply = CcSimGrainSupply(&metagame->sim, town);
+        CcGrainDeliveryPlan plan = CcSimGrainDeliveryPlan(&metagame->sim, town);
+        const CcCharacter *organiser = CcSimCharacter(&metagame->sim, supply->organiser_id);
+        Append(output, output_capacity, "%s: %s\n", organiser != NULL ? organiser->name : "Grain organiser", plan.reason);
+        Append(output, output_capacity, "Fund: %lld. Spent: %lld. Wheat ordered: %d. Arrived: %d. Lost: %d. Elsewhere: %d.\n",
+            (long long)supply->purse, (long long)supply->spent, supply->ordered, supply->delivered, supply->lost, supply->redirected);
+        Append(output, output_capacity, "Use grain fund to give 200 crowns, or grain end to return the unspent fund.\n");
+        return true;
     } else if (strcmp(command, "bakery") == 0) {
         CcBakerySupportPlan plan = CcSimBakerySupportPlan(&metagame->sim, metagame->sim.player.location_id);
         const CcCharacter *contact = CcSimCharacter(&metagame->sim, plan.contact_id);

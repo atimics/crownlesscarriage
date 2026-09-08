@@ -57,7 +57,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 72
+#define CC_SIM_SCHEMA_VERSION 73
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -538,7 +538,8 @@ typedef enum CcCommandKind {
     CC_COMMAND_CLEAR_ROAD_SITE = 54,
     CC_COMMAND_TRANSFER_ROAD_SITE = 55,
     CC_COMMAND_REPAIR_ROAD_SITE = 56,
-    CC_COMMAND_SUPPORT_BAKERY = 57
+    CC_COMMAND_SUPPORT_BAKERY = 57,
+    CC_COMMAND_FUND_GRAIN_SUPPLY = 58
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1695,6 +1696,27 @@ typedef struct CcPonyCompany {
     CcPony ponies[CC_PONY_COUNT];
 } CcPonyCompany;
 
+typedef struct CcGrainSupply {
+    CcId organiser_id, supplier_id, route_id, shipment_id;
+    CcMoney purse, spent;
+    int32_t ordered, delivered, lost, redirected;
+    int32_t last_dispatch_day, last_arrival_day;
+    bool enabled;
+} CcGrainSupply;
+
+typedef enum CcGrainSupplyStatus {
+    CC_GRAIN_READY, CC_GRAIN_INACTIVE, CC_GRAIN_CONTACT, CC_GRAIN_BAKERY,
+    CC_GRAIN_STOCKED, CC_GRAIN_TRANSIT, CC_GRAIN_BLOCKED, CC_GRAIN_CARRIAGE,
+    CC_GRAIN_SUPPLIER, CC_GRAIN_ROUTE, CC_GRAIN_FUNDS
+} CcGrainSupplyStatus;
+
+typedef struct CcGrainDeliveryPlan {
+    CcId organiser_id, supplier_id, route_id, carriage_id, next_hop_id;
+    int32_t path_capacity;
+    CcGrainSupplyStatus status;
+    char reason[192];
+} CcGrainDeliveryPlan;
+
 typedef struct CcSim {
     uint32_t schema_version;
     uint32_t generator_version;
@@ -1711,6 +1733,7 @@ typedef struct CcSim {
     CcTreasure treasures[CC_MAX_TREASURES];
     CcFaction factions[CC_MAX_FACTIONS];
     CcShipment shipments[CC_MAX_SHIPMENTS];
+    CcGrainSupply grain_supplies[CC_MAX_SETTLEMENTS];
     CcRoyalCarriage royal_carriages[CC_MAX_KINGDOMS];
     int32_t royal_trade_week;
     int32_t royal_route_slots_used[CC_MAX_ROUTES];
@@ -1793,7 +1816,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 183672,
+_Static_assert(sizeof(CcSim) == 184152,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -2143,6 +2166,8 @@ typedef struct CcBakerySupportPlan {
     char reason[192];
 } CcBakerySupportPlan;
 
+CcGrainDeliveryPlan CcSimGrainDeliveryPlan(const CcSim *sim, CcId settlement_id);
+const CcGrainSupply *CcSimGrainSupply(const CcSim *sim, CcId settlement_id);
 CcBakerySupportPlan CcSimBakerySupportPlan(const CcSim *sim, CcId settlement_id);
 bool CcSimKingdomsAtWar(const CcSim *sim, CcId first, CcId second);
 bool CcSimKingdomsAllied(const CcSim *sim, CcId first, CcId second);
