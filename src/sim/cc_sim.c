@@ -5776,6 +5776,11 @@ static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
            recruits: any rally is road news. */
         return sim->schema_version >= 50U && event->magnitude >= 1;
     }
+    if (event->kind == CC_EVENT_DRAGON_OMEN) {
+        /* An omen is struck only when a theft starts the dragon's countdown,
+           so its modest magnitude is not a measure of its weight. */
+        return sim->schema_version >= 50U;
+    }
     return event->magnitude >= 20 &&
         (event->kind == CC_EVENT_WAR_DECLARED ||
          event->kind == CC_EVENT_PEACE_DECLARED ||
@@ -5793,7 +5798,6 @@ static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
           event->kind == CC_EVENT_SHORTAGE) ||
          (sim->schema_version >= 50U &&
           (event->kind == CC_EVENT_GOBLIN_RAIDED ||
-           event->kind == CC_EVENT_DRAGON_OMEN ||
            event->kind == CC_EVENT_DRAGON_RETALIATION)));
 }
 
@@ -5889,13 +5893,9 @@ static void GatherGossip(CcSim *sim)
         }
         uint32_t bit = UINT32_C(1) << (uint32_t)slot;
         for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
-            /* Only a carrier that held the story can hold its version; skip
-               rewriting the zeros the rest already carry. */
-            if ((sim->gossip_carriers[i].stories & bit) != 0U) {
-                sim->gossip_carriers[i].versions[slot] = (CcGossipVersion){0};
-            }
             sim->gossip_carriers[i].stories &= ~bit;
             sim->gossip_carriers[i].told_player &= ~bit;
+            sim->gossip_carriers[i].versions[slot] = (CcGossipVersion){0};
         }
         sim->gossip[slot] = (CcGossip){
             .event_id = event->id, .origin_id = sim->settlements[origin].id,
@@ -6057,28 +6057,44 @@ static CcGossipVersion RetellGossip(const CcSim *sim, const CcGossip *story,
 static void MutatedGossipText(const char *original, int32_t retellings,
                               char *text, size_t capacity)
 {
-    static const struct { const char *before; const char *after; int32_t hop; } swaps[] = {
-        {"one", "two", 2}, {"two", "three", 2}, {"three", "five", 2},
-        {"four", "six", 2}, {"five", "seven", 2},
-        {"western", "northern", 4}, {"eastern", "southern", 4},
-        {"west", "north", 4}, {"east", "south", 4},
-        {"workers", "merchants", 6}, {"Raiders", "Deserters", 6},
-        {"raiders", "deserters", 6}, {"guards", "soldiers", 6}
+    static const struct {
+        const char *before;
+        const char *after;
+        int32_t hop;
+        size_t length;
+        size_t replacement;
+    } swaps[] = {
+#define CC_GOSSIP_SWAP(before_, after_, hop_) \
+        {before_, after_, hop_, sizeof(before_) - 1U, sizeof(after_) - 1U}
+        CC_GOSSIP_SWAP("one", "two", 2), CC_GOSSIP_SWAP("two", "three", 2),
+        CC_GOSSIP_SWAP("three", "five", 2), CC_GOSSIP_SWAP("four", "six", 2),
+        CC_GOSSIP_SWAP("five", "seven", 2),
+        CC_GOSSIP_SWAP("western", "northern", 4), CC_GOSSIP_SWAP("eastern", "southern", 4),
+        CC_GOSSIP_SWAP("west", "north", 4), CC_GOSSIP_SWAP("east", "south", 4),
+        CC_GOSSIP_SWAP("workers", "merchants", 6), CC_GOSSIP_SWAP("Raiders", "Deserters", 6),
+        CC_GOSSIP_SWAP("raiders", "deserters", 6), CC_GOSSIP_SWAP("guards", "soldiers", 6)
+#undef CC_GOSSIP_SWAP
     };
     size_t used = 0U;
     bool changed_count = false, changed_place = false, changed_people = false;
     for (size_t at = 0U; original[at] != '\0' && used + 1U < capacity;) {
+        /* A word interior cannot start a replacement. Avoid checking every
+           dictionary entry (and measuring its length) for every character. */
+        if (retellings < 2 ||
+            (at > 0U && isalpha((unsigned char)original[at - 1U]))) {
+            text[used++] = original[at++];
+            continue;
+        }
         bool replaced = false;
         for (size_t i = 0U; i < sizeof(swaps) / sizeof(swaps[0]); ++i) {
-            size_t length = strlen(swaps[i].before);
-            if (retellings < swaps[i].hop ||
+            size_t length = swaps[i].length;
+            if (original[at] != swaps[i].before[0] || retellings < swaps[i].hop ||
                 (swaps[i].hop == 2 && changed_count) ||
                 (swaps[i].hop == 4 && changed_place) ||
                 (swaps[i].hop == 6 && changed_people) ||
-                (at > 0U && isalpha((unsigned char)original[at - 1U])) ||
                 strncmp(original + at, swaps[i].before, length) != 0 ||
                 isalpha((unsigned char)original[at + length])) continue;
-            size_t replacement = strlen(swaps[i].after);
+            size_t replacement = swaps[i].replacement;
             if (used + replacement >= capacity) break;
             memcpy(text + used, swaps[i].after, replacement);
             used += replacement;
@@ -6135,7 +6151,19 @@ void CcGossipText(const CcSim *sim, const CcGossip *story,
     const char *bias = version->court_bias >= 15 ? " Loyal voices credit the crown." :
                        version->court_bias <= -15 ? " Some blame the court." : "";
     const char *alarm = version->alarm >= 30 ? " They fear worse is coming." : "";
-    (void)snprintf(text, capacity, "%s%s%s", account, bias, alarm);
+    /* Compose by bounded appends; a format-parsing join for every mutated
+       telling adds up over a chronicle. */
+    size_t used = strlen(account);
+    if (used >= capacity) used = capacity - 1U;
+    memcpy(text, account, used);
+    const char *const parts[2] = {bias, alarm};
+    for (size_t part = 0U; part < 2U; ++part) {
+        for (const char *at = parts[part];
+             used + 1U < capacity && *at != '\0'; ++at) {
+            text[used++] = *at;
+        }
+    }
+    text[used] = '\0';
 }
 
 static void HearGossip(CcSim *sim, CcGossip *story, CcId place_id,

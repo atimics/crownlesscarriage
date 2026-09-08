@@ -40,70 +40,6 @@ static bool ParsePositive(const char *text, int32_t *value)
     return true;
 }
 
-/* One measurement pass over the seeded worlds. Returns the elapsed seconds
-   and the worlds' checksum; a second pass must reproduce the same checksum
-   in the same timekeeping regime. */
-static double SimulationPass(int32_t sim_seeds, int32_t days_per_seed,
-                             uint64_t *checksum,
-                             char *error, size_t error_capacity)
-{
-    uint64_t pass_checksum = 0U;
-    CcSim sim;
-    clock_t started = clock();
-    for (int32_t seed = 0; seed < sim_seeds; ++seed) {
-        CcSimInit(&sim, (uint32_t)seed * UINT32_C(0x9e3779b9) + 1U);
-        CcSimAdvanceDays(&sim, days_per_seed);
-        if (!CcSimValidate(&sim, error, error_capacity)) {
-            return -1.0;
-        }
-        pass_checksum ^= CcSimHash(&sim);
-    }
-    *checksum = pass_checksum;
-    return ElapsedSeconds(started);
-}
-
-/* One measurement pass over the locomotion agents. */
-static double LocomotionPass(int32_t agent_count, int32_t frames,
-                             uint64_t *checksum)
-{
-    CcHumanoidGait *gaits = calloc((size_t)agent_count, sizeof(*gaits));
-    CcLimbVec3 *positions = calloc((size_t)agent_count, sizeof(*positions));
-    if (gaits == NULL || positions == NULL) {
-        free(gaits);
-        free(positions);
-        *checksum = UINT64_MAX;
-        return -1.0;
-    }
-    for (int32_t agent = 0; agent < agent_count; ++agent) {
-        positions[agent] = (CcLimbVec3){(float)(agent % 8), 0.0f,
-                                        (float)(agent / 8)};
-        CcHumanoidGaitInit(&gaits[agent], positions[agent], 0.0f,
-                           FlatGroundProbe, NULL);
-    }
-    uint64_t pass_checksum = 0U;
-    clock_t started = clock();
-    for (int32_t frame = 0; frame < frames; ++frame) {
-        for (int32_t agent = 0; agent < agent_count; ++agent) {
-            float direction = (agent & 1) != 0 ? -1.0f : 1.0f;
-            CcHumanoidGaitAdvance(
-                &gaits[agent], positions[agent], 0.0f,
-                (CcLimbVec3){0.0f, 0.0f, direction * 1.20f}, true,
-                1.0f / 60.0f, FlatGroundProbe, NULL);
-            positions[agent].x += gaits[agent].root_velocity.x / 60.0f;
-            positions[agent].z += gaits[agent].root_velocity.z / 60.0f;
-        }
-    }
-    double seconds = ElapsedSeconds(started);
-    for (int32_t agent = 0; agent < agent_count; ++agent) {
-        pass_checksum ^= (uint64_t)(gaits[agent].phase * 1000000.0f);
-        pass_checksum ^= (uint64_t)(int64_t)(positions[agent].z * 1000.0f);
-    }
-    free(gaits);
-    free(positions);
-    *checksum = pass_checksum;
-    return seconds;
-}
-
 int main(int argc, char **argv)
 {
     int32_t sim_seeds = 100;
@@ -148,42 +84,24 @@ int main(int argc, char **argv)
 
     uint64_t checksum = 0U;
     char validation[192];
-    /* A shared CI runner can slow a single pass by a few percent while the
-       same code runs at its usual rate the next minute. The budget keeps
-       the fastest of three passes -- the machine's real capability -- and
-       verifies each pass reproduces the same worlds. */
-    double sim_seconds = SimulationPass(
-        sim_seeds, simulation_days_per_seed, &checksum,
-        validation, sizeof(validation));
-    if (sim_seconds < 0.0) {
-        (void)fprintf(stderr, "%s\n", validation);
-        return EXIT_FAILURE;
-    }
-    if (assert_budget) {
-        for (int32_t pass = 1; pass < 3; ++pass) {
-            uint64_t again = 0U;
-            double seconds = SimulationPass(
-                sim_seeds, simulation_days_per_seed, &again,
-                validation, sizeof(validation));
-            if (seconds < 0.0) {
-                (void)fprintf(stderr, "%s\n", validation);
-                return EXIT_FAILURE;
-            }
-            if (again != checksum) {
-                (void)fprintf(stderr,
-                              "Simulation benchmark diverged across passes.\n");
-                return EXIT_FAILURE;
-            }
-            if (seconds < sim_seconds) sim_seconds = seconds;
+    CcSim sim;
+    clock_t started = clock();
+    for (int32_t seed = 0; seed < sim_seeds; ++seed) {
+        CcSimInit(&sim, (uint32_t)seed * UINT32_C(0x9e3779b9) + 1U);
+        CcSimAdvanceDays(&sim, simulation_days_per_seed);
+        if (!CcSimValidate(&sim, validation, sizeof(validation))) {
+            (void)fprintf(stderr, "Simulation benchmark invalid: %s\n", validation);
+            return EXIT_FAILURE;
         }
+        checksum ^= CcSimHash(&sim);
     }
+    double sim_seconds = ElapsedSeconds(started);
     int64_t simulated_days =
         (int64_t)sim_seeds * simulation_days_per_seed;
     double nanoseconds_per_day = sim_seconds * 1.0e9 / (double)simulated_days;
 
     enum { TERRAIN_SIDE = 64 };
-    CcSim sim;
-    clock_t started = clock();
+    started = clock();
     for (int32_t seed = 0; seed < sim_seeds; ++seed) {
         CcWorldManifest manifest;
         CcSimInit(&sim, (uint32_t)seed * UINT32_C(0x9e3779b9) + 1U);
@@ -206,35 +124,43 @@ int main(int argc, char **argv)
     double terrain_seconds = ElapsedSeconds(started);
     int64_t terrain_points = (int64_t)sim_seeds * TERRAIN_SIDE * TERRAIN_SIDE;
 
-    uint64_t locomotion_checksum = 0U;
-    double locomotion_seconds = LocomotionPass(
-        agent_count, locomotion_frames, &locomotion_checksum);
-    if (locomotion_seconds < 0.0) {
+    CcHumanoidGait *gaits = calloc((size_t)agent_count, sizeof(*gaits));
+    CcLimbVec3 *positions = calloc((size_t)agent_count, sizeof(*positions));
+    if (gaits == NULL || positions == NULL) {
+        free(gaits);
+        free(positions);
         (void)fprintf(stderr, "Could not allocate locomotion benchmark agents.\n");
         return EXIT_FAILURE;
     }
-    if (assert_budget) {
-        for (int32_t pass = 1; pass < 3; ++pass) {
-            uint64_t again = 0U;
-            double seconds = LocomotionPass(
-                agent_count, locomotion_frames, &again);
-            if (seconds < 0.0) {
-                (void)fprintf(stderr,
-                              "Could not allocate locomotion benchmark agents.\n");
-                return EXIT_FAILURE;
-            }
-            if (again != locomotion_checksum) {
-                (void)fprintf(stderr,
-                              "Locomotion benchmark diverged across passes.\n");
-                return EXIT_FAILURE;
-            }
-            if (seconds < locomotion_seconds) locomotion_seconds = seconds;
+    for (int32_t agent = 0; agent < agent_count; ++agent) {
+        positions[agent] = (CcLimbVec3){(float)(agent % 8), 0.0f,
+                                        (float)(agent / 8)};
+        CcHumanoidGaitInit(&gaits[agent], positions[agent], 0.0f,
+                           FlatGroundProbe, NULL);
+    }
+
+    started = clock();
+    for (int32_t frame = 0; frame < locomotion_frames; ++frame) {
+        for (int32_t agent = 0; agent < agent_count; ++agent) {
+            float direction = (agent & 1) != 0 ? -1.0f : 1.0f;
+            CcHumanoidGaitAdvance(
+                &gaits[agent], positions[agent], 0.0f,
+                (CcLimbVec3){0.0f, 0.0f, direction * 1.20f}, true,
+                1.0f / 60.0f, FlatGroundProbe, NULL);
+            positions[agent].x += gaits[agent].root_velocity.x / 60.0f;
+            positions[agent].z += gaits[agent].root_velocity.z / 60.0f;
         }
     }
-    checksum ^= locomotion_checksum;
+    double locomotion_seconds = ElapsedSeconds(started);
     int64_t agent_steps = (int64_t)agent_count * locomotion_frames;
     double nanoseconds_per_step = locomotion_seconds * 1.0e9 /
                                   (double)agent_steps;
+    for (int32_t agent = 0; agent < agent_count; ++agent) {
+        checksum ^= (uint64_t)(gaits[agent].phase * 1000000.0f);
+        checksum ^= (uint64_t)(int64_t)(positions[agent].z * 1000.0f);
+    }
+    free(gaits);
+    free(positions);
 
     (void)printf("simulation: seeds=%d years=%d days=%" PRId64
                  " cpu=%.6fs ns/day=%.1f\n",
