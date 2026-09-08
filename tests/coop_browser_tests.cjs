@@ -125,6 +125,8 @@ async function main() {
     assert.deepEqual((await state()).appearance, {skin:0, hair:4, style:4, face:0, coat:3});
     await selectMenuItem(game, 0);
     await game.waitForFunction(() => Module.crownlessScreen === 'playing');
+    /* The playing screen is published before the next frame refreshes the avatar. */
+    await game.waitForFunction(() => document.body.dataset.avatar === '12576');
     assert.equal(await game.locator('body').getAttribute('data-avatar'), '12576');
     assert.equal(await game.locator('#touch-panel').count(), 0);
     assert(await game.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -155,6 +157,8 @@ async function main() {
     await game.reload();
     await game.waitForFunction(() => document.body.dataset.companyReady === 'ready' && document.body.dataset.playerPosition, undefined, {timeout:120000});
     assert.notEqual(await game.locator('body').getAttribute('data-player-position'), start);
+    /* The playing screen is published before the next frame refreshes the avatar. */
+    await game.waitForFunction(() => document.body.dataset.avatar === '12576');
     assert.equal(await game.locator('body').getAttribute('data-avatar'), '12576');
     await owner.waitForFunction(() => JSON.parse(document.body.dataset.crewDrawn || '[]')[0]?.name === 'Bren');
     await game.locator('#canvas').focus();
