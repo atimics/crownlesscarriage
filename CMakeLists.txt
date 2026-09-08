@@ -96,6 +96,7 @@ add_library(crownless_sim
     src/sim/cc_trade_path.c
     src/sim/cc_sim_versions.c
     src/sim/cc_identity.c
+    src/sim/cc_road_council.c
     src/sim/cc_route_rules.c
     src/sim/cc_journey_departure.c
     src/sim/cc_journey_encounter.c
@@ -206,6 +207,8 @@ else()
 endif()
 add_library(crownless_persistence
     src/persistence/cc_save.c
+    src/persistence/cc_journal_replay.c
+    src/persistence/cc_legacy_runtime.c
 )
 target_include_directories(crownless_persistence PUBLIC src)
 target_link_libraries(crownless_persistence PUBLIC
@@ -261,6 +264,13 @@ if(CC_BUILD_BENCHMARKS)
     add_executable(crownless_sim_metrics tools/sim_metrics.c)
     target_link_libraries(crownless_sim_metrics PRIVATE crownless_sim)
     cc_strict_warnings(crownless_sim_metrics)
+
+    add_executable(crownless_quest_cast_experiment tools/quest_cast_experiment.c)
+    target_link_libraries(crownless_quest_cast_experiment PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_quest_cast_experiment)
+    add_executable(crownless_contested_road_experiment tools/contested_road_experiment.c)
+    target_link_libraries(crownless_contested_road_experiment PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_contested_road_experiment)
 
     add_executable(crownless_grain_experiment tools/grain_experiment.c)
     target_link_libraries(crownless_grain_experiment PRIVATE crownless_sim)
@@ -1209,6 +1219,11 @@ if(BUILD_TESTING)
     add_test(NAME local_session_round_trip COMMAND client_session_tests)
 
     add_executable(road_stop_tests tests/road_stop_tests.c)
+    add_executable(road_council_tests tests/road_council_tests.c)
+    target_link_libraries(road_council_tests PRIVATE crownless_metagame)
+    cc_strict_warnings(road_council_tests)
+    add_test(NAME road_council_and_quests COMMAND road_council_tests)
+
     add_executable(grain_supply_tests tests/grain_supply_tests.c)
     target_link_libraries(grain_supply_tests PRIVATE crownless_persistence)
     cc_strict_warnings(grain_supply_tests)
@@ -1483,6 +1498,12 @@ if(BUILD_TESTING)
     target_link_libraries(archive_funding_tests PRIVATE crownless_sim)
     cc_strict_warnings(archive_funding_tests)
     add_test(NAME archive_funding_plan COMMAND archive_funding_tests)
+    add_executable(quest_cast_tests tests/quest_cast_tests.c)
+    target_link_libraries(quest_cast_tests PRIVATE crownless_persistence)
+    target_compile_definitions(quest_cast_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    cc_strict_warnings(quest_cast_tests)
+    add_test(NAME quest_cast_continuity COMMAND quest_cast_tests)
+
     add_executable(character_lifetime_tests tests/character_lifetime_tests.c)
     target_link_libraries(character_lifetime_tests PRIVATE crownless_persistence)
     cc_strict_warnings(character_lifetime_tests)

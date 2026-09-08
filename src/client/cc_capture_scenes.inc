@@ -713,6 +713,13 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
             (*scene->view) = VIEW_TRADE;
             scene->local->trade_mode = 4;
         }
+        if (request->capture_ux_view == 20) {
+            scene->sim->player.location_id = scene->sim->settlements[1].id;
+            scene->sim->carriage.location_id = scene->sim->player.location_id;
+            (*scene->view) = VIEW_TRADE;
+            scene->local->trade_mode = 5;
+            scene->local->trade_good = (CcGood)1;
+        }
         if (request->capture_ux_view == 4) { (*scene->view) = VIEW_LEDGER; scene->local->book_page = 3; }
         if (request->capture_ux_view == 11 || request->capture_ux_view == 12) {
             (*scene->view) = VIEW_CARRIAGE;

@@ -3567,6 +3567,8 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
 static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
                        Rectangle viewport)
 {
+    /* Adventure controls carry scene facts; in-frame captions carry speech. */
+    if (interaction_ui_enabled) return;
     const float bubble_height = 18.0f;
     const float head_clearance = 8.0f;
     int32_t width = (int32_t)lroundf(viewport.width);

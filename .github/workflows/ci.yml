@@ -228,6 +228,18 @@ jobs:
           name: interaction-screen-review
           path: build/ux-*.png
           if-no-files-found: error
+      - name: Capture desktop reading matrix
+        if: runner.os == 'Linux'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: xvfb-run --auto-servernum python3 tools/capture_ux_desktop.py build/crownless_carriage
+      - name: Upload desktop reading matrix
+        if: runner.os == 'Linux' && !cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-desktop-review
+          path: out/ux-desktop-review/
+          if-no-files-found: error
       - name: Check character shaders and the full art viewport
         if: runner.os == 'Linux'
         env:

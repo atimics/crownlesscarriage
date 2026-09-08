@@ -1,0 +1,258 @@
+[
+  {
+    "scene": "conversation",
+    "width": 1040,
+    "height": 620,
+    "text_size": 0,
+    "file": "conversation-1040-0.png",
+    "sha256": "44af29d1e09bb6a8af46ecf36e5074f331ade0cbd14732ecb2d72fe9be1abd3d"
+  },
+  {
+    "scene": "trade",
+    "width": 1040,
+    "height": 620,
+    "text_size": 0,
+    "file": "trade-1040-0.png",
+    "sha256": "4c6e3e3d505972f769e106eef44845f0752cddaac1468f4e78b5f0d6aa63f680"
+  },
+  {
+    "scene": "book",
+    "width": 1040,
+    "height": 620,
+    "text_size": 0,
+    "file": "book-1040-0.png",
+    "sha256": "ab58e0fcb29f2f278acd07a07584631e824bc3b9b3d0dd95b2cc67095066def4"
+  },
+  {
+    "scene": "road",
+    "width": 1040,
+    "height": 620,
+    "text_size": 0,
+    "file": "road-1040-0.png",
+    "sha256": "cbc4813c13f3673dd9d0a1001a209437e7271d62564a0d3e59c64eccda8b09a0"
+  },
+  {
+    "scene": "conversation",
+    "width": 1040,
+    "height": 620,
+    "text_size": 2,
+    "file": "conversation-1040-2.png",
+    "sha256": "05fef2e81eb7169efa132f9ad3be05807eb4f22e993583d5d0b497747cf1e06d"
+  },
+  {
+    "scene": "trade",
+    "width": 1040,
+    "height": 620,
+    "text_size": 2,
+    "file": "trade-1040-2.png",
+    "sha256": "5ad8a83f2b1a15c58332156bc4f916863e1e4068b7535ef22cffe87daf324e5d"
+  },
+  {
+    "scene": "book",
+    "width": 1040,
+    "height": 620,
+    "text_size": 2,
+    "file": "book-1040-2.png",
+    "sha256": "36ab1f9246dc095c4aeb67beae04300db60770c6dcb30e40fd9af1ca4441bb74"
+  },
+  {
+    "scene": "road",
+    "width": 1040,
+    "height": 620,
+    "text_size": 2,
+    "file": "road-1040-2.png",
+    "sha256": "d1fef8d5a0d5499081d77949aa0dd162a5062ec6f674e33f5349ca14bc8b6a75"
+  },
+  {
+    "scene": "conversation",
+    "width": 1200,
+    "height": 700,
+    "text_size": 0,
+    "file": "conversation-1200-0.png",
+    "sha256": "6df6c48f89ef7de74d87cb2233019c4e9e18b20002314159c9e3395033fe1388"
+  },
+  {
+    "scene": "trade",
+    "width": 1200,
+    "height": 700,
+    "text_size": 0,
+    "file": "trade-1200-0.png",
+    "sha256": "54ed1e462b949d0f685da8bb9e6bfc678445b8e27e4f66faf02719b06896417d"
+  },
+  {
+    "scene": "book",
+    "width": 1200,
+    "height": 700,
+    "text_size": 0,
+    "file": "book-1200-0.png",
+    "sha256": "c56a05f3610db45c39b28857dd97f1b249610d158378a7cb1a86fc8771922541"
+  },
+  {
+    "scene": "road",
+    "width": 1200,
+    "height": 700,
+    "text_size": 0,
+    "file": "road-1200-0.png",
+    "sha256": "b2c93061f809101358e63711bd0fa9f0804a0d8128360bf85e87ac1106b28010"
+  },
+  {
+    "scene": "conversation",
+    "width": 1200,
+    "height": 700,
+    "text_size": 2,
+    "file": "conversation-1200-2.png",
+    "sha256": "359475be9b611966d714e7648203e78af5365ea110ea0123671cb0573f6b5d68"
+  },
+  {
+    "scene": "trade",
+    "width": 1200,
+    "height": 700,
+    "text_size": 2,
+    "file": "trade-1200-2.png",
+    "sha256": "db4189d2c4f3cb7be4e170c7e75cd2694db699728ba52f696ca6e92aa6b51977"
+  },
+  {
+    "scene": "book",
+    "width": 1200,
+    "height": 700,
+    "text_size": 2,
+    "file": "book-1200-2.png",
+    "sha256": "bbe21396b71b065699ef3a9a65a9ba547a037d0d2b5ccb3319e2cff2c122d0f3"
+  },
+  {
+    "scene": "road",
+    "width": 1200,
+    "height": 700,
+    "text_size": 2,
+    "file": "road-1200-2.png",
+    "sha256": "d86e8fa410f8202fc0f03c76e26c60e2eb2570b6bf687cd9b239eae70902c834"
+  },
+  {
+    "scene": "conversation",
+    "width": 1280,
+    "height": 720,
+    "text_size": 0,
+    "file": "conversation-1280-0.png",
+    "sha256": "d490ecd385b12b407c76513eac5126ed63e78ff64e2e5d4b628eca6b1170823e"
+  },
+  {
+    "scene": "trade",
+    "width": 1280,
+    "height": 720,
+    "text_size": 0,
+    "file": "trade-1280-0.png",
+    "sha256": "5c77fd8b190de229a6638a25931025e90d0535157cd09ca3b86dcb1c0e507f1a"
+  },
+  {
+    "scene": "book",
+    "width": 1280,
+    "height": 720,
+    "text_size": 0,
+    "file": "book-1280-0.png",
+    "sha256": "677c6d029642f6d9addd9ce9f221d579a71a060ed2cf1f2508808953b50751c5"
+  },
+  {
+    "scene": "road",
+    "width": 1280,
+    "height": 720,
+    "text_size": 0,
+    "file": "road-1280-0.png",
+    "sha256": "739e4ad014de782cdfd8691ef5478a09790d44111b0d14992370dd2f38faf657"
+  },
+  {
+    "scene": "conversation",
+    "width": 1280,
+    "height": 720,
+    "text_size": 2,
+    "file": "conversation-1280-2.png",
+    "sha256": "8aec55c428613ae2c8438a1433619ae1eb1dc602515db689223df99ada69c02a"
+  },
+  {
+    "scene": "trade",
+    "width": 1280,
+    "height": 720,
+    "text_size": 2,
+    "file": "trade-1280-2.png",
+    "sha256": "a9d55717f0dbc2048ca39d809844df795c31903b2b549e7649ff6ee64735404d"
+  },
+  {
+    "scene": "book",
+    "width": 1280,
+    "height": 720,
+    "text_size": 2,
+    "file": "book-1280-2.png",
+    "sha256": "197f60c84a64b9a996ab1f1085514d0ca6939007e19d33f733d28709f7646cbc"
+  },
+  {
+    "scene": "road",
+    "width": 1280,
+    "height": 720,
+    "text_size": 2,
+    "file": "road-1280-2.png",
+    "sha256": "71e427d4b29e20e1fc0f0204b602c2455eb7bbb991849d7748382f41a7ca7c2d"
+  },
+  {
+    "scene": "conversation",
+    "width": 1920,
+    "height": 1080,
+    "text_size": 0,
+    "file": "conversation-1920-0.png",
+    "sha256": "7a1fc9ead9878ea3dcdc8d8a5391a8b1b9574668d08b95b1739d8a3bf06bdd01"
+  },
+  {
+    "scene": "trade",
+    "width": 1920,
+    "height": 1080,
+    "text_size": 0,
+    "file": "trade-1920-0.png",
+    "sha256": "574e36e8672085a31c071c93ff4d7c7b10912f38b99fc091c68febfe834b630c"
+  },
+  {
+    "scene": "book",
+    "width": 1920,
+    "height": 1080,
+    "text_size": 0,
+    "file": "book-1920-0.png",
+    "sha256": "2780c8059e5431174bad073b31c8985b8d0e38eee5f82ac2f8fca2941c5d7069"
+  },
+  {
+    "scene": "road",
+    "width": 1920,
+    "height": 1080,
+    "text_size": 0,
+    "file": "road-1920-0.png",
+    "sha256": "afc6ce7105cb96eb02a86c21445c5b360d964f690109c9809312e2dd0298a65f"
+  },
+  {
+    "scene": "conversation",
+    "width": 1920,
+    "height": 1080,
+    "text_size": 2,
+    "file": "conversation-1920-2.png",
+    "sha256": "08f9bb58cacfbe922e04fbe4673773ea1adaf1d9836dc29e0081d8658c36d98e"
+  },
+  {
+    "scene": "trade",
+    "width": 1920,
+    "height": 1080,
+    "text_size": 2,
+    "file": "trade-1920-2.png",
+    "sha256": "90a2530fd7f75e5b2f5659ad2f52756c58e096dd35cad26eccbe45d32040b746"
+  },
+  {
+    "scene": "book",
+    "width": 1920,
+    "height": 1080,
+    "text_size": 2,
+    "file": "book-1920-2.png",
+    "sha256": "395e1c85c91a29975dd1da50cec80582d1f433ebcb9569e9239b5c46828e7b8c"
+  },
+  {
+    "scene": "road",
+    "width": 1920,
+    "height": 1080,
+    "text_size": 2,
+    "file": "road-1920-2.png",
+    "sha256": "3f49118270d8c2323730cead7ddc6363610b9e80355e2d2201f3f3a6037deda1"
+  }
+]

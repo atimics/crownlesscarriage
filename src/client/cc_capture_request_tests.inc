@@ -15,6 +15,9 @@ static int RunCaptureRequestRegression(void)
         strcmp(request.capture_path, "ux.png") != 0)
         return ClientRegressionFailure("UX capture must retain its view and path.");
     ux[2] = "20";
+    if (!CcCaptureRequestParse(6, ux, &request))
+        return ClientRegressionFailure("Road meeting capture must be available.");
+    ux[2] = "21";
     if (CcCaptureRequestParse(6, ux, &request))
         return ClientRegressionFailure("UX capture must enforce its view range.");
     char *storybook[] = {"crownless", "--capture-storybook", "0.25", "0.75", "story.png"};
@@ -143,9 +146,21 @@ static int RunCapturePresentationRegression(void)
     CcCaptureConfigureFrontend(&request, &frontend);
     if (frontend.screen != FRONTEND_PAUSED)
         return ClientRegressionFailure("Menu capture must open the pause screen.");
-    ux[4] = "1000";
-    if (CcCaptureConfigureWindow(&request, 5, ux, &window))
-        return ClientRegressionFailure("UX capture must enforce its window size choices.");
+    const struct { char *width; int32_t pixels, height; } sizes[] = {
+        {"1040", 1040, 620}, {"1200", 1200, 700}, {"1280", 1280, 720},
+        {"1600", 1600, 900}, {"1920", 1920, 1080}};
+    for (size_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i) {
+        ux[4] = sizes[i].width;
+        if (!CcCaptureConfigureWindow(&request, 5, ux, &window) ||
+            window.width != sizes[i].pixels || window.height != sizes[i].height)
+            return ClientRegressionFailure("UX capture must cover every supported desktop size.");
+    }
+    char *invalid_widths[] = {"1000", "1280px", "", "999999999999999999999999", "-1040"};
+    for (size_t i = 0; i < sizeof(invalid_widths) / sizeof(invalid_widths[0]); ++i) {
+        ux[4] = invalid_widths[i];
+        if (CcCaptureConfigureWindow(&request, 5, ux, &window))
+            return ClientRegressionFailure("UX capture must require a supported numeric width.");
+    }
     request = (CcCaptureRequest){.capture_gameplay_reel = true};
     state.gameplay_reel.stage = GAMEPLAY_REEL_QUEST_COMPLETE;
     play = CcCapturePresentationFor(&request, &state, false);
