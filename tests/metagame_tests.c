@@ -47,8 +47,9 @@ static void ResolveRoadRhythm(CcMetagame *metagame,
                               char *output, size_t capacity)
 {
     while (metagame->sim.journey.active &&
-           metagame->sim.journey.phase == CC_JOURNEY_PHASE_RESTING) {
-        const char *command =
+           (metagame->sim.journey.phase == CC_JOURNEY_PHASE_RESTING ||
+            CcSimJourneyRoadSiteStop(&metagame->sim) != NULL)) {
+        const char *command = CcSimJourneyRoadSiteStop(&metagame->sim) != NULL ? "road pass" :
             CcSimJourneyStop(&metagame->sim) == CC_JOURNEY_STOP_MIDDAY ?
                 "road break" : "road camp";
         CC_CHECK(CcMetagameExecute(metagame, command, output, capacity));
