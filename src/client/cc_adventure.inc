@@ -485,8 +485,9 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local,
         const char *tabs[] = {"Buy", "Sell", "Deliver promise", "Bakery"};
         for (int i = 0; i < 4; ++i) AdventureButton(AdventureTab(panel, i, 4), tabs[i], true, i == 3);
         int x = (int)panel.x + 28, y = (int)panel.y + 138;
-        CcOverlayDrawText(contact != NULL ? contact->name : "Waiting for a local contact", x, y, AdventureTextSize(20), INK);
-        y += 35 + AdventureWrap(plan.building_days > 0 ?
+        CcOverlayDrawText(contact != NULL ? (plan.remembered ? TextFormat("%s remembers your help", contact->name) : contact->name) : "Waiting for a local contact", x, y, AdventureTextSize(20), INK);
+        y += 35 + AdventureWrap(place->service_project == CC_SERVICE_BAKERY ?
+            TextFormat("The bakery is being rebuilt. Work has %d days left.", place->service_project_days) : plan.building_days > 0 ?
             "Bring twelve wheat and eighty crowns. The town supplies the building materials. Building takes seven days." :
             "Bring twelve wheat and eight crowns for the workers. The bakery will use the grain in its ordinary work.",
             x, y + 35, (int)panel.width - 56, AdventureTextSize(15), MUTED);
@@ -505,11 +506,11 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local,
             }
         }
         CcOverlayDrawText(TextFormat("Wages: %" PRId64 " crowns. Purse: %" PRId64, plan.coins, sim->player.coins), x, y + 12, AdventureTextSize(15), INK);
-        (void)AdventureWrap(plan.remembered ? "I remember your help with our bakery. Thank you." : plan.reason,
+        (void)AdventureWrap(plan.reason,
             x, y + 42, (int)panel.width - 56, AdventureTextSize(14), TEAL);
-        Rectangle button = {(float)x, panel.y + panel.height - 132, panel.width - 56, 34};
+        Rectangle button = {(float)x, panel.y + panel.height - 100, panel.width - 56, 34};
         AdventureButton(button, plan.building_days > 0 ? "Fund rebuilding  Enter" : "Give grain and wages  Enter", plan.ready, false);
-        (void)AdventureWrap(local->receipt, x, (int)(panel.y + panel.height) - 87, (int)panel.width - 56, AdventureTextSize(13), MUTED);
+        (void)AdventureWrap(local->receipt, x, (int)(panel.y + panel.height) - 55, (int)panel.width - 56, AdventureTextSize(13), MUTED);
         ClientTouchHeading("The town bakery", plan.reason);
         local->trade_quote_presented = true;
         local->trade_presented_total = plan.coins;
@@ -597,7 +598,7 @@ static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *loc
         }
     }
     if (local->trade_mode == 3) {
-        Rectangle button = {panel.x + 28, panel.y + panel.height - 132, panel.width - 56, 34};
+        Rectangle button = {panel.x + 28, panel.y + panel.height - 100, panel.width - 56, 34};
         if (!changed && (AdventureHit(button) || ClientKeyPressed(KEY_ENTER))) {
             CcBakerySupportPlan plan = CcSimBakerySupportPlan(sim, sim->player.location_id);
             if (local->trade_quote_presented && local->trade_presented_command.kind == CC_COMMAND_SUPPORT_BAKERY &&

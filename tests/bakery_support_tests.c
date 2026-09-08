@@ -45,6 +45,10 @@ int main(void)
     if (!CcSimValidate(&sim, error, sizeof(error))) { fprintf(stderr, "%s\n", error); return 1; }
 
     Prepare(true);
+    before = sim;
+    sim.settlements[1].stock[CC_GOOD_TOOLS] = 0;
+    CC_CHECK(!CcSimBakerySupportPlan(&sim, sim.player.location_id).ready);
+    sim = before;
     plan = CcSimBakerySupportPlan(&sim, sim.player.location_id);
     CC_CHECK(plan.ready && plan.building_days == 7);
     support.target_id = sim.player.location_id;
@@ -73,6 +77,18 @@ int main(void)
     CC_CHECK(CcJournalClose(&journal, &restored, error, sizeof(error)));
     (void)remove(path);
 
+    Prepare(false);
+    for (int i = 0; i < sim.situation_count; ++i) {
+        CcSituation *promise = &sim.situations[i];
+        if (promise->kind == CC_SITUATION_RELIEF_DELIVERY && promise->status == CC_SITUATION_ACTIVE) {
+            promise->good = CC_GOOD_WHEAT;
+            promise->quantity = 12;
+            promise->progress = 0;
+            sim.player.accepted_situation_id = promise->id;
+            CC_CHECK(!CcSimBakerySupportPlan(&sim, sim.player.location_id).ready);
+            break;
+        }
+    }
     Prepare(false);
     sim.schema_version = 71U;
     CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
