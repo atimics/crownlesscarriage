@@ -110,5 +110,25 @@ int main(void)
     CC_CHECK(!sim.routes[0].closed && blocked.routes[0].closed);
     CC_CHECK(CcSimSettlement(&sim, sim.routes[0].to_id)->stock[CC_GOOD_TOOLS] <
         CcSimSettlement(&blocked, blocked.routes[0].to_id)->stock[CC_GOOD_TOOLS]);
+    /* Paid crews also use the owned endpoint that has their Wood and Stone. */
+    Fixture();
+    for (int32_t i = 1; i < sim.route_count; ++i) {
+        sim.routes[i].closed = false; sim.routes[i].condition = 100;
+    }
+    from = CcSimSettlementMutable(&sim, sim.routes[0].from_id);
+    to = CcSimSettlementMutable(&sim, sim.routes[0].to_id);
+    from->kingdom_id = sim.kingdoms[0].id; to->kingdom_id = sim.kingdoms[0].id;
+    memset(from->stock, 0, sizeof(from->stock));
+    memset(to->stock, 0, sizeof(to->stock));
+    from->stock[CC_GOOD_WOOD] = 1000;
+    to->stock[CC_GOOD_WOOD] = 8; to->stock[CC_GOOD_STONE] = 8;
+    sim.kingdoms[0].treasury = 1000;
+    sim.current_day = 27;
+    blocked = sim; blocked.schema_version = 59U;
+    CcSimAdvanceDays(&sim, 1); CcSimAdvanceDays(&blocked, 1);
+    CC_CHECK(!sim.routes[0].closed && blocked.routes[0].closed);
+    CC_CHECK(CcSimSettlement(&sim, sim.routes[0].to_id)->stock[CC_GOOD_STONE] ==
+        CcSimSettlement(&blocked, blocked.routes[0].to_id)->stock[CC_GOOD_STONE] - 2);
+    CC_CHECK(CcSimTrackedGold(&sim) == CcSimTrackedGold(&blocked));
     return 0;
 }

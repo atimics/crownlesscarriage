@@ -13955,10 +13955,28 @@ static int32_t ActiveShipmentsForKingdom(const CcSim *sim, CcId kingdom_id)
     return count;
 }
 
+typedef enum RoadRepairFunding {
+    ROAD_REPAIR_UNFUNDED,
+    ROAD_REPAIR_CROWN_FUNDED,
+    ROAD_REPAIR_LOCALLY_FUNDED
+} RoadRepairFunding;
+
+static RoadRepairFunding RepairFunding(const CcSettlement *base, const CcKingdom *kingdom)
+{
+    if (base == NULL || base->stock[CC_GOOD_WOOD] < 2 ||
+        base->stock[CC_GOOD_STONE] < 2) return ROAD_REPAIR_UNFUNDED;
+    if (kingdom->treasury >= 24) return ROAD_REPAIR_CROWN_FUNDED;
+    if (base->stock[CC_GOOD_TOOLS] >= 1 &&
+        NutritionRations(base->stock, CC_NUTRITION_CIVILIAN) >= 4)
+        return ROAD_REPAIR_LOCALLY_FUNDED;
+    return ROAD_REPAIR_UNFUNDED;
+}
+
 static CcSettlement *RepairBaseForKingdom(CcSim *sim,
                                           const CcRoute *route,
-                                          CcId kingdom_id)
+                                          const CcKingdom *kingdom)
 {
+    CcId kingdom_id = kingdom->id;
     CcSettlement *from = CcSimSettlementMutable(sim, route->from_id);
     CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
     CcSettlement *best = NULL;
@@ -13977,6 +13995,11 @@ static CcSettlement *RepairBaseForKingdom(CcSim *sim,
              NutritionRations(best->stock, CC_NUTRITION_CIVILIAN))) {
         best = to;
     }
+    CcSettlement *alternative = best == from ? to : from;
+    if (sim->schema_version >= 60U && RepairFunding(best, kingdom) == ROAD_REPAIR_UNFUNDED &&
+        alternative != NULL && !CcSettlementIsAbandoned(alternative) &&
+        alternative->kingdom_id == kingdom_id &&
+        RepairFunding(alternative, kingdom) != ROAD_REPAIR_UNFUNDED) best = alternative;
     return best;
 }
 
@@ -14551,23 +14574,16 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 int32_t score = RouteRecoveryScore(sim, route, kingdom->id);
                 if (score <= best_score) continue;
                 CcSettlement *base = RepairBaseForKingdom(
-                    sim, route, kingdom->id);
+                    sim, route, kingdom);
                 if (base == NULL) continue;
                 best_score = score;
                 best_route = route;
                 repair_base = base;
             }
-            bool crown_funded = best_route != NULL &&
-                                repair_base->stock[CC_GOOD_WOOD] >= 2 &&
-                                repair_base->stock[CC_GOOD_STONE] >= 2 &&
-                                kingdom->treasury >= 24;
-            bool locally_funded = best_route != NULL && !crown_funded &&
-                                  repair_base->stock[CC_GOOD_WOOD] >= 2 &&
-                                  repair_base->stock[CC_GOOD_STONE] >= 2 &&
-                                  repair_base->stock[CC_GOOD_TOOLS] >= 1 &&
-                                  NutritionRations(
-                                      repair_base->stock,
-                                      CC_NUTRITION_CIVILIAN) >= 4;
+            RoadRepairFunding funding = best_route != NULL ?
+                RepairFunding(repair_base, kingdom) : ROAD_REPAIR_UNFUNDED;
+            bool crown_funded = funding == ROAD_REPAIR_CROWN_FUNDED;
+            bool locally_funded = funding == ROAD_REPAIR_LOCALLY_FUNDED;
             if (crown_funded || locally_funded) {
                 repair_base->stock[CC_GOOD_WOOD] -= 2;
                 repair_base->stock[CC_GOOD_STONE] -= 2;

@@ -215,3 +215,9 @@ two Wood, two Stone, and one Tool. The largest population still supplies labor.
 The original stock ranking resolves cases where both endpoints are supplied or
 both lack materials. Costs, dates, border rules, and work strength stay the same.
 Schemas through 59 retain the original stock ranking for historical replay.
+
+Kingdom crews in schema 60 apply the same preference within their own inhabited
+endpoints. A paid kit needs two Wood, two Stone, and 24 treasury coins; a local
+kit needs two Wood, two Stone, one Tool, and four food rations. The shared funding
+check drives both endpoint selection and execution. Existing repair priorities
+and historic schema behavior are preserved.
