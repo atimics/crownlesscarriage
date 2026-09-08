@@ -12546,7 +12546,7 @@ int main(int argc, char **argv)
 #endif
         if(sim.mine.phase != CC_MINE_NONE) {
             CcOverlayFlush();
-            DrawMineScene(&sim,local_target,message);
+            DrawMineScene(&sim,&local.agent,local_target,message);
             CcOverlayFlush();
         }
         ClientTouchEnd();

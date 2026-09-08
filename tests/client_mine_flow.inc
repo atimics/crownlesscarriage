@@ -26,6 +26,22 @@ static int RunMineInputRegression(void)
 #define MINE_CHECK(test,text) do { if(!(test)) { (void)CcJournalClose(&journal,&sim,error,sizeof(error)); (void)remove(path); return ClientRegressionFailure(text); } } while(0)
 #define MINE_INPUT() do { HandleInput(&journal,&sim,&selected,&situation,&view,&back,&local,(RenderTexture2D){0},(Rectangle){0},.2f,path,"",message,sizeof(message),feedback,sizeof(feedback),&feedback_age); ClientInputClearPressed(); } while(0)
 #define MINE_KEY(key) do { queued_key_press[key]=true; MINE_INPUT(); } while(0)
+    for(int phase=CC_MINE_YARD;phase<=CC_MINE_LEVEL;++phase) {
+        CcSim camera_sim=sim;
+        camera_sim.mine.phase=(CcMinePhase)phase;
+        camera_sim.mine.x=15;camera_sim.mine.y=5;
+        Camera3D camera=CcLocalMineCamera(&camera_sim);
+        Vector3 point={15,0,5};
+        Vector2 pixel=GetWorldToScreenEx(point,camera,1280,720);
+        Ray ray=GetScreenToWorldRayEx(pixel,camera,1280,720);
+        float distance=-ray.position.y/ray.direction.y;
+        Vector3 hit={ray.position.x+ray.direction.x*distance,0,ray.position.z+ray.direction.z*distance};
+        MINE_CHECK(camera.projection==CAMERA_PERSPECTIVE && fabsf(hit.x-point.x)+fabsf(hit.z-point.z)<.01f,
+            "Authored camera clicks must land on the same floor tile.");
+        Vector3 offset={camera.position.x-camera.target.x,camera.position.y-camera.target.y,camera.position.z-camera.target.z};
+        MINE_CHECK(offset.y>0 && fabsf(offset.z)>1,"Each view must show height and wall depth.");
+        if(phase==CC_MINE_LEVEL) MINE_CHECK(offset.y>fabsf(offset.z),"Dungeon camera must look mostly down.");
+    }
     ContextActionSet actions=BuildContextActions(&sim,&local,view,0,0);
     MINE_CHECK(actions.count==2 && actions.items[0].kind==CONTEXT_ACTION_VISIT_MINE,"Mine branch needs entry and continue cards.");
     Rectangle button=ContextActionBounds(0,2);

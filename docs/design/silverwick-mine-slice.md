@@ -2,7 +2,9 @@
 
 The Low Silver Pit branch lies on the Alderwatch–Silverwick road. Travel stops at the branch. Choose the left or right turn shown for the current direction, or continue along the road.
 
-The branch opens a small mine yard. The carriage stays beside the road. Pack Bread or Meat beside it, then walk north to the timber doorway. Use the doorway to enter Mine Mouth in an overhead view.
+The branch opens a small mine yard. The carriage stays beside the road. Pack Bread or Meat beside it, then walk north to the timber doorway. Use the doorway to enter Mine Mouth in a mostly overhead 3D view.
+
+Both places use the town renderer, world lighting, and character model. The yard has two fixed King's Quest style compositions, covering the carriage court and mine doorway. Each dungeon room has a fixed high camera with visible wall depth. Ground clicks use the camera for the current view.
 
 ## Controls
 
