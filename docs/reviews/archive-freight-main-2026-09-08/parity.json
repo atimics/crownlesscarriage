@@ -1,0 +1,20 @@
+{
+  "base_revision": "85bfb702ba233585d4e3359273f048de1cae7b2f",
+  "implementation_revision": "5ea1a6f",
+  "runs": [
+    {
+      "seed": "42",
+      "checkpoints": 41,
+      "existing_fields_equal": true,
+      "base_sha256": "181b15a4f6a5b4e4564459a7b0ef1b358d9765c37c4a69ecd00adf623cc7ac5e",
+      "current_sha256": "150488d923875c5241dd7233098700e89fef5e7577c67e08e437a5a57a07d924"
+    },
+    {
+      "seed": "0x5eed0001",
+      "checkpoints": 41,
+      "existing_fields_equal": true,
+      "base_sha256": "5d3713325de4f17f1cf7d43b6408c5b9f5a19c4f1bf60a0ba42507c3bbc0b81f",
+      "current_sha256": "6ea49ebbdfb62746114db6647df6bbbabe98ceca2cc99789da7f87d9c2a8d5af"
+    }
+  ]
+}
