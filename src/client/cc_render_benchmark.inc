@@ -1,4 +1,5 @@
 /* Render benchmark orchestration and validation belong to this interface. */
+_Static_assert(CC_MAX_MAPS <= 32, "Benchmark map catalogue needs a wider mask.");
 typedef struct CcRenderBenchmark {
     bool active;
     int32_t frames;
@@ -82,8 +83,7 @@ static void CcRenderBenchmarkPrepareWorld(const CcRenderBenchmark *benchmark, Cc
     if (benchmark->roadbook_network) {
         uint32_t catalogue_mask = 0U;
         for (int32_t map_index = 0;
-             map_index < sim->map_count && map_index < CC_MAX_MAPS &&
-             map_index < 32; ++map_index) {
+             map_index < sim->map_count && map_index < CC_MAX_MAPS; ++map_index) {
             sim->maps[map_index].owner_id = sim->player.id;
             catalogue_mask |= UINT32_C(1) << (uint32_t)map_index;
         }
