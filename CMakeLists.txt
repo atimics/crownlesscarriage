@@ -92,6 +92,7 @@ add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
     src/sim/cc_production.c
+    src/sim/cc_journey.c
     src/sim/cc_mine.c
     src/sim/cc_ponies.c
 )

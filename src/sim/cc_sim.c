@@ -1,4 +1,5 @@
 #include "sim/cc_sim.h"
+#include "sim/cc_journey_internal.h"
 #include "sim/cc_mine.h"
 #include "sim/cc_production.h"
 
@@ -39,8 +40,6 @@ static bool DragonIsAliveAndUncrowned(const CcSim *sim);
 static int32_t TakeAllianceGood(CcSim *sim, uint32_t mask, CcGood good,
                                 int32_t quantity);
 static CcId LatestLocalCause(const CcSim *sim, CcId location);
-static uint32_t RoadHouseSeed(const CcSim *sim, CcId route_id);
-static const char *GeneratedRoadHouseName(const CcSim *sim, CcId route_id);
 static const CcSettlement *Scriptorium(const CcSim *sim);
 static void AssignHistoryOffices(CcSim *sim, bool announce);
 static void GrowBanditCamp(CcBanditGroup *bandits);
@@ -4342,7 +4341,7 @@ void CcSimInitializeRoadSites(CcSim *sim)
         site->input_good = seed->input_good;
         site->output_good = seed->output_good;
         site->progress_milli = seed->kind == CC_ROAD_SITE_ROAD_HOUSE ?
-            300 + (int32_t)(RoadHouseSeed(sim, route->id) % 401U) :
+            300 + (int32_t)(CcJourneyRoadHouseSeed(sim, route->id) % 401U) :
             seed->progress_milli;
         site->side = seed->side;
         site->spur_length = seed->spur_length;
@@ -4356,7 +4355,7 @@ void CcSimInitializeRoadSites(CcSim *sim)
         site->home_settlement_id = site->progress_milli < 500 ?
             route->from_id : route->to_id;
         CopyName(site->name, seed->name != NULL ? seed->name :
-                 GeneratedRoadHouseName(sim, route->id));
+                 CcJourneyGeneratedRoadHouseName(sim, route->id));
     }
 }
 
@@ -17055,193 +17054,6 @@ static void InterruptJourney(CcSim *sim)
     sim->carriage.speed_milli_per_second = 0;
 }
 
-static int32_t JourneyCarriageSpeed(int32_t total_subticks)
-{
-    if (total_subticks <= 0) return 0;
-    const int32_t represented_route_millimetres = 52000;
-    return (int32_t)(((int64_t)represented_route_millimetres *
-                      CC_TRAVEL_GAME_MINUTES_PER_SECOND *
-                      CC_WORLD_TICKS_PER_SECOND) / total_subticks);
-}
-
-static int32_t JourneyPaceRate(CcJourneyPace pace)
-{
-    switch (pace) {
-        case CC_JOURNEY_PACE_CAREFUL: return 24;
-        case CC_JOURNEY_PACE_STEADY: return CC_TRAVEL_GAME_MINUTES_PER_SECOND;
-        case CC_JOURNEY_PACE_PUSH: return 38;
-    }
-    return CC_TRAVEL_GAME_MINUTES_PER_SECOND;
-}
-
-const char *CcJourneyPaceName(CcJourneyPace pace)
-{
-    switch (pace) {
-        case CC_JOURNEY_PACE_CAREFUL: return "CAREFUL";
-        case CC_JOURNEY_PACE_STEADY: return "STEADY";
-        case CC_JOURNEY_PACE_PUSH: return "PUSH";
-    }
-    return "STEADY";
-}
-
-static int32_t JourneyCarriageSpeedForPace(int32_t total_subticks,
-                                            CcJourneyPace pace)
-{
-    return JourneyCarriageSpeed(total_subticks) * JourneyPaceRate(pace) /
-        CC_TRAVEL_GAME_MINUTES_PER_SECOND;
-}
-
-static uint32_t RoadHouseSeed(const CcSim *sim, CcId route_id)
-{
-    uint32_t seed = sim != NULL ? sim->world_seed : 0U;
-    seed ^= (uint32_t)route_id;
-    seed ^= (uint32_t)(route_id >> 32U);
-    seed ^= seed >> 16U;
-    seed *= UINT32_C(0x7feb352d);
-    seed ^= seed >> 15U;
-    return seed;
-}
-
-static const char *GeneratedRoadHouseName(const CcSim *sim, CcId route_id)
-{
-    static const char *const names[] = {
-        "The Lantern and Pike",
-        "The Three Wheels",
-        "Ash Tree House",
-        "The Red Mile",
-        "Pilgrim's Rest",
-        "The Barrow Lantern",
-        "The Fox and Fir",
-        "The Broken Crown"
-    };
-    uint32_t seed = RoadHouseSeed(sim, route_id);
-    return names[seed % (sizeof(names) / sizeof(names[0]))];
-}
-
-const char *CcSimRoadHouseName(const CcSim *sim, CcId route_id)
-{
-    const CcRoadSite *site = CcSimRoadHouseSite(sim, route_id);
-    if (site != NULL) return site->name;
-    return GeneratedRoadHouseName(sim, route_id);
-}
-
-static int32_t RoadHouseTargetProgress(const CcSim *sim, CcId route_id)
-{
-    const CcRoadSite *site = CcSimRoadHouseSite(sim, route_id);
-    int32_t progress = site != NULL ? site->progress_milli :
-        300 + (int32_t)(RoadHouseSeed(sim, route_id) % 401U);
-    const CcRoute *route = CcSimRoute(sim, route_id);
-    CcId origin_id = sim != NULL && sim->journey.active ?
-        sim->journey.origin_id : sim != NULL ? sim->player.location_id : 0U;
-    if (route != NULL && origin_id == route->to_id) progress = 1000 - progress;
-    return progress;
-}
-
-int32_t CcSimRoadHouseProgressMilli(const CcSim *sim, CcId route_id,
-                                    int32_t journey_watch_count)
-{
-    if (journey_watch_count < 3) return 0;
-    int32_t target = RoadHouseTargetProgress(sim, route_id);
-    int32_t best_watch = 2;
-    int32_t best_distance = INT32_MAX;
-    for (int32_t watch = 2; watch < journey_watch_count; watch += 2) {
-        int32_t progress = watch * 1000 / journey_watch_count;
-        int32_t distance = progress > target ? progress - target :
-                                                target - progress;
-        if (distance < best_distance) {
-            best_watch = watch;
-            best_distance = distance;
-        }
-    }
-    return best_watch * 1000 / journey_watch_count;
-}
-
-int32_t CcSimRoadHouseDistanceMiles(const CcSim *sim, CcId route_id)
-{
-    const CcRoute *route = CcSimRoute(sim, route_id);
-    if (route == NULL) return 0;
-    int32_t route_miles = route->travel_days * 18 +
-        4 + (int32_t)(RoadHouseSeed(sim, route_id) % 9U);
-    int32_t progress = RoadHouseTargetProgress(sim, route_id);
-    return MaximumI32(1, (route_miles * progress + 500) / 1000);
-}
-
-CcMoney CcSimRoadHouseCost(const CcSim *sim, CcId route_id)
-{
-    return 4 + (CcMoney)(RoadHouseSeed(sim, route_id) % 5U);
-}
-
-int32_t CcSimJourneyWatchCount(const CcSim *sim)
-{
-    if (sim == NULL || !sim->journey.active ||
-        sim->journey.total_subticks <= 0) return 0;
-    return sim->journey.total_subticks / CC_WORLD_WATCH_SUBTICKS;
-}
-
-int32_t CcSimJourneyWatchNumber(const CcSim *sim)
-{
-    int32_t watch_count = CcSimJourneyWatchCount(sim);
-    if (watch_count <= 0) return 0;
-    if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
-        return MinimumI32(
-            watch_count,
-            sim->journey.elapsed_subticks / CC_WORLD_WATCH_SUBTICKS);
-    }
-    return MinimumI32(
-        watch_count,
-        sim->journey.elapsed_subticks / CC_WORLD_WATCH_SUBTICKS + 1);
-}
-
-CcJourneyStopKind CcSimJourneyStop(const CcSim *sim)
-{
-    if (sim == NULL || !sim->journey.active ||
-        sim->journey.phase != CC_JOURNEY_PHASE_RESTING ||
-        sim->journey.elapsed_subticks <= 0 ||
-        sim->journey.elapsed_subticks >= sim->journey.total_subticks ||
-        sim->journey.elapsed_subticks % CC_WORLD_WATCH_SUBTICKS != 0) {
-        return CC_JOURNEY_STOP_NONE;
-    }
-    int32_t completed_watch =
-        sim->journey.elapsed_subticks / CC_WORLD_WATCH_SUBTICKS;
-    return completed_watch % 2 == 0 ? CC_JOURNEY_STOP_OVERNIGHT :
-                                      CC_JOURNEY_STOP_MIDDAY;
-}
-
-bool CcSimJourneyRoadHouseAvailable(const CcSim *sim)
-{
-    if (CcSimJourneyStop(sim) != CC_JOURNEY_STOP_OVERNIGHT) return false;
-    int32_t watch_count = CcSimJourneyWatchCount(sim);
-    int32_t house_progress = CcSimRoadHouseProgressMilli(
-        sim, sim->journey.route_id, watch_count);
-    int32_t completed_watch =
-        sim->journey.elapsed_subticks / CC_WORLD_WATCH_SUBTICKS;
-    return completed_watch * 1000 / watch_count == house_progress;
-}
-
-int32_t CcSimJourneyEtaMinutes(const CcSim *sim)
-{
-    if (sim == NULL || !sim->journey.active ||
-        sim->journey.elapsed_subticks >= sim->journey.total_subticks) return 0;
-    int32_t remaining = sim->journey.total_subticks -
-                        sim->journey.elapsed_subticks;
-    int32_t pace_rate = JourneyPaceRate(sim->journey.pace);
-    int64_t world_subticks =
-        ((int64_t)remaining * CC_TRAVEL_GAME_MINUTES_PER_SECOND +
-         pace_rate - 1) / pace_rate;
-    int32_t first_boundary = sim->journey.elapsed_subticks /
-        CC_WORLD_WATCH_SUBTICKS + 1;
-    if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING &&
-        CcSimJourneyStop(sim) == CC_JOURNEY_STOP_OVERNIGHT) {
-        world_subticks += CC_WORLD_WATCH_SUBTICKS;
-    }
-    int32_t watch_count = CcSimJourneyWatchCount(sim);
-    for (int32_t watch = first_boundary; watch < watch_count; ++watch) {
-        if (watch % 2 == 0) world_subticks += CC_WORLD_WATCH_SUBTICKS;
-    }
-    return (int32_t)((world_subticks + CC_WORLD_MINUTE_SUBTICKS - 1) /
-                     CC_WORLD_MINUTE_SUBTICKS);
-}
-
 static int32_t HorseFeedRequired(int32_t travel_days)
 {
     return MaximumI32(1, (travel_days + 1) / 2);
@@ -17522,7 +17334,7 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         .origin_id = sim->player.location_id,
         .destination_id = destination->id,
         .speed_milli_per_second =
-            JourneyCarriageSpeedForPace(
+            CcJourneyCarriageSpeedForPace(
                 total_subticks, CC_JOURNEY_PACE_STEADY),
         .condition = sim->carriage.condition
     };
@@ -17789,7 +17601,7 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
         CC_TRAVEL_GAME_MINUTES_PER_SECOND;
     sim->carriage.mode = CC_CARRIAGE_MOVING;
     sim->carriage.speed_milli_per_second =
-        JourneyCarriageSpeedForPace(
+        CcJourneyCarriageSpeedForPace(
             sim->journey.total_subticks, sim->journey.pace);
     CreateJourneyTraffic(sim, &journey, outcome_event_id);
     SetError(error, error_capacity, "");
@@ -17875,7 +17687,7 @@ static bool ApplyJourneyPace(CcSim *sim, const CcCommand *command,
         return false;
     }
     sim->journey.pace = (CcJourneyPace)command->amount;
-    sim->carriage.speed_milli_per_second = JourneyCarriageSpeedForPace(
+    sim->carriage.speed_milli_per_second = CcJourneyCarriageSpeedForPace(
         sim->journey.total_subticks, sim->journey.pace);
     SetError(error, error_capacity, "");
     return true;
@@ -17933,7 +17745,7 @@ static void ResumeJourney(CcSim *sim)
     sim->clock.game_minutes_per_second =
         CC_TRAVEL_GAME_MINUTES_PER_SECOND;
     sim->carriage.mode = CC_CARRIAGE_MOVING;
-    sim->carriage.speed_milli_per_second = JourneyCarriageSpeedForPace(
+    sim->carriage.speed_milli_per_second = CcJourneyCarriageSpeedForPace(
         sim->journey.total_subticks, sim->journey.pace);
 }
 
@@ -18254,7 +18066,7 @@ void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks)
             sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) break;
         sim->clock.tick += 1U;
         int32_t clock_rate = CC_TRAVEL_GAME_MINUTES_PER_SECOND;
-        int32_t journey_rate = JourneyPaceRate(sim->journey.pace);
+        int32_t journey_rate = CcJourneyPaceRate(sim->journey.pace);
         sim->clock.game_minutes_per_second = clock_rate;
         sim->clock.minute_subticks += clock_rate;
         while (sim->clock.minute_subticks >= CC_WORLD_DAY_SUBTICKS) {
@@ -21704,7 +21516,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             int32_t expected_progress = (int32_t)(
                 ((int64_t)sim->journey.elapsed_subticks * 1000) /
                 sim->journey.total_subticks);
-            if ((sim->mine.phase != CC_MINE_NONE && sim->mine.return_speed != JourneyCarriageSpeedForPace(sim->journey.total_subticks,sim->journey.pace)) ||
+            if ((sim->mine.phase != CC_MINE_NONE && sim->mine.return_speed != CcJourneyCarriageSpeedForPace(sim->journey.total_subticks,sim->journey.pace)) ||
                 sim->carriage.mode != expected_mode ||
                 sim->carriage.route_id != sim->journey.route_id ||
                 sim->carriage.origin_id != sim->journey.origin_id ||
@@ -21715,7 +21527,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 sim->carriage.progress_milli != expected_progress ||
                 (sim->carriage.mode == CC_CARRIAGE_MOVING &&
                  sim->carriage.speed_milli_per_second !=
-                    JourneyCarriageSpeedForPace(
+                    CcJourneyCarriageSpeedForPace(
                         sim->journey.total_subticks,
                         sim->journey.pace)) ||
                 (sim->carriage.mode == CC_CARRIAGE_STOPPED &&
