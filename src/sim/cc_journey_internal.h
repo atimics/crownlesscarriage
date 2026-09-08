@@ -17,4 +17,22 @@ bool CcJourneyApplyCommand(CcSim *sim, const CcCommand *command,
     char *error, size_t error_capacity, CcJourneyRecordEvent record_event);
 void CcJourneyApplyWatchStrain(CcSim *sim);
 
+/* Core-owned services retain random, event, gossip, and discovery ordering.
+ * The command dispatcher supplies this complete, immutable table. */
+typedef struct {
+    CcJourneyRecordEvent record_event;
+    uint32_t (*next_random)(CcSim *sim);
+    CcCourier *(*courier)(CcSim *sim, CcId id);
+    CcKingdom *(*kingdom)(CcSim *sim, CcId id);
+    void (*exchange_gossip)(CcSim *sim, CcId carrier, CcId place,
+                            const char *speaker);
+    CcId (*latest_local_cause)(const CcSim *sim, CcId location);
+    void (*reveal_settlement_roads)(CcSim *sim, CcId settlement);
+    void (*reveal_journey_road)(CcSim *sim);
+} CcJourneyDepartureServices;
+
+bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
+    char *error, size_t error_capacity,
+    const CcJourneyDepartureServices *services);
+
 #endif
