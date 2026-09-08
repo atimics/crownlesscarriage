@@ -777,6 +777,18 @@ typedef struct CcFaction {
     int32_t support;
 } CcFaction;
 
+/* Read-only route geometry. Dispatch applies access, capacity and custody rules. */
+typedef struct {
+    CcId route_id;
+    CcId origin_id;
+    CcId destination_id;
+    int32_t origin_milli;
+    int32_t destination_milli;
+    int32_t travel_days;
+} CcFreightLeg;
+
+
+
 typedef enum CcShipmentStatus {
     CC_SHIPMENT_UNUSED,
     CC_SHIPMENT_TRAVELLING,
@@ -1889,6 +1901,10 @@ const char *CcFrontStageName(CcFrontStage stage);
 
 const CcSettlement *CcSimSettlement(const CcSim *sim, CcId id);
 CcSettlement *CcSimSettlementMutable(CcSim *sim, CcId id);
+bool CcSimFreightLeg(const CcSim *sim, CcId route_id,
+    CcId origin_id, CcId destination_id, CcFreightLeg *leg);
+int32_t CcSimFreightLegDays(const CcSim *sim, CcId route_id,
+    CcId origin_id, CcId destination_id);
 const CcRoute *CcSimRoute(const CcSim *sim, CcId id);
 const CcRoadSite *CcSimRoadSite(const CcSim *sim, CcId id);
 const CcRoadSite *CcSimRoadSiteAt(const CcSim *sim, int32_t index);

@@ -1879,6 +1879,45 @@ const char *CcDungeonReactionName(int32_t reaction)
     return "helpful for now";
 }
 
+static bool FreightEndpointProgress(const CcSim *sim, const CcRoute *route,
+                                    CcId endpoint_id, int32_t *progress)
+{
+    if (CcSimSettlement(sim, endpoint_id) != NULL) {
+        if (endpoint_id == route->from_id) { *progress = 0; return true; }
+        if (endpoint_id == route->to_id) { *progress = 1000; return true; }
+    }
+    const CcRoadSite *site = CcSimRoadSite(sim, endpoint_id);
+    if (site == NULL || site->route_id != route->id ||
+        site->progress_milli < 100 || site->progress_milli > 900) return false;
+    *progress = site->progress_milli;
+    return true;
+}
+
+bool CcSimFreightLeg(const CcSim *sim, CcId route_id, CcId origin_id,
+                     CcId destination_id, CcFreightLeg *leg)
+{
+    if (leg != NULL) *leg = (CcFreightLeg){0};
+    const CcRoute *route = CcSimRoute(sim, route_id);
+    int32_t origin = 0, destination = 0;
+    if (route == NULL || origin_id == destination_id ||
+        route->travel_days < 1 || route->travel_days > CC_SIM_MAX_ROUTE_DAYS ||
+        !FreightEndpointProgress(sim, route, origin_id, &origin) ||
+        !FreightEndpointProgress(sim, route, destination_id, &destination)) return false;
+    int32_t distance = origin > destination ? origin - destination : destination - origin;
+    int32_t days = (int32_t)(((int64_t)route->travel_days * distance + 999) / 1000);
+    if (days < 1) days = 1;
+    if (leg != NULL) *leg = (CcFreightLeg){route->id, origin_id, destination_id,
+        origin, destination, days};
+    return true;
+}
+
+int32_t CcSimFreightLegDays(const CcSim *sim, CcId route_id, CcId origin_id,
+                           CcId destination_id)
+{
+    CcFreightLeg leg;
+    return CcSimFreightLeg(sim, route_id, origin_id, destination_id, &leg) ? leg.travel_days : 0;
+}
+
 const CcRoute *CcSimRouteBetween(const CcSim *sim, CcId a, CcId b)
 {
     if (sim == NULL) return NULL;
@@ -9679,7 +9718,8 @@ static bool StartRoyalRepositioningLeg(CcSim *sim,
     carriage->target_id = target_id;
     carriage->mode = CC_ROYAL_CARRIAGE_REPOSITIONING;
     carriage->departure_day = sim->current_day;
-    carriage->arrival_day = sim->current_day + route->travel_days;
+    carriage->arrival_day = sim->current_day + CcSimFreightLegDays(
+        sim, route->id, carriage->location_id, next_hop_id);
     carriage->blocked_since_day = 0;
     ExchangeGossip(sim, carriage->id, carriage->location_id, "Carriage travelers");
     const CcSettlement *destination = CcSimSettlement(sim, next_hop_id);
@@ -9851,7 +9891,8 @@ static void UpdateShipments(CcSim *sim)
             shipment->destination_id = next_hop_id;
             shipment->route_id = route->id;
             shipment->departure_day = sim->current_day;
-            shipment->arrival_day = sim->current_day + route->travel_days;
+            shipment->arrival_day = sim->current_day + CcSimFreightLegDays(
+                sim, route->id, shipment->origin_id, shipment->destination_id);
             shipment->status = CC_SHIPMENT_TRAVELLING;
             carriage->route_id = route->id;
             carriage->destination_id = next_hop_id;
@@ -9997,7 +10038,8 @@ static void UpdateShipments(CcSim *sim)
                 shipment->destination_id = next_hop_id;
                 shipment->route_id = next_route->id;
                 shipment->departure_day = sim->current_day;
-                shipment->arrival_day = sim->current_day + next_route->travel_days;
+                shipment->arrival_day = sim->current_day + CcSimFreightLegDays(
+                    sim, next_route->id, shipment->origin_id, shipment->destination_id);
                 if (carriage != NULL) {
                     carriage->location_id = hop->id;
                     carriage->route_id = next_route->id;
@@ -10275,7 +10317,8 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
     shipment->good = good;
     shipment->quantity = quantity;
     shipment->departure_day = sim->current_day;
-    shipment->arrival_day = sim->current_day + route->travel_days;
+    shipment->arrival_day = sim->current_day + CcSimFreightLegDays(
+                sim, route->id, shipment->origin_id, shipment->destination_id);
     shipment->status = CC_SHIPMENT_TRAVELLING;
     if (royal) {
         carriage->route_id = route->id;
@@ -16397,7 +16440,8 @@ static void CreateJourneyTraffic(CcSim *sim,
         .good = good,
         .quantity = quantity,
         .departure_day = sim->current_day,
-        .arrival_day = sim->current_day + route->travel_days,
+        .arrival_day = sim->current_day + CcSimFreightLegDays(
+            sim, route->id, origin->id, destination->id),
         .status = CC_SHIPMENT_TRAVELLING
     };
     if (carriage != NULL) {
@@ -19848,11 +19892,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         const CcShipment *shipment = &sim->shipments[i];
         const CcRoute *shipment_route = CcSimRoute(sim, shipment->route_id);
-        bool route_connects = shipment_route != NULL &&
-            ((shipment_route->from_id == shipment->origin_id &&
-              shipment_route->to_id == shipment->destination_id) ||
-             (shipment_route->to_id == shipment->origin_id &&
-              shipment_route->from_id == shipment->destination_id));
+        CcFreightLeg shipment_leg;
+        bool route_connects = CcSimFreightLeg(sim, shipment->route_id,
+            shipment->origin_id, shipment->destination_id, &shipment_leg);
         bool timing_valid = shipment->status != CC_SHIPMENT_TRAVELLING ||
             (shipment->departure_day >= 1 &&
              shipment->departure_day <= sim->current_day &&
@@ -19860,7 +19902,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
              shipment_route != NULL &&
              (int64_t)shipment->arrival_day ==
                  (int64_t)shipment->departure_day +
-                     (int64_t)shipment_route->travel_days);
+                     (int64_t)shipment_leg.travel_days);
         bool capacity_valid = shipment_route != NULL &&
             shipment->good >= 0 && shipment->good < CC_GOOD_COUNT &&
             shipment->quantity >= 1 &&
@@ -19910,16 +19952,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             bool blocked = carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED;
             bool waiting_capacity = carriage->mode ==
                 CC_ROYAL_CARRIAGE_WAITING_CAPACITY;
-            bool route_connects = route != NULL && destination != NULL &&
-                ((route->from_id == carriage->location_id &&
-                  route->to_id == carriage->destination_id) ||
-                 (route->to_id == carriage->location_id &&
-                  route->from_id == carriage->destination_id));
+            CcFreightLeg carriage_leg = {0};
+            bool route_connects = destination != NULL && CcSimFreightLeg(sim,
+                carriage->route_id, carriage->location_id, carriage->destination_id, &carriage_leg);
             bool trip_timing = carriage->departure_day >= 1 &&
                 carriage->departure_day <= sim->current_day &&
                 carriage->arrival_day > sim->current_day && route != NULL &&
                 (int64_t)carriage->arrival_day ==
-                    (int64_t)carriage->departure_day + route->travel_days;
+                    (int64_t)carriage->departure_day + carriage_leg.travel_days;
             bool mode_valid =
                 (idle && carriage->active_shipment_id == 0U &&
                  carriage->route_id == 0U &&
