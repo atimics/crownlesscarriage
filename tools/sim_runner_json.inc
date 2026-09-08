@@ -186,7 +186,7 @@ static void JsonRetainedHistory(const CcSim *sim)
 static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t year,
     const char *fixture, const char *dragon_policy, const CcNutritionAccounting *nutrition,
     const CcSmithyAccounting *smithy, const CcRoadProductionAccounting *sites,
-    const int32_t *open_days)
+    const RoadObservation *roads)
 {
     CcHungerSnapshot hunger = CcSimHungerSnapshot(sim);
     printf("{\"protocol\":6,\"fixture\":"); JsonString(fixture);
@@ -266,12 +266,14 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         const CcRoute *route = &sim->routes[i];
         printf("%s{\"id\":\"%" PRIu64 "\",\"condition\":%d,\"closed\":%s,\"open_days\":%d,\"closed_days\":%d,\"closure_reason\":null",
             i ? "," : "", route->id, route->condition, route->closed ? "true" : "false",
-            open_days[i], sim->current_day - start_day - open_days[i]);
+            roads[i].open_days, sim->current_day - start_day - roads[i].open_days);
         printf(",\"from_id\":\"%" PRIu64 "\",\"to_id\":\"%" PRIu64 "\",\"travel_days\":%d,\"capacity\":%d",
             route->from_id, route->to_id, route->travel_days, route->capacity);
         printf(",\"context\":"); JsonRoadContext(sim, route);
         printf(",\"observation\":{\"semantics\":\"run_interval\",\"start_day_exclusive\":%d,\"end_day_inclusive\":%d,\"sampling\":\"after_daily_advance\"}",
             start_day, sim->current_day);
+        printf(",\"outage\":{\"semantics\":\"run_interval_daily_samples\",\"current_closed_days\":%d,\"longest_closed_days\":%d,\"closed_inhabited_days\":%d}",
+            roads[i].current_closed_days, roads[i].longest_closed_days, roads[i].closed_inhabited_days);
         printf(",\"recovery\":"); JsonRoadRecovery(sim, route->id); putchar('}');
     }
     printf("],\"carriages\":[");

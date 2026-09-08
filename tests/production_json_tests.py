@@ -38,6 +38,8 @@ with tempfile.TemporaryDirectory() as directory:
                 assert route['observation']['start_day_exclusive'] == 731
                 assert route['observation']['end_day_inclusive'] == 731
                 assert route['open_days'] == route['closed_days'] == 0
+                assert route['outage'] == {'semantics': 'run_interval_daily_samples', 'current_closed_days': 0,
+                    'longest_closed_days': 0, 'closed_inhabited_days': 0}
             assert loaded['accounting_start_day'] == 731
             assert loaded['dragon_policy'] == 'loaded-save'
             assert all(sum(site['input']) == 0 for site in loaded['sites'])
@@ -63,6 +65,12 @@ with tempfile.TemporaryDirectory() as directory:
                 assert route['observation'] == {'semantics': 'run_interval', 'start_day_exclusive': 1,
                     'end_day_inclusive': row['day'], 'sampling': 'after_daily_advance'}
                 assert route['open_days'] + route['closed_days'] == row['day'] - 1
+                outage = route['outage']
+                assert 0 <= outage['current_closed_days'] <= outage['longest_closed_days'] <= route['closed_days']
+                assert 0 <= outage['closed_inhabited_days'] <= route['closed_days']
+                if not route['closed']:
+                    assert outage['current_closed_days'] == 0
+
         assert all(route['open_days'] + route['closed_days'] == 730 for route in rows[-1]['routes'])
         assert all(route['recovery']['semantics'] == 'evaluated_plan_snapshot' for row in rows for route in row['routes'])
         for start, end in zip(rows[0]['sites'], rows[-1]['sites']):
@@ -109,3 +117,8 @@ with tempfile.TemporaryDirectory() as directory:
     assert len(manifest['runs']) == 4
     assert all(row['repeat_match'] for row in manifest['runs'])
 print('Production JSON: repeatability, save/text parity, custody accounting and capture manifest passed')
+
+# Report spacing preserves daily observations between emitted checkpoints.
+annual = [json.loads(line) for line in run('--seed', '42', '--years', '4', '--json').splitlines()]
+sparse = [json.loads(line) for line in run('--seed', '42', '--years', '4', '--json', '--report-every', '3').splitlines()]
+assert sparse == [annual[index] for index in [0, 1, 3, 4]]
