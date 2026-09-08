@@ -211,12 +211,10 @@ static void PrintSummary(const CcSim *sim, bool detail)
             sim->goblins.lair_coins, offering.relics, offering.food_rations,
             sim->goblins.lair_stock[CC_GOOD_TOOLS], sim->goblins.lair_stock[CC_GOOD_WEAPONS],
             offering.eggs);
-        const char *offering_names[] = {"invalid", "members", "devotion", "cohesion",
-            "coins", "relics", "food", "tools", "weapons"};
         bool offering_separator = false;
-        for (unsigned bit = 0; bit < sizeof(offering_names) / sizeof(offering_names[0]); ++bit) {
+        for (unsigned bit = 0; bit < sizeof(RITUAL_BLOCK_NAMES) / sizeof(RITUAL_BLOCK_NAMES[0]); ++bit) {
             if ((offering.blocked & (UINT32_C(1) << bit)) == 0U) continue;
-            (void)printf("%s%s", offering_separator ? "," : "", offering_names[bit]);
+            (void)printf("%s%s", offering_separator ? "," : "", RITUAL_BLOCK_NAMES[bit]);
             offering_separator = true;
         }
         (void)puts(offering_separator ? "" : "ready");
@@ -232,12 +230,10 @@ static void PrintSummary(const CcSim *sim, bool detail)
             (launch.blocked & CC_CAMPAIGN_PREPARATION_BLOCKS) == 0U ? 1 : 0,
             launch.food_rations, launch.tools, launch.weapons,
             launch.patron_id, launch.hero_id, launch.origin_id);
-        const char *launch_names[] = {"invalid", "active", "cooldown", "dragon_slain",
-            "pledges", "dragon_age", "food", "tools", "weapons", "patron", "hero", "seat"};
         bool launch_separator = false;
-        for (unsigned bit = 0; bit < sizeof(launch_names) / sizeof(launch_names[0]); ++bit) {
+        for (unsigned bit = 0; bit < sizeof(CAMPAIGN_BLOCK_NAMES) / sizeof(CAMPAIGN_BLOCK_NAMES[0]); ++bit) {
             if ((launch.blocked & (UINT32_C(1) << bit)) == 0U) continue;
-            (void)printf("%s%s", launch_separator ? "," : "", launch_names[bit]);
+            (void)printf("%s%s", launch_separator ? "," : "", CAMPAIGN_BLOCK_NAMES[bit]);
             launch_separator = true;
         }
         (void)puts(launch_separator ? "" : "ready");

@@ -93,6 +93,54 @@ static void JsonRoadRecovery(const CcSim *sim, CcId route_id)
     putchar('}');
 }
 
+static const char *const CAMPAIGN_BLOCK_NAMES[] = {
+    "invalid", "active", "cooldown", "dragon_slain", "pledges", "dragon_age",
+    "food", "tools", "weapons", "patron", "hero", "seat"};
+static const char *const RITUAL_BLOCK_NAMES[] = {
+    "invalid", "members", "devotion", "cohesion", "coins", "relics", "food", "tools", "weapons"};
+
+static void JsonPlanBlocks(uint32_t blocked, const char *const *names, size_t count)
+{
+    printf("\"blocked_mask\":%" PRIu32 ",\"blocked_reasons\":[", blocked);
+    bool separator = false;
+    for (size_t bit = 0; bit < count; ++bit) {
+        if ((blocked & (UINT32_C(1) << bit)) == 0U) continue;
+        if (separator) putchar(',');
+        JsonString(names[bit]); separator = true;
+    }
+    putchar(']');
+}
+
+static void JsonCampaignPlan(const CcSim *sim)
+{
+    CcCampaignLaunchPlan plan = CcSimCampaignLaunchPlan(sim);
+    printf("{\"semantics\":\"held_supply_plan_snapshot\",\"policy_intent\":null,");
+    JsonPlanBlocks(plan.blocked, CAMPAIGN_BLOCK_NAMES, sizeof(CAMPAIGN_BLOCK_NAMES) / sizeof(CAMPAIGN_BLOCK_NAMES[0]));
+    printf(",\"phase\":%d,\"attempts_lifetime\":%d,\"cooldown_days\":%d,\"pledged_mask\":%" PRIu32
+           ",\"pledged_count\":%d,\"prepare_eligible\":%s,\"food_rations\":%d,\"tools\":%d,\"weapons\":%d",
+        (int)sim->dragon_campaign.phase, sim->dragon_campaign.attempts,
+        sim->dragon_campaign.cooldown_days, plan.pledged_mask, plan.pledged_count,
+        (plan.blocked & CC_CAMPAIGN_PREPARATION_BLOCKS) == 0U ? "true" : "false",
+        plan.food_rations, plan.tools, plan.weapons);
+    printf(",\"patron_id\":\"%" PRIu64 "\",\"hero_id\":\"%" PRIu64 "\",\"origin_id\":\"%" PRIu64 "\"}",
+        plan.patron_id, plan.hero_id, plan.origin_id);
+}
+
+static void JsonRitualPlan(const CcSim *sim)
+{
+    CcRitualOfferingPlan plan = CcSimRitualOfferingPlan(sim);
+    printf("{\"semantics\":\"held_offering_plan_snapshot\",");
+    JsonPlanBlocks(plan.blocked, RITUAL_BLOCK_NAMES, sizeof(RITUAL_BLOCK_NAMES) / sizeof(RITUAL_BLOCK_NAMES[0]));
+    printf(",\"cult_id\":\"%" PRIu64 "\",\"lair_id\":\"%" PRIu64 "\",\"phase\":%d,\"days_remaining\":%d,\"afterdeath_days\":%d,\"tribute_phase\":%d",
+        sim->goblins.id, sim->goblins.lair_settlement_id, (int)sim->goblins.dragon_seed_phase,
+        sim->goblins.dragon_seed_days_remaining, sim->dragon.afterdeath_days, (int)sim->goblins.tribute_phase);
+    printf(",\"members\":%d,\"devotion\":%d,\"cohesion\":%d,\"coins\":%" PRId64
+           ",\"relics\":%d,\"food_rations\":%d,\"tools\":%d,\"weapons\":%d,\"planned_eggs\":%d,\"existing_eggs\":%d}",
+        sim->goblins.members, sim->goblins.devotion, sim->goblins.cohesion, sim->goblins.lair_coins,
+        plan.relics, plan.food_rations, sim->goblins.lair_stock[CC_GOOD_TOOLS],
+        sim->goblins.lair_stock[CC_GOOD_WEAPONS], plan.eggs, sim->dragon.egg_count);
+}
+
 static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t year,
     const char *fixture, const char *dragon_policy, const CcNutritionAccounting *nutrition,
     const CcSmithyAccounting *smithy, const CcRoadProductionAccounting *sites,
@@ -106,6 +154,8 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         (int)sim->dragon.life_stage, (int)sim->dragon.activity, sim->dragon.body_condition,
         sim->dragon.crown_strength, sim->dragon.egg_count);
     printf(",\"threats\":"); JsonThreatSnapshot(sim);
+    printf(",\"campaign_launch\":"); JsonCampaignPlan(sim);
+    printf(",\"ritual_offering\":"); JsonRitualPlan(sim);
     printf(",\"world_seed\":%" PRIu32 ",\"schema\":%" PRIu32 ",\"generator\":%" PRIu32
            ",\"accounting_start_day\":%d,\"elapsed_years\":%d,\"day\":%d,\"state_hash\":\"%016" PRIx64 "\",\"goods\":[",
         sim->world_seed, sim->schema_version, sim->generator_version, start_day, year, sim->current_day, CcSimHash(sim));

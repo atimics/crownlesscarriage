@@ -30,6 +30,8 @@ with tempfile.TemporaryDirectory() as directory:
             loaded = json.loads(run('--load', str(root / f'{name}.ccsave'), '--years', '0', '--json'))
             assert loaded['state_hash'] == rows[-1]['state_hash']
             assert loaded['threats'] == rows[-1]['threats']
+            assert loaded['campaign_launch'] == rows[-1]['campaign_launch']
+            assert loaded['ritual_offering'] == rows[-1]['ritual_offering']
             assert loaded['accounting_start_day'] == 731
             assert loaded['dragon_policy'] == 'loaded-save'
             assert all(sum(site['input']) == 0 for site in loaded['sites'])
@@ -71,6 +73,14 @@ with tempfile.TemporaryDirectory() as directory:
     assert controlled['dragon']['body_condition'] == 0 and controlled['dragon']['crown_strength'] == 0
     assert controlled['dragon']['eggs'] == natural['dragon']['eggs']
     assert controlled['state_hash'] != natural['state_hash']
+    # The deliberate slain policy adds exactly its evaluated campaign gate.
+    slain_gate = 1 << 3
+    natural_plan = natural['campaign_launch']
+    controlled_plan = controlled['campaign_launch']
+    assert controlled_plan['blocked_mask'] == natural_plan['blocked_mask'] | slain_gate
+    assert controlled_plan['blocked_reasons'] == ['dragon_slain', *natural_plan['blocked_reasons']]
+    controlled_plan['blocked_mask'] &= ~slain_gate
+    controlled_plan['blocked_reasons'].remove('dragon_slain')
     for field in ['dragon', 'dragon_policy', 'state_hash']:
         natural.pop(field)
         controlled.pop(field)

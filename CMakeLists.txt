@@ -1368,6 +1368,18 @@ if(BUILD_TESTING)
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/road_recovery_json_tests.py
                          $<TARGET_FILE:road_recovery_json_fixture>)
+        add_executable(campaign_json_fixture tests/transition_json_fixture.c)
+        target_link_libraries(campaign_json_fixture PRIVATE crownless_persistence)
+        cc_strict_warnings(campaign_json_fixture)
+        add_executable(ritual_json_fixture tests/transition_json_fixture.c)
+        target_compile_definitions(ritual_json_fixture PRIVATE CC_RITUAL_JSON_FIXTURE)
+        target_link_libraries(ritual_json_fixture PRIVATE crownless_persistence)
+        cc_strict_warnings(ritual_json_fixture)
+        add_test(NAME transition_plan_json
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/transition_json_tests.py
+                         $<TARGET_FILE:campaign_json_fixture>
+                         $<TARGET_FILE:ritual_json_fixture>)
         add_test(NAME production_json_capture
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/production_json_tests.py
