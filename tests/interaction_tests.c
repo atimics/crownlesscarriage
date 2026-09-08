@@ -5,6 +5,37 @@
 #define CHECK(test) do { if (!(test)) { fprintf(stderr, "line %d: %s\n", __LINE__, #test); return 1; } } while (0)
 int main(void)
 {
+    /* Road signs share an anchor but keep separate pointer regions. */
+    CcInteractionLabelRect viewport = {12, 88, 1016, 420};
+    CcInteractionLabelRect labels[CC_INTERACTION_CAPACITY] = {0};
+    for (int32_t i = 0; i < 8; ++i) {
+        CHECK(CcInteractionPlaceLabel((CcInteractionLabelRect){200, 280, 220, 36},
+            viewport, labels, i, &labels[i]));
+        CHECK(labels[i].x >= viewport.x && labels[i].y >= viewport.y);
+        CHECK(labels[i].x + labels[i].width <= viewport.x + viewport.width);
+        CHECK(labels[i].y + labels[i].height <= viewport.y + viewport.height);
+        for (int32_t j = 0; j < i; ++j) {
+            CHECK(labels[i].y >= labels[j].y + labels[j].height + 4 ||
+                  labels[j].y >= labels[i].y + labels[i].height + 4);
+        }
+    }
+    CcInteractionLabelRect edge;
+    CHECK(CcInteractionPlaceLabel((CcInteractionLabelRect){-100, -100, 400, 36},
+        viewport, NULL, 0, &edge));
+    CHECK(edge.x == viewport.x && edge.y == viewport.y);
+    CHECK(CcInteractionPlaceLabel((CcInteractionLabelRect){2000, 2000, 400, 36},
+        viewport, NULL, 0, &edge));
+    CHECK(edge.x + edge.width == viewport.x + viewport.width);
+    CHECK(edge.y + edge.height == viewport.y + viewport.height);
+    /* A full scene falls back to the corresponding action card. */
+    CcInteractionLabelRect full = {12, 88, 1016, 420};
+    CHECK(!CcInteractionPlaceLabel((CcInteractionLabelRect){200, 280, 220, 36},
+        viewport, &full, 1, &edge));
+    CHECK(edge.width == 0);
+    CHECK(!CcInteractionPlaceLabel((CcInteractionLabelRect){200, 280, 2000, 36},
+        viewport, NULL, 0, &edge));
+    CHECK(!CcInteractionPlaceLabel((CcInteractionLabelRect){NAN, 280, 220, 36},
+        viewport, NULL, 0, &edge));
     CcInteractionPlan plan = {.count = 2, .targets = {
         {.key = {1, 20, CC_INTERACTION_PERSON}, .visible = true, .available = true,
          .left = 10, .right = 40, .top = 10, .bottom = 80, .camera_distance = 8,

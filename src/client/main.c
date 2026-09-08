@@ -9435,11 +9435,11 @@ static CcMusicContext LocalMusicContext(const CcSim *sim, const LocalState *loca
 
 static Rectangle LocalViewportBounds(void)
 {
-    Rectangle bounds = CcLocalViewportBounds(GetScreenWidth(), GetScreenHeight());
+    Rectangle bounds = CcLocalViewportBounds(ContextViewportWidth(), ContextViewportHeight());
     if (adventure_preferences != NULL) {
-        float available = (float)GetScreenHeight() - 200.0f;
-        float scale = fminf(((float)GetScreenWidth() - 20.0f) / 630.0f, available / 320.0f);
-        bounds = (Rectangle){((float)GetScreenWidth() - 630.0f * scale) * 0.5f,
+        float available = (float)ContextViewportHeight() - 200.0f;
+        float scale = fminf(((float)ContextViewportWidth() - 20.0f) / 630.0f, available / 320.0f);
+        bounds = (Rectangle){((float)ContextViewportWidth() - 630.0f * scale) * 0.5f,
             88.0f, 630.0f * scale, 320.0f * scale};
     }
     return bounds;

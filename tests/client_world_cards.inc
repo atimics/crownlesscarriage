@@ -31,6 +31,16 @@ static bool WorldCardPoint(CcSim *sim, LocalState *local, ClientView view,
         chosen->left = 490; chosen->right = 510; chosen->top = 290; chosen->bottom = 310;
         chosen->camera_distance = 8;
         client_test_pointer = (Vector2){500, 300};
+        if (chosen->key.kind == CC_INTERACTION_ACTION) {
+            Rectangle labels[CC_INTERACTION_CAPACITY] = {0};
+            WorldActionLabelLayout(local, labels);
+            int32_t chosen_index = (int32_t)(chosen - local->interactions.targets);
+            Rectangle label = labels[chosen_index];
+            if (label.width <= 0) return false;
+            client_test_pointer = (Vector2){label.x + label.width * 0.5f,
+                label.y + label.height * 0.5f};
+            if (WorldActionPointerTarget(local, client_test_pointer) != chosen) return false;
+        }
     }
     queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
     return true;

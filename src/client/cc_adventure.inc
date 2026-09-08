@@ -797,20 +797,45 @@ static bool HandleAdventurePause(LocalState *local, ClientView *view, ClientView
     return true;
 }
 
-static Rectangle WorldActionLabelBounds(const CcInteractionTarget *target)
+static Rectangle LocalViewportBounds(void);
+
+static void WorldActionLabelLayout(const LocalState *local,
+                                   Rectangle labels[CC_INTERACTION_CAPACITY])
 {
-    int width = CcOverlayMeasureText(target->name, AdventureTextSize(14)) + 20;
-    float x = (target->left + target->right) * 0.5f;
-    float left = fmaxf(12, fminf(x - (float)width * 0.5f, (float)GetScreenWidth() - (float)width - 12));
-    return (Rectangle){left, target->top - 33, (float)width, 28};
+    CcInteractionLabelRect placed[CC_INTERACTION_CAPACITY] = {0};
+    Rectangle scene = LocalViewportBounds();
+    CcInteractionLabelRect viewport = {
+        scene.x + 12, scene.y + 12, scene.width - 24, scene.height - 24};
+    int32_t count = 0;
+    float height = (float)AdventureTextSize(14) + 14.0f;
+    for (int32_t i = 0; i < CC_INTERACTION_CAPACITY; ++i) labels[i] = (Rectangle){0};
+    /* Action signs take space first; temporary focus details follow. */
+    for (int pass = 0; pass < 2; ++pass) {
+        for (int32_t i = 0; i < local->interactions.count; ++i) {
+            const CcInteractionTarget *target = &local->interactions.targets[i];
+            if (!target->visible ||
+                (target->key.kind == CC_INTERACTION_ACTION) != (pass == 0)) continue;
+            float width = (float)CcOverlayMeasureText(target->name, AdventureTextSize(14)) + 20;
+            CcInteractionLabelRect desired = {
+                (target->left + target->right - width) * 0.5f,
+                target->top - height - 5, width, height};
+            CcInteractionLabelRect label;
+            if (CcInteractionPlaceLabel(desired, viewport, placed, count, &label)) {
+                placed[count++] = label;
+                labels[i] = (Rectangle){label.x, label.y, label.width, label.height};
+            }
+        }
+    }
 }
 
 static const CcInteractionTarget *WorldActionPointerTarget(const LocalState *local, Vector2 mouse)
 {
+    Rectangle labels[CC_INTERACTION_CAPACITY] = {0};
+    WorldActionLabelLayout(local, labels);
     for (int32_t i = 0; i < local->interactions.count; ++i) {
         const CcInteractionTarget *target = &local->interactions.targets[i];
         if (target->key.kind == CC_INTERACTION_ACTION && target->visible &&
-            CheckCollisionPointRec(mouse, WorldActionLabelBounds(target))) return target;
+            labels[i].width > 0 && CheckCollisionPointRec(mouse, labels[i])) return target;
     }
     return CcInteractionPick(&local->interactions, mouse.x, mouse.y);
 }
@@ -836,6 +861,8 @@ static void DrawAdventureFocus(const CcSim *sim, const LocalState *local, Client
     if (hover != NULL) SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
     else SetMouseCursor(MOUSE_CURSOR_DEFAULT);
     bool hints = adventure_preferences == NULL || adventure_preferences->focus_hints;
+    Rectangle labels[CC_INTERACTION_CAPACITY] = {0};
+    WorldActionLabelLayout(local, labels);
     for (int32_t i = 0; i < local->interactions.count; ++i) {
         const CcInteractionTarget *target = &local->interactions.targets[i];
         if (!target->visible) continue;
@@ -846,7 +873,8 @@ static void DrawAdventureFocus(const CcSim *sim, const LocalState *local, Client
             DrawRectangleRoundedLinesEx(outline, 0.12f, 4, 2.0f, target->available ? CC_GOLD : MUTED);
         } else if (hints) DrawCircle((int)x, (int)target->top - 6, 3, Fade(CC_GOLD, 0.85f));
         if (selected || target->key.kind == CC_INTERACTION_ACTION) {
-            Rectangle label = WorldActionLabelBounds(target);
+            Rectangle label = labels[i];
+            if (label.width <= 0) continue;
             DrawRectangleRec(label, PANEL_DEEP);
             CcOverlayDrawText(target->name, (int)label.x + 10, (int)label.y + 6, AdventureTextSize(14), INK);
         }
