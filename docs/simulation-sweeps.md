@@ -108,3 +108,19 @@ The metrics also include political and faction exposure:
 
 Use `tools/analyze_sweep.py` for group comparisons and
 `tools/plot_archetypes.py` for report charts.
+
+## Roadside recovery diagnostics
+
+`crownless_sim_runner --detail` emits one `roadside_recovery` snapshot per route.
+The snapshot uses the same `CcSimRoadRecoveryPlan` that the daily recovery code
+executes. It identifies the route, endpoints, chosen labor base and supplier,
+work date, available and required people/materials, planned work, and every
+unmet gate. `blocked=ready` means this roadside effort can execute at that exact
+snapshot. Fields set to `-1` are unavailable because the route or endpoint is
+missing. Entity IDs of `0` are unavailable.
+
+These are engine inspection records. They describe communal roadside recovery;
+kingdom-funded repairs, routine upkeep, and recolonization have their own rules.
+An annual endpoint can differ from the next work day's state because production,
+trade, and other repairs run before the recovery decision. The report identifies
+snapshot gates; activity counts require interval accounting.

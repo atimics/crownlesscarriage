@@ -13976,43 +13976,75 @@ static int32_t RouteRecoveryScore(const CcSim *sim, const CcRoute *route,
            (100 - route->condition);
 }
 
-static void AdvanceRoadsideRecovery(CcSim *sim, CcRoute *route)
+CcRoadRecoveryPlan CcSimRoadRecoveryPlan(const CcSim *sim, CcId route_id)
 {
-    if (sim == NULL || route == NULL || !route->closed ||
-        (CcSimRouteCrossesWarBorder(sim, route->id) &&
-         !route->smuggler_route) || sim->current_day % 112 != 0) return;
-    CcSettlement *from = CcSimSettlementMutable(sim, route->from_id);
-    CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
-    if (from == NULL || to == NULL || CcSettlementIsAbandoned(from) ||
-        CcSettlementIsAbandoned(to)) return;
-
+    CcRoadRecoveryPlan plan = {.route_id = route_id, .population = -1,
+        .food_rations = -1, .wood = -1, .stone = -1, .tools = -1,
+        .effort = -1, .people_used = -1, .next_work_day = -1};
+    const CcRoute *route = sim != NULL ? CcSimRoute(sim, route_id) : NULL;
+    if (route == NULL) {
+        plan.blocked = CC_ROAD_RECOVERY_INVALID;
+        return plan;
+    }
+    plan.next_work_day = ((int64_t)sim->current_day + 111) / 112 * 112;
+    if (!route->closed) plan.blocked |= CC_ROAD_RECOVERY_OPEN;
+    if (CcSimRouteCrossesWarBorder(sim, route_id) && !route->smuggler_route)
+        plan.blocked |= CC_ROAD_RECOVERY_WAR;
+    if (sim->current_day % 112 != 0) plan.blocked |= CC_ROAD_RECOVERY_CALENDAR;
+    const CcSettlement *from = CcSimSettlement(sim, route->from_id);
+    const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+    if (from == NULL || to == NULL) {
+        plan.blocked |= CC_ROAD_RECOVERY_INVALID;
+        return plan;
+    }
+    if (CcSettlementIsAbandoned(from) || CcSettlementIsAbandoned(to))
+        plan.blocked |= CC_ROAD_RECOVERY_ABANDONED;
     int32_t distress = MaximumI32(from->hunger, to->hunger);
-    CcSettlement *labor_base = from->population >= to->population ?
+    const CcSettlement *labor_base = from->population >= to->population ?
                                from : to;
-    CcSettlement *supplier =
+    const CcSettlement *supplier =
         NutritionRations(from->stock, CC_NUTRITION_CIVILIAN) +
             from->stock[CC_GOOD_TOOLS] + from->stock[CC_GOOD_WOOD] +
             from->stock[CC_GOOD_STONE] >=
         NutritionRations(to->stock, CC_NUTRITION_CIVILIAN) +
             to->stock[CC_GOOD_TOOLS] + to->stock[CC_GOOD_WOOD] +
             to->stock[CC_GOOD_STONE] ? from : to;
-    if (labor_base->population < 220 ||
-        NutritionRations(supplier->stock, CC_NUTRITION_CIVILIAN) < 4 ||
-        supplier->stock[CC_GOOD_WOOD] < 2 ||
-        supplier->stock[CC_GOOD_STONE] < 2 ||
-        supplier->stock[CC_GOOD_TOOLS] < 1) return;
+    plan.labor_base_id = labor_base->id;
+    plan.supplier_id = supplier->id;
+    plan.population = labor_base->population;
+    plan.food_rations = NutritionRations(supplier->stock, CC_NUTRITION_CIVILIAN);
+    plan.wood = supplier->stock[CC_GOOD_WOOD];
+    plan.stone = supplier->stock[CC_GOOD_STONE];
+    plan.tools = supplier->stock[CC_GOOD_TOOLS];
+    plan.effort = 6 + distress / 20 + (route->smuggler_route ? 1 : 0);
+    plan.people_used = MaximumI32(1, labor_base->population / 500);
+    if (plan.population < 220) plan.blocked |= CC_ROAD_RECOVERY_PEOPLE;
+    if (plan.food_rations < 4) plan.blocked |= CC_ROAD_RECOVERY_FOOD;
+    if (plan.wood < 2) plan.blocked |= CC_ROAD_RECOVERY_WOOD;
+    if (plan.stone < 2) plan.blocked |= CC_ROAD_RECOVERY_STONE;
+    if (plan.tools < 1) plan.blocked |= CC_ROAD_RECOVERY_TOOLS;
+    return plan;
+}
+
+static void AdvanceRoadsideRecovery(CcSim *sim, CcRoute *route)
+{
+    if (sim == NULL || route == NULL || !route->closed || sim->current_day % 112 != 0)
+        return;
+    CcRoadRecoveryPlan plan = CcSimRoadRecoveryPlan(sim, route->id);
+    if (plan.blocked != 0U) return;
+    CcSettlement *from = CcSimSettlementMutable(sim, route->from_id);
+    CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
+    CcSettlement *labor_base = CcSimSettlementMutable(sim, plan.labor_base_id);
+    CcSettlement *supplier = CcSimSettlementMutable(sim, plan.supplier_id);
+    if (from == NULL || to == NULL || labor_base == NULL || supplier == NULL) return;
     (void)CcNutritionConsume(
         supplier->stock, CC_NUTRITION_CIVILIAN,
         4 * CC_NUTRITION_PER_RATION);
     supplier->stock[CC_GOOD_WOOD] -= 2;
     supplier->stock[CC_GOOD_STONE] -= 2;
     supplier->stock[CC_GOOD_TOOLS] -= 1;
-    int32_t effort = 6 + distress / 20 +
-                     (route->smuggler_route ? 1 : 0);
-    route->condition = ClampI32(route->condition + effort, 0, 100);
-    labor_base->population = MaximumI32(
-        0, labor_base->population - MaximumI32(1,
-        labor_base->population / 500));
+    route->condition = ClampI32(route->condition + plan.effort, 0, 100);
+    labor_base->population = MaximumI32(0, labor_base->population - plan.people_used);
     if (route->condition < 45) return;
 
     route->closed = false;

@@ -1904,6 +1904,38 @@ int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimActiveFrontCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
 CcHungerSnapshot CcSimHungerSnapshot(const CcSim *sim);
+
+/* Engine diagnostics and execution share these roadside recovery gates. */
+typedef enum CcRoadRecoveryBlock {
+    CC_ROAD_RECOVERY_INVALID = 1U << 0,
+    CC_ROAD_RECOVERY_OPEN = 1U << 1,
+    CC_ROAD_RECOVERY_WAR = 1U << 2,
+    CC_ROAD_RECOVERY_CALENDAR = 1U << 3,
+    CC_ROAD_RECOVERY_ABANDONED = 1U << 4,
+    CC_ROAD_RECOVERY_PEOPLE = 1U << 5,
+    CC_ROAD_RECOVERY_FOOD = 1U << 6,
+    CC_ROAD_RECOVERY_WOOD = 1U << 7,
+    CC_ROAD_RECOVERY_STONE = 1U << 8,
+    CC_ROAD_RECOVERY_TOOLS = 1U << 9
+} CcRoadRecoveryBlock;
+
+typedef struct CcRoadRecoveryPlan {
+    uint32_t blocked;
+    CcId route_id;
+    CcId labor_base_id;
+    CcId supplier_id;
+    int32_t population;
+    int32_t food_rations;
+    int32_t wood;
+    int32_t stone;
+    int32_t tools;
+    int32_t effort;
+    int32_t people_used;
+    int64_t next_work_day;
+} CcRoadRecoveryPlan;
+
+CcRoadRecoveryPlan CcSimRoadRecoveryPlan(const CcSim *sim, CcId route_id);
+
 CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
 const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker);
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,

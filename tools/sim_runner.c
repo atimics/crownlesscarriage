@@ -204,6 +204,28 @@ static void PrintSummary(const CcSim *sim, bool detail)
                          person->generation,
                          home != NULL ? home->name : "unknown");
         }
+        for (int32_t i = 0; i < sim->route_count; ++i) {
+            const CcRoute *route = &sim->routes[i];
+            CcRoadRecoveryPlan plan = CcSimRoadRecoveryPlan(sim, route->id);
+            (void)printf("  roadside_recovery route=%" PRIu64
+                " from=%" PRIu64 " to=%" PRIu64 " closed=%d condition=%d"
+                " day=%d next_work_day=%" PRId64 " labor_base=%" PRIu64
+                " supplier=%" PRIu64 " people=%d/220 food_rations=%d/4"
+                " wood=%d/2 stone=%d/2 tools=%d/1 effort=%d people_used=%d blocked=",
+                route->id, route->from_id, route->to_id, route->closed ? 1 : 0,
+                route->condition, sim->current_day, plan.next_work_day,
+                plan.labor_base_id, plan.supplier_id, plan.population, plan.food_rations,
+                plan.wood, plan.stone, plan.tools, plan.effort, plan.people_used);
+            const char *names[] = {"invalid", "open", "war_border", "calendar",
+                "abandoned_endpoint", "people", "food", "wood", "stone", "tools"};
+            bool separator = false;
+            for (unsigned bit = 0; bit < sizeof(names) / sizeof(names[0]); ++bit) {
+                if ((plan.blocked & (UINT32_C(1) << bit)) == 0U) continue;
+                (void)printf("%s%s", separator ? "," : "", names[bit]);
+                separator = true;
+            }
+            (void)puts(separator ? "" : "ready");
+        }
         for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
             const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
             (void)printf(
