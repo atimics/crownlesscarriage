@@ -2484,6 +2484,11 @@ CcMoney CcSimTrackedGold(const CcSim *sim)
         total += sim->settlements[i].market_coins;
         total += sim->settlements[i].war_chest;
     }
+    if (sim->schema_version >= 60U) {
+        for (int32_t i = 0; i < sim->character_count; ++i) {
+            total += sim->characters[i].travel_coins;
+        }
+    }
     return total;
 }
 
@@ -3575,6 +3580,17 @@ int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good)
            incoming < 0 ? 0 : (int32_t)incoming;
 }
 
+static int32_t ArchiveSpareGrain(const CcSim *sim, const CcSettlement *place)
+{
+    if (place == NULL) return 0;
+    if (sim->schema_version < 58U) return MaximumI32(
+        0, place->stock[CC_GOOD_WHEAT] - WeeklyFoodUse(sim, place) * 2);
+    int32_t rations = NutritionRations(place->stock, CC_NUTRITION_CIVILIAN);
+    int32_t spare = MaximumI32(0, rations - WeeklyFoodUse(sim, place) * 2);
+    /* Two wheat units provide one civilian ration. */
+    return MinimumI32(place->stock[CC_GOOD_WHEAT], spare * 2);
+}
+
 static const CcSettlement *Scriptorium(const CcSim *sim)
 {
     if (sim == NULL) return NULL;
@@ -3627,8 +3643,7 @@ CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim)
             binding_available = true;
         }
     }
-    int32_t scribe_grain = MaximumI32(
-        0, snapshot.wheat - WeeklyFoodUse(sim, place) * 2);
+    int32_t scribe_grain = ArchiveSpareGrain(sim, place);
     snapshot.blocker = snapshot.scribes <= 0 ?
         CC_MATERIAL_CHAIN_NO_SCRIBES :
         !binding_available ? CC_MATERIAL_CHAIN_BINDING :
@@ -5028,42 +5043,79 @@ static void CompleteTreasure(CcSim *sim, CcSettlement *settlement)
     settlement->treasure_work = 0;
 }
 
+const char *CcSmithyStatusName(CcSmithyStatus status)
+{
+    switch (status) {
+        case CC_SMITHY_READY: return "Ready";
+        case CC_SMITHY_SERVICE_UNAVAILABLE: return "Smithy service required";
+        case CC_SMITHY_ZERO_CAPACITY: return "Production capacity required";
+        case CC_SMITHY_RESERVE_MET: return "Reserve target met";
+        case CC_SMITHY_IRON_REQUIRED: return "Iron required";
+        case CC_SMITHY_WOOD_REQUIRED: return "Wood required";
+    }
+    return "Unknown smithy state";
+}
+
+static CcSmithyStatus SmithyLineStatus(int32_t capacity, int32_t gap,
+                                      int32_t iron, int32_t wood,
+                                      int32_t iron_cost, int32_t wood_cost)
+{
+    if (capacity <= 0) return CC_SMITHY_ZERO_CAPACITY;
+    if (gap <= 0) return CC_SMITHY_RESERVE_MET;
+    if (iron < iron_cost) return CC_SMITHY_IRON_REQUIRED;
+    if (wood_cost > 0 && wood < wood_cost) return CC_SMITHY_WOOD_REQUIRED;
+    return CC_SMITHY_READY;
+}
+
+CcSmithyPlan CcSimPlanSmithy(const CcSim *sim,
+                            const CcSettlement *settlement)
+{
+    CcSmithyPlan plan = {0};
+    plan.tools_status = CC_SMITHY_SERVICE_UNAVAILABLE;
+    plan.weapons_status = CC_SMITHY_SERVICE_UNAVAILABLE;
+    if (sim == NULL || settlement == NULL ||
+        !CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) return plan;
+    bool legacy_smithy = sim->schema_version < 27U;
+    int32_t iron = settlement->stock[CC_GOOD_IRON];
+    int32_t wood = settlement->stock[CC_GOOD_WOOD];
+    int32_t tool_gap = MaximumI32(0, settlement->reserve_target[CC_GOOD_TOOLS] * 2 -
+                                     settlement->stock[CC_GOOD_TOOLS]);
+    int32_t tool_capacity = MaximumI32(0, settlement->production[CC_GOOD_TOOLS]);
+    int32_t tool_material = iron / 2;
+    if (!legacy_smithy) tool_material = MinimumI32(tool_material, wood);
+    plan.tools_status = SmithyLineStatus(tool_capacity, tool_gap, iron, wood,
+                                         2, legacy_smithy ? 0 : 1);
+    plan.tools_made = MinimumI32(tool_capacity, MinimumI32(tool_gap, tool_material));
+    iron -= plan.tools_made * 2;
+    if (!legacy_smithy) wood -= plan.tools_made;
+
+    int32_t weapon_gap = MaximumI32(0,
+        EffectiveReserveTarget(sim, settlement, CC_GOOD_WEAPONS) * 2 -
+        settlement->stock[CC_GOOD_WEAPONS]);
+    int32_t weapon_capacity = MaximumI32(0, settlement->production[CC_GOOD_WEAPONS]);
+    int32_t weapon_material = iron / 3;
+    if (!legacy_smithy) weapon_material = MinimumI32(weapon_material, wood / 2);
+    plan.weapons_status = SmithyLineStatus(weapon_capacity, weapon_gap, iron, wood,
+                                           3, legacy_smithy ? 0 : 2);
+    plan.weapons_made = MinimumI32(weapon_capacity,
+                                  MinimumI32(weapon_gap, weapon_material));
+    plan.iron_used = plan.tools_made * 2 + plan.weapons_made * 3;
+    plan.wood_used = legacy_smithy ? 0 : plan.tools_made + plan.weapons_made * 2;
+    return plan;
+}
+
 static void RunSmithy(CcSim *sim, CcSettlement *settlement)
 {
     if (!CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) return;
     bool legacy_smithy = sim->schema_version < 27U;
     int32_t iron_before = settlement->stock[CC_GOOD_IRON];
     int32_t wood_before = settlement->stock[CC_GOOD_WOOD];
-    int32_t tools_made = 0;
-    int32_t tool_gap = MaximumI32(0, settlement->reserve_target[CC_GOOD_TOOLS] * 2 -
-                                     settlement->stock[CC_GOOD_TOOLS]);
-    int32_t tool_capacity = MaximumI32(0, settlement->production[CC_GOOD_TOOLS]);
-    int32_t tool_material = settlement->stock[CC_GOOD_IRON] / 2;
-    if (!legacy_smithy) {
-        tool_material = MinimumI32(
-            tool_material, settlement->stock[CC_GOOD_WOOD]);
-    }
-    tools_made = MinimumI32(
-        tool_capacity, MinimumI32(tool_gap, tool_material));
-    settlement->stock[CC_GOOD_IRON] -= tools_made * 2;
-    if (!legacy_smithy) settlement->stock[CC_GOOD_WOOD] -= tools_made;
+    CcSmithyPlan plan = CcSimPlanSmithy(sim, settlement);
+    int32_t tools_made = plan.tools_made;
+    int32_t weapons_made = plan.weapons_made;
+    settlement->stock[CC_GOOD_IRON] -= plan.iron_used;
+    settlement->stock[CC_GOOD_WOOD] -= plan.wood_used;
     settlement->stock[CC_GOOD_TOOLS] += tools_made;
-
-    int32_t weapons_made = 0;
-    int32_t weapon_gap = MaximumI32(0,
-        EffectiveReserveTarget(sim, settlement, CC_GOOD_WEAPONS) * 2 -
-        settlement->stock[CC_GOOD_WEAPONS]);
-    int32_t weapon_capacity = MaximumI32(
-        0, settlement->production[CC_GOOD_WEAPONS]);
-    int32_t weapon_material = settlement->stock[CC_GOOD_IRON] / 3;
-    if (!legacy_smithy) {
-        weapon_material = MinimumI32(
-            weapon_material, settlement->stock[CC_GOOD_WOOD] / 2);
-    }
-    weapons_made = MinimumI32(
-        weapon_capacity, MinimumI32(weapon_gap, weapon_material));
-    settlement->stock[CC_GOOD_IRON] -= weapons_made * 3;
-    if (!legacy_smithy) settlement->stock[CC_GOOD_WOOD] -= weapons_made * 2;
     settlement->stock[CC_GOOD_WEAPONS] += weapons_made;
 
     int32_t smith_batches = tools_made + weapons_made;
@@ -6425,16 +6477,18 @@ static void HearGossip(CcSim *sim, CcGossip *story, CcId place_id,
 {
     const CcSettlement *scriptorium = Scriptorium(sim);
     if (story->heard_day > 0 || story->recorded ||
-        sim->archives.scribes <= 0 || scriptorium == NULL ||
-        scriptorium->id != place_id) return;
+        (sim->schema_version < 58U && sim->archives.scribes <= 0) ||
+        scriptorium == NULL || scriptorium->id != place_id) return;
     story->heard_day = sim->current_day;
     story->heard = version;
     (void)snprintf(story->heard_from, sizeof(story->heard_from), "%s", speaker);
     char account[CC_EVENT_TEXT_CAPACITY];
     CcGossipText(sim, story, &version, account, sizeof(account));
     char text[CC_EVENT_TEXT_CAPACITY];
-    (void)snprintf(text, sizeof(text), "%.31s tell the scribes: %.85s",
-                   speaker, account);
+    (void)snprintf(text, sizeof(text),
+                   sim->schema_version >= 58U && sim->archives.scribes <= 0 ?
+                       "%.31s bring word to the scriptorium: %.70s" :
+                       "%.31s tell the scribes: %.85s", speaker, account);
     story->heard_event_id = PushEvent(
         sim, CC_EVENT_RUMOR_SHARED, story->event_id, place_id,
         parent_id, 1, text)->id;
@@ -6850,6 +6904,16 @@ static CcMoney FundArchiveRecovery(CcSim *sim)
 {
     const CcSettlement *archive = Scriptorium(sim);
     if (archive == NULL || CcSettlementIsAbandoned(archive)) return 0;
+    CcMoney funding = 50 - sim->iron_ledger_reserve;
+    if (funding <= 0 || funding > (sim->schema_version >= 58U ? 50 : 10)) return 0;
+    if (sim->schema_version >= 58U) {
+        CcKingdom *host = KingdomMutable(sim, archive->kingdom_id);
+        if (host != NULL && host->treasury >= 800) {
+            host->treasury -= funding;
+            sim->iron_ledger_reserve += funding;
+            return funding;
+        }
+    }
     bool reached[CC_MAX_SETTLEMENTS] = {false};
     int32_t archive_slot = SettlementSlotById(sim, archive->id);
     if (archive_slot < 0) return 0;
@@ -6878,8 +6942,6 @@ static CcMoney FundArchiveRecovery(CcSim *sim)
         }
     }
     if (count < 2) return 0;
-    CcMoney funding = 50 - sim->iron_ledger_reserve;
-    if (funding <= 0 || funding > 10) return 0;
     CcMoney first = (funding + 1) / 2;
     sim->kingdoms[donors[0]].treasury -= first;
     sim->kingdoms[donors[1]].treasury -= funding - first;
@@ -6905,11 +6967,9 @@ static void AdvanceArchives(CcSim *sim)
         } else {
             archives->dead_since_day = 0;
         }
-        /* After five years, two connected solvent crowns can restore a
-           ledger holding 40-49 crowns to the 50-crown staffing threshold. */
+        /* After five years, connected solvent crowns restore one scribe. */
         if (target_scribes <= 0 && archives->dead_since_day > 0 &&
-            sim->current_day - archives->dead_since_day >= 1825 &&
-            sim->iron_ledger_reserve >= 40) {
+            sim->current_day - archives->dead_since_day >= 1825) {
             crown_funding = FundArchiveRecovery(sim);
             if (crown_funding > 0) target_scribes = 1;
         }
@@ -6938,9 +6998,7 @@ static void AdvanceArchives(CcSim *sim)
         if (place != NULL) {
             scriptorium = CcSimSettlementMutable(sim, place->id);
         }
-        int32_t scribe_grain = scriptorium == NULL ? 0 : MaximumI32(
-            0, scriptorium->stock[CC_GOOD_WHEAT] -
-               WeeklyFoodUse(sim, scriptorium) * 2);
+        int32_t scribe_grain = ArchiveSpareGrain(sim, scriptorium);
         active_scribes = MinimumI32(archives->scribes, scribe_grain / 2);
         if (active_scribes > 0) {
             scriptorium->stock[CC_GOOD_WHEAT] -= active_scribes * 2;
@@ -11395,6 +11453,11 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     RemoveCharacterKnowledgeSources(sim, dead.id);
 
     CcCharacter successor = {0};
+    if (sim->schema_version >= 60U) {
+        successor.travel_coins = dead.travel_coins;
+        CcBanditGroup *camp = BanditMutable(sim, dead.bandit_group_id);
+        if (camp != NULL && camp->members > 4) camp->members -= 1;
+    }
     successor.id = NextId(sim, CC_ENTITY_CHARACTER);
     successor.home_settlement_id = dead.home_settlement_id;
     successor.current_settlement_id = dead.home_settlement_id;
@@ -14949,6 +15012,104 @@ static void AdvanceHorseTeam(CcSim *sim)
     }
 }
 
+static const CcBanditGroup *TravellerBanditCamp(const CcSim *sim, CcId id)
+{
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        if (sim->bandits[i].id == id) return &sim->bandits[i];
+    }
+    return NULL;
+}
+
+static void AdvanceTravellerNeeds(CcSim *sim)
+{
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        CcCharacter *person = &sim->characters[i];
+        if ((person->role != CC_CHARACTER_TRAVELLER &&
+             person->role != CC_CHARACTER_REFUGEE) ||
+            CcCharacterAgeYears(sim, person) < 16) continue;
+        if (person->bandit_group_id != 0U) {
+            person->activity = CC_CHARACTER_ACTIVITY_HIDING;
+            continue;
+        }
+        CcSettlement *place = CcSimSettlementMutable(sim, person->current_settlement_id);
+        if (place == NULL) continue;
+        bool inhabited = !CcSettlementIsAbandoned(place);
+        /* Residents share the town's existing food and household model. */
+        if (inhabited && person->current_settlement_id == person->home_settlement_id &&
+            person->activity != CC_CHARACTER_ACTIVITY_TRAVELLING) {
+            person->hungry_days = 0;
+            person->unsheltered_nights = 0;
+            continue;
+        }
+        /* A day's casual work buys a normal meal and a two-crown bed. */
+        if (inhabited && place->prosperity >= 35 && place->market_coins >= 6 &&
+            person->travel_coins <= CC_SIM_MAX_MONEY - 6) {
+            place->market_coins -= 6;
+            person->travel_coins += 6;
+        }
+        CcGood meal = CC_GOOD_COUNT;
+        int32_t units = 0;
+        CcMoney cheapest = CC_SIM_MAX_MONEY;
+        for (int32_t good = 0; inhabited && good < CC_GOOD_COUNT; ++good) {
+            int32_t nutrition = CcGoodNutritionValue((CcGood)good, CC_NUTRITION_CIVILIAN);
+            if (nutrition <= 0) continue;
+            int32_t needed = (CC_NUTRITION_PER_RATION + nutrition - 1) / nutrition;
+            CcMoney cost = (CcMoney)MaximumI32(1, place->price[good]) * needed;
+            if (place->stock[good] >= needed && cost < cheapest) {
+                meal = (CcGood)good; units = needed; cheapest = cost;
+            }
+        }
+        if (meal != CC_GOOD_COUNT && person->travel_coins >= cheapest &&
+            place->market_coins <= CC_SIM_MAX_MONEY - cheapest) {
+            person->travel_coins -= cheapest;
+            place->market_coins += cheapest;
+            place->stock[meal] -= units;
+            person->hungry_days = 0;
+        } else {
+            person->hungry_days = MinimumI32(7, person->hungry_days + 1);
+        }
+        bool at_home = inhabited && person->current_settlement_id == person->home_settlement_id &&
+            person->role != CC_CHARACTER_REFUGEE;
+        if (at_home) {
+            person->unsheltered_nights = 0;
+        } else if (inhabited && CcSettlementHasService(place, CC_SERVICE_INN) &&
+                   person->travel_coins >= 2 && place->market_coins <= CC_SIM_MAX_MONEY - 2) {
+            person->travel_coins -= 2;
+            place->market_coins += 2;
+            person->unsheltered_nights = 0;
+        } else {
+            person->unsheltered_nights = MinimumI32(7, person->unsheltered_nights + 1);
+        }
+        bool hungry = person->hungry_days >= 3;
+        bool homeless = person->unsheltered_nights >= 3;
+        if (!hungry && !homeless) continue;
+        person->activity = CC_CHARACTER_ACTIVITY_SEEKING_AID;
+        person->stress = ClampI32(person->stress + 5, 0, 100);
+        /* Hardship creates a choice once a week for each adult traveller. */
+        if (((uint32_t)sim->current_day + person->appearance_seed) % 7U != 0U) continue;
+        for (int32_t b = 0; b < sim->bandit_count; ++b) {
+            CcBanditGroup *camp = &sim->bandits[b];
+            const CcRoute *road = CcSimRoute(sim, camp->route_id);
+            if (road == NULL || camp->members >= 120 ||
+                (road->from_id != place->id && road->to_id != place->id &&
+                 camp->camp_settlement_id != place->id)) continue;
+            camp->members += 1;
+            person->bandit_group_id = camp->id;
+            person->activity = CC_CHARACTER_ACTIVITY_HIDING;
+            char text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(text, sizeof(text),
+                "%.24s joins %.24s after %d days seeking %s at %.24s.",
+                person->name, camp->name,
+                hungry ? person->hungry_days : person->unsheltered_nights,
+                hungry ? "food" : "a bed", place->name);
+            (void)PushSocialEvent(sim, CC_EVENT_BANDIT_PRESSURE, camp->id,
+                place->id, LatestLocalCause(sim, place->id),
+                person->id, 0U, 0U, 0U, camp->members, text);
+            break;
+        }
+    }
+}
+
 void CcSimAdvanceDays(CcSim *sim, int32_t days)
 {
     CcSimAdvanceDaysWithNutritionAccounting(sim, days, NULL);
@@ -14964,6 +15125,7 @@ void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
     for (int32_t day = 0; day < days; ++day) {
         sim->current_day += 1;
         if (sim->schema_version >= 26U) AdvanceCharacterLifecycles(sim);
+        if (sim->schema_version >= 60U) AdvanceTravellerNeeds(sim);
         HearLocalGossip(sim);
         CcSimRefreshCharacterGossip(sim);
         if (!sim->journey.active) {
@@ -18930,7 +19092,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 58U
+#define CC_NEWEST_LEGACY_SCHEMA 59U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18948,7 +19110,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 58U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 59U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -19168,7 +19330,13 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             sim, kingdom->ruler_character_id);
         const CcCharacter *patron = CcSimCharacter(
             sim, kingdom->monastery_patron_id);
-        if (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+        bool has_land = false;
+        for (int32_t town = 0; town < sim->settlement_count; ++town) {
+            if (sim->settlements[town].kingdom_id == kingdom->id) has_land = true;
+        }
+        bool vacant = !has_land && kingdom->ruler_character_id == 0U &&
+            kingdom->monastery_patron_id == 0U;
+        if (sim->schema_version == CC_SIM_SCHEMA_VERSION && !vacant &&
             (ruler == NULL || CharacterKingdomSlot(sim, ruler) != i ||
              patron == NULL || CharacterKingdomSlot(sim, patron) != i)) {
             if (error != NULL && error_capacity > 0U) {
@@ -20288,6 +20456,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 character->player_disposition > 100 ||
                 character->stress < 0 || character->stress > 100 ||
                 character->courage < 0 || character->courage > 100 ||
+                (sim->schema_version >= 60U &&
+                 (character->travel_coins < 0 || character->travel_coins > CC_SIM_MAX_MONEY ||
+                  character->hungry_days < 0 || character->hungry_days > 7 ||
+                  character->unsheltered_nights < 0 || character->unsheltered_nights > 7 ||
+                  (character->bandit_group_id != 0U &&
+                   TravellerBanditCamp(sim, character->bandit_group_id) == NULL))) ||
                 (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
                  ((character->ancestor_id != 0U &&
                    (!IsIssuedCharacterId(sim, character->ancestor_id) ||
@@ -21551,6 +21725,12 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(character->player_disposition);
             HASH_VALUE(character->stress);
             HASH_VALUE(character->courage);
+            if (sim->schema_version >= 60U) {
+                HASH_VALUE(character->travel_coins);
+                HASH_VALUE(character->bandit_group_id);
+                HASH_VALUE(character->hungry_days);
+                HASH_VALUE(character->unsheltered_nights);
+            }
             HASH_VALUE(character->memory_count);
             HASH_VALUE(character->memory_write_index);
             for (int32_t memory = 0;
