@@ -124,7 +124,7 @@ static void UnloadSiteCarriage(CcSim *sim, CcRoyalCarriage *carriage, CcRoadProd
 
 static void AdvanceSiteCarriages(CcSim *sim, CcRoadProductionAccounting *accounting)
 {
-    if (sim->schema_version < 65U) return;
+    if (sim->schema_version < 66U) return;
     PrepareRoyalRouteUsage(sim);
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
         CcRoyalCarriage *carriage = &sim->royal_carriages[i];
@@ -196,7 +196,7 @@ static void AdvanceSiteCarriages(CcSim *sim, CcRoadProductionAccounting *account
 
 static bool ValidSiteCarriage(const CcSim *sim, const CcRoyalCarriage *carriage, int32_t index)
 {
-    if (sim->schema_version < 65U || CcIdKind(carriage->id) != CC_ENTITY_ROYAL_CARRIAGE ||
+    if (sim->schema_version < 66U || CcIdKind(carriage->id) != CC_ENTITY_ROYAL_CARRIAGE ||
         carriage->kingdom_id != sim->kingdoms[index].id || carriage->condition < 0 ||
         carriage->condition > 100 || carriage->trips_completed < 0 ||
         carriage->trips_completed > CC_SIM_MAX_UNITS || carriage->cargo_losses < 0 ||

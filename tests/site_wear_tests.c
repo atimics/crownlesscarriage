@@ -23,7 +23,7 @@ static void CheckTaper(void)
 {
     CcRoadSite *site = Prepare(2, 60);
     site->stock[CC_GOOD_WHEAT] = 20; site->stock[CC_GOOD_TOOLS] = 1;
-    old = sim; old.schema_version = 67;
+    old = sim; old.schema_version = 68;
     if (!CcSimValidate(&sim, error, sizeof(error))) { fprintf(stderr, "%s\n", error); CC_CHECK(false); }
     CcSimAdvanceDaysWithProductionAccounting(&sim, 364, NULL, NULL, &total);
     CcSimAdvanceDays(&old, 364);

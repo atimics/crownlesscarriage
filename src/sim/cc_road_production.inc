@@ -49,9 +49,9 @@ static CcProductionContext RoadProductionContext(const CcSim *sim,
     }
     return (CcProductionContext){.producer_id = site->id, .storage_id = site->id,
         .location_id = site->id, .stock = stock,
-        .capacity = sim->schema_version >= 68U && site->condition < 65 ? 1 : 2, .output_limit = limit,
+        .capacity = sim->schema_version >= 69U && site->condition < 66 ? 1 : 2, .output_limit = limit,
         .work_available = recipe->work_only ? 6 : 2, .condition = site->condition,
-        .enabled = sim->schema_version >= 64U && site->accessible};
+        .enabled = sim->schema_version >= 65U && site->accessible};
 }
 
 static CcProductionReceipt PlanSiteMaintenance(const CcSim *sim, const CcRoadSite *site);
@@ -99,7 +99,7 @@ CcProductionReceipt CcSimPlanRoadSiteMaintenance(const CcSim *sim, CcId site_id)
 
 static void ProduceRoadSites(CcSim *sim, CcRoadProductionAccounting *accounting)
 {
-    if (sim->schema_version < 64U) return;
+    if (sim->schema_version < 65U) return;
     int32_t active = 0, output = 0, repair = 0;
     for (int32_t i = 0; i < sim->road_site_count; ++i) {
         CcRoadSite *site = &sim->road_sites[i];
@@ -142,7 +142,7 @@ static void ProduceRoadSites(CcSim *sim, CcRoadProductionAccounting *accounting)
             if (!recipe.work_only) row->output[recipe.output] += (uint64_t)receipt.output;
         }
         if (receipt.gate != CC_PRODUCTION_READY) continue;
-        if (sim->schema_version >= 68U) {
+        if (sim->schema_version >= 69U) {
             int32_t wear = site->condition >= 80 ? (receipt.work + 1) / 2 : receipt.work;
             wear = MinimumI32(wear, site->condition);
             site->condition -= wear;

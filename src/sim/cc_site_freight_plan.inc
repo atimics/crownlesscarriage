@@ -14,7 +14,7 @@ static int32_t SiteFreightRoom(const CcRoadSite *site, CcGood good)
    Actual unloading still checks the physical store at arrival. */
 static int32_t SiteSupplyRoom(const CcSim *sim, const CcRoadSite *site, CcGood good)
 {
-    if (sim->schema_version < 69U) return SiteFreightRoom(site, good);
+    if (sim->schema_version < 70U) return SiteFreightRoom(site, good);
     CcRoadSite projected = *site;
     for (int32_t item = 0; item < CC_GOOD_COUNT; ++item) {
         int32_t incoming = CcSimIncomingGood(sim, site->id, (CcGood)item);
@@ -27,7 +27,7 @@ static bool PlanSiteSupply(const CcSim *sim, const CcRoadSite *site,
     const CcSettlement *town, CcGood good, int32_t target, int32_t slots,
     CcSiteFreightPlan *plan)
 {
-    int32_t incoming = sim->schema_version >= 69U ? CcSimIncomingGood(sim, site->id, good) : 0;
+    int32_t incoming = sim->schema_version >= 70U ? CcSimIncomingGood(sim, site->id, good) : 0;
     int32_t need = target - site->stock[good] - incoming;
     if (need <= 0) return false;
     int32_t floor = town->reserve_target[good];
@@ -55,7 +55,7 @@ CcSiteFreightPlan CcSimPlanSiteFreight(const CcSim *sim, CcId carriage_id, CcId 
     const CcRoadSite *site = CcSimRoadSite(sim, site_id);
     CcProductionRecipe recipe;
     plan.gate = CC_SITE_FREIGHT_SITE_REQUIRED;
-    if (site == NULL || !site->accessible || (site->condition < 50 && sim->schema_version < 67U) ||
+    if (site == NULL || !site->accessible || (site->condition < 50 && sim->schema_version < 68U) ||
         !CcRoadSiteRecipe(site, &recipe)) return plan;
     plan.site_id = site_id; plan.route_id = site->route_id;
     const CcSettlement *town = CcSimSettlement(sim, carriage->location_id);

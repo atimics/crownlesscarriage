@@ -56,7 +56,7 @@ static void CheckGates(void)
         site->stock[CC_GOOD_TOOLS] = mode == 0 ? 1 : 2;
         site->stock[CC_GOOD_WOOD] = mode == 1 ? 0 : 1;
         if (mode == 2) { site->accessible = false; site->blocker = CC_ROAD_SITE_BLOCKER_TREE; }
-        if (mode == 3) sim.schema_version = 66;
+        if (mode == 3) sim.schema_version = 67;
         CC_CHECK(CcSimPlanRoadSiteMaintenance(&sim, site->id).gate != CC_PRODUCTION_READY);
         CcSimAdvanceDaysWithProductionAccounting(&sim, 1, NULL, NULL, &total);
         CC_CHECK(site->condition == 44 && total.sites[2].site_repair == 0);

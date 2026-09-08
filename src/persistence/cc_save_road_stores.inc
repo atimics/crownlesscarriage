@@ -1,7 +1,7 @@
 static bool SaveRoadStores(sqlite3 *database, const CcSim *sim,
                            char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 63U) return true;
+    if (sim->schema_version < 64U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "INSERT INTO road_site_stock VALUES(?,?,?);",
                  &statement, error, error_capacity)) return false;
@@ -22,7 +22,7 @@ static bool SaveRoadStores(sqlite3 *database, const CcSim *sim,
 static bool ReadRoadStores(sqlite3 *database, CcSim *sim,
                            char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 63U) return true;
+    if (sim->schema_version < 64U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "SELECT site_slot,good,quantity FROM road_site_stock ORDER BY site_slot,good;",
                  &statement, error, error_capacity)) return false;

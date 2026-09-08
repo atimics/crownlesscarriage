@@ -241,7 +241,7 @@ static void CheckPre62Save(void)
 {
     const char *path = "road-clearing-legacy-test.ccsave";
     PrepareStop(0, false);
-    sim.schema_version = 61U;
+    sim.schema_version = 62U;
     sim.player.cargo[CC_GOOD_TOOLS] = 2;
     sim.player.cargo[CC_GOOD_WOOD] = 1;
     uint64_t hash = CcSimHash(&sim);
@@ -253,7 +253,7 @@ static void CheckPre62Save(void)
     CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
-    restored.schema_version = 61U;
+    restored.schema_version = 62U;
     CC_CHECK(CcSimHash(&restored) == hash);
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSimApply(&restored, &clear, error, sizeof(error)));
@@ -310,11 +310,11 @@ static void CheckStoreTransfers(void)
     PrepareStop(0, false);
     sim.road_sites[0].accessible = true;
     sim.road_sites[0].blocker = CC_ROAD_SITE_BLOCKER_NONE;
-    sim.schema_version = 62;
+    sim.schema_version = 63;
     CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
-    restored.schema_version = 62;
+    restored.schema_version = 63;
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     for (int32_t slot = 0; slot < restored.road_site_count; ++slot)
@@ -452,7 +452,7 @@ static void CheckRepairs(void)
         if (failure == 2) sim.player.cargo[CC_GOOD_TOOLS] = 1;
         if (failure == 3) sim.player.cargo[CC_GOOD_WOOD] = 0;
         if (failure == 4) site->condition = 100;
-        if (failure == 5) sim.schema_version = 65;
+        if (failure == 5) sim.schema_version = 66;
         uint64_t hash = CcSimHash(&sim);
         CC_CHECK(!CcSimApply(&sim, &repair, error, sizeof(error)) && CcSimHash(&sim) == hash);
     }
@@ -460,7 +460,7 @@ static void CheckRepairs(void)
     CcRoadSite *site = &sim.road_sites[2];
     site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE; site->condition = 97;
     sim.player.cargo[CC_GOOD_TOOLS] = 2; sim.player.cargo[CC_GOOD_WOOD] = 1;
-    sim.schema_version = 65;
+    sim.schema_version = 66;
     CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     sim = restored;

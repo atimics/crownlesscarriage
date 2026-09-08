@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 31
+#define CC_SQLITE_USER_VERSION 32
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -526,6 +526,18 @@ static bool EnsureCharacterLifecycleColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "npc_character", "generation",
             "ALTER TABLE npc_character ADD COLUMN generation INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "travel_coins",
+            "ALTER TABLE npc_character ADD COLUMN travel_coins INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "bandit_group_id",
+            "ALTER TABLE npc_character ADD COLUMN bandit_group_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "hungry_days",
+            "ALTER TABLE npc_character ADD COLUMN hungry_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "unsheltered_nights",
+            "ALTER TABLE npc_character ADD COLUMN unsheltered_nights INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
         EnsureColumn(database, "meta", "character_births",
             "ALTER TABLE meta ADD COLUMN character_births INTEGER NOT NULL DEFAULT 0;",
@@ -2883,7 +2895,7 @@ static bool SaveQuestArchitecture(sqlite3 *database, const CcSim *sim,
 static bool SaveHistoricalCharacters(sqlite3 *database, const CcSim *sim,
                                       char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 61U) return true;
+    if (sim->schema_version < 62U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "INSERT INTO historic_character VALUES(?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
@@ -2917,8 +2929,9 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
                  "(slot,id,name,home_settlement_id,current_settlement_id,faction_id,"
                  "role,goal,activity,appearance_seed,player_disposition,stress,courage,"
                  "memory_count,memory_write_index,knowledge_count,"
-                 "knowledge_write_index,ancestor_id,birth_day,death_day,generation) "
-                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "knowledge_write_index,ancestor_id,birth_day,death_day,generation,"
+                 "travel_coins,bandit_group_id,hungry_days,unsheltered_nights) "
+                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &character_statement, error, error_capacity) ||
         !Prepare(database,
                  "INSERT INTO character_memory VALUES(?,?,?,?,?,?);",
@@ -2966,6 +2979,10 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
         BindInt(character_statement, column++, character->birth_day);
         BindInt(character_statement, column++, character->death_day);
         BindInt(character_statement, column++, character->generation);
+        BindMoney(character_statement, column++, sim->schema_version >= 60U ? character->travel_coins : 0);
+        BindId(character_statement, column++, sim->schema_version >= 60U ? character->bandit_group_id : 0U);
+        BindInt(character_statement, column++, sim->schema_version >= 60U ? character->hungry_days : 0);
+        BindInt(character_statement, column++, sim->schema_version >= 60U ? character->unsheltered_nights : 0);
         if (!StepDone(database, character_statement, error, error_capacity) ||
             !ResetStatement(database, character_statement,
                             error, error_capacity)) goto failed;
@@ -5312,7 +5329,7 @@ static bool ReadHistoricalCharacters(sqlite3 *database, CcSim *sim,
                                       char *error, size_t error_capacity)
 {
     sim->historic_character_count = 0;
-    if (sim->schema_version < 61U) return true;
+    if (sim->schema_version < 62U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "SELECT * FROM historic_character ORDER BY slot;",
                  &statement, error, error_capacity)) return false;
@@ -5400,6 +5417,12 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
         character->birth_day = sqlite3_column_int(statement, 18);
         character->death_day = sqlite3_column_int(statement, 19);
         character->generation = sqlite3_column_int(statement, 20);
+        if (sim->schema_version >= 60U) {
+            character->travel_coins = sqlite3_column_int64(statement, 21);
+            character->bandit_group_id = (CcId)sqlite3_column_int64(statement, 22);
+            character->hungry_days = sqlite3_column_int(statement, 23);
+            character->unsheltered_nights = sqlite3_column_int(statement, 24);
+        }
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -5473,7 +5496,7 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
             knowledge->private_knowledge =
                 sqlite3_column_int(statement, 7) != 0;
             knowledge->day = sqlite3_column_int(statement, 8);
-            if (sim->schema_version >= 61U &&
+            if (sim->schema_version >= 62U &&
                 !ReadTextColumn(statement, 9, knowledge->source_name,
                                 sizeof(knowledge->source_name), "knowledge source name",
                                 error, error_capacity)) {
@@ -6075,7 +6098,11 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 54U || legacy_version == 55U ||
          legacy_version == 56U || legacy_version == 57U ||
          legacy_version == 58U || legacy_version == 59U ||
-         legacy_version == 60U || legacy_version == 61U || legacy_version == 62U || legacy_version == 63U || legacy_version == 64U || legacy_version == 65U || legacy_version == 66U || legacy_version == 67U || legacy_version == 68U) &&
+         legacy_version == 60U || legacy_version == 61U ||
+         legacy_version == 62U || legacy_version == 63U ||
+         legacy_version == 64U || legacy_version == 65U ||
+         legacy_version == 66U || legacy_version == 67U ||
+         legacy_version == 68U || legacy_version == 69U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
@@ -6090,7 +6117,7 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          * Schema 56 adds the saved archive silence date, defaulting to zero.
          * Schema 58 uses local name roots for new residents and descendants;
          * saved names remain intact. Schema 59 adds mine visits with an empty
-         * visit for older saves. Schema 60 seeds a Silverwick tool line in new
+         * visit for older saves. Schema 61 seeds a Silverwick tool line in new
          * worlds; stored production capacities remain intact. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
@@ -6568,7 +6595,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
             sim->dragon.wyrmheart_id = CcMakeId(CC_ENTITY_TREASURE, sim->next_entity_serial++);
         }
     }
-    if (legacy_version < 61U) CcSimUpgradeKnowledgeSourceNames(sim);
+    if (legacy_version < 62U) CcSimUpgradeKnowledgeSourceNames(sim);
     if (legacy_version < 51U) CcSimSeedCommonPonyHerds(sim);
     if (legacy_version < 52U) CcSimUnharnessSecondDraftAnimal(sim);
     return true;

@@ -40,7 +40,7 @@ static void CheckIncomingLoads(void)
         .final_destination_id = site->id, .status = CC_SHIPMENT_TRAVELLING};
     CcSiteFreightPlan plan = Plan();
     CC_CHECK(plan.good == CC_GOOD_WHEAT && plan.quantity == 4);
-    sim.schema_version = 68;
+    sim.schema_version = 69;
     CC_CHECK(Plan().good == CC_GOOD_TOOLS);
     sim.schema_version = CC_SIM_SCHEMA_VERSION;
     cargo->status = CC_SHIPMENT_BLOCKED;
@@ -122,7 +122,7 @@ int main(void)
     carriage->location_id = town->id; site->accessible = false;
     CC_CHECK(Plan().gate == CC_SITE_FREIGHT_SITE_REQUIRED);
     site->accessible = true; site->condition = 49;
-    sim.schema_version = 66;
+    sim.schema_version = 67;
     CC_CHECK(Plan().gate == CC_SITE_FREIGHT_SITE_REQUIRED);
     sim.schema_version = CC_SIM_SCHEMA_VERSION;
     plan = Plan();

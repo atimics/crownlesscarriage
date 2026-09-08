@@ -45,7 +45,7 @@ int main(void)
     if (!CcSimValidate(&sim, error, sizeof(error))) { fprintf(stderr, "%s\n", error); CC_CHECK(false); }
     CcSiteFreightPlan planned = CcSimPlanSiteFreight(&sim, sim.royal_carriages[1].id, site->id);
     CC_CHECK(planned.gate == CC_SITE_FREIGHT_READY && planned.good == CC_GOOD_WHEAT && planned.quantity == 4);
-    legacy = sim; legacy.schema_version = 68;
+    legacy = sim; legacy.schema_version = 69;
     CcSimAdvanceDaysWithProductionAccounting(&sim, 7, NULL, NULL, &total);
     CcSimAdvanceDays(&legacy, 7);
     CC_CHECK(total.sites[2].freight_sent[CC_GOOD_TOOLS] == 1);

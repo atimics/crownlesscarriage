@@ -108,7 +108,7 @@ static void CheckGates(void)
     site->stock[CC_GOOD_WHEAT] = 6; site->stock[CC_GOOD_BREAD] = 17;
     CC_CHECK(CcSimPlanRoadSite(&sim, site).gate == CC_PRODUCTION_OUTPUT_FULL);
     site->stock[CC_GOOD_BREAD] = 0;
-    sim.schema_version = 63;
+    sim.schema_version = 64;
     CcSimAdvanceDays(&sim, 7);
     CC_CHECK(site->stock[CC_GOOD_WHEAT] == 6 && site->stock[CC_GOOD_BREAD] == 0);
 }
