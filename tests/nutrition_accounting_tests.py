@@ -1,4 +1,5 @@
 import csv
+import io
 import pathlib
 import subprocess
 import sys
@@ -11,6 +12,17 @@ with tempfile.TemporaryDirectory() as directory:
     ordinary = subprocess.check_output(args)
     measured = subprocess.check_output(args + ['--nutrition-csv', str(path)])
     assert ordinary == measured, 'measurement changed the ordinary metrics'
+    extended = subprocess.check_output(args + ['--campaign-metrics', '--nutrition-csv', str(path)])
+    basic_rows = list(csv.DictReader(io.StringIO(ordinary.decode())))
+    extended_rows = list(csv.DictReader(io.StringIO(extended.decode())))
+    assert len(basic_rows) == len(extended_rows)
+    for basic, extra in zip(basic_rows, extended_rows):
+        assert {key: extra[key] for key in basic} == basic
+        assert len(extra) == len(basic) + 8
+        assert 0 <= int(extra['live_treasures']) <= int(extra['treasure_count'])
+        assert int(extra['live_treasure_value']) >= 0
+        assert int(extra['oldest_treasure_day']) <= int(extra['newest_treasure_day'])
+
     with path.open() as stream:
         rows = list(csv.DictReader(stream))
     assert len(rows) == 2 * 6 * 3

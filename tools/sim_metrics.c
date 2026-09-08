@@ -144,8 +144,36 @@ static void UpdateHistory(const CcSim *sim, CcMetricsHistory *history)
     }
 }
 
+static void PrintCampaignMetrics(const CcSim *sim)
+{
+    int32_t live = 0;
+    int64_t value = 0;
+    int32_t newest = 0;
+    int32_t oldest = sim->current_day;
+    int32_t ruined_makers = 0;
+    int32_t ruined_locations = 0;
+    uint64_t identity_hash = UINT64_C(14695981039346656037);
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        const CcTreasure *treasure = &sim->treasures[i];
+        if (treasure->destroyed) continue;
+        live += 1;
+        value += treasure->appraised_value;
+        if (treasure->created_day > newest) newest = treasure->created_day;
+        if (treasure->created_day < oldest) oldest = treasure->created_day;
+        const CcSettlement *maker = CcSimSettlement(sim, treasure->maker_settlement_id);
+        const CcSettlement *location = CcSimSettlement(sim, treasure->location_id);
+        if (maker != NULL && CcSettlementIsAbandoned(maker)) ruined_makers += 1;
+        if (location != NULL && CcSettlementIsAbandoned(location)) ruined_locations += 1;
+        identity_hash = (identity_hash ^ treasure->id) * UINT64_C(1099511628211);
+    }
+    (void)printf(",%d,%" PRId64 ",%d,%d,%d,%d,%" PRIu64 ",%" PRIu64,
+                 live, value, newest, live > 0 ? oldest : 0,
+                 ruined_makers, ruined_locations, identity_hash,
+                 (uint64_t)sim->next_entity_serial);
+}
+
 static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
-                      int32_t seed_number, int32_t year)
+                      int32_t seed_number, int32_t year, bool campaign_metrics)
 {
     CcHungerSnapshot hunger = CcSimHungerSnapshot(sim);
     int32_t prosperity_total = 0;
@@ -353,7 +381,9 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         sim->archives.lore_ceiling,
         sim->archives.kit_tool_wear,
         sim->archives.abbot_character_id != 0U ? 1 : 0);
-    (void)printf(",%d\n", hunger.population_weighted);
+    (void)printf(",%d", hunger.population_weighted);
+    if (campaign_metrics) PrintCampaignMetrics(sim);
+    (void)putchar('\n');
 }
 
 static void PrintNutritionYear(FILE *stream, const CcSim *sim,
@@ -390,6 +420,7 @@ int main(int argc, char **argv)
     int32_t years = 10;
     int32_t first_seed = 1;
     bool final_only = false;
+    bool campaign_metrics = false;
     const char *nutrition_path = NULL;
     for (int32_t argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--seed") == 0 && argument + 1 < argc) {
@@ -400,6 +431,8 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[argument], "--years") == 0 &&
                    argument + 1 < argc) {
             if (!ParsePositive(argv[++argument], &years)) return EXIT_FAILURE;
+        } else if (strcmp(argv[argument], "--campaign-metrics") == 0) {
+            campaign_metrics = true;
         } else if (strcmp(argv[argument], "--nutrition-csv") == 0 &&
                    argument + 1 < argc) {
             nutrition_path = argv[++argument];
@@ -408,7 +441,7 @@ int main(int argc, char **argv)
         } else {
             (void)fprintf(stderr,
                           "Usage: %s [--seed NUMBER | --seeds COUNT]"
-                          " [--years COUNT] [--final-only] [--nutrition-csv PATH]\n",
+                          " [--years COUNT] [--final-only] [--nutrition-csv PATH] [--campaign-metrics]\n",
                           argv[0]);
             return EXIT_FAILURE;
         }
@@ -426,7 +459,7 @@ int main(int argc, char **argv)
             "cumulative_aged_units,cumulative_overflow_units,cumulative_civilian_units,"
             "wasted_nutrition,cumulative_wasted_nutrition\n", nutrition_csv);
     }
-    (void)puts(
+    (void)printf(
         "seed_number,world_seed,year,average_hunger,maximum_hunger,"
         "average_prosperity,minimum_prosperity,maximum_prosperity,"
         "average_security,minimum_security,maximum_security,"
@@ -465,6 +498,12 @@ int main(int argc, char **argv)
         "lore_stored,lore_lost_total,archive_stewardship,"
         "archive_last_recorded_day,lore_ceiling,archive_tool_wear,"
         "archive_abbot_present,population_weighted_hunger");
+    if (campaign_metrics) {
+        (void)printf(",live_treasures,live_treasure_value,newest_treasure_day,"
+                     "oldest_treasure_day,treasures_from_ruins,treasures_in_ruins,"
+                     "treasure_identity_hash,next_entity_serial");
+    }
+    (void)putchar('\n');
     char error[192];
     for (int32_t seed_number = first_seed;
          seed_number < first_seed + seeds; ++seed_number) {
@@ -496,7 +535,7 @@ int main(int argc, char **argv)
                 return EXIT_FAILURE;
             }
             if (!final_only || year == years) {
-                PrintYear(&sim, &history, seed_number, year);
+                PrintYear(&sim, &history, seed_number, year, campaign_metrics);
                 if (nutrition_csv != NULL) {
                     PrintNutritionYear(nutrition_csv, &sim, &nutrition,
                                        &previous_nutrition, seed_number, year);
