@@ -2224,7 +2224,8 @@ static int32_t NutritionStorageCapacity(const CcSim *sim,
     return CC_SIM_MAX_UNITS;
 }
 
-static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place)
+static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place,
+                                    CcTownNutritionAccounting *accounting)
 {
     static const CcGood goods[] = {
         CC_GOOD_BREAD, CC_GOOD_WHEAT, CC_GOOD_MEAT
@@ -2236,9 +2237,13 @@ static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place)
                           good == CC_GOOD_WHEAT ? 400 : 100;
         int32_t stored = place->stock[good];
         int32_t spoiled = stored / divisor;
+        if (accounting != NULL) accounting->aged_units[good] += (uint64_t)spoiled;
         stored -= spoiled;
         int32_t capacity = NutritionStorageCapacity(sim, place, good);
         if (stored > capacity) {
+            if (accounting != NULL) {
+                accounting->overflow_units[good] += (uint64_t)(stored - capacity);
+            }
             spoiled += stored - capacity;
             stored = capacity;
         }
@@ -5706,10 +5711,12 @@ static void ReleaseAbandonedCamps(CcSim *sim)
 }
 
 static void UpdateSettlement(CcSim *sim, int32_t index,
-                             CcId scriptorium_id)
+                             CcId scriptorium_id,
+                             CcTownNutritionAccounting *accounting)
 {
     CcSettlement *settlement = &sim->settlements[index];
     if (CcSettlementIsAbandoned(settlement)) return;
+    if (accounting != NULL) accounting->settlement_id = settlement->id;
     int32_t produced[CC_GOOD_COUNT] = {0};
     int32_t cow_output = AdvanceCowHerd(sim, settlement);
     AdvanceSheepFlock(sim, settlement);
@@ -5741,9 +5748,19 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         1, WeeklyFoodUse(sim, settlement)) * CC_NUTRITION_PER_RATION;
     int32_t food_eaten = sim->schema_version >= 32U ?
         MinimumI32(food_required, cow_output) : 0;
+    int32_t before_eating[CC_GOOD_COUNT];
+    if (accounting != NULL) {
+        memcpy(before_eating, settlement->stock, sizeof(before_eating));
+    }
     food_eaten += CcNutritionConsume(
         settlement->stock, CC_NUTRITION_CIVILIAN,
         food_required - food_eaten);
+    if (accounting != NULL) {
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            accounting->civilian_units[good] +=
+                (uint64_t)(before_eating[good] - settlement->stock[good]);
+        }
+    }
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         if (CcGoodNutritionValue(
                 (CcGood)good, CC_NUTRITION_CIVILIAN) > 0) continue;
@@ -5755,7 +5772,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         int32_t consumed = MinimumI32(settlement->stock[good], consumption);
         settlement->stock[good] -= consumed;
     }
-    (void)SpoilStoredNutrition(sim, settlement);
+    (void)SpoilStoredNutrition(sim, settlement, accounting);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         RefreshSettlementGoodPrice(sim, settlement, (CcGood)good);
     }
@@ -14733,6 +14750,12 @@ static void AdvanceHorseTeam(CcSim *sim)
 
 void CcSimAdvanceDays(CcSim *sim, int32_t days)
 {
+    CcSimAdvanceDaysWithNutritionAccounting(sim, days, NULL);
+}
+
+void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
+                                             CcNutritionAccounting *accounting)
+{
     if (sim == NULL || days <= 0 || sim->current_day < 1 ||
         sim->current_day > CC_SIM_MAX_DAY ||
         days > CC_SIM_MAX_DAY - sim->current_day) return;
@@ -14767,7 +14790,8 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
             CcId scriptorium_id = scriptorium != NULL ?
                 scriptorium->id : 0U;
             for (int32_t settlement = 0; settlement < sim->settlement_count; ++settlement) {
-                UpdateSettlement(sim, settlement, scriptorium_id);
+                UpdateSettlement(sim, settlement, scriptorium_id,
+                    accounting != NULL ? &accounting->towns[settlement] : NULL);
             }
             AdvanceRuins(sim);
             if (sim->schema_version >= 22U) AdvanceArchives(sim);
