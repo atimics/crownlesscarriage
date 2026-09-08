@@ -203,6 +203,7 @@ jobs:
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release
           -DCC_WARNINGS_AS_ERRORS=ON
+          -DCC_BUILD_GRAPHICS_PROBES=ON
       - name: Build
         run: cmake --build build --parallel
       - name: Test
@@ -233,6 +234,7 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: 1
         run: |
           python3 -m pip install pillow
+          xvfb-run --auto-servernum cmake --build build --target run_matrix_upload_tests
           xvfb-run --auto-servernum cmake --build build --target run_renderer_graphics_tests
           python3 tests/art_check_tests.py --viewport-image build/renderer-viewport.png
           xvfb-run --auto-servernum cmake --build build --target run_character_material_captures
