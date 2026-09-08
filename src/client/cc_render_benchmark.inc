@@ -1,4 +1,5 @@
 /* Render benchmark orchestration and validation belong to this interface. */
+_Static_assert(CC_MAX_MAPS <= 32, "Benchmark map catalogue needs a wider mask.");
 typedef struct CcRenderBenchmark {
     bool active;
     int32_t frames;
