@@ -1,0 +1,93 @@
+[
+  {
+    "name": "conversation",
+    "width": 1200,
+    "height": 700,
+    "bytes": 166415,
+    "matches_parent_bytes": false
+  },
+  {
+    "name": "trade",
+    "width": 1040,
+    "height": 620,
+    "bytes": 68425,
+    "matches_parent_bytes": false
+  },
+  {
+    "name": "book",
+    "width": 1040,
+    "height": 620,
+    "bytes": 73933,
+    "matches_parent_bytes": false
+  },
+  {
+    "name": "ponies",
+    "width": 1200,
+    "height": 700,
+    "bytes": 53811,
+    "matches_parent_bytes": false
+  },
+  {
+    "name": "ponies-large",
+    "width": 1040,
+    "height": 620,
+    "bytes": 44311,
+    "matches_parent_bytes": true
+  },
+  {
+    "name": "ponies-roaming",
+    "width": 1040,
+    "height": 620,
+    "bytes": 45488,
+    "matches_parent_bytes": false
+  },
+  {
+    "name": "menu",
+    "width": 1040,
+    "height": 620,
+    "bytes": 51711,
+    "matches_parent_bytes": true
+  },
+  {
+    "name": "road-1040",
+    "width": 1040,
+    "height": 700,
+    "bytes": 202193,
+    "matches_parent_bytes": true
+  },
+  {
+    "name": "road-1200",
+    "width": 1200,
+    "height": 700,
+    "bytes": 206993,
+    "matches_parent_bytes": true
+  },
+  {
+    "name": "road-1280",
+    "width": 1280,
+    "height": 700,
+    "bytes": 209334,
+    "matches_parent_bytes": true
+  },
+  {
+    "name": "pony-encounter",
+    "width": 1280,
+    "height": 760,
+    "bytes": 160332,
+    "matches_parent_bytes": true
+  },
+  {
+    "name": "pony-swap",
+    "width": 1280,
+    "height": 760,
+    "bytes": 160515,
+    "matches_parent_bytes": true
+  },
+  {
+    "name": "pony-book",
+    "width": 1280,
+    "height": 760,
+    "bytes": 62580,
+    "matches_parent_bytes": true
+  }
+]
