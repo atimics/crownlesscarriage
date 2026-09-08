@@ -24,7 +24,13 @@ with tempfile.TemporaryDirectory() as directory:
         assert all(row['threats']['semantics'] == 'snapshot' for row in rows)
         for row in rows:
             assert row['archive_recruitment_order']['semantics'] == 'stored_reservation'
-            assert row['archive_recruitment_order']['status'] == 0
+            order = row['archive_recruitment_order']
+            assert order['status'] == 0
+            assert order['journey_gate'] == 'unavailable'
+            for field in ['current_id', 'leg_route_id', 'leg_hop_id']:
+                assert order[field] == '0'
+            for field in ['leg_arrival_day', 'provisioned_days', 'arrived_day']:
+                assert order[field] == 0
             recruit = row['archive_recruitment']
             assert recruit['semantics'] == 'recruitment_quote_snapshot'
             assert isinstance(recruit['person_id'], str)

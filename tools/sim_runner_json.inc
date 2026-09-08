@@ -39,6 +39,13 @@ static void JsonArchiveRecruitmentOrder(const CcSim *sim)
     printf(",\"trainer_days\":%d", o->trainer_days);
     printf(",\"arrival_estimate\":%" PRId64, o->arrival_estimate);
     printf(",\"ready_estimate\":%" PRId64, o->ready_estimate);
+    printf(",\"current_id\":\"%" PRIu64 "\"", o->current_id);
+    printf(",\"leg_route_id\":\"%" PRIu64 "\"", o->leg_route_id);
+    printf(",\"leg_hop_id\":\"%" PRIu64 "\"", o->leg_hop_id);
+    printf(",\"leg_arrival_day\":%d", o->leg_arrival_day);
+    printf(",\"provisioned_days\":%d", o->provisioned_days);
+    printf(",\"arrived_day\":%d", o->arrived_day);
+    printf(",\"journey_gate\":"); JsonString(CcArchiveRecruitmentGateName(CcSimArchiveRecruitmentJourneyGate(sim)));
     printf("}");
 }
 

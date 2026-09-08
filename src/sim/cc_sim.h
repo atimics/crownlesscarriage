@@ -61,9 +61,9 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-/* Schemas 75-81 shipped ahead of this branch; the cast slice
-   (character travel and resident seeding) is schema 82. */
-#define CC_SIM_SCHEMA_VERSION 82
+/* Schemas 75-82 shipped ahead of this branch; the archive recruit
+   journey is schema 83. */
+#define CC_SIM_SCHEMA_VERSION 83
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -1850,7 +1850,7 @@ typedef struct CcPonyCompany {
     CcPony ponies[CC_PONY_COUNT];
 } CcPonyCompany;
 
-/* One committed recruitment reservation. Status 0 is empty; 1 is reserved. */
+/* One committed recruitment reservation. Status 0 is empty; 1 waits, 2 travels, 3 arrived, 4 failed. */
 typedef struct CcArchiveRecruitmentOrder {
     int32_t status;
     CcId person_id, trainer_id, seat_id, origin_id, first_route_id, first_hop_id;
@@ -1858,6 +1858,8 @@ typedef struct CcArchiveRecruitmentOrder {
     CcMoney donor_shares[2], purse;
     int32_t wheat, paper, tools, travel_wheat, start_day, training_days, trainer_days;
     int64_t arrival_estimate, ready_estimate;
+    CcId current_id, leg_route_id, leg_hop_id;
+    int32_t leg_arrival_day, provisioned_days, arrived_day;
 } CcArchiveRecruitmentOrder;
 
 typedef struct CcGrainSupply {

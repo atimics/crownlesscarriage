@@ -216,11 +216,33 @@ bool CcSimBeginArchiveRecruitment(CcSim *sim)
     return true;
 }
 
+static bool JourneyValid(const CcSim *sim)
+{
+    if (sim->schema_version < 79U) return true;
+    const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    if (o->status == 0) return o->current_id == 0 && o->leg_route_id == 0 &&
+        o->leg_hop_id == 0 && o->leg_arrival_day == 0 && o->provisioned_days == 0 && o->arrived_day == 0;
+    if ((o->current_id != 0 && CcSimSettlement(sim, o->current_id) == NULL) ||
+        o->provisioned_days < 0 || o->provisioned_days > CC_SIM_MAX_DAY ||
+        o->arrived_day < 0 || o->arrived_day > sim->current_day) return false;
+    if (o->status == 2) {
+        const CcRoute *route = CcSimRoute(sim, o->leg_route_id);
+        if (route == NULL || o->current_id == 0 || o->leg_hop_id == o->current_id ||
+            !((route->from_id == o->current_id && route->to_id == o->leg_hop_id) ||
+              (route->to_id == o->current_id && route->from_id == o->leg_hop_id)) ||
+            o->leg_arrival_day < sim->current_day || o->leg_arrival_day > CC_SIM_MAX_DAY ||
+            o->provisioned_days == 0 || o->arrived_day != 0) return false;
+    } else if (o->leg_route_id != 0 || o->leg_hop_id != 0 || o->leg_arrival_day != 0) return false;
+    if (o->status == 3) return o->current_id == o->seat_id && o->arrived_day >= o->start_day;
+    return o->arrived_day == 0;
+}
+
 bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
 {
     if (sim == NULL) return false;
     if (sim->schema_version < 80U) return true;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    if (!JourneyValid(sim)) return false;
     if (o->status == 0) {
         return o->person_id == 0 &&
             o->trainer_id == 0 &&
@@ -245,7 +267,7 @@ bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
             o->arrival_estimate == 0 &&
             o->ready_estimate == 0;
     }
-    if (o->status != 1 || CcIdKind(o->person_id) != CC_ENTITY_CHARACTER ||
+    if ((o->status < 1 || o->status > (sim->schema_version >= 79U ? 4 : 1)) || CcIdKind(o->person_id) != CC_ENTITY_CHARACTER ||
         (o->person_id & CC_ID_SERIAL_MASK) == 0 ||
         (o->person_id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial ||
         (o->trainer_id != 0 && (CcIdKind(o->trainer_id) != CC_ENTITY_CHARACTER ||
@@ -285,11 +307,15 @@ bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
 
 bool CcSimCancelArchiveRecruitment(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 80U || sim->archive_recruitment.status != 1 ||
+    if (sim == NULL || sim->schema_version < 80U ||
+        (sim->archive_recruitment.status != 1 &&
+         !(sim->schema_version >= 83U && (sim->archive_recruitment.status == 3 ||
+           sim->archive_recruitment.status == 4))) ||
         !CcSimArchiveRecruitmentOrderValid(sim)) return false;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
     CcSettlement *seat = CcSimSettlementMutable(sim, o->seat_id);
-    CcSettlement *origin = CcSimSettlementMutable(sim, o->origin_id);
+    CcSettlement *origin = CcSimSettlementMutable(sim,
+        sim->schema_version >= 79U && o->current_id != 0 ? o->current_id : o->origin_id);
     CcMoney donors = o->donor_shares[0] + o->donor_shares[1];
     if (donors > o->purse || sim->iron_ledger_reserve > CC_SIM_MAX_MONEY - (o->purse - donors)) return false;
     int32_t seat_wheat = o->wheat + (origin == seat ? o->travel_wheat : 0);
@@ -315,4 +341,93 @@ bool CcSimCancelArchiveRecruitment(CcSim *sim)
     CcEconomyRefreshSettlementGoodPrice(sim, origin, CC_GOOD_WHEAT);
     sim->archive_recruitment = (CcArchiveRecruitmentOrder){0};
     return true;
+}
+
+static CcCharacter *Recruit(CcSim *sim)
+{
+    for (int32_t i = 0; i < sim->character_count; ++i)
+        if (sim->characters[i].id == sim->archive_recruitment.person_id) return &sim->characters[i];
+    return NULL;
+}
+
+CcArchiveRecruitmentGate CcSimArchiveRecruitmentJourneyGate(const CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 79U || sim->archive_recruitment.status == 0)
+        return CC_ARCHIVE_RECRUIT_UNAVAILABLE;
+    const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    const CcCharacter *person = CcSimCharacter(sim, o->person_id);
+    if (person == NULL || person->death_day <= sim->current_day)
+        return CC_ARCHIVE_RECRUIT_CANDIDATE;
+    if (o->status == 4) return CC_ARCHIVE_RECRUIT_TRAVEL_FOOD;
+    if (o->status == 2 || o->status == 3) return CC_ARCHIVE_RECRUIT_BUSY;
+    CcId current = o->current_id != 0 ? o->current_id : o->origin_id;
+    if (!Available(sim, person) || person->current_settlement_id != current)
+        return CC_ARCHIVE_RECRUIT_CANDIDATE;
+    const CcSettlement *seat = CcSimSettlement(sim, o->seat_id);
+    if (seat == NULL || CcSettlementIsAbandoned(seat)) return CC_ARCHIVE_RECRUIT_SEAT;
+    if (current == o->seat_id) return CC_ARCHIVE_RECRUIT_READY;
+    int32_t slot = -1;
+    if (!CcTradeFindPath(sim, current, o->seat_id, CC_GOOD_FOOD, &slot, NULL,
+        NULL, NULL, NULL, true, 0, false, 1)) return CC_ARCHIVE_RECRUIT_ROUTE;
+    int64_t days = (int64_t)o->provisioned_days + sim->routes[slot].travel_days;
+    if (days > CC_SIM_MAX_DAY || (int64_t)sim->current_day + sim->routes[slot].travel_days > CC_SIM_MAX_DAY)
+        return CC_ARCHIVE_RECRUIT_CALENDAR;
+    int64_t food = 2 * ((days + 6) / 7 - ((int64_t)o->provisioned_days + 6) / 7);
+    if (o->travel_wheat < food) return CC_ARCHIVE_RECRUIT_TRAVEL_FOOD;
+    return CC_ARCHIVE_RECRUIT_READY;
+}
+
+CcArchiveJourneyStep CcSimAdvanceArchiveRecruitmentJourney(CcSim *sim, uint32_t road_roll)
+{
+    if (sim == NULL || sim->schema_version < 79U) return CC_ARCHIVE_JOURNEY_WAIT;
+    CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    if (o->status != 1 && o->status != 2) return CC_ARCHIVE_JOURNEY_WAIT;
+    CcCharacter *person = Recruit(sim);
+    if (person == NULL || person->death_day <= sim->current_day) {
+        if (o->status == 2) o->travel_wheat = 0;
+        o->status = 4;
+        o->leg_route_id = o->leg_hop_id = 0;
+        o->leg_arrival_day = 0;
+        return CC_ARCHIVE_JOURNEY_FAILED;
+    }
+    if (o->status == 2) {
+        if (sim->current_day < o->leg_arrival_day) return CC_ARCHIVE_JOURNEY_WAIT;
+        int32_t danger = CcSimRouteDanger(sim, o->leg_route_id);
+        o->current_id = o->leg_hop_id;
+        person->current_settlement_id = o->current_id;
+        person->activity = CC_CHARACTER_ACTIVITY_WORKING;
+        o->leg_route_id = o->leg_hop_id = 0;
+        o->leg_arrival_day = 0;
+        o->status = 1;
+        /* Match the courier's bounded road-risk threshold. The recruit reaches
+           shelter after an attack; the remaining provisions are lost. */
+        if (road_roll % 100U < (uint32_t)(danger / 5)) {
+            o->status = 4;
+            o->travel_wheat = 0;
+            person->activity = CC_CHARACTER_ACTIVITY_RECOVERING;
+            return CC_ARCHIVE_JOURNEY_FAILED;
+        }
+        if (o->current_id != o->seat_id) return CC_ARCHIVE_JOURNEY_STOP;
+    }
+    if (CcSimArchiveRecruitmentJourneyGate(sim) != CC_ARCHIVE_RECRUIT_READY)
+        return CC_ARCHIVE_JOURNEY_WAIT;
+    if (o->current_id == 0) o->current_id = o->origin_id;
+    if (o->current_id == o->seat_id) {
+        o->status = 3;
+        o->arrived_day = sim->current_day;
+        return CC_ARCHIVE_JOURNEY_ARRIVED;
+    }
+    int32_t slot = -1; CcId hop = 0;
+    if (!CcTradeFindPath(sim, o->current_id, o->seat_id, CC_GOOD_FOOD, &slot, &hop,
+        NULL, NULL, NULL, true, 0, false, 1)) return CC_ARCHIVE_JOURNEY_WAIT;
+    const CcRoute *route = &sim->routes[slot];
+    int32_t days = o->provisioned_days + route->travel_days;
+    o->travel_wheat -= 2 * ((days + 6) / 7 - (o->provisioned_days + 6) / 7);
+    o->provisioned_days = days;
+    o->leg_route_id = route->id;
+    o->leg_hop_id = hop;
+    o->leg_arrival_day = sim->current_day + route->travel_days;
+    o->status = 2;
+    person->activity = CC_CHARACTER_ACTIVITY_TRAVELLING;
+    return CC_ARCHIVE_JOURNEY_DEPARTED;
 }
