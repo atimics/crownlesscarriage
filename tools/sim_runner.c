@@ -2,6 +2,7 @@
 #include "sim/cc_sim.h"
 
 #include <inttypes.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -177,6 +178,49 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  campaign_hero != NULL ? campaign_hero->name : "none",
                  sim->dragon.territoryless_days);
     if (detail) {
+        CcRitualOfferingPlan offering = CcSimRitualOfferingPlan(sim);
+        (void)printf("  ritual_offering_snapshot cult=%" PRIu64 " lair=%" PRIu64
+            " phase=%d days_remaining=%d afterdeath_days=%d tribute_phase=%d"
+            " existing_eggs=%d members=%d/48 devotion=%d/75 cohesion=%d/75"
+            " coins=%" PRId64 "/120 relics=%d/2 food_rations=%d/12 tools=%d/2 weapons=%d/3"
+            " planned_eggs=%d blocked=",
+            sim->goblins.id, sim->goblins.lair_settlement_id,
+            (int)sim->goblins.dragon_seed_phase, sim->goblins.dragon_seed_days_remaining,
+            sim->dragon.afterdeath_days, (int)sim->goblins.tribute_phase, sim->dragon.egg_count,
+            sim->goblins.members, sim->goblins.devotion, sim->goblins.cohesion,
+            sim->goblins.lair_coins, offering.relics, offering.food_rations,
+            sim->goblins.lair_stock[CC_GOOD_TOOLS], sim->goblins.lair_stock[CC_GOOD_WEAPONS],
+            offering.eggs);
+        const char *offering_names[] = {"invalid", "members", "devotion", "cohesion",
+            "coins", "relics", "food", "tools", "weapons"};
+        bool offering_separator = false;
+        for (unsigned bit = 0; bit < sizeof(offering_names) / sizeof(offering_names[0]); ++bit) {
+            if ((offering.blocked & (UINT32_C(1) << bit)) == 0U) continue;
+            (void)printf("%s%s", offering_separator ? "," : "", offering_names[bit]);
+            offering_separator = true;
+        }
+        (void)puts(offering_separator ? "" : "ready");
+        CcCampaignLaunchPlan launch = CcSimCampaignLaunchPlan(sim);
+        (void)printf("  campaign_launch_snapshot phase=%d attempts=%d cooldown=%d"
+            " pledged_mask=%" PRIu32 " pledges=%d/2 dragon_age_days=%d/182500"
+            " dragon_stage=%d dragon_slain=%d prepare_eligible=%d"
+            " held_food_rations=%d/32 held_tools=%d/8 held_weapons=%d/12"
+            " patron=%" PRIu64 " hero=%" PRIu64 " origin=%" PRIu64 " blocked=",
+            (int)sim->dragon_campaign.phase, sim->dragon_campaign.attempts,
+            sim->dragon_campaign.cooldown_days, launch.pledged_mask, launch.pledged_count,
+            sim->dragon.age_days, (int)sim->dragon.life_stage, sim->dragon.slain ? 1 : 0,
+            (launch.blocked & CC_CAMPAIGN_PREPARATION_BLOCKS) == 0U ? 1 : 0,
+            launch.food_rations, launch.tools, launch.weapons,
+            launch.patron_id, launch.hero_id, launch.origin_id);
+        const char *launch_names[] = {"invalid", "active", "cooldown", "dragon_slain",
+            "pledges", "dragon_age", "food", "tools", "weapons", "patron", "hero", "seat"};
+        bool launch_separator = false;
+        for (unsigned bit = 0; bit < sizeof(launch_names) / sizeof(launch_names[0]); ++bit) {
+            if ((launch.blocked & (UINT32_C(1) << bit)) == 0U) continue;
+            (void)printf("%s%s", launch_separator ? "," : "", launch_names[bit]);
+            launch_separator = true;
+        }
+        (void)puts(launch_separator ? "" : "ready");
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             const CcSettlement *place = &sim->settlements[i];
             (void)printf("  %-16s hunger=%3d prosperity=%3d security=%3d"
@@ -203,6 +247,28 @@ static void PrintSummary(const CcSim *sim, bool detail)
                          person->name, CcCharacterAgeYears(sim, person),
                          person->generation,
                          home != NULL ? home->name : "unknown");
+        }
+        for (int32_t i = 0; i < sim->route_count; ++i) {
+            const CcRoute *route = &sim->routes[i];
+            CcRoadRecoveryPlan plan = CcSimRoadRecoveryPlan(sim, route->id);
+            (void)printf("  roadside_recovery route=%" PRIu64
+                " from=%" PRIu64 " to=%" PRIu64 " closed=%d condition=%d"
+                " day=%d next_work_day=%" PRId64 " labor_base=%" PRIu64
+                " supplier=%" PRIu64 " people=%d/220 food_rations=%d/4"
+                " wood=%d/2 stone=%d/2 tools=%d/1 effort=%d people_used=%d blocked=",
+                route->id, route->from_id, route->to_id, route->closed ? 1 : 0,
+                route->condition, sim->current_day, plan.next_work_day,
+                plan.labor_base_id, plan.supplier_id, plan.population, plan.food_rations,
+                plan.wood, plan.stone, plan.tools, plan.effort, plan.people_used);
+            const char *names[] = {"invalid", "open", "war_border", "calendar",
+                "abandoned_endpoint", "people", "food", "wood", "stone", "tools"};
+            bool separator = false;
+            for (unsigned bit = 0; bit < sizeof(names) / sizeof(names[0]); ++bit) {
+                if ((plan.blocked & (UINT32_C(1) << bit)) == 0U) continue;
+                (void)printf("%s%s", separator ? "," : "", names[bit]);
+                separator = true;
+            }
+            (void)puts(separator ? "" : "ready");
         }
         for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
             const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
@@ -249,6 +315,18 @@ static void PrintChronicleNewEvents(const CcSim *sim)
     }
 }
 
+static bool ParseUnsignedArgument(const char *text, int base, uint32_t limit,
+    uint32_t *value)
+{
+    if (text == NULL || text[0] < '0' || text[0] > '9') return false;
+    char *end = NULL;
+    errno = 0;
+    unsigned long long parsed = strtoull(text, &end, base);
+    if (errno == ERANGE || end == text || *end != '\0' || parsed > limit) return false;
+    *value = (uint32_t)parsed;
+    return true;
+}
+
 int main(int argc, char **argv)
 {
     uint32_t seed = UINT32_C(0xc0a71a9e);
@@ -259,27 +337,51 @@ int main(int argc, char **argv)
     const char *save_path = NULL;
     bool detail = false;
     for (int argument = 1; argument < argc; ++argument) {
+        uint32_t parsed = 0;
+        const char *option = argv[argument];
         if (strcmp(argv[argument], "--seed") == 0 && argument + 1 < argc) {
-            seed = (uint32_t)strtoul(argv[++argument], NULL, 0);
+            if (!ParseUnsignedArgument(argv[++argument], 0, UINT32_MAX, &seed)) {
+                (void)fprintf(stderr, "Invalid value for %s: %s\n", option, argv[argument]);
+                return EXIT_FAILURE;
+            }
         } else if (strcmp(argv[argument], "--years") == 0 && argument + 1 < argc) {
-            years = (int32_t)strtol(argv[++argument], NULL, 10);
+            if (!ParseUnsignedArgument(argv[++argument], 10, INT32_MAX, &parsed)) {
+                (void)fprintf(stderr, "Invalid value for %s: %s\n", option, argv[argument]);
+                return EXIT_FAILURE;
+            }
+            years = (int32_t)parsed;
         } else if (strcmp(argv[argument], "--report-every") == 0 &&
                    argument + 1 < argc) {
-            report_every = (int32_t)strtol(argv[++argument], NULL, 10);
+            if (!ParseUnsignedArgument(argv[++argument], 10, INT32_MAX, &parsed)) {
+                (void)fprintf(stderr, "Invalid value for %s: %s\n", option, argv[argument]);
+                return EXIT_FAILURE;
+            }
+            report_every = (int32_t)parsed;
         } else if (strcmp(argv[argument], "--interval") == 0 &&
                    argument + 1 < argc) {
-            report_every = (int32_t)strtol(argv[++argument], NULL, 10);
+            if (!ParseUnsignedArgument(argv[++argument], 10, INT32_MAX, &parsed)) {
+                (void)fprintf(stderr, "Invalid value for %s: %s\n", option, argv[argument]);
+                return EXIT_FAILURE;
+            }
+            report_every = (int32_t)parsed;
         } else if (strcmp(argv[argument], "--save") == 0 && argument + 1 < argc) {
             save_path = argv[++argument];
         } else if (strcmp(argv[argument], "--load") == 0 && argument + 1 < argc) {
             load_path = argv[++argument];
         } else if (strcmp(argv[argument], "--checkpoint-every") == 0 &&
                    argument + 1 < argc) {
-            checkpoint_every = (int32_t)strtol(argv[++argument], NULL, 10);
+            if (!ParseUnsignedArgument(argv[++argument], 10, INT32_MAX, &parsed)) {
+                (void)fprintf(stderr, "Invalid value for %s: %s\n", option, argv[argument]);
+                return EXIT_FAILURE;
+            }
+            checkpoint_every = (int32_t)parsed;
         } else if (strcmp(argv[argument], "--detail") == 0) {
             detail = true;
         } else if (strcmp(argv[argument], "--chronicle") == 0) {
             chronicle = true;
+        } else {
+            (void)fprintf(stderr, "Unknown or incomplete option: %s\n", option);
+            return EXIT_FAILURE;
         }
     }
 
@@ -304,7 +406,7 @@ int main(int argc, char **argv)
     }
     if (report_every < 1) report_every = 1;
     if (chronicle) {
-        (void)printf("== world seed=%" PRIu32 " ==\n", seed);
+        (void)printf("== world seed=%" PRIu32 " ==\n", sim.world_seed);
         for (int32_t i = 0; i < sim.kingdom_count; ++i) {
             (void)printf("kingdom: %s\n", sim.kingdoms[i].name);
         }

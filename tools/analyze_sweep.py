@@ -44,6 +44,8 @@ METRICS = [
     # bandits
     "bandit_members_end", "bandit_supplies_end", "bandit_influence_end",
     "bandit_raids_end", "days_bandit_raid",
+    "bandit_raid_group_days", "bandit_influence_70_plus_group_days",
+    "bandit_raid_group_year_samples", "bandit_influence_70_plus_group_year_samples",
     "days_bandit_influence_70_plus", "smuggler_routes",
     # scriptorium / monastery
     "iron_ledger_reserve", "treasure_count",
