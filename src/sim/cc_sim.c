@@ -2490,7 +2490,7 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
 {
     if (sim == NULL || good < 0 || good >= CC_GOOD_COUNT) return 0;
     int64_t total = sim->player.cargo[good] +
-                    (sim->schema_version >= 58U ? sim->mine.pack[good] : 0) +
+                    (sim->schema_version >= 59U ? sim->mine.pack[good] : 0) +
                     sim->goblins.carried_goods[good] +
                     sim->goblins.lair_stock[good] +
                     sim->dragon.hoard_goods[good] +
@@ -18897,7 +18897,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 57U
+#define CC_NEWEST_LEGACY_SCHEMA 58U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18915,7 +18915,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 57U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 58U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -20945,7 +20945,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Pony company state is invalid.");
         return false;
     }
-    if (sim->schema_version >= 58U && !CcMineValidate(sim)) {
+    if (sim->schema_version >= 59U && !CcMineValidate(sim)) {
         SetError(error, error_capacity, "Mine visit state is invalid.");
         return false;
     }
@@ -20996,7 +20996,7 @@ uint64_t CcSimHash(const CcSim *sim)
     bool hash_lifecycles = sim->schema_version >= 26U;
     uint64_t hash = UINT64_C(1469598103934665603);
 #define HASH_VALUE(value) hash = HashU64(hash, (uint64_t)(value))
-    if (sim->schema_version >= 58U) {
+    if (sim->schema_version >= 59U) {
         HASH_VALUE(sim->mine.phase); HASH_VALUE(sim->mine.site_id);
         HASH_VALUE(sim->mine.x); HASH_VALUE(sim->mine.y); HASH_VALUE(sim->mine.revision);
         HASH_VALUE(sim->mine.return_speed); HASH_VALUE(sim->mine.light);

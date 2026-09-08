@@ -1307,6 +1307,7 @@ if(BUILD_TESTING)
 
     add_executable(mine_tests tests/mine_tests.c)
     target_link_libraries(mine_tests PRIVATE crownless_coop crownless_metagame)
+    target_compile_definitions(mine_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     cc_strict_warnings(mine_tests)
     add_test(NAME silverwick_mine_roundtrip COMMAND mine_tests)
 

@@ -21,7 +21,7 @@ Return through the entrance, walk to the carriage, and use it to resume the same
 
 The simulation owns position, collision, carried goods, elapsed time, opened passages, and the road anchor. The screen, text controls, and shared company commands use those rules. Each movement carries the current mine revision so a repeated request cannot take another step.
 
-Save schema 58 adds the mine visit and pack. Schema 57 saves retain their old hash during verification, then upgrade with an empty visit. Journal replay restores the same position and supplies.
+Save schema 59 adds the mine visit and pack. Schema 57 and 58 saves retain their old hash during verification, then upgrade with an empty visit. Journal replay restores the same position and supplies.
 
 Text controls: `mine visit`, `mine look`, `mine move north`, `mine use`, `mine pack Bread`, `mine unpack Bread`, and `road pass`.
 
@@ -32,3 +32,5 @@ This slice builds the Silverwick road branch, surface yard, and zone 01. The rem
 ## Checks
 
 `silverwick_mine_roundtrip` covers both road approaches, parking, pack accounting, collision, the survey, the bar, save/load, journal replay, old-save migration, shared commands, and text commands. `silverwick_mine_input` covers the branch card, keyboard movement, food packing, the view change at the doorway, F5, and the return to the road. Native capture options are `--capture-mine-yard filename.png` and `--capture-mine-level filename.png`.
+
+The schema 58 migration fixture was written with naming PR revision `6e3436940a667461821b928269224cd6f33f08fc`. Seed 42 has all 24 death dates set to day 2, followed by one flushed journal day. Its replay hash is `1053288272468887993`. The standalone SQLite fixture verifies the original naming replay before schema 59 adds an empty mine visit.

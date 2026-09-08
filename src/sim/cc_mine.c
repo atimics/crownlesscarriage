@@ -35,7 +35,7 @@ const CcRoadSite *CcMineSite(const CcSim *sim)
 }
 int32_t CcMineBranchSubtick(const CcSim *sim)
 {
-    if(sim == NULL || sim->schema_version < 58U || !sim->journey.active) return -1;
+    if(sim == NULL || sim->schema_version < 59U || !sim->journey.active) return -1;
     const CcRoadSite *site=CcMineSite(sim);
     if(site == NULL || site->route_id != sim->journey.route_id) return -1;
     int32_t slot=(int32_t)(site-sim->road_sites);
@@ -98,7 +98,7 @@ static void SpendMinutes(CcSim *sim, int32_t minutes)
 bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capacity)
 {
     CcMineVisit *m=&sim->mine;
-    if (sim->schema_version < 58U || m->revision >= INT_MAX-1)
+    if (sim->schema_version < 59U || m->revision >= INT_MAX-1)
         return Fail(error,capacity,"Load this campaign with the current mine rules.");
     if (command->kind == CC_COMMAND_VISIT_MINE) {
         const CcRoadSite *site=CcMineSite(sim);

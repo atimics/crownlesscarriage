@@ -4154,8 +4154,8 @@ static ContextActionSet BuildContextActions(
     int32_t selected, int32_t selected_situation)
 {
     ContextActionSet set = {0};
-    if (sim->mine.phase != CC_MINE_NONE) return set;
     if (sim == NULL || local == NULL) return set;
+    if (sim->mine.phase != CC_MINE_NONE) return set;
     if (local->adventure_ui && (view == VIEW_TRADE || view == VIEW_PAUSE || view == VIEW_LEDGER)) return set;
     int32_t pony = CcPonyOnRoad(sim);
     if (view == VIEW_LOCAL && pony >= 0 && !LocalCombatActive(local)) {

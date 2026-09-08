@@ -5987,7 +5987,8 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 50U || legacy_version == 51U ||
          legacy_version == 52U || legacy_version == 53U ||
          legacy_version == 54U || legacy_version == 55U ||
-         legacy_version == 56U || legacy_version == 57U) &&
+         legacy_version == 56U || legacy_version == 57U ||
+         legacy_version == 58U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
@@ -6001,7 +6002,8 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          * journal replay uses the original rule gates before this upgrade.
          * Schema 56 adds the saved archive silence date, defaulting to zero.
          * Schema 58 uses local name roots for new residents and descendants;
-         * saved names remain intact. */
+         * saved names remain intact. Schema 59 adds mine visits with an empty
+         * visit for older saves. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }

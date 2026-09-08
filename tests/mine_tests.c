@@ -118,7 +118,15 @@ int main(void)
     CcSimInit(&sim,123);sim.schema_version=57;
     Check(CcSaveWrite(path,&sim,error,sizeof(error)));
     Check(CcSaveRead(path,&restored,error,sizeof(error)));
-    CC_CHECK(restored.schema_version==58 && restored.mine.phase==CC_MINE_NONE);
+    CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION && restored.mine.phase==CC_MINE_NONE);
+    Check(CcSaveRead(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-58-generator-25-names-journal.ccsave",
+        &restored,error,sizeof(error)));
+    CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION && restored.mine.phase==CC_MINE_NONE);
+    CC_CHECK(restored.character_births==24);
+    CC_CHECK(strcmp(restored.characters[0].name,"Rowen Venn")==0);
+    CC_CHECK(strcmp(restored.characters[23].name,"Hartha Stonehewer")==0);
+    restored.schema_version=58U;
+    CC_CHECK(CcSimHash(&restored)==UINT64_C(1053288272468887993));
     AtBranch(&sim,false);
     Check(CcCoopApply(&sim,"visit_mine",CcMineSite(&sim)->id,0,0,error,sizeof(error)));
     Check(CcCoopApply(&sim,"mine_step",(CcId)sim.mine.revision,0,0,error,sizeof(error)));
