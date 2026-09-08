@@ -6102,7 +6102,7 @@ void CcGossipText(const CcSim *sim, const CcGossip *story,
     if (version->retellings == 0) {
         /* The untold telling is a straight copy; a format-parsing
            snprintf per archived story adds up over a chronicle. */
-        size_t length = strnlen(story->text, sizeof(story->text));
+        size_t length = strlen(story->text);
         if (length >= capacity) length = capacity - 1U;
         memcpy(text, story->text, length);
         text[length] = '\0';
