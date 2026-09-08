@@ -1,0 +1,12 @@
+{
+  "runtime": {
+    "rows": 8640,
+    "parent_sha256": "3c2f03e408c5322f952a2e15283c0e36ca9e23a622fdc1f5f537de4750e724aa",
+    "current_sha256": "3c2f03e408c5322f952a2e15283c0e36ca9e23a622fdc1f5f537de4750e724aa"
+  },
+  "annual_states": {
+    "rows": 720,
+    "parent_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10",
+    "current_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10"
+  }
+}

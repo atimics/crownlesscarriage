@@ -50,4 +50,20 @@ bool CcJourneyResolveEncounter(CcSim *sim, const CcCommand *command,
     char *error, size_t error_capacity,
     const CcJourneyEncounterServices *services);
 
+/* Shared world effects keep their core owners while journey ticks order them. */
+typedef struct {
+    CcJourneyRecordEvent record_event;
+    CcBanditGroup *(*bandits)(CcSim *sim, CcId route_id);
+    void (*exchange_gossip)(CcSim *sim, CcId carrier, CcId place,
+                            const char *speaker);
+    void (*reveal_complete_route)(CcSim *sim, CcId route);
+    void (*reveal_settlement_roads)(CcSim *sim, CcId settlement);
+    void (*reveal_journey_road)(CcSim *sim);
+    void (*deliver_courier)(CcSim *sim, CcCourier *courier, bool player);
+    void (*deliver_delayed_echo)(CcSim *sim);
+} CcJourneyRuntimeServices;
+
+void CcJourneyAdvanceTicks(CcSim *sim, int32_t ticks,
+    const CcJourneyRuntimeServices *services);
+
 #endif
