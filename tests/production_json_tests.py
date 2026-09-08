@@ -20,6 +20,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert report == run(*base, '--json')
         rows = [json.loads(line) for line in report.splitlines()]
         assert [row['day'] for row in rows] == [1, 366, 731]
+        assert all(row['threats']['semantics'] == 'snapshot' for row in rows)
         policy = 'slain-at-day-1' if '--dragon-slain-day-one' in fixture else 'natural-history'
         assert all(row['dragon_policy'] == policy and row['comparison_scope'] == 'whole-policy' for row in rows)
         text = run(*base, '--save', str(root / 'text.ccsave'))
@@ -28,6 +29,10 @@ with tempfile.TemporaryDirectory() as directory:
         for name in ['json', 'text']:
             loaded = json.loads(run('--load', str(root / f'{name}.ccsave'), '--years', '0', '--json'))
             assert loaded['state_hash'] == rows[-1]['state_hash']
+            assert loaded['threats'] == rows[-1]['threats']
+            assert loaded['campaign_launch'] == rows[-1]['campaign_launch']
+            assert loaded['ritual_offering'] == rows[-1]['ritual_offering']
+            assert loaded['retained_history'] == rows[-1]['retained_history']
             assert loaded['accounting_start_day'] == 731
             assert loaded['dragon_policy'] == 'loaded-save'
             assert all(sum(site['input']) == 0 for site in loaded['sites'])
@@ -49,6 +54,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert sum(sum(town['herds']['cows']['feed']) for town in rows[-1]['towns']) > 0
         assert sum(town['herds']['sheep']['output'][rows[-1]['goods'].index('Wool')] for town in rows[-1]['towns']) > 0
         assert all(route['open_days'] + route['closed_days'] == 730 for route in rows[-1]['routes'])
+        assert all(route['recovery']['semantics'] == 'evaluated_plan_snapshot' for row in rows for route in row['routes'])
         for start, end in zip(rows[0]['sites'], rows[-1]['sites']):
             assert end['condition'] == start['condition'] + end['site_repair'] - end['wear']
             for good in range(len(rows[-1]['goods'])):
@@ -68,6 +74,14 @@ with tempfile.TemporaryDirectory() as directory:
     assert controlled['dragon']['body_condition'] == 0 and controlled['dragon']['crown_strength'] == 0
     assert controlled['dragon']['eggs'] == natural['dragon']['eggs']
     assert controlled['state_hash'] != natural['state_hash']
+    # The deliberate slain policy adds exactly its evaluated campaign gate.
+    slain_gate = 1 << 3
+    natural_plan = natural['campaign_launch']
+    controlled_plan = controlled['campaign_launch']
+    assert controlled_plan['blocked_mask'] == natural_plan['blocked_mask'] | slain_gate
+    assert controlled_plan['blocked_reasons'] == ['dragon_slain', *natural_plan['blocked_reasons']]
+    controlled_plan['blocked_mask'] &= ~slain_gate
+    controlled_plan['blocked_reasons'].remove('dragon_slain')
     for field in ['dragon', 'dragon_policy', 'state_hash']:
         natural.pop(field)
         controlled.pop(field)

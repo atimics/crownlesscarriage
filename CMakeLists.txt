@@ -91,6 +91,9 @@ cc_strict_warnings(crownless_locomotion)
 add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
+    src/sim/cc_sim_hash.c
+    src/sim/cc_sim_versions.c
+    src/sim/cc_identity.c
     src/sim/cc_route_rules.c
     src/sim/cc_journey_departure.c
     src/sim/cc_journey_encounter.c
@@ -201,6 +204,8 @@ else()
 endif()
 add_library(crownless_persistence
     src/persistence/cc_save.c
+    src/persistence/cc_journal_replay.c
+    src/persistence/cc_legacy_runtime.c
 )
 target_include_directories(crownless_persistence PUBLIC src)
 target_link_libraries(crownless_persistence PUBLIC
@@ -1351,6 +1356,39 @@ if(BUILD_TESTING)
     cc_strict_warnings(hunger_metrics_tests)
     add_test(NAME inhabited_hunger_metrics COMMAND hunger_metrics_tests)
     if(CC_PYTHON3_EXECUTABLE AND CC_BUILD_BENCHMARKS)
+        add_executable(threat_snapshot_fixture tests/threat_snapshot_fixture.c)
+        target_link_libraries(threat_snapshot_fixture PRIVATE crownless_persistence)
+        cc_strict_warnings(threat_snapshot_fixture)
+        add_test(NAME threat_group_snapshots
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/threat_snapshot_tests.py
+                         $<TARGET_FILE:threat_snapshot_fixture>)
+        add_executable(road_recovery_json_fixture tests/road_recovery_json_fixture.c)
+        target_link_libraries(road_recovery_json_fixture PRIVATE crownless_persistence)
+        cc_strict_warnings(road_recovery_json_fixture)
+        add_test(NAME road_recovery_json
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/road_recovery_json_tests.py
+                         $<TARGET_FILE:road_recovery_json_fixture>)
+        add_executable(campaign_json_fixture tests/transition_json_fixture.c)
+        target_link_libraries(campaign_json_fixture PRIVATE crownless_persistence)
+        cc_strict_warnings(campaign_json_fixture)
+        add_executable(ritual_json_fixture tests/transition_json_fixture.c)
+        target_compile_definitions(ritual_json_fixture PRIVATE CC_RITUAL_JSON_FIXTURE)
+        target_link_libraries(ritual_json_fixture PRIVATE crownless_persistence)
+        cc_strict_warnings(ritual_json_fixture)
+        add_test(NAME transition_plan_json
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/transition_json_tests.py
+                         $<TARGET_FILE:campaign_json_fixture>
+                         $<TARGET_FILE:ritual_json_fixture>)
+        add_executable(retained_history_fixture tests/retained_history_fixture.c)
+        target_link_libraries(retained_history_fixture PRIVATE crownless_persistence)
+        cc_strict_warnings(retained_history_fixture)
+        add_test(NAME retained_history_json
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/retained_history_tests.py
+                         $<TARGET_FILE:retained_history_fixture>)
         add_test(NAME production_json_capture
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/production_json_tests.py
@@ -1416,6 +1454,11 @@ if(BUILD_TESTING)
     target_link_libraries(character_lifetime_tests PRIVATE crownless_persistence)
     cc_strict_warnings(character_lifetime_tests)
     add_test(NAME received_account_lifetimes COMMAND character_lifetime_tests)
+
+    add_executable(identity_ledger_tests tests/identity_ledger_tests.c)
+    target_link_libraries(identity_ledger_tests PRIVATE crownless_sim)
+    cc_strict_warnings(identity_ledger_tests)
+    add_test(NAME identity_ledger_collisions COMMAND identity_ledger_tests)
 
     add_executable(persistence_fields_tests tests/persistence_fields_tests.c)
     target_link_libraries(persistence_fields_tests PRIVATE crownless_persistence)

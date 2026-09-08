@@ -1,0 +1,26 @@
+{
+  "parent": "5e764c3",
+  "moved_lines": 906,
+  "source_body": "exact match",
+  "annual_comparisons": 960,
+  "schemas": [
+    26,
+    27,
+    33,
+    34,
+    36,
+    37,
+    58,
+    59,
+    60,
+    69,
+    72,
+    73
+  ],
+  "seeds": [
+    "0x5eed0001",
+    "0xc0a71a9e"
+  ],
+  "years_per_case": 40,
+  "sha256": "1f6c8726a95f7d6477e7272a8d409fa5b6cdadcd3e434b82973a065366677f03"
+}

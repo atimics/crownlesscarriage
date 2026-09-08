@@ -180,3 +180,335 @@ int32_t CcEconomyEffectiveProduction(const CcSim *sim,
         good != CC_GOOD_WOOD && good != CC_GOOD_STONE) return 0;
     return MaximumI32(0, production);
 }
+
+#include <stdio.h>
+#include <string.h>
+
+void CcEconomyWearOneTool(CcSettlement *settlement, int32_t *wear,
+                        int32_t batches_per_tool)
+{
+    if (settlement->stock[CC_GOOD_TOOLS] <= 0) return;
+    *wear += 1;
+    if (*wear < batches_per_tool) return;
+    settlement->stock[CC_GOOD_TOOLS] -= 1;
+    *wear = 0;
+}
+
+static void RecordRecipe(CcRecipeAccounting *accounting,
+    const CcProductionRecipe *recipe, const CcProductionReceipt *receipt)
+{
+    if (accounting == NULL) return;
+    accounting->gates[receipt->gate]++;
+    accounting->work += (uint64_t)receipt->work;
+    for (int32_t i = 0; i < recipe->input_count; ++i)
+        accounting->input[recipe->inputs[i].good] += (uint64_t)receipt->inputs[i];
+    if (!recipe->work_only) accounting->output[recipe->output] += (uint64_t)receipt->output;
+}
+
+int32_t CcEconomyRunBakery(CcSim *sim, CcSettlement *place,
+                         CcId scriptorium_id, CcRecipeAccounting *accounting,
+    const CcProductionServices *services)
+{
+    int32_t capacity = CcEconomyBakeryCapacity(place);
+    if (capacity <= 0 || place->stock[CC_GOOD_WHEAT] <= 0) {
+        if (accounting != NULL) accounting->gates[capacity <= 0 ? CC_PRODUCTION_CAPACITY : CC_PRODUCTION_INPUT]++;
+        return 0;
+    }
+    int32_t grain_floor = 0;
+    if (scriptorium_id != 0U && place->id == scriptorium_id &&
+        place->hunger == 0 &&
+        place->stock[CC_GOOD_TOOLS] > 0 &&
+        CcSettlementHasService(place, CC_SERVICE_MILL)) {
+        grain_floor = MaximumI32(
+            place->reserve_target[CC_GOOD_WHEAT],
+            CcEconomyWeeklyFoodUse(sim, place) * 2 + sim->archives.scribes * 2);
+    }
+    const CcProductionRecipe recipe = {
+        .output = CC_GOOD_BREAD, .output_units = 1, .input_count = 1,
+        .inputs = {{CC_GOOD_WHEAT, 1, grain_floor}}, .work_per_batch = 1,
+        .hunger_soft_limit = 35, .hunger_hard_limit = 65,
+        .hunger_soft_percent = 86, .hunger_hard_percent = 72
+    };
+    const CcProductionContext context = {
+        .producer_id = place->id, .storage_id = place->id, .location_id = place->id,
+        .stock = place->stock, .capacity = capacity, .output_limit = CC_SIM_MAX_UNITS,
+        .work_available = capacity, .condition = 100, .hunger = place->hunger, .enabled = true
+    };
+    CcProductionReceipt receipt = CcProductionRun(&recipe, &context);
+    RecordRecipe(accounting, &recipe, &receipt);
+    int32_t baked = receipt.output;
+    if (baked <= 0) return 0;
+    if (sim->current_day % 28 == 0) {
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text),
+                       "%s's bakery mills %d Wheat into %d Bread.",
+                       place->name, baked, baked);
+        (void)services->record_event(sim, CC_EVENT_BAKERY_PRODUCTION, place->id,
+                        place->id, 0U, baked, text);
+    }
+    return baked;
+}
+
+const char *CcSmithyStatusName(CcSmithyStatus status)
+{
+    switch (status) {
+        case CC_SMITHY_READY: return "Ready";
+        case CC_SMITHY_SERVICE_UNAVAILABLE: return "Smithy service required";
+        case CC_SMITHY_ZERO_CAPACITY: return "Production capacity required";
+        case CC_SMITHY_RESERVE_MET: return "Reserve target met";
+        case CC_SMITHY_IRON_REQUIRED: return "Iron required";
+        case CC_SMITHY_WOOD_REQUIRED: return "Wood required";
+        case CC_SMITHY_ABANDONED: return "Workers required";
+        case CC_SMITHY_REPAIRS_REQUIRED: return "Fire repairs required";
+        case CC_SMITHY_STATUS_COUNT: break;
+    }
+    return "Unknown smithy state";
+}
+
+static CcSmithyStatus SmithyLineStatus(int32_t capacity, int32_t gap,
+                                      int32_t iron, int32_t wood,
+                                      int32_t iron_cost, int32_t wood_cost)
+{
+    if (capacity <= 0) return CC_SMITHY_ZERO_CAPACITY;
+    if (gap <= 0) return CC_SMITHY_RESERVE_MET;
+    if (iron < iron_cost) return CC_SMITHY_IRON_REQUIRED;
+    if (wood_cost > 0 && wood < wood_cost) return CC_SMITHY_WOOD_REQUIRED;
+    return CC_SMITHY_READY;
+}
+
+static CcSmithyPlan RunSmithyRecipes(const CcSim *sim,
+                                    const CcSettlement *settlement, int32_t *stock)
+{
+    CcSmithyPlan plan = {0};
+    plan.tools_status = CC_SMITHY_SERVICE_UNAVAILABLE;
+    plan.weapons_status = CC_SMITHY_SERVICE_UNAVAILABLE;
+    if (sim == NULL || settlement == NULL ||
+        !CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) return plan;
+    if (sim->schema_version >= 61U &&
+        (CcSettlementIsAbandoned(settlement) || settlement->fire_damage >= 100)) {
+        plan.tools_status = CcSettlementIsAbandoned(settlement) ?
+            CC_SMITHY_ABANDONED : CC_SMITHY_REPAIRS_REQUIRED;
+        plan.weapons_status = plan.tools_status;
+        return plan;
+    }
+    bool legacy_smithy = sim->schema_version < 27U;
+    CcProductionRecipe recipe = {
+        .output = CC_GOOD_TOOLS, .output_units = 1,
+        .input_count = legacy_smithy ? 1 : 2,
+        .inputs = {{CC_GOOD_IRON, 2, 0}, {CC_GOOD_WOOD, 1, 0}},
+        .work_per_batch = 1, .hunger_soft_limit = 100, .hunger_hard_limit = 100
+    };
+    CcProductionContext context = {
+        .producer_id = settlement->id, .storage_id = settlement->id,
+        .location_id = settlement->id, .stock = stock,
+        .capacity = MaximumI32(0, settlement->production[CC_GOOD_TOOLS]),
+        .output_limit = settlement->reserve_target[CC_GOOD_TOOLS] * 2,
+        .work_available = INT32_MAX, .condition = 100, .enabled = true
+    };
+    plan.tools_status = SmithyLineStatus(context.capacity,
+        context.output_limit - stock[CC_GOOD_TOOLS], stock[CC_GOOD_IRON],
+        stock[CC_GOOD_WOOD], 2, legacy_smithy ? 0 : 1);
+    CcProductionReceipt tools = CcProductionRun(&recipe, &context);
+    recipe.output = CC_GOOD_WEAPONS;
+    recipe.inputs[0].units = 3;
+    recipe.inputs[1].units = 2;
+    context.capacity = MaximumI32(0, settlement->production[CC_GOOD_WEAPONS]);
+    context.output_limit = CcEconomyEffectiveReserveTarget(sim, settlement, CC_GOOD_WEAPONS) * 2;
+    plan.weapons_status = SmithyLineStatus(context.capacity,
+        context.output_limit - stock[CC_GOOD_WEAPONS], stock[CC_GOOD_IRON],
+        stock[CC_GOOD_WOOD], 3, legacy_smithy ? 0 : 2);
+    CcProductionReceipt weapons = CcProductionRun(&recipe, &context);
+    plan.tools_made = tools.output;
+    plan.weapons_made = weapons.output;
+    plan.iron_used = tools.inputs[0] + weapons.inputs[0];
+    plan.wood_used = tools.inputs[1] + weapons.inputs[1];
+    return plan;
+}
+
+CcSmithyPlan CcSimPlanSmithy(const CcSim *sim, const CcSettlement *settlement)
+{
+    int32_t stock[CC_GOOD_COUNT] = {0};
+    if (settlement != NULL) memcpy(stock, settlement->stock, sizeof(stock));
+    return RunSmithyRecipes(sim, settlement, stock);
+}
+
+void CcEconomyRunSmithy(CcSim *sim, CcSettlement *settlement,
+                       CcTownSmithyAccounting *accounting, CcTownProductionAccounting *ledger,
+    const CcProductionServices *services)
+{
+    int32_t iron_before = settlement->stock[CC_GOOD_IRON];
+    int32_t wood_before = settlement->stock[CC_GOOD_WOOD];
+    CcSmithyPlan plan = RunSmithyRecipes(sim, settlement, settlement->stock);
+    if (accounting != NULL) {
+        accounting->settlement_id = settlement->id;
+        accounting->tools_status[plan.tools_status]++;
+        accounting->weapons_status[plan.weapons_status]++;
+        accounting->tools_made += (uint64_t)plan.tools_made;
+        accounting->weapons_made += (uint64_t)plan.weapons_made;
+        accounting->iron_used += (uint64_t)plan.iron_used;
+        accounting->wood_used += (uint64_t)plan.wood_used;
+    }
+    if (!CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) {
+        if (ledger != NULL) ledger->treasure.gates[CC_PRODUCTION_CLOSED]++;
+        return;
+    }
+    bool legacy_smithy = sim->schema_version < 27U;
+    int32_t tools_made = plan.tools_made;
+    int32_t weapons_made = plan.weapons_made;
+
+    int32_t tools_before_wear = settlement->stock[CC_GOOD_TOOLS];
+    int32_t smith_batches = tools_made + weapons_made;
+    for (int32_t batch = 0; batch < smith_batches; ++batch) {
+        CcEconomyWearOneTool(settlement, &settlement->smith_tool_wear, 4);
+    }
+    if (accounting != NULL) {
+        accounting->tools_worn += (uint64_t)(tools_before_wear -
+                                             settlement->stock[CC_GOOD_TOOLS]);
+    }
+    if (smith_batches > 0) {
+        char text[CC_EVENT_TEXT_CAPACITY];
+        if (legacy_smithy) {
+            (void)snprintf(
+                text, sizeof(text),
+                "%s's smithy turns %d Iron into %d Tools and %d Weapons.",
+                settlement->name,
+                iron_before - settlement->stock[CC_GOOD_IRON],
+                tools_made, weapons_made);
+        } else {
+            (void)snprintf(
+                text, sizeof(text),
+                "%s's smithy uses %d Iron and %d Wood to make %d Tools and %d Weapons.",
+                settlement->name,
+                iron_before - settlement->stock[CC_GOOD_IRON],
+                wood_before - settlement->stock[CC_GOOD_WOOD],
+                tools_made, weapons_made);
+        }
+        (void)services->record_event(sim, CC_EVENT_SMITH_PRODUCTION, settlement->id,
+                        settlement->id, services->latest_local_cause(sim, settlement->id),
+                        tools_made + weapons_made, text);
+    }
+
+    bool treasure_town = settlement->function == CC_SETTLEMENT_MARKET ||
+                         settlement->function == CC_SETTLEMENT_CAPITAL;
+    if (!treasure_town) {
+        if (ledger != NULL) ledger->treasure.gates[CC_PRODUCTION_CLOSED]++;
+        return;
+    }
+    CcProductionReceipt craft = services->run_treasure_work(sim, settlement, settlement->stock);
+    if (ledger != NULL) {
+        ledger->treasure.gates[craft.gate]++;
+        ledger->treasure.input[CC_GOOD_GOLD] += (uint64_t)craft.inputs[0];
+        ledger->treasure.input[CC_GOOD_GEMS] += (uint64_t)craft.inputs[1];
+        ledger->treasure.work += (uint64_t)craft.work;
+    }
+    if (craft.gate == CC_PRODUCTION_READY) {
+        if (settlement->treasure_work == 0) {
+            settlement->treasure_gold_committed = craft.inputs[0];
+            settlement->treasure_gems_committed = craft.inputs[1];
+        }
+        settlement->treasure_work += craft.work;
+    }
+    if (settlement->treasure_work >= 3 &&
+        sim->treasure_count < CC_MAX_TREASURES) {
+        services->complete_treasure(sim, settlement);
+        if (ledger != NULL && settlement->treasure_work == 0) ledger->treasures_completed++;
+    }
+}
+
+void CcEconomyRunPaperMill(CcSim *sim, CcSettlement *settlement, CcRecipeAccounting *accounting,
+    const CcProductionServices *services)
+{
+    if (sim == NULL || sim->schema_version < 33U) {
+        if (accounting != NULL) accounting->gates[CC_PRODUCTION_CLOSED]++;
+        return;
+    }
+    bool legacy = sim->schema_version < 34U;
+    if (!legacy && (!CcSettlementHasService(settlement, CC_SERVICE_MILL) ||
+        settlement->hunger > 0 || settlement->stock[CC_GOOD_TOOLS] <= 0)) {
+        if (accounting != NULL) accounting->gates[!CcSettlementHasService(settlement, CC_SERVICE_MILL) ?
+            CC_PRODUCTION_CLOSED : settlement->hunger > 0 ? CC_PRODUCTION_CAPACITY : CC_PRODUCTION_TOOLS]++;
+        return;
+    }
+    /* Keep mill work behind the town's food buffer, across all edible goods. */
+    if (sim->schema_version >= 37U &&
+        CcEconomyNutritionRations(settlement->stock, CC_NUTRITION_CIVILIAN) <
+            CcEconomyWeeklyFoodUse(sim, settlement) * 4) {
+        if (accounting != NULL) accounting->gates[CC_PRODUCTION_INPUT]++;
+        return;
+    }
+    int32_t capacity = MaximumI32(0, settlement->production[CC_GOOD_PAPER]);
+    CcGood input = !legacy && sim->schema_version < 37U ?
+        CC_GOOD_WHEAT : CC_GOOD_WOOD;
+    int32_t protected_input = settlement->reserve_target[input];
+    if (input == CC_GOOD_WHEAT) protected_input += CcEconomyWeeklyFoodUse(sim, settlement) * 4;
+    const CcProductionRecipe recipe = {
+        .output = CC_GOOD_PAPER, .output_units = 4, .allow_partial_output = true,
+        .input_count = 1, .inputs = {{input, 1, protected_input}},
+        .work_per_batch = 1, .tools_required = legacy ? 0 : 1,
+        .hunger_soft_limit = 100, .hunger_hard_limit = 100
+    };
+    int64_t capacity_limit = (int64_t)settlement->stock[CC_GOOD_PAPER] + capacity;
+    const CcProductionContext context = {
+        .producer_id = settlement->id, .storage_id = settlement->id,
+        .location_id = settlement->id, .stock = settlement->stock,
+        .capacity = capacity / 4 + (capacity % 4 != 0),
+        .output_limit = MinimumI32(settlement->reserve_target[CC_GOOD_PAPER] * 2,
+            capacity_limit > INT32_MAX ? INT32_MAX : (int32_t)capacity_limit),
+        .work_available = INT32_MAX, .condition = 100, .enabled = true
+    };
+    CcProductionReceipt receipt = CcProductionRun(&recipe, &context);
+    RecordRecipe(accounting, &recipe, &receipt);
+    int32_t paper_made = receipt.output;
+    if (paper_made <= 0) return;
+    int32_t input_used = receipt.inputs[0];
+    if (legacy) {
+        CcEconomyRefreshSettlementGoodPrice(sim, settlement, CC_GOOD_WOOD);
+        CcEconomyRefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
+        return;
+    }
+    int32_t tools_before = settlement->stock[CC_GOOD_TOOLS];
+    CcEconomyWearOneTool(settlement, &settlement->paper_tool_wear, 8);
+    if (accounting != NULL) accounting->tools_worn += (uint64_t)(tools_before - settlement->stock[CC_GOOD_TOOLS]);
+    CcEconomyRefreshSettlementGoodPrice(sim, settlement, input);
+    CcEconomyRefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
+    CcEconomyRefreshSettlementGoodPrice(sim, settlement, CC_GOOD_TOOLS);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s's mill uses %d %s to make %d Paper.",
+        settlement->name, input_used, CcGoodName(input), paper_made);
+    (void)services->record_event(
+        sim, CC_EVENT_PAPER_MILLED, settlement->id, settlement->id,
+        services->latest_local_cause(sim, settlement->id), paper_made, text);
+}
+
+void CcEconomyAdvanceRareMineWork(CcSim *sim, CcSettlement *settlement,
+                                int32_t iron_mined,
+    const CcProductionServices *services)
+{
+    if (iron_mined <= 0) return;
+    if (settlement->gold_seam && settlement->stock[CC_GOOD_TOOLS] > 0) {
+        settlement->gold_progress += 1;
+        if (settlement->gold_progress >= 12) {
+            settlement->gold_progress -= 12;
+            settlement->stock[CC_GOOD_GOLD] += 1;
+        }
+    }
+    if (settlement->gem_seam && settlement->stock[CC_GOOD_TOOLS] > 0) {
+        settlement->gem_progress += 1;
+        if (settlement->gem_progress >= 48) {
+            settlement->gem_progress -= 48;
+            settlement->stock[CC_GOOD_GEMS] += 1;
+        }
+    }
+    if (sim->current_day % 28 == 0) {
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text),
+                       "%s extracts %d Iron; seams stand at gold %d/12 and gems %d/48.",
+                       settlement->name, iron_mined,
+                       settlement->gold_progress, settlement->gem_progress);
+        (void)services->record_event(sim, CC_EVENT_RESOURCE_EXTRACTED, settlement->id,
+                        settlement->id, services->latest_local_cause(sim, settlement->id),
+                        iron_mined, text);
+    }
+}

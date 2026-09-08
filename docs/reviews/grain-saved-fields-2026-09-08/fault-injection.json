@@ -1,0 +1,12 @@
+[
+  {
+    "case": "hash omission",
+    "exit": 1,
+    "output": "Hash omitted grain_supplies[town].redirected\n/private/tmp/crownless-current-economy-save-contract/tests/persistence_fields_tests.c:21: check failed: false\n"
+  },
+  {
+    "case": "hash and save omission with direct field assertions",
+    "exit": 1,
+    "output": "Save round trip omitted grain_supplies[town].redirected\n/private/tmp/crownless-current-economy-save-contract/tests/persistence_fields_tests.c:97: check failed: false\n"
+  }
+]

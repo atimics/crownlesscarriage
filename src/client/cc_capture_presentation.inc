@@ -58,9 +58,20 @@ static bool CcCaptureConfigureWindow(const CcCaptureRequest *request,
         window->height = request->capture_pony_book && window->width == 1040 ? 620 : 700;
     }
     if (request->capture_ux && argc >= 5) {
-        window->width = atoi(argv[4]);
-        if (window->width != 1040 && window->width != 1200 && window->width != 1600) return false;
-        window->height = window->width == 1040 ? 620 : window->width == 1600 ? 900 : 700;
+        char *end = NULL;
+        long width = strtol(argv[4], &end, 10);
+        int32_t height;
+        if (*end != '\0') return false;
+        switch (width) {
+            case 1040: height = 620; break;
+            case 1200: height = 700; break;
+            case 1280: height = 720; break;
+            case 1600: height = 900; break;
+            case 1920: height = 1080; break;
+            default: return false;
+        }
+        window->width = (int32_t)width;
+        window->height = height;
     }
     if (request->capture_road_fork || request->capture_pony_book || request->capture_ux) {
         window->minimum_width = 1040;

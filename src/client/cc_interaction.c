@@ -4,6 +4,51 @@
 #include <math.h>
 #include <stdio.h>
 
+bool CcInteractionPlaceLabel(CcInteractionLabelRect desired,
+                              CcInteractionLabelRect viewport,
+                              const CcInteractionLabelRect *placed,
+                              int32_t count, CcInteractionLabelRect *result)
+{
+    if (result == NULL || count < 0 || count > CC_INTERACTION_CAPACITY ||
+        (count > 0 && placed == NULL)) return false;
+    *result = (CcInteractionLabelRect){0};
+    if (!isfinite(desired.x) || !isfinite(desired.y) ||
+        !isfinite(desired.width) || !isfinite(desired.height) ||
+        !isfinite(viewport.x) || !isfinite(viewport.y) ||
+        !isfinite(viewport.width) || !isfinite(viewport.height) ||
+        desired.width <= 0 || desired.height <= 0 ||
+        desired.width > viewport.width || desired.height > viewport.height) return false;
+    float bottom = viewport.y + viewport.height - desired.height;
+    desired.x = fmaxf(viewport.x,
+        fminf(desired.x, viewport.x + viewport.width - desired.width));
+    desired.y = fmaxf(viewport.y, fminf(desired.y, bottom));
+    /* Try the anchor row first, then alternate above and below it. At most one
+     * row per placed label is needed before the viewport is exhausted. */
+    for (int32_t step = 0; step <= 2 * (count + 1); ++step) {
+        int32_t row = (step + 1) / 2;
+        float offset = (float)row * (desired.height + 4.0f);
+        CcInteractionLabelRect candidate = desired;
+        candidate.y += step % 2 == 1 ? -offset : offset;
+        if (candidate.y < viewport.y || candidate.y > bottom) continue;
+        bool overlaps = false;
+        for (int32_t i = 0; i < count; ++i) {
+            if (placed[i].width <= 0 || placed[i].height <= 0) continue;
+            if (candidate.x < placed[i].x + placed[i].width + 4.0f &&
+                candidate.x + candidate.width + 4.0f > placed[i].x &&
+                candidate.y < placed[i].y + placed[i].height + 4.0f &&
+                candidate.y + candidate.height + 4.0f > placed[i].y) {
+                overlaps = true;
+                break;
+            }
+        }
+        if (!overlaps) {
+            *result = candidate;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool CcInteractionKeyEqual(CcInteractionKey a, CcInteractionKey b)
 {
     return a.place == b.place && a.object == b.object && a.kind == b.kind;

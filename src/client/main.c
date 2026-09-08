@@ -9494,11 +9494,11 @@ static CcMusicContext LocalMusicContext(const CcSim *sim, const LocalState *loca
 
 static Rectangle LocalViewportBounds(void)
 {
-    Rectangle bounds = CcLocalViewportBounds(GetScreenWidth(), GetScreenHeight());
+    Rectangle bounds = CcLocalViewportBounds(ContextViewportWidth(), ContextViewportHeight());
     if (adventure_preferences != NULL) {
-        float available = (float)GetScreenHeight() - 200.0f;
-        float scale = fminf(((float)GetScreenWidth() - 20.0f) / 630.0f, available / 320.0f);
-        bounds = (Rectangle){((float)GetScreenWidth() - 630.0f * scale) * 0.5f,
+        float available = (float)ContextViewportHeight() - 200.0f;
+        float scale = fminf(((float)ContextViewportWidth() - 20.0f) / 630.0f, available / 320.0f);
+        bounds = (Rectangle){((float)ContextViewportWidth() - 630.0f * scale) * 0.5f,
             88.0f, 630.0f * scale, 320.0f * scale};
     }
     return bounds;
@@ -9984,6 +9984,9 @@ int main(int argc, char **argv)
     else if (capture_active) SetTraceLogLevel(LOG_WARNING);
 
     unsigned int window_flags = capture_active ? FLAG_WINDOW_HIDDEN : 0U;
+#if defined(__APPLE__)
+    if (capture_active) window_flags |= FLAG_WINDOW_HIGHDPI;
+#endif
 #if !defined(PLATFORM_WEB)
     window_flags |= FLAG_WINDOW_RESIZABLE;
 #endif
@@ -10001,7 +10004,11 @@ int main(int argc, char **argv)
         .fps = benchmark.active ? 0 : 60,
     };
     if (!CcCaptureConfigureWindow(&capture_request, argc, argv, &window)) return 1;
-    InitWindow(window.width, window.height,
+    /* Start hidden captures within a desktop-sized frame before resizing.
+     * macOS can report invalid placement for an oversized initial window. */
+    int32_t opening_width = capture_active && window.width > 1200 ? 1200 : window.width;
+    int32_t opening_height = capture_active && window.height > 700 ? 700 : window.height;
+    InitWindow(opening_width, opening_height,
                "Crownless Carriage — living world spine");
     if (!IsWindowReady()) {
         (void)fprintf(stderr,
@@ -10009,6 +10016,8 @@ int main(int argc, char **argv)
         CcClientInstanceLockRelease(&instance_lock);
         return 1;
     }
+    if (opening_width != window.width || opening_height != window.height)
+        SetWindowSize(window.width, window.height);
     SetExitKey(KEY_NULL);
     ClientInputInstall();
 #if defined(PLATFORM_WEB)
@@ -10306,7 +10315,7 @@ int main(int argc, char **argv)
         local.adventure_ui = presentation.adventure_ui;
         if (normal_play && AdventureScene(&local)) local.course.automatic_alarm = false;
         adventure_preferences = local.adventure_ui ? &preferences : NULL;
-        CcLocalRendererSetInteractionUI(AdventureScene(&local));
+        CcLocalRendererSetInteractionUI(local.adventure_ui);
         ClientTouchBegin();
         const CcSettlement *touch_place = CcSimSettlement(&sim, sim.player.location_id);
         ClientTouchHeading(touch_place != NULL ? touch_place->name : "The road",

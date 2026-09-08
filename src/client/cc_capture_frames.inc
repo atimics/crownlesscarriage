@@ -10,7 +10,17 @@ typedef struct CcCaptureState {
 #if defined(CC_CLIENT_SELF_TESTS)
 static void ClientTakeScreenshot(const char *path)
 {
+#if defined(__APPLE__)
+    Image frame = LoadImageFromScreen();
+    if (frame.data != NULL) {
+        if (frame.width != GetScreenWidth() || frame.height != GetScreenHeight())
+            ImageResize(&frame, GetScreenWidth(), GetScreenHeight());
+        (void)ExportImage(frame, path);
+        UnloadImage(frame);
+    }
+#else
     TakeScreenshot(path);
+#endif
 #if defined(PLATFORM_WEB)
     (void)remove(path);
 #endif
