@@ -9504,7 +9504,8 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
                                 int32_t path_capacity,
                                 int32_t minimum_cargo_slots,
                                 int32_t route_used[CC_MAX_ROUTES],
-                                CcGrainSupply *supply)
+                                CcGrainSupply *supply,
+                                const CcArchiveSupplyPlan *archive)
 {
     if (sim == NULL || route_slot < 0 ||
         route_slot >= sim->route_count || origin == NULL ||
@@ -9525,7 +9526,7 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
     }
     int32_t surplus = TradeSurplus(
         sim, origin, final_destination, good);
-    int32_t need = supply != NULL ? MaximumI32(0, 12 - final_destination->stock[CC_GOOD_WHEAT] -
+    int32_t need = archive != NULL ? archive->quantity : supply != NULL ? MaximumI32(0, 12 - final_destination->stock[CC_GOOD_WHEAT] -
         CcSimIncomingGood(sim, final_destination->id, CC_GOOD_WHEAT)) :
         SettlementUnmetNeed(sim, final_destination, good);
     int32_t effective_capacity = CcTradeRouteCapacity(sim, route);
@@ -9537,14 +9538,15 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
         (royal ? CC_ROYAL_CARRIAGE_CARGO_SLOTS : 5) *
             CcGoodsFreightUnitsPerCargoSlot(good),
         MinimumI32(cargo_capacity, MinimumI32(surplus, need)));
-    bool military_supply = supply == NULL && WarWeeklyNeed(
+    bool military_supply = archive == NULL && supply == NULL && WarWeeklyNeed(
         sim, final_destination, good) > 0;
-    CcMoney *buyer_coins = supply != NULL ? &supply->purse : military_supply ?
+    CcMoney *buyer_coins = archive != NULL ? &sim->iron_ledger_reserve :
+                           supply != NULL ? &supply->purse : military_supply ?
                            &final_destination->war_chest :
                            &final_destination->market_coins;
     CcKingdom *buyer_kingdom = KingdomMutable(
         sim, final_destination->kingdom_id);
-    bool essential_credit = supply == NULL && IronLedgerWillFund(final_destination, good);
+    bool essential_credit = archive == NULL && supply == NULL && IronLedgerWillFund(final_destination, good);
     int32_t unit_price = MaximumI32(1, origin->price[good]);
     CcMoney toll = royal ? CcRouteRoyalTradeToll(
         sim, route, carriage->kingdom_id) : CcRouteToll(sim, route);
@@ -9556,7 +9558,7 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
                          INT32_MAX :
                          (int32_t)((purchasing_power - toll) / unit_price);
     quantity = MinimumI32(quantity, affordable);
-    int32_t minimum_load =
+    int32_t minimum_load = archive != NULL ? 1 :
         CcGoodDefinitionFor(good)->minimum_trade_units;
     if (quantity < minimum_load ||
         CcGoodsFreightCargoSlots(good, quantity) < minimum_cargo_slots) return false;
@@ -9651,6 +9653,11 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
         (void)snprintf(text, sizeof(text), "%.20s books %d wheat from %.20s to %.20s for %" PRId64 " crowns.",
             organiser != NULL ? organiser->name : "The organiser", quantity, origin->name, final_destination->name, total_charge);
     }
+    if (archive != NULL) {
+        (void)snprintf(text, sizeof(text),
+            "The archive at %.20s books %d %.12s from %.20s for %" PRId64 " crowns.",
+            final_destination->name, quantity, CcGoodName(good), origin->name, total_charge);
+    }
     const CcEvent *need_event = LatestEvent(sim, CC_EVENT_SHORTAGE,
                                            final_destination->id,
                                            final_destination->id);
@@ -9666,6 +9673,31 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
 }
 
 #include "cc_grain_supply.inc"
+
+bool CcArchiveDispatchSupply(CcSim *sim, CcId carriage_id)
+{
+    if (sim == NULL || sim->schema_version < 75U) return false;
+    CcArchiveSupplyPlan plan = CcSimArchiveSupplyPlan(sim, carriage_id);
+    if (plan.gate != CC_ARCHIVE_SUPPLY_READY || plan.first_dispatch_day > sim->current_day) return false;
+    CcRoyalCarriage *carriage = NULL;
+    for (int i = 0; i < sim->royal_carriage_count; ++i)
+        if (sim->royal_carriages[i].id == carriage_id) carriage = &sim->royal_carriages[i];
+    if (carriage == NULL) return false;
+    if (carriage->location_id != plan.source_id) {
+        /* Book rare pickup trips every four weeks. A carriage already at the
+           supplier can collect a needed load within its ordinary cooldown. */
+        return StartRoyalRepositioningLeg(sim, carriage, plan.source_id);
+    }
+    PrepareRoyalRouteUsage(sim);
+    for (int i = 0; i < sim->route_count; ++i) {
+        if (sim->routes[i].id != plan.first_route_id) continue;
+        return CreateTradeShipment(sim, carriage, i, plan.first_hop_id, plan.good,
+            CcSimSettlementMutable(sim, plan.source_id), CcSimSettlementMutable(sim, plan.seat_id),
+            plan.path_capacity, 1, sim->royal_route_slots_used, NULL, &plan);
+    }
+    return false;
+}
+
 
 static void PlanLegacyTrade(CcSim *sim)
 {
@@ -9733,7 +9765,7 @@ static void PlanLegacyTrade(CcSim *sim)
                 sim, NULL, best_route, best_hop, (CcGood)good,
                 &sim->settlements[best_source],
                 &sim->settlements[best_destination],
-                best_path_capacity, 1, route_used, NULL);
+                best_path_capacity, 1, route_used, NULL, NULL);
         }
     }
 }
@@ -9929,6 +9961,7 @@ static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting)
         }
         if (sim->schema_version >= 66U && DispatchSiteCarriage(sim, carriage, site_accounting)) continue;
         if (sim->schema_version >= 73U && DispatchGrainSupply(sim, carriage, route_used)) continue;
+        if (CcArchiveDispatchSupply(sim, carriage->id)) continue;
         int32_t best_score = 0;
         int32_t best_source = -1;
         int32_t best_destination = -1;
@@ -10041,7 +10074,7 @@ static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting)
         (void)CreateTradeShipment(
             sim, carriage, best_route, best_hop, best_good, source,
             &sim->settlements[best_destination],
-            best_path_capacity, best_minimum_cargo_slots, route_used, NULL);
+            best_path_capacity, best_minimum_cargo_slots, route_used, NULL, NULL);
     }
 }
 

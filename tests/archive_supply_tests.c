@@ -114,7 +114,7 @@ int main(void)
     CcSettlement swap = sim.settlements[1];
     sim.settlements[1] = sim.settlements[2]; sim.settlements[2] = swap;
     plan = Query(CC_ARCHIVE_SUPPLY_READY); CC_CHECK(plan.source_id == chosen);
-    CC_CHECK(plan.reposition_cost > 0);
+    CC_CHECK(plan.reposition_cost > 0 && plan.first_dispatch_day == 28);
     Fixture(); sim.schema_version = 57U; (void)Query(CC_ARCHIVE_SUPPLY_UNAVAILABLE);
     Fixture();
     for (int i = 0; i < 3; ++i) sim.settlements[i].population = 0;

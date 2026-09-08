@@ -89,6 +89,11 @@ CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
     }
     plan.gate = !source_found ? CC_ARCHIVE_SUPPLY_SOURCE : !path_found ? CC_ARCHIVE_SUPPLY_ROUTE :
         plan.source_id == 0U ? CC_ARCHIVE_SUPPLY_FUNDS : CC_ARCHIVE_SUPPLY_READY;
+    if (plan.gate == CC_ARCHIVE_SUPPLY_READY) {
+        plan.first_dispatch_day = sim->current_day;
+        if (sim->schema_version >= 75U && carriage->location_id != plan.source_id)
+            plan.first_dispatch_day = (((int64_t)sim->current_day + 27) / 28) * 28;
+    }
     return plan;
 }
 

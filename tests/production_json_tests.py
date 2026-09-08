@@ -28,6 +28,7 @@ with tempfile.TemporaryDirectory() as directory:
             assert supply['cost_scope'] == 'goods_and_first_loaded_leg'
             assert [q['carriage_id'] for q in supply['quotes']] == [c['id'] for c in row['carriages']]
             for quote in supply['quotes']:
+                assert quote['first_dispatch_day'] >= 0
                 assert quote['total_charge'] == quote['goods_cost'] + quote['first_leg_toll']
                 assert (quote['quantity'] > 0) == (quote['gate'] == 'ready')
             funding = row['archive_funding']

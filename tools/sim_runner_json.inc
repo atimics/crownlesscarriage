@@ -25,9 +25,10 @@ static void JsonArchiveSupply(const CcSim *sim)
                plan.seat_id, plan.source_id, plan.first_route_id, plan.first_hop_id);
         if (plan.good == CC_GOOD_COUNT) printf("null"); else JsonString(CcGoodName(plan.good));
         printf(",\"quantity\":%d,\"path_capacity\":%d,\"path_cost\":%d,\"reposition_cost\":%d,"
-               "\"goods_cost\":%" PRId64 ",\"first_leg_toll\":%" PRId64 ",\"total_charge\":%" PRId64 "}",
+               "\"goods_cost\":%" PRId64 ",\"first_leg_toll\":%" PRId64 ",\"total_charge\":%" PRId64,
                plan.quantity, plan.path_capacity, plan.path_cost, plan.reposition_cost,
                plan.goods_cost, plan.first_leg_toll, plan.total_charge);
+        printf(",\"first_dispatch_day\":%" PRId64 "}", plan.first_dispatch_day);
     }
     printf("]}");
 }
