@@ -1450,6 +1450,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(pony_tests)
     add_test(NAME rainbow_pony_companions COMMAND pony_tests)
 
+    add_executable(quest_cast_tests tests/quest_cast_tests.c)
+    target_link_libraries(quest_cast_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(quest_cast_tests)
+    add_test(NAME quest_cast_continuity COMMAND quest_cast_tests)
+
     add_executable(character_lifetime_tests tests/character_lifetime_tests.c)
     target_link_libraries(character_lifetime_tests PRIVATE crownless_persistence)
     cc_strict_warnings(character_lifetime_tests)

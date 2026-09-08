@@ -10698,8 +10698,11 @@ static void RefreshSituationCharacterActivities(CcSim *sim,
         sim, situation->sponsor_character_id);
     CcCharacter *affected = CharacterMutable(
         sim, situation->affected_character_id);
-    if (sponsor != NULL) sponsor->activity = CC_CHARACTER_ACTIVITY_WORKING;
-    if (affected == NULL) return;
+    bool preserve = sim->schema_version >= 74U;
+    if (sponsor != NULL && (!preserve || (sponsor->bandit_group_id == 0U &&
+        sponsor->activity != CC_CHARACTER_ACTIVITY_TRAVELLING))) sponsor->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    if (affected == NULL || (preserve && (affected->bandit_group_id != 0U ||
+        affected->activity == CC_CHARACTER_ACTIVITY_TRAVELLING))) return;
     if (situation->status == CC_SITUATION_RESOLVED) {
         affected->activity = CC_CHARACTER_ACTIVITY_RECOVERING;
         affected->stress = ClampI32(affected->stress - 30, 0, 100);
@@ -10743,7 +10746,7 @@ static CcCharacter *AdultCharacterAt(CcSim *sim, CcId settlement_id,
     return best;
 }
 
-static void AssignSituationCast(CcSim *sim, CcSituation *situation,
+static void AssignSituationCastLegacy(CcSim *sim, CcSituation *situation,
                                  bool establish_knowledge)
 {
     static const char *sponsors[CC_MAX_SETTLEMENTS] = {
@@ -10869,6 +10872,8 @@ static void AssignSituationCast(CcSim *sim, CcSituation *situation,
     RefreshSituationCharacterActivities(sim, situation);
 }
 
+#include "cc_quest_cast.inc"
+
 static void FillSettlementResidents(CcSim *sim)
 {
     if (sim == NULL) return;
@@ -10989,11 +10994,14 @@ static void SuccessorName(const CcSim *sim, const CcCharacter *ancestor,
                    ordinal % 100000U);
 }
 
+static void CloseUnstaffedSituation(CcSim *sim, CcSituation *situation);
+
 static void RecastSituationsAfterDeath(CcSim *sim, CcId character_id)
 {
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         CcSituation *situation = &sim->situations[i];
         if (situation->status != CC_SITUATION_ACTIVE) continue;
+        CcSituation original = *situation;
         bool changed = false;
         if (situation->sponsor_character_id == character_id) {
             situation->sponsor_character_id = 0U;
@@ -11016,7 +11024,10 @@ static void RecastSituationsAfterDeath(CcSim *sim, CcId character_id)
             situation->discovery_stage = CC_DISCOVERY_RUMOR;
             situation->lead_path = CC_LEAD_PATH_UNDECIDED;
         }
-        AssignSituationCast(sim, situation, sim->schema_version < 62U);
+        if (!AssignSituationCast(sim, situation, sim->schema_version < 62U)) {
+            *situation = original;
+            CloseUnstaffedSituation(sim, situation);
+        }
     }
 }
 
@@ -11511,6 +11522,20 @@ static void FinishFrontAfterSituation(CcSim *sim,
     front->portent.resolved_by_event_id = front->resolved_event_id;
 }
 
+static void CloseUnstaffedSituation(CcSim *sim, CcSituation *situation)
+{
+    situation->status = CC_SITUATION_FAILED;
+    situation->end_reason = CC_QUEST_END_INVALIDATED;
+    if (sim->player.accepted_situation_id == situation->id) sim->player.accepted_situation_id = 0U;
+    CcEvent *event = PushEvent(sim, CC_EVENT_SITUATION_FAILED, situation->id,
+        situation->target_id, situation->cause_event_id, 0,
+        "The commission closes after a death leaves its local responsibilities unfilled.");
+    CcId event_id = event->id;
+    situation->objective.danger.resolved_by_event_id = event_id;
+    FinishFrontAfterSituation(sim, situation, event_id);
+    ArchiveSituationOutcome(sim, situation, event_id);
+}
+
 static void AdvanceQuestDangerClocks(CcSim *sim)
 {
     if (sim == NULL) return;
@@ -11668,6 +11693,10 @@ static CcSituation *CreateSituation(
     CcGood good, int32_t quantity, CcMoney reward, int32_t duration)
 {
     if (HasRecentSituation(sim, kind, target)) return NULL;
+    if (sim->schema_version >= 74U && sim->current_day > 1) {
+        CcSituation proposed = {.kind = kind, .target_id = target, .issuer_faction_id = issuer};
+        if (!SelectPresentQuestCast(sim, &proposed)) return NULL;
+    }
     CcSituation *situation = AllocateSituation(sim);
     if (situation == NULL) return NULL;
     situation->id = NextId(sim, CC_ENTITY_SITUATION);
