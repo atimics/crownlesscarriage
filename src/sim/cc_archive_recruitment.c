@@ -233,8 +233,29 @@ static bool JourneyValid(const CcSim *sim)
             o->leg_arrival_day < sim->current_day || o->leg_arrival_day > CC_SIM_MAX_DAY ||
             o->provisioned_days == 0 || o->arrived_day != 0) return false;
     } else if (o->leg_route_id != 0 || o->leg_hop_id != 0 || o->leg_arrival_day != 0) return false;
-    if (o->status == 3) return o->current_id == o->seat_id && o->arrived_day >= o->start_day;
+    if (o->status == 3 || (sim->schema_version >= 80U &&
+        (o->status == 5 || (o->status == 4 && o->arrived_day > 0))))
+        return o->current_id == o->seat_id && o->arrived_day >= o->start_day;
     return o->arrived_day == 0;
+}
+
+static bool TrainingValid(const CcSim *sim)
+{
+    if (sim->schema_version < 80U) return true;
+    if (sim->archive_training_week < 0 || sim->archive_training_week > (sim->current_day + 6) / 7) return false;
+    const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    if (o->labor_days < 0 || o->labor_days > o->training_days ||
+        o->trainer_labor_days < 0 || o->trainer_labor_days > o->labor_days ||
+        o->last_work_day < 0 || o->last_work_day > sim->current_day ||
+        (o->wages_paid != 0 && o->wages_paid != 50)) return false;
+    if (o->labor_days == 0) return o->trainer_labor_days == 0 &&
+        o->last_work_day == 0 && o->wages_paid == 0 && o->status != 5;
+    if (o->status != 3 && o->status != 4 && o->status != 5) return false;
+    if (o->arrived_day == 0 || o->last_work_day - o->arrived_day < o->labor_days ||
+        o->trainer_labor_days != (o->training_days == 28 ? o->labor_days : 0) ||
+        (o->training_days == 28 && o->trainer_id == 0)) return false;
+    if (o->status == 5) return o->labor_days == o->training_days && o->wages_paid == 50 && o->purse == 0;
+    return o->labor_days < o->training_days && o->wages_paid == 0;
 }
 
 bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
@@ -242,7 +263,7 @@ bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
     if (sim == NULL) return false;
     if (sim->schema_version < 80U) return true;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
-    if (!JourneyValid(sim)) return false;
+    if (!JourneyValid(sim) || !TrainingValid(sim)) return false;
     if (o->status == 0) {
         return o->person_id == 0 &&
             o->trainer_id == 0 &&
@@ -267,7 +288,11 @@ bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
             o->arrival_estimate == 0 &&
             o->ready_estimate == 0;
     }
+<<<<<<< HEAD
     if ((o->status < 1 || o->status > (sim->schema_version >= 83U ? 4 : 1)) || CcIdKind(o->person_id) != CC_ENTITY_CHARACTER ||
+=======
+    if ((o->status < 1 || o->status > (sim->schema_version >= 80U ? 5 : sim->schema_version >= 79U ? 4 : 1)) || CcIdKind(o->person_id) != CC_ENTITY_CHARACTER ||
+>>>>>>> b5a483f (Train named archive recruits with paid work and supplies)
         (o->person_id & CC_ID_SERIAL_MASK) == 0 ||
         (o->person_id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial ||
         (o->trainer_id != 0 && (CcIdKind(o->trainer_id) != CC_ENTITY_CHARACTER ||
@@ -286,7 +311,8 @@ bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
         o->ready_estimate < o->arrival_estimate || o->ready_estimate > CC_SIM_MAX_DAY) return false;
     if (o->donor_shares[0] < 0 || o->donor_shares[0] > 50 ||
         o->donor_shares[1] < 0 || o->donor_shares[1] > 50 ||
-        o->donor_shares[0] + o->donor_shares[1] > o->purse ||
+        o->donor_shares[0] + o->donor_shares[1] > o->purse +
+            (sim->schema_version >= 80U ? o->wages_paid : 0) ||
         (o->donor_ids[0] != 0 && o->donor_ids[0] == o->donor_ids[1])) return false;
     for (int32_t i = 0; i < 2; ++i) {
         if (o->donor_ids[i] == 0) {
@@ -307,16 +333,30 @@ bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
 
 bool CcSimCancelArchiveRecruitment(CcSim *sim)
 {
+<<<<<<< HEAD
     if (sim == NULL || sim->schema_version < 80U ||
         (sim->archive_recruitment.status != 1 &&
          !(sim->schema_version >= 83U && (sim->archive_recruitment.status == 3 ||
            sim->archive_recruitment.status == 4))) ||
+=======
+    if (sim == NULL || sim->schema_version < 78U || (sim->archive_recruitment.status != 1 &&
+         !(sim->schema_version >= 79U && (sim->archive_recruitment.status == 3 ||
+           sim->archive_recruitment.status == 4 ||
+           (sim->schema_version >= 80U && sim->archive_recruitment.status == 5)))) ||
+>>>>>>> b5a483f (Train named archive recruits with paid work and supplies)
         !CcSimArchiveRecruitmentOrderValid(sim)) return false;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
     CcSettlement *seat = CcSimSettlementMutable(sim, o->seat_id);
     CcSettlement *origin = CcSimSettlementMutable(sim,
+<<<<<<< HEAD
         sim->schema_version >= 83U && o->current_id != 0 ? o->current_id : o->origin_id);
     CcMoney donors = o->donor_shares[0] + o->donor_shares[1];
+=======
+        sim->schema_version >= 79U && o->current_id != 0 ? o->current_id : o->origin_id);
+    CcMoney refunds[2] = {o->donor_shares[0], o->donor_shares[1]};
+    if (sim->schema_version >= 80U && o->wages_paid == 50) refunds[0] = refunds[1] = 0;
+    CcMoney donors = refunds[0] + refunds[1];
+>>>>>>> b5a483f (Train named archive recruits with paid work and supplies)
     if (donors > o->purse || sim->iron_ledger_reserve > CC_SIM_MAX_MONEY - (o->purse - donors)) return false;
     int32_t seat_wheat = o->wheat + (origin == seat ? o->travel_wheat : 0);
     if (seat->stock[CC_GOOD_WHEAT] > CC_SIM_MAX_UNITS - seat_wheat ||
@@ -326,10 +366,10 @@ bool CcSimCancelArchiveRecruitment(CcSim *sim)
     for (int32_t i = 0; i < 2; ++i)
         for (int32_t k = 0; k < sim->kingdom_count; ++k)
             if (sim->kingdoms[k].id == o->donor_ids[i] &&
-                sim->kingdoms[k].treasury > CC_SIM_MAX_MONEY - o->donor_shares[i]) return false;
+                sim->kingdoms[k].treasury > CC_SIM_MAX_MONEY - refunds[i]) return false;
     for (int32_t i = 0; i < 2; ++i)
         for (int32_t k = 0; k < sim->kingdom_count; ++k)
-            if (sim->kingdoms[k].id == o->donor_ids[i]) sim->kingdoms[k].treasury += o->donor_shares[i];
+            if (sim->kingdoms[k].id == o->donor_ids[i]) sim->kingdoms[k].treasury += refunds[i];
     sim->iron_ledger_reserve += o->purse - donors;
     seat->stock[CC_GOOD_WHEAT] += o->wheat;
     seat->stock[CC_GOOD_PAPER] += o->paper;
@@ -359,7 +399,7 @@ CcArchiveRecruitmentGate CcSimArchiveRecruitmentJourneyGate(const CcSim *sim)
     if (person == NULL || person->death_day <= sim->current_day)
         return CC_ARCHIVE_RECRUIT_CANDIDATE;
     if (o->status == 4) return CC_ARCHIVE_RECRUIT_TRAVEL_FOOD;
-    if (o->status == 2 || o->status == 3) return CC_ARCHIVE_RECRUIT_BUSY;
+    if (o->status == 2 || o->status == 3 || o->status == 5) return CC_ARCHIVE_RECRUIT_BUSY;
     CcId current = o->current_id != 0 ? o->current_id : o->origin_id;
     if (!Available(sim, person) || person->current_settlement_id != current)
         return CC_ARCHIVE_RECRUIT_CANDIDATE;
@@ -430,4 +470,61 @@ CcArchiveJourneyStep CcSimAdvanceArchiveRecruitmentJourney(CcSim *sim, uint32_t 
     o->status = 2;
     person->activity = CC_CHARACTER_ACTIVITY_TRAVELLING;
     return CC_ARCHIVE_JOURNEY_DEPARTED;
+}
+
+CcArchiveRecruitmentGate CcSimArchiveRecruitmentTrainingGate(const CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 80U || sim->archive_recruitment.status != 3)
+        return CC_ARCHIVE_RECRUIT_UNAVAILABLE;
+    const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    if (sim->current_day <= o->arrived_day || sim->current_day <= o->last_work_day)
+        return CC_ARCHIVE_RECRUIT_BUSY;
+    const CcCharacter *person = CcSimCharacter(sim, o->person_id);
+    if (!Available(sim, person) || person->current_settlement_id != o->seat_id)
+        return CC_ARCHIVE_RECRUIT_CANDIDATE;
+    const CcSettlement *seat = CcSimSettlement(sim, o->seat_id);
+    if (seat == NULL || CcSettlementIsAbandoned(seat) || !CcSettlementHasService(seat, CC_SERVICE_MILL))
+        return CC_ARCHIVE_RECRUIT_SEAT;
+    if (o->training_days == 28) {
+        const CcCharacter *trainer = CcSimCharacter(sim, o->trainer_id);
+        if (!Available(sim, trainer) || trainer->occupation != CC_OCCUPATION_SCRIBE ||
+            trainer->current_settlement_id != o->seat_id) return CC_ARCHIVE_RECRUIT_TRAINER;
+    }
+    int32_t food = o->training_days == 28 ? 4 : 2;
+    if (o->tools < 1 || (o->labor_days % 7 == 0 && (o->wheat < food + 2 || o->paper < 2)))
+        return CC_ARCHIVE_RECRUIT_MATERIALS;
+    if (o->purse != 50 || (o->labor_days == o->training_days - 1 &&
+        person->travel_coins > CC_SIM_MAX_MONEY - 50)) return CC_ARCHIVE_RECRUIT_FUNDS;
+    return CC_ARCHIVE_RECRUIT_READY;
+}
+
+CcArchiveTrainingStep CcSimAdvanceArchiveRecruitmentTraining(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 80U || sim->archive_recruitment.status != 3)
+        return CC_ARCHIVE_TRAINING_WAIT;
+    CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    CcCharacter *person = Recruit(sim);
+    if (person == NULL || person->death_day <= sim->current_day) {
+        o->status = 4;
+        return CC_ARCHIVE_TRAINING_FAILED;
+    }
+    if (CcSimArchiveRecruitmentTrainingGate(sim) != CC_ARCHIVE_RECRUIT_READY)
+        return CC_ARCHIVE_TRAINING_WAIT;
+    if (o->labor_days % 7 == 0) {
+        o->wheat -= o->training_days == 28 ? 4 : 2;
+        o->paper -= 1;
+    }
+    o->labor_days += 1;
+    if (o->training_days == 28) {
+        o->trainer_labor_days += 1;
+        sim->archive_training_week = (sim->current_day + 6) / 7;
+    }
+    o->last_work_day = sim->current_day;
+    if (o->labor_days < o->training_days) return CC_ARCHIVE_TRAINING_WORKED;
+    person->travel_coins += o->purse;
+    o->wages_paid = (int32_t)o->purse;
+    o->purse = 0;
+    person->occupation = CC_OCCUPATION_SCRIBE;
+    o->status = 5;
+    return CC_ARCHIVE_TRAINING_COMPLETE;
 }
