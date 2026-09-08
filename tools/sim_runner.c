@@ -177,6 +177,28 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  campaign_hero != NULL ? campaign_hero->name : "none",
                  sim->dragon.territoryless_days);
     if (detail) {
+        CcRitualOfferingPlan offering = CcSimRitualOfferingPlan(sim);
+        (void)printf("  ritual_offering_snapshot cult=%" PRIu64 " lair=%" PRIu64
+            " phase=%d days_remaining=%d afterdeath_days=%d tribute_phase=%d"
+            " existing_eggs=%d members=%d/48 devotion=%d/75 cohesion=%d/75"
+            " coins=%" PRId64 "/120 relics=%d/2 food_rations=%d/12 tools=%d/2 weapons=%d/3"
+            " planned_eggs=%d blocked=",
+            sim->goblins.id, sim->goblins.lair_settlement_id,
+            (int)sim->goblins.dragon_seed_phase, sim->goblins.dragon_seed_days_remaining,
+            sim->dragon.afterdeath_days, (int)sim->goblins.tribute_phase, sim->dragon.egg_count,
+            sim->goblins.members, sim->goblins.devotion, sim->goblins.cohesion,
+            sim->goblins.lair_coins, offering.relics, offering.food_rations,
+            sim->goblins.lair_stock[CC_GOOD_TOOLS], sim->goblins.lair_stock[CC_GOOD_WEAPONS],
+            offering.eggs);
+        const char *offering_names[] = {"invalid", "members", "devotion", "cohesion",
+            "coins", "relics", "food", "tools", "weapons"};
+        bool offering_separator = false;
+        for (unsigned bit = 0; bit < sizeof(offering_names) / sizeof(offering_names[0]); ++bit) {
+            if ((offering.blocked & (UINT32_C(1) << bit)) == 0U) continue;
+            (void)printf("%s%s", offering_separator ? "," : "", offering_names[bit]);
+            offering_separator = true;
+        }
+        (void)puts(offering_separator ? "" : "ready");
         CcCampaignLaunchPlan launch = CcSimCampaignLaunchPlan(sim);
         (void)printf("  campaign_launch_snapshot phase=%d attempts=%d cooldown=%d"
             " pledged_mask=%" PRIu32 " pledges=%d/2 dragon_age_days=%d/182500"

@@ -1970,6 +1970,29 @@ typedef struct CcCampaignLaunchPlan {
 /* A snapshot of held supplies; preparation can change these before departure. */
 CcCampaignLaunchPlan CcSimCampaignLaunchPlan(const CcSim *sim);
 
+typedef enum CcRitualBlock {
+    CC_RITUAL_INVALID = 1U << 0,
+    CC_RITUAL_MEMBERS = 1U << 1,
+    CC_RITUAL_DEVOTION = 1U << 2,
+    CC_RITUAL_COHESION = 1U << 3,
+    CC_RITUAL_COINS = 1U << 4,
+    CC_RITUAL_RELICS = 1U << 5,
+    CC_RITUAL_FOOD = 1U << 6,
+    CC_RITUAL_TOOLS = 1U << 7,
+    CC_RITUAL_WEAPONS = 1U << 8
+} CcRitualBlock;
+
+typedef struct CcRitualOfferingPlan {
+    uint32_t blocked;
+    int32_t food_rations;
+    int32_t relics;
+    int32_t eggs;
+} CcRitualOfferingPlan;
+
+/* Held offerings for the clutch reveal; phase, calendar, and timer are separate. */
+CcRitualOfferingPlan CcSimRitualOfferingPlan(const CcSim *sim);
+
+
 
 CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
 const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker);

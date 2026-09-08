@@ -1232,6 +1232,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(horse_stable_tests)
     add_test(NAME horse_stable_breeding COMMAND horse_stable_tests)
 
+    add_executable(ritual_offering_plan_tests tests/ritual_offering_plan_tests.c)
+    target_link_libraries(ritual_offering_plan_tests PRIVATE crownless_sim)
+    cc_strict_warnings(ritual_offering_plan_tests)
+    add_test(NAME ritual_offering_plan COMMAND ritual_offering_plan_tests)
+
     add_executable(campaign_launch_plan_tests tests/campaign_launch_plan_tests.c)
     target_link_libraries(campaign_launch_plan_tests PRIVATE crownless_sim)
     cc_strict_warnings(campaign_launch_plan_tests)

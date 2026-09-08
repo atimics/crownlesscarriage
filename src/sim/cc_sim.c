@@ -8596,6 +8596,29 @@ static void GatherDragonSeedOfferings(CcSim *sim)
         text);
 }
 
+CcRitualOfferingPlan CcSimRitualOfferingPlan(const CcSim *sim)
+{
+    CcRitualOfferingPlan plan = {.food_rations = -1, .relics = -1, .eggs = -1};
+    if (sim == NULL) {
+        plan.blocked = CC_RITUAL_INVALID;
+        return plan;
+    }
+    const CcGoblinCult *goblins = &sim->goblins;
+    plan.food_rations = NutritionRations(goblins->lair_stock, CC_NUTRITION_CIVILIAN);
+    plan.relics = goblins->lair_stock[CC_GOOD_GOLD] + goblins->lair_stock[CC_GOOD_GEMS];
+    if (goblins->members < 48) plan.blocked |= CC_RITUAL_MEMBERS;
+    if (goblins->devotion < 75) plan.blocked |= CC_RITUAL_DEVOTION;
+    if (goblins->cohesion < 75) plan.blocked |= CC_RITUAL_COHESION;
+    if (goblins->lair_coins < 120) plan.blocked |= CC_RITUAL_COINS;
+    if (plan.relics < 2) plan.blocked |= CC_RITUAL_RELICS;
+    if (plan.food_rations < 12) plan.blocked |= CC_RITUAL_FOOD;
+    if (goblins->lair_stock[CC_GOOD_TOOLS] < 2) plan.blocked |= CC_RITUAL_TOOLS;
+    if (goblins->lair_stock[CC_GOOD_WEAPONS] < 3) plan.blocked |= CC_RITUAL_WEAPONS;
+    plan.eggs = goblins->members >= 72 && goblins->devotion >= 90 &&
+        goblins->cohesion >= 90 ? 2 : 1;
+    return plan;
+}
+
 static void AdvanceAfterdragonCult(CcSim *sim)
 {
     CcDragon *dragon = &sim->dragon;
@@ -8693,16 +8716,8 @@ static void AdvanceAfterdragonCult(CcSim *sim)
     }
     if (goblins->dragon_seed_days_remaining > 0) return;
 
-    int32_t relics = goblins->lair_stock[CC_GOOD_GOLD] +
-                     goblins->lair_stock[CC_GOOD_GEMS];
-    bool can_reveal_clutch = goblins->members >= 48 &&
-        goblins->devotion >= 75 && goblins->cohesion >= 75 &&
-        goblins->lair_coins >= 120 && relics >= 2 &&
-        NutritionRations(
-            goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 12 &&
-        goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
-        goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
-    if (!can_reveal_clutch) return;
+    CcRitualOfferingPlan offering = CcSimRitualOfferingPlan(sim);
+    if (offering.blocked != 0U) return;
 
     CcMoney ritual_coins = 120;
     goblins->lair_coins -= ritual_coins;
@@ -8718,9 +8733,7 @@ static void AdvanceAfterdragonCult(CcSim *sim)
         12 * CC_NUTRITION_PER_RATION);
     goblins->lair_stock[CC_GOOD_TOOLS] -= 1;
     goblins->lair_stock[CC_GOOD_WEAPONS] -= 1;
-    dragon->egg_count = goblins->members >= 72 &&
-                        goblins->devotion >= 90 &&
-                        goblins->cohesion >= 90 ? 2 : 1;
+    dragon->egg_count = offering.eggs;
     dragon->brood_days_remaining =
         (10 + (int32_t)(NextRandom(sim) % 6U)) * 365;
     char text[CC_EVENT_TEXT_CAPACITY];

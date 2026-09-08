@@ -140,3 +140,18 @@ royal diplomacy schedule controls when preparation is called. A ready snapshot
 therefore describes readiness at that instant. The same read-only inspection
 adds engine information to the runner. Coalition formation, supply availability
 above reserves, and ritual eligibility remain separate diagnostic work.
+
+## Successor ritual offerings
+
+`--detail` includes a `ritual_offering_snapshot` for the named cult and lair.
+`CcSimRitualOfferingPlan` is the offering check used by clutch revelation after
+annual gathering, cult changes, and timer advancement. It reports every unmet
+membership, devotion, cohesion, coin, relic, nutrition, Tool, and Weapon threshold.
+The planned egg count uses the same rule as execution.
+
+The snapshot also identifies the current ritual phase, timer, afterdeath age,
+tribute phase, and existing eggs. `blocked=ready` applies to held offerings;
+the annual schedule and ritual stage determine when execution checks them.
+Tools and Weapons thresholds include retained equipment: revelation consumes
+one of each after requiring two Tools and three Weapons. Food costs twelve
+rations and the transfer to the dragon uses 120 coins and two relics.
