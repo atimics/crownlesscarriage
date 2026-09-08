@@ -3541,44 +3541,6 @@ const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker)
     return "unknown";
 }
 
-int32_t CcPlayerCargoUsed(const CcPlayerCompany *player)
-{
-    if (player == NULL) return 0;
-    int32_t used = player->treasure_cargo_slots;
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        if (player->cargo[good] > 0) {
-            const CcGoodDefinition *definition = CcGoodDefinitionFor(
-                (CcGood)good);
-            used += (player->cargo[good] +
-                     definition->player_units_per_slot - 1) /
-                    definition->player_units_per_slot;
-        }
-    }
-    return used;
-}
-
-static int32_t PlayerCargoBoxes(CcGood good, int32_t quantity)
-{
-    const CcGoodDefinition *definition = CcGoodDefinitionFor(good);
-    if (definition == NULL || quantity <= 0) return 0;
-    return (quantity + definition->player_units_per_slot - 1) /
-           definition->player_units_per_slot;
-}
-
-static int32_t FreightCargoSlots(CcGood good, int32_t quantity)
-{
-    const CcGoodDefinition *definition = CcGoodDefinitionFor(good);
-    if (definition == NULL || quantity <= 0) return 0;
-    return (quantity + definition->freight_units_per_slot - 1) /
-           definition->freight_units_per_slot;
-}
-
-static int32_t FreightUnitsPerCargoSlot(CcGood good)
-{
-    const CcGoodDefinition *definition = CcGoodDefinitionFor(good);
-    return definition != NULL ? definition->freight_units_per_slot : 1;
-}
-
 const CcTreasure *CcSimTreasure(const CcSim *sim, CcId id)
 {
     if (sim == NULL || CcIdKind(id) != CC_ENTITY_TREASURE) return NULL;
@@ -4346,7 +4308,7 @@ void CcSimInitializeRoyalCarriages(CcSim *sim)
             origin != NULL ? KingdomSlotById(sim, origin->kingdom_id) : -1;
         if (kingdom_slot < 0 ||
             sim->royal_carriages[kingdom_slot].active_shipment_id != 0U ||
-            FreightCargoSlots(shipment->good, shipment->quantity) >
+            CcGoodsFreightCargoSlots(shipment->good, shipment->quantity) >
                 CC_ROYAL_CARRIAGE_CARGO_SLOTS) {
             CcSettlement *destination = CcSimSettlementMutable(
                 sim, shipment->final_destination_id);
@@ -9605,7 +9567,7 @@ static void UpdateShipments(CcSim *sim)
             }
             int32_t route_slot = -1;
             CcId next_hop_id = 0U;
-            int32_t cargo_slots = FreightCargoSlots(
+            int32_t cargo_slots = CcGoodsFreightCargoSlots(
                 shipment->good, shipment->quantity);
             if (!FindTradePath(sim, carriage->location_id, final_id,
                                shipment->good, &route_slot, &next_hop_id,
@@ -9790,7 +9752,7 @@ static void UpdateShipments(CcSim *sim)
             }
             int32_t next_route_slot = -1;
             CcId next_hop_id = 0U;
-            int32_t cargo_slots = FreightCargoSlots(
+            int32_t cargo_slots = CcGoodsFreightCargoSlots(
                 shipment_good, shipment->quantity);
             if (FindTradePath(sim, hop->id, final_id, shipment_good,
                               &next_route_slot,
@@ -10017,10 +9979,10 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
     int32_t available_capacity = effective_capacity - route_used[route_slot];
     int32_t cargo_capacity = MinimumI32(
         available_capacity, path_capacity) *
-        FreightUnitsPerCargoSlot(good);
+        CcGoodsFreightUnitsPerCargoSlot(good);
     int32_t quantity = MinimumI32(
         (royal ? CC_ROYAL_CARRIAGE_CARGO_SLOTS : 5) *
-            FreightUnitsPerCargoSlot(good),
+            CcGoodsFreightUnitsPerCargoSlot(good),
         MinimumI32(cargo_capacity, MinimumI32(surplus, need)));
     bool military_supply = WarWeeklyNeed(
         sim, final_destination, good) > 0;
@@ -10044,7 +10006,7 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
     int32_t minimum_load =
         CcGoodDefinitionFor(good)->minimum_trade_units;
     if (quantity < minimum_load ||
-        FreightCargoSlots(good, quantity) < minimum_cargo_slots) return false;
+        CcGoodsFreightCargoSlots(good, quantity) < minimum_cargo_slots) return false;
     CcShipment *shipment = AllocateShipment(sim);
     if (shipment == NULL) return false;
     origin->stock[good] -= quantity;
@@ -10096,7 +10058,7 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
         carriage->blocked_since_day = 0;
         carriage->next_dispatch_day = sim->current_day + 7;
     }
-    route_used[route_slot] += FreightCargoSlots(good, quantity);
+    route_used[route_slot] += CcGoodsFreightCargoSlots(good, quantity);
     if (route->smuggler_route || sim->current_day % 21 == 0) {
         route->condition = ClampI32(route->condition - 1, 0, 100);
     }
@@ -10171,7 +10133,7 @@ static void PlanLegacyTrade(CcSim *sim)
                             sim, from->id, to->id, (CcGood)good,
                             &route_slot, &next_hop, &path_cost,
                             &path_capacity, route_used, false, 0U,
-                            false, FreightCargoSlots(
+                            false, CcGoodsFreightCargoSlots(
                                 (CcGood)good, minimum_load))) continue;
                     CcMoney minimum_cost =
                         (CcMoney)minimum_load *
@@ -10212,8 +10174,8 @@ static int32_t RoyalTradeScore(const CcSim *sim,
                                CcGood good, int32_t need, int32_t surplus,
                                int32_t path_cost, int32_t reposition_cost)
 {
-    int32_t freight_need = FreightCargoSlots(good, need);
-    int32_t freight_surplus = FreightCargoSlots(good, surplus);
+    int32_t freight_need = CcGoodsFreightCargoSlots(good, need);
+    int32_t freight_surplus = CcGoodsFreightCargoSlots(good, surplus);
     bool nutrition = good == CC_GOOD_BREAD ||
                      good == CC_GOOD_WHEAT || good == CC_GOOD_MEAT;
     bool military_supply = WarWeeklyNeed(sim, destination, good) > 0;
@@ -10294,7 +10256,7 @@ static void BlockRoyalTradeDemand(
         CcGood cargo_good = (CcGood)good;
         int32_t minimum_load = CcGoodDefinitionFor(
             cargo_good)->minimum_trade_units;
-        int32_t required_slots = FreightCargoSlots(
+        int32_t required_slots = CcGoodsFreightCargoSlots(
             cargo_good, minimum_load);
         for (int32_t destination = 0;
              destination < sim->settlement_count; ++destination) {
@@ -10313,8 +10275,8 @@ static void BlockRoyalTradeDemand(
                 if (surplus < minimum_load) continue;
                 int32_t load_slots = MinimumI32(
                     CC_ROYAL_CARRIAGE_CARGO_SLOTS,
-                    MinimumI32(FreightCargoSlots(cargo_good, need),
-                               FreightCargoSlots(cargo_good, surplus)));
+                    MinimumI32(CcGoodsFreightCargoSlots(cargo_good, need),
+                               CcGoodsFreightCargoSlots(cargo_good, surplus)));
                     if (load_slots < 2 &&
                         !RoyalTradeIsUrgent(
                         sim, archive_chain, to, cargo_good)) continue;
@@ -10430,7 +10392,7 @@ static void PlanTrade(CcSim *sim)
                             &route_slot, &next_hop, &path_cost,
                             &path_capacity, route_used, true,
                             carriage->kingdom_id, false,
-                            FreightCargoSlots(
+                            CcGoodsFreightCargoSlots(
                                 (CcGood)good, minimum_load));
                     if (!delivery_path) {
                         delivery_path = FindTradePath(
@@ -10438,7 +10400,7 @@ static void PlanTrade(CcSim *sim)
                             &route_slot, &next_hop, &path_cost,
                             &path_capacity, route_used, true,
                             carriage->kingdom_id, true,
-                            FreightCargoSlots(
+                            CcGoodsFreightCargoSlots(
                                 (CcGood)good, minimum_load));
                         if (!delivery_path ||
                             !CcSimRoyalCarriageCanUseRoute(
@@ -10450,8 +10412,8 @@ static void PlanTrade(CcSim *sim)
                         MinimumI32(
                             path_capacity,
                             MinimumI32(
-                                FreightCargoSlots((CcGood)good, need),
-                                FreightCargoSlots((CcGood)good, surplus))));
+                                CcGoodsFreightCargoSlots((CcGood)good, need),
+                                CcGoodsFreightCargoSlots((CcGood)good, surplus))));
                     bool urgent = RoyalTradeIsUrgent(
                         sim, &archive_chain, to, (CcGood)good);
                     int32_t minimum_cargo_slots = MinimumI32(
@@ -10467,7 +10429,7 @@ static void PlanTrade(CcSim *sim)
                     int32_t required_units = urgent ? minimum_load :
                         MaximumI32(minimum_load,
                             (minimum_cargo_slots - 1) *
-                                FreightUnitsPerCargoSlot((CcGood)good) + 1);
+                                CcGoodsFreightUnitsPerCargoSlot((CcGood)good) + 1);
                     CcMoney minimum_cost =
                         (CcMoney)required_units *
                             MaximumI32(1, from->price[good]) +
@@ -14981,9 +14943,9 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
             SetError(error, error_capacity, "The local market lacks that stock.");
             return false;
         }
-        int32_t old_slots = PlayerCargoBoxes(
+        int32_t old_slots = CcGoodsPlayerCargoBoxes(
             command->good, sim->player.cargo[command->good]);
-        int32_t new_slots = PlayerCargoBoxes(
+        int32_t new_slots = CcGoodsPlayerCargoBoxes(
             command->good, sim->player.cargo[command->good] + amount);
         if (CcPlayerCargoUsed(&sim->player) - old_slots + new_slots >
             sim->player.cargo_capacity) {
@@ -15681,9 +15643,9 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
                      "Mara's granary cannot cover the promised food load.");
             return false;
         }
-        int32_t old_slots = PlayerCargoBoxes(
+        int32_t old_slots = CcGoodsPlayerCargoBoxes(
             CC_GOOD_FOOD, sim->player.cargo[CC_GOOD_FOOD]);
-        int32_t new_slots = PlayerCargoBoxes(
+        int32_t new_slots = CcGoodsPlayerCargoBoxes(
             CC_GOOD_FOOD,
             sim->player.cargo[CC_GOOD_FOOD] + relief_load);
         if (CcPlayerCargoUsed(&sim->player) - old_slots + new_slots >
@@ -18312,7 +18274,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             shipment->good >= 0 && shipment->good < CC_GOOD_COUNT &&
             shipment->quantity >= 1 &&
             shipment->quantity <= CC_SIM_MAX_UNITS &&
-            FreightCargoSlots(shipment->good, shipment->quantity) <=
+            CcGoodsFreightCargoSlots(shipment->good, shipment->quantity) <=
                 shipment_route->capacity;
         if (CcIdKind(shipment->id) != CC_ENTITY_SHIPMENT ||
             CcSimSettlement(sim, shipment->origin_id) == NULL ||
@@ -18418,7 +18380,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                  (CcSimSettlement(sim,
                      shipment->final_destination_id)->kingdom_id !=
                       carriage->kingdom_id ||
-                  FreightCargoSlots(shipment->good,
+                  CcGoodsFreightCargoSlots(shipment->good,
                                     shipment->quantity) >
                       CC_ROYAL_CARRIAGE_CARGO_SLOTS)) ||
                 !mode_valid) {

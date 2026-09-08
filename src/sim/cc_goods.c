@@ -118,3 +118,41 @@ CcGood CcGoodsPreferredNutritionGood(
     return best;
 }
 
+int32_t CcPlayerCargoUsed(const CcPlayerCompany *player)
+{
+    if (player == NULL) return 0;
+    int64_t used = player->treasure_cargo_slots;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        if (player->cargo[good] > 0) {
+            const CcGoodDefinition *definition = CcGoodDefinitionFor(
+                (CcGood)good);
+            used += ((int64_t)player->cargo[good] +
+                     definition->player_units_per_slot - 1) /
+                    definition->player_units_per_slot;
+        }
+    }
+    return used > INT32_MAX ? INT32_MAX : (int32_t)used;
+}
+
+int32_t CcGoodsPlayerCargoBoxes(CcGood good, int32_t quantity)
+{
+    const CcGoodDefinition *definition = CcGoodDefinitionFor(good);
+    if (definition == NULL || quantity <= 0) return 0;
+    return (int32_t)(((int64_t)quantity + definition->player_units_per_slot - 1) /
+                     definition->player_units_per_slot);
+}
+
+int32_t CcGoodsFreightCargoSlots(CcGood good, int32_t quantity)
+{
+    const CcGoodDefinition *definition = CcGoodDefinitionFor(good);
+    if (definition == NULL || quantity <= 0) return 0;
+    return (int32_t)(((int64_t)quantity + definition->freight_units_per_slot - 1) /
+                     definition->freight_units_per_slot);
+}
+
+int32_t CcGoodsFreightUnitsPerCargoSlot(CcGood good)
+{
+    const CcGoodDefinition *definition = CcGoodDefinitionFor(good);
+    return definition != NULL ? definition->freight_units_per_slot : 1;
+}
+

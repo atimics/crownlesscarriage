@@ -7,4 +7,8 @@
 CcGood CcGoodsPreferredNutritionGood(
     const int32_t goods[CC_GOOD_COUNT], CcNutritionPurpose purpose);
 
+int32_t CcGoodsPlayerCargoBoxes(CcGood good, int32_t quantity);
+int32_t CcGoodsFreightCargoSlots(CcGood good, int32_t quantity);
+int32_t CcGoodsFreightUnitsPerCargoSlot(CcGood good);
+
 #endif

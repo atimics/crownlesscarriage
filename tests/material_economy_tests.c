@@ -1,4 +1,5 @@
 #include "sim/cc_sim.h"
+#include "sim/cc_goods_internal.h"
 
 #include "test_support.h"
 #include <stdio.h>
@@ -170,6 +171,22 @@ static void CheckWeakestRouteUpkeep(void)
 
 int main(void)
 {
+    /* Maximum cargo counts keep capacity checks conservative. */
+    CcPlayerCompany large_cargo = {0};
+    large_cargo.cargo[CC_GOOD_BREAD] = INT32_MAX;
+    large_cargo.cargo[CC_GOOD_MEAT] = INT32_MAX;
+    CC_CHECK(CcPlayerCargoUsed(&large_cargo) == INT32_MAX);
+    large_cargo.cargo[CC_GOOD_MEAT] = 0;
+    large_cargo.treasure_cargo_slots = 1;
+    CC_CHECK(CcPlayerCargoUsed(&large_cargo) == INT32_MAX);
+    CC_CHECK(CcGoodsPlayerCargoBoxes(CC_GOOD_BREAD, INT32_MAX) == INT32_MAX);
+    CC_CHECK(CcGoodsFreightCargoSlots(CC_GOOD_BREAD, INT32_MAX) == 268435456);
+    CC_CHECK(CcGoodsFreightCargoSlots(CC_GOOD_MEAT, INT32_MAX) == 357913942);
+    CC_CHECK(CcGoodsFreightCargoSlots(CC_GOOD_BREAD, 8) == 1);
+    CC_CHECK(CcGoodsFreightCargoSlots(CC_GOOD_BREAD, 9) == 2);
+    CC_CHECK(CcGoodsFreightCargoSlots(CC_GOOD_BREAD, 0) == 0);
+    CC_CHECK(CcGoodsFreightCargoSlots((CcGood)-1, INT32_MAX) == 0);
+
     CheckRoadUseRecovery();
     CheckWeakestRouteUpkeep();
     CC_CHECK(CC_GOOD_BREAD == 0);
