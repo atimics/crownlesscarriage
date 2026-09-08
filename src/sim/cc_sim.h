@@ -57,7 +57,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 77
+#define CC_SIM_SCHEMA_VERSION 78
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -1786,6 +1786,16 @@ typedef struct CcPonyCompany {
     CcPony ponies[CC_PONY_COUNT];
 } CcPonyCompany;
 
+/* One committed recruitment reservation. Status 0 is empty; 1 is reserved. */
+typedef struct CcArchiveRecruitmentOrder {
+    int32_t status;
+    CcId person_id, trainer_id, seat_id, origin_id, first_route_id, first_hop_id;
+    CcId donor_ids[2], patron_ids[2];
+    CcMoney donor_shares[2], purse;
+    int32_t wheat, paper, tools, travel_wheat, start_day, training_days, trainer_days;
+    int64_t arrival_estimate, ready_estimate;
+} CcArchiveRecruitmentOrder;
+
 typedef struct CcGrainSupply {
     CcId organiser_id, supplier_id, route_id, shipment_id;
     CcMoney purse, spent;
@@ -1850,6 +1860,7 @@ typedef struct CcSim {
     int32_t stable_horse_count;
     CcWorldClock clock;
     CcArchives archives;
+    CcArchiveRecruitmentOrder archive_recruitment;
     CcGossip gossip[CC_MAX_GOSSIP];
     CcGossipCarrier gossip_carriers[CC_MAX_GOSSIP_CARRIERS];
     CcId gossip_last_event_id;
@@ -1906,7 +1917,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 184176,
+_Static_assert(sizeof(CcSim) == 184336,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

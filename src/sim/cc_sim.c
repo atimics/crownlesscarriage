@@ -1,5 +1,6 @@
 #include "sim/cc_sim.h"
 #include "sim/cc_occupations.h"
+#include "sim/cc_archive_recruitment.h"
 #include "sim/cc_identity_internal.h"
 #include "sim/cc_archive_internal.h"
 #include "sim/cc_production_internal.h"
@@ -6426,6 +6427,8 @@ static void AdvanceArchives(CcSim *sim)
     int32_t target_scribes = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
         sim->iron_ledger_reserve >= 150 ? 2 :
         sim->iron_ledger_reserve >= 50 ? 1 : 0;
+    bool recruitment_reserved = sim->schema_version >= 78U && sim->archive_recruitment.status == 1;
+    if (recruitment_reserved) target_scribes = MinimumI32(target_scribes, archives->scribes);
     /* Date the first weekly sample with zero scribes. */
     CcMoney crown_funding = 0;
     if (sim->schema_version >= 56U) {
@@ -6437,7 +6440,7 @@ static void AdvanceArchives(CcSim *sim)
             archives->dead_since_day = 0;
         }
         /* After five years, connected solvent crowns restore one scribe. */
-        if (CcSimArchiveRecoveryWindow(sim).gate == CC_ARCHIVE_RECOVERY_DUE) {
+        if (!recruitment_reserved && CcSimArchiveRecoveryWindow(sim).gate == CC_ARCHIVE_RECOVERY_DUE) {
             crown_funding = FundArchiveRecovery(sim);
             if (crown_funding > 0) target_scribes = 1;
         }
@@ -19731,6 +19734,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     }
     if (sim->schema_version >= 59U && !CcMineValidate(sim)) {
         SetError(error, error_capacity, "Mine visit state is invalid.");
+        return false;
+    }
+    if (!CcSimArchiveRecruitmentOrderValid(sim)) {
+        SetError(error, error_capacity, "Archive recruitment reservation is invalid.");
         return false;
     }
     return true;

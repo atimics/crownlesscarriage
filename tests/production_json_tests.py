@@ -23,6 +23,8 @@ with tempfile.TemporaryDirectory() as directory:
         assert [row['day'] for row in rows] == [1, 366, 731]
         assert all(row['threats']['semantics'] == 'snapshot' for row in rows)
         for row in rows:
+            assert row['archive_recruitment_order']['semantics'] == 'stored_reservation'
+            assert row['archive_recruitment_order']['status'] == 0
             recruit = row['archive_recruitment']
             assert recruit['semantics'] == 'recruitment_quote_snapshot'
             assert isinstance(recruit['person_id'], str)
@@ -66,6 +68,7 @@ with tempfile.TemporaryDirectory() as directory:
             assert loaded['road_network'] == rows[-1]['road_network']
             assert loaded['archive_work'] == rows[-1]['archive_work']
             assert loaded['archive_funding'] == rows[-1]['archive_funding']
+            assert loaded['archive_recruitment_order'] == rows[-1]['archive_recruitment_order']
             assert loaded['archive_recruitment'] == rows[-1]['archive_recruitment']
             assert loaded['archive_supply'] == rows[-1]['archive_supply']
             assert loaded['archive_seat_plan'] == rows[-1]['archive_seat_plan']

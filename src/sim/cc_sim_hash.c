@@ -834,6 +834,31 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(item->magnitude); hash = HashString(hash, item->text);
     }
     if (hash_archives) {
+        if (sim->schema_version >= 78U) {
+            HASH_VALUE(sim->archive_recruitment.status);
+            HASH_VALUE(sim->archive_recruitment.person_id);
+            HASH_VALUE(sim->archive_recruitment.trainer_id);
+            HASH_VALUE(sim->archive_recruitment.seat_id);
+            HASH_VALUE(sim->archive_recruitment.origin_id);
+            HASH_VALUE(sim->archive_recruitment.first_route_id);
+            HASH_VALUE(sim->archive_recruitment.first_hop_id);
+            HASH_VALUE(sim->archive_recruitment.donor_ids[0]);
+            HASH_VALUE(sim->archive_recruitment.donor_ids[1]);
+            HASH_VALUE(sim->archive_recruitment.patron_ids[0]);
+            HASH_VALUE(sim->archive_recruitment.patron_ids[1]);
+            HASH_VALUE(sim->archive_recruitment.donor_shares[0]);
+            HASH_VALUE(sim->archive_recruitment.donor_shares[1]);
+            HASH_VALUE(sim->archive_recruitment.purse);
+            HASH_VALUE(sim->archive_recruitment.wheat);
+            HASH_VALUE(sim->archive_recruitment.paper);
+            HASH_VALUE(sim->archive_recruitment.tools);
+            HASH_VALUE(sim->archive_recruitment.travel_wheat);
+            HASH_VALUE(sim->archive_recruitment.start_day);
+            HASH_VALUE(sim->archive_recruitment.training_days);
+            HASH_VALUE(sim->archive_recruitment.trainer_days);
+            HASH_VALUE(sim->archive_recruitment.arrival_estimate);
+            HASH_VALUE(sim->archive_recruitment.ready_estimate);
+        }
         HASH_VALUE(sim->archives.scribes);
         HASH_VALUE(sim->archives.lore_stored);
         HASH_VALUE(sim->archives.lore_lost_total);
