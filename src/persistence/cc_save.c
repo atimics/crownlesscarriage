@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 30
+#define CC_SQLITE_USER_VERSION 31
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -1398,7 +1398,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " output_good INTEGER NOT NULL, progress_milli INTEGER NOT NULL,"
         " side INTEGER NOT NULL, spur_length INTEGER NOT NULL,"
         " condition INTEGER NOT NULL, blocker INTEGER NOT NULL,"
-        " accessible INTEGER NOT NULL);";
+        " accessible INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS road_site_stock (site_slot INTEGER NOT NULL,"
+        " good INTEGER NOT NULL, quantity INTEGER NOT NULL, PRIMARY KEY(site_slot,good));";
     const char *gossip_schema =
         "CREATE TABLE IF NOT EXISTS gossip_state ("
         " id INTEGER PRIMARY KEY CHECK(id=1), last_event_id INTEGER NOT NULL,"
@@ -2001,6 +2003,8 @@ static bool SaveRoutes(sqlite3 *database, const CcSim *sim,
     return true;
 }
 
+#include "cc_save_road_stores.inc"
+
 static bool SaveRoadSites(sqlite3 *database, const CcSim *sim,
                           char *error, size_t error_capacity)
 {
@@ -2031,7 +2035,7 @@ static bool SaveRoadSites(sqlite3 *database, const CcSim *sim,
         }
     }
     sqlite3_finalize(statement);
-    return true;
+    return SaveRoadStores(database, sim, error, error_capacity);
 }
 
 static bool SaveMaps(sqlite3 *database, const CcSim *sim,
@@ -3333,7 +3337,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM town_recovery;"
             "DELETE FROM horse_team; DELETE FROM stable_horse;"
             "DELETE FROM pony_company; DELETE FROM rainbow_pony;"
-            "DELETE FROM route; DELETE FROM road_site;"
+            "DELETE FROM route; DELETE FROM road_site; DELETE FROM road_site_stock;"
             "DELETE FROM map_object; DELETE FROM map_collection;"
             "DELETE FROM player_route_knowledge;"
             "DELETE FROM player_settlement_knowledge;"
@@ -4169,7 +4173,7 @@ static bool ReadRoadSites(sqlite3 *database, CcSim *sim,
                  "Road site rows are incomplete.");
         return false;
     }
-    return true;
+    return ReadRoadStores(database, sim, error, error_capacity);
 }
 
 static bool ReadMaps(sqlite3 *database, CcSim *sim,
@@ -6071,7 +6075,7 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 54U || legacy_version == 55U ||
          legacy_version == 56U || legacy_version == 57U ||
          legacy_version == 58U || legacy_version == 59U ||
-         legacy_version == 60U || legacy_version == 61U) &&
+         legacy_version == 60U || legacy_version == 61U || legacy_version == 62U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,

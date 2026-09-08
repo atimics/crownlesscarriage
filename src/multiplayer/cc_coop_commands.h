@@ -60,7 +60,8 @@ static inline const char *CcCoopActionName(CcCommandKind kind)
         "mine_use",
         "mine_pack",
         "clear_road_site",
+        "transfer_road_site",
     };
-    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_CLEAR_ROAD_SITE ? names[(int)kind] : "";
+    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_TRANSFER_ROAD_SITE ? names[(int)kind] : "";
 }
 #endif

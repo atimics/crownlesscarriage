@@ -283,6 +283,18 @@ static int RunWorldCardRegression(void)
         CARD_INPUT();
         CARD_CHECK(site->accessible && site->blocker == CC_ROAD_SITE_BLOCKER_NONE,
             "Clearing through either control must open the site.");
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_TRANSFER_ROAD_SITE, 1, mode != 0),
+            "An open store needs an unload action.");
+        CARD_INPUT();
+        int32_t stored = 0;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) stored += site->stock[good];
+        CARD_CHECK(stored == 1, "Unloading must move one bundle into the local store.");
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_TRANSFER_ROAD_SITE, -1, mode != 0),
+            "Stored goods need a load action.");
+        CARD_INPUT();
+        stored = 0;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) stored += site->stock[good];
+        CARD_CHECK(stored == 0, "Loading must return the stored bundle to the carriage.");
         ContextActionSet opened = BuildContextActions(&sim, &local, view, selected, 0);
         CARD_CHECK(WorldCardIndex(&opened, CONTEXT_ACTION_CLEAR_ROAD_SITE, 0) < 0,
             "An opened site offers its remaining actions.");
@@ -290,7 +302,10 @@ static int RunWorldCardRegression(void)
         CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_CAMP_ROAD_SITE, 0, mode != 0),
             "A camp needs matching card and world actions.");
         if (mode != 0) {
-            CcInteractionTarget *camp = &local.interactions.targets[0];
+            CcInteractionTarget *camp = NULL;
+            for (int32_t i = 0; i < local.interactions.count; ++i)
+                if (local.interactions.targets[i].action == CONTEXT_ACTION_CAMP_ROAD_SITE) camp = &local.interactions.targets[i];
+            CARD_CHECK(camp != NULL, "The camp needs a world target.");
             uint64_t subject = camp->subject_id;
             camp->subject_id = subject + 1;
             ContextActionSet current = BuildContextActions(&sim, &local, view, selected, 0);

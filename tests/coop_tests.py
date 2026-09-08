@@ -303,7 +303,7 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(self.worlds.view(self.id, self.a)['state']['company']['cargo'][0], 1)
 
     def test_road_and_pony_actions_reach_the_simulation(self):
-        for action in ('clear_road_site', 'camp_road_site', 'pass_road_site', 'meet_pony',
+        for action in ('transfer_road_site', 'clear_road_site', 'camp_road_site', 'pass_road_site', 'meet_pony',
                        'help_pony', 'swap_pony', 'leave_pony'):
             with self.subTest(action=action):
                 before = self.worlds.view(self.id, self.a)['state']
@@ -329,6 +329,8 @@ class CoopTests(unittest.TestCase):
         body, opened = apply(self.b, 'clear_road_site', target=site['id'])
         self.assertTrue(opened['journey']['road_site']['accessible'])
         self.assertGreater(opened['journey']['road_site']['condition'], site['condition'])
+        body, opened = apply(self.b, 'transfer_road_site', target=site['id'], good=2, amount=1)
+        self.assertEqual(opened['journey']['road_site']['stock'][2], 1)
         self.assertEqual(self.worlds.command(self.id, self.b, body)['world']['state'], opened)
         self.assertEqual(self.worlds.view(self.id, self.a)['state'], opened)
         self.worlds.close()

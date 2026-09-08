@@ -260,12 +260,151 @@ static void CheckPre62Save(void)
     (void)remove(path);
 }
 
+static void CheckStoreTransfers(void)
+{
+    const char *path = "road-store-test.ccsave";
+    for (int32_t slot = 0; slot < CC_MAX_ROAD_SITES; ++slot) {
+        PrepareStop(slot, slot % 2 != 0);
+        CcRoadSite *site = &sim.road_sites[slot];
+        site->accessible = true;
+        site->blocker = CC_ROAD_SITE_BLOCKER_NONE;
+        memset(sim.player.cargo, 0, sizeof(sim.player.cargo));
+        sim.player.treasure_cargo_slots = 0;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            sim.player.cargo[good] = 2;
+            uint64_t initial = CcSimHash(&sim);
+            site->stock[good]++;
+            CC_CHECK(CcSimHash(&sim) != initial);
+            site->stock[good]--;
+            (void)remove(path);
+            CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+            CC_CHECK(journal != NULL);
+            CcCommand transfer = {.kind = CC_COMMAND_TRANSFER_ROAD_SITE,
+                .target_id = site->id, .good = (CcGood)good, .amount = 1};
+            int32_t time = sim.clock.minute_subticks;
+            CcSettlement town = *CcSimSettlement(&sim, site->home_settlement_id);
+            CC_CHECK(CcJournalApply(journal, &sim, &transfer, error, sizeof(error)));
+            CC_CHECK(site->stock[good] == 1 && sim.player.cargo[good] == 1);
+            CC_CHECK(sim.clock.minute_subticks == time);
+            CC_CHECK(memcmp(&town, CcSimSettlement(&sim, site->home_settlement_id), sizeof(town)) == 0);
+            CC_CHECK(CcJournalFlush(journal, &sim, error, sizeof(error)));
+            CcJournalAbandon(&journal);
+            journal = CcJournalResume(path, &restored, error, sizeof(error));
+            CC_CHECK(journal != NULL && CcSimHash(&restored) == CcSimHash(&sim));
+            CC_CHECK(restored.road_sites[slot].stock[good] == 1);
+            transfer.amount = -1;
+            CC_CHECK(CcJournalApply(journal, &restored, &transfer, error, sizeof(error)));
+            CC_CHECK(restored.road_sites[slot].stock[good] == 0 && restored.player.cargo[good] == 2);
+            uint64_t hash = CcSimHash(&restored);
+            CC_CHECK(!CcJournalApply(journal, &restored, &transfer, error, sizeof(error)));
+            CC_CHECK(CcSimHash(&restored) == hash);
+            CC_CHECK(CcJournalClose(&journal, &restored, error, sizeof(error)));
+            CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+            CC_CHECK(restored.road_sites[slot].stock[good] == 0);
+            site->stock[good] = 0;
+            sim.player.cargo[good] = 0;
+        }
+    }
+    PrepareStop(0, false);
+    sim.road_sites[0].accessible = true;
+    sim.road_sites[0].blocker = CC_ROAD_SITE_BLOCKER_NONE;
+    sim.schema_version = 62;
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 62;
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    for (int32_t slot = 0; slot < restored.road_site_count; ++slot)
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
+            CC_CHECK(restored.road_sites[slot].stock[good] == 0);
+    (void)remove(path);
+}
+
+static void CheckStoreRejections(void)
+{
+    PrepareStop(0, false);
+    CcRoadSite *site = &sim.road_sites[0];
+    site->accessible = true;
+    site->blocker = CC_ROAD_SITE_BLOCKER_NONE;
+    memset(sim.player.cargo, 0, sizeof(sim.player.cargo));
+    sim.player.treasure_cargo_slots = 0;
+    sim.player.cargo[CC_GOOD_TOOLS] = 1;
+    int32_t units = CcGoodDefinitionFor(CC_GOOD_TOOLS)->player_units_per_slot;
+    site->stock[CC_GOOD_TOOLS] = CC_ROAD_SITE_CAPACITY * units;
+    CcCommand transfer = {.kind = CC_COMMAND_TRANSFER_ROAD_SITE,
+        .target_id = site->id, .good = CC_GOOD_TOOLS, .amount = 1};
+#define STORE_REFUSAL() do { uint64_t before = CcSimHash(&sim);     CC_CHECK(!CcSimApply(&sim, &transfer, error, sizeof(error)));     CC_CHECK(CcSimHash(&sim) == before); } while (0)
+    STORE_REFUSAL();
+    site->stock[CC_GOOD_TOOLS] = 1;
+    sim.player.cargo[CC_GOOD_TOOLS] = sim.player.cargo_capacity * units;
+    transfer.amount = -1; STORE_REFUSAL();
+    sim.player.cargo[CC_GOOD_TOOLS] = 1;
+    site->accessible = false; site->blocker = CC_ROAD_SITE_BLOCKER_TREE; STORE_REFUSAL();
+    site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE;
+    sim.carriage.progress_milli -= 21; STORE_REFUSAL();
+    sim.carriage.progress_milli += 21;
+    transfer.good = CC_GOOD_COUNT; STORE_REFUSAL();
+    transfer.good = CC_GOOD_TOOLS; transfer.amount = 0; STORE_REFUSAL();
+    transfer.amount = INT32_MIN; STORE_REFUSAL();
+#undef STORE_REFUSAL
+    const char *path = "road-store-missing-row.ccsave";
+    (void)remove(path);
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    CC_CHECK(sqlite3_exec(database, "DELETE FROM road_site_stock WHERE site_slot=0 AND good=0;",
+        NULL, NULL, NULL) == SQLITE_OK);
+    CC_CHECK(sqlite3_close(database) == SQLITE_OK);
+    CC_CHECK(!CcSaveRead(path, &restored, error, sizeof(error)));
+    (void)remove(path);
+}
+
+static void CheckCarriageDelivery(void)
+{
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcRoadSite *site = &sim.road_sites[0];
+    const CcRoute *route = CcSimRoute(&sim, site->route_id);
+    CC_CHECK(route != NULL);
+    sim.player.location_id = route->from_id;
+    sim.carriage.location_id = route->from_id;
+    sim.player.coins = 10000;
+    memset(sim.player.cargo, 0, sizeof(sim.player.cargo));
+    sim.player.cargo[CC_GOOD_WHEAT] = 2;
+    sim.player.cargo[CC_GOOD_TOOLS] = 2;
+    sim.player.cargo[CC_GOOD_WOOD] = 1;
+    CcCommand transfer = {.kind = CC_COMMAND_TRANSFER_ROAD_SITE,
+        .target_id = site->id, .good = CC_GOOD_WHEAT, .amount = 2};
+    uint64_t hash = CcSimHash(&sim);
+    CC_CHECK(!CcSimApply(&sim, &transfer, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == hash);
+    CcCommand travel = {.kind = CC_COMMAND_TRAVEL, .target_id = route->to_id};
+    CC_CHECK(CcSimApply(&sim, &travel, error, sizeof(error)));
+    sim.journey.encounter_triggered = true;
+    sim.journey.ambush_pending = false;
+    int32_t ticks = 0;
+    while (CcSimJourneyRoadSiteStop(&sim) != site && ticks < 10000) {
+        CcSimAdvanceRuntimeTicks(&sim, 1);
+        ticks++;
+    }
+    CC_CHECK(ticks > 0 && ticks < 10000);
+    CC_CHECK(sim.journey.elapsed_subticks > 0 && sim.carriage.progress_milli > 0);
+    CcCommand clear = {.kind = CC_COMMAND_CLEAR_ROAD_SITE, .target_id = site->id};
+    CC_CHECK(CcSimApply(&sim, &clear, error, sizeof(error)));
+    CC_CHECK(CcSimApply(&sim, &transfer, error, sizeof(error)));
+    CC_CHECK(site->stock[CC_GOOD_WHEAT] == 2 && sim.player.cargo[CC_GOOD_WHEAT] == 0);
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+}
+
 int main(void)
 {
     CheckChoices();
     CheckPersistence();
     CheckClearing();
     CheckPre62Save();
+    CheckStoreTransfers();
+    CheckStoreRejections();
+    CheckCarriageDelivery();
     (void)puts("Roadside camps: both directions, costs, pass, replay and save upgrade passed");
     return 0;
 }

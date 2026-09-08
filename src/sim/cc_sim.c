@@ -17488,6 +17488,60 @@ const CcRoadSite *CcSimJourneyRoadSiteStop(const CcSim *sim)
     return NULL;
 }
 
+static int32_t RoadSiteCargoUsed(const CcRoadSite *site)
+{
+    int32_t used = 0;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        int32_t units = CcGoodDefinitionFor((CcGood)good)->player_units_per_slot;
+        used += (site->stock[good] + units - 1) / units;
+    }
+    return used;
+}
+
+static bool ApplyRoadSiteTransfer(CcSim *sim, const CcCommand *command,
+                                  char *error, size_t error_capacity)
+{
+    const CcRoadSite *stop = CcSimJourneyRoadSiteStop(sim);
+    if (sim->schema_version < 63U || stop == NULL || stop->id != command->target_id ||
+        !stop->accessible) {
+        SetError(error, error_capacity, "Reach an open roadside store first.");
+        return false;
+    }
+    if (!CcGoodIsValid(command->good) || command->amount == 0 ||
+        command->amount < -CC_SIM_MAX_UNITS || command->amount > CC_SIM_MAX_UNITS) {
+        SetError(error, error_capacity, "Choose a bounded goods load.");
+        return false;
+    }
+    bool deposit = command->amount > 0;
+    int32_t quantity = deposit ? command->amount : -command->amount;
+    CcRoadSite next = *stop;
+    CcPlayerCompany player = sim->player;
+    int32_t *source = deposit ? &player.cargo[command->good] : &next.stock[command->good];
+    int32_t *destination = deposit ? &next.stock[command->good] : &player.cargo[command->good];
+    if (*source < quantity || *destination > CC_SIM_MAX_UNITS - quantity) {
+        SetError(error, error_capacity, "Choose goods held here and room for the load.");
+        return false;
+    }
+    *source -= quantity;
+    *destination += quantity;
+    if (RoadSiteCargoUsed(&next) > CC_ROAD_SITE_CAPACITY ||
+        CcPlayerCargoUsed(&player) > player.cargo_capacity) {
+        SetError(error, error_capacity, "Make room for this load first.");
+        return false;
+    }
+    sim->road_sites[stop - sim->road_sites] = next;
+    sim->player = player;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "The company %s %d %s %s %.40s.",
+        deposit ? "unloads" : "loads", quantity, CcGoodName(command->good),
+        deposit ? "into" : "from", next.name);
+    CcEvent *event = PushEvent(sim, CC_EVENT_JOURNEY_BREAK, sim->player.id,
+        next.id, sim->journey.parent_event_id, quantity, text);
+    sim->journey.parent_event_id = event->id;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool ApplyClearRoadSite(CcSim *sim, const CcCommand *command,
                                char *error, size_t error_capacity)
 {
@@ -18771,6 +18825,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_LODGE_ROAD_HOUSE:
             return ApplyJourneyStopAction(
                 sim, command, error, error_capacity);
+        case CC_COMMAND_TRANSFER_ROAD_SITE:
+            return ApplyRoadSiteTransfer(sim, command, error, error_capacity);
         case CC_COMMAND_CLEAR_ROAD_SITE:
             return ApplyClearRoadSite(sim, command, error, error_capacity);
         case CC_COMMAND_CAMP_ROAD_SITE:
@@ -19090,7 +19146,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 61U
+#define CC_NEWEST_LEGACY_SCHEMA 62U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -19108,7 +19164,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 61U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 62U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -19614,6 +19670,16 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
         for (int32_t i = 0; i < sim->road_site_count; ++i) {
             const CcRoadSite *site = &sim->road_sites[i];
+            for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+                if (site->stock[good] < 0 || site->stock[good] > CC_SIM_MAX_UNITS) {
+                    SetError(error, error_capacity, "Road store goods are invalid.");
+                    return false;
+                }
+            }
+            if (RoadSiteCargoUsed(site) > CC_ROAD_SITE_CAPACITY) {
+                SetError(error, error_capacity, "Road store capacity is exceeded.");
+                return false;
+            }
             const CcRoute *route = CcSimRoute(sim, site->route_id);
             bool valid_home = route != NULL &&
                 (site->home_settlement_id == route->from_id ||
@@ -21374,6 +21440,9 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->side); HASH_VALUE(item->spur_length);
             HASH_VALUE(item->condition); HASH_VALUE(item->blocker);
             HASH_VALUE(item->accessible);
+            if (sim->schema_version >= 63U) {
+                for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) HASH_VALUE(item->stock[good]);
+            }
         }
     }
     for (int32_t i = 0; i < sim->map_count; ++i) {
