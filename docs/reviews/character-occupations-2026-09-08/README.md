@@ -20,17 +20,16 @@ the same allocation. Existing schema-77 saves keep their saved occupations.
 
 Herd events, paper milling, baking, woodlot harvests, quarry output and masonry
 repairs enter the gossip ring as craft news. A local adult with the matching
-occupation topic can hold a direct account from the current or previous day.
-This is the simulation's daily observation window. The direct version records
-that person's ID with full confidence and zero retellings. An older local
-craft event reaches a character through a received account.
+occupation topic receives a direct account when the event enters the ledger.
+The production act gathers its event immediately and captures the eligible
+adults who are present. The direct version records that person's ID with full
+confidence and zero retellings. Later arrivals learn through received accounts.
 
 Shepherds use the herd topic; millers, farmers and bakers use wheat; woodcutters,
 quarrymen, innkeepers and cartwrights use road; smiths use war; scribes use
 throne. Shared public news retains its existing rules. Received accounts retain
 their normal source, retelling and lifetime rules, including when they cover
-another trade. Named craft tellers must hold the account or qualify for local
-observation.
+another trade. Named craft tellers must hold the account.
 
 The research mission selects the resident with the most held accounts matching
 its topic. Pages name both role and occupation. The probe's `--sealed` option
@@ -38,8 +37,8 @@ selects a writer with a composing seal for the existing seal contract test.
 
 ## Evidence
 
-- Strict headless build passed. All 119 headless checks passed: the full suite
-  followed by the occupation check after correcting a fixture's event date.
+- Strict headless build and all 119 headless tests passed. The expanded
+  occupation check also passed with a real spring shearing fixture.
 - Static analysis passed with one reviewed baseline item.
 - All 616 independent field mutations passed, including each of the 24 saved
   occupations. The separate save-only run also passed 616 mutations.
@@ -48,6 +47,10 @@ selects a writer with a composing seal for the existing seal contract test.
   an actual carried account reaching a smith in another town, retained source
   after the shepherd's death, the descendant's trade, direct save comparisons,
   invalid enum values and a corrupt SQLite integer wider than 32 bits.
+- A late-arrival regression first reproduced the earlier direct-account error.
+  The shepherd now learns through received accounts after arrival. A separate
+  spring shearing fixture proves that a present shepherd holds the direct
+  account before the next daily gossip refresh.
 - A schema-76 fixture drops the occupation column, replays a day journal, then
   upgrades. The legacy hash matches before the schema is raised.
 - Two 40-year runs retain all 82 schema-76 checkpoint hashes from the parent.

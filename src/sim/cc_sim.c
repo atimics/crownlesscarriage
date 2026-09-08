@@ -21,6 +21,8 @@
 
 
 static void GenerateSituations(CcSim *sim);
+static void GatherGossipEvents(CcSim *sim);
+static void ObserveCraftStory(CcSim *sim, int32_t slot);
 static void DeliverDelayedEchoIfReady(CcSim *sim);
 static void ResolveSituation(CcSim *sim, CcSituation *situation);
 static void PlanGoblinTribute(CcSim *sim);
@@ -880,6 +882,7 @@ static CcEvent *PushEvent(CcSim *sim, CcEventKind kind, CcId subject,
         sim, kind, subject, location, parent, magnitude, text);
     LearnPlayerKnowledgeFromEvent(
         sim, event, CC_PLAYER_KNOWLEDGE_EVENT);
+    if (sim->schema_version >= 77U && CcGossipCraftEvent(kind)) GatherGossipEvents(sim);
     return event;
 }
 
@@ -900,6 +903,7 @@ static CcEvent *PushSocialEvent(CcSim *sim, CcEventKind kind, CcId subject,
         kind == CC_EVENT_RUMOR_SHARED ? CC_PLAYER_KNOWLEDGE_RUMOR :
         witness == sim->player.id ? CC_PLAYER_KNOWLEDGE_WITNESS :
                                     CC_PLAYER_KNOWLEDGE_EVENT);
+    if (sim->schema_version >= 77U && CcGossipCraftEvent(kind)) GatherGossipEvents(sim);
     return event;
 }
 
@@ -5622,10 +5626,9 @@ static void PostPendingSituationNotices(CcSim *sim)
     }
 }
 
-static void GatherGossip(CcSim *sim)
+static void GatherGossipEvents(CcSim *sim)
 {
     if (sim->schema_version < 44U) return;
-    PostPendingSituationNotices(sim);
     const CcEvent *newest = CcSimRecentEvent(sim, 0);
     if (newest == NULL || newest->id <= sim->gossip_last_event_id) return;
     CcId latest = sim->gossip_last_event_id;
@@ -5667,8 +5670,17 @@ static void GatherGossip(CcSim *sim)
         sim->gossip[slot].local[origin].confidence = 100;
         (void)snprintf(sim->gossip[slot].text,
                        sizeof(sim->gossip[slot].text), "%s", event->text);
+        if (sim->schema_version >= 77U && CcGossipCraftEvent(event->kind))
+            ObserveCraftStory(sim, slot);
     }
     sim->gossip_last_event_id = latest;
+}
+
+static void GatherGossip(CcSim *sim)
+{
+    if (sim->schema_version < 44U) return;
+    PostPendingSituationNotices(sim);
+    GatherGossipEvents(sim);
 }
 
 int32_t CcSimGossipCarrierCapacity(const CcSim *sim)
@@ -5768,6 +5780,45 @@ static bool GossipCarrierExists(const CcSim *sim, CcId id)
     return false;
 }
 
+static CcGossipCarrier *GossipCarrierFor(CcSim *sim, CcId carrier_id)
+{
+    CcGossipCarrier *carrier = NULL;
+    for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
+        if (sim->gossip_carriers[i].id == carrier_id) {
+            carrier = &sim->gossip_carriers[i];
+            break;
+        }
+    }
+    if (carrier == NULL) {
+        for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
+            if (!GossipCarrierExists(sim, sim->gossip_carriers[i].id)) {
+                carrier = &sim->gossip_carriers[i];
+                *carrier = (CcGossipCarrier){.id = carrier_id};
+                break;
+            }
+        }
+    }
+    return carrier;
+}
+
+static void ObserveCraftStory(CcSim *sim, int32_t slot)
+{
+    const CcGossip *story = &sim->gossip[slot];
+    if (story->day != sim->current_day) return;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *person = &sim->characters[i];
+        if (person->current_settlement_id != story->origin_id ||
+            person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
+            person->death_day <= sim->current_day || CcCharacterAgeYears(sim, person) < 16 ||
+            !CcOccupationObserves(person->occupation, story->kind)) continue;
+        CcGossipCarrier *carrier = GossipCarrierFor(sim, person->id);
+        if (carrier == NULL) continue;
+        carrier->stories |= UINT32_C(1) << (uint32_t)slot;
+        carrier->versions[slot] = (CcGossipVersion){
+            .source_character_id = person->id, .confidence = 100};
+    }
+}
+
 static const CcCharacter *GossipTellerAt(const CcSim *sim, CcId place_id,
                                         CcId story_id)
 {
@@ -5782,13 +5833,10 @@ static const CcCharacter *GossipTellerAt(const CcSim *sim, CcId place_id,
     for (int32_t offset = 0; offset < sim->character_count; ++offset) {
         const CcCharacter *person = &sim->characters[(first + offset) % sim->character_count];
         if (craft_slot >= 0) {
-            const CcGossip *story = &sim->gossip[craft_slot];
             const CcGossipCarrier *held = CcSimGossipCarrier(sim, person->id);
             bool knows = held != NULL &&
                 (held->stories & (UINT32_C(1) << (uint32_t)craft_slot)) != 0U;
-            bool observes = story->origin_id == place_id && sim->current_day - story->day <= 1 &&
-                CcOccupationObserves(person->occupation, story->kind);
-            if (!knows && !observes) continue;
+            if (!knows) continue;
         }
         if (person->current_settlement_id == place_id &&
             CcCharacterAgeYears(sim, person) >= 16 &&
@@ -5972,22 +6020,7 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
     if (place < 0 || (sim->schema_version < 55U &&
         CcSettlementIsAbandoned(&sim->settlements[place]))) return;
     GatherGossip(sim);
-    CcGossipCarrier *carrier = NULL;
-    for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
-        if (sim->gossip_carriers[i].id == carrier_id) {
-            carrier = &sim->gossip_carriers[i];
-            break;
-        }
-    }
-    if (carrier == NULL) {
-        for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
-            if (!GossipCarrierExists(sim, sim->gossip_carriers[i].id)) {
-                carrier = &sim->gossip_carriers[i];
-                *carrier = (CcGossipCarrier){.id = carrier_id};
-                break;
-            }
-        }
-    }
+    CcGossipCarrier *carrier = GossipCarrierFor(sim, carrier_id);
     if (carrier == NULL) return;
     uint32_t town = UINT32_C(1) << (uint32_t)place;
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
@@ -6012,21 +6045,11 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
         }
         if ((story->settlement_mask & town) != 0U &&
             (carrier->stories & bit) == 0U) {
-            const CcCharacter *observer = sim->schema_version >= 77U ?
-                CcSimCharacter(sim, carrier_id) : NULL;
-            bool craft_observation = observer != NULL &&
+            /* Direct craft accounts were captured when the event entered the ledger. */
+            if (sim->schema_version >= 77U && CcSimCharacter(sim, carrier_id) != NULL &&
                 story->origin_id == place_id && story->local[place].retellings == 0 &&
-                CcGossipCraftEvent(story->kind);
-            if (craft_observation &&
-                (!CcOccupationObserves(observer->occupation, story->kind) ||
-                 sim->current_day - story->day > 1 ||
-                 CcCharacterAgeYears(sim, observer) < 16)) continue;
+                CcGossipCraftEvent(story->kind)) continue;
             carrier->stories |= bit;
-            if (craft_observation) {
-                carrier->versions[i] = story->local[place];
-                carrier->versions[i].source_character_id = observer->id;
-                continue;
-            }
             const CcCharacter *teller =
                 sim->schema_version >= 46U && CcIdKind(carrier_id) == CC_ENTITY_CHARACTER ?
                 NULL : GossipTellerAt(sim, place_id, story->event_id);

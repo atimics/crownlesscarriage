@@ -120,6 +120,13 @@ int main(void)
     sim.events[(sim.event_write_index + CC_MAX_EVENTS - 1) % CC_MAX_EVENTS].day -= 3;
     CcSimRefreshCharacterGossip(&sim);
     CC_CHECK(!Holds(shepherd->id, Slot(event)));
+    /* Arrival after an event gives access to received accounts. */
+    shepherd->current_settlement_id = sim.settlements[destination].id;
+    event = AddEvent(CC_EVENT_SHEEP_BRED, sim.settlements[town].id);
+    CcSimRefreshCharacterGossip(&sim);
+    shepherd->current_settlement_id = sim.settlements[town].id;
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(!Holds(shepherd->id, Slot(event)));
     /* A received account keeps its source after that lifetime ends. */
     CcId source_id = shepherd->id;
     shepherd->death_day = sim.current_day + 1;
@@ -143,6 +150,32 @@ int main(void)
     CC_CHECK(!CcSaveRead(path, &saved, error, sizeof(error)));
     CC_CHECK(strstr(error, "occupation") != NULL);
     (void)remove(path);
+    /* Spring shearing records its present witness during the production act. */
+    CcSimInit(&sim, 42U);
+    sim.current_day = 90;
+    shepherd = &sim.characters[0];
+    shepherd->occupation = CC_OCCUPATION_SHEPHERD;
+    shepherd->role = CC_CHARACTER_LABORER;
+    shepherd->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    shepherd->current_settlement_id = sim.settlements[town].id;
+    shepherd->death_day = 10000;
+    sim.settlements[town].sheep_adults = 8;
+    sim.settlements[town].stock[CC_GOOD_FOOD] = 10000;
+    sim.settlements[town].stock[CC_GOOD_WHEAT] = 10000;
+    CcSimAdvanceDays(&sim, 1);
+    event = 0;
+    for (int32_t i = 0; i < sim.event_count; ++i) {
+        const CcEvent *candidate = CcSimRecentEvent(&sim, i);
+        if (candidate->kind == CC_EVENT_SHEEP_SHEARED && candidate->day == 91 &&
+            candidate->location_id == sim.settlements[town].id) event = candidate->id;
+    }
+    CC_CHECK(event != 0);
+    slot = Slot(event);
+    CC_CHECK(Holds(shepherd->id, slot));
+    carrier = CcSimGossipCarrier(&sim, shepherd->id);
+    CC_CHECK(carrier->versions[slot].source_character_id == shepherd->id);
+    CC_CHECK(carrier->versions[slot].retellings == 0);
+    RoundTrip();
     puts("Occupation identity, local observations and received accounts passed.");
     return 0;
 }
