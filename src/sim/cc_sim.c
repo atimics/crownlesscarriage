@@ -6489,10 +6489,9 @@ void CcGossipText(const CcSim *sim, const CcGossip *story,
 static void HearGossip(CcSim *sim, CcGossip *story, CcId place_id,
                         CcId parent_id, const char *speaker, CcGossipVersion version)
 {
+    if (story->heard_day > 0 || story->recorded || sim->archives.scribes <= 0) return;
     const CcSettlement *scriptorium = Scriptorium(sim);
-    if (story->heard_day > 0 || story->recorded ||
-        sim->archives.scribes <= 0 || scriptorium == NULL ||
-        scriptorium->id != place_id) return;
+    if (scriptorium == NULL || scriptorium->id != place_id) return;
     story->heard_day = sim->current_day;
     story->heard = version;
     (void)snprintf(story->heard_from, sizeof(story->heard_from), "%s", speaker);
@@ -6555,10 +6554,9 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
         if ((story->settlement_mask & town) != 0U &&
             (carrier->stories & bit) == 0U) {
             carrier->stories |= bit;
-            const CcCharacter *teller = GossipTellerAt(sim, place_id, story->event_id);
-            if (sim->schema_version >= 46U && CcIdKind(carrier_id) == CC_ENTITY_CHARACTER) {
-                teller = NULL;
-            }
+            const CcCharacter *teller =
+                sim->schema_version >= 46U && CcIdKind(carrier_id) == CC_ENTITY_CHARACTER ?
+                NULL : GossipTellerAt(sim, place_id, story->event_id);
             carrier->versions[i] = RetellGossip(sim, story, story->local[place], teller, 0U);
         }
     }
@@ -6644,6 +6642,7 @@ static void HearLocalGossip(CcSim *sim)
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
         if ((sim->gossip[i].settlement_mask & town) != 0U) {
             CcGossip *story = &sim->gossip[i];
+            if (story->heard_day > 0 || story->recorded || sim->archives.scribes <= 0) continue;
             CcGossipVersion version = RetellGossip(sim, story, story->local[slot],
                 GossipTellerAt(sim, place->id, story->event_id), 0U);
             HearGossip(sim, &sim->gossip[i], place->id,

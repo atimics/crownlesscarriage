@@ -75,3 +75,10 @@ routes for goods whose war allowance is always zero. Five local Release
 benchmark runs per version gave median 22.6702 -> 21.9332 microseconds/day
 (3.25% lower). Both 40-year reports matched the prior version byte for byte.
 The Linux CI jobs verify the budget on their own hardware.
+
+The next timing check remained above budget. The gossip loop now checks whether
+an account is already heard before preparing it, and avoids teller lookup when
+the current character rule uses an anonymous town account. Five local Release
+runs measured a combined median of 21.3450 microseconds/day, 5.85% below the
+original 22.6702. Both 40-year reports still match byte for byte; the gossip and
+SQLite suites pass. Linux budget verification remains a CI check.
