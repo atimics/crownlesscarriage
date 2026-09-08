@@ -100,7 +100,7 @@ static void CcCaptureSelectStart(const CcCaptureRequest *request, int32_t *selec
 
 static bool CcCaptureNeedsRoadbook(const CcCaptureRequest *request)
 {
-    return (request->capture_ux && request->capture_ux_view >= 21) || request->capture_world || request->capture_travel || request->capture_route_sight ||
+    return request->capture_world || request->capture_travel || request->capture_route_sight ||
         request->capture_road_fork || request->capture_road_zoom;
 }
 

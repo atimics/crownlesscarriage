@@ -65,6 +65,7 @@ typedef enum FrontendAction {
     FRONTEND_ACTION_FIELD_PASS,
     FRONTEND_ACTION_FIELD_INVITATION,
     FRONTEND_ACTION_CONFIRM_REMOVE,
+    FRONTEND_ACTION_CAMPAIGN_CHOICE,
     FRONTEND_ACTION_DEEP_WYRM,
     FRONTEND_ACTION_BEGIN_DEEP_WYRM,
     FRONTEND_ACTION_WORLD_FIRST = 100,
@@ -90,6 +91,7 @@ typedef struct FrontendState {
     FrontendAction text_field;
     FrontendScreen company_return;
     bool deleting_company;
+    bool deep_wyrm_start;
     char remove_member[33];
     char remove_name[65];
 } FrontendState;
@@ -167,6 +169,8 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
             {x, y + 64, 848, 46}, create ? "World name" : "Invitation", true};
         int count = 2;
         if (create) items[count++] = (FrontendItem){FRONTEND_ACTION_FIELD_PASS, {x, y + 128, 848, 46}, "World pass", true};
+        if (create) items[count++] = (FrontendItem){FRONTEND_ACTION_CAMPAIGN_CHOICE,
+            {x, y + 186, 848, 36}, state->deep_wyrm_start ? "Campaign: The Day of the Deep Wyrm" : "Campaign: A new world", true};
         items[count++] = (FrontendItem){create ? FRONTEND_ACTION_CREATE_SUBMIT : FRONTEND_ACTION_JOIN_SUBMIT,
             {x, y + 240, 412, 46}, create ? "Create world" : "Join company", true};
         items[count++] = (FrontendItem){FRONTEND_ACTION_WORLD_LIST, {x + 436, y + 240, 412, 46}, "Back", true};
@@ -427,9 +431,9 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
         }
         if (!CcStartingCampaignDeepWyrm(sim, path, state->feedback, sizeof(state->feedback))) return;
         LeaveOpenWorld(local);
-        ResetLocalState(local);
         CcLocalTerrainSetSeed(sim->world_seed);
         CcLocalBindPlace(sim);
+        ResetLocalState(local);
         if (!InitializeOpenWorld(sim, local, false)) {
             (void)snprintf(state->feedback, sizeof(state->feedback), "The town could not open. Try again.");
             return;
@@ -829,6 +833,14 @@ static int RunFrontendRegression(void)
     FRONTEND_CHECK(items[2].enabled && items[2].action == FRONTEND_ACTION_PLAY);
     FRONTEND_CHECK(state.screen == FRONTEND_TITLE && journal == NULL);
     FRONTEND_CHECK(!CampaignSaveExists(save_path));
+    FrontendOpen(&state, FRONTEND_CREATE_WORLD);
+    FRONTEND_ACT(FRONTEND_ACTION_CAMPAIGN_CHOICE);
+    FRONTEND_CHECK(state.deep_wyrm_start);
+    FRONTEND_CHECK(FrontendItems(&state, items) == 6);
+    FRONTEND_CHECK(strstr(items[3].label, CC_DEEP_WYRM_TITLE) != NULL);
+    FRONTEND_ACT(FRONTEND_ACTION_CAMPAIGN_CHOICE);
+    FRONTEND_CHECK(!state.deep_wyrm_start);
+    FrontendOpen(&state, FRONTEND_TITLE);
     CcClientPreferences avatar_preferences;
     CcClientPreferencesDefault(&avatar_preferences);
     adventure_preferences = &avatar_preferences;
@@ -956,7 +968,7 @@ static int RunFrontendRegression(void)
     FRONTEND_CHECK(state.screen == FRONTEND_PLAYING && state.has_world && journal != NULL);
     FRONTEND_CHECK(sim.current_day == CC_DEEP_WYRM_DAY && sim.world_seed == CC_DEEP_WYRM_SEED);
     FRONTEND_CHECK(strcmp(CcSimSettlement(&sim, sim.player.location_id)->name, "Gloamgate") == 0);
-    FRONTEND_CHECK(local.open_world && CampaignSaveExists(save_path));
+    FRONTEND_CHECK(local.world_stream.manifest.route_count > 0 && CampaignSaveExists(save_path));
     uint64_t campaign_hash = CcSimHash(&sim);
     FRONTEND_ACT(FRONTEND_ACTION_BEGIN_DEEP_WYRM);
     FRONTEND_CHECK(CcSimHash(&sim) == campaign_hash);

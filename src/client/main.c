@@ -635,6 +635,8 @@ static int32_t OpeningSituationIndex(const CcSim *sim)
 
 static bool OpeningRequired(const CcSim *sim)
 {
+    if (sim != NULL && sim->world_seed == CC_DEEP_WYRM_SEED &&
+        sim->current_day >= CC_DEEP_WYRM_DAY) return false;
     int32_t index = OpeningSituationIndex(sim);
     return sim != NULL && index >= 0 && sim->player.reputation == 0 &&
         sim->player.accepted_situation_id == 0U &&

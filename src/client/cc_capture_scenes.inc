@@ -653,7 +653,7 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
 {
     if (request->capture_ux && request->capture_ux_view >= 21) {
         scene->local->adventure_ui = true;
-        return true;
+        return InitializeOpenWorld(scene->sim, scene->local, false);
     }
     if (request->capture_ux) {
         scene->local->adventure_ui = true;
