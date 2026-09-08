@@ -1277,6 +1277,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(pony_tests)
     add_test(NAME rainbow_pony_companions COMMAND pony_tests)
 
+    add_executable(character_lifetime_tests tests/character_lifetime_tests.c)
+    target_link_libraries(character_lifetime_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(character_lifetime_tests)
+    add_test(NAME received_account_lifetimes COMMAND character_lifetime_tests)
+
     add_executable(persistence_tests tests/persistence_tests.c)
     target_link_libraries(persistence_tests PRIVATE crownless_persistence)
     target_compile_definitions(persistence_tests PRIVATE

@@ -26,6 +26,7 @@
 #define CC_MAX_QUEST_EVIDENCE 8
 #define CC_MAX_PENDING_ECHOES 3
 #define CC_MAX_CHARACTERS 24
+#define CC_MAX_HISTORIC_CHARACTERS 32
 #define CC_MAX_SCRIBES 4
 #define CC_MAX_GOSSIP 32
 #define CC_LEGACY_GOSSIP_CARRIERS (1 + CC_MAX_KINGDOMS + CC_MAX_SHIPMENTS + CC_MAX_COURIERS)
@@ -56,7 +57,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 59
+#define CC_SIM_SCHEMA_VERSION 60
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -1339,6 +1340,20 @@ typedef struct CcCharacterMemory {
     int32_t day;
 } CcCharacterMemory;
 
+/* Detailed engine history has a bounded lifetime. Held accounts keep their
+   own source name; actor knowledge never comes from this store. */
+typedef struct CcHistoricCharacter {
+    CcId id;
+    CcId ancestor_id;
+    CcId home_settlement_id;
+    char name[CC_NAME_CAPACITY];
+    int32_t birth_day;
+    int32_t death_day;
+    int32_t generation;
+    CcCharacterRole role;
+    int32_t importance;
+} CcHistoricCharacter;
+
 typedef struct CcCharacterKnowledge {
     CcKnowledgeKind kind;
     CcId subject_id;
@@ -1347,6 +1362,7 @@ typedef struct CcCharacterKnowledge {
     CcKnowledgeCertainty certainty;
     bool private_knowledge;
     int32_t day;
+    char source_name[CC_NAME_CAPACITY];
 } CcCharacterKnowledge;
 
 typedef struct CcCharacter {
@@ -1696,6 +1712,8 @@ typedef struct CcSim {
     int32_t last_shortage_level[CC_MAX_SETTLEMENTS];
     int32_t last_bandit_level[CC_MAX_BANDITS];
     int32_t last_monster_level[CC_MAX_MONSTERS];
+    int32_t historic_character_count;
+    CcHistoricCharacter historic_characters[CC_MAX_HISTORIC_CHARACTERS];
 } CcSim;
 
 /* Every field of CcSim is spelled out by hand in four other places: CcSimHash,
@@ -1712,7 +1730,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 172936,
+_Static_assert(sizeof(CcSim) == 181648,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -1784,6 +1802,9 @@ void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
 bool CcSimApply(CcSim *sim, const CcCommand *command,
                 char *error, size_t error_capacity);
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity);
+/* Engine/debug lookup; actor-facing code reads held account snapshots. */
+const CcHistoricCharacter *CcSimHistoricCharacter(const CcSim *sim, CcId id);
+void CcSimUpgradeKnowledgeSourceNames(CcSim *sim);
 uint64_t CcSimHash(const CcSim *sim);
 int32_t CcSimHorseTeamReadiness(const CcSim *sim);
 const char *CcJourneyPaceName(CcJourneyPace pace);

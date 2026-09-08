@@ -526,7 +526,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 29);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 30);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -2712,7 +2712,7 @@ static void CheckSchema41Upgrade(void)
    future edit to that table cannot quietly widen or narrow what loads. */
 static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
 {
-    bool legacy = schema >= 2U && schema <= 58U;
+    bool legacy = schema >= 2U && schema <= 59U;
     if (!legacy && schema != CC_SIM_SCHEMA_VERSION) return false;
     if (schema == CC_SIM_SCHEMA_VERSION &&
         generator == CC_GENERATOR_VERSION) return true;
@@ -2720,7 +2720,7 @@ static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
         /* The current generator reads the oldest schemas and the recent run,
            but not 28 through 31, which shipped with generators of their own. */
         if (schema >= 2U && schema <= 27U) return true;
-        if (schema >= 32U && schema <= 58U) return true;
+        if (schema >= 32U && schema <= 59U) return true;
     }
     if (schema == 31U && generator == 24U) return true;
     if (schema == 27U && generator >= 21U && generator <= 23U) return true;
@@ -2790,8 +2790,54 @@ static void CheckSchema58SmithyCapacity(void)
     RemoveDatabase(path);
 }
 
+static void CheckPre60KnowledgeJournal(void)
+{
+    static CcSim legacy;
+    static CcSim after;
+    static CcSim restored;
+    char error[256];
+    const char *path = "persistence-schema59-knowledge.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    legacy.schema_version = 59U;
+    CcId source_id = 0U;
+    for (int32_t i = 0; i < legacy.character_count && source_id == 0U; ++i) {
+        for (int32_t j = 0; j < legacy.characters[i].knowledge_count; ++j) {
+            if (legacy.characters[i].knowledge[j].kind == CC_KNOWLEDGE_PROBLEM_RUMOR) {
+                source_id = legacy.characters[i].knowledge[j].source_character_id;
+                break;
+            }
+        }
+    }
+    CC_CHECK(source_id != 0U);
+    for (int32_t i = 0; i < legacy.character_count; ++i) {
+        if (legacy.characters[i].id == source_id) legacy.characters[i].death_day = 2;
+    }
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 59U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.historic_character_count == 0);
+    restored.schema_version = 59U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    for (int32_t i = 0; i < restored.character_count; ++i) {
+        for (int32_t j = 0; j < restored.characters[i].knowledge_count; ++j) {
+            const CcCharacterKnowledge *item = &restored.characters[i].knowledge[j];
+            CC_CHECK(item->source_character_id != source_id);
+            const CcCharacter *source = CcSimCharacter(&restored, item->source_character_id);
+            CC_CHECK(source != NULL);
+            CC_CHECK(strcmp(item->source_name, source->name) == 0);
+        }
+    }
+    RemoveDatabase(path);
+}
+
 int main(void)
 {
+    CheckPre60KnowledgeJournal();
     CheckSchema58SmithyCapacity();
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
