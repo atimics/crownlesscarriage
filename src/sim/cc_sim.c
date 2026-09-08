@@ -17803,7 +17803,7 @@ static bool ApplyRepairRoadSite(CcSim *sim, const CcCommand *command,
     site->condition = MinimumI32(100, site->condition + gain);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-        "The company repairs %.40s in two watches, using one Tool and one Wood. Condition rises by %d to %d.",
+        "%.40s: two watches, one Tool and one Wood. Condition rises by %d to %d.",
         site->name, gain, site->condition);
     CcEvent *event = PushEvent(sim, CC_EVENT_JOURNEY_BREAK, sim->player.id,
         site->id, sim->journey.parent_event_id, gain, text);
