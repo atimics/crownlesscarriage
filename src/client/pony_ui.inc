@@ -35,7 +35,10 @@ static bool HandlePonyInput(CcJournal *journal, CcSim *sim, LocalState *local,
         if (ClientKeyPressed(KEY_ONE) || (action.kind == CONTEXT_ACTION_PONY_SWAP && action.amount == 0)) {
             command.kind = CC_COMMAND_SWAP_PONY;
             command.amount = 0;
-        } else if (ClientKeyPressed(KEY_TWO) || (action.kind == CONTEXT_ACTION_PONY_SWAP && action.amount == 1)) {
+        } else if (CcSimHorseTeamCount(sim) > 1 &&
+                   (ClientKeyPressed(KEY_TWO) ||
+                    (action.kind == CONTEXT_ACTION_PONY_SWAP &&
+                     action.amount == 1))) {
             command.kind = CC_COMMAND_SWAP_PONY;
             command.amount = 1;
         }
@@ -43,7 +46,7 @@ static bool HandlePonyInput(CcJournal *journal, CcSim *sim, LocalState *local,
         command.kind = CC_COMMAND_HELP_PONY;
     }
     if (command.kind != CC_COMMAND_NONE) {
-        int32_t released = sim->pony_company.team[command.amount];
+        int32_t released = CcSimTeamPony(sim, command.amount);
         if (ApplyCommand(journal, sim, command, message, capacity)) {
             if (command.kind == CC_COMMAND_SWAP_PONY) {
                 (void)snprintf(message, capacity, "%s joins you. %s heads out on a new adventure.",
@@ -138,7 +141,7 @@ static bool CheckPonyInterface(CcSim *sim, LocalState *local, int32_t pony)
         !sim->pony_company.ponies[pony].ready) return false;
     CcPonyCompany ready = sim->pony_company;
     CcHorse horses[2] = {sim->horse_team[0], sim->horse_team[1]};
-    for (int32_t slot = 0; slot < 2; ++slot) {
+    for (int32_t slot = 0; slot < CcSimHorseTeamCount(sim); ++slot) {
         ClientInputClearPressed();
         queued_key_press[KEY_ONE + slot] = true;
         if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, (ContextAction){0}, message, sizeof(message)) ||
@@ -160,6 +163,6 @@ static bool CheckPonyInterface(CcSim *sim, LocalState *local, int32_t pony)
     if (!HandleCarriageTabs(local, VIEW_CARRIAGE) ||
         local->carriage_tab != CARRIAGE_OVERVIEW) return false;
     ClientInputClearPressed();
-    (void)puts("PASS pony interface: quest, both swap slots, carriage tabs");
+    (void)puts("PASS pony interface: quest, harnessed swap slots, carriage tabs");
     return true;
 }

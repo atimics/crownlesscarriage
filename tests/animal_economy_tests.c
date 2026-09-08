@@ -369,6 +369,81 @@ int main(void)
     CC_CHECK(!CcSimValidate(&restored, error, sizeof(error)));
     CC_CHECK(remove(path) == 0);
 
-    puts("Horse, cattle, and flock economy tests passed");
+    CcSim herd_world;
+    CcSimInit(&herd_world, UINT32_C(0x9a41e003));
+    CC_CHECK(CcSimCommonPonyCount(&herd_world) > 0);
+
+    /* Herds are worked by the weekly settlement update, so each of these
+       cases has to cross a week boundary to see a single feeding. A yard that
+       is fed keeps its condition; the same yard with an empty granary loses
+       animals rather than going hungry forever. */
+    CcSim starved;
+    CcSimInit(&starved, UINT32_C(0x9a41e004));
+    CcSettlement *yard = NULL;
+    for (int32_t i = 0; i < starved.settlement_count; ++i) {
+        if (starved.settlements[i].pony_adults > 0) {
+            yard = &starved.settlements[i];
+            break;
+        }
+    }
+    CC_CHECK(yard != NULL);
+    int32_t stocked = yard->pony_adults + yard->pony_foals;
+    yard->pony_hunger = 80;
+    yard->stock[CC_GOOD_WHEAT] = 0;
+    yard->production[CC_GOOD_WHEAT] = 0;
+    CcSimAdvanceDays(&starved, 7);
+    CC_CHECK(yard->pony_adults + yard->pony_foals < stocked);
+    CC_CHECK(yard->pony_condition < 80);
+
+    CcSim fed;
+    CcSimInit(&fed, UINT32_C(0x9a41e004));
+    CcSettlement *fed_yard = &fed.settlements[yard - starved.settlements];
+    CC_CHECK(fed_yard->pony_adults > 0);
+    fed_yard->pony_hunger = 40;
+    fed_yard->pony_condition = 50;
+    fed_yard->stock[CC_GOOD_WHEAT] = 400;
+    CcSimAdvanceDays(&fed, 7);
+    CC_CHECK(fed_yard->pony_hunger < 40);
+    CC_CHECK(fed_yard->pony_condition > 50);
+    CC_CHECK(fed_yard->stock[CC_GOOD_WHEAT] < 400);
+
+    /* A town that loses the yard stops working the herd, the way a farm that
+       loses its fields stops working the flock. */
+    CcSim closed;
+    CcSimInit(&closed, UINT32_C(0x9a41e004));
+    CcSettlement *closed_yard = &closed.settlements[yard - starved.settlements];
+    closed_yard->service_mask = 0U;
+    closed_yard->pony_hunger = 90;
+    closed_yard->stock[CC_GOOD_WHEAT] = 0;
+    int32_t idle = closed_yard->pony_adults + closed_yard->pony_foals;
+    CcSimAdvanceDays(&closed, 7);
+    CC_CHECK(closed_yard->pony_adults + closed_yard->pony_foals == idle);
+
+    const char *herd_path = "/tmp/crownless-pony-herd-tests.ccsave";
+    (void)remove(herd_path);
+    CcSim saved;
+    CcSimInit(&saved, UINT32_C(0x9a41e005));
+    saved.settlements[0].pony_adults = 12;
+    saved.settlements[0].pony_foals = 5;
+    saved.settlements[0].pony_condition = 71;
+    saved.settlements[0].pony_hunger = 19;
+    uint64_t herd_hash = CcSimHash(&saved);
+    CC_CHECK(CcSaveWrite(herd_path, &saved, error, sizeof(error)));
+    CcSim herd_restored;
+    CC_CHECK(CcSaveRead(herd_path, &herd_restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&herd_restored) == herd_hash);
+    CC_CHECK(herd_restored.settlements[0].pony_adults == 12);
+    CC_CHECK(herd_restored.settlements[0].pony_foals == 5);
+    CC_CHECK(herd_restored.settlements[0].pony_condition == 71);
+    CC_CHECK(herd_restored.settlements[0].pony_hunger == 19);
+    CC_CHECK(CcSimValidate(&herd_restored, error, sizeof(error)));
+    herd_restored.settlements[0].pony_adults = -1;
+    CC_CHECK(!CcSimValidate(&herd_restored, error, sizeof(error)));
+    herd_restored.settlements[0].pony_adults = 12;
+    herd_restored.settlements[0].pony_condition = 101;
+    CC_CHECK(!CcSimValidate(&herd_restored, error, sizeof(error)));
+    CC_CHECK(remove(herd_path) == 0);
+
+    puts("Horse, cattle, flock, and pony herd economy tests passed");
     return 0;
 }

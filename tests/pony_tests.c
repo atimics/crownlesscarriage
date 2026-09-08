@@ -24,11 +24,35 @@ int main(void)
         CcSimInit(&restored, seed);
         CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
         CC_CHECK(CcPoniesValidate(&sim));
-        CC_CHECK(sim.pony_company.team[0] != sim.pony_company.team[1]);
-        selected[sim.pony_company.team[0]] = true;
-        selected[sim.pony_company.team[1]] = true;
+        /* Only a harnessed seat names a pony. An unharnessed one reads back
+           as -1 and must never reach an array subscript. */
+        for (int32_t seat = 0; seat < CC_CARRIAGE_HORSE_COUNT; ++seat) {
+            int32_t harnessed = CcSimTeamPony(&sim, seat);
+            if (seat < CcSimHorseTeamCount(&sim)) {
+                CC_CHECK(harnessed >= 0 && harnessed < CC_PONY_COUNT);
+                selected[harnessed] = true;
+            } else {
+                CC_CHECK(harnessed == -1);
+                CC_CHECK(sim.pony_company.team[seat] == -1);
+            }
+        }
     }
     for (int32_t i = 0; i < CC_PONY_COUNT; ++i) CC_CHECK(selected[i]);
+    /* One carriage, one animal in harness -- but the pair is still owned, so
+       the horses are both still there to age, feed and foal. */
+    CcSimInit(&sim, 117U);
+    CC_CHECK(CcSimHorseTeamCount(&sim) == 1);
+    CC_CHECK(CcSimHorseCount(&sim) >= CC_CARRIAGE_HORSE_COUNT);
+    CC_CHECK(sim.pony_company.team[1] == -1);
+    CC_CHECK(CcSimTeamPony(&sim, 0) == sim.pony_company.team[0]);
+    CC_CHECK(CcSimTeamPony(&sim, 1) == -1);
+    CC_CHECK(CcSimTeamPony(&sim, -1) == -1);
+    CC_CHECK(CcSimTeamPony(&sim, CC_PONY_COUNT) == -1);
+    CC_CHECK(CcSimTeamPony(NULL, 0) == -1);
+    /* The pony that would have filled the second seat stays out on the roads,
+       which is what keeps the company valid. */
+    CC_CHECK(CcPoniesValidate(&sim));
+
     CcSimInit(&sim, 117U);
     CcCommand travel = {.kind = CC_COMMAND_TRAVEL, .target_id = sim.settlements[1].id};
     CC_CHECK(CcSimApply(&sim, &travel, error, sizeof(error)));

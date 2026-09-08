@@ -89,13 +89,20 @@ int main(void)
     };
     sim.player.coins += 20;
     CC_CHECK(CcSimApply(&sim, &breed_again, error, sizeof(error)));
-    sim.horse_team[1].pregnancy_days_remaining = 30;
     CcCommand travel = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = sim.settlements[1].id
     };
+    sim.horse_team[1].pregnancy_days_remaining = 30;
+    if (CcSimHorseTeamCount(&sim) > 1) {
+        CC_CHECK(!CcSimApply(&sim, &travel, error, sizeof(error)));
+        CC_CHECK(strstr(error, "foaling") != NULL);
+    }
+    /* The animal in harness is the one that can hold the carriage back. */
+    sim.horse_team[0].pregnancy_days_remaining = 30;
     CC_CHECK(!CcSimApply(&sim, &travel, error, sizeof(error)));
     CC_CHECK(strstr(error, "foaling") != NULL);
+    sim.horse_team[0].pregnancy_days_remaining = 0;
 
     const char *path = "/tmp/crownless-horse-stable-tests.ccsave";
     (void)remove(path);
