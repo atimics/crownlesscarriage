@@ -82,6 +82,25 @@ int main(void)
     CcCommand outside={.kind=CC_COMMAND_PASS_ROAD_SITE,.target_id=sim.mine.site_id};
     CC_CHECK(!CcSimApply(&sim,&outside,error,sizeof(error)) && CcSimHash(&sim)==before);
     const char *path="mine-roundtrip.ccsave";
+    /* Shipped schema-59 mine saves retain the active visit on upgrade. */
+    changed=sim;changed.schema_version=59U;
+    Check(CcSaveWrite(path,&changed,error,sizeof(error)));
+    Check(CcSaveRead(path,&restored,error,sizeof(error)));
+    CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.mine.phase==changed.mine.phase);
+    CC_CHECK(restored.mine.site_id==changed.mine.site_id);
+    CC_CHECK(restored.mine.x==changed.mine.x && restored.mine.y==changed.mine.y);
+    CC_CHECK(restored.mine.revision==changed.mine.revision);
+    CC_CHECK(restored.mine.return_speed==changed.mine.return_speed);
+    CC_CHECK(restored.mine.light==changed.mine.light && restored.mine.steps==changed.mine.steps);
+    CC_CHECK(restored.mine.seen==changed.mine.seen);
+    CC_CHECK(restored.mine.bar_open==changed.mine.bar_open);
+    CC_CHECK(restored.mine.surveyed==changed.mine.surveyed);
+    for(int32_t good=0;good<CC_GOOD_COUNT;++good) {
+        CC_CHECK(restored.mine.pack[good]==changed.mine.pack[good]);
+    }
+    restored.schema_version=59U;
+    CC_CHECK(CcSimHash(&restored)==CcSimHash(&changed));
     Check(CcSaveWrite(path,&sim,error,sizeof(error)));
     Check(CcSaveRead(path,&restored,error,sizeof(error)));
     CC_CHECK(CcSimHash(&sim)==CcSimHash(&restored));
