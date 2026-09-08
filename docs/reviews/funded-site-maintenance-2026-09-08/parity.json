@@ -1,0 +1,24 @@
+{
+  "parent_commit": "ee5e861",
+  "schemas": [
+    26,
+    27,
+    33,
+    34,
+    36,
+    37,
+    61,
+    63,
+    64,
+    65,
+    66
+  ],
+  "seeds": [
+    1592590337,
+    3232176798
+  ],
+  "years_per_case": 40,
+  "annual_comparisons": 880,
+  "all_match": true,
+  "hash_rows_sha256": "5a2cdcbe756908a7d609aa39649c48b37f6e9bddbf618fd7dedfe5b65acba9d4"
+}
