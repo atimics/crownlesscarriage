@@ -62,6 +62,19 @@ out/build/release/crownless_agent_sweep --seeds 8 --years 10
 out/build/release/crownless_agent_sweep --seed 47 --years 100 --wip-limit 1
 ```
 
+Hunger columns use `CcSimHungerSnapshot`: `control_hunger` and `agent_hunger`
+are averages over inhabited settlements. The maximum and population-weighted
+columns use that same population. Hunger is `-1` when every settlement is
+abandoned; the active and abandoned counts make that case explicit. Prosperity
+retains its average over all settlement slots.
+
+Each row includes the numeric world seed, requested target day, actual control
+and agent days, schema and generator versions, and final state hashes. The agent
+can finish a journey after the target day. Use the actual days when comparing
+endpoints. These rows describe whole-policy comparisons. Job and combat counters
+cover the run; world columns describe the final snapshots. Keep the build revision
+and command alongside captured CSV files.
+
 The output compares population, prosperity, hunger, active settlements, and
 closed routes, and records repairs, failed repair attempts, travel, accepted
 jobs, completed jobs, and combat decisions/outcomes. The agent has an explicit

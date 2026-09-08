@@ -304,6 +304,69 @@ static bool ParsePositive(const char *text, int32_t *value)
     return true;
 }
 
+static void WriteReportHeader(FILE *output)
+{
+    (void)fputs("seed,control_population,agent_population,control_prosperity,agent_prosperity,"
+               "control_hunger,agent_hunger,control_active_settlements,agent_active_settlements,"
+               "control_closed_routes,agent_closed_routes,repairs,repair_failures,"
+               "travel_attempts,travel_successes,jobs_accepted,jobs_completed,"
+               "combats_initiated,combats_won,combats_lost,"
+               "route_jobs_accepted,relief_jobs_accepted,jobs_resolved,"
+               "jobs_expired,jobs_abandoned,jobs_unresolved,"
+               "objective_loss,objective_pass,world_seed,target_day,control_day,agent_day,"
+               "control_maximum_hunger,agent_maximum_hunger,"
+               "control_population_weighted_hunger,agent_population_weighted_hunger,"
+               "control_abandoned_settlements,agent_abandoned_settlements,"
+               "schema_version,generator_version,control_hash,agent_hash\n", output);
+}
+
+static void WriteReportRow(FILE *output, int32_t seed, int32_t target_day,
+    const CcSim *control, const CcSim *agent, const AgentStats *stats)
+{
+    CcHungerSnapshot control_hunger = CcSimHungerSnapshot(control);
+    CcHungerSnapshot agent_hunger = CcSimHungerSnapshot(agent);
+    int32_t control_closed = 0;
+    int32_t agent_closed = 0;
+    int32_t control_prosperity = 0;
+    int32_t agent_prosperity = 0;
+    for (int32_t i = 0; i < control->settlement_count; ++i) {
+        control_prosperity += control->settlements[i].prosperity;
+    }
+    for (int32_t i = 0; i < agent->settlement_count; ++i)
+        agent_prosperity += agent->settlements[i].prosperity;
+    for (int32_t i = 0; i < control->route_count; ++i) {
+        control_closed += control->routes[i].closed;
+    }
+    for (int32_t i = 0; i < agent->route_count; ++i)
+        agent_closed += agent->routes[i].closed;
+    int32_t objective_loss = stats->jobs_expired * 10 +
+        stats->jobs_abandoned * 10 + stats->jobs_unresolved * 20 +
+        stats->combats_lost * 5;
+    (void)fprintf(output, "%d,%" PRId64 ",%" PRId64 ",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+                 seed, control_hunger.population, agent_hunger.population,
+                 control->settlement_count > 0 ? control_prosperity / control->settlement_count : -1,
+                 agent->settlement_count > 0 ? agent_prosperity / agent->settlement_count : -1,
+                 control_hunger.average,
+                 agent_hunger.average,
+                 control_hunger.inhabited_settlements, agent_hunger.inhabited_settlements, control_closed, agent_closed,
+                 stats->repairs, stats->repair_failures,
+                 stats->travel_attempts, stats->travel_successes,
+                 stats->jobs_accepted, stats->jobs_completed,
+                 stats->combats_initiated, stats->combats_won,
+                 stats->combats_lost,
+                 stats->route_jobs_accepted, stats->relief_jobs_accepted,
+                 stats->jobs_resolved, stats->jobs_expired,
+                 stats->jobs_abandoned, stats->jobs_unresolved,
+                 objective_loss, objective_loss == 0 ? 1 : 0);
+    (void)fprintf(output, ",%" PRIu32 ",%d,%d,%d,%d,%d,%d,%d,%d,%d,%" PRIu32 ",%" PRIu32 ",%016" PRIx64 ",%016" PRIx64 "\n",
+        control->world_seed, target_day, control->current_day, agent->current_day,
+        control_hunger.maximum, agent_hunger.maximum,
+        control_hunger.population_weighted, agent_hunger.population_weighted,
+        control_hunger.abandoned_settlements, agent_hunger.abandoned_settlements,
+        control->schema_version, control->generator_version,
+        CcSimHash(control), CcSimHash(agent));
+}
+
 int main(int argc, char **argv)
 {
     int32_t seeds = 8;
@@ -325,14 +388,7 @@ int main(int argc, char **argv)
             return EXIT_FAILURE;
         }
     }
-    (void)puts("seed,control_population,agent_population,control_prosperity,agent_prosperity,"
-               "control_hunger,agent_hunger,control_active_settlements,agent_active_settlements,"
-               "control_closed_routes,agent_closed_routes,repairs,repair_failures,"
-               "travel_attempts,travel_successes,jobs_accepted,jobs_completed,"
-               "combats_initiated,combats_won,combats_lost,"
-               "route_jobs_accepted,relief_jobs_accepted,jobs_resolved,"
-               "jobs_expired,jobs_abandoned,jobs_unresolved,"
-               "objective_loss,objective_pass\n");
+    WriteReportHeader(stdout);
     for (int32_t seed = first_seed;
          seed < first_seed + seeds; ++seed) {
         uint32_t world_seed = (uint32_t)seed * UINT32_C(0x9e3779b9);
@@ -364,30 +420,6 @@ int main(int argc, char **argv)
                 return EXIT_FAILURE;
             }
             if (agent.current_day > target_day + 365) break;
-        }
-        int32_t control_active = 0;
-        int32_t agent_active = 0;
-        int32_t control_closed = 0;
-        int32_t agent_closed = 0;
-        int32_t control_hunger = 0;
-        int32_t agent_hunger = 0;
-        int32_t control_population = 0;
-        int32_t agent_population = 0;
-        int32_t control_prosperity = 0;
-        int32_t agent_prosperity = 0;
-        for (int32_t i = 0; i < control.settlement_count; ++i) {
-            control_active += !CcSettlementIsAbandoned(&control.settlements[i]);
-            agent_active += !CcSettlementIsAbandoned(&agent.settlements[i]);
-            control_hunger += control.settlements[i].hunger;
-            agent_hunger += agent.settlements[i].hunger;
-            control_population += control.settlements[i].population;
-            agent_population += agent.settlements[i].population;
-            control_prosperity += control.settlements[i].prosperity;
-            agent_prosperity += agent.settlements[i].prosperity;
-        }
-        for (int32_t i = 0; i < control.route_count; ++i) {
-            control_closed += control.routes[i].closed;
-            agent_closed += agent.routes[i].closed;
         }
         ObserveJobLifecycle(&agent, &stats);
         char error[192];
@@ -422,25 +454,7 @@ int main(int argc, char **argv)
             }
             return EXIT_FAILURE;
         }
-        int32_t objective_loss = stats.jobs_expired * 10 +
-            stats.jobs_abandoned * 10 + stats.jobs_unresolved * 20 +
-            stats.combats_lost * 5;
-        (void)printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
-                     seed, control_population, agent_population,
-                     control_prosperity / control.settlement_count,
-                     agent_prosperity / agent.settlement_count,
-                     control_hunger / control.settlement_count,
-                     agent_hunger / agent.settlement_count,
-                     control_active, agent_active, control_closed, agent_closed,
-                     stats.repairs, stats.repair_failures,
-                     stats.travel_attempts, stats.travel_successes,
-                     stats.jobs_accepted, stats.jobs_completed,
-                     stats.combats_initiated, stats.combats_won,
-                     stats.combats_lost,
-                     stats.route_jobs_accepted, stats.relief_jobs_accepted,
-                     stats.jobs_resolved, stats.jobs_expired,
-                     stats.jobs_abandoned, stats.jobs_unresolved,
-                     objective_loss, objective_loss == 0 ? 1 : 0);
+        WriteReportRow(stdout, seed, target_day, &control, &agent, &stats);
     }
     return EXIT_SUCCESS;
 }
