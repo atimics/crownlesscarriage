@@ -2712,7 +2712,7 @@ static void CheckSchema41Upgrade(void)
    future edit to that table cannot quietly widen or narrow what loads. */
 static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
 {
-    bool legacy = schema >= 2U && schema <= 62U;
+    bool legacy = schema >= 2U && schema <= 63U;
     if (!legacy && schema != CC_SIM_SCHEMA_VERSION) return false;
     if (schema == CC_SIM_SCHEMA_VERSION &&
         generator == CC_GENERATOR_VERSION) return true;
@@ -2720,7 +2720,7 @@ static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
         /* The current generator reads the oldest schemas and the recent run,
            but not 28 through 31, which shipped with generators of their own. */
         if (schema >= 2U && schema <= 27U) return true;
-        if (schema >= 32U && schema <= 62U) return true;
+        if (schema >= 32U && schema <= 63U) return true;
     }
     if (schema == 31U && generator == 24U) return true;
     if (schema == 27U && generator >= 21U && generator <= 23U) return true;
@@ -2835,9 +2835,38 @@ static void CheckPre61KnowledgeJournal(void)
     RemoveDatabase(path);
 }
 
+static void CheckPre64SiteJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema63-sites.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    legacy.schema_version = 63;
+    legacy.current_day = 6;
+    legacy.road_sites[2].accessible = true;
+    legacy.road_sites[2].blocker = CC_ROAD_SITE_BLOCKER_NONE;
+    legacy.road_sites[2].stock[CC_GOOD_WHEAT] = 6;
+    legacy.road_sites[2].stock[CC_GOOD_TOOLS] = 1;
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(after.road_sites[2].stock[CC_GOOD_BREAD] == 0);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 63U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    restored.schema_version = 63;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimAdvanceDays(&restored, 7);
+    CC_CHECK(restored.road_sites[2].stock[CC_GOOD_BREAD] == 2);
+    CC_CHECK(restored.road_sites[2].stock[CC_GOOD_WHEAT] == 4);
+    RemoveDatabase(path);
+}
+
 int main(void)
 {
     CheckPre61KnowledgeJournal();
+    CheckPre64SiteJournal();
     CheckSchema58SmithyCapacity();
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();

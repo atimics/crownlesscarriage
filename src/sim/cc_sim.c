@@ -1269,6 +1269,7 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_DRAGON_TERRITORY_LOST: return "CROWN BROKEN";
         case CC_EVENT_ROYAL_CARRIAGE_BLOCKED: return "BORDER BLOCK";
         case CC_EVENT_ROYAL_CARRIAGE_REROUTED: return "CARRIAGE ROUTE";
+        case CC_EVENT_ROAD_SITE_PRODUCTION: return "ROAD WORKS";
         case CC_EVENT_NOTICE_POSTED: return "NOTICE";
     }
     return "EVENT";
@@ -15066,9 +15067,18 @@ void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
     CcSimAdvanceDaysWithAccounting(sim, days, accounting, NULL);
 }
 
+#include "cc_road_production.inc"
+
 void CcSimAdvanceDaysWithAccounting(CcSim *sim, int32_t days,
                                      CcNutritionAccounting *accounting,
                                      CcSmithyAccounting *smithy)
+{
+    CcSimAdvanceDaysWithProductionAccounting(sim, days, accounting, smithy, NULL);
+}
+
+void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
+    CcNutritionAccounting *accounting, CcSmithyAccounting *smithy,
+    CcRoadProductionAccounting *sites)
 {
     if (sim == NULL || days <= 0 || sim->current_day < 1 ||
         sim->current_day > CC_SIM_MAX_DAY ||
@@ -15112,6 +15122,7 @@ void CcSimAdvanceDaysWithAccounting(CcSim *sim, int32_t days,
             if (sim->schema_version >= 22U) AdvanceArchives(sim);
             UpdateThreats(sim);
             UpdateRoutesAndGovernments(sim);
+            ProduceRoadSites(sim, sites);
             UpdateRoyalDiplomacy(sim);
             AdvanceWarSociety(sim);
             PlanTrade(sim);
@@ -19146,7 +19157,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 62U
+#define CC_NEWEST_LEGACY_SCHEMA 63U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -19164,7 +19175,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 62U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 63U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -19446,7 +19457,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_NOTICE_POSTED ||
+                event->kind > CC_EVENT_ROAD_SITE_PRODUCTION ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||

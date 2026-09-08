@@ -16,6 +16,7 @@ typedef struct {
     int32_t output_units;
     /* A final partial output still pays one full batch of inputs and work. */
     bool allow_partial_output;
+    bool work_only;
     int32_t input_count;
     CcRecipeInput inputs[CC_RECIPE_INPUTS];
     int32_t work_per_batch;
@@ -51,7 +52,8 @@ typedef enum {
     CC_PRODUCTION_OUTPUT_FULL,
     CC_PRODUCTION_WORK,
     CC_PRODUCTION_TOOLS,
-    CC_PRODUCTION_INPUT
+    CC_PRODUCTION_INPUT,
+    CC_PRODUCTION_GATE_COUNT
 } CcProductionGate;
 
 typedef struct {
@@ -72,4 +74,22 @@ CcProductionReceipt CcProductionPlan(const CcProductionRecipe *recipe,
    aggregation belong to the caller. Receipts are observations, not commands. */
 CcProductionReceipt CcProductionRun(const CcProductionRecipe *recipe,
                                     const CcProductionContext *context);
+typedef struct {
+    CcId site_id;
+    uint64_t input[CC_GOOD_COUNT];
+    uint64_t output[CC_GOOD_COUNT];
+    uint64_t work;
+    uint64_t route_repair;
+    uint64_t gates[CC_PRODUCTION_GATE_COUNT];
+} CcSiteProductionAccounting;
+
+typedef struct {
+    CcSiteProductionAccounting sites[CC_MAX_ROAD_SITES];
+} CcRoadProductionAccounting;
+
+bool CcRoadSiteRecipe(const CcRoadSite *site, CcProductionRecipe *recipe);
+CcProductionReceipt CcSimPlanRoadSite(const CcSim *sim, const CcRoadSite *site);
+void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
+    CcNutritionAccounting *nutrition, CcSmithyAccounting *smithy,
+    CcRoadProductionAccounting *sites);
 #endif

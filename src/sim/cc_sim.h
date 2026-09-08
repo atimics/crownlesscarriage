@@ -57,7 +57,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 63
+#define CC_SIM_SCHEMA_VERSION 64
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -332,7 +332,8 @@ typedef enum CcEventKind {
     CC_EVENT_ROYAL_CARRIAGE_BLOCKED = 130,
     CC_EVENT_ROYAL_CARRIAGE_REROUTED = 131,
     CC_EVENT_PARTY_WIPED = 132,
-    CC_EVENT_NOTICE_POSTED = 133
+    CC_EVENT_NOTICE_POSTED = 133,
+    CC_EVENT_ROAD_SITE_PRODUCTION = 134
 } CcEventKind;
 
 typedef struct CcArchives {

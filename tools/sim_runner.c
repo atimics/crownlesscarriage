@@ -1,3 +1,4 @@
+#include "sim/cc_production.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
 
@@ -266,6 +267,21 @@ static void PrintSmithyAccounting(const CcSim *sim,
     }
 }
 
+static void PrintRoadProduction(const CcSim *sim, const CcRoadProductionAccounting *accounting)
+{
+    for (int32_t i = 0; i < sim->road_site_count; ++i) {
+        const CcSiteProductionAccounting *row = &accounting->sites[i];
+        printf("site day=%d id=%" PRIu64 " work=%" PRIu64 " repair=%" PRIu64,
+            sim->current_day, sim->road_sites[i].id, row->work, row->route_repair);
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
+            printf(" input_%d=%" PRIu64 " output_%d=%" PRIu64 " stock_%d=%d",
+                good, row->input[good], good, row->output[good], good, sim->road_sites[i].stock[good]);
+        for (int32_t gate = 0; gate < CC_PRODUCTION_GATE_COUNT; ++gate)
+            printf(" gate_%d=%" PRIu64, gate, row->gates[gate]);
+        putchar('\n');
+    }
+}
+
 int main(int argc, char **argv)
 {
     uint32_t seed = UINT32_C(0xc0a71a9e);
@@ -276,6 +292,8 @@ int main(int argc, char **argv)
     const char *save_path = NULL;
     bool detail = false;
     bool smithy_report = false;
+    bool site_report = false;
+    CcRoadProductionAccounting sites = {0};
     CcSmithyAccounting smithy = {0};
     for (int argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--seed") == 0 && argument + 1 < argc) {
@@ -297,6 +315,8 @@ int main(int argc, char **argv)
             checkpoint_every = (int32_t)strtol(argv[++argument], NULL, 10);
         } else if (strcmp(argv[argument], "--detail") == 0) {
             detail = true;
+        } else if (strcmp(argv[argument], "--sites") == 0) {
+            site_report = true;
         } else if (strcmp(argv[argument], "--smithy") == 0) {
             smithy_report = true;
         } else if (strcmp(argv[argument], "--chronicle") == 0) {
@@ -339,13 +359,13 @@ int main(int argc, char **argv)
             /* Monthly scans: a busy year pushes more than the event ring
              * holds, so a yearly window would lose mid-year events. */
             for (int32_t month = 0; month < 12; ++month) {
-                CcSimAdvanceDaysWithAccounting(&sim, month == 11 ? 35 : 30,
-                    NULL, smithy_report ? &smithy : NULL);
+                CcSimAdvanceDaysWithProductionAccounting(&sim, month == 11 ? 35 : 30,
+                    NULL, smithy_report ? &smithy : NULL, site_report ? &sites : NULL);
                 PrintChronicleNewEvents(&sim);
             }
         } else {
-            CcSimAdvanceDaysWithAccounting(&sim, 365, NULL,
-                smithy_report ? &smithy : NULL);
+            CcSimAdvanceDaysWithProductionAccounting(&sim, 365, NULL,
+                smithy_report ? &smithy : NULL, site_report ? &sites : NULL);
         }
         if (!CcSimValidate(&sim, error, sizeof(error))) {
             (void)fprintf(stderr, "validation failed in year %d: %s\n", year + 1, error);
@@ -362,10 +382,12 @@ int main(int argc, char **argv)
             PrintChronicleNewEvents(&sim);
             PrintSummary(&sim, detail);
             if (smithy_report) PrintSmithyAccounting(&sim, &smithy);
+            if (site_report) PrintRoadProduction(&sim, &sites);
         } else if (year == 0 || year + 1 == years ||
             (year + 1) % report_every == 0) {
             PrintSummary(&sim, detail);
             if (smithy_report) PrintSmithyAccounting(&sim, &smithy);
+            if (site_report) PrintRoadProduction(&sim, &sites);
             (void)fflush(stdout);
         }
     }

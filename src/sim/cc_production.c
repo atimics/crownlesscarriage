@@ -8,7 +8,8 @@ CcProductionReceipt CcProductionPlan(const CcProductionRecipe *recipe,
                                   .blocked_good = CC_GOOD_COUNT};
     if (recipe == NULL || context == NULL || context->stock == NULL ||
         context->producer_id == 0 || context->storage_id == 0 || context->location_id == 0 ||
-        recipe->output < 0 || recipe->output >= CC_GOOD_COUNT ||
+        (recipe->work_only ? recipe->output != CC_GOOD_COUNT :
+         (recipe->output < 0 || recipe->output >= CC_GOOD_COUNT)) ||
         recipe->output_units <= 0 || recipe->work_per_batch <= 0 ||
         recipe->input_count < 0 || recipe->input_count > CC_RECIPE_INPUTS ||
         recipe->minimum_condition < 0 || recipe->minimum_condition > 100 ||
@@ -28,7 +29,7 @@ CcProductionReceipt CcProductionPlan(const CcProductionRecipe *recipe,
         for (int32_t j = 0; j < i; ++j)
             if (recipe->inputs[j].good == input.good) return result;
     }
-    if (context->stock[recipe->output] < 0 || context->stock[CC_GOOD_TOOLS] < 0) return result;
+    if ((!recipe->work_only && context->stock[recipe->output] < 0) || context->stock[CC_GOOD_TOOLS] < 0) return result;
     result.producer_id = context->producer_id;
     result.storage_id = context->storage_id;
     result.location_id = context->location_id;
@@ -41,8 +42,9 @@ CcProductionReceipt CcProductionPlan(const CcProductionRecipe *recipe,
     else if (context->hunger > recipe->hunger_soft_limit)
         batches = (int32_t)((int64_t)batches * recipe->hunger_soft_percent / 100);
     if (batches == 0) STOP(CC_PRODUCTION_CAPACITY);
-    int32_t output_space = context->output_limit > context->stock[recipe->output] ?
-        context->output_limit - context->stock[recipe->output] : 0;
+    int32_t held_output = recipe->work_only ? 0 : context->stock[recipe->output];
+    int32_t output_space = context->output_limit > held_output ?
+        context->output_limit - held_output : 0;
     int32_t space = output_space / recipe->output_units;
     if (recipe->allow_partial_output && output_space % recipe->output_units != 0) space++;
     if (space == 0) STOP(CC_PRODUCTION_OUTPUT_FULL);
@@ -67,7 +69,8 @@ CcProductionReceipt CcProductionPlan(const CcProductionRecipe *recipe,
     result.gate = CC_PRODUCTION_READY;
     result.batches = batches;
     int64_t output = (int64_t)batches * recipe->output_units;
-    result.output = output > output_space ? output_space : (int32_t)output;
+    result.output = recipe->work_only ? 0 :
+        output > output_space ? output_space : (int32_t)output;
     result.work = batches * recipe->work_per_batch;
     for (int32_t i = 0; i < recipe->input_count; ++i)
         result.inputs[i] = batches * recipe->inputs[i].units;
@@ -82,6 +85,6 @@ CcProductionReceipt CcProductionRun(const CcProductionRecipe *recipe,
     if (result.gate != CC_PRODUCTION_READY) return result;
     for (int32_t i = 0; i < recipe->input_count; ++i)
         context->stock[recipe->inputs[i].good] -= result.inputs[i];
-    context->stock[recipe->output] += result.output;
+    if (!recipe->work_only) context->stock[recipe->output] += result.output;
     return result;
 }
