@@ -249,7 +249,7 @@ static void CapturePonyGait(const char *directory)
                           false, CC_LOCAL_SCENE_ROAD);
         EndWorldLighting();
         EndMode3D();
-        DrawText("TROT / live foot controller", 18, 18, 20, RAYWHITE);
+        DrawText("Trot", 18, 18, 20, RAYWHITE);
         EndTextureMode();
         if (frame >= 120 && frame % 4 == 0) {
             Image shot = LoadImageFromTexture(target.texture);

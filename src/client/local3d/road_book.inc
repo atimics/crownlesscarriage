@@ -334,8 +334,8 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
 
 Vector3 CcLocalStablePonyPositionInternal(int32_t horse)
 {
-    return TerrainWorldPoint(CC_LOCAL_CARRIAGE_X - 4.6f,
-                             CC_LOCAL_CARRIAGE_Z + (float)horse * 2.8f);
+    return TerrainWorldPoint(CC_LOCAL_CARRIAGE_X - 2.0f + (float)horse * 2.8f,
+                             CC_LOCAL_CARRIAGE_Z + 5.3f);
 }
 
 static void DrawStableHorseTeam(const CcSim *sim, float clock)
@@ -375,28 +375,28 @@ static void DrawStableHorseTeam(const CcSim *sim, float clock)
         bool controlled = CcLocalCreatureGaitPoseInternal(
             horse == 0 ? CREATURE_GAIT_STABLE_LEFT : CREATURE_GAIT_STABLE_RIGHT,
             CC_CREATURE_RIG_HORSE, CC_CREATURE_RIG_GAIT_WALK, clock,
-            (float)horse * 0.5f, base, -0.5f * PI, 0.96f,
+            (float)horse * 0.5f, base, 0.0f, 0.96f,
             CC_LOCAL_SCENE_STREET, &controlled_pose);
         (void)DrawCreatureGait3D(
-            CC_CREATURE_HORSE, pose, base, -0.5f * PI, 0.96f, coat,
+            CC_CREATURE_HORSE, pose, base, 0.0f, 0.96f, coat,
             clock * 0.35f + (float)horse * PI, false,
             controlled ? &controlled_pose : NULL);
     }
     Vector3 first = CcLocalStablePonyPositionInternal(0);
-    float rail_x = first.x - 1.5f;
-    float start_z = first.z - 1.1f;
-    float end_z = first.z + (float)(CcSimHorseTeamCount(sim) - 1) * 2.8f + 1.1f;
-    float rail_y = CcLocalTerrainHeightAt(rail_x, (start_z + end_z) * 0.5f);
+    float rail_z = first.z + 1.5f;
+    float start_x = first.x - 1.1f;
+    float end_x = first.x + (float)(CcSimHorseTeamCount(sim) - 1) * 2.8f + 1.1f;
+    float rail_y = CcLocalTerrainHeightAt((start_x + end_x) * 0.5f, rail_z);
     for (int32_t post = 0; post < 2; ++post) {
-        float z = post == 0 ? start_z : end_z;
-        float ground = CcLocalTerrainHeightAt(rail_x, z);
-        DrawBox((Vector3){rail_x, ground + 0.62f, z},
+        float x = post == 0 ? start_x : end_x;
+        float ground = CcLocalTerrainHeightAt(x, rail_z);
+        DrawBox((Vector3){x, ground + 0.62f, rail_z},
                 (Vector3){0.14f, 1.24f, 0.14f}, rail);
     }
     for (int32_t bar = 0; bar < 2; ++bar) {
-        DrawBox((Vector3){rail_x, rail_y + 0.55f + (float)bar * 0.50f,
-                          (start_z + end_z) * 0.5f},
-                (Vector3){0.10f, 0.10f, end_z - start_z},
+        DrawBox((Vector3){(start_x + end_x) * 0.5f,
+                          rail_y + 0.55f + (float)bar * 0.50f, rail_z},
+                (Vector3){end_x - start_x, 0.10f, 0.10f},
                 bar == 0 ? rail : rail_cap);
     }
 }

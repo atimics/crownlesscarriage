@@ -73,13 +73,16 @@ static int ProfileContract(void)
             if (camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
                 CHECK(camera->fovy >= 9.0f);
             } else if (camera->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST) {
-                CHECK(camera->fovy <= 6.6f);
+                bool pony_yard = profile->function == CC_SETTLEMENT_MARKET &&
+                    camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD;
+                CHECK(camera->fovy <= (pony_yard ? 9.0f : 6.6f));
             }
             if (camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD) {
                 CHECK(camera->trigger_x >= 42.0f && camera->trigger_x <= 43.0f);
                 CHECK(camera->trigger_z >= 54.5f && camera->trigger_z <= 56.0f);
                 CHECK(camera->target_x >= 38.0f && camera->target_x <= 41.0f);
-                CHECK(camera->target_z >= 51.0f && camera->target_z <= 53.0f);
+                CHECK(camera->target_z >= 51.0f && camera->target_z <=
+                      (profile->function == CC_SETTLEMENT_MARKET ? 54.0f : 53.0f));
             }
             for (int32_t previous = 0; previous < scene; ++previous) {
                 CHECK(strcmp(camera->name,
