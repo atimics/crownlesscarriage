@@ -414,7 +414,6 @@ int main(void)
     unequal_town = CcSimSettlementMutable(&unjust, unequal_town->id);
     CC_CHECK(unequal_town != NULL);
     CC_CHECK(remove(social_path) == 0);
-    int32_t hunger_before_relief = unequal_town->hunger;
     for (int32_t day = 0;
          day < 14 && unjust.hoard_raiders.raids_completed == 0; ++day) {
         CcSimAdvanceDays(&unjust, 1);
@@ -422,7 +421,7 @@ int main(void)
     CC_CHECK(unjust.hoard_raiders.raids_completed == 1);
     CC_CHECK(unjust.hoard_raiders.social_raid_latched);
     CC_CHECK(unjust.goblins.hoard_defenses == 1);
-    CC_CHECK(unequal_town->hunger < hunger_before_relief);
+    CC_CHECK(unjust.hoard_raiders.carried_treasure == 0);
     for (int32_t day = 0;
          day < 14 && unjust.dragon.retaliations == 0; ++day) {
         CcSimAdvanceDays(&unjust, 1);

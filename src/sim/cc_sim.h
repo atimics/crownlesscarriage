@@ -386,6 +386,21 @@ typedef enum CcMaterialChainBlocker {
     CC_MATERIAL_CHAIN_BINDING
 } CcMaterialChainBlocker;
 
+/* Caller-owned totals for weekly town stock consumption and storage loss.
+ * Zero-initialize for each campaign. Units are goods bundles; multiply by
+ * CcGoodNutritionValue for civilian nutrition. Samples are differences between
+ * successive totals. The ledger is separate from saves and authoritative state. */
+typedef struct CcTownNutritionAccounting {
+    CcId settlement_id;
+    uint64_t civilian_units[CC_GOOD_COUNT];
+    uint64_t aged_units[CC_GOOD_COUNT];
+    uint64_t overflow_units[CC_GOOD_COUNT];
+} CcTownNutritionAccounting;
+
+typedef struct CcNutritionAccounting {
+    CcTownNutritionAccounting towns[CC_MAX_SETTLEMENTS];
+} CcNutritionAccounting;
+
 /* Read-only hunger measurements. Values are -1 when no settlement is inhabited. */
 typedef struct CcHungerSnapshot {
     int32_t inhabited_settlements;
@@ -1691,6 +1706,8 @@ void CcSimUpgradeQuestArchitecture(CcSim *sim);
 void CcSimInitializeUnderroad(CcSim *sim);
 void CcSimUpgradeGrainEconomy(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
+void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
+                                             CcNutritionAccounting *accounting);
 int32_t CcSimGossipCarrierCapacity(const CcSim *sim);
 const CcGossipCarrier *CcSimGossipCarrier(const CcSim *sim, CcId id);
 const CcGossip *CcSimPersonalGossip(const CcSim *sim, CcId id, int32_t offset,

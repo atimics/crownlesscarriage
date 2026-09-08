@@ -5977,9 +5977,11 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          * default 0). Schema 49 makes notable famine accounts gossip and
          * schema 50 adds goblin raids, cult rallies, dragon omens and dragon
          * fires; both changes are derived from events, so older saves need
-         * no data migration. Schema 51 adds common pony herds, which are
-         * seeded by the caller below rather than here, because every branch
-         * of this function lands on the current schema. */
+         * no data migration. Schema 51 seeds pony herds and schema 52
+         * unharnesses the second animal in the caller below. Schema 53 changes
+         * hoard-return food rules; schema 54 adds paper decay. Schema 55 adds
+         * dragon succession gossip and reports gathered at ruins. Historical
+         * journal replay uses the original rule gates before this upgrade. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }

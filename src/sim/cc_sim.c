@@ -2224,7 +2224,8 @@ static int32_t NutritionStorageCapacity(const CcSim *sim,
     return CC_SIM_MAX_UNITS;
 }
 
-static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place)
+static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place,
+                                    CcTownNutritionAccounting *accounting)
 {
     static const CcGood goods[] = {
         CC_GOOD_BREAD, CC_GOOD_WHEAT, CC_GOOD_MEAT
@@ -2236,9 +2237,13 @@ static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place)
                           good == CC_GOOD_WHEAT ? 400 : 100;
         int32_t stored = place->stock[good];
         int32_t spoiled = stored / divisor;
+        if (accounting != NULL) accounting->aged_units[good] += (uint64_t)spoiled;
         stored -= spoiled;
         int32_t capacity = NutritionStorageCapacity(sim, place, good);
         if (stored > capacity) {
+            if (accounting != NULL) {
+                accounting->overflow_units[good] += (uint64_t)(stored - capacity);
+            }
             spoiled += stored - capacity;
             stored = capacity;
         }
@@ -2246,6 +2251,19 @@ static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place)
         total_spoiled += spoiled;
     }
     return total_spoiled;
+}
+
+/* Paper goes the way of stored food, just far more slowly: a hoard left
+   sitting loses about a hundredth of itself a quarter, and never less than a
+   sheaf. Small working stores are left alone, so a scriptorium's own supply
+   is not ground away between deliveries -- only what a town is sitting on.
+   Silent, like the nutrition spoilage above it. */
+static void DecayStoredPaper(CcSim *sim, CcSettlement *place)
+{
+    if (sim->schema_version < 54U || place->stock[CC_GOOD_PAPER] <= 10 ||
+        sim->current_day % 91 != 0) return;
+    place->stock[CC_GOOD_PAPER] -= MaximumI32(
+        1, place->stock[CC_GOOD_PAPER] / 100);
 }
 
 static int32_t BakeryCapacity(const CcSettlement *place)
@@ -5706,10 +5724,12 @@ static void ReleaseAbandonedCamps(CcSim *sim)
 }
 
 static void UpdateSettlement(CcSim *sim, int32_t index,
-                             CcId scriptorium_id)
+                             CcId scriptorium_id,
+                             CcTownNutritionAccounting *accounting)
 {
     CcSettlement *settlement = &sim->settlements[index];
     if (CcSettlementIsAbandoned(settlement)) return;
+    if (accounting != NULL) accounting->settlement_id = settlement->id;
     int32_t produced[CC_GOOD_COUNT] = {0};
     int32_t cow_output = AdvanceCowHerd(sim, settlement);
     AdvanceSheepFlock(sim, settlement);
@@ -5741,9 +5761,19 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         1, WeeklyFoodUse(sim, settlement)) * CC_NUTRITION_PER_RATION;
     int32_t food_eaten = sim->schema_version >= 32U ?
         MinimumI32(food_required, cow_output) : 0;
+    int32_t before_eating[CC_GOOD_COUNT];
+    if (accounting != NULL) {
+        memcpy(before_eating, settlement->stock, sizeof(before_eating));
+    }
     food_eaten += CcNutritionConsume(
         settlement->stock, CC_NUTRITION_CIVILIAN,
         food_required - food_eaten);
+    if (accounting != NULL) {
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            accounting->civilian_units[good] +=
+                (uint64_t)(before_eating[good] - settlement->stock[good]);
+        }
+    }
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         if (CcGoodNutritionValue(
                 (CcGood)good, CC_NUTRITION_CIVILIAN) > 0) continue;
@@ -5755,7 +5785,8 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         int32_t consumed = MinimumI32(settlement->stock[good], consumption);
         settlement->stock[good] -= consumed;
     }
-    (void)SpoilStoredNutrition(sim, settlement);
+    (void)SpoilStoredNutrition(sim, settlement, accounting);
+    DecayStoredPaper(sim, settlement);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         RefreshSettlementGoodPrice(sim, settlement, (CcGood)good);
     }
@@ -5952,6 +5983,21 @@ static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
            so its modest magnitude is not a measure of its weight. */
         return sim->schema_version >= 50U;
     }
+    /* The dragon's succession is news because it changes the world, not
+       because a whelp is heavy. A whelp dispersing, an heir hatching, a
+       dynasty ending and an un-crowning all travel — a future chronicler
+       must be able to find them (schema 55, see GatherGossip). */
+    if (sim->schema_version >= 55U &&
+        (event->kind == CC_EVENT_DRAGON_WHELP_DISPERSED ||
+         event->kind == CC_EVENT_DRAGON_SUCCESSOR ||
+         event->kind == CC_EVENT_DRAGON_AFTERSHOCK ||
+         event->kind == CC_EVENT_DRAGON_UNCROWNED ||
+         event->kind == CC_EVENT_DRAGON_CROWNED ||
+         event->kind == CC_EVENT_DRAGON_SLAIN ||
+         event->kind == CC_EVENT_DRAGON_BROOD ||
+         event->kind == CC_EVENT_DRAGON_HOARD_RECOVERED)) {
+        return true;
+    }
     return event->magnitude >= 20 &&
         (event->kind == CC_EVENT_WAR_DECLARED ||
          event->kind == CC_EVENT_PEACE_DECLARED ||
@@ -6052,7 +6098,9 @@ static void GatherGossip(CcSim *sim)
             const CcRoute *route = CcSimRoute(sim, event->location_id);
             if (route != NULL) origin = SettlementSlotById(sim, route->from_id);
         }
-        if (origin < 0 || CcSettlementIsAbandoned(&sim->settlements[origin])) {
+        /* Schema 55 lets travelers carry reports from abandoned origins. */
+        if (origin < 0 || (sim->schema_version < 55U &&
+            CcSettlementIsAbandoned(&sim->settlements[origin]))) {
             continue;
         }
         int32_t slot = 0;
@@ -6362,7 +6410,8 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
 {
     if (sim->schema_version < 44U) return;
     int32_t place = SettlementSlotById(sim, place_id);
-    if (place < 0 || CcSettlementIsAbandoned(&sim->settlements[place])) return;
+    if (place < 0 || (sim->schema_version < 55U &&
+        CcSettlementIsAbandoned(&sim->settlements[place]))) return;
     GatherGossip(sim);
     CcGossipCarrier *carrier = NULL;
     for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
@@ -8029,8 +8078,10 @@ static void AdvanceHoardRaid(CcSim *sim)
         raiders->war_raids_completed += 1;
     } else {
         origin->market_coins += relief;
-        origin->hunger = ClampI32(origin->hunger - MaximumI32(3, relief / 2),
-                                  0, 100);
+        if (sim->schema_version < 53U) {
+            origin->hunger = ClampI32(origin->hunger - MaximumI32(3, relief / 2),
+                                      0, 100);
+        }
         origin->prosperity = ClampI32(origin->prosperity + 2, 0, 100);
         for (int32_t i = 0; i < sim->faction_count; ++i) {
             CcFaction *faction = &sim->factions[i];
@@ -8040,6 +8091,8 @@ static void AdvanceHoardRaid(CcSim *sim)
             }
         }
         (void)snprintf(text, sizeof(text),
+                       sim->schema_version >= 53U ?
+                       "%s returns to %s with %d stolen crowns for market purchases." :
                        "%s returns to %s and spends %d stolen crowns on bread and old debts.",
                        raiders->name, origin->name, relief);
     }
@@ -14769,6 +14822,12 @@ static void AdvanceHorseTeam(CcSim *sim)
 
 void CcSimAdvanceDays(CcSim *sim, int32_t days)
 {
+    CcSimAdvanceDaysWithNutritionAccounting(sim, days, NULL);
+}
+
+void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
+                                             CcNutritionAccounting *accounting)
+{
     if (sim == NULL || days <= 0 || sim->current_day < 1 ||
         sim->current_day > CC_SIM_MAX_DAY ||
         days > CC_SIM_MAX_DAY - sim->current_day) return;
@@ -14803,7 +14862,8 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
             CcId scriptorium_id = scriptorium != NULL ?
                 scriptorium->id : 0U;
             for (int32_t settlement = 0; settlement < sim->settlement_count; ++settlement) {
-                UpdateSettlement(sim, settlement, scriptorium_id);
+                UpdateSettlement(sim, settlement, scriptorium_id,
+                    accounting != NULL ? &accounting->towns[settlement] : NULL);
             }
             AdvanceRuins(sim);
             if (sim->schema_version >= 22U) AdvanceArchives(sim);
@@ -18751,9 +18811,8 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
     { 28U, 28U, 22U, 22U },
     { 29U, 29U, 23U, 23U },
     { 30U, 30U, 23U, 23U },
-    /* Every legacy schema remains readable by the generators that predate the
-       versioning split. */
-    { CC_OLDEST_SUPPORTED_SCHEMA, CC_NEWEST_LEGACY_SCHEMA, 2U, 21U },
+    /* Preserve the historical generator pairings. Schema 52 shipped with 25. */
+    { CC_OLDEST_SUPPORTED_SCHEMA, 51U, 2U, 21U },
 };
 
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
