@@ -217,3 +217,49 @@ static void CaptureCreatures(const char *directory)
     TestDragonCourtColors();
     (void)puts("PASS creature review: three goblin roles, four dragon stages, faces and moving turns");
 }
+
+/* Follow the live road team while the fixed-step controller moves its feet. */
+static void CapturePonyGait(const char *directory)
+{
+    RequireRenderer(MakeDirectory(directory) == 0 || DirectoryExists(directory),
+                    "pony gait review directory exists");
+    static CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcLocalBindPlace(NULL);
+    RenderTexture2D target = LoadRenderTexture(640, 480);
+    RequireRenderer(IsRenderTextureValid(target), "pony gait render target loads");
+    for (int32_t frame = 0; frame < 240; ++frame) {
+        float clock = (float)frame / 60.0f;
+        float distance = clock * 1.55f;
+        Vector3 base = {10.0f, 0.0f, 10.0f + distance};
+        Vector3 focus = LocalPoint(base, 0.0f, 0.9f,
+            CcLocalRoadHorseLongitudinalOffsetInternal(), 0.0f);
+        Camera3D camera = {.position = Vector3Add(focus, (Vector3){5,2,3}),
+            .target = focus, .up = {0,1,0}, .fovy = 3.3f,
+            .projection = CAMERA_ORTHOGRAPHIC};
+        CcLocalCreatureGaitsFixedStepInternal(1.0f / 60.0f);
+        BeginTextureMode(target);
+        ClearBackground((Color){24,28,34,255});
+        BeginMode3D(camera);
+        ArtComposition composition = ROAD_ART_COMPOSITION;
+        composition.light_profile = ART_LIGHT_CLEAR_MARKET;
+        composition.focal_point = focus;
+        BeginWorldLighting(camera, &composition);
+        DrawRoadHorseTeam(&sim, base, clock, 0.72f, distance, 0.0f,
+                          false, CC_LOCAL_SCENE_ROAD);
+        EndWorldLighting();
+        EndMode3D();
+        DrawText("TROT / live foot controller", 18, 18, 20, RAYWHITE);
+        EndTextureMode();
+        if (frame >= 120 && frame % 4 == 0) {
+            Image shot = LoadImageFromTexture(target.texture);
+            ImageFlipVertical(&shot);
+            char path[1024];
+            (void)snprintf(path, sizeof(path), "%s/trot-%03d.png", directory,
+                           (frame - 120) / 4);
+            RequireRenderer(ExportImage(shot, path), "pony gait frame is saved");
+            UnloadImage(shot);
+        }
+    }
+    UnloadRenderTexture(target);
+}
