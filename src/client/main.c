@@ -10001,7 +10001,11 @@ int main(int argc, char **argv)
         .fps = benchmark.active ? 0 : 60,
     };
     if (!CcCaptureConfigureWindow(&capture_request, argc, argv, &window)) return 1;
-    InitWindow(window.width, window.height,
+    /* Start hidden captures within a desktop-sized frame before resizing.
+     * macOS can report invalid placement for an oversized initial window. */
+    int32_t opening_width = capture_active && window.width > 1200 ? 1200 : window.width;
+    int32_t opening_height = capture_active && window.height > 700 ? 700 : window.height;
+    InitWindow(opening_width, opening_height,
                "Crownless Carriage — living world spine");
     if (!IsWindowReady()) {
         (void)fprintf(stderr,
@@ -10009,6 +10013,8 @@ int main(int argc, char **argv)
         CcClientInstanceLockRelease(&instance_lock);
         return 1;
     }
+    if (opening_width != window.width || opening_height != window.height)
+        SetWindowSize(window.width, window.height);
     SetExitKey(KEY_NULL);
     ClientInputInstall();
 #if defined(PLATFORM_WEB)
