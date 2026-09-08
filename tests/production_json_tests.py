@@ -24,6 +24,10 @@ with tempfile.TemporaryDirectory() as directory:
         assert all(row['threats']['semantics'] == 'snapshot' for row in rows)
         for row in rows:
             assert row['archive_recruitment_order']['semantics'] == 'stored_reservation'
+            staff = row['archive_staff']
+            assert staff['active'] is False and staff['legacy_scribes'] == 0
+            assert staff['person_ids'] == ['0'] * 4
+            assert staff['appointment_gate'] == 'unavailable'
             order = row['archive_recruitment_order']
             assert order['status'] == 0
             assert order['journey_gate'] == 'unavailable'

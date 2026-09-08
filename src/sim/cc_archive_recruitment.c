@@ -1,4 +1,5 @@
 #include "sim/cc_archive_recruitment.h"
+#include "sim/cc_archive_staff.h"
 #include "sim/cc_archive_internal.h"
 #include "sim/cc_food_economy_internal.h"
 #include "sim/cc_identity_internal.h"
@@ -27,15 +28,18 @@ static bool Available(const CcSim *sim, const CcCharacter *person)
    local scribes in stable ID order. The quote reports its named trainer. */
 static bool Incumbent(const CcSim *sim, CcId seat, const CcCharacter *person)
 {
+    if (CcSimArchiveStaffMember(sim, person->id)) return true;
     if (person->occupation != CC_OCCUPATION_SCRIBE || person->current_settlement_id != seat ||
         !Available(sim, person)) return false;
     int32_t earlier = 0;
     for (int32_t i = 0; i < sim->character_count; ++i) {
         const CcCharacter *other = &sim->characters[i];
         if (other->id < person->id && other->occupation == CC_OCCUPATION_SCRIBE &&
-            other->current_settlement_id == seat && Available(sim, other)) ++earlier;
+            other->current_settlement_id == seat && Available(sim, other) &&
+            !CcSimArchiveStaffMember(sim, other->id)) ++earlier;
     }
-    return earlier < sim->archives.scribes;
+    return earlier < (sim->schema_version >= 81U && sim->archive_staff.active ?
+        sim->archive_staff.legacy_scribes : sim->archives.scribes);
 }
 
 static CcId Trainer(const CcSim *sim, CcId seat, CcId trainee)
@@ -149,7 +153,7 @@ CcArchiveRecruitmentPlan CcSimArchiveRecruitmentPlan(const CcSim *sim)
     if (sim->schema_version >= 80U && sim->archive_recruitment.status != 0) {
         result.gate = CC_ARCHIVE_RECRUIT_BUSY; return result;
     }
-    if (sim->archives.scribes >= CC_MAX_SCRIBES) { result.gate = CC_ARCHIVE_RECRUIT_FULL; return result; }
+    if (CcSimArchiveStaffSlots(sim) >= CC_MAX_SCRIBES) { result.gate = CC_ARCHIVE_RECRUIT_FULL; return result; }
     const CcSettlement *seat = CcArchiveSeat(sim);
     result.gate = CC_ARCHIVE_RECRUIT_SEAT;
     if (seat == NULL || !CcSimArchiveSeatCandidate(sim, seat->id).viable) return result;
@@ -176,8 +180,8 @@ CcArchiveRecruitmentPlan CcSimArchiveRecruitmentPlan(const CcSim *sim)
 const char *CcArchiveRecruitmentGateName(CcArchiveRecruitmentGate gate)
 {
     static const char *const names[] = {"ready", "unavailable", "full", "seat", "candidate",
-        "trainer", "route", "travel_food", "materials", "silence", "funds", "patron", "busy", "calendar"};
-    return gate >= CC_ARCHIVE_RECRUIT_READY && gate <= CC_ARCHIVE_RECRUIT_CALENDAR ?
+        "trainer", "route", "travel_food", "materials", "silence", "funds", "patron", "busy", "calendar", "records", "storage"};
+    return gate >= CC_ARCHIVE_RECRUIT_READY && gate <= CC_ARCHIVE_RECRUIT_STORAGE ?
         names[gate] : "unknown";
 }
 
@@ -263,7 +267,7 @@ bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
     if (sim == NULL) return false;
     if (sim->schema_version < 84U) return true;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
-    if (!JourneyValid(sim) || !TrainingValid(sim)) return false;
+    if (!JourneyValid(sim) || !TrainingValid(sim) || !CcSimArchiveStaffValid(sim)) return false;
     if (o->status == 0) {
         return o->person_id == 0 &&
             o->trainer_id == 0 &&
@@ -327,7 +331,7 @@ bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
     return true;
 }
 
-bool CcSimCancelArchiveRecruitment(CcSim *sim)
+bool CcSimCanRefundArchiveRecruitment(const CcSim *sim, int32_t used_wheat, int32_t used_paper)
 {
     if (sim == NULL || sim->schema_version < 80U ||
         (sim->archive_recruitment.status != 1 &&
@@ -336,22 +340,42 @@ bool CcSimCancelArchiveRecruitment(CcSim *sim)
            (sim->schema_version >= 84U && sim->archive_recruitment.status == 5)))) ||
         !CcSimArchiveRecruitmentOrderValid(sim)) return false;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+<<<<<<< HEAD
     CcSettlement *seat = CcSimSettlementMutable(sim, o->seat_id);
     CcSettlement *origin = CcSimSettlementMutable(sim,
         sim->schema_version >= 83U && o->current_id != 0 ? o->current_id : o->origin_id);
+=======
+    if (used_wheat < 0 || used_wheat > o->wheat || used_paper < 0 || used_paper > o->paper) return false;
+    const CcSettlement *seat = CcSimSettlement(sim, o->seat_id);
+    const CcSettlement *origin = CcSimSettlement(sim,
+        sim->schema_version >= 79U && o->current_id != 0 ? o->current_id : o->origin_id);
+>>>>>>> 78e1c5f (Appoint named archive staff and record their first work)
     CcMoney refunds[2] = {o->donor_shares[0], o->donor_shares[1]};
     if (sim->schema_version >= 84U && o->wages_paid == 50) refunds[0] = refunds[1] = 0;
     CcMoney donors = refunds[0] + refunds[1];
     if (donors > o->purse || sim->iron_ledger_reserve > CC_SIM_MAX_MONEY - (o->purse - donors)) return false;
-    int32_t seat_wheat = o->wheat + (origin == seat ? o->travel_wheat : 0);
+    int32_t seat_wheat = o->wheat - used_wheat + (origin == seat ? o->travel_wheat : 0);
     if (seat->stock[CC_GOOD_WHEAT] > CC_SIM_MAX_UNITS - seat_wheat ||
-        seat->stock[CC_GOOD_PAPER] > CC_SIM_MAX_UNITS - o->paper ||
+        seat->stock[CC_GOOD_PAPER] > CC_SIM_MAX_UNITS - (o->paper - used_paper) ||
         seat->stock[CC_GOOD_TOOLS] > CC_SIM_MAX_UNITS - o->tools ||
         (origin != seat && origin->stock[CC_GOOD_WHEAT] > CC_SIM_MAX_UNITS - o->travel_wheat)) return false;
     for (int32_t i = 0; i < 2; ++i)
         for (int32_t k = 0; k < sim->kingdom_count; ++k)
             if (sim->kingdoms[k].id == o->donor_ids[i] &&
                 sim->kingdoms[k].treasury > CC_SIM_MAX_MONEY - refunds[i]) return false;
+    return true;
+}
+
+bool CcSimCancelArchiveRecruitment(CcSim *sim)
+{
+    if (!CcSimCanRefundArchiveRecruitment(sim, 0, 0)) return false;
+    const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    CcSettlement *seat = CcSimSettlementMutable(sim, o->seat_id);
+    CcSettlement *origin = CcSimSettlementMutable(sim,
+        sim->schema_version >= 79U && o->current_id != 0 ? o->current_id : o->origin_id);
+    CcMoney refunds[2] = {o->donor_shares[0], o->donor_shares[1]};
+    if (sim->schema_version >= 80U && o->wages_paid == 50) refunds[0] = refunds[1] = 0;
+    CcMoney donors = refunds[0] + refunds[1];
     for (int32_t i = 0; i < 2; ++i)
         for (int32_t k = 0; k < sim->kingdom_count; ++k)
             if (sim->kingdoms[k].id == o->donor_ids[i]) sim->kingdoms[k].treasury += refunds[i];

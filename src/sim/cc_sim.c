@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 #include "sim/cc_prophecy.h"
+=======
+#include "sim/cc_archive_staff.h"
+>>>>>>> 78e1c5f (Appoint named archive staff and record their first work)
 #include "sim/cc_sim.h"
 #include "sim/cc_occupations.h"
 #include "sim/cc_archive_recruitment.h"
@@ -19,6 +23,7 @@
 #include <ctype.h>
 #include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -6233,18 +6238,14 @@ static CcSettlement *ArchiveVaultWithBindingMaterials(CcSim *sim,
     return NULL;
 }
 
-static bool BindArchiveTome(CcSim *sim)
+static CcTreasure *BindArchiveTomeAt(CcSim *sim, CcSettlement *vault)
 {
-    if (sim == NULL || sim->kingdom_count <= 0) return false;
-    static const char *forms[] = {
-        "Chronicle", "Ledger", "Annal", "Register"
-    };
-    int32_t holder = (int32_t)(sim->treasure_count % sim->kingdom_count);
-    CcSettlement *vault = ArchiveVaultWithBindingMaterials(sim, holder);
-    CcKingdom *kingdom = vault != NULL ?
-        KingdomMutable(sim, vault->kingdom_id) : NULL;
+    static const char *forms[] = {"Chronicle", "Ledger", "Annal", "Register"};
+    if (vault == NULL || CcSettlementIsAbandoned(vault) ||
+        vault->stock[CC_GOOD_GOLD] < 1 || vault->stock[CC_GOOD_GEMS] < 1) return NULL;
+    CcKingdom *kingdom = KingdomMutable(sim, vault->kingdom_id);
     CcTreasure *tome = kingdom != NULL ? AllocateTreasure(sim) : NULL;
-    if (tome == NULL || vault == NULL) return false;
+    if (tome == NULL) return NULL;
     vault->stock[CC_GOOD_GOLD] -= 1;
     vault->stock[CC_GOOD_GEMS] -= 1;
     (void)snprintf(tome->name, sizeof(tome->name),
@@ -6259,7 +6260,135 @@ static bool BindArchiveTome(CcSim *sim)
     tome->craft_work = 1;
     tome->appraised_value = 6;
     tome->created_day = sim->current_day;
+    return tome;
+}
+
+static bool BindArchiveTome(CcSim *sim)
+{
+    if (sim == NULL || sim->kingdom_count <= 0) return false;
+    int32_t holder = (int32_t)(sim->treasure_count % sim->kingdom_count);
+    CcSettlement *vault = sim->schema_version >= 81U && sim->archive_staff.active ?
+        CcSimSettlementMutable(sim, sim->archive_staff.seat_id) : ArchiveVaultWithBindingMaterials(sim, holder);
+    return BindArchiveTomeAt(sim, vault) != NULL;
+}
+
+CcArchiveAppointmentPlan CcSimArchiveAppointmentPlan(const CcSim *sim)
+{
+    CcArchiveAppointmentPlan plan = {.gate = CC_ARCHIVE_RECRUIT_UNAVAILABLE, .account_slot = -1};
+    if (sim == NULL || sim->schema_version < 81U || sim->archive_recruitment.status != 5) return plan;
+    const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    plan.person_id = o->person_id; plan.seat_id = o->seat_id;
+    plan.gate = CC_ARCHIVE_RECRUIT_BUSY;
+    if (sim->current_day <= o->last_work_day) return plan;
+    plan.gate = CC_ARCHIVE_RECRUIT_CANDIDATE;
+    const CcCharacter *person = CcSimCharacter(sim, o->person_id);
+    if (person == NULL || person->death_day <= sim->current_day || CcCharacterAgeYears(sim, person) < 16 ||
+        person->activity != CC_CHARACTER_ACTIVITY_WORKING || person->occupation != CC_OCCUPATION_SCRIBE ||
+        person->bandit_group_id != 0 || person->current_settlement_id != o->seat_id ||
+        CcSimArchiveStaffMember(sim, person->id)) return plan;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i)
+        if (sim->kingdoms[i].ruler_character_id == person->id || sim->kingdoms[i].monastery_patron_id == person->id) return plan;
+    plan.gate = CC_ARCHIVE_RECRUIT_FULL;
+    if (CcSimArchiveStaffSlots(sim) >= CC_MAX_SCRIBES) return plan;
+    plan.gate = CC_ARCHIVE_RECRUIT_SEAT;
+    const CcSettlement *seat = CcArchiveSeat(sim);
+    if (seat == NULL || seat->id != o->seat_id || CcSettlementIsAbandoned(seat) ||
+        !CcSettlementHasService(seat, CC_SERVICE_MILL) ||
+        (sim->archive_staff.active && sim->archive_staff.seat_id != seat->id)) return plan;
+    plan.gate = CC_ARCHIVE_RECRUIT_MATERIALS;
+    if (o->wheat < 2 || o->paper < 1 || o->tools < 1) return plan;
+    plan.gate = CC_ARCHIVE_RECRUIT_STORAGE;
+    if (!CcSimCanRefundArchiveRecruitment(sim, 2, 1)) return plan;
+    plan.gate = CC_ARCHIVE_RECRUIT_RECORDS;
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        const CcTreasure *volume = &sim->treasures[i];
+        if (TreasureIsArchiveVolume(volume) && volume->owner_id == seat->id && volume->location_id == seat->id &&
+            volume->craft_work < CC_SIM_MAX_UNITS && volume->appraised_value < CC_SIM_MAX_UNITS &&
+            (plan.volume_id == 0 || volume->id < plan.volume_id)) plan.volume_id = volume->id;
+    }
+    if (plan.volume_id != 0) { plan.gate = CC_ARCHIVE_RECRUIT_READY; return plan; }
+    const CcGossipCarrier *held = CcSimGossipCarrier(sim, person->id);
+    for (int32_t i = 0; held != NULL && i < CC_MAX_GOSSIP; ++i)
+        if ((held->stories & (UINT32_C(1) << (uint32_t)i)) != 0 && sim->gossip[i].event_id != 0 &&
+            (plan.source_event_id == 0 || sim->gossip[i].event_id < plan.source_event_id)) {
+            plan.source_event_id = sim->gossip[i].event_id; plan.account_slot = i;
+        }
+    if (plan.account_slot < 0) return plan;
+    plan.gate = CC_ARCHIVE_RECRUIT_MATERIALS;
+    if (seat->stock[CC_GOOD_GOLD] < 1 || seat->stock[CC_GOOD_GEMS] < 1) return plan;
+    plan.gate = CC_ARCHIVE_RECRUIT_STORAGE;
+    bool slot = sim->treasure_count < CC_MAX_TREASURES;
+    for (int32_t i = 0; i < sim->treasure_count; ++i) slot |= sim->treasures[i].destroyed;
+    if (slot) plan.gate = CC_ARCHIVE_RECRUIT_READY;
+    return plan;
+}
+
+static bool AppointArchiveRecruitReady(CcSim *sim, CcArchiveAppointmentPlan plan)
+{
+    CcTreasure *volume = NULL;
+    for (int32_t i = 0; i < sim->treasure_count; ++i)
+        if (sim->treasures[i].id == plan.volume_id) volume = &sim->treasures[i];
+    CcSettlement *seat = CcSimSettlementMutable(sim, plan.seat_id);
+    if (plan.account_slot >= 0) volume = BindArchiveTomeAt(sim, seat);
+    if (volume == NULL) return false;
+    CcId patron = sim->archive_recruitment.patron_ids[0];
+    sim->archive_recruitment.wheat -= 2;
+    sim->archive_recruitment.paper -= 1;
+    /* The quote has checked the full refund before any transfer. */
+    if (!CcSimCancelArchiveRecruitment(sim)) {
+        sim->archive_recruitment.wheat += 2;
+        sim->archive_recruitment.paper += 1;
+        return false;
+    }
+    if (!sim->archive_staff.active) {
+        sim->archive_staff.active = true;
+        sim->archive_staff.seat_id = plan.seat_id;
+        sim->archive_staff.legacy_scribes = sim->archives.scribes;
+    }
+    for (int32_t i = 0; i < CC_MAX_SCRIBES; ++i)
+        if (sim->archive_staff.person_ids[i] == 0) {
+            sim->archive_staff.person_ids[i] = plan.person_id; break;
+        }
+    if (plan.account_slot < 0) {
+        volume->craft_work += 1;
+        volume->appraised_value += 1;
+    }
+    sim->archives.lore_stored = CcSimArchivePhysicalLore(sim);
+    sim->archives.last_recorded_day = sim->current_day;
+    sim->archives.dead_since_day = 0;
+    CcEconomyWearOneTool(seat, &sim->archives.kit_tool_wear, 8);
+    CcEconomyRefreshSettlementGoodPrice(sim, seat, CC_GOOD_TOOLS);
+    CcSimRefreshArchiveStaff(sim);
+    const CcCharacter *person = CcSimCharacter(sim, plan.person_id);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "%.30s joins the archive. Their first task adds an index page to %.48s.",
+        person != NULL ? person->name : "The trained recruit", volume->name);
+    if (plan.account_slot >= 0) {
+        const CcGossipCarrier *held = CcSimGossipCarrier(sim, plan.person_id);
+        char account[CC_EVENT_TEXT_CAPACITY];
+        CcGossipText(sim, &sim->gossip[plan.account_slot], &held->versions[plan.account_slot], account, sizeof(account));
+        HearGossip(sim, &sim->gossip[plan.account_slot], seat->id, plan.source_event_id,
+            person != NULL ? person->name : "The trained recruit", held->versions[plan.account_slot]);
+        sim->gossip[plan.account_slot].recorded = true;
+        (void)snprintf(text, sizeof(text), "%.24s joins the archive. Their first page records: %.75s",
+            person != NULL ? person->name : "The trained recruit", account);
+    }
+    (void)PushSocialEvent(sim, CC_EVENT_LORE_RECORDED, volume->id, seat->id, plan.source_event_id,
+        plan.person_id, plan.person_id, 0, patron, 1, text);
     return true;
+}
+
+bool CcSimAppointArchiveRecruit(CcSim *sim)
+{
+    CcArchiveAppointmentPlan plan = CcSimArchiveAppointmentPlan(sim);
+    if (plan.gate != CC_ARCHIVE_RECRUIT_READY) return false;
+    CcSim *next = malloc(sizeof(*next));
+    if (next == NULL) return false;
+    *next = *sim;
+    bool ok = AppointArchiveRecruitReady(next, plan);
+    if (ok) *sim = *next;
+    free(next);
+    return ok;
 }
 
 static void AdvanceCoronationLaw(CcSim *sim, bool scriptorium_ready,
@@ -6490,7 +6619,17 @@ static void AdvanceArchives(CcSim *sim)
     int32_t target_scribes = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
         sim->iron_ledger_reserve >= 150 ? 2 :
         sim->iron_ledger_reserve >= 50 ? 1 : 0;
+<<<<<<< HEAD
     bool recruitment_reserved = sim->schema_version >= 80U && sim->archive_recruitment.status != 0;
+=======
+    bool named_staff = sim->schema_version >= 81U && sim->archive_staff.active;
+    if (named_staff) {
+        sim->archive_staff.legacy_scribes = MinimumI32(sim->archive_staff.legacy_scribes, target_scribes);
+        CcSimRefreshArchiveStaff(sim);
+        target_scribes = archives->scribes;
+    }
+    bool recruitment_reserved = named_staff || (sim->schema_version >= 78U && sim->archive_recruitment.status != 0);
+>>>>>>> 78e1c5f (Appoint named archive staff and record their first work)
     if (recruitment_reserved) target_scribes = MinimumI32(target_scribes, archives->scribes);
     /* Date the first weekly sample with zero scribes. */
     CcMoney crown_funding = 0;
@@ -6538,9 +6677,37 @@ static void AdvanceArchives(CcSim *sim)
     int32_t noted_gossip[CC_MAX_SCRIBES];
     char noted_text[CC_MAX_SCRIBES][CC_EVENT_TEXT_CAPACITY];
     int32_t noted_count = 0;
+    CcId noted_author[CC_MAX_SCRIBES] = {0};
     HearLocalGossip(sim);
+    if (named_staff) {
+        for (int32_t worker = 0; worker < CC_MAX_SCRIBES && noted_count < active_scribes; ++worker) {
+            CcId author = sim->archive_staff.person_ids[worker];
+            if (!CcSimArchiveStaffWorking(sim, author)) continue;
+            const CcGossipCarrier *held = CcSimGossipCarrier(sim, author);
+            if (held == NULL) continue;
+            int32_t oldest = -1;
+            for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+                const CcGossip *story = &sim->gossip[i];
+                if (story->event_id == 0 || story->recorded || (held->stories & (UINT32_C(1) << (uint32_t)i)) == 0) continue;
+                bool selected = false;
+                for (int32_t j = 0; j < noted_count; ++j) if (noted_gossip[j] == i) selected = true;
+                if (selected) continue;
+                if (oldest < 0 || story->day < sim->gossip[oldest].day ||
+                    (story->day == sim->gossip[oldest].day && story->event_id < sim->gossip[oldest].event_id)) oldest = i;
+            }
+            if (oldest < 0) continue;
+            noted[noted_count] = sim->gossip[oldest].event_id;
+            noted_location[noted_count] = sim->archive_staff.seat_id;
+            noted_gossip[noted_count] = oldest;
+            noted_author[noted_count] = author;
+            CcGossipText(sim, &sim->gossip[oldest], &held->versions[oldest],
+                noted_text[noted_count], sizeof(noted_text[noted_count]));
+            ++noted_count;
+        }
+    }
     if (sim->schema_version >= 44U) {
-        while (noted_count < active_scribes) {
+        int32_t legacy_notes = 0;
+        while (noted_count < active_scribes && (!named_staff || legacy_notes < sim->archive_staff.legacy_scribes)) {
             int32_t oldest = -1;
             for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
                 const CcGossip *candidate = &sim->gossip[i];
@@ -6566,6 +6733,7 @@ static void AdvanceArchives(CcSim *sim)
                            sizeof(noted_text[noted_count]),
                            "%s", account);
             noted_count += 1;
+            legacy_notes += 1;
         }
     }
     int32_t first_day = MaximumI32(1, sim->current_day - 7);
@@ -6596,10 +6764,20 @@ static void AdvanceArchives(CcSim *sim)
         archives->lore_stored += 1;
         archives->last_recorded_day = sim->current_day;
         if (sim->schema_version >= 44U) {
+            if (noted_author[i] != 0) {
+                const CcGossipCarrier *held = CcSimGossipCarrier(sim, noted_author[i]);
+                const CcCharacter *author = CcSimCharacter(sim, noted_author[i]);
+                HearGossip(sim, &sim->gossip[noted_gossip[i]], noted_location[i], noted[i],
+                    author != NULL ? author->name : "The named scribe", held->versions[noted_gossip[i]]);
+            }
             sim->gossip[noted_gossip[i]].recorded = true;
         }
-        (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, noted[i],
-                        noted_location[i], noted[i], 1, noted_text[i]);
+        if (noted_author[i] != 0)
+            (void)PushSocialEvent(sim, CC_EVENT_LORE_RECORDED, noted[i], noted_location[i], noted[i],
+                noted_author[i], noted_author[i], 0, 0, 1, noted_text[i]);
+        else
+            (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, noted[i],
+                            noted_location[i], noted[i], 1, noted_text[i]);
         if (sim->schema_version >= 34U) {
             scriptorium->stock[CC_GOOD_PAPER] -= 1;
             CcEconomyRefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_PAPER);
@@ -15107,10 +15285,21 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
     for (int32_t day = 0; day < days; ++day) {
         sim->current_day += 1;
         if (sim->schema_version >= 26U) AdvanceCharacterLifecycles(sim);
+        if (sim->schema_version >= 81U && sim->archive_staff.active) {
+            CcId previous[CC_MAX_SCRIBES];
+            memcpy(previous, sim->archive_staff.person_ids, sizeof(previous));
+            CcSimRefreshArchiveStaff(sim);
+            for (int32_t i = 0; i < CC_MAX_SCRIBES; ++i)
+                if (previous[i] != 0 && sim->archive_staff.person_ids[i] == 0)
+                    (void)PushSocialEvent(sim, CC_EVENT_CHARACTER_INTERACTION, previous[i],
+                        sim->archive_staff.seat_id, 0, previous[i], previous[i], 0, 0, 1,
+                        "A named scribe's lifetime ends. Their archive place becomes vacant.");
+        }
         if (sim->schema_version >= 60U) AdvanceTravellerNeeds(sim);
         AdvanceCharacterTravel(sim);
         AdvanceArchiveRecruitJourney(sim);
         AdvanceArchiveRecruitTraining(sim);
+        if (sim->schema_version >= 81U) (void)CcSimAppointArchiveRecruit(sim);
         HearLocalGossip(sim);
         CcSimRefreshCharacterGossip(sim);
         if (!sim->journey.active) {

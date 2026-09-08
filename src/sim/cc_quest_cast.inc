@@ -7,8 +7,14 @@ static CcCharacter *PresentQuestActor(CcSim *sim, CcId town,
     int best_score = INT32_MIN;
     for (int i = 0; i < sim->character_count; ++i) {
         CcCharacter *person = &sim->characters[i];
+<<<<<<< HEAD
         if ((sim->schema_version >= 83U && sim->archive_recruitment.status > 0 &&
              (sim->archive_recruitment.status < 4 || (sim->schema_version >= 84U && sim->archive_recruitment.status == 5)) &&
+=======
+        if (CcSimArchiveStaffMember(sim, person->id) ||
+            (sim->schema_version >= 79U && sim->archive_recruitment.status > 0 &&
+             (sim->archive_recruitment.status < 4 || (sim->schema_version >= 80U && sim->archive_recruitment.status == 5)) &&
+>>>>>>> 78e1c5f (Appoint named archive staff and record their first work)
              (sim->archive_recruitment.person_id == person->id ||
               (sim->schema_version >= 84U && sim->archive_recruitment.status == 3 &&
                sim->archive_recruitment.trainer_id == person->id))) ||

@@ -61,9 +61,9 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-/* Schemas 75-83 shipped ahead of this branch; the archive recruit training
-   is schema 84. */
-#define CC_SIM_SCHEMA_VERSION 84
+/* Schemas 75-84 shipped ahead of this branch; the named archive staff
+   appointment is schema 85. */
+#define CC_SIM_SCHEMA_VERSION 85
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -1863,6 +1863,12 @@ typedef struct CcArchiveRecruitmentOrder {
     int32_t labor_days, trainer_labor_days, last_work_day, wages_paid;
 } CcArchiveRecruitmentOrder;
 
+typedef struct CcArchiveStaff {
+    CcId person_ids[CC_MAX_SCRIBES], seat_id;
+    int32_t legacy_scribes;
+    bool active;
+} CcArchiveStaff;
+
 typedef struct CcGrainSupply {
     CcId organiser_id, supplier_id, route_id, shipment_id;
     CcMoney purse, spent;
@@ -1931,6 +1937,7 @@ typedef struct CcSim {
     CcArchives archives;
     CcArchiveRecruitmentOrder archive_recruitment;
     int32_t archive_training_week;
+    CcArchiveStaff archive_staff;
     CcGossip gossip[CC_MAX_GOSSIP];
     CcGossipCarrier gossip_carriers[CC_MAX_GOSSIP_CARRIERS];
     CcId gossip_last_event_id;

@@ -16,7 +16,9 @@ typedef enum CcArchiveRecruitmentGate {
     CC_ARCHIVE_RECRUIT_FUNDS,
     CC_ARCHIVE_RECRUIT_PATRON,
     CC_ARCHIVE_RECRUIT_BUSY,
-    CC_ARCHIVE_RECRUIT_CALENDAR
+    CC_ARCHIVE_RECRUIT_CALENDAR,
+    CC_ARCHIVE_RECRUIT_RECORDS,
+    CC_ARCHIVE_RECRUIT_STORAGE
 } CcArchiveRecruitmentGate;
 
 typedef struct CcArchiveRecruitmentPlan {
@@ -59,4 +61,12 @@ typedef enum CcArchiveTrainingStep {
 } CcArchiveTrainingStep;
 CcArchiveRecruitmentGate CcSimArchiveRecruitmentTrainingGate(const CcSim *sim);
 CcArchiveTrainingStep CcSimAdvanceArchiveRecruitmentTraining(CcSim *sim);
+bool CcSimCanRefundArchiveRecruitment(const CcSim *sim, int32_t used_wheat, int32_t used_paper);
+typedef struct CcArchiveAppointmentPlan {
+    CcArchiveRecruitmentGate gate;
+    CcId person_id, seat_id, volume_id, source_event_id;
+    int32_t account_slot;
+} CcArchiveAppointmentPlan;
+CcArchiveAppointmentPlan CcSimArchiveAppointmentPlan(const CcSim *sim);
+bool CcSimAppointArchiveRecruit(CcSim *sim);
 #endif
