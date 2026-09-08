@@ -92,6 +92,7 @@ add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
     src/sim/cc_sim_hash.c
+    src/sim/cc_archive_queries.c
     src/sim/cc_sim_versions.c
     src/sim/cc_identity.c
     src/sim/cc_route_rules.c
