@@ -1258,6 +1258,9 @@ if(BUILD_TESTING)
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
     if(CC_PYTHON3_EXECUTABLE)
+        add_test(NAME age_of_dragons_sweep_integrity
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/age_of_dragons_sweep_tests.py)
         add_test(NAME sweep_hunger_analysis
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/sweep_analysis_tests.py)
