@@ -88,6 +88,78 @@ static void CheckSavedFields(int32_t listener, int32_t account, CcId retired_id)
     printf("Verified %u independent lifetime and source fields\n", saved_fields);
 }
 
+static CcSim retention_start, retention_prepared;
+
+static void CheckRetentionOrder(int32_t source, int32_t listener, int32_t account)
+{
+    retention_start = sim;
+    CcId tie_victim = 0;
+    for (int scenario = 0; scenario < 4; ++scenario) {
+        sim = retention_start;
+        CC_CHECK(sim.historic_character_count == CC_MAX_HISTORIC_CHARACTERS);
+        for (int32_t i = 0; i < sim.character_count; ++i)
+            sim.characters[i].death_day = CC_SIM_MAX_DAY;
+        for (int32_t i = 0; i < sim.historic_character_count; ++i) {
+            sim.historic_characters[i].birth_day = -100;
+            sim.historic_characters[i].death_day = sim.current_day - 2;
+            sim.historic_characters[i].importance = 1;
+        }
+        CcId victim;
+        if (scenario == 0) {
+            /* Lower importance wins even when its death is more recent. */
+            sim.historic_characters[7].importance = 0;
+            sim.historic_characters[7].death_day = sim.current_day;
+            victim = sim.historic_characters[7].id;
+        } else if (scenario == 1) {
+            sim.historic_characters[7].importance = 0;
+            sim.historic_characters[3].importance = 0;
+            sim.historic_characters[7].death_day = sim.current_day - 1;
+            victim = sim.historic_characters[3].id;
+        } else {
+            victim = sim.historic_characters[0].id;
+            for (int32_t i = 1; i < sim.historic_character_count; ++i)
+                if (sim.historic_characters[i].id < victim) victim = sim.historic_characters[i].id;
+            if (scenario == 2) tie_victim = victim;
+            else {
+                CC_CHECK(victim == tie_victim);
+                for (int32_t i = 0; i < sim.historic_character_count / 2; ++i) {
+                    int32_t other = sim.historic_character_count - 1 - i;
+                    CcHistoricCharacter swap = sim.historic_characters[i];
+                    sim.historic_characters[i] = sim.historic_characters[other];
+                    sim.historic_characters[other] = swap;
+                }
+            }
+        }
+        CcId deceased = sim.characters[source].id;
+        sim.characters[source].death_day = sim.current_day + 1;
+        CheckValid(&sim);
+        retention_prepared = sim;
+        replay = sim;
+        CcSimAdvanceDays(&sim, 1);
+        CcSimAdvanceDays(&replay, 1);
+        CheckValid(&sim);
+        CC_CHECK(CcSimHash(&sim) == CcSimHash(&replay));
+        CC_CHECK(sim.historic_character_count == CC_MAX_HISTORIC_CHARACTERS);
+        CC_CHECK(CcSimHistoricCharacter(&sim, victim) == NULL);
+        CC_CHECK(CcSimHistoricCharacter(&sim, deceased) != NULL);
+        CC_CHECK(sim.characters[source].id != deceased);
+        for (int32_t i = 0; i < retention_prepared.historic_character_count; ++i) {
+            const CcHistoricCharacter *prior = &retention_prepared.historic_characters[i];
+            if (prior->id == victim) continue;
+            const CcHistoricCharacter *kept = CcSimHistoricCharacter(&sim, prior->id);
+            CC_CHECK(kept != NULL && memcmp(prior, kept, sizeof(*prior)) == 0);
+        }
+        CC_CHECK(memcmp(&sim.characters[listener].knowledge[account],
+            &retention_prepared.characters[listener].knowledge[account],
+            sizeof(CcCharacterKnowledge)) == 0);
+        RoundTrip();
+        CC_CHECK(memcmp(sim.historic_characters, restored.historic_characters,
+            (size_t)sim.historic_character_count * sizeof(CcHistoricCharacter)) == 0);
+    }
+    sim = retention_start;
+    puts("Verified importance, age, stable-ID ties, and reordered history retirement");
+}
+
 int main(int argc, char **argv)
 {
     CC_CHECK(argc == 1 || (argc == 2 && strcmp(argv[1], "--save-only") == 0));
@@ -189,6 +261,7 @@ int main(int argc, char **argv)
     RoundTrip();
     CC_CHECK(restored.characters[listener].knowledge[account].source_character_id == original.id);
     CC_CHECK(strcmp(restored.characters[listener].knowledge[account].source_name, original.name) == 0);
+    CheckRetentionOrder(source, listener, account);
     CheckSavedFields(listener, account, original.id);
     puts("Received accounts survive source death and history retirement");
     return 0;
