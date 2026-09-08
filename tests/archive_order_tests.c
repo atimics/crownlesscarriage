@@ -168,6 +168,13 @@ int main(int argc, char **argv)
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
     (void)remove(path);
     baseline = sim;
+    baseline.archive_recruitment.status = 1;
+    baseline.archive_recruitment.current_id = 0;
+    baseline.archive_recruitment.arrived_day = 0;
+    baseline.archive_recruitment.leg_route_id = 0;
+    baseline.archive_recruitment.leg_hop_id = 0;
+    baseline.archive_recruitment.leg_arrival_day = 0;
+    baseline.archive_recruitment.provisioned_days = 0;
     baseline.archive_recruitment.donor_ids[0] = sim.kingdoms[0].id;
     baseline.archive_recruitment.donor_ids[1] = sim.kingdoms[1].id;
     baseline.archive_recruitment.patron_ids[0] = sim.characters[0].id;

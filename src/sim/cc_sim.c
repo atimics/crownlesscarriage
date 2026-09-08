@@ -6427,7 +6427,7 @@ static void AdvanceArchives(CcSim *sim)
     int32_t target_scribes = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
         sim->iron_ledger_reserve >= 150 ? 2 :
         sim->iron_ledger_reserve >= 50 ? 1 : 0;
-    bool recruitment_reserved = sim->schema_version >= 78U && sim->archive_recruitment.status == 1;
+    bool recruitment_reserved = sim->schema_version >= 78U && sim->archive_recruitment.status != 0;
     if (recruitment_reserved) target_scribes = MinimumI32(target_scribes, archives->scribes);
     /* Date the first weekly sample with zero scribes. */
     CcMoney crown_funding = 0;
@@ -14626,6 +14626,8 @@ static void AdvanceTravellerNeeds(CcSim *sim)
 {
     for (int32_t i = 0; i < sim->character_count; ++i) {
         CcCharacter *person = &sim->characters[i];
+        if (sim->schema_version >= 79U && sim->archive_recruitment.status == 2 &&
+            sim->archive_recruitment.person_id == person->id) continue;
         if ((person->role != CC_CHARACTER_TRAVELLER &&
              person->role != CC_CHARACTER_REFUGEE) ||
             CcCharacterAgeYears(sim, person) < 16) continue;
@@ -14732,6 +14734,27 @@ void CcSimAdvanceDaysWithAccounting(CcSim *sim, int32_t days,
     CcSimAdvanceDaysWithProductionAccounting(sim, days, accounting, smithy, NULL);
 }
 
+static void AdvanceArchiveRecruitJourney(CcSim *sim)
+{
+    if (sim->schema_version < 79U) return;
+    const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    uint32_t roll = o->status == 2 && sim->current_day >= o->leg_arrival_day ? NextRandom(sim) : 99U;
+    CcArchiveJourneyStep step = CcSimAdvanceArchiveRecruitmentJourney(sim, roll);
+    if (step == CC_ARCHIVE_JOURNEY_WAIT) return;
+    const CcCharacter *person = CcSimCharacter(sim, o->person_id);
+    const char *action = step == CC_ARCHIVE_JOURNEY_DEPARTED ? "starts a road leg to the archive" :
+        step == CC_ARCHIVE_JOURNEY_STOP ? "reaches the next town on the archive journey" :
+        step == CC_ARCHIVE_JOURNEY_ARRIVED ? "reaches the archive for induction" :
+        person != NULL && person->death_day > sim->current_day ?
+        "reaches shelter after a road attack. The remaining provisions are lost" :
+        "dies before archive induction";
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "%s %s.", person != NULL ? person->name : "The named recruit", action);
+    (void)PushSocialEvent(sim, CC_EVENT_CHARACTER_INTERACTION, o->person_id,
+        o->current_id != 0 ? o->current_id : o->origin_id, 0, o->person_id, o->person_id,
+        0, 0, 1, text);
+}
+
 void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
     CcNutritionAccounting *accounting, CcSmithyAccounting *smithy,
     CcRoadProductionAccounting *sites)
@@ -14744,6 +14767,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         sim->current_day += 1;
         if (sim->schema_version >= 26U) AdvanceCharacterLifecycles(sim);
         if (sim->schema_version >= 60U) AdvanceTravellerNeeds(sim);
+        AdvanceArchiveRecruitJourney(sim);
         HearLocalGossip(sim);
         CcSimRefreshCharacterGossip(sim);
         if (!sim->journey.active) {

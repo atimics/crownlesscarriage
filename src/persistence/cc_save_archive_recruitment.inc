@@ -1,3 +1,49 @@
+static bool SaveRecruitmentJourney(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 79U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "INSERT INTO archive_recruitment_journey VALUES(1,?,?,?,?,?,?);", &statement, error, error_capacity)) return false;
+    sqlite3_bind_int64(statement, 1, (sqlite3_int64)sim->archive_recruitment.current_id);
+    sqlite3_bind_int64(statement, 2, (sqlite3_int64)sim->archive_recruitment.leg_route_id);
+    sqlite3_bind_int64(statement, 3, (sqlite3_int64)sim->archive_recruitment.leg_hop_id);
+    sqlite3_bind_int64(statement, 4, (sqlite3_int64)sim->archive_recruitment.leg_arrival_day);
+    sqlite3_bind_int64(statement, 5, (sqlite3_int64)sim->archive_recruitment.provisioned_days);
+    sqlite3_bind_int64(statement, 6, (sqlite3_int64)sim->archive_recruitment.arrived_day);
+    bool ok = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement); return ok;
+}
+static bool ReadRecruitmentJourney(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 79U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "SELECT * FROM archive_recruitment_journey ORDER BY id;", &statement, error, error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW || sqlite3_column_int64(statement, 0) != 1) {
+        SetError(error, error_capacity, "Recruitment journey row is missing.");
+        sqlite3_finalize(statement); return false;
+    }
+    sim->archive_recruitment.current_id = (CcId)sqlite3_column_int64(statement, 1);
+    sim->archive_recruitment.leg_route_id = (CcId)sqlite3_column_int64(statement, 2);
+    sim->archive_recruitment.leg_hop_id = (CcId)sqlite3_column_int64(statement, 3);
+    if (sqlite3_column_int64(statement, 4) < 0 || sqlite3_column_int64(statement, 4) > INT32_MAX) {
+        SetError(error, error_capacity, "Recruitment journey integer exceeds its range.");
+        sqlite3_finalize(statement); return false;
+    }
+    sim->archive_recruitment.leg_arrival_day = (int32_t)sqlite3_column_int64(statement, 4);
+    if (sqlite3_column_int64(statement, 5) < 0 || sqlite3_column_int64(statement, 5) > INT32_MAX) {
+        SetError(error, error_capacity, "Recruitment journey integer exceeds its range.");
+        sqlite3_finalize(statement); return false;
+    }
+    sim->archive_recruitment.provisioned_days = (int32_t)sqlite3_column_int64(statement, 5);
+    if (sqlite3_column_int64(statement, 6) < 0 || sqlite3_column_int64(statement, 6) > INT32_MAX) {
+        SetError(error, error_capacity, "Recruitment journey integer exceeds its range.");
+        sqlite3_finalize(statement); return false;
+    }
+    sim->archive_recruitment.arrived_day = (int32_t)sqlite3_column_int64(statement, 6);
+    bool ok = sqlite3_step(statement) == SQLITE_DONE;
+    if (!ok) SetError(error, error_capacity, "Recruitment journey has extra rows.");
+    sqlite3_finalize(statement); return ok;
+}
+
 static bool SaveArchiveRecruitment(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim->schema_version < 78U) return true;
@@ -29,7 +75,7 @@ static bool SaveArchiveRecruitment(sqlite3 *database, const CcSim *sim, char *er
     sqlite3_bind_int64(statement, 23, (sqlite3_int64)order->ready_estimate);
     bool ok = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
-    return ok;
+    return ok && SaveRecruitmentJourney(database, sim, error, error_capacity);
 }
 
 static bool ReadArchiveRecruitment(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
@@ -99,5 +145,5 @@ static bool ReadArchiveRecruitment(sqlite3 *database, CcSim *sim, char *error, s
     order->ready_estimate = (int64_t)sqlite3_column_int64(statement, 23);
     bool ok = sqlite3_step(statement) == SQLITE_DONE;
     if (!ok) SetError(error, error_capacity, "Recruitment reservation has extra rows.");
-    sqlite3_finalize(statement); return ok;
+    sqlite3_finalize(statement); return ok && ReadRecruitmentJourney(database, sim, error, error_capacity);
 }
