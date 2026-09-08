@@ -12,6 +12,15 @@ spec.loader.exec_module(host)
 folder = root / 'assets/audio/music'
 offline = json.loads((folder / 'offline.json').read_text())['tracks']
 catalog = json.loads((folder / 'catalog.json').read_text())
+hosted = json.loads((folder / 'hosted.json').read_text())['tracks']
+expected_hosted = {'61-01', '62-01'} | {f'{cue:02d}-01' for cue in range(65, 83)}
+assert {t['stem'] for t in hosted} == expected_hosted
+assert {p.stem for p in (folder / 'hosted').glob('*.mp3')} == expected_hosted
+for track in hosted:
+    assert track['file'] == 'hosted/' + track['stem'] + '.mp3'
+    data = (folder / track['file']).read_bytes()
+    assert len(data) == track['bytes']
+    assert hashlib.sha256(data).hexdigest() == track['sha256']
 assert len(offline) == 27
 assert {p.stem for p in folder.glob('*.mp3')} == {t['stem'] for t in offline}
 for track in offline:
@@ -22,6 +31,10 @@ for track in offline:
     assert f'"{track["stem"]}"' in (root / 'src/client/cc_music_offline.inc').read_text()
 with tempfile.TemporaryDirectory() as tmp:
     directory = Path(tmp)
+    complete = host.build(folder, directory / 'complete', folder / 'catalog.json')
+    assert complete['available_takes'] == 47
+    assert {t['stem'] for t in complete['tracks']} == (
+        expected_hosted | {t['stem'] for t in offline})
     audio = directory / 'source'
     audio.mkdir()
     # A later export grows the online library independently of the bundled set.
