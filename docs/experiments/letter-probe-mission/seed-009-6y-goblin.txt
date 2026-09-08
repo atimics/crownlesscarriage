@@ -1,0 +1,33 @@
+letter probe — world seeds 9..9, 6 years, purpose "report", topic "all"
+
+== RESEARCH MISSION: goblin — seed 2415085441, day 2191 ==
+   Book: Scriptorium research copy on "goblin" — baseline day 365 (archive knew 0 facts before the scout left)
+
+   Scout route: Thornford → Gloamgate → Alderwatch → Silverwick → Rosespire → Hollowbarrow
+
+  --- page 1: told by Ilyra Senn (refugee), at Gloamgate ---
+    1. The Cinder Tithe raids Gloamgate: 16 Bread, 15 crowns.
+       cited: Gloamgate, event 648518346341358210 (GOBLIN RAID), held day 2097, retellings 1, [NOVEL since baseline]
+
+  --- page 2: told by Cera Mott (laborer), at Alderwatch ---
+    1. The Cinder Tithe raids Gloamgate: 16 Bread, 15 crowns. Loyal voices credit the crown.
+       cited: Gloamgate, event 648518346341358123 (GOBLIN RAID), held day 2055, retellings 3, [NOVEL since baseline]
+       [further account — a different telling on the same subject as page 1]
+
+  --- page 3: told by Jory Fen (scout), at Silverwick ---
+    1. The Cinder Tithe gathers 1 new tithe-bearers; Varkesh the Unappeased's court returns to 48.
+       cited: Silverwick, event 648518346341358431 (CULT RALLIES), held day 2190, retellings 1, [NOVEL since baseline]
+    2. The Cinder Tithe raids Gloamgate: 16 Bread, 15 crowns. Loyal voices credit the crown.
+       cited: Gloamgate, event 648518346341358123 (GOBLIN RAID), held day 2055, retellings 4, [repeat — one lineage, not copied]
+
+  --- page 4: told by Tamsin Kest (official), at Rosespire ---
+    1. The Cinder Tithe raids Gloamgate: 13 Bread, 15 crowns. Loyal voices credit the crown. They fear worse is coming.
+       cited: Gloamgate, event 648518346341357946 (GOBLIN RAID), held day 2013, retellings 4, [NOVEL since baseline]
+       [further account — a different telling on the same subject as page 1]
+
+  --- page 5: told by Wren Wick (official), at Hollowbarrow ---
+    1. The Cinder Tithe raids Gloamgate: 13 Bread, 15 crowns. Loyal voices credit the crown. They fear worse is coming.
+       cited: Gloamgate, event 648518346341357946 (GOBLIN RAID), held day 2013, retellings 6, [repeat — one lineage, not copied]
+
+  Book summary: 5 pages / 6 facts — 6 novel since baseline, 2 repeats, 2 further accounts, 0 pages by a craft-witness
+

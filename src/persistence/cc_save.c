@@ -5960,20 +5960,19 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 46U || legacy_version == 47U ||
          legacy_version == 48U || legacy_version == 49U ||
          legacy_version == 50U || legacy_version == 51U ||
-         legacy_version == 52U || legacy_version == 53U) &&
+         legacy_version == 52U || legacy_version == 53U ||
+         legacy_version == 54U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
          * default 0). Schema 49 makes notable famine accounts gossip and
          * schema 50 adds goblin raids, cult rallies, dragon omens and dragon
          * fires; both changes are derived from events, so older saves need
-         * no data migration. Schema 51 adds common pony herds and schema 52
-         * empties the carriage's second seat; both are seeded by the caller
-         * below rather than here, because every branch of this function lands
-         * on the current schema. Schema 53 changes hoard-return food rules
-         * after historical replay and schema 54 decays hoarded paper; both are
-         * rules applied as the simulation goes, and their stored fields have
-         * the same representation as schema 52. */
+         * no data migration. Schema 51 seeds pony herds and schema 52
+         * unharnesses the second animal in the caller below. Schema 53 changes
+         * hoard-return food rules; schema 54 adds paper decay. Schema 55 adds
+         * dragon succession gossip and reports gathered at ruins. Historical
+         * journal replay uses the original rule gates before this upgrade. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }

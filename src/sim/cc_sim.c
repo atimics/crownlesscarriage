@@ -5983,6 +5983,21 @@ static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
            so its modest magnitude is not a measure of its weight. */
         return sim->schema_version >= 50U;
     }
+    /* The dragon's succession is news because it changes the world, not
+       because a whelp is heavy. A whelp dispersing, an heir hatching, a
+       dynasty ending and an un-crowning all travel — a future chronicler
+       must be able to find them (schema 55, see GatherGossip). */
+    if (sim->schema_version >= 55U &&
+        (event->kind == CC_EVENT_DRAGON_WHELP_DISPERSED ||
+         event->kind == CC_EVENT_DRAGON_SUCCESSOR ||
+         event->kind == CC_EVENT_DRAGON_AFTERSHOCK ||
+         event->kind == CC_EVENT_DRAGON_UNCROWNED ||
+         event->kind == CC_EVENT_DRAGON_CROWNED ||
+         event->kind == CC_EVENT_DRAGON_SLAIN ||
+         event->kind == CC_EVENT_DRAGON_BROOD ||
+         event->kind == CC_EVENT_DRAGON_HOARD_RECOVERED)) {
+        return true;
+    }
     return event->magnitude >= 20 &&
         (event->kind == CC_EVENT_WAR_DECLARED ||
          event->kind == CC_EVENT_PEACE_DECLARED ||
@@ -6083,7 +6098,9 @@ static void GatherGossip(CcSim *sim)
             const CcRoute *route = CcSimRoute(sim, event->location_id);
             if (route != NULL) origin = SettlementSlotById(sim, route->from_id);
         }
-        if (origin < 0 || CcSettlementIsAbandoned(&sim->settlements[origin])) {
+        /* Schema 55 lets travelers carry reports from abandoned origins. */
+        if (origin < 0 || (sim->schema_version < 55U &&
+            CcSettlementIsAbandoned(&sim->settlements[origin]))) {
             continue;
         }
         int32_t slot = 0;
@@ -6393,7 +6410,8 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
 {
     if (sim->schema_version < 44U) return;
     int32_t place = SettlementSlotById(sim, place_id);
-    if (place < 0 || CcSettlementIsAbandoned(&sim->settlements[place])) return;
+    if (place < 0 || (sim->schema_version < 55U &&
+        CcSettlementIsAbandoned(&sim->settlements[place]))) return;
     GatherGossip(sim);
     CcGossipCarrier *carrier = NULL;
     for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
@@ -18728,7 +18746,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 53U
+#define CC_NEWEST_LEGACY_SCHEMA 54U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18746,7 +18764,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 53U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 54U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
