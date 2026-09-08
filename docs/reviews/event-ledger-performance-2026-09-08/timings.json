@@ -1,0 +1,138 @@
+{
+  "parent_commit": "08b3d13",
+  "change_commit": "7d86821",
+  "command": "crownless_benchmark --quick",
+  "runs": [
+    {
+      "repeat": 0,
+      "build": "parent",
+      "ns_per_day": 25715.9,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.150181s ns/day=25715.9\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002311s ns/step=641.9\nterrain: seeds=8 points=32768 cpu=0.008895s ns/point=271.5\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 0,
+      "build": "change",
+      "ns_per_day": 17348.5,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.101315s ns/day=17348.5\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002347s ns/step=651.9\nterrain: seeds=8 points=32768 cpu=0.008693s ns/point=265.3\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 1,
+      "build": "change",
+      "ns_per_day": 17324.7,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.101176s ns/day=17324.7\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002220s ns/step=616.7\nterrain: seeds=8 points=32768 cpu=0.008825s ns/point=269.3\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 1,
+      "build": "parent",
+      "ns_per_day": 21799.5,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.127309s ns/day=21799.5\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002178s ns/step=605.0\nterrain: seeds=8 points=32768 cpu=0.008625s ns/point=263.2\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 2,
+      "build": "parent",
+      "ns_per_day": 21840.2,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.127547s ns/day=21840.2\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002197s ns/step=610.3\nterrain: seeds=8 points=32768 cpu=0.008828s ns/point=269.4\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 2,
+      "build": "change",
+      "ns_per_day": 17015.9,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.099373s ns/day=17015.9\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002329s ns/step=646.9\nterrain: seeds=8 points=32768 cpu=0.008749s ns/point=267.0\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 3,
+      "build": "change",
+      "ns_per_day": 17582.2,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.102680s ns/day=17582.2\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002219s ns/step=616.4\nterrain: seeds=8 points=32768 cpu=0.008694s ns/point=265.3\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 3,
+      "build": "parent",
+      "ns_per_day": 21915.6,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.127987s ns/day=21915.6\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002218s ns/step=616.1\nterrain: seeds=8 points=32768 cpu=0.008601s ns/point=262.5\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 4,
+      "build": "parent",
+      "ns_per_day": 21593.2,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.126104s ns/day=21593.2\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002323s ns/step=645.3\nterrain: seeds=8 points=32768 cpu=0.008605s ns/point=262.6\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 4,
+      "build": "change",
+      "ns_per_day": 17466.6,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.102005s ns/day=17466.6\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002364s ns/step=656.7\nterrain: seeds=8 points=32768 cpu=0.008774s ns/point=267.8\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 5,
+      "build": "change",
+      "ns_per_day": 17215.2,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.100537s ns/day=17215.2\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002213s ns/step=614.7\nterrain: seeds=8 points=32768 cpu=0.008791s ns/point=268.3\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 5,
+      "build": "parent",
+      "ns_per_day": 21973.8,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.128327s ns/day=21973.8\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002241s ns/step=622.5\nterrain: seeds=8 points=32768 cpu=0.008583s ns/point=261.9\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 6,
+      "build": "parent",
+      "ns_per_day": 21867.6,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.127707s ns/day=21867.6\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002284s ns/step=634.4\nterrain: seeds=8 points=32768 cpu=0.008661s ns/point=264.3\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 6,
+      "build": "change",
+      "ns_per_day": 17235.4,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.100655s ns/day=17235.4\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002319s ns/step=644.2\nterrain: seeds=8 points=32768 cpu=0.008852s ns/point=270.1\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 7,
+      "build": "change",
+      "ns_per_day": 17381.0,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.101505s ns/day=17381.0\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002164s ns/step=601.1\nterrain: seeds=8 points=32768 cpu=0.008798s ns/point=268.5\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 7,
+      "build": "parent",
+      "ns_per_day": 22166.4,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.129452s ns/day=22166.4\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002346s ns/step=651.7\nterrain: seeds=8 points=32768 cpu=0.008821s ns/point=269.2\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 8,
+      "build": "parent",
+      "ns_per_day": 22000.7,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.128484s ns/day=22000.7\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002331s ns/step=647.5\nterrain: seeds=8 points=32768 cpu=0.008761s ns/point=267.4\nchecksum=8d6ebc3df51bfaa0\n"
+    },
+    {
+      "repeat": 8,
+      "build": "change",
+      "ns_per_day": 17199.1,
+      "checksum": "8d6ebc3df51bfaa0",
+      "raw": "simulation: seeds=8 years=2 days=5840 cpu=0.100443s ns/day=17199.1\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002175s ns/step=604.2\nterrain: seeds=8 points=32768 cpu=0.008911s ns/point=271.9\nchecksum=8d6ebc3df51bfaa0\n"
+    }
+  ],
+  "medians_ns_per_day": {
+    "parent": 21915.6,
+    "change": 17324.7
+  },
+  "speedup": 1.2649916015861744
+}
