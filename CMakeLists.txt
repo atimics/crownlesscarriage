@@ -95,6 +95,7 @@ add_library(crownless_sim
     src/sim/cc_archive_queries.c
     src/sim/cc_sim_versions.c
     src/sim/cc_identity.c
+    src/sim/cc_road_council.c
     src/sim/cc_route_rules.c
     src/sim/cc_journey_departure.c
     src/sim/cc_journey_encounter.c
@@ -266,6 +267,9 @@ if(CC_BUILD_BENCHMARKS)
     add_executable(crownless_quest_cast_experiment tools/quest_cast_experiment.c)
     target_link_libraries(crownless_quest_cast_experiment PRIVATE crownless_sim)
     cc_strict_warnings(crownless_quest_cast_experiment)
+    add_executable(crownless_contested_road_experiment tools/contested_road_experiment.c)
+    target_link_libraries(crownless_contested_road_experiment PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_contested_road_experiment)
 
     add_executable(crownless_grain_experiment tools/grain_experiment.c)
     target_link_libraries(crownless_grain_experiment PRIVATE crownless_sim)
@@ -1214,6 +1218,11 @@ if(BUILD_TESTING)
     add_test(NAME local_session_round_trip COMMAND client_session_tests)
 
     add_executable(road_stop_tests tests/road_stop_tests.c)
+    add_executable(road_council_tests tests/road_council_tests.c)
+    target_link_libraries(road_council_tests PRIVATE crownless_metagame)
+    cc_strict_warnings(road_council_tests)
+    add_test(NAME road_council_and_quests COMMAND road_council_tests)
+
     add_executable(grain_supply_tests tests/grain_supply_tests.c)
     target_link_libraries(grain_supply_tests PRIVATE crownless_persistence)
     cc_strict_warnings(grain_supply_tests)
