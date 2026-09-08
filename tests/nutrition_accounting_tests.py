@@ -18,7 +18,18 @@ with tempfile.TemporaryDirectory() as directory:
     assert len(basic_rows) == len(extended_rows)
     for basic, extra in zip(basic_rows, extended_rows):
         assert {key: extra[key] for key in basic} == basic
-        assert len(extra) == len(basic) + 8
+        expected_campaign_fields = {
+            'live_treasures', 'live_treasure_value', 'newest_treasure_day',
+            'oldest_treasure_day', 'treasures_from_ruins', 'treasures_in_ruins',
+            'treasure_identity_hash', 'next_entity_serial', 'character_coins',
+            'hungry_travellers', 'unsheltered_travellers', 'named_bandits',
+        }
+        assert set(extra) - set(basic) == expected_campaign_fields
+        assert None not in extra, 'CSV row has more values than header fields'
+        assert all(value is not None for value in extra.values())
+        for field in ('character_coins', 'hungry_travellers',
+                      'unsheltered_travellers', 'named_bandits'):
+            assert int(extra[field]) >= 0, (field, extra[field])
         assert 0 <= int(extra['live_treasures']) <= int(extra['treasure_count'])
         assert int(extra['live_treasure_value']) >= 0
         assert int(extra['oldest_treasure_day']) <= int(extra['newest_treasure_day'])
