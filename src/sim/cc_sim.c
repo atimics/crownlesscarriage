@@ -3572,6 +3572,17 @@ int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good)
            incoming < 0 ? 0 : (int32_t)incoming;
 }
 
+static int32_t ArchiveSpareGrain(const CcSim *sim, const CcSettlement *place)
+{
+    if (place == NULL) return 0;
+    if (sim->schema_version < 58U) return MaximumI32(
+        0, place->stock[CC_GOOD_WHEAT] - WeeklyFoodUse(sim, place) * 2);
+    int32_t rations = NutritionRations(place->stock, CC_NUTRITION_CIVILIAN);
+    int32_t spare = MaximumI32(0, rations - WeeklyFoodUse(sim, place) * 2);
+    /* Two wheat units provide one civilian ration. */
+    return MinimumI32(place->stock[CC_GOOD_WHEAT], spare * 2);
+}
+
 static const CcSettlement *Scriptorium(const CcSim *sim)
 {
     if (sim == NULL) return NULL;
@@ -3624,8 +3635,7 @@ CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim)
             binding_available = true;
         }
     }
-    int32_t scribe_grain = MaximumI32(
-        0, snapshot.wheat - WeeklyFoodUse(sim, place) * 2);
+    int32_t scribe_grain = ArchiveSpareGrain(sim, place);
     snapshot.blocker = snapshot.scribes <= 0 ?
         CC_MATERIAL_CHAIN_NO_SCRIBES :
         !binding_available ? CC_MATERIAL_CHAIN_BINDING :
@@ -6422,16 +6432,18 @@ static void HearGossip(CcSim *sim, CcGossip *story, CcId place_id,
 {
     const CcSettlement *scriptorium = Scriptorium(sim);
     if (story->heard_day > 0 || story->recorded ||
-        sim->archives.scribes <= 0 || scriptorium == NULL ||
-        scriptorium->id != place_id) return;
+        (sim->schema_version < 58U && sim->archives.scribes <= 0) ||
+        scriptorium == NULL || scriptorium->id != place_id) return;
     story->heard_day = sim->current_day;
     story->heard = version;
     (void)snprintf(story->heard_from, sizeof(story->heard_from), "%s", speaker);
     char account[CC_EVENT_TEXT_CAPACITY];
     CcGossipText(sim, story, &version, account, sizeof(account));
     char text[CC_EVENT_TEXT_CAPACITY];
-    (void)snprintf(text, sizeof(text), "%.31s tell the scribes: %.85s",
-                   speaker, account);
+    (void)snprintf(text, sizeof(text),
+                   sim->schema_version >= 58U && sim->archives.scribes <= 0 ?
+                       "%.31s bring word to the scriptorium: %.70s" :
+                       "%.31s tell the scribes: %.85s", speaker, account);
     story->heard_event_id = PushEvent(
         sim, CC_EVENT_RUMOR_SHARED, story->event_id, place_id,
         parent_id, 1, text)->id;
@@ -6847,6 +6859,16 @@ static CcMoney FundArchiveRecovery(CcSim *sim)
 {
     const CcSettlement *archive = Scriptorium(sim);
     if (archive == NULL || CcSettlementIsAbandoned(archive)) return 0;
+    CcMoney funding = 50 - sim->iron_ledger_reserve;
+    if (funding <= 0 || funding > (sim->schema_version >= 58U ? 50 : 10)) return 0;
+    if (sim->schema_version >= 58U) {
+        CcKingdom *host = KingdomMutable(sim, archive->kingdom_id);
+        if (host != NULL && host->treasury >= 800) {
+            host->treasury -= funding;
+            sim->iron_ledger_reserve += funding;
+            return funding;
+        }
+    }
     bool reached[CC_MAX_SETTLEMENTS] = {false};
     int32_t archive_slot = SettlementSlotById(sim, archive->id);
     if (archive_slot < 0) return 0;
@@ -6875,8 +6897,6 @@ static CcMoney FundArchiveRecovery(CcSim *sim)
         }
     }
     if (count < 2) return 0;
-    CcMoney funding = 50 - sim->iron_ledger_reserve;
-    if (funding <= 0 || funding > 10) return 0;
     CcMoney first = (funding + 1) / 2;
     sim->kingdoms[donors[0]].treasury -= first;
     sim->kingdoms[donors[1]].treasury -= funding - first;
@@ -6902,11 +6922,9 @@ static void AdvanceArchives(CcSim *sim)
         } else {
             archives->dead_since_day = 0;
         }
-        /* After five years, two connected solvent crowns can restore a
-           ledger holding 40-49 crowns to the 50-crown staffing threshold. */
+        /* After five years, connected solvent crowns restore one scribe. */
         if (target_scribes <= 0 && archives->dead_since_day > 0 &&
-            sim->current_day - archives->dead_since_day >= 1825 &&
-            sim->iron_ledger_reserve >= 40) {
+            sim->current_day - archives->dead_since_day >= 1825) {
             crown_funding = FundArchiveRecovery(sim);
             if (crown_funding > 0) target_scribes = 1;
         }
@@ -6935,9 +6953,7 @@ static void AdvanceArchives(CcSim *sim)
         if (place != NULL) {
             scriptorium = CcSimSettlementMutable(sim, place->id);
         }
-        int32_t scribe_grain = scriptorium == NULL ? 0 : MaximumI32(
-            0, scriptorium->stock[CC_GOOD_WHEAT] -
-               WeeklyFoodUse(sim, scriptorium) * 2);
+        int32_t scribe_grain = ArchiveSpareGrain(sim, scriptorium);
         active_scribes = MinimumI32(archives->scribes, scribe_grain / 2);
         if (active_scribes > 0) {
             scriptorium->stock[CC_GOOD_WHEAT] -= active_scribes * 2;
@@ -19118,7 +19134,13 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             sim, kingdom->ruler_character_id);
         const CcCharacter *patron = CcSimCharacter(
             sim, kingdom->monastery_patron_id);
-        if (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+        bool has_land = false;
+        for (int32_t town = 0; town < sim->settlement_count; ++town) {
+            if (sim->settlements[town].kingdom_id == kingdom->id) has_land = true;
+        }
+        bool vacant = !has_land && kingdom->ruler_character_id == 0U &&
+            kingdom->monastery_patron_id == 0U;
+        if (sim->schema_version == CC_SIM_SCHEMA_VERSION && !vacant &&
             (ruler == NULL || CharacterKingdomSlot(sim, ruler) != i ||
              patron == NULL || CharacterKingdomSlot(sim, patron) != i)) {
             if (error != NULL && error_capacity > 0U) {
