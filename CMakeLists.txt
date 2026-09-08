@@ -1342,6 +1342,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(goblin_society_tests)
     add_test(NAME goblin_society_choices COMMAND goblin_society_tests)
 
+    add_executable(traveller_poverty_tests tests/traveller_poverty_tests.c)
+    target_link_libraries(traveller_poverty_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(traveller_poverty_tests)
+    add_test(NAME traveller_poverty_recruitment COMMAND traveller_poverty_tests)
+
     add_executable(dragon_ecology_tests tests/dragon_ecology_tests.c)
     target_link_libraries(dragon_ecology_tests PRIVATE crownless_persistence)
     cc_strict_warnings(dragon_ecology_tests)
