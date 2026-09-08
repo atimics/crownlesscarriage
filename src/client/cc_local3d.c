@@ -11,3 +11,5 @@
 #include "client/local3d/road_book.inc"
 #include "client/local3d/open_world.inc"
 #include "client/local3d/interaction.inc"
+
+#include "client/local3d/mine_scene.inc"
