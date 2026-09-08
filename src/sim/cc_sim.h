@@ -1902,6 +1902,30 @@ void CcSimUnharnessSecondDraftAnimal(CcSim *sim);
 int32_t CcSimCommonPonyCount(const CcSim *sim);
 bool CcSettlementHasService(const CcSettlement *settlement,
                             CcServiceKind service);
+/* A read-only plan for the next smithy batch. Tools take materials first.
+   Quantities are gross output before the existing tool-wear rule. */
+typedef enum {
+    CC_SMITHY_READY = 0,
+    CC_SMITHY_SERVICE_UNAVAILABLE,
+    CC_SMITHY_ZERO_CAPACITY,
+    CC_SMITHY_RESERVE_MET,
+    CC_SMITHY_IRON_REQUIRED,
+    CC_SMITHY_WOOD_REQUIRED
+} CcSmithyStatus;
+
+typedef struct {
+    int32_t tools_made;
+    int32_t weapons_made;
+    int32_t iron_used;
+    int32_t wood_used;
+    CcSmithyStatus tools_status;
+    CcSmithyStatus weapons_status;
+} CcSmithyPlan;
+
+CcSmithyPlan CcSimPlanSmithy(const CcSim *sim,
+                            const CcSettlement *settlement);
+const char *CcSmithyStatusName(CcSmithyStatus status);
+
 bool CcSimStartServiceProject(CcSim *sim, CcId settlement_id,
                               CcServiceKind service,
                               char *error, size_t error_capacity);
