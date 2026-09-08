@@ -92,4 +92,23 @@ CcProductionReceipt CcSimPlanRoadSite(const CcSim *sim, const CcRoadSite *site);
 void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
     CcNutritionAccounting *nutrition, CcSmithyAccounting *smithy,
     CcRoadProductionAccounting *sites);
+typedef enum {
+    CC_SITE_FREIGHT_NONE, CC_SITE_FREIGHT_SUPPLY, CC_SITE_FREIGHT_PICKUP
+} CcSiteFreightKind;
+typedef enum {
+    CC_SITE_FREIGHT_READY, CC_SITE_FREIGHT_CARRIAGE_REQUIRED,
+    CC_SITE_FREIGHT_SITE_REQUIRED, CC_SITE_FREIGHT_LOCAL_TOWN_REQUIRED,
+    CC_SITE_FREIGHT_ROUTE_REQUIRED, CC_SITE_FREIGHT_CAPACITY_REQUIRED,
+    CC_SITE_FREIGHT_GOODS_REQUIRED
+} CcSiteFreightGate;
+typedef struct {
+    CcSiteFreightKind kind;
+    CcSiteFreightGate gate;
+    CcId carriage_id, site_id, town_id, route_id;
+    CcGood good;
+    int32_t quantity, travel_days, return_days;
+} CcSiteFreightPlan;
+/* Engine preview from actual stores. Re-plan before each future loading act.
+   Pickup quantity describes the return load; road capacity is a current snapshot. */
+CcSiteFreightPlan CcSimPlanSiteFreight(const CcSim *sim, CcId carriage_id, CcId site_id);
 #endif

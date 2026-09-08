@@ -282,6 +282,22 @@ static void PrintRoadProduction(const CcSim *sim, const CcRoadProductionAccounti
     }
 }
 
+static void PrintSiteFreight(const CcSim *sim)
+{
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        for (int32_t j = 0; j < sim->road_site_count; ++j) {
+            CcSiteFreightPlan plan = CcSimPlanSiteFreight(sim,
+                sim->royal_carriages[i].id, sim->road_sites[j].id);
+            if (plan.gate != CC_SITE_FREIGHT_READY) continue;
+            printf("site-freight-preview day=%d carriage=%" PRIu64 " site=%" PRIu64
+                   " town=%" PRIu64 " kind=%s good=%d quantity=%d outbound_days=%d return_days=%d\n",
+                   sim->current_day, plan.carriage_id, plan.site_id, plan.town_id,
+                   plan.kind == CC_SITE_FREIGHT_SUPPLY ? "supply" : "pickup",
+                   (int)plan.good, plan.quantity, plan.travel_days, plan.return_days);
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     uint32_t seed = UINT32_C(0xc0a71a9e);
@@ -293,6 +309,7 @@ int main(int argc, char **argv)
     bool detail = false;
     bool smithy_report = false;
     bool site_report = false;
+    bool site_freight_report = false;
     CcRoadProductionAccounting sites = {0};
     CcSmithyAccounting smithy = {0};
     for (int argument = 1; argument < argc; ++argument) {
@@ -315,6 +332,8 @@ int main(int argc, char **argv)
             checkpoint_every = (int32_t)strtol(argv[++argument], NULL, 10);
         } else if (strcmp(argv[argument], "--detail") == 0) {
             detail = true;
+        } else if (strcmp(argv[argument], "--site-freight") == 0) {
+            site_freight_report = true;
         } else if (strcmp(argv[argument], "--sites") == 0) {
             site_report = true;
         } else if (strcmp(argv[argument], "--smithy") == 0) {
@@ -383,11 +402,13 @@ int main(int argc, char **argv)
             PrintSummary(&sim, detail);
             if (smithy_report) PrintSmithyAccounting(&sim, &smithy);
             if (site_report) PrintRoadProduction(&sim, &sites);
+            if (site_freight_report) PrintSiteFreight(&sim);
         } else if (year == 0 || year + 1 == years ||
             (year + 1) % report_every == 0) {
             PrintSummary(&sim, detail);
             if (smithy_report) PrintSmithyAccounting(&sim, &smithy);
             if (site_report) PrintRoadProduction(&sim, &sites);
+            if (site_freight_report) PrintSiteFreight(&sim);
             (void)fflush(stdout);
         }
     }

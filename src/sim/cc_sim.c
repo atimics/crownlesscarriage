@@ -10203,6 +10203,8 @@ static int32_t TradeSurplus(const CcSim *sim,
     return origin->stock[good] - protected_stock;
 }
 
+#include "cc_site_freight_plan.inc"
+
 static CcMoney RoyalTradeRouteToll(const CcSim *sim, const CcRoute *route,
                                    CcId carriage_kingdom_id)
 {
