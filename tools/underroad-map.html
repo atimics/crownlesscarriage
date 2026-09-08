@@ -1,7 +1,8 @@
 <div id="underroad-atlas">
   <div class="viz-row">
-    <button type="button" class="btn" id="ur-overview" aria-pressed="true">Whole Underroad</button>
-    <label class="form-label" for="ur-zone">Zone
+    <button type="button" class="btn" id="ur-surface" aria-pressed="true">Main map</button>
+    <button type="button" class="btn" id="ur-overview" aria-pressed="false">Whole Underroad</button>
+    <label class="form-label" for="ur-zone">Inspect zone
       <select class="form-select" id="ur-zone" aria-label="Open a zone floor plan"></select>
     </label>
   </div>
@@ -29,6 +30,7 @@
   const root = document.getElementById('underroad-atlas');
   const select = root.querySelector('#ur-zone');
   const overview = root.querySelector('#ur-overview');
+  const surface = root.querySelector('#ur-surface');
   const map = root.querySelector('#ur-map');
   const title = root.querySelector('#ur-title');
   const subtitle = root.querySelector('#ur-subtitle');
@@ -76,10 +78,10 @@
       rooms:[['Upper stair',2,3,10,7],['Bell frame',17,3,10,8],['Watch ledge',32,4,8,7],['Rope landing',3,20,10,7],['Lower stair',18,20,10,7],['Counterweight',33,19,7,8]],
       paths:[[0,1],[1,2],[2,5],[5,4],[4,3],[3,0]], marks:[[5,'hazard']],
       choice:'Descend around the shaft; ringing the bell may bring the gatekeepers before you reach their door.'},
-    {name:'Archive Gate', band:'Goblin settlement', pos:[2,5], kind:'home', purpose:'Goblin border post, receiving hall, and passage desk',
+    {name:'Archive Gate', band:'Goblin settlement', pos:[2,5], kind:'home', purpose:'Hollowbarrow entrance · goblin border post and passage desk',
       rooms:[['Visitor stair',3,3,9,7],['Passage desk',17,3,11,8],['Guard room',33,3,8,8],['Waiting hall',3,19,10,8],['Records gate',18,19,10,8],['Market steps',33,19,8,8]],
       paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[1,4]], marks:[[2,'home'],[1,'terms']],
-      choice:'Ask for passage through the records hall or take the market route under its stated terms.'},
+      choice:'The visitor stair reaches the Hollowbarrow trail. Ask for passage through the records hall or take the market route under its stated terms.'},
     {name:'Hall of Ash Clerks', band:'Goblin settlement', pos:[1,6], kind:'home', purpose:'Clerks live and work beside the tribute records',
       rooms:[['Public counter',3,3,10,8],['Ledger hall',18,3,11,8],['Seal room',34,3,7,7],['Clerk homes',2,18,12,10],['Shared kitchen',19,20,9,7],['Vault stair',34,18,7,10]],
       paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[1,4],[2,5]], marks:[[3,'home'],[4,'home'],[2,'terms']],
@@ -147,6 +149,33 @@
   ];
   const code = i => String(i + 1).padStart(2,'0');
   const incident = i => links.filter(l => l[0] === i || l[1] === i).map(l => ({to:l[0] === i ? l[1] : l[0], kind:l[2] || 'open'}));
+  // Town connections follow InitRoute. Fork positions here are schematic.
+  // The mine fork reuses Low Silver Pit on route 2; the Hollowbarrow fork is proposed.
+  const roads = {
+    thornford:{name:'Thornford',p:[.13,401],town:true},
+    gloamgate:{name:'Gloamgate',p:[.30,335],town:true},
+    alderwatch:{name:'Alderwatch',p:[.52,194],town:true},
+    silverwick:{name:'Silverwick',p:[.85,365],town:true},
+    rosespire:{name:'Rosespire',p:[.79,48],town:true},
+    hollowbarrow:{name:'Hollowbarrow',p:[.23,48],town:true},
+    mineFork:{name:'Mine fork',p:[.72,286]},
+    mineYard:{name:'Low Silver Pit',p:[.89,213],entrance:0},
+    hollowFork:{name:'Trail fork',p:[.24,133]},
+    hollowYard:{name:'Hollowbarrow trailhead',p:[.075,208],entrance:9}
+  };
+  const roadLinks = [
+    ['thornford','gloamgate'],['gloamgate','alderwatch'],
+    ['alderwatch','mineFork'],['mineFork','silverwick'],['silverwick','rosespire'],
+    ['rosespire','hollowbarrow'],['hollowbarrow','hollowFork'],['hollowFork','gloamgate'],
+    ['gloamgate','silverwick'],['alderwatch','rosespire'],
+    ['mineFork','mineYard'],['hollowFork','hollowYard']
+  ];
+  const entrances = [
+    {zone:0,road:'mineYard',chamber:0,name:'Silverwick mine yard'},
+    {zone:9,road:'hollowYard',chamber:0,name:'Hollowbarrow trailhead'}
+  ];
+  let roadHere='mineFork', roadFrom='silverwick';
+  let surfaceView=true;
   let selected = 0;
   let whole = true;
   const svgNode = (tag, attrs = {}, text) => {
@@ -166,21 +195,89 @@
     if (aria) b.setAttribute('aria-label',aria);
     b.addEventListener('click',action); return b;
   };
-  const open = i => { selected=i; whole=false; select.value=String(i); draw(); };
+  const open = i => { selected=i; whole=false; surfaceView=false; select.value=String(i); draw(); };
   const placeholder=document.createElement('option'); placeholder.value=''; placeholder.disabled=true; placeholder.textContent='Choose a floor plan'; select.append(placeholder);
   zones.forEach((z,i) => { const option=document.createElement('option'); option.value=i; option.textContent=code(i)+' · '+z.name; select.append(option); });
   select.addEventListener('change',() => open(Number(select.value)));
-  overview.addEventListener('click',() => { whole=true; draw(); });
+  overview.addEventListener('click',() => { whole=true; surfaceView=false; draw(); });
+  surface.addEventListener('click',() => { surfaceView=true; draw(); });
   function draw() {
     map.replaceChildren(); rooms.replaceChildren(); exits.replaceChildren();
-    overview.setAttribute('aria-pressed',String(whole));
+    overview.setAttribute('aria-pressed',String(whole&&!surfaceView));
+    surface.setAttribute('aria-pressed',String(surfaceView));
     const width = Math.max(280,Math.floor(map.getBoundingClientRect().width));
-    if (whole) drawWhole(width); else drawZone(width);
+    if(surfaceView) drawSurface(width); else if (whole) drawWhole(width); else drawZone(width);
+  }
+  function neighbors(at) {
+    return roadLinks.filter(l=>l.includes(at)).map(l=>l[0]===at?l[1]:l[0]);
+  }
+  function direction(to) {
+    if(to===roadFrom) return 'Turn back';
+    const p=roads[roadFrom].p, q=roads[roadHere].p, r=roads[to].p;
+    const ax=(q[0]-p[0])*700,ay=q[1]-p[1],bx=(r[0]-q[0])*700,by=r[1]-q[1];
+    const angle=Math.atan2(ax*by-ay*bx,ax*bx+ay*by)*180/Math.PI;
+    if(Math.abs(angle)<35) return 'Continue ahead';
+    return angle>0?'Turn right':'Turn left';
+  }
+  function beyond(to) {
+    const seen=new Set([roadHere,to]),queue=[to],found=[];
+    for(const at of queue) {
+      if(at!==to&&roads[at].town) found.push(roads[at].name);
+      if(found.length===2) break;
+      for(const next of neighbors(at)) if(!seen.has(next)) {seen.add(next);queue.push(next);}
+    }
+    return found;
+  }
+  function drawSurface(width) {
+    select.value='';
+    title.textContent='Roads and the Underroad';
+    subtitle.textContent='Design sketch · two fixed entrances · proposed Hollowbarrow trail';
+    legend.textContent='Solid: surface roads · Dotted: foot entrances · Ring: carriage in the road sketch';
+    const svg=svgNode('svg',{viewBox:`0 0 ${width} 655`,role:'img','aria-label':'Six towns on surface roads. Low Silver Pit and a proposed Hollowbarrow trail connect to the same Underroad.'});
+    const point=id=>[roads[id].p[0]*width,roads[id].p[1]];
+    roadLinks.forEach(([a,b])=>line(svg,...point(a),...point(b),'var(--border)'));
+    for(const [id,r] of Object.entries(roads)) {
+      const [x,y]=point(id);
+      svg.append(svgNode(r.town?'circle':'rect',r.town?{cx:x,cy:y,r:5,fill:'var(--foreground)'}:{x:x-4,y:y-4,width:8,height:8,fill:'var(--foreground)'}));
+      if(id==='hollowYard') {label(svg,8,y-25,'Hollowbarrow','start'); label(svg,8,y-10,'trailhead','start');}
+      else if(id==='mineYard') {label(svg,width-8,y+19,'Low Silver Pit','end'); label(svg,width-8,y+34,'mine yard','end');}
+      else label(svg,x,y+(id==='mineFork'?21:-15),r.name);
+    }
+    const at=point(roadHere);
+    svg.append(svgNode('circle',{cx:at[0],cy:at[1],r:12,fill:'none',stroke:'var(--viz-series-1)','stroke-width':2}));
+    line(svg,8,447,width-8,447,'var(--border)');
+    for(const e of entrances) {
+      const [x,y]=point(e.road), side=e.zone===0?width-9:9;
+      const end=e.zone===0?width*.75:width*.25;
+      svg.append(svgNode('path',{d:`M ${x} ${y} L ${side} ${y+25} L ${side} 478 L ${end} 504`,fill:'none',stroke:'var(--viz-series-2)','stroke-width':1.5,'stroke-dasharray':'3 5'}));
+      label(svg,end,520,e.zone===0?'01 · Mine Mouth':'10 · Archive Gate');
+      line(svg,end,537,width*.5,579,'var(--viz-series-2)','3 5');
+    }
+    label(svg,width*.5,598,'24-zone Underroad');
+    label(svg,width*.5,624,'Dragon cave + hoard within zone 20');
+    map.append(svg);
+    const location=document.createElement('div'); location.className='text-small';
+    location.textContent='At '+roads[roadHere].name+' · arriving from '+roads[roadFrom].name;
+    rooms.append(location);
+    for(const to of neighbors(roadHere)) {
+      const onward=beyond(to), labelText=direction(to)+' — '+roads[to].name;
+      const b=button(labelText,()=>{roadFrom=roadHere;roadHere=to;draw();});
+      exits.append(b);
+      if(to!==roadFrom&&onward.length) {
+        const sign=document.createElement('div'); sign.className='text-small';
+        sign.textContent=roads[to].name+' direction: onward to '+onward.join(' / ');
+        rooms.append(sign);
+      }
+    }
+    if(roads[roadHere].entrance!==undefined) {
+      exits.append(button('Inspect foot entrance '+code(roads[roadHere].entrance),()=>open(roads[roadHere].entrance)));
+      detail.textContent='Carriage parking at '+roads[roadHere].name+' · carried packs enter here · each road choice follows one connected leg.';
+    } else detail.textContent='Try the direction choices. Each follows one road leg to the next place; left and right follow the direction of arrival.';
   }
   function drawWhole(width) {
     select.value='';
     title.textContent='The Underroad · 24 zones';
-    subtitle.textContent='Design draft · foot travel · surface entry at 01 · dragon hoard in 20';
+    subtitle.textContent='Foot travel · Silverwick entry 01 · Hollowbarrow entry 10 · hoard in 20';
     legend.textContent='Solid: passage · Dotted: hidden route · Dashed: lift repair';
     detail.textContent='Zone numbers keep the existing map order. Choose a numbered zone to open its floor plan.';
     const height=770, margin=28, step=(width-margin*2)/5;
@@ -194,7 +291,10 @@
       } else line(svg,...a,...b,l[2] ? 'var(--viz-series-2)' : 'var(--border)',l[2]==='hidden'?'2 5':l[2]==='repair'?'7 5':null);
     });
     const start=point(0),end=point(19);
-    label(svg,start[0],18,'Surface · carriage yard');
+    label(svg,start[0],18,'Silverwick mine yard');
+    const hollow=point(9);
+    line(svg,18,hollow[1],hollow[0]-23,hollow[1],'var(--viz-series-2)','3 5');
+    label(svg,8,hollow[1]-21,'Hollowbarrow','start');
     label(svg,end[0],height-26,'Dragon cave + hoard');
     zones.forEach((z,i) => {
       const [x,y]=point(i);
@@ -248,7 +348,7 @@
     });
     adjacent.forEach((exit,index)=>{
       // Spread exits across separate chambers. The hoard has a formal entry and a fissure.
-      const chamber=selected===0?3:selected===19?(exit.to===17?0:3):index%z.rooms.length;
+      const chamber=selected===0?3:selected===9?index+1:selected===19?(exit.to===17?0:3):index%z.rooms.length;
       const r=z.rooms[chamber], [cx]=center(chamber), cy=r[2]+r[4]-1;
       const boxw=width<450?24:30, boxh=20;
       svg.append(svgNode('rect',{x:cx*scale-boxw/2,y:(cy+.5)*scale-boxh/2,width:boxw,height:boxh,fill:'var(--background)',stroke:exit.kind==='open'?'var(--foreground)':'var(--viz-series-2)','stroke-dasharray':exit.kind==='hidden'?'2 2':exit.kind==='repair'?'5 3':'none'}));
@@ -256,8 +356,9 @@
       const suffix=exit.kind==='hidden'?' · hidden':exit.kind==='repair'?' · repair lift':'';
       exits.append(button(code(exit.to)+' '+zones[exit.to].name+suffix,()=>open(exit.to)));
     });
-    if(selected===0) {
-      const r=z.rooms[0]; label(svg,(r[1]+r[3]/2)*scale,(r[2]+r[4]-1)*scale,'Yard');
+    for(const e of entrances.filter(e=>e.zone===selected)) {
+      const r=z.rooms[e.chamber]; label(svg,(r[1]+r[3]/2)*scale,(r[2]+r[4]-1)*scale,'Surface');
+      exits.append(button('Inspect surface: '+e.name,()=>{surfaceView=true;draw();}));
     }
     // The ruler and local floor grid have a fixed physical scale across all zones.
     const ry=31*scale;
