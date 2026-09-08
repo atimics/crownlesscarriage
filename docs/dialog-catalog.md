@@ -117,31 +117,73 @@ Greetings by speaker and town state:
 - Fallback before any speech resolves: "Welcome. I was passing the %s. How was your journey?"
 
 Gossip drawn by the Chat verb:
-- The account: "I heard this: %s"
 - Who told them: "%s told me. The account concerns %s, on day %d." or, when the
   teller is the speaker: "People were talking about %s. The account is from day %d."
 
-Famine accounts, realized in the speaker's register (cc_speech_lexicon.c). A
-notable shortage notice ("%s has %d weeks of food; hunger reaches pressure
-level %d.") reaches the account each holder carries, and the holder's role
-chooses the voice that states it:
-- Traveller, courier, refugee, laborer (the road register), fresh telling:
-  "%s is down to %d weeks of food." or "Word from %s: the granary is down to
-  %d weeks."
-- The road register after four retellings, when the count has fallen away:
-  "They say %s is running out of food." or "The word along the road is that
-  %s is going hungry."
-- Scout: "The granary at %s holds %d weeks of food. Hunger there has reached
-  level %d." or "Counting the granary at %s: %d weeks left, with hunger at
-  level %d."
-- Official (the ledger register): "The stores at %s stand at %d weeks of food.
-  The ledger calls it pressure level %d, from day %d." or "By the ledger, %s
-  holds %d weeks of food at pressure level %d, as of day %d."
-- Every register keeps the gossip stance suffixes ("Loyal voices credit the
-  crown." / "Some blame the court." / "They fear worse is coming.")
-The variant choice is a stable hash of the account and the speaker, so the
-same telling always says the same words. Accounts of other kinds remain direct
-quotes until their lexicon lands.
+**Rumor speech carries no numbers.** Counts stay at the charter desk, where a
+sponsor tells the player exactly what to deliver. A register may keep a small
+count as a word when a person would say it that way ("a fortnight").
+
+Registers (cc_speech_lexicon.c), chosen by the speaker's role — traveller,
+courier, refugee and laborer share the road register; scouts report; officials
+keep the ledger:
+
+Famine accounts ("%s has %d weeks of food; hunger reaches pressure level %d."
+strikes as a notable notice and each holder realizes it from their held
+slots):
+- Road, fresh: "They say %s is down to its last weeks of food." / "%s has run
+  out of food." / "They say %s is starving, and the granary is empty."
+- Road, after four retellings, when the count has fallen away: "They say %s is
+  running out of food." / "The word along the road is that %s is going hungry."
+- Scout: "The granary at %s is nearly empty." / "There is no food left in %s.
+  The granary is bare." / "%s is hungrier than it lets on."
+- Ledger: "The stores at %s have run low since %s. The ledger marks %s." /
+  "By the ledger, %s is under %s, since %s." — the pressure becomes "the
+  first pressure", "pressing hunger" or "desperate want", and the day becomes
+  a season.
+
+Dramatic accounts — goblin raids, bandit raids, dragon omens, dragon fires
+and goblin cult rallies — speak their actors and places without their counts
+(schema 50):
+- Goblin raid, road: "They say the goblins raided %s and carried off what they
+  could." / "Goblins hit %s, the story goes. Goods and coin gone."
+- Goblin raid, ledger: "The ledger records a goblin raid on %s." / "Entered in
+  the ledger: %s was raided by the goblin court."
+- Bandit raid, road: "Brigands hit %s, they say. The town is poorer for it." /
+  "They tell it on the road: %s took what it wanted from %s."
+- Bandit raid, scout: "%s raided %s and took supplies." / "%s struck %s. The
+  road there is worse than it looks."
+- Dragon omen, road: "They say smoke fell into %s's chimneys. Old readers swear
+  %s is coming." / "The old readers in %s count the nights. They say %s is
+  coming."
+- Dragon omen, scout: "Watch %s: the readers count a fortnight to %s." /
+  "Smoke over %s. The old readers swear %s is coming."
+- Dragon omen, ledger: "An omen is entered: smoke over %s, and the readers
+  count fourteen nights until %s comes."
+- Dragon fire, road: "%s burned %s, they say, over stolen crowns." / "They tell
+  it on the road: %s burned %s for its hoard."
+- Dragon fire, ledger: "%s burned %s; the ledger holds it, with the stolen crowns
+  still unreturned."
+- Cult rally, road: "They say the goblin court is growing again. New converts,
+  if you believe the road." / "The goblin cult rallies, they say. %s's court
+  grows by the week."
+- Cult rally, scout: "The goblin cult is rallying. The court grows stronger
+  near the lair." / "New tithe-bearers have joined the goblin court."
+
+Every other account keeps its claim exactly as the sim and the road have told
+it, opened in the speaker's voice:
+- Road, fresh: "I heard it on the road: …" / "Word is going around: …"
+- Road, aged: "An old story on the road: …" / "They have been telling this for
+  a while: …"
+- Scout: "I have it from good ears: …" / "Counted and confirmed: …" (aged:
+  "Reported from further down the road: …")
+- Ledger: "The ledger records it thus: …" / "Entered in the ledger: …" (aged:
+  "The ledger holds an older telling: …")
+
+Every register keeps the gossip stance suffixes ("Loyal voices credit the
+  crown." / "Some blame the court." / "They fear worse is coming.") The variant
+choice is a stable hash of the account and the speaker, so the same telling
+always says the same words.
 
 Trade counter speech: "For %d %s, the price is %c crowns." /
 "I can pay %c crowns for %d %s." /

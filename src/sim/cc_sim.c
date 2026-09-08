@@ -5771,6 +5771,11 @@ static bool EventWasArchived(const CcSim *sim, CcId event_id)
 
 static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
 {
+    if (event->kind == CC_EVENT_GOBLIN_CULT_RALLIED) {
+        /* A cult rally carries its weight in the telling, not the count of
+           recruits: any rally is road news. */
+        return sim->schema_version >= 50U && event->magnitude >= 1;
+    }
     return event->magnitude >= 20 &&
         (event->kind == CC_EVENT_WAR_DECLARED ||
          event->kind == CC_EVENT_PEACE_DECLARED ||
@@ -5785,7 +5790,11 @@ static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
           (event->kind == CC_EVENT_HARVEST_FAILED || event->kind == CC_EVENT_ROUTE_CLOSED ||
            event->kind == CC_EVENT_BANDIT_PRESSURE || event->kind == CC_EVENT_MONSTER_PRESSURE)) ||
          (sim->schema_version >= 49U &&
-          event->kind == CC_EVENT_SHORTAGE));
+          event->kind == CC_EVENT_SHORTAGE) ||
+         (sim->schema_version >= 50U &&
+          (event->kind == CC_EVENT_GOBLIN_RAIDED ||
+           event->kind == CC_EVENT_DRAGON_OMEN ||
+           event->kind == CC_EVENT_DRAGON_RETALIATION)));
 }
 
 /* A notice posted on a board is a fact like any other: it enters the ledger
@@ -18466,7 +18475,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 48U
+#define CC_NEWEST_LEGACY_SCHEMA 49U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18484,7 +18493,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 48U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 49U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },

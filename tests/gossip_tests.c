@@ -62,27 +62,37 @@ static CcId AddAccount(CcId origin, const char *text)
     return event->id;
 }
 
-/* The sim strikes shortage notices in one authored format; the fixture
-   mirrors it so the lexicon reads real slots back out. */
-static CcId AddShortage(CcId origin, int32_t weeks, int32_t level)
+/* The sim strikes its accounts as structured events; the fixture mirrors it
+   for any kind, so the lexicon reads real slots back out. */
+static CcId AddEvent(CcEventKind kind, CcId subject, CcId location,
+                     int32_t magnitude, const char *text)
 {
     CC_CHECK(sim.event_count < CC_MAX_EVENTS);
     CcEvent *event = &sim.events[sim.event_write_index];
     *event = (CcEvent){
         .id = CcMakeId(CC_ENTITY_EVENT, sim.next_entity_serial++),
         .day = sim.current_day,
-        .kind = CC_EVENT_SHORTAGE,
-        .subject_id = origin,
-        .location_id = origin,
-        .magnitude = 40
+        .kind = kind,
+        .subject_id = subject,
+        .location_id = location,
+        .magnitude = magnitude
     };
-    const CcSettlement *place = CcSimSettlement(&sim, origin);
-    (void)snprintf(event->text, sizeof(event->text),
-        "%s has %d weeks of food; hunger reaches pressure level %d.",
-        place != NULL ? place->name : "A town", weeks, level);
+    (void)snprintf(event->text, sizeof(event->text), "%s", text);
     sim.event_write_index = (sim.event_write_index + 1) % CC_MAX_EVENTS;
     sim.event_count += 1;
     return event->id;
+}
+
+/* The sim strikes shortage notices in one authored format; the fixture
+   mirrors it so the lexicon reads real slots back out. */
+static CcId AddShortage(CcId origin, int32_t weeks, int32_t level)
+{
+    const CcSettlement *place = CcSimSettlement(&sim, origin);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+        "%s has %d weeks of food; hunger reaches pressure level %d.",
+        place != NULL ? place->name : "A town", weeks, level);
+    return AddEvent(CC_EVENT_SHORTAGE, origin, origin, 40, text);
 }
 
 static CcGossip *Account(CcId id)
@@ -662,10 +672,10 @@ static void CheckToldStories(void)
     (void)remove(path);
 }
 
-/* A famine account is realized in the speaker's own register. The road,
-   scout and ledger voices state the same claim differently, keep the slots
-   their register holds, and lose the count when deep hearsay no longer
-   carries it. Other accounts stay direct quotes until their lexicon lands. */
+/* A famine account is realized in the speaker's own register: no numbers,
+   the place, the pressure, and a worry that survives the count falling
+   away. Counts stay at the charter desk, where the sponsor tells the
+   player exactly what to deliver. */
 static CcGossipCarrier *CarrierOf(CcId id)
 {
     for (int32_t i = 0; i < CcSimGossipCarrierCapacity(&sim); ++i) {
@@ -682,6 +692,15 @@ static int32_t GossipSlotOf(CcId event_id)
         if (sim.gossip[i].event_id == event_id) return i;
     }
     return -1;
+}
+
+/* Rumor speech carries no digits: counts belong to the charter desk. */
+static bool NoDigits(const char *text)
+{
+    for (const char *at = text; *at != '\0'; ++at) {
+        if (*at >= '0' && *at <= '9') return false;
+    }
+    return true;
 }
 
 static void CheckShortageRegisters(void)
@@ -711,15 +730,17 @@ static void CheckShortageRegisters(void)
     CC_CHECK(CcSpeechGossip(&sim, traveller->id, road_offset, false, &road));
     CC_CHECK(CcSpeechGossip(&sim, official->id, ledger_offset, false, &ledger));
     CC_CHECK(CcSpeechGossip(&sim, scout->id, scout_offset, false, &lookouts));
-    /* Each register names the town; each keeps the count it holds. */
+    /* Each register names the town; none carries a number. */
     CC_CHECK(strstr(road.text, town) != NULL);
     CC_CHECK(strstr(ledger.text, town) != NULL);
     CC_CHECK(strstr(lookouts.text, town) != NULL);
-    CC_CHECK(strstr(road.text, "3 weeks") != NULL);
-    CC_CHECK(strstr(ledger.text, "3 weeks") != NULL);
-    CC_CHECK(strstr(lookouts.text, "3 weeks") != NULL);
-    CC_CHECK(strstr(ledger.text, "pressure level 1") != NULL);
-    CC_CHECK(strstr(lookouts.text, "level 1") != NULL);
+    CC_CHECK(NoDigits(road.text) && NoDigits(ledger.text) &&
+             NoDigits(lookouts.text));
+    CC_CHECK(strstr(road.text, "food") != NULL ||
+             strstr(road.text, "hungry") != NULL);
+    CC_CHECK(strstr(ledger.text, "ledger") != NULL);
+    CC_CHECK(strstr(lookouts.text, "food") != NULL ||
+             strstr(lookouts.text, "granary") != NULL);
     CC_CHECK(strcmp(road.text, ledger.text) != 0);
     CC_CHECK(strcmp(ledger.text, lookouts.text) != 0);
     printf("Road: %s\nLedger: %s\nScout: %s\n", road.text, ledger.text,
@@ -752,7 +773,8 @@ static void CheckShortageRegisters(void)
                             &saved));
     CC_CHECK(strcmp(saved.text, deep.text) == 0);
     (void)remove(path_saved);
-    /* Accounts without a register remain direct quotes. */
+    /* Accounts the lexicon does not compose keep their claim exactly, but
+       each register opens it in its own voice. */
     CcId raiders = AddAccount(place, "Raiders took three sacks from the "
                                 "western granary.");
     CcSimRefreshCharacterGossip(&sim);
@@ -760,7 +782,9 @@ static void CheckShortageRegisters(void)
     CC_CHECK(raid_offset >= 0);
     CcSpeech quote;
     CC_CHECK(CcSpeechGossip(&sim, traveller->id, raid_offset, false, &quote));
-    CC_CHECK(strncmp(quote.text, "I heard this: ", 13) == 0);
+    CC_CHECK(strstr(quote.text, "three sacks") != NULL);
+    CC_CHECK(strncmp(quote.text, "I heard this: ", 13) != 0);
+    printf("Wrapped: %s\n", quote.text);
     /* Famine accounts ride the schema gate so older journals replay. */
     Prepare();
     traveller = &sim.characters[0];
@@ -781,6 +805,110 @@ static void CheckShortageRegisters(void)
     CheckValid();
 }
 
+/* The dramatic kinds -- goblin raids, cult rallies, dragon omens and fires,
+   bandit raids -- speak their actors and places without their counts. */
+static void CheckDramaticRegisters(void)
+{
+    Prepare();
+    CcCharacter *traveller = &sim.characters[0];
+    CcCharacter *official = &sim.characters[1];
+    CcCharacter *scout = &sim.characters[2];
+    traveller->role = CC_CHARACTER_TRAVELLER;
+    official->role = CC_CHARACTER_OFFICIAL;
+    scout->role = CC_CHARACTER_SCOUT;
+    CcId place = sim.settlements[0].id;
+    traveller->current_settlement_id = place;
+    official->current_settlement_id = place;
+    scout->current_settlement_id = place;
+    traveller->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    official->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    scout->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    const char *town = sim.settlements[0].name;
+
+    CcId raid = AddEvent(CC_EVENT_GOBLIN_RAIDED, sim.goblins.id, place, 40,
+        "The Cinder Tithe raids the granary town: 12 wheat, 40 crowns.");
+    CcSimRefreshCharacterGossip(&sim);
+    int32_t raid_offset = StoryOffset(&sim, traveller->id, raid);
+    CC_CHECK(raid_offset >= 0);
+    CcSpeech goblin_road, goblin_ledger;
+    CC_CHECK(CcSpeechGossip(&sim, traveller->id, raid_offset, false,
+                            &goblin_road));
+    int32_t ledger_offset = StoryOffset(&sim, official->id, raid);
+    CC_CHECK(CcSpeechGossip(&sim, official->id, ledger_offset, false,
+                            &goblin_ledger));
+    CC_CHECK(strstr(goblin_road.text, town) != NULL);
+    CC_CHECK(strstr(goblin_road.text, "oblin") != NULL);
+    CC_CHECK(NoDigits(goblin_road.text) && NoDigits(goblin_ledger.text));
+    printf("Goblin raid road: %s\nGoblin raid ledger: %s\n",
+           goblin_road.text, goblin_ledger.text);
+
+    CcId omen = AddEvent(CC_EVENT_DRAGON_OMEN, sim.dragon.id, place, 40,
+        "Smoke falls into the chimneys; old readers count 14 nights.");
+    CcSimRefreshCharacterGossip(&sim);
+    int32_t omen_offset = StoryOffset(&sim, traveller->id, omen);
+    CC_CHECK(omen_offset >= 0);
+    CcSpeech omen_scout;
+    CC_CHECK(CcSpeechGossip(&sim, scout->id,
+                            StoryOffset(&sim, scout->id, omen), false,
+                            &omen_scout));
+    CC_CHECK(strstr(omen_scout.text, sim.dragon.name) != NULL);
+    CC_CHECK(strstr(omen_scout.text, "reader") != NULL ||
+             strstr(omen_scout.text, "smoke") != NULL);
+    CC_CHECK(NoDigits(omen_scout.text));
+    printf("Dragon omen scout: %s\n", omen_scout.text);
+
+    CcId rally = AddEvent(CC_EVENT_GOBLIN_CULT_RALLIED, sim.goblins.id, place,
+        3, "The Cinder Tithe gathers 3 new tithe-bearers.");
+    CcSimRefreshCharacterGossip(&sim);
+    CcSpeech cult_road;
+    int32_t rally_offset = StoryOffset(&sim, traveller->id, rally);
+    CC_CHECK(rally_offset >= 0);
+    CC_CHECK(CcSpeechGossip(&sim, traveller->id, rally_offset, false,
+                            &cult_road));
+    CC_CHECK(strstr(cult_road.text, "oblin") != NULL);
+    CC_CHECK(NoDigits(cult_road.text));
+    printf("Cult rally road: %s\n", cult_road.text);
+
+    CcId hit = AddEvent(CC_EVENT_SETTLEMENT_RAIDED,
+        sim.bandits[0].id, place, 40, "The Unpaid Company raids the town.");
+    CcSimRefreshCharacterGossip(&sim);
+    CcSpeech hit_road;
+    int32_t hit_offset = StoryOffset(&sim, traveller->id, hit);
+    CC_CHECK(hit_offset >= 0);
+    CC_CHECK(CcSpeechGossip(&sim, traveller->id, hit_offset, false,
+                            &hit_road));
+    CC_CHECK(strstr(hit_road.text, town) != NULL);
+    CC_CHECK(strstr(hit_road.text, sim.bandits[0].name) != NULL ||
+             strstr(hit_road.text, "Brigands") != NULL);
+    CC_CHECK(NoDigits(hit_road.text));
+    printf("Bandit raid road: %s\n", hit_road.text);
+
+    /* The dramatic kinds ride their own schema gate. */
+    Prepare();
+    traveller = &sim.characters[0];
+    traveller->role = CC_CHARACTER_TRAVELLER;
+    traveller->current_settlement_id = sim.settlements[0].id;
+    traveller->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    sim.schema_version = 49U;
+    CcId legacy_omen = AddEvent(CC_EVENT_DRAGON_OMEN, sim.dragon.id,
+        sim.settlements[0].id, 40,
+        "Smoke falls into the chimneys; old readers count 14 nights.");
+    CcId legacy_rally = AddEvent(CC_EVENT_GOBLIN_CULT_RALLIED,
+        sim.goblins.id, sim.settlements[0].id, 3,
+        "The Cinder Tithe gathers 3 new tithe-bearers.");
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(StoryOffset(&sim, traveller->id, legacy_omen) < 0);
+    CC_CHECK(StoryOffset(&sim, traveller->id, legacy_rally) < 0);
+    sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcId current_omen = AddEvent(CC_EVENT_DRAGON_OMEN, sim.dragon.id,
+        sim.settlements[0].id, 40,
+        "Smoke falls into the chimneys; old readers count 14 nights.");
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(StoryOffset(&sim, traveller->id, legacy_omen) < 0);
+    CC_CHECK(StoryOffset(&sim, traveller->id, current_omen) >= 0);
+    CheckValid();
+}
+
 int main(void)
 {
     CheckPersonalAccounts();
@@ -798,6 +926,7 @@ int main(void)
     CheckIncompleteSave();
     CheckBiasAndDecay();
     CheckShortageRegisters();
+    CheckDramaticRegisters();
     puts("Traveler gossip network passed.");
     return 0;
 }
