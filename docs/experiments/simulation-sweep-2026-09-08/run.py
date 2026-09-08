@@ -51,7 +51,7 @@ def main():
     def write(path, rows, compressed=False):
         opener = gzip.open if compressed else open
         with opener(path, "wt", newline="") as stream:
-            writer = csv.DictWriter(stream, fieldnames=rows[0].keys())
+            writer = csv.DictWriter(stream, fieldnames=rows[0].keys(), lineterminator="\n")
             writer.writeheader()
             writer.writerows(rows)
 
