@@ -19,4 +19,17 @@ Extra recording exposed a full-ledger case where a new theft's omen could remove
 - `legacy-probe.c` compares schema 83 against parent 225607a at 41 annual checkpoints for each of two seeds.
 - `world-probe.c` measures daily 40-year runs at schemas 83 and 84 for seeds 42 and 24301, with annual world validation. Results are in `world-measurements.json`.
 
-Final validation and measurements are running. Viable seat selection, sustained institutional recovery, and player controls remain further issue work.
+## Final results
+
+| Seed | Schema | Appointments | Days with named staff | Peak named staff |
+| --- | --- | --- | --- | --- |
+| 42 | 83 | 0 | 0 | 0 |
+| 42 | 84 | 1 | 2285 | 1 |
+| 24301 | 83 | 0 | 0 | 0 |
+| 24301 | 84 | 2 | 11720 | 2 |
+
+Each trial spans 14,600 daily advances. Both earlier-schema comparisons match all 41 annual hashes, for 82 matches total. Initial inherited staff remain separate from these named counts.
+
+Code head b37a432 passed the strict headless build and all 125 tests, the native build and all 14 archive/persistence/dragon checks, and static analysis with one reviewed baseline entry. The ordinary appointment journal reaches one new named scribe alongside the inherited staff on day 19 and matches the replay hash. Generator 25, SQLite schema 32, and the 184448-byte simulation structure remain unchanged.
+
+These are local results. Remote CI is tracked on PR #621. Viable seat selection, sustained institutional recovery, and player controls remain further issue work.
