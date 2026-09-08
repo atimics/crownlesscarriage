@@ -1,4 +1,5 @@
 #include "sim/cc_sim.h"
+#include "sim/cc_food_economy_internal.h"
 #include "sim/cc_goods_internal.h"
 #include "sim/cc_journey_internal.h"
 #include "sim/cc_route_rules_internal.h"
@@ -2026,42 +2027,6 @@ static int32_t WarWeeklyNeed(const CcSim *sim, const CcSettlement *place,
         sim, place, good, CcSimWarBurdenAtSettlement(sim, place->id));
 }
 
-static int32_t WarExtraConsumption(const CcSim *sim,
-                                   const CcSettlement *place,
-                                   CcGood good)
-{
-    if (!IsWarSeat(place)) return 0;
-    int32_t burden = CcSimWarBurdenAtSettlement(sim, place->id);
-    if (burden < 20) return 0;
-    if (good == CC_GOOD_FOOD) return MaximumI32(1, burden / 25);
-    if (good == CC_GOOD_TOOLS) return burden >= 50 ? 1 : 0;
-    if (good == CC_GOOD_WOOL && sim->schema_version >= 32U) {
-        return 1 + burden / 50;
-    }
-    return 0;
-}
-
-static int32_t EffectiveReserveTarget(const CcSim *sim,
-                                      const CcSettlement *place,
-                                      CcGood good)
-{
-    if (place == NULL || good < 0 || good >= CC_GOOD_COUNT) return 0;
-    return place->reserve_target[good] +
-           WarExtraConsumption(sim, place, good) * 3;
-}
-
-static int32_t CivilianFoodUse(const CcSettlement *place)
-{
-    if (place == NULL || place->consumption[CC_GOOD_FOOD] <= 0) return 0;
-    if (place->population >= 600) {
-        return place->consumption[CC_GOOD_FOOD];
-    }
-    int32_t population_use = MaximumI32(
-        1, (place->population + 299) / 300);
-    return MinimumI32(
-        place->consumption[CC_GOOD_FOOD], population_use);
-}
-
 static int32_t CivilianWoolUse(const CcSim *sim,
                                const CcSettlement *place)
 {
@@ -2078,102 +2043,6 @@ static int32_t SettlementPopulationCapacity(const CcSettlement *place)
     if (place->function == CC_SETTLEMENT_FARMING) result += 600;
     if (place->function == CC_SETTLEMENT_MARKET) result += 400;
     return result;
-}
-
-static int32_t WeeklyFoodUse(const CcSim *sim,
-                             const CcSettlement *place)
-{
-    if (place == NULL) return 1;
-    return MaximumI32(
-        1, CivilianFoodUse(place) +
-           WarExtraConsumption(sim, place, CC_GOOD_FOOD));
-}
-
-static int32_t FoodStorageCapacity(const CcSim *sim,
-                                   const CcSettlement *place)
-{
-    int32_t storage_weeks = CcSettlementHasService(
-        place, CC_SERVICE_GRANARY) ? 32 : 12;
-    return WeeklyFoodUse(sim, place) * storage_weeks;
-}
-
-static int32_t NutritionRations(const int32_t goods[CC_GOOD_COUNT],
-                                CcNutritionPurpose purpose)
-{
-    return CcNutritionAvailable(goods, purpose) / CC_NUTRITION_PER_RATION;
-}
-
-static int32_t IncomingNutrition(const CcSim *sim, CcId settlement_id,
-                                 CcNutritionPurpose purpose)
-{
-    int64_t nutrition = 0;
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        nutrition += (int64_t)CcSimIncomingGood(
-            sim, settlement_id, (CcGood)good) *
-            CcGoodNutritionValue((CcGood)good, purpose);
-    }
-    return nutrition > INT32_MAX ? INT32_MAX : (int32_t)nutrition;
-}
-
-static void RefreshSettlementGoodPrice(const CcSim *sim,
-                                       CcSettlement *settlement,
-                                       CcGood good)
-{
-    if (sim == NULL || settlement == NULL ||
-        good < 0 || good >= CC_GOOD_COUNT) return;
-    int32_t target = EffectiveReserveTarget(sim, settlement, good);
-    int32_t incoming = CcSimIncomingGood(sim, settlement->id, good);
-    int32_t expected_stock = settlement->stock[good] + incoming / 2;
-    int32_t shortage = target > 0 ?
-        (target - expected_stock) * 100 / target : 0;
-    int32_t pressure = ClampI32(shortage, -35, 220);
-    const CcGoodDefinition *definition = CcGoodDefinitionFor(good);
-    settlement->price[good] = MinimumI32(
-        99, definition->base_price * (100 + pressure) / 100);
-    if (settlement->price[good] < 1) settlement->price[good] = 1;
-}
-
-static int32_t NutritionStorageCapacity(const CcSim *sim,
-                                        const CcSettlement *place,
-                                        CcGood good)
-{
-    int32_t weekly_use = WeeklyFoodUse(sim, place);
-    bool granary = CcSettlementHasService(place, CC_SERVICE_GRANARY);
-    if (good == CC_GOOD_BREAD) return FoodStorageCapacity(sim, place);
-    if (good == CC_GOOD_WHEAT) {
-        return weekly_use * (granary ? 64 : 24);
-    }
-    if (good == CC_GOOD_MEAT) return weekly_use * (granary ? 8 : 2);
-    return CC_SIM_MAX_UNITS;
-}
-
-static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place,
-                                    CcTownNutritionAccounting *accounting)
-{
-    static const CcGood goods[] = {
-        CC_GOOD_BREAD, CC_GOOD_WHEAT, CC_GOOD_MEAT
-    };
-    int32_t total_spoiled = 0;
-    for (size_t i = 0; i < sizeof(goods) / sizeof(goods[0]); ++i) {
-        CcGood good = goods[i];
-        int32_t divisor = good == CC_GOOD_MEAT ? 20 :
-                          good == CC_GOOD_WHEAT ? 400 : 100;
-        int32_t stored = place->stock[good];
-        int32_t spoiled = stored / divisor;
-        if (accounting != NULL) accounting->aged_units[good] += (uint64_t)spoiled;
-        stored -= spoiled;
-        int32_t capacity = NutritionStorageCapacity(sim, place, good);
-        if (stored > capacity) {
-            if (accounting != NULL) {
-                accounting->overflow_units[good] += (uint64_t)(stored - capacity);
-            }
-            spoiled += stored - capacity;
-            stored = capacity;
-        }
-        place->stock[good] = stored;
-        total_spoiled += spoiled;
-    }
-    return total_spoiled;
 }
 
 /* Paper goes the way of stored food, just far more slowly: a hoard left
@@ -2209,7 +2078,7 @@ static int32_t RunBakery(CcSim *sim, CcSettlement *place,
         CcSettlementHasService(place, CC_SERVICE_MILL)) {
         grain_floor = MaximumI32(
             place->reserve_target[CC_GOOD_WHEAT],
-            WeeklyFoodUse(sim, place) * 2 + sim->archives.scribes * 2);
+            CcEconomyWeeklyFoodUse(sim, place) * 2 + sim->archives.scribes * 2);
     }
     int32_t baked = MinimumI32(
         capacity, MaximumI32(
@@ -2259,7 +2128,7 @@ int32_t CcSimWarSupplyCrisisAtSettlement(const CcSim *sim,
     if (burden < 20 || food_need < 1 || wage < 1) return 0;
     int32_t food_gap = MaximumI32(
         0, food_need * 3 -
-           NutritionRations(place->stock, CC_NUTRITION_CIVILIAN));
+           CcEconomyNutritionRations(place->stock, CC_NUTRITION_CIVILIAN));
     int32_t tool_gap = MaximumI32(0, tool_need * 3 -
                                   place->stock[CC_GOOD_TOOLS]);
     int32_t weapon_gap = MaximumI32(0, weapon_need * 3 -
@@ -2299,7 +2168,7 @@ int32_t CcSimKingdomPressure(const CcSim *sim, CcId kingdom_id)
         if (place->kingdom_id != kingdom_id) continue;
         pressure = MaximumI32(pressure, place->hunger);
         int32_t food_target = place->reserve_target[CC_GOOD_BREAD];
-        int32_t food_stock = NutritionRations(
+        int32_t food_stock = CcEconomyNutritionRations(
             place->stock, CC_NUTRITION_CIVILIAN);
         if (food_target > 0 && food_stock < food_target) {
             int32_t food_gap =
@@ -3517,7 +3386,7 @@ CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim)
         }
     }
     int32_t scribe_grain = MaximumI32(
-        0, snapshot.wheat - WeeklyFoodUse(sim, place) * 2);
+        0, snapshot.wheat - CcEconomyWeeklyFoodUse(sim, place) * 2);
     snapshot.blocker = snapshot.scribes <= 0 ?
         CC_MATERIAL_CHAIN_NO_SCRIBES :
         !binding_available ? CC_MATERIAL_CHAIN_BINDING :
@@ -3947,7 +3816,7 @@ static void ConfigureSettlementEconomies(CcSim *sim)
                         (int32_t)(NextRandom(sim) % 3U) - 1);
             }
         }
-        RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_FOOD);
+        CcEconomyRefreshSettlementGoodPrice(sim, settlement, CC_GOOD_FOOD);
     }
 }
 
@@ -4637,7 +4506,7 @@ static int32_t EffectiveProduction(const CcSim *sim,
         (settlement->hunger > 65 ||
          (settlement->population < 600 && settlement->hunger >= 20));
     int32_t subsistence_food = subsistence_muster ?
-        MaximumI32(1, CivilianFoodUse(settlement) * 2 / 3) : 0;
+        MaximumI32(1, CcEconomyCivilianFoodUse(settlement) * 2 / 3) : 0;
     if (production <= 0 && subsistence_food <= 0) return 0;
     if (settlement->hunger > 65) production = production * 72 / 100;
     else if (settlement->hunger > 35) production = production * 86 / 100;
@@ -4715,21 +4584,21 @@ bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
         MaximumI32(0, grain_production - bakery_input) +
         dairy_nutrition;
     int32_t storage_nutrition =
-        NutritionStorageCapacity(sim, settlement, CC_GOOD_BREAD) *
+        CcEconomyNutritionStorageCapacity(sim, settlement, CC_GOOD_BREAD) *
             CC_NUTRITION_PER_RATION +
-        NutritionStorageCapacity(sim, settlement, CC_GOOD_WHEAT) +
-        NutritionStorageCapacity(sim, settlement, CC_GOOD_MEAT) *
+        CcEconomyNutritionStorageCapacity(sim, settlement, CC_GOOD_WHEAT) +
+        CcEconomyNutritionStorageCapacity(sim, settlement, CC_GOOD_MEAT) *
             CC_NUTRITION_PER_RATION;
     *economy = (CcFoodEconomy){
-        .stock = NutritionRations(
+        .stock = CcEconomyNutritionRations(
             settlement->stock, CC_NUTRITION_CIVILIAN),
-        .incoming = IncomingNutrition(
+        .incoming = CcEconomyIncomingNutrition(
             sim, settlement_id, CC_NUTRITION_CIVILIAN) /
             CC_NUTRITION_PER_RATION,
         .weekly_production = production_nutrition /
             CC_NUTRITION_PER_RATION,
-        .weekly_consumption = WeeklyFoodUse(sim, settlement),
-        .reserve_target = EffectiveReserveTarget(
+        .weekly_consumption = CcEconomyWeeklyFoodUse(sim, settlement),
+        .reserve_target = CcEconomyEffectiveReserveTarget(
             sim, settlement, CC_GOOD_BREAD) +
             settlement->reserve_target[CC_GOOD_WHEAT] /
                 CC_NUTRITION_PER_RATION,
@@ -4902,7 +4771,7 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement)
 
     int32_t weapons_made = 0;
     int32_t weapon_gap = MaximumI32(0,
-        EffectiveReserveTarget(sim, settlement, CC_GOOD_WEAPONS) * 2 -
+        CcEconomyEffectiveReserveTarget(sim, settlement, CC_GOOD_WEAPONS) * 2 -
         settlement->stock[CC_GOOD_WEAPONS]);
     int32_t weapon_capacity = MaximumI32(
         0, settlement->production[CC_GOOD_WEAPONS]);
@@ -4983,8 +4852,8 @@ static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
         int32_t wood_used = (paper_made + 3) / 4;
         settlement->stock[CC_GOOD_WOOD] -= wood_used;
         settlement->stock[CC_GOOD_PAPER] += paper_made;
-        RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_WOOD);
-        RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
+        CcEconomyRefreshSettlementGoodPrice(sim, settlement, CC_GOOD_WOOD);
+        CcEconomyRefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
         return;
     }
     if (!CcSettlementHasService(settlement, CC_SERVICE_MILL) ||
@@ -4992,8 +4861,8 @@ static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
         settlement->stock[CC_GOOD_TOOLS] <= 0) return;
     /* Keep mill work behind the town's food buffer, across all edible goods. */
     if (sim->schema_version >= 37U &&
-        NutritionRations(settlement->stock, CC_NUTRITION_CIVILIAN) <
-            WeeklyFoodUse(sim, settlement) * 4) return;
+        CcEconomyNutritionRations(settlement->stock, CC_NUTRITION_CIVILIAN) <
+            CcEconomyWeeklyFoodUse(sim, settlement) * 4) return;
     int32_t capacity = MaximumI32(
         0, settlement->production[CC_GOOD_PAPER]);
     int32_t gap = MaximumI32(
@@ -5003,7 +4872,7 @@ static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
         CC_GOOD_WHEAT : CC_GOOD_WOOD;
     int32_t protected_input = settlement->reserve_target[input];
     if (input == CC_GOOD_WHEAT) {
-        protected_input += WeeklyFoodUse(sim, settlement) * 4;
+        protected_input += CcEconomyWeeklyFoodUse(sim, settlement) * 4;
     }
     int32_t input_available = MaximumI32(
         0, settlement->stock[input] - protected_input);
@@ -5014,9 +4883,9 @@ static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
     settlement->stock[input] -= input_used;
     settlement->stock[CC_GOOD_PAPER] += paper_made;
     WearOneTool(settlement, &settlement->paper_tool_wear, 8);
-    RefreshSettlementGoodPrice(sim, settlement, input);
-    RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
-    RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_TOOLS);
+    CcEconomyRefreshSettlementGoodPrice(sim, settlement, input);
+    CcEconomyRefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
+    CcEconomyRefreshSettlementGoodPrice(sim, settlement, CC_GOOD_TOOLS);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
@@ -5644,7 +5513,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         sim, settlement, scriptorium_id);
 
     int32_t food_required = MaximumI32(
-        1, WeeklyFoodUse(sim, settlement)) * CC_NUTRITION_PER_RATION;
+        1, CcEconomyWeeklyFoodUse(sim, settlement)) * CC_NUTRITION_PER_RATION;
     int32_t food_eaten = sim->schema_version >= 32U ?
         MinimumI32(food_required, cow_output) : 0;
     int32_t before_eating[CC_GOOD_COUNT];
@@ -5664,17 +5533,17 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         if (CcGoodNutritionValue(
                 (CcGood)good, CC_NUTRITION_CIVILIAN) > 0) continue;
         int32_t consumption = settlement->consumption[good] +
-            WarExtraConsumption(sim, settlement, (CcGood)good);
+            CcEconomyWarExtraConsumption(sim, settlement, (CcGood)good);
         if ((CcGood)good == CC_GOOD_WOOL) {
             consumption += CivilianWoolUse(sim, settlement);
         }
         int32_t consumed = MinimumI32(settlement->stock[good], consumption);
         settlement->stock[good] -= consumed;
     }
-    (void)SpoilStoredNutrition(sim, settlement, accounting);
+    (void)CcEconomySpoilStoredNutrition(sim, settlement, accounting);
     DecayStoredPaper(sim, settlement);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        RefreshSettlementGoodPrice(sim, settlement, (CcGood)good);
+        CcEconomyRefreshSettlementGoodPrice(sim, settlement, (CcGood)good);
     }
     CcGood farm_output = sim->schema_version < 29U ?
         CC_GOOD_BREAD : CC_GOOD_WHEAT;
@@ -5730,8 +5599,8 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
                         1, text);
     }
 
-    int32_t food_use = WeeklyFoodUse(sim, settlement);
-    int32_t coverage = NutritionRations(
+    int32_t food_use = CcEconomyWeeklyFoodUse(sim, settlement);
+    int32_t coverage = CcEconomyNutritionRations(
         settlement->stock, CC_NUTRITION_CIVILIAN) / food_use;
     int32_t food_unmet = MaximumI32(0, food_required - food_eaten);
     bool legacy_food_economy = sim->schema_version < 29U;
@@ -6791,11 +6660,11 @@ static void AdvanceArchives(CcSim *sim)
         }
         int32_t scribe_grain = scriptorium == NULL ? 0 : MaximumI32(
             0, scriptorium->stock[CC_GOOD_WHEAT] -
-               WeeklyFoodUse(sim, scriptorium) * 2);
+               CcEconomyWeeklyFoodUse(sim, scriptorium) * 2);
         active_scribes = MinimumI32(archives->scribes, scribe_grain / 2);
         if (active_scribes > 0) {
             scriptorium->stock[CC_GOOD_WHEAT] -= active_scribes * 2;
-            RefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_WHEAT);
+            CcEconomyRefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_WHEAT);
         }
         scriptorium_ready = active_scribes > 0 &&
             scriptorium->stock[CC_GOOD_PAPER] > 0 &&
@@ -6871,13 +6740,13 @@ static void AdvanceArchives(CcSim *sim)
                         noted_location[i], noted[i], 1, noted_text[i]);
         if (sim->schema_version >= 34U) {
             scriptorium->stock[CC_GOOD_PAPER] -= 1;
-            RefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_PAPER);
+            CcEconomyRefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_PAPER);
         }
         tomes_written += 1;
     }
     if (sim->schema_version >= 34U && tomes_written > 0) {
         WearOneTool(scriptorium, &archives->kit_tool_wear, 8);
-        RefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_TOOLS);
+        CcEconomyRefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_TOOLS);
     }
 
     if (sim->treasure_count >= CC_MAX_TREASURES - 4) {
@@ -7017,7 +6886,7 @@ static void AdvanceRuins(CcSim *sim)
             if (candidate == NULL || CcSettlementIsAbandoned(candidate) ||
                 candidate->population < 900 || candidate->hunger > 25 ||
                 candidate->prosperity < 55 ||
-                NutritionRations(
+                CcEconomyNutritionRations(
                     candidate->stock, CC_NUTRITION_CIVILIAN) < 18 ||
                 candidate->stock[CC_GOOD_TOOLS] < 2 ||
                 candidate->market_coins < 20) continue;
@@ -7425,7 +7294,7 @@ static void PlanGoblinTribute(CcSim *sim)
     if (goblins->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE ||
         goblins->tribute_cooldown_days > 0 ||
         sim->dragon.stolen_outstanding > 0) return;
-    if (NutritionRations(
+    if (CcEconomyNutritionRations(
             goblins->lair_stock, CC_NUTRITION_CIVILIAN) < 8) {
         goblins->raid_motive = CC_GOBLIN_RAID_HUNGER;
     } else if (goblins->lair_stock[CC_GOOD_TOOLS] < 2 ||
@@ -7455,7 +7324,7 @@ static void PlanGoblinTribute(CcSim *sim)
             place->id == goblins->lair_settlement_id) continue;
         int64_t score = -(int64_t)place->security * 2;
         if (goblins->raid_motive == CC_GOBLIN_RAID_HUNGER) {
-            score += NutritionRations(
+            score += CcEconomyNutritionRations(
                 place->stock, CC_NUTRITION_CIVILIAN) * 4;
         } else if (goblins->raid_motive == CC_GOBLIN_RAID_EQUIPMENT) {
             score += place->stock[CC_GOOD_IRON] +
@@ -7524,7 +7393,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
             }
         }
         if (sim->schema_version >= 36U && sim->current_day % 28 == 0 &&
-            NutritionRations(goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 4 &&
+            CcEconomyNutritionRations(goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 4 &&
             goblins->lair_stock[CC_GOOD_TOOLS] >= 1) {
             goblins->cohesion = MinimumI32(100, goblins->cohesion + 1);
         }
@@ -8099,11 +7968,11 @@ static CcSettlement *DragonHuntTarget(CcSim *sim)
         CcSettlement *place = &sim->settlements[i];
         if (CcSettlementIsAbandoned(place) ||
             place->id == sim->dragon.lair_settlement_id ||
-            (NutritionRations(
+            (CcEconomyNutritionRations(
                  place->stock, CC_NUTRITION_CIVILIAN) <= 0 &&
              place->cow_adults <= 0 &&
              place->sheep_adults <= 0)) continue;
-        int32_t score = NutritionRations(
+        int32_t score = CcEconomyNutritionRations(
                             place->stock, CC_NUTRITION_CIVILIAN) * 3 +
                         place->cow_adults * 8 +
                         place->sheep_adults * 3 - place->security;
@@ -8455,7 +8324,7 @@ CcRitualOfferingPlan CcSimRitualOfferingPlan(const CcSim *sim)
         return plan;
     }
     const CcGoblinCult *goblins = &sim->goblins;
-    plan.food_rations = NutritionRations(goblins->lair_stock, CC_NUTRITION_CIVILIAN);
+    plan.food_rations = CcEconomyNutritionRations(goblins->lair_stock, CC_NUTRITION_CIVILIAN);
     plan.relics = goblins->lair_stock[CC_GOOD_GOLD] + goblins->lair_stock[CC_GOOD_GEMS];
     if (goblins->members < 48) plan.blocked |= CC_RITUAL_MEMBERS;
     if (goblins->devotion < 75) plan.blocked |= CC_RITUAL_DEVOTION;
@@ -8480,7 +8349,7 @@ static void AdvanceAfterdragonCult(CcSim *sim)
 
     GatherDragonSeedOfferings(sim);
 
-    bool provisioned = NutritionRations(
+    bool provisioned = CcEconomyNutritionRations(
         goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 8;
     bool armed = goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
                  goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
@@ -8498,7 +8367,7 @@ static void AdvanceAfterdragonCult(CcSim *sim)
         recruits = MinimumI32(
             recruits, cult_limit - goblins->members);
         int32_t food_cost = 2 + recruits;
-        if (NutritionRations(
+        if (CcEconomyNutritionRations(
                 goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= food_cost) {
             (void)CcNutritionConsume(
                 goblins->lair_stock, CC_NUTRITION_CIVILIAN,
@@ -8609,7 +8478,7 @@ static void AdvanceLivingDragonCult(CcSim *sim)
     if (sim->current_day % (2 * 365) != 0 ||
         goblins->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE ||
         goblins->members >= 48 ||
-        NutritionRations(
+        CcEconomyNutritionRations(
             goblins->lair_stock, CC_NUTRITION_CIVILIAN) < 6 ||
         goblins->cohesion < 35) return;
 
@@ -8751,12 +8620,12 @@ static void AdvanceDragonEcology(CcSim *sim)
                 dragon->memory_integrity + 1, 0, 100);
         }
         int32_t stability_change = 0;
-        if (NutritionRations(
+        if (CcEconomyNutritionRations(
                 sim->goblins.lair_stock, CC_NUTRITION_CIVILIAN) >= 4 &&
             sim->goblins.lair_stock[CC_GOOD_TOOLS] >= 1 &&
             sim->goblins.devotion >= 50 &&
             sim->goblins.cohesion >= 50) stability_change += 1;
-        if (NutritionRations(
+        if (CcEconomyNutritionRations(
                 sim->goblins.lair_stock, CC_NUTRITION_CIVILIAN) == 0) {
             stability_change -= 2;
         }
@@ -9735,7 +9604,7 @@ static void UpdateShipments(CcSim *sim)
         if (shipment->destination_id != final_id && hop != NULL) {
             int32_t unload = 0;
             if (carriage == NULL) {
-                int32_t local_need = EffectiveReserveTarget(
+                int32_t local_need = CcEconomyEffectiveReserveTarget(
                                          sim, hop, shipment_good) -
                                      hop->stock[shipment_good] -
                                      CcSimIncomingGood(
@@ -9888,7 +9757,7 @@ static int32_t SettlementUnmetNeed(const CcSim *sim, const CcSettlement *place,
                                    CcGood good)
 {
     if (place == NULL) return 0;
-    return EffectiveReserveTarget(sim, place, good) - place->stock[good] -
+    return CcEconomyEffectiveReserveTarget(sim, place, good) - place->stock[good] -
            CcSimIncomingGood(sim, place->id, good);
 }
 
@@ -9924,7 +9793,7 @@ static int32_t TradeSurplus(const CcSim *sim,
     if (good == CC_GOOD_FOOD && destination->hunger >= 65 &&
         origin->hunger < 35) {
         int32_t survival_stock = MaximumI32(
-            WeeklyFoodUse(sim, origin) * 6,
+            CcEconomyWeeklyFoodUse(sim, origin) * 6,
             origin->reserve_target[CC_GOOD_FOOD] / 2);
         protected_stock = MinimumI32(protected_stock, survival_stock);
     }
@@ -11786,9 +11655,9 @@ static void GenerateSituations(CcSim *sim)
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         CcSettlement *settlement = &sim->settlements[i];
         if (CcSettlementIsAbandoned(settlement)) continue;
-        int32_t projected = NutritionRations(
+        int32_t projected = CcEconomyNutritionRations(
             settlement->stock, CC_NUTRITION_CIVILIAN) +
-            IncomingNutrition(sim, settlement->id,
+            CcEconomyIncomingNutrition(sim, settlement->id,
                               CC_NUTRITION_CIVILIAN) /
                 CC_NUTRITION_PER_RATION;
         int32_t need = settlement->reserve_target[CC_GOOD_FOOD] - projected +
@@ -11806,9 +11675,9 @@ static void GenerateSituations(CcSim *sim)
         if (shortage == NULL && !HasRecentSituation(
                 sim, CC_SITUATION_RELIEF_DELIVERY, relief_target->id)) {
             char text[CC_EVENT_TEXT_CAPACITY];
-            int32_t food = NutritionRations(
+            int32_t food = CcEconomyNutritionRations(
                 relief_target->stock, CC_NUTRITION_CIVILIAN) +
-                IncomingNutrition(sim, relief_target->id,
+                CcEconomyIncomingNutrition(sim, relief_target->id,
                                   CC_NUTRITION_CIVILIAN) /
                     CC_NUTRITION_PER_RATION;
             (void)snprintf(
@@ -12271,7 +12140,7 @@ static int32_t KingdomFood(const CcSim *sim, int32_t kingdom_slot)
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         if (sim->settlements[i].kingdom_id == kingdom_id &&
             !CcSettlementIsAbandoned(&sim->settlements[i])) {
-            total += NutritionRations(
+            total += CcEconomyNutritionRations(
                 sim->settlements[i].stock, CC_NUTRITION_CIVILIAN);
         }
     }
@@ -12983,7 +12852,7 @@ CcCampaignLaunchPlan CcSimCampaignLaunchPlan(const CcSim *sim)
     const CcDragonCampaign *campaign = &sim->dragon_campaign;
     plan.pledged_mask = campaign->pledged_kingdom_mask;
     plan.pledged_count = MaskCount(plan.pledged_mask);
-    plan.food_rations = NutritionRations(campaign->supplies, CC_NUTRITION_CIVILIAN);
+    plan.food_rations = CcEconomyNutritionRations(campaign->supplies, CC_NUTRITION_CIVILIAN);
     plan.tools = campaign->supplies[CC_GOOD_TOOLS];
     plan.weapons = campaign->supplies[CC_GOOD_WEAPONS];
     plan.patron_id = campaign->patron_character_id;
@@ -13125,7 +12994,7 @@ static void AdvanceDragonCampaign(CcSim *sim)
              sim->kingdoms[patron_slot].sanction / 4 : 0);
     int32_t attack = campaign->supplies[CC_GOOD_WEAPONS] * 4 +
                      campaign->supplies[CC_GOOD_TOOLS] * 2 +
-                     NutritionRations(
+                     CcEconomyNutritionRations(
                          campaign->supplies,
                          CC_NUTRITION_CIVILIAN) / 4 +
                      allies * 12 + campaign_experience + named_leadership +
@@ -13795,7 +13664,7 @@ static RoadRepairFunding RepairFunding(const CcSettlement *base, const CcKingdom
         base->stock[CC_GOOD_STONE] < 2) return ROAD_REPAIR_UNFUNDED;
     if (kingdom->treasury >= 24) return ROAD_REPAIR_CROWN_FUNDED;
     if (base->stock[CC_GOOD_TOOLS] >= 1 &&
-        NutritionRations(base->stock, CC_NUTRITION_CIVILIAN) >= 4)
+        CcEconomyNutritionRations(base->stock, CC_NUTRITION_CIVILIAN) >= 4)
         return ROAD_REPAIR_LOCALLY_FUNDED;
     return ROAD_REPAIR_UNFUNDED;
 }
@@ -13816,11 +13685,11 @@ static CcSettlement *RepairBaseForKingdom(CcSim *sim,
          to->stock[CC_GOOD_TOOLS] +
              to->stock[CC_GOOD_WOOD] +
              to->stock[CC_GOOD_STONE] +
-             NutritionRations(to->stock, CC_NUTRITION_CIVILIAN) >
+             CcEconomyNutritionRations(to->stock, CC_NUTRITION_CIVILIAN) >
          best->stock[CC_GOOD_TOOLS] +
              best->stock[CC_GOOD_WOOD] +
              best->stock[CC_GOOD_STONE] +
-             NutritionRations(best->stock, CC_NUTRITION_CIVILIAN))) {
+             CcEconomyNutritionRations(best->stock, CC_NUTRITION_CIVILIAN))) {
         best = to;
     }
     CcSettlement *alternative = best == from ? to : from;
@@ -13852,13 +13721,13 @@ static int32_t RouteRecoveryScore(const CcSim *sim, const CcRoute *route,
     if (from != NULL) {
         food_surplus = MaximumI32(
             food_surplus,
-            NutritionRations(from->stock, CC_NUTRITION_CIVILIAN) -
+            CcEconomyNutritionRations(from->stock, CC_NUTRITION_CIVILIAN) -
                 from->reserve_target[CC_GOOD_BREAD]);
     }
     if (to != NULL) {
         food_surplus = MaximumI32(
             food_surplus,
-            NutritionRations(to->stock, CC_NUTRITION_CIVILIAN) -
+            CcEconomyNutritionRations(to->stock, CC_NUTRITION_CIVILIAN) -
                 to->reserve_target[CC_GOOD_BREAD]);
     }
     return hunger * 4 + MinimumI32(100, food_surplus) * 2 +
@@ -13868,7 +13737,7 @@ static int32_t RouteRecoveryScore(const CcSim *sim, const CcRoute *route,
 static uint32_t RoadRecoverySupplyBlocks(const CcSettlement *supplier)
 {
     uint32_t blocked = 0U;
-    if (NutritionRations(supplier->stock, CC_NUTRITION_CIVILIAN) < 4)
+    if (CcEconomyNutritionRations(supplier->stock, CC_NUTRITION_CIVILIAN) < 4)
         blocked |= CC_ROAD_RECOVERY_FOOD;
     if (supplier->stock[CC_GOOD_WOOD] < 2) blocked |= CC_ROAD_RECOVERY_WOOD;
     if (supplier->stock[CC_GOOD_STONE] < 2) blocked |= CC_ROAD_RECOVERY_STONE;
@@ -13903,10 +13772,10 @@ CcRoadRecoveryPlan CcSimRoadRecoveryPlan(const CcSim *sim, CcId route_id)
     const CcSettlement *labor_base = from->population >= to->population ?
                                from : to;
     const CcSettlement *supplier =
-        NutritionRations(from->stock, CC_NUTRITION_CIVILIAN) +
+        CcEconomyNutritionRations(from->stock, CC_NUTRITION_CIVILIAN) +
             from->stock[CC_GOOD_TOOLS] + from->stock[CC_GOOD_WOOD] +
             from->stock[CC_GOOD_STONE] >=
-        NutritionRations(to->stock, CC_NUTRITION_CIVILIAN) +
+        CcEconomyNutritionRations(to->stock, CC_NUTRITION_CIVILIAN) +
             to->stock[CC_GOOD_TOOLS] + to->stock[CC_GOOD_WOOD] +
             to->stock[CC_GOOD_STONE] ? from : to;
     const CcSettlement *alternative = supplier == from ? to : from;
@@ -13915,7 +13784,7 @@ CcRoadRecoveryPlan CcSimRoadRecoveryPlan(const CcSim *sim, CcId route_id)
     plan.labor_base_id = labor_base->id;
     plan.supplier_id = supplier->id;
     plan.population = labor_base->population;
-    plan.food_rations = NutritionRations(supplier->stock, CC_NUTRITION_CIVILIAN);
+    plan.food_rations = CcEconomyNutritionRations(supplier->stock, CC_NUTRITION_CIVILIAN);
     plan.wood = supplier->stock[CC_GOOD_WOOD];
     plan.stone = supplier->stock[CC_GOOD_STONE];
     plan.tools = supplier->stock[CC_GOOD_TOOLS];
@@ -14246,11 +14115,11 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
             CcSettlement *place = &sim->settlements[i];
             if (place->kingdom_id != kingdom->id ||
                 CcSettlementIsAbandoned(place)) continue;
-            int32_t target = EffectiveReserveTarget(
+            int32_t target = CcEconomyEffectiveReserveTarget(
                 sim, place, CC_GOOD_FOOD);
-            int32_t projected = NutritionRations(
+            int32_t projected = CcEconomyNutritionRations(
                 place->stock, CC_NUTRITION_CIVILIAN) +
-                IncomingNutrition(
+                CcEconomyIncomingNutrition(
                     sim, place->id, CC_NUTRITION_CIVILIAN) /
                     CC_NUTRITION_PER_RATION;
             CcMoney buying_floor = place->price[CC_GOOD_FOOD] * 16;
@@ -15004,7 +14873,7 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
             sim, settlement->id, command->good, -amount,
             trade->id);
     }
-    RefreshSettlementGoodPrice(sim, settlement, command->good);
+    CcEconomyRefreshSettlementGoodPrice(sim, settlement, command->good);
     SetError(error, error_capacity, "");
     return true;
 }
@@ -15682,7 +15551,7 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
     if (relief_load > 0 && relief_origin != NULL) {
         relief_origin->stock[CC_GOOD_FOOD] -= relief_load;
         sim->player.cargo[CC_GOOD_FOOD] += relief_load;
-        RefreshSettlementGoodPrice(sim, relief_origin, CC_GOOD_FOOD);
+        CcEconomyRefreshSettlementGoodPrice(sim, relief_origin, CC_GOOD_FOOD);
         (void)snprintf(
             text, sizeof(text),
             "%s loads %d food boxes from %s's granary into the Crownless carriage.",
