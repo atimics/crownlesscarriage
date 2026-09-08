@@ -2253,6 +2253,19 @@ static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place,
     return total_spoiled;
 }
 
+/* Paper goes the way of stored food, just far more slowly: a hoard left
+   sitting loses about a hundredth of itself a quarter, and never less than a
+   sheaf. Small working stores are left alone, so a scriptorium's own supply
+   is not ground away between deliveries -- only what a town is sitting on.
+   Silent, like the nutrition spoilage above it. */
+static void DecayStoredPaper(CcSim *sim, CcSettlement *place)
+{
+    if (sim->schema_version < 54U || place->stock[CC_GOOD_PAPER] <= 10 ||
+        sim->current_day % 91 != 0) return;
+    place->stock[CC_GOOD_PAPER] -= MaximumI32(
+        1, place->stock[CC_GOOD_PAPER] / 100);
+}
+
 static int32_t BakeryCapacity(const CcSettlement *place)
 {
     if (!CcSettlementHasService(place, CC_SERVICE_BAKERY)) return 0;
@@ -5773,6 +5786,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         settlement->stock[good] -= consumed;
     }
     (void)SpoilStoredNutrition(sim, settlement, accounting);
+    DecayStoredPaper(sim, settlement);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         RefreshSettlementGoodPrice(sim, settlement, (CcGood)good);
     }
@@ -5972,8 +5986,8 @@ static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
     /* The dragon's succession is news because it changes the world, not
        because a whelp is heavy. A whelp dispersing, an heir hatching, a
        dynasty ending and an un-crowning all travel — a future chronicler
-       must be able to find them (schema 54, see GatherGossip). */
-    if (sim->schema_version >= 54U &&
+       must be able to find them (schema 55, see GatherGossip). */
+    if (sim->schema_version >= 55U &&
         (event->kind == CC_EVENT_DRAGON_WHELP_DISPERSED ||
          event->kind == CC_EVENT_DRAGON_SUCCESSOR ||
          event->kind == CC_EVENT_DRAGON_AFTERSHOCK ||
@@ -6084,8 +6098,8 @@ static void GatherGossip(CcSim *sim)
             const CcRoute *route = CcSimRoute(sim, event->location_id);
             if (route != NULL) origin = SettlementSlotById(sim, route->from_id);
         }
-        /* Schema 54 lets travelers carry reports from abandoned origins. */
-        if (origin < 0 || (sim->schema_version < 54U &&
+        /* Schema 55 lets travelers carry reports from abandoned origins. */
+        if (origin < 0 || (sim->schema_version < 55U &&
             CcSettlementIsAbandoned(&sim->settlements[origin]))) {
             continue;
         }
@@ -6396,7 +6410,7 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
 {
     if (sim->schema_version < 44U) return;
     int32_t place = SettlementSlotById(sim, place_id);
-    if (place < 0 || (sim->schema_version < 54U &&
+    if (place < 0 || (sim->schema_version < 55U &&
         CcSettlementIsAbandoned(&sim->settlements[place]))) return;
     GatherGossip(sim);
     CcGossipCarrier *carrier = NULL;
@@ -18732,7 +18746,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 53U
+#define CC_NEWEST_LEGACY_SCHEMA 54U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18750,7 +18764,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 53U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 54U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },

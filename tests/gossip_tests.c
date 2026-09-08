@@ -1081,13 +1081,13 @@ static const CcSettlement *ScriptoriumOf(const CcSim *s)
 /* A whelp hatches in a hollow lair: the research-mission vertical slice.
 
    The sim runs a dragon whose lair town can be abandoned (its own wrath
-   empties it). Before schema 54, a whelp hatching in that dead town was
+   empties it). Before schema 55, a whelp hatching in that dead town was
    silent forever: GatherGossip dropped facts whose origin settlement was
    abandoned, and ExchangeGossip would not let anyone exchange gossip at an
    abandoned place. So the world genuinely never learned its dragon was
    alive again — the story existed, but no road carried it.
 
-   Schema 54 fixes both: the fact enters the pool from the dead origin, and
+   Schema 55 fixes both: the fact enters the pool from the dead origin, and
    a scout who *visits the ruins* hears it and can carry it to the
    Scriptorium. This test proves the whole contract:
      1) a dragon event at an abandoned origin becomes gossip,
@@ -1113,10 +1113,10 @@ static void CheckResearchMissionHearsAbandonedLair(void)
     }
     const CcSettlement *scriptorium_town = ScriptoriumOf(&sim);
 
-    /* The whelp hatches in the ruins (schema 54 makes succession gossip
+    /* The whelp hatches in the ruins (schema 55 makes succession gossip
        regardless of magnitude). */
     sim.schema_version = CC_SIM_SCHEMA_VERSION;
-    sim.schema_version = 53U;
+    sim.schema_version = 54U;
     CcId whelp = AddEvent(CC_EVENT_DRAGON_SUCCESSOR, sim.dragon.id, lair,
         1, "A whelp hatches in Varkesh's empty lair and takes the first hoard.");
     static CcSim before_legacy;
