@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import sqlite3
 import sys
 import tempfile
 
@@ -21,6 +22,13 @@ with tempfile.TemporaryDirectory() as directory:
         rows = [json.loads(line) for line in report.splitlines()]
         assert [row['day'] for row in rows] == [1, 366, 731]
         assert all(row['threats']['semantics'] == 'snapshot' for row in rows)
+        for row in rows:
+            funding = row['archive_funding']
+            assert funding['semantics'] == 'treasury_top_up_plan_snapshot'
+            assert funding['total'] == sum(donor['amount'] for donor in funding['donors'])
+            assert (funding['total'] > 0) == (funding['blocker'] == 'ready')
+            assert all(isinstance(donor['kingdom_id'], str) for donor in funding['donors'])
+
         policy = 'slain-at-day-1' if '--dragon-slain-day-one' in fixture else 'natural-history'
         assert all(row['dragon_policy'] == policy and row['comparison_scope'] == 'whole-policy' for row in rows)
         text = run(*base, '--save', str(root / 'text.ccsave'))
@@ -35,6 +43,9 @@ with tempfile.TemporaryDirectory() as directory:
             assert loaded['retained_history'] == rows[-1]['retained_history']
             assert loaded['road_network'] == rows[-1]['road_network']
             assert loaded['archive_work'] == rows[-1]['archive_work']
+            assert loaded['archive_funding'] == rows[-1]['archive_funding']
+            assert loaded['carriages'] == rows[-1]['carriages']
+            assert loaded['shipments'] == rows[-1]['shipments']
             assert [route['context'] for route in loaded['routes']] == [route['context'] for route in rows[-1]['routes']]
             for route in loaded['routes']:
                 assert route['observation']['start_day_exclusive'] == 731
@@ -45,6 +56,14 @@ with tempfile.TemporaryDirectory() as directory:
             assert loaded['accounting_start_day'] == 731
             assert loaded['dragon_policy'] == 'loaded-save'
             assert all(sum(site['input']) == 0 for site in loaded['sites'])
+        with sqlite3.connect(root / 'json.ccsave') as database:
+            saved = database.execute('SELECT id, kingdom_id, target_id, blocked_since_day, next_dispatch_day FROM royal_carriage ORDER BY slot').fetchall()
+        assert [(cart['id'], cart['kingdom_id'], cart['target_id'], cart['blocked_since_day'], cart['next_dispatch_day'])
+                for cart in rows[-1]['carriages']] == [(str(a), str(b), str(c), d, e) for a, b, c, d, e in saved]
+        for row in rows:
+            assert all(cart['semantics'] == 'snapshot' and cart['counter_semantics'] == 'stored_cumulative'
+                       and cart['mode_name'] for cart in row['carriages'])
+            assert all(cargo['semantics'] == 'retained_shipment_snapshot' for cargo in row['shipments'])
         assert all(isinstance(town['id'], str) for town in rows[-1]['towns'])
         assert rows[-1]['protocol'] == 6
         for town in rows[-1]['towns']:

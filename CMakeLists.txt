@@ -93,6 +93,7 @@ add_library(crownless_sim
     src/sim/cc_sim.c
     src/sim/cc_sim_hash.c
     src/sim/cc_archive_queries.c
+    src/sim/cc_trade_path.c
     src/sim/cc_sim_versions.c
     src/sim/cc_identity.c
     src/sim/cc_road_council.c
@@ -1489,6 +1490,14 @@ if(BUILD_TESTING)
     cc_strict_warnings(pony_tests)
     add_test(NAME rainbow_pony_companions COMMAND pony_tests)
 
+    add_executable(trade_path_tests tests/trade_path_tests.c)
+    target_link_libraries(trade_path_tests PRIVATE crownless_sim)
+    cc_strict_warnings(trade_path_tests)
+    add_test(NAME trade_path_rules COMMAND trade_path_tests)
+    add_executable(archive_funding_tests tests/archive_funding_tests.c)
+    target_link_libraries(archive_funding_tests PRIVATE crownless_sim)
+    cc_strict_warnings(archive_funding_tests)
+    add_test(NAME archive_funding_plan COMMAND archive_funding_tests)
     add_executable(quest_cast_tests tests/quest_cast_tests.c)
     target_link_libraries(quest_cast_tests PRIVATE crownless_persistence)
     target_compile_definitions(quest_cast_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")

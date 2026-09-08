@@ -9,4 +9,7 @@ CcMoney CcRouteToll(const CcSim *sim, const CcRoute *route);
 
 int32_t CcRouteSettlementMonsterPressure(const CcSim *sim, CcId settlement_id);
 
+bool CcRouteRoyalIsOfficial(const CcSim *sim, const CcRoute *route);
+bool CcRouteRoyalCanReopen(const CcSim *sim, const CcRoute *route);
+
 #endif

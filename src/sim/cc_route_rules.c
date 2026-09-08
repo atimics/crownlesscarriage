@@ -39,3 +39,20 @@ int32_t CcRouteSettlementMonsterPressure(const CcSim *sim, CcId settlement_id)
     return pressure;
 }
 
+
+bool CcRouteRoyalIsOfficial(const CcSim *sim, const CcRoute *route)
+{
+    if (sim == NULL || route == NULL) return false;
+    if (sim->schema_version >= 73U && route->condition == 0) return false;
+    return !(route->smuggler_route &&
+             CcSimRouteCrossesKingdomBorder(sim, route->id)) &&
+           !CcSimRouteCrossesWarBorder(sim, route->id);
+}
+
+bool CcRouteRoyalCanReopen(const CcSim *sim, const CcRoute *route)
+{
+    if (sim == NULL || route == NULL) return false;
+    return !(route->smuggler_route &&
+             CcSimRouteCrossesKingdomBorder(sim, route->id));
+}
+

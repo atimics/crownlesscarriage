@@ -1,0 +1,20 @@
+{
+  "query_count": 27648,
+  "exact_output_match": true,
+  "sha256": "505001d48a2713ea7aa0aae0175c120a6f2292794642361976a46d27e6d01e7a",
+  "seeds": [
+    "42",
+    "0x5eed0001"
+  ],
+  "schemas": [
+    72,
+    73
+  ],
+  "fixtures": [
+    "generated",
+    "alternating_closed_and_zero_condition",
+    "all_closed"
+  ],
+  "state_preserved": true,
+  "failed_outputs_preserved": true
+}

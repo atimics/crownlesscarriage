@@ -21,6 +21,24 @@ static void JsonArchiveWork(const CcSim *sim)
         plan.wheat_required, plan.recording_ready ? "true" : "false");
 }
 
+static void JsonArchiveFunding(const CcSim *sim)
+{
+    CcArchiveFundingPlan plan = CcSimArchiveFundingPlan(sim);
+    printf("{\"semantics\":\"treasury_top_up_plan_snapshot\",\"seat_id\":\"%" PRIu64
+           "\",\"total\":%" PRId64 ",\"donors\":[", plan.seat_id, plan.total);
+    for (int32_t i = 0; i < plan.donor_count; ++i)
+        printf("%s{\"kingdom_id\":\"%" PRIu64 "\",\"amount\":%" PRId64 "}",
+            i ? "," : "", plan.donor_ids[i], plan.shares[i]);
+    printf("],\"blocker\":"); JsonString(CcArchiveFundingBlockerName(plan.blocker));
+    CcArchiveRecoveryWindow window = CcSimArchiveRecoveryWindow(sim);
+    printf(",\"recovery_timing\":{\"semantics\":\"held_state_timing_snapshot\",\"gate\":");
+    JsonString(CcArchiveRecoveryGateName(window.gate));
+    printf(",\"first_eligible_day\":");
+    if (window.first_eligible_day < 0) printf("null");
+    else printf("%" PRId64, window.first_eligible_day);
+    printf("}}");
+}
+
 static void JsonStock(const int32_t *values)
 {
     putchar('[');
@@ -207,6 +225,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         (int)sim->dragon.life_stage, (int)sim->dragon.activity, sim->dragon.body_condition,
         sim->dragon.crown_strength, sim->dragon.egg_count);
     printf(",\"archive_work\":"); JsonArchiveWork(sim);
+    printf(",\"archive_funding\":"); JsonArchiveFunding(sim);
     printf(",\"road_network\":"); JsonRoadNetwork(sim);
     printf(",\"threats\":"); JsonThreatSnapshot(sim);
     printf(",\"retained_history\":"); JsonRetainedHistory(sim);
@@ -296,8 +315,12 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
                "\",\"shipment_id\":\"%" PRIu64 "\",\"mode\":%d,\"condition\":%d,\"trips\":%d,\"losses\":%d",
             i ? "," : "", cart->id, cart->location_id, cart->destination_id, cart->active_shipment_id,
             cart->mode, cart->condition, cart->trips_completed, cart->cargo_losses);
-        printf(",\"route_id\":\"%" PRIu64 "\",\"departure_day\":%d,\"arrival_day\":%d}",
+        printf(",\"route_id\":\"%" PRIu64 "\",\"departure_day\":%d,\"arrival_day\":%d",
             cart->route_id, cart->departure_day, cart->arrival_day);
+        printf(",\"semantics\":\"snapshot\",\"counter_semantics\":\"stored_cumulative\",\"kingdom_id\":\"%" PRIu64
+               "\",\"target_id\":\"%" PRIu64 "\",\"blocked_since_day\":%d,\"next_dispatch_day\":%d,\"mode_name\":",
+            cart->kingdom_id, cart->target_id, cart->blocked_since_day, cart->next_dispatch_day);
+        JsonString(CcRoyalCarriageModeName(cart->mode)); putchar('}');
     }
     printf("],\"shipments\":[");
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
@@ -306,7 +329,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
                "\",\"good\":%d,\"quantity\":%d,\"status\":%d,\"departure_day\":%d,\"arrival_day\":%d",
             i ? "," : "", cargo->id, cargo->origin_id, cargo->destination_id,
             (int)cargo->good, cargo->quantity, (int)cargo->status, cargo->departure_day, cargo->arrival_day);
-        printf(",\"route_id\":\"%" PRIu64 "\",\"final_destination_id\":\"%" PRIu64 "\"}",
+        printf(",\"route_id\":\"%" PRIu64 "\",\"final_destination_id\":\"%" PRIu64 "\",\"semantics\":\"retained_shipment_snapshot\"}",
             cargo->route_id, cargo->final_destination_id);
     }
     printf("],\"treasuries\":[");
