@@ -124,7 +124,7 @@ static void ProduceRoadSites(CcSim *sim, CcRoadProductionAccounting *accounting)
                 }
                 char text[CC_EVENT_TEXT_CAPACITY];
                 (void)snprintf(text, sizeof(text),
-                    "%.40s uses one Tool and one Wood from its store for repairs; condition rises to %d. The crew spends this week's work on maintenance.",
+                    "%.40s uses one Tool and one Wood for weekly repairs; condition is %d.",
                     site->name, site->condition);
                 (void)PushEvent(sim, CC_EVENT_ROAD_SITE_PRODUCTION, site->id, site->id, 0, gain, text);
                 continue;
