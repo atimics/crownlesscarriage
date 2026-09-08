@@ -2720,7 +2720,8 @@ static bool StreetCanOccupy(Vector2 point)
         point.y > CC_LOCAL_WORLD_DEPTH - 0.28f - radius) return false;
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         WorldBuilding building = ActiveWorldBuildingAt(i);
-        if (InsideExpanded(point, building.footprint, radius)) {
+        if (InsideExpanded(BuildingUnrotatedPoint(i, point.x, point.y),
+                           building.footprint, radius)) {
             return false;
         }
     }

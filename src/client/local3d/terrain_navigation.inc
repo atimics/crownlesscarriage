@@ -785,23 +785,8 @@ static float TerrainKeepRise(void)
     return 2.20f;
 }
 
-static void TerrainGradeLaneVillage(void)
+static void TerrainGradeBuildingPlots(void)
 {
-    TerrainBuildLanePaths();
-    float keep_elevation = terrain_lanes[2].height[terrain_lanes[2].count - 1];
-    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
-        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
-            float x = (float)column * CC_TERRAIN_CELL_SIZE;
-            float z = (float)row * CC_TERRAIN_CELL_SIZE;
-            float elevation = 0.0f;
-            float inset = TerrainLaneInset(x, z, &elevation);
-            if (inset < -1.8f) continue;
-            float weight = TerrainSmooth01((inset + 1.8f) / 1.8f);
-            int32_t slot = TerrainIndex(column, row);
-            street_terrain_height[slot] +=
-                (elevation - street_terrain_height[slot]) * weight;
-        }
-    }
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         Rectangle pad = ActiveWorldBuildingAt(i).footprint;
         float elevation = TerrainRectangleAverage(pad);
@@ -819,6 +804,26 @@ static void TerrainGradeLaneVillage(void)
             }
         }
     }
+}
+
+static void TerrainGradeLaneVillage(void)
+{
+    TerrainBuildLanePaths();
+    float keep_elevation = terrain_lanes[2].height[terrain_lanes[2].count - 1];
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            float z = (float)row * CC_TERRAIN_CELL_SIZE;
+            float elevation = 0.0f;
+            float inset = TerrainLaneInset(x, z, &elevation);
+            if (inset < -1.8f) continue;
+            float weight = TerrainSmooth01((inset + 1.8f) / 1.8f);
+            int32_t slot = TerrainIndex(column, row);
+            street_terrain_height[slot] +=
+                (elevation - street_terrain_height[slot]) * weight;
+        }
+    }
+    TerrainGradeBuildingPlots();
     Rectangle keep = ActiveCompoundBounds();
     TerrainGradePad(keep, keep_elevation, 2.8f);
     /* Keep a steady cart grade through the junction and up to the gate. */
@@ -1018,10 +1023,7 @@ static void TerrainGenerate(void)
     if (active_place_function == CC_SETTLEMENT_MARKET) {
         TerrainGradePad((Rectangle){32.0f, 22.0f, 28.0f, 27.5f},
                         plaza_elevation, 2.0f);
-        for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
-            Rectangle pad = ActiveWorldBuildingAt(i).footprint;
-            TerrainGradePad(pad, TerrainRectangleAverage(pad), 1.0f);
-        }
+        TerrainGradeBuildingPlots();
         TerrainBuildLanePaths();
         for (int32_t lane = 0; lane < ActivePlaceProfile()->lane_count; ++lane) {
             TerrainLanePath *path = &terrain_lanes[lane];

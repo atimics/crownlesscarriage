@@ -233,22 +233,34 @@ static bool RagdollTouchesStreet(const CcBiomechRagdoll *ragdoll)
 }
 
 static void RequireSolidStreetHouse(const char *name, float wall_x,
-                                    float center_x, float center_z)
+                                    float center_x, float center_z, float yaw)
 {
     const float radius = 0.16f;
+    float c = cosf(yaw * DEG2RAD), s = sinf(yaw * DEG2RAD);
     float body_y = CcLocalTerrainHeightAt(center_x, center_z) + 1.0f;
-    Vector3 previous = {wall_x - 0.80f, body_y, center_z};
-    Vector3 proposed = {wall_x + 0.80f, body_y, center_z};
+    Vector3 previous = {center_x + c * (wall_x - 0.80f - center_x),
+                        body_y, center_z - s * (wall_x - 0.80f - center_x)};
+    Vector3 proposed = {center_x + c * (wall_x + 0.80f - center_x),
+                        body_y, center_z - s * (wall_x + 0.80f - center_x)};
     Vector3 corrected = proposed;
     Vector3 normal = {0};
     if (!CcLocalProbePhysicsSphereInternal(
             CC_LOCAL_SCENE_STREET, previous, proposed, radius,
             &corrected, &normal) ||
-        corrected.x > wall_x - radius + 0.006f || normal.x > -0.90f) {
+        center_x + c * (corrected.x - center_x) - s * (corrected.z - center_z) >
+            wall_x - radius + 0.006f ||
+        c * normal.x - s * normal.z > -0.90f) {
         (void)fprintf(stderr,
                       "%s was not solid: %.3f %.3f %.3f normal %.3f %.3f %.3f\n",
                       name, corrected.x, corrected.y, corrected.z,
                       normal.x, normal.y, normal.z);
+        exit(1);
+    }
+    Vector2 legacy = CcLocalMove((Vector2){previous.x, previous.z},
+        (Vector2){proposed.x - previous.x, proposed.z - previous.z}, false);
+    if (center_x + c * (legacy.x - center_x) - s * (legacy.y - center_z) >
+        wall_x - 0.15f) {
+        (void)fprintf(stderr, "%s allowed walking through its angled wall\n", name);
         exit(1);
     }
 }
@@ -439,7 +451,8 @@ static void TestSharedCharacterCollisionWorld(void)
         const CcLocalPlaceBuilding *house = &market->building[houses[i]];
         RequireSolidStreetHouse(house->name, house->x,
                                  house->x + house->width * 0.5f,
-                                 house->z + house->depth * 0.5f);
+                                 house->z + house->depth * 0.5f,
+                                 market->building_yaw_degrees[houses[i]]);
     }
 
 

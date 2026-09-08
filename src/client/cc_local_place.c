@@ -256,8 +256,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
                 {49,47}, {44,48}, {42,51.2f}, {42,56}}},
             {"Customs rise", 4.2f, 5, {{78.5f,54}, {78.5f,44},
                 {78.5f,34}, {78.5f,27}, {78.5f,23}}},
-            {"Food lane", 4.5f, 4, {{57.5f,35.5f}, {61,34},
-                {65,33}, {70,35}}},
+            {"Food lane", 4.5f, 4, {{54.1f,27.4f}, {56,30.5f},
+                {61,31.5f}, {65,33}}},
             {"Cloth yard", 4.8f, 5, {{34.5f,35.5f}, {30,31},
                 {24,28}, {16,28}, {10,27}}},
             {"Archive lane", 4.0f, 5, {{37.9f,27.4f}, {39.5f,24},
@@ -295,6 +295,7 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
                         CC_LOCAL_PLACE_INDUSTRY |
                         CC_LOCAL_PLACE_CARRIAGE,
         .building_count = 10,
+        .building_yaw_degrees = {-8, -12, 0, 8, -12, -10, 12, 8, -14, 12},
         .primary_building = 2,
         .compound_structure_count = 12,
         .room_name = {

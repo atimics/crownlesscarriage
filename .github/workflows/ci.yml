@@ -218,7 +218,7 @@ jobs:
           xvfb-run -a ./build/crownless_carriage --capture-town-state 1 44.25 28.85 build/gloamgate-review/market.png peaceful
           xvfb-run -a ./build/crownless_carriage --capture-town-state 1 42 47 build/gloamgate-review/coach-court.png peaceful
           xvfb-run -a ./build/crownless_carriage --capture-town-arrival 1 0.58 build/gloamgate-review/carriage.png
-          for state in burnt rebuilding lawless thriving; do
+          for state in burnt rebuilding lawless thriving hungry; do
             xvfb-run -a ./build/crownless_carriage --capture-town-state 1 44.25 28.85 build/gloamgate-review/$state.png $state
           done
       - name: Upload Gloamgate town views

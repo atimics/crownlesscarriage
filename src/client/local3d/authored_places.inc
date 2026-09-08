@@ -773,6 +773,28 @@ static void DrawSettlementBuilding(const WorldBuilding *building,
                              building->door, building->style);
                 break;
             }
+            if (building_index == profile->primary_building) {
+                /* A round guild chamber crowns the broad trading hall. */
+                float plinth = height * 0.48f;
+                float radius = fminf(width * 0.30f, depth * 0.34f);
+                DrawBuilding(x, z, width, depth * 0.72f, plinth,
+                             wall, roof, building->door, building->style);
+                rlPushMatrix();
+                rlTranslatef(0.0f, plinth, 0.0f);
+                DrawRoundTower(x + width * 0.5f, z + depth * 0.36f,
+                               radius, height - plinth,
+                               ShadeColor(wall, 1.08f), roof, false);
+                rlPopMatrix();
+                for (int32_t bay = 0; bay < 5; ++bay) {
+                    float t = ((float)bay - 2.0f) / 2.0f;
+                    float apron_depth = depth * (0.28f - 0.09f * t * t);
+                    DrawOpenRoofBay(x + (float)bay * width / 5.0f + 0.06f,
+                                    z + depth * 0.72f, width / 5.0f - 0.12f,
+                                    apron_depth, 2.55f, WORLD_WOOD_SHADOW,
+                                    burnt ? roof : BlendColor(WORLD_TEAL, wall, 0.16f));
+                }
+                break;
+            }
             /* Narrow shop fronts share a covered trading apron. */
             int32_t bays = width >= 9.0f ? 3 : 2;
             float bay_width = width / (float)bays;
@@ -4098,7 +4120,7 @@ static void DrawGloamgateShopLife(const CcSettlement *place,
     CcGood good = index == 6 ? CC_GOOD_BREAD :
                   index == 2 ? CC_GOOD_WHEAT :
                   index == 1 ? CC_GOOD_PAPER :
-                  index == 0 || index == 4 ? CC_GOOD_WOOL :
+                  index == 0 || index == 4 || index == 8 ? CC_GOOD_WOOL :
                   index == 5 ? CC_GOOD_TOOLS : CC_GOOD_WOOD;
     int32_t stock = place->stock[good] / 5;
     if (stock > 6) stock = 6;
@@ -4124,7 +4146,7 @@ static void DrawGloamgateShopLife(const CcSettlement *place,
                     (Vector3){0.035f, 0.02f, 0.55f}, WORLD_TEAL);
         }
     }
-    if (!burnt && stock > 0 && (index == 0 || index == 4)) {
+    if (!burnt && stock > 0 && (index == 0 || index == 4 || index == 8)) {
         for (int32_t cloth = 0; cloth < 3; ++cloth) {
             DrawBox((Vector3){pad.x + pad.width - 0.45f - (float)cloth * 0.52f, 1.65f, front},
                     (Vector3){0.43f, 1.3f, 0.08f},

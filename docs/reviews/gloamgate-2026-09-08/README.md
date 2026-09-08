@@ -3,7 +3,8 @@
 Gloamgate has a broad market square and five service lanes. The square is
 26.8 metres across. Six-metre coach roads curve into the existing yard.
 Shops and warehouses stand around separate trading courts, with lower
-buildings toward the camera.
+buildings toward the camera. Angled shops follow the lanes. A round guild
+chamber rises above the market hall and its bowed canopy.
 
 ![Current town plan](layout.png)
 
@@ -39,7 +40,7 @@ This native capture shows main at f0fa99e before the rebuild.
 ## Capture recipe
 
 The Linux client job publishes `gloamgate-review` with the arrival, market,
-coach court, moving carriage, fire damage, repairs, low security, and prosperity.
+coach court, moving carriage, fire damage, repairs, low security, prosperity, and empty food stores.
 
 ```sh
 --capture-town-state 1 82 36 arrival.png peaceful
@@ -50,4 +51,5 @@ coach court, moving carriage, fire damage, repairs, low security, and prosperity
 --capture-town-state 1 44.25 28.85 rebuilding.png rebuilding
 --capture-town-state 1 44.25 28.85 lawless.png lawless
 --capture-town-state 1 44.25 28.85 thriving.png thriving
+--capture-town-state 1 44.25 28.85 hungry.png hungry
 ```
