@@ -7,6 +7,7 @@ static CcSim baseline;
 static CcSim changed;
 static CcSim restored;
 static unsigned checks;
+static bool check_hash = true;
 
 static void RoundTrip(const char *field)
 {
@@ -15,7 +16,7 @@ static void RoundTrip(const char *field)
         fprintf(stderr, "%s: %s\n", field, error);
         CC_CHECK(false);
     }
-    if (CcSimHash(&changed) == CcSimHash(&baseline)) {
+    if (check_hash && CcSimHash(&changed) == CcSimHash(&baseline)) {
         fprintf(stderr, "Hash omitted %s\n", field);
         CC_CHECK(false);
     }
@@ -42,8 +43,10 @@ static void RoundTrip(const char *field)
     } \
 } while (0)
 
-int main(void)
+int main(int argc, char **argv)
 {
+    CC_CHECK(argc == 1 || (argc == 2 && strcmp(argv[1], "--save-only") == 0));
+    check_hash = argc == 1;
     CcSimInit(&baseline, UINT32_C(0x5eed0001));
     for (int32_t town = 0; town < baseline.settlement_count; ++town) {
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
@@ -79,6 +82,38 @@ int main(void)
     CHECK_FIELD(archives.dead_since_day, 1);
     CHECK_FIELD(archives.lore_lost_total, baseline.archives.lore_lost_total + 1);
     CHECK_FIELD(archives.kit_tool_wear, 1);
+    /* Schema 73 delivery receipts need direct field checks as well as hashes. */
+    for (int32_t town = 0; town < baseline.settlement_count; ++town) {
+        baseline.grain_supplies[town].organiser_id = baseline.characters[0].id;
+        baseline.grain_supplies[town].ordered = 10;
+        CHECK_FIELD(grain_supplies[town].organiser_id, baseline.characters[1].id);
+        CHECK_FIELD(grain_supplies[town].supplier_id, baseline.settlements[0].id);
+        CHECK_FIELD(grain_supplies[town].route_id, baseline.routes[0].id);
+        CHECK_FIELD(grain_supplies[town].purse, 1);
+        CHECK_FIELD(grain_supplies[town].spent, 1);
+        CHECK_FIELD(grain_supplies[town].ordered, 11);
+        CHECK_FIELD(grain_supplies[town].delivered, 1);
+        CHECK_FIELD(grain_supplies[town].lost, 1);
+        CHECK_FIELD(grain_supplies[town].redirected, 1);
+        CHECK_FIELD(grain_supplies[town].last_dispatch_day, 1);
+        CHECK_FIELD(grain_supplies[town].last_arrival_day, 1);
+        CHECK_FIELD(grain_supplies[town].enabled, true);
+    }
+    /* Obtain a valid live shipment through the real funded organiser path. */
+    CcSimInit(&baseline, 42U);
+    baseline.player.location_id = baseline.settlements[1].id;
+    baseline.carriage.location_id = baseline.player.location_id;
+    baseline.player.coins = 400;
+    char error[256];
+    CcCommand fund = {.kind = CC_COMMAND_FUND_GRAIN_SUPPLY,
+                     .target_id = baseline.player.location_id};
+    CC_CHECK(CcSimApply(&baseline, &fund, error, sizeof(error)));
+    for (int day = 0; day < 240 && baseline.grain_supplies[1].shipment_id == 0; ++day)
+        CcSimAdvanceDays(&baseline, 1);
+    CcId shipment = baseline.grain_supplies[1].shipment_id;
+    CC_CHECK(shipment != 0);
+    baseline.grain_supplies[1].shipment_id = 0;
+    CHECK_FIELD(grain_supplies[1].shipment_id, shipment);
     printf("Verified %u independent hash and saved-field mutations\n", checks);
     return 0;
 }
