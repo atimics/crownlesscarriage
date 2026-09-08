@@ -22,11 +22,19 @@ The changed worlds all hold 24 live treasures at those first different checkpoin
 
 Seed 4 accounts for most of the increase in hunts: 6,456 becomes 15,412. Its dragon is alive at the final checkpoint with the fix, and slain at that checkpoint in the control. Its population changes from 12,600 to 12,692. Seed 3 accounts for the larger population change, from 7,444 to 6,951 (−6.62%). These are outcomes of individual histories; the direction of a group average is a limited guide to campaign quality.
 
+## Seed 2 through 128,000 years
+
+**Every exported annual field matches in all 128,000 rows.** Both runs end with three treasures worth 1,566 crowns, population 12,758, 9,645 dragon hunts, and 528 broods. The dragon spends zero days uncrowned in both runs. Its existing heart stays sufficient for its continuing deep-wyrm life, so the recovery rule has no measured effect in this history.
+
+![Seed 2 through 128,000 years](seed2-long.png)
+
+Both longer runs pass all annual validations. Their first 16,000 years also match their shorter runs byte for byte after decompression. Together with the eight matched pairs, this study contains 512,000 successful annual validations, including those repeated prefixes. The complete older 32-seed long sweep remains a separate study on its earlier rules.
+
 ## Why the earlier seed 2 numbers differ
 
 The original 128,000-year investigation used simulation revision `06e5701`. The recovery fix was built on the later main revision `5f13096`, which includes other world-rule changes. At year 16,000, seed 2 has three treasures worth 1,566 crowns both before and after this fix. Every exported annual field agrees through that age.
 
-The earlier five-to-three treasure difference belongs to the change in baseline rules. The matched comparison isolates the Wyrmheart fix.
+The earlier five-to-three treasure difference belongs to the change in baseline rules. The matched comparison isolates the Wyrmheart fix. Other intervening changes already gave seed 2 a steadier history before this fix. Identifying which of those changes caused that shift would require a separate comparison.
 
 ## Campaign opinion
 
@@ -54,4 +62,4 @@ python3 run.py --long-seed2
 python3 analyze_long.py
 ```
 
-Matplotlib and NumPy are required for the charts. The eight-seed results describe this sample and these horizons.
+Matplotlib and NumPy are required for the charts. The eight-seed results describe this sample and these horizons. `long-manifest.json` and `long-summary.json` record the 128,000-year pair; `analyze_long.py` checks every exported annual field and draws its chart.
