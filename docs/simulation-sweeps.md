@@ -62,6 +62,14 @@ out/build/release/crownless_agent_sweep --seeds 8 --years 10
 out/build/release/crownless_agent_sweep --seed 47 --years 100 --wip-limit 1
 ```
 
+Both paired worlds pass structural validation at startup, each annual boundary,
+and the endpoint. The control reaches each boundary through daily steps. The
+agent is checked after its first completed action at or beyond a boundary; its
+failure report records the scheduled boundary and the actual day. A failure
+stops the sweep with a failing exit status and includes the seed, rules versions,
+state hash, and reproduction command. Each run still emits one endpoint CSV row
+per completed seed. Validation observes the simulation through its read-only API.
+
 Hunger columns use `CcSimHungerSnapshot`: `control_hunger` and `agent_hunger`
 are averages over inhabited settlements. The maximum and population-weighted
 columns use that same population. Hunger is `-1` when every settlement is

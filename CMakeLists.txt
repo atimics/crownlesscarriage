@@ -1232,6 +1232,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(horse_stable_tests)
     add_test(NAME horse_stable_breeding COMMAND horse_stable_tests)
 
+    add_executable(agent_validation_tests tests/agent_validation_tests.c)
+    target_link_libraries(agent_validation_tests PRIVATE crownless_sim)
+    cc_strict_warnings(agent_validation_tests)
+    add_test(NAME player_agent_checkpoint_validation COMMAND agent_validation_tests)
+
     add_executable(agent_report_tests tests/agent_report_tests.c)
     target_link_libraries(agent_report_tests PRIVATE crownless_sim)
     cc_strict_warnings(agent_report_tests)
