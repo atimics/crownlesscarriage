@@ -57,7 +57,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 64
+#define CC_SIM_SCHEMA_VERSION 65
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -815,7 +815,10 @@ typedef enum CcRoyalCarriageMode {
     CC_ROYAL_CARRIAGE_REPOSITIONING,
     CC_ROYAL_CARRIAGE_DELIVERING,
     CC_ROYAL_CARRIAGE_BLOCKED,
-    CC_ROYAL_CARRIAGE_WAITING_CAPACITY
+    CC_ROYAL_CARRIAGE_WAITING_CAPACITY,
+    CC_ROYAL_CARRIAGE_SITE_TRAVELLING,
+    CC_ROYAL_CARRIAGE_SITE_WAITING,
+    CC_ROYAL_CARRIAGE_SITE_UNLOADING
 } CcRoyalCarriageMode;
 
 typedef struct CcRoyalCarriage {

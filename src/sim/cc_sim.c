@@ -26,7 +26,13 @@ static void UpdateRoyalDiplomacy(CcSim *sim);
 static void AdvanceDragonCampaign(CcSim *sim);
 static void AdvanceHorseTeam(CcSim *sim);
 static void AdvanceRuins(CcSim *sim);
-static void PlanTrade(CcSim *sim);
+static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting);
+static void AdvanceSiteCarriages(CcSim *sim, CcRoadProductionAccounting *accounting);
+static bool IsSiteCarriage(const CcRoyalCarriage *carriage)
+{
+    return carriage != NULL && carriage->mode >= CC_ROYAL_CARRIAGE_SITE_TRAVELLING &&
+        carriage->mode <= CC_ROYAL_CARRIAGE_SITE_UNLOADING;
+}
 static int32_t SettlementSlotById(const CcSim *sim, CcId id);
 static int32_t CalculateDragonCrownStrength(const CcSim *sim);
 static bool DragonIsAliveAndUncrowned(const CcSim *sim);
@@ -1038,6 +1044,9 @@ const char *CcRoyalCarriageModeName(CcRoyalCarriageMode mode)
         case CC_ROYAL_CARRIAGE_REPOSITIONING: return "Seeking cargo";
         case CC_ROYAL_CARRIAGE_DELIVERING: return "Delivering";
         case CC_ROYAL_CARRIAGE_BLOCKED: return "Blocked";
+        case CC_ROYAL_CARRIAGE_SITE_TRAVELLING: return "Site delivery";
+        case CC_ROYAL_CARRIAGE_SITE_WAITING: return "Waiting at site road";
+        case CC_ROYAL_CARRIAGE_SITE_UNLOADING: return "Unloading at stop";
         case CC_ROYAL_CARRIAGE_WAITING_CAPACITY:
             return "Waiting for road space";
     }
@@ -9667,7 +9676,7 @@ static void SettleChangedRoyalDestinations(CcSim *sim)
     if (sim->schema_version < 46U) return;
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
         CcRoyalCarriage *carriage = &sim->royal_carriages[i];
-        if (carriage->active_shipment_id == 0U) continue;
+        if (IsSiteCarriage(carriage) || carriage->active_shipment_id == 0U) continue;
         const CcSettlement *target = CcSimSettlement(sim, carriage->target_id);
         if (target != NULL && target->kingdom_id == carriage->kingdom_id) continue;
         for (int32_t j = 0; j < sim->shipment_count; ++j) {
@@ -9733,12 +9742,13 @@ static bool StartRoyalRepositioningLeg(CcSim *sim,
     return true;
 }
 
-static void AdvanceRoyalCarriages(CcSim *sim)
+static void AdvanceRoyalCarriages(CcSim *sim, CcRoadProductionAccounting *site_accounting)
 {
     if (sim == NULL || sim->schema_version < 38U) return;
     bool reached_market = false;
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
         CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+        if (IsSiteCarriage(carriage)) continue;
         const CcSettlement *location = CcSimSettlement(
             sim, carriage->location_id);
         if ((location == NULL || CcSettlementIsAbandoned(location)) &&
@@ -9811,10 +9821,10 @@ static void AdvanceRoyalCarriages(CcSim *sim)
             }
         }
     }
-    if (reached_market && !HasRoyalCapacityWait(sim)) PlanTrade(sim);
+    if (reached_market && !HasRoyalCapacityWait(sim)) PlanTrade(sim, site_accounting);
 }
 
-static void UpdateShipments(CcSim *sim)
+static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_accounting)
 {
     PrepareRoyalRouteUsage(sim);
     bool reached_market = false;
@@ -9822,6 +9832,7 @@ static void UpdateShipments(CcSim *sim)
         CcShipment *shipment = &sim->shipments[i];
         CcRoyalCarriage *carriage = RoyalCarriageForShipment(
             sim, shipment->id);
+        if (IsSiteCarriage(carriage)) continue;
         if (shipment->status == CC_SHIPMENT_BLOCKED) {
             if (carriage == NULL) continue;
             bool waited_for_capacity = carriage->mode ==
@@ -10135,7 +10146,7 @@ static void UpdateShipments(CcSim *sim)
             reached_market = true;
         }
     }
-    if (reached_market) PlanTrade(sim);
+    if (reached_market) PlanTrade(sim, site_accounting);
 }
 
 static CcShipment *AllocateShipment(CcSim *sim)
@@ -10204,6 +10215,7 @@ static int32_t TradeSurplus(const CcSim *sim,
 }
 
 #include "cc_site_freight_plan.inc"
+#include "cc_site_carriages.inc"
 
 static CcMoney RoyalTradeRouteToll(const CcSim *sim, const CcRoute *route,
                                    CcId carriage_kingdom_id)
@@ -10610,7 +10622,7 @@ static void BlockRoyalTradeDemand(
                        blocked_destination);
 }
 
-static void PlanTrade(CcSim *sim)
+static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting)
 {
     if (sim->schema_version < 38U) {
         PlanLegacyTrade(sim);
@@ -10632,6 +10644,7 @@ static void PlanTrade(CcSim *sim)
                 carriage->condition + 4, 0, 100);
             continue;
         }
+        if (sim->schema_version >= 65U && DispatchSiteCarriage(sim, carriage, site_accounting)) continue;
         int32_t best_score = 0;
         int32_t best_source = -1;
         int32_t best_destination = -1;
@@ -15144,8 +15157,9 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
             ExpireSituations(sim);
             next_situation_expiry = NextSituationExpiryDay(sim);
         }
-        AdvanceRoyalCarriages(sim);
-        UpdateShipments(sim);
+        AdvanceSiteCarriages(sim, sites);
+        AdvanceRoyalCarriages(sim, sites);
+        UpdateShipments(sim, sites);
         AdvanceCouriers(sim);
         AdvanceServiceProjects(sim);
         AdvanceBanditRaids(sim);
@@ -15170,7 +15184,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
             ProduceRoadSites(sim, sites);
             UpdateRoyalDiplomacy(sim);
             AdvanceWarSociety(sim);
-            PlanTrade(sim);
+            PlanTrade(sim, sites);
             GenerateSituations(sim);
             PlanGoblinTribute(sim);
             PlanHoardRaid(sim);
@@ -19203,7 +19217,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 63U
+#define CC_NEWEST_LEGACY_SCHEMA 64U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -19221,7 +19235,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 63U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 64U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -19912,9 +19926,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             FreightCargoSlots(shipment->good, shipment->quantity) <=
                 shipment_route->capacity;
         if (CcIdKind(shipment->id) != CC_ENTITY_SHIPMENT ||
-            CcSimSettlement(sim, shipment->origin_id) == NULL ||
-            CcSimSettlement(sim, shipment->destination_id) == NULL ||
-            CcSimSettlement(sim, shipment->final_destination_id) == NULL ||
+            (CcSimSettlement(sim, shipment->origin_id) == NULL &&
+             (sim->schema_version < 65U || CcSimRoadSite(sim, shipment->origin_id) == NULL)) ||
+            (CcSimSettlement(sim, shipment->destination_id) == NULL &&
+             (sim->schema_version < 65U || CcSimRoadSite(sim, shipment->destination_id) == NULL)) ||
+            (CcSimSettlement(sim, shipment->final_destination_id) == NULL &&
+             (sim->schema_version < 65U || CcSimRoadSite(sim, shipment->final_destination_id) == NULL)) ||
             shipment_route == NULL || !route_connects || !timing_valid ||
             shipment->good < 0 || shipment->good >= CC_GOOD_COUNT ||
             shipment->quantity < 1 ||
@@ -19931,6 +19948,13 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     if (sim->schema_version >= 38U) {
         for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
             const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+            if (IsSiteCarriage(carriage)) {
+                if (!ValidSiteCarriage(sim, carriage, i)) {
+                    SetError(error, error_capacity, "Site carriage state is invalid.");
+                    return false;
+                }
+                continue;
+            }
             const CcSettlement *location = CcSimSettlement(
                 sim, carriage->location_id);
             const CcSettlement *destination = CcSimSettlement(
@@ -20010,7 +20034,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 carriage->next_dispatch_day < 0 ||
                 carriage->next_dispatch_day > sim->current_day + 7 ||
                 (shipment != NULL &&
-                 (CcSimSettlement(sim,
+                 (CcSimSettlement(sim, shipment->final_destination_id) == NULL ||
+                  CcSimSettlement(sim,
                      shipment->final_destination_id)->kingdom_id !=
                       carriage->kingdom_id ||
                   FreightCargoSlots(shipment->good,

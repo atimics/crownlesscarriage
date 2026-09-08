@@ -47,14 +47,18 @@ static void PrintSummary(const CcSim *sim, bool detail)
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
         const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
         if (carriage->mode == CC_ROYAL_CARRIAGE_IDLE) royal_idle += 1;
-        if (carriage->mode == CC_ROYAL_CARRIAGE_REPOSITIONING) {
+        if (carriage->mode == CC_ROYAL_CARRIAGE_REPOSITIONING ||
+            (carriage->mode == CC_ROYAL_CARRIAGE_SITE_TRAVELLING && carriage->active_shipment_id == 0)) {
             royal_repositioning += 1;
         }
-        if (carriage->mode == CC_ROYAL_CARRIAGE_DELIVERING) {
+        if (carriage->mode == CC_ROYAL_CARRIAGE_DELIVERING ||
+            (carriage->mode == CC_ROYAL_CARRIAGE_SITE_TRAVELLING && carriage->active_shipment_id != 0)) {
             royal_delivering += 1;
         }
-        if (carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED) royal_blocked += 1;
-        if (carriage->mode == CC_ROYAL_CARRIAGE_WAITING_CAPACITY) {
+        if (carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED ||
+            carriage->mode == CC_ROYAL_CARRIAGE_SITE_WAITING) royal_blocked += 1;
+        if (carriage->mode == CC_ROYAL_CARRIAGE_WAITING_CAPACITY ||
+            carriage->mode == CC_ROYAL_CARRIAGE_SITE_UNLOADING) {
             royal_waiting_capacity += 1;
         }
         royal_trips += carriage->trips_completed;
@@ -276,6 +280,13 @@ static void PrintRoadProduction(const CcSim *sim, const CcRoadProductionAccounti
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
             printf(" input_%d=%" PRIu64 " output_%d=%" PRIu64 " stock_%d=%d",
                 good, row->input[good], good, row->output[good], good, sim->road_sites[i].stock[good]);
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
+            if (row->freight_sent[good] || row->freight_received[good] || row->freight_delivered[good] ||
+                row->freight_shipped[good] || row->freight_lost[good])
+                printf(" sent_%d=%" PRIu64 " received_%d=%" PRIu64 " shipped_%d=%" PRIu64
+                       " delivered_%d=%" PRIu64 " lost_%d=%" PRIu64,
+                    good, row->freight_sent[good], good, row->freight_received[good],
+                    good, row->freight_shipped[good], good, row->freight_delivered[good], good, row->freight_lost[good]);
         for (int32_t gate = 0; gate < CC_PRODUCTION_GATE_COUNT; ++gate)
             printf(" gate_%d=%" PRIu64, gate, row->gates[gate]);
         putchar('\n');

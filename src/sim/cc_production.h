@@ -76,6 +76,11 @@ CcProductionReceipt CcProductionRun(const CcProductionRecipe *recipe,
                                     const CcProductionContext *context);
 typedef struct {
     CcId site_id;
+    uint64_t freight_sent[CC_GOOD_COUNT];
+    uint64_t freight_received[CC_GOOD_COUNT];
+    uint64_t freight_delivered[CC_GOOD_COUNT];
+    uint64_t freight_shipped[CC_GOOD_COUNT];
+    uint64_t freight_lost[CC_GOOD_COUNT];
     uint64_t input[CC_GOOD_COUNT];
     uint64_t output[CC_GOOD_COUNT];
     uint64_t work;
