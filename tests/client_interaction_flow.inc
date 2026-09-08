@@ -28,10 +28,20 @@ static int RunRoadJourneySaveRegression(void)
     local.adventure_ui = true;
     local.agent.athletics.travel_training_distance = 5.5f;
     local.agent.combat.health = 77.0f;
-    for (int scenario = 0; scenario < 4; ++scenario) {
+    for (int scenario = 0; scenario < 5; ++scenario) {
         if (scenario == 2) {
             ROAD_SAVE_CHECK(InitializeOpenWorld(&sim, &local, false), "Build the world road scene.");
             BeginRoadTravelState(&sim, &local);
+        }
+        if (scenario == 4) {
+            sim.journey.total_subticks = 2 * CC_WORLD_WATCH_SUBTICKS;
+            sim.journey.elapsed_subticks = CC_WORLD_WATCH_SUBTICKS;
+            sim.journey.phase = CC_JOURNEY_PHASE_RESTING;
+            sim.clock.game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND;
+            sim.carriage.mode = CC_CARRIAGE_STOPPED;
+            sim.carriage.speed_milli_per_second = 0;
+            sim.carriage.progress_milli = (int32_t)(
+                (int64_t)sim.journey.elapsed_subticks * 1000 / sim.journey.total_subticks);
         }
         local.agent.combat.health = 77.0f;
         local.agent.athletics.travel_training_distance = 5.5f;
