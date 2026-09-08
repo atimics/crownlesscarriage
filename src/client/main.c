@@ -659,20 +659,6 @@ static int32_t FirstActiveSituationIndex(const CcSim *sim)
     return -1;
 }
 
-static int32_t FirstDeliverySituationIndex(const CcSim *sim)
-{
-    if (sim == NULL) return -1;
-    for (int32_t i = 0; i < sim->situation_count; ++i) {
-        const CcSituation *situation = &sim->situations[i];
-        if (situation->status == CC_SITUATION_ACTIVE &&
-            (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
-             situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
-            return i;
-        }
-    }
-    return FirstActiveSituationIndex(sim);
-}
-
 static int32_t StepActiveSituationIndex(const CcSim *sim, int32_t selected,
                                         int32_t direction)
 {
@@ -2753,53 +2739,6 @@ static void EnterSiteFromGoblinTunnel(LocalState *local,
     local->course.scene = CC_LOCAL_SCENE_ROAD;
     local->course.alarm_countdown = 1000.0f;
 }
-
-
-
-static void PrepareActionReel(LocalState *local, ActionReelState *reel)
-{
-    *reel = (ActionReelState){0};
-    local->market_interior = false;
-    CcLocalAgentInit(&local->agent, (Vector2){1.82f, 7.50f}, false);
-    CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
-    for (int32_t discipline = 0;
-         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
-        CcLocalAgentSetAthleticLevel(
-            &local->agent, (CcAthleticDiscipline)discipline,
-            CC_ATHLETIC_MAX_LEVEL);
-    }
-    local->agent.facing_yaw = 0.5f * PI;
-    (void)CcLocalAgentSetExactTarget(
-        &local->agent, (Vector3){3.50f, 0.0f, 7.50f}, false);
-
-    local->course.alarm_active = true;
-    local->course.alarm_countdown = 1000.0f;
-    local->course.combat_origin = (Vector3){15.40f, 0.0f, 9.65f};
-    for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
-        CcLocalAgentInit(&local->course.runners[i].agent,
-                         (Vector2){88.0f + (float)i, 66.0f}, false);
-        local->course.runners[i].agent.crowned = false;
-        CcLocalCombatSetTeam(&local->course.runners[i].agent,
-                             CC_COMBAT_GUARD);
-    }
-    CcLocalAgent *opponent = &local->course.raiders[0];
-    CcLocalAgentInit(opponent, (Vector2){18.20f, 9.65f}, false);
-    opponent->crowned = false;
-    opponent->tunic_color = DANGER;
-    opponent->facing_yaw = -0.5f * PI;
-    CcLocalCombatSetTeam(opponent, CC_COMBAT_RAIDER);
-    CcLocalAgentSetAthleticLevel(opponent, CC_ATHLETIC_MOBILITY, 3);
-    CcLocalAgentSetAthleticLevel(opponent, CC_ATHLETIC_POWER, 3);
-    (void)CcLocalAgentSetExactTarget(
-        opponent, (Vector3){15.40f, 0.0f, 9.65f}, false);
-    CcLocalAgentInit(&local->course.raiders[1],
-                     (Vector2){91.0f, 65.0f}, false);
-    local->course.raiders[1].crowned = false;
-    CcLocalCombatSetTeam(&local->course.raiders[1], CC_COMBAT_RAIDER);
-}
-
-
-
 
 
 static Vector2 LocalPosition(const LocalState *local)
@@ -6188,30 +6127,6 @@ static bool StartOnlyOutgoingRoad(CcJournal *journal, CcSim *sim,
 }
 
 
-
-
-
-static void PrepareGameplayReel(CcSim *sim, LocalState *local,
-                                GameplayReelState *reel,
-                                int32_t *selected,
-                                int32_t *selected_situation,
-                                ClientView *view, ClientView *return_view)
-{
-    *reel = (GameplayReelState){0};
-    if (sim->player.coins < 120) sim->player.coins = 120;
-    *selected = FirstOutgoingRouteIndex(sim);
-    *selected_situation = FirstDeliverySituationIndex(sim);
-    *view = VIEW_LOCAL;
-    *return_view = VIEW_LOCAL;
-    ResetLocalState(local);
-    RepositionHero(local, (Vector2){44.25f, 28.85f}, false);
-    local->course.alarm_countdown = 1000.0f;
-    (void)CcLocalAgentSetExactTarget(
-        &local->agent, (Vector3){41.90f, 0.0f, 28.45f}, false);
-}
-
-
-
 static void PrepareRoadCombatReel(CcSim *sim, LocalState *local)
 {
     BeginRoadLocalState(sim, local, true);
@@ -6232,21 +6147,6 @@ static void PrepareRoadCombatReel(CcSim *sim, LocalState *local)
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 static bool HandleExpedition(CcJournal *journal, CcSim *sim,
@@ -9882,6 +9782,7 @@ static int RunTravelAudioRegression(void)
 #include "cc_capture_reels.inc"
 #endif
 #include "cc_capture_frames.inc"
+#include "cc_capture_scenes.inc"
 #if defined(CC_CLIENT_SELF_TESTS)
 #include "cc_capture_request_tests.inc"
 #endif
@@ -9889,6 +9790,7 @@ static int RunTravelAudioRegression(void)
 int main(int argc, char **argv)
 {
 #if defined(CC_CLIENT_SELF_TESTS)
+    if (argc == 2 && strcmp(argv[1], "--test-capture-scenes") == 0) return RunCaptureSceneRegression();
     if (argc == 2 && strcmp(argv[1], "--test-capture-frames") == 0) return RunCaptureFrameRegression();
     if (argc == 2 && strcmp(argv[1], "--test-capture-request") == 0) return RunCaptureRequestRegression();
     if (argc == 2 && strcmp(argv[1], "--test-map-texture-lifetime") == 0) return RunMapTextureLifetimeRegression();
@@ -10168,80 +10070,9 @@ int main(int argc, char **argv)
     }
 #endif
     CcLocalTerrainSetSeed(sim.world_seed);
-    if (capture_request.capture_creature_media &&
-        strcmp(capture_request.capture_creature_family, "goblins") == 0) {
-        sim.player.location_id = sim.goblins.lair_settlement_id;
-    } else if (capture_request.capture_creature_dragon) {
-        sim.player.location_id = sim.dragon.lair_settlement_id;
-        sim.dragon.omen_days_remaining = 2;
-        sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_TO_DRAGON;
-        if (strcmp(capture_request.capture_creature_family, "dragon-whelp") == 0) {
-            sim.dragon.life_stage = CC_DRAGON_STAGE_WHELP;
-        } else if (strcmp(capture_request.capture_creature_family,
-                          "dragon-wanderer") == 0) {
-            sim.dragon.life_stage = CC_DRAGON_STAGE_WANDERER;
-        } else if (strcmp(capture_request.capture_creature_family,
-                          "dragon-deep-wyrm") == 0) {
-            sim.dragon.life_stage = CC_DRAGON_STAGE_DEEP_WYRM;
-        }
-    } else if (capture_request.capture_creature_media) {
-        for (int32_t settlement = 0; settlement < sim.settlement_count;
-             ++settlement) {
-            if (sim.settlements[settlement].id != sim.player.location_id) {
-                continue;
-            }
-            sim.settlements[settlement].stock[CC_GOOD_FOOD] = 32;
-            break;
-        }
-    }
-    if (capture_request.capture_dragon_cave) {
-        sim.player.location_id = sim.dragon.lair_settlement_id;
-        sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_TO_DRAGON;
-        sim.goblins.tribute_target_id = sim.dragon.lair_settlement_id;
-        sim.goblins.tribute_days_remaining = 2;
-    }
-    if (capture_request.capture_road_fork || capture_request.capture_map_case || capture_request.capture_dragon_hoard_map) {
-        sim.player.location_id = sim.settlements[1].id;
-    }
-    if (capture_request.capture_town || capture_request.capture_town_arrival) {
-        sim.player.location_id = sim.settlements[capture_request.capture_town_index].id;
-    }
-    if (capture_request.capture_town_state) {
-        CcSettlement *town = &sim.settlements[capture_request.capture_town_index];
-        town->security = 75;
-        town->prosperity = strcmp(argv[6], "thriving") == 0 ? 85 : 45;
-        town->hunger = 10;
-        town->fire_damage = 0;
-        town->last_fire_day = 0;
-        town->service_project = CC_SERVICE_NONE;
-        town->service_project_days = 0;
-        if (strcmp(argv[6], "burnt") == 0 || strcmp(argv[6], "rebuilding") == 0) {
-            town->fire_damage = 60;
-            town->last_fire_day = sim.current_day;
-            town->stock[CC_GOOD_WOOD] = strcmp(argv[6], "rebuilding") == 0 ? 12 : 0;
-            town->stock[CC_GOOD_STONE] = 12;
-            town->stock[CC_GOOD_TOOLS] = 12;
-            town->prosperity = 25;
-        }
-        if (strcmp(argv[6], "lawless") == 0) town->security = 15;
-        for (int32_t a = 0; a < sim.kingdom_count; ++a) {
-            for (int32_t b = 0; b < sim.kingdom_count; ++b) {
-                sim.diplomacy[a][b] = CC_DIPLOMACY_PEACE;
-            }
-        }
-    }
-    if (capture_request.capture_witness || capture_request.capture_character) {
-        for (int32_t situation = 0; situation < sim.situation_count;
-             ++situation) {
-            if (sim.situations[situation].status != CC_SITUATION_ACTIVE) {
-                continue;
-            }
-            const CcCharacter *character = CcSimSituationAffectedCharacter(
-                &sim, &sim.situations[situation]);
-            if (character == NULL) continue;
-            sim.player.location_id = character->current_settlement_id;
-            break;
-        }
+    if (!CcCapturePrepareWorld(&capture_request, &sim, argv)) {
+        CcCaptureSceneAbort(local_target, &map_textures, &instance_lock);
+        return 1;
     }
     CcLocalBindPlace(&sim);
     if (capture_request.capture_encounter || capture_request.capture_travel || capture_request.capture_route_sight ||
@@ -10363,34 +10194,9 @@ int main(int argc, char **argv)
         sim.player.map_archive_mask = 0U;
         CcSimInitializePlayerRouteKnowledge(&sim);
     }
-    if (capture_request.capture_underroad && sim.dungeon_count > 0) {
-        sim.player.location_id = sim.dungeons[0].settlement_id;
-        sim.carriage.location_id = sim.player.location_id;
-        sim.player.cargo[CC_GOOD_FOOD] = 6;
-        sim.player.cargo[CC_GOOD_TOOLS] = 2;
-        sim.player.cargo[CC_GOOD_WEAPONS] = 1;
-        CcCommand enter = {
-            .kind = CC_COMMAND_BEGIN_DUNGEON_EXPEDITION,
-            .target_id = sim.dungeons[0].id
-        };
-        char setup_error[192];
-        (void)CcSimApply(&sim, &enter, setup_error, sizeof(setup_error));
-        for (int32_t room = 0; room <= 11; ++room) {
-            sim.dungeons[0].rooms[room].state_flags |=
-                CC_DUNGEON_ROOM_DISCOVERED;
-        }
-        sim.dungeons[0].links[29].flags |= CC_DUNGEON_LINK_DISCOVERED;
-        sim.dungeon_expedition.current_room = 9;
-        sim.dungeon_expedition.turns_elapsed = 8;
-        sim.dungeon_expedition.days_elapsed = 1;
-        sim.dungeon_expedition.light_remaining = 10;
-        sim.dungeon_expedition.noise = 3;
-        sim.dungeon_expedition.strain = 28;
-        sim.dungeon_expedition.maximum_depth = 2;
-        sim.dungeon_expedition.encounter_kind =
-            CC_DUNGEON_ENCOUNTER_TITHE_KEEPERS;
-        sim.dungeon_expedition.encounter_reaction = 6;
-        sim.dungeon_expedition.encounter_room = 9;
+    if (!CcCapturePrepareDungeon(&capture_request, &sim)) {
+        CcCaptureSceneAbort(local_target, &map_textures, &instance_lock);
+        return 1;
     }
     int32_t selected = capture_request.capture_dragon_hoard_map ? CC_MAP_DRAGON_HOARD :
         capture_request.capture_map_case ? CC_MAP_GLOAMGATE_NIGHT_ROAD :
@@ -10408,7 +10214,14 @@ int main(int argc, char **argv)
     ClientView return_view = VIEW_LOCAL;
     LocalState local = {0};
     CcCaptureState capture_state = {0};
-    uint32_t walk_cycle_mask = 0;
+#if defined(CC_CLIENT_SELF_TESTS)
+    CcCaptureScene capture_scene = {
+        .sim = &sim, .local = &local, .state = &capture_state,
+        .selected = &selected, .selected_situation = &selected_situation,
+        .view = &view, .return_view = &return_view,
+        .preferences = &preferences, .argc = argc, .argv = argv,
+    };
+#endif
     ResetLocalState(&local);
     bool roadbook_world_requested = capture_request.capture_world || capture_request.capture_travel ||
         capture_request.capture_route_sight || capture_request.capture_road_fork || capture_request.capture_road_zoom ||
@@ -10418,71 +10231,16 @@ int main(int argc, char **argv)
         (void)snprintf(startup_message, sizeof(startup_message),
                        "Could not generate the finite world.");
     }
-    if (capture_request.capture_world) {
-        const CcRoute *route = OpenWorldRouteFromSettlement(
-            &sim, sim.player.location_id);
-        if (route != NULL) {
-            (void)EnterOpenWorldAtRoadGate(&sim, &local, route->id);
-            local.world_carriage.camera_weight = 1.0f;
-        }
+    if (!CcCaptureEnterWorld(&capture_request, &capture_scene)) {
+        CcCaptureSceneAbort(local_target, &map_textures, &instance_lock);
+        return 1;
     }
     if (normal_play && !resuming_campaign && journal != NULL) {
         view = VIEW_LOCAL;
     }
-    if (capture_request.capture_opening) {
-        BeginOpening(&local);
-        view = VIEW_LOCAL;
-    }
-    if (capture_request.capture_carriage || capture_request.capture_carriage_target) {
-        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-            sim.player.cargo[good] = 1;
-        }
-    }
-    if (capture_request.capture_carriage) {
-        RepositionHero(&local, LOCAL_CARRIAGE_BAY, false);
-        local.agent.world_target = CC_LOCAL_WORLD_TARGET_CARRIAGE;
-        local.course.alarm_countdown = 1000.0f;
-    }
-    if (capture_request.capture_underroad) {
-        local.site_kind = CC_LOCAL_SITE_DUNGEON;
-        RepositionHero(
-            &local,
-            (Vector2){CC_LOCAL_SITE_ENTRANCE_X - 3.0f,
-                      CC_LOCAL_SITE_ENTRANCE_Z}, false);
-    }
-    if (capture_request.capture_carriage_target) {
-        (void)CcLocalAgentApproachWorldTarget(
-            &local.agent, CC_LOCAL_WORLD_TARGET_CARRIAGE);
-        local.course.alarm_countdown = 1000.0f;
-    }
-    if (capture_request.capture_road_fork || capture_request.capture_road_departure) {
-        const CcRoute *route = SelectedOutgoingRoute(&sim, selected);
-        if (route != NULL) {
-            (void)EnterOpenWorldAtRoadGate(&sim, &local, route->id);
-            local.world_carriage.camera_weight = capture_request.capture_road_departure ?
-                capture_request.capture_road_zoom_weight : 1.0f;
-            local.world_carriage.camera_target =
-                local.world_carriage.camera_weight;
-            local.road_choice_active = true;
-            local.departure = (CcClientDepartureTransition){
-                .phase = CC_CLIENT_DEPARTURE_READY,
-                .town_progress = 1.0f,
-                .road_book_progress = capture_request.capture_road_departure ?
-                    capture_request.capture_road_zoom_weight : 1.0f,
-            };
-            local.convoy.phase = CC_LOCAL_CONVOY_ROAD;
-            local.convoy.phase_progress = local.departure.road_book_progress;
-            local.convoy.pace = 0.0f;
-            if (capture_request.capture_road_fork) PositionOpenWorldDeparture(&sim, &local);
-            if (capture_request.capture_road_departure) {
-                PositionOpenWorldDeparture(&sim, &local);
-                if (capture_request.capture_road_zoom_weight < 1.0f) {
-                    local.convoy.pace = 0.72f;
-                    local.world_carriage.pace = local.convoy.pace;
-                }
-            }
-        }
-        local.fork_turn_progress = 1.0f;
+    if (!CcCapturePrepareDeparture(&capture_request, &capture_scene)) {
+        CcCaptureSceneAbort(local_target, &map_textures, &instance_lock);
+        return 1;
     }
     bool restored_local_session = resuming_campaign && journal != NULL &&
         RestoreClientStartupSession(session_path, &sim, &local, &view, &selected);
@@ -10539,317 +10297,9 @@ int main(int argc, char **argv)
             startup_message, sizeof(startup_message),
             "The goblin network opens inside the dragon roost.");
     }
-    if (capture_request.capture_dragon_cave) {
-        local.site_kind = CC_LOCAL_SITE_DRAGON_CAVE;
-        RepositionHero(
-            &local,
-            (Vector2){CC_LOCAL_SITE_ENTRANCE_X - 3.0f,
-                      CC_LOCAL_SITE_ENTRANCE_Z}, false);
-        CcLocalAgentSetScene(&local.agent, CC_LOCAL_SCENE_ROAD);
-        local.course.scene = CC_LOCAL_SCENE_ROAD;
-        local.course.alarm_countdown = 1000.0f;
-    }
-    if (capture_request.capture_golden || capture_request.capture_town || capture_request.capture_atmosphere) {
-        RepositionHero(
-            &local,
-            capture_request.capture_town ? (Vector2){capture_request.capture_town_x, capture_request.capture_town_z} :
-                           (Vector2){44.25f, 28.85f},
-            false);
-        local.agent.facing_yaw = -0.35f;
-        local.course.alarm_countdown = 1000.0f;
-    }
-    if (capture_request.capture_town_arrival) {
-        BeginTownArrivalState(&local);
-        local.convoy.phase_progress = capture_request.capture_town_arrival_progress;
-        SetConvoyTownPose(&local.convoy, 0.0f);
-    }
-    if (capture_request.capture_face) {
-        if (capture_request.capture_face_view == 3) {
-            RepositionHero(&local, (Vector2){64.0f, 31.0f}, false);
-            local.agent.facing_yaw = -0.32f;
-        } else {
-            local.market_interior = true;
-            CcLocalAgentInit(&local.agent, (Vector2){4.60f, 5.10f}, true);
-            CcLocalCombatSetTeam(&local.agent, CC_COMBAT_PLAYER);
-            local.agent.facing_yaw = 0.14f +
-                (capture_request.capture_face_view == 1 ? -0.38f :
-                 capture_request.capture_face_view == 2 ? 1.42f :
-                 capture_request.capture_face_view == 4 ? PI : 0.0f);
-        }
-        CcLocalAgentSetMorphology(&local.agent, CC_MORPHOLOGY_BIPED,
-                                  local.market_interior);
-        local.course.alarm_countdown = 1000.0f;
-    }
-    if (capture_request.capture_room) {
-        RepositionHero(&local,
-                       (Vector2){capture_request.capture_room_x, capture_request.capture_room_z}, false);
-        local.agent.facing_yaw = -0.18f;
-        local.course.alarm_countdown = 1000.0f;
-    }
-    if (capture_request.capture_creature_media) {
-        if (capture_request.capture_creature_horse) {
-            BeginRoadTravelState(&sim, &local);
-        } else if (capture_request.capture_creature_dragon ||
-                   strcmp(capture_request.capture_creature_family, "goblins") == 0) {
-            local.site_kind = capture_request.capture_creature_dragon ?
-                CC_LOCAL_SITE_DRAGON_CAVE : CC_LOCAL_SITE_GOBLIN_CAVE;
-            RepositionHero(
-                &local,
-                (Vector2){CC_LOCAL_SITE_ENTRANCE_X -
-                              (capture_request.capture_creature_dragon ? 12.0f : 7.0f),
-                          CC_LOCAL_SITE_ENTRANCE_Z}, false);
-            CcLocalAgentSetScene(&local.agent, CC_LOCAL_SCENE_ROAD);
-            local.course.scene = CC_LOCAL_SCENE_ROAD;
-            local.course.alarm_countdown = 1000.0f;
-        } else {
-            bool animal_view =
-                strcmp(capture_request.capture_creature_family, "animals") == 0 ||
-                strcmp(capture_request.capture_creature_family, "cow") == 0 ||
-                strcmp(capture_request.capture_creature_family, "sheep") == 0;
-            Vector2 creature_view = animal_view ?
-                (Vector2){59.5f, 40.0f} : (Vector2){24.5f, 49.5f};
-            RepositionHero(&local, creature_view, false);
-            local.agent.facing_yaw = -0.18f;
-            local.course.alarm_countdown = 1000.0f;
-        }
-    }
-    if (capture_request.capture_road || capture_request.capture_parley) {
-        BeginRoadLocalState(&sim, &local, capture_request.capture_road);
-        if (capture_request.capture_road && argc >= 4 && strcmp(argv[3], "focused") == 0) {
-            (void)CcLocalCourseSelectPlayerTarget(&local.course, &local.agent, 0);
-        }
-    }
-    if (capture_request.capture_travel || capture_request.capture_route_sight) {
-        BeginRoadTravelState(&sim, &local);
-        local.travel_time_blend = capture_request.capture_storybook ? capture_request.storybook_blend :
-                                   capture_request.capture_route_sight ? 1.0f : 0.0f;
-        local.travel_fast_forward = local.travel_time_blend > 0.5f;
-        local.world_carriage.storybook_travel = !capture_request.capture_route_sight;
-        local.world_carriage.camera_weight = local.travel_time_blend;
-        local.world_carriage.camera_target = local.travel_time_blend;
-    }
-    if (capture_request.capture_pony_book || capture_request.capture_pony_encounter || capture_request.capture_pony_swap) {
-        int32_t pony = 0;
-        while (pony == sim.pony_company.team[0] || pony == sim.pony_company.team[1]) pony++;
-        sim.pony_company.ponies[pony].route_id = sim.journey.route_id;
-        char pony_error[160];
-        CcCommand meet = {.kind = CC_COMMAND_MEET_PONY, .target_id = (CcId)pony + 1U};
-        if (!CcSimApply(&sim, &meet, pony_error, sizeof(pony_error))) {
-            (void)fprintf(stderr, "Pony capture: %s\n", pony_error);
-            return 1;
-        }
-        if (capture_request.capture_pony_swap || capture_request.capture_pony_book) {
-            CcPony *p = &sim.pony_company.ponies[pony];
-            sim.player.cargo[CcPonyQuestGood(p)] = p->quest_amount;
-            if (!CheckPonyInterface(&sim, &local, pony)) return 1;
-            if (capture_request.capture_pony_book) {
-                queued_key_press[KEY_ONE] = true;
-                if (!HandlePonyInput(NULL, &sim, &local, VIEW_LOCAL, (ContextAction){0},
-                                     pony_error, sizeof(pony_error))) return 1;
-            }
-        }
-        if (capture_request.capture_pony_book) {
-            view = VIEW_CARRIAGE;
-            local.carriage_tab = CARRIAGE_PONIES;
-        }
-        local.convoy.pace = 0.0f;
-        local.world_carriage.pace = 0.0f;
-    }
-    if (capture_request.capture_road_arrival) {
-        if (EnterOpenWorldAtRoadGate(
-                &sim, &local, sim.journey.route_id)) {
-            local.convoy.pace = 0.48f;
-            BeginRoadBookArrivalState(&sim, &local);
-            local.arrival.road_book_progress =
-                1.0f - capture_request.capture_road_zoom_weight;
-            local.arrival.phase = CC_CLIENT_ARRIVAL_ROAD_BOOK;
-            local.world_carriage.camera_weight = capture_request.capture_road_zoom_weight;
-            local.world_carriage.camera_target = capture_request.capture_road_zoom_weight;
-            (void)PositionOpenWorldArrival(&sim, &local);
-            local.world_carriage.storybook_travel = capture_request.capture_storybook_arrival;
-            local.world_carriage.arrival_travel_weight = 1.0f;
-            local.world_carriage.camera_heading_yaw = local.world_carriage.heading_yaw;
-        }
-    }
-    if (capture_request.capture && !capture_request.capture_world && !capture_request.capture_interior &&
-        !capture_request.capture_walk_cycle &&
-        !capture_request.capture_jump && !capture_request.capture_defense && !capture_request.capture_downclimb &&
-        !capture_request.capture_navigation && !capture_request.capture_limbs && !capture_request.capture_dojo &&
-        !capture_request.capture_action_reel && !capture_request.capture_gameplay_reel &&
-        !capture_request.capture_encounter && !capture_request.capture_travel && !capture_request.capture_route_sight &&
-        !capture_request.capture_road_fork &&
-        !capture_request.capture_road_zoom &&
-        !capture_request.capture_road &&
-        !capture_request.capture_parley && !capture_request.capture_carriage &&
-        !capture_request.capture_carriage_target &&
-        !capture_request.capture_golden && !capture_request.capture_town &&
-        !capture_request.capture_town_arrival &&
-        !capture_request.capture_atmosphere &&
-        !capture_request.capture_face && !capture_request.capture_room && !capture_request.capture_creature_media) {
-        local.course.alarm_countdown = 1000.0f;
-        for (int32_t frame = 0; frame < 1500; ++frame) {
-            CcLocalCourseUpdate(&local.course, &local.agent, &sim,
-                                1.0f / 60.0f);
-        }
-    }
-    if (capture_request.capture_character && local.course.situation_witness_active) {
-        RepositionHero(
-            &local,
-            (Vector2){local.course.situation_witness.position.x + 1.15f,
-                      local.course.situation_witness.position.z + 0.88f},
-            false);
-        local.conversation_character_id =
-            local.course.situation_witness_character_id;
-        local.conversation_situation_id =
-            local.course.situation_witness_id;
-        Vector3 toward_witness = {
-            local.course.situation_witness.position.x -
-                local.agent.position.x,
-            0.0f,
-            local.course.situation_witness.position.z -
-                local.agent.position.z,
-        };
-        local.agent.facing_yaw = atan2f(
-            toward_witness.x, toward_witness.z);
-        local.course.situation_witness.facing_yaw = atan2f(
-            -toward_witness.x, -toward_witness.z);
-    }
-    if (capture_request.capture_jump) {
-        local.course.alarm_countdown = 1000.0f;
-        local.agent.facing_yaw = 0.25f * PI;
-        (void)CcLocalAgentJump(&local.agent);
-        for (int32_t frame = 0; frame < 27; ++frame) {
-            CcLocalAgentUpdate(&local.agent, 1.0f / 60.0f, false);
-        }
-    }
-    if (capture_request.capture_action_reel) PrepareActionReel(&local, &capture_state.action_reel);
-    if (capture_request.capture_gameplay_reel) {
-        PrepareGameplayReel(&sim, &local, &capture_state.gameplay_reel, &selected,
-                            &selected_situation, &view, &return_view);
-    }
-    if (capture_request.capture_downclimb) {
-        CcLocalAgentInit(&local.agent, (Vector2){3.50f, 6.20f}, false);
-        (void)CcLocalAgentSetExactTarget(
-            &local.agent, (Vector3){3.50f, 0.0f, 7.50f}, false);
-        for (int32_t frame = 0; frame < 1200; ++frame) {
-            CcLocalAgentUpdate(&local.agent, 1.0f / 60.0f, false);
-            if (!local.agent.exact_target_valid && local.agent.grounded &&
-                fabsf(local.agent.position.y - 1.65f) < 0.01f) break;
-        }
-        (void)CcLocalAgentSetExactTarget(
-            &local.agent, (Vector3){3.50f, 0.0f, 6.20f}, false);
-        for (int32_t frame = 0; frame < 600; ++frame) {
-            CcLocalAgentUpdate(&local.agent, 1.0f / 60.0f, false);
-            if (local.agent.climbing_down &&
-                local.agent.climb_progress >= 0.55f) break;
-        }
-    }
-    if (capture_request.capture_defense) {
-        CcLocalCourseBindRaiderCompany(&local.course, &sim);
-        CcLocalCourseRaiseAlarmNear(&local.course, &local.agent);
-        (void)CcLocalCourseSelectPlayerTarget(&local.course,
-                                               &local.agent, 0);
-        (void)CcLocalCourseUsePlayerSkill(
-            &local.course, &local.agent, CC_COMBAT_SKILL_CRUSHING_BLOW);
-        int32_t fighting_frames = 0;
-        bool captured_skill_impact = false;
-        for (int32_t frame = 0; frame < 9000 && !captured_skill_impact;
-             ++frame) {
-            CcLocalAgentUpdate(&local.agent, 1.0f / 60.0f, false);
-            CcLocalCourseUpdate(&local.course, &local.agent, &sim,
-                                1.0f / 60.0f);
-            fighting_frames = local.course.alarm_active &&
-                              !local.course.raiders_retreating &&
-                              local.course.raider_resolve <
-                                  local.course.raider_initial_resolve ?
-                              fighting_frames + 1 : 0;
-            captured_skill_impact =
-                local.agent.humanoid.action == CC_HUMANOID_ACTION_STRIKE &&
-                local.agent.combat.active_skill ==
-                    CC_COMBAT_SKILL_CRUSHING_BLOW &&
-                local.agent.humanoid.action_time >= 0.54f;
-        }
-        (void)printf("defense capture: alarm %d retreat %d resolve %d wins %d fight frames %d skill impact %d origin %.2f,%.2f guards %.2f,%.2f raiders %.2f,%.2f\n",
-                     local.course.alarm_active,
-                     local.course.raiders_retreating,
-                     local.course.raider_resolve,
-                     local.course.defenses_completed, fighting_frames,
-                     captured_skill_impact,
-                     local.course.combat_origin.x,
-                     local.course.combat_origin.z,
-                     local.course.runners[0].agent.position.x,
-                     local.course.runners[0].agent.position.z,
-                     local.course.raiders[0].position.x,
-                     local.course.raiders[0].position.z);
-    }
-    if (capture_request.capture_dojo) {
-        local.course.alarm_countdown = 1000.0f;
-        CcLocalCourseRunner *swimmer = &local.course.runners[0];
-        CcLocalAgentInit(&swimmer->agent, (Vector2){13.90f, 9.78f}, false);
-        swimmer->agent.crowned = false;
-        swimmer->agent.tunic_color = swimmer->marker_color;
-        (void)CcLocalAgentSetExactTarget(
-            &swimmer->agent, (Vector3){9.40f, 0.0f, 9.72f}, false);
-        for (int32_t frame = 0; frame < 420; ++frame) {
-            CcLocalCourseUpdate(&local.course, &local.agent, &sim,
-                                1.0f / 60.0f);
-            if (swimmer->agent.swimming && frame > 90) break;
-        }
-    }
-    if (capture_request.capture_interior) {
-        local.market_interior = true;
-        CcLocalAgentInit(&local.agent, (Vector2){4.60f, 5.10f}, true);
-    }
-    if (capture_request.capture_limbs) {
-        CcLocalAgentSetMorphology(&local.agent, CC_MORPHOLOGY_BIPED, false);
-        if (CcLocalAgentSetExactTarget(&local.agent,
-                                       (Vector3){5.10f, 0.0f, 4.80f}, false)) {
-            for (int32_t frame = 0; frame < 120; ++frame) {
-                CcLocalAgentUpdate(&local.agent, 1.0f / 60.0f, false);
-                if (frame > 30 &&
-                    (local.agent.humanoid.feet[0].contact ==
-                         CC_HUMANOID_CONTACT_SWING ||
-                     local.agent.humanoid.feet[1].contact ==
-                         CC_HUMANOID_CONTACT_SWING)) break;
-            }
-        }
-    }
-    if (capture_request.capture_walk_cycle) {
-        local.market_interior = true;
-        CcLocalAgentInit(&local.agent, (Vector2){4.00f, 5.50f}, true);
-        (void)CcLocalAgentSetExactTarget(&local.agent,
-                                         (Vector3){8.00f, 0.0f, 5.50f}, true);
-        for (int32_t frame = 0; frame < 1200 && walk_cycle_mask != UINT32_C(0xff);
-             ++frame) {
-            CcLocalAgentUpdate(&local.agent, 1.0f / 60.0f, true);
-            float speed = sqrtf(local.agent.velocity.x * local.agent.velocity.x +
-                                local.agent.velocity.z * local.agent.velocity.z);
-            int32_t bin = (int32_t)floorf(local.agent.humanoid.phase * 8.0f) & 7;
-            uint32_t bit = UINT32_C(1) << bin;
-            if (speed > 0.25f && (walk_cycle_mask & bit) == 0) {
-                capture_state.walk_cycle_frames[bin] = local.agent;
-                walk_cycle_mask |= bit;
-            }
-        }
-        if (walk_cycle_mask != UINT32_C(0xff)) {
-            (void)fprintf(stderr, "could not sample every walk pose (mask 0x%02x)\n",
-                          walk_cycle_mask);
-            CcLocalRendererShutdown();
-            UnloadRenderTexture(local_target);
-            ReleaseMapTextures(&map_textures);
-            CcCoopClientShutdown();
-    CloseWindow();
-            return 1;
-        }
-        local.agent = capture_state.walk_cycle_frames[0];
-    }
-    if (capture_request.capture_navigation &&
-        CcLocalAgentSetExactTarget(&local.agent, (Vector3){3.50f, 0.0f, 7.50f},
-                                   false)) {
-        for (int32_t frame = 0; frame < 600; ++frame) {
-            CcLocalAgentUpdate(&local.agent, 1.0f / 60.0f, false);
-            if (!local.agent.grounded && local.agent.position.y > 0.65f) break;
-        }
+    if (!CcCapturePrepareLocal(&capture_request, &capture_scene)) {
+        CcCaptureSceneAbort(local_target, &map_textures, &instance_lock);
+        return 1;
     }
     if (render_benchmark) {
         view = VIEW_LOCAL;
@@ -10877,92 +10327,9 @@ int main(int argc, char **argv)
             local.course.alarm_countdown = 1000.0f;
         }
     }
-    if (capture_request.capture_ux) {
-        local.adventure_ui = true;
-        local.course.automatic_alarm = false;
-        RepositionHero(&local, (Vector2){44.25f, 28.85f}, false);
-        (void)CcLocalWorldUpdate(&local.course, &local.agent, &sim, 0.2f, false, true);
-        if (capture_request.capture_ux_view == 1 || capture_request.capture_ux_view == 3) {
-            local.market_interior = true;
-            RepositionHero(&local, (Vector2){4.5f, 4.2f}, true);
-        }
-        if (capture_request.capture_ux_view == 2) {
-            local.conversation_character_id = local.course.situation_witness_character_id;
-            local.conversation_situation_id = local.course.situation_witness_id;
-            RepositionHero(&local, (Vector2){local.course.situation_witness.position.x + 1.4f,
-                local.course.situation_witness.position.z + 0.4f}, false);
-            view = VIEW_CHARACTER;
-        }
-        if (capture_request.capture_ux_view == 13 || capture_request.capture_ux_view == 14) {
-            for (int32_t i = 0; i < sim.character_count; ++i) {
-                const CcCharacter *person = &sim.characters[i];
-                if (person->current_settlement_id != sim.player.location_id ||
-                    person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING || CcCharacterAgeYears(&sim, person) < 16) continue;
-                local.conversation_character_id = person->id;
-                local.conversation_situation_id = 0U;
-                local.conversation_gossip_source = capture_request.capture_ux_view == 14;
-                char capture_error[192];
-                if (!ApplyCommand(NULL, &sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
-                    .target_id = person->id}, capture_error, sizeof(capture_error))) return 1;
-                view = VIEW_CHARACTER;
-                break;
-            }
-        }
-        if (capture_request.capture_ux_view == 3) { view = VIEW_TRADE; local.trade_good = CC_GOOD_FOOD; local.trade_quantity = 2; }
-        if (capture_request.capture_ux_view == 4) { view = VIEW_LEDGER; local.book_page = 3; }
-        if (capture_request.capture_ux_view == 11 || capture_request.capture_ux_view == 12) {
-            view = VIEW_CARRIAGE;
-            local.carriage_tab = CARRIAGE_PONIES;
-            int32_t pony = sim.pony_company.team[0];
-            if (capture_request.capture_ux_view == 12) {
-                for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
-                    if (i != sim.pony_company.team[0] && i != sim.pony_company.team[1]) {
-                        pony = i;
-                        break;
-                    }
-                }
-            }
-            sim.pony_company.ponies[pony].seen = true;
-            sim.pony_company.ponies[pony].bond = 3;
-            sim.pony_company.ponies[pony].quests_completed = 2;
-            sim.pony_company.ponies[pony].releases = capture_request.capture_ux_view == 12 ? 1 : 0;
-            sim.pony_company.ponies[pony].last_seen_route = sim.routes[0].id;
-        }
-        if (capture_request.capture_ux_view == 5) view = VIEW_LOCAL;
-        if (capture_request.capture_ux_view == 6) view = VIEW_SITUATIONS;
-        if (capture_request.capture_ux_view >= 7 && capture_request.capture_ux_view <= 9) {
-            (void)InitializeOpenWorld(&sim, &local, false);
-            selected = FirstOutgoingRouteIndex(&sim);
-            const CcRoute *route = SelectedOutgoingRoute(&sim, selected);
-            if (route == NULL) return 1;
-            if (capture_request.capture_ux_view == 7) {
-                (void)EnterOpenWorldAtRoadGate(&sim, &local, route->id);
-                local.road_choice_active = true;
-                local.departure = (CcClientDepartureTransition){.phase = CC_CLIENT_DEPARTURE_READY,
-                    .town_progress = 1, .road_book_progress = 1};
-                local.convoy.phase = CC_LOCAL_CONVOY_ROAD;
-                PositionOpenWorldDeparture(&sim, &local);
-                view = VIEW_ROADS;
-            } else {
-                CcCommand travel = {.kind = CC_COMMAND_TRAVEL,
-                    .target_id = RouteOtherEnd(route, sim.player.location_id)};
-                char capture_error[192];
-                if (!ApplyCommand(NULL, &sim, travel, capture_error, sizeof(capture_error))) return 1;
-                if (capture_request.capture_ux_view == 9) {
-                    for (int32_t site = 0; site < sim.road_site_count; ++site) {
-                        if (sim.road_sites[site].route_id != route->id) continue;
-                        sim.carriage.progress_milli = route->from_id == sim.journey.origin_id ?
-                            sim.road_sites[site].progress_milli : 1000 - sim.road_sites[site].progress_milli;
-                        sim.journey.elapsed_subticks = (int32_t)((int64_t)sim.journey.total_subticks *
-                            sim.carriage.progress_milli / 1000);
-                        break;
-                    }
-                }
-                BeginRoadTravelState(&sim, &local);
-                view = VIEW_LOCAL;
-            }
-        }
-        if (argc >= 6) preferences.text_size = atoi(argv[5]) == 2 ? 2 : 0;
+    if (!CcCapturePrepareUX(&capture_request, &capture_scene)) {
+        CcCaptureSceneAbort(local_target, &map_textures, &instance_lock);
+        return 1;
     }
     bool roadbook_state_ready = !roadbook_world_requested ||
         (local.open_world && local.world_stream.manifest.route_count > 0 &&
@@ -10998,47 +10365,9 @@ int main(int argc, char **argv)
     if (!capture_request.capture && !render_benchmark && startup_message[0] != '\0') {
         (void)snprintf(message, sizeof(message), "%s", startup_message);
     }
-    if (capture_request.capture_golden) {
-        (void)snprintf(message, sizeof(message), "Town square.");
-    } else if (capture_request.capture_town || capture_request.capture_town_arrival) {
-        (void)snprintf(message, sizeof(message), "%s town plan.",
-                       CcSettlementFunctionName(
-                           sim.settlements[capture_request.capture_town_index].function));
-    } else if (capture_request.capture_atmosphere) {
-        (void)snprintf(message, sizeof(message), "%s.",
-                       CcLocalAtmosphereName(capture_request.capture_atmosphere_preset));
-    } else if (capture_request.capture_face) {
-        (void)snprintf(message, sizeof(message),
-                       "Same character model.");
-    } else if (capture_request.capture_room) {
-        (void)snprintf(message, sizeof(message), "Town view.");
-    } else if (capture_request.capture_creature_media) {
-        (void)snprintf(message, sizeof(message), "Creature settlement.");
-    }
-    if (capture_request.capture_road) {
-        (void)snprintf(message, sizeof(message), "Break the company line.");
-    } else if (capture_request.capture_parley) {
-        (void)snprintf(message, sizeof(message), "Speak with the captain.");
-    } else if (capture_request.capture_travel || capture_request.capture_route_sight) {
-        (void)snprintf(message, sizeof(message), "Travelling.");
-    }
-    if(capture_request.capture_mine_yard || capture_request.capture_mine_level) {
-        const CcRoadSite *site=CcMineSite(&sim);
-        const CcRoute *road=CcSimRoute(&sim,site->route_id);
-        sim.player.location_id=road->from_id; sim.carriage.location_id=road->from_id;
-        char mine_error[192];
-        CcCommand travel={.kind=CC_COMMAND_TRAVEL,.target_id=road->to_id};
-        if(!CcSimApply(&sim,&travel,mine_error,sizeof(mine_error))) return 1;
-        sim.journey.elapsed_subticks=(int32_t)(((int64_t)sim.journey.total_subticks*site->progress_milli+999)/1000);
-        sim.carriage.progress_milli=(int32_t)((int64_t)sim.journey.elapsed_subticks*1000/sim.journey.total_subticks);
-        sim.pony_company.encounter=-1;
-        CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=site->id};
-        if(!CcSimApply(&sim,&visit,mine_error,sizeof(mine_error))) return 1;
-        if(capture_request.capture_mine_level) {
-            sim.mine.phase=CC_MINE_LEVEL; sim.mine.x=15; sim.mine.y=5;sim.mine.light=18;sim.mine.seen=3;
-        }
-        view=VIEW_LOCAL;
-        (void)snprintf(message,sizeof(message),"Follow the mine road. Pack food before entering.");
+    if (!CcCapturePrepareMessage(&capture_request, &capture_scene, message, sizeof(message))) {
+        CcCaptureSceneAbort(local_target, &map_textures, &instance_lock);
+        return 1;
     }
     const int32_t render_benchmark_warmup_frames = 60;
     int32_t render_benchmark_warmup_count = 0;

@@ -96,3 +96,28 @@ static int RunCaptureFrameRegression(void)
     (void)puts("PASS capture frames: warmup, timing, paths, reels, and normal play");
     return 0;
 }
+
+static int RunCaptureSceneRegression(void)
+{
+    static CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcCaptureRequest request = {0};
+    uint64_t before = CcSimHash(&sim);
+    if (!CcCapturePrepareWorld(&request, &sim, NULL) ||
+        !CcCapturePrepareDungeon(&request, &sim) || CcSimHash(&sim) != before)
+        return ClientRegressionFailure("Normal startup must preserve its simulation state.");
+    request.capture_town = true;
+    request.capture_town_index = 2;
+    if (!CcCapturePrepareWorld(&request, &sim, NULL) ||
+        sim.player.location_id != sim.settlements[2].id)
+        return ClientRegressionFailure("Town capture must use the requested settlement.");
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    request = (CcCaptureRequest){.capture_underroad = true};
+    if (!CcCapturePrepareDungeon(&request, &sim) ||
+        !sim.dungeon_expedition.active ||
+        sim.dungeon_expedition.current_room != 9 ||
+        sim.player.location_id != sim.dungeons[0].settlement_id)
+        return ClientRegressionFailure("Underroad capture must enter its prepared expedition.");
+    (void)puts("PASS capture scenes: normal state, town selection, and expedition setup");
+    return 0;
+}

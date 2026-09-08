@@ -1,3 +1,17 @@
+static int32_t FirstDeliverySituationIndex(const CcSim *sim)
+{
+    if (sim == NULL) return -1;
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        const CcSituation *situation = &sim->situations[i];
+        if (situation->status == CC_SITUATION_ACTIVE &&
+            (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
+             situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
+            return i;
+        }
+    }
+    return FirstActiveSituationIndex(sim);
+}
+
 /* Reel simulation and overlays used by the capture frame hooks. */
 
 static void ActionReelSetStage(ActionReelState *reel, int32_t stage)
