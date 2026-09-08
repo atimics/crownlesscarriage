@@ -20,6 +20,7 @@
 
 #include "sim/cc_sim.h"
 #include "sim/cc_gossip_topics.h"
+#include "sim/cc_occupations.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -123,7 +124,7 @@ static const CcKingdom *KingdomForSettlement(const CcSim *sim,
    Ties break on story count, then on character slot. */
 static bool HasComposingSeal(const CcSim *sim, const CcCharacter *writer);
 
-static const CcCharacter *BestHeldWriter(const CcSim *sim, bool diary)
+static const CcCharacter *BestHeldWriter(const CcSim *sim, bool diary, bool sealed)
 {
     const CcCharacter *best = NULL;
     int32_t best_held = -1;
@@ -132,6 +133,7 @@ static const CcCharacter *BestHeldWriter(const CcSim *sim, bool diary)
         if (CcCharacterAgeYears(sim, person) < 16 ||
             person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING) continue;
         if (diary && HasComposingSeal(sim, person)) continue;
+        if (sealed && !HasComposingSeal(sim, person)) continue;
         int32_t held = 0;
         for (int32_t offset = 0; offset < CC_MAX_GOSSIP; ++offset) {
             const CcGossipVersion *version = NULL;
@@ -501,7 +503,7 @@ static int32_t RoleNotableTopic(CcCharacterRole role)
    gossip accounts. The mission visits each town and asks its most-informed
    resident for a page. */
 static const CcCharacter *BestHeldWriterAt(const CcSim *sim,
-                                           CcId settlement_id)
+                                           CcId settlement_id, int32_t topic)
 {
     const CcCharacter *best = NULL;
     int32_t best_held = -1;
@@ -511,6 +513,14 @@ static const CcCharacter *BestHeldWriterAt(const CcSim *sim,
         if (CcCharacterAgeYears(sim, person) < 16 ||
             person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING) continue;
         int32_t held = HeldCount(sim, person->id);
+        if (sim->schema_version >= 77U) {
+            held = 0;
+            for (int32_t offset = 0; offset < CC_MAX_GOSSIP; ++offset) {
+                const CcGossip *story = CcSimPersonalGossip(sim, person->id, offset, NULL);
+                if (story != NULL && CcGossipTopicMatches((CcGossipTopic)topic, story->kind))
+                    ++held;
+            }
+        }
         if (held > best_held) {
             best_held = held;
             best = person;
@@ -574,9 +584,11 @@ static void RunMission(const CcSim *sim, int topic, int32_t baseline,
 
     for (int32_t s = 0; s < sim->settlement_count && pages_written < CC_MISSION_MAX_PAGES; ++s) {
         const CcSettlement *place = &sim->settlements[s];
-        const CcCharacter *teller = BestHeldWriterAt(sim, place->id);
+        const CcCharacter *teller = BestHeldWriterAt(sim, place->id, topic);
         if (teller == NULL) continue;
-        bool by_craft = RoleNotableTopic(teller->role) == topic;
+        bool by_craft = sim->schema_version >= 77U ?
+            CcOccupationTopic(teller->occupation) == (CcGossipTopic)topic :
+            RoleNotableTopic(teller->role) == topic;
 
         typedef struct CandidateFact {
             const CcGossip *story;
@@ -607,8 +619,9 @@ static void RunMission(const CcSim *sim, int topic, int32_t baseline,
         }
         if (fact_count == 0) continue;
 
-        printf("  --- page %d: told by %s (%s), at %s%s ---\n",
+        printf("  --- page %d: told by %s (%s, %s), at %s%s ---\n",
                pages_written + 1, teller->name, CcCharacterRoleName(teller->role),
+               CcOccupationName(teller->occupation),
                place->name, by_craft ? "   [by craft]" : "");
         for (int32_t f = 0; f < fact_count; ++f) {
             const CcGossip *story = facts[f].story;
@@ -686,6 +699,7 @@ int main(int argc, char **argv)
     bool census = false;
     bool compare = false;
     bool diary = false;
+    bool sealed = false;
     bool scan = false;
     bool mission = false;
     int32_t mission_topic = 0;
@@ -711,6 +725,8 @@ int main(int argc, char **argv)
                            strcmp(name, "dispatch") == 0 ? 3 : 0;
         } else if (strcmp(argv[argument], "--census") == 0) {
             census = true;
+        } else if (strcmp(argv[argument], "--sealed") == 0) {
+            sealed = true;
         } else if (strcmp(argv[argument], "--diary") == 0) {
             diary = true;
         } else if (strcmp(argv[argument], "--compare") == 0) {
@@ -727,11 +743,15 @@ int main(int argc, char **argv)
                           "[--purpose report|petition|claim|dispatch|auto] "
                           "[--topic dragon|goblin|war|throne|wheat|herds|ponies|road|bandit|treasure|all] "
                           "[--mission TOPIC] [--baseline DAY] [--max-accounts K] "
-                          "[--census] [--compare] [--scan] [--diary]\n", argv[0]);
+                          "[--census] [--compare] [--scan] [--diary | --sealed]\n", argv[0]);
             return 1;
         }
     }
     if (seeds < 1 || years < 1 || max_accounts < 1) return 1;
+    if (diary && sealed) {
+        (void)fprintf(stderr, "Choose one writer filter: --diary or --sealed.\n");
+        return 2;
+    }
     if (mission && (mission_topic < 1 || mission_topic > CC_PROBE_TOPIC_COUNT)) {
         (void)fprintf(stderr, "--mission needs a real topic (dragon|goblin|war|throne|wheat|herds|ponies|road|bandit|treasure)\n");
         return 1;
@@ -764,7 +784,7 @@ int main(int argc, char **argv)
             }
             PrintWorldContext(&sim);
             if (census) PrintCensus(&sim);
-            const CcCharacter *writer = BestHeldWriter(&sim, diary);
+            const CcCharacter *writer = BestHeldWriter(&sim, diary, sealed);
             if (writer == NULL) {
                 printf("   <no adult non-travelling character holds accounts>\n\n");
                 continue;

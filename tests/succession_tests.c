@@ -1,3 +1,4 @@
+#include "sim/cc_occupations.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
 
@@ -163,6 +164,7 @@ static void CheckSuccessionSaves(void)
         CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
         CC_CHECK(restored.kingdoms[slot].ruler_character_id == winner_id);
         sim.schema_version = CC_SIM_SCHEMA_VERSION;
+        if (version < 77U) CcSimInitializeOccupations(&sim);
         CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
         (void)remove(path);
     }

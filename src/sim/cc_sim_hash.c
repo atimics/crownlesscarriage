@@ -575,6 +575,7 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(character->current_settlement_id);
             HASH_VALUE(character->faction_id);
             HASH_VALUE(character->role);
+            if (sim->schema_version >= 77U) HASH_VALUE(character->occupation);
             HASH_VALUE(character->goal);
             HASH_VALUE(character->activity);
             HASH_VALUE(character->appearance_seed);

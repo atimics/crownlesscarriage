@@ -1,4 +1,5 @@
 #include "sim/cc_sim.h"
+#include "sim/cc_occupations.h"
 #include "sim/cc_identity_internal.h"
 #include "sim/cc_archive_internal.h"
 #include "sim/cc_production_internal.h"
@@ -4390,6 +4391,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcSimInitializeRoadSites(sim);
     CcSimInitializeRoyalCarriages(sim);
     CcPoniesInit(sim);
+    CcSimInitializeOccupations(sim);
 }
 
 static CcDungeon *DungeonByIdMutable(CcSim *sim, CcId id)
@@ -5512,6 +5514,7 @@ static bool EventWasArchived(const CcSim *sim, CcId event_id)
 
 static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
 {
+    if (sim->schema_version >= 77U && CcGossipCraftEvent(event->kind)) return true;
     if (event->kind == CC_EVENT_GOBLIN_CULT_RALLIED) {
         /* A cult rally carries its weight in the telling, not the count of
            recruits: any rally is road news. */
@@ -5769,9 +5772,24 @@ static const CcCharacter *GossipTellerAt(const CcSim *sim, CcId place_id,
                                         CcId story_id)
 {
     if (sim->character_count == 0) return NULL;
+    int32_t craft_slot = -1;
+    if (sim->schema_version >= 77U) {
+        for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i)
+            if (sim->gossip[i].event_id == story_id && CcGossipCraftEvent(sim->gossip[i].kind))
+                craft_slot = i;
+    }
     int32_t first = (int32_t)(story_id % (uint64_t)sim->character_count);
     for (int32_t offset = 0; offset < sim->character_count; ++offset) {
         const CcCharacter *person = &sim->characters[(first + offset) % sim->character_count];
+        if (craft_slot >= 0) {
+            const CcGossip *story = &sim->gossip[craft_slot];
+            const CcGossipCarrier *held = CcSimGossipCarrier(sim, person->id);
+            bool knows = held != NULL &&
+                (held->stories & (UINT32_C(1) << (uint32_t)craft_slot)) != 0U;
+            bool observes = story->origin_id == place_id && sim->current_day - story->day <= 1 &&
+                CcOccupationObserves(person->occupation, story->kind);
+            if (!knows && !observes) continue;
+        }
         if (person->current_settlement_id == place_id &&
             CcCharacterAgeYears(sim, person) >= 16 &&
             person->activity != CC_CHARACTER_ACTIVITY_TRAVELLING) return person;
@@ -5994,7 +6012,21 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
         }
         if ((story->settlement_mask & town) != 0U &&
             (carrier->stories & bit) == 0U) {
+            const CcCharacter *observer = sim->schema_version >= 77U ?
+                CcSimCharacter(sim, carrier_id) : NULL;
+            bool craft_observation = observer != NULL &&
+                story->origin_id == place_id && story->local[place].retellings == 0 &&
+                CcGossipCraftEvent(story->kind);
+            if (craft_observation &&
+                (!CcOccupationObserves(observer->occupation, story->kind) ||
+                 sim->current_day - story->day > 1 ||
+                 CcCharacterAgeYears(sim, observer) < 16)) continue;
             carrier->stories |= bit;
+            if (craft_observation) {
+                carrier->versions[i] = story->local[place];
+                carrier->versions[i].source_character_id = observer->id;
+                continue;
+            }
             const CcCharacter *teller =
                 sim->schema_version >= 46U && CcIdKind(carrier_id) == CC_ENTITY_CHARACTER ?
                 NULL : GossipTellerAt(sim, place_id, story->event_id);
@@ -10215,6 +10247,8 @@ static CcCharacter *PromoteCharacter(CcSim *sim, const char *name,
     character->current_settlement_id = settlement_id;
     character->faction_id = faction_id;
     character->role = role;
+    character->occupation = sim->schema_version >= 77U ?
+        CcSimInitialOccupation(sim, settlement_id, character->id) : CC_OCCUPATION_NONE;
     character->goal = goal;
     character->activity = activity;
     character->appearance_seed = (uint32_t)(
@@ -10948,6 +10982,7 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
         }
     }
     successor.role = dead.role;
+    successor.occupation = sim->schema_version >= 77U ? dead.occupation : CC_OCCUPATION_NONE;
     successor.goal = dead.goal;
     successor.activity = CC_CHARACTER_ACTIVITY_WORKING;
     successor.appearance_seed = (uint32_t)(
@@ -18927,6 +18962,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !faction_exists ||
                 character->role < CC_CHARACTER_OFFICIAL ||
                 character->role > CC_CHARACTER_COURIER ||
+                (sim->schema_version >= 77U &&
+                 (character->occupation < CC_OCCUPATION_NONE ||
+                  character->occupation >= CC_OCCUPATION_COUNT)) ||
                 character->goal < CC_CHARACTER_GOAL_KEEP_ORDER ||
                 character->goal > CC_CHARACTER_GOAL_CARRY_NEWS ||
                 character->activity < CC_CHARACTER_ACTIVITY_WORKING ||
