@@ -1005,8 +1005,7 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
     for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
         CcLocalAgent *raider = &course->raiders[i];
         Vector2 raider_position = hostile ?
-            (Vector2){54.60f + (float)i * 0.35f,
-                      i == 0 ? 39.35f : 40.65f} :
+            (Vector2){49.40f + (float)i * 1.80f, 39.45f} :
             (Vector2){i == 0 ? 50.45f : 52.90f,
                       i == 0 ? 39.45f : 40.65f};
         CcLocalAgentInit(raider, raider_position, false);

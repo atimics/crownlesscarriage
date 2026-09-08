@@ -752,6 +752,7 @@ static void DrawRoadTerrain(uint32_t world_seed, const CcRoute *route,
         float z = far_side ? 45.4f + verge : 34.6f - verge;
         x += far_side ? -regional_style.cluster_pull :
                         regional_style.cluster_pull;
+        if (bridge_checkpoint && x > 38.0f && x < 60.0f) continue;
         if (!SceneryPointVisible(x, z, focus)) continue;
         TreeFamily family = (seed % 7U) == 0U ? TREE_FAMILY_OAK :
                             (seed % 5U) == 0U ? TREE_FAMILY_POLLARD :
@@ -869,6 +870,12 @@ float CcLocalRoadCarriageTravelInternal(int32_t progress_milli)
     return (float)progress_milli * 0.052f;
 }
 
+/* Leave room for the team, the hero, and the west bridge approach. */
+float CcLocalRoadEncounterCarriageXInternal(void)
+{
+    return 38.35f;
+}
+
 float CcLocalRoadCarriageX(int32_t progress_milli)
 {
     return 20.15f + CcLocalRoadCarriageTravelInternal(progress_milli);
@@ -897,10 +904,13 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     bool authored_checkpoint = !travelling &&
         runtime_assets[RUNTIME_ASSET_BRIDGE].ready;
-    float carriage_x = CcLocalRoadCarriageX(sim->carriage.progress_milli);
+    float carriage_x = travelling ?
+        CcLocalRoadCarriageX(sim->carriage.progress_milli) :
+        CcLocalRoadEncounterCarriageXInternal();
     float carriage_travel = CcLocalRoadCarriageTravelInternal(
         sim->carriage.progress_milli);
-    float lateral_offset = convoy != NULL ? convoy->lateral_offset : 0.0f;
+    float lateral_offset = travelling && convoy != NULL ?
+        convoy->lateral_offset : 0.0f;
     float carriage_pace = travelling && convoy != NULL ?
         convoy->pace : travelling ? 0.72f : 0.0f;
     bool carriage_moving = carriage_pace > 0.02f;
@@ -939,8 +949,6 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     bool combat_presentation = !travelling && course->alarm_active &&
                                camera.projection == CAMERA_PERSPECTIVE;
-    const CcLocalAgent *duel_opponent = combat_presentation ?
-        CombatCameraOpponent(course, agent) : NULL;
     RememberPresentedCamera(CC_LOCAL_SCENE_ROAD, camera, agent,
                             target.texture.width, target.texture.height);
     ArtComposition road_art = ROAD_ART_COMPOSITION;
@@ -1070,8 +1078,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
 
     if (!travelling) {
-        if (combat_presentation) DrawCourseRaider(duel_opponent);
-        else DrawCourseRunners(course, camera.target);
+        DrawCourseRunners(course, camera.target);
     }
     if (parley && !course->alarm_active) {
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {

@@ -1382,6 +1382,8 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-adventure-town-routes)
         add_test(NAME adventure_trade_terms
                  COMMAND crownless_carriage --test-adventure-trade)
+        add_test(NAME bridge_scene_input
+                 COMMAND crownless_carriage --test-bridge-scene)
         add_test(NAME world_card_input_parity
                  COMMAND crownless_carriage --test-world-cards)
         add_test(NAME adventure_input_flow

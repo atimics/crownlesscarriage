@@ -822,10 +822,10 @@ static void DrawAdventureFocus(const CcSim *sim, const LocalState *local, Client
     Vector2 mouse = ClientPointerPosition();
     const CcInteractionTarget *hover = WorldActionPointerTarget(local, mouse);
     ContextActionSet cards = BuildContextActions(sim, local, view, selected_route, selected_situation);
-    int32_t first = ContextCardFirst(local, cards.count);
-    int32_t shown = ContextCardCount(cards.count, first);
+    int32_t first = ContextCardFirst(local, &cards);
+    int32_t shown = ContextCardCount(&cards, first);
     for (int32_t card = first; card < first + shown; ++card) {
-        if (!CheckCollisionPointRec(mouse, ContextActionBounds(card - first, shown))) continue;
+        if (!CheckCollisionPointRec(mouse, ContextActionBounds(card - first, shown, cards.combat))) continue;
         for (int32_t i = 0; i < local->interactions.count; ++i) {
             const CcInteractionTarget *target = &local->interactions.targets[i];
             if (CcInteractionKeyEqual(target->key, cards.items[card].target) ||
