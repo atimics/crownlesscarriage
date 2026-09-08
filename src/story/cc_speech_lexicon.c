@@ -100,6 +100,7 @@ static bool ComposeCore(CcEventKind kind, const char *account, uint64_t choice,
 {
     char actor[CC_EVENT_TEXT_CAPACITY];
     char place[CC_EVENT_TEXT_CAPACITY];
+    char detail[CC_EVENT_TEXT_CAPACITY];
     bool alternate = (choice & 1U) != 0U;
     switch (kind) {
     case CC_EVENT_SHORTAGE:
@@ -169,6 +170,83 @@ static bool ComposeCore(CcEventKind kind, const char *account, uint64_t choice,
             return true;
         }
         break;
+    case CC_EVENT_HARVEST_FAILED:
+        if (Before(account, "'s drought harvest cannot supply the ", actor, sizeof(actor)) &&
+            Between(account, "'s drought harvest cannot supply the ", ".", place, sizeof(place))) {
+            (void)snprintf(core, capacity, alternate ?
+                "%s's drought harvest fell short of what the %s needed." :
+                "The drought harvest in %s fell short of supplies for the %s.", actor, place);
+            return true;
+        }
+        break;
+    case CC_EVENT_ROUTE_CLOSED:
+        if (Before(account, " closes the treaty bridge and delays the relief convoy.",
+                   actor, sizeof(actor))) {
+            (void)snprintf(core, capacity, alternate ?
+                "%s closed the treaty bridge, delaying the relief convoy." :
+                "The relief convoy was delayed when %s closed the treaty bridge.", actor);
+            return true;
+        }
+        break;
+    case CC_EVENT_BANDIT_PRESSURE:
+        if (Before(account, " reinforce ", actor, sizeof(actor)) &&
+            Between(account, " reinforce ", " on the old road.", place, sizeof(place))) {
+            (void)snprintf(core, capacity, alternate ?
+                "%s reinforced %s on the old road." :
+                "%s gave %s support on the old road.", actor, place);
+            return true;
+        }
+        if (Before(account, " recruits from hungry debtors and unpaid households;", actor, sizeof(actor))) {
+            (void)snprintf(core, capacity, alternate ?
+                "%s recruited hungry debtors and people from unpaid households." :
+                "Hungry debtors and people from unpaid households were being recruited by %s.", actor);
+            return true;
+        }
+        break;
+    case CC_EVENT_NOTICE_POSTED:
+        if (Before(account, " posts a notice at ", actor, sizeof(actor)) &&
+            Between(account, " posts a notice at ", ": ", place, sizeof(place)) &&
+            Between(account, ": ", ".", detail, sizeof(detail))) {
+            (void)snprintf(core, capacity, alternate ?
+                "%s posted a notice at %s about %s." :
+                "%s put up a notice at %s: %s.", actor, place, detail);
+            return true;
+        }
+        break;
+    case CC_EVENT_CHARACTER_DIED:
+        if (Before(account, " died at age ", actor, sizeof(actor)) &&
+            Between(account, " after a life in ", ".", place, sizeof(place))) {
+            (void)snprintf(core, capacity, alternate ?
+                "%s died after a life in %s." : "%s had lived in %s and died.",
+                actor, place);
+            return true;
+        }
+        break;
+    case CC_EVENT_TREASURE_CRAFTED:
+        if (Before(account, " finishes ", place, sizeof(place)) &&
+            Between(account, " finishes ", " from ", actor, sizeof(actor)) &&
+            strstr(account, "Raw Gold") != NULL && strstr(account, "weeks of work.") != NULL) {
+            (void)snprintf(core, capacity, alternate ?
+                "%s finished making %s." : "%s completed %s.", place, actor);
+            return true;
+        }
+        break;
+    case CC_EVENT_WAR_DECLARED:
+    case CC_EVENT_PEACE_DECLARED:
+        if (Before(account, "'s courier reaches ", actor, sizeof(actor)) &&
+            Between(account, "'s courier reaches ", ":", place, sizeof(place)) &&
+            strstr(account, " now binds the ") != NULL && strstr(account, " courts.") != NULL) {
+            /* Read the held wording: a retelling can change its diplomatic claim. */
+            const char *state = strstr(account, ": war now binds") != NULL ? "war" :
+                strstr(account, ": peace now binds") != NULL ? "peace" : NULL;
+            if (state != NULL) {
+                (void)snprintf(core, capacity, alternate ?
+                    "%s and %s were bound by %s." : "The courts of %s and %s entered %s.",
+                    actor, place, state);
+                return true;
+            }
+        }
+        break;
     case CC_EVENT_DRAGON_SLAIN:
         if (Before(account, ":", actor, sizeof(actor)) &&
             strstr(actor, " slays ") != NULL) {
@@ -207,6 +285,47 @@ static const char *Opener(SpeechRegister voice, const CcGossipVersion *version,
     return openings[voice][choice % 3U];
 }
 
+bool CcSpeechPrepareGossip(const CcSim *sim, const CcGossip *story,
+                            const CcGossipVersion *version, uint32_t variant,
+                            CcGossipLanguage *language)
+{
+    if (language == NULL) return false;
+    *language = (CcGossipLanguage){0};
+    if (sim == NULL || story == NULL || version == NULL || variant > 1U) return false;
+    language->kind = story->kind;
+    language->variant = variant;
+    language->confidence = version->confidence;
+    language->retellings = version->retellings;
+    CcGossipVersion unstanced = *version;
+    unstanced.court_bias = 0;
+    unstanced.alarm = 0;
+    CcGossipText(sim, story, &unstanced, language->account, sizeof(language->account));
+    if (!ComposeCore(story->kind, language->account, variant,
+                     language->claim, sizeof(language->claim)) ||
+        language->claim[0] == '\0' || HasQuantity(language->claim)) {
+        language->claim[0] = '\0';
+        return false;
+    }
+    return true;
+}
+
+bool CcSpeechCoreGossip(const CcGossipLanguage *language,
+                         char *text, size_t capacity)
+{
+    if (text == NULL || capacity == 0U) return false;
+    text[0] = '\0';
+    if (language == NULL || language->claim[0] == '\0' || HasQuantity(language->claim)) return false;
+    const char *opener = language->confidence < 40 ? "I am unsure of this account: " :
+        language->retellings >= 4 ? "This account has passed through several people: " :
+        language->variant == 0U ? "The account I heard says: " : "This is what I was told: ";
+    int written = snprintf(text, capacity, "%s%s", opener, language->claim);
+    if (written < 0 || (size_t)written >= capacity) {
+        text[0] = '\0';
+        return false;
+    }
+    return true;
+}
+
 bool CcSpeechRealizeGossip(const CcSim *sim, const CcCharacter *speaker,
                            const CcGossip *story, const CcGossipVersion *version,
                            char *text, size_t capacity)
@@ -215,18 +334,12 @@ bool CcSpeechRealizeGossip(const CcSim *sim, const CcCharacter *speaker,
     text[0] = '\0';
     if (sim == NULL || speaker == NULL || story == NULL || version == NULL) return false;
 
-    char account[CC_EVENT_TEXT_CAPACITY];
-    /* Keep the held retelling's mutations. Realization does not mutate the
-       knowledge state, and the old sim-level archival rendering stays intact. */
-    CcGossipVersion unstanced = *version;
-    unstanced.court_bias = 0;
-    unstanced.alarm = 0;
-    CcGossipText(sim, story, &unstanced, account, sizeof(account));
     char core[CC_SPEECH_TEXT_CAPACITY];
     uint64_t choice = Choice(story->event_id, speaker->id, UINT64_C(0x63632d72756d6f32));
-    if (!ComposeCore(story->kind, account, choice, core, sizeof(core))) {
-        (void)snprintf(core, sizeof(core), "%s", account);
-    }
+    CcGossipLanguage language;
+    bool supported = CcSpeechPrepareGossip(sim, story, version,
+                                          (uint32_t)(choice & 1U), &language);
+    (void)snprintf(core, sizeof(core), "%s", supported ? language.claim : language.account);
     if (core[0] == '\0' || HasQuantity(core)) {
         /* Do not mechanically erase digits and leave a broken assertion.
            Unsupported numerical accounts remain stored in full for quests,
