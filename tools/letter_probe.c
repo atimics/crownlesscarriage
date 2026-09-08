@@ -30,6 +30,206 @@ typedef struct Candidate {
     int32_t offset;
 } Candidate;
 
+/* A topic is a research mandate: the account kinds a patron (Scriptorium,
+   court, cult, guild) would commission a scout to collect. The probe's
+   topic filter is the stand-in for the future research-commission system:
+   a researcher targeting a topic searches only the accounts that match its
+   kinds, never the rest of a writer's holdings. */
+#define CC_PROBE_TOPIC_COUNT 10
+
+static const char *TopicNames[CC_PROBE_TOPIC_COUNT + 1] = {
+    "all",
+    "dragon",   /* 1 */
+    "goblin",   /* 2 */
+    "war",      /* 3 */
+    "throne",   /* 4 */
+    "wheat",    /* 5 */
+    "herds",    /* 6 */
+    "ponies",   /* 7 */
+    "road",     /* 8 */
+    "bandit",   /* 9 */
+    "treasure"  /* 10 */
+};
+
+static bool TopicMatches(int32_t topic, CcEventKind kind)
+{
+    switch (topic) {
+        case 1: /* dragon: the ember and its shadow */
+            switch (kind) {
+                case CC_EVENT_DRAGON_HOARD_STOLEN:
+                case CC_EVENT_DRAGON_OMEN:
+                case CC_EVENT_DRAGON_TREASURE_RETURNED:
+                case CC_EVENT_DRAGON_RETALIATION:
+                case CC_EVENT_DRAGON_MUSTERED:
+                case CC_EVENT_DRAGON_BATTLE:
+                case CC_EVENT_DRAGON_SLAIN:
+                case CC_EVENT_DRAGON_HOARD_RECOVERED:
+                case CC_EVENT_DRAGON_HUNT:
+                case CC_EVENT_DRAGON_CROWNED:
+                case CC_EVENT_DRAGON_UNCROWNED:
+                case CC_EVENT_DRAGON_BROOD:
+                case CC_EVENT_DRAGON_WHELP_DISPERSED:
+                case CC_EVENT_DRAGON_AFTERSHOCK:
+                case CC_EVENT_DRAGON_SUCCESSOR:
+                case CC_EVENT_DRAGON_PATRON_NAMED:
+                case CC_EVENT_DRAGON_TERRITORY_LOST:
+                case CC_EVENT_GOBLIN_CULT_RALLIED:
+                case CC_EVENT_GOBLIN_DRAGON_SEED:
+                case CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED:
+                case CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED:
+                    return true;
+                default:
+                    return false;
+            }
+        case 2: /* goblin: the Cinder Tithe and the underroad */
+            switch (kind) {
+                case CC_EVENT_GOBLIN_TRIBUTE_DEPARTED:
+                case CC_EVENT_GOBLIN_TRIBUTE_TAKEN:
+                case CC_EVENT_GOBLIN_TRIBUTE_DELIVERED:
+                case CC_EVENT_GOBLIN_RAID_DEPARTED:
+                case CC_EVENT_GOBLIN_RAIDED:
+                case CC_EVENT_GOBLIN_RAID_RETURNED:
+                case CC_EVENT_GOBLIN_HOARD_DEFENDED:
+                case CC_EVENT_GOBLIN_RAID_PREPARED:
+                case CC_EVENT_GOBLIN_TARGET_WARNED:
+                case CC_EVENT_GOBLIN_EXPEDITION_INTERCEPTED:
+                case CC_EVENT_GOBLIN_TRADE:
+                case CC_EVENT_GOBLIN_TUNNEL_TRAVERSED:
+                case CC_EVENT_GOBLIN_CULT_RALLIED:
+                case CC_EVENT_GOBLIN_DRAGON_SEED:
+                case CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED:
+                case CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED:
+                    return true;
+                default:
+                    return false;
+            }
+        case 3: /* war: courts, couriers, and supply lines */
+            switch (kind) {
+                case CC_EVENT_WAR_PRESSURE:
+                case CC_EVENT_WAR_DECLARED:
+                case CC_EVENT_PEACE_DECLARED:
+                case CC_EVENT_ALLIANCE_DECLARED:
+                case CC_EVENT_WAR_CHEST_FUNDED:
+                case CC_EVENT_WAR_SUPPLY_BOUGHT:
+                case CC_EVENT_WAR_SUPPLY_SHORTAGE:
+                case CC_EVENT_WAR_MATERIEL_LOST:
+                case CC_EVENT_COURIER_DEPARTED:
+                case CC_EVENT_COURIER_ARRIVED:
+                case CC_EVENT_COURIER_LOST:
+                case CC_EVENT_COURIER_DISTORTED:
+                case CC_EVENT_DRAGON_MUSTERED:
+                    return true;
+                default:
+                    return false;
+            }
+        case 4: /* throne: succession, pretenders, and the court's legitimacy */
+            switch (kind) {
+                case CC_EVENT_KINGDOM_ACTION:
+                case CC_EVENT_PRETENDER_CRISIS:
+                case CC_EVENT_ROYAL_SUCCESSION:
+                case CC_EVENT_MONASTIC_SUCCESSION:
+                case CC_EVENT_KING_ANOINTED:
+                case CC_EVENT_FACTION_SHIFT:
+                    return true;
+                default:
+                    return false;
+            }
+        case 5: /* wheat: the food supply that keeps hunger from the wall */
+            switch (kind) {
+                case CC_EVENT_HARVEST_FAILED:
+                case CC_EVENT_SHORTAGE:
+                case CC_EVENT_RELIEF:
+                case CC_EVENT_BAKERY_PRODUCTION:
+                case CC_EVENT_PAPER_MILLED:
+                    return true;
+                default:
+                    return false;
+            }
+        case 6: /* herds: cows, sheep, and the carriage team */
+            switch (kind) {
+                case CC_EVENT_COW_CALVING:
+                case CC_EVENT_COW_SLAUGHTERED:
+                case CC_EVENT_HORSE_BRED:
+                case CC_EVENT_FOAL_BORN:
+                case CC_EVENT_SHEEP_BRED:
+                case CC_EVENT_SHEEP_SHEARED:
+                case CC_EVENT_SHEEP_SLAUGHTERED:
+                case CC_EVENT_HORSE_TEAM_CHANGED:
+                    return true;
+                default:
+                    return false;
+            }
+        case 7: /* ponies: the seven rainbow companions. WIP: no gossip events
+                   exist for them yet, so a researcher finds nothing — and the
+                   probe reports that honestly instead of inventing holdings. */
+            return false;
+        case 8: /* road: routes, carriage, and the working sites */
+            switch (kind) {
+                case CC_EVENT_ROUTE_CLOSED:
+                case CC_EVENT_ROUTE_REPAIRED:
+                case CC_EVENT_ROUTE_DECAY:
+                case CC_EVENT_ROYAL_CARRIAGE_BLOCKED:
+                case CC_EVENT_ROYAL_CARRIAGE_REROUTED:
+                case CC_EVENT_ROAD_HOUSE_LODGING:
+                case CC_EVENT_JOURNEY_WARNING:
+                case CC_EVENT_WOODLOT_HARVEST:
+                case CC_EVENT_QUARRY_OUTPUT:
+                case CC_EVENT_MASONRY_REPAIR:
+                    return true;
+                default:
+                    return false;
+            }
+        case 9: /* bandit: raiders and the armed road */
+            switch (kind) {
+                case CC_EVENT_BANDIT_PRESSURE:
+                case CC_EVENT_BANDIT_RAID_DEPARTED:
+                case CC_EVENT_SETTLEMENT_RAIDED:
+                case CC_EVENT_BANDIT_RAID_RETURNED:
+                case CC_EVENT_ENCOUNTER_LOOT:
+                case CC_EVENT_AMBUSH_EVADED:
+                case CC_EVENT_ENCOUNTER_WITHDRAWN:
+                case CC_EVENT_HOARD_HEIST_DEPARTED:
+                case CC_EVENT_HOARD_HEIST_RETURNED:
+                    return true;
+                default:
+                    return false;
+            }
+        case 10: /* treasure: the hoard, the ledger, and wealth's movement */
+            switch (kind) {
+                case CC_EVENT_TREASURE_CRAFTED:
+                case CC_EVENT_DRAGON_HOARD_STOLEN:
+                case CC_EVENT_DRAGON_TREASURE_RETURNED:
+                case CC_EVENT_DRAGON_HOARD_RECOVERED:
+                case CC_EVENT_IRON_LEDGER_LOAN:
+                case CC_EVENT_IRON_LEDGER_REPAID:
+                case CC_EVENT_INEQUALITY_PRESSURE:
+                case CC_EVENT_GOBLIN_TRADE:
+                    return true;
+                default:
+                    return false;
+            }
+        default: /* all / none */
+            return true;
+    }
+}
+
+static const char *TopicName(int32_t topic)
+{
+    if (topic >= 0 && topic <= CC_PROBE_TOPIC_COUNT) {
+        return TopicNames[topic];
+    }
+    return "all";
+}
+
+static int32_t TopicId(const char *name)
+{
+    if (name == NULL) return 0;
+    for (int32_t topic = 1; topic <= CC_PROBE_TOPIC_COUNT; ++topic) {
+        if (strcmp(name, TopicNames[topic]) == 0) return topic;
+    }
+    return 0;
+}
+
 static const char *PurposeName(int purpose)
 {
     switch (purpose) {
@@ -39,39 +239,6 @@ static const char *PurposeName(int purpose)
         case 3: return "dispatch";
         default: return "report";
     }
-}
-
-static bool IsDragonTopic(CcEventKind kind)
-{
-    switch (kind) {
-        case CC_EVENT_DRAGON_HOARD_STOLEN:
-        case CC_EVENT_DRAGON_OMEN:
-        case CC_EVENT_DRAGON_TREASURE_RETURNED:
-        case CC_EVENT_DRAGON_RETALIATION:
-        case CC_EVENT_DRAGON_MUSTERED:
-        case CC_EVENT_DRAGON_BATTLE:
-        case CC_EVENT_DRAGON_SLAIN:
-        case CC_EVENT_DRAGON_HOARD_RECOVERED:
-        case CC_EVENT_DRAGON_HUNT:
-        case CC_EVENT_DRAGON_CROWNED:
-        case CC_EVENT_DRAGON_UNCROWNED:
-        case CC_EVENT_DRAGON_BROOD:
-        case CC_EVENT_DRAGON_WHELP_DISPERSED:
-        case CC_EVENT_DRAGON_AFTERSHOCK:
-        case CC_EVENT_DRAGON_SUCCESSOR:
-        case CC_EVENT_GOBLIN_CULT_RALLIED:
-        case CC_EVENT_GOBLIN_DRAGON_SEED:
-        case CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED:
-        case CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED:
-            return true;
-        default:
-            return false;
-    }
-}
-
-static const char *TopicName(int32_t topic)
-{
-    return topic == 1 ? "dragon" : "none";
 }
 
 static bool IsKingdomEvent(CcEventKind kind)
@@ -266,13 +433,14 @@ static const char *Audience(int purpose)
 
 /* Purpose scoring over held accounts. This is the probe's stand-in for the
    future document-mode of the discourse scorer (#277). It selects accounts
-   the writer holds; it can never fetch one they do not. */
+   the writer holds; it can never fetch one they do not. The topic filter is
+   applied before this (PrintLetter skips irrelevant accounts), so scoring
+   here only ranks within the researched subject. */
 static int32_t ScoreForPurpose(const CcSim *sim, const CcCharacter *writer,
                                const CcGossip *story,
                                const CcGossipVersion *version,
-                               int purpose, int32_t topic)
+                               int purpose)
 {
-    if (topic == 1 && IsDragonTopic(story->kind)) return 900 + story->day;
     int32_t told_day = story->heard_day > 0 ? story->heard_day : story->day;
     int32_t recency = told_day;
     int32_t score = recency * 2;
@@ -316,14 +484,17 @@ static void PrintLetter(const CcSim *sim, const CcCharacter *writer,
     Candidate candidates[CC_MAX_GOSSIP];
     int32_t candidate_count = 0;
     int32_t held = 0;
+    int32_t relevant = 0;
     for (int32_t offset = 0; offset < CC_MAX_GOSSIP; ++offset) {
         const CcGossipVersion *version = NULL;
         const CcGossip *story = CcSimPersonalGossip(sim, writer->id, offset, &version);
         if (story == NULL || version == NULL) break;
         held += 1;
+        if (topic != 0 && !TopicMatches(topic, story->kind)) continue;
+        relevant += 1;
         if (candidate_count < CC_MAX_GOSSIP) {
             candidates[candidate_count].score =
-                ScoreForPurpose(sim, writer, story, version, purpose, topic);
+                ScoreForPurpose(sim, writer, story, version, purpose);
             candidates[candidate_count].offset = offset;
             candidate_count += 1;
         }
@@ -368,6 +539,9 @@ static void PrintLetter(const CcSim *sim, const CcCharacter *writer,
     }
 
     printf("  --- purpose: %s\n", PurposeName(purpose));
+    if (topic != 0) {
+        printf("  ---- topic: %s\n", TopicName(topic));
+    }
     printf("  From: %s (%s), at %s\n",
            name, CcCharacterRoleName(writer->role),
            place != NULL ? place->name : "the road");
@@ -384,6 +558,9 @@ static void PrintLetter(const CcSim *sim, const CcCharacter *writer,
     printf("  %s\n", salutation);
     if (held == 0) {
         printf("    <no held accounts — this writer composes nothing>\n");
+    } else if (relevant == 0) {
+        printf("    <no held account touches \"%s\" — the researcher finds nothing on this subject here>\n",
+               TopicName(topic));
     }
     int32_t used = 0;
     for (int32_t i = 0; i < selected_count; ++i) {
@@ -413,7 +590,12 @@ static void PrintLetter(const CcSim *sim, const CcCharacter *writer,
         used += 1;
     }
     printf("  %s — %s\n", Closing(purpose), name);
-    printf("  ( %d held accounts; %d cited in this letter )\n\n", held, used);
+    if (topic != 0) {
+        printf("  ( %d of %d held accounts relevant to \"%s\"; %d cited in this letter )\n\n",
+               relevant, held, TopicName(topic), used);
+    } else {
+        printf("  ( %d held accounts; %d cited in this letter )\n\n", held, used);
+    }
 }
 
 static void PrintWorldContext(const CcSim *sim)
@@ -483,6 +665,7 @@ int main(int argc, char **argv)
     int32_t max_accounts = 3;
     bool census = false;
     bool compare = false;
+    bool scan = false;
     int32_t topic = 0;
 
     for (int32_t argument = 1; argument < argc; ++argument) {
@@ -495,8 +678,7 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[argument], "--max-accounts") == 0 && argument + 1 < argc) {
             max_accounts = (int32_t)strtol(argv[++argument], NULL, 10);
         } else if (strcmp(argv[argument], "--topic") == 0 && argument + 1 < argc) {
-            const char *name = argv[++argument];
-            topic = strcmp(name, "dragon") == 0 ? 1 : 0;
+            topic = TopicId(argv[++argument]);
         } else if (strcmp(argv[argument], "--purpose") == 0 && argument + 1 < argc) {
             const char *name = argv[++argument];
             if (strcmp(name, "auto") == 0) purpose = -1;
@@ -507,19 +689,22 @@ int main(int argc, char **argv)
             census = true;
         } else if (strcmp(argv[argument], "--compare") == 0) {
             compare = true;
+        } else if (strcmp(argv[argument], "--scan") == 0) {
+            scan = true;
         } else {
             (void)fprintf(stderr, "Usage: %s [--seed N] [--seeds N] [--years Y] "
                           "[--purpose report|petition|claim|dispatch|auto] "
-                          "[--topic dragon] [--max-accounts K] [--census] [--compare]\n", argv[0]);
+                          "[--topic dragon|goblin|war|throne|wheat|herds|ponies|road|bandit|treasure|all] "
+                          "[--max-accounts K] [--census] [--compare] [--scan]\n", argv[0]);
             return 1;
         }
     }
     if (seeds < 1 || years < 1 || max_accounts < 1) return 1;
 
-    printf("letter probe — world seeds %d..%d, %d years, purpose \"%s\", topic \"%s\"\n\n",
+    printf("letter probe — world seeds %d..%d, %d years, purpose \"%s\", topic \"%s\"%s\n\n",
            seed_number, seed_number + seeds - 1, years,
            purpose < 0 ? "auto (writer goal)" : PurposeName(purpose),
-           TopicName(topic));
+           TopicName(topic), scan ? ", scan all topics" : "");
 
     for (int32_t s = 0; s < seeds; ++s) {
         CcSim sim;
@@ -543,6 +728,15 @@ int main(int argc, char **argv)
             if (compare) {
                 for (int32_t p = 0; p < 4; ++p) {
                     PrintLetter(&sim, writer, p, topic, max_accounts);
+                }
+            } else if (scan) {
+                /* A researcher searches every subject in turn, composing one
+                   research report per topic from the same writer's holdings.
+                   Reports go to the Scriptorium Intake (purpose 0) because
+                   research letters are intake documents. */
+                int32_t used_purpose = purpose >= 0 ? purpose : 0;
+                for (int32_t t = 1; t <= CC_PROBE_TOPIC_COUNT; ++t) {
+                    PrintLetter(&sim, writer, used_purpose, t, max_accounts);
                 }
             } else {
                 int32_t used_purpose = purpose >= 0 ? purpose :

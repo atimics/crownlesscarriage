@@ -55,6 +55,16 @@ def main():
     if not check_quantities(vouched, redacted):
         return 1
 
+    # --scan composes one research letter per topic from the same writer,
+    # and reports honestly when a topic has no holdings (ponies are WIP).
+    scan_out = run(binary, "--seed", "3", "--seeds", "1", "--years", "1",
+                   "--scan", "--max-accounts", "2").stdout
+    for topic in ("dragon", "goblin", "war", "throne", "wheat",
+                  "herds", "ponies", "road", "bandit", "treasure"):
+        if f"purpose: report" not in scan_out or f"---- topic: {topic}" not in scan_out:
+            print(f"FAIL: scan missing topic header for {topic}")
+            return 1
+
     print("letter probe contracts passed.")
     return 0
 
