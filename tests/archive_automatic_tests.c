@@ -123,8 +123,9 @@ int main(void)
     CcSimAdvanceDays(&sim, 1);
     CC_CHECK(sim.archives.scribes == 0);
     CC_CHECK(sim.archive_recruitment.status == 1);
-    /* The ordinary world reaches its first binding shortage on day 19. */
+    /* Schema 83 reaches its first binding shortage on day 19. */
     CcSimInit(&sim, 42U);
+    sim.schema_version = 83U;
     for (int day = 0; day < 18; ++day) CcSimAdvanceDays(&sim, 1);
     CcArchiveAppointmentPlan appointment = CcSimArchiveAppointmentPlan(&sim);
     CC_CHECK(appointment.gate == CC_ARCHIVE_RECRUIT_MATERIALS && appointment.account_slot >= 0);
@@ -139,6 +140,22 @@ int main(void)
     CcSimSettlementMutable(&sim, appointment.seat_id)->stock[CC_GOOD_GOLD] = 1;
     supply = CcSimArchiveSupplyPlan(&sim, sim.royal_carriages[0].id);
     CC_CHECK(supply.gate == CC_ARCHIVE_SUPPLY_SOURCE && supply.good == CC_GOOD_GEMS);
+    CcSimInit(&sim, 42U);
+    journal = CcJournalStart(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    for (int day = 0; day < 18; ++day)
+        CC_CHECK(CcJournalAdvanceDays(journal, &sim, 1, error, sizeof(error)));
+    CC_CHECK(sim.archive_recruitment.status == 0 && sim.archives.scribes == 1);
+    CC_CHECK(CcSimArchiveStaffCount(&sim) == 1);
+    bool plain = false;
+    for (int i = 0; i < sim.treasure_count; ++i)
+        if (sim.treasures[i].owner_id == sim.archive_staff.seat_id &&
+            sim.treasures[i].gold_content == 0 && sim.treasures[i].gem_content == 0) plain = true;
+    CC_CHECK(plain);
+    CcJournalAbandon(&journal);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+    (void)remove(path);
     puts("Automatic recruitment pays real funders and reaches named work through travel, training and replay.");
     return 0;
 }

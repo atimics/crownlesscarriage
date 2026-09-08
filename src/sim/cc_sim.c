@@ -618,6 +618,15 @@ static bool EventIsPinned(const CcSim *sim, CcId event_id,
                           CcId incoming_parent)
 {
     if (event_id == 0U) return false;
+    if (sim->schema_version >= 84U) {
+        /* Keep the hoard's short causal chain through theft and its omen.
+           The motive reader follows the same five-event bound. */
+        const CcEvent *cause = CcSimEvent(sim, sim->dragon.hoard_event_id);
+        for (int depth = 0; cause != NULL && depth < 5; ++depth) {
+            if (cause->id == event_id) return true;
+            cause = CcSimEvent(sim, cause->parent_id);
+        }
+    }
     if (sim->schema_version >= 44U) {
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
             if (!sim->gossip[i].recorded &&
@@ -4526,14 +4535,18 @@ static CcTreasure *AllocateTreasure(CcSim *sim)
     return treasure;
 }
 
+static bool ArchiveTitle(const char *name)
+{
+    return strncmp(name, "Chronicle ", 10) == 0 ||
+           strncmp(name, "Ledger ", 7) == 0 ||
+           strncmp(name, "Annal ", 6) == 0 ||
+           strncmp(name, "Register ", 9) == 0 ||
+           strncmp(name, "Codex of ", 9) == 0;
+}
+
 static bool TreasureIsArchiveVolume(const CcTreasure *treasure)
 {
-    if (treasure == NULL || treasure->destroyed) return false;
-    return strncmp(treasure->name, "Chronicle ", 10) == 0 ||
-           strncmp(treasure->name, "Ledger ", 7) == 0 ||
-           strncmp(treasure->name, "Annal ", 6) == 0 ||
-           strncmp(treasure->name, "Register ", 9) == 0 ||
-           strncmp(treasure->name, "Codex of ", 9) == 0;
+    return treasure != NULL && !treasure->destroyed && ArchiveTitle(treasure->name);
 }
 
 int32_t CcSimArchivePhysicalLore(const CcSim *sim)
@@ -6178,16 +6191,16 @@ static CcSettlement *ArchiveVaultWithBindingMaterials(CcSim *sim,
     return NULL;
 }
 
-static CcTreasure *BindArchiveTomeAt(CcSim *sim, CcSettlement *vault)
+static CcTreasure *BindArchiveTomeAt(CcSim *sim, CcSettlement *vault, bool plain)
 {
     static const char *forms[] = {"Chronicle", "Ledger", "Annal", "Register"};
     if (vault == NULL || CcSettlementIsAbandoned(vault) ||
-        vault->stock[CC_GOOD_GOLD] < 1 || vault->stock[CC_GOOD_GEMS] < 1) return NULL;
+        (!plain && (vault->stock[CC_GOOD_GOLD] < 1 || vault->stock[CC_GOOD_GEMS] < 1))) return NULL;
     CcKingdom *kingdom = KingdomMutable(sim, vault->kingdom_id);
     CcTreasure *tome = kingdom != NULL ? AllocateTreasure(sim) : NULL;
     if (tome == NULL) return NULL;
-    vault->stock[CC_GOOD_GOLD] -= 1;
-    vault->stock[CC_GOOD_GEMS] -= 1;
+    vault->stock[CC_GOOD_GOLD] -= plain ? 0 : 1;
+    vault->stock[CC_GOOD_GEMS] -= plain ? 0 : 1;
     (void)snprintf(tome->name, sizeof(tome->name),
                    "%.12s %.18s of %d",
                    forms[sim->treasure_count % 4],
@@ -6195,10 +6208,10 @@ static CcTreasure *BindArchiveTomeAt(CcSim *sim, CcSettlement *vault)
     tome->maker_settlement_id = vault->id;
     tome->owner_id = vault->id;
     tome->location_id = vault->id;
-    tome->gold_content = 1;
-    tome->gem_content = 1;
+    tome->gold_content = plain ? 0 : 1;
+    tome->gem_content = plain ? 0 : 1;
     tome->craft_work = 1;
-    tome->appraised_value = 6;
+    tome->appraised_value = plain ? 1 : 6;
     tome->created_day = sim->current_day;
     return tome;
 }
@@ -6209,7 +6222,7 @@ static bool BindArchiveTome(CcSim *sim)
     int32_t holder = (int32_t)(sim->treasure_count % sim->kingdom_count);
     CcSettlement *vault = sim->schema_version >= 81U && sim->archive_staff.active ?
         CcSimSettlementMutable(sim, sim->archive_staff.seat_id) : ArchiveVaultWithBindingMaterials(sim, holder);
-    return BindArchiveTomeAt(sim, vault) != NULL;
+    return BindArchiveTomeAt(sim, vault, sim->schema_version >= 84U && sim->archive_staff.active) != NULL;
 }
 
 CcArchiveAppointmentPlan CcSimArchiveAppointmentPlan(const CcSim *sim)
@@ -6255,7 +6268,8 @@ CcArchiveAppointmentPlan CcSimArchiveAppointmentPlan(const CcSim *sim)
         }
     if (plan.account_slot < 0) return plan;
     plan.gate = CC_ARCHIVE_RECRUIT_MATERIALS;
-    if (seat->stock[CC_GOOD_GOLD] < 1 || seat->stock[CC_GOOD_GEMS] < 1) return plan;
+    if (sim->schema_version < 84U &&
+        (seat->stock[CC_GOOD_GOLD] < 1 || seat->stock[CC_GOOD_GEMS] < 1)) return plan;
     plan.gate = CC_ARCHIVE_RECRUIT_STORAGE;
     bool slot = sim->treasure_count < CC_MAX_TREASURES;
     for (int32_t i = 0; i < sim->treasure_count; ++i) slot |= sim->treasures[i].destroyed;
@@ -6269,7 +6283,7 @@ static bool AppointArchiveRecruitReady(CcSim *sim, CcArchiveAppointmentPlan plan
     for (int32_t i = 0; i < sim->treasure_count; ++i)
         if (sim->treasures[i].id == plan.volume_id) volume = &sim->treasures[i];
     CcSettlement *seat = CcSimSettlementMutable(sim, plan.seat_id);
-    if (plan.account_slot >= 0) volume = BindArchiveTomeAt(sim, seat);
+    if (plan.account_slot >= 0) volume = BindArchiveTomeAt(sim, seat, sim->schema_version >= 84U);
     if (volume == NULL) return false;
     CcId patron = sim->archive_recruitment.patron_ids[0];
     sim->archive_recruitment.wheat -= 2;
@@ -18556,13 +18570,17 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             treasure->owner_id == sim->dragon.id ||
             treasure->owner_id == sim->player.id ||
             treasure->owner_id == sim->hoard_raiders.id;
+        bool archive_material = ArchiveTitle(treasure->name) ||
+            (strncmp(treasure->name, "Ruined ", 7) == 0 && ArchiveTitle(treasure->name + 7));
+        bool plain_archive = sim->schema_version >= 84U && archive_material &&
+            treasure->gold_content == 0 && treasure->gem_content == 0;
         if (CcIdKind(treasure->id) != CC_ENTITY_TREASURE ||
             !ValidBoundedText(treasure->name, sizeof(treasure->name)) ||
             CcSimSettlement(sim, treasure->maker_settlement_id) == NULL ||
             CcSimSettlement(sim, treasure->location_id) == NULL ||
-            !valid_owner || treasure->gold_content < 1 ||
+            !valid_owner || (!plain_archive && treasure->gold_content < 1) ||
             treasure->gold_content > CC_SIM_MAX_UNITS ||
-            treasure->gem_content < 1 ||
+            (!plain_archive && treasure->gem_content < 1) ||
             treasure->gem_content > CC_SIM_MAX_UNITS ||
             treasure->craft_work < 1 ||
             treasure->craft_work > CC_SIM_MAX_UNITS ||

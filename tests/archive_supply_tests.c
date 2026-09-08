@@ -126,6 +126,7 @@ int main(void)
         sim.settlements[0].stock[CC_GOOD_GOLD] = 1;
         sim.settlements[0].stock[CC_GOOD_GEMS] = 1;
         sim.settlements[0].stock[binding] = 0;
+        sim.schema_version = 83U;
         sim.archive_staff.active = true;
         sim.archive_staff.seat_id = sim.settlements[0].id;
         sim.archive_staff.legacy_scribes = 1;

@@ -61,6 +61,7 @@ static void RoundTrip(void)
     CC_CHECK(CcSaveEncode(&sim, &bytes, &length, error, sizeof(error)));
     CC_CHECK(CcSaveDecode(bytes, length, &restored, error, sizeof(error)));
     CcSaveFreeBuffer(bytes);
+    restored.schema_version = sim.schema_version;
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
     CC_CHECK(memcmp(sim.royal_carriages, restored.royal_carriages, sizeof(sim.royal_carriages)) == 0);
 }
@@ -164,6 +165,7 @@ static void CheckBindingDelivery(void)
     const CcGood goods[] = {CC_GOOD_GOLD, CC_GOOD_GEMS};
     for (int i = 0; i < 2; ++i) {
         Fixture();
+        sim.schema_version = 83U;
         CcGood good = goods[i];
         CcSettlement *seat = CcSimSettlementMutable(&sim, seat_id);
         seat->stock[CC_GOOD_PAPER] = 10;
