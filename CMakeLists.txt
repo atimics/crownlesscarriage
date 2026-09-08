@@ -91,6 +91,7 @@ cc_strict_warnings(crownless_locomotion)
 add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
+    src/sim/cc_journey.c
     src/sim/cc_mine.c
     src/sim/cc_ponies.c
 )
