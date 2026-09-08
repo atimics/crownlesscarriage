@@ -1,0 +1,12 @@
+{
+  "food_rules": {
+    "rows": 5400,
+    "parent_sha256": "dca7ed9e42fc11a203ee354e312b0b300ac9f466e33e158d784bd6c6879d1ca5",
+    "current_sha256": "dca7ed9e42fc11a203ee354e312b0b300ac9f466e33e158d784bd6c6879d1ca5"
+  },
+  "annual_states": {
+    "rows": 720,
+    "parent_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10",
+    "current_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10"
+  }
+}

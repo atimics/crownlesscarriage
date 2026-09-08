@@ -1,0 +1,16 @@
+[
+  {
+    "probe": "commands",
+    "rows": 832,
+    "parent_sha256": "2444a879f581a117a67d68aae15c001e6157095a4bbebf70fa613255aa89abaa",
+    "current_sha256": "2444a879f581a117a67d68aae15c001e6157095a4bbebf70fa613255aa89abaa",
+    "equal": true
+  },
+  {
+    "probe": "annual_hashes",
+    "rows": 720,
+    "parent_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10",
+    "current_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10",
+    "equal": true
+  }
+]

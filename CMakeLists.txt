@@ -91,8 +91,15 @@ cc_strict_warnings(crownless_locomotion)
 add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
+    src/sim/cc_route_rules.c
+    src/sim/cc_journey_departure.c
+    src/sim/cc_journey_encounter.c
+    src/sim/cc_journey_runtime.c
     src/sim/cc_production.c
+    src/sim/cc_food_economy.c
+    src/sim/cc_goods.c
     src/sim/cc_journey.c
+    src/sim/cc_journey_commands.c
     src/sim/cc_mine.c
     src/sim/cc_ponies.c
 )
@@ -249,6 +256,14 @@ if(CC_BUILD_BENCHMARKS)
     add_executable(crownless_sim_metrics tools/sim_metrics.c)
     target_link_libraries(crownless_sim_metrics PRIVATE crownless_sim)
     cc_strict_warnings(crownless_sim_metrics)
+
+    add_executable(crownless_grain_experiment tools/grain_experiment.c)
+    target_link_libraries(crownless_grain_experiment PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_grain_experiment)
+
+    add_executable(crownless_bakery_experiment tools/bakery_experiment.c)
+    target_link_libraries(crownless_bakery_experiment PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_bakery_experiment)
 
     add_executable(crownless_letter_probe tools/letter_probe.c)
     target_link_libraries(crownless_letter_probe PRIVATE crownless_sim)
@@ -1189,6 +1204,15 @@ if(BUILD_TESTING)
     add_test(NAME local_session_round_trip COMMAND client_session_tests)
 
     add_executable(road_stop_tests tests/road_stop_tests.c)
+    add_executable(grain_supply_tests tests/grain_supply_tests.c)
+    target_link_libraries(grain_supply_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(grain_supply_tests)
+    add_test(NAME grain_supply_and_disruption COMMAND grain_supply_tests)
+
+    add_executable(bakery_support_tests tests/bakery_support_tests.c)
+    target_link_libraries(bakery_support_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(bakery_support_tests)
+    add_test(NAME bakery_support_and_memory COMMAND bakery_support_tests)
     target_link_libraries(road_stop_tests PRIVATE crownless_persistence crownless_metagame)
     cc_strict_warnings(road_stop_tests)
     add_test(NAME roadside_camp_choices COMMAND road_stop_tests)

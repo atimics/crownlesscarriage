@@ -43,7 +43,7 @@ static void StartSiteLeg(CcSim *sim, CcRoyalCarriage *carriage, CcShipment *ship
         shipment->departure_day = carriage->departure_day;
         shipment->arrival_day = carriage->arrival_day;
         shipment->status = CC_SHIPMENT_TRAVELLING;
-        slots = FreightCargoSlots(shipment->good, shipment->quantity);
+        slots = CcGoodsFreightCargoSlots(shipment->good, shipment->quantity);
     }
     const CcRoute *route = CcSimRoute(sim, carriage->route_id);
     UseRoyalRoute(sim, (int32_t)(route - sim->routes), slots);
@@ -136,7 +136,7 @@ static void AdvanceSiteCarriages(CcSim *sim, CcRoadProductionAccounting *account
         }
         if (carriage->mode == CC_ROYAL_CARRIAGE_SITE_WAITING) {
             int32_t slots = SiteRouteSlots(sim, carriage);
-            if (slots < (shipment != NULL ? FreightCargoSlots(shipment->good, shipment->quantity) : 1)) continue;
+            if (slots < (shipment != NULL ? CcGoodsFreightCargoSlots(shipment->good, shipment->quantity) : 1)) continue;
             const CcRoadSite *site = CcSimRoadSite(sim, carriage->location_id);
             CcProductionRecipe recipe;
             if (shipment == NULL && site != NULL && site->accessible && CcRoadSiteRecipe(site, &recipe) &&
@@ -145,7 +145,7 @@ static void AdvanceSiteCarriages(CcSim *sim, CcRoadProductionAccounting *account
                 int32_t floor = SiteOutputFloor(sim, site, good);
                 const CcSettlement *town = CcSimSettlement(sim, carriage->destination_id);
                 int32_t quantity = MinimumI32(site->stock[good] - floor,
-                    MinimumI32(CC_SIM_MAX_UNITS - town->stock[good], slots * FreightUnitsPerCargoSlot(good)));
+                    MinimumI32(CC_SIM_MAX_UNITS - town->stock[good], slots * CcGoodsFreightUnitsPerCargoSlot(good)));
                 if (quantity > 0) {
                     shipment = AllocateShipment(sim);
                     if (shipment == NULL) continue;
@@ -208,7 +208,7 @@ static bool ValidSiteCarriage(const CcSim *sim, const CcRoyalCarriage *carriage,
     for (int32_t i = 0; i < sim->shipment_count; ++i)
         if (sim->shipments[i].id == carriage->active_shipment_id) shipment = &sim->shipments[i];
     if ((carriage->active_shipment_id != 0) != (shipment != NULL)) return false;
-    if (shipment != NULL && (FreightCargoSlots(shipment->good, shipment->quantity) >
+    if (shipment != NULL && (CcGoodsFreightCargoSlots(shipment->good, shipment->quantity) >
         CC_ROYAL_CARRIAGE_CARGO_SLOTS || shipment->route_id != carriage->route_id ||
         shipment->destination_id != carriage->destination_id ||
         shipment->final_destination_id != carriage->destination_id)) return false;

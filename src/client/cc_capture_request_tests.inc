@@ -14,7 +14,7 @@ static int RunCaptureRequestRegression(void)
         !request.capture || request.capture_ux_view != 14 ||
         strcmp(request.capture_path, "ux.png") != 0)
         return ClientRegressionFailure("UX capture must retain its view and path.");
-    ux[2] = "15";
+    ux[2] = "20";
     if (CcCaptureRequestParse(6, ux, &request))
         return ClientRegressionFailure("UX capture must enforce its view range.");
     char *storybook[] = {"crownless", "--capture-storybook", "0.25", "0.75", "story.png"};

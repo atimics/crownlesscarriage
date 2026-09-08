@@ -1,0 +1,12 @@
+{
+  "cargo": {
+    "rows": 2176,
+    "parent_sha256": "35d723dd302351616e4f70e95a65bad260b0b3c1d769d461acb30c24d09ad27c",
+    "current_sha256": "35d723dd302351616e4f70e95a65bad260b0b3c1d769d461acb30c24d09ad27c"
+  },
+  "annual_states": {
+    "rows": 720,
+    "parent_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10",
+    "current_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10"
+  }
+}
