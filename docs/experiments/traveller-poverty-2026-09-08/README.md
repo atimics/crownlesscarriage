@@ -1,3 +1,11 @@
+## Current-main integration
+
+The current draft uses simulation schema 60 and SQLite version 30. Schemas 58
+and 59 retain main's settlement-name and mine rules. Historical simulations below
+were captured from the earlier schema-58 draft; their manifests identify that
+revision. Updated compatibility and current-rules checks are in
+../../reviews/traveller-main-integration-2026-09-08.
+
 # Traveller poverty and bandits
 
 Implemented source: `619b485`; baseline: `d478d2e`.

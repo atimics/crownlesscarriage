@@ -1,4 +1,5 @@
 #include "sim/cc_sim.h"
+#include "sim/cc_mine.h"
 
 #include "quest/cc_quest.h"
 
@@ -207,6 +208,38 @@ void CcGenerateCharacterName(uint32_t world_seed, CcId settlement_id,
         (uint32_t)(sizeof(family_names) / sizeof(family_names[0]));
     (void)snprintf(output, CC_NAME_CAPACITY, "%s %s",
                    first_names[first], family_names[family]);
+}
+
+#include "cc_character_names.inc"
+
+void CcGenerateSettlementCharacterName(uint32_t world_seed, CcId settlement_id,
+                                       int32_t place_function, int32_t generation,
+                                       uint32_t ordinal, char output[CC_NAME_CAPACITY])
+{
+    if (output == NULL) return;
+    uint32_t settlement = (uint32_t)(settlement_id ^ (settlement_id >> 32U));
+    uint32_t seed = MixCharacterSeed(world_seed ^ settlement ^
+        ((uint32_t)generation + 1U) * UINT32_C(0x9e3779b9) ^
+        (ordinal + 1U) * UINT32_C(0x85ebca6b));
+    const char *given = RootedNameForm(GIVEN_NAME_ROOTS,
+        sizeof(GIVEN_NAME_ROOTS) / sizeof(GIVEN_NAME_ROOTS[0]), place_function, seed);
+    const char *family = RootedNameForm(FAMILY_NAME_ROOTS,
+        sizeof(FAMILY_NAME_ROOTS) / sizeof(FAMILY_NAME_ROOTS[0]), place_function,
+        MixCharacterSeed(seed ^ UINT32_C(0xa511e9b3)));
+    (void)snprintf(output, CC_NAME_CAPACITY, "%s %s", given, family);
+}
+
+static void GenerateResidentName(const CcSim *sim, CcId settlement_id,
+                                 int32_t generation, uint32_t ordinal,
+                                 char output[CC_NAME_CAPACITY])
+{
+    if (sim->schema_version < 58U) {
+        CcGenerateCharacterName(sim->world_seed, settlement_id, generation, ordinal, output);
+        return;
+    }
+    const CcSettlement *place = CcSimSettlement(sim, settlement_id);
+    CcGenerateSettlementCharacterName(sim->world_seed, settlement_id,
+        place != NULL ? (int32_t)place->function : -1, generation, ordinal, output);
 }
 
 int32_t CcCharacterAgeYears(const CcSim *sim,
@@ -2450,7 +2483,7 @@ CcMoney CcSimTrackedGold(const CcSim *sim)
         total += sim->settlements[i].market_coins;
         total += sim->settlements[i].war_chest;
     }
-    if (sim->schema_version >= 58U) {
+    if (sim->schema_version >= 60U) {
         for (int32_t i = 0; i < sim->character_count; ++i) {
             total += sim->characters[i].travel_coins;
         }
@@ -2462,6 +2495,7 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
 {
     if (sim == NULL || good < 0 || good >= CC_GOOD_COUNT) return 0;
     int64_t total = sim->player.cargo[good] +
+                    (sim->schema_version >= 59U ? sim->mine.pack[good] : 0) +
                     sim->goblins.carried_goods[good] +
                     sim->goblins.lair_stock[good] +
                     sim->dragon.hoard_goods[good] +
@@ -11105,8 +11139,7 @@ static void FillSettlementResidents(CcSim *sim)
         while (residents < 4 && sim->character_count < CC_MAX_CHARACTERS) {
             char name[CC_NAME_CAPACITY];
             do {
-                CcGenerateCharacterName(
-                    sim->world_seed, settlement_id, 0, ordinal++, name);
+                GenerateResidentName(sim, settlement_id, 0, ordinal++, name);
             } while (CharacterForName(sim, name) != NULL && ordinal < 2048U);
             CcCharacterRole role = residents == 0 ? CC_CHARACTER_OFFICIAL :
                 residents == 1 ? CC_CHARACTER_LABORER :
@@ -11193,8 +11226,8 @@ static void SuccessorName(const CcSim *sim, const CcCharacter *ancestor,
     const char *family = strrchr(ancestor->name, ' ');
     for (uint32_t attempt = 0U; attempt < 2048U; ++attempt) {
         char generated[CC_NAME_CAPACITY];
-        CcGenerateCharacterName(
-            sim->world_seed, ancestor->home_settlement_id, generation,
+        GenerateResidentName(
+            sim, ancestor->home_settlement_id, generation,
             ordinal + attempt, generated);
         char *space = strchr(generated, ' ');
         if (family != NULL && space != NULL) {
@@ -11366,7 +11399,7 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     RemoveCharacterKnowledgeSources(sim, dead.id);
 
     CcCharacter successor = {0};
-    if (sim->schema_version >= 58U) {
+    if (sim->schema_version >= 60U) {
         successor.travel_coins = dead.travel_coins;
         CcBanditGroup *camp = BanditMutable(sim, dead.bandit_group_id);
         if (camp != NULL && camp->members > 4) camp->members -= 1;
@@ -15006,7 +15039,7 @@ void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
     for (int32_t day = 0; day < days; ++day) {
         sim->current_day += 1;
         if (sim->schema_version >= 26U) AdvanceCharacterLifecycles(sim);
-        if (sim->schema_version >= 58U) AdvanceTravellerNeeds(sim);
+        if (sim->schema_version >= 60U) AdvanceTravellerNeeds(sim);
         HearLocalGossip(sim);
         CcSimRefreshCharacterGossip(sim);
         if (!sim->journey.active) {
@@ -17547,10 +17580,12 @@ static void PauseJourneyForWatchStop(CcSim *sim)
 
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks)
 {
-    if (sim == NULL || ticks <= 0 || !sim->journey.active ||
+    if (sim == NULL || ticks <= 0 || sim->mine.phase != CC_MINE_NONE || !sim->journey.active ||
         sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
         sim->clock.tick > UINT64_MAX - (uint64_t)ticks) return;
     for (int32_t tick = 0; tick < ticks; ++tick) {
+        int32_t mine_stop=CcMineBranchSubtick(sim);
+        if (mine_stop >= 0 && sim->journey.elapsed_subticks == mine_stop) break;
         if (sim->schema_version >= 40U && sim->pony_company.encounter >= 0) break;
         if (!sim->journey.active ||
             sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) break;
@@ -17568,12 +17603,14 @@ void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks)
             CC_WORLD_WATCH_SUBTICKS;
         int32_t next_limit = MinimumI32(
             sim->journey.total_subticks, next_watch);
+        if (mine_stop > sim->journey.elapsed_subticks) next_limit=MinimumI32(next_limit,mine_stop);
         sim->journey.elapsed_subticks = MinimumI32(
             next_limit, sim->journey.elapsed_subticks + journey_rate);
         sim->carriage.progress_milli = sim->journey.total_subticks > 0 ?
             (int32_t)(((int64_t)sim->journey.elapsed_subticks * 1000) /
                       sim->journey.total_subticks) : 0;
         RevealJourneyRoad(sim);
+        if (mine_stop >= 0 && sim->journey.elapsed_subticks == mine_stop) break;
         if (sim->journey.elapsed_subticks >= sim->journey.total_subticks) {
             ApplyTravelWatchStrain(sim);
             FinishJourneyArrival(sim);
@@ -18530,6 +18567,12 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Command target is missing.");
         return false;
     }
+    bool mine_action = command->kind >= CC_COMMAND_VISIT_MINE && command->kind <= CC_COMMAND_MINE_PACK;
+    if (sim->mine.phase != CC_MINE_NONE && !mine_action) {
+        SetError(error, error_capacity, "Return to the road through the mine yard first.");
+        return false;
+    }
+    if (mine_action) return CcMineApply(sim, command, error, error_capacity);
     bool party_wipe = command->kind == CC_COMMAND_PARTY_WIPE;
     if (!party_wipe && sim->schema_version >= 40U && sim->pony_company.encounter >= 0 &&
         (command->kind < CC_COMMAND_MEET_PONY || command->kind > CC_COMMAND_LEAVE_PONY)) {
@@ -18572,6 +18615,11 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         return false;
     }
     switch (command->kind) {
+        case CC_COMMAND_VISIT_MINE:
+        case CC_COMMAND_MINE_STEP:
+        case CC_COMMAND_MINE_USE:
+        case CC_COMMAND_MINE_PACK:
+            return CcMineApply(sim, command, error, error_capacity);
         case CC_COMMAND_EXCHANGE_GOSSIP:
             return ApplyExchangeGossip(sim, command, error, error_capacity);
         case CC_COMMAND_HEARD_STORY:
@@ -18958,7 +19006,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 57U
+#define CC_NEWEST_LEGACY_SCHEMA 59U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18976,7 +19024,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 57U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 59U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -20316,7 +20364,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 character->player_disposition > 100 ||
                 character->stress < 0 || character->stress > 100 ||
                 character->courage < 0 || character->courage > 100 ||
-                (sim->schema_version >= 58U &&
+                (sim->schema_version >= 60U &&
                  (character->travel_coins < 0 || character->travel_coins > CC_SIM_MAX_MONEY ||
                   character->hungry_days < 0 || character->hungry_days > 7 ||
                   character->unsheltered_nights < 0 || character->unsheltered_nights > 7 ||
@@ -20916,12 +20964,13 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 return false;
             }
             CcCarriageMode expected_mode =
-                sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ?
+                sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING && sim->mine.phase == CC_MINE_NONE ?
                     CC_CARRIAGE_MOVING : CC_CARRIAGE_STOPPED;
             int32_t expected_progress = (int32_t)(
                 ((int64_t)sim->journey.elapsed_subticks * 1000) /
                 sim->journey.total_subticks);
-            if (sim->carriage.mode != expected_mode ||
+            if ((sim->mine.phase != CC_MINE_NONE && sim->mine.return_speed != JourneyCarriageSpeedForPace(sim->journey.total_subticks,sim->journey.pace)) ||
+                sim->carriage.mode != expected_mode ||
                 sim->carriage.route_id != sim->journey.route_id ||
                 sim->carriage.origin_id != sim->journey.origin_id ||
                 sim->carriage.destination_id !=
@@ -21011,6 +21060,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Pony company state is invalid.");
         return false;
     }
+    if (sim->schema_version >= 59U && !CcMineValidate(sim)) {
+        SetError(error, error_capacity, "Mine visit state is invalid.");
+        return false;
+    }
     return true;
 }
 
@@ -21058,6 +21111,14 @@ uint64_t CcSimHash(const CcSim *sim)
     bool hash_lifecycles = sim->schema_version >= 26U;
     uint64_t hash = UINT64_C(1469598103934665603);
 #define HASH_VALUE(value) hash = HashU64(hash, (uint64_t)(value))
+    if (sim->schema_version >= 59U) {
+        HASH_VALUE(sim->mine.phase); HASH_VALUE(sim->mine.site_id);
+        HASH_VALUE(sim->mine.x); HASH_VALUE(sim->mine.y); HASH_VALUE(sim->mine.revision);
+        HASH_VALUE(sim->mine.return_speed); HASH_VALUE(sim->mine.light);
+        HASH_VALUE(sim->mine.steps); HASH_VALUE(sim->mine.seen);
+        HASH_VALUE(sim->mine.bar_open); HASH_VALUE(sim->mine.surveyed);
+        for (int32_t good=0;good<CC_GOOD_COUNT;++good) HASH_VALUE(sim->mine.pack[good]);
+    }
     HASH_VALUE(sim->schema_version);
     HASH_VALUE(sim->generator_version);
     HASH_VALUE(sim->world_seed);
@@ -21572,7 +21633,7 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(character->player_disposition);
             HASH_VALUE(character->stress);
             HASH_VALUE(character->courage);
-            if (sim->schema_version >= 58U) {
+            if (sim->schema_version >= 60U) {
                 HASH_VALUE(character->travel_coins);
                 HASH_VALUE(character->bandit_group_id);
                 HASH_VALUE(character->hungry_days);

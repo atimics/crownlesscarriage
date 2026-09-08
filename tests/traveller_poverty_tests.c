@@ -96,13 +96,15 @@ int main(void) {
     advance();advance();advance();CC_CHECK(person()->bandit_group_id==0U);
 
     /* Historical saves retain their old rules and upgrade with empty purses. */
-    prepare();sim.schema_version=57U;advance();advance();advance();
+    for (uint32_t schema = 57U; schema <= 59U; ++schema) {
+    prepare();sim.schema_version=schema;advance();advance();advance();
     CC_CHECK(person()->travel_coins==0 && person()->bandit_group_id==0U);
     CC_CHECK(CcSaveWrite(path,&sim,error,sizeof(error)));
     CC_CHECK(CcSaveRead(path,&restored,error,sizeof(error)));
     CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.characters[person_slot].hungry_days==0);
     CC_CHECK(remove(path)==0);
+    }
     puts("Traveller food, lodging, recruitment, inheritance, and save checks passed");
     return 0;
 }
