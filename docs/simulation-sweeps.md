@@ -109,6 +109,61 @@ The metrics also include political and faction exposure:
 Use `tools/analyze_sweep.py` for group comparisons and
 `tools/plot_archetypes.py` for report charts.
 
+## Welfare and cluster review
+
+Metrics version 2 appends precise welfare columns to every row. Existing
+`average_prosperity` and `average_security` retain their whole-number averages
+over all settlement slots, including ruins. The new `inhabited_hunger`,
+`inhabited_prosperity`, and `inhabited_security` average living towns equally.
+`weighted_hunger`, `weighted_prosperity`, and `weighted_security` weight each
+living town by its population. These six fields keep six decimal places and
+use `-1` when every town is abandoned. Report the abandoned-town count alongside
+welfare so that collapse remains visible.
+
+`years_population_weighted_hunger_40_plus` counts annual checkpoints with
+population-weighted hunger at least 40. `years_without_population` counts
+empty-population checkpoints separately. Existing `years_hunger_40_plus` and
+`years_hunger_60_plus` use inhabited-town hunger. These counters sample once
+every 365 days. Daily war exposure retains its separate daily counter.
+
+Rows also include `day`, `schema_version`, `generator_version`, and `state_hash`.
+Keep the source commit, executable hash, command, and sweep exit status with
+saved results. September 6 sweeps used an older hunger definition that included
+ruins. Regenerate those sweeps for welfare comparisons.
+
+To inspect a world's final decade at weekly intervals:
+
+```sh
+out/build/play/crownless_sim_metrics --seed 1 --years 1000 \
+  --settlements-csv out/seed-1-settlements.csv \
+  --trace-start-day 361350 --trace-every-days 7 > out/seed-1-years.csv
+```
+
+Trace days are elapsed days since initialization. The default starts at day
+zero and samples every 28 days. An explicit start day, interval boundaries,
+and the final day each produce one observation. Each observation records every
+town, including ruins, with its raw population, hunger, prosperity, security,
+kingdom legitimacy, town size and function, dragon stage, and campaign victories.
+`--final-only` controls the main CSV; the separate trace keeps its selected
+interval. World validation still runs each year. Check the exit status before
+using either output.
+
+Create the welfare charts and a repeatable selection of worlds:
+
+```sh
+python3 tools/plot_welfare.py out/sweep-endpoints.csv --out out/welfare
+# After recording selected worlds as seed-N-settlements.csv:
+python3 tools/plot_welfare.py out/sweep-endpoints.csv \
+  --out out/welfare --traces out/welfare/traces
+```
+
+The plotter requires metrics version 2 and one endpoint per seed at one common
+year. It selects the world nearest each dragon group's median weighted
+prosperity, plus the lowest seed at the most common prosperity and security
+values. The report distinguishes original survivors, living successors after
+campaign victories, and dragons slain at the endpoint. The town-history chart
+uses the supplied trace window; the command above supplies the final decade.
+
 ## Roadside recovery diagnostics
 
 `crownless_sim_runner --detail` emits one `roadside_recovery` snapshot per route.

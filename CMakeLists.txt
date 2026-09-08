@@ -1352,6 +1352,13 @@ if(BUILD_TESTING)
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/hunger_report_tests.py
                          $<TARGET_FILE:crownless_sim_runner>
                          $<TARGET_FILE:crownless_sim_metrics>)
+        add_test(NAME welfare_report_agreement
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/welfare_report_tests.py
+                         $<TARGET_FILE:crownless_sim_metrics>)
+        add_test(NAME welfare_plot_inputs
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/welfare_plot_tests.py)
     endif()
 
     add_executable(character_name_tests tests/character_name_tests.c)
@@ -1572,6 +1579,12 @@ if(BUILD_TESTING)
         target_compile_definitions(crownless_carriage PRIVATE
             CC_CLIENT_SELF_TESTS=1
         )
+        add_test(NAME render_benchmark_contract
+                 COMMAND crownless_carriage --test-render-benchmark)
+        add_test(NAME capture_presentation_contract
+                 COMMAND crownless_carriage --test-capture-presentation)
+        add_test(NAME capture_scene_contract
+                 COMMAND crownless_carriage --test-capture-scenes)
         add_test(NAME capture_frame_contract
                  COMMAND crownless_carriage --test-capture-frames)
         add_test(NAME capture_request_contract

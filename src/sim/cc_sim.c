@@ -124,6 +124,38 @@ CcHungerSnapshot CcSimHungerSnapshot(const CcSim *sim)
     return result;
 }
 
+CcWelfareSnapshot CcSimWelfareSnapshot(const CcSim *sim)
+{
+    CcWelfareSnapshot result = {0, 0, 0, -1, -1, -1, -1, -1, -1};
+    if (sim == NULL) return result;
+    int64_t hunger = 0, prosperity = 0, security = 0;
+    int64_t weighted_hunger = 0, weighted_prosperity = 0, weighted_security = 0;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) {
+            result.abandoned_settlements += 1;
+            continue;
+        }
+        result.inhabited_settlements += 1;
+        result.population += place->population;
+        hunger += place->hunger;
+        prosperity += place->prosperity;
+        security += place->security;
+        weighted_hunger += (int64_t)place->population * place->hunger;
+        weighted_prosperity += (int64_t)place->population * place->prosperity;
+        weighted_security += (int64_t)place->population * place->security;
+    }
+    if (result.inhabited_settlements > 0) {
+        result.hunger = (double)hunger / result.inhabited_settlements;
+        result.prosperity = (double)prosperity / result.inhabited_settlements;
+        result.security = (double)security / result.inhabited_settlements;
+        result.population_weighted_hunger = (double)weighted_hunger / (double)result.population;
+        result.population_weighted_prosperity = (double)weighted_prosperity / (double)result.population;
+        result.population_weighted_security = (double)weighted_security / (double)result.population;
+    }
+    return result;
+}
+
 int32_t CcSimClimateFactor(const CcSim *sim)
 {
     if (sim == NULL) return 100;

@@ -96,3 +96,62 @@ static int RunCaptureFrameRegression(void)
     (void)puts("PASS capture frames: warmup, timing, paths, reels, and normal play");
     return 0;
 }
+
+static int RunCaptureSceneRegression(void)
+{
+    static CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcCaptureRequest request = {0};
+    uint64_t before = CcSimHash(&sim);
+    if (!CcCapturePrepareWorld(&request, &sim, NULL) ||
+        !CcCapturePrepareDungeon(&request, &sim) || CcSimHash(&sim) != before)
+        return ClientRegressionFailure("Normal startup must preserve its simulation state.");
+    request.capture_town = true;
+    request.capture_town_index = 2;
+    if (!CcCapturePrepareWorld(&request, &sim, NULL) ||
+        sim.player.location_id != sim.settlements[2].id)
+        return ClientRegressionFailure("Town capture must use the requested settlement.");
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    request = (CcCaptureRequest){.capture_underroad = true};
+    if (!CcCapturePrepareDungeon(&request, &sim) ||
+        !sim.dungeon_expedition.active ||
+        sim.dungeon_expedition.current_room != 9 ||
+        sim.player.location_id != sim.dungeons[0].settlement_id)
+        return ClientRegressionFailure("Underroad capture must enter its prepared expedition.");
+    (void)puts("PASS capture scenes: normal state, town selection, and expedition setup");
+    return 0;
+}
+
+static int RunCapturePresentationRegression(void)
+{
+    CcCaptureRequest request = {0};
+    CcCaptureState state = {0};
+    CcCapturePresentation play = CcCapturePresentationFor(&request, &state, true);
+    if (!play.adventure_ui || !play.navigation || !play.accept_input || !play.update_convoy ||
+        !play.local_panels || !play.combat_status || !play.feedback || !play.save_feedback ||
+        !play.context_actions || !play.commands || play.message_step != 0.0f)
+        return ClientRegressionFailure("Normal play must retain its input and presentation.");
+    char *ux[] = {"crownless", "--capture-ux", "5", "menu.png", "1040"};
+    CcCaptureWindow window = {.width = 1280, .height = 760,
+        .minimum_width = 1280, .minimum_height = 760, .fps = 60};
+    if (!CcCaptureRequestParse(5, ux, &request) ||
+        !CcCaptureConfigureWindow(&request, 5, ux, &window) ||
+        window.width != 1040 || window.height != 620 ||
+        window.minimum_width != 1040 || window.minimum_height != 620 || window.fps != 60)
+        return ClientRegressionFailure("UX capture must retain its window dimensions.");
+    FrontendState frontend = {.screen = FRONTEND_PLAYING};
+    CcCaptureConfigureFrontend(&request, &frontend);
+    if (frontend.screen != FRONTEND_PAUSED)
+        return ClientRegressionFailure("Menu capture must open the pause screen.");
+    ux[4] = "1000";
+    if (CcCaptureConfigureWindow(&request, 5, ux, &window))
+        return ClientRegressionFailure("UX capture must enforce its window size choices.");
+    request = (CcCaptureRequest){.capture_gameplay_reel = true};
+    state.gameplay_reel.stage = GAMEPLAY_REEL_QUEST_COMPLETE;
+    play = CcCapturePresentationFor(&request, &state, false);
+    if (play.combat_status || play.feedback || play.save_feedback || play.context_actions ||
+        play.message_step != 1.0f / 15.0f)
+        return ClientRegressionFailure("The final reel frame must retain its presentation timing.");
+    (void)puts("PASS capture presentation: play, window sizes, menus, and reel completion");
+    return 0;
+}
