@@ -329,6 +329,9 @@ async function main() {
             `A fresh campaign stalled on screen '${screen}' after Enter at title.`);
     }
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision + 2);
+    /* Desktop checks are complete. Release its running game before mobile
+       startup so the phone fixture has its own browser resource budget. */
+    await context.close();
     const phone = await browser.newContext({viewport: {width: 390, height: 844},
       hasTouch: true, isMobile: true, deviceScaleFactor: 3});
     const mobile = await phone.newPage();

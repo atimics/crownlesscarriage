@@ -41,7 +41,12 @@ prototype methods installed by that build.
 [Cached frame report](webgl-upload-correctness-2026-09-07/cached-frame-budget.json)
 and [direct frame report](webgl-upload-correctness-2026-09-07/direct-frame-budget.json)
 also contain vertex and binding counts. These are single short software-renderer
-samples. Device speed, GPU memory and real-Safari reload behavior require their
+samples. The first Linux CI sample also passed all six buffer cases and measured
+160 uploads / 3,409,773 bytes per frame. Its [frame report](webgl-upload-correctness-2026-09-07/linux-direct-frame-budget.json)
+records the slower shared-runner frame intervals. The mobile fixture now starts
+after closing the completed desktop context, which releases that running game.
+
+Device speed, GPU memory and real-Safari reload behavior require their
 own measurements under #445.
 
 The browser upload ceilings move from 130 calls / 3 MiB to 190 calls / 4 MiB
