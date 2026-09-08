@@ -2,6 +2,7 @@
 #include "sim/cc_sim.h"
 
 #include <inttypes.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -314,6 +315,18 @@ static void PrintChronicleNewEvents(const CcSim *sim)
     }
 }
 
+static bool ParseUnsignedArgument(const char *text, int base, uint32_t limit,
+    uint32_t *value)
+{
+    if (text == NULL || text[0] < '0' || text[0] > '9') return false;
+    char *end = NULL;
+    errno = 0;
+    unsigned long long parsed = strtoull(text, &end, base);
+    if (errno == ERANGE || end == text || *end != '\0' || parsed > limit) return false;
+    *value = (uint32_t)parsed;
+    return true;
+}
+
 int main(int argc, char **argv)
 {
     uint32_t seed = UINT32_C(0xc0a71a9e);
@@ -324,27 +337,51 @@ int main(int argc, char **argv)
     const char *save_path = NULL;
     bool detail = false;
     for (int argument = 1; argument < argc; ++argument) {
+        uint32_t parsed = 0;
+        const char *option = argv[argument];
         if (strcmp(argv[argument], "--seed") == 0 && argument + 1 < argc) {
-            seed = (uint32_t)strtoul(argv[++argument], NULL, 0);
+            if (!ParseUnsignedArgument(argv[++argument], 0, UINT32_MAX, &seed)) {
+                (void)fprintf(stderr, "Invalid value for %s: %s\n", option, argv[argument]);
+                return EXIT_FAILURE;
+            }
         } else if (strcmp(argv[argument], "--years") == 0 && argument + 1 < argc) {
-            years = (int32_t)strtol(argv[++argument], NULL, 10);
+            if (!ParseUnsignedArgument(argv[++argument], 10, INT32_MAX, &parsed)) {
+                (void)fprintf(stderr, "Invalid value for %s: %s\n", option, argv[argument]);
+                return EXIT_FAILURE;
+            }
+            years = (int32_t)parsed;
         } else if (strcmp(argv[argument], "--report-every") == 0 &&
                    argument + 1 < argc) {
-            report_every = (int32_t)strtol(argv[++argument], NULL, 10);
+            if (!ParseUnsignedArgument(argv[++argument], 10, INT32_MAX, &parsed)) {
+                (void)fprintf(stderr, "Invalid value for %s: %s\n", option, argv[argument]);
+                return EXIT_FAILURE;
+            }
+            report_every = (int32_t)parsed;
         } else if (strcmp(argv[argument], "--interval") == 0 &&
                    argument + 1 < argc) {
-            report_every = (int32_t)strtol(argv[++argument], NULL, 10);
+            if (!ParseUnsignedArgument(argv[++argument], 10, INT32_MAX, &parsed)) {
+                (void)fprintf(stderr, "Invalid value for %s: %s\n", option, argv[argument]);
+                return EXIT_FAILURE;
+            }
+            report_every = (int32_t)parsed;
         } else if (strcmp(argv[argument], "--save") == 0 && argument + 1 < argc) {
             save_path = argv[++argument];
         } else if (strcmp(argv[argument], "--load") == 0 && argument + 1 < argc) {
             load_path = argv[++argument];
         } else if (strcmp(argv[argument], "--checkpoint-every") == 0 &&
                    argument + 1 < argc) {
-            checkpoint_every = (int32_t)strtol(argv[++argument], NULL, 10);
+            if (!ParseUnsignedArgument(argv[++argument], 10, INT32_MAX, &parsed)) {
+                (void)fprintf(stderr, "Invalid value for %s: %s\n", option, argv[argument]);
+                return EXIT_FAILURE;
+            }
+            checkpoint_every = (int32_t)parsed;
         } else if (strcmp(argv[argument], "--detail") == 0) {
             detail = true;
         } else if (strcmp(argv[argument], "--chronicle") == 0) {
             chronicle = true;
+        } else {
+            (void)fprintf(stderr, "Unknown or incomplete option: %s\n", option);
+            return EXIT_FAILURE;
         }
     }
 
@@ -369,7 +406,7 @@ int main(int argc, char **argv)
     }
     if (report_every < 1) report_every = 1;
     if (chronicle) {
-        (void)printf("== world seed=%" PRIu32 " ==\n", seed);
+        (void)printf("== world seed=%" PRIu32 " ==\n", sim.world_seed);
         for (int32_t i = 0; i < sim.kingdom_count; ++i) {
             (void)printf("kingdom: %s\n", sim.kingdoms[i].name);
         }

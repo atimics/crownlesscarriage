@@ -447,6 +447,11 @@ int main(int argc, char **argv)
         }
     }
 
+    if ((int64_t)first_seed + seeds - 1 > INT32_MAX ||
+        years > (INT32_MAX - 1) / 365) {
+        (void)fprintf(stderr, "Seed range or duration exceeds the supported day/index range.\n");
+        return EXIT_FAILURE;
+    }
     FILE *nutrition_csv = NULL;
     if (nutrition_path != NULL) {
         nutrition_csv = fopen(nutrition_path, "w");
@@ -505,8 +510,8 @@ int main(int argc, char **argv)
     }
     (void)putchar('\n');
     char error[192];
-    for (int32_t seed_number = first_seed;
-         seed_number < first_seed + seeds; ++seed_number) {
+    for (int64_t index = first_seed; index < (int64_t)first_seed + seeds; ++index) {
+        int32_t seed_number = (int32_t)index;
         CcSim sim;
         CcMetricsHistory history = {0};
         CcNutritionAccounting nutrition = {0};

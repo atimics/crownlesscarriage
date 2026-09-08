@@ -155,3 +155,16 @@ the annual schedule and ritual stage determine when execution checks them.
 Tools and Weapons thresholds include retained equipment: revelation consumes
 one of each after requiring two Tools and three Weapons. Food costs twelve
 rations and the transfer to the dragon uses 120 coins and two relics.
+
+## Input limits
+
+The runner accepts raw world seeds from 0 through 4294967295, including hexadecimal
+notation. Durations and intervals use complete decimal integers. Zero years saves
+or inspects the initial or loaded state. A zero report interval retains the annual
+report default, and a zero checkpoint interval disables intermediate saves.
+
+Metrics seed indexes range from 1 through 2147483647 and retain the documented
+32-bit seed mapping. A requested index range must fit within that bound. Durations
+must fit the simulation's signed day counter. Invalid numeric values, unknown
+runner options, and missing arguments produce a failing exit status before output
+files are written. Resumed chronicle headers identify the world seed from the save.
