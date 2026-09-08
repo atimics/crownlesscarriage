@@ -69,6 +69,28 @@ int main(void)
     CC_CHECK(CcNutritionAvailable(
         provisions, CC_NUTRITION_ANIMAL) == 16);
 
+    /* Large requests consume only available stock and retain whole-unit rounding. */
+    int32_t large_request[CC_GOOD_COUNT] = {0};
+    large_request[CC_GOOD_BREAD] = 10;
+    CC_CHECK(CcNutritionConsume(large_request, CC_NUTRITION_CIVILIAN,
+                                INT32_MAX) == 20);
+    CC_CHECK(large_request[CC_GOOD_BREAD] == 0);
+    large_request[CC_GOOD_BREAD] = INT32_MAX;
+    CC_CHECK(CcNutritionConsume(large_request, CC_NUTRITION_CIVILIAN,
+                                INT32_MAX) == INT32_MAX);
+    CC_CHECK(large_request[CC_GOOD_BREAD] == INT32_MAX / 2);
+    large_request[CC_GOOD_BREAD] = 1;
+    large_request[CC_GOOD_MEAT] = INT32_MAX;
+    CC_CHECK(CcNutritionConsume(large_request, CC_NUTRITION_TRAVEL,
+                                INT32_MAX) == INT32_MAX);
+    CC_CHECK(large_request[CC_GOOD_BREAD] == 0);
+    CC_CHECK(large_request[CC_GOOD_MEAT] == INT32_MAX / 2 + 1);
+    memset(large_request, 0, sizeof(large_request));
+    large_request[CC_GOOD_WHEAT] = INT32_MAX;
+    CC_CHECK(CcNutritionConsume(large_request, CC_NUTRITION_ANIMAL,
+                                INT32_MAX) == INT32_MAX);
+    CC_CHECK(large_request[CC_GOOD_WHEAT] == INT32_MAX / 2);
+
     CcSim farm;
     CcSettlement *place = IsolatedSettlement(&farm);
     place->service_mask |= Service(CC_SERVICE_FARM);

@@ -95,6 +95,7 @@ add_library(crownless_sim
     src/sim/cc_journey_departure.c
     src/sim/cc_journey_encounter.c
     src/sim/cc_journey_runtime.c
+    src/sim/cc_goods.c
     src/sim/cc_journey.c
     src/sim/cc_journey_commands.c
     src/sim/cc_mine.c
