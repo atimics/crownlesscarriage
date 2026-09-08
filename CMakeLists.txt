@@ -91,6 +91,7 @@ cc_strict_warnings(crownless_locomotion)
 add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
+    src/sim/cc_mine.c
     src/sim/cc_ponies.c
 )
 target_include_directories(crownless_sim PUBLIC src)
@@ -1313,6 +1314,12 @@ if(BUILD_TESTING)
     cc_strict_warnings(route_knowledge_tests)
     add_test(NAME persistent_route_knowledge COMMAND route_knowledge_tests)
 
+    add_executable(mine_tests tests/mine_tests.c)
+    target_link_libraries(mine_tests PRIVATE crownless_coop crownless_metagame)
+    target_compile_definitions(mine_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    cc_strict_warnings(mine_tests)
+    add_test(NAME silverwick_mine_roundtrip COMMAND mine_tests)
+
     add_executable(underroad_tests tests/underroad_tests.c)
     target_link_libraries(underroad_tests PRIVATE crownless_persistence)
     cc_strict_warnings(underroad_tests)
@@ -1461,6 +1468,8 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-bridge-scene)
         add_test(NAME world_card_input_parity
                  COMMAND crownless_carriage --test-world-cards)
+        add_test(NAME silverwick_mine_input
+                 COMMAND crownless_carriage --test-mine-input)
         add_test(NAME adventure_input_flow
                  COMMAND crownless_carriage --test-adventure-input)
         add_test(NAME title_and_pause_menu

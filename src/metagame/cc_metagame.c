@@ -1,3 +1,4 @@
+#include "sim/cc_mine.h"
 #include "metagame/cc_metagame.h"
 
 #include "persistence/cc_save.h"
@@ -1626,6 +1627,7 @@ static void DescribeHelp(char *output, size_t capacity)
            "  road break|press-on|camp|lodge\n"
            "  road fight|bargain|supper|turn-back, repair NUMBER tools|cash\n"
            "  stable breed MARE STALLION, stable team SLOT HORSE\n"
+           "  mine visit|look|move DIRECTION|use|pack GOOD|unpack GOOD\n"
            "  underroad enter|look|move NUMBER|search|open\n"
            "  underroad parley|evade|force|retreat\n"
            "  dungeon public|smuggler|close (after reaching the threshold), wait DAYS\n"
@@ -1676,6 +1678,14 @@ static bool FinishTravel(CcMetagame *metagame,
     CcSim *sim = &metagame->sim;
     while (sim->journey.active &&
            sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+        if (sim->mine.phase != CC_MINE_NONE) {
+            Append(output,capacity,"The company is exploring the mine. Use 'mine look'.\n");
+            return true;
+        }
+        if (CcMineBranchSubtick(sim) >= 0 && sim->journey.elapsed_subticks == CcMineBranchSubtick(sim)) {
+            Append(output,capacity,"Low Silver Pit branches from this road. Choose 'mine visit' or 'road pass'.\n");
+            return true;
+        }
         if (!AdvanceRuntimeTicks(metagame, CC_WORLD_TICKS_PER_SECOND,
                                  output, capacity)) return false;
     }
@@ -2249,6 +2259,12 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         if (!FinishTravel(metagame, output, output_capacity)) return false;
     } else if (strcmp(command, "road") == 0) {
+        if (first != NULL && strcmp(first,"pass") == 0) {
+            const CcRoadSite *site=CcSimJourneyRoadSiteStop(&metagame->sim);
+            CcCommand pass={.kind=CC_COMMAND_PASS_ROAD_SITE,.target_id=site != NULL ? site->id : 0};
+            if(!ApplyCommand(metagame,&pass,output,output_capacity)) return false;
+            return FinishTravel(metagame,output,output_capacity);
+        }
         if (metagame->sim.journey.active &&
             metagame->sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
             first != NULL && strcmp(first, "continue") == 0) {
@@ -2354,6 +2370,29 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         Append(output, output_capacity,
                "The treaty bridge reopens. Other shipments can now follow.\n");
+    } else if (strcmp(command, "mine") == 0) {
+        CcCommand action={.target_id=(CcId)metagame->sim.mine.revision};
+        if(first != NULL && strcmp(first,"visit")==0) {
+            const CcRoadSite *site=CcMineSite(&metagame->sim);
+            action.kind=CC_COMMAND_VISIT_MINE; action.target_id=site != NULL ? site->id : 0;
+        } else if(first != NULL && strcmp(first,"use")==0) action.kind=CC_COMMAND_MINE_USE;
+        else if(first != NULL && strcmp(first,"pack")==0 && ParseGood(second,&action.good)) {
+            action.kind=CC_COMMAND_MINE_PACK;action.amount=1;
+        } else if(first != NULL && strcmp(first,"unpack")==0 && ParseGood(second,&action.good)) {
+            action.kind=CC_COMMAND_MINE_PACK;action.amount=-1;
+        } else if(first != NULL && strcmp(first,"move")==0 && second != NULL) {
+            const char *const directions[]={"north","east","south","west"};
+            for(int32_t i=0;i<4;++i) if(strcmp(second,directions[i])==0) {action.kind=CC_COMMAND_MINE_STEP;action.amount=i;}
+            if(action.kind==CC_COMMAND_NONE) {Append(output,output_capacity,"Choose north, east, south, or west.\n");return false;}
+        } else if(first != NULL && strcmp(first,"look")!=0) {
+            Append(output,output_capacity,"Use mine visit|look|move north/east/south/west|use|pack GOOD|unpack GOOD.\n");return false;
+        }
+        if(action.kind != CC_COMMAND_NONE && !ApplyCommand(metagame,&action,output,output_capacity)) return false;
+        const CcMineVisit *m=&metagame->sim.mine;
+        Append(output,output_capacity,"LOW SILVER PIT — %s (%d,%d). Pack %d/8. Light %d.\n%s\n",
+            m->phase==CC_MINE_NONE?"road":m->phase==CC_MINE_YARD?"mine yard":CcMineChamberName(CcMineChamber(m->x,m->y)),
+            m->x,m->y,CcMinePackUsed(&metagame->sim),m->light,
+            CcMineAction(&metagame->sim) != NULL ? CcMineAction(&metagame->sim) : "Walk to the next doorway.");
     } else if (strcmp(command, "underroad") == 0) {
         CcCommand action = {0};
         if (first == NULL || strcmp(first, "look") == 0) {
@@ -2655,6 +2694,9 @@ static bool AgentCommandAllowed(const CcMetagame *metagame,
     char *second = strtok(NULL, " \t\r\n");
     if (command == NULL) return false;
     if (metagame->sim.journey.active) {
+        if (strcmp(command,"mine") == 0) return true;
+        if (strcmp(command,"road") == 0 && first != NULL && strcmp(first,"pass") == 0)
+            return CcSimJourneyRoadSiteStop(&metagame->sim) != NULL;
         return strcmp(command, "look") == 0 || strcmp(command, "roads") == 0 ||
             strcmp(command, "routes") == 0 || strcmp(command, "cargo") == 0 ||
             strcmp(command, "status") == 0 || strcmp(command, "debrief") == 0 ||
