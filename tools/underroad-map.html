@@ -187,7 +187,12 @@
     const point=i => [margin+zones[i].pos[0]*step,52+zones[i].pos[1]*65];
     const svg=svgNode('svg',{viewBox:`0 0 ${width} ${height}`,role:'group','aria-label':'The complete Underroad. Each numbered zone opens a floor plan.'});
     svg.append(svgNode('title',{},'24 connected Underroad zones'));
-    links.forEach(l => { const a=point(l[0]),b=point(l[1]); line(svg,...a,...b,l[2] ? 'var(--viz-series-2)' : 'var(--border)',l[2]==='hidden'?'2 5':l[2]==='repair'?'7 5':null); });
+    links.forEach(l => {
+      const a=point(l[0]),b=point(l[1]);
+      if(l[0]===5 && l[1]===6) {
+        svg.append(svgNode('path',{d:`M ${a[0]} ${a[1]} C ${a[0]} ${a[1]+44}, ${b[0]} ${b[1]+44}, ${b[0]} ${b[1]}`,fill:'none',stroke:'var(--border)','stroke-width':1.5}));
+      } else line(svg,...a,...b,l[2] ? 'var(--viz-series-2)' : 'var(--border)',l[2]==='hidden'?'2 5':l[2]==='repair'?'7 5':null);
+    });
     const start=point(0),end=point(19);
     label(svg,start[0],18,'Surface · carriage yard');
     label(svg,end[0],height-26,'Dragon cave + hoard');
@@ -205,7 +210,7 @@
     title.textContent=code(selected)+' · '+z.name;
     subtitle.textContent=z.band+' · '+z.purpose;
     detail.textContent=z.choice;
-    legend.textContent='A–G: chambers · Boxed numbers: stairs or passages to zones · Each grid square: 2 metres';
+    legend.textContent='A–'+String.fromCharCode(64+z.rooms.length)+': chambers · Boxed numbers: stairs or passages to zones · Each grid square: 2 metres';
     const scale=width/44, height=32*scale;
     const svg=svgNode('svg',{viewBox:`0 0 ${width} ${height}`,role:'img','aria-label':z.name+' floor plan: '+z.rooms.map(r=>r[0]).join(', ')});
     svg.append(svgNode('title',{},z.name+' top-down dungeon level'));
