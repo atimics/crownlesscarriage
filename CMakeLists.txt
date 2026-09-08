@@ -1571,6 +1571,12 @@ if(BUILD_TESTING)
         target_compile_definitions(crownless_carriage PRIVATE
             CC_CLIENT_SELF_TESTS=1
         )
+        add_test(NAME render_benchmark_contract
+                 COMMAND crownless_carriage --test-render-benchmark)
+        add_test(NAME capture_presentation_contract
+                 COMMAND crownless_carriage --test-capture-presentation)
+        add_test(NAME capture_scene_contract
+                 COMMAND crownless_carriage --test-capture-scenes)
         add_test(NAME capture_frame_contract
                  COMMAND crownless_carriage --test-capture-frames)
         add_test(NAME capture_request_contract
