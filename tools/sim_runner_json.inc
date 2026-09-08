@@ -12,6 +12,15 @@ static void JsonString(const char *value)
 
 #include "sim_runner_network.inc"
 
+static void JsonArchiveWork(const CcSim *sim)
+{
+    CcArchiveWorkPlan plan = CcSimArchiveWorkPlan(sim);
+    printf("{\"semantics\":\"held_supply_plan_snapshot\",\"seat_id\":\"%" PRIu64
+           "\",\"nominal_scribes\":%d,\"eligible_scribes\":%d,\"wheat_required\":%d,\"recording_ready\":%s}",
+        plan.seat_id, sim->archives.scribes, plan.eligible_scribes,
+        plan.wheat_required, plan.recording_ready ? "true" : "false");
+}
+
 static void JsonStock(const int32_t *values)
 {
     putchar('[');
@@ -197,6 +206,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         sim->dragon.id, sim->dragon.slain ? "true" : "false", sim->dragon.slain_day,
         (int)sim->dragon.life_stage, (int)sim->dragon.activity, sim->dragon.body_condition,
         sim->dragon.crown_strength, sim->dragon.egg_count);
+    printf(",\"archive_work\":"); JsonArchiveWork(sim);
     printf(",\"road_network\":"); JsonRoadNetwork(sim);
     printf(",\"threats\":"); JsonThreatSnapshot(sim);
     printf(",\"retained_history\":"); JsonRetainedHistory(sim);

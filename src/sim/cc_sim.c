@@ -6765,23 +6765,13 @@ static void AdvanceArchives(CcSim *sim)
         archives->scribes -= 1;
     }
 
-    CcSettlement *scriptorium = NULL;
-    int32_t active_scribes = archives->scribes;
-    bool scriptorium_ready = archives->scribes > 0;
-    if (sim->schema_version >= 34U) {
-        const CcSettlement *place = CcArchiveSeat(sim);
-        if (place != NULL) {
-            scriptorium = CcSimSettlementMutable(sim, place->id);
-        }
-        int32_t scribe_grain = CcArchiveSpareGrain(sim, scriptorium);
-        active_scribes = MinimumI32(archives->scribes, scribe_grain / 2);
-        if (active_scribes > 0) {
-            scriptorium->stock[CC_GOOD_WHEAT] -= active_scribes * 2;
-            CcEconomyRefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_WHEAT);
-        }
-        scriptorium_ready = active_scribes > 0 &&
-            scriptorium->stock[CC_GOOD_PAPER] > 0 &&
-            scriptorium->stock[CC_GOOD_TOOLS] > 0;
+    CcArchiveWorkPlan work = CcSimArchiveWorkPlan(sim);
+    CcSettlement *scriptorium = CcSimSettlementMutable(sim, work.seat_id);
+    int32_t active_scribes = work.eligible_scribes;
+    bool scriptorium_ready = work.recording_ready;
+    if (work.wheat_required > 0) {
+        scriptorium->stock[CC_GOOD_WHEAT] -= work.wheat_required;
+        CcEconomyRefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_WHEAT);
     }
 
     CcId noted[CC_MAX_SCRIBES];
