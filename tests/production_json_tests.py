@@ -51,6 +51,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert sum(sum(town['herds']['cows']['feed']) for town in rows[-1]['towns']) > 0
         assert sum(town['herds']['sheep']['output'][rows[-1]['goods'].index('Wool')] for town in rows[-1]['towns']) > 0
         assert all(route['open_days'] + route['closed_days'] == 730 for route in rows[-1]['routes'])
+        assert all(route['recovery']['semantics'] == 'evaluated_plan_snapshot' for row in rows for route in row['routes'])
         for start, end in zip(rows[0]['sites'], rows[-1]['sites']):
             assert end['condition'] == start['condition'] + end['site_repair'] - end['wear']
             for good in range(len(rows[-1]['goods'])):

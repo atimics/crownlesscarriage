@@ -67,6 +67,32 @@ static void JsonThreatSnapshot(const CcSim *sim)
     printf("]}");
 }
 
+static const char *const ROAD_RECOVERY_BLOCK_NAMES[] = {
+    "invalid", "open", "war_border", "calendar", "abandoned_endpoint",
+    "people", "food", "wood", "stone", "tools"};
+
+static void JsonRoadRecovery(const CcSim *sim, CcId route_id)
+{
+    CcRoadRecoveryPlan plan = CcSimRoadRecoveryPlan(sim, route_id);
+    printf("{\"semantics\":\"evaluated_plan_snapshot\",\"blocked_mask\":%" PRIu32 ",\"blocked_reasons\":[", plan.blocked);
+    bool separator = false;
+    for (unsigned bit = 0; bit < sizeof(ROAD_RECOVERY_BLOCK_NAMES) / sizeof(ROAD_RECOVERY_BLOCK_NAMES[0]); ++bit) {
+        if ((plan.blocked & (UINT32_C(1) << bit)) == 0U) continue;
+        if (separator) putchar(',');
+        JsonString(ROAD_RECOVERY_BLOCK_NAMES[bit]); separator = true;
+    }
+    printf("],\"labor_base_id\":\"%" PRIu64 "\",\"supplier_id\":\"%" PRIu64 "\",\"next_work_day\":",
+        plan.labor_base_id, plan.supplier_id);
+    if (plan.next_work_day < 0) printf("null"); else printf("%" PRId64, plan.next_work_day);
+    const char *names[] = {"population", "food_rations", "wood", "stone", "tools", "effort", "people_used"};
+    const int32_t values[] = {plan.population, plan.food_rations, plan.wood, plan.stone, plan.tools, plan.effort, plan.people_used};
+    for (unsigned i = 0; i < sizeof(values) / sizeof(values[0]); ++i) {
+        printf(",\"%s\":", names[i]);
+        if (values[i] < 0) printf("null"); else printf("%d", values[i]);
+    }
+    putchar('}');
+}
+
 static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t year,
     const char *fixture, const char *dragon_policy, const CcNutritionAccounting *nutrition,
     const CcSmithyAccounting *smithy, const CcRoadProductionAccounting *sites,
@@ -148,8 +174,9 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         printf("%s{\"id\":\"%" PRIu64 "\",\"condition\":%d,\"closed\":%s,\"open_days\":%d,\"closed_days\":%d,\"closure_reason\":null",
             i ? "," : "", route->id, route->condition, route->closed ? "true" : "false",
             open_days[i], sim->current_day - start_day - open_days[i]);
-        printf(",\"from_id\":\"%" PRIu64 "\",\"to_id\":\"%" PRIu64 "\",\"travel_days\":%d,\"capacity\":%d}",
+        printf(",\"from_id\":\"%" PRIu64 "\",\"to_id\":\"%" PRIu64 "\",\"travel_days\":%d,\"capacity\":%d",
             route->from_id, route->to_id, route->travel_days, route->capacity);
+        printf(",\"recovery\":"); JsonRoadRecovery(sim, route->id); putchar('}');
     }
     printf("],\"carriages\":[");
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {

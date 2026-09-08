@@ -1361,6 +1361,13 @@ if(BUILD_TESTING)
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/threat_snapshot_tests.py
                          $<TARGET_FILE:threat_snapshot_fixture>)
+        add_executable(road_recovery_json_fixture tests/road_recovery_json_fixture.c)
+        target_link_libraries(road_recovery_json_fixture PRIVATE crownless_persistence)
+        cc_strict_warnings(road_recovery_json_fixture)
+        add_test(NAME road_recovery_json
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/road_recovery_json_tests.py
+                         $<TARGET_FILE:road_recovery_json_fixture>)
         add_test(NAME production_json_capture
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/production_json_tests.py

@@ -280,12 +280,10 @@ static void PrintSummary(const CcSim *sim, bool detail)
                 route->condition, sim->current_day, plan.next_work_day,
                 plan.labor_base_id, plan.supplier_id, plan.population, plan.food_rations,
                 plan.wood, plan.stone, plan.tools, plan.effort, plan.people_used);
-            const char *names[] = {"invalid", "open", "war_border", "calendar",
-                "abandoned_endpoint", "people", "food", "wood", "stone", "tools"};
             bool separator = false;
-            for (unsigned bit = 0; bit < sizeof(names) / sizeof(names[0]); ++bit) {
+            for (unsigned bit = 0; bit < sizeof(ROAD_RECOVERY_BLOCK_NAMES) / sizeof(ROAD_RECOVERY_BLOCK_NAMES[0]); ++bit) {
                 if ((plan.blocked & (UINT32_C(1) << bit)) == 0U) continue;
-                (void)printf("%s%s", separator ? "," : "", names[bit]);
+                (void)printf("%s%s", separator ? "," : "", ROAD_RECOVERY_BLOCK_NAMES[bit]);
                 separator = true;
             }
             (void)puts(separator ? "" : "ready");
