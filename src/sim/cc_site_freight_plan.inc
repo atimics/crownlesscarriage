@@ -10,17 +10,31 @@ static int32_t SiteFreightRoom(const CcRoadSite *site, CcGood good)
         CcGoodDefinitionFor(good)->player_units_per_slot - site->stock[good]);
 }
 
+/* Reserve future room for loads already travelling or waiting to unload.
+   Actual unloading still checks the physical store at arrival. */
+static int32_t SiteSupplyRoom(const CcSim *sim, const CcRoadSite *site, CcGood good)
+{
+    if (sim->schema_version < 69U) return SiteFreightRoom(site, good);
+    CcRoadSite projected = *site;
+    for (int32_t item = 0; item < CC_GOOD_COUNT; ++item) {
+        int32_t incoming = CcSimIncomingGood(sim, site->id, (CcGood)item);
+        projected.stock[item] += MinimumI32(incoming, CC_SIM_MAX_UNITS - projected.stock[item]);
+    }
+    return SiteFreightRoom(&projected, good);
+}
+
 static bool PlanSiteSupply(const CcSim *sim, const CcRoadSite *site,
     const CcSettlement *town, CcGood good, int32_t target, int32_t slots,
     CcSiteFreightPlan *plan)
 {
-    int32_t need = target - site->stock[good];
+    int32_t incoming = sim->schema_version >= 69U ? CcSimIncomingGood(sim, site->id, good) : 0;
+    int32_t need = target - site->stock[good] - incoming;
     if (need <= 0) return false;
     int32_t floor = town->reserve_target[good];
     if (good == CC_GOOD_FOOD || good == CC_GOOD_WHEAT)
         floor = MaximumI32(floor, WeeklyFoodUse(sim, town) * 6);
     int32_t quantity = MinimumI32(need, MinimumI32(town->stock[good] - floor,
-        MinimumI32(SiteFreightRoom(site, good), slots * FreightUnitsPerCargoSlot(good))));
+        MinimumI32(SiteSupplyRoom(sim, site, good), slots * FreightUnitsPerCargoSlot(good))));
     if (quantity <= 0) return false;
     plan->kind = CC_SITE_FREIGHT_SUPPLY; plan->gate = CC_SITE_FREIGHT_READY;
     plan->good = good; plan->quantity = quantity;

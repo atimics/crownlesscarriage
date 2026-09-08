@@ -31,8 +31,48 @@ static CcSiteFreightPlan Plan(void)
     return plan;
 }
 
+static void CheckIncomingLoads(void)
+{
+    Prepare(2);
+    sim.shipment_count = 1;
+    CcShipment *cargo = &sim.shipments[0];
+    *cargo = (CcShipment){.good = CC_GOOD_TOOLS, .quantity = 1,
+        .final_destination_id = site->id, .status = CC_SHIPMENT_TRAVELLING};
+    CcSiteFreightPlan plan = Plan();
+    CC_CHECK(plan.good == CC_GOOD_WHEAT && plan.quantity == 4);
+    sim.schema_version = 68;
+    CC_CHECK(Plan().good == CC_GOOD_TOOLS);
+    sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    cargo->status = CC_SHIPMENT_BLOCKED;
+    CC_CHECK(Plan().good == CC_GOOD_WHEAT);
+    cargo->status = CC_SHIPMENT_LOST;
+    CC_CHECK(Plan().good == CC_GOOD_TOOLS);
+    cargo->status = CC_SHIPMENT_ARRIVED;
+    CC_CHECK(Plan().good == CC_GOOD_TOOLS);
+    cargo->status = CC_SHIPMENT_TRAVELLING;
+    cargo->final_destination_id = town->id;
+    CC_CHECK(Plan().good == CC_GOOD_TOOLS);
+    cargo->final_destination_id = site->id;
+    site->stock[CC_GOOD_TOOLS] = 1;
+    cargo->good = CC_GOOD_WHEAT; cargo->quantity = 2;
+    plan = Plan();
+    CC_CHECK(plan.good == CC_GOOD_WHEAT && plan.quantity == 2);
+    cargo->quantity = 4;
+    CC_CHECK(Plan().gate == CC_SITE_FREIGHT_GOODS_REQUIRED);
+    site->stock[CC_GOOD_TOOLS] = 0;
+    cargo->good = CC_GOOD_WOOD; cargo->quantity = CC_ROAD_SITE_CAPACITY;
+    CC_CHECK(Plan().gate == CC_SITE_FREIGHT_GOODS_REQUIRED);
+    cargo->quantity = CC_ROAD_SITE_CAPACITY - 1;
+    CC_CHECK(Plan().good == CC_GOOD_TOOLS && Plan().quantity == 1);
+    site->stock[CC_GOOD_WOOD] = 1;
+    CC_CHECK(Plan().gate == CC_SITE_FREIGHT_GOODS_REQUIRED);
+    cargo->status = CC_SHIPMENT_LOST;
+    CC_CHECK(Plan().good == CC_GOOD_TOOLS);
+}
+
 int main(void)
 {
+    CheckIncomingLoads();
     Prepare(2);
     CcSiteFreightPlan plan = Plan();
     CC_CHECK(plan.gate == CC_SITE_FREIGHT_READY && plan.kind == CC_SITE_FREIGHT_SUPPLY);
