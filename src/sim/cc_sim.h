@@ -466,6 +466,14 @@ typedef struct CcWelfareSnapshot {
     double population_weighted_security;
 } CcWelfareSnapshot;
 
+typedef struct CcArchiveFundingPlan {
+    CcId seat_id;
+    int32_t donor_count;
+    CcId donor_ids[2];
+    CcMoney shares[2];
+    CcMoney total;
+} CcArchiveFundingPlan;
+
 typedef struct CcArchiveWorkPlan {
     CcId seat_id;
     int32_t eligible_scribes;
@@ -2138,6 +2146,8 @@ CcRitualOfferingPlan CcSimRitualOfferingPlan(const CcSim *sim);
 CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
 /* Evaluate the current staffing and held supplies without advancing archive work. */
 CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim);
+/* Treasury top-up under current funds and routes; recovery timing is separate. */
+CcArchiveFundingPlan CcSimArchiveFundingPlan(const CcSim *sim);
 const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker);
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
                                   CcFoodEconomy *economy);

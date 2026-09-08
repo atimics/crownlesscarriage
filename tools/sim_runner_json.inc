@@ -21,6 +21,17 @@ static void JsonArchiveWork(const CcSim *sim)
         plan.wheat_required, plan.recording_ready ? "true" : "false");
 }
 
+static void JsonArchiveFunding(const CcSim *sim)
+{
+    CcArchiveFundingPlan plan = CcSimArchiveFundingPlan(sim);
+    printf("{\"semantics\":\"treasury_top_up_plan_snapshot\",\"seat_id\":\"%" PRIu64
+           "\",\"total\":%" PRId64 ",\"donors\":[", plan.seat_id, plan.total);
+    for (int32_t i = 0; i < plan.donor_count; ++i)
+        printf("%s{\"kingdom_id\":\"%" PRIu64 "\",\"amount\":%" PRId64 "}",
+            i ? "," : "", plan.donor_ids[i], plan.shares[i]);
+    printf("]}");
+}
+
 static void JsonStock(const int32_t *values)
 {
     putchar('[');
@@ -207,6 +218,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         (int)sim->dragon.life_stage, (int)sim->dragon.activity, sim->dragon.body_condition,
         sim->dragon.crown_strength, sim->dragon.egg_count);
     printf(",\"archive_work\":"); JsonArchiveWork(sim);
+    printf(",\"archive_funding\":"); JsonArchiveFunding(sim);
     printf(",\"road_network\":"); JsonRoadNetwork(sim);
     printf(",\"threats\":"); JsonThreatSnapshot(sim);
     printf(",\"retained_history\":"); JsonRetainedHistory(sim);

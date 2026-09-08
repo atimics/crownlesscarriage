@@ -6674,54 +6674,15 @@ void CcSimUpgradeHistoryOffices(CcSim *sim)
     }
 }
 
-/* Find solvent crowns connected to the active archive by open roads. */
 static CcMoney FundArchiveRecovery(CcSim *sim)
 {
-    const CcSettlement *archive = CcArchiveSeat(sim);
-    if (archive == NULL || CcSettlementIsAbandoned(archive)) return 0;
-    CcMoney funding = 50 - sim->iron_ledger_reserve;
-    if (funding <= 0 || funding > (sim->schema_version >= 58U ? 50 : 10)) return 0;
-    if (sim->schema_version >= 58U) {
-        CcKingdom *host = KingdomMutable(sim, archive->kingdom_id);
-        if (host != NULL && host->treasury >= 800) {
-            host->treasury -= funding;
-            sim->iron_ledger_reserve += funding;
-            return funding;
-        }
+    CcArchiveFundingPlan plan = CcSimArchiveFundingPlan(sim);
+    for (int32_t i = 0; i < plan.donor_count; ++i) {
+        CcKingdom *donor = KingdomMutable(sim, plan.donor_ids[i]);
+        donor->treasury -= plan.shares[i];
     }
-    bool reached[CC_MAX_SETTLEMENTS] = {false};
-    int32_t archive_slot = SettlementSlotById(sim, archive->id);
-    if (archive_slot < 0) return 0;
-    reached[archive_slot] = true;
-    for (int32_t pass = 0; pass < sim->settlement_count; ++pass) {
-        for (int32_t r = 0; r < sim->route_count; ++r) {
-            const CcRoute *road = &sim->routes[r];
-            if (road->closed) continue;
-            int32_t from = SettlementSlotById(sim, road->from_id);
-            int32_t to = SettlementSlotById(sim, road->to_id);
-            if (from < 0 || to < 0 ||
-                CcSettlementIsAbandoned(&sim->settlements[from]) ||
-                CcSettlementIsAbandoned(&sim->settlements[to])) continue;
-            if (reached[from] || reached[to]) reached[from] = reached[to] = true;
-        }
-    }
-    int32_t donors[2] = {-1, -1};
-    int32_t count = 0;
-    for (int32_t k = 0; k < sim->kingdom_count && count < 2; ++k) {
-        if (sim->kingdoms[k].treasury < 800) continue;
-        for (int32_t town = 0; town < sim->settlement_count; ++town) {
-            if (reached[town] && sim->settlements[town].kingdom_id == sim->kingdoms[k].id) {
-                donors[count++] = k;
-                break;
-            }
-        }
-    }
-    if (count < 2) return 0;
-    CcMoney first = (funding + 1) / 2;
-    sim->kingdoms[donors[0]].treasury -= first;
-    sim->kingdoms[donors[1]].treasury -= funding - first;
-    sim->iron_ledger_reserve += funding;
-    return funding;
+    sim->iron_ledger_reserve += plan.total;
+    return plan.total;
 }
 
 static void AdvanceArchives(CcSim *sim)

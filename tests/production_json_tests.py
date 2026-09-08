@@ -21,6 +21,12 @@ with tempfile.TemporaryDirectory() as directory:
         rows = [json.loads(line) for line in report.splitlines()]
         assert [row['day'] for row in rows] == [1, 366, 731]
         assert all(row['threats']['semantics'] == 'snapshot' for row in rows)
+        for row in rows:
+            funding = row['archive_funding']
+            assert funding['semantics'] == 'treasury_top_up_plan_snapshot'
+            assert funding['total'] == sum(donor['amount'] for donor in funding['donors'])
+            assert all(isinstance(donor['kingdom_id'], str) for donor in funding['donors'])
+
         policy = 'slain-at-day-1' if '--dragon-slain-day-one' in fixture else 'natural-history'
         assert all(row['dragon_policy'] == policy and row['comparison_scope'] == 'whole-policy' for row in rows)
         text = run(*base, '--save', str(root / 'text.ccsave'))
@@ -35,6 +41,7 @@ with tempfile.TemporaryDirectory() as directory:
             assert loaded['retained_history'] == rows[-1]['retained_history']
             assert loaded['road_network'] == rows[-1]['road_network']
             assert loaded['archive_work'] == rows[-1]['archive_work']
+            assert loaded['archive_funding'] == rows[-1]['archive_funding']
             assert [route['context'] for route in loaded['routes']] == [route['context'] for route in rows[-1]['routes']]
             for route in loaded['routes']:
                 assert route['observation']['start_day_exclusive'] == 731
