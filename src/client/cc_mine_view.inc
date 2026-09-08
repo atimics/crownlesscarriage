@@ -15,7 +15,8 @@ static void MineLabel(RenderTexture2D target, const CcSim *sim, Vector3 point, c
     Rectangle view=MineViewport();
     int x=(int)(view.x+pixel.x*view.width/(float)target.texture.width);
     int y=(int)(view.y+pixel.y*view.height/(float)target.texture.height);
-    if(x<view.x+80 || x>view.x+view.width-80 || y<view.y+12 || y>view.y+view.height-20) return;
+    if((float)x<view.x+80 || (float)x>view.x+view.width-80 ||
+       (float)y<view.y+12 || (float)y>view.y+view.height-20) return;
     int width=CcOverlayMeasureText(text,10);
     DrawRectangle(x-width/2-5,y-4,width+10,18,Fade(BACKGROUND,.88f));
     CcOverlayDrawText(text,x-width/2,y,10,INK);
