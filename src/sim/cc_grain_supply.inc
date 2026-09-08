@@ -15,10 +15,6 @@ static CcGrainDeliveryPlan PlanGrainForCarriage(const CcSim *sim, const CcSettle
     plan.organiser_id = supply->organiser_id;
     const CcCharacter *organiser = CcSimCharacter(sim, supply->organiser_id);
 #define GRAIN_WAIT(state, text) do { plan.status = state; SetError(plan.reason, sizeof(plan.reason), text); return plan; } while (0)
-    if (!supply->enabled) GRAIN_WAIT(CC_GRAIN_INACTIVE, "Fund an organiser to arrange continuing grain deliveries.");
-    if (organiser == NULL || organiser->death_day <= sim->current_day ||
-        organiser->current_settlement_id != town->id)
-        GRAIN_WAIT(CC_GRAIN_CONTACT, "The town needs its organiser here before buying more grain.");
     if (supply->shipment_id != 0U) {
         for (int i = 0; i < sim->shipment_count; ++i) {
             const CcShipment *shipment = &sim->shipments[i];
@@ -31,6 +27,11 @@ static CcGrainDeliveryPlan PlanGrainForCarriage(const CcSim *sim, const CcSettle
             GRAIN_WAIT(CC_GRAIN_TRANSIT, "A paid grain load is on its way.");
         }
     }
+    if (!supply->enabled) GRAIN_WAIT(CC_GRAIN_INACTIVE, "Fund an organiser to arrange continuing grain deliveries.");
+    if (organiser == NULL || organiser->death_day <= sim->current_day ||
+        organiser->current_settlement_id != town->id)
+        GRAIN_WAIT(CC_GRAIN_CONTACT, "The town needs its organiser here before buying more grain.");
+    if (supply->ordered > INT32_MAX - 12) GRAIN_WAIT(CC_GRAIN_FUNDS, "This delivery record is complete. End its orders and collect the remaining fund.");
     if (CcSettlementIsAbandoned(town) || !CcSettlementHasService(town, CC_SERVICE_BAKERY))
         GRAIN_WAIT(CC_GRAIN_BAKERY, "Reopen the bakery before ordering its next load.");
     if (town->stock[CC_GOOD_WHEAT] + CcSimIncomingGood(sim, town->id, CC_GOOD_WHEAT) >= 12)

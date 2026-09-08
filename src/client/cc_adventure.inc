@@ -501,7 +501,16 @@ static void DrawAdventureGrainSupply(const CcSim *sim, LocalState *local, const 
     y += 30;
     const CcSettlement *supplier = CcSimSettlement(sim, plan.supplier_id != 0 ? plan.supplier_id : supply->supplier_id);
     if (supplier != NULL) {
-        CcOverlayDrawText(TextFormat("Supplier: %s. Last arrival: day %d.", supplier->name, supply->last_arrival_day), x, y, AdventureTextSize(14), INK);
+        CcOverlayDrawText(supply->last_arrival_day > 0 ?
+            TextFormat("Supplier: %s. Last delivery: %d days ago.", supplier->name, sim->current_day - supply->last_arrival_day) :
+            TextFormat("Supplier: %s. First arrival pending.", supplier->name), x, y, AdventureTextSize(14), INK);
+        y += 30;
+    }
+    const CcRoute *road = CcSimRoute(sim, plan.route_id != 0 ? plan.route_id : supply->route_id);
+    if (road != NULL) {
+        const CcSettlement *from = CcSimSettlement(sim, road->from_id);
+        const CcSettlement *to = CcSimSettlement(sim, road->to_id);
+        CcOverlayDrawText(TextFormat("Supply road: %s to %s.", from->name, to->name), x, y, AdventureTextSize(14), INK);
         y += 30;
     }
     (void)AdventureWrap(plan.reason, x, y, (int)panel.width - 56, AdventureTextSize(14), TEAL);

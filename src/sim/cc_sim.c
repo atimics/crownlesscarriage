@@ -16707,7 +16707,10 @@ static bool ApplyFundGrainSupply(CcSim *sim, const CcCommand *command,
     }
     CcGrainSupply *supply = (CcGrainSupply *)CcSimGrainSupply(sim, town->id);
     if (command->amount == -1) {
-        if (sim->player.coins > CC_SIM_MAX_MONEY - supply->purse) return false;
+        if (sim->player.coins > CC_SIM_MAX_MONEY - supply->purse) {
+            SetError(error, error_capacity, "Make room in the company purse before collecting this fund.");
+            return false;
+        }
         sim->player.coins += supply->purse;
         supply->purse = 0;
         supply->enabled = false;

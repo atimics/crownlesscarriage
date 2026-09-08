@@ -429,6 +429,18 @@ static int RunAdventureTradeTermsRegression(void)
         "Bakery confirmation must transfer the displayed cargo and wages.");
     TERMS_CHECK(CcSimBakerySupportPlan(&sim, sim.player.location_id).remembered,
         "The receiving contact must remember the confirmed support.");
+    local.trade_mode = 4;
+    sim.player.coins = 400;
+    local.trade_presented_command = (CcCommand){.kind = CC_COMMAND_FUND_GRAIN_SUPPLY,
+        .target_id = sim.player.location_id};
+    local.trade_presented_total = 200;
+    queued_key_press[KEY_ENTER] = true;
+    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
+    ClientInputClearPressed();
+    TERMS_CHECK(sim.grain_supplies[1].enabled && sim.grain_supplies[1].purse == 192,
+        "The grain fund button must start the displayed agreement.");
+    TERMS_CHECK(strstr(local.receipt, "grain fund") != NULL,
+        "Funding must show its receipt.");
 #undef TERMS_CHECK
     puts("adventure trade terms passed");
     return 0;

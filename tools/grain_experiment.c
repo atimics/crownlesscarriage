@@ -36,13 +36,14 @@ int main(int argc, char **argv)
             break;
         }
     }
+    bool pilot_dispatched = cut_route != 0;
     if (cut_route == 0) {
         for (int r = 0; r < base.route_count; ++r)
             if (base.routes[r].from_id == base.player.location_id || base.routes[r].to_id == base.player.location_id) {
                 cut_route = base.routes[r].id; break;
             }
     }
-    puts("seed,age,arm,day,cut_day,cut_route,hunger,prosperity,population,nutrition,bread_made,wheat_used,food_aged,food_overflow,ordered,delivered,lost,redirected,fund,spent,status,supplier,route");
+    puts("seed,age,arm,day,cut_day,cut_route,pilot_dispatched,hunger,prosperity,population,nutrition,bread_made,wheat_used,food_aged,food_overflow,ordered,delivered,lost,redirected,fund,spent,status,supplier,route");
     const char *arms[] = {"cash_open", "fund_open", "cash_cut", "fund_cut"};
     for (int arm = 0; arm < 4; ++arm) {
         trial = base;
@@ -54,6 +55,8 @@ int main(int argc, char **argv)
             trial.settlements[1].market_coins += 200;
         }
         if (gold != CcSimTrackedGold(&trial)) return 1;
+        int previous_condition = 0;
+        bool previous_closed = false;
         CcNutritionAccounting food = {0};
         CcProductionAccounting production = {0};
         for (int day = 0; day <= 365; ++day) {
@@ -69,19 +72,20 @@ int main(int argc, char **argv)
                 aged += food.towns[1].aged_units[good] * value;
                 overflow += food.towns[1].overflow_units[good] * value;
             }
-            printf("%d,%d,%s,%d,%d,%" PRIu64 ",%d,%d,%d,%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d,%d,%d,%d,%" PRId64 ",%" PRId64 ",%d,%" PRIu64 ",%" PRIu64 "\n",
-                ordinal, years, arms[arm], day, cut_day, cut_route, town->hunger, town->prosperity, town->population,
+            printf("%d,%d,%s,%d,%d,%" PRIu64 ",%d,%d,%d,%d,%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d,%d,%d,%d,%" PRId64 ",%" PRId64 ",%d,%" PRIu64 ",%" PRIu64 "\n",
+                ordinal, years, arms[arm], day, cut_day, cut_route, pilot_dispatched, town->hunger, town->prosperity, town->population,
                 nutrition, production.towns[1].bakery.output[CC_GOOD_BREAD], production.towns[1].bakery.input[CC_GOOD_WHEAT],
                 aged, overflow, supply->ordered, supply->delivered, supply->lost, supply->redirected,
                 supply->purse, supply->spent, CcSimGrainDeliveryPlan(&trial, town->id).status, supply->supplier_id, supply->route_id);
             if (day == 365) break;
             if (arm >= 2 && day + 1 >= cut_day && day + 1 < cut_day + 42) {
                 for (int r = 0; r < trial.route_count; ++r) if (trial.routes[r].id == cut_route) {
+                    if (day + 1 == cut_day) { previous_condition = trial.routes[r].condition; previous_closed = trial.routes[r].closed; }
                     trial.routes[r].condition = 0; trial.routes[r].closed = true;
                 }
             } else if (arm >= 2 && day + 1 == cut_day + 42) {
                 for (int r = 0; r < trial.route_count; ++r) if (trial.routes[r].id == cut_route) {
-                    trial.routes[r].condition = 80; trial.routes[r].closed = false;
+                    trial.routes[r].condition = previous_condition; trial.routes[r].closed = previous_closed;
                 }
             }
             CcSimAdvanceDaysWithProductionAccounting(&trial, 1, &food, NULL, &production);
