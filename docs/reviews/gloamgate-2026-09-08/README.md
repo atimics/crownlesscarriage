@@ -31,6 +31,33 @@ The fountain uses the same location in street rendering, walking collision,
 body collision, and the wider world view. The scene uses the town's existing
 simulation state.
 
+## In-game review
+
+These Linux game captures come from commit `e47c405aa188a62d712d6dbd10f8fb3949edc93f`
+in [CI run 34289081803](https://github.com/atimics/crownlesscarriage/actions/runs/34289081803).
+The arrival view shows the round hall, angled shops, and open square together.
+The moving carriage follows the wide curve around the fountain.
+
+![Arrival](arrival.png)
+
+![Queen's market](market.png)
+
+![Carriage on the market road](carriage.png)
+
+![Coach court](coach-court.png)
+
+| Town condition | Capture |
+| --- | --- |
+| Fire damage | [Darkened shops](burnt.png) |
+| Rebuilding | [Repair scaffolds](rebuilding.png) |
+| Low security | [Shuttered fronts](lawless.png) |
+| Prosperity | [Fresh trim](thriving.png) |
+| Empty food stores | [Hungry town](hungry.png) |
+
+All 152 local tests passed. The added walking check for angled walls also
+passed. Static analysis passed. Route checks cover two terrain seeds, all
+service lanes, the fountain, and carriage arrival and departure.
+
 ## Before
 
 This native capture shows main at f0fa99e before the rebuild.
