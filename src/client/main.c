@@ -12,6 +12,7 @@
 #include "client/cc_visual_style.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_mine.h"
 #include "story/cc_story.h"
 #include "world/cc_world.h"
 
@@ -297,7 +298,8 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_DUNGEON_RETREAT,
     CONTEXT_ACTION_DUNGEON_PUBLIC_ROUTE,
     CONTEXT_ACTION_DUNGEON_SMUGGLER_ROUTE,
-    CONTEXT_ACTION_DUNGEON_RESEAL
+    CONTEXT_ACTION_DUNGEON_RESEAL,
+    CONTEXT_ACTION_VISIT_MINE
 } ContextActionKind;
 
 typedef struct ContextAction {
@@ -4146,6 +4148,7 @@ static ContextActionSet BuildContextActions(
     int32_t selected, int32_t selected_situation)
 {
     ContextActionSet set = {0};
+    if (sim->mine.phase != CC_MINE_NONE) return set;
     if (sim == NULL || local == NULL) return set;
     if (local->adventure_ui && (view == VIEW_TRADE || view == VIEW_PAUSE || view == VIEW_LEDGER)) return set;
     int32_t pony = CcPonyOnRoad(sim);
@@ -4504,6 +4507,17 @@ static ContextActionSet BuildContextActions(
 
     if (local->journey_travel_active) {
         const CcRoadSite *road_stop = CcSimJourneyRoadSiteStop(sim);
+        if (road_stop != NULL && road_stop == CcMineSite(sim) &&
+            sim->journey.elapsed_subticks == CcMineBranchSubtick(sim)) {
+            const CcRoute *route=CcSimRoute(sim,road_stop->route_id);
+            bool right=route != NULL && (road_stop->side > 0) == (sim->journey.origin_id == route->from_id);
+            AddDetailedContextAction(&set,CONTEXT_ACTION_VISIT_MINE,
+                right ? "Turn right to Low Silver Pit" : "Turn left to Low Silver Pit", "",
+                "MINE YARD / PARK AND WALK",true,false);
+            AddDetailedContextAction(&set,CONTEXT_ACTION_PASS_ROAD_SITE,
+                "Continue along the road", "", "PASS THE MINE BRANCH",true,false);
+            return set;
+        }
         if (road_stop != NULL) {
             AddDetailedContextAction(
                 &set, CONTEXT_ACTION_CAMP_ROAD_SITE, TextFormat("Camp at %.28s", road_stop->name), "",
@@ -4748,7 +4762,7 @@ static ContextActionSet BuildContextActions(
         GridDistance(position, LOCAL_DUNGEON) < 1.35f) {
         AddDetailedContextAction(
             &set, CONTEXT_ACTION_TRAVEL_DUNGEON_SITE,
-            "Drive to the mine", "F", "SEPARATE LOCAL MAP", true, false);
+            "Find the mine road", "F", "LOW SILVER PIT / ALDERWATCH ROAD", true, false);
     }
     return set;
 }
@@ -6251,6 +6265,7 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
 }
 
 #include "client/cc_adventure.inc"
+#include "client/cc_mine_view.inc"
 #include "client/cc_world_actions.inc"
 static bool StartOnlyOutgoingRoad(CcJournal *journal, CcSim *sim,
                                    LocalState *local, ClientView *view,
@@ -8456,6 +8471,14 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
+    if (sim->mine.phase != CC_MINE_NONE) {
+        if (ClientKeyPressed(KEY_F5) || queued_save_shortcut) {
+            *save_feedback_age=0.0f;
+            (void)SaveClientWorld(*journal,sim,local,save_path,session_path,save_feedback,save_feedback_capacity);
+            (void)snprintf(message,message_capacity,"%s",save_feedback);
+        } else HandleMineInput(*journal,sim,local_target,delta_time,message,message_capacity);
+        return;
+    }
     if (HandleCaravanRecovery(local, view, return_view, GetTime(),
                                message, message_capacity)) return;
     if (local->adventure_ui) {
@@ -8541,6 +8564,14 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
 
+    if (context_action == CONTEXT_ACTION_VISIT_MINE || context_action == CONTEXT_ACTION_PASS_ROAD_SITE) {
+        const CcRoadSite *site=CcSimJourneyRoadSiteStop(sim);
+        if(site != NULL) {
+            CcCommand command={.kind=context_action == CONTEXT_ACTION_VISIT_MINE ? CC_COMMAND_VISIT_MINE : CC_COMMAND_PASS_ROAD_SITE,.target_id=site->id};
+            (void)ApplyCommand(*journal,sim,command,message,message_capacity);
+        }
+        return;
+    }
     if (HandleCarriageTabs(local, *view)) return;
     if (HandlePonyInput(*journal, sim, local, *view, pressed_action, message, message_capacity)) return;
     if (context_action == CONTEXT_ACTION_STOP_APPROACH) {
@@ -9679,9 +9710,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 (context_action == CONTEXT_ACTION_TRAVEL_DUNGEON_SITE ||
                  (interact && GridDistance(position, LOCAL_DUNGEON) <
                                   1.35f))) {
-                BeginSiteTravelState(local, CC_LOCAL_SITE_DUNGEON, false);
+                const CcRoadSite *mine=CcMineSite(sim);
+                const CcRoute *road=mine != NULL ? CcSimRoute(sim,mine->route_id) : NULL;
+                if(road != NULL) {
+                    *selected=(int32_t)(road-sim->routes);
+                    SetOpenWorldCarriageAtRoadGate(sim,local,road->id);
+                    *view=VIEW_ROADS;
+                }
                 (void)snprintf(message, message_capacity,
-                               "The carriage takes the mine road.");
+                               "Follow the Alderwatch road to the Low Silver Pit branch.");
                 return;
             }
             if (local->site_kind == CC_LOCAL_SITE_NONE &&
@@ -10130,6 +10167,7 @@ static int ClientRegressionFailure(const char *message)
 }
 
 #include "../../tests/client_interaction_flow.inc"
+#include "../../tests/client_mine_flow.inc"
 #include "../../tests/client_world_cards.inc"
 #include "../../tests/map_texture_lifetime.inc"
 
@@ -10458,6 +10496,7 @@ int main(int argc, char **argv)
     if (argc == 2 && strcmp(argv[1], "--test-map-texture-lifetime") == 0) return RunMapTextureLifetimeRegression();
     if (argc == 2 && strcmp(argv[1], "--test-travel-audio") == 0) return RunTravelAudioRegression();
     if (argc == 2 && strcmp(argv[1], "--test-world-cards") == 0) return RunWorldCardRegression();
+    if (argc == 2 && strcmp(argv[1], "--test-mine-input") == 0) return RunMineInputRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-input") == 0) return RunAdventureInputRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-trade") == 0) return RunAdventureTradeTermsRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-town-routes") == 0) return RunAdventureTownRoutesRegression();
@@ -10750,6 +10789,8 @@ int main(int argc, char **argv)
     }
     bool capture_dragon_cave = argc >= 2 &&
         strcmp(argv[1], "--capture-dragon-cave") == 0;
+    bool capture_mine_yard = argc >= 2 && strcmp(argv[1],"--capture-mine-yard") == 0;
+    bool capture_mine_level = argc >= 2 && strcmp(argv[1],"--capture-mine-level") == 0;
     bool capture_underroad = argc >= 2 &&
         strcmp(argv[1], "--capture-underroad") == 0;
     bool capture_atmosphere = argc >= 2 &&
@@ -10887,7 +10928,7 @@ int main(int argc, char **argv)
     bool capture_menu = argc >= 2 && strcmp(argv[1], "--capture-menu") == 0;
     bool capture_delete = argc >= 2 && strcmp(argv[1], "--capture-delete-menu") == 0;
     bool capture = argc >= 2 &&
-                   (strcmp(argv[1], "--capture") == 0 || capture_ux || capture_title ||
+                   (strcmp(argv[1], "--capture") == 0 || capture_mine_yard || capture_mine_level || capture_ux || capture_title ||
                     capture_menu || capture_delete || capture_world ||
                     capture_board ||
                     capture_opening ||
@@ -11941,6 +11982,24 @@ int main(int argc, char **argv)
     } else if (capture_travel || capture_route_sight) {
         (void)snprintf(message, sizeof(message), "Travelling.");
     }
+    if(capture_mine_yard || capture_mine_level) {
+        const CcRoadSite *site=CcMineSite(&sim);
+        const CcRoute *road=CcSimRoute(&sim,site->route_id);
+        sim.player.location_id=road->from_id; sim.carriage.location_id=road->from_id;
+        char mine_error[192];
+        CcCommand travel={.kind=CC_COMMAND_TRAVEL,.target_id=road->to_id};
+        if(!CcSimApply(&sim,&travel,mine_error,sizeof(mine_error))) return 1;
+        sim.journey.elapsed_subticks=(int32_t)(((int64_t)sim.journey.total_subticks*site->progress_milli+999)/1000);
+        sim.carriage.progress_milli=(int32_t)((int64_t)sim.journey.elapsed_subticks*1000/sim.journey.total_subticks);
+        sim.pony_company.encounter=-1;
+        CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=site->id};
+        if(!CcSimApply(&sim,&visit,mine_error,sizeof(mine_error))) return 1;
+        if(capture_mine_level) {
+            sim.mine.phase=CC_MINE_LEVEL; sim.mine.x=15; sim.mine.y=5;sim.mine.light=18;sim.mine.seen=3;
+        }
+        view=VIEW_LOCAL;
+        (void)snprintf(message,sizeof(message),"Follow the mine road. Pack food before entering.");
+    }
     int capture_frames = 0;
     int walk_frame_count = 0;
     const int32_t render_benchmark_warmup_frames = 60;
@@ -12485,6 +12544,11 @@ int main(int argc, char **argv)
             frontend.screen == FRONTEND_INVITATION ? "invitation" :
             frontend.screen == FRONTEND_REMOVE_MEMBER ? "remove" : "playing", frontend.focus, (int)frontend.avatar);
 #endif
+        if(sim.mine.phase != CC_MINE_NONE) {
+            CcOverlayFlush();
+            DrawMineScene(&sim,local_target,message);
+            CcOverlayFlush();
+        }
         ClientTouchEnd();
         EndDrawing();
 #if defined(PLATFORM_WEB)

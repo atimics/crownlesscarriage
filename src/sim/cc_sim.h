@@ -56,7 +56,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 56
+#define CC_SIM_SCHEMA_VERSION 57
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -475,7 +475,11 @@ typedef enum CcCommandKind {
     CC_COMMAND_LEAVE_PONY = 46,
     CC_COMMAND_PARTY_WIPE = 47,
     CC_COMMAND_EXCHANGE_GOSSIP = 48,
-    CC_COMMAND_HEARD_STORY = 49
+    CC_COMMAND_HEARD_STORY = 49,
+    CC_COMMAND_VISIT_MINE = 50,
+    CC_COMMAND_MINE_STEP = 51,
+    CC_COMMAND_MINE_USE = 52,
+    CC_COMMAND_MINE_PACK = 53
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1544,6 +1548,24 @@ typedef struct CcPlayerCompany {
     CcId accepted_situation_id;
 } CcPlayerCompany;
 
+typedef enum CcMinePhase {
+    CC_MINE_NONE, CC_MINE_YARD, CC_MINE_LEVEL
+} CcMinePhase;
+
+typedef struct CcMineVisit {
+    CcMinePhase phase;
+    CcId site_id;
+    int32_t x, y;
+    int32_t revision;
+    int32_t return_speed;
+    int32_t light;
+    int32_t steps;
+    uint32_t seen;
+    bool bar_open;
+    bool surveyed;
+    int32_t pack[CC_GOOD_COUNT];
+} CcMineVisit;
+
 typedef struct CcCommand {
     CcCommandKind kind;
     CcId target_id;
@@ -1624,6 +1646,7 @@ typedef struct CcSim {
     uint32_t posted_situation_mask;
     CcJourneyEncounter journey;
     CcCarriageState carriage;
+    CcMineVisit mine;
     CcDelayedEcho delayed_echo;
     CcDelayedEcho pending_echoes[CC_MAX_PENDING_ECHOES];
     int32_t pending_echo_count;
@@ -1671,7 +1694,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 172928,
+_Static_assert(sizeof(CcSim) == 173032,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

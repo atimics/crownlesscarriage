@@ -1404,7 +1404,14 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " source_character_id INTEGER NOT NULL, retellings INTEGER NOT NULL,"
         " court_bias INTEGER NOT NULL, alarm INTEGER NOT NULL, confidence INTEGER NOT NULL,"
         " PRIMARY KEY(holder_kind,holder_slot,gossip_slot));";
-    return Execute(database, gossip_schema, error, error_capacity) &&
+    const char *mine_schema =
+        "CREATE TABLE IF NOT EXISTS mine_visit (slot INTEGER PRIMARY KEY CHECK(slot=1),"
+        " phase INTEGER NOT NULL,site_id INTEGER NOT NULL,x INTEGER NOT NULL,y INTEGER NOT NULL,"
+        " revision INTEGER NOT NULL,return_speed INTEGER NOT NULL,light INTEGER NOT NULL,"
+        " steps INTEGER NOT NULL,seen INTEGER NOT NULL,bar_open INTEGER NOT NULL,surveyed INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS mine_pack (good INTEGER PRIMARY KEY,quantity INTEGER NOT NULL);";
+    return Execute(database, mine_schema, error, error_capacity) &&
+           Execute(database, gossip_schema, error, error_capacity) &&
            Execute(database, pony_schema, error, error_capacity) &&
            Execute(database, schema, error, error_capacity) &&
            Execute(database, royal_carriage_schema, error, error_capacity) &&
@@ -3266,6 +3273,8 @@ invalid:
     return false;
 }
 
+#include "persistence/cc_save_mine.inc"
+
 static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
                                  uint64_t journal_generation,
                                  uint64_t journal_cursor,
@@ -3279,6 +3288,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         return false;
     }
     return Execute(database,
+            "DELETE FROM mine_visit; DELETE FROM mine_pack;"
             "DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
             "DELETE FROM gossip_version;"
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
@@ -3351,7 +3361,8 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveEvents(database, sim, error, error_capacity) &&
         SavePlayer(database, sim, error, error_capacity) &&
         SavePlayerCommitment(database, sim, error, error_capacity) &&
-        SaveJourneyState(database, sim, error, error_capacity);
+        SaveJourneyState(database, sim, error, error_capacity) &&
+        SaveMine(database, sim, error, error_capacity);
 }
 
 static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
@@ -5970,7 +5981,7 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 48U || legacy_version == 49U ||
          legacy_version == 50U || legacy_version == 51U ||
          legacy_version == 52U || legacy_version == 53U ||
-         legacy_version == 54U || legacy_version == 55U) &&
+         legacy_version == 54U || legacy_version == 55U || legacy_version == 56U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
@@ -6505,7 +6516,8 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadPlayerCommitment(database, sim, error, error_capacity) &&
               ReadJourneyState(database, sim, error, error_capacity) &&
               ReadPonies(database, sim, error, error_capacity) &&
-              ReadGossip(database, sim, error, error_capacity);
+              ReadGossip(database, sim, error, error_capacity) &&
+              ReadMine(database, sim, error, error_capacity);
     if (!ok) {
         return false;
     }
