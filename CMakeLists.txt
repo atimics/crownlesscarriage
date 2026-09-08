@@ -264,6 +264,10 @@ if(CC_BUILD_BENCHMARKS)
         USES_TERMINAL
     )
 
+    add_executable(crownless_species_metrics tools/species_metrics.c)
+    target_link_libraries(crownless_species_metrics PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_species_metrics)
+
     add_executable(crownless_sim_metrics tools/sim_metrics.c)
     target_link_libraries(crownless_sim_metrics PRIVATE crownless_sim)
     cc_strict_warnings(crownless_sim_metrics)
@@ -1260,6 +1264,11 @@ if(BUILD_TESTING)
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
     if(CC_PYTHON3_EXECUTABLE)
+        if(CC_BUILD_BENCHMARKS)
+            add_test(NAME species_sweep_integrity COMMAND ${CC_PYTHON3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/species_sweep_tests.py
+                $<TARGET_FILE:crownless_species_metrics> $<TARGET_FILE:crownless_sim_metrics>)
+        endif()
         add_test(NAME age_of_dragons_sweep_integrity
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/age_of_dragons_sweep_tests.py)
