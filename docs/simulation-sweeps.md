@@ -221,3 +221,12 @@ endpoints. A paid kit needs two Wood, two Stone, and 24 treasury coins; a local
 kit needs two Wood, two Stone, one Tool, and four food rations. The shared funding
 check drives both endpoint selection and execution. Existing repair priorities
 and historic schema behavior are preserved.
+
+## Hunger analysis availability
+
+`analyze_sweep.py` summarizes average, maximum, and population-weighted hunger
+using worlds with an observed inhabited hunger value. Each hunger line reports
+the observed and unavailable world counts. The `all-abandoned` group identifies
+worlds with zero active settlements; their hunger is unavailable, including in
+older CSV files that reported a numeric value for ruins. The poor-no-dragon group
+requires observed hunger among inhabitants. Fractional medians remain visible.
