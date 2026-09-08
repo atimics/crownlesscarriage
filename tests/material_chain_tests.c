@@ -547,13 +547,16 @@ static void CheckArchiveRecoversAfterSilence(void)
     CC_CHECK(sim.archives.scribes == 0);
     CC_CHECK(sim.archives.dead_since_day > 0);
 
-    /* The full wait and solvent crowns, but a ledger too far gone: this tops
-       up a recovering world rather than rescuing a dead one. */
+    /* Solvent connected crowns can restore a fully empty ledger. */
     sim.archives.dead_since_day = sim.current_day - 1830;
-    sim.iron_ledger_reserve = 10;
+    sim.iron_ledger_reserve = 0;
     SetCrowns(&sim, 900);
+    for (int32_t r = 0; r < sim.route_count; ++r) sim.routes[r].closed = false;
+    CcMoney empty_gold = CcSimTrackedGold(&sim);
     CcSimAdvanceDays(&sim, 7);
-    CC_CHECK(sim.archives.scribes == 0);
+    CC_CHECK(sim.archives.scribes == 1);
+    CC_CHECK(CcSimTrackedGold(&sim) == empty_gold);
+    sim.archives.scribes = 0;
 
     /* All three together end the silence, and it is written down. */
     sim.archives.dead_since_day = sim.current_day - 1830;
@@ -565,8 +568,8 @@ static void CheckArchiveRecoversAfterSilence(void)
     closed = sim;
     for (int32_t r = 0; r < closed.route_count; ++r) closed.routes[r].closed = true;
     CcSimAdvanceDays(&closed, 7);
-    CC_CHECK(closed.archives.scribes == 0);
-    CC_CHECK(CountRecoveryEntries(&closed) == before);
+    CC_CHECK(closed.archives.scribes == 1);
+    CC_CHECK(CountRecoveryEntries(&closed) == before + 1);
     closed = sim;
     closed.schema_version = 55U;
     CcSimAdvanceDays(&closed, 7);
@@ -581,7 +584,8 @@ static void CheckArchiveRecoversAfterSilence(void)
     CcMoney funding = 0;
     for (int32_t i = 0; i < sim.event_count; ++i) {
         const CcEvent *event = CcSimRecentEvent(&sim, i);
-        if (strstr(event->text, "stirs after silence") != NULL) funding += event->magnitude;
+        if (event->day > sim.current_day - 7 &&
+            strstr(event->text, "stirs after silence") != NULL) funding += event->magnitude;
     }
     CC_CHECK(funding > 0 && funding <= 10);
     CcMoney paid = 0;
@@ -612,8 +616,29 @@ static void CheckArchiveRecoversAfterSilence(void)
     CC_CHECK(CountRecoveryEntries(&ledger) == quiet_entries);
 }
 
+static void CheckBreadProtectsScribeGrain(void)
+{
+    CcSim sim;
+    CcSettlement *place = PrepareIsolated(&sim);
+    sim.iron_ledger_reserve = 50;
+    sim.archives.scribes = 1;
+    place->population = 2800;
+    place->stock[CC_GOOD_BREAD] = 10000;
+    place->stock[CC_GOOD_WHEAT] = 2;
+    place->stock[CC_GOOD_TOOLS] = 1;
+    place->stock[CC_GOOD_PAPER] = 1;
+    AddNotableEvent(&sim);
+    CC_CHECK(CcSimMaterialChainSnapshot(&sim).blocker == CC_MATERIAL_CHAIN_READY);
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(sim.archives.lore_stored == 1);
+    CC_CHECK(place->stock[CC_GOOD_WHEAT] == 0);
+    CC_CHECK(place->stock[CC_GOOD_PAPER] == 0);
+    CC_CHECK(place->stock[CC_GOOD_BREAD] > 0);
+}
+
 int main(void)
 {
+    CheckBreadProtectsScribeGrain();
     CC_CHECK(CC_SERVICE_MILL == 15);
     CC_CHECK(strcmp(CcServiceName(CC_SERVICE_MILL), "Mill") == 0);
     CC_CHECK(CC_EVENT_PAPER_MILLED == 123);

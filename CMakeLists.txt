@@ -91,6 +91,7 @@ cc_strict_warnings(crownless_locomotion)
 add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
+    src/sim/cc_mine.c
     src/sim/cc_ponies.c
 )
 target_include_directories(crownless_sim PUBLIC src)
@@ -1020,6 +1021,7 @@ if(BUILD_TESTING)
     add_test(NAME war_society_from_ruins COMMAND war_society_tests)
     add_executable(succession_tests tests/succession_tests.c)
     target_link_libraries(succession_tests PRIVATE crownless_persistence)
+    target_compile_definitions(succession_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     cc_strict_warnings(succession_tests)
     add_test(NAME crisis_contested_succession COMMAND succession_tests)
     add_executable(music_tests tests/music_tests.c)
@@ -1074,12 +1076,21 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/license_page_tests.cmake
     )
 
+    if(APPLE)
+        add_test(NAME macos_configuration_contract
+            COMMAND ${CMAKE_COMMAND}
+                -DCC_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                -DCC_TEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/macos-contract
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/macos_configuration_tests.cmake)
+        set_tests_properties(macos_configuration_contract PROPERTIES TIMEOUT 180)
+    endif()
+
     if(APPLE AND CC_BUILD_CLIENT)
         add_test(
             NAME macos_deployment_target
             COMMAND ${CMAKE_COMMAND}
                 -DCC_BINARY=$<TARGET_FILE:crownless_carriage>
-                -DCC_EXPECTED_MINOS=14.0
+                -DCC_EXPECTED_MINOS=${CMAKE_OSX_DEPLOYMENT_TARGET}
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/macos_deployment_target_tests.cmake
         )
     endif()
@@ -1243,8 +1254,15 @@ if(BUILD_TESTING)
                          $<TARGET_FILE:crownless_sim_metrics>)
     endif()
 
+    add_executable(character_name_tests tests/character_name_tests.c)
+    target_link_libraries(character_name_tests PRIVATE crownless_persistence)
+    target_compile_definitions(character_name_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    cc_strict_warnings(character_name_tests)
+    add_test(NAME settlement_character_names COMMAND character_name_tests)
+
     add_executable(nutrition_accounting_tests tests/nutrition_accounting_tests.c)
-    target_link_libraries(nutrition_accounting_tests PRIVATE crownless_sim)
+    target_link_libraries(nutrition_accounting_tests PRIVATE crownless_persistence)
+    target_compile_definitions(nutrition_accounting_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     cc_strict_warnings(nutrition_accounting_tests)
     add_test(NAME nutrition_storage_accounting COMMAND nutrition_accounting_tests)
     if(CC_PYTHON3_EXECUTABLE AND CC_BUILD_BENCHMARKS)
@@ -1256,6 +1274,7 @@ if(BUILD_TESTING)
 
     add_executable(raid_food_tests tests/raid_food_tests.c)
     target_link_libraries(raid_food_tests PRIVATE crownless_persistence)
+    target_compile_definitions(raid_food_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     cc_strict_warnings(raid_food_tests)
     add_test(NAME hoard_raid_food_accounting COMMAND raid_food_tests)
 
@@ -1268,6 +1287,11 @@ if(BUILD_TESTING)
     target_link_libraries(pony_tests PRIVATE crownless_persistence)
     cc_strict_warnings(pony_tests)
     add_test(NAME rainbow_pony_companions COMMAND pony_tests)
+
+    add_executable(persistence_fields_tests tests/persistence_fields_tests.c)
+    target_link_libraries(persistence_fields_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(persistence_fields_tests)
+    add_test(NAME persistence_field_contract COMMAND persistence_fields_tests)
 
     add_executable(persistence_tests tests/persistence_tests.c)
     target_link_libraries(persistence_tests PRIVATE crownless_persistence)
@@ -1295,6 +1319,12 @@ if(BUILD_TESTING)
         crownless_persistence crownless_road_book crownless_world)
     cc_strict_warnings(route_knowledge_tests)
     add_test(NAME persistent_route_knowledge COMMAND route_knowledge_tests)
+
+    add_executable(mine_tests tests/mine_tests.c)
+    target_link_libraries(mine_tests PRIVATE crownless_coop crownless_metagame)
+    target_compile_definitions(mine_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    cc_strict_warnings(mine_tests)
+    add_test(NAME silverwick_mine_roundtrip COMMAND mine_tests)
 
     add_executable(underroad_tests tests/underroad_tests.c)
     target_link_libraries(underroad_tests PRIVATE crownless_persistence)
@@ -1325,6 +1355,11 @@ if(BUILD_TESTING)
     target_link_libraries(goblin_society_tests PRIVATE crownless_persistence)
     cc_strict_warnings(goblin_society_tests)
     add_test(NAME goblin_society_choices COMMAND goblin_society_tests)
+
+    add_executable(traveller_poverty_tests tests/traveller_poverty_tests.c)
+    target_link_libraries(traveller_poverty_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(traveller_poverty_tests)
+    add_test(NAME traveller_poverty_recruitment COMMAND traveller_poverty_tests)
 
     add_executable(dragon_ecology_tests tests/dragon_ecology_tests.c)
     target_link_libraries(dragon_ecology_tests PRIVATE crownless_persistence)
@@ -1444,6 +1479,8 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-bridge-scene)
         add_test(NAME world_card_input_parity
                  COMMAND crownless_carriage --test-world-cards)
+        add_test(NAME silverwick_mine_input
+                 COMMAND crownless_carriage --test-mine-input)
         add_test(NAME adventure_input_flow
                  COMMAND crownless_carriage --test-adventure-input)
         add_test(NAME title_and_pause_menu

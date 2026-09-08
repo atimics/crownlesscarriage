@@ -56,7 +56,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 57
+#define CC_SIM_SCHEMA_VERSION 60
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -475,7 +475,11 @@ typedef enum CcCommandKind {
     CC_COMMAND_LEAVE_PONY = 46,
     CC_COMMAND_PARTY_WIPE = 47,
     CC_COMMAND_EXCHANGE_GOSSIP = 48,
-    CC_COMMAND_HEARD_STORY = 49
+    CC_COMMAND_HEARD_STORY = 49,
+    CC_COMMAND_VISIT_MINE = 50,
+    CC_COMMAND_MINE_STEP = 51,
+    CC_COMMAND_MINE_USE = 52,
+    CC_COMMAND_MINE_PACK = 53
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1327,6 +1331,10 @@ typedef struct CcCharacter {
     int32_t player_disposition;
     int32_t stress;
     int32_t courage;
+    CcMoney travel_coins;
+    CcId bandit_group_id;
+    int32_t hungry_days;
+    int32_t unsheltered_nights;
     CcCharacterMemory memories[CC_CHARACTER_MEMORY_CAPACITY];
     int32_t memory_count;
     int32_t memory_write_index;
@@ -1546,6 +1554,24 @@ typedef struct CcPlayerCompany {
     CcId accepted_situation_id;
 } CcPlayerCompany;
 
+typedef enum CcMinePhase {
+    CC_MINE_NONE, CC_MINE_YARD, CC_MINE_LEVEL
+} CcMinePhase;
+
+typedef struct CcMineVisit {
+    CcMinePhase phase;
+    CcId site_id;
+    int32_t x, y;
+    int32_t revision;
+    int32_t return_speed;
+    int32_t light;
+    int32_t steps;
+    uint32_t seen;
+    bool bar_open;
+    bool surveyed;
+    int32_t pack[CC_GOOD_COUNT];
+} CcMineVisit;
+
 typedef struct CcCommand {
     CcCommandKind kind;
     CcId target_id;
@@ -1626,6 +1652,7 @@ typedef struct CcSim {
     uint32_t posted_situation_mask;
     CcJourneyEncounter journey;
     CcCarriageState carriage;
+    CcMineVisit mine;
     CcDelayedEcho delayed_echo;
     CcDelayedEcho pending_echoes[CC_MAX_PENDING_ECHOES];
     int32_t pending_echo_count;
@@ -1673,7 +1700,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 172936,
+_Static_assert(sizeof(CcSim) == 173616,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -1732,6 +1759,11 @@ int32_t CcCharacterAgeYears(const CcSim *sim,
 void CcGenerateCharacterName(uint32_t world_seed, CcId settlement_id,
                              int32_t generation, uint32_t ordinal,
                              char output[CC_NAME_CAPACITY]);
+
+/* Unrecognized settlement functions draw from the whole name pool. */
+void CcGenerateSettlementCharacterName(uint32_t world_seed, CcId settlement_id,
+                                       int32_t place_function, int32_t generation,
+                                       uint32_t ordinal, char output[CC_NAME_CAPACITY]);
 
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
 bool CcSimApply(CcSim *sim, const CcCommand *command,
@@ -1897,6 +1929,30 @@ void CcSimUnharnessSecondDraftAnimal(CcSim *sim);
 int32_t CcSimCommonPonyCount(const CcSim *sim);
 bool CcSettlementHasService(const CcSettlement *settlement,
                             CcServiceKind service);
+/* A read-only plan for the next smithy batch. Tools take materials first.
+   Quantities are gross output before the existing tool-wear rule. */
+typedef enum {
+    CC_SMITHY_READY = 0,
+    CC_SMITHY_SERVICE_UNAVAILABLE,
+    CC_SMITHY_ZERO_CAPACITY,
+    CC_SMITHY_RESERVE_MET,
+    CC_SMITHY_IRON_REQUIRED,
+    CC_SMITHY_WOOD_REQUIRED
+} CcSmithyStatus;
+
+typedef struct {
+    int32_t tools_made;
+    int32_t weapons_made;
+    int32_t iron_used;
+    int32_t wood_used;
+    CcSmithyStatus tools_status;
+    CcSmithyStatus weapons_status;
+} CcSmithyPlan;
+
+CcSmithyPlan CcSimPlanSmithy(const CcSim *sim,
+                            const CcSettlement *settlement);
+const char *CcSmithyStatusName(CcSmithyStatus status);
+
 bool CcSimStartServiceProject(CcSim *sim, CcId settlement_id,
                               CcServiceKind service,
                               char *error, size_t error_capacity);

@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 29
+#define CC_SQLITE_USER_VERSION 30
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -517,6 +517,18 @@ static bool EnsureCharacterLifecycleColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "npc_character", "generation",
             "ALTER TABLE npc_character ADD COLUMN generation INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "travel_coins",
+            "ALTER TABLE npc_character ADD COLUMN travel_coins INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "bandit_group_id",
+            "ALTER TABLE npc_character ADD COLUMN bandit_group_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "hungry_days",
+            "ALTER TABLE npc_character ADD COLUMN hungry_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "unsheltered_nights",
+            "ALTER TABLE npc_character ADD COLUMN unsheltered_nights INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
         EnsureColumn(database, "meta", "character_births",
             "ALTER TABLE meta ADD COLUMN character_births INTEGER NOT NULL DEFAULT 0;",
@@ -1407,7 +1419,14 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " source_character_id INTEGER NOT NULL, retellings INTEGER NOT NULL,"
         " court_bias INTEGER NOT NULL, alarm INTEGER NOT NULL, confidence INTEGER NOT NULL,"
         " PRIMARY KEY(holder_kind,holder_slot,gossip_slot));";
-    return Execute(database, gossip_schema, error, error_capacity) &&
+    const char *mine_schema =
+        "CREATE TABLE IF NOT EXISTS mine_visit (slot INTEGER PRIMARY KEY CHECK(slot=1),"
+        " phase INTEGER NOT NULL,site_id INTEGER NOT NULL,x INTEGER NOT NULL,y INTEGER NOT NULL,"
+        " revision INTEGER NOT NULL,return_speed INTEGER NOT NULL,light INTEGER NOT NULL,"
+        " steps INTEGER NOT NULL,seen INTEGER NOT NULL,bar_open INTEGER NOT NULL,surveyed INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS mine_pack (good INTEGER PRIMARY KEY,quantity INTEGER NOT NULL);";
+    return Execute(database, mine_schema, error, error_capacity) &&
+           Execute(database, gossip_schema, error, error_capacity) &&
            Execute(database, pony_schema, error, error_capacity) &&
            Execute(database, schema, error, error_capacity) &&
            Execute(database, royal_carriage_schema, error, error_capacity) &&
@@ -2873,8 +2892,9 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
                  "(slot,id,name,home_settlement_id,current_settlement_id,faction_id,"
                  "role,goal,activity,appearance_seed,player_disposition,stress,courage,"
                  "memory_count,memory_write_index,knowledge_count,"
-                 "knowledge_write_index,ancestor_id,birth_day,death_day,generation) "
-                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "knowledge_write_index,ancestor_id,birth_day,death_day,generation,"
+                 "travel_coins,bandit_group_id,hungry_days,unsheltered_nights) "
+                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &character_statement, error, error_capacity) ||
         !Prepare(database,
                  "INSERT INTO character_memory VALUES(?,?,?,?,?,?);",
@@ -2922,6 +2942,10 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
         BindInt(character_statement, column++, character->birth_day);
         BindInt(character_statement, column++, character->death_day);
         BindInt(character_statement, column++, character->generation);
+        BindMoney(character_statement, column++, sim->schema_version >= 60U ? character->travel_coins : 0);
+        BindId(character_statement, column++, sim->schema_version >= 60U ? character->bandit_group_id : 0U);
+        BindInt(character_statement, column++, sim->schema_version >= 60U ? character->hungry_days : 0);
+        BindInt(character_statement, column++, sim->schema_version >= 60U ? character->unsheltered_nights : 0);
         if (!StepDone(database, character_statement, error, error_capacity) ||
             !ResetStatement(database, character_statement,
                             error, error_capacity)) goto failed;
@@ -3270,6 +3294,8 @@ invalid:
     return false;
 }
 
+#include "persistence/cc_save_mine.inc"
+
 static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
                                  uint64_t journal_generation,
                                  uint64_t journal_cursor,
@@ -3283,6 +3309,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         return false;
     }
     return Execute(database,
+            "DELETE FROM mine_visit; DELETE FROM mine_pack;"
             "DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
             "DELETE FROM gossip_version;"
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
@@ -3355,7 +3382,8 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveEvents(database, sim, error, error_capacity) &&
         SavePlayer(database, sim, error, error_capacity) &&
         SavePlayerCommitment(database, sim, error, error_capacity) &&
-        SaveJourneyState(database, sim, error, error_capacity);
+        SaveJourneyState(database, sim, error, error_capacity) &&
+        SaveMine(database, sim, error, error_capacity);
 }
 
 static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
@@ -5310,6 +5338,12 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
         character->birth_day = sqlite3_column_int(statement, 18);
         character->death_day = sqlite3_column_int(statement, 19);
         character->generation = sqlite3_column_int(statement, 20);
+        if (sim->schema_version >= 60U) {
+            character->travel_coins = sqlite3_column_int64(statement, 21);
+            character->bandit_group_id = (CcId)sqlite3_column_int64(statement, 22);
+            character->hungry_days = sqlite3_column_int(statement, 23);
+            character->unsheltered_nights = sqlite3_column_int(statement, 24);
+        }
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -5976,7 +6010,8 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 50U || legacy_version == 51U ||
          legacy_version == 52U || legacy_version == 53U ||
          legacy_version == 54U || legacy_version == 55U ||
-         legacy_version == 56U) &&
+         legacy_version == 56U || legacy_version == 57U ||
+         legacy_version == 58U || legacy_version == 59U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
@@ -5988,7 +6023,10 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          * hoard-return food rules; schema 54 adds paper decay. Schema 55 adds
          * dragon succession gossip and reports gathered at ruins. Historical
          * journal replay uses the original rule gates before this upgrade.
-         * Schema 56 adds the saved archive silence date, defaulting to zero. */
+         * Schema 56 adds the saved archive silence date, defaulting to zero.
+         * Schema 58 uses local name roots for new residents and descendants;
+         * saved names remain intact. Schema 59 adds mine visits with an empty
+         * visit for older saves. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }
@@ -6530,7 +6568,8 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadPlayerCommitment(database, sim, error, error_capacity) &&
               ReadJourneyState(database, sim, error, error_capacity) &&
               ReadPonies(database, sim, error, error_capacity) &&
-              ReadGossip(database, sim, error, error_capacity);
+              ReadGossip(database, sim, error, error_capacity) &&
+              ReadMine(database, sim, error, error_capacity);
     if (!ok) {
         return false;
     }
