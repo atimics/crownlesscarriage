@@ -1936,6 +1936,41 @@ typedef struct CcRoadRecoveryPlan {
 
 CcRoadRecoveryPlan CcSimRoadRecoveryPlan(const CcSim *sim, CcId route_id);
 
+typedef enum CcCampaignLaunchBlock {
+    CC_CAMPAIGN_INVALID = 1U << 0,
+    CC_CAMPAIGN_ACTIVE = 1U << 1,
+    CC_CAMPAIGN_COOLDOWN = 1U << 2,
+    CC_CAMPAIGN_DRAGON_SLAIN = 1U << 3,
+    CC_CAMPAIGN_PLEDGES = 1U << 4,
+    CC_CAMPAIGN_DRAGON_AGE = 1U << 5,
+    CC_CAMPAIGN_FOOD = 1U << 6,
+    CC_CAMPAIGN_TOOLS = 1U << 7,
+    CC_CAMPAIGN_WEAPONS = 1U << 8,
+    CC_CAMPAIGN_PATRON = 1U << 9,
+    CC_CAMPAIGN_HERO = 1U << 10,
+    CC_CAMPAIGN_SEAT = 1U << 11
+} CcCampaignLaunchBlock;
+#define CC_CAMPAIGN_PREPARATION_BLOCKS (CC_CAMPAIGN_INVALID | CC_CAMPAIGN_ACTIVE | \
+    CC_CAMPAIGN_COOLDOWN | CC_CAMPAIGN_DRAGON_SLAIN | CC_CAMPAIGN_PLEDGES | \
+    CC_CAMPAIGN_DRAGON_AGE)
+
+typedef struct CcCampaignLaunchPlan {
+    uint32_t blocked;
+    uint32_t pledged_mask;
+    int32_t pledged_count;
+    int32_t food_rations;
+    int32_t tools;
+    int32_t weapons;
+    int32_t leader_slot;
+    CcId origin_id;
+    CcId patron_id;
+    CcId hero_id;
+} CcCampaignLaunchPlan;
+
+/* A snapshot of held supplies; preparation can change these before departure. */
+CcCampaignLaunchPlan CcSimCampaignLaunchPlan(const CcSim *sim);
+
+
 CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
 const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker);
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,

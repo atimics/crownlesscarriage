@@ -124,3 +124,19 @@ kingdom-funded repairs, routine upkeep, and recolonization have their own rules.
 An annual endpoint can differ from the next work day's state because production,
 trade, and other repairs run before the recovery decision. The report identifies
 snapshot gates; activity counts require interval accounting.
+
+## Campaign launch diagnostics
+
+Detailed runner output includes a `campaign_launch_snapshot`. The shared
+`CcSimCampaignLaunchPlan` supplies the same preparation and departure gates that
+execution uses. `prepare_eligible` reflects phase, cooldown, dragon life/age, and
+pledges. Held food, Tools, Weapons, patron, hero, and origin describe the current
+snapshot. Preparation can name leaders and draw or commission supplies before
+execution evaluates departure again. Deep wyrms satisfy the age gate at any age.
+
+The row includes all unmet gates. `attempts` is the existing lifetime departure
+count. The diagnostic describes launch prerequisites at inspection time; the
+royal diplomacy schedule controls when preparation is called. A ready snapshot
+therefore describes readiness at that instant. The same read-only inspection
+adds engine information to the runner. Coalition formation, supply availability
+above reserves, and ritual eligibility remain separate diagnostic work.

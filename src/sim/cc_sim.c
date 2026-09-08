@@ -12369,14 +12369,14 @@ static int32_t NextSituationExpiryDay(const CcSim *sim)
     return next_day;
 }
 
-static CcSettlement *KingdomSeat(CcSim *sim, int32_t kingdom_slot)
+static const CcSettlement *KingdomSeat(const CcSim *sim, int32_t kingdom_slot)
 {
     if (sim == NULL || kingdom_slot < 0 ||
         kingdom_slot >= sim->kingdom_count) return NULL;
-    CcSettlement *best = NULL;
+    const CcSettlement *best = NULL;
     CcId kingdom_id = sim->kingdoms[kingdom_slot].id;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        CcSettlement *place = &sim->settlements[i];
+        const CcSettlement *place = &sim->settlements[i];
         if (place->kingdom_id != kingdom_id ||
             CcSettlementIsAbandoned(place)) continue;
         if (best == NULL || place->function == CC_SETTLEMENT_CAPITAL ||
@@ -12796,8 +12796,8 @@ static CcCourier *LaunchCourier(CcSim *sim, CcCourierKind kind,
         recipient_slot >= sim->kingdom_count ||
         CourierActiveBetween(sim, kind, sim->kingdoms[issuer_slot].id,
                              sim->kingdoms[recipient_slot].id)) return NULL;
-    CcSettlement *origin = KingdomSeat(sim, issuer_slot);
-    CcSettlement *destination = KingdomSeat(sim, recipient_slot);
+    const CcSettlement *origin = KingdomSeat(sim, issuer_slot);
+    const CcSettlement *destination = KingdomSeat(sim, recipient_slot);
     if (origin == NULL || destination == NULL) return NULL;
     CcCourier *courier = AllocateCourier(sim);
     if (courier == NULL) return NULL;
@@ -13131,35 +13131,60 @@ static void StockDragonCampaign(CcSim *sim, uint32_t mask)
     }
 }
 
-static void TryLaunchDragonCampaign(CcSim *sim)
+CcCampaignLaunchPlan CcSimCampaignLaunchPlan(const CcSim *sim)
 {
-    CcDragonCampaign *campaign = &sim->dragon_campaign;
-    uint32_t mask = campaign->pledged_kingdom_mask;
-    if (campaign->phase != CC_DRAGON_CAMPAIGN_IDLE ||
-        campaign->cooldown_days > 0 || sim->dragon.slain ||
-        MaskCount(mask) < 2) return;
+    CcCampaignLaunchPlan plan = {.leader_slot = -1, .pledged_count = -1,
+        .food_rations = -1, .tools = -1, .weapons = -1};
+    if (sim == NULL) {
+        plan.blocked = CC_CAMPAIGN_INVALID;
+        return plan;
+    }
+    const CcDragonCampaign *campaign = &sim->dragon_campaign;
+    plan.pledged_mask = campaign->pledged_kingdom_mask;
+    plan.pledged_count = MaskCount(plan.pledged_mask);
+    plan.food_rations = NutritionRations(campaign->supplies, CC_NUTRITION_CIVILIAN);
+    plan.tools = campaign->supplies[CC_GOOD_TOOLS];
+    plan.weapons = campaign->supplies[CC_GOOD_WEAPONS];
+    plan.patron_id = campaign->patron_character_id;
+    plan.hero_id = campaign->hero_character_id;
+    if (campaign->phase != CC_DRAGON_CAMPAIGN_IDLE) plan.blocked |= CC_CAMPAIGN_ACTIVE;
+    if (campaign->cooldown_days > 0) plan.blocked |= CC_CAMPAIGN_COOLDOWN;
+    if (sim->dragon.slain) plan.blocked |= CC_CAMPAIGN_DRAGON_SLAIN;
+    if (plan.pledged_count < 2) plan.blocked |= CC_CAMPAIGN_PLEDGES;
     if (sim->dragon.age_days < 500 * 365 &&
-        sim->dragon.life_stage != CC_DRAGON_STAGE_DEEP_WYRM) return;
-    NameDragonCampaignLeaders(sim, mask);
-    StockDragonCampaign(sim, mask);
-    if (NutritionRations(
-            campaign->supplies, CC_NUTRITION_CIVILIAN) < 32 ||
-        campaign->supplies[CC_GOOD_TOOLS] < 8 ||
-        campaign->supplies[CC_GOOD_WEAPONS] < 12 ||
-        campaign->patron_character_id == 0U ||
-        campaign->hero_character_id == 0U) return;
-    int32_t leader_slot = -1;
-    CcSettlement *origin = NULL;
+        sim->dragon.life_stage != CC_DRAGON_STAGE_DEEP_WYRM)
+        plan.blocked |= CC_CAMPAIGN_DRAGON_AGE;
+    if (plan.food_rations < 32) plan.blocked |= CC_CAMPAIGN_FOOD;
+    if (plan.tools < 8) plan.blocked |= CC_CAMPAIGN_TOOLS;
+    if (plan.weapons < 12) plan.blocked |= CC_CAMPAIGN_WEAPONS;
+    if (plan.patron_id == 0U) plan.blocked |= CC_CAMPAIGN_PATRON;
+    if (plan.hero_id == 0U) plan.blocked |= CC_CAMPAIGN_HERO;
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
-        if ((mask & (UINT32_C(1) << (uint32_t)i)) == 0U) continue;
-        CcSettlement *candidate = KingdomSeat(sim, i);
+        if ((plan.pledged_mask & (UINT32_C(1) << (uint32_t)i)) == 0U) continue;
+        const CcSettlement *candidate = KingdomSeat(sim, i);
         if (candidate != NULL) {
-            leader_slot = i;
-            origin = candidate;
+            plan.leader_slot = i;
+            plan.origin_id = candidate->id;
             break;
         }
     }
-    if (leader_slot < 0 || origin == NULL) return;
+    if (plan.origin_id == 0U) plan.blocked |= CC_CAMPAIGN_SEAT;
+    return plan;
+}
+
+static void TryLaunchDragonCampaign(CcSim *sim)
+{
+    CcCampaignLaunchPlan plan = CcSimCampaignLaunchPlan(sim);
+    if ((plan.blocked & CC_CAMPAIGN_PREPARATION_BLOCKS) != 0U) return;
+    CcDragonCampaign *campaign = &sim->dragon_campaign;
+    uint32_t mask = plan.pledged_mask;
+    NameDragonCampaignLeaders(sim, mask);
+    StockDragonCampaign(sim, mask);
+    plan = CcSimCampaignLaunchPlan(sim);
+    if (plan.blocked != 0U) return;
+    int32_t leader_slot = plan.leader_slot;
+    const CcSettlement *origin = CcSimSettlement(sim, plan.origin_id);
+    if (origin == NULL) return;
     campaign->phase = CC_DRAGON_CAMPAIGN_OUTBOUND;
     campaign->alliance_kingdom_mask = mask;
     campaign->origin_settlement_id = origin->id;

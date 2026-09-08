@@ -177,6 +177,27 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  campaign_hero != NULL ? campaign_hero->name : "none",
                  sim->dragon.territoryless_days);
     if (detail) {
+        CcCampaignLaunchPlan launch = CcSimCampaignLaunchPlan(sim);
+        (void)printf("  campaign_launch_snapshot phase=%d attempts=%d cooldown=%d"
+            " pledged_mask=%" PRIu32 " pledges=%d/2 dragon_age_days=%d/182500"
+            " dragon_stage=%d dragon_slain=%d prepare_eligible=%d"
+            " held_food_rations=%d/32 held_tools=%d/8 held_weapons=%d/12"
+            " patron=%" PRIu64 " hero=%" PRIu64 " origin=%" PRIu64 " blocked=",
+            (int)sim->dragon_campaign.phase, sim->dragon_campaign.attempts,
+            sim->dragon_campaign.cooldown_days, launch.pledged_mask, launch.pledged_count,
+            sim->dragon.age_days, (int)sim->dragon.life_stage, sim->dragon.slain ? 1 : 0,
+            (launch.blocked & CC_CAMPAIGN_PREPARATION_BLOCKS) == 0U ? 1 : 0,
+            launch.food_rations, launch.tools, launch.weapons,
+            launch.patron_id, launch.hero_id, launch.origin_id);
+        const char *launch_names[] = {"invalid", "active", "cooldown", "dragon_slain",
+            "pledges", "dragon_age", "food", "tools", "weapons", "patron", "hero", "seat"};
+        bool launch_separator = false;
+        for (unsigned bit = 0; bit < sizeof(launch_names) / sizeof(launch_names[0]); ++bit) {
+            if ((launch.blocked & (UINT32_C(1) << bit)) == 0U) continue;
+            (void)printf("%s%s", launch_separator ? "," : "", launch_names[bit]);
+            launch_separator = true;
+        }
+        (void)puts(launch_separator ? "" : "ready");
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             const CcSettlement *place = &sim->settlements[i];
             (void)printf("  %-16s hunger=%3d prosperity=%3d security=%3d"
