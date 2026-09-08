@@ -559,8 +559,37 @@ static void CheckArchiveRecoversAfterSilence(void)
     sim.archives.dead_since_day = sim.current_day - 1830;
     sim.iron_ledger_reserve = 45;
     SetCrowns(&sim, 900);
+    for (int32_t r = 0; r < sim.route_count; ++r) sim.routes[r].closed = false;
     int32_t before = CountRecoveryEntries(&sim);
+    static CcSim closed, quiet;
+    closed = sim;
+    for (int32_t r = 0; r < closed.route_count; ++r) closed.routes[r].closed = true;
+    CcSimAdvanceDays(&closed, 7);
+    CC_CHECK(closed.archives.scribes == 0);
+    CC_CHECK(CountRecoveryEntries(&closed) == before);
+    closed = sim;
+    closed.schema_version = 55U;
+    CcSimAdvanceDays(&closed, 7);
+    CC_CHECK(closed.archives.scribes == 0);
+    CC_CHECK(CountRecoveryEntries(&closed) == before);
+    quiet = sim;
+    quiet.archives.dead_since_day = sim.current_day;
+    CcSimAdvanceDays(&quiet, 7);
+    CcMoney gold_before = CcSimTrackedGold(&sim);
     CcSimAdvanceDays(&sim, 7);
+    CC_CHECK(CcSimTrackedGold(&sim) == gold_before);
+    CcMoney funding = 0;
+    for (int32_t i = 0; i < sim.event_count; ++i) {
+        const CcEvent *event = CcSimRecentEvent(&sim, i);
+        if (strstr(event->text, "stirs after silence") != NULL) funding += event->magnitude;
+    }
+    CC_CHECK(funding > 0 && funding <= 10);
+    CcMoney paid = 0;
+    for (int32_t k = 0; k < sim.kingdom_count; ++k) {
+        paid += quiet.kingdoms[k].treasury - sim.kingdoms[k].treasury;
+    }
+    CC_CHECK(paid == funding);
+    CC_CHECK(sim.iron_ledger_reserve == quiet.iron_ledger_reserve + funding);
     CC_CHECK(sim.archives.scribes == 1);
     CC_CHECK(sim.archives.dead_since_day == 0);
     CC_CHECK(CountRecoveryEntries(&sim) == before + 1);
@@ -576,11 +605,11 @@ static void CheckArchiveRecoversAfterSilence(void)
     CcSimAdvanceDays(&ledger, 7);
     CC_CHECK(ledger.archives.dead_since_day > 0);
     ledger.iron_ledger_reserve = 60;
-    int32_t quiet = CountRecoveryEntries(&ledger);
+    int32_t quiet_entries = CountRecoveryEntries(&ledger);
     CcSimAdvanceDays(&ledger, 7);
     CC_CHECK(ledger.archives.scribes >= 1);
     CC_CHECK(ledger.archives.dead_since_day == 0);
-    CC_CHECK(CountRecoveryEntries(&ledger) == quiet);
+    CC_CHECK(CountRecoveryEntries(&ledger) == quiet_entries);
 }
 
 int main(void)

@@ -5970,7 +5970,7 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 48U || legacy_version == 49U ||
          legacy_version == 50U || legacy_version == 51U ||
          legacy_version == 52U || legacy_version == 53U ||
-         legacy_version == 54U) &&
+         legacy_version == 54U || legacy_version == 55U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
@@ -5981,7 +5981,8 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          * unharnesses the second animal in the caller below. Schema 53 changes
          * hoard-return food rules; schema 54 adds paper decay. Schema 55 adds
          * dragon succession gossip and reports gathered at ruins. Historical
-         * journal replay uses the original rule gates before this upgrade. */
+         * journal replay uses the original rule gates before this upgrade.
+         * Schema 56 adds the saved archive silence date, defaulting to zero. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }

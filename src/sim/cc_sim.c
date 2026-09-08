@@ -6810,6 +6810,48 @@ void CcSimUpgradeHistoryOffices(CcSim *sim)
     }
 }
 
+/* Find solvent crowns connected to the active archive by open roads. */
+static CcMoney FundArchiveRecovery(CcSim *sim)
+{
+    const CcSettlement *archive = Scriptorium(sim);
+    if (archive == NULL || CcSettlementIsAbandoned(archive)) return 0;
+    bool reached[CC_MAX_SETTLEMENTS] = {false};
+    int32_t archive_slot = SettlementSlotById(sim, archive->id);
+    if (archive_slot < 0) return 0;
+    reached[archive_slot] = true;
+    for (int32_t pass = 0; pass < sim->settlement_count; ++pass) {
+        for (int32_t r = 0; r < sim->route_count; ++r) {
+            const CcRoute *road = &sim->routes[r];
+            if (road->closed) continue;
+            int32_t from = SettlementSlotById(sim, road->from_id);
+            int32_t to = SettlementSlotById(sim, road->to_id);
+            if (from < 0 || to < 0 ||
+                CcSettlementIsAbandoned(&sim->settlements[from]) ||
+                CcSettlementIsAbandoned(&sim->settlements[to])) continue;
+            if (reached[from] || reached[to]) reached[from] = reached[to] = true;
+        }
+    }
+    int32_t donors[2] = {-1, -1};
+    int32_t count = 0;
+    for (int32_t k = 0; k < sim->kingdom_count && count < 2; ++k) {
+        if (sim->kingdoms[k].treasury < 800) continue;
+        for (int32_t town = 0; town < sim->settlement_count; ++town) {
+            if (reached[town] && sim->settlements[town].kingdom_id == sim->kingdoms[k].id) {
+                donors[count++] = k;
+                break;
+            }
+        }
+    }
+    if (count < 2) return 0;
+    CcMoney funding = 50 - sim->iron_ledger_reserve;
+    if (funding <= 0 || funding > 10) return 0;
+    CcMoney first = (funding + 1) / 2;
+    sim->kingdoms[donors[0]].treasury -= first;
+    sim->kingdoms[donors[1]].treasury -= funding - first;
+    sim->iron_ledger_reserve += funding;
+    return funding;
+}
+
 static void AdvanceArchives(CcSim *sim)
 {
     if (sim == NULL || sim->current_day % 7 != 0) return;
@@ -6818,12 +6860,9 @@ static void AdvanceArchives(CcSim *sim)
     int32_t target_scribes = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
         sim->iron_ledger_reserve >= 150 ? 2 :
         sim->iron_ledger_reserve >= 50 ? 1 : 0;
-    /* An archive that loses its last scribe used to stay lost: staffing reads
-       only the iron ledger, and a ledger that fell below fifty had no way back
-       up. Remember when the silence started, so a world that recovers around
-       it can end that silence. */
-    bool crown_funded = false;
-    if (sim->schema_version >= 55U) {
+    /* Date the first weekly sample with zero scribes. */
+    CcMoney crown_funding = 0;
+    if (sim->schema_version >= 56U) {
         if (archives->scribes <= 0) {
             if (archives->dead_since_day <= 0) {
                 archives->dead_since_day = sim->current_day;
@@ -6831,21 +6870,13 @@ static void AdvanceArchives(CcSim *sim)
         } else {
             archives->dead_since_day = 0;
         }
-        /* After five years of silence, two solvent kingdoms with roads between
-           them will fund one scribe between them -- but only once the ledger
-           has climbed back to within a scribe's wage of paying for itself, so
-           this tops up a recovering world rather than rescuing a dead one. */
+        /* After five years, two connected solvent crowns can restore a
+           ledger holding 40-49 crowns to the 50-crown staffing threshold. */
         if (target_scribes <= 0 && archives->dead_since_day > 0 &&
-            sim->current_day - archives->dead_since_day >= 1820 &&
-            sim->iron_ledger_reserve >= 40 && sim->route_count >= 2) {
-            int32_t funded_kingdoms = 0;
-            for (int32_t i = 0; i < sim->kingdom_count; ++i) {
-                if (sim->kingdoms[i].treasury >= 800) funded_kingdoms += 1;
-            }
-            if (funded_kingdoms >= 2) {
-                target_scribes = 1;
-                crown_funded = true;
-            }
+            sim->current_day - archives->dead_since_day >= 1825 &&
+            sim->iron_ledger_reserve >= 40) {
+            crown_funding = FundArchiveRecovery(sim);
+            if (crown_funding > 0) target_scribes = 1;
         }
     }
     if (target_scribes > archives->scribes) {
@@ -6853,13 +6884,13 @@ static void AdvanceArchives(CcSim *sim)
         /* A ledger that climbs back over the threshold on its own restaffs the
            archive quietly, the way it always has. Only the crowns stepping in
            is worth an entry. */
-        if (crown_funded) {
+        if (crown_funding > 0) {
             (void)PushEvent(
-                sim, CC_EVENT_LORE_RECORDED, 0U, 0U, 0U, 1,
-                "The kingdom treasuries fund a lone scribe; "
+                sim, CC_EVENT_LORE_RECORDED, 0U, 0U, 0U, (int32_t)crown_funding,
+                "The kingdom treasuries replenish the ledger for one scribe; "
                 "the archive stirs after silence.");
         }
-        if (sim->schema_version >= 55U) archives->dead_since_day = 0;
+        if (sim->schema_version >= 56U) archives->dead_since_day = 0;
     } else if (target_scribes < archives->scribes) {
         archives->scribes -= 1;
     }
@@ -18786,7 +18817,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 54U
+#define CC_NEWEST_LEGACY_SCHEMA 55U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18804,7 +18835,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 54U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 55U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -18870,6 +18901,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
          CcSimCharacter(sim, sim->archives.abbot_character_id) == NULL ||
          sim->archives.stewardship_rank < 0 ||
          sim->archives.stewardship_rank > 100 ||
+         sim->archives.dead_since_day < 0 ||
+         sim->archives.dead_since_day > sim->current_day ||
          sim->archives.last_recorded_day < 0 ||
          sim->archives.last_recorded_day > sim->current_day)) {
         SetError(error, error_capacity,
@@ -21627,7 +21660,7 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(sim->archives.abbot_character_id);
             HASH_VALUE(sim->archives.stewardship_rank);
         }
-        if (sim->schema_version >= 55U) {
+        if (sim->schema_version >= 56U) {
             HASH_VALUE(sim->archives.dead_since_day);
         }
     }

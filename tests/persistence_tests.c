@@ -650,10 +650,18 @@ static void CheckDiplomacyPersistence(char *error, size_t error_capacity)
     sim.dragon.age_days = 500 * 365;
     CcSimAdvanceDays(&sim, 27);
     sim.dragon.territoryless_days = 17;
-    /* The archive's silence has to outlive the save. Before schema 55 this
+    /* The archive's silence has to outlive the save. Before schema 56 this
        field existed only in memory, so the five-year wait restarted on every
        load and the recovery it gates could never come due. */
-    sim.archives.dead_since_day = 41;
+    uint64_t before_silence = CcSimHash(&sim);
+    sim.archives.dead_since_day = 1;
+    CC_CHECK(CcSimHash(&sim) != before_silence);
+    CC_CHECK(CcSimValidate(&sim, error, error_capacity));
+    sim.archives.dead_since_day = sim.current_day + 1;
+    CC_CHECK(!CcSimValidate(&sim, error, error_capacity));
+    sim.archives.dead_since_day = -1;
+    CC_CHECK(!CcSimValidate(&sim, error, error_capacity));
+    sim.archives.dead_since_day = 1;
     CC_CHECK(sim.courier_count > 0);
     CC_CHECK(sim.couriers[0].status == CC_COURIER_WAITING);
     CC_CHECK(CcSaveWrite(path, &sim, error, error_capacity));
@@ -672,7 +680,7 @@ static void CheckDiplomacyPersistence(char *error, size_t error_capacity)
              sim.archives.abbot_character_id);
     CC_CHECK(restored.archives.stewardship_rank ==
              sim.archives.stewardship_rank);
-    CC_CHECK(restored.archives.dead_since_day == 41);
+    CC_CHECK(restored.archives.dead_since_day == 1);
     CC_CHECK(restored.kingdoms[0].ruler_character_id ==
              sim.kingdoms[0].ruler_character_id);
     CC_CHECK(restored.kingdoms[0].monastery_patron_id ==
@@ -2704,7 +2712,7 @@ static void CheckSchema41Upgrade(void)
    future edit to that table cannot quietly widen or narrow what loads. */
 static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
 {
-    bool legacy = schema >= 2U && schema <= 54U;
+    bool legacy = schema >= 2U && schema <= 55U;
     if (!legacy && schema != CC_SIM_SCHEMA_VERSION) return false;
     if (schema == CC_SIM_SCHEMA_VERSION &&
         generator == CC_GENERATOR_VERSION) return true;
@@ -2712,7 +2720,7 @@ static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
         /* The current generator reads the oldest schemas and the recent run,
            but not 28 through 31, which shipped with generators of their own. */
         if (schema >= 2U && schema <= 27U) return true;
-        if (schema >= 32U && schema <= 54U) return true;
+        if (schema >= 32U && schema <= 55U) return true;
     }
     if (schema == 31U && generator == 24U) return true;
     if (schema == 27U && generator >= 21U && generator <= 23U) return true;
