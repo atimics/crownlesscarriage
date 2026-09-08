@@ -222,7 +222,8 @@ kit needs two Wood, two Stone, one Tool, and four food rations. The shared fundi
 check drives both endpoint selection and execution. Existing repair priorities
 and historic schema behavior are preserved.
 
-Schema 61 ranks funded kingdom repair jobs by the existing recovery score. A road
+The schema-61 experiment worsened the eight-seed road-health sample; its evidence
+is in docs/reviews/funded-repair-selection-2026-09-08. It ranks funded kingdom repair jobs by the existing recovery score. A road
 waiting for its kit keeps its condition and demand while an eligible road can
 use the month's crew. The kingdom still completes at most one such job per
 monthly update. Schemas through 60 preserve the earlier selection order.
