@@ -1564,6 +1564,10 @@ if(BUILD_TESTING)
         target_compile_definitions(crownless_carriage PRIVATE
             CC_CLIENT_SELF_TESTS=1
         )
+        add_test(NAME capture_frame_contract
+                 COMMAND crownless_carriage --test-capture-frames)
+        add_test(NAME capture_request_contract
+                 COMMAND crownless_carriage --test-capture-request)
         add_test(NAME storybook_travel_boundaries
                  COMMAND crownless_carriage --test-storybook-travel)
         add_test(NAME travel_audio_presentation

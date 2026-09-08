@@ -1,0 +1,80 @@
+[
+  {
+    "name": "conversation",
+    "width": 1200,
+    "height": 700,
+    "bytes": 166638
+  },
+  {
+    "name": "trade",
+    "width": 1040,
+    "height": 620,
+    "bytes": 68491
+  },
+  {
+    "name": "book",
+    "width": 1040,
+    "height": 620,
+    "bytes": 73890
+  },
+  {
+    "name": "ponies",
+    "width": 1200,
+    "height": 700,
+    "bytes": 53808
+  },
+  {
+    "name": "ponies-large",
+    "width": 1040,
+    "height": 620,
+    "bytes": 44311
+  },
+  {
+    "name": "ponies-roaming",
+    "width": 1040,
+    "height": 620,
+    "bytes": 45485
+  },
+  {
+    "name": "menu",
+    "width": 1040,
+    "height": 620,
+    "bytes": 51711
+  },
+  {
+    "name": "road-1040",
+    "width": 1040,
+    "height": 700,
+    "bytes": 202193
+  },
+  {
+    "name": "road-1200",
+    "width": 1200,
+    "height": 700,
+    "bytes": 206993
+  },
+  {
+    "name": "road-1280",
+    "width": 1280,
+    "height": 700,
+    "bytes": 209334
+  },
+  {
+    "name": "pony-encounter",
+    "width": 1280,
+    "height": 760,
+    "bytes": 160332
+  },
+  {
+    "name": "pony-swap",
+    "width": 1280,
+    "height": 760,
+    "bytes": 160515
+  },
+  {
+    "name": "pony-book",
+    "width": 1280,
+    "height": 760,
+    "bytes": 62580
+  }
+]
