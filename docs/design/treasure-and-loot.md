@@ -2,6 +2,13 @@
 
 Design proposal · 7 September 2026.
 
+Backlog groomed and concept art added on 8 September 2026. Start with
+[#408](https://github.com/atimics/crownlesscarriage/issues/408) for the delivery
+order and [the art and backlog guide](treasure-art/README.md) for the six
+treasure designs, dependencies and acceptance owners.
+
+![The six treasure concepts](treasure-art/treasure-concepts-v1.png)
+
 ## The experience
 
 Treasure gives the company a reason to take another road. A cup can buy food,
