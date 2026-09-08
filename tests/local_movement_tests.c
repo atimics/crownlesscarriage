@@ -2742,6 +2742,7 @@ static void TestTownSquareGroundSightlines(void)
 
 int main(void)
 {
+    /* Large campaign fixtures use static storage to keep room for nested checks. */
     TestTownSquareGroundSightlines();
     CcLocalTerrainMeshStatsInternal terrain_mesh =
         CcLocalTerrainMeshStatsInternalGet();
@@ -3975,13 +3976,13 @@ int main(void)
     TestMultiLegDamageCollapse();
     TestTravellerIngress();
     RequirePosition("market wall blocks entry",
-                    CcLocalMove((Vector2){50.00f, 26.65f},
+                    CcLocalMove((Vector2){50.00f, 22.65f},
                                 (Vector2){0.00f, -1.00f}, false),
-                    (Vector2){50.00f, 26.65f});
+                    (Vector2){50.00f, 22.65f});
     RequirePosition("collision slides along facade",
-                    CcLocalMove((Vector2){42.50f, 26.65f},
+                    CcLocalMove((Vector2){42.50f, 22.65f},
                                 (Vector2){2.00f, -1.00f}, false),
-                    (Vector2){44.50f, 26.65f});
+                    (Vector2){44.50f, 22.65f});
     RequirePosition("carriage blocks movement",
                     CcLocalMove((Vector2){39.70f, 51.20f},
                                 (Vector2){-1.00f, 0.00f}, false),
@@ -4338,7 +4339,7 @@ int main(void)
         return 1;
     }
 
-    CcSim cadence_sim;
+    static CcSim cadence_sim;
     CcSimInit(&cadence_sim, UINT32_C(0xcade60));
     CcLocalAgent cadence_player;
     CcLocalCourse cadence_course;
@@ -4996,7 +4997,7 @@ int main(void)
         return 1;
     }
 
-    CcSim witness_sim;
+    static CcSim witness_sim;
     CcSimInit(&witness_sim, UINT32_C(0x717e55));
     const CcSituation *visible_situation = NULL;
     CcId witness_settlement = 0U;
@@ -5066,7 +5067,7 @@ int main(void)
         return 1;
     }
 
-    CcSim sponsor_sim;
+    static CcSim sponsor_sim;
     CcSimInit(&sponsor_sim, UINT32_C(0x5a0e50));
     const CcSituation *sponsor_situation = NULL;
     const CcCharacter *expected_sponsor = NULL;
@@ -5285,7 +5286,7 @@ int main(void)
         return 1;
     }
 
-    CcSim defense_sim;
+    static CcSim defense_sim;
     CcSimInit(&defense_sim, 42U);
     CcLocalCourse defense;
     CcLocalCourseInit(&defense);
