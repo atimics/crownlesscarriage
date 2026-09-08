@@ -41,6 +41,39 @@ static const char *PurposeName(int purpose)
     }
 }
 
+static bool IsDragonTopic(CcEventKind kind)
+{
+    switch (kind) {
+        case CC_EVENT_DRAGON_HOARD_STOLEN:
+        case CC_EVENT_DRAGON_OMEN:
+        case CC_EVENT_DRAGON_TREASURE_RETURNED:
+        case CC_EVENT_DRAGON_RETALIATION:
+        case CC_EVENT_DRAGON_MUSTERED:
+        case CC_EVENT_DRAGON_BATTLE:
+        case CC_EVENT_DRAGON_SLAIN:
+        case CC_EVENT_DRAGON_HOARD_RECOVERED:
+        case CC_EVENT_DRAGON_HUNT:
+        case CC_EVENT_DRAGON_CROWNED:
+        case CC_EVENT_DRAGON_UNCROWNED:
+        case CC_EVENT_DRAGON_BROOD:
+        case CC_EVENT_DRAGON_WHELP_DISPERSED:
+        case CC_EVENT_DRAGON_AFTERSHOCK:
+        case CC_EVENT_DRAGON_SUCCESSOR:
+        case CC_EVENT_GOBLIN_CULT_RALLIED:
+        case CC_EVENT_GOBLIN_DRAGON_SEED:
+        case CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED:
+        case CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static const char *TopicName(int32_t topic)
+{
+    return topic == 1 ? "dragon" : "none";
+}
+
 static bool IsKingdomEvent(CcEventKind kind)
 {
     switch (kind) {
@@ -237,8 +270,9 @@ static const char *Audience(int purpose)
 static int32_t ScoreForPurpose(const CcSim *sim, const CcCharacter *writer,
                                const CcGossip *story,
                                const CcGossipVersion *version,
-                               int purpose)
+                               int purpose, int32_t topic)
 {
+    if (topic == 1 && IsDragonTopic(story->kind)) return 900 + story->day;
     int32_t told_day = story->heard_day > 0 ? story->heard_day : story->day;
     int32_t recency = told_day;
     int32_t score = recency * 2;
@@ -272,7 +306,7 @@ static int32_t ScoreForPurpose(const CcSim *sim, const CcCharacter *writer,
 }
 
 static void PrintLetter(const CcSim *sim, const CcCharacter *writer,
-                        int purpose, int max_accounts)
+                        int purpose, int32_t topic, int max_accounts)
 {
     const CcSettlement *place = CcSimSettlement(sim, writer->current_settlement_id);
     const CcKingdom *kingdom = KingdomForSettlement(sim, writer->current_settlement_id);
@@ -289,7 +323,7 @@ static void PrintLetter(const CcSim *sim, const CcCharacter *writer,
         held += 1;
         if (candidate_count < CC_MAX_GOSSIP) {
             candidates[candidate_count].score =
-                ScoreForPurpose(sim, writer, story, version, purpose);
+                ScoreForPurpose(sim, writer, story, version, purpose, topic);
             candidates[candidate_count].offset = offset;
             candidate_count += 1;
         }
@@ -449,6 +483,7 @@ int main(int argc, char **argv)
     int32_t max_accounts = 3;
     bool census = false;
     bool compare = false;
+    int32_t topic = 0;
 
     for (int32_t argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--seed") == 0 && argument + 1 < argc) {
@@ -459,6 +494,9 @@ int main(int argc, char **argv)
             years = (int32_t)strtol(argv[++argument], NULL, 10);
         } else if (strcmp(argv[argument], "--max-accounts") == 0 && argument + 1 < argc) {
             max_accounts = (int32_t)strtol(argv[++argument], NULL, 10);
+        } else if (strcmp(argv[argument], "--topic") == 0 && argument + 1 < argc) {
+            const char *name = argv[++argument];
+            topic = strcmp(name, "dragon") == 0 ? 1 : 0;
         } else if (strcmp(argv[argument], "--purpose") == 0 && argument + 1 < argc) {
             const char *name = argv[++argument];
             if (strcmp(name, "auto") == 0) purpose = -1;
@@ -472,15 +510,16 @@ int main(int argc, char **argv)
         } else {
             (void)fprintf(stderr, "Usage: %s [--seed N] [--seeds N] [--years Y] "
                           "[--purpose report|petition|claim|dispatch|auto] "
-                          "[--max-accounts K] [--census] [--compare]\n", argv[0]);
+                          "[--topic dragon] [--max-accounts K] [--census] [--compare]\n", argv[0]);
             return 1;
         }
     }
     if (seeds < 1 || years < 1 || max_accounts < 1) return 1;
 
-    printf("letter probe — world seeds %d..%d, %d years, purpose \"%s\"\n\n",
+    printf("letter probe — world seeds %d..%d, %d years, purpose \"%s\", topic \"%s\"\n\n",
            seed_number, seed_number + seeds - 1, years,
-           purpose < 0 ? "auto (writer goal)" : PurposeName(purpose));
+           purpose < 0 ? "auto (writer goal)" : PurposeName(purpose),
+           TopicName(topic));
 
     for (int32_t s = 0; s < seeds; ++s) {
         CcSim sim;
@@ -503,12 +542,12 @@ int main(int argc, char **argv)
                    HeldCount(&sim, writer->id));
             if (compare) {
                 for (int32_t p = 0; p < 4; ++p) {
-                    PrintLetter(&sim, writer, p, max_accounts);
+                    PrintLetter(&sim, writer, p, topic, max_accounts);
                 }
             } else {
                 int32_t used_purpose = purpose >= 0 ? purpose :
                     PurposeForGoal(writer->goal);
-                PrintLetter(&sim, writer, used_purpose, max_accounts);
+                PrintLetter(&sim, writer, used_purpose, topic, max_accounts);
             }
         }
         printf("\n");
