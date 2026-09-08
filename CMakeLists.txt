@@ -17,6 +17,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 option(CC_BUILD_CLIENT "Build the raylib fixed-pixel three-quarter 3D client" ON)
+option(CC_BUILD_GRAPHICS_PROBES "Build standalone GPU regression probes" OFF)
 option(CC_BUILD_BENCHMARKS "Build repeatable headless benchmarks" ON)
 option(CC_ENABLE_STRICT_WARNINGS "Enable strict compiler warnings" ON)
 option(CC_WARNINGS_AS_ERRORS "Treat project warnings as build errors" OFF)
@@ -271,6 +272,11 @@ if(CC_BUILD_CLIENT)
         GIT_SHALLOW TRUE
     )
     FetchContent_MakeAvailable(raylib)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" "-DRAYLIB_SOURCE_DIR=${raylib_SOURCE_DIR}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchRaylibMatrices.cmake"
+        COMMAND_ERROR_IS_FATAL ANY
+    )
     if(TARGET raylib)
         get_target_property(CC_RAYLIB_IMPORTED raylib IMPORTED)
         if(NOT CC_RAYLIB_IMPORTED)
@@ -278,6 +284,25 @@ if(CC_BUILD_CLIENT)
             if(EMSCRIPTEN)
                 set_property(TARGET raylib PROPERTY C_EXTENSIONS ON)
             endif()
+        endif()
+    endif()
+
+    if(CC_BUILD_GRAPHICS_PROBES)
+        add_executable(matrix_upload_tests tests/matrix_upload_tests.c)
+        target_link_libraries(matrix_upload_tests PRIVATE raylib)
+        cc_strict_warnings(matrix_upload_tests)
+        if(EMSCRIPTEN)
+            set_property(TARGET matrix_upload_tests PROPERTY C_EXTENSIONS ON)
+            set_target_properties(matrix_upload_tests PROPERTIES
+                OUTPUT_NAME matrix-upload SUFFIX ".html"
+                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/matrix-probe")
+            target_link_options(matrix_upload_tests PRIVATE
+                "-sMIN_WEBGL_VERSION=2" "-sMAX_WEBGL_VERSION=2")
+        else()
+            add_custom_target(run_matrix_upload_tests
+                COMMAND matrix_upload_tests DEPENDS matrix_upload_tests
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                USES_TERMINAL)
         endif()
     endif()
 
@@ -587,7 +612,7 @@ if(CC_BUILD_CLIENT)
             SUFFIX ".html"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/site"
             LINK_DEPENDS
-                "${CMAKE_CURRENT_SOURCE_DIR}/web/gl-uploads.js;${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CMAKE_CURRENT_SOURCE_DIR}/web/music.js;${CMAKE_CURRENT_SOURCE_DIR}/web/voice.js"
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CMAKE_CURRENT_SOURCE_DIR}/web/music.js;${CMAKE_CURRENT_SOURCE_DIR}/web/voice.js"
         )
         target_compile_definitions(crownless_carriage PRIVATE PLATFORM_WEB)
         set_property(TARGET crownless_carriage PROPERTY C_EXTENSIONS ON)
@@ -603,7 +628,6 @@ if(CC_BUILD_CLIENT)
             "-sMIN_WEBGL_VERSION=2"
             "-sMAX_WEBGL_VERSION=2"
             "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
-            "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/gl-uploads.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
@@ -1207,6 +1231,34 @@ if(BUILD_TESTING)
     cc_strict_warnings(horse_stable_tests)
     add_test(NAME horse_stable_breeding COMMAND horse_stable_tests)
 
+    add_executable(hunger_metrics_tests tests/hunger_metrics_tests.c)
+    target_link_libraries(hunger_metrics_tests PRIVATE crownless_sim)
+    cc_strict_warnings(hunger_metrics_tests)
+    add_test(NAME inhabited_hunger_metrics COMMAND hunger_metrics_tests)
+    if(CC_PYTHON3_EXECUTABLE AND CC_BUILD_BENCHMARKS)
+        add_test(NAME hunger_report_agreement
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/hunger_report_tests.py
+                         $<TARGET_FILE:crownless_sim_runner>
+                         $<TARGET_FILE:crownless_sim_metrics>)
+    endif()
+
+    add_executable(nutrition_accounting_tests tests/nutrition_accounting_tests.c)
+    target_link_libraries(nutrition_accounting_tests PRIVATE crownless_sim)
+    cc_strict_warnings(nutrition_accounting_tests)
+    add_test(NAME nutrition_storage_accounting COMMAND nutrition_accounting_tests)
+    if(CC_PYTHON3_EXECUTABLE AND CC_BUILD_BENCHMARKS)
+        add_test(NAME nutrition_accounting_csv
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/nutrition_accounting_tests.py
+                         $<TARGET_FILE:crownless_sim_metrics>)
+    endif()
+
+    add_executable(raid_food_tests tests/raid_food_tests.c)
+    target_link_libraries(raid_food_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(raid_food_tests)
+    add_test(NAME hoard_raid_food_accounting COMMAND raid_food_tests)
+
     add_executable(balance_tests tests/balance_tests.c)
     target_link_libraries(balance_tests PRIVATE crownless_sim)
     cc_strict_warnings(balance_tests)
@@ -1421,7 +1473,8 @@ if(BUILD_TESTING)
         add_custom_target(run_renderer_graphics_tests
             COMMAND renderer_regression_tests --graphics
                 "${CMAKE_CURRENT_BINARY_DIR}/renderer-viewport.png"
-            DEPENDS renderer_regression_tests
+            COMMAND crownless_carriage --test-map-texture-lifetime
+            DEPENDS renderer_regression_tests crownless_carriage
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             USES_TERMINAL
         )

@@ -2699,7 +2699,7 @@ static void CheckSchema41Upgrade(void)
    future edit to that table cannot quietly widen or narrow what loads. */
 static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
 {
-    bool legacy = schema >= 2U && schema <= 52U;
+    bool legacy = schema >= 2U && schema <= 53U;
     if (!legacy && schema != CC_SIM_SCHEMA_VERSION) return false;
     if (schema == CC_SIM_SCHEMA_VERSION &&
         generator == CC_GENERATOR_VERSION) return true;
@@ -2707,15 +2707,15 @@ static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
         /* The current generator reads the oldest schemas and the recent run,
            but not 28 through 31, which shipped with generators of their own. */
         if (schema >= 2U && schema <= 27U) return true;
-        if (schema >= 32U && schema <= 52U) return true;
+        if (schema >= 32U && schema <= 53U) return true;
     }
     if (schema == 31U && generator == 24U) return true;
     if (schema == 27U && generator >= 21U && generator <= 23U) return true;
     if (schema == 28U && generator == 22U) return true;
     if (schema == 29U && generator == 23U) return true;
     if (schema == 30U && generator == 23U) return true;
-    /* Generators predating the versioning split read any legacy schema. */
-    if (legacy && generator >= 2U && generator <= 21U) return true;
+    /* Preserve older pairings; schema 52 only shipped with generator 25. */
+    if (schema >= 2U && schema <= 51U && generator >= 2U && generator <= 21U) return true;
     return false;
 }
 
