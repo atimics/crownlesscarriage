@@ -2736,7 +2736,7 @@ static void CheckSupportedVersionPairings(void)
 {
     static const char *unsupported = "Simulation version is unsupported.";
     int32_t accepted = 0;
-    for (uint32_t schema = 0U; schema <= 60U; ++schema) {
+    for (uint32_t schema = 0U; schema <= CC_SIM_SCHEMA_VERSION + 2U; ++schema) {
         for (uint32_t generator = 0U; generator <= 30U; ++generator) {
             static CcSim sim;
             char error[256] = {0};

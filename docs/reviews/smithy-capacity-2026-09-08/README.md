@@ -12,11 +12,11 @@ requirement through the shared smithy plan.
 
 ## Save policy
 
-Schema 59, generator 25. The new capacity is assigned after randomized economy
+Schema 60, generator 25. The new capacity is assigned after randomized economy
 setup, preserving its random draw count. Existing saves keep their stored
 capacities, including zero and custom values. A future recommissioning action
 can reopen a deliberately idle saved line through an explicit player choice.
-The plan preserves older fire-damage behavior while replaying pre-59 journals.
+The plan preserves older fire-damage behavior while replaying pre-60 journals.
 Current worlds stop tool and weapon batches at full fire damage.
 
 The production ledger is caller-owned and starts at zero for each capture.
@@ -82,3 +82,10 @@ the current character rule uses an anonymous town account. Five local Release
 runs measured a combined median of 21.3450 microseconds/day, 5.85% below the
 original 22.6702. Both 40-year reports still match byte for byte; the gossip and
 SQLite suites pass. Linux budget verification remains a CI check.
+
+## Main integration
+
+Main `08b3d13` assigns schema 59 to mine visits. This draft now uses schema 60;
+schema-59 saves retain their mine state and saved smithy capacities. The earlier
+measurements above describe the pre-integration build. Current measurements
+are recorded separately in `measurements-schema60.json`.

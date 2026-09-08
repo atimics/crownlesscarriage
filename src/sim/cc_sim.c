@@ -1,4 +1,5 @@
 #include "sim/cc_sim.h"
+#include "sim/cc_mine.h"
 
 #include "quest/cc_quest.h"
 
@@ -2491,6 +2492,7 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
 {
     if (sim == NULL || good < 0 || good >= CC_GOOD_COUNT) return 0;
     int64_t total = sim->player.cargo[good] +
+                    (sim->schema_version >= 59U ? sim->mine.pack[good] : 0) +
                     sim->goblins.carried_goods[good] +
                     sim->goblins.lair_stock[good] +
                     sim->dragon.hoard_goods[good] +
@@ -5066,7 +5068,7 @@ CcSmithyPlan CcSimPlanSmithy(const CcSim *sim,
     plan.weapons_status = CC_SMITHY_SERVICE_UNAVAILABLE;
     if (sim == NULL || settlement == NULL ||
         !CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) return plan;
-    if (sim->schema_version >= 59U &&
+    if (sim->schema_version >= 60U &&
         (CcSettlementIsAbandoned(settlement) || settlement->fire_damage >= 100)) {
         plan.tools_status = CcSettlementIsAbandoned(settlement) ?
             CC_SMITHY_ABANDONED : CC_SMITHY_REPAIRS_REQUIRED;
@@ -17613,10 +17615,12 @@ static void PauseJourneyForWatchStop(CcSim *sim)
 
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks)
 {
-    if (sim == NULL || ticks <= 0 || !sim->journey.active ||
+    if (sim == NULL || ticks <= 0 || sim->mine.phase != CC_MINE_NONE || !sim->journey.active ||
         sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
         sim->clock.tick > UINT64_MAX - (uint64_t)ticks) return;
     for (int32_t tick = 0; tick < ticks; ++tick) {
+        int32_t mine_stop=CcMineBranchSubtick(sim);
+        if (mine_stop >= 0 && sim->journey.elapsed_subticks == mine_stop) break;
         if (sim->schema_version >= 40U && sim->pony_company.encounter >= 0) break;
         if (!sim->journey.active ||
             sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) break;
@@ -17634,12 +17638,14 @@ void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks)
             CC_WORLD_WATCH_SUBTICKS;
         int32_t next_limit = MinimumI32(
             sim->journey.total_subticks, next_watch);
+        if (mine_stop > sim->journey.elapsed_subticks) next_limit=MinimumI32(next_limit,mine_stop);
         sim->journey.elapsed_subticks = MinimumI32(
             next_limit, sim->journey.elapsed_subticks + journey_rate);
         sim->carriage.progress_milli = sim->journey.total_subticks > 0 ?
             (int32_t)(((int64_t)sim->journey.elapsed_subticks * 1000) /
                       sim->journey.total_subticks) : 0;
         RevealJourneyRoad(sim);
+        if (mine_stop >= 0 && sim->journey.elapsed_subticks == mine_stop) break;
         if (sim->journey.elapsed_subticks >= sim->journey.total_subticks) {
             ApplyTravelWatchStrain(sim);
             FinishJourneyArrival(sim);
@@ -18596,6 +18602,12 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Command target is missing.");
         return false;
     }
+    bool mine_action = command->kind >= CC_COMMAND_VISIT_MINE && command->kind <= CC_COMMAND_MINE_PACK;
+    if (sim->mine.phase != CC_MINE_NONE && !mine_action) {
+        SetError(error, error_capacity, "Return to the road through the mine yard first.");
+        return false;
+    }
+    if (mine_action) return CcMineApply(sim, command, error, error_capacity);
     bool party_wipe = command->kind == CC_COMMAND_PARTY_WIPE;
     if (!party_wipe && sim->schema_version >= 40U && sim->pony_company.encounter >= 0 &&
         (command->kind < CC_COMMAND_MEET_PONY || command->kind > CC_COMMAND_LEAVE_PONY)) {
@@ -18638,6 +18650,11 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         return false;
     }
     switch (command->kind) {
+        case CC_COMMAND_VISIT_MINE:
+        case CC_COMMAND_MINE_STEP:
+        case CC_COMMAND_MINE_USE:
+        case CC_COMMAND_MINE_PACK:
+            return CcMineApply(sim, command, error, error_capacity);
         case CC_COMMAND_EXCHANGE_GOSSIP:
             return ApplyExchangeGossip(sim, command, error, error_capacity);
         case CC_COMMAND_HEARD_STORY:
@@ -21019,12 +21036,13 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 return false;
             }
             CcCarriageMode expected_mode =
-                sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ?
+                sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING && sim->mine.phase == CC_MINE_NONE ?
                     CC_CARRIAGE_MOVING : CC_CARRIAGE_STOPPED;
             int32_t expected_progress = (int32_t)(
                 ((int64_t)sim->journey.elapsed_subticks * 1000) /
                 sim->journey.total_subticks);
-            if (sim->carriage.mode != expected_mode ||
+            if ((sim->mine.phase != CC_MINE_NONE && sim->mine.return_speed != JourneyCarriageSpeedForPace(sim->journey.total_subticks,sim->journey.pace)) ||
+                sim->carriage.mode != expected_mode ||
                 sim->carriage.route_id != sim->journey.route_id ||
                 sim->carriage.origin_id != sim->journey.origin_id ||
                 sim->carriage.destination_id !=
@@ -21114,6 +21132,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Pony company state is invalid.");
         return false;
     }
+    if (sim->schema_version >= 59U && !CcMineValidate(sim)) {
+        SetError(error, error_capacity, "Mine visit state is invalid.");
+        return false;
+    }
     return true;
 }
 
@@ -21161,6 +21183,14 @@ uint64_t CcSimHash(const CcSim *sim)
     bool hash_lifecycles = sim->schema_version >= 26U;
     uint64_t hash = UINT64_C(1469598103934665603);
 #define HASH_VALUE(value) hash = HashU64(hash, (uint64_t)(value))
+    if (sim->schema_version >= 59U) {
+        HASH_VALUE(sim->mine.phase); HASH_VALUE(sim->mine.site_id);
+        HASH_VALUE(sim->mine.x); HASH_VALUE(sim->mine.y); HASH_VALUE(sim->mine.revision);
+        HASH_VALUE(sim->mine.return_speed); HASH_VALUE(sim->mine.light);
+        HASH_VALUE(sim->mine.steps); HASH_VALUE(sim->mine.seen);
+        HASH_VALUE(sim->mine.bar_open); HASH_VALUE(sim->mine.surveyed);
+        for (int32_t good=0;good<CC_GOOD_COUNT;++good) HASH_VALUE(sim->mine.pack[good]);
+    }
     HASH_VALUE(sim->schema_version);
     HASH_VALUE(sim->generator_version);
     HASH_VALUE(sim->world_seed);
