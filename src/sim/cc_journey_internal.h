@@ -35,4 +35,19 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
     char *error, size_t error_capacity,
     const CcJourneyDepartureServices *services);
 
+/* The simulation supplies all services before dispatching an encounter. */
+typedef struct {
+    CcJourneyRecordEvent record_event;
+    uint32_t (*next_random)(CcSim *sim);
+    CcRoute *(*route)(CcSim *sim, CcId id);
+    CcBanditGroup *(*bandits)(CcSim *sim, CcId route_id);
+    CcTreasure *(*allocate_treasure)(CcSim *sim);
+    void (*create_traffic)(CcSim *sim, const CcJourneyEncounter *journey,
+                           CcId parent_event_id);
+} CcJourneyEncounterServices;
+
+bool CcJourneyResolveEncounter(CcSim *sim, const CcCommand *command,
+    char *error, size_t error_capacity,
+    const CcJourneyEncounterServices *services);
+
 #endif

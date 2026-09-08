@@ -1,0 +1,12 @@
+{
+  "encounters": {
+    "rows": 23976,
+    "parent_sha256": "535bd66c43d9bc18064555c36a6cab3d0263f6b7a201a3735d95aaa9cee1e0a5",
+    "current_sha256": "535bd66c43d9bc18064555c36a6cab3d0263f6b7a201a3735d95aaa9cee1e0a5"
+  },
+  "annual_states": {
+    "rows": 720,
+    "parent_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10",
+    "current_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10"
+  }
+}
