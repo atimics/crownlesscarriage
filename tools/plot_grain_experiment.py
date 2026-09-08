@@ -31,7 +31,12 @@ def main():
     if args.reuse_data:
         with gzip.open(args.output / 'daily.csv.gz', 'rt') as stream:
             rows = list(csv.DictReader(stream))
-        failures = json.loads((args.output / 'results.json').read_text())['failures']
+        saved = json.loads((args.output / 'results.json').read_text())
+        for path, digest in saved['source_sha256'].items():
+            if hashlib.sha256(Path(path).read_bytes()).hexdigest() != digest:
+                raise ValueError('Simulation source changed; run fresh experiments before redrawing.')
+        failures = saved['failures']
+        args.seeds = saved['requested_per_age']
     else:
         with ThreadPoolExecutor(max_workers=args.workers) as pool:
             for (seed, age), result in pool.map(run, [(s, a) for a in (0, 1000) for s in range(1, args.seeds + 1)]):
