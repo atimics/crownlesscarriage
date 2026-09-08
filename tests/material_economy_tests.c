@@ -174,7 +174,8 @@ static void CheckSmithyPlan(void)
     CcSimInit(&sim, UINT32_C(0x5eed0001));
     uint64_t before = CcSimHash(&sim);
     CcSmithyPlan plan = CcSimPlanSmithy(&sim, &sim.settlements[3]);
-    CC_CHECK(plan.tools_status == CC_SMITHY_ZERO_CAPACITY);
+    CC_CHECK(sim.settlements[3].production[CC_GOOD_TOOLS] == 2);
+    CC_CHECK(plan.tools_status == CC_SMITHY_RESERVE_MET);
     CC_CHECK(plan.weapons_status == CC_SMITHY_ZERO_CAPACITY);
     CC_CHECK(plan.iron_used == 0 && plan.wood_used == 0);
     plan = CcSimPlanSmithy(&sim, &sim.settlements[2]);
@@ -225,9 +226,82 @@ static void CheckSmithyPlan(void)
                     "Production capacity required") == 0);
 }
 
+static void CheckSmithyAccounting(void)
+{
+    static CcSim sim;
+    static CcSim control;
+    CcSettlement *place = IsolatedSettlement(&sim);
+    place->service_mask |= Service(CC_SERVICE_SMITHY);
+    place->production[CC_GOOD_TOOLS] = 2;
+    place->reserve_target[CC_GOOD_TOOLS] = 10;
+    place->stock[CC_GOOD_IRON] = 8;
+    place->stock[CC_GOOD_WOOD] = 4;
+    control = sim;
+    CcSmithyAccounting accounting = {0};
+    CcSimAdvanceDaysWithAccounting(&sim, 14, NULL, &accounting);
+    CcSimAdvanceDays(&control, 14);
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&control));
+    CC_CHECK(accounting.towns[0].settlement_id == place->id);
+    CC_CHECK(accounting.towns[0].tools_made == 4);
+    CC_CHECK(accounting.towns[0].weapons_made == 0);
+    CC_CHECK(accounting.towns[0].iron_used == 8);
+    CC_CHECK(accounting.towns[0].wood_used == 4);
+    CC_CHECK(accounting.towns[0].tools_worn == 1);
+    CC_CHECK(accounting.towns[0].tools_status[CC_SMITHY_READY] == 2);
+    CC_CHECK(place->stock[CC_GOOD_TOOLS] == 3);
+    CcSimAdvanceDaysWithAccounting(&sim, 7, NULL, &accounting);
+    CC_CHECK(accounting.towns[0].tools_made == 4);
+    CC_CHECK(accounting.towns[0].tools_status[CC_SMITHY_IRON_REQUIRED] == 1);
+    place->fire_damage = 100;
+    CcSmithyPlan plan = CcSimPlanSmithy(&sim, place);
+    CC_CHECK(plan.tools_status == CC_SMITHY_REPAIRS_REQUIRED);
+    CC_CHECK(plan.tools_made == 0);
+    place->fire_damage = 0;
+    place->population = 0;
+    plan = CcSimPlanSmithy(&sim, place);
+    CC_CHECK(plan.tools_status == CC_SMITHY_ABANDONED);
+}
+
+static void CheckSeededSmithyProduction(void)
+{
+    static CcSim sim;
+    static CcSim plain;
+    static CcSim zero_capacity;
+    const uint32_t seeds[] = {UINT32_C(0x5eed0001), UINT32_C(0xc0a71a9e)};
+    for (size_t seed = 0; seed < sizeof(seeds) / sizeof(seeds[0]); ++seed) {
+        CcSimInit(&sim, seeds[seed]);
+        plain = sim;
+        zero_capacity = sim;
+        zero_capacity.settlements[3].production[CC_GOOD_TOOLS] = 0;
+        CcSmithyAccounting actual = {0};
+        CcSmithyAccounting control = {0};
+        char error[256];
+        for (int32_t year = 0; year < 40; ++year) {
+            CcSimAdvanceDaysWithAccounting(&sim, 365, NULL, &actual);
+            CcSimAdvanceDaysWithAccounting(&zero_capacity, 365, NULL, &control);
+            CcSimAdvanceDays(&plain, 365);
+            CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+            CC_CHECK(CcSimValidate(&zero_capacity, error, sizeof(error)));
+            CC_CHECK(CcSimHash(&sim) == CcSimHash(&plain));
+        }
+        const CcTownSmithyAccounting *forge = &actual.towns[3];
+        CC_CHECK(forge->settlement_id == sim.settlements[3].id);
+        CC_CHECK(forge->tools_made > 0 && forge->weapons_made == 0);
+        CC_CHECK(forge->iron_used == forge->tools_made * 2);
+        CC_CHECK(forge->wood_used == forge->tools_made);
+        CC_CHECK(control.towns[3].tools_made == 0);
+        CC_CHECK(control.towns[3].iron_used == 0);
+        CC_CHECK(control.towns[3].wood_used == 0);
+        CC_CHECK(actual.towns[2].tools_made == 0);
+        CC_CHECK(actual.towns[2].weapons_made > 0);
+    }
+}
+
 int main(void)
 {
     CheckSmithyPlan();
+    CheckSmithyAccounting();
+    CheckSeededSmithyProduction();
     CheckRoadUseRecovery();
     CheckWeakestRouteUpkeep();
     CC_CHECK(CC_GOOD_BREAD == 0);
@@ -281,24 +355,27 @@ int main(void)
     CC_CHECK(paper_definition->base_price == 12);
 
     CcSim paper_mill;
-    CcSettlement *place = IsolatedSettlement(&paper_mill);
-    paper_mill.iron_ledger_reserve = 0;
-    paper_mill.archives.scribes = 0;
-    place->service_mask |= Service(CC_SERVICE_MILL);
-    place->population = 100;
-    place->stock[CC_GOOD_BREAD] = 10;
-    place->stock[CC_GOOD_WHEAT] = 7;
-    place->reserve_target[CC_GOOD_WHEAT] = 1;
-    place->stock[CC_GOOD_WOOD] = 7;
-    place->reserve_target[CC_GOOD_WOOD] = 1;
-    place->stock[CC_GOOD_TOOLS] = 1;
-    place->reserve_target[CC_GOOD_PAPER] = 10;
-    place->production[CC_GOOD_PAPER] = 8;
-    CcSimAdvanceDays(&paper_mill, 6);
-    CC_CHECK(place->stock[CC_GOOD_PAPER] == 8);
-    CC_CHECK(place->stock[CC_GOOD_WHEAT] == 7);
-    CC_CHECK(place->stock[CC_GOOD_WOOD] == 5);
-    CC_CHECK(place->paper_tool_wear == 1);
+    CcSettlement *place;
+    for (int32_t capacity = 1; capacity <= 9; ++capacity) {
+        place = IsolatedSettlement(&paper_mill);
+        paper_mill.iron_ledger_reserve = 0;
+        paper_mill.archives.scribes = 0;
+        place->service_mask |= Service(CC_SERVICE_MILL);
+        place->population = 100;
+        place->stock[CC_GOOD_BREAD] = 10;
+        place->stock[CC_GOOD_WHEAT] = 7;
+        place->reserve_target[CC_GOOD_WHEAT] = 1;
+        place->stock[CC_GOOD_WOOD] = 7;
+        place->reserve_target[CC_GOOD_WOOD] = 1;
+        place->stock[CC_GOOD_TOOLS] = 1;
+        place->reserve_target[CC_GOOD_PAPER] = 10;
+        place->production[CC_GOOD_PAPER] = capacity;
+        CcSimAdvanceDays(&paper_mill, 6);
+        CC_CHECK(place->stock[CC_GOOD_PAPER] == capacity);
+        CC_CHECK(place->stock[CC_GOOD_WHEAT] == 7);
+        CC_CHECK(place->stock[CC_GOOD_WOOD] == 7 - (capacity + 3) / 4);
+        CC_CHECK(place->paper_tool_wear == 1);
+    }
 
     CcSim wet_journey;
     CcSimInit(&wet_journey, UINT32_C(0x5a11a9e));

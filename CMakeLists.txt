@@ -91,6 +91,7 @@ cc_strict_warnings(crownless_locomotion)
 add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
+    src/sim/cc_production.c
     src/sim/cc_mine.c
     src/sim/cc_ponies.c
 )
@@ -1015,6 +1016,46 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(site_wear_tests tests/site_wear_tests.c)
+    target_link_libraries(site_wear_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(site_wear_tests)
+    add_test(NAME road_site_use_wear COMMAND site_wear_tests)
+    add_executable(site_maintenance_tests tests/site_maintenance_tests.c)
+    target_link_libraries(site_maintenance_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(site_maintenance_tests)
+    add_test(NAME funded_site_maintenance COMMAND site_maintenance_tests)
+    add_executable(town_production_tests tests/town_production_tests.c)
+    target_link_libraries(town_production_tests PRIVATE crownless_sim)
+    cc_strict_warnings(town_production_tests)
+    add_test(NAME town_production_accounting COMMAND town_production_tests)
+    add_executable(treasure_production_tests tests/treasure_production_tests.c)
+    target_link_libraries(treasure_production_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(treasure_production_tests)
+    add_test(NAME treasure_production_contract COMMAND treasure_production_tests)
+    add_executable(site_delivery_tests tests/site_delivery_tests.c)
+    target_link_libraries(site_delivery_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(site_delivery_tests)
+    add_test(NAME site_carriage_deliveries COMMAND site_delivery_tests)
+    add_executable(site_freight_reservation_tests tests/site_freight_reservation_tests.c)
+    target_link_libraries(site_freight_reservation_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(site_freight_reservation_tests)
+    add_test(NAME site_freight_reservations COMMAND site_freight_reservation_tests)
+    add_executable(site_freight_tests tests/site_freight_tests.c)
+    target_link_libraries(site_freight_tests PRIVATE crownless_sim)
+    cc_strict_warnings(site_freight_tests)
+    add_test(NAME site_freight_planning COMMAND site_freight_tests)
+    add_executable(freight_leg_tests tests/freight_leg_tests.c)
+    target_link_libraries(freight_leg_tests PRIVATE crownless_sim)
+    cc_strict_warnings(freight_leg_tests)
+    add_test(NAME freight_leg_geometry COMMAND freight_leg_tests)
+    add_executable(road_production_tests tests/road_production_tests.c)
+    target_link_libraries(road_production_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(road_production_tests)
+    add_test(NAME road_site_production COMMAND road_production_tests)
+    add_executable(production_tests tests/production_tests.c)
+    target_link_libraries(production_tests PRIVATE crownless_sim)
+    cc_strict_warnings(production_tests)
+    add_test(NAME common_production_contract COMMAND production_tests)
     add_executable(war_society_tests tests/war_society_tests.c)
     target_link_libraries(war_society_tests PRIVATE crownless_persistence)
     cc_strict_warnings(war_society_tests)
@@ -1147,7 +1188,7 @@ if(BUILD_TESTING)
     add_test(NAME local_session_round_trip COMMAND client_session_tests)
 
     add_executable(road_stop_tests tests/road_stop_tests.c)
-    target_link_libraries(road_stop_tests PRIVATE crownless_persistence)
+    target_link_libraries(road_stop_tests PRIVATE crownless_persistence crownless_metagame)
     cc_strict_warnings(road_stop_tests)
     add_test(NAME roadside_camp_choices COMMAND road_stop_tests)
 
@@ -1252,6 +1293,10 @@ if(BUILD_TESTING)
     cc_strict_warnings(hunger_metrics_tests)
     add_test(NAME inhabited_hunger_metrics COMMAND hunger_metrics_tests)
     if(CC_PYTHON3_EXECUTABLE AND CC_BUILD_BENCHMARKS)
+        add_test(NAME production_json_capture
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/production_json_tests.py
+                         $<TARGET_FILE:crownless_sim_runner>)
         add_test(NAME hunger_report_agreement
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/hunger_report_tests.py
@@ -1292,6 +1337,11 @@ if(BUILD_TESTING)
     target_link_libraries(pony_tests PRIVATE crownless_persistence)
     cc_strict_warnings(pony_tests)
     add_test(NAME rainbow_pony_companions COMMAND pony_tests)
+
+    add_executable(character_lifetime_tests tests/character_lifetime_tests.c)
+    target_link_libraries(character_lifetime_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(character_lifetime_tests)
+    add_test(NAME received_account_lifetimes COMMAND character_lifetime_tests)
 
     add_executable(persistence_fields_tests tests/persistence_fields_tests.c)
     target_link_libraries(persistence_fields_tests PRIVATE crownless_persistence)

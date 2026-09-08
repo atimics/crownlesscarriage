@@ -526,7 +526,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 30);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 32);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -2712,7 +2712,7 @@ static void CheckSchema41Upgrade(void)
    future edit to that table cannot quietly widen or narrow what loads. */
 static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
 {
-    bool legacy = schema >= 2U && schema <= 59U;
+    bool legacy = schema >= 2U && schema <= 69U;
     if (!legacy && schema != CC_SIM_SCHEMA_VERSION) return false;
     if (schema == CC_SIM_SCHEMA_VERSION &&
         generator == CC_GENERATOR_VERSION) return true;
@@ -2720,7 +2720,7 @@ static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
         /* The current generator reads the oldest schemas and the recent run,
            but not 28 through 31, which shipped with generators of their own. */
         if (schema >= 2U && schema <= 27U) return true;
-        if (schema >= 32U && schema <= 59U) return true;
+        if (schema >= 32U && schema <= 69U) return true;
     }
     if (schema == 31U && generator == 24U) return true;
     if (schema == 27U && generator >= 21U && generator <= 23U) return true;
@@ -2736,7 +2736,7 @@ static void CheckSupportedVersionPairings(void)
 {
     static const char *unsupported = "Simulation version is unsupported.";
     int32_t accepted = 0;
-    for (uint32_t schema = 0U; schema <= 60U; ++schema) {
+    for (uint32_t schema = 0U; schema <= CC_SIM_SCHEMA_VERSION + 2U; ++schema) {
         for (uint32_t generator = 0U; generator <= 30U; ++generator) {
             static CcSim sim;
             char error[256] = {0};
@@ -2760,8 +2760,219 @@ static void CheckSupportedVersionPairings(void)
     CC_CHECK(accepted > 0);
 }
 
+static void CheckSchema58SmithyCapacity(void)
+{
+    static CcSim legacy;
+    static CcSim restored;
+    char error[256];
+    const char *path = "persistence-schema58-smithy.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    CC_CHECK(legacy.settlements[3].production[CC_GOOD_TOOLS] == 2);
+    legacy.schema_version = 58U;
+    legacy.settlements[3].production[CC_GOOD_TOOLS] = 0;
+    legacy.settlements[1].production[CC_GOOD_TOOLS] = 7;
+    CcSim after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 58U, 25U);
+    legacy = after;
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.settlements[3].production[CC_GOOD_TOOLS] == 0);
+    CC_CHECK(restored.settlements[1].production[CC_GOOD_TOOLS] == 7);
+    restored.schema_version = 58U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&legacy));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &legacy, error, sizeof(error)));
+    CC_CHECK(legacy.settlements[3].production[CC_GOOD_TOOLS] == 0);
+    RemoveDatabase(path);
+}
+
+static void CheckShippedTravellerSave(void)
+{
+    static CcSim restored;
+    char path[512], error[256];
+    (void)snprintf(path, sizeof(path),
+        "%s/tests/fixtures/shipped/schema-60-traveller-day-1461.ccsave",
+        CC_TEST_SOURCE_DIR);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
+    restored.schema_version = 60U;
+    CC_CHECK(CcSimHash(&restored) == UINT64_C(0xaf82f2230153da41));
+    CcSimAdvanceDays(&restored, 9);
+    CC_CHECK(CcSimHash(&restored) == UINT64_C(0x3c8745b83278bea2));
+}
+
+static void CheckPre61KnowledgeJournal(void)
+{
+    static CcSim legacy;
+    static CcSim after;
+    static CcSim restored;
+    char error[256];
+    const char *path = "persistence-schema60-knowledge.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    legacy.schema_version = 60U;
+    CcId source_id = 0U;
+    for (int32_t i = 0; i < legacy.character_count && source_id == 0U; ++i) {
+        for (int32_t j = 0; j < legacy.characters[i].knowledge_count; ++j) {
+            if (legacy.characters[i].knowledge[j].kind == CC_KNOWLEDGE_PROBLEM_RUMOR) {
+                source_id = legacy.characters[i].knowledge[j].source_character_id;
+                break;
+            }
+        }
+    }
+    CC_CHECK(source_id != 0U);
+    for (int32_t i = 0; i < legacy.character_count; ++i) {
+        if (legacy.characters[i].id == source_id) legacy.characters[i].death_day = 2;
+    }
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 60U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.historic_character_count == 0);
+    restored.schema_version = 60U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    for (int32_t i = 0; i < restored.character_count; ++i) {
+        for (int32_t j = 0; j < restored.characters[i].knowledge_count; ++j) {
+            const CcCharacterKnowledge *item = &restored.characters[i].knowledge[j];
+            CC_CHECK(item->source_character_id != source_id);
+            const CcCharacter *source = CcSimCharacter(&restored, item->source_character_id);
+            CC_CHECK(source != NULL);
+            CC_CHECK(strcmp(item->source_name, source->name) == 0);
+        }
+    }
+    RemoveDatabase(path);
+}
+
+static void CheckPre64SiteJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema63-sites.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    legacy.schema_version = 64;
+    legacy.current_day = 6;
+    legacy.road_sites[2].accessible = true;
+    legacy.road_sites[2].blocker = CC_ROAD_SITE_BLOCKER_NONE;
+    legacy.road_sites[2].stock[CC_GOOD_WHEAT] = 6;
+    legacy.road_sites[2].stock[CC_GOOD_TOOLS] = 1;
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(after.road_sites[2].stock[CC_GOOD_BREAD] == 0);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 64U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    restored.schema_version = 64;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimAdvanceDays(&restored, 7);
+    CC_CHECK(restored.road_sites[2].stock[CC_GOOD_BREAD] == 2);
+    CC_CHECK(restored.road_sites[2].stock[CC_GOOD_WHEAT] == 4);
+    RemoveDatabase(path);
+}
+
+static void CheckPre65FreightJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema64-freight.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    legacy.schema_version = 65;
+    legacy.current_day = 6;
+    CcRoadSite *site = &legacy.road_sites[11];
+    site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE;
+    site->stock[CC_GOOD_TOOLS] = 5;
+    const CcSettlement *town = CcSimSettlement(&legacy, site->home_settlement_id);
+    for (int32_t i = 0; i < legacy.royal_carriage_count; ++i)
+        if (legacy.royal_carriages[i].kingdom_id == town->kingdom_id)
+            legacy.royal_carriages[i].location_id = town->id;
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(after.road_sites[11].stock[CC_GOOD_TOOLS] == 5);
+    for (int32_t i = 0; i < after.royal_carriage_count; ++i)
+        CC_CHECK(after.royal_carriages[i].mode <= CC_ROYAL_CARRIAGE_WAITING_CAPACITY);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 65U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    restored.schema_version = 65;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimAdvanceDays(&restored, 35);
+    CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckPre67MaintenanceJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema66-maintenance.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    legacy.schema_version = 67; legacy.current_day = 6;
+    CcRoadSite *site = &legacy.road_sites[2];
+    site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE; site->condition = 44;
+    site->stock[CC_GOOD_TOOLS] = 2; site->stock[CC_GOOD_WOOD] = 1;
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(after.road_sites[2].condition == 44);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 67U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    restored.schema_version = 67;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimAdvanceDays(&restored, 7);
+    CC_CHECK(restored.road_sites[2].condition == 54);
+    CC_CHECK(restored.road_sites[2].stock[CC_GOOD_TOOLS] == 1 && restored.road_sites[2].stock[CC_GOOD_WOOD] == 0);
+    CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckPre68WearJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema67-wear.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    legacy.schema_version = 68; legacy.current_day = 6;
+    CcRoadSite *site = &legacy.road_sites[2];
+    site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE; site->condition = 60;
+    site->stock[CC_GOOD_TOOLS] = 1; site->stock[CC_GOOD_WHEAT] = 6;
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(after.road_sites[2].condition == 60 && after.road_sites[2].stock[CC_GOOD_WHEAT] == 4);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 68U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    restored.schema_version = 68;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimAdvanceDays(&restored, 7);
+    CC_CHECK(restored.road_sites[2].condition == 59 && restored.road_sites[2].stock[CC_GOOD_WHEAT] == 3);
+    CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
 int main(void)
 {
+    CheckShippedTravellerSave();
+    CheckPre61KnowledgeJournal();
+    CheckPre64SiteJournal();
+    CheckPre65FreightJournal();
+    CheckPre67MaintenanceJournal();
+    CheckPre68WearJournal();
+    CheckSchema58SmithyCapacity();
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
     CheckSchema41Upgrade();

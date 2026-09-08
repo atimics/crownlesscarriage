@@ -1,0 +1,38 @@
+{
+  "base": "b461239",
+  "schema": 64,
+  "generator": 25,
+  "runs": [
+    {
+      "seed": "0x5eed0001",
+      "years": 40,
+      "reports_match": true,
+      "sha256": "7519265af006776d1c7827b5a4ae2ca161c2c91601eeaf7cbd8b3f64e1a56365"
+    },
+    {
+      "seed": "0xc0a71a9e",
+      "years": 40,
+      "reports_match": true,
+      "sha256": "fd4ac283267bc8e9e58f9cb3dc95fbeb2b6cf773ccf35e22ecdf9cb813766edc"
+    }
+  ],
+  "historical_rules": {
+    "versions": [
+      26,
+      27,
+      38,
+      41,
+      46,
+      63,
+      64
+    ],
+    "seeds": [
+      "0x5eed0001",
+      "0xc0a71a9e"
+    ],
+    "years_each": 40,
+    "annual_hashes_matched": 560,
+    "sha256": "be2638aefce2d4a3cef59a17048b522b2b16d2df88dc7ce9997b7532e2327db6",
+    "fixture": "Historical rules selected after current initialization; shipped save coverage is separate."
+  }
+}

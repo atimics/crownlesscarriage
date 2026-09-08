@@ -306,7 +306,9 @@ static const CcKingdom *KingdomForSettlement(const CcSim *sim,
 
 /* The adult character at a settlement who holds the most gossip accounts.
    Ties break on story count, then on character slot. */
-static const CcCharacter *BestHeldWriter(const CcSim *sim)
+static bool HasComposingSeal(const CcSim *sim, const CcCharacter *writer);
+
+static const CcCharacter *BestHeldWriter(const CcSim *sim, bool diary)
 {
     const CcCharacter *best = NULL;
     int32_t best_held = -1;
@@ -314,6 +316,7 @@ static const CcCharacter *BestHeldWriter(const CcSim *sim)
         const CcCharacter *person = &sim->characters[i];
         if (CcCharacterAgeYears(sim, person) < 16 ||
             person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING) continue;
+        if (diary && HasComposingSeal(sim, person)) continue;
         int32_t held = 0;
         for (int32_t offset = 0; offset < CC_MAX_GOSSIP; ++offset) {
             const CcGossipVersion *version = NULL;
@@ -867,6 +870,7 @@ int main(int argc, char **argv)
     int32_t max_accounts = 3;
     bool census = false;
     bool compare = false;
+    bool diary = false;
     bool scan = false;
     bool mission = false;
     int32_t mission_topic = 0;
@@ -892,6 +896,8 @@ int main(int argc, char **argv)
                            strcmp(name, "dispatch") == 0 ? 3 : 0;
         } else if (strcmp(argv[argument], "--census") == 0) {
             census = true;
+        } else if (strcmp(argv[argument], "--diary") == 0) {
+            diary = true;
         } else if (strcmp(argv[argument], "--compare") == 0) {
             compare = true;
         } else if (strcmp(argv[argument], "--scan") == 0) {
@@ -906,7 +912,7 @@ int main(int argc, char **argv)
                           "[--purpose report|petition|claim|dispatch|auto] "
                           "[--topic dragon|goblin|war|throne|wheat|herds|ponies|road|bandit|treasure|all] "
                           "[--mission TOPIC] [--baseline DAY] [--max-accounts K] "
-                          "[--census] [--compare] [--scan]\n", argv[0]);
+                          "[--census] [--compare] [--scan] [--diary]\n", argv[0]);
             return 1;
         }
     }
@@ -943,7 +949,7 @@ int main(int argc, char **argv)
             }
             PrintWorldContext(&sim);
             if (census) PrintCensus(&sim);
-            const CcCharacter *writer = BestHeldWriter(&sim);
+            const CcCharacter *writer = BestHeldWriter(&sim, diary);
             if (writer == NULL) {
                 printf("   <no adult non-travelling character holds accounts>\n\n");
                 continue;

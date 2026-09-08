@@ -303,7 +303,7 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(self.worlds.view(self.id, self.a)['state']['company']['cargo'][0], 1)
 
     def test_road_and_pony_actions_reach_the_simulation(self):
-        for action in ('camp_road_site', 'pass_road_site', 'meet_pony',
+        for action in ('repair_road_site', 'transfer_road_site', 'clear_road_site', 'camp_road_site', 'pass_road_site', 'meet_pony',
                        'help_pony', 'swap_pony', 'leave_pony'):
             with self.subTest(action=action):
                 before = self.worlds.view(self.id, self.a)['state']
@@ -312,6 +312,34 @@ class CoopTests(unittest.TestCase):
                 self.assertFalse(result['accepted'])
                 self.assertEqual(result['world']['state'], before)
                 self.assertTrue(self.worlds.command(self.id, self.a, body)['duplicate'])
+
+    def test_two_players_clear_and_reload_a_road_site(self):
+        def apply(token, action, **values):
+            body = self.command(token, action, **values)
+            result = self.worlds.command(self.id, token, body)
+            self.assertTrue(result['accepted'], result['message'])
+            return body, result['world']['state']
+        apply(self.a, 'trade', good=2, amount=2)
+        apply(self.a, 'trade', good=6, amount=2)
+        destination = next(t['id'] for t in self.worlds.view(self.id, self.a)['state']['travel'] if t['available'])
+        apply(self.a, 'travel', target=destination)
+        _, stopped = apply(self.b, 'skip_watch')
+        site = stopped['journey']['road_site']
+        self.assertFalse(site['accessible'])
+        body, opened = apply(self.b, 'clear_road_site', target=site['id'])
+        self.assertTrue(opened['journey']['road_site']['accessible'])
+        self.assertGreater(opened['journey']['road_site']['condition'], site['condition'])
+        condition = opened['journey']['road_site']['condition']
+        body, opened = apply(self.b, 'repair_road_site', target=site['id'])
+        self.assertEqual(opened['journey']['road_site']['condition'], min(100, condition + 10))
+        self.assertEqual(self.worlds.command(self.id, self.b, body)['world']['state'], opened)
+        body, opened = apply(self.b, 'transfer_road_site', target=site['id'], good=2, amount=1)
+        self.assertEqual(opened['journey']['road_site']['stock'][2], 1)
+        self.assertEqual(self.worlds.command(self.id, self.b, body)['world']['state'], opened)
+        self.assertEqual(self.worlds.view(self.id, self.a)['state'], opened)
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.assertEqual(self.worlds.view(self.id, self.b)['state'], opened)
 
     def test_two_players_camp_continue_and_resume_the_same_road(self):
         def apply(token, action, target='0'):

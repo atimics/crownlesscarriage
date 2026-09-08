@@ -1,3 +1,4 @@
+#include "sim/cc_production.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
 
@@ -5,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "sim_runner_json.inc"
 
 static void PrintSummary(const CcSim *sim, bool detail)
 {
@@ -46,14 +49,18 @@ static void PrintSummary(const CcSim *sim, bool detail)
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
         const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
         if (carriage->mode == CC_ROYAL_CARRIAGE_IDLE) royal_idle += 1;
-        if (carriage->mode == CC_ROYAL_CARRIAGE_REPOSITIONING) {
+        if (carriage->mode == CC_ROYAL_CARRIAGE_REPOSITIONING ||
+            (carriage->mode == CC_ROYAL_CARRIAGE_SITE_TRAVELLING && carriage->active_shipment_id == 0)) {
             royal_repositioning += 1;
         }
-        if (carriage->mode == CC_ROYAL_CARRIAGE_DELIVERING) {
+        if (carriage->mode == CC_ROYAL_CARRIAGE_DELIVERING ||
+            (carriage->mode == CC_ROYAL_CARRIAGE_SITE_TRAVELLING && carriage->active_shipment_id != 0)) {
             royal_delivering += 1;
         }
-        if (carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED) royal_blocked += 1;
-        if (carriage->mode == CC_ROYAL_CARRIAGE_WAITING_CAPACITY) {
+        if (carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED ||
+            carriage->mode == CC_ROYAL_CARRIAGE_SITE_WAITING) royal_blocked += 1;
+        if (carriage->mode == CC_ROYAL_CARRIAGE_WAITING_CAPACITY ||
+            carriage->mode == CC_ROYAL_CARRIAGE_SITE_UNLOADING) {
             royal_waiting_capacity += 1;
         }
         royal_trips += carriage->trips_completed;
@@ -249,6 +256,61 @@ static void PrintChronicleNewEvents(const CcSim *sim)
     }
 }
 
+static void PrintSmithyAccounting(const CcSim *sim,
+                                   const CcSmithyAccounting *accounting)
+{
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcTownSmithyAccounting *town = &accounting->towns[i];
+        printf("smithy day=%d town=%" PRIu64 " tools=%" PRIu64 " weapons=%" PRIu64
+               " iron_used=%" PRIu64 " wood_used=%" PRIu64 " tools_worn=%" PRIu64,
+               sim->current_day, sim->settlements[i].id, town->tools_made,
+               town->weapons_made, town->iron_used, town->wood_used, town->tools_worn);
+        for (int32_t state = 0; state < CC_SMITHY_STATUS_COUNT; ++state) {
+            printf(" tools_state_%d=%" PRIu64 " weapons_state_%d=%" PRIu64,
+                   state, town->tools_status[state], state, town->weapons_status[state]);
+        }
+        putchar('\n');
+    }
+}
+
+static void PrintRoadProduction(const CcSim *sim, const CcRoadProductionAccounting *accounting)
+{
+    for (int32_t i = 0; i < sim->road_site_count; ++i) {
+        const CcSiteProductionAccounting *row = &accounting->sites[i];
+        printf("site day=%d id=%" PRIu64 " work=%" PRIu64 " repair=%" PRIu64,
+            sim->current_day, sim->road_sites[i].id, row->work, row->route_repair);
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
+            printf(" input_%d=%" PRIu64 " output_%d=%" PRIu64 " stock_%d=%d",
+                good, row->input[good], good, row->output[good], good, sim->road_sites[i].stock[good]);
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
+            if (row->freight_sent[good] || row->freight_received[good] || row->freight_delivered[good] ||
+                row->freight_shipped[good] || row->freight_lost[good])
+                printf(" sent_%d=%" PRIu64 " received_%d=%" PRIu64 " shipped_%d=%" PRIu64
+                       " delivered_%d=%" PRIu64 " lost_%d=%" PRIu64,
+                    good, row->freight_sent[good], good, row->freight_received[good],
+                    good, row->freight_shipped[good], good, row->freight_delivered[good], good, row->freight_lost[good]);
+        for (int32_t gate = 0; gate < CC_PRODUCTION_GATE_COUNT; ++gate)
+            printf(" gate_%d=%" PRIu64, gate, row->gates[gate]);
+        putchar('\n');
+    }
+}
+
+static void PrintSiteFreight(const CcSim *sim)
+{
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        for (int32_t j = 0; j < sim->road_site_count; ++j) {
+            CcSiteFreightPlan plan = CcSimPlanSiteFreight(sim,
+                sim->royal_carriages[i].id, sim->road_sites[j].id);
+            if (plan.gate != CC_SITE_FREIGHT_READY) continue;
+            printf("site-freight-preview day=%d carriage=%" PRIu64 " site=%" PRIu64
+                   " town=%" PRIu64 " kind=%s good=%d quantity=%d outbound_days=%d return_days=%d\n",
+                   sim->current_day, plan.carriage_id, plan.site_id, plan.town_id,
+                   plan.kind == CC_SITE_FREIGHT_SUPPLY ? "supply" : "pickup",
+                   (int)plan.good, plan.quantity, plan.travel_days, plan.return_days);
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     uint32_t seed = UINT32_C(0xc0a71a9e);
@@ -257,7 +319,17 @@ int main(int argc, char **argv)
     int32_t checkpoint_every = 0;
     const char *load_path = NULL;
     const char *save_path = NULL;
+    bool json_report = false;
+    bool opened_pilots = false;
+    bool dragon_slain_day_one = false;
+    CcNutritionAccounting nutrition = {0};
+    int32_t route_open_days[CC_MAX_ROUTES] = {0};
     bool detail = false;
+    bool smithy_report = false;
+    bool site_report = false;
+    bool site_freight_report = false;
+    CcRoadProductionAccounting sites = {0};
+    CcSmithyAccounting smithy = {0};
     for (int argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--seed") == 0 && argument + 1 < argc) {
             seed = (uint32_t)strtoul(argv[++argument], NULL, 0);
@@ -276,8 +348,20 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[argument], "--checkpoint-every") == 0 &&
                    argument + 1 < argc) {
             checkpoint_every = (int32_t)strtol(argv[++argument], NULL, 10);
+        } else if (strcmp(argv[argument], "--json") == 0) {
+            json_report = true;
+        } else if (strcmp(argv[argument], "--dragon-slain-day-one") == 0) {
+            dragon_slain_day_one = true;
+        } else if (strcmp(argv[argument], "--opened-production-pilots") == 0) {
+            opened_pilots = true;
         } else if (strcmp(argv[argument], "--detail") == 0) {
             detail = true;
+        } else if (strcmp(argv[argument], "--site-freight") == 0) {
+            site_freight_report = true;
+        } else if (strcmp(argv[argument], "--sites") == 0) {
+            site_report = true;
+        } else if (strcmp(argv[argument], "--smithy") == 0) {
+            smithy_report = true;
         } else if (strcmp(argv[argument], "--chronicle") == 0) {
             chronicle = true;
         }
@@ -285,6 +369,11 @@ int main(int argc, char **argv)
 
     CcSim sim;
     char error[256];
+    if ((json_report && chronicle) || ((opened_pilots || dragon_slain_day_one) && load_path != NULL)) {
+        fputs("Choose JSON or chronicle output; use a fresh seed for controlled fixtures.\n", stderr);
+        return 1;
+    }
+    if (json_report) { smithy_report = true; site_report = true; }
     if (checkpoint_every < 0 || (checkpoint_every > 0 && save_path == NULL)) {
         (void)fprintf(stderr, "checkpoint interval requires --save and a positive year count\n");
         return 1;
@@ -297,6 +386,38 @@ int main(int argc, char **argv)
     } else {
         CcSimInit(&sim, seed);
     }
+    if (opened_pilots) {
+        const int32_t indices[] = {2, 11, 15};
+        const CcRoadSiteKind kinds[] = {CC_ROAD_SITE_MILL, CC_ROAD_SITE_SMITHY, CC_ROAD_SITE_FARM};
+        for (int32_t i = 0; i < 3; ++i) {
+            CcRoadSite *site = &sim.road_sites[indices[i]];
+            CcProductionRecipe recipe;
+            if (site->kind != kinds[i] || !CcRoadSiteRecipe(site, &recipe)) {
+                fputs("The production pilot requires its authored mill, forge and farm.\n", stderr);
+                return 1;
+            }
+            site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE;
+            site->stock[CC_GOOD_TOOLS] = 1;
+            for (int32_t j = 0; j < recipe.input_count; ++j)
+                site->stock[recipe.inputs[j].good] = recipe.inputs[j].reserve + 4 * recipe.inputs[j].units;
+        }
+    }
+    if (dragon_slain_day_one) {
+        sim.dragon.slain = true;
+        sim.dragon.slain_day = 1;
+        sim.dragon.life_stage = CC_DRAGON_STAGE_AFTERDRAGON;
+        sim.dragon.activity = CC_DRAGON_ACTIVITY_AFTERMATH;
+        sim.dragon.body_condition = 0;
+        sim.dragon.crown_strength = 0;
+    }
+    if (!CcSimValidate(&sim, error, sizeof(error))) {
+        fprintf(stderr, "initial validation failed: %s\n", error);
+        return 1;
+    }
+    const char *dragon_policy = dragon_slain_day_one ? "slain-at-day-1" :
+        load_path != NULL ? "loaded-save" : "natural-history";
+    const int32_t start_day = sim.current_day;
+    const char *fixture = opened_pilots ? "opened-production-pilots" : load_path != NULL ? "loaded-save" : "baseline";
     /* --years counts further years when resuming a saved world. */
     if (years < 0 || years > (INT32_MAX - sim.current_day) / 365) {
         (void)fprintf(stderr, "year count exceeds the simulation day range\n");
@@ -313,20 +434,29 @@ int main(int argc, char **argv)
         }
         PrintChronicleNewEvents(&sim);
     }
+    if (json_report) PrintProductionJson(&sim, start_day, 0, fixture, dragon_policy, &nutrition, &smithy, &sites, route_open_days);
     for (int32_t year = 0; year < years; ++year) {
-        if (chronicle) {
+        if (json_report) {
+            for (int32_t day = 0; day < 365; ++day) {
+                CcSimAdvanceDaysWithProductionAccounting(&sim, 1, &nutrition, &smithy, &sites);
+                for (int32_t i = 0; i < sim.route_count; ++i)
+                    if (!sim.routes[i].closed) route_open_days[i]++;
+            }
+        } else if (chronicle) {
             /* Monthly scans: a busy year pushes more than the event ring
              * holds, so a yearly window would lose mid-year events. */
             for (int32_t month = 0; month < 12; ++month) {
-                CcSimAdvanceDays(&sim, month == 11 ? 35 : 30);
+                CcSimAdvanceDaysWithProductionAccounting(&sim, month == 11 ? 35 : 30,
+                    NULL, smithy_report ? &smithy : NULL, site_report ? &sites : NULL);
                 PrintChronicleNewEvents(&sim);
             }
         } else {
-            CcSimAdvanceDays(&sim, 365);
+            CcSimAdvanceDaysWithProductionAccounting(&sim, 365, NULL,
+                smithy_report ? &smithy : NULL, site_report ? &sites : NULL);
         }
         if (!CcSimValidate(&sim, error, sizeof(error))) {
             (void)fprintf(stderr, "validation failed in year %d: %s\n", year + 1, error);
-            if (detail) PrintSummary(&sim, true);
+            if (detail && !json_report) PrintSummary(&sim, true);
             return 1;
         }
         if (checkpoint_every > 0 && (year + 1) % checkpoint_every == 0 &&
@@ -334,13 +464,22 @@ int main(int argc, char **argv)
             (void)fprintf(stderr, "checkpoint failed: %s\n", error);
             return 1;
         }
-        if (chronicle) {
+        if (json_report) {
+            if (year == 0 || year + 1 == years || (year + 1) % report_every == 0)
+                PrintProductionJson(&sim, start_day, year + 1, fixture, dragon_policy, &nutrition, &smithy, &sites, route_open_days);
+        } else if (chronicle) {
             (void)printf("== year %d (day %d) ==\n", year + 1, sim.current_day);
             PrintChronicleNewEvents(&sim);
             PrintSummary(&sim, detail);
+            if (smithy_report) PrintSmithyAccounting(&sim, &smithy);
+            if (site_report) PrintRoadProduction(&sim, &sites);
+            if (site_freight_report) PrintSiteFreight(&sim);
         } else if (year == 0 || year + 1 == years ||
             (year + 1) % report_every == 0) {
             PrintSummary(&sim, detail);
+            if (smithy_report) PrintSmithyAccounting(&sim, &smithy);
+            if (site_report) PrintRoadProduction(&sim, &sites);
+            if (site_freight_report) PrintSiteFreight(&sim);
             (void)fflush(stdout);
         }
     }

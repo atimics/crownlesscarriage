@@ -42,8 +42,9 @@ def main():
         print("FAIL: expected at least one official delivering a stamped letter")
         return 1
 
-    # A small fixed cohort covers writers with plain diaries (#435).
-    diarist = run(binary, "--seed", "1", "--seeds", "8", "--years", "1",
+    # Select a plain diary writer directly; economic outcomes can change
+    # which role holds the most accounts in an unfiltered seed (#435).
+    diarist = run(binary, "--seed", "1", "--seeds", "1", "--years", "1", "--diary",
                   "--compare", "--max-accounts", "3").stdout
     if "carries no seal" not in diarist:
         print("FAIL: expected at least one unstamped diarist")

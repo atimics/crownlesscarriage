@@ -12,6 +12,7 @@
 #include "client/cc_visual_style.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_production.h"
 #include "sim/cc_mine.h"
 #include "story/cc_story.h"
 #include "world/cc_world.h"
@@ -266,6 +267,9 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_LODGE_ROAD_HOUSE,
     CONTEXT_ACTION_CAMP_ROAD_SITE,
     CONTEXT_ACTION_PASS_ROAD_SITE,
+    CONTEXT_ACTION_CLEAR_ROAD_SITE,
+    CONTEXT_ACTION_TRANSFER_ROAD_SITE,
+    CONTEXT_ACTION_REPAIR_ROAD_SITE,
     CONTEXT_ACTION_JUMP,
     CONTEXT_ACTION_RAISE_ALARM,
     CONTEXT_ACTION_SELECT_TARGET,
@@ -4513,6 +4517,39 @@ static ContextActionSet BuildContextActions(
 
     if (local->journey_travel_active) {
         const CcRoadSite *road_stop = CcSimJourneyRoadSiteStop(sim);
+        if (road_stop != NULL && !road_stop->accessible) {
+            bool tree = road_stop->blocker == CC_ROAD_SITE_BLOCKER_TREE;
+            AddDetailedContextAction(&set, CONTEXT_ACTION_CLEAR_ROAD_SITE,
+                tree ? "Clear fallen tree" : "Clear rocks", "",
+                tree ? "1 TOOL / USE 1 WOOD / 1 WATCH" : "USE 2 TOOLS / 2 WATCHES",
+                sim->player.cargo[CC_GOOD_TOOLS] >= (tree ? 1 : 2) &&
+                (!tree || sim->player.cargo[CC_GOOD_WOOD] >= 1), false);
+            set.items[set.count - 1].target = (CcInteractionKey){
+                sim->player.location_id, road_stop->id, CC_INTERACTION_ACTION};
+        }
+        if (road_stop != NULL && road_stop->accessible) {
+            if (road_stop->condition < 100) {
+                CcProductionReceipt repair = CcSimPlanRoadSiteRepair(sim, road_stop->id);
+                AddDetailedContextAction(&set, CONTEXT_ACTION_REPAIR_ROAD_SITE,
+                    "Repair site", "", "2 TOOLS / USE 1 TOOL + 1 WOOD / 2 WATCHES",
+                    repair.gate == CC_PRODUCTION_READY, false);
+                set.items[set.count - 1].target = (CcInteractionKey){
+                    sim->player.location_id, road_stop->id, CC_INTERACTION_ACTION};
+            }
+            for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+                for (int32_t direction = -1; direction <= 1; direction += 2) {
+                    int32_t held = direction > 0 ? sim->player.cargo[good] : road_stop->stock[good];
+                    if (held <= 0) continue;
+                    AddDetailedContextAction(&set, CONTEXT_ACTION_TRANSFER_ROAD_SITE,
+                        TextFormat("%s 1 %s", direction > 0 ? "Unload" : "Load", CcGoodName((CcGood)good)), "",
+                        TextFormat("STORE %d / CARRIAGE %d", road_stop->stock[good], sim->player.cargo[good]), true, false);
+                    ContextAction *action = &set.items[set.count - 1];
+                    action->good = (CcGood)good;
+                    action->amount = direction;
+                    action->target = (CcInteractionKey){sim->player.location_id, road_stop->id, CC_INTERACTION_ACTION};
+                }
+            }
+        }
         if (road_stop != NULL && road_stop == CcMineSite(sim) &&
             sim->journey.elapsed_subticks == CcMineBranchSubtick(sim)) {
             const CcRoute *route=CcSimRoute(sim,road_stop->route_id);
@@ -8591,6 +8628,22 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
 
+    if (context_action == CONTEXT_ACTION_TRANSFER_ROAD_SITE) {
+        CcCommand command = {.kind = CC_COMMAND_TRANSFER_ROAD_SITE,
+            .target_id = CcSimJourneyRoadSiteStop(sim) != NULL ? CcSimJourneyRoadSiteStop(sim)->id : 0,
+            .good = pressed_action.good, .amount = pressed_action.amount};
+        (void)ApplyCommand(*journal, sim, command, message, message_capacity);
+        return;
+    }
+    if (context_action == CONTEXT_ACTION_CLEAR_ROAD_SITE || context_action == CONTEXT_ACTION_REPAIR_ROAD_SITE) {
+        const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+        if (site != NULL) {
+            CcCommand command = {.kind = context_action == CONTEXT_ACTION_REPAIR_ROAD_SITE ?
+                CC_COMMAND_REPAIR_ROAD_SITE : CC_COMMAND_CLEAR_ROAD_SITE, .target_id = site->id};
+            (void)ApplyCommand(*journal, sim, command, message, message_capacity);
+        }
+        return;
+    }
     if (context_action == CONTEXT_ACTION_VISIT_MINE || context_action == CONTEXT_ACTION_PASS_ROAD_SITE) {
         const CcRoadSite *site=CcSimJourneyRoadSiteStop(sim);
         if(site != NULL) {

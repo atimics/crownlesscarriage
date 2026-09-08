@@ -176,6 +176,15 @@ static void CheckSharedDepartureAndRoadStop(void)
     CC_CHECK(CcCoopDecode(guest, bytes, length, error, sizeof(error)));
     CcCoopFree(bytes);
     CC_CHECK(CcSimHash(guest) == stopped && CcSimJourneyRoadSiteStop(guest) != NULL);
+    host->player.cargo[CC_GOOD_TOOLS] = 2;
+    host->player.cargo[CC_GOOD_WOOD] = 1;
+    CC_CHECK(CcCoopApply(host, "clear_road_site", site->id, 0, 0, error, sizeof(error)));
+    CC_CHECK(site->accessible);
+    CC_CHECK(CcCoopEncode(host, &bytes, &length, error, sizeof(error)));
+    CC_CHECK(CcCoopDecode(guest, bytes, length, error, sizeof(error)));
+    CcCoopFree(bytes);
+    CC_CHECK(CcSimHash(host) == CcSimHash(guest));
+    CC_CHECK(CcSimRoadSite(guest, site->id)->accessible);
     CC_CHECK(CcCoopApply(guest, "pass_road_site", site->id, 0, 0, error, sizeof(error)));
     int32_t before = host->carriage.progress_milli;
     CC_CHECK(CcCoopAdvance(host, 60, error, sizeof(error)));

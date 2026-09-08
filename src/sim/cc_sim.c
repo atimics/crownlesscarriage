@@ -1,5 +1,6 @@
 #include "sim/cc_sim.h"
 #include "sim/cc_mine.h"
+#include "sim/cc_production.h"
 
 #include "quest/cc_quest.h"
 
@@ -25,7 +26,13 @@ static void UpdateRoyalDiplomacy(CcSim *sim);
 static void AdvanceDragonCampaign(CcSim *sim);
 static void AdvanceHorseTeam(CcSim *sim);
 static void AdvanceRuins(CcSim *sim);
-static void PlanTrade(CcSim *sim);
+static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting);
+static void AdvanceSiteCarriages(CcSim *sim, CcRoadProductionAccounting *accounting);
+static bool IsSiteCarriage(const CcRoyalCarriage *carriage)
+{
+    return carriage != NULL && carriage->mode >= CC_ROYAL_CARRIAGE_SITE_TRAVELLING &&
+        carriage->mode <= CC_ROYAL_CARRIAGE_SITE_UNLOADING;
+}
 static int32_t SettlementSlotById(const CcSim *sim, CcId id);
 static int32_t CalculateDragonCrownStrength(const CcSim *sim);
 static bool DragonIsAliveAndUncrowned(const CcSim *sim);
@@ -1038,6 +1045,9 @@ const char *CcRoyalCarriageModeName(CcRoyalCarriageMode mode)
         case CC_ROYAL_CARRIAGE_REPOSITIONING: return "Seeking cargo";
         case CC_ROYAL_CARRIAGE_DELIVERING: return "Delivering";
         case CC_ROYAL_CARRIAGE_BLOCKED: return "Blocked";
+        case CC_ROYAL_CARRIAGE_SITE_TRAVELLING: return "Site delivery";
+        case CC_ROYAL_CARRIAGE_SITE_WAITING: return "Waiting at site road";
+        case CC_ROYAL_CARRIAGE_SITE_UNLOADING: return "Unloading at stop";
         case CC_ROYAL_CARRIAGE_WAITING_CAPACITY:
             return "Waiting for road space";
     }
@@ -1269,6 +1279,7 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_DRAGON_TERRITORY_LOST: return "CROWN BROKEN";
         case CC_EVENT_ROYAL_CARRIAGE_BLOCKED: return "BORDER BLOCK";
         case CC_EVENT_ROYAL_CARRIAGE_REROUTED: return "CARRIAGE ROUTE";
+        case CC_EVENT_ROAD_SITE_PRODUCTION: return "ROAD WORKS";
         case CC_EVENT_NOTICE_POSTED: return "NOTICE";
     }
     return "EVENT";
@@ -1878,6 +1889,45 @@ const char *CcDungeonReactionName(int32_t reaction)
     return "helpful for now";
 }
 
+static bool FreightEndpointProgress(const CcSim *sim, const CcRoute *route,
+                                    CcId endpoint_id, int32_t *progress)
+{
+    if (CcSimSettlement(sim, endpoint_id) != NULL) {
+        if (endpoint_id == route->from_id) { *progress = 0; return true; }
+        if (endpoint_id == route->to_id) { *progress = 1000; return true; }
+    }
+    const CcRoadSite *site = CcSimRoadSite(sim, endpoint_id);
+    if (site == NULL || site->route_id != route->id ||
+        site->progress_milli < 100 || site->progress_milli > 900) return false;
+    *progress = site->progress_milli;
+    return true;
+}
+
+bool CcSimFreightLeg(const CcSim *sim, CcId route_id, CcId origin_id,
+                     CcId destination_id, CcFreightLeg *leg)
+{
+    if (leg != NULL) *leg = (CcFreightLeg){0};
+    const CcRoute *route = CcSimRoute(sim, route_id);
+    int32_t origin = 0, destination = 0;
+    if (route == NULL || origin_id == destination_id ||
+        route->travel_days < 1 || route->travel_days > CC_SIM_MAX_ROUTE_DAYS ||
+        !FreightEndpointProgress(sim, route, origin_id, &origin) ||
+        !FreightEndpointProgress(sim, route, destination_id, &destination)) return false;
+    int32_t distance = origin > destination ? origin - destination : destination - origin;
+    int32_t days = (int32_t)(((int64_t)route->travel_days * distance + 999) / 1000);
+    if (days < 1) days = 1;
+    if (leg != NULL) *leg = (CcFreightLeg){route->id, origin_id, destination_id,
+        origin, destination, days};
+    return true;
+}
+
+int32_t CcSimFreightLegDays(const CcSim *sim, CcId route_id, CcId origin_id,
+                           CcId destination_id)
+{
+    CcFreightLeg leg;
+    return CcSimFreightLeg(sim, route_id, origin_id, destination_id, &leg) ? leg.travel_days : 0;
+}
+
 const CcRoute *CcSimRouteBetween(const CcSim *sim, CcId a, CcId b)
 {
     if (sim == NULL) return NULL;
@@ -2141,7 +2191,9 @@ static int32_t WarExtraConsumption(const CcSim *sim,
                                    const CcSettlement *place,
                                    CcGood good)
 {
-    if (!IsWarSeat(place)) return 0;
+    if (sim == NULL || !IsWarSeat(place)) return 0;
+    if (good != CC_GOOD_FOOD && good != CC_GOOD_TOOLS &&
+        (good != CC_GOOD_WOOL || sim->schema_version < 32U)) return 0;
     int32_t burden = CcSimWarBurdenAtSettlement(sim, place->id);
     if (burden < 20) return 0;
     if (good == CC_GOOD_FOOD) return MaximumI32(1, burden / 25);
@@ -2306,13 +2358,25 @@ static int32_t BakeryCapacity(const CcSettlement *place)
     return MaximumI32(0, place->production[CC_GOOD_BREAD]);
 }
 
+static void RecordRecipe(CcRecipeAccounting *accounting,
+    const CcProductionRecipe *recipe, const CcProductionReceipt *receipt)
+{
+    if (accounting == NULL) return;
+    accounting->gates[receipt->gate]++;
+    accounting->work += (uint64_t)receipt->work;
+    for (int32_t i = 0; i < recipe->input_count; ++i)
+        accounting->input[recipe->inputs[i].good] += (uint64_t)receipt->inputs[i];
+    if (!recipe->work_only) accounting->output[recipe->output] += (uint64_t)receipt->output;
+}
+
 static int32_t RunBakery(CcSim *sim, CcSettlement *place,
-                         CcId scriptorium_id)
+                         CcId scriptorium_id, CcRecipeAccounting *accounting)
 {
     int32_t capacity = BakeryCapacity(place);
-    if (capacity <= 0 || place->stock[CC_GOOD_WHEAT] <= 0) return 0;
-    if (place->hunger > 65) capacity = capacity * 72 / 100;
-    else if (place->hunger > 35) capacity = capacity * 86 / 100;
+    if (capacity <= 0 || place->stock[CC_GOOD_WHEAT] <= 0) {
+        if (accounting != NULL) accounting->gates[capacity <= 0 ? CC_PRODUCTION_CAPACITY : CC_PRODUCTION_INPUT]++;
+        return 0;
+    }
     int32_t grain_floor = 0;
     if (scriptorium_id != 0U && place->id == scriptorium_id &&
         place->hunger == 0 &&
@@ -2322,14 +2386,21 @@ static int32_t RunBakery(CcSim *sim, CcSettlement *place,
             place->reserve_target[CC_GOOD_WHEAT],
             WeeklyFoodUse(sim, place) * 2 + sim->archives.scribes * 2);
     }
-    int32_t baked = MinimumI32(
-        capacity, MaximumI32(
-            0, place->stock[CC_GOOD_WHEAT] - grain_floor));
-    baked = MinimumI32(baked,
-                       CC_SIM_MAX_UNITS - place->stock[CC_GOOD_BREAD]);
+    const CcProductionRecipe recipe = {
+        .output = CC_GOOD_BREAD, .output_units = 1, .input_count = 1,
+        .inputs = {{CC_GOOD_WHEAT, 1, grain_floor}}, .work_per_batch = 1,
+        .hunger_soft_limit = 35, .hunger_hard_limit = 65,
+        .hunger_soft_percent = 86, .hunger_hard_percent = 72
+    };
+    const CcProductionContext context = {
+        .producer_id = place->id, .storage_id = place->id, .location_id = place->id,
+        .stock = place->stock, .capacity = capacity, .output_limit = CC_SIM_MAX_UNITS,
+        .work_available = capacity, .condition = 100, .hunger = place->hunger, .enabled = true
+    };
+    CcProductionReceipt receipt = CcProductionRun(&recipe, &context);
+    RecordRecipe(accounting, &recipe, &receipt);
+    int32_t baked = receipt.output;
     if (baked <= 0) return 0;
-    place->stock[CC_GOOD_WHEAT] -= baked;
-    place->stock[CC_GOOD_BREAD] += baked;
     if (sim->current_day % 28 == 0) {
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(text, sizeof(text),
@@ -4582,6 +4653,10 @@ void CcSimInit(CcSim *sim, uint32_t seed)
                    map_x, map_y, 1280, 46, 45);
     sim->settlement_count = CC_MAX_SETTLEMENTS;
     ConfigureSettlementEconomies(sim);
+    /* New Silverwick worlds have a small local tool forge. Set this after
+       randomized economy setup to preserve the generator's random stream.
+       Saved capacities remain authoritative during upgrades. */
+    sim->settlements[3].production[CC_GOOD_TOOLS] = 2;
     CcSimInitializeWoodEconomy(sim);
     CcSimInitializeStoneEconomy(sim);
     CcSimInitializePaperEconomy(sim);
@@ -5006,6 +5081,39 @@ static bool FindArchiveVolumesToBind(const CcSim *sim, int32_t slots[4])
     return true;
 }
 
+static CcProductionReceipt RunTreasureWork(const CcSim *sim,
+    const CcSettlement *settlement, int32_t *stock)
+{
+    if (sim == NULL || settlement == NULL || settlement->treasure_work < 0 ||
+        settlement->treasure_work > 3)
+        return (CcProductionReceipt){.gate = CC_PRODUCTION_INVALID, .blocked_good = CC_GOOD_COUNT};
+    bool starting = settlement->treasure_work == 0;
+    CcProductionRecipe recipe = {
+        .output = CC_GOOD_COUNT, .output_units = 1, .work_only = true,
+        .input_count = starting ? 2 : 0,
+        .inputs = {{CC_GOOD_GOLD, 1, 0}, {CC_GOOD_GEMS, 1, 0}},
+        .work_per_batch = 1, .hunger_soft_limit = 100, .hunger_hard_limit = 100
+    };
+    CcProductionContext context = {
+        .producer_id = settlement->id, .storage_id = settlement->id,
+        .location_id = settlement->id, .stock = stock, .capacity = 1,
+        .output_limit = 1, .work_available = 3 - settlement->treasure_work,
+        .condition = 100,
+        .enabled = CcSettlementHasService(settlement, CC_SERVICE_SMITHY) &&
+            (settlement->function == CC_SETTLEMENT_MARKET || settlement->function == CC_SETTLEMENT_CAPITAL)
+    };
+    return CcProductionRun(&recipe, &context);
+}
+
+CcProductionReceipt CcSimPlanTreasureWork(const CcSim *sim, const CcSettlement *settlement)
+{
+    if (settlement == NULL)
+        return (CcProductionReceipt){.gate = CC_PRODUCTION_INVALID, .blocked_good = CC_GOOD_COUNT};
+    int32_t stock[CC_GOOD_COUNT];
+    memcpy(stock, settlement->stock, sizeof(stock));
+    return RunTreasureWork(sim, settlement, stock);
+}
+
 static void CompleteTreasure(CcSim *sim, CcSettlement *settlement)
 {
     CcTreasure *treasure = AllocateTreasure(sim);
@@ -5052,6 +5160,9 @@ const char *CcSmithyStatusName(CcSmithyStatus status)
         case CC_SMITHY_RESERVE_MET: return "Reserve target met";
         case CC_SMITHY_IRON_REQUIRED: return "Iron required";
         case CC_SMITHY_WOOD_REQUIRED: return "Wood required";
+        case CC_SMITHY_ABANDONED: return "Workers required";
+        case CC_SMITHY_REPAIRS_REQUIRED: return "Fire repairs required";
+        case CC_SMITHY_STATUS_COUNT: break;
     }
     return "Unknown smithy state";
 }
@@ -5067,60 +5178,93 @@ static CcSmithyStatus SmithyLineStatus(int32_t capacity, int32_t gap,
     return CC_SMITHY_READY;
 }
 
-CcSmithyPlan CcSimPlanSmithy(const CcSim *sim,
-                            const CcSettlement *settlement)
+static CcSmithyPlan RunSmithyRecipes(const CcSim *sim,
+                                    const CcSettlement *settlement, int32_t *stock)
 {
     CcSmithyPlan plan = {0};
     plan.tools_status = CC_SMITHY_SERVICE_UNAVAILABLE;
     plan.weapons_status = CC_SMITHY_SERVICE_UNAVAILABLE;
     if (sim == NULL || settlement == NULL ||
         !CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) return plan;
+    if (sim->schema_version >= 61U &&
+        (CcSettlementIsAbandoned(settlement) || settlement->fire_damage >= 100)) {
+        plan.tools_status = CcSettlementIsAbandoned(settlement) ?
+            CC_SMITHY_ABANDONED : CC_SMITHY_REPAIRS_REQUIRED;
+        plan.weapons_status = plan.tools_status;
+        return plan;
+    }
     bool legacy_smithy = sim->schema_version < 27U;
-    int32_t iron = settlement->stock[CC_GOOD_IRON];
-    int32_t wood = settlement->stock[CC_GOOD_WOOD];
-    int32_t tool_gap = MaximumI32(0, settlement->reserve_target[CC_GOOD_TOOLS] * 2 -
-                                     settlement->stock[CC_GOOD_TOOLS]);
-    int32_t tool_capacity = MaximumI32(0, settlement->production[CC_GOOD_TOOLS]);
-    int32_t tool_material = iron / 2;
-    if (!legacy_smithy) tool_material = MinimumI32(tool_material, wood);
-    plan.tools_status = SmithyLineStatus(tool_capacity, tool_gap, iron, wood,
-                                         2, legacy_smithy ? 0 : 1);
-    plan.tools_made = MinimumI32(tool_capacity, MinimumI32(tool_gap, tool_material));
-    iron -= plan.tools_made * 2;
-    if (!legacy_smithy) wood -= plan.tools_made;
-
-    int32_t weapon_gap = MaximumI32(0,
-        EffectiveReserveTarget(sim, settlement, CC_GOOD_WEAPONS) * 2 -
-        settlement->stock[CC_GOOD_WEAPONS]);
-    int32_t weapon_capacity = MaximumI32(0, settlement->production[CC_GOOD_WEAPONS]);
-    int32_t weapon_material = iron / 3;
-    if (!legacy_smithy) weapon_material = MinimumI32(weapon_material, wood / 2);
-    plan.weapons_status = SmithyLineStatus(weapon_capacity, weapon_gap, iron, wood,
-                                           3, legacy_smithy ? 0 : 2);
-    plan.weapons_made = MinimumI32(weapon_capacity,
-                                  MinimumI32(weapon_gap, weapon_material));
-    plan.iron_used = plan.tools_made * 2 + plan.weapons_made * 3;
-    plan.wood_used = legacy_smithy ? 0 : plan.tools_made + plan.weapons_made * 2;
+    CcProductionRecipe recipe = {
+        .output = CC_GOOD_TOOLS, .output_units = 1,
+        .input_count = legacy_smithy ? 1 : 2,
+        .inputs = {{CC_GOOD_IRON, 2, 0}, {CC_GOOD_WOOD, 1, 0}},
+        .work_per_batch = 1, .hunger_soft_limit = 100, .hunger_hard_limit = 100
+    };
+    CcProductionContext context = {
+        .producer_id = settlement->id, .storage_id = settlement->id,
+        .location_id = settlement->id, .stock = stock,
+        .capacity = MaximumI32(0, settlement->production[CC_GOOD_TOOLS]),
+        .output_limit = settlement->reserve_target[CC_GOOD_TOOLS] * 2,
+        .work_available = INT32_MAX, .condition = 100, .enabled = true
+    };
+    plan.tools_status = SmithyLineStatus(context.capacity,
+        context.output_limit - stock[CC_GOOD_TOOLS], stock[CC_GOOD_IRON],
+        stock[CC_GOOD_WOOD], 2, legacy_smithy ? 0 : 1);
+    CcProductionReceipt tools = CcProductionRun(&recipe, &context);
+    recipe.output = CC_GOOD_WEAPONS;
+    recipe.inputs[0].units = 3;
+    recipe.inputs[1].units = 2;
+    context.capacity = MaximumI32(0, settlement->production[CC_GOOD_WEAPONS]);
+    context.output_limit = EffectiveReserveTarget(sim, settlement, CC_GOOD_WEAPONS) * 2;
+    plan.weapons_status = SmithyLineStatus(context.capacity,
+        context.output_limit - stock[CC_GOOD_WEAPONS], stock[CC_GOOD_IRON],
+        stock[CC_GOOD_WOOD], 3, legacy_smithy ? 0 : 2);
+    CcProductionReceipt weapons = CcProductionRun(&recipe, &context);
+    plan.tools_made = tools.output;
+    plan.weapons_made = weapons.output;
+    plan.iron_used = tools.inputs[0] + weapons.inputs[0];
+    plan.wood_used = tools.inputs[1] + weapons.inputs[1];
     return plan;
 }
 
-static void RunSmithy(CcSim *sim, CcSettlement *settlement)
+CcSmithyPlan CcSimPlanSmithy(const CcSim *sim, const CcSettlement *settlement)
 {
-    if (!CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) return;
-    bool legacy_smithy = sim->schema_version < 27U;
+    int32_t stock[CC_GOOD_COUNT] = {0};
+    if (settlement != NULL) memcpy(stock, settlement->stock, sizeof(stock));
+    return RunSmithyRecipes(sim, settlement, stock);
+}
+
+static void RunSmithy(CcSim *sim, CcSettlement *settlement,
+                       CcTownSmithyAccounting *accounting, CcTownProductionAccounting *ledger)
+{
     int32_t iron_before = settlement->stock[CC_GOOD_IRON];
     int32_t wood_before = settlement->stock[CC_GOOD_WOOD];
-    CcSmithyPlan plan = CcSimPlanSmithy(sim, settlement);
+    CcSmithyPlan plan = RunSmithyRecipes(sim, settlement, settlement->stock);
+    if (accounting != NULL) {
+        accounting->settlement_id = settlement->id;
+        accounting->tools_status[plan.tools_status]++;
+        accounting->weapons_status[plan.weapons_status]++;
+        accounting->tools_made += (uint64_t)plan.tools_made;
+        accounting->weapons_made += (uint64_t)plan.weapons_made;
+        accounting->iron_used += (uint64_t)plan.iron_used;
+        accounting->wood_used += (uint64_t)plan.wood_used;
+    }
+    if (!CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) {
+        if (ledger != NULL) ledger->treasure.gates[CC_PRODUCTION_CLOSED]++;
+        return;
+    }
+    bool legacy_smithy = sim->schema_version < 27U;
     int32_t tools_made = plan.tools_made;
     int32_t weapons_made = plan.weapons_made;
-    settlement->stock[CC_GOOD_IRON] -= plan.iron_used;
-    settlement->stock[CC_GOOD_WOOD] -= plan.wood_used;
-    settlement->stock[CC_GOOD_TOOLS] += tools_made;
-    settlement->stock[CC_GOOD_WEAPONS] += weapons_made;
 
+    int32_t tools_before_wear = settlement->stock[CC_GOOD_TOOLS];
     int32_t smith_batches = tools_made + weapons_made;
     for (int32_t batch = 0; batch < smith_batches; ++batch) {
         WearOneTool(settlement, &settlement->smith_tool_wear, 4);
+    }
+    if (accounting != NULL) {
+        accounting->tools_worn += (uint64_t)(tools_before_wear -
+                                             settlement->stock[CC_GOOD_TOOLS]);
     }
     if (smith_batches > 0) {
         char text[CC_EVENT_TEXT_CAPACITY];
@@ -5147,74 +5291,84 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement)
 
     bool treasure_town = settlement->function == CC_SETTLEMENT_MARKET ||
                          settlement->function == CC_SETTLEMENT_CAPITAL;
-    if (!treasure_town) return;
-    if (settlement->treasure_work == 0 &&
-        settlement->stock[CC_GOOD_GOLD] >= 1 &&
-        settlement->stock[CC_GOOD_GEMS] >= 1) {
-        settlement->stock[CC_GOOD_GOLD] -= 1;
-        settlement->stock[CC_GOOD_GEMS] -= 1;
-        settlement->treasure_gold_committed = 1;
-        settlement->treasure_gems_committed = 1;
-        settlement->treasure_work = 1;
-    } else if (settlement->treasure_work > 0 &&
-               settlement->treasure_work < 3) {
-        settlement->treasure_work += 1;
+    if (!treasure_town) {
+        if (ledger != NULL) ledger->treasure.gates[CC_PRODUCTION_CLOSED]++;
+        return;
+    }
+    CcProductionReceipt craft = RunTreasureWork(sim, settlement, settlement->stock);
+    if (ledger != NULL) {
+        ledger->treasure.gates[craft.gate]++;
+        ledger->treasure.input[CC_GOOD_GOLD] += (uint64_t)craft.inputs[0];
+        ledger->treasure.input[CC_GOOD_GEMS] += (uint64_t)craft.inputs[1];
+        ledger->treasure.work += (uint64_t)craft.work;
+    }
+    if (craft.gate == CC_PRODUCTION_READY) {
+        if (settlement->treasure_work == 0) {
+            settlement->treasure_gold_committed = craft.inputs[0];
+            settlement->treasure_gems_committed = craft.inputs[1];
+        }
+        settlement->treasure_work += craft.work;
     }
     if (settlement->treasure_work >= 3 &&
         sim->treasure_count < CC_MAX_TREASURES) {
         CompleteTreasure(sim, settlement);
+        if (ledger != NULL && settlement->treasure_work == 0) ledger->treasures_completed++;
     }
 }
 
-static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
+static void RunPaperMill(CcSim *sim, CcSettlement *settlement, CcRecipeAccounting *accounting)
 {
-    if (sim == NULL || sim->schema_version < 33U) return;
-    if (sim->schema_version < 34U) {
-        int32_t capacity = MaximumI32(
-            0, settlement->production[CC_GOOD_PAPER]);
-        int32_t gap = MaximumI32(
-            0, settlement->reserve_target[CC_GOOD_PAPER] * 2 -
-               settlement->stock[CC_GOOD_PAPER]);
-        int32_t wood_available = MaximumI32(
-            0, settlement->stock[CC_GOOD_WOOD] -
-               settlement->reserve_target[CC_GOOD_WOOD]);
-        int32_t paper_made = MinimumI32(
-            capacity, MinimumI32(gap, wood_available * 4));
-        if (paper_made <= 0) return;
-        int32_t wood_used = (paper_made + 3) / 4;
-        settlement->stock[CC_GOOD_WOOD] -= wood_used;
-        settlement->stock[CC_GOOD_PAPER] += paper_made;
+    if (sim == NULL || sim->schema_version < 33U) {
+        if (accounting != NULL) accounting->gates[CC_PRODUCTION_CLOSED]++;
+        return;
+    }
+    bool legacy = sim->schema_version < 34U;
+    if (!legacy && (!CcSettlementHasService(settlement, CC_SERVICE_MILL) ||
+        settlement->hunger > 0 || settlement->stock[CC_GOOD_TOOLS] <= 0)) {
+        if (accounting != NULL) accounting->gates[!CcSettlementHasService(settlement, CC_SERVICE_MILL) ?
+            CC_PRODUCTION_CLOSED : settlement->hunger > 0 ? CC_PRODUCTION_CAPACITY : CC_PRODUCTION_TOOLS]++;
+        return;
+    }
+    /* Keep mill work behind the town's food buffer, across all edible goods. */
+    if (sim->schema_version >= 37U &&
+        NutritionRations(settlement->stock, CC_NUTRITION_CIVILIAN) <
+            WeeklyFoodUse(sim, settlement) * 4) {
+        if (accounting != NULL) accounting->gates[CC_PRODUCTION_INPUT]++;
+        return;
+    }
+    int32_t capacity = MaximumI32(0, settlement->production[CC_GOOD_PAPER]);
+    CcGood input = !legacy && sim->schema_version < 37U ?
+        CC_GOOD_WHEAT : CC_GOOD_WOOD;
+    int32_t protected_input = settlement->reserve_target[input];
+    if (input == CC_GOOD_WHEAT) protected_input += WeeklyFoodUse(sim, settlement) * 4;
+    const CcProductionRecipe recipe = {
+        .output = CC_GOOD_PAPER, .output_units = 4, .allow_partial_output = true,
+        .input_count = 1, .inputs = {{input, 1, protected_input}},
+        .work_per_batch = 1, .tools_required = legacy ? 0 : 1,
+        .hunger_soft_limit = 100, .hunger_hard_limit = 100
+    };
+    int64_t capacity_limit = (int64_t)settlement->stock[CC_GOOD_PAPER] + capacity;
+    const CcProductionContext context = {
+        .producer_id = settlement->id, .storage_id = settlement->id,
+        .location_id = settlement->id, .stock = settlement->stock,
+        .capacity = capacity / 4 + (capacity % 4 != 0),
+        .output_limit = MinimumI32(settlement->reserve_target[CC_GOOD_PAPER] * 2,
+            capacity_limit > INT32_MAX ? INT32_MAX : (int32_t)capacity_limit),
+        .work_available = INT32_MAX, .condition = 100, .enabled = true
+    };
+    CcProductionReceipt receipt = CcProductionRun(&recipe, &context);
+    RecordRecipe(accounting, &recipe, &receipt);
+    int32_t paper_made = receipt.output;
+    if (paper_made <= 0) return;
+    int32_t input_used = receipt.inputs[0];
+    if (legacy) {
         RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_WOOD);
         RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
         return;
     }
-    if (!CcSettlementHasService(settlement, CC_SERVICE_MILL) ||
-        settlement->hunger > 0 ||
-        settlement->stock[CC_GOOD_TOOLS] <= 0) return;
-    /* Keep mill work behind the town's food buffer, across all edible goods. */
-    if (sim->schema_version >= 37U &&
-        NutritionRations(settlement->stock, CC_NUTRITION_CIVILIAN) <
-            WeeklyFoodUse(sim, settlement) * 4) return;
-    int32_t capacity = MaximumI32(
-        0, settlement->production[CC_GOOD_PAPER]);
-    int32_t gap = MaximumI32(
-        0, settlement->reserve_target[CC_GOOD_PAPER] * 2 -
-           settlement->stock[CC_GOOD_PAPER]);
-    CcGood input = sim->schema_version < 37U ?
-        CC_GOOD_WHEAT : CC_GOOD_WOOD;
-    int32_t protected_input = settlement->reserve_target[input];
-    if (input == CC_GOOD_WHEAT) {
-        protected_input += WeeklyFoodUse(sim, settlement) * 4;
-    }
-    int32_t input_available = MaximumI32(
-        0, settlement->stock[input] - protected_input);
-    int32_t paper_made = MinimumI32(
-        capacity, MinimumI32(gap, input_available * 4));
-    if (paper_made <= 0) return;
-    int32_t input_used = (paper_made + 3) / 4;
-    settlement->stock[input] -= input_used;
-    settlement->stock[CC_GOOD_PAPER] += paper_made;
+    int32_t tools_before = settlement->stock[CC_GOOD_TOOLS];
     WearOneTool(settlement, &settlement->paper_tool_wear, 8);
+    if (accounting != NULL) accounting->tools_worn += (uint64_t)(tools_before - settlement->stock[CC_GOOD_TOOLS]);
     RefreshSettlementGoodPrice(sim, settlement, input);
     RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
     RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_TOOLS);
@@ -5279,7 +5433,36 @@ static void AdvanceServiceProjects(CcSim *sim)
     }
 }
 
-static int32_t AdvanceCowHerd(CcSim *sim, CcSettlement *settlement)
+/* Record physical feed units at the animal meal, before any herd output. */
+static int32_t ConsumeHerdFeed(CcSettlement *settlement, int32_t required,
+                               bool legacy_bread, CcHerdAccounting *accounting)
+{
+    int32_t before[CC_GOOD_COUNT];
+    if (accounting != NULL) memcpy(before, settlement->stock, sizeof(before));
+    int32_t eaten;
+    if (legacy_bread) {
+        eaten = MinimumI32(required, settlement->stock[CC_GOOD_BREAD]);
+        settlement->stock[CC_GOOD_BREAD] -= eaten;
+    } else {
+        eaten = CcNutritionConsume(settlement->stock, CC_NUTRITION_ANIMAL,
+            required * CC_NUTRITION_PER_RATION) / CC_NUTRITION_PER_RATION;
+    }
+    if (accounting != NULL) {
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
+            accounting->feed[good] += (uint64_t)(before[good] - settlement->stock[good]);
+    }
+    return eaten;
+}
+
+static void RecordHerdOutput(CcHerdAccounting *accounting, CcGood good,
+                              int32_t wanted, int32_t stored)
+{
+    if (accounting == NULL) return;
+    accounting->output[good] += (uint64_t)stored;
+    accounting->cap_loss[good] += (uint64_t)(wanted - stored);
+}
+
+static int32_t AdvanceCowHerd(CcSim *sim, CcSettlement *settlement, CcHerdAccounting *accounting)
 {
     if (sim->schema_version < 14U) return 0;
     if (!CcSettlementHasService(settlement, CC_SERVICE_FARM)) return 0;
@@ -5287,17 +5470,8 @@ static int32_t AdvanceCowHerd(CcSim *sim, CcSettlement *settlement)
     if (herd <= 0) return 0;
 
     int32_t feed_required = MaximumI32(1, (herd + 11) / 12);
-    int32_t feed_eaten;
-    if (sim->schema_version < 29U) {
-        feed_eaten = MinimumI32(
-            feed_required, settlement->stock[CC_GOOD_BREAD]);
-        settlement->stock[CC_GOOD_BREAD] -= feed_eaten;
-    } else {
-        feed_eaten = CcNutritionConsume(
-            settlement->stock, CC_NUTRITION_ANIMAL,
-            feed_required * CC_NUTRITION_PER_RATION) /
-            CC_NUTRITION_PER_RATION;
-    }
+    int32_t feed_eaten = ConsumeHerdFeed(
+        settlement, feed_required, sim->schema_version < 29U, accounting);
     int32_t feed_shortfall = feed_required - feed_eaten;
     if (feed_shortfall > 0) {
         settlement->cow_hunger = ClampI32(
@@ -5347,6 +5521,7 @@ static int32_t AdvanceCowHerd(CcSim *sim, CcSettlement *settlement)
             int32_t beef = MinimumI32(
                 4, CC_SIM_MAX_UNITS - settlement->stock[CC_GOOD_MEAT]);
             settlement->stock[CC_GOOD_MEAT] += beef;
+            RecordHerdOutput(accounting, CC_GOOD_MEAT, 4, beef);
             (void)snprintf(
                 text, sizeof(text),
                 "%s slaughters one cow after the herd's fodder runs short; %d Meat enters the local store as beef.",
@@ -5357,6 +5532,7 @@ static int32_t AdvanceCowHerd(CcSim *sim, CcSettlement *settlement)
                 beef, text);
         } else {
             settlement->stock[CC_GOOD_FOOD] += 4;
+            RecordHerdOutput(accounting, CC_GOOD_FOOD, 4, 4);
             (void)snprintf(
                 text, sizeof(text),
                 "%s slaughters one cow after the herd's fodder runs short; 4 Food enters the local store.",
@@ -5410,7 +5586,7 @@ static void RecordSheepCull(CcSim *sim, CcSettlement *settlement,
         0U, meat, text);
 }
 
-static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
+static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement, CcHerdAccounting *accounting)
 {
     if (sim->schema_version < 32U ||
         !CcSettlementHasService(settlement, CC_SERVICE_FARM)) return;
@@ -5419,10 +5595,7 @@ static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
 
     if (IsWinter(sim)) {
         int32_t feed_required = MaximumI32(1, (flock + 23) / 24);
-        int32_t feed_eaten = CcNutritionConsume(
-            settlement->stock, CC_NUTRITION_ANIMAL,
-            feed_required * CC_NUTRITION_PER_RATION) /
-            CC_NUTRITION_PER_RATION;
+        int32_t feed_eaten = ConsumeHerdFeed(settlement, feed_required, false, accounting);
         int32_t feed_shortfall = feed_required - feed_eaten;
         if (feed_shortfall > 0) {
             settlement->sheep_hunger = ClampI32(
@@ -5445,9 +5618,11 @@ static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
     int32_t year_day = sim->current_day % 364;
     if (year_day == 91 && settlement->sheep_adults > 0) {
         int32_t wool = MaximumI32(1, settlement->sheep_adults / 4);
+        int32_t wanted_wool = wool;
         wool = MinimumI32(
             wool, CC_SIM_MAX_UNITS - settlement->stock[CC_GOOD_WOOL]);
         settlement->stock[CC_GOOD_WOOL] += wool;
+        RecordHerdOutput(accounting, CC_GOOD_WOOL, wanted_wool, wool);
         if (wool > 0) {
             char text[CC_EVENT_TEXT_CAPACITY];
             (void)snprintf(
@@ -5491,6 +5666,7 @@ static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
         planned = MinimumI32(planned, settlement->sheep_adults - 8);
         settlement->sheep_adults -= planned;
         int32_t meat = StoreMutton(settlement, planned);
+        RecordHerdOutput(accounting, CC_GOOD_MEAT, planned * 2, meat);
         RecordSheepCull(
             sim, settlement, planned, meat, "in the autumn cull");
     }
@@ -5499,6 +5675,7 @@ static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
         settlement->sheep_adults > 0) {
         settlement->sheep_adults -= 1;
         int32_t meat = StoreMutton(settlement, 1);
+        RecordHerdOutput(accounting, CC_GOOD_MEAT, 2, meat);
         settlement->sheep_hunger = ClampI32(
             settlement->sheep_hunger - 14, 0, 100);
         RecordSheepCull(
@@ -5511,7 +5688,7 @@ static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
    tracks fodder the town chose not to spend rather than the season. Foals
    mature on the same quarter the mares are put to stud; 112 is a whole
    number of weeks, so that day is never stepped over. */
-static void AdvancePonyHerd(CcSim *sim, CcSettlement *settlement)
+static void AdvancePonyHerd(CcSim *sim, CcSettlement *settlement, CcHerdAccounting *accounting)
 {
     if (sim->schema_version < 51U ||
         (!CcSettlementHasService(settlement, CC_SERVICE_FARM) &&
@@ -5520,9 +5697,7 @@ static void AdvancePonyHerd(CcSim *sim, CcSettlement *settlement)
     if (herd <= 0) return;
 
     int32_t feed_required = MaximumI32(1, (herd + 7) / 8);
-    int32_t feed_eaten = CcNutritionConsume(
-        settlement->stock, CC_NUTRITION_ANIMAL,
-        feed_required * CC_NUTRITION_PER_RATION) / CC_NUTRITION_PER_RATION;
+    int32_t feed_eaten = ConsumeHerdFeed(settlement, feed_required, false, accounting);
     int32_t feed_shortfall = feed_required - feed_eaten;
     if (feed_shortfall > 0) {
         settlement->pony_hunger = ClampI32(
@@ -5812,20 +5987,31 @@ static void ReleaseAbandonedCamps(CcSim *sim)
 
 static void UpdateSettlement(CcSim *sim, int32_t index,
                              CcId scriptorium_id,
-                             CcTownNutritionAccounting *accounting)
+                             CcTownNutritionAccounting *accounting,
+                             CcTownSmithyAccounting *smithy, CcTownProductionAccounting *ledger)
 {
     CcSettlement *settlement = &sim->settlements[index];
+    if (ledger != NULL) {
+        ledger->settlement_id = settlement->id;
+        if (CcSettlementIsAbandoned(settlement)) ledger->inactive_weeks++;
+        else ledger->active_weeks++;
+    }
     if (CcSettlementIsAbandoned(settlement)) return;
     if (accounting != NULL) accounting->settlement_id = settlement->id;
     int32_t produced[CC_GOOD_COUNT] = {0};
-    int32_t cow_output = AdvanceCowHerd(sim, settlement);
-    AdvanceSheepFlock(sim, settlement);
-    AdvancePonyHerd(sim, settlement);
+    int32_t cow_output = AdvanceCowHerd(sim, settlement, ledger != NULL ? &ledger->cows : NULL);
+    AdvanceSheepFlock(sim, settlement, ledger != NULL ? &ledger->sheep : NULL);
+    AdvancePonyHerd(sim, settlement, ledger != NULL ? &ledger->ponies : NULL);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         int32_t production = EffectiveProduction(sim, settlement, index, (CcGood)good);
         produced[good] = production;
         if ((CcGood)good == CC_GOOD_IRON) {
             settlement->iron_deposit -= production;
+        }
+        if (ledger != NULL) {
+            int32_t received = MinimumI32(production, CC_SIM_MAX_UNITS - settlement->stock[good]);
+            ledger->primary_output[good] += (uint64_t)received;
+            ledger->primary_cap_loss[good] += (uint64_t)(production - received);
         }
         int64_t replenished = (int64_t)settlement->stock[good] +
                               (int64_t)production;
@@ -5840,14 +6026,21 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
             CC_SIM_MAX_UNITS - settlement->stock[CC_GOOD_BREAD]);
         settlement->stock[CC_GOOD_BREAD] += cow_bread;
         produced[CC_GOOD_BREAD] += cow_bread;
+        RecordHerdOutput(ledger != NULL ? &ledger->cows : NULL,
+            CC_GOOD_BREAD, cow_output, cow_bread);
     }
     produced[CC_GOOD_BREAD] += RunBakery(
-        sim, settlement, scriptorium_id);
+        sim, settlement, scriptorium_id, ledger != NULL ? &ledger->bakery : NULL);
 
     int32_t food_required = MaximumI32(
         1, WeeklyFoodUse(sim, settlement)) * CC_NUTRITION_PER_RATION;
     int32_t food_eaten = sim->schema_version >= 32U ?
         MinimumI32(food_required, cow_output) : 0;
+    if (ledger != NULL && sim->schema_version >= 32U) {
+        ledger->dairy_nutrition += (uint64_t)cow_output;
+        ledger->dairy_used += (uint64_t)food_eaten;
+        ledger->dairy_unused += (uint64_t)(cow_output - food_eaten);
+    }
     int32_t before_eating[CC_GOOD_COUNT];
     if (accounting != NULL) {
         memcpy(before_eating, settlement->stock, sizeof(before_eating));
@@ -5877,6 +6070,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         RefreshSettlementGoodPrice(sim, settlement, (CcGood)good);
     }
+    int32_t primary_tools_before = settlement->stock[CC_GOOD_TOOLS];
     CcGood farm_output = sim->schema_version < 29U ?
         CC_GOOD_BREAD : CC_GOOD_WHEAT;
     if (produced[farm_output] > 0 &&
@@ -5885,7 +6079,13 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         WearOneTool(settlement, &settlement->farm_tool_wear, 4);
     }
     if (produced[CC_GOOD_IRON] > 0) {
+        int32_t before_gold = settlement->stock[CC_GOOD_GOLD];
+        int32_t before_gems = settlement->stock[CC_GOOD_GEMS];
         AdvanceRareMineWork(sim, settlement, produced[CC_GOOD_IRON]);
+        if (ledger != NULL) {
+            ledger->rare_mine_output[CC_GOOD_GOLD] += (uint64_t)(settlement->stock[CC_GOOD_GOLD] - before_gold);
+            ledger->rare_mine_output[CC_GOOD_GEMS] += (uint64_t)(settlement->stock[CC_GOOD_GEMS] - before_gems);
+        }
         WearOneTool(settlement, &settlement->mine_tool_wear, 3);
     }
     if (produced[CC_GOOD_WOOD] > 0 && sim->current_day % 84 == 0) {
@@ -5903,6 +6103,8 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
             LatestLocalCause(sim, settlement->id),
             produced[CC_GOOD_WOOD], text);
     }
+    if (ledger != NULL) ledger->primary_tools_worn +=
+        (uint64_t)(primary_tools_before - settlement->stock[CC_GOOD_TOOLS]);
     if (produced[CC_GOOD_STONE] > 0 && sim->current_day % 28 == 0) {
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(
@@ -5915,8 +6117,8 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
             produced[CC_GOOD_STONE], text);
     }
     MaintainSettlementStonework(sim, settlement);
-    RunSmithy(sim, settlement);
-    RunPaperMill(sim, settlement);
+    RunSmithy(sim, settlement, smithy, ledger);
+    RunPaperMill(sim, settlement, ledger != NULL ? &ledger->paper : NULL);
     int32_t war_burden = CcSimWarBurdenAtSettlement(sim, settlement->id);
     if (IsWarSeat(settlement) && war_burden >= 50 &&
         sim->current_day % 14 == 0 &&
@@ -6475,10 +6677,10 @@ void CcGossipText(const CcSim *sim, const CcGossip *story,
 static void HearGossip(CcSim *sim, CcGossip *story, CcId place_id,
                         CcId parent_id, const char *speaker, CcGossipVersion version)
 {
-    const CcSettlement *scriptorium = Scriptorium(sim);
     if (story->heard_day > 0 || story->recorded ||
-        (sim->schema_version < 58U && sim->archives.scribes <= 0) ||
-        scriptorium == NULL || scriptorium->id != place_id) return;
+        (sim->schema_version < 58U && sim->archives.scribes <= 0)) return;
+    const CcSettlement *scriptorium = Scriptorium(sim);
+    if (scriptorium == NULL || scriptorium->id != place_id) return;
     story->heard_day = sim->current_day;
     story->heard = version;
     (void)snprintf(story->heard_from, sizeof(story->heard_from), "%s", speaker);
@@ -6543,10 +6745,9 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
         if ((story->settlement_mask & town) != 0U &&
             (carrier->stories & bit) == 0U) {
             carrier->stories |= bit;
-            const CcCharacter *teller = GossipTellerAt(sim, place_id, story->event_id);
-            if (sim->schema_version >= 46U && CcIdKind(carrier_id) == CC_ENTITY_CHARACTER) {
-                teller = NULL;
-            }
+            const CcCharacter *teller =
+                sim->schema_version >= 46U && CcIdKind(carrier_id) == CC_ENTITY_CHARACTER ?
+                NULL : GossipTellerAt(sim, place_id, story->event_id);
             carrier->versions[i] = RetellGossip(sim, story, story->local[place], teller, 0U);
         }
     }
@@ -6632,6 +6833,8 @@ static void HearLocalGossip(CcSim *sim)
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
         if ((sim->gossip[i].settlement_mask & town) != 0U) {
             CcGossip *story = &sim->gossip[i];
+            if (story->heard_day > 0 || story->recorded ||
+                (sim->schema_version < 58U && sim->archives.scribes <= 0)) continue;
             CcGossipVersion version = RetellGossip(sim, story, story->local[slot],
                 GossipTellerAt(sim, place->id, story->event_id), 0U);
             HearGossip(sim, &sim->gossip[i], place->id,
@@ -9615,7 +9818,7 @@ static void SettleChangedRoyalDestinations(CcSim *sim)
     if (sim->schema_version < 46U) return;
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
         CcRoyalCarriage *carriage = &sim->royal_carriages[i];
-        if (carriage->active_shipment_id == 0U) continue;
+        if (IsSiteCarriage(carriage) || carriage->active_shipment_id == 0U) continue;
         const CcSettlement *target = CcSimSettlement(sim, carriage->target_id);
         if (target != NULL && target->kingdom_id == carriage->kingdom_id) continue;
         for (int32_t j = 0; j < sim->shipment_count; ++j) {
@@ -9666,7 +9869,8 @@ static bool StartRoyalRepositioningLeg(CcSim *sim,
     carriage->target_id = target_id;
     carriage->mode = CC_ROYAL_CARRIAGE_REPOSITIONING;
     carriage->departure_day = sim->current_day;
-    carriage->arrival_day = sim->current_day + route->travel_days;
+    carriage->arrival_day = sim->current_day + CcSimFreightLegDays(
+        sim, route->id, carriage->location_id, next_hop_id);
     carriage->blocked_since_day = 0;
     ExchangeGossip(sim, carriage->id, carriage->location_id, "Carriage travelers");
     const CcSettlement *destination = CcSimSettlement(sim, next_hop_id);
@@ -9680,12 +9884,13 @@ static bool StartRoyalRepositioningLeg(CcSim *sim,
     return true;
 }
 
-static void AdvanceRoyalCarriages(CcSim *sim)
+static void AdvanceRoyalCarriages(CcSim *sim, CcRoadProductionAccounting *site_accounting)
 {
     if (sim == NULL || sim->schema_version < 38U) return;
     bool reached_market = false;
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
         CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+        if (IsSiteCarriage(carriage)) continue;
         const CcSettlement *location = CcSimSettlement(
             sim, carriage->location_id);
         if ((location == NULL || CcSettlementIsAbandoned(location)) &&
@@ -9758,10 +9963,10 @@ static void AdvanceRoyalCarriages(CcSim *sim)
             }
         }
     }
-    if (reached_market && !HasRoyalCapacityWait(sim)) PlanTrade(sim);
+    if (reached_market && !HasRoyalCapacityWait(sim)) PlanTrade(sim, site_accounting);
 }
 
-static void UpdateShipments(CcSim *sim)
+static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_accounting)
 {
     PrepareRoyalRouteUsage(sim);
     bool reached_market = false;
@@ -9769,6 +9974,7 @@ static void UpdateShipments(CcSim *sim)
         CcShipment *shipment = &sim->shipments[i];
         CcRoyalCarriage *carriage = RoyalCarriageForShipment(
             sim, shipment->id);
+        if (IsSiteCarriage(carriage)) continue;
         if (shipment->status == CC_SHIPMENT_BLOCKED) {
             if (carriage == NULL) continue;
             bool waited_for_capacity = carriage->mode ==
@@ -9838,7 +10044,8 @@ static void UpdateShipments(CcSim *sim)
             shipment->destination_id = next_hop_id;
             shipment->route_id = route->id;
             shipment->departure_day = sim->current_day;
-            shipment->arrival_day = sim->current_day + route->travel_days;
+            shipment->arrival_day = sim->current_day + CcSimFreightLegDays(
+                sim, route->id, shipment->origin_id, shipment->destination_id);
             shipment->status = CC_SHIPMENT_TRAVELLING;
             carriage->route_id = route->id;
             carriage->destination_id = next_hop_id;
@@ -9984,7 +10191,8 @@ static void UpdateShipments(CcSim *sim)
                 shipment->destination_id = next_hop_id;
                 shipment->route_id = next_route->id;
                 shipment->departure_day = sim->current_day;
-                shipment->arrival_day = sim->current_day + next_route->travel_days;
+                shipment->arrival_day = sim->current_day + CcSimFreightLegDays(
+                    sim, next_route->id, shipment->origin_id, shipment->destination_id);
                 if (carriage != NULL) {
                     carriage->location_id = hop->id;
                     carriage->route_id = next_route->id;
@@ -10080,7 +10288,7 @@ static void UpdateShipments(CcSim *sim)
             reached_market = true;
         }
     }
-    if (reached_market) PlanTrade(sim);
+    if (reached_market) PlanTrade(sim, site_accounting);
 }
 
 static CcShipment *AllocateShipment(CcSim *sim)
@@ -10147,6 +10355,40 @@ static int32_t TradeSurplus(const CcSim *sim,
     }
     return origin->stock[good] - protected_stock;
 }
+
+static const CcProductionRecipe RoadSiteRepairRecipe = {
+    .output = CC_GOOD_COUNT, .output_units = 1, .work_only = true,
+    .input_count = 2, .inputs = {{CC_GOOD_TOOLS, 1, 1}, {CC_GOOD_WOOD, 1, 0}},
+    .work_per_batch = 2, .tools_required = 1,
+    .hunger_soft_limit = 100, .hunger_hard_limit = 100
+};
+
+static bool SiteNeedsMaintenance(const CcSim *sim, const CcRoadSite *site)
+{
+    return sim->schema_version >= 68U && site->accessible && site->condition < 80;
+}
+
+static int32_t SiteMaintenanceWoodTarget(const CcRoadSite *site)
+{
+    CcProductionRecipe recipe;
+    if (CcRoadSiteRecipe(site, &recipe)) {
+        for (int32_t i = 0; i < recipe.input_count; ++i)
+            if (recipe.inputs[i].good == CC_GOOD_WOOD) return recipe.inputs[i].reserve + 1;
+    }
+    return 1;
+}
+
+static int32_t SiteOutputFloor(const CcSim *sim, const CcRoadSite *site, CcGood good)
+{
+    if (SiteNeedsMaintenance(sim, site)) {
+        if (good == CC_GOOD_TOOLS) return 2;
+        if (good == CC_GOOD_WOOD) return SiteMaintenanceWoodTarget(site);
+    }
+    return good == CC_GOOD_TOOLS ? 1 : 0;
+}
+
+#include "cc_site_freight_plan.inc"
+#include "cc_site_carriages.inc"
 
 static CcMoney RoyalTradeRouteToll(const CcSim *sim, const CcRoute *route,
                                    CcId carriage_kingdom_id)
@@ -10262,7 +10504,8 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
     shipment->good = good;
     shipment->quantity = quantity;
     shipment->departure_day = sim->current_day;
-    shipment->arrival_day = sim->current_day + route->travel_days;
+    shipment->arrival_day = sim->current_day + CcSimFreightLegDays(
+                sim, route->id, shipment->origin_id, shipment->destination_id);
     shipment->status = CC_SHIPMENT_TRAVELLING;
     if (royal) {
         carriage->route_id = route->id;
@@ -10552,7 +10795,7 @@ static void BlockRoyalTradeDemand(
                        blocked_destination);
 }
 
-static void PlanTrade(CcSim *sim)
+static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting)
 {
     if (sim->schema_version < 38U) {
         PlanLegacyTrade(sim);
@@ -10574,6 +10817,7 @@ static void PlanTrade(CcSim *sim)
                 carriage->condition + 4, 0, 100);
             continue;
         }
+        if (sim->schema_version >= 66U && DispatchSiteCarriage(sim, carriage, site_accounting)) continue;
         int32_t best_score = 0;
         int32_t best_source = -1;
         int32_t best_destination = -1;
@@ -10838,7 +11082,67 @@ static CcCharacter *PromoteCharacter(CcSim *sim, const char *name,
     return character;
 }
 
-static void RememberKnowledge(CcCharacter *character, CcKnowledgeKind kind,
+static void SnapshotKnowledgeSource(const CcSim *sim,
+                                     CcCharacterKnowledge *knowledge)
+{
+    if (sim->schema_version < 62U) return;
+    const CcCharacter *source = CcSimCharacter(sim, knowledge->source_character_id);
+    CopyName(knowledge->source_name, source != NULL ? source->name :
+        knowledge->source_character_id == sim->player.id ? "Crownless Company" : "");
+}
+
+void CcSimUpgradeKnowledgeSourceNames(CcSim *sim)
+{
+    if (sim == NULL) return;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        for (int32_t j = 0; j < sim->characters[i].knowledge_count; ++j) {
+            SnapshotKnowledgeSource(sim, &sim->characters[i].knowledge[j]);
+        }
+    }
+}
+
+const CcHistoricCharacter *CcSimHistoricCharacter(const CcSim *sim, CcId id)
+{
+    if (sim == NULL || id == 0U) return NULL;
+    for (int32_t i = 0; i < sim->historic_character_count; ++i) {
+        if (sim->historic_characters[i].id == id) return &sim->historic_characters[i];
+    }
+    return NULL;
+}
+
+static bool CharacterHoldsOffice(const CcSim *sim, CcId character_id);
+
+static void RecordCharacterLifetime(CcSim *sim, const CcCharacter *person)
+{
+    int32_t slot = sim->historic_character_count;
+    if (slot == CC_MAX_HISTORIC_CHARACTERS) {
+        slot = 0;
+        for (int32_t i = 1; i < CC_MAX_HISTORIC_CHARACTERS; ++i) {
+            const CcHistoricCharacter *candidate = &sim->historic_characters[i];
+            const CcHistoricCharacter *oldest = &sim->historic_characters[slot];
+            if (candidate->importance < oldest->importance ||
+                (candidate->importance == oldest->importance &&
+                 (candidate->death_day < oldest->death_day ||
+                  (candidate->death_day == oldest->death_day && candidate->id < oldest->id)))) {
+                slot = i;
+            }
+        }
+    } else {
+        sim->historic_character_count++;
+    }
+    CcHistoricCharacter *record = &sim->historic_characters[slot];
+    *record = (CcHistoricCharacter){
+        .id = person->id, .ancestor_id = person->ancestor_id,
+        .home_settlement_id = person->home_settlement_id,
+        .birth_day = person->birth_day, .death_day = sim->current_day,
+        .generation = person->generation, .role = person->role,
+        .importance = CharacterHoldsOffice(sim, person->id) ? 2 :
+            person->role == CC_CHARACTER_OFFICIAL ? 1 : 0
+    };
+    CopyName(record->name, person->name);
+}
+
+static void RememberKnowledge(CcSim *sim, CcCharacter *character, CcKnowledgeKind kind,
                               CcId subject_id, CcId source_character_id,
                               CcId event_id, CcKnowledgeCertainty certainty,
                               bool private_knowledge, int32_t day)
@@ -10855,6 +11159,7 @@ static void RememberKnowledge(CcCharacter *character, CcKnowledgeKind kind,
             existing->certainty = certainty;
             existing->private_knowledge = private_knowledge;
             existing->day = day;
+            SnapshotKnowledgeSource(sim, existing);
         }
         return;
     }
@@ -10868,6 +11173,7 @@ static void RememberKnowledge(CcCharacter *character, CcKnowledgeKind kind,
         .private_knowledge = private_knowledge,
         .day = day
     };
+    SnapshotKnowledgeSource(sim, &character->knowledge[slot]);
     character->knowledge_write_index =
         (slot + 1) % CC_CHARACTER_KNOWLEDGE_CAPACITY;
     if (character->knowledge_count < CC_CHARACTER_KNOWLEDGE_CAPACITY) {
@@ -10994,10 +11300,10 @@ static void InitializeMineSocialThread(CcSim *sim, CcSituation *situation,
     }
     CcId witness_event_id = situation->cause_event_id != 0U ?
         situation->cause_event_id : situation->lead_event_id;
-    RememberKnowledge(witness, CC_KNOWLEDGE_WITNESS_ACCOUNT, situation->id,
+    RememberKnowledge(sim, witness, CC_KNOWLEDGE_WITNESS_ACCOUNT, situation->id,
                       witness->id, witness_event_id,
                       CC_KNOWLEDGE_WITNESSED, true, sim->current_day);
-    RememberKnowledge(participant, CC_KNOWLEDGE_PROBLEM_RUMOR, situation->id,
+    RememberKnowledge(sim, participant, CC_KNOWLEDGE_PROBLEM_RUMOR, situation->id,
                       witness->id, situation->lead_event_id,
                       CC_KNOWLEDGE_TOLD, true, sim->current_day);
 }
@@ -11055,7 +11361,8 @@ static CcCharacter *AdultCharacterAt(CcSim *sim, CcId settlement_id,
     return best;
 }
 
-static void AssignSituationCast(CcSim *sim, CcSituation *situation)
+static void AssignSituationCast(CcSim *sim, CcSituation *situation,
+                                 bool establish_knowledge)
 {
     static const char *sponsors[CC_MAX_SETTLEMENTS] = {
         "Mara Venn", "Tomas Rill", "Ilyra Senn",
@@ -11135,15 +11442,15 @@ static void AssignSituationCast(CcSim *sim, CcSituation *situation)
     situation->sponsor_character_id = sponsor != NULL ? sponsor->id : 0U;
     situation->affected_character_id = participant != NULL ?
         participant->id : 0U;
-    if (situation->kind == CC_SITUATION_RELIEF_DELIVERY &&
+    if (establish_knowledge && situation->kind == CC_SITUATION_RELIEF_DELIVERY &&
         situation->cause_event_id != 0U) {
         RememberKnowledge(
-            sponsor, CC_KNOWLEDGE_OFFER, situation->id,
+            sim, sponsor, CC_KNOWLEDGE_OFFER, situation->id,
             sponsor != NULL ? sponsor->id : 0U,
             situation->cause_event_id, CC_KNOWLEDGE_WITNESSED,
             false, sim->current_day);
         RememberKnowledge(
-            participant, CC_KNOWLEDGE_IMMEDIATE_STAKE, situation->id,
+            sim, participant, CC_KNOWLEDGE_IMMEDIATE_STAKE, situation->id,
             participant != NULL ? participant->id : 0U,
             situation->cause_event_id, CC_KNOWLEDGE_WITNESSED,
             false, sim->current_day);
@@ -11167,8 +11474,11 @@ static void AssignSituationCast(CcSim *sim, CcSituation *situation)
         if (witness != NULL) {
             witness->current_settlement_id = affected_home;
         }
-        InitializeMineSocialThread(sim, situation, participant, sponsor,
-                                   witness);
+        if (establish_knowledge) {
+            InitializeMineSocialThread(sim, situation, participant, sponsor, witness);
+        } else {
+            situation->witness_character_id = witness != NULL ? witness->id : 0U;
+        }
         if (situation->status != CC_SITUATION_ACTIVE ||
             sim->player.accepted_situation_id == situation->id) {
             situation->discovery_stage = CC_DISCOVERY_OFFER;
@@ -11230,7 +11540,7 @@ void CcSimInitializeCharacters(CcSim *sim)
     if (sim == NULL) return;
     CcSimUpgradeCharacterLifecycles(sim);
     for (int32_t i = 0; i < sim->situation_count; ++i) {
-        AssignSituationCast(sim, &sim->situations[i]);
+        AssignSituationCast(sim, &sim->situations[i], true);
     }
 }
 
@@ -11318,12 +11628,13 @@ static void RecastSituationsAfterDeath(CcSim *sim, CcId character_id)
             changed = true;
         }
         if (!changed) continue;
-        if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION &&
+            sim->schema_version < 62U) {
             situation->lead_event_id = 0U;
             situation->discovery_stage = CC_DISCOVERY_RUMOR;
             situation->lead_path = CC_LEAD_PATH_UNDECIDED;
         }
-        AssignSituationCast(sim, situation);
+        AssignSituationCast(sim, situation, sim->schema_version < 62U);
     }
 }
 
@@ -11450,7 +11761,8 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     sim->character_deaths += 1;
 
     RemoveCharacterRelationships(sim, dead.id);
-    RemoveCharacterKnowledgeSources(sim, dead.id);
+    if (sim->schema_version < 62U) RemoveCharacterKnowledgeSources(sim, dead.id);
+    else RecordCharacterLifetime(sim, &dead);
 
     CcCharacter successor = {0};
     if (sim->schema_version >= 60U) {
@@ -11987,7 +12299,7 @@ static CcSituation *CreateSituation(
     situation->reward = reward;
     situation->created_day = sim->current_day;
     situation->deadline_day = sim->current_day + duration;
-    AssignSituationCast(sim, situation);
+    AssignSituationCast(sim, situation, true);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text), "%s issued; reward %" PRId64
                    " crowns before day %d.", CcSituationKindName(kind), reward,
@@ -15086,6 +15398,22 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
 void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
                                              CcNutritionAccounting *accounting)
 {
+    CcSimAdvanceDaysWithAccounting(sim, days, accounting, NULL);
+}
+
+#include "cc_road_production.inc"
+
+void CcSimAdvanceDaysWithAccounting(CcSim *sim, int32_t days,
+                                     CcNutritionAccounting *accounting,
+                                     CcSmithyAccounting *smithy)
+{
+    CcSimAdvanceDaysWithProductionAccounting(sim, days, accounting, smithy, NULL);
+}
+
+void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
+    CcNutritionAccounting *accounting, CcSmithyAccounting *smithy,
+    CcRoadProductionAccounting *sites)
+{
     if (sim == NULL || days <= 0 || sim->current_day < 1 ||
         sim->current_day > CC_SIM_MAX_DAY ||
         days > CC_SIM_MAX_DAY - sim->current_day) return;
@@ -15106,8 +15434,9 @@ void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
             ExpireSituations(sim);
             next_situation_expiry = NextSituationExpiryDay(sim);
         }
-        AdvanceRoyalCarriages(sim);
-        UpdateShipments(sim);
+        AdvanceSiteCarriages(sim, sites);
+        AdvanceRoyalCarriages(sim, sites);
+        UpdateShipments(sim, sites);
         AdvanceCouriers(sim);
         AdvanceServiceProjects(sim);
         AdvanceBanditRaids(sim);
@@ -15122,15 +15451,18 @@ void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
                 scriptorium->id : 0U;
             for (int32_t settlement = 0; settlement < sim->settlement_count; ++settlement) {
                 UpdateSettlement(sim, settlement, scriptorium_id,
-                    accounting != NULL ? &accounting->towns[settlement] : NULL);
+                    accounting != NULL ? &accounting->towns[settlement] : NULL,
+                    smithy != NULL ? &smithy->towns[settlement] : NULL,
+                    sites != NULL ? &sites->towns[settlement] : NULL);
             }
             AdvanceRuins(sim);
             if (sim->schema_version >= 22U) AdvanceArchives(sim);
             UpdateThreats(sim);
             UpdateRoutesAndGovernments(sim);
+            ProduceRoadSites(sim, sites);
             UpdateRoyalDiplomacy(sim);
             AdvanceWarSociety(sim);
-            PlanTrade(sim);
+            PlanTrade(sim, sites);
             GenerateSituations(sim);
             PlanGoblinTribute(sim);
             PlanHoardRaid(sim);
@@ -16232,14 +16564,14 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
             situation->discovery_stage = CC_DISCOVERY_DECISION;
             CcCharacter *jory = CharacterMutable(
                 sim, situation->affected_character_id);
-            RememberKnowledge(jory, CC_KNOWLEDGE_IMMEDIATE_STAKE,
+            RememberKnowledge(sim, jory, CC_KNOWLEDGE_IMMEDIATE_STAKE,
                               situation->id, character->id, event_id,
                               CC_KNOWLEDGE_TOLD, true, sim->current_day);
         } else if (situation->discovery_stage == CC_DISCOVERY_AUTHORITY) {
             situation->discovery_stage = CC_DISCOVERY_OFFER;
             CcCharacter *mara = CharacterMutable(
                 sim, situation->sponsor_character_id);
-            RememberKnowledge(mara, CC_KNOWLEDGE_WITNESS_ACCOUNT,
+            RememberKnowledge(sim, mara, CC_KNOWLEDGE_WITNESS_ACCOUNT,
                               situation->id, sim->player.id, event_id,
                               CC_KNOWLEDGE_TOLD, false, sim->current_day);
             CcRelationship *mara_to_jory = RelationshipMutable(
@@ -16255,7 +16587,7 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
                 sim, jory_to_mara, 1,
                 event_id, situation->id,
                 "Mara acts on the warning, so Jory trusts Mara more.");
-            RememberKnowledge(mara, CC_KNOWLEDGE_OFFER,
+            RememberKnowledge(sim, mara, CC_KNOWLEDGE_OFFER,
                               situation->id, mara != NULL ? mara->id : 0U,
                               event_id, CC_KNOWLEDGE_WITNESSED, false,
                               sim->current_day);
@@ -16267,7 +16599,7 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
         } else {
             situation->lead_path = CC_LEAD_PATH_CONFIDENCE;
             situation->discovery_stage = CC_DISCOVERY_OFFER;
-            RememberKnowledge(character, CC_KNOWLEDGE_OFFER,
+            RememberKnowledge(sim, character, CC_KNOWLEDGE_OFFER,
                               situation->id, character->id, event_id,
                               CC_KNOWLEDGE_WITNESSED, true,
                               sim->current_day);
@@ -16402,7 +16734,8 @@ static void CreateJourneyTraffic(CcSim *sim,
         .good = good,
         .quantity = quantity,
         .departure_day = sim->current_day,
-        .arrival_day = sim->current_day + route->travel_days,
+        .arrival_day = sim->current_day + CcSimFreightLegDays(
+            sim, route->id, origin->id, destination->id),
         .status = CC_SHIPMENT_TRAVELLING
     };
     if (carriage != NULL) {
@@ -17502,6 +17835,153 @@ const CcRoadSite *CcSimJourneyRoadSiteStop(const CcSim *sim)
         if (distance >= -20 && distance <= 30) return site;
     }
     return NULL;
+}
+
+static int32_t RoadSiteCargoUsed(const CcRoadSite *site)
+{
+    int32_t used = 0;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        int32_t units = CcGoodDefinitionFor((CcGood)good)->player_units_per_slot;
+        used += (site->stock[good] + units - 1) / units;
+    }
+    return used;
+}
+
+static bool ApplyRoadSiteTransfer(CcSim *sim, const CcCommand *command,
+                                  char *error, size_t error_capacity)
+{
+    const CcRoadSite *stop = CcSimJourneyRoadSiteStop(sim);
+    if (sim->schema_version < 64U || stop == NULL || stop->id != command->target_id ||
+        !stop->accessible) {
+        SetError(error, error_capacity, "Reach an open roadside store first.");
+        return false;
+    }
+    if (!CcGoodIsValid(command->good) || command->amount == 0 ||
+        command->amount < -CC_SIM_MAX_UNITS || command->amount > CC_SIM_MAX_UNITS) {
+        SetError(error, error_capacity, "Choose a bounded goods load.");
+        return false;
+    }
+    bool deposit = command->amount > 0;
+    int32_t quantity = deposit ? command->amount : -command->amount;
+    CcRoadSite next = *stop;
+    CcPlayerCompany player = sim->player;
+    int32_t *source = deposit ? &player.cargo[command->good] : &next.stock[command->good];
+    int32_t *destination = deposit ? &next.stock[command->good] : &player.cargo[command->good];
+    if (*source < quantity || *destination > CC_SIM_MAX_UNITS - quantity) {
+        SetError(error, error_capacity, "Choose goods held here and room for the load.");
+        return false;
+    }
+    *source -= quantity;
+    *destination += quantity;
+    if (RoadSiteCargoUsed(&next) > CC_ROAD_SITE_CAPACITY ||
+        CcPlayerCargoUsed(&player) > player.cargo_capacity) {
+        SetError(error, error_capacity, "Make room for this load first.");
+        return false;
+    }
+    sim->road_sites[stop - sim->road_sites] = next;
+    sim->player = player;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "The company %s %d %s %s %.40s.",
+        deposit ? "unloads" : "loads", quantity, CcGoodName(command->good),
+        deposit ? "into" : "from", next.name);
+    CcEvent *event = PushEvent(sim, CC_EVENT_JOURNEY_BREAK, sim->player.id,
+        next.id, sim->journey.parent_event_id, quantity, text);
+    sim->journey.parent_event_id = event->id;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static CcProductionContext RoadSiteRepairContext(const CcSim *sim,
+    const CcRoadSite *site, int32_t *stock)
+{
+    return (CcProductionContext){.producer_id = sim->player.id,
+        .storage_id = sim->player.id, .location_id = site->id, .stock = stock,
+        .capacity = 1, .output_limit = site->condition < 100 ? 1 : 0,
+        .work_available = 2, .condition = site->condition,
+        .enabled = sim->schema_version >= 67U && site->accessible};
+}
+
+CcProductionReceipt CcSimPlanRoadSiteRepair(const CcSim *sim, CcId site_id)
+{
+    const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+    if (site == NULL || site->id != site_id)
+        return (CcProductionReceipt){.gate = CC_PRODUCTION_CLOSED, .blocked_good = CC_GOOD_COUNT};
+    int32_t stock[CC_GOOD_COUNT];
+    memcpy(stock, sim->player.cargo, sizeof(stock));
+    CcProductionContext context = RoadSiteRepairContext(sim, site, stock);
+    return CcProductionPlan(&RoadSiteRepairRecipe, &context);
+}
+
+static bool ApplyRepairRoadSite(CcSim *sim, const CcCommand *command,
+                                char *error, size_t error_capacity)
+{
+    CcProductionReceipt plan = CcSimPlanRoadSiteRepair(sim, command->target_id);
+    if (plan.gate != CC_PRODUCTION_READY) {
+        SetError(error, error_capacity, plan.gate == CC_PRODUCTION_CLOSED ?
+            "Reach an open road site first." : plan.gate == CC_PRODUCTION_OUTPUT_FULL ?
+            "This site is in full repair." :
+            "Bring two Tools and one Wood; repair uses one Tool and one Wood.");
+        return false;
+    }
+    CcRoadSite *site = &sim->road_sites[CcSimJourneyRoadSiteStop(sim) - sim->road_sites];
+    CcProductionContext context = RoadSiteRepairContext(sim, site, sim->player.cargo);
+    CcProductionReceipt receipt = CcProductionRun(&RoadSiteRepairRecipe, &context);
+    int32_t gain = MinimumI32(10, 100 - site->condition);
+    for (int32_t watch = 0; watch < receipt.work; ++watch) AdvanceJourneyRestWatch(sim);
+    site->condition = MinimumI32(100, site->condition + gain);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+        "%.40s: two watches, one Tool and one Wood. Condition rises by %d to %d.",
+        site->name, gain, site->condition);
+    CcEvent *event = PushEvent(sim, CC_EVENT_JOURNEY_BREAK, sim->player.id,
+        site->id, sim->journey.parent_event_id, gain, text);
+    sim->journey.parent_event_id = event->id;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyClearRoadSite(CcSim *sim, const CcCommand *command,
+                               char *error, size_t error_capacity)
+{
+    const CcRoadSite *stop = CcSimJourneyRoadSiteStop(sim);
+    if (sim->schema_version < 63U || stop == NULL ||
+        stop->id != command->target_id) {
+        SetError(error, error_capacity, "Reach this roadside stop first.");
+        return false;
+    }
+    if (stop->accessible) {
+        SetError(error, error_capacity, "This road site is already open.");
+        return false;
+    }
+    bool tree = stop->blocker == CC_ROAD_SITE_BLOCKER_TREE;
+    int32_t tools = tree ? 1 : 2;
+    if (sim->player.cargo[CC_GOOD_TOOLS] < tools ||
+        (tree && sim->player.cargo[CC_GOOD_WOOD] < 1)) {
+        SetError(error, error_capacity, tree ?
+            "Clearing a tree needs one axe tool and one Wood for supports." :
+            "Clearing rocks uses two Tools.");
+        return false;
+    }
+    CcRoadSite *site = &sim->road_sites[stop - sim->road_sites];
+    if (tree) sim->player.cargo[CC_GOOD_WOOD] -= 1;
+    else sim->player.cargo[CC_GOOD_TOOLS] -= 2;
+    int32_t watches = tree ? 1 : 2;
+    for (int32_t watch = 0; watch < watches; ++watch) {
+        AdvanceJourneyRestWatch(sim);
+        site->condition = ClampI32(site->condition + 3, 0, 100);
+    }
+    site->blocker = CC_ROAD_SITE_BLOCKER_NONE;
+    site->accessible = true;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), tree ?
+        "The company axes the fallen tree at %.40s in one watch, using one Wood for supports. The way opens; condition is %d." :
+        "The company breaks the rocks at %.40s in two watches, using two Tools. The way opens; condition is %d.",
+        site->name, site->condition);
+    CcEvent *event = PushEvent(sim, CC_EVENT_JOURNEY_BREAK,
+        sim->player.id, site->id, sim->journey.parent_event_id, watches, text);
+    sim->journey.parent_event_id = event->id;
+    SetError(error, error_capacity, "");
+    return true;
 }
 
 static bool ApplyRoadSiteStop(CcSim *sim, const CcCommand *command,
@@ -18743,6 +19223,12 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_LODGE_ROAD_HOUSE:
             return ApplyJourneyStopAction(
                 sim, command, error, error_capacity);
+        case CC_COMMAND_REPAIR_ROAD_SITE:
+            return ApplyRepairRoadSite(sim, command, error, error_capacity);
+        case CC_COMMAND_TRANSFER_ROAD_SITE:
+            return ApplyRoadSiteTransfer(sim, command, error, error_capacity);
+        case CC_COMMAND_CLEAR_ROAD_SITE:
+            return ApplyClearRoadSite(sim, command, error, error_capacity);
         case CC_COMMAND_CAMP_ROAD_SITE:
         case CC_COMMAND_PASS_ROAD_SITE:
             return ApplyRoadSiteStop(sim, command, error, error_capacity);
@@ -19060,7 +19546,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 59U
+#define CC_NEWEST_LEGACY_SCHEMA 69U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -19078,7 +19564,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 59U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 69U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -19366,7 +19852,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_NOTICE_POSTED ||
+                event->kind > CC_EVENT_ROAD_SITE_PRODUCTION ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||
@@ -19590,6 +20076,16 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
         for (int32_t i = 0; i < sim->road_site_count; ++i) {
             const CcRoadSite *site = &sim->road_sites[i];
+            for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+                if (site->stock[good] < 0 || site->stock[good] > CC_SIM_MAX_UNITS) {
+                    SetError(error, error_capacity, "Road store goods are invalid.");
+                    return false;
+                }
+            }
+            if (RoadSiteCargoUsed(site) > CC_ROAD_SITE_CAPACITY) {
+                SetError(error, error_capacity, "Road store capacity is exceeded.");
+                return false;
+            }
             const CcRoute *route = CcSimRoute(sim, site->route_id);
             bool valid_home = route != NULL &&
                 (site->home_settlement_id == route->from_id ||
@@ -19608,7 +20104,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 (site->side != -1 && site->side != 1) ||
                 site->spur_length < 12 || site->spur_length > 48 ||
                 site->condition < 0 || site->condition > 100 ||
-                site->accessible) {
+                (site->accessible != (site->blocker == CC_ROAD_SITE_BLOCKER_NONE))) {
                 SetError(error, error_capacity,
                          "Road district site data is invalid.");
                 return false;
@@ -19747,11 +20243,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         const CcShipment *shipment = &sim->shipments[i];
         const CcRoute *shipment_route = CcSimRoute(sim, shipment->route_id);
-        bool route_connects = shipment_route != NULL &&
-            ((shipment_route->from_id == shipment->origin_id &&
-              shipment_route->to_id == shipment->destination_id) ||
-             (shipment_route->to_id == shipment->origin_id &&
-              shipment_route->from_id == shipment->destination_id));
+        CcFreightLeg shipment_leg;
+        bool route_connects = CcSimFreightLeg(sim, shipment->route_id,
+            shipment->origin_id, shipment->destination_id, &shipment_leg);
         bool timing_valid = shipment->status != CC_SHIPMENT_TRAVELLING ||
             (shipment->departure_day >= 1 &&
              shipment->departure_day <= sim->current_day &&
@@ -19759,7 +20253,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
              shipment_route != NULL &&
              (int64_t)shipment->arrival_day ==
                  (int64_t)shipment->departure_day +
-                     (int64_t)shipment_route->travel_days);
+                     (int64_t)shipment_leg.travel_days);
         bool capacity_valid = shipment_route != NULL &&
             shipment->good >= 0 && shipment->good < CC_GOOD_COUNT &&
             shipment->quantity >= 1 &&
@@ -19767,9 +20261,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             FreightCargoSlots(shipment->good, shipment->quantity) <=
                 shipment_route->capacity;
         if (CcIdKind(shipment->id) != CC_ENTITY_SHIPMENT ||
-            CcSimSettlement(sim, shipment->origin_id) == NULL ||
-            CcSimSettlement(sim, shipment->destination_id) == NULL ||
-            CcSimSettlement(sim, shipment->final_destination_id) == NULL ||
+            (CcSimSettlement(sim, shipment->origin_id) == NULL &&
+             (sim->schema_version < 66U || CcSimRoadSite(sim, shipment->origin_id) == NULL)) ||
+            (CcSimSettlement(sim, shipment->destination_id) == NULL &&
+             (sim->schema_version < 66U || CcSimRoadSite(sim, shipment->destination_id) == NULL)) ||
+            (CcSimSettlement(sim, shipment->final_destination_id) == NULL &&
+             (sim->schema_version < 66U || CcSimRoadSite(sim, shipment->final_destination_id) == NULL)) ||
             shipment_route == NULL || !route_connects || !timing_valid ||
             shipment->good < 0 || shipment->good >= CC_GOOD_COUNT ||
             shipment->quantity < 1 ||
@@ -19786,6 +20283,13 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     if (sim->schema_version >= 38U) {
         for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
             const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+            if (IsSiteCarriage(carriage)) {
+                if (!ValidSiteCarriage(sim, carriage, i)) {
+                    SetError(error, error_capacity, "Site carriage state is invalid.");
+                    return false;
+                }
+                continue;
+            }
             const CcSettlement *location = CcSimSettlement(
                 sim, carriage->location_id);
             const CcSettlement *destination = CcSimSettlement(
@@ -19809,16 +20313,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             bool blocked = carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED;
             bool waiting_capacity = carriage->mode ==
                 CC_ROYAL_CARRIAGE_WAITING_CAPACITY;
-            bool route_connects = route != NULL && destination != NULL &&
-                ((route->from_id == carriage->location_id &&
-                  route->to_id == carriage->destination_id) ||
-                 (route->to_id == carriage->location_id &&
-                  route->from_id == carriage->destination_id));
+            CcFreightLeg carriage_leg = {0};
+            bool route_connects = destination != NULL && CcSimFreightLeg(sim,
+                carriage->route_id, carriage->location_id, carriage->destination_id, &carriage_leg);
             bool trip_timing = carriage->departure_day >= 1 &&
                 carriage->departure_day <= sim->current_day &&
                 carriage->arrival_day > sim->current_day && route != NULL &&
                 (int64_t)carriage->arrival_day ==
-                    (int64_t)carriage->departure_day + route->travel_days;
+                    (int64_t)carriage->departure_day + carriage_leg.travel_days;
             bool mode_valid =
                 (idle && carriage->active_shipment_id == 0U &&
                  carriage->route_id == 0U &&
@@ -19867,7 +20369,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 carriage->next_dispatch_day < 0 ||
                 carriage->next_dispatch_day > sim->current_day + 7 ||
                 (shipment != NULL &&
-                 (CcSimSettlement(sim,
+                 (CcSimSettlement(sim, shipment->final_destination_id) == NULL ||
+                  CcSimSettlement(sim,
                      shipment->final_destination_id)->kingdom_id !=
                       carriage->kingdom_id ||
                   FreightCargoSlots(shipment->good,
@@ -20398,6 +20901,37 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             return false;
         }
     }
+    if (sim->schema_version >= 62U) {
+        if (sim->historic_character_count < 0 ||
+            sim->historic_character_count > CC_MAX_HISTORIC_CHARACTERS) {
+            SetError(error, error_capacity, "Historical character count is invalid.");
+            return false;
+        }
+        for (int32_t i = 0; i < sim->historic_character_count; ++i) {
+            const CcHistoricCharacter *item = &sim->historic_characters[i];
+            if (!IsIssuedCharacterId(sim, item->id) || CcSimCharacter(sim, item->id) != NULL ||
+                !ValidBoundedText(item->name, sizeof(item->name)) ||
+                CcSimSettlement(sim, item->home_settlement_id) == NULL ||
+                (item->ancestor_id != 0U && (!IsIssuedCharacterId(sim, item->ancestor_id) ||
+                                            item->ancestor_id == item->id)) ||
+                item->birth_day < -CC_SIM_MAX_DAY || item->death_day <= item->birth_day ||
+                item->death_day > sim->current_day || item->death_day < 1 ||
+                item->generation < 0 || item->generation > CC_SIM_MAX_UNITS ||
+                (item->generation == 0 && item->ancestor_id != 0U) ||
+                (item->generation > 0 && item->ancestor_id == 0U) ||
+                item->role < CC_CHARACTER_OFFICIAL || item->role > CC_CHARACTER_COURIER ||
+                item->importance < 0 || item->importance > 2) {
+                SetError(error, error_capacity, "Historical character lifetime is invalid.");
+                return false;
+            }
+            for (int32_t j = 0; j < i; ++j) {
+                if (sim->historic_characters[j].id == item->id) {
+                    SetError(error, error_capacity, "Historical character identity is repeated.");
+                    return false;
+                }
+            }
+        }
+    }
     if (sim->schema_version >= 17U) {
         for (int32_t i = 0; i < sim->character_count; ++i) {
             const CcCharacter *character = &sim->characters[i];
@@ -20488,6 +21022,15 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                     return false;
                 }
             }
+            if (sim->schema_version >= 62U) {
+                for (int32_t k = 0; k < CC_CHARACTER_KNOWLEDGE_CAPACITY; ++k) {
+                    if (!ValidOptionalBoundedText(character->knowledge[k].source_name,
+                                                  sizeof(character->knowledge[k].source_name))) {
+                        SetError(error, error_capacity, "Knowledge source name is invalid.");
+                        return false;
+                    }
+                }
+            }
             if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
                 for (int32_t knowledge = 0;
                      knowledge < character->knowledge_count; ++knowledge) {
@@ -20495,12 +21038,15 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                         &character->knowledge[knowledge];
                     bool source_exists = item->source_character_id ==
                             sim->player.id ||
-                        CcSimCharacter(sim,
-                                       item->source_character_id) != NULL;
+                        (sim->schema_version >= 62U ?
+                         IsIssuedCharacterId(sim, item->source_character_id) :
+                         CcSimCharacter(sim, item->source_character_id) != NULL);
                     if (item->kind <= CC_KNOWLEDGE_NONE ||
                         item->kind > CC_KNOWLEDGE_OFFER ||
                         CcSimSituation(sim, item->subject_id) == NULL ||
                         !source_exists ||
+                        (sim->schema_version >= 62U &&
+                         !ValidBoundedText(item->source_name, sizeof(item->source_name))) ||
                         CcSimEvent(sim, item->event_id) == NULL ||
                         item->certainty < CC_KNOWLEDGE_DOUBTFUL ||
                         item->certainty > CC_KNOWLEDGE_WITNESSED ||
@@ -21313,6 +21859,9 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->side); HASH_VALUE(item->spur_length);
             HASH_VALUE(item->condition); HASH_VALUE(item->blocker);
             HASH_VALUE(item->accessible);
+            if (sim->schema_version >= 64U) {
+                for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) HASH_VALUE(item->stock[good]);
+            }
         }
     }
     for (int32_t i = 0; i < sim->map_count; ++i) {
@@ -21725,8 +22274,20 @@ uint64_t CcSimHash(const CcSim *sim)
                     HASH_VALUE(item->certainty);
                     HASH_VALUE(item->private_knowledge);
                     HASH_VALUE(item->day);
+                    if (sim->schema_version >= 62U) hash = HashString(hash, item->source_name);
                 }
             }
+        }
+    }
+    if (sim->schema_version >= 62U) {
+        HASH_VALUE(sim->historic_character_count);
+        for (int32_t i = 0; i < sim->historic_character_count; ++i) {
+            const CcHistoricCharacter *item = &sim->historic_characters[i];
+            HASH_VALUE(item->id); HASH_VALUE(item->ancestor_id);
+            HASH_VALUE(item->home_settlement_id);
+            hash = HashString(hash, item->name);
+            HASH_VALUE(item->birth_day); HASH_VALUE(item->death_day);
+            HASH_VALUE(item->generation); HASH_VALUE(item->role); HASH_VALUE(item->importance);
         }
     }
     if (hash_social) {

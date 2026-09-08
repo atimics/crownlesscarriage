@@ -275,11 +275,46 @@ static int RunWorldCardRegression(void)
         sim.journey.elapsed_subticks = (int32_t)((int64_t)sim.journey.total_subticks * sim.carriage.progress_milli / 1000);
         for (int32_t i = 0; i < CC_PONY_COUNT; ++i) sim.pony_company.ponies[i].last_met_day = sim.current_day;
         CARD_CHECK(CcSimJourneyRoadSiteStop(&sim) == site, "Fixture must reach the site stop.");
+        sim.player.cargo[CC_GOOD_TOOLS] = 2;
+        sim.player.cargo[CC_GOOD_WOOD] = 1;
+        CARD_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)), error);
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_CLEAR_ROAD_SITE, 0, mode != 0),
+            "A blocked site needs matching clearing card and world actions.");
+        CARD_INPUT();
+        CARD_CHECK(site->accessible && site->blocker == CC_ROAD_SITE_BLOCKER_NONE,
+            "Clearing through either control must open the site.");
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_TRANSFER_ROAD_SITE, 1, mode != 0),
+            "An open store needs an unload action.");
+        CARD_INPUT();
+        int32_t stored = 0;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) stored += site->stock[good];
+        CARD_CHECK(stored == 1, "Unloading must move one bundle into the local store.");
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_TRANSFER_ROAD_SITE, -1, mode != 0),
+            "Stored goods need a load action.");
+        CARD_INPUT();
+        stored = 0;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) stored += site->stock[good];
+        CARD_CHECK(stored == 0, "Loading must return the stored bundle to the carriage.");
+        sim.player.cargo[CC_GOOD_TOOLS] = 2;
+        sim.player.cargo[CC_GOOD_WOOD] = 1;
+        sim.road_sites[site - sim.road_sites].condition = 44;
+        CARD_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)), error);
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_REPAIR_ROAD_SITE, 0, mode != 0),
+            "An open site needs matching repair card and world actions.");
+        CARD_INPUT();
+        CARD_CHECK(site->condition == 54 && sim.player.cargo[CC_GOOD_TOOLS] == 1 && sim.player.cargo[CC_GOOD_WOOD] == 0,
+            "Repair uses local cargo and restores saved condition.");
+        ContextActionSet opened = BuildContextActions(&sim, &local, view, selected, 0);
+        CARD_CHECK(WorldCardIndex(&opened, CONTEXT_ACTION_CLEAR_ROAD_SITE, 0) < 0,
+            "An opened site offers its remaining actions.");
         CARD_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)), error);
         CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_CAMP_ROAD_SITE, 0, mode != 0),
             "A camp needs matching card and world actions.");
         if (mode != 0) {
-            CcInteractionTarget *camp = &local.interactions.targets[0];
+            CcInteractionTarget *camp = NULL;
+            for (int32_t i = 0; i < local.interactions.count; ++i)
+                if (local.interactions.targets[i].action == CONTEXT_ACTION_CAMP_ROAD_SITE) camp = &local.interactions.targets[i];
+            CARD_CHECK(camp != NULL, "The camp needs a world target.");
             uint64_t subject = camp->subject_id;
             camp->subject_id = subject + 1;
             ContextActionSet current = BuildContextActions(&sim, &local, view, selected, 0);
