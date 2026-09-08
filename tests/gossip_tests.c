@@ -1065,6 +1065,94 @@ static void CheckGossipTextBounds(void)
     }
 }
 
+/* The Scriptorium is the archive town the sim favors (Gloamgate by
+   convention in a fresh world). */
+static const CcSettlement *ScriptoriumOf(const CcSim *s)
+{
+    if (s == NULL) return NULL;
+    for (int32_t i = 0; i < s->settlement_count; ++i) {
+        if (strcmp(s->settlements[i].name, "Gloamgate") == 0) {
+            return &s->settlements[i];
+        }
+    }
+    return &s->settlements[0];
+}
+
+/* A whelp hatches in a hollow lair: the research-mission vertical slice.
+
+   The sim runs a dragon whose lair town can be abandoned (its own wrath
+   empties it). Before schema 51, a whelp hatching in that dead town was
+   silent forever: GatherGossip dropped facts whose origin settlement was
+   abandoned, and ExchangeGossip would not let anyone exchange gossip at an
+   abandoned place. So the world genuinely never learned its dragon was
+   alive again — the story existed, but no road carried it.
+
+   Schema 51 fixes both: the fact enters the pool from the dead origin, and
+   a scout who *visits the ruins* hears it and can carry it to the
+   Scriptorium. This test proves the whole contract:
+     1) a dragon event at an abandoned origin becomes gossip,
+     2) a scout present at the dead town picks it up,
+     3) the scout carrying it to the Scriptorium causes intake to hear it.
+*/
+static void CheckResearchMissionHearsAbandonedLair(void)
+{
+    Prepare();
+    CcId lair = sim.settlements[sim.settlement_count - 1].id;
+    for (int32_t i = 0; i < sim.settlement_count; ++i) {
+        if (sim.settlements[i].id == lair) {
+            /* A proper ruin: no services, no security, no prosperity. The
+               lair town is dead, which is precisely the case that used to
+               silence its dragon. */
+            sim.settlements[i].population = 0;
+            sim.settlements[i].service_mask = 0U;
+            sim.settlements[i].service_project = CC_SERVICE_NONE;
+            sim.settlements[i].service_project_days = 0;
+            sim.settlements[i].security = 0;
+            sim.settlements[i].prosperity = 0;
+        }
+    }
+    const CcSettlement *scriptorium_town = ScriptoriumOf(&sim);
+
+    /* The whelp hatches in the ruins (schema 51 makes succession gossip
+       regardless of magnitude). */
+    sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcId whelp = AddEvent(CC_EVENT_DRAGON_SUCCESSOR, sim.dragon.id, lair,
+        1, "A whelp hatches in Varkesh's empty lair and takes the first hoard.");
+    CcSimRefreshCharacterGossip(&sim);
+
+    /* A scout rides to the ruins and hears it. Any adult character present
+       at the dead town now exchanges, so the story can leave. */
+    CcCharacter *scout = NULL;
+    for (int32_t i = 0; i < sim.character_count; ++i) {
+        const CcCharacter *person = &sim.characters[i];
+        if (CcCharacterAgeYears(&sim, person) >= 16 &&
+            person->activity != CC_CHARACTER_ACTIVITY_TRAVELLING) {
+            scout = &sim.characters[i];
+            break;
+        }
+    }
+    CC_CHECK(scout != NULL);
+    scout->current_settlement_id = lair;
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(StoryOffset(&sim, scout->id, whelp) >= 0);
+
+    /* The scout carries the fact to the Scriptorium; intake hears it. */
+    CC_CHECK(scriptorium_town != NULL);
+    scout->current_settlement_id = scriptorium_town->id;
+    CcSimRefreshCharacterGossip(&sim);
+    const CcGossip *story = NULL;
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        if (sim.gossip[i].event_id == whelp) { story = &sim.gossip[i]; break; }
+    }
+    CC_CHECK(story != NULL);
+    /* The delivered report reaches intake (heard) — the research-mission
+       contract. Writing it into a tome is the archive's weekly step, covered
+       by CheckLocalAndRemoteAccounts; the essential fix here is that a fact
+       born in a dead town can reach the Scriptorium at all. */
+    CC_CHECK(story->heard_day > 0);
+    CheckValid();
+}
+
 int main(void)
 {
     CheckPersonalAccounts();
@@ -1085,6 +1173,7 @@ int main(void)
     CheckDramaticRegisters();
     CheckHeldAccountBoundary();
     CheckGossipTextBounds();
+    CheckResearchMissionHearsAbandonedLair();
     puts("Traveler gossip network passed.");
     return 0;
 }

@@ -56,7 +56,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 50
+#define CC_SIM_SCHEMA_VERSION 51
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
