@@ -934,10 +934,9 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                              &travelling_hero);
     }
     Vector3 camera_focus = travelling ? carriage_base : agent->position;
-    Camera3D base_camera = RoadCamera(camera_focus, travelling, clock, true,
-                                      target.texture.height);
-    Camera3D camera = CcLocalCombatCameraInternal(
-        base_camera, agent, course, clock, true, target.texture.height);
+    /* Keep the whole crossing visible as the player changes targets. */
+    Camera3D camera = RoadCamera(camera_focus, travelling, clock, true,
+                                  target.texture.height);
     if (travelling) camera = PonyConversationCamera(camera, carriage_base, 0.5f * PI, sim);
     if (!travelling) {
         camera = KeepHeroInsideStreetFrame(

@@ -11,6 +11,17 @@ static int RunBridgeSceneRegression(void)
     const char *path = "bridge-input.ccsave";
     (void)remove(path);
     CcSimInit(&sim, 42U);
+    CcRoute *route = &sim.routes[0];
+    route->closed = false;
+    sim.player.location_id = route->from_id;
+    sim.carriage.location_id = route->from_id;
+    CcCommand travel = {.kind = CC_COMMAND_TRAVEL, .target_id = route->to_id};
+    if (!CcSimApply(&sim, &travel, error, sizeof(error))) return ClientRegressionFailure(error);
+    sim.journey.phase = CC_JOURNEY_PHASE_BLOCKED;
+    sim.journey.encounter_triggered = true;
+    sim.clock.game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND;
+    sim.carriage.mode = CC_CARRIAGE_STOPPED;
+    sim.carriage.speed_milli_per_second = 0;
     CcLocalBindPlace(&sim);
     ResetLocalState(&local);
     BeginRoadLocalState(&sim, &local, true);
@@ -74,6 +85,22 @@ static int RunBridgeSceneRegression(void)
             before.items[i].amount == after.items[i].amount, "Each combat slot must keep its action.");
     }
     BRIDGE_CHECK(!after.items[1].enabled, "The fallen bandit's card must show its state.");
+    BeginRoadLocalState(&sim, &local, false);
+    local.adventure_ui = true;
+    BRIDGE_CLICK(CONTEXT_ACTION_APPROACH_COLLECTOR, 0);
+    BRIDGE_CHECK(local.agent.exact_target_valid, "Approach captain must start a walk.");
+    for (int32_t frame = 0; frame < 900 && local.agent.exact_target_valid; ++frame)
+        CcLocalAgentUpdate(&local.agent, 1.0f / 60.0f, false);
+    BRIDGE_CHECK(GridDistance(LocalPosition(&local),
+        (Vector2){CC_LOCAL_ROAD_PARLEY_X, CC_LOCAL_ROAD_PARLEY_Z}) < 1.55f,
+        "The captain's approach must reach speaking distance.");
+    BRIDGE_CLICK(CONTEXT_ACTION_RETURN_TO_CHOICE, 0);
+    BRIDGE_CHECK(view == VIEW_ENCOUNTER, "Return to carriage must restore the encounter choice.");
+    BeginRoadLocalState(&sim, &local, true);
+    view = VIEW_LOCAL;
+    BRIDGE_CLICK(CONTEXT_ACTION_WITHDRAW, 0);
+    BRIDGE_CHECK(!sim.journey.active && !local.journey_combat_active && view == VIEW_LOCAL,
+        "Withdraw must return the company to town.");
     BRIDGE_CHECK(CcJournalClose(&journal, &sim, error, sizeof(error)), error);
     client_test_pointer_active = false;
     (void)remove(path);

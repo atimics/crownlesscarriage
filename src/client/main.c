@@ -255,6 +255,7 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_CONFIRM_MAP_SALE,
     CONTEXT_ACTION_REPAIR_ROUTE,
     CONTEXT_ACTION_PAY_COLLECTOR,
+    CONTEXT_ACTION_APPROACH_COLLECTOR,
     CONTEXT_ACTION_OFFER_PROVISIONS,
     CONTEXT_ACTION_RETURN_TO_CHOICE,
     CONTEXT_ACTION_SKIP_TRAVEL,
@@ -4544,6 +4545,11 @@ static ContextActionSet BuildContextActions(
                                  TextFormat("Offer %d %s", quantity,
                                             CcGoodName(good)));
             }
+        }
+        if (GridDistance(LocalPosition(local), collector) >= 1.55f) {
+            AddDetailedContextAction(&set, CONTEXT_ACTION_APPROACH_COLLECTOR,
+                "Approach captain", "F", "WALK TO THE BRIDGE", true,
+                local->agent.exact_target_valid);
         }
         AddContextAction(&set, CONTEXT_ACTION_RETURN_TO_CHOICE,
                          "Return to carriage");
@@ -9547,6 +9553,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                "Back at the carriage.");
                 return;
             }
+            if ((context_action == CONTEXT_ACTION_APPROACH_COLLECTOR ||
+                 ClientKeyPressed(KEY_F)) &&
+                GridDistance(LocalPosition(local), collector) >= 1.55f) {
+                bool walking = CcLocalAgentSetExactTarget(&local->agent,
+                    (Vector3){collector.x, 0.0f, collector.y}, false);
+                (void)snprintf(message, message_capacity, "%s",
+                    walking ? "Walking to the captain." : "Choose a clear path to the captain.");
+                return;
+            }
             if (context_action == CONTEXT_ACTION_OFFER_PROVISIONS &&
                 GridDistance(LocalPosition(local), collector) < 1.55f) {
                 CcCommand offer = {
@@ -11560,6 +11575,9 @@ int main(int argc, char **argv)
     }
     if (capture_road || capture_parley) {
         BeginRoadLocalState(&sim, &local, capture_road);
+        if (capture_road && argc >= 4 && strcmp(argv[3], "focused") == 0) {
+            (void)CcLocalCourseSelectPlayerTarget(&local.course, &local.agent, 0);
+        }
     }
     if (capture_travel || capture_route_sight) {
         BeginRoadTravelState(&sim, &local);
