@@ -5959,7 +5959,7 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 44U || legacy_version == 45U ||
          legacy_version == 46U || legacy_version == 47U ||
          legacy_version == 48U || legacy_version == 49U ||
-         legacy_version == 50U) &&
+         legacy_version == 50U || legacy_version == 51U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
@@ -6427,6 +6427,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     uint32_t legacy_version = sim->schema_version;
     if (!UpgradeLegacyRuntimeSchema(sim, error, error_capacity)) return false;
     if (legacy_version < 51U) CcSimSeedCommonPonyHerds(sim);
+    if (legacy_version < 52U) CcSimUnharnessSecondDraftAnimal(sim);
     return true;
 }
 

@@ -125,9 +125,16 @@ static void CheckSharedPonies(void)
     CC_CHECK(CcCoopApply(guest, "leave_pony", target, 0, 0, error, sizeof(error)));
     CC_CHECK(guest->pony_company.encounter == -1);
     CC_CHECK(CcCoopApply(host, "help_pony", target, 0, 0, error, sizeof(error)));
-    int32_t released = host->pony_company.team[1];
-    CC_CHECK(CcCoopApply(host, "swap_pony", target, 0, 1, error, sizeof(error)));
-    CC_CHECK(host->pony_company.team[1] == pony);
+    /* The carriage draws one animal, so the second seat is empty and cannot
+       be swapped into. The swap has to land in the seat that exists, and the
+       bridge has to agree about it on both sides. */
+    CC_CHECK(host->pony_company.team[1] == -1);
+    CC_CHECK(!CcCoopApply(host, "swap_pony", target, 0, 1,
+                          error, sizeof(error)));
+    int32_t released = host->pony_company.team[0];
+    CC_CHECK(CcCoopApply(host, "swap_pony", target, 0, 0, error, sizeof(error)));
+    CC_CHECK(host->pony_company.team[0] == pony);
+    CC_CHECK(host->pony_company.team[1] == -1);
     CC_CHECK(host->pony_company.ponies[released].releases == 1);
     CC_CHECK(CcCoopEncode(host, &bytes, &length, error, sizeof(error)));
     CC_CHECK(CcCoopDecode(guest, bytes, length, error, sizeof(error)));

@@ -56,7 +56,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 51
+#define CC_SIM_SCHEMA_VERSION 52
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -1719,6 +1719,8 @@ int32_t CcSimRoadHouseProgressMilli(const CcSim *sim, CcId route_id,
                                     int32_t journey_watch_count);
 CcMoney CcSimRoadHouseCost(const CcSim *sim, CcId route_id);
 bool CcSimJourneyRoadHouseAvailable(const CcSim *sim);
+int32_t CcSimHorseTeamCount(const CcSim *sim);
+int32_t CcSimTeamPony(const CcSim *sim, int32_t slot);
 int32_t CcSimHorseCount(const CcSim *sim);
 const CcHorse *CcSimHorseAt(const CcSim *sim, int32_t index);
 const CcHorse *CcSimHorse(const CcSim *sim, CcId horse_id);
@@ -1859,6 +1861,7 @@ int32_t CcSimTreasureCountForOwner(const CcSim *sim, CcId owner_id);
 int32_t CcSettlementServiceCapacity(CcSettlementSize size);
 int32_t CcSettlementServiceCount(const CcSettlement *settlement);
 void CcSimSeedCommonPonyHerds(CcSim *sim);
+void CcSimUnharnessSecondDraftAnimal(CcSim *sim);
 int32_t CcSimCommonPonyCount(const CcSim *sim);
 bool CcSettlementHasService(const CcSettlement *settlement,
                             CcServiceKind service);
