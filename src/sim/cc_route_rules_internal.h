@@ -7,4 +7,6 @@
 int32_t CcRouteDragonShadowDanger(const CcSim *sim, const CcRoute *route);
 CcMoney CcRouteToll(const CcSim *sim, const CcRoute *route);
 
+int32_t CcRouteSettlementMonsterPressure(const CcSim *sim, CcId settlement_id);
+
 #endif

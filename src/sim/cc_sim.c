@@ -1,4 +1,5 @@
 #include "sim/cc_sim.h"
+#include "sim/cc_production_internal.h"
 #include "sim/cc_food_economy_internal.h"
 #include "sim/cc_goods_internal.h"
 #include "sim/cc_journey_internal.h"
@@ -2058,16 +2059,10 @@ static void DecayStoredPaper(CcSim *sim, CcSettlement *place)
         1, place->stock[CC_GOOD_PAPER] / 100);
 }
 
-static int32_t BakeryCapacity(const CcSettlement *place)
-{
-    if (!CcSettlementHasService(place, CC_SERVICE_BAKERY)) return 0;
-    return MaximumI32(0, place->production[CC_GOOD_BREAD]);
-}
-
 static int32_t RunBakery(CcSim *sim, CcSettlement *place,
                          CcId scriptorium_id)
 {
-    int32_t capacity = BakeryCapacity(place);
+    int32_t capacity = CcEconomyBakeryCapacity(place);
     if (capacity <= 0 || place->stock[CC_GOOD_WHEAT] <= 0) return 0;
     if (place->hunger > 65) capacity = capacity * 72 / 100;
     else if (place->hunger > 35) capacity = capacity * 86 / 100;
@@ -4428,20 +4423,6 @@ static CcDungeon *DungeonByIdMutable(CcSim *sim, CcId id)
     return NULL;
 }
 
-static int32_t MonsterPressureAtSettlement(const CcSim *sim, CcId settlement_id)
-{
-    int32_t pressure = 0;
-    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
-        if (sim->dungeons[i].settlement_id != settlement_id) continue;
-        for (int32_t monster = 0; monster < sim->monster_count; ++monster) {
-            if (sim->monsters[monster].dungeon_id == sim->dungeons[i].id) {
-                pressure = MaximumI32(pressure, sim->monsters[monster].pressure);
-            }
-        }
-    }
-    return pressure;
-}
-
 bool CcSettlementCanRepairFire(const CcSettlement *place)
 {
     return place != NULL && place->population > 0 &&
@@ -4463,7 +4444,7 @@ uint32_t CcSimTownConditions(const CcSim *sim, CcId settlement_id)
     if (place->security <= 25) conditions |= CC_TOWN_LAWLESS;
     if (place->security >= 60 &&
         CcSimWarBurdenAtSettlement(sim, place->id) < 20 &&
-        MonsterPressureAtSettlement(sim, place->id) < 30) conditions |= CC_TOWN_PEACEFUL;
+        CcRouteSettlementMonsterPressure(sim, place->id) < 30) conditions |= CC_TOWN_PEACEFUL;
     if (place->prosperity >= 70 && place->hunger < 20) conditions |= CC_TOWN_THRIVING;
     if (place->hunger >= 40) conditions |= CC_TOWN_HUNGRY;
     return conditions;
@@ -4485,80 +4466,6 @@ static void RepairSettlementFire(CcSim *sim, CcSettlement *place)
                     LatestLocalCause(sim, place->id), 10, text);
 }
 
-static int32_t GrainSeasonFactor(const CcSim *sim)
-{
-    int32_t week = (sim->current_day / 7) % 52;
-    if (week < 13) return 72;
-    if (week < 26) return 112;
-    if (week < 39) return 148;
-    return 58;
-}
-
-static int32_t EffectiveProduction(const CcSim *sim,
-                                   const CcSettlement *settlement,
-                                   int32_t index, CcGood good)
-{
-    if (CcSettlementIsAbandoned(settlement)) return 0;
-    bool legacy_food_economy = sim->schema_version < 29U;
-    int32_t production = settlement->production[good];
-    CcGood staple = legacy_food_economy ? CC_GOOD_BREAD : CC_GOOD_WHEAT;
-    bool subsistence_muster = good == staple &&
-        (settlement->hunger > 65 ||
-         (settlement->population < 600 && settlement->hunger >= 20));
-    int32_t subsistence_food = subsistence_muster ?
-        MaximumI32(1, CcEconomyCivilianFoodUse(settlement) * 2 / 3) : 0;
-    if (production <= 0 && subsistence_food <= 0) return 0;
-    if (settlement->hunger > 65) production = production * 72 / 100;
-    else if (settlement->hunger > 35) production = production * 86 / 100;
-
-    if (!legacy_food_economy && good == CC_GOOD_BREAD) return 0;
-    if (good == staple) {
-        if (!CcSettlementHasService(settlement, CC_SERVICE_FARM) ||
-            settlement->field_yield <= 0) return subsistence_food;
-        production = production * GrainSeasonFactor(sim) / 100;
-        production = production * settlement->field_yield / 100;
-        production = production * CcSimClimateFactor(sim) / 100;
-        int32_t labor_factor = ClampI32(
-            35 + settlement->population / 20, 35, 100);
-        production = production * labor_factor / 100;
-        if (index == 0 && sim->current_day < 112) production = production * 64 / 100;
-        if (settlement->stock[CC_GOOD_TOOLS] <= 0) {
-            production = production * 50 / 100;
-        }
-        production = MaximumI32(production, subsistence_food);
-    }
-    if (legacy_food_economy && good == CC_GOOD_BREAD) {
-        return MaximumI32(0, production);
-    }
-    if (good == CC_GOOD_IRON) {
-        if (!CcSettlementHasService(settlement, CC_SERVICE_MINE) ||
-            settlement->iron_deposit <= 0) return 0;
-        int32_t monster_pressure = MonsterPressureAtSettlement(sim, settlement->id);
-        production = production * (100 - monster_pressure / 2) / 100;
-        if (settlement->stock[CC_GOOD_TOOLS] <= 0) production = MaximumI32(1, production / 4);
-        for (int32_t dungeon = 0; dungeon < sim->dungeon_count; ++dungeon) {
-            if (sim->dungeons[dungeon].settlement_id == settlement->id &&
-                sim->dungeons[dungeon].state == CC_DUNGEON_PUBLIC_ROUTE) {
-                production = production * 125 / 100;
-            }
-        }
-        production = MinimumI32(production, settlement->iron_deposit);
-    }
-    if (good == CC_GOOD_WOOD && settlement->stock[CC_GOOD_TOOLS] <= 0) {
-        production = MaximumI32(1, production / 4);
-    }
-    if (good == CC_GOOD_STONE) {
-        if (!CcSettlementHasService(settlement, CC_SERVICE_MINE)) return 0;
-        if (settlement->stock[CC_GOOD_TOOLS] <= 0) {
-            production = MaximumI32(1, production / 4);
-        }
-    }
-    if (legacy_food_economy && good >= CC_GOOD_TOOLS) return 0;
-    if (good != CC_GOOD_WHEAT && good != CC_GOOD_IRON &&
-        good != CC_GOOD_WOOD && good != CC_GOOD_STONE) return 0;
-    return MaximumI32(0, production);
-}
-
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
                                   CcFoodEconomy *economy)
 {
@@ -4567,7 +4474,7 @@ bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
     if (settlement == NULL) return false;
     int32_t slot = SettlementSlotById(sim, settlement_id);
     if (slot < 0) return false;
-    int32_t grain_production = EffectiveProduction(
+    int32_t grain_production = CcEconomyEffectiveProduction(
         sim, settlement, slot, CC_GOOD_WHEAT);
     int32_t dairy_nutrition = sim->schema_version >= 14U &&
         CcSettlementHasService(settlement, CC_SERVICE_FARM) &&
@@ -4577,7 +4484,7 @@ bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
             CC_NUTRITION_PER_RATION :
         0;
     int32_t bakery_input = MinimumI32(
-        BakeryCapacity(settlement),
+        CcEconomyBakeryCapacity(settlement),
         settlement->stock[CC_GOOD_WHEAT] + grain_production);
     int32_t production_nutrition =
         bakery_input * CC_NUTRITION_PER_RATION +
@@ -5490,7 +5397,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
     AdvanceSheepFlock(sim, settlement);
     AdvancePonyHerd(sim, settlement);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        int32_t production = EffectiveProduction(sim, settlement, index, (CcGood)good);
+        int32_t production = CcEconomyEffectiveProduction(sim, settlement, index, (CcGood)good);
         produced[good] = production;
         if ((CcGood)good == CC_GOOD_IRON) {
             settlement->iron_deposit -= production;
@@ -5628,7 +5535,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         settlement->hunger < 45 && settlement->prosperity < 78) {
         settlement->prosperity = ClampI32(settlement->prosperity + 1, 0, 100);
     }
-    int32_t local_threat = MonsterPressureAtSettlement(sim, settlement->id);
+    int32_t local_threat = CcRouteSettlementMonsterPressure(sim, settlement->id);
     bool security_recovering =
         (settlement->security < 45 && settlement->hunger < 35) ||
         (settlement->prosperity > 70 && settlement->hunger < 15 &&
@@ -8945,8 +8852,8 @@ int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id)
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         if (sim->bandits[i].route_id == route_id) danger += sim->bandits[i].influence / 3;
     }
-    danger += MonsterPressureAtSettlement(sim, route->from_id) / 10;
-    danger += MonsterPressureAtSettlement(sim, route->to_id) / 10;
+    danger += CcRouteSettlementMonsterPressure(sim, route->from_id) / 10;
+    danger += CcRouteSettlementMonsterPressure(sim, route->to_id) / 10;
     return ClampI32(danger, 0, 95);
 }
 

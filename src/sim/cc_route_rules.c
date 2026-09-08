@@ -1,5 +1,7 @@
 #include "sim/cc_route_rules_internal.h"
 
+static int32_t MaximumI32(int32_t a, int32_t b) { return a > b ? a : b; }
+
 int32_t CcRouteDragonShadowDanger(const CcSim *sim,
                                        const CcRoute *route)
 {
@@ -21,5 +23,19 @@ CcMoney CcRouteToll(const CcSim *sim, const CcRoute *route)
         toll += 4;
     }
     return toll;
+}
+
+int32_t CcRouteSettlementMonsterPressure(const CcSim *sim, CcId settlement_id)
+{
+    int32_t pressure = 0;
+    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+        if (sim->dungeons[i].settlement_id != settlement_id) continue;
+        for (int32_t monster = 0; monster < sim->monster_count; ++monster) {
+            if (sim->monsters[monster].dungeon_id == sim->dungeons[i].id) {
+                pressure = MaximumI32(pressure, sim->monsters[monster].pressure);
+            }
+        }
+    }
+    return pressure;
 }
 
