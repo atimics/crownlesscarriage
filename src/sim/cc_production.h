@@ -14,6 +14,8 @@ typedef struct {
 typedef struct {
     CcGood output;
     int32_t output_units;
+    /* A final partial output still pays one full batch of inputs and work. */
+    bool allow_partial_output;
     int32_t input_count;
     CcRecipeInput inputs[CC_RECIPE_INPUTS];
     int32_t work_per_batch;

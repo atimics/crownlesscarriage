@@ -5196,51 +5196,42 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement,
 static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
 {
     if (sim == NULL || sim->schema_version < 33U) return;
-    if (sim->schema_version < 34U) {
-        int32_t capacity = MaximumI32(
-            0, settlement->production[CC_GOOD_PAPER]);
-        int32_t gap = MaximumI32(
-            0, settlement->reserve_target[CC_GOOD_PAPER] * 2 -
-               settlement->stock[CC_GOOD_PAPER]);
-        int32_t wood_available = MaximumI32(
-            0, settlement->stock[CC_GOOD_WOOD] -
-               settlement->reserve_target[CC_GOOD_WOOD]);
-        int32_t paper_made = MinimumI32(
-            capacity, MinimumI32(gap, wood_available * 4));
-        if (paper_made <= 0) return;
-        int32_t wood_used = (paper_made + 3) / 4;
-        settlement->stock[CC_GOOD_WOOD] -= wood_used;
-        settlement->stock[CC_GOOD_PAPER] += paper_made;
-        RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_WOOD);
-        RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
-        return;
-    }
-    if (!CcSettlementHasService(settlement, CC_SERVICE_MILL) ||
-        settlement->hunger > 0 ||
-        settlement->stock[CC_GOOD_TOOLS] <= 0) return;
+    bool legacy = sim->schema_version < 34U;
+    if (!legacy && (!CcSettlementHasService(settlement, CC_SERVICE_MILL) ||
+        settlement->hunger > 0 || settlement->stock[CC_GOOD_TOOLS] <= 0)) return;
     /* Keep mill work behind the town's food buffer, across all edible goods. */
     if (sim->schema_version >= 37U &&
         NutritionRations(settlement->stock, CC_NUTRITION_CIVILIAN) <
             WeeklyFoodUse(sim, settlement) * 4) return;
-    int32_t capacity = MaximumI32(
-        0, settlement->production[CC_GOOD_PAPER]);
-    int32_t gap = MaximumI32(
-        0, settlement->reserve_target[CC_GOOD_PAPER] * 2 -
-           settlement->stock[CC_GOOD_PAPER]);
-    CcGood input = sim->schema_version < 37U ?
+    int32_t capacity = MaximumI32(0, settlement->production[CC_GOOD_PAPER]);
+    CcGood input = !legacy && sim->schema_version < 37U ?
         CC_GOOD_WHEAT : CC_GOOD_WOOD;
     int32_t protected_input = settlement->reserve_target[input];
-    if (input == CC_GOOD_WHEAT) {
-        protected_input += WeeklyFoodUse(sim, settlement) * 4;
-    }
-    int32_t input_available = MaximumI32(
-        0, settlement->stock[input] - protected_input);
-    int32_t paper_made = MinimumI32(
-        capacity, MinimumI32(gap, input_available * 4));
+    if (input == CC_GOOD_WHEAT) protected_input += WeeklyFoodUse(sim, settlement) * 4;
+    const CcProductionRecipe recipe = {
+        .output = CC_GOOD_PAPER, .output_units = 4, .allow_partial_output = true,
+        .input_count = 1, .inputs = {{input, 1, protected_input}},
+        .work_per_batch = 1, .tools_required = legacy ? 0 : 1,
+        .hunger_soft_limit = 100, .hunger_hard_limit = 100
+    };
+    int64_t capacity_limit = (int64_t)settlement->stock[CC_GOOD_PAPER] + capacity;
+    const CcProductionContext context = {
+        .producer_id = settlement->id, .storage_id = settlement->id,
+        .location_id = settlement->id, .stock = settlement->stock,
+        .capacity = capacity / 4 + (capacity % 4 != 0),
+        .output_limit = MinimumI32(settlement->reserve_target[CC_GOOD_PAPER] * 2,
+            capacity_limit > INT32_MAX ? INT32_MAX : (int32_t)capacity_limit),
+        .work_available = INT32_MAX, .condition = 100, .enabled = true
+    };
+    CcProductionReceipt receipt = CcProductionRun(&recipe, &context);
+    int32_t paper_made = receipt.output;
     if (paper_made <= 0) return;
-    int32_t input_used = (paper_made + 3) / 4;
-    settlement->stock[input] -= input_used;
-    settlement->stock[CC_GOOD_PAPER] += paper_made;
+    int32_t input_used = receipt.inputs[0];
+    if (legacy) {
+        RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_WOOD);
+        RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
+        return;
+    }
     WearOneTool(settlement, &settlement->paper_tool_wear, 8);
     RefreshSettlementGoodPrice(sim, settlement, input);
     RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);

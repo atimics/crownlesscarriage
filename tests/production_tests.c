@@ -77,10 +77,35 @@ static void CheckGates(void)
 #undef GATE
 }
 
+static void CheckPartialOutput(void)
+{
+    for (int32_t limit = 1; limit <= 9; ++limit) {
+        int32_t stock[CC_GOOD_COUNT] = {0};
+        stock[CC_GOOD_WOOD] = 13;
+        CcProductionRecipe recipe = {.output = CC_GOOD_PAPER, .output_units = 4,
+            .allow_partial_output = true, .input_count = 1,
+            .inputs = {{CC_GOOD_WOOD, 1, 10}}, .work_per_batch = 2,
+            .hunger_soft_limit = 100, .hunger_hard_limit = 100};
+        CcProductionContext context = {.producer_id = 1, .storage_id = 1, .location_id = 1,
+            .stock = stock, .capacity = 3, .output_limit = limit, .work_available = 6,
+            .condition = 100, .enabled = true};
+        CcProductionReceipt receipt = CcProductionRun(&recipe, &context);
+        int32_t batches = (limit + 3) / 4;
+        CC_CHECK(receipt.output == limit && receipt.batches == batches);
+        CC_CHECK(receipt.inputs[0] == batches && receipt.work == batches * 2);
+        CC_CHECK(stock[CC_GOOD_WOOD] == 13 - batches && stock[CC_GOOD_PAPER] == limit);
+        CC_CHECK(CcProductionRun(&recipe, &context).gate == CC_PRODUCTION_OUTPUT_FULL);
+        stock[CC_GOOD_PAPER] = INT32_MAX - 1;
+        context.output_limit = INT32_MAX;
+        CC_CHECK(CcProductionRun(&recipe, &context).output == (batches == 3 ? 0 : 1));
+    }
+}
+
 int main(void)
 {
     CheckCommonStore();
     CheckGates();
+    CheckPartialOutput();
     puts("Common production: local custody, exact receipts, reserves, work, policy and gates passed");
     return 0;
 }

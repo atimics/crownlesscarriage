@@ -1,0 +1,21 @@
+{
+  "base": "9b726ff",
+  "schema": 62,
+  "generator": 25,
+  "rule_versions": [
+    33,
+    34,
+    36,
+    37,
+    58,
+    62
+  ],
+  "seeds": [
+    "0x5eed0001",
+    "0xc0a71a9e"
+  ],
+  "years_each": 40,
+  "annual_hashes_matched": 480,
+  "sha256": "1e4411d7ebdce3e5f9fe95cac607c6cea405fc0673f99ae99bae5583b7df8c0e",
+  "fixture": "Current initialized worlds with historical rules selected. Shipped save fixtures are covered separately by sqlite_round_trip."
+}
