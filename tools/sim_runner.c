@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "sim_runner_road_observation.inc"
 #include "sim_runner_json.inc"
 
 static void PrintSummary(const CcSim *sim, bool detail)
@@ -408,7 +409,7 @@ int main(int argc, char **argv)
     bool opened_pilots = false;
     bool dragon_slain_day_one = false;
     CcNutritionAccounting nutrition = {0};
-    int32_t route_open_days[CC_MAX_ROUTES] = {0};
+    RoadObservation road_observations[CC_MAX_ROUTES] = {0};
     bool detail = false;
     bool smithy_report = false;
     bool site_report = false;
@@ -543,13 +544,13 @@ int main(int argc, char **argv)
         }
         PrintChronicleNewEvents(&sim);
     }
-    if (json_report) PrintProductionJson(&sim, start_day, 0, fixture, dragon_policy, &nutrition, &smithy, &sites, route_open_days);
+    if (json_report) PrintProductionJson(&sim, start_day, 0, fixture, dragon_policy, &nutrition, &smithy, &sites, road_observations);
     for (int32_t year = 0; year < years; ++year) {
         if (json_report) {
             for (int32_t day = 0; day < 365; ++day) {
                 CcSimAdvanceDaysWithProductionAccounting(&sim, 1, &nutrition, &smithy, &sites);
                 for (int32_t i = 0; i < sim.route_count; ++i)
-                    if (!sim.routes[i].closed) route_open_days[i]++;
+                    ObserveRoadDay(&sim, &sim.routes[i], &road_observations[i]);
             }
         } else if (chronicle) {
             /* Monthly scans: a busy year pushes more than the event ring
@@ -575,7 +576,7 @@ int main(int argc, char **argv)
         }
         if (json_report) {
             if (year == 0 || year + 1 == years || (year + 1) % report_every == 0)
-                PrintProductionJson(&sim, start_day, year + 1, fixture, dragon_policy, &nutrition, &smithy, &sites, route_open_days);
+                PrintProductionJson(&sim, start_day, year + 1, fixture, dragon_policy, &nutrition, &smithy, &sites, road_observations);
         } else if (chronicle) {
             (void)printf("== year %d (day %d) ==\n", year + 1, sim.current_day);
             PrintChronicleNewEvents(&sim);

@@ -1,0 +1,12 @@
+[
+  {
+    "seed": "42",
+    "checkpoints": 41,
+    "all_existing_fields_match": true
+  },
+  {
+    "seed": "0x5eed0001",
+    "checkpoints": 41,
+    "all_existing_fields_match": true
+  }
+]

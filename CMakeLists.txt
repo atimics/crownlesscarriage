@@ -92,6 +92,7 @@ add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
     src/sim/cc_sim_hash.c
+    src/sim/cc_archive_queries.c
     src/sim/cc_sim_versions.c
     src/sim/cc_identity.c
     src/sim/cc_route_rules.c
@@ -1382,6 +1383,24 @@ if(BUILD_TESTING)
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/transition_json_tests.py
                          $<TARGET_FILE:campaign_json_fixture>
                          $<TARGET_FILE:ritual_json_fixture>)
+        add_executable(road_network_fixture tests/road_network_fixture.c)
+        target_link_libraries(road_network_fixture PRIVATE crownless_persistence)
+        cc_strict_warnings(road_network_fixture)
+        add_test(NAME road_network_json
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/road_network_tests.py
+                         $<TARGET_FILE:road_network_fixture>)
+        add_executable(road_observation_tests tests/road_observation_tests.c)
+        target_link_libraries(road_observation_tests PRIVATE crownless_sim)
+        cc_strict_warnings(road_observation_tests)
+        add_test(NAME road_observation COMMAND road_observation_tests)
+        add_executable(road_context_fixture tests/road_context_fixture.c)
+        target_link_libraries(road_context_fixture PRIVATE crownless_persistence)
+        cc_strict_warnings(road_context_fixture)
+        add_test(NAME road_context_json
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/road_context_tests.py
+                         $<TARGET_FILE:road_context_fixture>)
         add_executable(retained_history_fixture tests/retained_history_fixture.c)
         target_link_libraries(retained_history_fixture PRIVATE crownless_persistence)
         cc_strict_warnings(retained_history_fixture)
