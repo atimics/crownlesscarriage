@@ -200,6 +200,20 @@ static void CheckSeedSweep(char *error, size_t capacity)
     CC_CHECK(any_contest);
 }
 
+static void CheckSeedTwoLandLoss(char *error, size_t capacity)
+{
+    CcSim sim;
+    CC_CHECK(CcSaveRead(CC_TEST_SOURCE_DIR
+        "/tests/fixtures/shipped/seed-2-before-land-loss.ccsave",
+        &sim, error, capacity));
+    CC_CHECK(sim.current_day == 5864249);
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(sim.current_day == 5864250);
+    CC_CHECK(sim.kingdoms[1].ruler_character_id == 0U);
+    CC_CHECK(sim.kingdoms[1].monastery_patron_id == 0U);
+    CC_CHECK(CcSimValidate(&sim, error, capacity));
+}
+
 static void CheckLandlessOffices(char *error, size_t capacity)
 {
     CcSim sim;
@@ -228,6 +242,7 @@ static void CheckLandlessOffices(char *error, size_t capacity)
 int main(void)
 {
     char error[256];
+    CheckSeedTwoLandLoss(error, sizeof(error));
     CheckLandlessOffices(error, sizeof(error));
     CheckUncontestedSuccession(error, sizeof(error));
     CheckProclamationVictory(error, sizeof(error));
