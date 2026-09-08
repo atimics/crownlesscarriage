@@ -14,8 +14,8 @@ Scene setup and frame capture hooks remain in `main()` for a later extraction.
   image. Visual review confirmed the title menu and world background.
 - Both parent 610e16a and this branch used the web preset, Emscripten 5.0.4,
   and the same cached raylib source.
-- Parent `index.wasm`: 4,201,041 bytes; extracted version: 4,166,951 bytes.
-  Reduction: 34,090 bytes (0.81%), before compression.
+- Final linked parent `index.wasm`: 5,638,751 bytes; extracted version: 5,585,950 bytes.
+  Reduction: 52,801 bytes (0.94%), before compression.
 - A byte scan found 54 distinct `--capture` flags in the parent WebAssembly
   and zero in this version. This measures flag removal; it does not establish
   removal of every capture helper.
