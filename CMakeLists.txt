@@ -1262,6 +1262,10 @@ if(BUILD_TESTING)
     cc_strict_warnings(hunger_metrics_tests)
     add_test(NAME inhabited_hunger_metrics COMMAND hunger_metrics_tests)
     if(CC_PYTHON3_EXECUTABLE AND CC_BUILD_BENCHMARKS)
+        add_test(NAME production_json_capture
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/production_json_tests.py
+                         $<TARGET_FILE:crownless_sim_runner>)
         add_test(NAME hunger_report_agreement
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/hunger_report_tests.py

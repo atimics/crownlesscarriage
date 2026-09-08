@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "sim_runner_json.inc"
+
 static void PrintSummary(const CcSim *sim, bool detail)
 {
     CcHungerSnapshot hunger = CcSimHungerSnapshot(sim);
@@ -317,6 +319,10 @@ int main(int argc, char **argv)
     int32_t checkpoint_every = 0;
     const char *load_path = NULL;
     const char *save_path = NULL;
+    bool json_report = false;
+    bool opened_pilots = false;
+    CcNutritionAccounting nutrition = {0};
+    int32_t route_open_days[CC_MAX_ROUTES] = {0};
     bool detail = false;
     bool smithy_report = false;
     bool site_report = false;
@@ -341,6 +347,10 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[argument], "--checkpoint-every") == 0 &&
                    argument + 1 < argc) {
             checkpoint_every = (int32_t)strtol(argv[++argument], NULL, 10);
+        } else if (strcmp(argv[argument], "--json") == 0) {
+            json_report = true;
+        } else if (strcmp(argv[argument], "--opened-production-pilots") == 0) {
+            opened_pilots = true;
         } else if (strcmp(argv[argument], "--detail") == 0) {
             detail = true;
         } else if (strcmp(argv[argument], "--site-freight") == 0) {
@@ -356,6 +366,11 @@ int main(int argc, char **argv)
 
     CcSim sim;
     char error[256];
+    if ((json_report && chronicle) || (opened_pilots && load_path != NULL)) {
+        fputs("Choose JSON or chronicle output; use a fresh seed for opened pilots.\n", stderr);
+        return 1;
+    }
+    if (json_report) { smithy_report = true; site_report = true; }
     if (checkpoint_every < 0 || (checkpoint_every > 0 && save_path == NULL)) {
         (void)fprintf(stderr, "checkpoint interval requires --save and a positive year count\n");
         return 1;
@@ -368,6 +383,24 @@ int main(int argc, char **argv)
     } else {
         CcSimInit(&sim, seed);
     }
+    if (opened_pilots) {
+        const int32_t indices[] = {2, 11, 15};
+        const CcRoadSiteKind kinds[] = {CC_ROAD_SITE_MILL, CC_ROAD_SITE_SMITHY, CC_ROAD_SITE_FARM};
+        for (int32_t i = 0; i < 3; ++i) {
+            CcRoadSite *site = &sim.road_sites[indices[i]];
+            CcProductionRecipe recipe;
+            if (site->kind != kinds[i] || !CcRoadSiteRecipe(site, &recipe)) {
+                fputs("The production pilot requires its authored mill, forge and farm.\n", stderr);
+                return 1;
+            }
+            site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE;
+            site->stock[CC_GOOD_TOOLS] = 1;
+            for (int32_t j = 0; j < recipe.input_count; ++j)
+                site->stock[recipe.inputs[j].good] = recipe.inputs[j].reserve + 4 * recipe.inputs[j].units;
+        }
+    }
+    const int32_t start_day = sim.current_day;
+    const char *fixture = opened_pilots ? "opened-production-pilots" : load_path != NULL ? "loaded-save" : "baseline";
     /* --years counts further years when resuming a saved world. */
     if (years < 0 || years > (INT32_MAX - sim.current_day) / 365) {
         (void)fprintf(stderr, "year count exceeds the simulation day range\n");
@@ -384,8 +417,15 @@ int main(int argc, char **argv)
         }
         PrintChronicleNewEvents(&sim);
     }
+    if (json_report) PrintProductionJson(&sim, start_day, 0, fixture, &nutrition, &smithy, &sites, route_open_days);
     for (int32_t year = 0; year < years; ++year) {
-        if (chronicle) {
+        if (json_report) {
+            for (int32_t day = 0; day < 365; ++day) {
+                CcSimAdvanceDaysWithProductionAccounting(&sim, 1, &nutrition, &smithy, &sites);
+                for (int32_t i = 0; i < sim.route_count; ++i)
+                    if (!sim.routes[i].closed) route_open_days[i]++;
+            }
+        } else if (chronicle) {
             /* Monthly scans: a busy year pushes more than the event ring
              * holds, so a yearly window would lose mid-year events. */
             for (int32_t month = 0; month < 12; ++month) {
@@ -399,7 +439,7 @@ int main(int argc, char **argv)
         }
         if (!CcSimValidate(&sim, error, sizeof(error))) {
             (void)fprintf(stderr, "validation failed in year %d: %s\n", year + 1, error);
-            if (detail) PrintSummary(&sim, true);
+            if (detail && !json_report) PrintSummary(&sim, true);
             return 1;
         }
         if (checkpoint_every > 0 && (year + 1) % checkpoint_every == 0 &&
@@ -407,7 +447,10 @@ int main(int argc, char **argv)
             (void)fprintf(stderr, "checkpoint failed: %s\n", error);
             return 1;
         }
-        if (chronicle) {
+        if (json_report) {
+            if (year == 0 || year + 1 == years || (year + 1) % report_every == 0)
+                PrintProductionJson(&sim, start_day, year + 1, fixture, &nutrition, &smithy, &sites, route_open_days);
+        } else if (chronicle) {
             (void)printf("== year %d (day %d) ==\n", year + 1, sim.current_day);
             PrintChronicleNewEvents(&sim);
             PrintSummary(&sim, detail);
