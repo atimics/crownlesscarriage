@@ -1,6 +1,6 @@
 # Long-world comparison rule
 
-This extends simulation source 06e5701c6d6c09bc25430685a9fd917b81a42972 with read-only campaign metrics. It uses metrics seeds 1–32, each for 128,000 years. Checkpoints are 1,000 years and repeated doublings through 128,000 years. Every year is validated and contributes to statistics.
+This extends simulation source 06e5701c6d6c09bc25430685a9fd917b81a42972 with read-only campaign metrics. It uses metrics seeds 1–32, each for 128,000 years. Checkpoints are 1,000 years and repeated doublings through 128,000 years. Every year is validated. Each completed 1,000-year block uses all its annual observations. A failed run keeps sampled rows and its last valid endpoint from the final partial block.
 
 For each seed and checkpoint, compare the average over the final quarter of its history, with a minimum window of 1,000 years. A practical plateau requires both the cohort mean and at least 80% of seeds to stay within tolerance at every later doubling. The reported plateau year is the first checkpoint from which those later comparisons hold. The year 128,000 endpoint alone cannot establish a plateau.
 

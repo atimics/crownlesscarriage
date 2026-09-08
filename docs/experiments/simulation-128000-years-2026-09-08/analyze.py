@@ -98,7 +98,8 @@ def main():
     fig,axs=plt.subplots(1,2,figsize=(13,5),layout='constrained')
     for s in seeds:
         vals=[int(r['live_treasures']) for r in annual[s]]
-        axs[0].plot(years,vals,lw=1,alpha=.6)
+        axs[0].plot(years,vals,lw=2 if s in (1,2,7) else .8,alpha=1 if s in (1,2,7) else .3,
+                    color={1:C[1],2:C[0],7:C[2]}.get(s,'#777777'),label=f'Seed {s}' if s in (1,2,7) else None)
     axs[0].axhline(24,color='#333333',ls=':',label='24-object limit')
     axs[0].set(xscale='log',xlabel='Simulated year · log scale',ylabel='Live treasure objects',title='Each completed world');axs[0].legend(frameon=False);axs[0].grid(True)
     coverage=[summary['coverage_by_horizon'][str(h)] for h in HORIZONS]

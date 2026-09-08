@@ -83,5 +83,6 @@ def main():
     manifest['data_hashes']={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for folder in ('annual','blocks') for p in sorted((root/folder).glob('*.gz'))}
     (root/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     print(f"Finished: {sum(x['passed'] for x in manifest['runs'])}/{args.seeds} passed in {manifest['seconds']:.1f}s",flush=True)
+    return 0 if all(x['passed'] for x in manifest['runs']) else 1
 
-if __name__=='__main__':main()
+if __name__=='__main__':raise SystemExit(main())

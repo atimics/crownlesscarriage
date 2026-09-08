@@ -1,4 +1,4 @@
-/* Reproduce a long-run validation failure and report carriage counters. */
+/* Reproduce a long-run validation failure and report carriage and bandit counters. */
 #include "sim/cc_sim.h"
 #include <inttypes.h>
 #include <stdio.h>
@@ -25,6 +25,12 @@ int main(int argc, char **argv)
                          i, carriage->trips_completed, carriage->cargo_losses,
                          carriage->condition, (int32_t)carriage->mode,
                          carriage->next_dispatch_day, CC_SIM_MAX_UNITS);
+        }
+        for (int32_t i = 0; i < sim->bandit_count; ++i) {
+            const CcBanditGroup *bandits = &sim->bandits[i];
+            (void)printf("bandits=%d raids=%d phase=%d remaining=%d counter_limit=%d\n",
+                         i, bandits->raids_completed, (int32_t)bandits->raid_phase,
+                         bandits->raid_days_remaining, CC_SIM_MAX_UNITS);
         }
         free(sim);
         return 1;
