@@ -201,6 +201,7 @@ else()
 endif()
 add_library(crownless_persistence
     src/persistence/cc_save.c
+    src/persistence/cc_journal_replay.c
     src/persistence/cc_legacy_runtime.c
 )
 target_include_directories(crownless_persistence PUBLIC src)
