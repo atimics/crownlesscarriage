@@ -2458,7 +2458,7 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
 {
     if (sim == NULL || good < 0 || good >= CC_GOOD_COUNT) return 0;
     int64_t total = sim->player.cargo[good] +
-                    (sim->schema_version >= 57U ? sim->mine.pack[good] : 0) +
+                    (sim->schema_version >= 58U ? sim->mine.pack[good] : 0) +
                     sim->goblins.carried_goods[good] +
                     sim->goblins.lair_stock[good] +
                     sim->dragon.hoard_goods[good] +
@@ -8334,6 +8334,7 @@ static void HatchDragonSuccessor(CcSim *sim)
     CopyName(former_name, dragon->name);
     dragon->whelps_dispersed += MaximumI32(0, clutch - 1);
     dragon->id = NextId(sim, CC_ENTITY_DRAGON);
+    dragon->wyrmheart_id = 0U;
     static const char *successor_names[] = {
         "Ashwing the Inheritor", "Cinder-Child", "The Remembered Scale",
         "Ember Beneath Stone"
@@ -8790,6 +8791,45 @@ static void AdvanceAfterdragon(CcSim *sim)
     }
 }
 
+static CcTreasure *CreateDragonWyrmheart(CcSim *sim)
+{
+    CcDragon *dragon = &sim->dragon;
+    CcSettlement *lair = CcSimSettlementMutable(
+        sim, dragon->lair_settlement_id);
+    CcTreasure *gem = lair != NULL ? AllocateTreasure(sim) : NULL;
+    if (gem != NULL) {
+        (void)snprintf(gem->name, sizeof(gem->name),
+                       "Wyrmheart of %.20s", dragon->name);
+        gem->maker_settlement_id = lair->id;
+        gem->owner_id = dragon->id;
+        gem->location_id = lair->id;
+        gem->gold_content = 2;
+        gem->gem_content = 12;
+        gem->craft_work = 50;
+        gem->appraised_value = gem->gold_content * 40 +
+            gem->gem_content * 70 + gem->craft_work * 10;
+        gem->created_day = sim->current_day;
+    }
+    return gem;
+}
+
+static bool DragonCanBecomeDeepWyrm(const CcSim *sim)
+{
+    const CcDragon *dragon = &sim->dragon;
+    if (dragon->wyrmheart_id == 0U) {
+        if (CcSimSettlement(sim, dragon->lair_settlement_id) == NULL) return false;
+        if (sim->treasure_count < CC_MAX_TREASURES) return true;
+        for (int32_t i = 0; i < sim->treasure_count; ++i) {
+            if (sim->treasures[i].destroyed) return true;
+        }
+        return false;
+    }
+    const CcTreasure *heart = CcSimTreasure(sim, dragon->wyrmheart_id);
+    return heart != NULL && !heart->destroyed &&
+        heart->owner_id == dragon->id &&
+        heart->location_id == dragon->lair_settlement_id;
+}
+
 static void AdvanceDragonEcology(CcSim *sim)
 {
     CcDragon *dragon = &sim->dragon;
@@ -8928,25 +8968,17 @@ static void AdvanceDragonEcology(CcSim *sim)
                dragon->age_days >= 500 * 365 &&
                dragon->crown_strength >= 60 &&
                dragon->crown_continuity_days >= 200 * 365 &&
-               dragon->territory_stability >= 75) {
+               dragon->territory_stability >= 75 &&
+               (sim->schema_version < 57U || DragonCanBecomeDeepWyrm(sim))) {
         ChangeDragonStage(sim, CC_DRAGON_STAGE_DEEP_WYRM,
                           CC_EVENT_DRAGON_CROWNED,
                           "centuries of possession bind wyrm, hoard, and mountain");
-        CcSettlement *lair = CcSimSettlementMutable(
-            sim, dragon->lair_settlement_id);
-        CcTreasure *gem = lair != NULL ? AllocateTreasure(sim) : NULL;
-        if (gem != NULL) {
-            (void)snprintf(gem->name, sizeof(gem->name),
-                           "Wyrmheart of %.20s", dragon->name);
-            gem->maker_settlement_id = lair->id;
-            gem->owner_id = dragon->id;
-            gem->location_id = lair->id;
-            gem->gold_content = 2;
-            gem->gem_content = 12;
-            gem->craft_work = 50;
-            gem->appraised_value = gem->gold_content * 40 +
-                gem->gem_content * 70 + gem->craft_work * 10;
-            gem->created_day = sim->current_day;
+        /* Keep first formation in its historical event and identity order. */
+        if (sim->schema_version < 57U || dragon->wyrmheart_id == 0U) {
+            CcTreasure *heart = CreateDragonWyrmheart(sim);
+            if (sim->schema_version >= 57U && heart != NULL) {
+                dragon->wyrmheart_id = heart->id;
+            }
         }
     }
 
@@ -18834,7 +18866,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 56U
+#define CC_NEWEST_LEGACY_SCHEMA 57U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18852,7 +18884,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 56U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 57U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -20084,6 +20116,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                      "Dragon ecology state is invalid.");
             return false;
         }
+        /* A lost heart keeps its identity even after its slot is reused. */
+        if (sim->schema_version >= 57U && dragon->wyrmheart_id != 0U &&
+            (CcIdKind(dragon->wyrmheart_id) != CC_ENTITY_TREASURE ||
+             (dragon->wyrmheart_id & CC_ID_SERIAL_MASK) == 0U ||
+             (dragon->wyrmheart_id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial)) {
+            SetError(error, error_capacity, "Dragon Wyrmheart identity is invalid.");
+            return false;
+        }
         const CcDragonCampaign *campaign = &sim->dragon_campaign;
         bool campaign_idle =
             campaign->phase == CC_DRAGON_CAMPAIGN_IDLE;
@@ -20874,7 +20914,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Pony company state is invalid.");
         return false;
     }
-    if (sim->schema_version >= 57U && !CcMineValidate(sim)) {
+    if (sim->schema_version >= 58U && !CcMineValidate(sim)) {
         SetError(error, error_capacity, "Mine visit state is invalid.");
         return false;
     }
@@ -20925,7 +20965,7 @@ uint64_t CcSimHash(const CcSim *sim)
     bool hash_lifecycles = sim->schema_version >= 26U;
     uint64_t hash = UINT64_C(1469598103934665603);
 #define HASH_VALUE(value) hash = HashU64(hash, (uint64_t)(value))
-    if (sim->schema_version >= 57U) {
+    if (sim->schema_version >= 58U) {
         HASH_VALUE(sim->mine.phase); HASH_VALUE(sim->mine.site_id);
         HASH_VALUE(sim->mine.x); HASH_VALUE(sim->mine.y); HASH_VALUE(sim->mine.revision);
         HASH_VALUE(sim->mine.return_speed); HASH_VALUE(sim->mine.light);
@@ -21228,6 +21268,9 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(dragon->whelps_dispersed);
             HASH_VALUE(dragon->afterdeath_days);
             HASH_VALUE(dragon->lifecycle_event_id);
+        }
+        if (sim->schema_version >= 57U) {
+            HASH_VALUE(dragon->wyrmheart_id);
         }
         if (sim->schema_version >= 9U) {
             HASH_VALUE(dragon->stolen_treasure_id);

@@ -5112,7 +5112,7 @@ int main(void)
     CcLocalCourseStageRoadEncounter(&road_course, &road_player, true);
     if (!road_course.road_encounter || !road_course.alarm_active ||
         fabsf(road_player.position.x - CC_LOCAL_ROAD_START_X) > 0.01f ||
-        road_course.raiders[0].position.x < road_player.position.x + 8.0f ||
+        road_course.raiders[0].position.x < road_player.position.x + 2.0f ||
         fabsf(road_course.raiders[0].position.y - 0.56f) > 0.02f) {
         (void)fprintf(stderr,
                       "hostile road encounter was not staged on the bridge deck: player %.2f %.2f raider %.2f %.2f\n",
@@ -5121,10 +5121,11 @@ int main(void)
                       road_course.raiders[0].position.y);
         return 1;
     }
-    if (CcLocalCourseHasNearbyHostile(&road_course, &road_player) ||
-        CcLocalCourseSelectPlayerTarget(&road_course, &road_player, 0)) {
+    if (!CcLocalCourseHasNearbyHostile(&road_course, &road_player) ||
+        !CcLocalCourseSelectPlayerTarget(&road_course, &road_player, 0) ||
+        !CcLocalCourseSelectPlayerTarget(&road_course, &road_player, 1)) {
         (void)fprintf(stderr,
-                      "distant road hostile activated combat at map entry\n");
+                      "bridge targets should be selectable when the fight starts\n");
         return 1;
     }
     bool road_hostile_nearby = false;

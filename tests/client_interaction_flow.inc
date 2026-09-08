@@ -85,7 +85,7 @@ static int RunAdventureInputRegression(void)
         "A repeated exchange must keep the same remembered account.");
     local.conversation_gossip_source = false;
     replies = BuildContextActions(&sim, &local, view, selected, selected_situation);
-    Rectangle source_card = ContextActionBounds(0, ContextCardCount(replies.count, 0));
+    Rectangle source_card = ContextActionBounds(0, ContextCardCount(&replies, 0), replies.combat);
     client_test_pointer_active = true;
     client_test_pointer = (Vector2){source_card.x + source_card.width * 0.5f,
         source_card.y + source_card.height * 0.5f};

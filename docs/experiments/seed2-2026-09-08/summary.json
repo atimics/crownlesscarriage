@@ -1,0 +1,58 @@
+{
+  "simulation_base": "06e5701c6d6c09bc25430685a9fd917b81a42972",
+  "seed_number": 2,
+  "world_seed": 1013904242,
+  "validated_years": 140000,
+  "matching_prior_checkpoints": 128,
+  "matching_detail_checkpoints": 8,
+  "matching_128000_treasure_identity_hash": "1389565615143552662",
+  "objects_at_128000": 23,
+  "value_at_128000": 31380,
+  "unique_names_at_128000": 2,
+  "objects_at_140000": 24,
+  "total_wyrmhearts_created": 23,
+  "uncrownings": 22,
+  "creation_years": [
+    0.0547945205479452,
+    254.0,
+    7302.550684931507,
+    11334.16712328767,
+    14989.356164383562,
+    22003.471232876713,
+    29833.575342465752,
+    37966.15616438356,
+    46901.14794520548,
+    56069.03835616438,
+    61378.375342465755,
+    70204.28219178082,
+    74950.0904109589,
+    76996.85205479452,
+    82520.3698630137,
+    88707.75616438357,
+    96668.34794520547,
+    100874.94520547945,
+    102273.33424657534,
+    107944.75342465754,
+    109135.71232876713,
+    120035.53698630138,
+    120520.74246575343,
+    136100.63287671233
+  ],
+  "heart_gap_years": {
+    "min": 485.2054794520548,
+    "median": 5929.402739726027,
+    "max": 15579.890410958904
+  },
+  "recovery_years": {
+    "min": 9.361643835616439,
+    "median": 11.854794520547944,
+    "max": 27.156164383561645
+  },
+  "all_inventory_owned_by_dragon": true,
+  "all_uncrownings_have_zero_territory": true,
+  "artifact_sha256": {
+    "trace.c": "83312551ab3ac654d4dd7b57b0695e5b2ed792c16962e4d5a875001f08adedb0",
+    "trace.jsonl": "cf5ce53eec636c762597b2a4bfb8caf47abce7f57bac3acd85b618834ce4bc25",
+    "first-cycle.jsonl": "26ca2a535145eb44fa8017b8be83f394281946ee9b7fd369ed4b93244eb6aae9"
+  }
+}

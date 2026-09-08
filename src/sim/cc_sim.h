@@ -56,7 +56,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 57
+#define CC_SIM_SCHEMA_VERSION 58
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -927,6 +927,8 @@ typedef struct CcDragon {
     CcMoney hoard;
     int32_t hoard_goods[CC_GOOD_COUNT];
     CcId stolen_treasure_id;
+    /* The first heart of this dragon; retained after loss or destruction. */
+    CcId wyrmheart_id;
     CcMoney stolen_outstanding;
     CcId theft_actor_id;
     CcId retaliation_target_id;
@@ -1694,7 +1696,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 173032,
+_Static_assert(sizeof(CcSim) == 173040,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

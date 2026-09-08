@@ -26,8 +26,155 @@ static int32_t TotalHuntFood(const CcSim *sim)
     return total;
 }
 
+static void ReadyForDeepWyrm(CcSim *sim)
+{
+    sim->dragon.life_stage = CC_DRAGON_STAGE_CROWNED;
+    sim->dragon.hoard = 5000;
+    sim->dragon.hoard_goods[CC_GOOD_GOLD] = 10;
+    sim->dragon.hoard_goods[CC_GOOD_GEMS] = 10;
+    sim->dragon.age_days = 500 * 365;
+    sim->dragon.body_condition = 50;
+    sim->dragon.memory_integrity = 100;
+    sim->dragon.territory_stability = 100;
+    sim->dragon.crown_continuity_days = 250 * 365;
+    sim->goblins.devotion = 100;
+}
+
+static void CheckWyrmheartRecovery(void)
+{
+    static CcSim first, trial, restored;
+    char error[256];
+    const char *path = "/tmp/crownless-wyrmheart-tests.ccsave";
+    CcSimInit(&first, UINT32_C(0xdee00003));
+    ReadyForDeepWyrm(&first);
+    CcSimAdvanceDays(&first, 1);
+    CC_CHECK(first.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
+    CC_CHECK(first.treasure_count == 1);
+    CcId heart_id = first.dragon.wyrmheart_id;
+    CC_CHECK(heart_id == first.treasures[0].id);
+
+    /* Recovery reuses the same object, including after a save and reload. */
+    trial = first;
+    ReadyForDeepWyrm(&trial);
+    CC_CHECK(CcSaveWrite(path, &trial, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&trial) == CcSimHash(&restored));
+    for (int i = 0; i < 3; ++i) {
+        ReadyForDeepWyrm(&restored);
+        CcSimAdvanceDays(&restored, 1);
+        CC_CHECK(restored.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
+        CC_CHECK(restored.treasure_count == 1);
+        CC_CHECK(restored.dragon.wyrmheart_id == heart_id);
+    }
+
+    trial = first;
+    trial.dragon.territory_stability = 0;
+    trial.dragon.territoryless_days = 5 * 364 - 1;
+    CcSimAdvanceDays(&trial, 1);
+    CC_CHECK(trial.dragon.life_stage == CC_DRAGON_STAGE_UNCROWNED);
+    trial.dragon.territory_stability = 100;
+    CcSimAdvanceDays(&trial, 1);
+    CC_CHECK(trial.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
+    CcSimAdvanceDays(&trial, 1);
+    CC_CHECK(trial.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
+    CC_CHECK(trial.treasure_count == 1);
+    CC_CHECK(trial.dragon.wyrmheart_id == heart_id);
+
+    /* Possession means the original intact heart is owned and held at the lair. */
+    for (int condition = 0; condition < 4; ++condition) {
+        trial = first;
+        ReadyForDeepWyrm(&trial);
+        if (condition == 0) trial.treasures[0].owner_id = trial.settlements[0].id;
+        if (condition == 1) trial.treasures[0].location_id = trial.settlements[0].id;
+        if (condition == 2) trial.treasures[0].destroyed = true;
+        if (condition == 3) trial.treasures[0].id = CcMakeId(CC_ENTITY_TREASURE, trial.next_entity_serial++);
+        CC_CHECK(CcSaveWrite(path, &trial, error, sizeof(error)));
+        CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+        CC_CHECK(restored.dragon.wyrmheart_id == heart_id);
+        CcSimAdvanceDays(&restored, 1);
+        CC_CHECK(restored.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
+        CC_CHECK(restored.treasure_count == 1);
+        restored.treasures[0] = first.treasures[0];
+        CcSimAdvanceDays(&restored, 1);
+        CC_CHECK(restored.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
+        CC_CHECK(restored.dragon.wyrmheart_id == heart_id);
+        CC_CHECK(restored.treasure_count == 1);
+    }
+
+    /* A full world waits for room for the first heart. */
+    CcSimInit(&trial, UINT32_C(0xdee00004));
+    ReadyForDeepWyrm(&trial);
+    trial.treasure_count = CC_MAX_TREASURES;
+    for (int i = 0; i < CC_MAX_TREASURES; ++i) {
+        trial.treasures[i] = first.treasures[0];
+        trial.treasures[i].id = CcMakeId(CC_ENTITY_TREASURE, trial.next_entity_serial++);
+        trial.treasures[i].owner_id = trial.dragon.id;
+        trial.treasures[i].location_id = trial.dragon.lair_settlement_id;
+    }
+    CcSimAdvanceDays(&trial, 1);
+    CC_CHECK(trial.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
+    CC_CHECK(trial.dragon.wyrmheart_id == 0U);
+    trial.treasures[0].destroyed = true;
+    CcSimAdvanceDays(&trial, 1);
+    CC_CHECK(trial.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
+    CC_CHECK(trial.dragon.wyrmheart_id == trial.treasures[0].id);
+
+    /* A successor has its own first heart, alongside its parent's relic. */
+    trial = first;
+    trial.dragon.slain = true;
+    trial.dragon.slain_day = trial.current_day;
+    trial.dragon.egg_count = 1;
+    trial.dragon.brood_days_remaining = 1;
+    CcSimAdvanceDays(&trial, 1);
+    CC_CHECK(trial.dragon.id != first.dragon.id);
+    CC_CHECK(trial.dragon.wyrmheart_id == 0U);
+    ReadyForDeepWyrm(&trial);
+    CcSimAdvanceDays(&trial, 1);
+    CC_CHECK(trial.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
+    CC_CHECK(trial.dragon.wyrmheart_id != heart_id);
+    CC_CHECK(trial.treasure_count == 2);
+
+    /* Legacy saves bind the earliest matching heart, even when it is elsewhere. */
+    trial = first;
+    trial.schema_version = 56U;
+    ReadyForDeepWyrm(&trial);
+    trial.treasures[0].owner_id = trial.settlements[0].id;
+    CC_CHECK(CcSaveWrite(path, &trial, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.dragon.wyrmheart_id == heart_id);
+    CcSimAdvanceDays(&restored, 1);
+    CC_CHECK(restored.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
+    CC_CHECK(restored.treasure_count == 1);
+    /* Existing duplicate hearts remain objects; the first retains its role. */
+    trial = first;
+    trial.schema_version = 56U;
+    trial.treasures[1] = trial.treasures[0];
+    trial.treasures[1].id = CcMakeId(CC_ENTITY_TREASURE, trial.next_entity_serial++);
+    trial.treasures[0].created_day = 1;
+    trial.treasure_count = 2;
+    CC_CHECK(CcSaveWrite(path, &trial, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.dragon.wyrmheart_id == heart_id);
+    CC_CHECK(restored.treasure_count == 2);
+
+    /* An old deep wyrm whose heart is gone retains a spent heart identity. */
+    trial = first;
+    trial.schema_version = 56U;
+    trial.treasure_count = 0;
+    CC_CHECK(CcSaveWrite(path, &trial, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.dragon.wyrmheart_id != 0U);
+    ReadyForDeepWyrm(&restored);
+    CcSimAdvanceDays(&restored, 1);
+    CC_CHECK(restored.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
+    CC_CHECK(restored.treasure_count == 0);
+    CC_CHECK(remove(path) == 0);
+}
+
 int main(void)
 {
+    CheckWyrmheartRecovery();
     char error[256];
     CcSim offices;
     CcSimInit(&offices, UINT32_C(0xab807001));

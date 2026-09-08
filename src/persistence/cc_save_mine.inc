@@ -1,6 +1,6 @@
 static bool SaveMine(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 57U) return true;
+    if (sim->schema_version < 58U) return true;
     sqlite3_stmt *statement=NULL;
     if (!Prepare(database,"INSERT INTO mine_visit VALUES(1,?,?,?,?,?,?,?,?,?,?,?);",
         &statement,error,error_capacity)) return false;
@@ -23,7 +23,7 @@ static bool SaveMine(sqlite3 *database, const CcSim *sim, char *error, size_t er
 }
 static bool ReadMine(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 57U) return true;
+    if (sim->schema_version < 58U) return true;
     sqlite3_stmt *statement=NULL;
     if (!Prepare(database,"SELECT phase,site_id,x,y,revision,return_speed,light,steps,seen,bar_open,surveyed FROM mine_visit WHERE slot=1;",
         &statement,error,error_capacity)) return false;

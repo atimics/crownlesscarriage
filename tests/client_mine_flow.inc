@@ -44,7 +44,7 @@ static int RunMineInputRegression(void)
     }
     ContextActionSet actions=BuildContextActions(&sim,&local,view,0,0);
     MINE_CHECK(actions.count==2 && actions.items[0].kind==CONTEXT_ACTION_VISIT_MINE,"Mine branch needs entry and continue cards.");
-    Rectangle button=ContextActionBounds(0,2);
+    Rectangle button=ContextActionBounds(0,2,false);
     client_test_pointer_active=true;client_test_pointer=(Vector2){button.x+button.width/2,button.y+button.height/2};
     queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
     MINE_CHECK(sim.mine.phase==CC_MINE_YARD,"Clicking the branch must open the yard.");

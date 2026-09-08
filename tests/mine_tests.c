@@ -115,10 +115,10 @@ int main(void)
     CC_CHECK(restored.mine.phase==CC_MINE_NONE && restored.mine.surveyed && restored.mine.bar_open);
     CC_CHECK(restored.player.cargo[CC_GOOD_BREAD]==2 && restored.journey.elapsed_subticks==anchor);
     CcSimAdvanceRuntimeTicks(&restored,1);CC_CHECK(restored.journey.elapsed_subticks>anchor);
-    CcSimInit(&sim,123);sim.schema_version=56;
+    CcSimInit(&sim,123);sim.schema_version=57;
     Check(CcSaveWrite(path,&sim,error,sizeof(error)));
     Check(CcSaveRead(path,&restored,error,sizeof(error)));
-    CC_CHECK(restored.schema_version==57 && restored.mine.phase==CC_MINE_NONE);
+    CC_CHECK(restored.schema_version==58 && restored.mine.phase==CC_MINE_NONE);
     AtBranch(&sim,false);
     Check(CcCoopApply(&sim,"visit_mine",CcMineSite(&sim)->id,0,0,error,sizeof(error)));
     Check(CcCoopApply(&sim,"mine_step",(CcId)sim.mine.revision,0,0,error,sizeof(error)));
