@@ -1,5 +1,7 @@
 # Repeated production capture
 
+Protocol 2 adds town production accounting; see [the extension](../town-production-accounting-2026-09-08/README.md). The manifest below records the original protocol 1 capture.
+
 This reporting slice of #394 adds JSON Lines to the existing simulation runner. Run the complete baseline protocol from a clean checkout with:
 
 ```sh

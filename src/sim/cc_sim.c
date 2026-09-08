@@ -2357,11 +2357,25 @@ static int32_t BakeryCapacity(const CcSettlement *place)
     return MaximumI32(0, place->production[CC_GOOD_BREAD]);
 }
 
+static void RecordRecipe(CcRecipeAccounting *accounting,
+    const CcProductionRecipe *recipe, const CcProductionReceipt *receipt)
+{
+    if (accounting == NULL) return;
+    accounting->gates[receipt->gate]++;
+    accounting->work += (uint64_t)receipt->work;
+    for (int32_t i = 0; i < recipe->input_count; ++i)
+        accounting->input[recipe->inputs[i].good] += (uint64_t)receipt->inputs[i];
+    if (!recipe->work_only) accounting->output[recipe->output] += (uint64_t)receipt->output;
+}
+
 static int32_t RunBakery(CcSim *sim, CcSettlement *place,
-                         CcId scriptorium_id)
+                         CcId scriptorium_id, CcRecipeAccounting *accounting)
 {
     int32_t capacity = BakeryCapacity(place);
-    if (capacity <= 0 || place->stock[CC_GOOD_WHEAT] <= 0) return 0;
+    if (capacity <= 0 || place->stock[CC_GOOD_WHEAT] <= 0) {
+        if (accounting != NULL) accounting->gates[capacity <= 0 ? CC_PRODUCTION_CAPACITY : CC_PRODUCTION_INPUT]++;
+        return 0;
+    }
     int32_t grain_floor = 0;
     if (scriptorium_id != 0U && place->id == scriptorium_id &&
         place->hunger == 0 &&
@@ -2382,7 +2396,9 @@ static int32_t RunBakery(CcSim *sim, CcSettlement *place,
         .stock = place->stock, .capacity = capacity, .output_limit = CC_SIM_MAX_UNITS,
         .work_available = capacity, .condition = 100, .hunger = place->hunger, .enabled = true
     };
-    int32_t baked = CcProductionRun(&recipe, &context).output;
+    CcProductionReceipt receipt = CcProductionRun(&recipe, &context);
+    RecordRecipe(accounting, &recipe, &receipt);
+    int32_t baked = receipt.output;
     if (baked <= 0) return 0;
     if (sim->current_day % 28 == 0) {
         char text[CC_EVENT_TEXT_CAPACITY];
@@ -5203,7 +5219,7 @@ CcSmithyPlan CcSimPlanSmithy(const CcSim *sim, const CcSettlement *settlement)
 }
 
 static void RunSmithy(CcSim *sim, CcSettlement *settlement,
-                       CcTownSmithyAccounting *accounting)
+                       CcTownSmithyAccounting *accounting, CcTownProductionAccounting *ledger)
 {
     int32_t iron_before = settlement->stock[CC_GOOD_IRON];
     int32_t wood_before = settlement->stock[CC_GOOD_WOOD];
@@ -5217,7 +5233,10 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement,
         accounting->iron_used += (uint64_t)plan.iron_used;
         accounting->wood_used += (uint64_t)plan.wood_used;
     }
-    if (!CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) return;
+    if (!CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) {
+        if (ledger != NULL) ledger->treasure.gates[CC_PRODUCTION_CLOSED]++;
+        return;
+    }
     bool legacy_smithy = sim->schema_version < 27U;
     int32_t tools_made = plan.tools_made;
     int32_t weapons_made = plan.weapons_made;
@@ -5256,8 +5275,17 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement,
 
     bool treasure_town = settlement->function == CC_SETTLEMENT_MARKET ||
                          settlement->function == CC_SETTLEMENT_CAPITAL;
-    if (!treasure_town) return;
+    if (!treasure_town) {
+        if (ledger != NULL) ledger->treasure.gates[CC_PRODUCTION_CLOSED]++;
+        return;
+    }
     CcProductionReceipt craft = RunTreasureWork(sim, settlement, settlement->stock);
+    if (ledger != NULL) {
+        ledger->treasure.gates[craft.gate]++;
+        ledger->treasure.input[CC_GOOD_GOLD] += (uint64_t)craft.inputs[0];
+        ledger->treasure.input[CC_GOOD_GEMS] += (uint64_t)craft.inputs[1];
+        ledger->treasure.work += (uint64_t)craft.work;
+    }
     if (craft.gate == CC_PRODUCTION_READY) {
         if (settlement->treasure_work == 0) {
             settlement->treasure_gold_committed = craft.inputs[0];
@@ -5268,19 +5296,30 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement,
     if (settlement->treasure_work >= 3 &&
         sim->treasure_count < CC_MAX_TREASURES) {
         CompleteTreasure(sim, settlement);
+        if (ledger != NULL && settlement->treasure_work == 0) ledger->treasures_completed++;
     }
 }
 
-static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
+static void RunPaperMill(CcSim *sim, CcSettlement *settlement, CcRecipeAccounting *accounting)
 {
-    if (sim == NULL || sim->schema_version < 33U) return;
+    if (sim == NULL || sim->schema_version < 33U) {
+        if (accounting != NULL) accounting->gates[CC_PRODUCTION_CLOSED]++;
+        return;
+    }
     bool legacy = sim->schema_version < 34U;
     if (!legacy && (!CcSettlementHasService(settlement, CC_SERVICE_MILL) ||
-        settlement->hunger > 0 || settlement->stock[CC_GOOD_TOOLS] <= 0)) return;
+        settlement->hunger > 0 || settlement->stock[CC_GOOD_TOOLS] <= 0)) {
+        if (accounting != NULL) accounting->gates[!CcSettlementHasService(settlement, CC_SERVICE_MILL) ?
+            CC_PRODUCTION_CLOSED : settlement->hunger > 0 ? CC_PRODUCTION_CAPACITY : CC_PRODUCTION_TOOLS]++;
+        return;
+    }
     /* Keep mill work behind the town's food buffer, across all edible goods. */
     if (sim->schema_version >= 37U &&
         NutritionRations(settlement->stock, CC_NUTRITION_CIVILIAN) <
-            WeeklyFoodUse(sim, settlement) * 4) return;
+            WeeklyFoodUse(sim, settlement) * 4) {
+        if (accounting != NULL) accounting->gates[CC_PRODUCTION_INPUT]++;
+        return;
+    }
     int32_t capacity = MaximumI32(0, settlement->production[CC_GOOD_PAPER]);
     CcGood input = !legacy && sim->schema_version < 37U ?
         CC_GOOD_WHEAT : CC_GOOD_WOOD;
@@ -5302,6 +5341,7 @@ static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
         .work_available = INT32_MAX, .condition = 100, .enabled = true
     };
     CcProductionReceipt receipt = CcProductionRun(&recipe, &context);
+    RecordRecipe(accounting, &recipe, &receipt);
     int32_t paper_made = receipt.output;
     if (paper_made <= 0) return;
     int32_t input_used = receipt.inputs[0];
@@ -5310,7 +5350,9 @@ static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
         RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
         return;
     }
+    int32_t tools_before = settlement->stock[CC_GOOD_TOOLS];
     WearOneTool(settlement, &settlement->paper_tool_wear, 8);
+    if (accounting != NULL) accounting->tools_worn += (uint64_t)(tools_before - settlement->stock[CC_GOOD_TOOLS]);
     RefreshSettlementGoodPrice(sim, settlement, input);
     RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
     RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_TOOLS);
@@ -5909,9 +5951,14 @@ static void ReleaseAbandonedCamps(CcSim *sim)
 static void UpdateSettlement(CcSim *sim, int32_t index,
                              CcId scriptorium_id,
                              CcTownNutritionAccounting *accounting,
-                             CcTownSmithyAccounting *smithy)
+                             CcTownSmithyAccounting *smithy, CcTownProductionAccounting *ledger)
 {
     CcSettlement *settlement = &sim->settlements[index];
+    if (ledger != NULL) {
+        ledger->settlement_id = settlement->id;
+        if (CcSettlementIsAbandoned(settlement)) ledger->inactive_weeks++;
+        else ledger->active_weeks++;
+    }
     if (CcSettlementIsAbandoned(settlement)) return;
     if (accounting != NULL) accounting->settlement_id = settlement->id;
     int32_t produced[CC_GOOD_COUNT] = {0};
@@ -5923,6 +5970,11 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         produced[good] = production;
         if ((CcGood)good == CC_GOOD_IRON) {
             settlement->iron_deposit -= production;
+        }
+        if (ledger != NULL) {
+            int32_t received = MinimumI32(production, CC_SIM_MAX_UNITS - settlement->stock[good]);
+            ledger->primary_output[good] += (uint64_t)received;
+            ledger->primary_cap_loss[good] += (uint64_t)(production - received);
         }
         int64_t replenished = (int64_t)settlement->stock[good] +
                               (int64_t)production;
@@ -5939,7 +5991,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         produced[CC_GOOD_BREAD] += cow_bread;
     }
     produced[CC_GOOD_BREAD] += RunBakery(
-        sim, settlement, scriptorium_id);
+        sim, settlement, scriptorium_id, ledger != NULL ? &ledger->bakery : NULL);
 
     int32_t food_required = MaximumI32(
         1, WeeklyFoodUse(sim, settlement)) * CC_NUTRITION_PER_RATION;
@@ -5974,6 +6026,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         RefreshSettlementGoodPrice(sim, settlement, (CcGood)good);
     }
+    int32_t primary_tools_before = settlement->stock[CC_GOOD_TOOLS];
     CcGood farm_output = sim->schema_version < 29U ?
         CC_GOOD_BREAD : CC_GOOD_WHEAT;
     if (produced[farm_output] > 0 &&
@@ -5982,7 +6035,13 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         WearOneTool(settlement, &settlement->farm_tool_wear, 4);
     }
     if (produced[CC_GOOD_IRON] > 0) {
+        int32_t before_gold = settlement->stock[CC_GOOD_GOLD];
+        int32_t before_gems = settlement->stock[CC_GOOD_GEMS];
         AdvanceRareMineWork(sim, settlement, produced[CC_GOOD_IRON]);
+        if (ledger != NULL) {
+            ledger->rare_mine_output[CC_GOOD_GOLD] += (uint64_t)(settlement->stock[CC_GOOD_GOLD] - before_gold);
+            ledger->rare_mine_output[CC_GOOD_GEMS] += (uint64_t)(settlement->stock[CC_GOOD_GEMS] - before_gems);
+        }
         WearOneTool(settlement, &settlement->mine_tool_wear, 3);
     }
     if (produced[CC_GOOD_WOOD] > 0 && sim->current_day % 84 == 0) {
@@ -6000,6 +6059,8 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
             LatestLocalCause(sim, settlement->id),
             produced[CC_GOOD_WOOD], text);
     }
+    if (ledger != NULL) ledger->primary_tools_worn +=
+        (uint64_t)(primary_tools_before - settlement->stock[CC_GOOD_TOOLS]);
     if (produced[CC_GOOD_STONE] > 0 && sim->current_day % 28 == 0) {
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(
@@ -6012,8 +6073,8 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
             produced[CC_GOOD_STONE], text);
     }
     MaintainSettlementStonework(sim, settlement);
-    RunSmithy(sim, settlement, smithy);
-    RunPaperMill(sim, settlement);
+    RunSmithy(sim, settlement, smithy, ledger);
+    RunPaperMill(sim, settlement, ledger != NULL ? &ledger->paper : NULL);
     int32_t war_burden = CcSimWarBurdenAtSettlement(sim, settlement->id);
     if (IsWarSeat(settlement) && war_burden >= 50 &&
         sim->current_day % 14 == 0 &&
@@ -15204,7 +15265,8 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
             for (int32_t settlement = 0; settlement < sim->settlement_count; ++settlement) {
                 UpdateSettlement(sim, settlement, scriptorium_id,
                     accounting != NULL ? &accounting->towns[settlement] : NULL,
-                    smithy != NULL ? &smithy->towns[settlement] : NULL);
+                    smithy != NULL ? &smithy->towns[settlement] : NULL,
+                    sites != NULL ? &sites->towns[settlement] : NULL);
             }
             AdvanceRuins(sim);
             if (sim->schema_version >= 22U) AdvanceArchives(sim);

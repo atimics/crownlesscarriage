@@ -89,8 +89,30 @@ typedef struct {
 } CcSiteProductionAccounting;
 
 typedef struct {
+    uint64_t input[CC_GOOD_COUNT];
+    uint64_t output[CC_GOOD_COUNT];
+    uint64_t work;
+    uint64_t tools_worn;
+    uint64_t gates[CC_PRODUCTION_GATE_COUNT];
+} CcRecipeAccounting;
+
+typedef struct {
+    CcId settlement_id;
+    uint64_t active_weeks, inactive_weeks;
+    uint64_t primary_tools_worn;
+    uint64_t primary_output[CC_GOOD_COUNT];
+    uint64_t primary_cap_loss[CC_GOOD_COUNT];
+    uint64_t rare_mine_output[CC_GOOD_COUNT];
+    CcRecipeAccounting bakery, paper, treasure;
+    uint64_t treasures_completed;
+} CcTownProductionAccounting;
+
+typedef struct {
     CcSiteProductionAccounting sites[CC_MAX_ROAD_SITES];
-} CcRoadProductionAccounting;
+    CcTownProductionAccounting towns[CC_MAX_SETTLEMENTS];
+} CcProductionAccounting;
+/* Existing callers keep the original name for this caller-owned ledger. */
+typedef CcProductionAccounting CcRoadProductionAccounting;
 
 /* One weekly craft act. Inputs enter the saved work order on the first act;
    the completed treasure receives those committed materials after three acts. */

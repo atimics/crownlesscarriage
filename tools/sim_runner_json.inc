@@ -24,13 +24,21 @@ static void JsonTotals(const uint64_t *values, int32_t count)
     putchar(']');
 }
 
+static void JsonRecipe(const CcRecipeAccounting *recipe)
+{
+    printf("{\"input\":"); JsonTotals(recipe->input, CC_GOOD_COUNT);
+    printf(",\"output\":"); JsonTotals(recipe->output, CC_GOOD_COUNT);
+    printf(",\"work\":%" PRIu64 ",\"tools_worn\":%" PRIu64 ",\"gates\":", recipe->work, recipe->tools_worn);
+    JsonTotals(recipe->gates, CC_PRODUCTION_GATE_COUNT); putchar('}');
+}
+
 static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t year,
     const char *fixture, const CcNutritionAccounting *nutrition,
     const CcSmithyAccounting *smithy, const CcRoadProductionAccounting *sites,
     const int32_t *open_days)
 {
     CcHungerSnapshot hunger = CcSimHungerSnapshot(sim);
-    printf("{\"protocol\":1,\"fixture\":"); JsonString(fixture);
+    printf("{\"protocol\":2,\"fixture\":"); JsonString(fixture);
     printf(",\"world_seed\":%" PRIu32 ",\"schema\":%" PRIu32 ",\"generator\":%" PRIu32
            ",\"accounting_start_day\":%d,\"elapsed_years\":%d,\"day\":%d,\"state_hash\":\"%016" PRIx64 "\",\"goods\":[",
         sim->world_seed, sim->schema_version, sim->generator_version, start_day, year, sim->current_day, CcSimHash(sim));
@@ -45,6 +53,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *town = &sim->settlements[i];
         const CcTownSmithyAccounting *craft = &smithy->towns[i];
+        const CcTownProductionAccounting *production = &sites->towns[i];
         printf("%s{\"id\":\"%" PRIu64 "\",\"name\":", i ? "," : "", town->id); JsonString(town->name);
         printf(",\"population\":%d,\"hunger\":%d,\"market_coins\":%" PRId64
                ",\"war_chest\":%" PRId64 ",\"fire_damage\":%d,\"stock\":",
@@ -54,8 +63,18 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         printf(",\"aged_loss\":"); JsonTotals(nutrition->towns[i].aged_units, CC_GOOD_COUNT);
         printf(",\"overflow_loss\":"); JsonTotals(nutrition->towns[i].overflow_units, CC_GOOD_COUNT);
         printf(",\"smithy\":{\"tools\":%" PRIu64 ",\"weapons\":%" PRIu64 ",\"iron_used\":%" PRIu64
-               ",\"wood_used\":%" PRIu64 ",\"tools_worn\":%" PRIu64 "},\"other_production_totals\":null}",
+               ",\"wood_used\":%" PRIu64 ",\"tools_worn\":%" PRIu64 "}",
             craft->tools_made, craft->weapons_made, craft->iron_used, craft->wood_used, craft->tools_worn);
+        printf(",\"production\":{\"active_weeks\":%" PRIu64 ",\"inactive_weeks\":%" PRIu64 ",\"primary_output\":",
+            production->active_weeks, production->inactive_weeks);
+        JsonTotals(production->primary_output, CC_GOOD_COUNT);
+        printf(",\"primary_tools_worn\":%" PRIu64, production->primary_tools_worn);
+        printf(",\"primary_cap_loss\":"); JsonTotals(production->primary_cap_loss, CC_GOOD_COUNT);
+        printf(",\"rare_mine_output\":"); JsonTotals(production->rare_mine_output, CC_GOOD_COUNT);
+        printf(",\"bakery\":"); JsonRecipe(&production->bakery);
+        printf(",\"paper\":"); JsonRecipe(&production->paper);
+        printf(",\"treasure\":"); JsonRecipe(&production->treasure);
+        printf(",\"treasures_completed\":%" PRIu64 "},\"herd_production_totals\":null}", production->treasures_completed);
     }
     printf("],\"sites\":[");
     for (int32_t i = 0; i < sim->road_site_count; ++i) {

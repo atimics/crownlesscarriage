@@ -28,6 +28,13 @@ with tempfile.TemporaryDirectory() as directory:
             assert loaded['accounting_start_day'] == 731
             assert all(sum(site['input']) == 0 for site in loaded['sites'])
         assert all(isinstance(town['id'], str) for town in rows[-1]['towns'])
+        assert rows[-1]['protocol'] == 2
+        for town in rows[-1]['towns']:
+            production = town['production']
+            assert production['active_weeks'] + production['inactive_weeks'] == 104
+            assert production['bakery']['input'][7] == production['bakery']['output'][0]
+            assert production['paper']['output'][8] <= production['paper']['work'] * 4
+
         assert all(route['open_days'] + route['closed_days'] == 730 for route in rows[-1]['routes'])
         for start, end in zip(rows[0]['sites'], rows[-1]['sites']):
             for good in range(len(rows[-1]['goods'])):
