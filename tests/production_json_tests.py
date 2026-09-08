@@ -33,6 +33,11 @@ with tempfile.TemporaryDirectory() as directory:
             assert loaded['campaign_launch'] == rows[-1]['campaign_launch']
             assert loaded['ritual_offering'] == rows[-1]['ritual_offering']
             assert loaded['retained_history'] == rows[-1]['retained_history']
+            assert [route['context'] for route in loaded['routes']] == [route['context'] for route in rows[-1]['routes']]
+            for route in loaded['routes']:
+                assert route['observation']['start_day_exclusive'] == 731
+                assert route['observation']['end_day_inclusive'] == 731
+                assert route['open_days'] == route['closed_days'] == 0
             assert loaded['accounting_start_day'] == 731
             assert loaded['dragon_policy'] == 'loaded-save'
             assert all(sum(site['input']) == 0 for site in loaded['sites'])
@@ -53,6 +58,11 @@ with tempfile.TemporaryDirectory() as directory:
 
         assert sum(sum(town['herds']['cows']['feed']) for town in rows[-1]['towns']) > 0
         assert sum(town['herds']['sheep']['output'][rows[-1]['goods'].index('Wool')] for town in rows[-1]['towns']) > 0
+        for row in rows:
+            for route in row['routes']:
+                assert route['observation'] == {'semantics': 'run_interval', 'start_day_exclusive': 1,
+                    'end_day_inclusive': row['day'], 'sampling': 'after_daily_advance'}
+                assert route['open_days'] + route['closed_days'] == row['day'] - 1
         assert all(route['open_days'] + route['closed_days'] == 730 for route in rows[-1]['routes'])
         assert all(route['recovery']['semantics'] == 'evaluated_plan_snapshot' for row in rows for route in row['routes'])
         for start, end in zip(rows[0]['sites'], rows[-1]['sites']):
