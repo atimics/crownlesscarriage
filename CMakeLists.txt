@@ -1404,7 +1404,8 @@ if(BUILD_TESTING)
         add_custom_target(run_renderer_graphics_tests
             COMMAND renderer_regression_tests --graphics
                 "${CMAKE_CURRENT_BINARY_DIR}/renderer-viewport.png"
-            DEPENDS renderer_regression_tests
+            COMMAND crownless_carriage --test-map-texture-lifetime
+            DEPENDS renderer_regression_tests crownless_carriage
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             USES_TERMINAL
         )

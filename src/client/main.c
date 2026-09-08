@@ -3528,13 +3528,19 @@ static void ReleaseMapTexture(Texture2D *texture, bool *attempted)
     *attempted = false;
 }
 
-static void ReleaseMapTextures(ClientMapTextures *textures)
+static void ReleaseMapPageTextures(ClientMapTextures *textures)
 {
     if (textures == NULL) return;
     ReleaseMapTexture(&textures->illustrated,
                       &textures->illustrated_attempted);
     ReleaseMapTexture(&textures->collectible_atlas,
                       &textures->collectible_atlas_attempted);
+}
+
+static void ReleaseMapTextures(ClientMapTextures *textures)
+{
+    if (textures == NULL) return;
+    ReleaseMapPageTextures(textures);
     ReleaseMapTexture(&textures->economic_goods,
                       &textures->economic_goods_attempted);
 }
@@ -10125,6 +10131,7 @@ static int ClientRegressionFailure(const char *message)
 
 #include "../../tests/client_interaction_flow.inc"
 #include "../../tests/client_world_cards.inc"
+#include "../../tests/map_texture_lifetime.inc"
 
 static int RunMapSaleInputRegression(void)
 {
@@ -10448,6 +10455,7 @@ static int RunTravelAudioRegression(void)
 int main(int argc, char **argv)
 {
 #if defined(CC_CLIENT_SELF_TESTS)
+    if (argc == 2 && strcmp(argv[1], "--test-map-texture-lifetime") == 0) return RunMapTextureLifetimeRegression();
     if (argc == 2 && strcmp(argv[1], "--test-travel-audio") == 0) return RunTravelAudioRegression();
     if (argc == 2 && strcmp(argv[1], "--test-world-cards") == 0) return RunWorldCardRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-input") == 0) return RunAdventureInputRegression();
@@ -12230,7 +12238,7 @@ int main(int argc, char **argv)
         }
 #if defined(PLATFORM_WEB)
         else {
-            ReleaseMapTextures(&map_textures);
+            ReleaseMapPageTextures(&map_textures);
         }
 #endif
 
