@@ -168,3 +168,20 @@ Metrics seed indexes range from 1 through 2147483647 and retain the documented
 must fit the simulation's signed day counter. Invalid numeric values, unknown
 runner options, and missing arguments produce a failing exit status before output
 files are written. Resumed chronicle headers identify the world seed from the save.
+
+## Bandit exposure scope
+
+`days_bandit_raid` and `days_bandit_influence_70_plus` count each sampled day
+once when any bandit group qualifies. The matching `years_*` columns count
+annual endpoint samples with any qualifying group. They measure endpoint
+observations, while the `days_*` columns measure daily exposure.
+
+`bandit_raid_group_days` and `bandit_influence_70_plus_group_days` sum each
+group's daily activity. Their `*_group_year_samples` counterparts sum qualifying
+groups at annual endpoints. Two active groups on one day add one day of exposure
+and two group-days. These group totals retain the previous counters' meaning.
+
+`first_bandit_id` identifies the group described by the existing `bandit_influence`,
+`bandit_members_end`, `bandit_supplies_end`, `bandit_influence_end`, and
+`bandit_raids_end` snapshots. An ID of zero means that group is absent. Per-group
+interval tables remain further diagnostic work.

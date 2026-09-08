@@ -38,6 +38,10 @@ typedef struct CcMetricsHistory {
     int32_t days_goblin_raid;
     int32_t days_bandit_raid;
     int32_t days_bandit_influence_70_plus;
+    uint64_t bandit_raid_group_days;
+    uint64_t bandit_influence_70_plus_group_days;
+    uint64_t bandit_raid_group_year_samples;
+    uint64_t bandit_influence_70_plus_group_year_samples;
     int32_t dragon_stage_days[7];
     bool route_was_closed[CC_MAX_ROUTES];
     bool settlement_was_abandoned[CC_MAX_SETTLEMENTS];
@@ -62,14 +66,20 @@ static void UpdateDailyHistory(const CcSim *sim, CcMetricsHistory *history)
     if (sim->goblins.raid_motive != CC_GOBLIN_RAID_NONE) {
         history->days_goblin_raid += 1;
     }
+    bool bandit_raid = false;
+    bool bandit_influence = false;
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         if (sim->bandits[i].raid_phase != CC_BANDIT_RAID_IDLE) {
-            history->days_bandit_raid += 1;
+            bandit_raid = true;
+            history->bandit_raid_group_days += 1;
         }
         if (sim->bandits[i].influence >= 70) {
-            history->days_bandit_influence_70_plus += 1;
+            bandit_influence = true;
+            history->bandit_influence_70_plus_group_days += 1;
         }
     }
+    if (bandit_raid) history->days_bandit_raid += 1;
+    if (bandit_influence) history->days_bandit_influence_70_plus += 1;
     if (sim->dragon.life_stage >= CC_DRAGON_STAGE_EGG &&
         sim->dragon.life_stage <= CC_DRAGON_STAGE_AFTERDRAGON) {
         history->dragon_stage_days[sim->dragon.life_stage] += 1;
@@ -134,14 +144,20 @@ static void UpdateHistory(const CcSim *sim, CcMetricsHistory *history)
     if (sim->goblins.raid_motive != CC_GOBLIN_RAID_NONE) {
         history->years_goblin_raid += 1;
     }
+    bool bandit_raid = false;
+    bool bandit_influence = false;
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         if (sim->bandits[i].raid_phase != CC_BANDIT_RAID_IDLE) {
-            history->years_bandit_raid += 1;
+            bandit_raid = true;
+            history->bandit_raid_group_year_samples += 1;
         }
         if (sim->bandits[i].influence >= 70) {
-            history->years_bandit_influence_70_plus += 1;
+            bandit_influence = true;
+            history->bandit_influence_70_plus_group_year_samples += 1;
         }
     }
+    if (bandit_raid) history->years_bandit_raid += 1;
+    if (bandit_influence) history->years_bandit_influence_70_plus += 1;
 }
 
 static void PrintCampaignMetrics(const CcSim *sim)
@@ -382,6 +398,10 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         sim->archives.kit_tool_wear,
         sim->archives.abbot_character_id != 0U ? 1 : 0);
     (void)printf(",%d", hunger.population_weighted);
+    (void)printf(",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64,
+        sim->bandit_count > 0 ? sim->bandits[0].id : 0U,
+        history->bandit_raid_group_days, history->bandit_influence_70_plus_group_days,
+        history->bandit_raid_group_year_samples, history->bandit_influence_70_plus_group_year_samples);
     if (campaign_metrics) PrintCampaignMetrics(sim);
     (void)putchar('\n');
 }
@@ -502,7 +522,9 @@ int main(int argc, char **argv)
         "dragon_uncrowned_days,dragon_afterdragon_days,archive_scribes,"
         "lore_stored,lore_lost_total,archive_stewardship,"
         "archive_last_recorded_day,lore_ceiling,archive_tool_wear,"
-        "archive_abbot_present,population_weighted_hunger");
+        "archive_abbot_present,population_weighted_hunger,first_bandit_id,"
+        "bandit_raid_group_days,bandit_influence_70_plus_group_days,"
+        "bandit_raid_group_year_samples,bandit_influence_70_plus_group_year_samples");
     if (campaign_metrics) {
         (void)printf(",live_treasures,live_treasure_value,newest_treasure_day,"
                      "oldest_treasure_day,treasures_from_ruins,treasures_in_ruins,"

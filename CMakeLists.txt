@@ -1232,6 +1232,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(horse_stable_tests)
     add_test(NAME horse_stable_breeding COMMAND horse_stable_tests)
 
+    add_executable(bandit_exposure_tests tests/bandit_exposure_tests.c)
+    target_link_libraries(bandit_exposure_tests PRIVATE crownless_sim)
+    cc_strict_warnings(bandit_exposure_tests)
+    add_test(NAME bandit_exposure_counts COMMAND bandit_exposure_tests)
+
     add_executable(ritual_offering_plan_tests tests/ritual_offering_plan_tests.c)
     target_link_libraries(ritual_offering_plan_tests PRIVATE crownless_sim)
     cc_strict_warnings(ritual_offering_plan_tests)
