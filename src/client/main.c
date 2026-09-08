@@ -9984,6 +9984,9 @@ int main(int argc, char **argv)
     else if (capture_active) SetTraceLogLevel(LOG_WARNING);
 
     unsigned int window_flags = capture_active ? FLAG_WINDOW_HIDDEN : 0U;
+#if defined(__APPLE__)
+    if (capture_active) window_flags |= FLAG_WINDOW_HIGHDPI;
+#endif
 #if !defined(PLATFORM_WEB)
     window_flags |= FLAG_WINDOW_RESIZABLE;
 #endif
