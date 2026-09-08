@@ -142,7 +142,7 @@ static void AdvanceSiteCarriages(CcSim *sim, CcRoadProductionAccounting *account
             if (shipment == NULL && site != NULL && site->accessible && CcRoadSiteRecipe(site, &recipe) &&
                 !recipe.work_only) {
                 CcGood good = recipe.output;
-                int32_t floor = good == CC_GOOD_TOOLS ? recipe.tools_required : 0;
+                int32_t floor = SiteOutputFloor(sim, site, good);
                 const CcSettlement *town = CcSimSettlement(sim, carriage->destination_id);
                 int32_t quantity = MinimumI32(site->stock[good] - floor,
                     MinimumI32(CC_SIM_MAX_UNITS - town->stock[good], slots * FreightUnitsPerCargoSlot(good)));

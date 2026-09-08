@@ -65,7 +65,8 @@ static void CheckYear(uint32_t seed)
                 totals.sites[i].freight_received[good] + totals.sites[i].freight_delivered[good] +
                 totals.sites[i].freight_lost[good] + aboard);
             CC_CHECK((int64_t)sim.road_sites[i].stock[good] == initial[i][good] +
-                (int64_t)totals.sites[i].output[good] - (int64_t)totals.sites[i].input[good] +
+                (int64_t)totals.sites[i].output[good] - (int64_t)totals.sites[i].input[good] -
+                (int64_t)totals.sites[i].maintenance_input[good] +
                 (int64_t)totals.sites[i].freight_received[good] - (int64_t)totals.sites[i].freight_shipped[good]);
         }
     }

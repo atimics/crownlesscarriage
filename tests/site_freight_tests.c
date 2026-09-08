@@ -82,7 +82,11 @@ int main(void)
     carriage->location_id = town->id; site->accessible = false;
     CC_CHECK(Plan().gate == CC_SITE_FREIGHT_SITE_REQUIRED);
     site->accessible = true; site->condition = 49;
+    sim.schema_version = 66;
     CC_CHECK(Plan().gate == CC_SITE_FREIGHT_SITE_REQUIRED);
+    sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    plan = Plan();
+    CC_CHECK(plan.gate == CC_SITE_FREIGHT_READY && plan.good == CC_GOOD_TOOLS && plan.quantity == 1);
     site->condition = 100; carriage->active_shipment_id = 1;
     CC_CHECK(Plan().gate == CC_SITE_FREIGHT_CARRIAGE_REQUIRED);
     carriage->active_shipment_id = 0; carriage->next_dispatch_day += 1;

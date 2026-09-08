@@ -10332,6 +10332,37 @@ static int32_t TradeSurplus(const CcSim *sim,
     return origin->stock[good] - protected_stock;
 }
 
+static const CcProductionRecipe RoadSiteRepairRecipe = {
+    .output = CC_GOOD_COUNT, .output_units = 1, .work_only = true,
+    .input_count = 2, .inputs = {{CC_GOOD_TOOLS, 1, 1}, {CC_GOOD_WOOD, 1, 0}},
+    .work_per_batch = 2, .tools_required = 1,
+    .hunger_soft_limit = 100, .hunger_hard_limit = 100
+};
+
+static bool SiteNeedsMaintenance(const CcSim *sim, const CcRoadSite *site)
+{
+    return sim->schema_version >= 67U && site->accessible && site->condition < 80;
+}
+
+static int32_t SiteMaintenanceWoodTarget(const CcRoadSite *site)
+{
+    CcProductionRecipe recipe;
+    if (CcRoadSiteRecipe(site, &recipe)) {
+        for (int32_t i = 0; i < recipe.input_count; ++i)
+            if (recipe.inputs[i].good == CC_GOOD_WOOD) return recipe.inputs[i].reserve + 1;
+    }
+    return 1;
+}
+
+static int32_t SiteOutputFloor(const CcSim *sim, const CcRoadSite *site, CcGood good)
+{
+    if (SiteNeedsMaintenance(sim, site)) {
+        if (good == CC_GOOD_TOOLS) return 2;
+        if (good == CC_GOOD_WOOD) return SiteMaintenanceWoodTarget(site);
+    }
+    return good == CC_GOOD_TOOLS ? 1 : 0;
+}
+
 #include "cc_site_freight_plan.inc"
 #include "cc_site_carriages.inc"
 
@@ -17732,13 +17763,6 @@ static bool ApplyRoadSiteTransfer(CcSim *sim, const CcCommand *command,
     return true;
 }
 
-static const CcProductionRecipe RoadSiteRepairRecipe = {
-    .output = CC_GOOD_COUNT, .output_units = 1, .work_only = true,
-    .input_count = 2, .inputs = {{CC_GOOD_TOOLS, 1, 1}, {CC_GOOD_WOOD, 1, 0}},
-    .work_per_batch = 2, .tools_required = 1,
-    .hunger_soft_limit = 100, .hunger_hard_limit = 100
-};
-
 static CcProductionContext RoadSiteRepairContext(const CcSim *sim,
     const CcRoadSite *site, int32_t *stock)
 {
@@ -17776,7 +17800,7 @@ static bool ApplyRepairRoadSite(CcSim *sim, const CcCommand *command,
     CcProductionReceipt receipt = CcProductionRun(&RoadSiteRepairRecipe, &context);
     int32_t gain = MinimumI32(10, 100 - site->condition);
     for (int32_t watch = 0; watch < receipt.work; ++watch) AdvanceJourneyRestWatch(sim);
-    site->condition += gain;
+    site->condition = MinimumI32(100, site->condition + gain);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
         "The company repairs %.40s in two watches, using one Tool and one Wood. Condition rises by %d to %d.",
@@ -19394,7 +19418,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 65U
+#define CC_NEWEST_LEGACY_SCHEMA 66U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -19412,7 +19436,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 65U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 66U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },

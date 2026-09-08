@@ -53,15 +53,47 @@ static CcProductionContext RoadProductionContext(const CcSim *sim,
         .enabled = sim->schema_version >= 64U && site->accessible};
 }
 
+static CcProductionReceipt PlanSiteMaintenance(const CcSim *sim, const CcRoadSite *site);
+
 CcProductionReceipt CcSimPlanRoadSite(const CcSim *sim, const CcRoadSite *site)
 {
     CcProductionRecipe recipe;
     if (sim == NULL || !CcRoadSiteRecipe(site, &recipe))
         return (CcProductionReceipt){.gate = CC_PRODUCTION_CLOSED, .blocked_good = CC_GOOD_COUNT};
+    if (PlanSiteMaintenance(sim, site).gate == CC_PRODUCTION_READY)
+        return (CcProductionReceipt){.gate = CC_PRODUCTION_WORK, .blocked_good = CC_GOOD_COUNT,
+            .producer_id = site->id, .storage_id = site->id, .location_id = site->id};
     int32_t stock[CC_GOOD_COUNT];
     memcpy(stock, site->stock, sizeof(stock));
     CcProductionContext context = RoadProductionContext(sim, site, stock, &recipe);
     return CcProductionPlan(&recipe, &context);
+}
+
+static CcProductionContext SiteMaintenanceContext(const CcSim *sim,
+    const CcRoadSite *site, int32_t *stock)
+{
+    return (CcProductionContext){.producer_id = site->id, .storage_id = site->id,
+        .location_id = site->id, .stock = stock, .capacity = 1,
+        .output_limit = 1, .work_available = 2, .condition = site->condition,
+        .enabled = SiteNeedsMaintenance(sim, site)};
+}
+
+static CcProductionReceipt PlanSiteMaintenance(const CcSim *sim, const CcRoadSite *site)
+{
+    CcProductionRecipe production;
+    if (sim == NULL || site == NULL || !CcRoadSiteRecipe(site, &production))
+        return (CcProductionReceipt){.gate = CC_PRODUCTION_CLOSED, .blocked_good = CC_GOOD_COUNT};
+    int32_t stock[CC_GOOD_COUNT];
+    memcpy(stock, site->stock, sizeof(stock));
+    CcProductionContext context = SiteMaintenanceContext(sim, site, stock);
+    CcProductionRecipe repair = RoadSiteRepairRecipe;
+    repair.inputs[1].reserve = SiteMaintenanceWoodTarget(site) - 1;
+    return CcProductionPlan(&repair, &context);
+}
+
+CcProductionReceipt CcSimPlanRoadSiteMaintenance(const CcSim *sim, CcId site_id)
+{
+    return PlanSiteMaintenance(sim, sim != NULL ? CcSimRoadSite(sim, site_id) : NULL);
 }
 
 static void ProduceRoadSites(CcSim *sim, CcRoadProductionAccounting *accounting)
@@ -73,9 +105,33 @@ static void ProduceRoadSites(CcSim *sim, CcRoadProductionAccounting *accounting)
         if (!site->accessible && accounting == NULL) continue;
         CcProductionRecipe recipe;
         if (!CcRoadSiteRecipe(site, &recipe)) continue;
+        CcSiteProductionAccounting *row = accounting != NULL ? &accounting->sites[i] : NULL;
+        if (SiteNeedsMaintenance(sim, site)) {
+            CcProductionContext upkeep = SiteMaintenanceContext(sim, site, site->stock);
+            CcProductionRecipe repair_recipe = RoadSiteRepairRecipe;
+            repair_recipe.inputs[1].reserve = SiteMaintenanceWoodTarget(site) - 1;
+            CcProductionReceipt maintenance = CcProductionRun(&repair_recipe, &upkeep);
+            if (maintenance.gate == CC_PRODUCTION_READY) {
+                int32_t gain = MinimumI32(10, 100 - site->condition);
+                site->condition += gain;
+                if (row != NULL) {
+                    row->site_id = site->id;
+                    row->maintenance_work += (uint64_t)maintenance.work;
+                    row->site_repair += (uint64_t)gain;
+                    for (int32_t input = 0; input < RoadSiteRepairRecipe.input_count; ++input)
+                        row->maintenance_input[RoadSiteRepairRecipe.inputs[input].good] += (uint64_t)maintenance.inputs[input];
+                    row->gates[CC_PRODUCTION_WORK]++;
+                }
+                char text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(text, sizeof(text),
+                    "%.40s uses one Tool and one Wood from its store for repairs; condition rises to %d. The crew spends this week's work on maintenance.",
+                    site->name, site->condition);
+                (void)PushEvent(sim, CC_EVENT_ROAD_SITE_PRODUCTION, site->id, site->id, 0, gain, text);
+                continue;
+            }
+        }
         CcProductionContext context = RoadProductionContext(sim, site, site->stock, &recipe);
         CcProductionReceipt receipt = CcProductionRun(&recipe, &context);
-        CcSiteProductionAccounting *row = accounting != NULL ? &accounting->sites[i] : NULL;
         if (row != NULL) {
             row->site_id = site->id;
             row->gates[receipt.gate]++;

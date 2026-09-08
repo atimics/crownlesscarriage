@@ -85,6 +85,8 @@ typedef struct {
     uint64_t output[CC_GOOD_COUNT];
     uint64_t work;
     uint64_t route_repair;
+    uint64_t maintenance_input[CC_GOOD_COUNT];
+    uint64_t maintenance_work, site_repair;
     uint64_t gates[CC_PRODUCTION_GATE_COUNT];
 } CcSiteProductionAccounting;
 
@@ -127,6 +129,7 @@ typedef CcProductionAccounting CcRoadProductionAccounting;
 CcProductionReceipt CcSimPlanTreasureWork(const CcSim *sim, const CcSettlement *settlement);
 
 bool CcRoadSiteRecipe(const CcRoadSite *site, CcProductionRecipe *recipe);
+CcProductionReceipt CcSimPlanRoadSiteMaintenance(const CcSim *sim, CcId site_id);
 CcProductionReceipt CcSimPlanRoadSiteRepair(const CcSim *sim, CcId site_id);
 CcProductionReceipt CcSimPlanRoadSite(const CcSim *sim, const CcRoadSite *site);
 void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,

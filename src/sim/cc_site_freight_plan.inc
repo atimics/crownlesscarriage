@@ -10,6 +10,23 @@ static int32_t SiteFreightRoom(const CcRoadSite *site, CcGood good)
         CcGoodDefinitionFor(good)->player_units_per_slot - site->stock[good]);
 }
 
+static bool PlanSiteSupply(const CcSim *sim, const CcRoadSite *site,
+    const CcSettlement *town, CcGood good, int32_t target, int32_t slots,
+    CcSiteFreightPlan *plan)
+{
+    int32_t need = target - site->stock[good];
+    if (need <= 0) return false;
+    int32_t floor = town->reserve_target[good];
+    if (good == CC_GOOD_FOOD || good == CC_GOOD_WHEAT)
+        floor = MaximumI32(floor, WeeklyFoodUse(sim, town) * 6);
+    int32_t quantity = MinimumI32(need, MinimumI32(town->stock[good] - floor,
+        MinimumI32(SiteFreightRoom(site, good), slots * FreightUnitsPerCargoSlot(good))));
+    if (quantity <= 0) return false;
+    plan->kind = CC_SITE_FREIGHT_SUPPLY; plan->gate = CC_SITE_FREIGHT_READY;
+    plan->good = good; plan->quantity = quantity;
+    return true;
+}
+
 CcSiteFreightPlan CcSimPlanSiteFreight(const CcSim *sim, CcId carriage_id, CcId site_id)
 {
     CcSiteFreightPlan plan = {.gate = CC_SITE_FREIGHT_CARRIAGE_REQUIRED, .good = CC_GOOD_COUNT};
@@ -24,7 +41,7 @@ CcSiteFreightPlan CcSimPlanSiteFreight(const CcSim *sim, CcId carriage_id, CcId 
     const CcRoadSite *site = CcSimRoadSite(sim, site_id);
     CcProductionRecipe recipe;
     plan.gate = CC_SITE_FREIGHT_SITE_REQUIRED;
-    if (site == NULL || !site->accessible || site->condition < 50 ||
+    if (site == NULL || !site->accessible || (site->condition < 50 && sim->schema_version < 67U) ||
         !CcRoadSiteRecipe(site, &recipe)) return plan;
     plan.site_id = site_id; plan.route_id = site->route_id;
     const CcSettlement *town = CcSimSettlement(sim, carriage->location_id);
@@ -46,10 +63,14 @@ CcSiteFreightPlan CcSimPlanSiteFreight(const CcSim *sim, CcId carriage_id, CcId 
     plan.gate = CC_SITE_FREIGHT_CAPACITY_REQUIRED;
     if (slots < 1) return plan;
     plan.gate = CC_SITE_FREIGHT_GOODS_REQUIRED;
+    bool maintenance = SiteNeedsMaintenance(sim, site);
+    if (maintenance &&
+        (PlanSiteSupply(sim, site, town, CC_GOOD_TOOLS, 2, slots, &plan) ||
+         PlanSiteSupply(sim, site, town, CC_GOOD_WOOD, SiteMaintenanceWoodTarget(site), slots, &plan))) return plan;
     /* Collect finished stock first. Preserve the site's working Tool. */
     if (!recipe.work_only) {
         CcGood good = recipe.output;
-        int32_t floor = good == CC_GOOD_TOOLS ? recipe.tools_required : 0;
+        int32_t floor = SiteOutputFloor(sim, site, good);
         int32_t quantity = MinimumI32(site->stock[good] - floor,
             MinimumI32(CC_SIM_MAX_UNITS - town->stock[good], slots * FreightUnitsPerCargoSlot(good)));
         if (quantity > 0) {
@@ -57,6 +78,7 @@ CcSiteFreightPlan CcSimPlanSiteFreight(const CcSim *sim, CcId carriage_id, CcId 
             plan.good = good; plan.quantity = quantity; return plan;
         }
     }
+    if (maintenance) return plan;
     int32_t target[CC_GOOD_COUNT] = {0};
     target[CC_GOOD_TOOLS] = recipe.tools_required;
     for (int32_t i = 0; i < recipe.input_count; ++i)
@@ -65,16 +87,7 @@ CcSiteFreightPlan CcSimPlanSiteFreight(const CcSim *sim, CcId carriage_id, CcId 
     /* Tools first, then declared inputs in recipe order. */
     for (int32_t i = -1; i < recipe.input_count; ++i) {
         CcGood good = i < 0 ? CC_GOOD_TOOLS : recipe.inputs[i].good;
-        int32_t need = target[good] - site->stock[good];
-        if (need <= 0) continue;
-        int32_t floor = town->reserve_target[good];
-        if (good == CC_GOOD_FOOD || good == CC_GOOD_WHEAT)
-            floor = MaximumI32(floor, WeeklyFoodUse(sim, town) * 6);
-        int32_t quantity = MinimumI32(need, MinimumI32(town->stock[good] - floor,
-            MinimumI32(SiteFreightRoom(site, good), slots * FreightUnitsPerCargoSlot(good))));
-        if (quantity <= 0) continue;
-        plan.kind = CC_SITE_FREIGHT_SUPPLY; plan.gate = CC_SITE_FREIGHT_READY;
-        plan.good = good; plan.quantity = quantity; return plan;
+        if (PlanSiteSupply(sim, site, town, good, target[good], slots, &plan)) return plan;
     }
     return plan;
 }
