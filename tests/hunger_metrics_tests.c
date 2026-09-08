@@ -68,5 +68,17 @@ int main(void)
     CC_CHECK(hunger.average == -1 && hunger.population == 0);
     welfare = CcSimWelfareSnapshot(NULL);
     CC_CHECK(welfare.hunger == -1 && welfare.population == 0);
+    sim.settlement_count = 2;
+    for (int32_t i = 0; i < 2; ++i) {
+        sim.settlements[i].population = INT32_MAX;
+        sim.settlements[i].hunger = 100;
+        sim.settlements[i].prosperity = 100;
+        sim.settlements[i].security = 100;
+    }
+    welfare = CcSimWelfareSnapshot(&sim);
+    CC_CHECK(welfare.population == (int64_t)INT32_MAX * 2);
+    CC_CHECK(welfare.population_weighted_hunger == 100 &&
+             welfare.population_weighted_prosperity == 100 &&
+             welfare.population_weighted_security == 100);
     return 0;
 }

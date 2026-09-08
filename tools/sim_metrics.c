@@ -474,6 +474,7 @@ int main(int argc, char **argv)
     const char *nutrition_path = NULL;
     const char *settlements_path = NULL;
     int32_t trace_every_days = 28;
+    int32_t trace_start_day = 0;
     for (int32_t argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--seed") == 0 && argument + 1 < argc) {
             if (!ParsePositive(argv[++argument], &first_seed)) return EXIT_FAILURE;
@@ -496,17 +497,21 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[argument], "--trace-every-days") == 0 &&
                    argument + 1 < argc) {
             if (!ParsePositive(argv[++argument], &trace_every_days)) return EXIT_FAILURE;
+        } else if (strcmp(argv[argument], "--trace-start-day") == 0 &&
+                   argument + 1 < argc) {
+            if (!ParsePositive(argv[++argument], &trace_start_day)) return EXIT_FAILURE;
         } else {
             (void)fprintf(stderr,
                           "Usage: %s [--seed NUMBER | --seeds COUNT]"
                           " [--years COUNT] [--final-only] [--nutrition-csv PATH] [--campaign-metrics]"
-                          " [--settlements-csv PATH] [--trace-every-days COUNT]\n",
+                          " [--settlements-csv PATH] [--trace-every-days COUNT] [--trace-start-day DAY]\n",
                           argv[0]);
             return EXIT_FAILURE;
         }
     }
 
     if (years > (INT32_MAX - 1) / 365 || first_seed > INT32_MAX - seeds ||
+        trace_start_day > years * 365 ||
         (nutrition_path != NULL && settlements_path != NULL &&
          strcmp(nutrition_path, settlements_path) == 0)) return EXIT_FAILURE;
     FILE *settlements_csv = NULL;
@@ -590,7 +595,9 @@ int main(int argc, char **argv)
         CcNutritionAccounting nutrition = {0};
         CcNutritionAccounting previous_nutrition = {0};
         CcSimInit(&sim, (uint32_t)seed_number * UINT32_C(0x9e3779b9));
-        if (settlements_csv != NULL) PrintSettlementTrace(settlements_csv, &sim, seed_number, 0);
+        if (settlements_csv != NULL && trace_start_day == 0) {
+            PrintSettlementTrace(settlements_csv, &sim, seed_number, 0);
+        }
         history.minimum_active_settlements = sim.settlement_count;
         for (int32_t i = 0; i < sim.settlement_count; ++i) {
             history.settlement_was_abandoned[i] =
@@ -605,8 +612,9 @@ int main(int argc, char **argv)
                     nutrition_csv != NULL ? &nutrition : NULL);
                 UpdateDailyHistory(&sim, &history);
                 int32_t elapsed_days = (year - 1) * 365 + day + 1;
-                if (settlements_csv != NULL &&
-                    (elapsed_days % trace_every_days == 0 || elapsed_days == years * 365)) {
+                if (settlements_csv != NULL && elapsed_days >= trace_start_day &&
+                    (elapsed_days == trace_start_day ||
+                     elapsed_days % trace_every_days == 0 || elapsed_days == years * 365)) {
                     PrintSettlementTrace(settlements_csv, &sim, seed_number, elapsed_days);
                 }
             }

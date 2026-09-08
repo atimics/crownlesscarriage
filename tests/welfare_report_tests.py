@@ -47,7 +47,12 @@ with tempfile.TemporaryDirectory() as directory:
     run("--final-only", "--settlements-csv", str(path), "--trace-every-days", "365")
     towns = list(csv.DictReader(path.open()))
     assert len(towns) == 4 * 6
+    assert run("--settlements-csv", str(path), "--trace-every-days", "28",
+               "--trace-start-day", "1000") == annual
+    towns = list(csv.DictReader(path.open()))
+    assert sorted({int(r["elapsed_days"]) for r in towns}) == [1000, 1008, 1036, 1064, 1092, 1095]
     for args in (("--trace-every-days", "0"),
+                 ("--years", "1", "--trace-start-day", "366"),
                  ("--settlements-csv", str(Path(directory) / "missing" / "x.csv")),
                  ("--settlements-csv", str(path), "--nutrition-csv", str(path))):
         assert subprocess.run([binary, *args], capture_output=True).returncode != 0
