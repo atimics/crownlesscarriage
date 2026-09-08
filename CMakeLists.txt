@@ -1717,6 +1717,8 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-world-cards)
         add_test(NAME silverwick_mine_input
                  COMMAND crownless_carriage --test-mine-input)
+        add_test(NAME road_journey_save
+                 COMMAND crownless_carriage --test-road-journey-save)
         add_test(NAME adventure_input_flow
                  COMMAND crownless_carriage --test-adventure-input)
         add_test(NAME title_and_pause_menu
