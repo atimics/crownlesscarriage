@@ -69,7 +69,7 @@
     }
   },
   "source_files_sha256": {
-    "src/sim/cc_sim.c": "24eee47dde240f843ce7ced368a5de8e117e6415664867708afbb9e5fcabd2a4",
+    "src/sim/cc_sim.c": "bc6428f25a1472724fcc832e8c1ef46e01b4a350e04e99579a106588f02dcf2e",
     "src/sim/cc_sim.h": "7037c5cda05fb863b70f082dbc06ece2184c53d669a20eaebdf09952c0e1de52",
     "tools/bakery_experiment.c": "3cc157bf0a8a2b17ab46327261036da8dfc7f875afd82d767d6335090b0a6d66"
   }

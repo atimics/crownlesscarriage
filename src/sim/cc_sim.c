@@ -16643,9 +16643,9 @@ static bool ApplyBakerySupport(CcSim *sim, const CcCommand *command,
         place->service_project_days = plan.building_days;
     }
     char text[CC_EVENT_TEXT_CAPACITY];
-    (void)snprintf(text, sizeof(text), "%s receives the company's bakery supplies and %" PRId64
-        " crowns at %s. %s", contact->name, plan.coins, place->name,
-        plan.building_days > 0 ? "Building takes seven days." : "The grain joins the town's working stock.");
+    (void)snprintf(text, sizeof(text), "%.31s accepts 12 wheat and %" PRId64
+        " crowns at %.31s. %s", contact->name, plan.coins, place->name,
+        plan.building_days > 0 ? "Bakery work begins." : "Grain enters stock.");
     CcEvent *event = PushEvent(sim, CC_EVENT_RELIEF, contact->id, place->id,
                               0U, plan.cargo[CC_GOOD_WHEAT], text);
     RememberCharacter(contact, CC_CHARACTER_MEMORY_PLAYER_HELPED, place->id, event->id, sim->current_day);
