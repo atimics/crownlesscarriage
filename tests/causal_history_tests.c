@@ -122,8 +122,36 @@ static void CheckAbbotSuccessionMovesAnointment(char *error, size_t capacity)
     CheckReferences(&sim);
 }
 
+static void CheckRotatedLedger(void)
+{
+    static CcSim original, canonical, rotated;
+    static CcEvent ordered[CC_MAX_EVENTS];
+    const uint32_t versions[] = {26U, 44U, CC_SIM_SCHEMA_VERSION};
+    const int32_t offsets[] = {1, 17, CC_MAX_EVENTS - 1};
+    for (size_t version = 0; version < sizeof(versions) / sizeof(versions[0]); ++version) {
+        CcSimInit(&original, UINT32_C(0xca05a1));
+        original.schema_version = versions[version];
+        CcSimAdvanceDays(&original, 365);
+        CC_CHECK(original.event_count == CC_MAX_EVENTS && original.event_write_index == 0);
+        for (int32_t i = 0; i < CC_MAX_EVENTS; ++i)
+            ordered[i] = *CcSimRecentEvent(&original, CC_MAX_EVENTS - 1 - i);
+        for (size_t offset = 0; offset < sizeof(offsets) / sizeof(offsets[0]); ++offset) {
+            canonical = original; rotated = original;
+            for (int32_t i = 0; i < CC_MAX_EVENTS; ++i)
+                rotated.events[(i + offsets[offset]) % CC_MAX_EVENTS] = ordered[i];
+            rotated.event_write_index = offsets[offset];
+            CcSimAdvanceDays(&canonical, 7);
+            CcSimAdvanceDays(&rotated, 7);
+            CC_CHECK(CcSimHash(&canonical) == CcSimHash(&rotated));
+            CC_CHECK(memcmp(canonical.events, rotated.events, sizeof(canonical.events)) == 0);
+            CheckReferences(&canonical); CheckReferences(&rotated);
+        }
+    }
+}
+
 int main(void)
 {
+    CheckRotatedLedger();
     char error[192];
     CheckPopulationTurnover();
     CheckRulerSuccessionClearsAnointment(error, sizeof(error));
