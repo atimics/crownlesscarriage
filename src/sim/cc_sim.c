@@ -5049,6 +5049,39 @@ static bool FindArchiveVolumesToBind(const CcSim *sim, int32_t slots[4])
     return true;
 }
 
+static CcProductionReceipt RunTreasureWork(const CcSim *sim,
+    const CcSettlement *settlement, int32_t *stock)
+{
+    if (sim == NULL || settlement == NULL || settlement->treasure_work < 0 ||
+        settlement->treasure_work > 3)
+        return (CcProductionReceipt){.gate = CC_PRODUCTION_INVALID, .blocked_good = CC_GOOD_COUNT};
+    bool starting = settlement->treasure_work == 0;
+    CcProductionRecipe recipe = {
+        .output = CC_GOOD_COUNT, .output_units = 1, .work_only = true,
+        .input_count = starting ? 2 : 0,
+        .inputs = {{CC_GOOD_GOLD, 1, 0}, {CC_GOOD_GEMS, 1, 0}},
+        .work_per_batch = 1, .hunger_soft_limit = 100, .hunger_hard_limit = 100
+    };
+    CcProductionContext context = {
+        .producer_id = settlement->id, .storage_id = settlement->id,
+        .location_id = settlement->id, .stock = stock, .capacity = 1,
+        .output_limit = 1, .work_available = 3 - settlement->treasure_work,
+        .condition = 100,
+        .enabled = CcSettlementHasService(settlement, CC_SERVICE_SMITHY) &&
+            (settlement->function == CC_SETTLEMENT_MARKET || settlement->function == CC_SETTLEMENT_CAPITAL)
+    };
+    return CcProductionRun(&recipe, &context);
+}
+
+CcProductionReceipt CcSimPlanTreasureWork(const CcSim *sim, const CcSettlement *settlement)
+{
+    if (settlement == NULL)
+        return (CcProductionReceipt){.gate = CC_PRODUCTION_INVALID, .blocked_good = CC_GOOD_COUNT};
+    int32_t stock[CC_GOOD_COUNT];
+    memcpy(stock, settlement->stock, sizeof(stock));
+    return RunTreasureWork(sim, settlement, stock);
+}
+
 static void CompleteTreasure(CcSim *sim, CcSettlement *settlement)
 {
     CcTreasure *treasure = AllocateTreasure(sim);
@@ -5224,17 +5257,13 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement,
     bool treasure_town = settlement->function == CC_SETTLEMENT_MARKET ||
                          settlement->function == CC_SETTLEMENT_CAPITAL;
     if (!treasure_town) return;
-    if (settlement->treasure_work == 0 &&
-        settlement->stock[CC_GOOD_GOLD] >= 1 &&
-        settlement->stock[CC_GOOD_GEMS] >= 1) {
-        settlement->stock[CC_GOOD_GOLD] -= 1;
-        settlement->stock[CC_GOOD_GEMS] -= 1;
-        settlement->treasure_gold_committed = 1;
-        settlement->treasure_gems_committed = 1;
-        settlement->treasure_work = 1;
-    } else if (settlement->treasure_work > 0 &&
-               settlement->treasure_work < 3) {
-        settlement->treasure_work += 1;
+    CcProductionReceipt craft = RunTreasureWork(sim, settlement, settlement->stock);
+    if (craft.gate == CC_PRODUCTION_READY) {
+        if (settlement->treasure_work == 0) {
+            settlement->treasure_gold_committed = craft.inputs[0];
+            settlement->treasure_gems_committed = craft.inputs[1];
+        }
+        settlement->treasure_work += craft.work;
     }
     if (settlement->treasure_work >= 3 &&
         sim->treasure_count < CC_MAX_TREASURES) {

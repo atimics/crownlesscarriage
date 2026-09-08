@@ -92,6 +92,10 @@ typedef struct {
     CcSiteProductionAccounting sites[CC_MAX_ROAD_SITES];
 } CcRoadProductionAccounting;
 
+/* One weekly craft act. Inputs enter the saved work order on the first act;
+   the completed treasure receives those committed materials after three acts. */
+CcProductionReceipt CcSimPlanTreasureWork(const CcSim *sim, const CcSettlement *settlement);
+
 bool CcRoadSiteRecipe(const CcRoadSite *site, CcProductionRecipe *recipe);
 CcProductionReceipt CcSimPlanRoadSite(const CcSim *sim, const CcRoadSite *site);
 void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
