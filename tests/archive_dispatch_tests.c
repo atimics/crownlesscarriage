@@ -159,8 +159,45 @@ static void CheckHostileContract(void)
     CC_CHECK(!CcSimValidate(&sim, error, sizeof(error)));
 }
 
+static void CheckBindingDelivery(void)
+{
+    const CcGood goods[] = {CC_GOOD_GOLD, CC_GOOD_GEMS};
+    for (int i = 0; i < 2; ++i) {
+        Fixture();
+        CcGood good = goods[i];
+        CcSettlement *seat = CcSimSettlementMutable(&sim, seat_id);
+        seat->stock[CC_GOOD_PAPER] = 10;
+        seat->stock[CC_GOOD_GOLD] = 1; seat->stock[CC_GOOD_GEMS] = 1;
+        seat->stock[good] = 0;
+        sim.archive_staff.active = true; sim.archive_staff.seat_id = seat_id;
+        sim.archive_staff.legacy_scribes = sim.archives.scribes;
+        CcSettlement *source = CcSimSettlementMutable(&sim, source_id);
+        source->stock[good] = source->reserve_target[good] + 1;
+        source->price[good] = 1;
+        CcArchiveSupplyPlan plan = CcSimArchiveSupplyPlan(&sim, carriage_id);
+        CC_CHECK(plan.gate == CC_ARCHIVE_SUPPLY_READY && plan.good == good && plan.source_id == source_id);
+        CcMoney money = CcSimTrackedGold(&sim), reserve = sim.iron_ledger_reserve;
+        int32_t units = CcSimTrackedGood(&sim, good), stock = source->stock[good];
+        CC_CHECK(CcArchiveDispatchSupply(&sim, carriage_id));
+        CC_CHECK(CcSimTrackedGold(&sim) == money && CcSimTrackedGood(&sim, good) == units);
+        CC_CHECK(source->stock[good] == stock - 1 && seat->stock[good] == 0);
+        CC_CHECK(sim.iron_ledger_reserve == reserve - plan.total_charge);
+        CcId id = Load()->id; int32_t arrival = Load()->arrival_day;
+        Valid(); RoundTrip();
+        CcSimAdvanceDays(&sim, arrival - sim.current_day);
+        CcSimAdvanceDays(&restored, arrival - restored.current_day);
+        CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+        bool arrived = false;
+        for (int j = 0; j < sim.shipment_count; ++j)
+            if (sim.shipments[j].id == id) arrived = sim.shipments[j].status == CC_SHIPMENT_ARRIVED;
+        CC_CHECK(arrived && CcSimSettlement(&sim, seat_id)->stock[good] == 1);
+        Valid(); RoundTrip();
+    }
+}
+
 int main(void)
 {
+    CheckBindingDelivery();
     CheckHostileContract();
     CheckDisruption();
     Fixture();

@@ -18723,7 +18723,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 carriage->next_dispatch_day < 0 ||
                 carriage->next_dispatch_day > sim->current_day + 7 ||
                 (carriage->archive_contract && shipment != NULL &&
-                 shipment->good != CC_GOOD_WHEAT && shipment->good != CC_GOOD_TOOLS && shipment->good != CC_GOOD_PAPER) ||
+                 shipment->good != CC_GOOD_WHEAT && shipment->good != CC_GOOD_TOOLS && shipment->good != CC_GOOD_PAPER &&
+                 !(sim->schema_version >= 83U &&
+                   (shipment->good == CC_GOOD_GOLD || shipment->good == CC_GOOD_GEMS))) ||
                 (shipment != NULL &&
                  (CcSimSettlement(sim, shipment->final_destination_id) == NULL ||
                   CcSimSettlement(sim,

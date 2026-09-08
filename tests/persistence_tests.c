@@ -2713,7 +2713,7 @@ static void CheckSchema41Upgrade(void)
    future edit to that table cannot quietly widen or narrow what loads. */
 static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
 {
-    bool legacy = schema >= 2U && schema <= 81U;
+    bool legacy = schema >= 2U && schema <= 82U;
     if (!legacy && schema != CC_SIM_SCHEMA_VERSION) return false;
     if (schema == CC_SIM_SCHEMA_VERSION &&
         generator == CC_GENERATOR_VERSION) return true;
@@ -2721,7 +2721,7 @@ static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
         /* The current generator reads the oldest schemas and the recent run,
            but not 28 through 31, which shipped with generators of their own. */
         if (schema >= 2U && schema <= 27U) return true;
-        if (schema >= 32U && schema <= 81U) return true;
+        if (schema >= 32U && schema <= 82U) return true;
     }
     if (schema == 31U && generator == 24U) return true;
     if (schema == 27U && generator >= 21U && generator <= 23U) return true;
@@ -2968,6 +2968,32 @@ static void CheckSchema81RecruitmentJournal(void)
     RemoveDatabase(path);
 }
 
+static void CheckSchema82RecruitmentJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema82-recruitment.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 82U;
+    CC_CHECK(CcSimBeginArchiveRecruitment(&legacy));
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 82U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 82U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
 static void CheckSchema58SmithyCapacity(void)
 {
     static CcSim legacy;
@@ -3189,6 +3215,7 @@ int main(void)
     CheckSchema79RecruitmentJournal();
     CheckSchema80RecruitmentJournal();
     CheckSchema81RecruitmentJournal();
+    CheckSchema82RecruitmentJournal();
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
     CheckSchema41Upgrade();

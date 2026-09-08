@@ -1,4 +1,5 @@
 #include "sim/cc_archive_internal.h"
+#include "sim/cc_archive_recruitment.h"
 #include "sim/cc_food_economy_internal.h"
 #include "sim/cc_goods_internal.h"
 #include "sim/cc_route_rules_internal.h"
@@ -29,10 +30,19 @@ CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
     for (int i = 0; i < CC_GOOD_COUNT; ++i)
         projected.stock[i] += Min(CC_SIM_MAX_UNITS - projected.stock[i],
             CcSimIncomingGood(sim, seat->id, (CcGood)i));
-    const CcGood goods[] = {CC_GOOD_WHEAT, CC_GOOD_TOOLS, CC_GOOD_PAPER};
+    const CcGood goods[] = {CC_GOOD_WHEAT, CC_GOOD_TOOLS, CC_GOOD_PAPER,
+        CC_GOOD_GOLD, CC_GOOD_GEMS};
+    int32_t good_count = 3;
+    if (sim->schema_version >= 83U) {
+        CcArchiveAppointmentPlan appointment = CcSimArchiveAppointmentPlan(sim);
+        /* Local book work uses the same binding recipe as the archive. An
+           appointment that can index a surviving volume needs only its kit. */
+        if ((sim->archive_staff.active && sim->archive_staff.seat_id == seat->id) ||
+            (appointment.account_slot >= 0 && appointment.volume_id == 0)) good_count = 5;
+    }
     bool shortage = false;
     int32_t need = 0;
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < good_count; ++i) {
         CcGood good = goods[i];
         int32_t current = good == CC_GOOD_WHEAT ? WheatNeed(sim, seat) : Max(0, 1 - seat->stock[good]);
         if (current <= 0) continue;

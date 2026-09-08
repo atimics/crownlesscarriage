@@ -119,6 +119,32 @@ int main(void)
     sim.settlements[1] = sim.settlements[2]; sim.settlements[2] = swap;
     plan = Query(CC_ARCHIVE_SUPPLY_READY); CC_CHECK(plan.source_id == chosen);
     CC_CHECK(plan.reposition_cost > 0 && plan.first_dispatch_day == 28);
+    /* Binding supplies follow the same price, reserve, and incoming rules. */
+    for (int binding = CC_GOOD_GOLD; binding <= CC_GOOD_GEMS; ++binding) {
+        Fixture();
+        sim.settlements[0].stock[CC_GOOD_PAPER] = 1;
+        sim.settlements[0].stock[CC_GOOD_GOLD] = 1;
+        sim.settlements[0].stock[CC_GOOD_GEMS] = 1;
+        sim.settlements[0].stock[binding] = 0;
+        sim.archive_staff.active = true;
+        sim.archive_staff.seat_id = sim.settlements[0].id;
+        sim.archive_staff.legacy_scribes = 1;
+        plan = Query(CC_ARCHIVE_SUPPLY_SOURCE); CC_CHECK(plan.good == (CcGood)binding);
+        sim.settlements[1].stock[binding] = 2;
+        sim.settlements[1].reserve_target[binding] = 1;
+        sim.settlements[1].price[binding] = 17;
+        plan = Query(CC_ARCHIVE_SUPPLY_READY);
+        CC_CHECK(plan.good == (CcGood)binding && plan.quantity == 1 && plan.goods_cost == 17);
+        sim.iron_ledger_reserve = 16; (void)Query(CC_ARCHIVE_SUPPLY_FUNDS);
+        sim.iron_ledger_reserve = 100;
+        sim.shipment_count = 1;
+        sim.shipments[0] = (CcShipment){.id = 999, .final_destination_id = sim.settlements[0].id,
+            .good = (CcGood)binding, .quantity = 1, .status = CC_SHIPMENT_TRAVELLING};
+        (void)Query(CC_ARCHIVE_SUPPLY_INCOMING);
+        sim.schema_version = 82U; (void)Query(CC_ARCHIVE_SUPPLY_STOCKED);
+        sim.schema_version = 83U; sim.archive_staff.active = false;
+        (void)Query(CC_ARCHIVE_SUPPLY_STOCKED);
+    }
     Fixture(); sim.schema_version = 57U; (void)Query(CC_ARCHIVE_SUPPLY_UNAVAILABLE);
     Fixture();
     for (int i = 0; i < 3; ++i) sim.settlements[i].population = 0;
