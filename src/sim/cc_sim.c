@@ -8811,13 +8811,16 @@ static CcTreasure *CreateDragonWyrmheart(CcSim *sim)
     return gem;
 }
 
-static bool DragonHasWyrmheart(CcSim *sim)
+static bool DragonCanBecomeDeepWyrm(const CcSim *sim)
 {
-    CcDragon *dragon = &sim->dragon;
+    const CcDragon *dragon = &sim->dragon;
     if (dragon->wyrmheart_id == 0U) {
-        CcTreasure *heart = CreateDragonWyrmheart(sim);
-        if (heart == NULL) return false;
-        dragon->wyrmheart_id = heart->id;
+        if (CcSimSettlement(sim, dragon->lair_settlement_id) == NULL) return false;
+        if (sim->treasure_count < CC_MAX_TREASURES) return true;
+        for (int32_t i = 0; i < sim->treasure_count; ++i) {
+            if (sim->treasures[i].destroyed) return true;
+        }
+        return false;
     }
     const CcTreasure *heart = CcSimTreasure(sim, dragon->wyrmheart_id);
     return heart != NULL && !heart->destroyed &&
@@ -8964,12 +8967,17 @@ static void AdvanceDragonEcology(CcSim *sim)
                dragon->crown_strength >= 60 &&
                dragon->crown_continuity_days >= 200 * 365 &&
                dragon->territory_stability >= 75 &&
-               (sim->schema_version < 57U || DragonHasWyrmheart(sim))) {
+               (sim->schema_version < 57U || DragonCanBecomeDeepWyrm(sim))) {
         ChangeDragonStage(sim, CC_DRAGON_STAGE_DEEP_WYRM,
                           CC_EVENT_DRAGON_CROWNED,
                           "centuries of possession bind wyrm, hoard, and mountain");
-        /* Historical replay keeps the original award order. */
-        if (sim->schema_version < 57U) (void)CreateDragonWyrmheart(sim);
+        /* Keep first formation in its historical event and identity order. */
+        if (sim->schema_version < 57U || dragon->wyrmheart_id == 0U) {
+            CcTreasure *heart = CreateDragonWyrmheart(sim);
+            if (sim->schema_version >= 57U && heart != NULL) {
+                dragon->wyrmheart_id = heart->id;
+            }
+        }
     }
 
     if (dragon->brood_cooldown_days == 0 && dragon->egg_count == 0 &&
