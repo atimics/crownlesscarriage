@@ -10247,7 +10247,7 @@ int main(int argc, char **argv)
         local.adventure_ui = presentation.adventure_ui;
         if (normal_play && AdventureScene(&local)) local.course.automatic_alarm = false;
         adventure_preferences = local.adventure_ui ? &preferences : NULL;
-        CcLocalRendererSetInteractionUI(AdventureScene(&local));
+        CcLocalRendererSetInteractionUI(local.adventure_ui);
         ClientTouchBegin();
         const CcSettlement *touch_place = CcSimSettlement(&sim, sim.player.location_id);
         ClientTouchHeading(touch_place != NULL ? touch_place->name : "The road",
