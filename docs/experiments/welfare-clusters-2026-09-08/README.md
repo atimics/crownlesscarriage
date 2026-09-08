@@ -135,6 +135,6 @@ python3 tools/plot_welfare.py docs/experiments/welfare-clusters-2026-09-08/endpo
   --traces docs/experiments/welfare-clusters-2026-09-08/traces
 ```
 
-Local validation passed the complete 89-test suite, the new plot-input test,
-the final focused report tests, undefined-behavior checks for welfare and trace
-tests, and static analysis. The local HTTP test passed with loopback access.
+Local validation passed all 90 tests on the final code, undefined-behavior
+checks for welfare and trace tests, and static analysis. The full suite used
+loopback access for its local HTTP tests.
