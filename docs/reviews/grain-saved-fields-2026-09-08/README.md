@@ -21,3 +21,15 @@ Both injected runs exited 1 at the intended assertion. The committed production 
 This extends independent coverage for the newly landed grain delivery state. The rest of #386 still requires its full current-main verification matrix, including macOS target checks, compatibility evidence, and shared trade logic. Historical fixture and journal tests run as part of the headless suite.
 
 Validation after restoration: strict Release headless build passed, all 101 tests passed, all 592 save-only field checks passed, and static analysis passed with its reviewed baseline.
+
+## Current-base macOS target checks
+
+The same 101-test run executed `macos_configuration_contract` against this source, based on main 6e4818c. It configured three separate directories, built `crownless_sim_runner` in each, and inspected each executable. A second direct `xcrun vtool -show-build` pass confirmed the records in [macos-targets.json](macos-targets.json).
+
+| Case | Cached target | Executable minimum |
+| --- | --- | --- |
+| Fresh configuration | 14.0 | 14.0 |
+| Reused cache with empty target | 14.0 | 14.0 |
+| Explicit override | 15.0 | 15.0 |
+
+This supplies current-source evidence for the deployment-target portion of #386. Signing and notarization remain under #121.
