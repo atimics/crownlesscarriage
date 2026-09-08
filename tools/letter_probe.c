@@ -656,6 +656,208 @@ static void PrintCensus(const CcSim *sim)
     }
 }
 
+/* ------------------------------------------------------------------ */
+/* Research-mission mode: baseline book, pages, scout collection       */
+/* ------------------------------------------------------------------ */
+
+/* One notable topic per character, derived from their role. This is the
+   simplest form of the model: a herdsman holds herd gossip, a guard holds
+   road/bandit gossip, an official holds throne gossip. The mission topic
+   and the teller's notable topic together give the "by craft" flag — a
+   herdsman telling a herds fact vouches for it better than an official
+   would. */
+static int32_t RoleNotableTopic(CcCharacterRole role)
+{
+    switch (role) {
+        case CC_CHARACTER_OFFICIAL: return 4;  /* throne */
+        case CC_CHARACTER_LABORER:  return 6;  /* herds */
+        case CC_CHARACTER_SCOUT:    return 8;  /* road */
+        case CC_CHARACTER_TRAVELLER:return 8;  /* road */
+        case CC_CHARACTER_REFUGEE:  return 5;  /* wheat */
+        case CC_CHARACTER_COURIER:  return 3;  /* war */
+        default:                    return 1;  /* dragon (unmapped roles default to the grand subject) */
+    }
+}
+
+/* The adult non-travelling character at one settlement who holds the most
+   gossip accounts. The mission visits each town and asks its most-informed
+   resident for a page. */
+static const CcCharacter *BestHeldWriterAt(const CcSim *sim,
+                                           CcId settlement_id)
+{
+    const CcCharacter *best = NULL;
+    int32_t best_held = -1;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *person = &sim->characters[i];
+        if (person->current_settlement_id != settlement_id) continue;
+        if (CcCharacterAgeYears(sim, person) < 16 ||
+            person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING) continue;
+        int32_t held = HeldCount(sim, person->id);
+        if (held > best_held) {
+            best_held = held;
+            best = person;
+        }
+    }
+    return best;
+}
+
+#define CC_MISSION_MAX_PAGES 10
+#define CC_MISSION_PAGE_FACTS 3
+
+static void RunMission(const CcSim *sim, int topic, int32_t baseline,
+                       int facts_per_page)
+{
+    if (sim == NULL || topic < 1 || topic > CC_PROBE_TOPIC_COUNT) return;
+    /* The archive pre-fills the book with what it already knew on this
+       subject by the baseline day (facts it has heard). */
+    CcId prefill[CC_MAX_GOSSIP];
+    int32_t prefill_count = 0;
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        const CcGossip *story = CcSimGossipStory(sim, i);
+        if (story == NULL || !TopicMatches(topic, story->kind)) continue;
+        if (story->heard_day > 0 && story->heard_day <= baseline) {
+            if (prefill_count < CC_MAX_GOSSIP) {
+                prefill[prefill_count++] = story->event_id;
+            }
+        }
+    }
+
+    printf("== RESEARCH MISSION: %s — seed %" PRIu32 ", day %d ==\n",
+           TopicName(topic), sim->world_seed, sim->current_day);
+    printf("   Book: Scriptorium research copy on \"%s\" — baseline day %d "
+           "(archive knew %d facts before the scout left)\n\n",
+           TopicName(topic), baseline, prefill_count);
+
+    /* The scout rides the towns in order and takes one page per town from
+       its most-informed adult: on-topic facts held AFTER the baseline, the
+       newest first, at most facts_per_page, one lineage per kind+origin. */
+    int32_t pages_written = 0;
+    int32_t facts_written = 0;
+    int32_t novel_count = 0;
+    int32_t repeat_count = 0;
+    int32_t further_count = 0;
+    int32_t craft_count = 0;
+    printf("   Scout route: ");
+    for (int32_t s = 0; s < sim->settlement_count; ++s) {
+        printf("%s%s", s > 0 ? " → " : "", sim->settlements[s].name);
+    }
+    printf("\n\n");
+
+    /* Every fact the book ends up holding, so a later town can be checked
+       for contradiction against any earlier page. */
+    typedef struct BookFact {
+        CcEventKind kind;
+        CcId origin_id;
+        CcId event_id;
+        int32_t page;
+    } BookFact;
+    BookFact book[CC_MAX_GOSSIP];
+    int32_t book_count = 0;
+
+    for (int32_t s = 0; s < sim->settlement_count && pages_written < CC_MISSION_MAX_PAGES; ++s) {
+        const CcSettlement *place = &sim->settlements[s];
+        const CcCharacter *teller = BestHeldWriterAt(sim, place->id);
+        if (teller == NULL) continue;
+        bool by_craft = RoleNotableTopic(teller->role) == topic;
+
+        typedef struct CandidateFact {
+            const CcGossip *story;
+            const CcGossipVersion *version;
+        } CandidateFact;
+        CandidateFact facts[CC_MAX_GOSSIP];
+        int32_t fact_count = 0;
+        for (int32_t offset = 0; offset < CC_MAX_GOSSIP; ++offset) {
+            const CcGossipVersion *version = NULL;
+            const CcGossip *story = CcSimPersonalGossip(sim, teller->id, offset, &version);
+            if (story == NULL || version == NULL) break;
+            if (!TopicMatches(topic, story->kind)) continue;
+            int32_t held_day = story->heard_day > 0 ? story->heard_day : story->day;
+            if (held_day <= baseline) continue;
+            bool dup = false;
+            for (int32_t k = 0; k < fact_count; ++k) {
+                if (facts[k].story->kind == story->kind &&
+                    facts[k].story->origin_id == story->origin_id) {
+                    dup = true;
+                    break;
+                }
+            }
+            if (dup) continue;
+            facts[fact_count].story = story;
+            facts[fact_count].version = version;
+            fact_count += 1;
+            if (fact_count >= facts_per_page) break;
+        }
+        if (fact_count == 0) continue;
+
+        printf("  --- page %d: told by %s (%s), at %s%s ---\n",
+               pages_written + 1, teller->name, CcCharacterRoleName(teller->role),
+               place->name, by_craft ? "   [by craft]" : "");
+        for (int32_t f = 0; f < fact_count; ++f) {
+            const CcGossip *story = facts[f].story;
+            const CcGossipVersion *version = facts[f].version;
+            char account[CC_EVENT_TEXT_CAPACITY];
+            CcGossipText(sim, story, version, account, sizeof(account));
+            bool novel = true;
+            for (int32_t p = 0; p < prefill_count; ++p) {
+                if (prefill[p] == story->event_id) { novel = false; break; }
+            }
+            /* Is this the first telling of this exact event in the book? */
+            bool repeat = false;
+            for (int32_t b = 0; b < book_count; ++b) {
+                if (book[b].event_id == story->event_id) { repeat = true; break; }
+            }
+            /* Or does a DIFFERENT event on the same kind+origin already sit
+               in the book? Ten copies of one story are one lineage; two
+               events on one subject are a separate occurrence — not a
+               contradiction, which needs a conflicting claim. */
+            int32_t further_of = 0;
+            for (int32_t b = 0; b < book_count; ++b) {
+                if (book[b].kind == story->kind &&
+                    book[b].origin_id == story->origin_id &&
+                    book[b].event_id != story->event_id) {
+                    further_of = book[b].page;
+                    break;
+                }
+            }
+            if (novel) novel_count += 1;
+            printf("    %d. %s\n", f + 1, account);
+            printf("       cited: %s, event %" PRIu64 " (%s), held day %d, retellings %d, %s\n",
+                   CcSimSettlement(sim, story->origin_id) != NULL ?
+                       CcSimSettlement(sim, story->origin_id)->name : "the road",
+                   story->event_id, CcEventKindName(story->kind),
+                   story->heard_day > 0 ? story->heard_day : story->day,
+                   version->retellings,
+                   repeat ? "[repeat — one lineage, not copied]" :
+                   novel ? "[NOVEL since baseline]" : "[known since baseline]");
+            if (repeat) {
+                repeat_count += 1;
+                continue; /* do not add a second page for the same event */
+            }
+            if (further_of != 0) {
+                further_count += 1;
+                printf("       [further account — a different telling on the same subject as page %d]\n",
+                       further_of);
+            }
+            book[book_count].kind = story->kind;
+            book[book_count].origin_id = story->origin_id;
+            book[book_count].event_id = story->event_id;
+            book[book_count].page = pages_written + 1;
+            book_count += 1;
+        }
+        printf("\n");
+        if (by_craft) craft_count += 1;
+        facts_written += fact_count;
+        pages_written += 1;
+    }
+
+    printf("  Book summary: %d pages / %d facts — %d novel since baseline, %d repeat%s, "
+           "%d further account%s, %d page%s by a craft-witness\n\n",
+           pages_written, facts_written, novel_count, repeat_count,
+           repeat_count == 1 ? "" : "s", further_count,
+           further_count == 1 ? "" : "s", craft_count,
+           craft_count == 1 ? "" : "s");
+}
+
 int main(int argc, char **argv)
 {
     int32_t seed_number = 1;
@@ -666,6 +868,9 @@ int main(int argc, char **argv)
     bool census = false;
     bool compare = false;
     bool scan = false;
+    bool mission = false;
+    int32_t mission_topic = 0;
+    int32_t baseline = 1;
     int32_t topic = 0;
 
     for (int32_t argument = 1; argument < argc; ++argument) {
@@ -691,15 +896,26 @@ int main(int argc, char **argv)
             compare = true;
         } else if (strcmp(argv[argument], "--scan") == 0) {
             scan = true;
+        } else if (strcmp(argv[argument], "--mission") == 0 && argument + 1 < argc) {
+            mission = true;
+            mission_topic = TopicId(argv[++argument]);
+        } else if (strcmp(argv[argument], "--baseline") == 0 && argument + 1 < argc) {
+            baseline = (int32_t)strtol(argv[++argument], NULL, 10);
         } else {
             (void)fprintf(stderr, "Usage: %s [--seed N] [--seeds N] [--years Y] "
                           "[--purpose report|petition|claim|dispatch|auto] "
                           "[--topic dragon|goblin|war|throne|wheat|herds|ponies|road|bandit|treasure|all] "
-                          "[--max-accounts K] [--census] [--compare] [--scan]\n", argv[0]);
+                          "[--mission TOPIC] [--baseline DAY] [--max-accounts K] "
+                          "[--census] [--compare] [--scan]\n", argv[0]);
             return 1;
         }
     }
     if (seeds < 1 || years < 1 || max_accounts < 1) return 1;
+    if (mission && (mission_topic < 1 || mission_topic > CC_PROBE_TOPIC_COUNT)) {
+        (void)fprintf(stderr, "--mission needs a real topic (dragon|goblin|war|throne|wheat|herds|ponies|road|bandit|treasure)\n");
+        return 1;
+    }
+    if (baseline < 1) baseline = 1;
 
     printf("letter probe — world seeds %d..%d, %d years, purpose \"%s\", topic \"%s\"%s\n\n",
            seed_number, seed_number + seeds - 1, years,
@@ -709,6 +925,18 @@ int main(int argc, char **argv)
     for (int32_t s = 0; s < seeds; ++s) {
         CcSim sim;
         CcSimInit(&sim, (uint32_t)(seed_number + s) * UINT32_C(0x9e3779b9));
+        if (mission) {
+            /* A research mission runs the world forward, then sends the scout
+               out once — the book is composed at the end from everything the
+               scout gathered after the baseline day. */
+            for (int32_t year = 1; year <= years; ++year) {
+                for (int32_t day = 0; day < 365; ++day) {
+                    CcSimAdvanceDays(&sim, 1);
+                }
+            }
+            RunMission(&sim, mission_topic, baseline, max_accounts);
+            continue;
+        }
         for (int32_t year = 1; year <= years; ++year) {
             for (int32_t day = 0; day < 365; ++day) {
                 CcSimAdvanceDays(&sim, 1);

@@ -65,6 +65,21 @@ def main():
             print(f"FAIL: scan missing topic header for {topic}")
             return 1
 
+    # --mission composes a research book: baseline prefill, per-town pages,
+    # novelty/repeat/contradiction lineage, and an honest summary.
+    mission = run(binary, "--seed", "9", "--seeds", "1", "--years", "3",
+                  "--mission", "goblin", "--baseline", "365",
+                  "--max-accounts", "3").stdout
+    if "RESEARCH MISSION: goblin" not in mission:
+        print("FAIL: mission mode missing header")
+        return 1
+    if "Book summary" not in mission:
+        print("FAIL: mission mode missing book summary")
+        return 1
+    if "repeat" not in mission and "further account" not in mission:
+        print("FAIL: expected lineage repeat/further-account terminology")
+        return 1
+
     print("letter probe contracts passed.")
     return 0
 
