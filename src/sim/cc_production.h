@@ -86,7 +86,7 @@ typedef struct {
     uint64_t work;
     uint64_t route_repair;
     uint64_t maintenance_input[CC_GOOD_COUNT];
-    uint64_t maintenance_work, site_repair;
+    uint64_t maintenance_work, site_repair, wear;
     uint64_t gates[CC_PRODUCTION_GATE_COUNT];
 } CcSiteProductionAccounting;
 

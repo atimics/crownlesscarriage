@@ -32,7 +32,7 @@ with tempfile.TemporaryDirectory() as directory:
             assert loaded['dragon_policy'] == 'loaded-save'
             assert all(sum(site['input']) == 0 for site in loaded['sites'])
         assert all(isinstance(town['id'], str) for town in rows[-1]['towns'])
-        assert rows[-1]['protocol'] == 5
+        assert rows[-1]['protocol'] == 6
         for town in rows[-1]['towns']:
             herds = town['herds']
             assert herds['dairy_nutrition'] == herds['dairy_used'] + herds['dairy_unused']
@@ -50,6 +50,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert sum(town['herds']['sheep']['output'][rows[-1]['goods'].index('Wool')] for town in rows[-1]['towns']) > 0
         assert all(route['open_days'] + route['closed_days'] == 730 for route in rows[-1]['routes'])
         for start, end in zip(rows[0]['sites'], rows[-1]['sites']):
+            assert end['condition'] == start['condition'] + end['site_repair'] - end['wear']
             for good in range(len(rows[-1]['goods'])):
                 assert end['stock'][good] == start['stock'][good] + end['output'][good] - end['input'][good] - end['maintenance_input'][good] + end['received'][good] - end['shipped'][good]
                 aboard = sum(cargo['quantity'] for cargo in rows[-1]['shipments']

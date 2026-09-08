@@ -49,7 +49,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
     const int32_t *open_days)
 {
     CcHungerSnapshot hunger = CcSimHungerSnapshot(sim);
-    printf("{\"protocol\":5,\"fixture\":"); JsonString(fixture);
+    printf("{\"protocol\":6,\"fixture\":"); JsonString(fixture);
     printf(",\"dragon_policy\":"); JsonString(dragon_policy);
     printf(",\"comparison_scope\":\"whole-policy\",\"dragon\":{\"id\":\"%" PRIu64 "\",\"slain\":%s,\"slain_day\":%d,\"life_stage\":%d,\"activity\":%d,\"body_condition\":%d,\"crown_strength\":%d,\"eggs\":%d}",
         sim->dragon.id, sim->dragon.slain ? "true" : "false", sim->dragon.slain_day,
@@ -115,7 +115,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
 #undef TOTAL
         printf(",\"work\":%" PRIu64 ",\"route_repair\":%" PRIu64 ",\"gates\":", row->work, row->route_repair);
         JsonTotals(row->gates, CC_PRODUCTION_GATE_COUNT);
-        printf(",\"maintenance_work\":%" PRIu64 ",\"site_repair\":%" PRIu64 ",\"wear\":null}", row->maintenance_work, row->site_repair);
+        printf(",\"maintenance_work\":%" PRIu64 ",\"site_repair\":%" PRIu64 ",\"wear\":%" PRIu64 "}", row->maintenance_work, row->site_repair, row->wear);
     }
     printf("],\"routes\":[");
     for (int32_t i = 0; i < sim->route_count; ++i) {

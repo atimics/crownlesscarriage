@@ -48,7 +48,8 @@ static CcProductionContext RoadProductionContext(const CcSim *sim,
             CcGoodDefinitionFor(recipe->output)->player_units_per_slot;
     }
     return (CcProductionContext){.producer_id = site->id, .storage_id = site->id,
-        .location_id = site->id, .stock = stock, .capacity = 2, .output_limit = limit,
+        .location_id = site->id, .stock = stock,
+        .capacity = sim->schema_version >= 68U && site->condition < 65 ? 1 : 2, .output_limit = limit,
         .work_available = recipe->work_only ? 6 : 2, .condition = site->condition,
         .enabled = sim->schema_version >= 64U && site->accessible};
 }
@@ -141,6 +142,12 @@ static void ProduceRoadSites(CcSim *sim, CcRoadProductionAccounting *accounting)
             if (!recipe.work_only) row->output[recipe.output] += (uint64_t)receipt.output;
         }
         if (receipt.gate != CC_PRODUCTION_READY) continue;
+        if (sim->schema_version >= 68U) {
+            int32_t wear = site->condition >= 80 ? (receipt.work + 1) / 2 : receipt.work;
+            wear = MinimumI32(wear, site->condition);
+            site->condition -= wear;
+            if (row != NULL) row->wear += (uint64_t)wear;
+        }
         active++;
         output += receipt.output;
         if (recipe.work_only) {

@@ -84,7 +84,8 @@ static void CheckCarriageFunding(void)
     CC_CHECK(total.sites[2].freight_sent[CC_GOOD_TOOLS] == 2 && total.sites[2].freight_received[CC_GOOD_TOOLS] == 0);
     CcSimAdvanceDaysWithProductionAccounting(&sim, 364, NULL, NULL, &total);
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
-    CC_CHECK(total.sites[2].site_repair == 40 && site->condition == 84);
+    CC_CHECK(total.sites[2].site_repair >= 40);
+    CC_CHECK(site->condition == 44 + (int32_t)total.sites[2].site_repair - (int32_t)total.sites[2].wear);
     CC_CHECK(total.sites[2].freight_received[CC_GOOD_TOOLS] >= 5 && total.sites[2].freight_received[CC_GOOD_WOOD] >= 4);
     for (int good = 0; good < CC_GOOD_COUNT; ++good) {
         const CcSiteProductionAccounting *row = &total.sites[2];

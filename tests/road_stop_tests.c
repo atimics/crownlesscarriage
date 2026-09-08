@@ -489,8 +489,8 @@ static void CheckRepairRestartsMill(void)
     CC_CHECK(site->condition == 54 && site->stock[CC_GOOD_WHEAT] == 6 && site->stock[CC_GOOD_BREAD] == 0);
     CC_CHECK(CcSimPlanRoadSite(&sim, site).gate == CC_PRODUCTION_READY);
     CcSimAdvanceDaysWithProductionAccounting(&sim, 7, NULL, NULL, &accounting);
-    CC_CHECK(accounting.sites[2].input[CC_GOOD_WHEAT] == 2);
-    CC_CHECK(accounting.sites[2].output[CC_GOOD_BREAD] == 2);
+    CC_CHECK(accounting.sites[2].input[CC_GOOD_WHEAT] == 1);
+    CC_CHECK(accounting.sites[2].output[CC_GOOD_BREAD] == 1);
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
