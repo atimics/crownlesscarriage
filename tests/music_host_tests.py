@@ -45,6 +45,20 @@ with tempfile.TemporaryDirectory() as tmp:
     }
     public = json.dumps(manifest)
     assert 'suno.com' not in public and '/Users/' not in public
+    hosted = audio / 'hosted'
+    hosted.mkdir()
+    (hosted / '61-01.mp3').write_bytes(b'B' * 2048)
+    manifest = host.build(audio, output, folder / 'catalog.json')
+    assert manifest['available_takes'] == 6
+    assert any(t['stem'] == '61-01' for t in manifest['tracks'])
+    (hosted / '03-01.mp3').write_bytes(b'B' * 2048)
+    try:
+        host.build(audio, output, folder / 'catalog.json')
+    except ValueError as error:
+        assert 'Duplicate soundtrack stem' in str(error)
+    else:
+        raise AssertionError('duplicate stem accepted')
+    (hosted / '03-01.mp3').unlink()
     (audio / '99-99.mp3').write_bytes(b'A' * 2048)
     try:
         host.build(audio, output, folder / 'catalog.json')
