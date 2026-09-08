@@ -883,6 +883,26 @@ static void CheckDramaticRegisters(void)
     CC_CHECK(NoDigits(hit_road.text));
     printf("Bandit raid road: %s\n", hit_road.text);
 
+    /* The relief-telling of famine composes the same way: the store
+       against its reserve, still without numbers. */
+    CcId relief = AddEvent(CC_EVENT_SHORTAGE, place, place, 40,
+        "Thornford has 12 food in store. Its reserve target is 70.");
+    CcSimRefreshCharacterGossip(&sim);
+    CcSpeech relief_road, relief_ledger;
+    int32_t relief_offset = StoryOffset(&sim, traveller->id, relief);
+    CC_CHECK(relief_offset >= 0);
+    CC_CHECK(CcSpeechGossip(&sim, traveller->id, relief_offset, false,
+                            &relief_road));
+    CC_CHECK(CcSpeechGossip(&sim, official->id,
+                            StoryOffset(&sim, official->id, relief), false,
+                            &relief_ledger));
+    CC_CHECK(strstr(relief_road.text, town) != NULL);
+    CC_CHECK(NoDigits(relief_road.text) && NoDigits(relief_ledger.text));
+    CC_CHECK(strstr(relief_road.text, "store") != NULL ||
+             strstr(relief_road.text, "reserve") != NULL);
+    printf("Relief store road: %s\nRelief store ledger: %s\n",
+           relief_road.text, relief_ledger.text);
+
     /* The dramatic kinds ride their own schema gate. */
     Prepare();
     traveller = &sim.characters[0];

@@ -66,26 +66,45 @@ static const CcBanditGroup *SpeechBanditGroup(const CcSim *sim, CcId id)
     return NULL;
 }
 
-/* The sim strikes shortage notices in one authored format:
-   "<place> has <weeks> weeks of food; hunger reaches pressure level <level>."
-   The slots are read back out of the account the holder carries; if the
-   words do not carry the numbers, the account is not one the lexicon can
-   compose and the caller wraps the direct account instead. */
-static bool ShortageSlots(const char *account, int32_t *weeks, int32_t *level)
+/* The sim strikes shortage notices in two authored formats: a weeks-and-
+   pressure telling and a store-versus-reserve telling. The slots are read
+   back out of the account the holder carries; if the words do not carry
+   one of these shapes, the account is not one the lexicon can compose and
+   the caller wraps the direct account instead. */
+static bool ShortageSlots(const char *account, int32_t *weeks, int32_t *level,
+                          int32_t *store, int32_t *reserve)
 {
     const char *has = strstr(account, " has ");
-    if (has == NULL) return false;
-    char *end = NULL;
-    long weeks_value = strtol(has + 5, &end, 10);
-    if (end == has + 5 || strncmp(end, " weeks of food", 14) != 0) return false;
-    const char *pressure = strstr(end, "pressure level ");
-    if (pressure == NULL) return false;
-    char *level_end = NULL;
-    long level_value = strtol(pressure + 15, &level_end, 10);
-    if (level_end == pressure + 15 || *level_end != '.') return false;
-    *weeks = (int32_t)weeks_value;
-    *level = (int32_t)level_value;
-    return true;
+    if (has != NULL) {
+        char *end = NULL;
+        long weeks_value = strtol(has + 5, &end, 10);
+        if (end != has + 5 && strncmp(end, " weeks of food", 14) == 0) {
+            const char *pressure = strstr(end, "pressure level ");
+            if (pressure != NULL) {
+                char *level_end = NULL;
+                long level_value = strtol(pressure + 15, &level_end, 10);
+                if (level_end != pressure + 15 && *level_end == '.') {
+                    *weeks = (int32_t)weeks_value;
+                    *level = (int32_t)level_value;
+                    return true;
+                }
+            }
+        }
+        char *store_end = NULL;
+        long store_value = strtol(has + 5, &store_end, 10);
+        if (store_end != has + 5 &&
+            strncmp(store_end, " food in store. Its reserve target is ", 38) == 0) {
+            const char *reserve_text = store_end + 38;
+            char *reserve_end = NULL;
+            long reserve_value = strtol(reserve_text, &reserve_end, 10);
+            if (reserve_end != reserve_text && *reserve_end == '.') {
+                *store = (int32_t)store_value;
+                *reserve = (int32_t)reserve_value;
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 /* Time told the way a person says it: a season, not a day number. */
@@ -99,45 +118,72 @@ static const char *SpeechSeason(int32_t day)
 
 static void ComposeShortage(const CcCharacter *speaker, const CcGossip *story,
                             const CcGossipVersion *version, int32_t weeks,
-                            int32_t level, const char *place,
+                            int32_t level, int32_t store, int32_t reserve,
+                            const char *place,
                             char *text, size_t capacity)
 {
     uint32_t variant = SpeechVariant(story->event_id, speaker->id, 2U);
     char claim[CC_SPEECH_TEXT_CAPACITY];
+    bool pressure_telling = reserve < 0;
     switch (CcSpeechRegisterForRole(speaker->role)) {
-    case CC_SPEECH_REGISTER_LEDGER: {
-        const char *standing = level >= 3 ? "desperate want" :
-                                level == 2 ? "pressing hunger" :
-                                             "the first pressure";
-        if (variant == 0U) {
+    case CC_SPEECH_REGISTER_LEDGER:
+        if (pressure_telling) {
+            const char *standing = level >= 3 ? "desperate want" :
+                                    level == 2 ? "pressing hunger" :
+                                                 "the first pressure";
+            if (variant == 0U) {
+                (void)snprintf(claim, sizeof(claim),
+                    "The stores at %s have run low since %s. The ledger marks %s.",
+                    place, SpeechSeason(story->day), standing);
+            } else {
+                (void)snprintf(claim, sizeof(claim),
+                    "By the ledger, %s is under %s, since %s.",
+                    place, standing, SpeechSeason(story->day));
+            }
+        } else if (store <= 0) {
             (void)snprintf(claim, sizeof(claim),
-                "The stores at %s have run low since %s. The ledger marks %s.",
-                place, SpeechSeason(story->day), standing);
+                "The ledger counts no food left in %s's store.", place);
+        } else if (variant == 0U) {
+            (void)snprintf(claim, sizeof(claim),
+                "The ledger counts the store at %s short of its reserve.",
+                place);
         } else {
             (void)snprintf(claim, sizeof(claim),
-                "By the ledger, %s is under %s, since %s.",
-                place, standing, SpeechSeason(story->day));
+                "By the ledger, %s stands below its reserve target.", place);
         }
         break;
-    }
     case CC_SPEECH_REGISTER_SCOUT:
-        if (weeks <= 0) {
+        if (pressure_telling) {
+            if (weeks <= 0) {
+                (void)snprintf(claim, sizeof(claim),
+                    variant == 0U ?
+                        "There is no food left in %s. The granary is bare." :
+                        "%s is starving; I have seen the empty bins myself.",
+                    place);
+            } else if (weeks <= 3) {
+                (void)snprintf(claim, sizeof(claim),
+                    variant == 0U ?
+                        "%s is down to its last weeks of food." :
+                        "The granary at %s is nearly empty.",
+                    place);
+            } else {
+                (void)snprintf(claim, sizeof(claim),
+                    variant == 0U ?
+                        "%s is hungrier than it lets on." :
+                        "Food is short in %s, and the pressure is rising.",
+                    place);
+            }
+        } else if (store <= 0) {
             (void)snprintf(claim, sizeof(claim),
                 variant == 0U ?
-                    "There is no food left in %s. The granary is bare." :
-                    "%s is starving; I have seen the empty bins myself.",
-                place);
-        } else if (weeks <= 3) {
-            (void)snprintf(claim, sizeof(claim),
-                variant == 0U ?
-                    "%s is down to its last weeks of food." :
-                    "The granary at %s is nearly empty.",
+                    "The store at %s is bare." :
+                    "There is nothing left in %s's store.",
                 place);
         } else {
             (void)snprintf(claim, sizeof(claim),
                 variant == 0U ?
-                    "%s is hungrier than it lets on." :
-                    "Food is short in %s, and the pressure is rising.",
+                    "The store at %s sits below its winter target." :
+                    "%s is eating into its reserve.",
                 place);
         }
         break;
@@ -149,6 +195,26 @@ static void ComposeShortage(const CcCharacter *speaker, const CcGossip *story,
                     "They say %s is running out of food." :
                     "The word along the road is that %s is going hungry.",
                 place);
+        } else if (!pressure_telling) {
+            if (store <= 0) {
+                (void)snprintf(claim, sizeof(claim),
+                    variant == 0U ?
+                        "%s has no food in store." :
+                        "They say %s's store is empty.",
+                    place);
+            } else if (store * 2 < reserve) {
+                (void)snprintf(claim, sizeof(claim),
+                    variant == 0U ?
+                        "They say %s is running short of its winter store." :
+                        "%s is drawing down its reserve, the way they tell it.",
+                    place);
+            } else {
+                (void)snprintf(claim, sizeof(claim),
+                    variant == 0U ?
+                        "Word is the store at %s is thinner than the town would like." :
+                        "They say %s's store is short of its winter target.",
+                    place);
+            }
         } else if (weeks <= 0) {
             (void)snprintf(claim, sizeof(claim),
                 variant == 0U ?
@@ -393,10 +459,12 @@ bool CcSpeechRealizeGossip(const CcSim *sim, const CcCharacter *speaker,
         return false;
     }
     if (story->kind == CC_EVENT_SHORTAGE) {
-        int32_t weeks = 0, level = 0;
-        if (!ShortageSlots(story->text, &weeks, &level)) return false;
+        int32_t weeks = -1, level = -1, store = -1, reserve = -1;
+        if (!ShortageSlots(story->text, &weeks, &level, &store, &reserve)) {
+            return false;
+        }
         const CcSettlement *origin = CcSimSettlement(sim, story->origin_id);
-        ComposeShortage(speaker, story, version, weeks, level,
+        ComposeShortage(speaker, story, version, weeks, level, store, reserve,
                         origin != NULL ? origin->name : "the road",
                         text, capacity);
         return true;
