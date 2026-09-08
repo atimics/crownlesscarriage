@@ -1199,5 +1199,17 @@
         "treasures_completed": 0
       }
     }
+  ],
+  "source_revision": "bec45f6705415a799388037e3894a95016347f20",
+  "working_tree_status": "",
+  "build_mode": "Debug",
+  "runner_sha256": "2b536ee602a37ac12b5a096c6711582d153e9412b367d37e0b87552f2474776b",
+  "command": [
+    "out/build/foundation/crownless_sim_runner",
+    "--json",
+    "--seed",
+    "0x5eed0001",
+    "--years",
+    "40"
   ]
 }
