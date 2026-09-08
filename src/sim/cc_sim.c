@@ -769,11 +769,14 @@ static void CompactEventLedger(CcSim *sim, CcId incoming_parent)
 {
     if (sim->event_count < CC_MAX_EVENTS) return;
 
-    CcEvent ordered[CC_MAX_EVENTS];
-    for (int32_t i = 0; i < sim->event_count; ++i) {
-        const CcEvent *event = CcSimRecentEvent(
-            sim, sim->event_count - 1 - i);
-        ordered[i] = event != NULL ? *event : (CcEvent){0};
+    CcEvent scratch[CC_MAX_EVENTS];
+    CcEvent *ordered = sim->events;
+    if (sim->event_write_index != 0) {
+        ordered = scratch;
+        for (int32_t i = 0; i < sim->event_count; ++i) {
+            const CcEvent *event = CcSimRecentEvent(sim, sim->event_count - 1 - i);
+            ordered[i] = event != NULL ? *event : (CcEvent){0};
+        }
     }
 
     int32_t removed = -1;
@@ -798,13 +801,11 @@ static void CompactEventLedger(CcSim *sim, CcId incoming_parent)
     }
     RedirectEventReference(sim, removed_id, replacement_id);
 
-    for (int32_t i = removed; i + 1 < sim->event_count; ++i) {
-        ordered[i] = ordered[i + 1];
-    }
+    memmove(&ordered[removed], &ordered[removed + 1],
+        (size_t)(sim->event_count - removed - 1) * sizeof(*ordered));
     sim->event_count -= 1;
-    for (int32_t i = 0; i < sim->event_count; ++i) {
-        sim->events[i] = ordered[i];
-    }
+    if (ordered != sim->events)
+        memcpy(sim->events, ordered, (size_t)sim->event_count * sizeof(*ordered));
     sim->events[sim->event_count] = (CcEvent){0};
     sim->event_write_index = sim->event_count;
 }
