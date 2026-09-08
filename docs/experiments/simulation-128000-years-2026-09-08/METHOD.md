@@ -8,4 +8,4 @@ Tolerances: 1% for population, treasure value and dragon hoard; one point for hu
 
 Plateaus in counts and means are interpreted alongside annual changes, treasure-identity changes, and recent creation dates. Treasure identity changes count annual observations at which the sequence of live treasure IDs differs from the prior year. Short-lived objects between annual observations can be missed. Location, ownership and value changes alone preserve that identity hash.
 
-The charts use the same 32 seeds at every age. Earlier 128-world results remain a broader baseline. Failed seeds retain their logs and partial samples; their status is reported explicitly.
+The plateau charts use the same completed seed cohort at every age. A separate coverage table includes all 32 requested seeds. Failed seeds retain their logs and partial samples. This separates changes with age from changes in which seeds remain valid; selection into the completed cohort still limits the result. Earlier 128-world results remain a broader baseline.

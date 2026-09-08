@@ -41,7 +41,8 @@ def main():
     blocks={s:read(ROOT/'blocks'/f'seed-{s:03}.csv.gz') for s in seeds}
     summary={'seeds':seeds,'requested':manifest['seeds'],'passed':len(seeds),'failed':[r for r in manifest['runs'] if not r['passed']],
              'annual_checkpoints':sum(r['annual_rows'] for r in manifest['runs']),
-             'gold_constant':sum(r['gold_constant'] for r in passed),'horizons':{},'plateaus':{}}
+             'gold_constant':sum(r['gold_constant'] for r in passed),'horizons':{},'plateaus':{},
+             'coverage_by_horizon':{str(h):sum(r['annual_rows']>=h for r in manifest['runs']) for h in HORIZONS}}
     for h in HORIZONS:
         window=max(1000,h//4)
         detail={'window_years':window,'window_means':{},'endpoints':{}}
@@ -81,8 +82,8 @@ def main():
         ax.grid(True)
     fig,axs=plt.subplots(2,3,figsize=(14,8),layout='constrained')
     for ax,k,label,col in zip(axs.flat,['live_treasures','live_treasure_value','treasures_from_ruins','total_population','active_settlements','closed_routes'],['Surviving treasure objects','Total appraised treasure value','Treasure made by ruined towns','Population','Active settlements / 6','Closed routes / 8'],C):trajectory(ax,k,label,col)
-    fig.suptitle(f'Crownless | {len(seeds)} worlds through 128,000 years',fontsize=20)
-    fig.supxlabel('Median and 10th–90th percentile · dotted line marks the earlier 1,000-year horizon',fontsize=10)
+    fig.suptitle(f'Crownless | {len(seeds)} completed histories through 128,000 years',fontsize=20)
+    fig.supxlabel('Same completed seeds at every age · median and 10th–90th percentile · dotted line marks year 1,000',fontsize=10)
     fig.savefig(ROOT/'long-trajectories.png',dpi=170);plt.close(fig)
     fig,axs=plt.subplots(2,2,figsize=(13,8),layout='constrained')
     for ax,k,label,col in zip([axs[0,0],axs[0,1],axs[1,0]],['average_hunger','dragon_hoard','lore_stored'],['Hunger (0–100)','Dragon hoard in crowns','Stored lore'],C):trajectory(ax,k,label,col)
@@ -94,6 +95,18 @@ def main():
     ax.set(xscale='log',xlabel='End of 1,000-year block',ylabel='Annual identity changes per block',title='Does treasure keep turning over?');ax.grid(True);ax.legend(frameon=False)
     fig.suptitle('World conditions and treasure turnover',fontsize=20)
     fig.savefig(ROOT/'long-activity.png',dpi=170);plt.close(fig)
+    fig,axs=plt.subplots(1,2,figsize=(13,5),layout='constrained')
+    for s in seeds:
+        vals=[int(r['live_treasures']) for r in annual[s]]
+        axs[0].plot(years,vals,lw=1,alpha=.6)
+    axs[0].axhline(24,color='#333333',ls=':',label='24-object limit')
+    axs[0].set(xscale='log',xlabel='Simulated year · log scale',ylabel='Live treasure objects',title='Each completed world');axs[0].legend(frameon=False);axs[0].grid(True)
+    coverage=[summary['coverage_by_horizon'][str(h)] for h in HORIZONS]
+    bars=axs[1].bar([str(h//1000)+'k' for h in HORIZONS],coverage,color=C[0])
+    axs[1].bar_label(bars,padding=3)
+    axs[1].set(ylim=(0,manifest['seeds']+4),xlabel='Simulated year',ylabel='Worlds reaching the checkpoint',title='Validation coverage of all requested seeds')
+    fig.suptitle('Different histories and the long-run limits',fontsize=19)
+    fig.savefig(ROOT/'individual-histories.png',dpi=170);plt.close(fig)
     summary['late_activity']={}
     for k in list(TOLERANCES)+['treasure_identity_changes']:
         records=[r for s in seeds for r in blocks[s] if r['metric']==k and int(r['end_year'])>96000]
