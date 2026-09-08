@@ -5959,7 +5959,8 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 44U || legacy_version == 45U ||
          legacy_version == 46U || legacy_version == 47U ||
          legacy_version == 48U || legacy_version == 49U ||
-         legacy_version == 50U || legacy_version == 51U) &&
+         legacy_version == 50U || legacy_version == 51U ||
+         legacy_version == 52U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
@@ -5968,7 +5969,9 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          * fires; both changes are derived from events, so older saves need
          * no data migration. Schema 51 adds common pony herds, which are
          * seeded by the caller below rather than here, because every branch
-         * of this function lands on the current schema. */
+         * of this function lands on the current schema. Schema 53 changes
+         * hoard-return food rules after historical replay; its stored fields
+         * have the same representation as schema 52. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }
