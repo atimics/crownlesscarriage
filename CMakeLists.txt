@@ -207,6 +207,7 @@ else()
     set(CC_SQLITE_TARGET SQLite::SQLite3)
 endif()
 add_library(crownless_persistence
+    src/persistence/cc_starting_campaign.c
     src/persistence/cc_save.c
     src/persistence/cc_journal_replay.c
     src/persistence/cc_legacy_runtime.c
@@ -396,6 +397,17 @@ if(CC_BUILD_CLIENT)
             VERBATIM)
         add_dependencies(crownless_voice_assets crownless_carriage)
     endif()
+    if(NOT EMSCRIPTEN)
+        if(APPLE)
+            set(CC_CAMPAIGN_DEST "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/campaigns")
+        else()
+            set(CC_CAMPAIGN_DEST "$<TARGET_FILE_DIR:crownless_carriage>/assets/campaigns")
+        endif()
+        add_custom_command(TARGET crownless_carriage POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CC_CAMPAIGN_DEST}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/campaigns/deep-wyrm.ccsave" "${CC_CAMPAIGN_DEST}/deep-wyrm.ccsave")
+    endif()
     target_link_libraries(crownless_carriage PRIVATE
         crownless_local_renderer
         crownless_persistence crownless_locomotion
@@ -504,6 +516,7 @@ if(CC_BUILD_CLIENT)
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/gloamgate_to_alderwatch.png"
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/collectible_map_atlas.png"
         )
+        list(APPEND CC_WEB_STARTUP_ASSET_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/assets/campaigns/deep-wyrm.ccsave")
         set(CC_WEB_STARTUP_ASSET_OUTPUTS)
         foreach(asset IN LISTS CC_WEB_STARTUP_ASSET_SOURCES)
             file(RELATIVE_PATH relative_asset
@@ -1495,6 +1508,11 @@ if(BUILD_TESTING)
     target_link_libraries(trade_path_tests PRIVATE crownless_sim)
     cc_strict_warnings(trade_path_tests)
     add_test(NAME trade_path_rules COMMAND trade_path_tests)
+    add_executable(starting_campaign_tests tests/starting_campaign_tests.c)
+    target_link_libraries(starting_campaign_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(starting_campaign_tests)
+    add_test(NAME deep_wyrm_starting_campaign COMMAND starting_campaign_tests
+             "${CMAKE_CURRENT_SOURCE_DIR}/assets/campaigns/deep-wyrm.ccsave")
     add_executable(archive_dispatch_tests tests/archive_dispatch_tests.c)
     target_link_libraries(archive_dispatch_tests PRIVATE crownless_persistence)
     cc_strict_warnings(archive_dispatch_tests)

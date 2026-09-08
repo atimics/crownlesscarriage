@@ -6,6 +6,7 @@ typedef enum FrontendScreen {
     FRONTEND_DELETE,
     FRONTEND_AVATAR,
     FRONTEND_SOUND,
+    FRONTEND_CAMPAIGN,
     FRONTEND_WORLDS,
     FRONTEND_CREATE_WORLD,
     FRONTEND_JOIN_WORLD,
@@ -64,6 +65,8 @@ typedef enum FrontendAction {
     FRONTEND_ACTION_FIELD_PASS,
     FRONTEND_ACTION_FIELD_INVITATION,
     FRONTEND_ACTION_CONFIRM_REMOVE,
+    FRONTEND_ACTION_DEEP_WYRM,
+    FRONTEND_ACTION_BEGIN_DEEP_WYRM,
     FRONTEND_ACTION_WORLD_FIRST = 100,
     FRONTEND_ACTION_MEMBER_FIRST = 200
 } FrontendAction;
@@ -120,7 +123,7 @@ typedef struct FrontendItem {
 
 static Rectangle FrontendPanel(FrontendScreen screen)
 {
-    float width = screen == FRONTEND_PAUSED || screen == FRONTEND_AVATAR || screen == FRONTEND_COMPANY ||
+    float width = screen == FRONTEND_TITLE || screen == FRONTEND_CAMPAIGN || screen == FRONTEND_PAUSED || screen == FRONTEND_AVATAR || screen == FRONTEND_COMPANY ||
         screen == FRONTEND_WORLDS || screen == FRONTEND_CREATE_WORLD || screen == FRONTEND_JOIN_WORLD ||
         screen == FRONTEND_INVITATION ? 920.0f : 440.0f;
     return (Rectangle){((float)GetScreenWidth() - width) * 0.5f,
@@ -195,6 +198,13 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
             items[i] = (FrontendItem){actions[i], {x, y + (float)i * 48, 368, 40}, labels[i], true};
         return 6;
     }
+    if (state->screen == FRONTEND_CAMPAIGN) {
+        items[0] = (FrontendItem){FRONTEND_ACTION_BEGIN_DEEP_WYRM,
+            {panel.x + 180, y + 238, 560, 48}, "Begin in Gloamgate", !state->has_world && !state->online};
+        items[1] = (FrontendItem){FRONTEND_ACTION_CANCEL,
+            {panel.x + 180, y + 296, 560, 36}, "Back", true};
+        return 2;
+    }
     if (state->screen == FRONTEND_TITLE) {
         items[0] = (FrontendItem){FRONTEND_ACTION_OFFLINE,
             {x, y + 20.0f, 179.0f, 44.0f}, "Offline", true};
@@ -206,11 +216,14 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
             {x, y + 234.0f, 368.0f, 40.0f}, "Your traveller", true};
         items[4] = (FrontendItem){FRONTEND_ACTION_QUIT,
             {x, y + 282.0f, 368.0f, 36.0f}, "Quit game", true};
-#if defined(PLATFORM_WEB)
-        return 4;
-#else
-        return 5;
+        int count = 4;
+#if !defined(PLATFORM_WEB)
+        count = 5;
 #endif
+        if (!state->has_world && !state->online)
+            items[count++] = (FrontendItem){FRONTEND_ACTION_DEEP_WYRM,
+                {panel.x + 496, y + 138, 388, 52}, CC_DEEP_WYRM_TITLE, true};
+        return count;
     }
     if (state->screen == FRONTEND_AVATAR) {
         for (int i = 0; i < 5; ++i) {
@@ -298,7 +311,7 @@ static FrontendAction FrontendInput(FrontendState *state)
             FrontendOpen(state, FRONTEND_PAUSED);
         } else if (state->screen == FRONTEND_PAUSED) {
             return FRONTEND_ACTION_RESUME;
-        } else if (state->screen == FRONTEND_DELETE || state->screen == FRONTEND_SOUND ||
+        } else if (state->screen == FRONTEND_DELETE || state->screen == FRONTEND_SOUND || state->screen == FRONTEND_CAMPAIGN ||
             state->screen >= FRONTEND_WORLDS) {
             return FRONTEND_ACTION_CANCEL;
         } else if (state->screen == FRONTEND_AVATAR) {
@@ -389,6 +402,44 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
     int32_t *selected_situation, const char *save_path, const char *session_path,
     const char *preferences_path)
 {
+    if (state->screen == FRONTEND_CAMPAIGN && action == FRONTEND_ACTION_CANCEL) {
+        FrontendOpen(state, FRONTEND_TITLE);
+        return;
+    }
+    if (action == FRONTEND_ACTION_DEEP_WYRM) {
+        if (!state->has_world && !state->online && *journal == NULL)
+            FrontendOpen(state, FRONTEND_CAMPAIGN);
+        return;
+    }
+    if (action == FRONTEND_ACTION_BEGIN_DEEP_WYRM) {
+        if (state->has_world || state->online || *journal != NULL) return;
+#if defined(PLATFORM_WEB)
+        if (ClientBrowserCampaignAccess() != 0) {
+            (void)snprintf(state->feedback, sizeof(state->feedback), "%s",
+                           ClientBrowserCampaignAccessMessage(ClientBrowserCampaignAccess()));
+            return;
+        }
+#endif
+        char path[1024];
+        if (!ResolveClientAssetPath(CC_DEEP_WYRM_ASSET, path, sizeof(path))) {
+            (void)snprintf(state->feedback, sizeof(state->feedback), "Restore the campaign file, then try again.");
+            return;
+        }
+        if (!CcStartingCampaignDeepWyrm(sim, path, state->feedback, sizeof(state->feedback))) return;
+        LeaveOpenWorld(local);
+        ResetLocalState(local);
+        CcLocalTerrainSetSeed(sim->world_seed);
+        CcLocalBindPlace(sim);
+        if (!InitializeOpenWorld(sim, local, false)) {
+            (void)snprintf(state->feedback, sizeof(state->feedback), "The town could not open. Try again.");
+            return;
+        }
+        *selected = FirstOutgoingRouteIndex(sim);
+        *selected_situation = FirstActiveSituationIndex(sim);
+        *view = VIEW_LOCAL;
+        *return_view = VIEW_LOCAL;
+        action = FRONTEND_ACTION_PLAY;
+    }
     if (FrontendCompanyAction(state, action)) return;
     if (action == FRONTEND_ACTION_AVATAR) {
         state->avatar_return = state->screen;
@@ -589,6 +640,7 @@ static void DrawFrontend(const FrontendState *state,
     const char *title = state->screen == FRONTEND_TITLE ? "The road awaits" :
         state->screen == FRONTEND_AVATAR ? "Your traveller" :
         state->screen == FRONTEND_SOUND ? "Sound & voices" :
+        state->screen == FRONTEND_CAMPAIGN ? CC_DEEP_WYRM_TITLE :
         state->screen == FRONTEND_WORLDS ? "Shared worlds" :
         state->screen == FRONTEND_CREATE_WORLD ? "Create a shared world" :
         state->screen == FRONTEND_JOIN_WORLD ? "Join a company" :
@@ -601,6 +653,7 @@ static void DrawFrontend(const FrontendState *state,
         state->screen == FRONTEND_DELETE ? CcCoopClientActive() || state->deleting_company ?
             "This removes the shared world and progress for everyone in the company." :
             "This removes your world and its progress. Your next Play begins a new world." :
+        state->screen == FRONTEND_CAMPAIGN ? "Gloamgate, Year 202. A dragon enters its deepest age. Begin in Gloamgate." :
         state->screen == FRONTEND_TITLE ? "Choose Offline or Online, then Play. Your world is saved on this device." :
         "Resume your journey, save your world, or change your settings.");
     FrontendCenteredText(title, top + 76, 28, INK);
@@ -611,6 +664,13 @@ static void DrawFrontend(const FrontendState *state,
         FrontendCenteredText(state->online ? "Create a world or join your company." :
             state->has_world ? "Continue your saved journey." : "Begin a new world.",
             top + 354, 14, MUTED);
+    } else if (state->screen == FRONTEND_CAMPAIGN) {
+        FrontendCenteredText("Gloamgate / Year 202", top + 132, 18, CC_GOLD);
+        FrontendCenteredText("Today, Varkesh the Unappeased becomes a Deep Wyrm.", top + 182, 18, INK);
+        FrontendCenteredText("Gloamgate bears the scars of dragon fire. Its people need food.", top + 216, 16, INK);
+        FrontendCenteredText("Beyond its gates, three courts face an ancient power.", top + 250, 16, INK);
+        FrontendCenteredText("Your carriage arrives with 42 crowns and a rested pony.", top + 294, 16, MUTED);
+        FrontendCenteredText("Find work, meet the townspeople, and choose your part in what follows.", top + 322, 16, MUTED);
     } else if (state->screen == FRONTEND_DELETE) {
         FrontendCenteredText(CcCoopClientActive() || state->deleting_company ? "This removes the shared world and progress" :
             "This removes your world and its progress", top + 165, 16, INK);
@@ -884,6 +944,27 @@ static int RunFrontendRegression(void)
     FRONTEND_CHECK(state.screen == FRONTEND_TITLE);
     FRONTEND_ACT(FRONTEND_ACTION_QUIT);
     FRONTEND_CHECK(state.quit);
+    FRONTEND_CHECK(DeleteClientWorld(&journal, &sim, save_path, session_path, error, sizeof(error)));
+    state = (FrontendState){.screen = FRONTEND_TITLE, .focus = 2};
+    uint64_t before_campaign = CcSimHash(&sim);
+    FRONTEND_ACT(FRONTEND_ACTION_DEEP_WYRM);
+    FRONTEND_CHECK(state.screen == FRONTEND_CAMPAIGN && FrontendItems(&state, items) == 2);
+    FRONTEND_ACT(FRONTEND_ACTION_CANCEL);
+    FRONTEND_CHECK(state.screen == FRONTEND_TITLE && CcSimHash(&sim) == before_campaign);
+    FRONTEND_ACT(FRONTEND_ACTION_DEEP_WYRM);
+    FRONTEND_ACT(FRONTEND_ACTION_BEGIN_DEEP_WYRM);
+    FRONTEND_CHECK(state.screen == FRONTEND_PLAYING && state.has_world && journal != NULL);
+    FRONTEND_CHECK(sim.current_day == CC_DEEP_WYRM_DAY && sim.world_seed == CC_DEEP_WYRM_SEED);
+    FRONTEND_CHECK(strcmp(CcSimSettlement(&sim, sim.player.location_id)->name, "Gloamgate") == 0);
+    FRONTEND_CHECK(local.open_world && CampaignSaveExists(save_path));
+    uint64_t campaign_hash = CcSimHash(&sim);
+    FRONTEND_ACT(FRONTEND_ACTION_BEGIN_DEEP_WYRM);
+    FRONTEND_CHECK(CcSimHash(&sim) == campaign_hash);
+    FRONTEND_CHECK(CcJournalClose(&journal, &sim, error, sizeof(error)));
+    journal = CcJournalResume(save_path, &sim, error, sizeof(error));
+    FRONTEND_CHECK(journal != NULL && CcSimHash(&sim) == campaign_hash);
+    FRONTEND_CHECK(RestoreClientStartupSession(session_path, &sim, &local, &view, &selected));
+    FRONTEND_CHECK(strcmp(CcSimSettlement(&sim, sim.player.location_id)->name, "Gloamgate") == 0);
     FRONTEND_CHECK(DeleteClientWorld(&journal, &sim, save_path, session_path, error, sizeof(error)));
     (void)remove(preferences_path);
     LeaveOpenWorld(&local);

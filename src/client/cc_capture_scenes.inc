@@ -142,6 +142,15 @@ static void CcCapturePrepareJourney(const CcCaptureRequest *request, CcSim *sim)
 
 static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, char **argv)
 {
+    if (request->capture_ux && request->capture_ux_view >= 21) {
+        char path[1024], error[256];
+        if (!ResolveClientAssetPath(CC_DEEP_WYRM_ASSET, path, sizeof(path))) return false;
+        if (!CcStartingCampaignDeepWyrm(sim, path, error, sizeof(error))) {
+            (void)fprintf(stderr, "%s\n", error);
+            return false;
+        }
+        return true;
+    }
     if (request->capture_creature_media &&
         strcmp(request->capture_creature_family, "goblins") == 0) {
         sim->player.location_id = sim->goblins.lair_settlement_id;
@@ -642,6 +651,10 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
 
 static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *scene)
 {
+    if (request->capture_ux && request->capture_ux_view >= 21) {
+        scene->local->adventure_ui = true;
+        return true;
+    }
     if (request->capture_ux) {
         scene->local->adventure_ui = true;
         scene->local->course.automatic_alarm = false;
