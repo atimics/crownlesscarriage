@@ -97,6 +97,12 @@ typedef struct {
 } CcRecipeAccounting;
 
 typedef struct {
+    uint64_t feed[CC_GOOD_COUNT];
+    uint64_t output[CC_GOOD_COUNT];
+    uint64_t cap_loss[CC_GOOD_COUNT];
+} CcHerdAccounting;
+
+typedef struct {
     CcId settlement_id;
     uint64_t active_weeks, inactive_weeks;
     uint64_t primary_tools_worn;
@@ -105,6 +111,8 @@ typedef struct {
     uint64_t rare_mine_output[CC_GOOD_COUNT];
     CcRecipeAccounting bakery, paper, treasure;
     uint64_t treasures_completed;
+    CcHerdAccounting cows, sheep, ponies;
+    uint64_t dairy_nutrition, dairy_used, dairy_unused;
 } CcTownProductionAccounting;
 
 typedef struct {

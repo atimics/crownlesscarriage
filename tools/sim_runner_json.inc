@@ -32,13 +32,24 @@ static void JsonRecipe(const CcRecipeAccounting *recipe)
     JsonTotals(recipe->gates, CC_PRODUCTION_GATE_COUNT); putchar('}');
 }
 
+static void JsonHerd(const CcHerdAccounting *herd, int32_t adults, int32_t young,
+                     int32_t hunger, int32_t condition)
+{
+    printf("{\"adults\":%d,\"young\":%d,\"hunger\":%d,\"condition\":%d,\"feed\":",
+        adults, young, hunger, condition);
+    JsonTotals(herd->feed, CC_GOOD_COUNT);
+    printf(",\"output\":"); JsonTotals(herd->output, CC_GOOD_COUNT);
+    printf(",\"cap_loss\":"); JsonTotals(herd->cap_loss, CC_GOOD_COUNT);
+    putchar('}');
+}
+
 static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t year,
     const char *fixture, const char *dragon_policy, const CcNutritionAccounting *nutrition,
     const CcSmithyAccounting *smithy, const CcRoadProductionAccounting *sites,
     const int32_t *open_days)
 {
     CcHungerSnapshot hunger = CcSimHungerSnapshot(sim);
-    printf("{\"protocol\":3,\"fixture\":"); JsonString(fixture);
+    printf("{\"protocol\":4,\"fixture\":"); JsonString(fixture);
     printf(",\"dragon_policy\":"); JsonString(dragon_policy);
     printf(",\"comparison_scope\":\"whole-policy\",\"dragon\":{\"id\":\"%" PRIu64 "\",\"slain\":%s,\"slain_day\":%d,\"life_stage\":%d,\"activity\":%d,\"body_condition\":%d,\"crown_strength\":%d,\"eggs\":%d}",
         sim->dragon.id, sim->dragon.slain ? "true" : "false", sim->dragon.slain_day,
@@ -79,7 +90,14 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         printf(",\"bakery\":"); JsonRecipe(&production->bakery);
         printf(",\"paper\":"); JsonRecipe(&production->paper);
         printf(",\"treasure\":"); JsonRecipe(&production->treasure);
-        printf(",\"treasures_completed\":%" PRIu64 "},\"herd_production_totals\":null}", production->treasures_completed);
+        printf(",\"treasures_completed\":%" PRIu64 "},\"herds\":{\"cows\":", production->treasures_completed);
+        JsonHerd(&production->cows, town->cow_adults, town->cow_calves, town->cow_hunger, town->cow_condition);
+        printf(",\"sheep\":");
+        JsonHerd(&production->sheep, town->sheep_adults, town->sheep_lambs, town->sheep_hunger, town->sheep_condition);
+        printf(",\"ponies\":");
+        JsonHerd(&production->ponies, town->pony_adults, town->pony_foals, town->pony_hunger, town->pony_condition);
+        printf(",\"dairy_nutrition\":%" PRIu64 ",\"dairy_used\":%" PRIu64 ",\"dairy_unused\":%" PRIu64 "}}",
+            production->dairy_nutrition, production->dairy_used, production->dairy_unused);
     }
     printf("],\"sites\":[");
     for (int32_t i = 0; i < sim->road_site_count; ++i) {

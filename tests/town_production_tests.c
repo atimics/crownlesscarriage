@@ -98,12 +98,65 @@ static void CheckFundedRecipes(void)
     CC_CHECK(row->treasure.work == 3 && row->treasures_completed == 1);
 }
 
+static CcSettlement *HerdFixture(int32_t day)
+{
+    CcSimInit(&sim, 42);
+    memset(&totals, 0, sizeof(totals));
+    sim.current_day = day - 1;
+    CcSettlement *town = &sim.settlements[0];
+    town->service_mask |= UINT32_C(1) << CC_SERVICE_FARM;
+    town->cow_adults = 12; town->cow_calves = 0;
+    town->sheep_adults = 24; town->sheep_lambs = 0;
+    town->pony_adults = 8; town->pony_foals = 0;
+    town->cow_condition = 100; town->cow_hunger = 0;
+    town->sheep_condition = 100; town->sheep_hunger = 0;
+    town->pony_condition = 100; town->pony_hunger = 0;
+    memset(town->stock, 0, sizeof(town->stock));
+    town->stock[CC_GOOD_WHEAT] = 100;
+    return town;
+}
+
+static void CheckHerds(void)
+{
+    CcSettlement *town = HerdFixture(280);
+    CcSimAdvanceDaysWithProductionAccounting(&sim, 1, NULL, NULL, &totals);
+    const CcTownProductionAccounting *row = &totals.towns[0];
+    CC_CHECK(row->cows.feed[CC_GOOD_WHEAT] == 1);
+    CC_CHECK(row->sheep.feed[CC_GOOD_WHEAT] == 1);
+    CC_CHECK(row->ponies.feed[CC_GOOD_WHEAT] == 1);
+    CC_CHECK(row->dairy_nutrition == 2 && row->dairy_used == 2 && row->dairy_unused == 0);
+
+    town = HerdFixture(91);
+    town->stock[CC_GOOD_WOOL] = CC_SIM_MAX_UNITS - 2;
+    CcSimAdvanceDaysWithProductionAccounting(&sim, 1, NULL, NULL, &totals);
+    CC_CHECK(row->sheep.feed[CC_GOOD_WHEAT] == 0);
+    CC_CHECK(row->sheep.output[CC_GOOD_WOOL] == 2 && row->sheep.cap_loss[CC_GOOD_WOOL] == 4);
+
+    town = HerdFixture(280);
+    town->stock[CC_GOOD_WHEAT] = 0;
+    town->stock[CC_GOOD_MEAT] = CC_SIM_MAX_UNITS - 1;
+    town->cow_hunger = 65; town->sheep_hunger = 65;
+    CcSimAdvanceDaysWithProductionAccounting(&sim, 1, NULL, NULL, &totals);
+    CC_CHECK(row->cows.output[CC_GOOD_MEAT] == 1 && row->cows.cap_loss[CC_GOOD_MEAT] == 3);
+    CC_CHECK(row->sheep.output[CC_GOOD_MEAT] == 0 && row->sheep.cap_loss[CC_GOOD_MEAT] == 2);
+    CC_CHECK(town->cow_adults == 11 && town->sheep_adults == 23);
+
+    town = HerdFixture(7);
+    sim.schema_version = 28;
+    town->stock[CC_GOOD_BREAD] = 10;
+    CcSimAdvanceDaysWithProductionAccounting(&sim, 1, NULL, NULL, &totals);
+    CC_CHECK(row->cows.feed[CC_GOOD_BREAD] == 1 && row->cows.output[CC_GOOD_BREAD] == 1);
+    CC_CHECK(row->dairy_nutrition == 0);
+    CC_CHECK(row->sheep.feed[CC_GOOD_WHEAT] == 0 && row->ponies.feed[CC_GOOD_WHEAT] == 0);
+}
+
 int main(void)
 {
     CheckYear(UINT32_C(0x5eed0001), CC_SIM_SCHEMA_VERSION);
     CheckYear(UINT32_C(0xc0a71a9e), CC_SIM_SCHEMA_VERSION);
     CheckYear(42, 33); CheckYear(42, 34); CheckYear(42, 36); CheckYear(42, 37);
     CheckPrimary();
+    CheckHerds();
     CheckFundedRecipes();
     puts("Town accounting: recipe costs, work orders, tool wear, cap loss, rare seams and observer parity passed");
     return 0;

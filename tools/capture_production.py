@@ -31,7 +31,7 @@ def main() -> None:
     if cache.exists():
         build_mode = next((line.split('=', 1)[1] for line in cache.read_text().splitlines()
                            if line.startswith('CMAKE_BUILD_TYPE:STRING=')), None)
-    manifest = {'protocol': 3, 'commit': commit, 'working_tree_status': status,
+    manifest = {'protocol': 4, 'commit': commit, 'working_tree_status': status,
                 'runner_sha256': digest(runner), 'build_mode': build_mode,
                 'seed': args.seed, 'seed_index': None, 'seed_mapping': 'direct numeric seed',
                 'years': args.years, 'runs': []}

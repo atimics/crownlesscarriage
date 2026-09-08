@@ -5417,7 +5417,36 @@ static void AdvanceServiceProjects(CcSim *sim)
     }
 }
 
-static int32_t AdvanceCowHerd(CcSim *sim, CcSettlement *settlement)
+/* Record physical feed units at the animal meal, before any herd output. */
+static int32_t ConsumeHerdFeed(CcSettlement *settlement, int32_t required,
+                               bool legacy_bread, CcHerdAccounting *accounting)
+{
+    int32_t before[CC_GOOD_COUNT];
+    if (accounting != NULL) memcpy(before, settlement->stock, sizeof(before));
+    int32_t eaten;
+    if (legacy_bread) {
+        eaten = MinimumI32(required, settlement->stock[CC_GOOD_BREAD]);
+        settlement->stock[CC_GOOD_BREAD] -= eaten;
+    } else {
+        eaten = CcNutritionConsume(settlement->stock, CC_NUTRITION_ANIMAL,
+            required * CC_NUTRITION_PER_RATION) / CC_NUTRITION_PER_RATION;
+    }
+    if (accounting != NULL) {
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
+            accounting->feed[good] += (uint64_t)(before[good] - settlement->stock[good]);
+    }
+    return eaten;
+}
+
+static void RecordHerdOutput(CcHerdAccounting *accounting, CcGood good,
+                              int32_t wanted, int32_t stored)
+{
+    if (accounting == NULL) return;
+    accounting->output[good] += (uint64_t)stored;
+    accounting->cap_loss[good] += (uint64_t)(wanted - stored);
+}
+
+static int32_t AdvanceCowHerd(CcSim *sim, CcSettlement *settlement, CcHerdAccounting *accounting)
 {
     if (sim->schema_version < 14U) return 0;
     if (!CcSettlementHasService(settlement, CC_SERVICE_FARM)) return 0;
@@ -5425,17 +5454,8 @@ static int32_t AdvanceCowHerd(CcSim *sim, CcSettlement *settlement)
     if (herd <= 0) return 0;
 
     int32_t feed_required = MaximumI32(1, (herd + 11) / 12);
-    int32_t feed_eaten;
-    if (sim->schema_version < 29U) {
-        feed_eaten = MinimumI32(
-            feed_required, settlement->stock[CC_GOOD_BREAD]);
-        settlement->stock[CC_GOOD_BREAD] -= feed_eaten;
-    } else {
-        feed_eaten = CcNutritionConsume(
-            settlement->stock, CC_NUTRITION_ANIMAL,
-            feed_required * CC_NUTRITION_PER_RATION) /
-            CC_NUTRITION_PER_RATION;
-    }
+    int32_t feed_eaten = ConsumeHerdFeed(
+        settlement, feed_required, sim->schema_version < 29U, accounting);
     int32_t feed_shortfall = feed_required - feed_eaten;
     if (feed_shortfall > 0) {
         settlement->cow_hunger = ClampI32(
@@ -5485,6 +5505,7 @@ static int32_t AdvanceCowHerd(CcSim *sim, CcSettlement *settlement)
             int32_t beef = MinimumI32(
                 4, CC_SIM_MAX_UNITS - settlement->stock[CC_GOOD_MEAT]);
             settlement->stock[CC_GOOD_MEAT] += beef;
+            RecordHerdOutput(accounting, CC_GOOD_MEAT, 4, beef);
             (void)snprintf(
                 text, sizeof(text),
                 "%s slaughters one cow after the herd's fodder runs short; %d Meat enters the local store as beef.",
@@ -5495,6 +5516,7 @@ static int32_t AdvanceCowHerd(CcSim *sim, CcSettlement *settlement)
                 beef, text);
         } else {
             settlement->stock[CC_GOOD_FOOD] += 4;
+            RecordHerdOutput(accounting, CC_GOOD_FOOD, 4, 4);
             (void)snprintf(
                 text, sizeof(text),
                 "%s slaughters one cow after the herd's fodder runs short; 4 Food enters the local store.",
@@ -5548,7 +5570,7 @@ static void RecordSheepCull(CcSim *sim, CcSettlement *settlement,
         0U, meat, text);
 }
 
-static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
+static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement, CcHerdAccounting *accounting)
 {
     if (sim->schema_version < 32U ||
         !CcSettlementHasService(settlement, CC_SERVICE_FARM)) return;
@@ -5557,10 +5579,7 @@ static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
 
     if (IsWinter(sim)) {
         int32_t feed_required = MaximumI32(1, (flock + 23) / 24);
-        int32_t feed_eaten = CcNutritionConsume(
-            settlement->stock, CC_NUTRITION_ANIMAL,
-            feed_required * CC_NUTRITION_PER_RATION) /
-            CC_NUTRITION_PER_RATION;
+        int32_t feed_eaten = ConsumeHerdFeed(settlement, feed_required, false, accounting);
         int32_t feed_shortfall = feed_required - feed_eaten;
         if (feed_shortfall > 0) {
             settlement->sheep_hunger = ClampI32(
@@ -5583,9 +5602,11 @@ static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
     int32_t year_day = sim->current_day % 364;
     if (year_day == 91 && settlement->sheep_adults > 0) {
         int32_t wool = MaximumI32(1, settlement->sheep_adults / 4);
+        int32_t wanted_wool = wool;
         wool = MinimumI32(
             wool, CC_SIM_MAX_UNITS - settlement->stock[CC_GOOD_WOOL]);
         settlement->stock[CC_GOOD_WOOL] += wool;
+        RecordHerdOutput(accounting, CC_GOOD_WOOL, wanted_wool, wool);
         if (wool > 0) {
             char text[CC_EVENT_TEXT_CAPACITY];
             (void)snprintf(
@@ -5629,6 +5650,7 @@ static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
         planned = MinimumI32(planned, settlement->sheep_adults - 8);
         settlement->sheep_adults -= planned;
         int32_t meat = StoreMutton(settlement, planned);
+        RecordHerdOutput(accounting, CC_GOOD_MEAT, planned * 2, meat);
         RecordSheepCull(
             sim, settlement, planned, meat, "in the autumn cull");
     }
@@ -5637,6 +5659,7 @@ static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
         settlement->sheep_adults > 0) {
         settlement->sheep_adults -= 1;
         int32_t meat = StoreMutton(settlement, 1);
+        RecordHerdOutput(accounting, CC_GOOD_MEAT, 2, meat);
         settlement->sheep_hunger = ClampI32(
             settlement->sheep_hunger - 14, 0, 100);
         RecordSheepCull(
@@ -5649,7 +5672,7 @@ static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
    tracks fodder the town chose not to spend rather than the season. Foals
    mature on the same quarter the mares are put to stud; 112 is a whole
    number of weeks, so that day is never stepped over. */
-static void AdvancePonyHerd(CcSim *sim, CcSettlement *settlement)
+static void AdvancePonyHerd(CcSim *sim, CcSettlement *settlement, CcHerdAccounting *accounting)
 {
     if (sim->schema_version < 51U ||
         (!CcSettlementHasService(settlement, CC_SERVICE_FARM) &&
@@ -5658,9 +5681,7 @@ static void AdvancePonyHerd(CcSim *sim, CcSettlement *settlement)
     if (herd <= 0) return;
 
     int32_t feed_required = MaximumI32(1, (herd + 7) / 8);
-    int32_t feed_eaten = CcNutritionConsume(
-        settlement->stock, CC_NUTRITION_ANIMAL,
-        feed_required * CC_NUTRITION_PER_RATION) / CC_NUTRITION_PER_RATION;
+    int32_t feed_eaten = ConsumeHerdFeed(settlement, feed_required, false, accounting);
     int32_t feed_shortfall = feed_required - feed_eaten;
     if (feed_shortfall > 0) {
         settlement->pony_hunger = ClampI32(
@@ -5962,9 +5983,9 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
     if (CcSettlementIsAbandoned(settlement)) return;
     if (accounting != NULL) accounting->settlement_id = settlement->id;
     int32_t produced[CC_GOOD_COUNT] = {0};
-    int32_t cow_output = AdvanceCowHerd(sim, settlement);
-    AdvanceSheepFlock(sim, settlement);
-    AdvancePonyHerd(sim, settlement);
+    int32_t cow_output = AdvanceCowHerd(sim, settlement, ledger != NULL ? &ledger->cows : NULL);
+    AdvanceSheepFlock(sim, settlement, ledger != NULL ? &ledger->sheep : NULL);
+    AdvancePonyHerd(sim, settlement, ledger != NULL ? &ledger->ponies : NULL);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         int32_t production = EffectiveProduction(sim, settlement, index, (CcGood)good);
         produced[good] = production;
@@ -5989,6 +6010,8 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
             CC_SIM_MAX_UNITS - settlement->stock[CC_GOOD_BREAD]);
         settlement->stock[CC_GOOD_BREAD] += cow_bread;
         produced[CC_GOOD_BREAD] += cow_bread;
+        RecordHerdOutput(ledger != NULL ? &ledger->cows : NULL,
+            CC_GOOD_BREAD, cow_output, cow_bread);
     }
     produced[CC_GOOD_BREAD] += RunBakery(
         sim, settlement, scriptorium_id, ledger != NULL ? &ledger->bakery : NULL);
@@ -5997,6 +6020,11 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         1, WeeklyFoodUse(sim, settlement)) * CC_NUTRITION_PER_RATION;
     int32_t food_eaten = sim->schema_version >= 32U ?
         MinimumI32(food_required, cow_output) : 0;
+    if (ledger != NULL && sim->schema_version >= 32U) {
+        ledger->dairy_nutrition += (uint64_t)cow_output;
+        ledger->dairy_used += (uint64_t)food_eaten;
+        ledger->dairy_unused += (uint64_t)(cow_output - food_eaten);
+    }
     int32_t before_eating[CC_GOOD_COUNT];
     if (accounting != NULL) {
         memcpy(before_eating, settlement->stock, sizeof(before_eating));

@@ -32,13 +32,22 @@ with tempfile.TemporaryDirectory() as directory:
             assert loaded['dragon_policy'] == 'loaded-save'
             assert all(sum(site['input']) == 0 for site in loaded['sites'])
         assert all(isinstance(town['id'], str) for town in rows[-1]['towns'])
-        assert rows[-1]['protocol'] == 3
+        assert rows[-1]['protocol'] == 4
         for town in rows[-1]['towns']:
+            herds = town['herds']
+            assert herds['dairy_nutrition'] == herds['dairy_used'] + herds['dairy_unused']
+            for species in ['cows', 'sheep', 'ponies']:
+                for field in ['feed', 'output', 'cap_loss']:
+                    assert len(herds[species][field]) == len(rows[-1]['goods'])
+                    assert all(value >= 0 for value in herds[species][field])
+            assert sum(herds['ponies']['output']) == 0
             production = town['production']
             assert production['active_weeks'] + production['inactive_weeks'] == 104
             assert production['bakery']['input'][7] == production['bakery']['output'][0]
-            assert production['paper']['output'][8] <= production['paper']['work'] * 4
+            assert production['paper']['output'][rows[-1]['goods'].index('Paper')] <= production['paper']['work'] * 4
 
+        assert sum(sum(town['herds']['cows']['feed']) for town in rows[-1]['towns']) > 0
+        assert sum(town['herds']['sheep']['output'][rows[-1]['goods'].index('Wool')] for town in rows[-1]['towns']) > 0
         assert all(route['open_days'] + route['closed_days'] == 730 for route in rows[-1]['routes'])
         for start, end in zip(rows[0]['sites'], rows[-1]['sites']):
             for good in range(len(rows[-1]['goods'])):
