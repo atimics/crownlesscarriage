@@ -1,0 +1,118 @@
+[
+  {
+    "fixture": "baseline",
+    "dragon_policy": "natural-history",
+    "comparison_scope": "whole-policy",
+    "final_state_hash": "82c5fa3dcf2eaa91",
+    "hunger": {
+      "inhabited": 6,
+      "abandoned": 0,
+      "population": 19973,
+      "average": 33,
+      "maximum": 100,
+      "population_weighted": 4
+    },
+    "dragon": {
+      "id": "1008806316530991149",
+      "slain": false,
+      "slain_day": 0,
+      "life_stage": 3,
+      "activity": 0,
+      "body_condition": 62,
+      "crown_strength": 52,
+      "eggs": 0
+    },
+    "dragon_hoard": 2330,
+    "market_coins": 180,
+    "bread_produced": 53352,
+    "paper_produced": 0,
+    "site_tools_delivered": 0
+  },
+  {
+    "fixture": "baseline",
+    "dragon_policy": "slain-at-day-1",
+    "comparison_scope": "whole-policy",
+    "final_state_hash": "c68e362bbaccf38d",
+    "hunger": {
+      "inhabited": 6,
+      "abandoned": 0,
+      "population": 20255,
+      "average": 33,
+      "maximum": 100,
+      "population_weighted": 5
+    },
+    "dragon": {
+      "id": "1008806316530991149",
+      "slain": true,
+      "slain_day": 1,
+      "life_stage": 6,
+      "activity": 4,
+      "body_condition": 0,
+      "crown_strength": 0,
+      "eggs": 0
+    },
+    "dragon_hoard": 30,
+    "market_coins": 588,
+    "bread_produced": 53866,
+    "paper_produced": 0,
+    "site_tools_delivered": 0
+  },
+  {
+    "fixture": "opened-production-pilots",
+    "dragon_policy": "natural-history",
+    "comparison_scope": "whole-policy",
+    "final_state_hash": "28101e0c0e8f1976",
+    "hunger": {
+      "inhabited": 6,
+      "abandoned": 0,
+      "population": 20168,
+      "average": 32,
+      "maximum": 99,
+      "population_weighted": 5
+    },
+    "dragon": {
+      "id": "1008806316530991149",
+      "slain": false,
+      "slain_day": 0,
+      "life_stage": 3,
+      "activity": 0,
+      "body_condition": 62,
+      "crown_strength": 52,
+      "eggs": 0
+    },
+    "dragon_hoard": 2677,
+    "market_coins": 283,
+    "bread_produced": 53316,
+    "paper_produced": 0,
+    "site_tools_delivered": 2
+  },
+  {
+    "fixture": "opened-production-pilots",
+    "dragon_policy": "slain-at-day-1",
+    "comparison_scope": "whole-policy",
+    "final_state_hash": "8ac20211bf9cb83b",
+    "hunger": {
+      "inhabited": 6,
+      "abandoned": 0,
+      "population": 21290,
+      "average": 25,
+      "maximum": 84,
+      "population_weighted": 8
+    },
+    "dragon": {
+      "id": "1008806316530991149",
+      "slain": true,
+      "slain_day": 1,
+      "life_stage": 6,
+      "activity": 4,
+      "body_condition": 0,
+      "crown_strength": 0,
+      "eggs": 0
+    },
+    "dragon_hoard": 30,
+    "market_coins": 685,
+    "bread_produced": 62832,
+    "paper_produced": 0,
+    "site_tools_delivered": 4
+  }
+]

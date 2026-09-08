@@ -26,3 +26,14 @@ A loaded save uses the `loaded-save` policy label. Its simulation state is prese
 World schema 65, generator 25 and SQLite 31 continue from the parent. This change lives in the runner and capture tools. Initial validation also covers zero-year fixture/save captures.
 
 Tests cover all four cases, repeated bytes, exact checkpoint days, initial stock/coin preservation, coherent aftermath state, save/resume, JSON/text parity, loaded-save labels and incompatible options. The complete capture records eight 40-year runs with matched checkpoints; later economic interpretation uses those records.
+
+## Recorded run
+
+The clean Release capture used commit `5efadc866b5928fe231a851918d1578d0d8b524c`. All eight 40-year runs passed annual validation and repeated-byte comparison. Each produced 41 checkpoints. The manifest records the commands and hashes; `outcomes.json` holds the final whole-policy outcomes. All 81 Debug headless tests passed, and the focused control/report test also passed against this Release build.
+
+| Site fixture | Dragon policy | Population-weighted hunger | Dragon hoard | Town bread produced | Town paper produced |
+| --- | --- | ---: | ---: | ---: | ---: |
+| baseline | natural-history | 4 | 2330 | 53352 | 0 |
+| baseline | slain-at-day-1 | 5 | 30 | 53866 | 0 |
+| opened-production-pilots | natural-history | 5 | 2677 | 53316 | 0 |
+| opened-production-pilots | slain-at-day-1 | 8 | 30 | 62832 | 0 |
