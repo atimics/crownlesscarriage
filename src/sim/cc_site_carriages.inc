@@ -100,6 +100,7 @@ static void UnloadSiteCarriage(CcSim *sim, CcRoyalCarriage *carriage, CcRoadProd
     for (int32_t i = 0; i < sim->road_site_count; ++i)
         if (sim->road_sites[i].id == carriage->location_id) site = &sim->road_sites[i];
     CcSettlement *town = CcSimSettlementMutable(sim, carriage->location_id);
+    if (site == NULL && town == NULL) return;
     int32_t *stock = site != NULL ? site->stock : town->stock;
     int32_t room = site != NULL ? (site->accessible ? SiteFreightRoom(site, shipment->good) : 0) :
         CC_SIM_MAX_UNITS - stock[shipment->good];
