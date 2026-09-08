@@ -356,12 +356,41 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
     (void)printf(",%d\n", hunger.population_weighted);
 }
 
+static void PrintNutritionYear(FILE *stream, const CcSim *sim,
+                               const CcNutritionAccounting *totals,
+                               const CcNutritionAccounting *previous,
+                               int32_t seed_number, int32_t year)
+{
+    static const CcGood goods[] = {CC_GOOD_BREAD, CC_GOOD_WHEAT, CC_GOOD_MEAT};
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcTownNutritionAccounting *now = &totals->towns[i];
+        const CcTownNutritionAccounting *before = &previous->towns[i];
+        for (size_t g = 0; g < sizeof(goods) / sizeof(goods[0]); ++g) {
+            CcGood good = goods[g];
+            uint64_t aged = now->aged_units[good] - before->aged_units[good];
+            uint64_t overflow = now->overflow_units[good] - before->overflow_units[good];
+            uint64_t eaten = now->civilian_units[good] - before->civilian_units[good];
+            uint64_t nutrition = (uint64_t)CcGoodNutritionValue(good, CC_NUTRITION_CIVILIAN);
+            (void)fprintf(stream,
+                "%d,%" PRIu32 ",%d,%" PRIu64 ",%s,%" PRIu64 ",%" PRIu64
+                ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64
+                ",%" PRIu64 ",%" PRIu64 "\n",
+                seed_number, sim->world_seed, year, sim->settlements[i].id,
+                CcGoodName(good), aged, overflow, eaten,
+                now->aged_units[good], now->overflow_units[good],
+                now->civilian_units[good], (aged + overflow) * nutrition,
+                (now->aged_units[good] + now->overflow_units[good]) * nutrition);
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     int32_t seeds = 100;
     int32_t years = 10;
     int32_t first_seed = 1;
     bool final_only = false;
+    const char *nutrition_path = NULL;
     for (int32_t argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--seed") == 0 && argument + 1 < argc) {
             if (!ParsePositive(argv[++argument], &first_seed)) return EXIT_FAILURE;
@@ -371,17 +400,32 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[argument], "--years") == 0 &&
                    argument + 1 < argc) {
             if (!ParsePositive(argv[++argument], &years)) return EXIT_FAILURE;
+        } else if (strcmp(argv[argument], "--nutrition-csv") == 0 &&
+                   argument + 1 < argc) {
+            nutrition_path = argv[++argument];
         } else if (strcmp(argv[argument], "--final-only") == 0) {
             final_only = true;
         } else {
             (void)fprintf(stderr,
                           "Usage: %s [--seed NUMBER | --seeds COUNT]"
-                          " [--years COUNT] [--final-only]\n",
+                          " [--years COUNT] [--final-only] [--nutrition-csv PATH]\n",
                           argv[0]);
             return EXIT_FAILURE;
         }
     }
 
+    FILE *nutrition_csv = NULL;
+    if (nutrition_path != NULL) {
+        nutrition_csv = fopen(nutrition_path, "w");
+        if (nutrition_csv == NULL) {
+            perror(nutrition_path);
+            return EXIT_FAILURE;
+        }
+        (void)fputs("seed_number,world_seed,year,settlement_id,good,"
+            "aged_units,overflow_units,civilian_units,"
+            "cumulative_aged_units,cumulative_overflow_units,cumulative_civilian_units,"
+            "wasted_nutrition,cumulative_wasted_nutrition\n", nutrition_csv);
+    }
     (void)puts(
         "seed_number,world_seed,year,average_hunger,maximum_hunger,"
         "average_prosperity,minimum_prosperity,maximum_prosperity,"
@@ -426,6 +470,8 @@ int main(int argc, char **argv)
          seed_number < first_seed + seeds; ++seed_number) {
         CcSim sim;
         CcMetricsHistory history = {0};
+        CcNutritionAccounting nutrition = {0};
+        CcNutritionAccounting previous_nutrition = {0};
         CcSimInit(&sim, (uint32_t)seed_number * UINT32_C(0x9e3779b9));
         history.minimum_active_settlements = sim.settlement_count;
         for (int32_t i = 0; i < sim.settlement_count; ++i) {
@@ -437,7 +483,8 @@ int main(int argc, char **argv)
         }
         for (int32_t year = 1; year <= years; ++year) {
             for (int32_t day = 0; day < 365; ++day) {
-                CcSimAdvanceDays(&sim, 1);
+                CcSimAdvanceDaysWithNutritionAccounting(&sim, 1,
+                    nutrition_csv != NULL ? &nutrition : NULL);
                 UpdateDailyHistory(&sim, &history);
             }
             UpdateHistory(&sim, &history);
@@ -445,11 +492,25 @@ int main(int argc, char **argv)
                 (void)fprintf(stderr,
                               "Seed %d failed in year %d: %s\n",
                               seed_number, year, error);
+                if (nutrition_csv != NULL) (void)fclose(nutrition_csv);
                 return EXIT_FAILURE;
             }
             if (!final_only || year == years) {
                 PrintYear(&sim, &history, seed_number, year);
+                if (nutrition_csv != NULL) {
+                    PrintNutritionYear(nutrition_csv, &sim, &nutrition,
+                                       &previous_nutrition, seed_number, year);
+                }
             }
+            previous_nutrition = nutrition;
+        }
+    }
+    if (nutrition_csv != NULL) {
+        bool failed = ferror(nutrition_csv) != 0;
+        if (fclose(nutrition_csv) != 0) failed = true;
+        if (failed) {
+            (void)fprintf(stderr, "Writing nutrition accounting failed.\n");
+            return EXIT_FAILURE;
         }
     }
     return EXIT_SUCCESS;

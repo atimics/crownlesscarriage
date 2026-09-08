@@ -1226,6 +1226,17 @@ if(BUILD_TESTING)
                          $<TARGET_FILE:crownless_sim_metrics>)
     endif()
 
+    add_executable(nutrition_accounting_tests tests/nutrition_accounting_tests.c)
+    target_link_libraries(nutrition_accounting_tests PRIVATE crownless_sim)
+    cc_strict_warnings(nutrition_accounting_tests)
+    add_test(NAME nutrition_storage_accounting COMMAND nutrition_accounting_tests)
+    if(CC_PYTHON3_EXECUTABLE AND CC_BUILD_BENCHMARKS)
+        add_test(NAME nutrition_accounting_csv
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/nutrition_accounting_tests.py
+                         $<TARGET_FILE:crownless_sim_metrics>)
+    endif()
+
     add_executable(raid_food_tests tests/raid_food_tests.c)
     target_link_libraries(raid_food_tests PRIVATE crownless_persistence)
     cc_strict_warnings(raid_food_tests)
