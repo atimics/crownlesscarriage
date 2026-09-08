@@ -66,3 +66,12 @@ ordinary writer directly, so the seal test exercises its intended condition.
 This delivery advances #461, #392 and #394. The player-facing production panel,
 full site production digest, and saved-line recommissioning remain follow-up
 work.
+
+## Reserve lookup cost
+
+Linux CI measured 50.34 and 50.52 microseconds per simulated day against a
+50-microsecond budget. The reserve helper now returns before scanning war
+routes for goods whose war allowance is always zero. Five local Release
+benchmark runs per version gave median 22.6702 -> 21.9332 microseconds/day
+(3.25% lower). Both 40-year reports matched the prior version byte for byte.
+The Linux CI jobs verify the budget on their own hardware.
