@@ -303,3 +303,15 @@ published data hashes before rendering PNG and SVG charts.
 Use `dragon_campaign_victories` for cumulative successful dragon campaigns.
 `dragon_slain` is the dragon's final boolean state. Poverty in this study means
 `100 - weighted_prosperity`; the report treats it as a living-standards proxy.
+
+## Six-species and goblin study
+
+The [six-species study](experiments/species-2026-09-08/README.md) charts dragons,
+humans, goblins, ponies, cows, and sheep across 1,000 requested worlds and
+1,000 years. It adds daily goblin raid motives, empty raids, recruitment,
+offering work, and completed egg rituals. Counts state their population scope.
+
+Build `crownless_species_metrics`, then use `tools/species_sweep.py` to collect
+sampled histories, endpoints, failures, and source hashes. `tools/plot_species.py`
+produces the three chart sets from those data files. The observer checks world
+validity every year and preserves the simulation state hash.

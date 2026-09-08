@@ -116,7 +116,7 @@ def main():
     labels = ['Raid musters', 'Raids', 'Tributes', 'Recruitment', 'Offering work', 'Egg rituals']
     heights = [values(ends, k).sum() / n for k in keys]
     ax.barh(labels[::-1], heights[::-1], color=COLORS[2]); ax.set_xscale('symlog', linthresh=1)
-    ax.set_title('Cult work over a thousand years', loc='left', weight='bold')
+    ax.set_title(f'Cult work over {horizon:,} years', loc='left', weight='bold')
     ax.set_xlabel('Mean events per world (linear to 1, then log scale)')
     ax = axes[1, 1]
     percentages = [summary['ritual_blocked_percent_afterdragon_days'][k] or 0 for k in blockers]
@@ -128,7 +128,7 @@ def main():
 
     fig, axes = plt.subplots(2, 3, figsize=(15, 8))
     fig.subplots_adjust(top=.83, bottom=.14, hspace=.4, wspace=.28)
-    fig.suptitle('Species populations at year 1,000', x=.035, ha='left', y=.965, fontsize=24, weight='bold')
+    fig.suptitle(f'Species populations at year {horizon:,}', x=.035, ha='left', y=.965, fontsize=24, weight='bold')
     fig.text(.035, .9, 'Endpoint distributions across completed worlds. Dashed lines mark the median starting population.', fontsize=12)
     for ax, key, label, color in zip(axes.flat, SPECIES, LABELS, COLORS):
         end = values(ends, key)
@@ -136,6 +136,8 @@ def main():
         ax.hist(end, bins=bins, color=color, alpha=.85)
         ax.axvline(summary['species'][key]['start_median'], color=INK, ls='--', lw=1.5)
         ax.set_title(label, loc='left', color=color, weight='bold', fontsize=16)
+        if key == 'dragon': ax.set_xticks([0, 1])
+        if key == 'human': ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _p: f'{x / 1000:g}k'))
         ax.set_xlabel('Count'); ax.set_ylabel('Worlds'); ax.grid(axis='y', alpha=.12)
     finish(fig, folder, 'species-distributions', caption + '\nPony totals include seven named ponies. Common-herd extinction is reported separately in the study.')
     summary['common_pony_extinction_worlds'] = int((values(ends, 'common_ponies') == 0).sum())
