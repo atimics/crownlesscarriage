@@ -1,0 +1,73 @@
+#ifndef CC_PRODUCTION_H
+#define CC_PRODUCTION_H
+
+#include "sim/cc_sim.h"
+
+#define CC_RECIPE_INPUTS 3
+
+typedef struct {
+    CcGood good;
+    int32_t units;
+    int32_t reserve;
+} CcRecipeInput;
+
+typedef struct {
+    CcGood output;
+    int32_t output_units;
+    int32_t input_count;
+    CcRecipeInput inputs[CC_RECIPE_INPUTS];
+    int32_t work_per_batch;
+    int32_t minimum_condition;
+    int32_t tools_required;
+    int32_t hunger_soft_limit;
+    int32_t hunger_hard_limit;
+    int32_t hunger_soft_percent;
+    int32_t hunger_hard_percent;
+} CcProductionRecipe;
+
+/* All stock belongs to this one store at this actual location. Callers supply
+   a site store or a co-located town store. Ownership alone never finds stock. */
+typedef struct {
+    CcId producer_id;
+    CcId storage_id;
+    CcId location_id;
+    int32_t *stock;
+    int32_t capacity;
+    int32_t output_limit;
+    int32_t work_available;
+    int32_t condition;
+    int32_t hunger;
+    bool enabled;
+} CcProductionContext;
+
+typedef enum {
+    CC_PRODUCTION_READY,
+    CC_PRODUCTION_INVALID,
+    CC_PRODUCTION_CLOSED,
+    CC_PRODUCTION_CONDITION,
+    CC_PRODUCTION_CAPACITY,
+    CC_PRODUCTION_OUTPUT_FULL,
+    CC_PRODUCTION_WORK,
+    CC_PRODUCTION_TOOLS,
+    CC_PRODUCTION_INPUT
+} CcProductionGate;
+
+typedef struct {
+    CcId producer_id;
+    CcId storage_id;
+    CcId location_id;
+    CcProductionGate gate;
+    CcGood blocked_good;
+    int32_t batches;
+    int32_t output;
+    int32_t inputs[CC_RECIPE_INPUTS];
+    int32_t work;
+} CcProductionReceipt;
+
+CcProductionReceipt CcProductionPlan(const CcProductionRecipe *recipe,
+                                     const CcProductionContext *context);
+/* Plans from current stock and applies exactly that act. Scheduling and event
+   aggregation belong to the caller. Receipts are observations, not commands. */
+CcProductionReceipt CcProductionRun(const CcProductionRecipe *recipe,
+                                    const CcProductionContext *context);
+#endif

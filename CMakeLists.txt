@@ -91,6 +91,7 @@ cc_strict_warnings(crownless_locomotion)
 add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
+    src/sim/cc_production.c
     src/sim/cc_mine.c
     src/sim/cc_ponies.c
 )
@@ -1015,6 +1016,10 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(production_tests tests/production_tests.c)
+    target_link_libraries(production_tests PRIVATE crownless_sim)
+    cc_strict_warnings(production_tests)
+    add_test(NAME common_production_contract COMMAND production_tests)
     add_executable(war_society_tests tests/war_society_tests.c)
     target_link_libraries(war_society_tests PRIVATE crownless_persistence)
     cc_strict_warnings(war_society_tests)

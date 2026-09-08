@@ -1,0 +1,38 @@
+{
+  "base": "4d0b641",
+  "schema": 62,
+  "generator": 25,
+  "runs": [
+    {
+      "seed": "0x5eed0001",
+      "years": 40,
+      "annual_and_smithy_reports_match": true,
+      "sha256": "c9bf2da3e47437b3113788f11da756212ae04e5f2d7a97edb1a5bd24d9d39469"
+    },
+    {
+      "seed": "0xc0a71a9e",
+      "years": 40,
+      "annual_and_smithy_reports_match": true,
+      "sha256": "43c5d1f24b2507b4137eb54f933e8d23a8d4c856e29c497ed5f3914bbb5a6bde"
+    }
+  ],
+  "historical_rule_probe": {
+    "schemas": [
+      26,
+      27,
+      58,
+      59,
+      60,
+      61,
+      62
+    ],
+    "seeds": [
+      "0x5eed0001",
+      "0xc0a71a9e"
+    ],
+    "years_each": 40,
+    "matching_annual_hashes": 560,
+    "sha256": "aa66c0e8a358b9d3011c9b73e63e5181c6881e43c856a7cc8a4e855240fe7503",
+    "fixture": "Current world initialization with each historical rule version selected; shipped save fixtures are covered separately by sqlite_round_trip."
+  }
+}

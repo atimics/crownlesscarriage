@@ -1,5 +1,6 @@
 #include "sim/cc_sim.h"
 #include "sim/cc_mine.h"
+#include "sim/cc_production.h"
 
 #include "quest/cc_quest.h"
 
@@ -2312,8 +2313,6 @@ static int32_t RunBakery(CcSim *sim, CcSettlement *place,
 {
     int32_t capacity = BakeryCapacity(place);
     if (capacity <= 0 || place->stock[CC_GOOD_WHEAT] <= 0) return 0;
-    if (place->hunger > 65) capacity = capacity * 72 / 100;
-    else if (place->hunger > 35) capacity = capacity * 86 / 100;
     int32_t grain_floor = 0;
     if (scriptorium_id != 0U && place->id == scriptorium_id &&
         place->hunger == 0 &&
@@ -2323,14 +2322,19 @@ static int32_t RunBakery(CcSim *sim, CcSettlement *place,
             place->reserve_target[CC_GOOD_WHEAT],
             WeeklyFoodUse(sim, place) * 2 + sim->archives.scribes * 2);
     }
-    int32_t baked = MinimumI32(
-        capacity, MaximumI32(
-            0, place->stock[CC_GOOD_WHEAT] - grain_floor));
-    baked = MinimumI32(baked,
-                       CC_SIM_MAX_UNITS - place->stock[CC_GOOD_BREAD]);
+    const CcProductionRecipe recipe = {
+        .output = CC_GOOD_BREAD, .output_units = 1, .input_count = 1,
+        .inputs = {{CC_GOOD_WHEAT, 1, grain_floor}}, .work_per_batch = 1,
+        .hunger_soft_limit = 35, .hunger_hard_limit = 65,
+        .hunger_soft_percent = 86, .hunger_hard_percent = 72
+    };
+    const CcProductionContext context = {
+        .producer_id = place->id, .storage_id = place->id, .location_id = place->id,
+        .stock = place->stock, .capacity = capacity, .output_limit = CC_SIM_MAX_UNITS,
+        .work_available = capacity, .condition = 100, .hunger = place->hunger, .enabled = true
+    };
+    int32_t baked = CcProductionRun(&recipe, &context).output;
     if (baked <= 0) return 0;
-    place->stock[CC_GOOD_WHEAT] -= baked;
-    place->stock[CC_GOOD_BREAD] += baked;
     if (sim->current_day % 28 == 0) {
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(text, sizeof(text),
@@ -5060,8 +5064,8 @@ static CcSmithyStatus SmithyLineStatus(int32_t capacity, int32_t gap,
     return CC_SMITHY_READY;
 }
 
-CcSmithyPlan CcSimPlanSmithy(const CcSim *sim,
-                            const CcSettlement *settlement)
+static CcSmithyPlan RunSmithyRecipes(const CcSim *sim,
+                                    const CcSettlement *settlement, int32_t *stock)
 {
     CcSmithyPlan plan = {0};
     plan.tools_status = CC_SMITHY_SERVICE_UNAVAILABLE;
@@ -5076,38 +5080,52 @@ CcSmithyPlan CcSimPlanSmithy(const CcSim *sim,
         return plan;
     }
     bool legacy_smithy = sim->schema_version < 27U;
-    int32_t iron = settlement->stock[CC_GOOD_IRON];
-    int32_t wood = settlement->stock[CC_GOOD_WOOD];
-    int32_t tool_gap = MaximumI32(0, settlement->reserve_target[CC_GOOD_TOOLS] * 2 -
-                                     settlement->stock[CC_GOOD_TOOLS]);
-    int32_t tool_capacity = MaximumI32(0, settlement->production[CC_GOOD_TOOLS]);
-    int32_t tool_material = iron / 2;
-    if (!legacy_smithy) tool_material = MinimumI32(tool_material, wood);
-    plan.tools_status = SmithyLineStatus(tool_capacity, tool_gap, iron, wood,
-                                         2, legacy_smithy ? 0 : 1);
-    plan.tools_made = MinimumI32(tool_capacity, MinimumI32(tool_gap, tool_material));
-    iron -= plan.tools_made * 2;
-    if (!legacy_smithy) wood -= plan.tools_made;
-
-    int32_t weapon_gap = MaximumI32(0,
-        EffectiveReserveTarget(sim, settlement, CC_GOOD_WEAPONS) * 2 -
-        settlement->stock[CC_GOOD_WEAPONS]);
-    int32_t weapon_capacity = MaximumI32(0, settlement->production[CC_GOOD_WEAPONS]);
-    int32_t weapon_material = iron / 3;
-    if (!legacy_smithy) weapon_material = MinimumI32(weapon_material, wood / 2);
-    plan.weapons_status = SmithyLineStatus(weapon_capacity, weapon_gap, iron, wood,
-                                           3, legacy_smithy ? 0 : 2);
-    plan.weapons_made = MinimumI32(weapon_capacity,
-                                  MinimumI32(weapon_gap, weapon_material));
-    plan.iron_used = plan.tools_made * 2 + plan.weapons_made * 3;
-    plan.wood_used = legacy_smithy ? 0 : plan.tools_made + plan.weapons_made * 2;
+    CcProductionRecipe recipe = {
+        .output = CC_GOOD_TOOLS, .output_units = 1,
+        .input_count = legacy_smithy ? 1 : 2,
+        .inputs = {{CC_GOOD_IRON, 2, 0}, {CC_GOOD_WOOD, 1, 0}},
+        .work_per_batch = 1, .hunger_soft_limit = 100, .hunger_hard_limit = 100
+    };
+    CcProductionContext context = {
+        .producer_id = settlement->id, .storage_id = settlement->id,
+        .location_id = settlement->id, .stock = stock,
+        .capacity = MaximumI32(0, settlement->production[CC_GOOD_TOOLS]),
+        .output_limit = settlement->reserve_target[CC_GOOD_TOOLS] * 2,
+        .work_available = INT32_MAX, .condition = 100, .enabled = true
+    };
+    plan.tools_status = SmithyLineStatus(context.capacity,
+        context.output_limit - stock[CC_GOOD_TOOLS], stock[CC_GOOD_IRON],
+        stock[CC_GOOD_WOOD], 2, legacy_smithy ? 0 : 1);
+    CcProductionReceipt tools = CcProductionRun(&recipe, &context);
+    recipe.output = CC_GOOD_WEAPONS;
+    recipe.inputs[0].units = 3;
+    recipe.inputs[1].units = 2;
+    context.capacity = MaximumI32(0, settlement->production[CC_GOOD_WEAPONS]);
+    context.output_limit = EffectiveReserveTarget(sim, settlement, CC_GOOD_WEAPONS) * 2;
+    plan.weapons_status = SmithyLineStatus(context.capacity,
+        context.output_limit - stock[CC_GOOD_WEAPONS], stock[CC_GOOD_IRON],
+        stock[CC_GOOD_WOOD], 3, legacy_smithy ? 0 : 2);
+    CcProductionReceipt weapons = CcProductionRun(&recipe, &context);
+    plan.tools_made = tools.output;
+    plan.weapons_made = weapons.output;
+    plan.iron_used = tools.inputs[0] + weapons.inputs[0];
+    plan.wood_used = tools.inputs[1] + weapons.inputs[1];
     return plan;
+}
+
+CcSmithyPlan CcSimPlanSmithy(const CcSim *sim, const CcSettlement *settlement)
+{
+    int32_t stock[CC_GOOD_COUNT] = {0};
+    if (settlement != NULL) memcpy(stock, settlement->stock, sizeof(stock));
+    return RunSmithyRecipes(sim, settlement, stock);
 }
 
 static void RunSmithy(CcSim *sim, CcSettlement *settlement,
                        CcTownSmithyAccounting *accounting)
 {
-    CcSmithyPlan plan = CcSimPlanSmithy(sim, settlement);
+    int32_t iron_before = settlement->stock[CC_GOOD_IRON];
+    int32_t wood_before = settlement->stock[CC_GOOD_WOOD];
+    CcSmithyPlan plan = RunSmithyRecipes(sim, settlement, settlement->stock);
     if (accounting != NULL) {
         accounting->settlement_id = settlement->id;
         accounting->tools_status[plan.tools_status]++;
@@ -5119,14 +5137,8 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement,
     }
     if (!CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) return;
     bool legacy_smithy = sim->schema_version < 27U;
-    int32_t iron_before = settlement->stock[CC_GOOD_IRON];
-    int32_t wood_before = settlement->stock[CC_GOOD_WOOD];
     int32_t tools_made = plan.tools_made;
     int32_t weapons_made = plan.weapons_made;
-    settlement->stock[CC_GOOD_IRON] -= plan.iron_used;
-    settlement->stock[CC_GOOD_WOOD] -= plan.wood_used;
-    settlement->stock[CC_GOOD_TOOLS] += tools_made;
-    settlement->stock[CC_GOOD_WEAPONS] += weapons_made;
 
     int32_t tools_before_wear = settlement->stock[CC_GOOD_TOOLS];
     int32_t smith_batches = tools_made + weapons_made;
