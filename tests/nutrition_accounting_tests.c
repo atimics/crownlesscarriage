@@ -1,4 +1,5 @@
 #include "sim/cc_sim.h"
+#include "persistence/cc_save.h"
 #include "test_support.h"
 #include <string.h>
 
@@ -108,7 +109,9 @@ int main(void)
     CC_CHECK(memcmp(&totals, &empty, sizeof(totals)) == 0);
 
     /* Measured and ordinary stepping share every authoritative byte and RNG. */
-    CcSimInit(&observed, UINT32_C(0x5EED0001));
+    char fixture_error[256];
+    CC_CHECK(CcSaveRead(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-53-generator-25-nutrition.ccsave",
+        &observed, fixture_error, sizeof(fixture_error)));
     observed.schema_version = 53U;
     control = observed;
     daily = observed;

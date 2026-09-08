@@ -56,7 +56,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 57
+#define CC_SIM_SCHEMA_VERSION 58
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -1732,6 +1732,11 @@ int32_t CcCharacterAgeYears(const CcSim *sim,
 void CcGenerateCharacterName(uint32_t world_seed, CcId settlement_id,
                              int32_t generation, uint32_t ordinal,
                              char output[CC_NAME_CAPACITY]);
+
+/* Unrecognized settlement functions draw from the whole name pool. */
+void CcGenerateSettlementCharacterName(uint32_t world_seed, CcId settlement_id,
+                                       int32_t place_function, int32_t generation,
+                                       uint32_t ordinal, char output[CC_NAME_CAPACITY]);
 
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
 bool CcSimApply(CcSim *sim, const CcCommand *command,
