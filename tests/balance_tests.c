@@ -34,26 +34,6 @@ static void QuietWorld(CcSim *sim, uint32_t seed)
     }
 }
 
-static int32_t AverageHunger(const CcSim *sim)
-{
-    int32_t total = 0;
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        total += sim->settlements[i].hunger;
-    }
-    return total / sim->settlement_count;
-}
-
-static int32_t MaximumHunger(const CcSim *sim)
-{
-    int32_t maximum = 0;
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        if (sim->settlements[i].hunger > maximum) {
-            maximum = sim->settlements[i].hunger;
-        }
-    }
-    return maximum;
-}
-
 int main(void)
 {
     char error[192];
@@ -348,11 +328,14 @@ int main(void)
             CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
             if (year < 20) continue;
             samples += 1;
-            int32_t average_hunger = AverageHunger(&sim);
-            int32_t maximum_hunger = MaximumHunger(&sim);
+            CcHungerSnapshot hunger = CcSimHungerSnapshot(&sim);
+            int32_t average_hunger = hunger.average;
+            int32_t maximum_hunger = hunger.maximum;
             if (average_hunger >= 60) collapse_samples += 1;
             if (maximum_hunger >= 40) crisis_samples += 1;
-            if (average_hunger < 25) quiet_samples += 1;
+            if (hunger.inhabited_settlements > 0 && average_hunger < 25) {
+                quiet_samples += 1;
+            }
             bool at_war = false;
             for (int32_t first = 0;
                  first < sim.kingdom_count; ++first) {

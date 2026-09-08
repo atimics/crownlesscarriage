@@ -91,6 +91,31 @@ bool CcSettlementIsAbandoned(const CcSettlement *settlement)
     return settlement != NULL && settlement->population <= 0;
 }
 
+CcHungerSnapshot CcSimHungerSnapshot(const CcSim *sim)
+{
+    CcHungerSnapshot result = {0, 0, 0, -1, -1, -1};
+    if (sim == NULL) return result;
+    int64_t total = 0;
+    int64_t weighted = 0;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) {
+            result.abandoned_settlements += 1;
+            continue;
+        }
+        result.inhabited_settlements += 1;
+        result.population += place->population;
+        total += place->hunger;
+        weighted += (int64_t)place->population * place->hunger;
+        if (place->hunger > result.maximum) result.maximum = place->hunger;
+    }
+    if (result.inhabited_settlements > 0) {
+        result.average = (int32_t)(total / result.inhabited_settlements);
+        result.population_weighted = (int32_t)(weighted / result.population);
+    }
+    return result;
+}
+
 int32_t CcSimClimateFactor(const CcSim *sim)
 {
     if (sim == NULL) return 100;

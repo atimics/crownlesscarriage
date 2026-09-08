@@ -384,6 +384,16 @@ typedef enum CcMaterialChainBlocker {
     CC_MATERIAL_CHAIN_BINDING
 } CcMaterialChainBlocker;
 
+/* Read-only hunger measurements. Values are -1 when no settlement is inhabited. */
+typedef struct CcHungerSnapshot {
+    int32_t inhabited_settlements;
+    int32_t abandoned_settlements;
+    int64_t population;
+    int32_t average;
+    int32_t maximum;
+    int32_t population_weighted;
+} CcHungerSnapshot;
+
 typedef struct CcMaterialChainSnapshot {
     CcId scriptorium_id;
     CcMaterialChainBlocker blocker;
@@ -1844,6 +1854,7 @@ const char *CcBanditReactionName(int32_t roll);
 int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimActiveFrontCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
+CcHungerSnapshot CcSimHungerSnapshot(const CcSim *sim);
 CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
 const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker);
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
