@@ -9785,13 +9785,16 @@ static int RunTravelAudioRegression(void)
 #include "cc_capture_frames.inc"
 #include "cc_capture_scenes.inc"
 #include "cc_capture_presentation.inc"
+#include "cc_render_benchmark.inc"
 #if defined(CC_CLIENT_SELF_TESTS)
 #include "cc_capture_request_tests.inc"
+#include "cc_render_benchmark_tests.inc"
 #endif
 
 int main(int argc, char **argv)
 {
 #if defined(CC_CLIENT_SELF_TESTS)
+    if (argc == 2 && strcmp(argv[1], "--test-render-benchmark") == 0) return RunRenderBenchmarkRegression();
     if (argc == 2 && strcmp(argv[1], "--test-capture-presentation") == 0) return RunCapturePresentationRegression();
     if (argc == 2 && strcmp(argv[1], "--test-capture-scenes") == 0) return RunCaptureSceneRegression();
     if (argc == 2 && strcmp(argv[1], "--test-capture-frames") == 0) return RunCaptureFrameRegression();
@@ -9849,61 +9852,8 @@ int main(int argc, char **argv)
             screen_first_hero = false;
         }
     }
-    bool render_benchmark = argc >= 2 &&
-                            strcmp(argv[1], "--benchmark-render") == 0;
-    int32_t render_benchmark_frames = 600;
-    double render_benchmark_minimum_fps = 0.0;
-    double render_benchmark_p95_budget = 0.0;
-    const char *render_benchmark_scene = "street";
-    if (render_benchmark && argc >= 3) {
-        char *end = NULL;
-        long parsed = strtol(argv[2], &end, 10);
-        if (end == argv[2] || *end != '\0' || parsed <= 0 || parsed > INT32_MAX) {
-            (void)fprintf(stderr, "Render benchmark frame count is invalid.\n");
-            return 1;
-        }
-        render_benchmark_frames = (int32_t)parsed;
-    }
-    if (render_benchmark && argc >= 4) {
-        char *end = NULL;
-        double parsed = strtod(argv[3], &end);
-        if (end == argv[3] || *end != '\0' || parsed <= 0.0) {
-            (void)fprintf(stderr,
-                          "Render benchmark minimum FPS is invalid.\n");
-            return 1;
-        }
-        render_benchmark_minimum_fps = parsed;
-    }
-    if (render_benchmark && argc >= 5 && argv[4][0] != '-') {
-        render_benchmark_scene = argv[4];
-        if (strcmp(render_benchmark_scene, "street") != 0 &&
-            strcmp(render_benchmark_scene, "market") != 0 &&
-            strcmp(render_benchmark_scene, "road") != 0 &&
-            strcmp(render_benchmark_scene, "roadbook-route") != 0 &&
-            strcmp(render_benchmark_scene, "roadbook-network") != 0 &&
-            strcmp(render_benchmark_scene, "combat") != 0) {
-            (void)fprintf(stderr,
-                          "Render benchmark scene must be street, market, road, roadbook-route, roadbook-network, or combat.\n");
-            return 1;
-        }
-    }
-    if (render_benchmark && argc >= 6 && argv[5][0] != '-') {
-        char *end = NULL;
-        double parsed = strtod(argv[5], &end);
-        if (end == argv[5] || *end != '\0' || !isfinite(parsed) ||
-            parsed <= 0.0) {
-            (void)fprintf(stderr,
-                          "Render benchmark p95 budget is invalid.\n");
-            return 1;
-        }
-        render_benchmark_p95_budget = parsed;
-    }
-    bool render_benchmark_roadbook_route = render_benchmark &&
-        strcmp(render_benchmark_scene, "roadbook-route") == 0;
-    bool render_benchmark_roadbook_network = render_benchmark &&
-        strcmp(render_benchmark_scene, "roadbook-network") == 0;
-    bool render_benchmark_roadbook = render_benchmark_roadbook_route ||
-        render_benchmark_roadbook_network;
+    CcRenderBenchmark benchmark = {0};
+    if (!CcRenderBenchmarkParse(argc, argv, &benchmark)) return 1;
     CcCaptureRequest capture_request = {0};
     if (!CcCaptureRequestParse(argc, argv, &capture_request)) return 1;
     char save_path[640];
@@ -9950,7 +9900,7 @@ int main(int argc, char **argv)
         return 1;
     }
     bool capture_active = CcCaptureActive(&capture_request);
-    bool normal_play = !capture_active && !render_benchmark;
+    bool normal_play = !capture_active && !benchmark.active;
     CcClientPreferences preferences;
     CcClientPreferencesDefault(&preferences);
     if (normal_play) {
@@ -9971,7 +9921,7 @@ int main(int argc, char **argv)
         }
     }
 
-    if (render_benchmark) SetTraceLogLevel(LOG_ERROR);
+    if (benchmark.active) SetTraceLogLevel(LOG_ERROR);
     else if (capture_active) SetTraceLogLevel(LOG_WARNING);
 
     unsigned int window_flags = capture_active ? FLAG_WINDOW_HIDDEN : 0U;
@@ -9989,7 +9939,7 @@ int main(int argc, char **argv)
         .width = initial_width, .height = initial_height,
         .minimum_width = normal_play ? 1040 : 1280,
         .minimum_height = normal_play ? 620 : 760,
-        .fps = render_benchmark ? 0 : 60,
+        .fps = benchmark.active ? 0 : 60,
     };
     if (!CcCaptureConfigureWindow(&capture_request, argc, argv, &window)) return 1;
     InitWindow(window.width, window.height,
@@ -10045,7 +9995,7 @@ int main(int argc, char **argv)
         (void)snprintf(startup_message, sizeof(startup_message), "%s",
                        journal != NULL ? "The company shares this carriage and clock." : error);
         CcCoopClientReady(journal != NULL ? "" : error);
-    } else if (capture_active || render_benchmark) {
+    } else if (capture_active || benchmark.active) {
         CcSimAdvanceDays(&sim, 28);
     } else {
         char error[256];
@@ -10070,24 +10020,7 @@ int main(int argc, char **argv)
     }
     CcLocalBindPlace(&sim);
     CcCapturePrepareJourney(&capture_request, &sim);
-    if (render_benchmark_roadbook) {
-        PrepareReviewJourney(&sim, (CcReviewJourneyOptions){
-            .suppress_encounter = true, .advance_trip = true,
-            .target_progress = 420, .tick_step = CC_WORLD_TICKS_PER_SECOND,
-        });
-    }
-    if (render_benchmark_roadbook_network) {
-        uint32_t catalogue_mask = 0U;
-        for (int32_t map_index = 0;
-             map_index < sim.map_count && map_index < CC_MAX_MAPS &&
-             map_index < 32; ++map_index) {
-            sim.maps[map_index].owner_id = sim.player.id;
-            catalogue_mask |= UINT32_C(1) << (uint32_t)map_index;
-        }
-        sim.player.map_catalogue_mask = catalogue_mask;
-        sim.player.map_archive_mask = 0U;
-        CcSimInitializePlayerRouteKnowledge(&sim);
-    }
+    CcRenderBenchmarkPrepareWorld(&benchmark, &sim);
     if (!CcCapturePrepareDungeon(&capture_request, &sim)) {
         CcCaptureSceneAbort(local_target, &map_textures, &instance_lock);
         return 1;
@@ -10109,7 +10042,7 @@ int main(int argc, char **argv)
 #endif
     ResetLocalState(&local);
     bool roadbook_world_requested = CcCaptureNeedsRoadbook(&capture_request) ||
-        render_benchmark_roadbook;
+        benchmark.roadbook;
     if ((normal_play || roadbook_world_requested) &&
         !InitializeOpenWorld(&sim, &local, false)) {
         (void)snprintf(startup_message, sizeof(startup_message),
@@ -10185,32 +10118,7 @@ int main(int argc, char **argv)
         CcCaptureSceneAbort(local_target, &map_textures, &instance_lock);
         return 1;
     }
-    if (render_benchmark) {
-        view = VIEW_LOCAL;
-        return_view = VIEW_LOCAL;
-        if (strcmp(render_benchmark_scene, "market") == 0) {
-            local.market_interior = true;
-            RepositionHero(&local, (Vector2){4.60f, 5.10f}, true);
-            local.agent.facing_yaw = 0.14f;
-        } else if (strcmp(render_benchmark_scene, "road") == 0) {
-            BeginRoadTravelState(&sim, &local);
-            local.convoy.pace = 0.0f;
-        } else if (render_benchmark_roadbook) {
-            BeginRoadTravelState(&sim, &local);
-            local.convoy.pace = 0.0f;
-            local.world_carriage.pace = 0.0f;
-            local.world_carriage.camera_weight = 1.0f;
-            local.world_carriage.camera_target = 1.0f;
-            local.world_carriage.storybook_travel = !render_benchmark_roadbook_network;
-            local.travel_time_blend = 1.0f;
-        } else if (strcmp(render_benchmark_scene, "combat") == 0) {
-            PrepareRoadCombatReel(&sim, &local);
-        } else {
-            RepositionHero(&local, (Vector2){44.25f, 28.85f}, false);
-            local.agent.facing_yaw = -0.35f;
-            local.course.alarm_countdown = 1000.0f;
-        }
-    }
+    CcRenderBenchmarkPrepareScene(&benchmark, &sim, &local, &view, &return_view);
     if (!CcCapturePrepareUX(&capture_request, &capture_scene)) {
         CcCaptureSceneAbort(local_target, &map_textures, &instance_lock);
         return 1;
@@ -10219,7 +10127,7 @@ int main(int argc, char **argv)
         (local.open_world && local.world_stream.manifest.route_count > 0 &&
          local.world_carriage.visible);
     bool journey_state_ready = CcCaptureJourneyReady(&capture_request, &sim, &local,
-        !render_benchmark_roadbook || (sim.journey.active &&
+        !benchmark.roadbook || (sim.journey.active &&
          sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING && local.journey_travel_active));
     if (!roadbook_state_ready || !journey_state_ready) {
         (void)fprintf(
@@ -10241,17 +10149,13 @@ int main(int argc, char **argv)
     }
     char message[256] = "";
     char save_feedback[128] = "";
-    if (!capture_active && !render_benchmark && startup_message[0] != '\0') {
+    if (!capture_active && !benchmark.active && startup_message[0] != '\0') {
         (void)snprintf(message, sizeof(message), "%s", startup_message);
     }
     if (!CcCapturePrepareMessage(&capture_request, &capture_scene, message, sizeof(message))) {
         CcCaptureSceneAbort(local_target, &map_textures, &instance_lock);
         return 1;
     }
-    const int32_t render_benchmark_warmup_frames = 60;
-    int32_t render_benchmark_warmup_count = 0;
-    int32_t render_benchmark_count = 0;
-    double render_benchmark_started = 0.0;
     bool performance_overlay = false;
     float message_age = 0.0f;
     float save_feedback_age = SAVE_FEEDBACK_VISIBLE_SECONDS;
@@ -10297,7 +10201,7 @@ int main(int argc, char **argv)
                 local.agent.position.z - (float)seat * 0.35f}, false);
         }
     }
-    while (render_benchmark || (!frontend.quit && !WindowShouldClose())) {
+    while (benchmark.active || (!frontend.quit && !WindowShouldClose())) {
 #if defined(PLATFORM_WEB)
         ClientWaitForAnimationFrame();
 #endif
@@ -10439,7 +10343,7 @@ int main(int argc, char **argv)
         CcLocalRendererBeginFrame(frame_delta_time);
         CcLocalBindPlace(&sim);
         BindOpenWorldForLocalState(&local);
-        if (!capture_active && !render_benchmark && ClientKeyPressed(KEY_F3)) {
+        if (!capture_active && !benchmark.active && ClientKeyPressed(KEY_F3)) {
             performance_overlay = !performance_overlay;
             (void)snprintf(message, sizeof(message), "%s",
                            performance_overlay ?
@@ -10450,7 +10354,7 @@ int main(int argc, char **argv)
                 &selected, &selected_situation, &view, &return_view,
                 message, sizeof(message))) {
             /* The capture hook supplied this frame's input. */
-        } else if (render_benchmark || !presentation.accept_input) {
+        } else if (benchmark.active || !presentation.accept_input) {
             ClientInputClearPressed();
         } else {
             if (local.agent.combat.life_state == CC_LIFE_DEAD) {
@@ -10510,9 +10414,8 @@ int main(int argc, char **argv)
         } else {
             message_age += presentation.message_step > 0.0f ? presentation.message_step : frame_delta_time;
         }
-        float clock = render_benchmark ?
-            (float)(render_benchmark_warmup_count +
-                    render_benchmark_count) / 60.0f :
+        float clock = benchmark.active ?
+            ((float)benchmark.warmup_count + (float)benchmark.count) / 60.0f :
             CcCaptureClock(&capture_request, &capture_state, (float)GetTime());
         if (local.world_carriage.storybook_travel) {
             clock = (float)fmod((double)sim.clock.tick /
@@ -10779,19 +10682,8 @@ int main(int argc, char **argv)
         }
 #endif
 
-        if (render_benchmark) {
-            if (render_benchmark_warmup_count <
-                render_benchmark_warmup_frames) {
-                render_benchmark_warmup_count += 1;
-                if (render_benchmark_warmup_count ==
-                    render_benchmark_warmup_frames) {
-                    CcLocalRendererResetPerformanceMetrics();
-                    render_benchmark_started = GetTime();
-                }
-                continue;
-            }
-            render_benchmark_count += 1;
-            if (render_benchmark_count >= render_benchmark_frames) break;
+        if (benchmark.active) {
+            if (CcRenderBenchmarkAfterFrame(&benchmark, GetTime)) break;
         } else if (CcCaptureAfterFrame(&capture_request, &capture_state,
                                        ClientTakeScreenshot)) {
             break;
@@ -10813,8 +10705,8 @@ int main(int argc, char **argv)
         (void)fprintf(stderr, "Could not commit the action journal: %s\n",
                       journal_error);
     }
-    double render_benchmark_elapsed = render_benchmark ?
-        GetTime() - render_benchmark_started : 0.0;
+    double render_benchmark_elapsed = benchmark.active ?
+        GetTime() - benchmark.started : 0.0;
     CcLocalRendererStats final_renderer_stats =
         CcLocalRendererGetStats();
     CcMusicPlayerShutdown();
@@ -10825,82 +10717,10 @@ int main(int argc, char **argv)
     CcCoopClientShutdown();
     CloseWindow();
     CcClientInstanceLockRelease(&instance_lock);
-    if (render_benchmark) {
-        double frames_per_second =
-            (double)render_benchmark_count / render_benchmark_elapsed;
-        double p95_budget = render_benchmark_p95_budget > 0.0 ?
-            render_benchmark_p95_budget :
-            (render_benchmark_minimum_fps > 0.0 ?
-                1500.0 / render_benchmark_minimum_fps : 0.0);
-        (void)printf("render: scene=%s frames=%d seconds=%.6f ms/frame=%.3f fps=%.1f p95=%.3f p95_budget=%.3f p99=%.3f max=%.3f hitches=%d skin_updates=%d skinned_meshes=%d hero_skin_updates=%d hero_skinned_meshes=%d npc_skin_updates=%d npc_skinned_meshes=%d creature_skin_updates=%d creature_skinned_meshes=%d high_detail=%d lod=%d static_batch_draws=%d static_batch_instances=%d static_batch_vertices=%d\n",
-                     render_benchmark_scene, render_benchmark_count,
-                     render_benchmark_elapsed,
-                     render_benchmark_elapsed * 1000.0 /
-                         (double)render_benchmark_count,
-                     frames_per_second,
-                     final_renderer_stats.p95_frame_milliseconds,
-                     p95_budget,
-                     final_renderer_stats.p99_frame_milliseconds,
-                     final_renderer_stats.maximum_frame_milliseconds,
-                     final_renderer_stats.hitch_count,
-                     final_renderer_stats.skin_updates,
-                     final_renderer_stats.skinned_meshes,
-                     final_renderer_stats.hero_skin_updates,
-                     final_renderer_stats.hero_skinned_meshes,
-                     final_renderer_stats.npc_skin_updates,
-                     final_renderer_stats.npc_skinned_meshes,
-                     final_renderer_stats.creature_skin_updates,
-                     final_renderer_stats.creature_skinned_meshes,
-                     final_renderer_stats.high_detail_characters,
-                     final_renderer_stats.low_detail_characters,
-                     final_renderer_stats.static_batch_draws,
-                     final_renderer_stats.static_batch_instances,
-                     final_renderer_stats.static_batch_vertices);
-        bool performance_failed = render_benchmark_minimum_fps > 0.0 &&
-                                  frames_per_second <
-                                      render_benchmark_minimum_fps;
-        bool frame_time_failed = p95_budget > 0.0 &&
-            final_renderer_stats.p95_frame_milliseconds > p95_budget;
-        bool scene_expects_lod =
-            strcmp(render_benchmark_scene, "combat") == 0;
-        bool hero_is_embarked = render_benchmark_roadbook;
-        bool hero_layout_failed = hero_is_embarked ?
-            final_renderer_stats.high_detail_characters != 0 :
-            (final_renderer_stats.high_detail_characters != 1 ||
-             (scene_expects_lod &&
-              final_renderer_stats.low_detail_characters <= 0));
-        bool skin_layout_failed = hero_is_embarked ?
-            (final_renderer_stats.hero_skin_updates != 0 ||
-             final_renderer_stats.hero_skinned_meshes != 0 ||
-             hero_layout_failed) :
-            (final_renderer_stats.hero_skin_updates != 1 ||
-             final_renderer_stats.hero_skinned_meshes <= 0 ||
-             final_renderer_stats.hero_skinned_meshes >
-                 CC_LOCAL_HERO_RUNTIME_MESH_BUDGET ||
-             hero_layout_failed);
-        if (performance_failed) {
-            (void)fprintf(stderr,
-                          "render performance budget failed: %.1f FPS < %.1f FPS\n",
-                          frames_per_second, render_benchmark_minimum_fps);
-        }
-        if (frame_time_failed) {
-            (void)fprintf(stderr,
-                          "render frame-time budget failed: p95 %.1f ms > %.1f ms\n",
-                          final_renderer_stats.p95_frame_milliseconds,
-                          p95_budget);
-        }
-        if (skin_layout_failed) {
-            (void)fprintf(stderr,
-                          "render hero skin budget failed: updates=%d meshes=%d hero=%d lod=%d (mesh budget %d)\n",
-                          final_renderer_stats.hero_skin_updates,
-                          final_renderer_stats.hero_skinned_meshes,
-                          final_renderer_stats.high_detail_characters,
-                          final_renderer_stats.low_detail_characters,
-                          CC_LOCAL_HERO_RUNTIME_MESH_BUDGET);
-        }
-        if (performance_failed || frame_time_failed || skin_layout_failed) {
-            return 2;
-        }
+    if (benchmark.active) {
+        int benchmark_result = CcRenderBenchmarkReport(&benchmark, render_benchmark_elapsed,
+            final_renderer_stats, stdout, stderr);
+        if (benchmark_result != 0) return benchmark_result;
     } else {
         CcCaptureReport(&capture_request, &capture_state);
     }
