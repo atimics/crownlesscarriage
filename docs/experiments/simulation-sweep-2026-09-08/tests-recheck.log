@@ -1,0 +1,15 @@
+Test project /private/tmp/crownless-sweep-build-20260908
+    Start  8: speech_worker_and_cache
+1/2 Test  #8: speech_worker_and_cache ..........   Passed    1.91 sec
+    Start 38: sqlite_round_trip
+2/2 Test #38: sqlite_round_trip ................***Failed    0.02 sec
+/private/tmp/crownless-sweep-20260908/tests/persistence_tests.c:2735: check failed: !valid && rejected_on_version
+
+
+50% tests passed, 1 tests failed out of 2
+
+Total Test time (real) =   1.93 sec
+
+The following tests FAILED:
+	 38 - sqlite_round_trip (Failed)
+Errors while running CTest

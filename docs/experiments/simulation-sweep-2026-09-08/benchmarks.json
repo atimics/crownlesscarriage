@@ -1,0 +1,72 @@
+[
+  {
+    "binary": "crownless_benchmark",
+    "repeat": 1,
+    "returncode": 0,
+    "stdout": "simulation: seeds=100 years=10 days=365000 cpu=8.179886s ns/day=22410.6\nlocomotion: agents=24 frames=3600 steps=86400 cpu=0.058277s ns/step=674.5\nterrain: seeds=100 points=409600 cpu=0.116803s ns/point=285.2\nchecksum=5dd2a87a274fe6be\n",
+    "stderr": ""
+  },
+  {
+    "binary": "crownless_benchmark",
+    "repeat": 2,
+    "returncode": 0,
+    "stdout": "simulation: seeds=100 years=10 days=365000 cpu=8.174484s ns/day=22395.8\nlocomotion: agents=24 frames=3600 steps=86400 cpu=0.058159s ns/step=673.1\nterrain: seeds=100 points=409600 cpu=0.113755s ns/point=277.7\nchecksum=5dd2a87a274fe6be\n",
+    "stderr": ""
+  },
+  {
+    "binary": "crownless_benchmark",
+    "repeat": 3,
+    "returncode": 0,
+    "stdout": "simulation: seeds=100 years=10 days=365000 cpu=8.120710s ns/day=22248.5\nlocomotion: agents=24 frames=3600 steps=86400 cpu=0.058520s ns/step=677.3\nterrain: seeds=100 points=409600 cpu=0.115645s ns/point=282.3\nchecksum=5dd2a87a274fe6be\n",
+    "stderr": ""
+  },
+  {
+    "binary": "crownless_benchmark",
+    "repeat": 4,
+    "returncode": 0,
+    "stdout": "simulation: seeds=100 years=10 days=365000 cpu=8.102174s ns/day=22197.7\nlocomotion: agents=24 frames=3600 steps=86400 cpu=0.058918s ns/step=681.9\nterrain: seeds=100 points=409600 cpu=0.113141s ns/point=276.2\nchecksum=5dd2a87a274fe6be\n",
+    "stderr": ""
+  },
+  {
+    "binary": "crownless_benchmark",
+    "repeat": 5,
+    "returncode": 0,
+    "stdout": "simulation: seeds=100 years=10 days=365000 cpu=8.160401s ns/day=22357.3\nlocomotion: agents=24 frames=3600 steps=86400 cpu=0.059623s ns/step=690.1\nterrain: seeds=100 points=409600 cpu=0.114441s ns/point=279.4\nchecksum=5dd2a87a274fe6be\n",
+    "stderr": ""
+  },
+  {
+    "binary": "crownless_robotics_benchmark",
+    "repeat": 1,
+    "returncode": 0,
+    "stdout": "avoidance: pairs=2000000 corrections=81369 cpu=0.006886s ns/pair=3.4\nclimbing: requests=128 routes=96 cpu=0.034549s us/request=269.9\nchecksum=1d9207b760746cd0\n",
+    "stderr": ""
+  },
+  {
+    "binary": "crownless_robotics_benchmark",
+    "repeat": 2,
+    "returncode": 0,
+    "stdout": "avoidance: pairs=2000000 corrections=81369 cpu=0.006773s ns/pair=3.4\nclimbing: requests=128 routes=96 cpu=0.034044s us/request=266.0\nchecksum=1d9207b760746cd0\n",
+    "stderr": ""
+  },
+  {
+    "binary": "crownless_robotics_benchmark",
+    "repeat": 3,
+    "returncode": 0,
+    "stdout": "avoidance: pairs=2000000 corrections=81369 cpu=0.007036s ns/pair=3.5\nclimbing: requests=128 routes=96 cpu=0.034817s us/request=272.0\nchecksum=1d9207b760746cd0\n",
+    "stderr": ""
+  },
+  {
+    "binary": "crownless_robotics_benchmark",
+    "repeat": 4,
+    "returncode": 0,
+    "stdout": "avoidance: pairs=2000000 corrections=81369 cpu=0.007067s ns/pair=3.5\nclimbing: requests=128 routes=96 cpu=0.034451s us/request=269.1\nchecksum=1d9207b760746cd0\n",
+    "stderr": ""
+  },
+  {
+    "binary": "crownless_robotics_benchmark",
+    "repeat": 5,
+    "returncode": 0,
+    "stdout": "avoidance: pairs=2000000 corrections=81369 cpu=0.007151s ns/pair=3.6\nclimbing: requests=128 routes=96 cpu=0.035225s us/request=275.2\nchecksum=1d9207b760746cd0\n",
+    "stderr": ""
+  }
+]
