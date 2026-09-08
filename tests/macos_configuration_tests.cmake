@@ -32,8 +32,9 @@ foreach(case fresh stale override)
         run_checked("${CMAKE_COMMAND}" -S "${CC_SOURCE_DIR}" -B "${build}")
     endif()
     file(STRINGS "${build}/CMakeCache.txt" target
-        REGEX "^CMAKE_OSX_DEPLOYMENT_TARGET:STRING=")
-    if(NOT target STREQUAL "CMAKE_OSX_DEPLOYMENT_TARGET:STRING=${expected}")
+        REGEX "^CMAKE_OSX_DEPLOYMENT_TARGET:[^=]+=")
+    string(REGEX REPLACE "^[^=]+=" "" target "${target}")
+    if(NOT target STREQUAL expected)
         message(FATAL_ERROR "${case}: unexpected cached target ${target}")
     endif()
     run_checked("${CMAKE_COMMAND}" --build "${build}"
