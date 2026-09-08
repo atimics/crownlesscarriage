@@ -114,6 +114,7 @@ int main(int argc, char **argv)
     CC_CHECK(shipment != 0);
     baseline.grain_supplies[1].shipment_id = 0;
     CHECK_FIELD(grain_supplies[1].shipment_id, shipment);
-    printf("Verified %u independent hash and saved-field mutations\n", checks);
+    printf("Verified %u independent %sfield mutations\n", checks,
+           check_hash ? "hash and saved-" : "saved-");
     return 0;
 }
