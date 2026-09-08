@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import subprocess
 import time
+import sys
 
 ROOT = Path(__file__).resolve().parent
 BINS = {'before': '/private/tmp/crownless-wyrmheart-control-build/crownless_sim_metrics',
@@ -17,10 +18,12 @@ YEARS = 16000
 
 def run(case):
     label, seed = case
-    command = [BINS[label], '--seed', str(seed), '--years', str(YEARS), '--campaign-metrics']
+    years = 128000 if len(sys.argv)>1 and sys.argv[1]=="--long-seed2" else YEARS
+    command = [BINS[label], '--seed', str(seed), '--years', str(years), '--campaign-metrics']
     start = time.monotonic()
-    filename = f'{label}-{seed:03}.csv.gz'
-    with (ROOT/f'{label}-{seed:03}.log').open('w') as err:
+    tag = f'{label}-{seed:03}' + ('-128000' if years == 128000 else '')
+    filename = f'{tag}.csv.gz'
+    with (ROOT/f'{tag}.log').open('w') as err:
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=err, text=True)
         reader = csv.DictReader(process.stdout)
         last = None
@@ -41,10 +44,13 @@ def run(case):
 
 if __name__ == '__main__':
     start = time.monotonic()
+    long_run = len(sys.argv)>1 and sys.argv[1]=="--long-seed2"
+    seeds = [2] if long_run else SEEDS
+    years = 128000 if long_run else YEARS
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-        results = list(pool.map(run, [(label, seed) for seed in SEEDS for label in BINS]))
-    manifest = dict(before='5f13096', after='7bccd65', seeds=SEEDS, years=YEARS,
+        results = list(pool.map(run, [(label, seed) for seed in seeds for label in BINS]))
+    manifest = dict(before='5f13096', after='7bccd65', seeds=seeds, years=years,
                     seconds=time.monotonic()-start, runs=results,
                     binaries={k:dict(path=v,sha256=hashlib.sha256(Path(v).read_bytes()).hexdigest()) for k,v in BINS.items()})
-    (ROOT/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
-    assert all(r['returncode']==0 and r['rows']==YEARS for r in results)
+    (ROOT/('long-manifest.json' if long_run else 'manifest.json')).write_text(json.dumps(manifest,indent=2)+'\n')
+    assert all(r['returncode']==0 and r['rows']==years for r in results)

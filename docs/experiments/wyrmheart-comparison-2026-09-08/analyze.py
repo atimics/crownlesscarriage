@@ -3,6 +3,7 @@
 import csv
 import gzip
 import json
+import hashlib
 import os
 from pathlib import Path
 os.environ.setdefault('MPLCONFIGDIR','/private/tmp/crownless-mpl')
@@ -21,6 +22,7 @@ assert len(m['runs'])==16
 assert all(r['returncode']==0 and r['rows']==m['years'] for r in m['runs'])
 data={}
 for run in m['runs']:
+    assert hashlib.sha256((ROOT/run['file']).read_bytes()).hexdigest()==run['sha256']
     with gzip.open(ROOT/run['file'],'rt') as stream:
         data[run['label'],run['seed']]=[{k:int(v) for k,v in r.items()} for r in csv.DictReader(stream)]
     assert len(data[run['label'],run['seed']])==16000
@@ -49,14 +51,17 @@ fig,ax=plt.subplots(2,2,figsize=(12,8))
 colors={'before':'#b46b42','after':'#177e89'}
 for label in ['before','after']:
     points=data[label,2]
-    ax[0,0].plot(np.arange(1,16001)/1000,[r['live_treasures'] for r in points],label=label.title(),color=colors[label],lw=2)
+    ax[0,0].plot(np.arange(1,16001)/1000,[r['live_treasures'] for r in points],label=label.title(),color=colors[label],lw=2,ls='--' if label=='after' else '-')
 ax[0,0].set(title='Seed 2: surviving named objects',xlabel='World age (thousand years)',ylabel='Objects')
+ax[0,0].set_ylim(0,4)
+ax[0,0].set_yticks([0,1,2,3,4])
 ax[0,0].legend(frameon=False)
 x=np.arange(8)
 for label,offset in [('before',-.18),('after',.18)]:
     ax[0,1].bar(x+offset,[data[label,s][-1]['live_treasures'] for s in m['seeds']],width=.36,color=colors[label],label=label.title())
 ax[0,1].set(xticks=x,xticklabels=m['seeds'],xlabel='Seed',ylabel='Objects',title='All eight pairs at year 16,000')
-ax[0,1].legend(frameon=False)
+ax[0,1].set_ylim(0,29)
+ax[0,1].legend(frameon=False,loc='upper center',ncol=2)
 pop=[100*(data['after',s][-1]['total_population']/data['before',s][-1]['total_population']-1) for s in m['seeds']]
 ax[1,0].bar(x,pop,color=['#177e89' if d>=0 else '#b46b42' for d in pop])
 ax[1,0].set(xticks=x,xticklabels=m['seeds'],xlabel='Seed',ylabel='Population change (%)',title='Wider effects vary by world')
