@@ -141,6 +141,23 @@ static void JsonRitualPlan(const CcSim *sim)
         sim->goblins.lair_stock[CC_GOOD_WEAPONS], plan.eggs, sim->dragon.egg_count);
 }
 
+static void JsonRetainedHistory(const CcSim *sim)
+{
+    int32_t earliest = -1, latest = -1;
+    for (int32_t i = 0; i < sim->event_count; ++i) {
+        const CcEvent *event = CcSimRecentEvent(sim, i);
+        if (event == NULL) continue;
+        if (earliest < 0 || event->day < earliest) earliest = event->day;
+        if (latest < 0 || event->day > latest) latest = event->day;
+    }
+    printf("{\"semantics\":\"retained_records_snapshot\",\"retained_count\":%d,\"capacity\":%d,\"lifetime_event_count\":null,\"earliest_retained_day\":",
+        sim->event_count, CC_MAX_EVENTS);
+    if (earliest < 0) printf("null"); else printf("%d", earliest);
+    printf(",\"latest_retained_day\":");
+    if (latest < 0) printf("null"); else printf("%d", latest);
+    putchar('}');
+}
+
 static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t year,
     const char *fixture, const char *dragon_policy, const CcNutritionAccounting *nutrition,
     const CcSmithyAccounting *smithy, const CcRoadProductionAccounting *sites,
@@ -154,6 +171,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         (int)sim->dragon.life_stage, (int)sim->dragon.activity, sim->dragon.body_condition,
         sim->dragon.crown_strength, sim->dragon.egg_count);
     printf(",\"threats\":"); JsonThreatSnapshot(sim);
+    printf(",\"retained_history\":"); JsonRetainedHistory(sim);
     printf(",\"campaign_launch\":"); JsonCampaignPlan(sim);
     printf(",\"ritual_offering\":"); JsonRitualPlan(sim);
     printf(",\"world_seed\":%" PRIu32 ",\"schema\":%" PRIu32 ",\"generator\":%" PRIu32

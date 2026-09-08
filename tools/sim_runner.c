@@ -118,7 +118,7 @@ static void PrintSummary(const CcSim *sim, bool detail)
     (void)printf("day=%d hash=%016" PRIx64
                  " average_hunger=%d maximum_hunger=%d"
                  " population_weighted_hunger=%d inhabited_settlements=%d"
-                 " hunger_population=%" PRId64 " shipments=%d events=%d"
+                 " hunger_population=%" PRId64 " shipments=%d retained_events=%d"
                  " blocked_shipments=%d royal_carriages=%d/%d/%d/%d/%d"
                  " royal_trips=%d royal_losses=%d"
                  " open_routes=%d/%d legitimacy=%d live_situations=%d"
