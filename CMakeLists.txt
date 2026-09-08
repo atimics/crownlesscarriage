@@ -1277,6 +1277,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(pony_tests)
     add_test(NAME rainbow_pony_companions COMMAND pony_tests)
 
+    add_executable(persistence_fields_tests tests/persistence_fields_tests.c)
+    target_link_libraries(persistence_fields_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(persistence_fields_tests)
+    add_test(NAME persistence_field_contract COMMAND persistence_fields_tests)
+
     add_executable(persistence_tests tests/persistence_tests.c)
     target_link_libraries(persistence_tests PRIVATE crownless_persistence)
     target_compile_definitions(persistence_tests PRIVATE
