@@ -1212,6 +1212,9 @@ if(BUILD_TESTING)
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
     if(CC_PYTHON3_EXECUTABLE)
+        add_test(NAME sweep_hunger_analysis
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/sweep_analysis_tests.py)
         if(CC_BUILD_CLIENT AND NOT EMSCRIPTEN)
             add_executable(native_coop_tests tests/native_coop_tests.c src/client/cc_coop_client.c src/client/cc_company.c)
             target_link_libraries(native_coop_tests PRIVATE crownless_persistence crownless_client_session raylib CURL::libcurl Threads::Threads)
@@ -1283,6 +1286,36 @@ if(BUILD_TESTING)
     cc_strict_warnings(horse_stable_tests)
     add_test(NAME horse_stable_breeding COMMAND horse_stable_tests)
 
+    add_executable(route_observation_tests tests/route_observation_tests.c)
+    target_link_libraries(route_observation_tests PRIVATE crownless_sim)
+    cc_strict_warnings(route_observation_tests)
+    add_test(NAME route_daily_observations COMMAND route_observation_tests)
+
+    add_executable(bandit_exposure_tests tests/bandit_exposure_tests.c)
+    target_link_libraries(bandit_exposure_tests PRIVATE crownless_sim)
+    cc_strict_warnings(bandit_exposure_tests)
+    add_test(NAME bandit_exposure_counts COMMAND bandit_exposure_tests)
+
+    add_executable(ritual_offering_plan_tests tests/ritual_offering_plan_tests.c)
+    target_link_libraries(ritual_offering_plan_tests PRIVATE crownless_sim)
+    cc_strict_warnings(ritual_offering_plan_tests)
+    add_test(NAME ritual_offering_plan COMMAND ritual_offering_plan_tests)
+
+    add_executable(campaign_launch_plan_tests tests/campaign_launch_plan_tests.c)
+    target_link_libraries(campaign_launch_plan_tests PRIVATE crownless_sim)
+    cc_strict_warnings(campaign_launch_plan_tests)
+    add_test(NAME campaign_launch_plan COMMAND campaign_launch_plan_tests)
+
+    add_executable(road_recovery_plan_tests tests/road_recovery_plan_tests.c)
+    target_link_libraries(road_recovery_plan_tests PRIVATE crownless_sim)
+    cc_strict_warnings(road_recovery_plan_tests)
+    add_test(NAME roadside_recovery_plan COMMAND road_recovery_plan_tests)
+
+    add_executable(agent_validation_tests tests/agent_validation_tests.c)
+    target_link_libraries(agent_validation_tests PRIVATE crownless_sim)
+    cc_strict_warnings(agent_validation_tests)
+    add_test(NAME player_agent_checkpoint_validation COMMAND agent_validation_tests)
+
     add_executable(agent_report_tests tests/agent_report_tests.c)
     target_link_libraries(agent_report_tests PRIVATE crownless_sim)
     cc_strict_warnings(agent_report_tests)
@@ -1297,6 +1330,15 @@ if(BUILD_TESTING)
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/production_json_tests.py
                          $<TARGET_FILE:crownless_sim_runner>)
+        add_test(NAME route_observation_csv
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/route_observation_tests.py
+                         $<TARGET_FILE:crownless_sim_metrics>)
+        add_test(NAME sweep_input_boundaries
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/sweep_input_tests.py
+                         $<TARGET_FILE:crownless_sim_runner>
+                         $<TARGET_FILE:crownless_sim_metrics>)
         add_test(NAME hunger_report_agreement
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/hunger_report_tests.py
@@ -1522,6 +1564,10 @@ if(BUILD_TESTING)
         target_compile_definitions(crownless_carriage PRIVATE
             CC_CLIENT_SELF_TESTS=1
         )
+        add_test(NAME capture_frame_contract
+                 COMMAND crownless_carriage --test-capture-frames)
+        add_test(NAME capture_request_contract
+                 COMMAND crownless_carriage --test-capture-request)
         add_test(NAME storybook_travel_boundaries
                  COMMAND crownless_carriage --test-storybook-travel)
         add_test(NAME travel_audio_presentation
