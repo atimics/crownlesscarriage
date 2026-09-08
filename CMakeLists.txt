@@ -246,6 +246,10 @@ if(CC_BUILD_BENCHMARKS)
     target_link_libraries(crownless_sim_metrics PRIVATE crownless_sim)
     cc_strict_warnings(crownless_sim_metrics)
 
+    add_executable(crownless_letter_probe tools/letter_probe.c)
+    target_link_libraries(crownless_letter_probe PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_letter_probe)
+
     add_executable(crownless_agent_sweep tools/agent_sweep.c)
     target_link_libraries(crownless_agent_sweep PRIVATE crownless_sim)
     cc_strict_warnings(crownless_agent_sweep)
@@ -1156,6 +1160,12 @@ if(BUILD_TESTING)
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/sim_runner_tests.py
                          $<TARGET_FILE:crownless_sim_runner>)
         set_tests_properties(simulation_runner_resume PROPERTIES TIMEOUT 60)
+
+        add_test(NAME letter_probe_contracts
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/letter_probe_tests.py
+                         $<TARGET_FILE:crownless_letter_probe>)
+        set_tests_properties(letter_probe_contracts PROPERTIES TIMEOUT 120)
     endif()
 
     add_executable(interaction_tests tests/interaction_tests.c)
