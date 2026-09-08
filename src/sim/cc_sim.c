@@ -5771,6 +5771,16 @@ static bool EventWasArchived(const CcSim *sim, CcId event_id)
 
 static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
 {
+    if (event->kind == CC_EVENT_GOBLIN_CULT_RALLIED) {
+        /* A cult rally carries its weight in the telling, not the count of
+           recruits: any rally is road news. */
+        return sim->schema_version >= 50U && event->magnitude >= 1;
+    }
+    if (event->kind == CC_EVENT_DRAGON_OMEN) {
+        /* An omen is struck only when a theft starts the dragon's countdown,
+           so its modest magnitude is not a measure of its weight. */
+        return sim->schema_version >= 50U;
+    }
     return event->magnitude >= 20 &&
         (event->kind == CC_EVENT_WAR_DECLARED ||
          event->kind == CC_EVENT_PEACE_DECLARED ||
@@ -5785,7 +5795,10 @@ static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
           (event->kind == CC_EVENT_HARVEST_FAILED || event->kind == CC_EVENT_ROUTE_CLOSED ||
            event->kind == CC_EVENT_BANDIT_PRESSURE || event->kind == CC_EVENT_MONSTER_PRESSURE)) ||
          (sim->schema_version >= 49U &&
-          event->kind == CC_EVENT_SHORTAGE));
+          event->kind == CC_EVENT_SHORTAGE) ||
+         (sim->schema_version >= 50U &&
+          (event->kind == CC_EVENT_GOBLIN_RAIDED ||
+           event->kind == CC_EVENT_DRAGON_RETALIATION)));
 }
 
 /* A notice posted on a board is a fact like any other: it enters the ledger
@@ -6044,28 +6057,44 @@ static CcGossipVersion RetellGossip(const CcSim *sim, const CcGossip *story,
 static void MutatedGossipText(const char *original, int32_t retellings,
                               char *text, size_t capacity)
 {
-    static const struct { const char *before; const char *after; int32_t hop; } swaps[] = {
-        {"one", "two", 2}, {"two", "three", 2}, {"three", "five", 2},
-        {"four", "six", 2}, {"five", "seven", 2},
-        {"western", "northern", 4}, {"eastern", "southern", 4},
-        {"west", "north", 4}, {"east", "south", 4},
-        {"workers", "merchants", 6}, {"Raiders", "Deserters", 6},
-        {"raiders", "deserters", 6}, {"guards", "soldiers", 6}
+    static const struct {
+        const char *before;
+        const char *after;
+        int32_t hop;
+        size_t length;
+        size_t replacement;
+    } swaps[] = {
+#define CC_GOSSIP_SWAP(before_, after_, hop_) \
+        {before_, after_, hop_, sizeof(before_) - 1U, sizeof(after_) - 1U}
+        CC_GOSSIP_SWAP("one", "two", 2), CC_GOSSIP_SWAP("two", "three", 2),
+        CC_GOSSIP_SWAP("three", "five", 2), CC_GOSSIP_SWAP("four", "six", 2),
+        CC_GOSSIP_SWAP("five", "seven", 2),
+        CC_GOSSIP_SWAP("western", "northern", 4), CC_GOSSIP_SWAP("eastern", "southern", 4),
+        CC_GOSSIP_SWAP("west", "north", 4), CC_GOSSIP_SWAP("east", "south", 4),
+        CC_GOSSIP_SWAP("workers", "merchants", 6), CC_GOSSIP_SWAP("Raiders", "Deserters", 6),
+        CC_GOSSIP_SWAP("raiders", "deserters", 6), CC_GOSSIP_SWAP("guards", "soldiers", 6)
+#undef CC_GOSSIP_SWAP
     };
     size_t used = 0U;
     bool changed_count = false, changed_place = false, changed_people = false;
     for (size_t at = 0U; original[at] != '\0' && used + 1U < capacity;) {
+        /* A word interior cannot start a replacement. Avoid checking every
+           dictionary entry (and measuring its length) for every character. */
+        if (retellings < 2 ||
+            (at > 0U && isalpha((unsigned char)original[at - 1U]))) {
+            text[used++] = original[at++];
+            continue;
+        }
         bool replaced = false;
         for (size_t i = 0U; i < sizeof(swaps) / sizeof(swaps[0]); ++i) {
-            size_t length = strlen(swaps[i].before);
-            if (retellings < swaps[i].hop ||
+            size_t length = swaps[i].length;
+            if (original[at] != swaps[i].before[0] || retellings < swaps[i].hop ||
                 (swaps[i].hop == 2 && changed_count) ||
                 (swaps[i].hop == 4 && changed_place) ||
                 (swaps[i].hop == 6 && changed_people) ||
-                (at > 0U && isalpha((unsigned char)original[at - 1U])) ||
                 strncmp(original + at, swaps[i].before, length) != 0 ||
                 isalpha((unsigned char)original[at + length])) continue;
-            size_t replacement = strlen(swaps[i].after);
+            size_t replacement = swaps[i].replacement;
             if (used + replacement >= capacity) break;
             memcpy(text + used, swaps[i].after, replacement);
             used += replacement;
@@ -6087,7 +6116,12 @@ void CcGossipText(const CcSim *sim, const CcGossip *story,
     if (text == NULL || capacity == 0U) return;
     if (sim == NULL || story == NULL || version == NULL) { text[0] = '\0'; return; }
     if (version->retellings == 0) {
-        (void)snprintf(text, capacity, "%s", story->text);
+        /* The untold telling is a straight copy; a format-parsing
+           snprintf per archived story adds up over a chronicle. */
+        size_t length = strlen(story->text);
+        if (length >= capacity) length = capacity - 1U;
+        memcpy(text, story->text, length);
+        text[length] = '\0';
         return;
     }
     char account[CC_EVENT_TEXT_CAPACITY];
@@ -6117,7 +6151,19 @@ void CcGossipText(const CcSim *sim, const CcGossip *story,
     const char *bias = version->court_bias >= 15 ? " Loyal voices credit the crown." :
                        version->court_bias <= -15 ? " Some blame the court." : "";
     const char *alarm = version->alarm >= 30 ? " They fear worse is coming." : "";
-    (void)snprintf(text, capacity, "%s%s%s", account, bias, alarm);
+    /* Compose by bounded appends; a format-parsing join for every mutated
+       telling adds up over a chronicle. */
+    size_t used = strlen(account);
+    if (used >= capacity) used = capacity - 1U;
+    memcpy(text, account, used);
+    const char *const parts[2] = {bias, alarm};
+    for (size_t part = 0U; part < 2U; ++part) {
+        for (const char *at = parts[part];
+             used + 1U < capacity && *at != '\0'; ++at) {
+            text[used++] = *at;
+        }
+    }
+    text[used] = '\0';
 }
 
 static void HearGossip(CcSim *sim, CcGossip *story, CcId place_id,
@@ -18466,7 +18512,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 48U
+#define CC_NEWEST_LEGACY_SCHEMA 49U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18484,7 +18530,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 48U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 49U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },

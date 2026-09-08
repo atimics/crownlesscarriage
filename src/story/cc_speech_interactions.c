@@ -41,24 +41,18 @@ bool CcSpeechStory(const CcSim *sim, CcId character_id,
     char text[CC_SPEECH_TEXT_CAPACITY];
     if (source) {
         const CcCharacter *teller = CcSimCharacter(sim, version->source_character_id);
-        const CcSettlement *origin = CcSimSettlement(sim, story->origin_id);
         if (teller != NULL && teller->id != speaker->id) {
-            (void)snprintf(text, sizeof(text), "%s told me. The account concerns %s, on day %d.",
-                teller->name, origin != NULL ? origin->name : "the road", story->day);
+            (void)snprintf(text, sizeof(text),
+                "%s passed the account to me. I cannot claim I saw it happen.",
+                teller->name);
         } else {
-            (void)snprintf(text, sizeof(text), "People were talking about %s. The account is from day %d.",
-                origin != NULL ? origin->name : "town", story->day);
+            (void)snprintf(text, sizeof(text),
+                "I heard it passed around. I cannot give you a named source.");
         }
-    } else {
-        char realized[CC_SPEECH_TEXT_CAPACITY];
-        if (CcSpeechRealizeGossip(sim, speaker, story, version,
-                                  realized, sizeof(realized))) {
-            (void)snprintf(text, sizeof(text), "%s", realized);
-        } else {
-            char account[CC_EVENT_TEXT_CAPACITY];
-            CcGossipText(sim, story, version, account, sizeof(account));
-            (void)snprintf(text, sizeof(text), "I heard this: %s", account);
-        }
+    } else if (!CcSpeechRealizeGossip(sim, speaker, story, version,
+                                      text, sizeof(text))) {
+        /* Do not undo the quantity/knowledge boundary with a raw-text fallback. */
+        return false;
     }
     return CcSpeechCompose(speech, source ? "gossip.source" : "gossip.account",
         speaker->id, speaker->name, CcSpeechCharacterVoice(sim, speaker), text,

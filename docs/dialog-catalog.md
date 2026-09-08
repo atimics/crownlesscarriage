@@ -116,32 +116,58 @@ Greetings by speaker and town state:
 - Otherwise: "Welcome to %s. The %s has work and supplies."
 - Fallback before any speech resolves: "Welcome. I was passing the %s. How was your journey?"
 
-Gossip drawn by the Chat verb:
-- The account: "I heard this: %s"
-- Who told them: "%s told me. The account concerns %s, on day %d." or, when the
-  teller is the speaker: "People were talking about %s. The account is from day %d."
+### Rumor registers
 
-Famine accounts, realized in the speaker's register (cc_speech_lexicon.c). A
-notable shortage notice ("%s has %d weeks of food; hunger reaches pressure
-level %d.") reaches the account each holder carries, and the holder's role
-chooses the voice that states it:
-- Traveller, courier, refugee, laborer (the road register), fresh telling:
-  "%s is down to %d weeks of food." or "Word from %s: the granary is down to
-  %d weeks."
-- The road register after four retellings, when the count has fallen away:
-  "They say %s is running out of food." or "The word along the road is that
-  %s is going hungry."
-- Scout: "The granary at %s holds %d weeks of food. Hunger there has reached
-  level %d." or "Counting the granary at %s: %d weeks left, with hunger at
-  level %d."
-- Official (the ledger register): "The stores at %s stand at %d weeks of food.
-  The ledger calls it pressure level %d, from day %d." or "By the ledger, %s
-  holds %d weeks of food at pressure level %d, as of day %d."
-- Every register keeps the gossip stance suffixes ("Loyal voices credit the
-  crown." / "Some blame the court." / "They fear worse is coming.")
-The variant choice is a stable hash of the account and the speaker, so the
-same telling always says the same words. Accounts of other kinds remain direct
-quotes until their lexicon lands.
+`src/story/cc_speech_lexicon.c` composes an opener, a claim clause and an
+optional personal stance. The input is the held telling, including its existing
+retelling mutations. It never looks up today's dragon, bandits or event ring.
+Names already lost or abbreviated in the account stay lost or abbreviated.
+
+**No exact quantities in rumor speech**, whether digits or number words.
+Dates, hunger levels and omen countdowns are not read aloud. Quest instructions,
+trade and the simulation's archival records retain their exact quantities.
+Unsupported numerical accounts receive a cautious fallback rather than a raw
+quote: "I have an account, but I cannot give you its particulars reliably."
+
+The register changes phrasing, not what evidence a person possesses:
+- Road (traveller, courier, refugee, laborer): "Word is going around: …" /
+  "This is the story I heard: …" / "People are passing this along: …"
+- Scout: "The report that reached me said: …" / "This is what I was told: …" /
+  "The account I heard went like this: …"
+- Official/record voice: "The account passed to me says: …" /
+  "This is the telling I have: …" /
+  "Let me separate the report from the reckoning: …"
+- Low confidence: "I am not sure of this telling: …"
+- Heavily retold: "It has travelled through other mouths: …" or
+  "This account has passed through other hands: …"
+
+Claim clauses include:
+- Shortage, either stored format: "Food was running short in %s." /
+  "%s was short of food." A rounded-down food-coverage figure does not prove
+  every bin was empty, and an old snapshot does not prove continuing famine.
+- Goblin or bandit raid: "%s raided %s." / "%s had been raided by %s."
+- Dragon omen: "The old readers in %s took the smoke as a warning of %s." /
+  "Smoke fell into %s's chimneys. The old readers feared %s was coming."
+- Dragon fire: "%s burned %s over crowns missing from the hoard." /
+  "%s burned %s. The telling blamed stolen hoard money."
+- Living-dragon cult: "%s was gathering new tithe-bearers for the goblin court."
+- Dead-dragon cult: "New ash-sworn were joining %s in the dead dragon's service."
+- Brood account: "%s had laid a clutch. Goblin Ashkeepers sealed the brood hoard."
+- Free-text raid: "%s took supplies from %s." The retold direction stays intact.
+
+Bias is expressed as the speaker's stance, not a new claim of royal credit:
+"I would hear the court's account before laying blame." /
+"I do not trust the court's telling of it." Alarm adds "That is what worries me."
+
+The source reply names the immediate teller when available: "%s passed the
+account to me. I cannot claim I saw it happen." Otherwise: "I heard it passed
+around. I cannot give you a named source."
+
+Stable, independently mixed choices select the opener and clause variant.
+Reading is state/RNG-neutral; identical inputs keep the same speech and audio
+key. Schema 50 adds goblin raids, cult rallies, omens and dragon retaliation to
+the gossip network. Small cult rallies and the actual omen magnitude are tested.
+This is deterministic template composition, not a trained neural ranker.
 
 Trade counter speech: "For %d %s, the price is %c crowns." /
 "I can pay %c crowns for %d %s." /
