@@ -1,5 +1,8 @@
 """Data integrity checks for the long-running paired sweep."""
 import importlib.util
+import contextlib
+import io
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -17,6 +20,34 @@ def row(year=1, seed=1):
 
 
 class Integrity(unittest.TestCase):
+    def test_failure_artifacts_and_resume_identity(self):
+        with tempfile.TemporaryDirectory() as folder:
+            binary = Path(folder) / 'metrics'
+            binary.write_text('binary version one')
+            output = Path(folder) / 'study'
+            args = ['age', '--binary', str(binary), '--source', 'recorded-commit',
+                    '--output', str(output), '--seeds', '2', '--years', '1', '--jobs', '1']
+            def fake_run(_binary, seed, _years):
+                return dict(seed=seed, passed=seed == 1, returncode=0 if seed == 1 else 1,
+                            annual_rows=1, seconds=0, error='' if seed == 1 else 'invalid state',
+                            endpoint=row(seed=seed) if seed == 1 else None,
+                            samples=[row(seed=seed)])
+            with patch('sys.argv', args), patch.object(age, 'run_seed', side_effect=fake_run), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(age.main(), 1)
+            manifest = json.loads((output / 'manifest.json').read_text())
+            self.assertEqual(manifest['passed'], 1)
+            with age.gzip.open(output / 'history.csv.gz', 'rt') as stream:
+                self.assertEqual([r['seed_number'] for r in age.csv.DictReader(stream)], ['1'])
+            with age.gzip.open(output / 'partial-history.csv.gz', 'rt') as stream:
+                self.assertEqual([r['seed_number'] for r in age.csv.DictReader(stream)], ['2'])
+            with patch('sys.argv', args), patch.object(age, 'run_seed') as rerun:
+                self.assertEqual(age.main(), 1)
+                rerun.assert_not_called()
+            binary.write_text('binary version two')
+            with patch('sys.argv', args), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+                age.main()
+            self.assertEqual(error.exception.code, 2)
+
     def test_complete_sequence(self):
         age.validate_rows([row(1), row(2)], 1, 2)
 
