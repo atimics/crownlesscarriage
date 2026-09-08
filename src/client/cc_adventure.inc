@@ -487,8 +487,9 @@ static void DrawAdventureCouncil(const CcSim *sim, LocalState *local, const CcSe
     AdventurePanelTitle(panel, "The road and its people");
     const char *tabs[] = {"Buy", "Sell", "Deliver promise", "Bakery", "Grain fund", "Road meeting"};
     for (int i = 0; i < 6; ++i) AdventureButton(AdventureTab(panel, i, 6), tabs[i], true, i == 5);
+    const char *concerns[] = {"Grain", "Repair", "Trade", "Visitor", "Camp", "Scout"};
     for (int i = 0; i < CC_ROAD_COUNCIL_ROWS; ++i)
-        AdventureButton(CouncilRowButton(panel, i), council.rows[i].name, true, i == selected);
+        AdventureButton(CouncilRowButton(panel, i), TextFormat("%s: %s", concerns[i], council.rows[i].name), true, i == selected);
     const CcRoadCouncilRow *row = &council.rows[selected];
     int x = (int)(panel.x + panel.width * .44f), y = (int)panel.y + 144;
     int width = (int)(panel.width * .56f) - 30;

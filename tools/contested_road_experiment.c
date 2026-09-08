@@ -36,6 +36,19 @@ int main(int argc, char **argv)
     base.player.cargo[CC_GOOD_TOOLS] = 2;
     base.player.cargo[CC_GOOD_WOOD] = 2;
     base.player.cargo[CC_GOOD_STONE] = 2;
+    /* One existing adult traveller arrives away from home with six crowns.
+       Preserve their job, allegiance, memory, and ties. Set this once before branching. */
+    CcId visitor_id = 0U;
+    for (int i = 0; i < base.character_count; ++i) {
+        CcCharacter *person = &base.characters[i];
+        if (person->role != CC_CHARACTER_TRAVELLER || person->home_settlement_id == town->id ||
+            person->death_day <= base.current_day || CcCharacterAgeYears(&base, person) < 16 ||
+            person->bandit_group_id != 0U) continue;
+        person->current_settlement_id = town->id;
+        person->travel_coins = 6;
+        visitor_id = person->id;
+        break;
+    }
     town->hunger = 45;
     for (int g = 0; g < CC_GOOD_COUNT; ++g)
         if (CcGoodNutritionValue((CcGood)g, CC_NUTRITION_CIVILIAN) > 0) town->stock[g] = 0;
@@ -45,7 +58,7 @@ int main(int argc, char **argv)
     base.routes[road_slot].condition = 0;
     base.routes[road_slot].closed = true;
     if (!CcSimValidate(&base, error, sizeof(error))) { fprintf(stderr, "fixture: %s\n", error); return 1; }
-    puts("seed,age,arm,day,hunger,population,nutrition,bread_made,road_condition,road_closed,active_loads,blocked_loads,other_units,delivered,lost,fund,spent,player_crowns,travellers_hungry,travellers_unsheltered,named_bandits,helpers_remembered,active_quests,resolved_quests,failed_quests,court,guild,commons,role_changes");
+    puts("seed,age,arm,day,hunger,population,nutrition,bread_made,road_condition,road_closed,active_loads,blocked_loads,other_units,delivered,lost,fund,spent,player_crowns,travellers_hungry,travellers_unsheltered,named_bandits,helpers_remembered,active_quests,resolved_quests,failed_quests,court,guild,commons,role_changes,visitor_id,visitor_here,visitor_bandit,visitor_role");
     const char *arms[] = {"wait", "fund", "supplies", "repair", "fund_repair"};
     for (int arm = 0; arm < 5; ++arm) {
         trial = base;
@@ -72,7 +85,7 @@ int main(int argc, char **argv)
             for (int i = 0; i < trial.character_count; ++i) {
                 const CcCharacter *p = &trial.characters[i];
                 if (p->death_day <= trial.current_day || p->current_settlement_id != town->id) continue;
-                bool traveller = p->role == CC_CHARACTER_TRAVELLER || p->role == CC_CHARACTER_REFUGEE;
+                bool traveller = (p->role == CC_CHARACTER_TRAVELLER || p->role == CC_CHARACTER_REFUGEE) && p->bandit_group_id == 0U;
                 hungry += traveller && p->hungry_days >= 3;
                 unsheltered += traveller && p->unsheltered_nights >= 3;
                 bandits += p->bandit_group_id != 0U;
@@ -86,12 +99,20 @@ int main(int argc, char **argv)
             for (int i = 0; i < trial.faction_count; ++i)
                 if (trial.factions[i].kingdom_id == town->kingdom_id) support[trial.factions[i].kind] = trial.factions[i].support;
             const CcGrainSupply *s = &trial.grain_supplies[1];
-            printf("%d,%d,%s,%d,%d,%d,%" PRIu64 ",%" PRIu64 ",%d,%d,%d,%d,%d,%d,%d,%" PRId64 ",%" PRId64 ",%" PRId64 ",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+            const CcCharacter *visitor = CcSimCharacter(&trial, visitor_id);
+            bool visitor_here = visitor != NULL && visitor->current_settlement_id == town->id && visitor->death_day > trial.current_day;
+            if (getenv("CC_CONTESTED_TRACE") != NULL && visitor != NULL)
+                fprintf(stderr, "%s,%d,%s,%d,%" PRIu64 ",%" PRIu64 ",%" PRId64 ",%d,%d,%" PRIu64 "\n",
+                    arms[arm], day, visitor->name, visitor->role, visitor->home_settlement_id,
+                    visitor->current_settlement_id, visitor->travel_coins, visitor->hungry_days,
+                    visitor->unsheltered_nights, visitor->bandit_group_id);
+            printf("%d,%d,%s,%d,%d,%d,%" PRIu64 ",%" PRIu64 ",%d,%d,%d,%d,%d,%d,%d,%" PRId64 ",%" PRId64 ",%" PRId64 ",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%" PRIu64 ",%d,%d,%d\n",
                 seed, age, arms[arm], day, trial.settlements[1].hunger, trial.settlements[1].population,
                 nutrition, production.towns[1].bakery.output[CC_GOOD_BREAD], trial.routes[road_slot].condition,
                 trial.routes[road_slot].closed, active, blocked, other, s->delivered, s->lost, s->purse, s->spent,
                 trial.player.coins, hungry, unsheltered, bandits, memory, quests[0], quests[1], quests[2],
-                support[0], support[1], support[2], changed);
+                support[0], support[1], support[2], changed, visitor_id, visitor_here,
+                visitor != NULL && visitor->bandit_group_id != 0U, visitor != NULL ? (int)visitor->role : -1);
             if (day < 180) CcSimAdvanceDaysWithProductionAccounting(&trial, 1, &food, NULL, &production);
         }
     }
