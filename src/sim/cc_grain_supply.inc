@@ -57,7 +57,7 @@ static CcGrainDeliveryPlan PlanGrainForCarriage(const CcSim *sim, const CcSettle
             from->id, CC_GOOD_WHEAT, NULL, NULL, &reposition_cost, NULL, NULL,
             true, carriage->kingdom_id, false, 1)) continue;
         path_found = true;
-        CcMoney toll = RoyalTradeRouteToll(sim, &sim->routes[route_slot], carriage->kingdom_id);
+        CcMoney toll = CcRouteRoyalTradeToll(sim, &sim->routes[route_slot], carriage->kingdom_id);
         CcMoney price = MaximumI32(1, from->price[CC_GOOD_WHEAT]);
         if (supply->purse < price * 4 + toll) continue;
         int64_t score = price * 12 + toll + path_cost + reposition_cost;

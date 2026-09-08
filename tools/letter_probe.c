@@ -19,6 +19,7 @@
 */
 
 #include "sim/cc_sim.h"
+#include "sim/cc_gossip_topics.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -30,204 +31,18 @@ typedef struct Candidate {
     int32_t offset;
 } Candidate;
 
-/* A topic is a research mandate: the account kinds a patron (Scriptorium,
-   court, cult, guild) would commission a scout to collect. The probe's
-   topic filter is the stand-in for the future research-commission system:
-   a researcher targeting a topic searches only the accounts that match its
-   kinds, never the rest of a writer's holdings. */
-#define CC_PROBE_TOPIC_COUNT 10
-
-static const char *TopicNames[CC_PROBE_TOPIC_COUNT + 1] = {
-    "all",
-    "dragon",   /* 1 */
-    "goblin",   /* 2 */
-    "war",      /* 3 */
-    "throne",   /* 4 */
-    "wheat",    /* 5 */
-    "herds",    /* 6 */
-    "ponies",   /* 7 */
-    "road",     /* 8 */
-    "bandit",   /* 9 */
-    "treasure"  /* 10 */
-};
-
-static bool TopicMatches(int32_t topic, CcEventKind kind)
-{
-    switch (topic) {
-        case 1: /* dragon: the ember and its shadow */
-            switch (kind) {
-                case CC_EVENT_DRAGON_HOARD_STOLEN:
-                case CC_EVENT_DRAGON_OMEN:
-                case CC_EVENT_DRAGON_TREASURE_RETURNED:
-                case CC_EVENT_DRAGON_RETALIATION:
-                case CC_EVENT_DRAGON_MUSTERED:
-                case CC_EVENT_DRAGON_BATTLE:
-                case CC_EVENT_DRAGON_SLAIN:
-                case CC_EVENT_DRAGON_HOARD_RECOVERED:
-                case CC_EVENT_DRAGON_HUNT:
-                case CC_EVENT_DRAGON_CROWNED:
-                case CC_EVENT_DRAGON_UNCROWNED:
-                case CC_EVENT_DRAGON_BROOD:
-                case CC_EVENT_DRAGON_WHELP_DISPERSED:
-                case CC_EVENT_DRAGON_AFTERSHOCK:
-                case CC_EVENT_DRAGON_SUCCESSOR:
-                case CC_EVENT_DRAGON_PATRON_NAMED:
-                case CC_EVENT_DRAGON_TERRITORY_LOST:
-                case CC_EVENT_GOBLIN_CULT_RALLIED:
-                case CC_EVENT_GOBLIN_DRAGON_SEED:
-                case CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED:
-                case CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED:
-                    return true;
-                default:
-                    return false;
-            }
-        case 2: /* goblin: the Cinder Tithe and the underroad */
-            switch (kind) {
-                case CC_EVENT_GOBLIN_TRIBUTE_DEPARTED:
-                case CC_EVENT_GOBLIN_TRIBUTE_TAKEN:
-                case CC_EVENT_GOBLIN_TRIBUTE_DELIVERED:
-                case CC_EVENT_GOBLIN_RAID_DEPARTED:
-                case CC_EVENT_GOBLIN_RAIDED:
-                case CC_EVENT_GOBLIN_RAID_RETURNED:
-                case CC_EVENT_GOBLIN_HOARD_DEFENDED:
-                case CC_EVENT_GOBLIN_RAID_PREPARED:
-                case CC_EVENT_GOBLIN_TARGET_WARNED:
-                case CC_EVENT_GOBLIN_EXPEDITION_INTERCEPTED:
-                case CC_EVENT_GOBLIN_TRADE:
-                case CC_EVENT_GOBLIN_TUNNEL_TRAVERSED:
-                case CC_EVENT_GOBLIN_CULT_RALLIED:
-                case CC_EVENT_GOBLIN_DRAGON_SEED:
-                case CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED:
-                case CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED:
-                    return true;
-                default:
-                    return false;
-            }
-        case 3: /* war: courts, couriers, and supply lines */
-            switch (kind) {
-                case CC_EVENT_WAR_PRESSURE:
-                case CC_EVENT_WAR_DECLARED:
-                case CC_EVENT_PEACE_DECLARED:
-                case CC_EVENT_ALLIANCE_DECLARED:
-                case CC_EVENT_WAR_CHEST_FUNDED:
-                case CC_EVENT_WAR_SUPPLY_BOUGHT:
-                case CC_EVENT_WAR_SUPPLY_SHORTAGE:
-                case CC_EVENT_WAR_MATERIEL_LOST:
-                case CC_EVENT_COURIER_DEPARTED:
-                case CC_EVENT_COURIER_ARRIVED:
-                case CC_EVENT_COURIER_LOST:
-                case CC_EVENT_COURIER_DISTORTED:
-                case CC_EVENT_DRAGON_MUSTERED:
-                    return true;
-                default:
-                    return false;
-            }
-        case 4: /* throne: succession, pretenders, and the court's legitimacy */
-            switch (kind) {
-                case CC_EVENT_KINGDOM_ACTION:
-                case CC_EVENT_PRETENDER_CRISIS:
-                case CC_EVENT_ROYAL_SUCCESSION:
-                case CC_EVENT_MONASTIC_SUCCESSION:
-                case CC_EVENT_KING_ANOINTED:
-                case CC_EVENT_FACTION_SHIFT:
-                    return true;
-                default:
-                    return false;
-            }
-        case 5: /* wheat: the food supply that keeps hunger from the wall */
-            switch (kind) {
-                case CC_EVENT_HARVEST_FAILED:
-                case CC_EVENT_SHORTAGE:
-                case CC_EVENT_RELIEF:
-                case CC_EVENT_BAKERY_PRODUCTION:
-                case CC_EVENT_PAPER_MILLED:
-                    return true;
-                default:
-                    return false;
-            }
-        case 6: /* herds: cows, sheep, and the carriage team */
-            switch (kind) {
-                case CC_EVENT_COW_CALVING:
-                case CC_EVENT_COW_SLAUGHTERED:
-                case CC_EVENT_HORSE_BRED:
-                case CC_EVENT_FOAL_BORN:
-                case CC_EVENT_SHEEP_BRED:
-                case CC_EVENT_SHEEP_SHEARED:
-                case CC_EVENT_SHEEP_SLAUGHTERED:
-                case CC_EVENT_HORSE_TEAM_CHANGED:
-                    return true;
-                default:
-                    return false;
-            }
-        case 7: /* ponies: the seven rainbow companions. WIP: no gossip events
-                   exist for them yet, so a researcher finds nothing — and the
-                   probe reports that honestly instead of inventing holdings. */
-            return false;
-        case 8: /* road: routes, carriage, and the working sites */
-            switch (kind) {
-                case CC_EVENT_ROUTE_CLOSED:
-                case CC_EVENT_ROUTE_REPAIRED:
-                case CC_EVENT_ROUTE_DECAY:
-                case CC_EVENT_ROYAL_CARRIAGE_BLOCKED:
-                case CC_EVENT_ROYAL_CARRIAGE_REROUTED:
-                case CC_EVENT_ROAD_HOUSE_LODGING:
-                case CC_EVENT_JOURNEY_WARNING:
-                case CC_EVENT_WOODLOT_HARVEST:
-                case CC_EVENT_QUARRY_OUTPUT:
-                case CC_EVENT_MASONRY_REPAIR:
-                    return true;
-                default:
-                    return false;
-            }
-        case 9: /* bandit: raiders and the armed road */
-            switch (kind) {
-                case CC_EVENT_BANDIT_PRESSURE:
-                case CC_EVENT_BANDIT_RAID_DEPARTED:
-                case CC_EVENT_SETTLEMENT_RAIDED:
-                case CC_EVENT_BANDIT_RAID_RETURNED:
-                case CC_EVENT_ENCOUNTER_LOOT:
-                case CC_EVENT_AMBUSH_EVADED:
-                case CC_EVENT_ENCOUNTER_WITHDRAWN:
-                case CC_EVENT_HOARD_HEIST_DEPARTED:
-                case CC_EVENT_HOARD_HEIST_RETURNED:
-                    return true;
-                default:
-                    return false;
-            }
-        case 10: /* treasure: the hoard, the ledger, and wealth's movement */
-            switch (kind) {
-                case CC_EVENT_TREASURE_CRAFTED:
-                case CC_EVENT_DRAGON_HOARD_STOLEN:
-                case CC_EVENT_DRAGON_TREASURE_RETURNED:
-                case CC_EVENT_DRAGON_HOARD_RECOVERED:
-                case CC_EVENT_IRON_LEDGER_LOAN:
-                case CC_EVENT_IRON_LEDGER_REPAID:
-                case CC_EVENT_INEQUALITY_PRESSURE:
-                case CC_EVENT_GOBLIN_TRADE:
-                    return true;
-                default:
-                    return false;
-            }
-        default: /* all / none */
-            return true;
-    }
-}
+#define CC_PROBE_TOPIC_COUNT (CC_GOSSIP_TOPIC_COUNT - 1)
 
 static const char *TopicName(int32_t topic)
 {
-    if (topic >= 0 && topic <= CC_PROBE_TOPIC_COUNT) {
-        return TopicNames[topic];
-    }
-    return "all";
+    return CcGossipTopicName((CcGossipTopic)topic);
 }
 
 static int32_t TopicId(const char *name)
 {
-    if (name == NULL) return 0;
-    for (int32_t topic = 1; topic <= CC_PROBE_TOPIC_COUNT; ++topic) {
-        if (strcmp(name, TopicNames[topic]) == 0) return topic;
-    }
-    return 0;
+    CcGossipTopic topic = CC_GOSSIP_TOPIC_ALL;
+    (void)CcGossipTopicParse(name, &topic);
+    return (int32_t)topic;
 }
 
 static const char *PurposeName(int purpose)
@@ -493,7 +308,7 @@ static void PrintLetter(const CcSim *sim, const CcCharacter *writer,
         const CcGossip *story = CcSimPersonalGossip(sim, writer->id, offset, &version);
         if (story == NULL || version == NULL) break;
         held += 1;
-        if (topic != 0 && !TopicMatches(topic, story->kind)) continue;
+        if (topic != 0 && !CcGossipTopicMatches((CcGossipTopic)topic, story->kind)) continue;
         relevant += 1;
         if (candidate_count < CC_MAX_GOSSIP) {
             candidates[candidate_count].score =
@@ -717,7 +532,7 @@ static void RunMission(const CcSim *sim, int topic, int32_t baseline,
     int32_t prefill_count = 0;
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
         const CcGossip *story = CcSimGossipStory(sim, i);
-        if (story == NULL || !TopicMatches(topic, story->kind)) continue;
+        if (story == NULL || !CcGossipTopicMatches((CcGossipTopic)topic, story->kind)) continue;
         if (story->heard_day > 0 && story->heard_day <= baseline) {
             if (prefill_count < CC_MAX_GOSSIP) {
                 prefill[prefill_count++] = story->event_id;
@@ -773,7 +588,7 @@ static void RunMission(const CcSim *sim, int topic, int32_t baseline,
             const CcGossipVersion *version = NULL;
             const CcGossip *story = CcSimPersonalGossip(sim, teller->id, offset, &version);
             if (story == NULL || version == NULL) break;
-            if (!TopicMatches(topic, story->kind)) continue;
+            if (!CcGossipTopicMatches((CcGossipTopic)topic, story->kind)) continue;
             int32_t held_day = story->heard_day > 0 ? story->heard_day : story->day;
             if (held_day <= baseline) continue;
             bool dup = false;

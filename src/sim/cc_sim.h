@@ -466,6 +466,18 @@ typedef struct CcWelfareSnapshot {
     double population_weighted_security;
 } CcWelfareSnapshot;
 
+typedef struct CcArchiveSeatCandidate {
+    CcId settlement_id, patron_id;
+    int32_t paper, spare_wheat, tools, usable_connections, security, score;
+    bool inhabited, mill, viable;
+} CcArchiveSeatCandidate;
+
+typedef struct CcArchiveSeatPlan {
+    CcId current_id, selected_id;
+    int32_t score;
+    bool keep_current;
+} CcArchiveSeatPlan;
+
 typedef enum CcArchiveRecoveryGate {
     CC_ARCHIVE_RECOVERY_DUE = 0,
     CC_ARCHIVE_RECOVERY_UNAVAILABLE,
@@ -498,6 +510,26 @@ typedef struct CcArchiveFundingPlan {
     CcMoney shares[2];
     CcMoney total;
 } CcArchiveFundingPlan;
+
+typedef enum CcArchiveSupplyGate {
+    CC_ARCHIVE_SUPPLY_READY = 0,
+    CC_ARCHIVE_SUPPLY_UNAVAILABLE,
+    CC_ARCHIVE_SUPPLY_SEAT,
+    CC_ARCHIVE_SUPPLY_STOCKED,
+    CC_ARCHIVE_SUPPLY_INCOMING,
+    CC_ARCHIVE_SUPPLY_CARRIAGE,
+    CC_ARCHIVE_SUPPLY_SOURCE,
+    CC_ARCHIVE_SUPPLY_ROUTE,
+    CC_ARCHIVE_SUPPLY_FUNDS
+} CcArchiveSupplyGate;
+
+typedef struct CcArchiveSupplyPlan {
+    CcArchiveSupplyGate gate;
+    CcId seat_id, carriage_id, source_id, first_route_id, first_hop_id;
+    CcGood good;
+    int32_t quantity, path_capacity, path_cost, reposition_cost;
+    CcMoney goods_cost, first_leg_toll, total_charge;
+} CcArchiveSupplyPlan;
 
 typedef struct CcArchiveWorkPlan {
     CcId seat_id;
@@ -2170,6 +2202,13 @@ CcRitualOfferingPlan CcSimRitualOfferingPlan(const CcSim *sim);
 
 CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
 /* Evaluate the current staffing and held supplies without advancing archive work. */
+/* Held-state booking quote. Costs cover goods and the first loaded leg.
+   Dispatch must recheck the quote when the carriage reaches its supplier. */
+CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id);
+const char *CcArchiveSupplyGateName(CcArchiveSupplyGate gate);
+/* Placement advice from held local supplies. A healthy seat has priority. */
+CcArchiveSeatCandidate CcSimArchiveSeatCandidate(const CcSim *sim, CcId settlement_id);
+CcArchiveSeatPlan CcSimArchiveSeatPlan(const CcSim *sim, CcId current_seat_id);
 CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim);
 /* Treasury top-up under current funds and routes; recovery timing is separate. */
 CcArchiveFundingPlan CcSimArchiveFundingPlan(const CcSim *sim);

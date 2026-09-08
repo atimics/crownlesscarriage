@@ -12,6 +12,45 @@ static void JsonString(const char *value)
 
 #include "sim_runner_network.inc"
 
+static void JsonArchiveSeatPlan(const CcSim *sim)
+{
+    CcId current = CcSimMaterialChainSnapshot(sim).scriptorium_id;
+    CcArchiveSeatPlan plan = CcSimArchiveSeatPlan(sim, current);
+    printf("{\"semantics\":\"held_placement_advice_snapshot\",\"current_id\":\"%" PRIu64
+           "\",\"selected_id\":\"%" PRIu64 "\",\"keep_current\":%s,\"candidates\":[",
+        current, plan.selected_id, plan.keep_current ? "true" : "false");
+    for (int i = 0; i < sim->settlement_count; ++i) {
+        CcArchiveSeatCandidate c = CcSimArchiveSeatCandidate(sim, sim->settlements[i].id);
+        printf("%s{\"id\":\"%" PRIu64 "\",\"patron_id\":\"%" PRIu64
+            "\",\"inhabited\":%s,\"mill\":%s,\"viable\":%s,\"paper\":%d,\"spare_wheat\":%d,"
+            "\"tools\":%d,\"usable_connections\":%d,\"security\":%d,\"score\":%d}",
+            i ? "," : "", c.settlement_id, c.patron_id, c.inhabited ? "true" : "false",
+            c.mill ? "true" : "false", c.viable ? "true" : "false", c.paper, c.spare_wheat,
+            c.tools, c.usable_connections, c.security, c.score);
+    }
+    printf("]}");
+}
+
+static void JsonArchiveSupply(const CcSim *sim)
+{
+    printf("{\"semantics\":\"held_booking_quote_snapshot\",\"cost_scope\":\"goods_and_first_loaded_leg\",\"quotes\":[");
+    for (int i = 0; i < sim->royal_carriage_count; ++i) {
+        CcId carriage_id = sim->royal_carriages[i].id;
+        CcArchiveSupplyPlan plan = CcSimArchiveSupplyPlan(sim, carriage_id);
+        printf("%s{\"carriage_id\":\"%" PRIu64 "\",\"gate\":", i ? "," : "", carriage_id);
+        JsonString(CcArchiveSupplyGateName(plan.gate));
+        printf(",\"seat_id\":\"%" PRIu64 "\",\"source_id\":\"%" PRIu64
+               "\",\"first_route_id\":\"%" PRIu64 "\",\"first_hop_id\":\"%" PRIu64 "\",\"good\":",
+               plan.seat_id, plan.source_id, plan.first_route_id, plan.first_hop_id);
+        if (plan.good == CC_GOOD_COUNT) printf("null"); else JsonString(CcGoodName(plan.good));
+        printf(",\"quantity\":%d,\"path_capacity\":%d,\"path_cost\":%d,\"reposition_cost\":%d,"
+               "\"goods_cost\":%" PRId64 ",\"first_leg_toll\":%" PRId64 ",\"total_charge\":%" PRId64 "}",
+               plan.quantity, plan.path_capacity, plan.path_cost, plan.reposition_cost,
+               plan.goods_cost, plan.first_leg_toll, plan.total_charge);
+    }
+    printf("]}");
+}
+
 static void JsonArchiveWork(const CcSim *sim)
 {
     CcArchiveWorkPlan plan = CcSimArchiveWorkPlan(sim);
@@ -226,6 +265,8 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         sim->dragon.crown_strength, sim->dragon.egg_count);
     printf(",\"archive_work\":"); JsonArchiveWork(sim);
     printf(",\"archive_funding\":"); JsonArchiveFunding(sim);
+    printf(",\"archive_supply\":"); JsonArchiveSupply(sim);
+    printf(",\"archive_seat_plan\":"); JsonArchiveSeatPlan(sim);
     printf(",\"road_network\":"); JsonRoadNetwork(sim);
     printf(",\"threats\":"); JsonThreatSnapshot(sim);
     printf(",\"retained_history\":"); JsonRetainedHistory(sim);

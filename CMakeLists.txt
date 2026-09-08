@@ -92,7 +92,10 @@ add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
     src/sim/cc_sim_hash.c
+    src/sim/cc_gossip_topics.c
     src/sim/cc_archive_queries.c
+    src/sim/cc_archive_supply.c
+    src/sim/cc_archive_seat_plan.c
     src/sim/cc_trade_path.c
     src/sim/cc_sim_versions.c
     src/sim/cc_identity.c
@@ -1257,6 +1260,9 @@ if(BUILD_TESTING)
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
     if(CC_PYTHON3_EXECUTABLE)
+        add_test(NAME age_of_dragons_sweep_integrity
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/age_of_dragons_sweep_tests.py)
         add_test(NAME sweep_hunger_analysis
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/sweep_analysis_tests.py)
@@ -1494,6 +1500,14 @@ if(BUILD_TESTING)
     target_link_libraries(trade_path_tests PRIVATE crownless_sim)
     cc_strict_warnings(trade_path_tests)
     add_test(NAME trade_path_rules COMMAND trade_path_tests)
+    add_executable(archive_seat_tests tests/archive_seat_tests.c)
+    target_link_libraries(archive_seat_tests PRIVATE crownless_sim)
+    cc_strict_warnings(archive_seat_tests)
+    add_test(NAME archive_seat_selection COMMAND archive_seat_tests)
+    add_executable(archive_supply_tests tests/archive_supply_tests.c)
+    target_link_libraries(archive_supply_tests PRIVATE crownless_sim)
+    cc_strict_warnings(archive_supply_tests)
+    add_test(NAME archive_supply_booking COMMAND archive_supply_tests)
     add_executable(archive_funding_tests tests/archive_funding_tests.c)
     target_link_libraries(archive_funding_tests PRIVATE crownless_sim)
     cc_strict_warnings(archive_funding_tests)
@@ -1602,6 +1616,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(material_chain_tests)
     cc_large_sim_stack(material_chain_tests)
     add_test(NAME material_chain_proofs COMMAND material_chain_tests)
+
+    add_executable(gossip_topic_tests tests/gossip_topic_tests.c)
+    target_link_libraries(gossip_topic_tests PRIVATE crownless_sim)
+    cc_strict_warnings(gossip_topic_tests)
+    add_test(NAME gossip_topic_contract COMMAND gossip_topic_tests)
 
     add_executable(gossip_tests tests/gossip_tests.c)
     target_link_libraries(gossip_tests PRIVATE crownless_persistence crownless_metagame)

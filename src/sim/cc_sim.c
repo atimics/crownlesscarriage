@@ -9497,22 +9497,6 @@ static int32_t SiteOutputFloor(const CcSim *sim, const CcRoadSite *site, CcGood 
 #include "cc_site_freight_plan.inc"
 #include "cc_site_carriages.inc"
 
-static CcMoney RoyalTradeRouteToll(const CcSim *sim, const CcRoute *route,
-                                   CcId carriage_kingdom_id)
-{
-    CcMoney toll = CcRouteToll(sim, route);
-    const CcSettlement *from = route != NULL ?
-        CcSimSettlement(sim, route->from_id) : NULL;
-    const CcSettlement *to = route != NULL ?
-        CcSimSettlement(sim, route->to_id) : NULL;
-    if (from == NULL || to == NULL ||
-        from->kingdom_id == to->kingdom_id) return toll;
-    CcId host = from->kingdom_id == carriage_kingdom_id ?
-        to->kingdom_id : from->kingdom_id;
-    toll += CcSimKingdomsAllied(sim, carriage_kingdom_id, host) ? 1 : 3;
-    return toll;
-}
-
 static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
                                 int32_t route_slot, CcId next_hop_id,
                                 CcGood good, CcSettlement *origin,
@@ -9562,7 +9546,7 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
         sim, final_destination->kingdom_id);
     bool essential_credit = supply == NULL && IronLedgerWillFund(final_destination, good);
     int32_t unit_price = MaximumI32(1, origin->price[good]);
-    CcMoney toll = royal ? RoyalTradeRouteToll(
+    CcMoney toll = royal ? CcRouteRoyalTradeToll(
         sim, route, carriage->kingdom_id) : CcRouteToll(sim, route);
     CcMoney credit_available = essential_credit ?
         IronLedgerCreditAvailable(sim, buyer_kingdom) : 0;
@@ -10021,7 +10005,7 @@ static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting)
                     CcMoney minimum_cost =
                         (CcMoney)required_units *
                             MaximumI32(1, from->price[good]) +
-                        RoyalTradeRouteToll(
+                        CcRouteRoyalTradeToll(
                             sim, &sim->routes[route_slot],
                             carriage->kingdom_id);
                     if (BuyerPurchasingPower(sim, to, (CcGood)good) <
