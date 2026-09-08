@@ -120,6 +120,26 @@ static void CcCaptureSceneAbort(RenderTexture2D target, ClientMapTextures *maps,
     CcClientInstanceLockRelease(lock);
 }
 
+static void CcCapturePrepareJourney(const CcCaptureRequest *request, CcSim *sim)
+{
+    if (!(request->capture_encounter || request->capture_travel ||
+          request->capture_route_sight || request->capture_road ||
+          request->capture_parley || request->capture_aftermath ||
+          request->capture_creature_horse || request->capture_road_arrival)) return;
+    PrepareReviewJourney(sim, (CcReviewJourneyOptions){
+        .clear_route_knowledge = request->capture_route_sight,
+        .suppress_encounter = request->capture_road_arrival || request->capture_route_sight,
+        .advance_trip = request->capture_travel || request->capture_route_sight ||
+            request->capture_creature_horse || request->capture_road_arrival,
+        .finish_arrival = request->capture_road_arrival,
+        .resolve_combat = request->capture_aftermath,
+        .target_progress = request->capture_road_arrival ? 850 :
+            request->capture_storybook ? (int32_t)(request->storybook_progress * 1000.0f + 0.5f) :
+            request->capture_route_sight ? (int32_t)(request->capture_route_sight_progress * 1000.0f + 0.5f) : 200,
+        .tick_step = request->capture_storybook ? 1 : CC_WORLD_TICKS_PER_SECOND,
+    });
+}
+
 static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, char **argv)
 {
     if (request->capture_creature_media &&
@@ -761,6 +781,7 @@ static bool CcCapturePrepareMessage(const CcCaptureRequest *request, CcCaptureSc
 
 #else
 #define CcCaptureSceneAbort(...) ((void)0)
+#define CcCapturePrepareJourney(...) ((void)0)
 #define CcCapturePrepareWorld(...) true
 #define CcCapturePrepareDungeon(...) true
 #define CcCaptureEnterWorld(...) true
