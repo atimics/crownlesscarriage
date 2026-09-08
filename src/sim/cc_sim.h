@@ -56,7 +56,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 58
+#define CC_SIM_SCHEMA_VERSION 59
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -400,6 +400,45 @@ typedef struct CcTownNutritionAccounting {
 typedef struct CcNutritionAccounting {
     CcTownNutritionAccounting towns[CC_MAX_SETTLEMENTS];
 } CcNutritionAccounting;
+
+/* A read-only plan for the next smithy batch. Tools take materials first.
+   Quantities are gross output before the existing tool-wear rule. */
+typedef enum {
+    CC_SMITHY_READY = 0,
+    CC_SMITHY_SERVICE_UNAVAILABLE,
+    CC_SMITHY_ZERO_CAPACITY,
+    CC_SMITHY_RESERVE_MET,
+    CC_SMITHY_IRON_REQUIRED,
+    CC_SMITHY_WOOD_REQUIRED,
+    CC_SMITHY_ABANDONED,
+    CC_SMITHY_REPAIRS_REQUIRED,
+    CC_SMITHY_STATUS_COUNT
+} CcSmithyStatus;
+
+typedef struct {
+    int32_t tools_made;
+    int32_t weapons_made;
+    int32_t iron_used;
+    int32_t wood_used;
+    CcSmithyStatus tools_status;
+    CcSmithyStatus weapons_status;
+} CcSmithyPlan;
+
+/* Caller-owned cumulative production capture; reset for each run. */
+typedef struct {
+    CcId settlement_id;
+    uint64_t tools_made;
+    uint64_t weapons_made;
+    uint64_t iron_used;
+    uint64_t wood_used;
+    uint64_t tools_worn;
+    uint64_t tools_status[CC_SMITHY_STATUS_COUNT];
+    uint64_t weapons_status[CC_SMITHY_STATUS_COUNT];
+} CcTownSmithyAccounting;
+
+typedef struct {
+    CcTownSmithyAccounting towns[CC_MAX_SETTLEMENTS];
+} CcSmithyAccounting;
 
 /* Read-only hunger measurements. Values are -1 when no settlement is inhabited. */
 typedef struct CcHungerSnapshot {
@@ -1710,6 +1749,9 @@ void CcSimUpgradeGrainEconomy(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
                                              CcNutritionAccounting *accounting);
+void CcSimAdvanceDaysWithAccounting(CcSim *sim, int32_t days,
+                                     CcNutritionAccounting *nutrition,
+                                     CcSmithyAccounting *smithy);
 int32_t CcSimGossipCarrierCapacity(const CcSim *sim);
 const CcGossipCarrier *CcSimGossipCarrier(const CcSim *sim, CcId id);
 const CcGossip *CcSimPersonalGossip(const CcSim *sim, CcId id, int32_t offset,
@@ -1902,26 +1944,6 @@ void CcSimUnharnessSecondDraftAnimal(CcSim *sim);
 int32_t CcSimCommonPonyCount(const CcSim *sim);
 bool CcSettlementHasService(const CcSettlement *settlement,
                             CcServiceKind service);
-/* A read-only plan for the next smithy batch. Tools take materials first.
-   Quantities are gross output before the existing tool-wear rule. */
-typedef enum {
-    CC_SMITHY_READY = 0,
-    CC_SMITHY_SERVICE_UNAVAILABLE,
-    CC_SMITHY_ZERO_CAPACITY,
-    CC_SMITHY_RESERVE_MET,
-    CC_SMITHY_IRON_REQUIRED,
-    CC_SMITHY_WOOD_REQUIRED
-} CcSmithyStatus;
-
-typedef struct {
-    int32_t tools_made;
-    int32_t weapons_made;
-    int32_t iron_used;
-    int32_t wood_used;
-    CcSmithyStatus tools_status;
-    CcSmithyStatus weapons_status;
-} CcSmithyPlan;
-
 CcSmithyPlan CcSimPlanSmithy(const CcSim *sim,
                             const CcSettlement *settlement);
 const char *CcSmithyStatusName(CcSmithyStatus status);

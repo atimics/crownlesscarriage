@@ -249,6 +249,23 @@ static void PrintChronicleNewEvents(const CcSim *sim)
     }
 }
 
+static void PrintSmithyAccounting(const CcSim *sim,
+                                   const CcSmithyAccounting *accounting)
+{
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcTownSmithyAccounting *town = &accounting->towns[i];
+        printf("smithy day=%d town=%" PRIu64 " tools=%" PRIu64 " weapons=%" PRIu64
+               " iron_used=%" PRIu64 " wood_used=%" PRIu64 " tools_worn=%" PRIu64,
+               sim->current_day, sim->settlements[i].id, town->tools_made,
+               town->weapons_made, town->iron_used, town->wood_used, town->tools_worn);
+        for (int32_t state = 0; state < CC_SMITHY_STATUS_COUNT; ++state) {
+            printf(" tools_state_%d=%" PRIu64 " weapons_state_%d=%" PRIu64,
+                   state, town->tools_status[state], state, town->weapons_status[state]);
+        }
+        putchar('\n');
+    }
+}
+
 int main(int argc, char **argv)
 {
     uint32_t seed = UINT32_C(0xc0a71a9e);
@@ -258,6 +275,8 @@ int main(int argc, char **argv)
     const char *load_path = NULL;
     const char *save_path = NULL;
     bool detail = false;
+    bool smithy_report = false;
+    CcSmithyAccounting smithy = {0};
     for (int argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--seed") == 0 && argument + 1 < argc) {
             seed = (uint32_t)strtoul(argv[++argument], NULL, 0);
@@ -278,6 +297,8 @@ int main(int argc, char **argv)
             checkpoint_every = (int32_t)strtol(argv[++argument], NULL, 10);
         } else if (strcmp(argv[argument], "--detail") == 0) {
             detail = true;
+        } else if (strcmp(argv[argument], "--smithy") == 0) {
+            smithy_report = true;
         } else if (strcmp(argv[argument], "--chronicle") == 0) {
             chronicle = true;
         }
@@ -318,11 +339,13 @@ int main(int argc, char **argv)
             /* Monthly scans: a busy year pushes more than the event ring
              * holds, so a yearly window would lose mid-year events. */
             for (int32_t month = 0; month < 12; ++month) {
-                CcSimAdvanceDays(&sim, month == 11 ? 35 : 30);
+                CcSimAdvanceDaysWithAccounting(&sim, month == 11 ? 35 : 30,
+                    NULL, smithy_report ? &smithy : NULL);
                 PrintChronicleNewEvents(&sim);
             }
         } else {
-            CcSimAdvanceDays(&sim, 365);
+            CcSimAdvanceDaysWithAccounting(&sim, 365, NULL,
+                smithy_report ? &smithy : NULL);
         }
         if (!CcSimValidate(&sim, error, sizeof(error))) {
             (void)fprintf(stderr, "validation failed in year %d: %s\n", year + 1, error);
@@ -338,9 +361,11 @@ int main(int argc, char **argv)
             (void)printf("== year %d (day %d) ==\n", year + 1, sim.current_day);
             PrintChronicleNewEvents(&sim);
             PrintSummary(&sim, detail);
+            if (smithy_report) PrintSmithyAccounting(&sim, &smithy);
         } else if (year == 0 || year + 1 == years ||
             (year + 1) % report_every == 0) {
             PrintSummary(&sim, detail);
+            if (smithy_report) PrintSmithyAccounting(&sim, &smithy);
             (void)fflush(stdout);
         }
     }

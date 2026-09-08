@@ -4564,6 +4564,10 @@ void CcSimInit(CcSim *sim, uint32_t seed)
                    map_x, map_y, 1280, 46, 45);
     sim->settlement_count = CC_MAX_SETTLEMENTS;
     ConfigureSettlementEconomies(sim);
+    /* New Silverwick worlds have a small local tool forge. Set this after
+       randomized economy setup to preserve the generator's random stream.
+       Saved capacities remain authoritative during upgrades. */
+    sim->settlements[3].production[CC_GOOD_TOOLS] = 2;
     CcSimInitializeWoodEconomy(sim);
     CcSimInitializeStoneEconomy(sim);
     CcSimInitializePaperEconomy(sim);
@@ -5034,6 +5038,9 @@ const char *CcSmithyStatusName(CcSmithyStatus status)
         case CC_SMITHY_RESERVE_MET: return "Reserve target met";
         case CC_SMITHY_IRON_REQUIRED: return "Iron required";
         case CC_SMITHY_WOOD_REQUIRED: return "Wood required";
+        case CC_SMITHY_ABANDONED: return "Workers required";
+        case CC_SMITHY_REPAIRS_REQUIRED: return "Fire repairs required";
+        case CC_SMITHY_STATUS_COUNT: break;
     }
     return "Unknown smithy state";
 }
@@ -5057,6 +5064,13 @@ CcSmithyPlan CcSimPlanSmithy(const CcSim *sim,
     plan.weapons_status = CC_SMITHY_SERVICE_UNAVAILABLE;
     if (sim == NULL || settlement == NULL ||
         !CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) return plan;
+    if (sim->schema_version >= 59U &&
+        (CcSettlementIsAbandoned(settlement) || settlement->fire_damage >= 100)) {
+        plan.tools_status = CcSettlementIsAbandoned(settlement) ?
+            CC_SMITHY_ABANDONED : CC_SMITHY_REPAIRS_REQUIRED;
+        plan.weapons_status = plan.tools_status;
+        return plan;
+    }
     bool legacy_smithy = sim->schema_version < 27U;
     int32_t iron = settlement->stock[CC_GOOD_IRON];
     int32_t wood = settlement->stock[CC_GOOD_WOOD];
@@ -5086,13 +5100,23 @@ CcSmithyPlan CcSimPlanSmithy(const CcSim *sim,
     return plan;
 }
 
-static void RunSmithy(CcSim *sim, CcSettlement *settlement)
+static void RunSmithy(CcSim *sim, CcSettlement *settlement,
+                       CcTownSmithyAccounting *accounting)
 {
+    CcSmithyPlan plan = CcSimPlanSmithy(sim, settlement);
+    if (accounting != NULL) {
+        accounting->settlement_id = settlement->id;
+        accounting->tools_status[plan.tools_status]++;
+        accounting->weapons_status[plan.weapons_status]++;
+        accounting->tools_made += (uint64_t)plan.tools_made;
+        accounting->weapons_made += (uint64_t)plan.weapons_made;
+        accounting->iron_used += (uint64_t)plan.iron_used;
+        accounting->wood_used += (uint64_t)plan.wood_used;
+    }
     if (!CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) return;
     bool legacy_smithy = sim->schema_version < 27U;
     int32_t iron_before = settlement->stock[CC_GOOD_IRON];
     int32_t wood_before = settlement->stock[CC_GOOD_WOOD];
-    CcSmithyPlan plan = CcSimPlanSmithy(sim, settlement);
     int32_t tools_made = plan.tools_made;
     int32_t weapons_made = plan.weapons_made;
     settlement->stock[CC_GOOD_IRON] -= plan.iron_used;
@@ -5100,9 +5124,14 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement)
     settlement->stock[CC_GOOD_TOOLS] += tools_made;
     settlement->stock[CC_GOOD_WEAPONS] += weapons_made;
 
+    int32_t tools_before_wear = settlement->stock[CC_GOOD_TOOLS];
     int32_t smith_batches = tools_made + weapons_made;
     for (int32_t batch = 0; batch < smith_batches; ++batch) {
         WearOneTool(settlement, &settlement->smith_tool_wear, 4);
+    }
+    if (accounting != NULL) {
+        accounting->tools_worn += (uint64_t)(tools_before_wear -
+                                             settlement->stock[CC_GOOD_TOOLS]);
     }
     if (smith_batches > 0) {
         char text[CC_EVENT_TEXT_CAPACITY];
@@ -5794,7 +5823,8 @@ static void ReleaseAbandonedCamps(CcSim *sim)
 
 static void UpdateSettlement(CcSim *sim, int32_t index,
                              CcId scriptorium_id,
-                             CcTownNutritionAccounting *accounting)
+                             CcTownNutritionAccounting *accounting,
+                             CcTownSmithyAccounting *smithy)
 {
     CcSettlement *settlement = &sim->settlements[index];
     if (CcSettlementIsAbandoned(settlement)) return;
@@ -5897,7 +5927,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
             produced[CC_GOOD_STONE], text);
     }
     MaintainSettlementStonework(sim, settlement);
-    RunSmithy(sim, settlement);
+    RunSmithy(sim, settlement, smithy);
     RunPaperMill(sim, settlement);
     int32_t war_burden = CcSimWarBurdenAtSettlement(sim, settlement->id);
     if (IsWarSeat(settlement) && war_burden >= 50 &&
@@ -14959,6 +14989,13 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
 void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
                                              CcNutritionAccounting *accounting)
 {
+    CcSimAdvanceDaysWithAccounting(sim, days, accounting, NULL);
+}
+
+void CcSimAdvanceDaysWithAccounting(CcSim *sim, int32_t days,
+                                     CcNutritionAccounting *accounting,
+                                     CcSmithyAccounting *smithy)
+{
     if (sim == NULL || days <= 0 || sim->current_day < 1 ||
         sim->current_day > CC_SIM_MAX_DAY ||
         days > CC_SIM_MAX_DAY - sim->current_day) return;
@@ -14994,7 +15031,8 @@ void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
                 scriptorium->id : 0U;
             for (int32_t settlement = 0; settlement < sim->settlement_count; ++settlement) {
                 UpdateSettlement(sim, settlement, scriptorium_id,
-                    accounting != NULL ? &accounting->towns[settlement] : NULL);
+                    accounting != NULL ? &accounting->towns[settlement] : NULL,
+                    smithy != NULL ? &smithy->towns[settlement] : NULL);
             }
             AdvanceRuins(sim);
             if (sim->schema_version >= 22U) AdvanceArchives(sim);
@@ -18917,7 +18955,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 57U
+#define CC_NEWEST_LEGACY_SCHEMA 58U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18935,7 +18973,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 57U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 58U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
