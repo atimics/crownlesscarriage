@@ -37,3 +37,62 @@ static int RunCaptureRequestRegression(void)
     (void)puts("PASS capture requests: play, paths, views, scene settings, and ranges");
     return 0;
 }
+
+static int capture_test_images;
+static char capture_test_last_path[768];
+
+static void RecordCaptureFrame(const char *path)
+{
+    capture_test_images += 1;
+    (void)snprintf(capture_test_last_path, sizeof(capture_test_last_path), "%s", path);
+}
+
+static int RunCaptureFrameRegression(void)
+{
+    struct {
+        CcCaptureRequest request;
+        int frames;
+        int images;
+        const char *last_path;
+    } cases[] = {
+        {{.capture = true}, 3, 1, "frame"},
+        {{.capture = true, .capture_ux = true}, 90, 1, "frame"},
+        {{.capture = true, .capture_road = true}, 45, 1, "frame"},
+        {{.capture = true, .capture_pony_encounter = true}, 45, 1, "frame"},
+        {{.capture = true, .capture_pony_swap = true}, 45, 1, "frame"},
+        {{.capture = true, .capture_character = true}, 120, 1, "frame"},
+        {{.capture = true, .capture_walk_cycle = true}, 10, 8, "frame-07.png"},
+        {{.capture = true, .capture_creature_reel = true}, 47, 45, "frame-044.png"},
+        {{.capture = true, .capture_gameplay_reel = true}, 6, 4, "frame-003.png"},
+        {{.capture = true, .capture_action_reel = true}, 6, 4, "frame-003.png"},
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        CcCaptureState state = {0};
+        capture_test_images = 0;
+        capture_test_last_path[0] = '\0';
+        cases[i].request.capture_path = "frame";
+        for (int frame = 1; frame <= cases[i].frames; ++frame) {
+            state.gameplay_reel.complete = frame == cases[i].frames;
+            state.action_reel.complete = frame == cases[i].frames;
+            bool finished = CcCaptureAfterFrame(&cases[i].request, &state, RecordCaptureFrame);
+            if (finished != (frame == cases[i].frames))
+                return ClientRegressionFailure("Capture must finish on the expected frame.");
+            if (frame <= 2 && capture_test_images != 0)
+                return ClientRegressionFailure("Capture must wait for its warmup frames.");
+        }
+        if (capture_test_images != cases[i].images ||
+            strcmp(capture_test_last_path, cases[i].last_path) != 0)
+            return ClientRegressionFailure("Capture image counts and filenames must match.");
+    }
+    CcCaptureRequest normal = {0};
+    CcCaptureState state = {0};
+    capture_test_images = 0;
+    for (int frame = 0; frame < 125; ++frame) {
+        if (CcCaptureAfterFrame(&normal, &state, RecordCaptureFrame))
+            return ClientRegressionFailure("Normal play must keep its frame loop running.");
+    }
+    if (capture_test_images != 0 || state.capture_frames != 0)
+        return ClientRegressionFailure("Normal play must keep capture state idle.");
+    (void)puts("PASS capture frames: warmup, timing, paths, reels, and normal play");
+    return 0;
+}
