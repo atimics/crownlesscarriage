@@ -24,7 +24,7 @@ static int32_t SiteRouteSlots(const CcSim *sim, const CcRoyalCarriage *carriage)
         !CcSimRoyalCarriageCanUseRoute(sim, carriage->kingdom_id, route->id)) return 0;
     int32_t slot = (int32_t)(route - sim->routes);
     return MaximumI32(0, MinimumI32(CC_ROYAL_CARRIAGE_CARGO_SLOTS,
-        MinimumI32(route->capacity, TradeRouteCapacity(sim, route)) - sim->royal_route_slots_used[slot]));
+        MinimumI32(route->capacity, CcTradeRouteCapacity(sim, route)) - sim->royal_route_slots_used[slot]));
 }
 
 static void StartSiteLeg(CcSim *sim, CcRoyalCarriage *carriage, CcShipment *shipment)

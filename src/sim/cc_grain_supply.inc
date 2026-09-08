@@ -50,10 +50,10 @@ static CcGrainDeliveryPlan PlanGrainForCarriage(const CcSim *sim, const CcSettle
         surplus_found = true;
         int route_slot = -1, path_cost = 0, capacity = 0, reposition_cost = 0;
         CcId hop = 0;
-        if (!FindTradePath(sim, from->id, town->id, CC_GOOD_WHEAT,
+        if (!CcTradeFindPath(sim, from->id, town->id, CC_GOOD_WHEAT,
             &route_slot, &hop, &path_cost, &capacity, sim->royal_route_slots_used,
             true, carriage->kingdom_id, false, 1)) continue;
-        if (carriage->location_id != from->id && !FindTradePath(sim, carriage->location_id,
+        if (carriage->location_id != from->id && !CcTradeFindPath(sim, carriage->location_id,
             from->id, CC_GOOD_WHEAT, NULL, NULL, &reposition_cost, NULL, NULL,
             true, carriage->kingdom_id, false, 1)) continue;
         path_found = true;

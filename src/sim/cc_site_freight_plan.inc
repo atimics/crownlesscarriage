@@ -73,7 +73,7 @@ CcSiteFreightPlan CcSimPlanSiteFreight(const CcSim *sim, CcId carriage_id, CcId 
     int32_t route_slot = (int32_t)(route - sim->routes);
     int32_t used = sim->royal_trade_week == sim->current_day / 7 ? sim->royal_route_slots_used[route_slot] : 0;
     int32_t slots = MinimumI32(CC_ROYAL_CARRIAGE_CARGO_SLOTS,
-        MinimumI32(route->capacity, TradeRouteCapacity(sim, route)) - used);
+        MinimumI32(route->capacity, CcTradeRouteCapacity(sim, route)) - used);
     plan.gate = CC_SITE_FREIGHT_CAPACITY_REQUIRED;
     if (slots < 1) return plan;
     plan.gate = CC_SITE_FREIGHT_GOODS_REQUIRED;
