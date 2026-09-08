@@ -12,6 +12,25 @@ static void JsonString(const char *value)
 
 #include "sim_runner_network.inc"
 
+static void JsonArchiveSeatPlan(const CcSim *sim)
+{
+    CcId current = CcSimMaterialChainSnapshot(sim).scriptorium_id;
+    CcArchiveSeatPlan plan = CcSimArchiveSeatPlan(sim, current);
+    printf("{\"semantics\":\"held_placement_advice_snapshot\",\"current_id\":\"%" PRIu64
+           "\",\"selected_id\":\"%" PRIu64 "\",\"keep_current\":%s,\"candidates\":[",
+        current, plan.selected_id, plan.keep_current ? "true" : "false");
+    for (int i = 0; i < sim->settlement_count; ++i) {
+        CcArchiveSeatCandidate c = CcSimArchiveSeatCandidate(sim, sim->settlements[i].id);
+        printf("%s{\"id\":\"%" PRIu64 "\",\"patron_id\":\"%" PRIu64
+            "\",\"inhabited\":%s,\"mill\":%s,\"viable\":%s,\"paper\":%d,\"spare_wheat\":%d,"
+            "\"tools\":%d,\"usable_connections\":%d,\"security\":%d,\"score\":%d}",
+            i ? "," : "", c.settlement_id, c.patron_id, c.inhabited ? "true" : "false",
+            c.mill ? "true" : "false", c.viable ? "true" : "false", c.paper, c.spare_wheat,
+            c.tools, c.usable_connections, c.security, c.score);
+    }
+    printf("]}");
+}
+
 static void JsonArchiveSupply(const CcSim *sim)
 {
     printf("{\"semantics\":\"held_booking_quote_snapshot\",\"cost_scope\":\"goods_and_first_loaded_leg\",\"quotes\":[");
@@ -247,6 +266,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
     printf(",\"archive_work\":"); JsonArchiveWork(sim);
     printf(",\"archive_funding\":"); JsonArchiveFunding(sim);
     printf(",\"archive_supply\":"); JsonArchiveSupply(sim);
+    printf(",\"archive_seat_plan\":"); JsonArchiveSeatPlan(sim);
     printf(",\"road_network\":"); JsonRoadNetwork(sim);
     printf(",\"threats\":"); JsonThreatSnapshot(sim);
     printf(",\"retained_history\":"); JsonRetainedHistory(sim);

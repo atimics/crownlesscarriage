@@ -466,6 +466,18 @@ typedef struct CcWelfareSnapshot {
     double population_weighted_security;
 } CcWelfareSnapshot;
 
+typedef struct CcArchiveSeatCandidate {
+    CcId settlement_id, patron_id;
+    int32_t paper, spare_wheat, tools, usable_connections, security, score;
+    bool inhabited, mill, viable;
+} CcArchiveSeatCandidate;
+
+typedef struct CcArchiveSeatPlan {
+    CcId current_id, selected_id;
+    int32_t score;
+    bool keep_current;
+} CcArchiveSeatPlan;
+
 typedef enum CcArchiveRecoveryGate {
     CC_ARCHIVE_RECOVERY_DUE = 0,
     CC_ARCHIVE_RECOVERY_UNAVAILABLE,
@@ -2194,6 +2206,9 @@ CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
    Dispatch must recheck the quote when the carriage reaches its supplier. */
 CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id);
 const char *CcArchiveSupplyGateName(CcArchiveSupplyGate gate);
+/* Placement advice from held local supplies. A healthy seat has priority. */
+CcArchiveSeatCandidate CcSimArchiveSeatCandidate(const CcSim *sim, CcId settlement_id);
+CcArchiveSeatPlan CcSimArchiveSeatPlan(const CcSim *sim, CcId current_seat_id);
 CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim);
 /* Treasury top-up under current funds and routes; recovery timing is separate. */
 CcArchiveFundingPlan CcSimArchiveFundingPlan(const CcSim *sim);
