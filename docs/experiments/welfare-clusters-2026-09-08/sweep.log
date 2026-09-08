@@ -1,0 +1,19 @@
+== Crownless simulation sweep ==
+requested seeds=1..1000 years=1000 jobs=8
+passed=996 failed=4 checkpoints=996000
+seed multiplier=0x9E3779B9
+total_population mean=12596.97 median=13197 min=3058 max=18076
+active_settlements mean=3.85 median=4 min=2 max=5
+average_prosperity mean=32.96 median=35 min=13 max=55
+average_security mean=48.34 median=54 min=16 max=60
+average_hunger mean=8.40 median=6 min=0 max=54
+average_legitimacy mean=36.47 median=40 min=6 max=75
+closed_routes mean=7.95 median=8 min=2 max=8
+wars mean=0.30 median=0 min=0 max=2
+alliances mean=0.57 median=0 min=0 max=3
+dragon_slain mean=0.59 median=1 min=0 max=1
+-- failures --
+seed=357 world_seed=2740764413: Seed 357 failed in year 280: Royal carriage 1 invalid (m=1 rc=1 tm=0 lk=0 slots=3/4/4 r=3->4 dep=102172 arr=102175).
+seed=423 world_seed=1839866031: Seed 423 failed in year 70: Settlement service state is invalid.
+seed=806 world_seed=581516406: Seed 806 failed in year 125: Settlement service state is invalid.
+seed=996 world_seed=2413138884: Seed 996 failed in year 94: Settlement service state is invalid.
