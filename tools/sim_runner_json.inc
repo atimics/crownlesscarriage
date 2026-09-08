@@ -315,8 +315,12 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
                "\",\"shipment_id\":\"%" PRIu64 "\",\"mode\":%d,\"condition\":%d,\"trips\":%d,\"losses\":%d",
             i ? "," : "", cart->id, cart->location_id, cart->destination_id, cart->active_shipment_id,
             cart->mode, cart->condition, cart->trips_completed, cart->cargo_losses);
-        printf(",\"route_id\":\"%" PRIu64 "\",\"departure_day\":%d,\"arrival_day\":%d}",
+        printf(",\"route_id\":\"%" PRIu64 "\",\"departure_day\":%d,\"arrival_day\":%d",
             cart->route_id, cart->departure_day, cart->arrival_day);
+        printf(",\"semantics\":\"snapshot\",\"counter_semantics\":\"stored_cumulative\",\"kingdom_id\":\"%" PRIu64
+               "\",\"target_id\":\"%" PRIu64 "\",\"blocked_since_day\":%d,\"next_dispatch_day\":%d,\"mode_name\":",
+            cart->kingdom_id, cart->target_id, cart->blocked_since_day, cart->next_dispatch_day);
+        JsonString(CcRoyalCarriageModeName(cart->mode)); putchar('}');
     }
     printf("],\"shipments\":[");
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
@@ -325,7 +329,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
                "\",\"good\":%d,\"quantity\":%d,\"status\":%d,\"departure_day\":%d,\"arrival_day\":%d",
             i ? "," : "", cargo->id, cargo->origin_id, cargo->destination_id,
             (int)cargo->good, cargo->quantity, (int)cargo->status, cargo->departure_day, cargo->arrival_day);
-        printf(",\"route_id\":\"%" PRIu64 "\",\"final_destination_id\":\"%" PRIu64 "\"}",
+        printf(",\"route_id\":\"%" PRIu64 "\",\"final_destination_id\":\"%" PRIu64 "\",\"semantics\":\"retained_shipment_snapshot\"}",
             cargo->route_id, cargo->final_destination_id);
     }
     printf("],\"treasuries\":[");
