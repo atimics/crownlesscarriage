@@ -96,7 +96,7 @@ static int TestCountryHasRelief(void)
 static int TestSocietyUsesLocalFoundations(void)
 {
     static const Rectangle pads[] = {
-        {47.0f, 17.0f, 6.0f, 8.0f},
+        {47.0f, 13.0f, 6.0f, 8.0f},
         {65.20f, 8.20f, 26.50f, 24.40f},
         {27.40f, 49.70f, 3.20f, 1.60f},
     };
@@ -174,7 +174,7 @@ static void TestFootstepSurfaces(void)
     const uint32_t seeds[] = {UINT32_C(0xc0a71a9e), UINT32_C(0x12345678)};
     for (size_t i = 0; i < sizeof(seeds) / sizeof(seeds[0]); ++i) {
         CcLocalTerrainSetSeed(seeds[i]);
-        CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 24.0f, 29.4f) == CC_SOUND_STEP_STONE);
+        CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 24.0f, 28.0f) == CC_SOUND_STEP_STONE);
         CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 24.0f, 32.8f) == CC_SOUND_STEP_GRASS);
         CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 11.0f, 9.8f) == CC_SOUND_SPLASH);
         CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET, 10.4f, 1.0f) == CC_SOUND_STEP_WOOD);
@@ -238,6 +238,62 @@ static void TestCurvedVillageRoads(void)
     CcLocalBindPlace(NULL);
 }
 
+static void TestGloamgateMarketRoutes(void)
+{
+    static CcSim sim;
+    const uint32_t seeds[] = {UINT32_C(0xc0a71a9e), UINT32_C(0x12345678)};
+    for (int32_t seed = 0; seed < 2; ++seed) {
+        CcSimInit(&sim, seeds[seed]);
+        sim.player.location_id = sim.settlements[1].id;
+        CcLocalBindPlace(&sim);
+        const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(&sim.settlements[1]);
+        /* All service lanes and the ring remain walkable, including their bends. */
+        for (int32_t lane = 0; lane < 7; ++lane) {
+            const CcLocalLane *path = &profile->lane[lane];
+            CcLocalLanePoint previous = CcLocalLaneSample(path, 0.0f);
+            for (int32_t sample = 1; sample <= 160; ++sample) {
+                CcLocalLanePoint point = CcLocalLaneSample(path, (float)sample / 160.0f);
+                Vector3 start = {previous.x, CcLocalTerrainHeightAt(previous.x, previous.z), previous.z};
+                Vector3 end = {point.x, CcLocalTerrainHeightAt(point.x, point.z), point.z};
+                Vector3 corrected, normal;
+                if (CcLocalMoveCapsuleInternal(CC_LOCAL_SCENE_STREET,
+                    start, end, 0.24f, &corrected, &normal)) {
+                    fprintf(stderr, "Gloamgate lane %d blocked at %.2f %.2f\n", lane, point.x, point.z);
+                    CC_CHECK(false);
+                }
+                CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET,
+                    point.x, point.z) == CC_SOUND_STEP_STONE);
+                previous = point;
+            }
+        }
+        Vector2 arrival[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+        Vector2 departure[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+        int32_t count = CcLocalTownCarriagePath(true, arrival, CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY);
+        CC_CHECK(count > 2);
+        CC_CHECK(CcLocalTownCarriagePath(false, departure, CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY) == count);
+        CC_CHECK(fabsf(arrival[0].x - CC_LOCAL_TOWN_GATE_X) < 0.001f);
+        CC_CHECK(hypotf(arrival[count - 1].x - CC_LOCAL_CARRIAGE_X,
+                        arrival[count - 1].y - CC_LOCAL_CARRIAGE_Z) < 0.001f);
+        for (int32_t i = 0; i < count; ++i) {
+            CC_CHECK(hypotf(arrival[i].x - departure[count - 1 - i].x,
+                            arrival[i].y - departure[count - 1 - i].y) < 0.001f);
+            CC_CHECK(hypotf(arrival[i].x - 46.0f, arrival[i].y - 31.5f) > 4.0f);
+            if (i > 0) CC_CHECK(hypotf(arrival[i].x - arrival[i-1].x,
+                                       arrival[i].y - arrival[i-1].y) < 2.0f);
+        }
+        /* Both ordinary movement and the body collision probe see the basin. */
+        Vector2 blocked = CcLocalMove((Vector2){46,34.5f}, (Vector2){0,-2.0f}, false);
+        CC_CHECK(blocked.y > 32.85f);
+        float ground = CcLocalTerrainHeightAt(46,31.5f);
+        Vector3 corrected, normal;
+        CC_CHECK(CcLocalProbePhysicsSphereInternal(CC_LOCAL_SCENE_STREET,
+            (Vector3){46,ground+0.4f,34}, (Vector3){46,ground+0.4f,32.7f},
+            0.16f, &corrected, &normal));
+        CC_CHECK(corrected.z >= 33.0f);
+    }
+    CcLocalBindPlace(NULL);
+}
+
 int main(void)
 {
     if (TestSeededTerrain() != 0) return 1;
@@ -246,5 +302,6 @@ int main(void)
     if (TestWalkingFollowsTheLand() != 0) return 1;
     TestFootstepSurfaces();
     TestCurvedVillageRoads();
+    TestGloamgateMarketRoutes();
     return 0;
 }

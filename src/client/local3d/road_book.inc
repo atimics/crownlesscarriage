@@ -1939,15 +1939,6 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                        foreground_reveal_world,
                        target.texture.width, target.texture.height, clock);
     WorldBuilding primary_building = ActivePrimaryBuilding();
-    if (profile->function == CC_SETTLEMENT_MARKET &&
-        SceneryFootprintVisible(primary_building.footprint, scenery_focus)) {
-        float reveal_cut_height = foreground_reveal_world.y - 0.30f;
-        SetWorldForegroundReveal(
-            world_building_reveals[profile->primary_building].amount,
-            reveal_cut_height);
-        (void)DrawAuthoredMarket(place);
-        SetWorldForegroundReveal(0.0f, reveal_cut_height);
-    }
     DrawCastle(sim, place, kingdom, profile, scenery_focus, camera,
                foreground_reveal_world,
                target.texture.width, target.texture.height, clock);
@@ -2153,12 +2144,27 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
 
     char witness_label[96];
-    WorldLabel labels[20];
+    WorldLabel labels[24];
     int32_t count = 0;
     if (convoy_visible && agent != NULL) {
         labels[count++] = (WorldLabel){
             {convoy_hero_position.x, convoy_hero_position.y + 2.50f,
              convoy_hero_position.z}, "YOU", WORLD_TEAL};
+    }
+    if (profile->function == CC_SETTLEMENT_MARKET) {
+        static const struct { float x, z; const char *name; } signs[] = {
+            {35.5f, 24.0f, "Archive and maps"},
+            {31.0f, 28.0f, "Cloth yard"},
+            {60.0f, 32.0f, "Food lane"},
+            {42.0f, 44.0f, "Coach court"},
+            {73.0f, 34.0f, "Customs road"},
+        };
+        for (int32_t sign = 0; sign < 5; ++sign) {
+            if (!AgentNearLabel(agent, signs[sign].x, signs[sign].z, 9.0f)) continue;
+            labels[count++] = (WorldLabel){
+                {signs[sign].x, CcLocalTerrainHeightAt(signs[sign].x, signs[sign].z) + 2.0f,
+                 signs[sign].z}, signs[sign].name, WORLD_TEAL};
+        }
     }
     char primary_hall_label[96];
     (void)snprintf(primary_hall_label, sizeof(primary_hall_label),
@@ -2729,6 +2735,9 @@ static bool StreetCanOccupy(Vector2 point)
             return false;
         }
     }
+    if (active_place_function == CC_SETTLEMENT_MARKET &&
+        (InsideExpanded(point, GLOAMGATE_FOUNTAIN, radius) ||
+         InsideExpanded(point, GLOAMGATE_GATE_POST, radius))) return false;
     if ((active_opening_step == CC_LOCAL_OPENING_COMPLETE &&
          InsideExpanded(point, CARRIAGE_FOOTPRINT, radius)) ||
         InsideExpanded(point, DUNGEON_FOOTPRINT, radius)) return false;

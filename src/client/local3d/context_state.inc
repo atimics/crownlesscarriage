@@ -156,6 +156,8 @@ typedef struct WorldStructure {
 } WorldStructure;
 
 static const Rectangle CARRIAGE_FOOTPRINT = {35.80f, 48.50f, 3.20f, 5.40f};
+static const Rectangle GLOAMGATE_GATE_POST = {83.6f, 37.0f, 0.8f, 0.8f};
+static const Rectangle GLOAMGATE_FOUNTAIN = {44.65f, 30.15f, 2.70f, 2.70f};
 static const Rectangle DUNGEON_FOOTPRINT = {27.40f, 49.70f, 3.20f, 1.60f};
 
 static const Rectangle ROOM_ART_OBSTACLES[] = {
