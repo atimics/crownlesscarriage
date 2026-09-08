@@ -91,7 +91,9 @@ static float street_terrain_height[CC_TERRAIN_SAMPLE_COUNT];
 static WorldTreePlacement ActiveWorldTreeAt(int32_t index)
 {
     return active_place_function == CC_SETTLEMENT_FARMING ?
-        THORNFORD_TREES[index] : WORLD_TREES[index];
+        THORNFORD_TREES[index] :
+        active_place_function == CC_SETTLEMENT_MARKET ?
+        GLOAMGATE_TREES[index] : WORLD_TREES[index];
 }
 
 static const CcLocalPlaceLandmark *ActivePlaceLandmarkAt(int32_t index)
@@ -1014,8 +1016,12 @@ static void TerrainGenerate(void)
     TerrainGradeNorthSouthRamp((Rectangle){14.65f, 10.50f, 3.50f, 16.60f},
                                0.0f, east_course_road_height);
     if (active_place_function == CC_SETTLEMENT_MARKET) {
-        TerrainGradePad((Rectangle){37.5f, 23.5f, 17.5f, 17.0f},
+        TerrainGradePad((Rectangle){32.0f, 22.0f, 28.0f, 27.5f},
                         plaza_elevation, 2.0f);
+        for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+            Rectangle pad = ActiveWorldBuildingAt(i).footprint;
+            TerrainGradePad(pad, TerrainRectangleAverage(pad), 1.0f);
+        }
         TerrainBuildLanePaths();
         for (int32_t lane = 0; lane < ActivePlaceProfile()->lane_count; ++lane) {
             TerrainLanePath *path = &terrain_lanes[lane];
@@ -1311,7 +1317,7 @@ static int32_t GatherTownCollisionBoxes(const CcWorldManifest *manifest,
             AddTownCollisionBox(manifest, place, GLOAMGATE_FOUNTAIN,
                                 0.68f, 0.0f, boxes, &count);
             AddTownCollisionBox(manifest, place,
-                                (Rectangle){45.55f, 31.05f, 0.9f, 0.9f},
+                                (Rectangle){45.55f, 35.05f, 0.9f, 0.9f},
                                 3.0f, 0.0f, boxes, &count);
         }
         for (int32_t i = 0; i < profile->building_count; ++i) {
@@ -1410,7 +1416,8 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
     }
     if (active_place_function == CC_SETTLEMENT_MARKET &&
         (CircleTouchesFootprint(x, z, radius, GLOAMGATE_FOUNTAIN) ||
-         CircleTouchesFootprint(x, z, radius, GLOAMGATE_GATE_POST))) return true;
+         CircleTouchesFootprint(x, z, radius, GLOAMGATE_GATE_POSTS[0]) ||
+         CircleTouchesFootprint(x, z, radius, GLOAMGATE_GATE_POSTS[1]))) return true;
     if ((active_opening_step == CC_LOCAL_OPENING_COMPLETE &&
          CircleTouchesFootprint(x, z, radius, CARRIAGE_FOOTPRINT)) ||
         CircleTouchesFootprint(x, z, radius, DUNGEON_FOOTPRINT)) return true;
@@ -1887,12 +1894,18 @@ static int32_t GatherLocalCollisionBoxes(const LocalProbeContext *context,
                              2.65f);
     }
     if (active_place_function == CC_SETTLEMENT_MARKET) {
-        AddLocalCollisionBox(boxes, &count, GLOAMGATE_GATE_POST,
-                             TerrainFootprintHeight(GLOAMGATE_GATE_POST), 4.6f);
+        float gate_ground = CcLocalTerrainHeightAt(84.0f, 36.0f);
+        for (int32_t post = 0; post < 2; ++post) {
+            AddLocalCollisionBox(boxes, &count, GLOAMGATE_GATE_POSTS[post],
+                                 gate_ground, 4.6f);
+        }
+        AddLocalCollisionBox(boxes, &count,
+                             (Rectangle){83.475f, 32.2f, 1.05f, 7.6f},
+                             gate_ground + 4.275f, 0.65f);
         AddLocalCollisionBox(boxes, &count, GLOAMGATE_FOUNTAIN,
                              TerrainFootprintHeight(GLOAMGATE_FOUNTAIN), 0.68f);
         AddLocalCollisionBox(boxes, &count,
-                             (Rectangle){45.55f, 31.05f, 0.9f, 0.9f},
+                             (Rectangle){45.55f, 35.05f, 0.9f, 0.9f},
                              TerrainFootprintHeight(GLOAMGATE_FOUNTAIN), 3.0f);
     }
     AddLocalCollisionBox(boxes, &count, DUNGEON_FOOTPRINT,

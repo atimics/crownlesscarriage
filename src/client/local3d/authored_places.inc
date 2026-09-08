@@ -1782,7 +1782,7 @@ static float TerrainCarriageRoadAmount(float x, float z)
 static float TerrainRoadAmount(float x, float z)
 {
     if (active_place_function == CC_SETTLEMENT_MARKET &&
-        hypotf(x - 46.0f, z - 31.5f) < 7.7f) return 1.0f;
+        hypotf(x - 46.0f, z - 35.5f) < 13.4f) return 1.0f;
     if (ActivePlaceProfile()->lane_count > 0) {
         TerrainEnsureReady();
         float inset = TerrainLaneInset(x, z, NULL);
@@ -3308,10 +3308,10 @@ static void DrawMiningTerrainStage(Vector3 focus)
 
 static void DrawGloamgateFountain(float ground)
 {
-    const float x = 46.0f, z = 31.5f;
+    const float x = 46.0f, z = 35.5f;
     /* The level civic court joins all five lanes around the basin. */
     for (int32_t ring = 0; ring < 4; ++ring) {
-        float radius = 7.7f - (float)ring * 1.8f;
+        float radius = 13.4f - (float)ring * 3.2f;
         DrawCylinder((Vector3){x, ground + 0.012f + (float)ring * 0.012f, z},
                      radius, radius, 0.012f, 40,
                      BlendColor(WORLD_STONE, WORLD_ROAD_LIGHT,
@@ -3352,20 +3352,20 @@ static void DrawGloamgateFountain(float ground)
 
 static void DrawMarketTerrainStage(Vector3 focus)
 {
-    if (SceneryPointVisible(46.0f, 31.5f, focus)) {
+    if (SceneryPointVisible(46.0f, 35.5f, focus)) {
         DrawGloamgateFountain(TerrainFootprintHeight(GLOAMGATE_FOUNTAIN));
     }
-    if (SceneryPointVisible(84.0f, 34.0f, focus)) {
-        float ground = CcLocalTerrainHeightAt(84.0f, 34.0f);
+    if (SceneryPointVisible(84.0f, 36.0f, focus)) {
+        float ground = CcLocalTerrainHeightAt(84.0f, 36.0f);
         for (int32_t side = -1; side <= 1; side += 2) {
-            DrawBox((Vector3){84.0f, ground + 2.3f, 34.0f + (float)side * 3.4f},
+            DrawBox((Vector3){84.0f, ground + 2.3f, 36.0f + (float)side * 3.4f},
                     (Vector3){0.8f, 4.6f, 0.8f}, WORLD_STONE_LIGHT);
-            DrawBox((Vector3){84.0f, ground + 4.0f, 34.0f + (float)side * 2.9f},
+            DrawBox((Vector3){84.0f, ground + 4.0f, 36.0f + (float)side * 2.9f},
                     (Vector3){0.9f, 0.5f, 1.2f}, WORLD_STONE);
         }
-        DrawBox((Vector3){84.0f, ground + 4.6f, 34.0f},
+        DrawBox((Vector3){84.0f, ground + 4.6f, 36.0f},
                 (Vector3){1.05f, 0.65f, 7.6f}, WORLD_STONE_LIGHT);
-        DrawBox((Vector3){84.55f, ground + 4.6f, 34.0f},
+        DrawBox((Vector3){84.55f, ground + 4.6f, 36.0f},
                 (Vector3){0.08f, 0.45f, 1.3f}, WORLD_TEAL);
     }
     if (SceneryFootprintVisible(CARRIAGE_FOOTPRINT, focus)) {

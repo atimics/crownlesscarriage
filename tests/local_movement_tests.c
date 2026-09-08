@@ -302,10 +302,14 @@ static void TestTownPlanCollisionAndGate(void)
         sim.player.location_id = sim.settlements[settlement].id;
         CcLocalBindPlace(&sim);
 
-        Vector2 hall_approach = {50.0f, 27.0f};
+        const CcLocalPlaceProfile *town = CcLocalPlaceProfileForSettlement(
+            &sim.settlements[settlement]);
+        const CcLocalPlaceBuilding *hall = &town->building[town->primary_building];
+        float front = hall->z + hall->depth;
+        Vector2 hall_approach = {hall->x + hall->width * 0.5f, front + 1.0f};
         Vector2 hall_blocked = CcLocalMove(
             hall_approach, (Vector2){0.0f, -2.0f}, false);
-        if (hall_blocked.y < 26.27f) {
+        if (hall_blocked.y < front + 0.27f) {
             (void)fprintf(
                 stderr,
                 "town plan %d did not keep its civic hall solid: %.3f\n",
@@ -429,10 +433,14 @@ static void TestSharedCharacterCollisionWorld(void)
     }
 
 
-    RequireSolidStreetHouse("west crofts house", 20.0f, 25.0f, 37.0f);
-    RequireSolidStreetHouse("artisan row house", 31.0f, 33.25f, 39.0f);
-    RequireSolidStreetHouse("market road house", 57.0f, 60.25f, 27.75f);
-    RequireSolidStreetHouse("coach yard house", 50.0f, 55.0f, 61.5f);
+    const CcLocalPlaceProfile *market = CcLocalPlaceProfileForFunction(CC_SETTLEMENT_MARKET);
+    const int32_t houses[] = {3, 4, 6, 9};
+    for (int32_t i = 0; i < 4; ++i) {
+        const CcLocalPlaceBuilding *house = &market->building[houses[i]];
+        RequireSolidStreetHouse(house->name, house->x,
+                                 house->x + house->width * 0.5f,
+                                 house->z + house->depth * 0.5f);
+    }
 
 
     const Rectangle ore_station = {25.725f, 53.825f, 1.45f, 1.05f};
@@ -3454,7 +3462,7 @@ int main(void)
     CcLocalAgentUpdate(&edge_walker, 1.0f / 60.0f, false);
     const char *edge_destination = CcLocalAgentNavigationName(&edge_walker);
     if (edge_destination == NULL ||
-        strcmp(edge_destination, "CROWN GATE") != 0) {
+        strcmp(edge_destination, "CUSTOMS ROAD") != 0) {
         (void)fprintf(stderr,
                       "road-edge proximity did not start Crown Gate traversal\n");
         return 1;
@@ -3652,7 +3660,7 @@ int main(void)
     CcLocalAgent room_traveller;
     CcLocalAgentInit(&room_traveller, (Vector2){44.0f, 29.0f}, false);
     int32_t market_portal = StreetPortalIndex(&room_traveller,
-                                               "MARKET STEPS");
+                                               "MARKET HALL");
     if (market_portal < 0 ||
         !CcLocalAgentFollowStreetPortal(&room_traveller, market_portal) ||
         CcLocalAgentNavigationName(&room_traveller) == NULL) {
@@ -3679,7 +3687,7 @@ int main(void)
     CcLocalAgentInit(&cancelled_traversal,
                      (Vector2){50.0f, 27.25f}, false);
     int32_t cancelled_portal = StreetPortalIndex(
-        &cancelled_traversal, "CROWN GATE");
+        &cancelled_traversal, "CUSTOMS ROAD");
     if (cancelled_portal < 0 ||
         !CcLocalAgentFollowStreetPortal(
             &cancelled_traversal, cancelled_portal)) {

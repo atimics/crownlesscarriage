@@ -271,25 +271,26 @@ static void TestGloamgateMarketRoutes(void)
         int32_t count = CcLocalTownCarriagePath(true, arrival, CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY);
         CC_CHECK(count > 2);
         CC_CHECK(CcLocalTownCarriagePath(false, departure, CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY) == count);
+        CC_CHECK(fabsf(arrival[0].y - CC_LOCAL_TOWN_GATE_Z) < 0.001f);
         CC_CHECK(fabsf(arrival[0].x - CC_LOCAL_TOWN_GATE_X) < 0.001f);
         CC_CHECK(hypotf(arrival[count - 1].x - CC_LOCAL_CARRIAGE_X,
                         arrival[count - 1].y - CC_LOCAL_CARRIAGE_Z) < 0.001f);
         for (int32_t i = 0; i < count; ++i) {
             CC_CHECK(hypotf(arrival[i].x - departure[count - 1 - i].x,
                             arrival[i].y - departure[count - 1 - i].y) < 0.001f);
-            CC_CHECK(hypotf(arrival[i].x - 46.0f, arrival[i].y - 31.5f) > 4.0f);
+            CC_CHECK(hypotf(arrival[i].x - 46.0f, arrival[i].y - 35.5f) > 4.0f);
             if (i > 0) CC_CHECK(hypotf(arrival[i].x - arrival[i-1].x,
                                        arrival[i].y - arrival[i-1].y) < 2.0f);
         }
         /* Both ordinary movement and the body collision probe see the basin. */
-        Vector2 blocked = CcLocalMove((Vector2){46,34.5f}, (Vector2){0,-2.0f}, false);
-        CC_CHECK(blocked.y > 32.85f);
-        float ground = CcLocalTerrainHeightAt(46,31.5f);
+        Vector2 blocked = CcLocalMove((Vector2){46,38.5f}, (Vector2){0,-2.0f}, false);
+        CC_CHECK(blocked.y > 36.85f);
+        float ground = CcLocalTerrainHeightAt(46,35.5f);
         Vector3 corrected, normal;
         CC_CHECK(CcLocalProbePhysicsSphereInternal(CC_LOCAL_SCENE_STREET,
-            (Vector3){46,ground+0.4f,34}, (Vector3){46,ground+0.4f,32.7f},
+            (Vector3){46,ground+0.4f,38}, (Vector3){46,ground+0.4f,36.7f},
             0.16f, &corrected, &normal));
-        CC_CHECK(corrected.z >= 33.0f);
+        CC_CHECK(corrected.z >= 37.0f);
     }
     CcLocalBindPlace(NULL);
 }

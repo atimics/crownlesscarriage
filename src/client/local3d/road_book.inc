@@ -2153,10 +2153,10 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     if (profile->function == CC_SETTLEMENT_MARKET) {
         static const struct { float x, z; const char *name; } signs[] = {
-            {35.5f, 24.0f, "Archive and maps"},
-            {31.0f, 28.0f, "Cloth yard"},
-            {60.0f, 32.0f, "Food lane"},
-            {42.0f, 44.0f, "Coach court"},
+            {33.0f, 21.0f, "Archive and maps"},
+            {24.0f, 29.0f, "Cloth yard"},
+            {61.0f, 31.0f, "Food lane"},
+            {42.0f, 47.0f, "Coach court"},
             {73.0f, 34.0f, "Customs road"},
         };
         for (int32_t sign = 0; sign < 5; ++sign) {
@@ -2737,7 +2737,8 @@ static bool StreetCanOccupy(Vector2 point)
     }
     if (active_place_function == CC_SETTLEMENT_MARKET &&
         (InsideExpanded(point, GLOAMGATE_FOUNTAIN, radius) ||
-         InsideExpanded(point, GLOAMGATE_GATE_POST, radius))) return false;
+         InsideExpanded(point, GLOAMGATE_GATE_POSTS[0], radius) ||
+         InsideExpanded(point, GLOAMGATE_GATE_POSTS[1], radius))) return false;
     if ((active_opening_step == CC_LOCAL_OPENING_COMPLETE &&
          InsideExpanded(point, CARRIAGE_FOOTPRINT, radius)) ||
         InsideExpanded(point, DUNGEON_FOOTPRINT, radius)) return false;
