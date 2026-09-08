@@ -8,8 +8,7 @@
 
 static void PrintSummary(const CcSim *sim, bool detail)
 {
-    int32_t total_hunger = 0;
-    int32_t maximum_hunger = 0;
+    CcHungerSnapshot hunger = CcSimHungerSnapshot(sim);
     int32_t travelling = 0;
     int32_t blocked_shipments = 0;
     int32_t royal_idle = 0;
@@ -25,7 +24,6 @@ static void PrintSummary(const CcSim *sim, bool detail)
     int32_t wars = 0;
     int32_t alliances = 0;
     int32_t active_couriers = 0;
-    int32_t abandoned_settlements = 0;
     int32_t maximum_generation = 0;
     int32_t sanction = 0;
     int32_t anointed_count = 0;
@@ -39,15 +37,6 @@ static void PrintSummary(const CcSim *sim, bool detail)
     const CcCharacter *campaign_hero = CcSimCharacter(
         sim, sim->dragon_campaign.hero_character_id);
     const CcKingdom *anointed_kingdom = NULL;
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        if (CcSettlementIsAbandoned(&sim->settlements[i])) {
-            abandoned_settlements += 1;
-        }
-        total_hunger += sim->settlements[i].hunger;
-        if (sim->settlements[i].hunger > maximum_hunger) {
-            maximum_hunger = sim->settlements[i].hunger;
-        }
-    }
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         if (sim->shipments[i].status == CC_SHIPMENT_TRAVELLING) travelling += 1;
         if (sim->shipments[i].status == CC_SHIPMENT_BLOCKED) {
@@ -107,7 +96,9 @@ static void PrintSummary(const CcSim *sim, bool detail)
     }
     CcMaterialChainSnapshot chain = CcSimMaterialChainSnapshot(sim);
     (void)printf("day=%d hash=%016" PRIx64
-                 " average_hunger=%d maximum_hunger=%d shipments=%d events=%d"
+                 " average_hunger=%d maximum_hunger=%d"
+                 " population_weighted_hunger=%d inhabited_settlements=%d"
+                 " hunger_population=%" PRId64 " shipments=%d events=%d"
                  " blocked_shipments=%d royal_carriages=%d/%d/%d/%d/%d"
                  " royal_trips=%d royal_losses=%d"
                  " open_routes=%d/%d legitimacy=%d live_situations=%d"
@@ -133,7 +124,8 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  " dragon_patron=\"%s\" dragon_hero=\"%s\""
                  " landless_days=%d\n",
                  sim->current_day, CcSimHash(sim),
-                 total_hunger / sim->settlement_count, maximum_hunger,
+                 hunger.average, hunger.maximum, hunger.population_weighted,
+                 hunger.inhabited_settlements, hunger.population,
                  travelling, sim->event_count,
                  blocked_shipments, royal_idle, royal_repositioning,
                  royal_delivering, royal_blocked, royal_waiting_capacity,
@@ -164,7 +156,7 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  sim->dragon.broods_laid,
                  sim->dragon.whelps_dispersed,
                  sim->dragon.afterdeath_days,
-                 abandoned_settlements, CcSimClimateFactor(sim),
+                 hunger.abandoned_settlements, CcSimClimateFactor(sim),
                  CcDragonCampaignExperience(sim),
                  sim->archives.lore_stored,
                  sim->archives.lore_lost_total,

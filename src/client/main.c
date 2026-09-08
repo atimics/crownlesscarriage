@@ -3528,13 +3528,19 @@ static void ReleaseMapTexture(Texture2D *texture, bool *attempted)
     *attempted = false;
 }
 
-static void ReleaseMapTextures(ClientMapTextures *textures)
+static void ReleaseMapPageTextures(ClientMapTextures *textures)
 {
     if (textures == NULL) return;
     ReleaseMapTexture(&textures->illustrated,
                       &textures->illustrated_attempted);
     ReleaseMapTexture(&textures->collectible_atlas,
                       &textures->collectible_atlas_attempted);
+}
+
+static void ReleaseMapTextures(ClientMapTextures *textures)
+{
+    if (textures == NULL) return;
+    ReleaseMapPageTextures(textures);
     ReleaseMapTexture(&textures->economic_goods,
                       &textures->economic_goods_attempted);
 }
@@ -4149,9 +4155,9 @@ static ContextActionSet BuildContextActions(
                 sim->pony_company.ponies[pony].seen ? TextFormat("Talk to %s", CcPonyName(pony)) : "Meet a rainbow pony",
                 "", "Stop for a conversation", true, false);
         } else if (sim->pony_company.ponies[pony].ready) {
-            for (int32_t seat = 0; seat < 2; ++seat) {
+            for (int32_t seat = 0; seat < CcSimHorseTeamCount(sim); ++seat) {
                 AddDetailedContextAction(&set, CONTEXT_ACTION_PONY_SWAP,
-                    TextFormat("Release %s", CcPonyName(sim->pony_company.team[seat])), "",
+                    TextFormat("Release %s", CcPonyName(CcSimTeamPony(sim, seat))), "",
                     TextFormat("Invite %s", CcPonyName(pony)), true, false);
                 set.items[set.count - 1].amount = seat;
             }
@@ -5896,9 +5902,9 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
     DrawPanel((Rectangle){866.0f, 174.0f, 362.0f, 454.0f},
               Fade(BACKGROUND, 0.76f));
     CcOverlayDrawText("TEAM & DEPARTURE", 888, 194, 15, CC_VIOLET);
-    for (int32_t horse = 0; horse < CC_CARRIAGE_HORSE_COUNT; ++horse) {
+    for (int32_t horse = 0; horse < CcSimHorseTeamCount(sim); ++horse) {
         int32_t y = 232 + horse * 70;
-        CcOverlayDrawText(CcPonyName(sim->pony_company.team[horse]), 888, y, 13, INK);
+        CcOverlayDrawText(CcPonyName(CcSimTeamPony(sim, horse)), 888, y, 13, INK);
         CcOverlayDrawText(
             TextFormat("HEALTH %d / FATIGUE %d",
                        sim->horse_team[horse].health,
@@ -10125,6 +10131,7 @@ static int ClientRegressionFailure(const char *message)
 
 #include "../../tests/client_interaction_flow.inc"
 #include "../../tests/client_world_cards.inc"
+#include "../../tests/map_texture_lifetime.inc"
 
 static int RunMapSaleInputRegression(void)
 {
@@ -10448,6 +10455,7 @@ static int RunTravelAudioRegression(void)
 int main(int argc, char **argv)
 {
 #if defined(CC_CLIENT_SELF_TESTS)
+    if (argc == 2 && strcmp(argv[1], "--test-map-texture-lifetime") == 0) return RunMapTextureLifetimeRegression();
     if (argc == 2 && strcmp(argv[1], "--test-travel-audio") == 0) return RunTravelAudioRegression();
     if (argc == 2 && strcmp(argv[1], "--test-world-cards") == 0) return RunWorldCardRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-input") == 0) return RunAdventureInputRegression();
@@ -12230,7 +12238,7 @@ int main(int argc, char **argv)
         }
 #if defined(PLATFORM_WEB)
         else {
-            ReleaseMapTextures(&map_textures);
+            ReleaseMapPageTextures(&map_textures);
         }
 #endif
 

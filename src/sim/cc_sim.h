@@ -56,7 +56,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 51
+#define CC_SIM_SCHEMA_VERSION 55
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -384,6 +384,31 @@ typedef enum CcMaterialChainBlocker {
     CC_MATERIAL_CHAIN_BINDING
 } CcMaterialChainBlocker;
 
+/* Caller-owned totals for weekly town stock consumption and storage loss.
+ * Zero-initialize for each campaign. Units are goods bundles; multiply by
+ * CcGoodNutritionValue for civilian nutrition. Samples are differences between
+ * successive totals. The ledger is separate from saves and authoritative state. */
+typedef struct CcTownNutritionAccounting {
+    CcId settlement_id;
+    uint64_t civilian_units[CC_GOOD_COUNT];
+    uint64_t aged_units[CC_GOOD_COUNT];
+    uint64_t overflow_units[CC_GOOD_COUNT];
+} CcTownNutritionAccounting;
+
+typedef struct CcNutritionAccounting {
+    CcTownNutritionAccounting towns[CC_MAX_SETTLEMENTS];
+} CcNutritionAccounting;
+
+/* Read-only hunger measurements. Values are -1 when no settlement is inhabited. */
+typedef struct CcHungerSnapshot {
+    int32_t inhabited_settlements;
+    int32_t abandoned_settlements;
+    int64_t population;
+    int32_t average;
+    int32_t maximum;
+    int32_t population_weighted;
+} CcHungerSnapshot;
+
 typedef struct CcMaterialChainSnapshot {
     CcId scriptorium_id;
     CcMaterialChainBlocker blocker;
@@ -542,6 +567,10 @@ typedef struct CcSettlement {
     int32_t sheep_lambs;
     int32_t sheep_condition;
     int32_t sheep_hunger;
+    int32_t pony_adults;
+    int32_t pony_foals;
+    int32_t pony_condition;
+    int32_t pony_hunger;
 } CcSettlement;
 
 typedef enum CcTownCondition {
@@ -1640,7 +1669,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 172832,
+_Static_assert(sizeof(CcSim) == 172928,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -1675,6 +1704,8 @@ void CcSimUpgradeQuestArchitecture(CcSim *sim);
 void CcSimInitializeUnderroad(CcSim *sim);
 void CcSimUpgradeGrainEconomy(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
+void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
+                                             CcNutritionAccounting *accounting);
 int32_t CcSimGossipCarrierCapacity(const CcSim *sim);
 const CcGossipCarrier *CcSimGossipCarrier(const CcSim *sim, CcId id);
 const CcGossip *CcSimPersonalGossip(const CcSim *sim, CcId id, int32_t offset,
@@ -1715,6 +1746,8 @@ int32_t CcSimRoadHouseProgressMilli(const CcSim *sim, CcId route_id,
                                     int32_t journey_watch_count);
 CcMoney CcSimRoadHouseCost(const CcSim *sim, CcId route_id);
 bool CcSimJourneyRoadHouseAvailable(const CcSim *sim);
+int32_t CcSimHorseTeamCount(const CcSim *sim);
+int32_t CcSimTeamPony(const CcSim *sim, int32_t slot);
 int32_t CcSimHorseCount(const CcSim *sim);
 const CcHorse *CcSimHorseAt(const CcSim *sim, int32_t index);
 const CcHorse *CcSimHorse(const CcSim *sim, CcId horse_id);
@@ -1838,6 +1871,7 @@ const char *CcBanditReactionName(int32_t roll);
 int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimActiveFrontCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
+CcHungerSnapshot CcSimHungerSnapshot(const CcSim *sim);
 CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
 const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker);
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
@@ -1854,6 +1888,9 @@ const CcTreasure *CcSimTreasure(const CcSim *sim, CcId id);
 int32_t CcSimTreasureCountForOwner(const CcSim *sim, CcId owner_id);
 int32_t CcSettlementServiceCapacity(CcSettlementSize size);
 int32_t CcSettlementServiceCount(const CcSettlement *settlement);
+void CcSimSeedCommonPonyHerds(CcSim *sim);
+void CcSimUnharnessSecondDraftAnimal(CcSim *sim);
+int32_t CcSimCommonPonyCount(const CcSim *sim);
 bool CcSettlementHasService(const CcSettlement *settlement,
                             CcServiceKind service);
 bool CcSimStartServiceProject(CcSim *sim, CcId settlement_id,
