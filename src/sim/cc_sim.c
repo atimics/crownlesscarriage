@@ -91,6 +91,31 @@ bool CcSettlementIsAbandoned(const CcSettlement *settlement)
     return settlement != NULL && settlement->population <= 0;
 }
 
+CcHungerSnapshot CcSimHungerSnapshot(const CcSim *sim)
+{
+    CcHungerSnapshot result = {0, 0, 0, -1, -1, -1};
+    if (sim == NULL) return result;
+    int64_t total = 0;
+    int64_t weighted = 0;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) {
+            result.abandoned_settlements += 1;
+            continue;
+        }
+        result.inhabited_settlements += 1;
+        result.population += place->population;
+        total += place->hunger;
+        weighted += (int64_t)place->population * place->hunger;
+        if (place->hunger > result.maximum) result.maximum = place->hunger;
+    }
+    if (result.inhabited_settlements > 0) {
+        result.average = (int32_t)(total / result.inhabited_settlements);
+        result.population_weighted = (int32_t)(weighted / result.population);
+    }
+    return result;
+}
+
 int32_t CcSimClimateFactor(const CcSim *sim)
 {
     if (sim == NULL) return 100;
@@ -7978,8 +8003,10 @@ static void AdvanceHoardRaid(CcSim *sim)
         raiders->war_raids_completed += 1;
     } else {
         origin->market_coins += relief;
-        origin->hunger = ClampI32(origin->hunger - MaximumI32(3, relief / 2),
-                                  0, 100);
+        if (sim->schema_version < 53U) {
+            origin->hunger = ClampI32(origin->hunger - MaximumI32(3, relief / 2),
+                                      0, 100);
+        }
         origin->prosperity = ClampI32(origin->prosperity + 2, 0, 100);
         for (int32_t i = 0; i < sim->faction_count; ++i) {
             CcFaction *faction = &sim->factions[i];
@@ -7989,6 +8016,8 @@ static void AdvanceHoardRaid(CcSim *sim)
             }
         }
         (void)snprintf(text, sizeof(text),
+                       sim->schema_version >= 53U ?
+                       "%s returns to %s with %d stolen crowns for market purchases." :
                        "%s returns to %s and spends %d stolen crowns on bread and old debts.",
                        raiders->name, origin->name, relief);
     }
@@ -18700,9 +18729,8 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
     { 28U, 28U, 22U, 22U },
     { 29U, 29U, 23U, 23U },
     { 30U, 30U, 23U, 23U },
-    /* Every legacy schema remains readable by the generators that predate the
-       versioning split. */
-    { CC_OLDEST_SUPPORTED_SCHEMA, CC_NEWEST_LEGACY_SCHEMA, 2U, 21U },
+    /* Preserve the historical generator pairings. Schema 52 shipped with 25. */
+    { CC_OLDEST_SUPPORTED_SCHEMA, 51U, 2U, 21U },
 };
 
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)

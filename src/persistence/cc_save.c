@@ -5970,9 +5970,10 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          * no data migration. Schema 51 adds common pony herds and schema 52
          * empties the carriage's second seat; both are seeded by the caller
          * below rather than here, because every branch of this function lands
-         * on the current schema. Schema 54 decays hoarded paper, a rule the
-         * settlement update applies as it goes, so older saves need no data
-         * migration for it either. */
+         * on the current schema. Schema 53 changes hoard-return food rules
+         * after historical replay and schema 54 decays hoarded paper; both are
+         * rules applied as the simulation goes, and their stored fields have
+         * the same representation as schema 52. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }

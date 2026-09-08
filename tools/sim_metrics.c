@@ -80,11 +80,10 @@ static void UpdateHistory(const CcSim *sim, CcMetricsHistory *history)
 {
     int32_t active_settlements = 0;
     int32_t closed_routes = 0;
-    int32_t hunger_total = 0;
+    CcHungerSnapshot hunger = CcSimHungerSnapshot(sim);
     bool has_abandoned_settlement = false;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         bool abandoned = CcSettlementIsAbandoned(&sim->settlements[i]);
-        hunger_total += sim->settlements[i].hunger;
         if (!abandoned) active_settlements += 1;
         else has_abandoned_settlement = true;
         if (abandoned && !history->settlement_was_abandoned[i]) {
@@ -112,10 +111,10 @@ static void UpdateHistory(const CcSim *sim, CcMetricsHistory *history)
     if (has_abandoned_settlement) {
         history->years_with_abandoned_settlement += 1;
     }
-    if (hunger_total / sim->settlement_count >= 40) {
+    if (hunger.average >= 40) {
         history->years_hunger_40_plus += 1;
     }
-    if (hunger_total / sim->settlement_count >= 60) {
+    if (hunger.average >= 60) {
         history->years_hunger_60_plus += 1;
     }
     bool at_war = false;
@@ -148,8 +147,7 @@ static void UpdateHistory(const CcSim *sim, CcMetricsHistory *history)
 static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
                       int32_t seed_number, int32_t year)
 {
-    int32_t hunger_total = 0;
-    int32_t hunger_maximum = 0;
+    CcHungerSnapshot hunger = CcSimHungerSnapshot(sim);
     int32_t prosperity_total = 0;
     int32_t prosperity_minimum = 100;
     int32_t prosperity_maximum = 0;
@@ -175,8 +173,6 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         if (CcSettlementIsAbandoned(place)) abandoned_settlements += 1;
         else active_settlements += 1;
         total_population += place->population;
-        hunger_total += place->hunger;
-        if (place->hunger > hunger_maximum) hunger_maximum = place->hunger;
         prosperity_total += place->prosperity;
         if (place->prosperity < prosperity_minimum) {
             prosperity_minimum = place->prosperity;
@@ -253,7 +249,7 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         "%d,%u,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
         "%d,%" PRId64 ",%" PRId64 ",%d,",
         seed_number, sim->world_seed, year,
-        hunger_total / sim->settlement_count, hunger_maximum,
+        hunger.average, hunger.maximum,
         prosperity_total / sim->settlement_count,
         prosperity_minimum, prosperity_maximum,
         security_total / sim->settlement_count,
@@ -293,7 +289,7 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
         "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
         "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
-        "%d,%d,%d,%d,%d,%d,%d,%d\n",
+        "%d,%d,%d,%d,%d,%d,%d,%d",
         wars, alliances, active_couriers, lost_couriers,
         distorted_couriers, sim->dragon.slain ? 1 : 0,
         sim->dragon_campaign.attempts,
@@ -357,6 +353,7 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         sim->archives.lore_ceiling,
         sim->archives.kit_tool_wear,
         sim->archives.abbot_character_id != 0U ? 1 : 0);
+    (void)printf(",%d\n", hunger.population_weighted);
 }
 
 int main(int argc, char **argv)
@@ -423,7 +420,7 @@ int main(int argc, char **argv)
         "dragon_uncrowned_days,dragon_afterdragon_days,archive_scribes,"
         "lore_stored,lore_lost_total,archive_stewardship,"
         "archive_last_recorded_day,lore_ceiling,archive_tool_wear,"
-        "archive_abbot_present");
+        "archive_abbot_present,population_weighted_hunger");
     char error[192];
     for (int32_t seed_number = first_seed;
          seed_number < first_seed + seeds; ++seed_number) {

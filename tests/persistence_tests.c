@@ -2714,8 +2714,8 @@ static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
     if (schema == 28U && generator == 22U) return true;
     if (schema == 29U && generator == 23U) return true;
     if (schema == 30U && generator == 23U) return true;
-    /* Generators predating the versioning split read any legacy schema. */
-    if (legacy && generator >= 2U && generator <= 21U) return true;
+    /* Preserve older pairings; schema 52 only shipped with generator 25. */
+    if (schema >= 2U && schema <= 51U && generator >= 2U && generator <= 21U) return true;
     return false;
 }
 
