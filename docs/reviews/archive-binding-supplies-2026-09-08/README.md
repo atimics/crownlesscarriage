@@ -16,4 +16,11 @@ The existing archive cargo validator accepts these two goods from schema 83. Sch
 
 The ordinary worlds still need viable seats and source production or surviving local records. This freight change provides a route for existing binding goods when a supplier has stock to spare. #446 remains open.
 
-Full validation is running; final results will be added before this draft is handed over.
+## Validation
+
+- Strict Release headless build passed; all 125 tests passed.
+- Static analysis passed with the single reviewed baseline entry.
+- Native play build passed; all 13 archive and persistence checks passed.
+- The two legacy comparisons and four ordinary-world measurements completed successfully.
+
+These are local results. Remote CI is tracked on draft PR #620.
