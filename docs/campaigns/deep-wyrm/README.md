@@ -40,7 +40,7 @@ the original snapshot.
 The loader checks the recorded seed, day, versions, and complete historical
 state hash before it creates the company. It keeps the world clock, random
 state, towns, characters, events, and dragon campaign. The new prophecy book
-uses one new entity ID. It resets
+uses one new entity ID. The loader resets
 the player inventory, carriage, horses, journey, mine progress, and route
 knowledge for a fresh start in Gloamgate. The resulting company saves through
 the regular campaign system.
@@ -93,3 +93,20 @@ travel provide the company's first choices.
 For a headless build, run `ctest -R deep_wyrm_starting_campaign`.
 For a native build, run `crownless_carriage --test-frontend`.
 Capture scenes 21 and 22 show the introduction and the town respectively.
+
+## Prophecy delivery validation
+
+All 117 headless checks pass. The native Release build and interface regression
+pass, including opening the Prophecy page, handing over the book, and resuming
+the saved result. All 44 shared host checks pass, including a second player's
+view of the delivery, repeated requests, and server restart. Static analysis
+passes with the repository's one reviewed baseline item.
+
+A further 120-day replay after immediate delivery kept the source sequence:
+Roda funds the host on day 73388, Quill leaves Gloamgate on day 73472, the
+wyrm's named trophy appears on day 73477, and the host returns 3185 crowns to
+three allied realms on day 73482. The company took no further actions during
+that replay.
+
+The desktop window server was unavailable for the new Prophecy-page capture.
+The earlier campaign images above remain labeled as the original opening.
