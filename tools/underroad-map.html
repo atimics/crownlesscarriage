@@ -1,0 +1,372 @@
+<div id="underroad-atlas">
+  <div class="viz-row">
+    <button type="button" class="btn" id="ur-surface" aria-pressed="true">Main map</button>
+    <button type="button" class="btn" id="ur-overview" aria-pressed="false">Whole Underroad</button>
+    <label class="form-label" for="ur-zone">Inspect zone
+      <select class="form-select" id="ur-zone" aria-label="Open a zone floor plan"></select>
+    </label>
+  </div>
+  <h3 id="ur-title">The Underroad · 24 zones</h3>
+  <div id="ur-subtitle" class="text-small" aria-live="polite"></div>
+  <div id="ur-map"></div>
+  <div id="ur-legend" class="text-small"></div>
+  <div id="ur-rooms"></div>
+  <div id="ur-exits" class="viz-row" aria-label="Connected zones"></div>
+  <div id="ur-detail" class="text-small" aria-live="polite"></div>
+</div>
+<style>
+  #underroad-atlas { color:var(--foreground); }
+  #underroad-atlas #ur-map { width:100%; margin:12px 0; }
+  #underroad-atlas #ur-map svg { display:block; width:100%; }
+  #underroad-atlas #ur-rooms { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 18px; margin:14px 0; }
+  #underroad-atlas #ur-exits { margin:14px 0; }
+  #underroad-atlas #ur-detail { margin-top:12px; }
+  #underroad-atlas .ur-node { display:flex; justify-content:center; align-items:center; height:100%; }
+  #underroad-atlas .ur-room-key { font-weight:500; }
+  @media(max-width:450px) { #underroad-atlas #ur-rooms { grid-template-columns:1fr; } }
+</style>
+<script>
+(() => {
+  const root = document.getElementById('underroad-atlas');
+  const select = root.querySelector('#ur-zone');
+  const overview = root.querySelector('#ur-overview');
+  const surface = root.querySelector('#ur-surface');
+  const map = root.querySelector('#ur-map');
+  const title = root.querySelector('#ur-title');
+  const subtitle = root.querySelector('#ur-subtitle');
+  const legend = root.querySelector('#ur-legend');
+  const rooms = root.querySelector('#ur-rooms');
+  const exits = root.querySelector('#ur-exits');
+  const detail = root.querySelector('#ur-detail');
+  const ns = 'http://www.w3.org/2000/svg';
+  // Each chamber is [name, x, y, width, height]. Coordinates use a two-metre grid.
+  // Zone IDs retain the simulation's room order; player-facing numbers start at 01.
+  const zones = [
+    {name:'Mine Mouth', band:'Upper workings', pos:[2,0], kind:'stone', purpose:'Surface entrance · carriage and horses stay in the yard',
+      rooms:[['Gatehouse',3,3,10,7],['Changing room',18,3,8,7],['Pack store',30,3,9,7],['First descent',16,18,11,8],['Rope bench',3,18,9,8],['Porter shelter',31,18,8,8]],
+      paths:[[0,1],[1,2],[1,3],[3,4],[3,5],[0,4]], marks:[[1,'pack'],[4,'cache']],
+      choice:'Weigh the carried load, leave supplies with the carriage, and descend through the stair hall.'},
+    {name:'Lamp Hall', band:'Upper workings', pos:[2,1], kind:'stone', purpose:'Main junction · light, route marks, and the lift landing',
+      rooms:[['Lamp racks',3,4,8,8],['Route hall',16,3,11,9],['Lift landing',32,3,8,9],['Quiet stair',4,20,10,7],['Oil store',19,20,7,7],['Weighhouse stair',31,19,9,8]],
+      paths:[[0,1],[1,2],[0,3],[1,4],[4,5],[2,5]], marks:[[4,'cache']],
+      choice:'Choose the dry bridge route or the flooded workings; the repaired lift gives porters a shorter return.'},
+    {name:'Broken Weighhouse', band:'Upper workings', pos:[1,2], kind:'stone', purpose:'Failed scales and old haulage lanes',
+      rooms:[['Receiving bay',2,3,11,7],['Scale pit',18,3,9,8],['Foreman desk',33,3,7,7],['Cracked aisle',17,17,12,9],['Tool cage',3,20,8,6],['Bridge stair',34,18,6,9]],
+      paths:[[0,1],[1,2],[1,3],[0,4],[4,3],[3,5]], marks:[[1,'hazard'],[4,'cache']],
+      choice:'Cross the scale pit quickly or use the longer side aisle to protect a heavy pack.'},
+    {name:'Sump Gallery', band:'Flooded workings', pos:[3,2], kind:'water', purpose:'Water channels and stoneback work marks',
+      rooms:[['Dry steps',2,3,9,7],['Sump pool',16,2,13,10],['Drain gate',34,4,6,7],['Stone nests',3,19,10,8],['Raised ledge',18,19,10,6],['Pump chamber',33,18,7,9]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5]], marks:[[1,'water'],[3,'home']],
+      choice:'Use the dry perimeter or cross the sump; stonebacks occupy the southern chambers.'},
+    {name:'Chain Bridge', band:'Upper workings', pos:[2,3], kind:'chasm', purpose:'A narrow suspended crossing over the drainage shaft',
+      rooms:[['West abutment',2,3,12,8],['Chain house',28,3,12,8],['Inspection ledge',3,20,9,6],['East abutment',28,19,12,8],['Underbridge pier',17,12,8,7]],
+      paths:[[0,1],[1,3],[0,2],[2,4],[4,3]], marks:[[4,'hazard']],
+      choice:'Study the supports from below; the upper bridge is the short route and the ledge is the alternate crossing.'},
+    {name:"Foreman's Lockroom", band:'Upper workings', pos:[0,3], kind:'stone', purpose:'A sheltered workshop behind the old office',
+      rooms:[['Office',3,3,9,8],['Lock bench',18,3,9,7],['Tool store',32,3,8,8],['Records',3,19,10,7],['Workshop',18,17,13,10],['Service steps',35,20,6,7]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[2,4],[4,5]], marks:[[2,'cache']],
+      choice:'Recover tools and read the survey records before choosing the wet service stair or the survey route.'},
+    {name:'Flooded Turntable', band:'Flooded workings', pos:[4,3], kind:'water', purpose:'A sunken rail junction with three working ledges',
+      rooms:[['North landing',17,2,10,6],['West rail',2,11,10,7],['Turntable',17,11,11,9],['East rail',33,10,8,8],['Drain steps',3,23,9,5],['South landing',24,23,12,5]],
+      paths:[[0,2],[1,2],[2,3],[1,4],[4,5],[5,3]], marks:[[2,'water']],
+      choice:'The rim walk reaches the cargo spur; crossing the flooded turntable saves distance and exposes the load.'},
+    {name:'Lost Cargo Spur', band:'Flooded workings', pos:[4,4], kind:'stone', purpose:'Abandoned freight, hand-carry routes, and a concealed cut',
+      rooms:[['Rail head',2,3,10,7],['Broken wagons',17,3,14,8],['Porter steps',35,3,6,8],['Iron stacks',3,20,9,7],['Split arch',18,19,9,8],['Hidden drain',34,20,7,6]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[1,4]], marks:[[1,'hazard'],[3,'cache']],
+      choice:'Break the iron load into carried portions; the concealed drain offers another route toward the market.'},
+    {name:'Bell Shaft', band:'Upper workings', pos:[2,4], kind:'chasm', purpose:'A vertical stair around the old signal shaft',
+      rooms:[['Upper stair',2,3,10,7],['Bell frame',17,3,10,8],['Watch ledge',32,4,8,7],['Rope landing',3,20,10,7],['Lower stair',18,20,10,7],['Counterweight',33,19,7,8]],
+      paths:[[0,1],[1,2],[2,5],[5,4],[4,3],[3,0]], marks:[[5,'hazard']],
+      choice:'Descend around the shaft; ringing the bell may bring the gatekeepers before you reach their door.'},
+    {name:'Archive Gate', band:'Goblin settlement', pos:[2,5], kind:'home', purpose:'Hollowbarrow entrance · goblin border post and passage desk',
+      rooms:[['Visitor stair',3,3,9,7],['Passage desk',17,3,11,8],['Guard room',33,3,8,8],['Waiting hall',3,19,10,8],['Records gate',18,19,10,8],['Market steps',33,19,8,8]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[1,4]], marks:[[2,'home'],[1,'terms']],
+      choice:'The visitor stair reaches the Hollowbarrow trail. Ask for passage through the records hall or take the market route under its stated terms.'},
+    {name:'Hall of Ash Clerks', band:'Goblin settlement', pos:[1,6], kind:'home', purpose:'Clerks live and work beside the tribute records',
+      rooms:[['Public counter',3,3,10,8],['Ledger hall',18,3,11,8],['Seal room',34,3,7,7],['Clerk homes',2,18,12,10],['Shared kitchen',19,20,9,7],['Vault stair',34,18,7,10]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[1,4],[2,5]], marks:[[3,'home'],[4,'home'],[2,'terms']],
+      choice:'Learn who owns a load and which passage a permit covers; homes and kitchens form a quieter loop.'},
+    {name:'Cinder Market', band:'Goblin settlement', pos:[3,6], kind:'home', purpose:'An inhabited market with food, water, and porter hire',
+      rooms:[['Market entry',2,3,10,7],['Stall court',17,3,13,10],['Porter house',34,3,7,8],['Family rooms',2,19,11,9],['Kitchen and well',18,21,11,7],['Night door',34,21,7,6]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5],[1,4]], marks:[[3,'home'],[4,'home'],[2,'terms']],
+      choice:'Buy provisions or arrange porter help; a concealed night door joins the smuggler cut.'},
+    {name:'Red Cap Barracks', band:'Goblin settlement', pos:[0,7], kind:'home', purpose:'The guard company lives beside its muster court',
+      rooms:[['Gate stair',2,3,10,7],['Muster court',17,3,13,9],['Captain room',35,3,6,8],['Sleeping hall',2,19,12,9],['Mess kitchen',19,21,9,7],['Armoury',34,19,7,9]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5],[1,4]], marks:[[3,'home'],[4,'home'],[5,'cache']],
+      choice:'The guard route reaches the shrine directly; passage depends on the occupants and the terms you obtain.'},
+    {name:'Ledger Vault', band:'Goblin settlement', pos:[2,7], kind:'stone', purpose:'Stored tribute and the records of its owners',
+      rooms:[['Receiving hall',2,3,11,7],['Counting room',18,3,10,9],['Seal desk',34,3,7,7],['Bulk store',2,19,12,9],['Strongroom',19,20,10,8],['Tithe stair',35,19,6,9]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5]], marks:[[3,'cache'],[4,'cache'],[2,'terms']],
+      choice:'Inspect a specific load and its ownership before planning a return through the inhabited halls.'},
+    {name:'Tribute Lift', band:'Goblin settlement', pos:[4,7], kind:'chasm', purpose:'A small goods platform served by goblin porters',
+      rooms:[['Upper landing',3,3,10,7],['Winch house',18,3,11,8],['Porter quarters',34,3,7,9],['Lower landing',3,20,10,8],['Basket store',18,20,10,7],['Foot stair',34,19,7,9]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5]], marks:[[2,'home'],[1,'hazard']],
+      choice:'Use the stair with carried packs or arrange a basket lift within its load limit.'},
+    {name:'Blind Aqueduct', band:'Deep Underroad', pos:[4,8], kind:'water', purpose:'A dark watercourse beneath the tribute road',
+      rooms:[['Intake steps',2,3,10,7],['Silt chamber',17,3,12,8],['Blind bend',34,3,7,8],['Dry shelf',2,20,11,8],['Sluice',18,20,10,8],['Hidden overflow',34,20,7,8]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5]], marks:[[1,'water'],[4,'water']],
+      choice:'The dry shelf takes longer; the overflow can reveal a concealed way into the porters’ burial chambers.'},
+    {name:'The Tithe Road', band:'Deep Underroad', pos:[2,8], kind:'stone', purpose:'A paved foot road used by tribute bearers',
+      rooms:[['Receiving arch',2,3,11,7],['Toll court',18,3,10,8],['Lookout',34,3,7,8],['Porter rest',2,20,11,8],['Load layby',18,20,11,8],['Forked stair',35,20,6,8]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5],[1,4]], marks:[[1,'terms'],[3,'home']],
+      choice:'Choose the watched shrine approach or the burial-road approach; rests and load laybys support a planned return.'},
+    {name:'Furnace Shrine', band:'Deep Underroad', pos:[1,9], kind:'heat', purpose:'The watched approach to the dragon chamber',
+      rooms:[['Procession stair',2,3,10,8],['Offering hall',17,3,13,9],['Attendant rooms',34,3,7,9],['Cool gallery',2,20,11,8],['Ember trench',18,20,11,8],['Dragon stair',35,20,6,8]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5]], marks:[[2,'home'],[4,'heat']],
+      choice:'Follow the formal tribute approach or use the cool gallery around the offering hall.'},
+    {name:"Porters' Grave", band:'Deep Underroad', pos:[3,9], kind:'stone', purpose:'A burial road with a narrow second approach to the hoard',
+      rooms:[['Mourning stair',2,3,11,8],['Memorial hall',18,3,11,9],['Names alcove',35,3,6,9],['Burial chambers',2,20,12,8],['Crawl ledge',19,21,10,6],['Hoard fissure',35,20,6,8]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5]], marks:[[4,'hazard']],
+      choice:'Reach the hoard through the fissure with a light pack; a larger recovered load needs another exit.'},
+    {name:'Hoard Threshold · Dragon Cave', band:'Dragon domain', pos:[2,10], kind:'heat', purpose:'Final zone · the dragon chamber and its actual hoard',
+      rooms:[['Tribute vestibule',2,3,10,8],['Goblin watch',17,3,9,8],['Dragon chamber',29,3,12,16],['Quiet fissure',2,21,10,7],['Tribute cache',17,21,9,7],['Hoard shelf',30,23,11,5]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5]], marks:[[1,'home'],[2,'dragon'],[4,'cache'],[5,'hoard']],
+      choice:'Two underground approaches meet at the lair. Read the dragon’s state, reach a real load, and plan how to carry it back.'},
+    {name:'Old Smuggler Cut', band:'Hidden routes', pos:[5,5], kind:'stone', purpose:'A narrow bypass between the wet workings and goblin market',
+      rooms:[['Low arch',2,3,10,7],['Meeting room',18,3,10,8],['Market crawl',35,3,6,7],['Hidden store',2,20,11,8],['Dry channel',18,21,11,7],['Lift stair',35,20,6,8]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5]], marks:[[3,'cache'],[1,'terms']],
+      choice:'Find the concealed links, learn the local passage terms, and keep the load small enough for the crawl.'},
+    {name:'Stoneback Nursery', band:'Flooded workings', pos:[5,3], kind:'water', purpose:'Stonebacks shelter among warm pools and arranged tools',
+      rooms:[['Dry landing',2,3,10,8],['Warm pool',17,3,13,9],['Tool patterns',35,3,6,9],['Outer ledge',2,20,11,8],['Nursery',18,20,12,8],['Lift approach',35,20,6,8]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5]], marks:[[1,'water'],[4,'home']],
+      choice:'Use the outer ledge around the nursery or approach the stonebacks openly.'},
+    {name:'Collapsed Freight Lift', band:'Flooded workings', pos:[5,1], kind:'chasm', purpose:'A damaged lift that can become a porter shortcut',
+      rooms:[['Lower landing',2,3,10,8],['Broken cage',17,3,11,10],['Anchor room',34,3,7,9],['Repair bench',2,21,10,7],['Counterweight',18,21,10,7],['Lamp Hall landing',34,20,7,8]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5]], marks:[[1,'hazard'],[4,'hazard']],
+      choice:'Brace the lift and restore a small goods platform; people use the companion ladder.'},
+    {name:"King's Survey Room", band:'Upper workings', pos:[0,4], kind:'stone', purpose:'A quiet survey station with a second way to the shaft',
+      rooms:[['Survey entry',2,3,10,8],['Map table',17,3,12,9],['Instrument store',34,3,7,8],['Survey bunk',2,20,11,8],['Sample racks',18,20,11,8],['Bell stair',35,20,6,8]],
+      paths:[[0,1],[1,2],[0,3],[3,4],[4,5],[2,5]], marks:[[4,'cache']],
+      choice:'Compare the old survey with observed passages and recover useful material before descending.'}
+  ];
+  // The 29 ordinary links and four special links are the existing authored graph.
+  // Two fixed side passages replace seed-only optional links in this design draft.
+  const links = [
+    [0,1],[1,2],[1,3],[2,4],[2,5],[3,4],[3,6],[4,8],[5,23],[23,8],
+    [6,7],[6,21],[21,22],[8,9],[9,10],[9,11],[10,12],[10,13],[11,13],
+    [11,14],[12,17],[13,16],[14,15],[14,20],[15,16],[16,17],[16,18],[17,19],[18,19],
+    [7,20,'hidden'],[20,11,'hidden'],[22,1,'repair'],[15,18,'hidden'],[5,6],[14,18]
+  ];
+  const code = i => String(i + 1).padStart(2,'0');
+  const incident = i => links.filter(l => l[0] === i || l[1] === i).map(l => ({to:l[0] === i ? l[1] : l[0], kind:l[2] || 'open'}));
+  // Town connections follow InitRoute. Fork positions here are schematic.
+  // The mine fork reuses Low Silver Pit on route 2; the Hollowbarrow fork is proposed.
+  const roads = {
+    thornford:{name:'Thornford',p:[.13,401],town:true},
+    gloamgate:{name:'Gloamgate',p:[.30,335],town:true},
+    alderwatch:{name:'Alderwatch',p:[.52,194],town:true},
+    silverwick:{name:'Silverwick',p:[.85,365],town:true},
+    rosespire:{name:'Rosespire',p:[.79,48],town:true},
+    hollowbarrow:{name:'Hollowbarrow',p:[.23,48],town:true},
+    mineFork:{name:'Mine fork',p:[.72,286]},
+    mineYard:{name:'Low Silver Pit',p:[.89,213],entrance:0},
+    hollowFork:{name:'Trail fork',p:[.24,133]},
+    hollowYard:{name:'Hollowbarrow trailhead',p:[.075,208],entrance:9}
+  };
+  const roadLinks = [
+    ['thornford','gloamgate'],['gloamgate','alderwatch'],
+    ['alderwatch','mineFork'],['mineFork','silverwick'],['silverwick','rosespire'],
+    ['rosespire','hollowbarrow'],['hollowbarrow','hollowFork'],['hollowFork','gloamgate'],
+    ['gloamgate','silverwick'],['alderwatch','rosespire'],
+    ['mineFork','mineYard'],['hollowFork','hollowYard']
+  ];
+  const entrances = [
+    {zone:0,road:'mineYard',chamber:0,name:'Silverwick mine yard'},
+    {zone:9,road:'hollowYard',chamber:0,name:'Hollowbarrow trailhead'}
+  ];
+  let roadHere='mineFork', roadFrom='silverwick';
+  let surfaceView=true;
+  let selected = 0;
+  let whole = true;
+  const svgNode = (tag, attrs = {}, text) => {
+    const e = document.createElementNS(ns,tag);
+    for (const [k,v] of Object.entries(attrs)) e.setAttribute(k,v);
+    if (text !== undefined) e.textContent = text;
+    return e;
+  };
+  const line = (svg,x1,y1,x2,y2,color,dash) => {
+    const attrs = {x1,y1,x2,y2,stroke:color,'stroke-width':1.5};
+    if (dash) attrs['stroke-dasharray']=dash;
+    svg.append(svgNode('line',attrs));
+  };
+  const label = (svg,x,y,text,anchor = 'middle') => svg.append(svgNode('text',{x,y,fill:'var(--foreground)','text-anchor':anchor,'dominant-baseline':'middle',class:'text-small'},text));
+  const button = (text,action,aria) => {
+    const b = document.createElement('button'); b.type='button'; b.className='btn'; b.textContent=text;
+    if (aria) b.setAttribute('aria-label',aria);
+    b.addEventListener('click',action); return b;
+  };
+  const open = i => { selected=i; whole=false; surfaceView=false; select.value=String(i); draw(); };
+  const placeholder=document.createElement('option'); placeholder.value=''; placeholder.disabled=true; placeholder.textContent='Choose a floor plan'; select.append(placeholder);
+  zones.forEach((z,i) => { const option=document.createElement('option'); option.value=i; option.textContent=code(i)+' · '+z.name; select.append(option); });
+  select.addEventListener('change',() => open(Number(select.value)));
+  overview.addEventListener('click',() => { whole=true; surfaceView=false; draw(); });
+  surface.addEventListener('click',() => { surfaceView=true; draw(); });
+  function draw() {
+    map.replaceChildren(); rooms.replaceChildren(); exits.replaceChildren();
+    overview.setAttribute('aria-pressed',String(whole&&!surfaceView));
+    surface.setAttribute('aria-pressed',String(surfaceView));
+    const width = Math.max(280,Math.floor(map.getBoundingClientRect().width));
+    if(surfaceView) drawSurface(width); else if (whole) drawWhole(width); else drawZone(width);
+  }
+  function neighbors(at) {
+    return roadLinks.filter(l=>l.includes(at)).map(l=>l[0]===at?l[1]:l[0]);
+  }
+  function direction(to) {
+    if(to===roadFrom) return 'Turn back';
+    const p=roads[roadFrom].p, q=roads[roadHere].p, r=roads[to].p;
+    const ax=(q[0]-p[0])*700,ay=q[1]-p[1],bx=(r[0]-q[0])*700,by=r[1]-q[1];
+    const angle=Math.atan2(ax*by-ay*bx,ax*bx+ay*by)*180/Math.PI;
+    if(Math.abs(angle)<35) return 'Continue ahead';
+    return angle>0?'Turn right':'Turn left';
+  }
+  function beyond(to) {
+    const seen=new Set([roadHere,to]),queue=[to],found=[];
+    for(const at of queue) {
+      if(at!==to&&roads[at].town) found.push(roads[at].name);
+      if(found.length===2) break;
+      for(const next of neighbors(at)) if(!seen.has(next)) {seen.add(next);queue.push(next);}
+    }
+    return found;
+  }
+  function drawSurface(width) {
+    select.value='';
+    title.textContent='Roads and the Underroad';
+    subtitle.textContent='Design sketch · two fixed entrances · proposed Hollowbarrow trail';
+    legend.textContent='Solid: surface roads · Dotted: foot entrances · Ring: carriage in the road sketch';
+    const svg=svgNode('svg',{viewBox:`0 0 ${width} 655`,role:'img','aria-label':'Six towns on surface roads. Low Silver Pit and a proposed Hollowbarrow trail connect to the same Underroad.'});
+    const point=id=>[roads[id].p[0]*width,roads[id].p[1]];
+    roadLinks.forEach(([a,b])=>line(svg,...point(a),...point(b),'var(--border)'));
+    for(const [id,r] of Object.entries(roads)) {
+      const [x,y]=point(id);
+      svg.append(svgNode(r.town?'circle':'rect',r.town?{cx:x,cy:y,r:5,fill:'var(--foreground)'}:{x:x-4,y:y-4,width:8,height:8,fill:'var(--foreground)'}));
+      if(id==='hollowYard') {label(svg,8,y-25,'Hollowbarrow','start'); label(svg,8,y-10,'trailhead','start');}
+      else if(id==='mineYard') {label(svg,width-8,y+19,'Low Silver Pit','end'); label(svg,width-8,y+34,'mine yard','end');}
+      else label(svg,x,y+(id==='mineFork'?21:-15),r.name);
+    }
+    const at=point(roadHere);
+    svg.append(svgNode('circle',{cx:at[0],cy:at[1],r:12,fill:'none',stroke:'var(--viz-series-1)','stroke-width':2}));
+    line(svg,8,447,width-8,447,'var(--border)');
+    for(const e of entrances) {
+      const [x,y]=point(e.road), side=e.zone===0?width-9:9;
+      const end=e.zone===0?width*.75:width*.25;
+      svg.append(svgNode('path',{d:`M ${x} ${y} L ${side} ${y+25} L ${side} 478 L ${end} 504`,fill:'none',stroke:'var(--viz-series-2)','stroke-width':1.5,'stroke-dasharray':'3 5'}));
+      label(svg,end,520,e.zone===0?'01 · Mine Mouth':'10 · Archive Gate');
+      line(svg,end,537,width*.5,579,'var(--viz-series-2)','3 5');
+    }
+    label(svg,width*.5,598,'24-zone Underroad');
+    label(svg,width*.5,624,'Dragon cave + hoard within zone 20');
+    map.append(svg);
+    const location=document.createElement('div'); location.className='text-small';
+    location.textContent='At '+roads[roadHere].name+' · arriving from '+roads[roadFrom].name;
+    rooms.append(location);
+    for(const to of neighbors(roadHere)) {
+      const onward=beyond(to), labelText=direction(to)+' — '+roads[to].name;
+      const b=button(labelText,()=>{roadFrom=roadHere;roadHere=to;draw();});
+      exits.append(b);
+      if(to!==roadFrom&&onward.length) {
+        const sign=document.createElement('div'); sign.className='text-small';
+        sign.textContent=roads[to].name+' direction: onward to '+onward.join(' / ');
+        rooms.append(sign);
+      }
+    }
+    if(roads[roadHere].entrance!==undefined) {
+      exits.append(button('Inspect foot entrance '+code(roads[roadHere].entrance),()=>open(roads[roadHere].entrance)));
+      detail.textContent='Carriage parking at '+roads[roadHere].name+' · carried packs enter here · each road choice follows one connected leg.';
+    } else detail.textContent='Try the direction choices. Each follows one road leg to the next place; left and right follow the direction of arrival.';
+  }
+  function drawWhole(width) {
+    select.value='';
+    title.textContent='The Underroad · 24 zones';
+    subtitle.textContent='Foot travel · Silverwick entry 01 · Hollowbarrow entry 10 · hoard in 20';
+    legend.textContent='Solid: passage · Dotted: hidden route · Dashed: lift repair';
+    detail.textContent='Zone numbers keep the existing map order. Choose a numbered zone to open its floor plan.';
+    const height=770, margin=28, step=(width-margin*2)/5;
+    const point=i => [margin+zones[i].pos[0]*step,52+zones[i].pos[1]*65];
+    const svg=svgNode('svg',{viewBox:`0 0 ${width} ${height}`,role:'group','aria-label':'The complete Underroad. Each numbered zone opens a floor plan.'});
+    svg.append(svgNode('title',{},'24 connected Underroad zones'));
+    links.forEach(l => {
+      const a=point(l[0]),b=point(l[1]);
+      if(l[0]===5 && l[1]===6) {
+        svg.append(svgNode('path',{d:`M ${a[0]} ${a[1]} C ${a[0]} ${a[1]+44}, ${b[0]} ${b[1]+44}, ${b[0]} ${b[1]}`,fill:'none',stroke:'var(--border)','stroke-width':1.5}));
+      } else line(svg,...a,...b,l[2] ? 'var(--viz-series-2)' : 'var(--border)',l[2]==='hidden'?'2 5':l[2]==='repair'?'7 5':null);
+    });
+    const start=point(0),end=point(19);
+    label(svg,start[0],18,'Silverwick mine yard');
+    const hollow=point(9);
+    line(svg,18,hollow[1],hollow[0]-23,hollow[1],'var(--viz-series-2)','3 5');
+    label(svg,8,hollow[1]-21,'Hollowbarrow','start');
+    label(svg,end[0],height-26,'Dragon cave + hoard');
+    zones.forEach((z,i) => {
+      const [x,y]=point(i);
+      const f=svgNode('foreignObject',{x:x-23,y:y-23,width:46,height:46});
+      const holder=document.createElement('div'); holder.setAttribute('xmlns','http://www.w3.org/1999/xhtml'); holder.className='ur-node';
+      const b=button(code(i),() => open(i),code(i)+' '+z.name); b.setAttribute('data-tooltip',z.name);
+      holder.append(b); f.append(holder); svg.append(f);
+    });
+    map.append(svg);
+  }
+  function drawZone(width) {
+    const z=zones[selected], adjacent=incident(selected);
+    title.textContent=code(selected)+' · '+z.name;
+    subtitle.textContent=z.band+' · '+z.purpose;
+    detail.textContent=z.choice;
+    legend.textContent='A–'+String.fromCharCode(64+z.rooms.length)+': chambers · Boxed numbers: stairs or passages to zones · Each grid square: 2 metres';
+    const scale=width/44, height=32*scale;
+    const svg=svgNode('svg',{viewBox:`0 0 ${width} ${height}`,role:'img','aria-label':z.name+' floor plan: '+z.rooms.map(r=>r[0]).join(', ')});
+    svg.append(svgNode('title',{},z.name+' top-down dungeon level'));
+    const floor=Array.from({length:30},()=>Array(44).fill(false));
+    const carve=(x,y,w,h) => { for(let row=y;row<y+h;row++) for(let col=x;col<x+w;col++) if(row>=0&&row<30&&col>=0&&col<44) floor[row][col]=true; };
+    const center=i => { const r=z.rooms[i]; return [Math.floor(r[1]+r[3]/2),Math.floor(r[2]+r[4]/2)]; };
+    z.rooms.forEach(r=>carve(r[1],r[2],r[3],r[4]));
+    z.paths.forEach(([a,b],index)=>{
+      const p=center(a),q=center(b);
+      const bend=index%2===0?[q[0],p[1]]:[p[0],q[1]];
+      for(const [u,v] of [[p,bend],[bend,q]]) carve(Math.min(u[0],v[0]),Math.min(u[1],v[1]),Math.abs(u[0]-v[0])+2,Math.abs(u[1]-v[1])+2);
+    });
+    svg.append(svgNode('rect',{x:0,y:0,width,height,fill:'var(--muted)'}));
+    for(let y=0;y<30;y++) for(let x=0;x<44;x++) if(floor[y][x]) {
+      svg.append(svgNode('rect',{x:x*scale,y:(y+1)*scale,width:scale+.1,height:scale+.1,fill:'var(--background)',stroke:'var(--border)','stroke-width':.25}));
+      for(const [dx,dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+        if(floor[y+dy]?.[x+dx]) continue;
+        const ax=x+(dx===1?1:0), ay=y+1+(dy===1?1:0);
+        line(svg,ax*scale,ay*scale,(ax+(dy!==0?1:0))*scale,(ay+(dx!==0?1:0))*scale,'var(--foreground)');
+      }
+    }
+    const symbols={water:'Water',hazard:'Risk',heat:'Heat',home:'Home',cache:'Load',terms:'Terms',dragon:'Dragon',hoard:'Hoard',pack:'Packs'};
+    z.marks.forEach(([i,kind])=>{
+      const r=z.rooms[i], [cx,cy]=center(i);
+      const color=kind==='water'?'var(--viz-series-1)':kind==='heat'||kind==='dragon'?'var(--viz-series-3)':kind==='home'?'var(--viz-series-2)':'var(--viz-series-4)';
+      svg.append(svgNode('rect',{x:(r[1]+1)*scale,y:(r[2]+2)*scale,width:(r[3]-2)*scale,height:(r[4]-2)*scale,fill:color,opacity:.13}));
+      if(width>=500) label(svg,cx*scale,(cy+1)*scale,symbols[kind]);
+    });
+    z.rooms.forEach((r,i)=>{
+      const [cx]=center(i), key=String.fromCharCode(65+i);
+      label(svg,cx*scale,(r[2]+2)*scale,key);
+      const row=document.createElement('div'); row.className='text-small';
+      const strong=document.createElement('span'); strong.className='ur-room-key'; strong.textContent=key+' · ';
+      row.append(strong,document.createTextNode(r[0])); rooms.append(row);
+    });
+    adjacent.forEach((exit,index)=>{
+      // Spread exits across separate chambers. The hoard has a formal entry and a fissure.
+      const chamber=selected===0?3:selected===9?index+1:selected===19?(exit.to===17?0:3):index%z.rooms.length;
+      const r=z.rooms[chamber], [cx]=center(chamber), cy=r[2]+r[4]-1;
+      const boxw=width<450?24:30, boxh=20;
+      svg.append(svgNode('rect',{x:cx*scale-boxw/2,y:(cy+.5)*scale-boxh/2,width:boxw,height:boxh,fill:'var(--background)',stroke:exit.kind==='open'?'var(--foreground)':'var(--viz-series-2)','stroke-dasharray':exit.kind==='hidden'?'2 2':exit.kind==='repair'?'5 3':'none'}));
+      label(svg,cx*scale,(cy+.5)*scale,code(exit.to));
+      const suffix=exit.kind==='hidden'?' · hidden':exit.kind==='repair'?' · repair lift':'';
+      exits.append(button(code(exit.to)+' '+zones[exit.to].name+suffix,()=>open(exit.to)));
+    });
+    for(const e of entrances.filter(e=>e.zone===selected)) {
+      const r=z.rooms[e.chamber]; label(svg,(r[1]+r[3]/2)*scale,(r[2]+r[4]-1)*scale,'Surface');
+      exits.append(button('Inspect surface: '+e.name,()=>{surfaceView=true;draw();}));
+    }
+    // The ruler and local floor grid have a fixed physical scale across all zones.
+    const ry=31*scale;
+    line(svg,3*scale,ry,8*scale,ry,'var(--foreground)');
+    label(svg,10*scale,ry,'10 m','start');
+    map.append(svg);
+  }
+  new ResizeObserver(draw).observe(map);
+  draw();
+})();
+</script>
