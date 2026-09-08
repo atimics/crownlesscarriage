@@ -263,6 +263,10 @@ if(CC_BUILD_BENCHMARKS)
     target_link_libraries(crownless_sim_metrics PRIVATE crownless_sim)
     cc_strict_warnings(crownless_sim_metrics)
 
+    add_executable(crownless_quest_cast_experiment tools/quest_cast_experiment.c)
+    target_link_libraries(crownless_quest_cast_experiment PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_quest_cast_experiment)
+
     add_executable(crownless_grain_experiment tools/grain_experiment.c)
     target_link_libraries(crownless_grain_experiment PRIVATE crownless_sim)
     cc_strict_warnings(crownless_grain_experiment)
@@ -1468,6 +1472,12 @@ if(BUILD_TESTING)
     target_link_libraries(pony_tests PRIVATE crownless_persistence)
     cc_strict_warnings(pony_tests)
     add_test(NAME rainbow_pony_companions COMMAND pony_tests)
+
+    add_executable(quest_cast_tests tests/quest_cast_tests.c)
+    target_link_libraries(quest_cast_tests PRIVATE crownless_persistence)
+    target_compile_definitions(quest_cast_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    cc_strict_warnings(quest_cast_tests)
+    add_test(NAME quest_cast_continuity COMMAND quest_cast_tests)
 
     add_executable(character_lifetime_tests tests/character_lifetime_tests.c)
     target_link_libraries(character_lifetime_tests PRIVATE crownless_persistence)
