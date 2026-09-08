@@ -754,6 +754,42 @@ int main(void)
     cargo.treasure_cargo_slots = 1;
     CC_CHECK(CcPlayerCargoUsed(&cargo) == 20);
 
+    /* Hoarded paper decays a hundredth a quarter, never less than a sheaf,
+       and a small working store is left alone. The settlement update runs
+       weekly and 91 is thirteen whole weeks, so the quarter day is never
+       stepped over. */
+    CcSim paper;
+    CcSettlement *store = IsolatedSettlement(&paper);
+    store->stock[CC_GOOD_PAPER] = 400;
+    paper.current_day = 90;
+    CcSimAdvanceDays(&paper, 1);
+    CC_CHECK(store->stock[CC_GOOD_PAPER] == 396);
+
+    /* A hoard under the floor is untouched however long it sits. */
+    CcSim small;
+    store = IsolatedSettlement(&small);
+    store->stock[CC_GOOD_PAPER] = 10;
+    small.current_day = 90;
+    CcSimAdvanceDays(&small, 1);
+    CC_CHECK(store->stock[CC_GOOD_PAPER] == 10);
+
+    /* Just over the floor still loses its sheaf, because the hundredth
+       rounds to nothing and the minimum takes over. */
+    CcSim sliver;
+    store = IsolatedSettlement(&sliver);
+    store->stock[CC_GOOD_PAPER] = 11;
+    sliver.current_day = 90;
+    CcSimAdvanceDays(&sliver, 1);
+    CC_CHECK(store->stock[CC_GOOD_PAPER] == 10);
+
+    /* Any other week of the quarter leaves the hoard alone. */
+    CcSim between;
+    store = IsolatedSettlement(&between);
+    store->stock[CC_GOOD_PAPER] = 400;
+    between.current_day = 83;
+    CcSimAdvanceDays(&between, 1);
+    CC_CHECK(store->stock[CC_GOOD_PAPER] == 400);
+
     puts("Material economy tests passed");
     return 0;
 }

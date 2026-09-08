@@ -2223,6 +2223,19 @@ static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place)
     return total_spoiled;
 }
 
+/* Paper goes the way of stored food, just far more slowly: a hoard left
+   sitting loses about a hundredth of itself a quarter, and never less than a
+   sheaf. Small working stores are left alone, so a scriptorium's own supply
+   is not ground away between deliveries -- only what a town is sitting on.
+   Silent, like the nutrition spoilage above it. */
+static void DecayStoredPaper(CcSim *sim, CcSettlement *place)
+{
+    if (sim->schema_version < 54U || place->stock[CC_GOOD_PAPER] <= 10 ||
+        sim->current_day % 91 != 0) return;
+    place->stock[CC_GOOD_PAPER] -= MaximumI32(
+        1, place->stock[CC_GOOD_PAPER] / 100);
+}
+
 static int32_t BakeryCapacity(const CcSettlement *place)
 {
     if (!CcSettlementHasService(place, CC_SERVICE_BAKERY)) return 0;
@@ -5731,6 +5744,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         settlement->stock[good] -= consumed;
     }
     (void)SpoilStoredNutrition(sim, settlement);
+    DecayStoredPaper(sim, settlement);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         RefreshSettlementGoodPrice(sim, settlement, (CcGood)good);
     }
@@ -18661,7 +18675,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 51U
+#define CC_NEWEST_LEGACY_SCHEMA 53U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18679,7 +18693,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 51U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 53U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
