@@ -1021,6 +1021,7 @@ if(BUILD_TESTING)
     add_test(NAME war_society_from_ruins COMMAND war_society_tests)
     add_executable(succession_tests tests/succession_tests.c)
     target_link_libraries(succession_tests PRIVATE crownless_persistence)
+    target_compile_definitions(succession_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     cc_strict_warnings(succession_tests)
     add_test(NAME crisis_contested_succession COMMAND succession_tests)
     add_executable(music_tests tests/music_tests.c)
@@ -1075,12 +1076,21 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/license_page_tests.cmake
     )
 
+    if(APPLE)
+        add_test(NAME macos_configuration_contract
+            COMMAND ${CMAKE_COMMAND}
+                -DCC_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                -DCC_TEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/macos-contract
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/macos_configuration_tests.cmake)
+        set_tests_properties(macos_configuration_contract PROPERTIES TIMEOUT 180)
+    endif()
+
     if(APPLE AND CC_BUILD_CLIENT)
         add_test(
             NAME macos_deployment_target
             COMMAND ${CMAKE_COMMAND}
                 -DCC_BINARY=$<TARGET_FILE:crownless_carriage>
-                -DCC_EXPECTED_MINOS=14.0
+                -DCC_EXPECTED_MINOS=${CMAKE_OSX_DEPLOYMENT_TARGET}
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/macos_deployment_target_tests.cmake
         )
     endif()
@@ -1313,6 +1323,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(pony_tests)
     add_test(NAME rainbow_pony_companions COMMAND pony_tests)
 
+    add_executable(persistence_fields_tests tests/persistence_fields_tests.c)
+    target_link_libraries(persistence_fields_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(persistence_fields_tests)
+    add_test(NAME persistence_field_contract COMMAND persistence_fields_tests)
+
     add_executable(persistence_tests tests/persistence_tests.c)
     target_link_libraries(persistence_tests PRIVATE crownless_persistence)
     target_compile_definitions(persistence_tests PRIVATE
@@ -1375,6 +1390,11 @@ if(BUILD_TESTING)
     target_link_libraries(goblin_society_tests PRIVATE crownless_persistence)
     cc_strict_warnings(goblin_society_tests)
     add_test(NAME goblin_society_choices COMMAND goblin_society_tests)
+
+    add_executable(traveller_poverty_tests tests/traveller_poverty_tests.c)
+    target_link_libraries(traveller_poverty_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(traveller_poverty_tests)
+    add_test(NAME traveller_poverty_recruitment COMMAND traveller_poverty_tests)
 
     add_executable(dragon_ecology_tests tests/dragon_ecology_tests.c)
     target_link_libraries(dragon_ecology_tests PRIVATE crownless_persistence)
