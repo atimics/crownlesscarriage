@@ -17324,6 +17324,46 @@ static bool ApplyPartyWipe(CcSim *sim, const CcCommand *command,
     return true;
 }
 
+static bool ApplyArchiveRecruitment(CcSim *sim, const CcCommand *command,
+                                     char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 78U) {
+        SetError(error, error_capacity, "This campaign needs the recruitment save upgrade.");
+        return false;
+    }
+    if (command->kind == CC_COMMAND_RESERVE_ARCHIVE_RECRUITMENT) {
+        CcArchiveRecruitmentPlan plan = CcSimArchiveRecruitmentPlan(sim);
+        if (plan.gate != CC_ARCHIVE_RECRUIT_READY || command->target_id != plan.person_id ||
+            sim->player.location_id != plan.seat_id) {
+            SetError(error, error_capacity, "Visit the archive and choose its current eligible recruit.");
+            return false;
+        }
+        if (!CcSimBeginArchiveRecruitment(sim)) {
+            SetError(error, error_capacity, "Review the recruitment quote again.");
+            return false;
+        }
+        const CcCharacter *person = CcSimCharacter(sim, plan.person_id);
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text), "The archive reserves %" PRId64
+            " crowns and supplies for %.31s's recruitment.", plan.wages, person->name);
+        (void)PushSocialEvent(sim, CC_EVENT_CHARACTER_INTERACTION, plan.person_id,
+            plan.seat_id, 0, sim->player.id, plan.person_id, plan.person_id, 0, 1, text);
+    } else {
+        CcId seat = sim->archive_recruitment.seat_id;
+        CcId person = sim->archive_recruitment.person_id;
+        if (command->target_id != person || sim->player.location_id != seat ||
+            !CcSimCancelArchiveRecruitment(sim)) {
+            SetError(error, error_capacity, "Visit the archive and review its reserved recruit and refund capacity.");
+            return false;
+        }
+        (void)PushSocialEvent(sim, CC_EVENT_CHARACTER_INTERACTION, person,
+            seat, 0, sim->player.id, person, 0, 0, 1,
+            "The archive returns the unused recruitment funds and supplies to their original ledgers and stores.");
+    }
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 bool CcSimApply(CcSim *sim, const CcCommand *command,
                 char *error, size_t error_capacity)
 {
@@ -17374,6 +17414,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL ||
         command->kind == CC_COMMAND_BEGIN_DUNGEON_EXPEDITION ||
         command->kind == CC_COMMAND_FUND_GRAIN_SUPPLY ||
+        command->kind == CC_COMMAND_RESERVE_ARCHIVE_RECRUITMENT ||
+        command->kind == CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT ||
         command->kind == CC_COMMAND_SUPPORT_BAKERY;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
@@ -17381,6 +17423,9 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         return false;
     }
     switch (command->kind) {
+        case CC_COMMAND_RESERVE_ARCHIVE_RECRUITMENT:
+        case CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT:
+            return ApplyArchiveRecruitment(sim, command, error, error_capacity);
         case CC_COMMAND_VISIT_MINE:
         case CC_COMMAND_MINE_STEP:
         case CC_COMMAND_MINE_USE:

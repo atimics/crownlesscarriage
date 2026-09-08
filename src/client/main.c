@@ -6083,6 +6083,12 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
             break;
         case CC_COMMAND_TRAVEL: confirmation = "Journey started."; break;
         case CC_COMMAND_REPAIR_ROUTE: confirmation = "Road repaired."; break;
+        case CC_COMMAND_RESERVE_ARCHIVE_RECRUITMENT:
+            confirmation = "Recruitment funds and supplies reserved.";
+            break;
+        case CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT:
+            confirmation = "Unused recruitment resources returned.";
+            break;
         case CC_COMMAND_FUND_GRAIN_SUPPLY:
             confirmation = command.amount < 0 ? "Orders ended. The unspent fund is back in your purse." : "The organiser has pay and a grain fund.";
             break;

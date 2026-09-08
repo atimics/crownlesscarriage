@@ -63,7 +63,8 @@ static inline const char *CcCoopActionName(CcCommandKind kind)
         "transfer_road_site",
         "repair_road_site",
         "support_bakery", "fund_grain_supply",
+        "reserve_archive_recruitment", "cancel_archive_recruitment",
     };
-    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_FUND_GRAIN_SUPPLY ? names[(int)kind] : "";
+    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT ? names[(int)kind] : "";
 }
 #endif

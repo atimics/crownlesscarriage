@@ -25,6 +25,26 @@ store or treasury leaves the complete reservation available for a later retry.
 Cancellation also works after the recruit's lifetime ends. A second
 cancellation preserves the whole simulation.
 
+## Replayable commands
+
+`CC_COMMAND_RESERVE_ARCHIVE_RECRUITMENT` and
+`CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT` enter through the simulation command
+boundary. Their target is the named recruit. The company must be at the archive
+and ready for settlement business. Reservation checks the current eligible
+person; cancellation checks the person held in the reservation. Stale targets
+and duplicate requests preserve the full simulation.
+
+The shared-command names are `reserve_archive_recruitment` and
+`cancel_archive_recruitment`. Successful commands record a character interaction
+with the company as actor, the recruit as target, and the archive as location.
+The native client has matching confirmations.
+
+A journal test begins with an empty reservation, records a reserve command,
+recovers it, resumes the journal, records cancellation, and recovers again.
+Money and all held goods balance at each step. The test also rejects requests
+from another town, during a journey, for a stale person, and after the work has
+already been reserved or cancelled.
+
 ## Save contract
 
 Schema 78 adds a fixed one-row SQLite table, `archive_recruitment`. Its 23
@@ -43,6 +63,9 @@ increase of 160 bytes for the bounded record.
 
 - Strict headless build and all 121 headless tests passed.
 - Static analysis passed with one reviewed baseline item.
+- The native play build and five focused native checks passed: recruitment
+  reservation, shared command bridge, adventure input, bridge input and world
+  card input. Shared command round-trip coverage now includes all 60 commands.
 - `archive_order_tests` proves normal and patron-funded reservations conserve
   total money, wheat, paper and tools across the original stores and the held
   reservation. It also checks duplicate requests, capacity-safe cancellation,
@@ -63,5 +86,5 @@ increase of 160 bytes for the bounded record.
 The reservation API and saved record are ready for the next work-order stage.
 Departure, leg-by-leg travel, training progress, refunds after interruption,
 actual named staff appointment and the first archive task remain to implement.
-Game commands or automatic recruitment should enter through these APIs when
-those progression steps are ready. The full recruitment issue remains open.
+The reserve and cancel commands already enter through these APIs. Player
+controls and automatic recruitment can follow the progression steps. The full recruitment issue remains open.

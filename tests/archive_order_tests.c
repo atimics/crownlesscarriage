@@ -90,6 +90,62 @@ static void Cancel(void)
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
     RoundTrip();
 }
+static void JournalCommands(void)
+{
+    CcSimInit(&sim, 42U);
+    CcArchiveRecruitmentPlan plan = CcSimArchiveRecruitmentPlan(&sim);
+    CC_CHECK(plan.gate == CC_ARCHIVE_RECRUIT_READY);
+    CcCommand reserve = {.kind = CC_COMMAND_RESERVE_ARCHIVE_RECRUITMENT, .target_id = plan.person_id};
+    before = sim;
+    CC_CHECK(!CcSimApply(&sim, &reserve, error, sizeof(error)));
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    sim.player.location_id = sim.carriage.location_id = plan.seat_id;
+    CcCommand stale = reserve; stale.target_id = sim.characters[0].id;
+    before = sim;
+    CC_CHECK(!CcSimApply(&sim, &stale, error, sizeof(error)));
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    sim.journey.active = true; before = sim;
+    CC_CHECK(!CcSimApply(&sim, &reserve, error, sizeof(error)));
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    sim.journey.active = false;
+    CcMoney money = Money();
+    int64_t wheat = Stock(CC_GOOD_WHEAT), paper = Stock(CC_GOOD_PAPER), tools = Stock(CC_GOOD_TOOLS);
+    const char *path = "archive-order-commands.ccsave";
+    (void)remove(path);
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalApply(journal, &sim, &reserve, error, sizeof(error)));
+    CC_CHECK(sim.archive_recruitment.person_id == plan.person_id);
+    CC_CHECK(Money() == money && Stock(CC_GOOD_WHEAT) == wheat);
+    CC_CHECK(Stock(CC_GOOD_PAPER) == paper && Stock(CC_GOOD_TOOLS) == tools);
+    const CcEvent *event = CcSimRecentEvent(&sim, 0);
+    CC_CHECK(event->kind == CC_EVENT_CHARACTER_INTERACTION && event->actor_id == sim.player.id);
+    CC_CHECK(event->target_id == plan.person_id && event->location_id == plan.seat_id);
+    before = sim;
+    CC_CHECK(!CcJournalApply(journal, &sim, &reserve, error, sizeof(error)));
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    CcJournalAbandon(&journal);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+    CC_CHECK(restored.archive_recruitment.purse == 50);
+    journal = CcJournalResume(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CcCommand cancel = {.kind = CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT, .target_id = plan.person_id};
+    stale = cancel; stale.target_id = sim.characters[0].id; before = sim;
+    CC_CHECK(!CcJournalApply(journal, &sim, &stale, error, sizeof(error)));
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    CC_CHECK(CcJournalApply(journal, &sim, &cancel, error, sizeof(error)));
+    CC_CHECK(Money() == money && Stock(CC_GOOD_WHEAT) == wheat);
+    CC_CHECK(Stock(CC_GOOD_PAPER) == paper && Stock(CC_GOOD_TOOLS) == tools);
+    before = sim;
+    CC_CHECK(!CcJournalApply(journal, &sim, &cancel, error, sizeof(error)));
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    CcJournalAbandon(&journal);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+    CC_CHECK(restored.archive_recruitment.status == 0);
+    (void)remove(path);
+}
 #define FIELD(name,value) do { \
     sim = baseline; sim.archive_recruitment.name = (value); \
     CC_CHECK(sim.archive_recruitment.name != baseline.archive_recruitment.name); \
@@ -203,6 +259,7 @@ int main(int argc, char **argv)
     CcSimInit(&sim, 42U); sim.iron_ledger_reserve = 0; before = sim;
     CC_CHECK(!CcSimBeginArchiveRecruitment(&sim));
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    JournalCommands();
     printf("Verified %d independent order fields, conserved reservations and journal recovery.\n", checks);
     return 0;
 }
