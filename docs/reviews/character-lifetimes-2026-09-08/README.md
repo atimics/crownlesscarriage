@@ -1,11 +1,11 @@
 # Received accounts and character lifetimes
 
 This delivery advances #459 and supplies the bounded lifetime store for #250.
-It builds on #500 (schema 59 / generator 25).
+It builds on #500 (schema 60 / generator 25).
 
 ## Contract
 
-Schema 60 / generator 25, SQLite layout 30. Each received situation account
+Schema 61 / generator 25, SQLite layout 30. Each received situation account
 keeps the teller's lifetime ID and the name recorded when it was learned.
 A death preserves surviving characters' held accounts. Recasting a situation
 assigns its live roles while preserving the surviving accounts and the old
@@ -34,11 +34,11 @@ bytes for source-name snapshots and the bounded history store.
 
 ## Compatibility
 
-Schema 59 and earlier journals replay their original source cleanup and cast
+Schema 60 and earlier journals replay their original source cleanup and cast
 seeding rules. The loader checks their original hashes before upgrading. It
 fills source-name snapshots only for accounts that survived that replay, using
 the referenced living source (or the Company). Historical records start empty.
-Future deaths populate the store. All new fields enter the schema-60 hash,
+Future deaths populate the store. All new fields enter the schema-61 hash,
 save paths and validation. SQLite layout 30 marks the added table and column.
 
 ## Verification
@@ -54,7 +54,7 @@ then kills its source through daily lifecycle processing. Every survivor keeps
 their prior account set. The test covers 35 replacements, deterministic history
 retirement, names after retirement, save round trips, and a hash mutation for
 every new historical field and the received source name. Saved fields are
-compared directly. The schema-59 journal test verifies old cleanup before the
+compared directly. The schema-60 journal test verifies old cleanup before the
 new snapshot upgrade. The standard SQLite suite covers shipped fixtures.
 
 ## Follow-up deliveries

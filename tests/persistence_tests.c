@@ -2712,7 +2712,7 @@ static void CheckSchema41Upgrade(void)
    future edit to that table cannot quietly widen or narrow what loads. */
 static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
 {
-    bool legacy = schema >= 2U && schema <= 59U;
+    bool legacy = schema >= 2U && schema <= 60U;
     if (!legacy && schema != CC_SIM_SCHEMA_VERSION) return false;
     if (schema == CC_SIM_SCHEMA_VERSION &&
         generator == CC_GENERATOR_VERSION) return true;
@@ -2720,7 +2720,7 @@ static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
         /* The current generator reads the oldest schemas and the recent run,
            but not 28 through 31, which shipped with generators of their own. */
         if (schema >= 2U && schema <= 27U) return true;
-        if (schema >= 32U && schema <= 59U) return true;
+        if (schema >= 32U && schema <= 60U) return true;
     }
     if (schema == 31U && generator == 24U) return true;
     if (schema == 27U && generator >= 21U && generator <= 23U) return true;
@@ -2790,16 +2790,16 @@ static void CheckSchema58SmithyCapacity(void)
     RemoveDatabase(path);
 }
 
-static void CheckPre60KnowledgeJournal(void)
+static void CheckPre61KnowledgeJournal(void)
 {
     static CcSim legacy;
     static CcSim after;
     static CcSim restored;
     char error[256];
-    const char *path = "persistence-schema59-knowledge.ccsave";
+    const char *path = "persistence-schema60-knowledge.ccsave";
     RemoveDatabase(path);
     CcSimInit(&legacy, UINT32_C(0x5eed0001));
-    legacy.schema_version = 59U;
+    legacy.schema_version = 60U;
     CcId source_id = 0U;
     for (int32_t i = 0; i < legacy.character_count && source_id == 0U; ++i) {
         for (int32_t j = 0; j < legacy.characters[i].knowledge_count; ++j) {
@@ -2816,11 +2816,11 @@ static void CheckPre60KnowledgeJournal(void)
     after = legacy;
     CcSimAdvanceDays(&after, 1);
     CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
-    AddLegacyDayJournalSuffix(path, &legacy, &after, 59U, 25U);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 60U, 25U);
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.historic_character_count == 0);
-    restored.schema_version = 59U;
+    restored.schema_version = 60U;
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     for (int32_t i = 0; i < restored.character_count; ++i) {
@@ -2837,7 +2837,7 @@ static void CheckPre60KnowledgeJournal(void)
 
 int main(void)
 {
-    CheckPre60KnowledgeJournal();
+    CheckPre61KnowledgeJournal();
     CheckSchema58SmithyCapacity();
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();

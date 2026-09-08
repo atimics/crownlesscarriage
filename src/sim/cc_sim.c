@@ -10848,7 +10848,7 @@ static CcCharacter *PromoteCharacter(CcSim *sim, const char *name,
 static void SnapshotKnowledgeSource(const CcSim *sim,
                                      CcCharacterKnowledge *knowledge)
 {
-    if (sim->schema_version < 60U) return;
+    if (sim->schema_version < 61U) return;
     const CcCharacter *source = CcSimCharacter(sim, knowledge->source_character_id);
     CopyName(knowledge->source_name, source != NULL ? source->name :
         knowledge->source_character_id == sim->player.id ? "Crownless Company" : "");
@@ -11392,12 +11392,12 @@ static void RecastSituationsAfterDeath(CcSim *sim, CcId character_id)
         }
         if (!changed) continue;
         if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION &&
-            sim->schema_version < 60U) {
+            sim->schema_version < 61U) {
             situation->lead_event_id = 0U;
             situation->discovery_stage = CC_DISCOVERY_RUMOR;
             situation->lead_path = CC_LEAD_PATH_UNDECIDED;
         }
-        AssignSituationCast(sim, situation, sim->schema_version < 60U);
+        AssignSituationCast(sim, situation, sim->schema_version < 61U);
     }
 }
 
@@ -11524,7 +11524,7 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     sim->character_deaths += 1;
 
     RemoveCharacterRelationships(sim, dead.id);
-    if (sim->schema_version < 60U) RemoveCharacterKnowledgeSources(sim, dead.id);
+    if (sim->schema_version < 61U) RemoveCharacterKnowledgeSources(sim, dead.id);
     else RecordCharacterLifetime(sim, &dead);
 
     CcCharacter successor = {0};
@@ -19024,7 +19024,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 59U
+#define CC_NEWEST_LEGACY_SCHEMA 60U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -19042,7 +19042,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 59U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 60U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -20356,7 +20356,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             return false;
         }
     }
-    if (sim->schema_version >= 60U) {
+    if (sim->schema_version >= 61U) {
         if (sim->historic_character_count < 0 ||
             sim->historic_character_count > CC_MAX_HISTORIC_CHARACTERS) {
             SetError(error, error_capacity, "Historical character count is invalid.");
@@ -20471,7 +20471,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                     return false;
                 }
             }
-            if (sim->schema_version >= 60U) {
+            if (sim->schema_version >= 61U) {
                 for (int32_t k = 0; k < CC_CHARACTER_KNOWLEDGE_CAPACITY; ++k) {
                     if (!ValidOptionalBoundedText(character->knowledge[k].source_name,
                                                   sizeof(character->knowledge[k].source_name))) {
@@ -20487,14 +20487,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                         &character->knowledge[knowledge];
                     bool source_exists = item->source_character_id ==
                             sim->player.id ||
-                        (sim->schema_version >= 60U ?
+                        (sim->schema_version >= 61U ?
                          IsIssuedCharacterId(sim, item->source_character_id) :
                          CcSimCharacter(sim, item->source_character_id) != NULL);
                     if (item->kind <= CC_KNOWLEDGE_NONE ||
                         item->kind > CC_KNOWLEDGE_OFFER ||
                         CcSimSituation(sim, item->subject_id) == NULL ||
                         !source_exists ||
-                        (sim->schema_version >= 60U &&
+                        (sim->schema_version >= 61U &&
                          !ValidBoundedText(item->source_name, sizeof(item->source_name))) ||
                         CcSimEvent(sim, item->event_id) == NULL ||
                         item->certainty < CC_KNOWLEDGE_DOUBTFUL ||
@@ -21701,12 +21701,12 @@ uint64_t CcSimHash(const CcSim *sim)
                     HASH_VALUE(item->certainty);
                     HASH_VALUE(item->private_knowledge);
                     HASH_VALUE(item->day);
-                    if (sim->schema_version >= 60U) hash = HashString(hash, item->source_name);
+                    if (sim->schema_version >= 61U) hash = HashString(hash, item->source_name);
                 }
             }
         }
     }
-    if (sim->schema_version >= 60U) {
+    if (sim->schema_version >= 61U) {
         HASH_VALUE(sim->historic_character_count);
         for (int32_t i = 0; i < sim->historic_character_count; ++i) {
             const CcHistoricCharacter *item = &sim->historic_characters[i];

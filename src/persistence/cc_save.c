@@ -2872,7 +2872,7 @@ static bool SaveQuestArchitecture(sqlite3 *database, const CcSim *sim,
 static bool SaveHistoricalCharacters(sqlite3 *database, const CcSim *sim,
                                       char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 60U) return true;
+    if (sim->schema_version < 61U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "INSERT INTO historic_character VALUES(?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
@@ -5297,7 +5297,7 @@ static bool ReadHistoricalCharacters(sqlite3 *database, CcSim *sim,
                                       char *error, size_t error_capacity)
 {
     sim->historic_character_count = 0;
-    if (sim->schema_version < 60U) return true;
+    if (sim->schema_version < 61U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "SELECT * FROM historic_character ORDER BY slot;",
                  &statement, error, error_capacity)) return false;
@@ -5458,7 +5458,7 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
             knowledge->private_knowledge =
                 sqlite3_column_int(statement, 7) != 0;
             knowledge->day = sqlite3_column_int(statement, 8);
-            if (sim->schema_version >= 60U &&
+            if (sim->schema_version >= 61U &&
                 !ReadTextColumn(statement, 9, knowledge->source_name,
                                 sizeof(knowledge->source_name), "knowledge source name",
                                 error, error_capacity)) {
@@ -6059,7 +6059,8 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 52U || legacy_version == 53U ||
          legacy_version == 54U || legacy_version == 55U ||
          legacy_version == 56U || legacy_version == 57U ||
-         legacy_version == 58U || legacy_version == 59U) &&
+         legacy_version == 58U || legacy_version == 59U ||
+         legacy_version == 60U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
@@ -6551,7 +6552,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
             sim->dragon.wyrmheart_id = CcMakeId(CC_ENTITY_TREASURE, sim->next_entity_serial++);
         }
     }
-    if (legacy_version < 60U) CcSimUpgradeKnowledgeSourceNames(sim);
+    if (legacy_version < 61U) CcSimUpgradeKnowledgeSourceNames(sim);
     if (legacy_version < 51U) CcSimSeedCommonPonyHerds(sim);
     if (legacy_version < 52U) CcSimUnharnessSecondDraftAnimal(sim);
     return true;
