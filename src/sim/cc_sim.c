@@ -6100,7 +6100,12 @@ void CcGossipText(const CcSim *sim, const CcGossip *story,
     if (text == NULL || capacity == 0U) return;
     if (sim == NULL || story == NULL || version == NULL) { text[0] = '\0'; return; }
     if (version->retellings == 0) {
-        (void)snprintf(text, capacity, "%s", story->text);
+        /* The untold telling is a straight copy; a format-parsing
+           snprintf per archived story adds up over a chronicle. */
+        size_t length = strnlen(story->text, sizeof(story->text));
+        if (length >= capacity) length = capacity - 1U;
+        memcpy(text, story->text, length);
+        text[length] = '\0';
         return;
     }
     char account[CC_EVENT_TEXT_CAPACITY];
