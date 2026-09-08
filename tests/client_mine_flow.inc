@@ -54,6 +54,11 @@ static int RunMineInputRegression(void)
     MINE_CHECK(sim.mine.y==4,"W must walk to the entrance.");
     MINE_KEY(KEY_E);
     MINE_CHECK(sim.mine.phase==CC_MINE_LEVEL,"E at the door must switch overhead.");
+    uint64_t book_hash=CcSimHash(&sim);
+    view=VIEW_LEDGER;back=VIEW_LOCAL;
+    MINE_KEY(KEY_B);
+    MINE_CHECK(view==VIEW_LOCAL && CcSimHash(&sim)==book_hash,
+        "Closing the company book must restore the same mine visit.");
     MINE_KEY(KEY_F5);
     MINE_CHECK(CcSaveRead(path,&restored,error,sizeof(error)) && CcSimHash(&sim)==CcSimHash(&restored),"F5 must save the underground position.");
     MINE_KEY(KEY_D);MINE_CHECK(sim.mine.x==6,"D must move inside the level.");

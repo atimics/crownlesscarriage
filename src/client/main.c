@@ -8497,7 +8497,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
-    if (sim->mine.phase != CC_MINE_NONE) {
+    if (sim->mine.phase != CC_MINE_NONE && (*view == VIEW_LOCAL || *view == VIEW_ROADS)) {
         if (ClientKeyPressed(KEY_F5) || queued_save_shortcut) {
             *save_feedback_age=0.0f;
             (void)SaveClientWorld(*journal,sim,local,save_path,session_path,save_feedback,save_feedback_capacity);
@@ -10828,7 +10828,8 @@ int main(int argc, char **argv)
     bool capture_dragon_cave = argc >= 2 &&
         strcmp(argv[1], "--capture-dragon-cave") == 0;
     bool capture_mine_yard = argc >= 2 && strcmp(argv[1],"--capture-mine-yard") == 0;
-    bool capture_mine_level = argc >= 2 && strcmp(argv[1],"--capture-mine-level") == 0;
+    bool capture_mine_menu = argc >= 2 && strcmp(argv[1],"--capture-mine-menu") == 0;
+    bool capture_mine_level = capture_mine_menu || (argc >= 2 && strcmp(argv[1],"--capture-mine-level") == 0);
     bool capture_underroad = argc >= 2 &&
         strcmp(argv[1], "--capture-underroad") == 0;
     bool capture_atmosphere = argc >= 2 &&
@@ -12066,8 +12067,8 @@ int main(int argc, char **argv)
                   normal_play || capture_title ? FRONTEND_TITLE :
                   capture_delete ? FRONTEND_DELETE :
                   capture_ux && capture_ux_view == 10 ? FRONTEND_SOUND :
-                  capture_menu || (capture_ux && capture_ux_view == 5) ? FRONTEND_PAUSED : FRONTEND_PLAYING,
-        .has_world = resuming_campaign || capture_menu || capture_delete,
+                  capture_menu || capture_mine_menu || (capture_ux && capture_ux_view == 5) ? FRONTEND_PAUSED : FRONTEND_PLAYING,
+        .has_world = resuming_campaign || capture_menu || capture_delete || capture_mine_menu,
     };
     if ((resuming_campaign || CcCoopClientActive()) && journal == NULL) {
         (void)snprintf(frontend.feedback, sizeof(frontend.feedback), "%s", startup_message);
@@ -12149,8 +12150,9 @@ int main(int argc, char **argv)
         bool music_play_input = false;
         bool menu_frame = frontend.screen != FRONTEND_PLAYING;
         FrontendAction menu_action = FRONTEND_ACTION_NONE;
-        bool scene_owns_escape = local.interaction.approaching || view == VIEW_CARRIAGE || view == VIEW_CHARACTER ||
-            view == VIEW_TRADE || view == VIEW_LEDGER || view == VIEW_SITUATIONS;
+        bool scene_owns_escape = sim.mine.phase == CC_MINE_NONE &&
+            (local.interaction.approaching || view == VIEW_CARRIAGE || view == VIEW_CHARACTER ||
+             view == VIEW_TRADE || view == VIEW_LEDGER || view == VIEW_SITUATIONS);
         if (normal_play && (frontend.screen != FRONTEND_PLAYING || !scene_owns_escape)) {
             menu_action = FrontendInput(&frontend);
             menu_frame = menu_frame || frontend.screen != FRONTEND_PLAYING;
@@ -12569,6 +12571,12 @@ int main(int argc, char **argv)
             const CcCrewMember *crew = CcLocalCrewDrawn(&crew_count);
             CcCoopClientDrawn(crew, crew_count);
         }
+        if(sim.mine.phase != CC_MINE_NONE && !persistence_blocked &&
+            (view == VIEW_LOCAL || view == VIEW_ROADS)) {
+            CcOverlayFlush();
+            DrawMineScene(&sim,&local.agent,local_target,message);
+            CcOverlayFlush();
+        }
         if (frontend.screen != FRONTEND_PLAYING) {
             DrawFrontend(&frontend, &preferences, &sim, local_target);
         }
@@ -12585,11 +12593,6 @@ int main(int argc, char **argv)
             frontend.screen == FRONTEND_INVITATION ? "invitation" :
             frontend.screen == FRONTEND_REMOVE_MEMBER ? "remove" : "playing", frontend.focus, (int)frontend.avatar);
 #endif
-        if(sim.mine.phase != CC_MINE_NONE) {
-            CcOverlayFlush();
-            DrawMineScene(&sim,&local.agent,local_target,message);
-            CcOverlayFlush();
-        }
         ClientTouchEnd();
         EndDrawing();
 #if defined(PLATFORM_WEB)

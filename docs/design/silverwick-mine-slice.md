@@ -12,6 +12,7 @@ Both places use the town renderer, world lighting, and character model. The yard
 - E or Use: interact with a nearby doorway, bar, or survey.
 - P or Pack food: move one Bread or Meat from carriage to pack.
 - F5: save the campaign and current position.
+- Escape: open or close the pause menu.
 
 The pack holds eight goods. Entry consumes one ration. Explore six rooms joined by narrow passages. The western store provides a loop around the barred middle passage. The workers' survey is in the eastern records room. The lower stair marks the future connection to Lamp Hall.
 
@@ -31,6 +32,6 @@ This slice builds the Silverwick road branch, surface yard, and zone 01. The rem
 
 ## Checks
 
-`silverwick_mine_roundtrip` covers both road approaches, parking, pack accounting, collision, the survey, the bar, save/load, journal replay, old-save migration, shared commands, and text commands. `silverwick_mine_input` covers the branch card, keyboard movement, food packing, the view change at the doorway, F5, and the return to the road. Native capture options are `--capture-mine-yard filename.png` and `--capture-mine-level filename.png`.
+`silverwick_mine_roundtrip` covers both road approaches, parking, pack accounting, collision, the survey, the bar, save/load, journal replay, old-save migration, shared commands, and text commands. `silverwick_mine_input` covers the branch card, keyboard movement, food packing, the view change at the doorway, F5, and the return to the road. Native capture options are `--capture-mine-yard filename.png` and `--capture-mine-level filename.png`. `--capture-mine-menu filename.png` captures the pause menu over the underground view.
 
 The schema 58 migration fixture was written with naming PR revision `6e3436940a667461821b928269224cd6f33f08fc`. Seed 42 has all 24 death dates set to day 2, followed by one flushed journal day. Its replay hash is `1053288272468887993`. The standalone SQLite fixture verifies the original naming replay before schema 59 adds an empty mine visit.
