@@ -40,8 +40,13 @@ static void Prepare(void)
         sim.routes[i].condition = 100;
         sim.routes[i].security = 100;
     }
+    /* These delivery fixtures use settlement 1 as their supplied archive. */
+    for (int32_t i = 0; i < sim.settlement_count; ++i)
+        sim.settlements[i].service_mask &= ~(UINT32_C(1) << CC_SERVICE_MILL);
+    sim.settlements[1].service_mask |= UINT32_C(1) << CC_SERVICE_MILL;
     sim.iron_ledger_reserve = 50;
     sim.archives.scribes = 1;
+    CC_CHECK(CcSimMaterialChainSnapshot(&sim).scriptorium_id == sim.settlements[1].id);
 }
 
 static CcId AddAccount(CcId origin, const char *text)
@@ -168,8 +173,10 @@ static void CheckArrivalAndLateRecording(void)
     CC_CHECK(receipt->location_id == sim.settlements[1].id);
     sim.settlements[1].stock[CC_GOOD_PAPER] = 0;
     sim.settlements[1].production[CC_GOOD_PAPER] = 0;
-    sim.settlements[1].service_mask &= ~(UINT32_C(1) << CC_SERVICE_MILL);
+    /* Zero paper and production capacity isolate the supply gate at this seat. */
+    CC_CHECK(CcSettlementHasService(&sim.settlements[1], CC_SERVICE_MILL));
     CcSimAdvanceDays(&sim, 14);
+    CC_CHECK(CcSimMaterialChainSnapshot(&sim).scriptorium_id == sim.settlements[1].id);
     CC_CHECK(!Account(remote)->recorded);
     sim.settlements[1].stock[CC_GOOD_PAPER] = 20;
     sim.iron_ledger_reserve = 50;
