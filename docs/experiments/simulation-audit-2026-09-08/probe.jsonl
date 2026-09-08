@@ -1,0 +1,178 @@
+{"kind":"counter_probe","field":0,"value":1000001,"valid":false,"error":"Royal carriage 0 invalid (m=0 rc=0 tm=0 lk=0 slots=0/-1/-1 r=-1->-1 dep=0 arr=0)."}
+{"kind":"counter_probe","field":1,"value":1000001,"valid":false,"error":"Bandit expedition state is invalid."}
+{"kind":"counter_probe","field":2,"value":1000001,"valid":false,"error":"Hoard-raider state is invalid."}
+{"kind":"counter_probe","field":3,"value":1000001,"valid":false,"error":"Goblin tribute state is invalid."}
+{"kind":"snapshot","label":"start","day":5840001,"reserve":0,"scribes":0,"lore":0,"archive_blocker":1,"archive_wheat":0,"archive_paper":0,"archive_tools":0,"treasures":3,"goblin_members":36,"goblin_tributes":248,"bandit_members":4,"bandit_supplies":100,"bandit_raids":2351,"dragon_influence":99}
+{"kind":"town","label":"start","name":"Thornford","abandoned":false,"population":2800,"hunger":0,"security":80,"is_scriptorium":false}
+{"kind":"town","label":"start","name":"Gloamgate","abandoned":false,"population":296,"hunger":21,"security":45,"is_scriptorium":true}
+{"kind":"town","label":"start","name":"Alderwatch","abandoned":true,"population":0,"hunger":100,"security":0,"is_scriptorium":false}
+{"kind":"town","label":"start","name":"Silverwick","abandoned":true,"population":0,"hunger":100,"security":0,"is_scriptorium":false}
+{"kind":"town","label":"start","name":"Rosespire","abandoned":false,"population":9662,"hunger":0,"security":100,"is_scriptorium":false}
+{"kind":"town","label":"start","name":"Hollowbarrow","abandoned":true,"population":0,"hunger":100,"security":0,"is_scriptorium":false}
+{"kind":"diplomacy","label":"start","first":0,"second":1,"state":1,"since_day":175739}
+{"kind":"diplomacy","label":"start","first":0,"second":2,"state":2,"since_day":173390}
+{"kind":"diplomacy","label":"start","first":1,"second":2,"state":2,"since_day":175290}
+{"kind":"treasure","label":"start","name":"Rosespire Sun Reliquary","owner":1008806316530991149,"location":144115188075855881,"value":140}
+{"kind":"treasure","label":"start","name":"Ruined Annal Ashen Throne of 0","owner":144115188075855879,"location":144115188075855879,"value":6}
+{"kind":"treasure","label":"start","name":"Wyrmheart of Varkesh the Unappeas","owner":1008806316530991149,"location":144115188075855881,"value":1420}
+{"kind":"example","label":"control","event":"GOBLIN RAID","text":"The Cinder Tithe raids Thornford: 20 Wheat, 0 crowns."}
+{"kind":"example","label":"control","event":"GOBLIN RAID","text":"The Cinder Tithe raids Gloamgate: 0 Iron, 0 crowns."}
+{"kind":"example","label":"control","event":"COURIER LOST","text":"No rider can find a passable road for a declaration of war."}
+{"kind":"example","label":"control","event":"COURIER LOST","text":"No rider can find a passable road for a declaration of war."}
+{"kind":"event_count","label":"control","event":"SHORTAGE","count":1738,"positive":1738,"magnitude_sum":41712}
+{"kind":"event_count","label":"control","event":"DECREE","count":6,"positive":2,"magnitude_sum":216}
+{"kind":"event_count","label":"control","event":"POLITICS","count":3912,"positive":3912,"magnitude_sum":391200}
+{"kind":"event_count","label":"control","event":"CONTRACT","count":2584,"positive":2564,"magnitude_sum":16600}
+{"kind":"event_count","label":"control","event":"FAILED","count":2564,"positive":0,"magnitude_sum":0}
+{"kind":"event_count","label":"control","event":"GOBLIN RAIDERS","count":962,"positive":962,"magnitude_sum":3361}
+{"kind":"event_count","label":"control","event":"GOBLIN RAID","count":962,"positive":475,"magnitude_sum":9500}
+{"kind":"event_count","label":"control","event":"GOBLINS RETURN","count":962,"positive":962,"magnitude_sum":34632}
+{"kind":"event_count","label":"control","event":"COURIER LOST","count":20,"positive":0,"magnitude_sum":0}
+{"kind":"event_count","label":"control","event":"DRAGON HUNT","count":7,"positive":7,"magnitude_sum":84}
+{"kind":"event_count","label":"control","event":"CALVING","count":7,"positive":7,"magnitude_sum":21}
+{"kind":"event_count","label":"control","event":"GOBLIN MUSTER","count":962,"positive":962,"magnitude_sum":3361}
+{"kind":"event_count","label":"control","event":"RUMOR","count":339,"positive":339,"magnitude_sum":339}
+{"kind":"event_count","label":"control","event":"RELATIONSHIP","count":192,"positive":92,"magnitude_sum":-16}
+{"kind":"event_count","label":"control","event":"STORY FRONT","count":672,"positive":672,"magnitude_sum":26376}
+{"kind":"event_count","label":"control","event":"FRONT FAILED","count":672,"positive":672,"magnitude_sum":4032}
+{"kind":"event_count","label":"control","event":"BIRTH","count":32,"positive":32,"magnitude_sum":384}
+{"kind":"event_count","label":"control","event":"DEATH","count":32,"positive":32,"magnitude_sum":960}
+{"kind":"event_count","label":"control","event":"WOODLOT","count":1305,"positive":1305,"magnitude_sum":2175}
+{"kind":"event_count","label":"control","event":"BAKERY","count":2174,"positive":2174,"magnitude_sum":19066}
+{"kind":"event_count","label":"control","event":"MASONRY","count":978,"positive":0,"magnitude_sum":0}
+{"kind":"event_count","label":"control","event":"LAMBING","count":100,"positive":100,"magnitude_sum":1021}
+{"kind":"event_count","label":"control","event":"SHEARING","count":100,"positive":100,"magnitude_sum":2986}
+{"kind":"event_count","label":"control","event":"FLOCK CULL","count":100,"positive":100,"magnitude_sum":2000}
+{"kind":"event_count","label":"control","event":"NEW ABBOT","count":1,"positive":1,"magnitude_sum":30}
+{"kind":"event_count","label":"control","event":"NEW RULER","count":5,"positive":5,"magnitude_sum":125}
+{"kind":"event_count","label":"control","event":"NOTICE","count":1541,"positive":1541,"magnitude_sum":30820}
+{"kind":"window","label":"control","days":36500,"valid":true,"war_days":36500,"days_with_new_heard_gossip":0,"staffed_days":0}
+{"kind":"snapshot","label":"control","day":5876501,"reserve":0,"scribes":0,"lore":0,"archive_blocker":1,"archive_wheat":0,"archive_paper":0,"archive_tools":0,"treasures":3,"goblin_members":36,"goblin_tributes":248,"bandit_members":4,"bandit_supplies":100,"bandit_raids":2351,"dragon_influence":99}
+{"kind":"town","label":"control","name":"Thornford","abandoned":false,"population":2800,"hunger":0,"security":80,"is_scriptorium":false}
+{"kind":"town","label":"control","name":"Gloamgate","abandoned":false,"population":296,"hunger":18,"security":45,"is_scriptorium":true}
+{"kind":"town","label":"control","name":"Alderwatch","abandoned":true,"population":0,"hunger":100,"security":0,"is_scriptorium":false}
+{"kind":"town","label":"control","name":"Silverwick","abandoned":true,"population":0,"hunger":100,"security":0,"is_scriptorium":false}
+{"kind":"town","label":"control","name":"Rosespire","abandoned":false,"population":9662,"hunger":0,"security":100,"is_scriptorium":false}
+{"kind":"town","label":"control","name":"Hollowbarrow","abandoned":true,"population":0,"hunger":100,"security":0,"is_scriptorium":false}
+{"kind":"diplomacy","label":"control","first":0,"second":1,"state":1,"since_day":175739}
+{"kind":"diplomacy","label":"control","first":0,"second":2,"state":2,"since_day":173390}
+{"kind":"diplomacy","label":"control","first":1,"second":2,"state":2,"since_day":175290}
+{"kind":"treasure","label":"control","name":"Rosespire Sun Reliquary","owner":1008806316530991149,"location":144115188075855881,"value":140}
+{"kind":"treasure","label":"control","name":"Ruined Annal Ashen Throne of 0","owner":144115188075855879,"location":144115188075855879,"value":6}
+{"kind":"treasure","label":"control","name":"Wyrmheart of Varkesh the Unappeas","owner":1008806316530991149,"location":144115188075855881,"value":1420}
+{"kind":"example","label":"roads_maintained","event":"GOBLIN RAID","text":"The Cinder Tithe raids Thornford: 20 Wheat, 0 crowns."}
+{"kind":"example","label":"roads_maintained","event":"GOBLIN RAID","text":"The Cinder Tithe raids Gloamgate: 0 Iron, 0 crowns."}
+{"kind":"example","label":"roads_maintained","event":"COURIER LOST","text":"No rider can find a passable road for a declaration of war."}
+{"kind":"example","label":"roads_maintained","event":"COURIER LOST","text":"No rider can find a passable road for a declaration of war."}
+{"kind":"event_count","label":"roads_maintained","event":"SHORTAGE","count":1738,"positive":1738,"magnitude_sum":41712}
+{"kind":"event_count","label":"roads_maintained","event":"DECREE","count":5,"positive":2,"magnitude_sum":216}
+{"kind":"event_count","label":"roads_maintained","event":"POLITICS","count":3912,"positive":3912,"magnitude_sum":391200}
+{"kind":"event_count","label":"roads_maintained","event":"CONTRACT","count":1932,"positive":1912,"magnitude_sum":15296}
+{"kind":"event_count","label":"roads_maintained","event":"FAILED","count":1913,"positive":0,"magnitude_sum":0}
+{"kind":"event_count","label":"roads_maintained","event":"GOBLIN RAIDERS","count":962,"positive":962,"magnitude_sum":3361}
+{"kind":"event_count","label":"roads_maintained","event":"GOBLIN RAID","count":962,"positive":475,"magnitude_sum":9500}
+{"kind":"event_count","label":"roads_maintained","event":"GOBLINS RETURN","count":962,"positive":962,"magnitude_sum":34632}
+{"kind":"event_count","label":"roads_maintained","event":"COURIER LOST","count":20,"positive":0,"magnitude_sum":0}
+{"kind":"event_count","label":"roads_maintained","event":"DRAGON HUNT","count":7,"positive":7,"magnitude_sum":84}
+{"kind":"event_count","label":"roads_maintained","event":"CALVING","count":7,"positive":7,"magnitude_sum":21}
+{"kind":"event_count","label":"roads_maintained","event":"GOBLIN MUSTER","count":962,"positive":962,"magnitude_sum":3361}
+{"kind":"event_count","label":"roads_maintained","event":"RUMOR","count":232,"positive":232,"magnitude_sum":232}
+{"kind":"event_count","label":"roads_maintained","event":"RELATIONSHIP","count":190,"positive":97,"magnitude_sum":8}
+{"kind":"event_count","label":"roads_maintained","event":"STORY FRONT","count":541,"positive":541,"magnitude_sum":16487}
+{"kind":"event_count","label":"roads_maintained","event":"FRONT FAILED","count":542,"positive":542,"magnitude_sum":3252}
+{"kind":"event_count","label":"roads_maintained","event":"BIRTH","count":31,"positive":31,"magnitude_sum":372}
+{"kind":"event_count","label":"roads_maintained","event":"DEATH","count":31,"positive":31,"magnitude_sum":930}
+{"kind":"event_count","label":"roads_maintained","event":"WOODLOT","count":1305,"positive":1305,"magnitude_sum":2175}
+{"kind":"event_count","label":"roads_maintained","event":"BAKERY","count":2174,"positive":2174,"magnitude_sum":19066}
+{"kind":"event_count","label":"roads_maintained","event":"MASONRY","count":978,"positive":0,"magnitude_sum":0}
+{"kind":"event_count","label":"roads_maintained","event":"LAMBING","count":100,"positive":100,"magnitude_sum":1021}
+{"kind":"event_count","label":"roads_maintained","event":"SHEARING","count":100,"positive":100,"magnitude_sum":2986}
+{"kind":"event_count","label":"roads_maintained","event":"FLOCK CULL","count":100,"positive":100,"magnitude_sum":2000}
+{"kind":"event_count","label":"roads_maintained","event":"NEW ABBOT","count":1,"positive":1,"magnitude_sum":30}
+{"kind":"event_count","label":"roads_maintained","event":"NEW RULER","count":4,"positive":4,"magnitude_sum":100}
+{"kind":"event_count","label":"roads_maintained","event":"DRAGON VOW","count":1,"positive":1,"magnitude_sum":78}
+{"kind":"event_count","label":"roads_maintained","event":"NOTICE","count":889,"positive":889,"magnitude_sum":17780}
+{"kind":"window","label":"roads_maintained","days":36500,"valid":true,"war_days":36500,"days_with_new_heard_gossip":0,"staffed_days":0}
+{"kind":"snapshot","label":"roads_maintained","day":5876501,"reserve":0,"scribes":0,"lore":0,"archive_blocker":1,"archive_wheat":0,"archive_paper":0,"archive_tools":0,"treasures":3,"goblin_members":36,"goblin_tributes":248,"bandit_members":4,"bandit_supplies":100,"bandit_raids":2351,"dragon_influence":99}
+{"kind":"town","label":"roads_maintained","name":"Thornford","abandoned":false,"population":2800,"hunger":0,"security":80,"is_scriptorium":false}
+{"kind":"town","label":"roads_maintained","name":"Gloamgate","abandoned":false,"population":296,"hunger":18,"security":45,"is_scriptorium":true}
+{"kind":"town","label":"roads_maintained","name":"Alderwatch","abandoned":true,"population":0,"hunger":100,"security":0,"is_scriptorium":false}
+{"kind":"town","label":"roads_maintained","name":"Silverwick","abandoned":true,"population":0,"hunger":100,"security":0,"is_scriptorium":false}
+{"kind":"town","label":"roads_maintained","name":"Rosespire","abandoned":false,"population":9662,"hunger":0,"security":100,"is_scriptorium":false}
+{"kind":"town","label":"roads_maintained","name":"Hollowbarrow","abandoned":true,"population":0,"hunger":100,"security":0,"is_scriptorium":false}
+{"kind":"diplomacy","label":"roads_maintained","first":0,"second":1,"state":1,"since_day":175739}
+{"kind":"diplomacy","label":"roads_maintained","first":0,"second":2,"state":2,"since_day":173390}
+{"kind":"diplomacy","label":"roads_maintained","first":1,"second":2,"state":2,"since_day":175290}
+{"kind":"treasure","label":"roads_maintained","name":"Rosespire Sun Reliquary","owner":1008806316530991149,"location":144115188075855881,"value":140}
+{"kind":"treasure","label":"roads_maintained","name":"Ruined Annal Ashen Throne of 0","owner":144115188075855879,"location":144115188075855879,"value":6}
+{"kind":"treasure","label":"roads_maintained","name":"Wyrmheart of Varkesh the Unappeas","owner":1008806316530991149,"location":144115188075855881,"value":1420}
+{"kind":"example","label":"roads_and_archive_supported","event":"GOBLIN RAID","text":"The Cinder Tithe raids Thornford: 20 Wheat, 0 crowns."}
+{"kind":"example","label":"roads_and_archive_supported","event":"GOBLIN RAID","text":"The Cinder Tithe raids Gloamgate: 4 Tools, 0 crowns."}
+{"kind":"example","label":"roads_and_archive_supported","event":"COURIER LOST","text":"No rider can find a passable road for a declaration of war."}
+{"kind":"example","label":"roads_and_archive_supported","event":"COURIER LOST","text":"No rider can find a passable road for a declaration of war."}
+{"kind":"example","label":"roads_and_archive_supported","event":"PEACE","text":"Willow Republic's courier reaches Indigo March: peace now binds the two courts."}
+{"kind":"example","label":"roads_and_archive_supported","event":"NEWS ARRIVES","text":"A royal courier reaches Rosespire with a peace offer intact."}
+{"kind":"validation_failure","label":"roads_and_archive_supported","day":5864456,"error":"Kingdom Ashen Throne has an invalid ruler home allegiance."}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"SHORTAGE","count":5,"positive":5,"magnitude_sum":292}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"SHIPMENT","count":490,"positive":490,"magnitude_sum":4221}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"ARRIVAL","count":461,"positive":461,"magnitude_sum":3991}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"AMBUSH","count":1,"positive":1,"magnitude_sum":9}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"DECREE","count":87,"positive":84,"magnitude_sum":2048}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"POLITICS","count":2619,"positive":2619,"magnitude_sum":260828}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"CONTRACT","count":888,"positive":877,"magnitude_sum":7016}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"FAILED","count":879,"positive":0,"magnitude_sum":0}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"RAIDERS","count":76,"positive":76,"magnitude_sum":7935}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"RAID","count":76,"positive":76,"magnitude_sum":1954}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"RAIDERS RETURN","count":76,"positive":76,"magnitude_sum":1954}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"MINE YIELD","count":243,"positive":243,"magnitude_sum":991}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"SMITHY","count":3,"positive":3,"magnitude_sum":13}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"TREASURE","count":1,"positive":1,"magnitude_sum":1950}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"GOBLIN RAIDERS","count":652,"positive":652,"magnitude_sum":2142}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"GOBLIN RAID","count":652,"positive":652,"magnitude_sum":8400}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"GOBLINS RETURN","count":652,"positive":652,"magnitude_sum":21818}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"MONASTERY CREDIT","count":30,"positive":30,"magnitude_sum":2151}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"DEBT REPAID","count":135,"positive":135,"magnitude_sum":1221}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"COURIER","count":3,"positive":3,"magnitude_sum":8}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"NEWS ARRIVES","count":1,"positive":1,"magnitude_sum":96}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"COURIER LOST","count":10,"positive":0,"magnitude_sum":0}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"PEACE","count":1,"positive":1,"magnitude_sum":96}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"DRAGON HOST","count":1,"positive":1,"magnitude_sum":3}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"DRAGON SLAIN","count":1,"positive":1,"magnitude_sum":19}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"HOARD RECOVERED","count":1,"positive":1,"magnitude_sum":3329}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"DRAGON HUNT","count":4,"positive":4,"magnitude_sum":48}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"AFTERDRAGON","count":2,"positive":2,"magnitude_sum":154}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"CULT RALLIES","count":7,"positive":7,"magnitude_sum":7}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"GOBLIN MUSTER","count":652,"positive":652,"magnitude_sum":2142}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"RUMOR","count":813,"positive":813,"magnitude_sum":813}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"RELATIONSHIP","count":119,"positive":56,"magnitude_sum":-14}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"STORY FRONT","count":604,"positive":604,"magnitude_sum":17551}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"FRONT FAILED","count":605,"positive":605,"magnitude_sum":3630}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"BIRTH","count":20,"positive":20,"magnitude_sum":240}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"DEATH","count":20,"positive":20,"magnitude_sum":600}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"WOODLOT","count":956,"positive":956,"magnitude_sum":3182}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"BAKERY","count":1746,"positive":1746,"magnitude_sum":45469}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"MASONRY","count":720,"positive":0,"magnitude_sum":0}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"LAMBING","count":67,"positive":67,"magnitude_sum":670}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"SHEARING","count":67,"positive":67,"magnitude_sum":2010}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"FLOCK CULL","count":67,"positive":67,"magnitude_sum":1340}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"PAPER MILL","count":3787,"positive":3787,"magnitude_sum":11837}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"CORONATION","count":4,"positive":4,"magnitude_sum":280}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"NEW ABBOT","count":1,"positive":1,"magnitude_sum":30}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"NEW RULER","count":3,"positive":3,"magnitude_sum":75}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"CARRIAGE ROUTE","count":463,"positive":463,"magnitude_sum":1355}
+{"kind":"event_count","label":"roads_and_archive_supported","event":"NOTICE","count":195,"positive":195,"magnitude_sum":3900}
+{"kind":"window","label":"roads_and_archive_supported","days":24455,"valid":false,"war_days":24455,"days_with_new_heard_gossip":5352,"staffed_days":5352}
+{"kind":"snapshot","label":"roads_and_archive_supported","day":5864456,"reserve":432,"scribes":4,"lore":0,"archive_blocker":5,"archive_wheat":10000,"archive_paper":20,"archive_tools":20,"treasures":4,"goblin_members":25,"goblin_tributes":248,"bandit_members":104,"bandit_supplies":100,"bandit_raids":2427,"dragon_influence":40}
+{"kind":"town","label":"roads_and_archive_supported","name":"Thornford","abandoned":false,"population":2800,"hunger":0,"security":80,"is_scriptorium":false}
+{"kind":"town","label":"roads_and_archive_supported","name":"Gloamgate","abandoned":false,"population":793,"hunger":0,"security":80,"is_scriptorium":true}
+{"kind":"town","label":"roads_and_archive_supported","name":"Alderwatch","abandoned":false,"population":180,"hunger":0,"security":44,"is_scriptorium":false}
+{"kind":"town","label":"roads_and_archive_supported","name":"Silverwick","abandoned":true,"population":0,"hunger":100,"security":0,"is_scriptorium":false}
+{"kind":"town","label":"roads_and_archive_supported","name":"Rosespire","abandoned":false,"population":9662,"hunger":0,"security":99,"is_scriptorium":false}
+{"kind":"town","label":"roads_and_archive_supported","name":"Hollowbarrow","abandoned":false,"population":312,"hunger":12,"security":80,"is_scriptorium":false}
+{"kind":"diplomacy","label":"roads_and_archive_supported","first":0,"second":1,"state":1,"since_day":175739}
+{"kind":"diplomacy","label":"roads_and_archive_supported","first":0,"second":2,"state":0,"since_day":5859519}
+{"kind":"diplomacy","label":"roads_and_archive_supported","first":1,"second":2,"state":2,"since_day":175290}
+{"kind":"treasure","label":"roads_and_archive_supported","name":"Rosespire Sun Reliquary","owner":144115188075855876,"location":144115188075855876,"value":140}
+{"kind":"treasure","label":"roads_and_archive_supported","name":"Ruined Annal Ashen Throne of 0","owner":144115188075855879,"location":144115188075855879,"value":6}
+{"kind":"treasure","label":"roads_and_archive_supported","name":"Wyrmheart of Varkesh the Unappeas","owner":144115188075855876,"location":144115188075855876,"value":1420}
+{"kind":"treasure","label":"roads_and_archive_supported","name":"Bane of Varkesh the Unappeased, Wyrmsbane","owner":1369094286725348276,"location":144115188075855878,"value":1950}
