@@ -6769,8 +6769,48 @@ static void AdvanceArchives(CcSim *sim)
     int32_t target_scribes = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
         sim->iron_ledger_reserve >= 150 ? 2 :
         sim->iron_ledger_reserve >= 50 ? 1 : 0;
+    /* An archive that loses its last scribe used to stay lost: staffing reads
+       only the iron ledger, and a ledger that fell below fifty had no way back
+       up. Remember when the silence started, so a world that recovers around
+       it can end that silence. */
+    bool crown_funded = false;
+    if (sim->schema_version >= 55U) {
+        if (archives->scribes <= 0) {
+            if (archives->dead_since_day <= 0) {
+                archives->dead_since_day = sim->current_day;
+            }
+        } else {
+            archives->dead_since_day = 0;
+        }
+        /* After five years of silence, two solvent kingdoms with roads between
+           them will fund one scribe between them -- but only once the ledger
+           has climbed back to within a scribe's wage of paying for itself, so
+           this tops up a recovering world rather than rescuing a dead one. */
+        if (target_scribes <= 0 && archives->dead_since_day > 0 &&
+            sim->current_day - archives->dead_since_day >= 1820 &&
+            sim->iron_ledger_reserve >= 40 && sim->route_count >= 2) {
+            int32_t funded_kingdoms = 0;
+            for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+                if (sim->kingdoms[i].treasury >= 800) funded_kingdoms += 1;
+            }
+            if (funded_kingdoms >= 2) {
+                target_scribes = 1;
+                crown_funded = true;
+            }
+        }
+    }
     if (target_scribes > archives->scribes) {
         archives->scribes = target_scribes;
+        /* A ledger that climbs back over the threshold on its own restaffs the
+           archive quietly, the way it always has. Only the crowns stepping in
+           is worth an entry. */
+        if (crown_funded) {
+            (void)PushEvent(
+                sim, CC_EVENT_LORE_RECORDED, 0U, 0U, 0U, 1,
+                "The kingdom treasuries fund a lone scribe; "
+                "the archive stirs after silence.");
+        }
+        if (sim->schema_version >= 55U) archives->dead_since_day = 0;
     } else if (target_scribes < archives->scribes) {
         archives->scribes -= 1;
     }
@@ -18686,7 +18726,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 51U
+#define CC_NEWEST_LEGACY_SCHEMA 54U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18704,7 +18744,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 51U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 54U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -21527,6 +21567,9 @@ uint64_t CcSimHash(const CcSim *sim)
         if (sim->schema_version >= 35U) {
             HASH_VALUE(sim->archives.abbot_character_id);
             HASH_VALUE(sim->archives.stewardship_rank);
+        }
+        if (sim->schema_version >= 55U) {
+            HASH_VALUE(sim->archives.dead_since_day);
         }
     }
     if (sim->schema_version >= 44U) {

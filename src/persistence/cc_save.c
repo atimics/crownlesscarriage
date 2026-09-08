@@ -875,6 +875,10 @@ static bool EnsureHistoryOfficeColumns(sqlite3 *database,
             "ALTER TABLE meta ADD COLUMN archive_stewardship_rank "
             "INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
+        EnsureColumn(database, "meta", "archive_dead_since_day",
+            "ALTER TABLE meta ADD COLUMN archive_dead_since_day "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
         EnsureColumn(database, "kingdom", "ruler_character_id",
             "ALTER TABLE kingdom ADD COLUMN ruler_character_id "
             "INTEGER NOT NULL DEFAULT 0;",
@@ -925,7 +929,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " archive_lore_lost_total INTEGER NOT NULL DEFAULT 0,"
         " archive_last_recorded_day INTEGER NOT NULL DEFAULT 0,"
         " archive_lore_ceiling INTEGER NOT NULL DEFAULT 40,"
-        " archive_kit_tool_wear INTEGER NOT NULL DEFAULT 0);"
+        " archive_kit_tool_wear INTEGER NOT NULL DEFAULT 0,"
+        " archive_dead_since_day INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS route ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, from_id INTEGER NOT NULL,"
         " to_id INTEGER NOT NULL, travel_days INTEGER NOT NULL, capacity INTEGER NOT NULL,"
@@ -1441,8 +1446,9 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
         "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling,"
         "character_births,character_deaths,archive_kit_tool_wear,"
-        "archive_abbot_character_id,archive_stewardship_rank) "
-        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+        "archive_abbot_character_id,archive_stewardship_rank,"
+        "archive_dead_since_day) "
+        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
     char hash[24];
     (void)snprintf(hash, sizeof(hash), "%016" PRIx64, CcSimHash(sim));
@@ -1476,6 +1482,7 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
     BindInt(statement, 28, sim->archives.kit_tool_wear);
     BindId(statement, 29, sim->archives.abbot_character_id);
     BindInt(statement, 30, sim->archives.stewardship_rank);
+    BindInt(statement, 31, sim->archives.dead_since_day);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
@@ -3408,7 +3415,8 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
         "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling,"
         "character_births,character_deaths,archive_kit_tool_wear,"
-        "archive_abbot_character_id,archive_stewardship_rank "
+        "archive_abbot_character_id,archive_stewardship_rank,"
+        "archive_dead_since_day "
         "FROM meta WHERE id=1;", &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
         SetError(error, error_capacity, "Campaign metadata is missing.");
@@ -3450,6 +3458,7 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
     sim->archives.abbot_character_id =
         (CcId)sqlite3_column_int64(statement, 28);
     sim->archives.stewardship_rank = sqlite3_column_int(statement, 29);
+    sim->archives.dead_since_day = sqlite3_column_int(statement, 30);
     sqlite3_finalize(statement);
     return true;
 }
@@ -5959,7 +5968,9 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 44U || legacy_version == 45U ||
          legacy_version == 46U || legacy_version == 47U ||
          legacy_version == 48U || legacy_version == 49U ||
-         legacy_version == 50U || legacy_version == 51U) &&
+         legacy_version == 50U || legacy_version == 51U ||
+         legacy_version == 52U || legacy_version == 53U ||
+         legacy_version == 54U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,

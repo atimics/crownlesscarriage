@@ -56,7 +56,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 52
+#define CC_SIM_SCHEMA_VERSION 55
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -342,6 +342,8 @@ typedef struct CcArchives {
     int32_t kit_tool_wear;
     CcId abbot_character_id;
     int32_t stewardship_rank;
+    /* Day the last scribe was lost, or 0 while the archive is staffed. */
+    int32_t dead_since_day;
 } CcArchives;
 
 typedef struct CcGossipVersion {

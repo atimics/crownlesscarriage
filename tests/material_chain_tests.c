@@ -489,6 +489,100 @@ static void CheckAbandonedScriptoriumMoves(void)
     CC_CHECK(snapshot.scriptorium_id != first_id);
 }
 
+static void SetCrowns(CcSim *sim, CcMoney treasury)
+{
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        sim->kingdoms[i].treasury = treasury;
+    }
+}
+
+static int32_t CountRecoveryEntries(const CcSim *sim)
+{
+    int32_t count = 0;
+    for (int32_t i = 0; i < sim->event_count; ++i) {
+        if (strstr(sim->events[i].text, "stirs after silence") != NULL) {
+            count += 1;
+        }
+    }
+    return count;
+}
+
+/* An archive that loses its last scribe used to stay lost, because staffing
+   reads only the iron ledger and a ledger below fifty had no way back up.
+   PrepareIsolated cannot be used here: recovery needs two solvent crowns and
+   roads between them, and that world has one kingdom and no routes. The
+   ledger earns on its own, so each step sets it and advances a single week. */
+static void CheckArchiveRecoversAfterSilence(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x6d111c4a));
+    CC_CHECK(sim.route_count >= 2 && sim.kingdom_count >= 2);
+    SetCrowns(&sim, 0);
+    sim.iron_ledger_reserve = 0;
+    sim.archives.scribes = 0;
+    sim.archives.dead_since_day = 0;
+    CcSimAdvanceDays(&sim, 7);
+    CC_CHECK(sim.archives.scribes == 0);
+    int32_t started = sim.archives.dead_since_day;
+    CC_CHECK(started > 0);
+
+    /* The date of the silence is fixed when it starts, not renewed weekly. */
+    sim.iron_ledger_reserve = 0;
+    CcSimAdvanceDays(&sim, 7);
+    CC_CHECK(sim.archives.dead_since_day == started);
+
+    /* Solvent crowns and roads, but the silence is young. */
+    sim.current_day = 2000;
+    sim.archives.dead_since_day = sim.current_day - 100;
+    sim.iron_ledger_reserve = 45;
+    SetCrowns(&sim, 900);
+    CcSimAdvanceDays(&sim, 7);
+    CC_CHECK(sim.archives.scribes == 0);
+
+    /* The full wait, but the treasuries cannot pay. */
+    sim.archives.dead_since_day = sim.current_day - 1830;
+    sim.iron_ledger_reserve = 45;
+    SetCrowns(&sim, 0);
+    CcSimAdvanceDays(&sim, 7);
+    CC_CHECK(sim.archives.scribes == 0);
+    CC_CHECK(sim.archives.dead_since_day > 0);
+
+    /* The full wait and solvent crowns, but a ledger too far gone: this tops
+       up a recovering world rather than rescuing a dead one. */
+    sim.archives.dead_since_day = sim.current_day - 1830;
+    sim.iron_ledger_reserve = 10;
+    SetCrowns(&sim, 900);
+    CcSimAdvanceDays(&sim, 7);
+    CC_CHECK(sim.archives.scribes == 0);
+
+    /* All three together end the silence, and it is written down. */
+    sim.archives.dead_since_day = sim.current_day - 1830;
+    sim.iron_ledger_reserve = 45;
+    SetCrowns(&sim, 900);
+    int32_t before = CountRecoveryEntries(&sim);
+    CcSimAdvanceDays(&sim, 7);
+    CC_CHECK(sim.archives.scribes == 1);
+    CC_CHECK(sim.archives.dead_since_day == 0);
+    CC_CHECK(CountRecoveryEntries(&sim) == before + 1);
+
+    /* A ledger that climbs back on its own restaffs the archive quietly; that
+       is the old behaviour and it does not claim the crowns paid for it. */
+    CcSim ledger;
+    CcSimInit(&ledger, UINT32_C(0x6d111c4a));
+    SetCrowns(&ledger, 0);
+    ledger.iron_ledger_reserve = 0;
+    ledger.archives.scribes = 0;
+    ledger.archives.dead_since_day = 0;
+    CcSimAdvanceDays(&ledger, 7);
+    CC_CHECK(ledger.archives.dead_since_day > 0);
+    ledger.iron_ledger_reserve = 60;
+    int32_t quiet = CountRecoveryEntries(&ledger);
+    CcSimAdvanceDays(&ledger, 7);
+    CC_CHECK(ledger.archives.scribes >= 1);
+    CC_CHECK(ledger.archives.dead_since_day == 0);
+    CC_CHECK(CountRecoveryEntries(&ledger) == quiet);
+}
+
 int main(void)
 {
     CC_CHECK(CC_SERVICE_MILL == 15);
@@ -507,5 +601,6 @@ int main(void)
     CheckPretenderYear();
     CheckPretenderCampaignSupplies();
     CheckAbandonedScriptoriumMoves();
+    CheckArchiveRecoversAfterSilence();
     return 0;
 }
