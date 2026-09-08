@@ -6110,6 +6110,7 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
             break;
         case CC_COMMAND_TRAVEL: confirmation = "Journey started."; break;
         case CC_COMMAND_REPAIR_ROUTE: confirmation = "Road repaired."; break;
+        case CC_COMMAND_DELIVER_PROPHECY: confirmation = "The council receives your prophecy book."; break;
         case CC_COMMAND_FUND_GRAIN_SUPPLY:
             confirmation = command.amount < 0 ? "Orders ended. The unspent fund is back in your purse." : "The organiser has pay and a grain fund.";
             break;
@@ -7841,7 +7842,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         if (HandleAdventurePause(local, view, return_view) ||
             HandleAdventureTrade(*journal, sim, local, view, message, message_capacity) ||
-            HandleAdventureBook(sim, local, view, return_view)) return;
+            HandleAdventureBook(*journal, sim, local, view, return_view, message, message_capacity)) return;
         if (*view == VIEW_SITUATIONS && AdventureHit(AdventureClose(AdventurePromisesPanel()))) {
             *view = SafeOverlayReturnView(*return_view);
             return;
@@ -9649,6 +9650,10 @@ static void ReadCompanyPage(const CcSim *sim, const LocalState *local)
             (void)snprintf(words + used, sizeof(words) - used, "%d %s. ", sim->player.cargo[i], CcGoodName((CcGood)i));
         }
         ClientReadSpeech(sim, words, 0);
+    } else if (local->book_page == 4 && CcSimDeepWyrmProphecy(sim) != NULL) {
+        ClientReadSpeech(sim, CC_PROPHECY_TITLE, 0);
+        ClientReadSpeech(sim, CC_PROPHECY_WORDS, 0);
+        ClientReadSpeech(sim, CC_PROPHECY_CHARGE, 0);
     } else {
         int32_t limit = AdventureBookPageSize(local);
         for (int32_t i = local->book_offset; i < sim->event_count && i < local->book_offset + limit; ++i) {

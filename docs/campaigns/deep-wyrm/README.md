@@ -2,7 +2,11 @@
 
 Start a company in Gloamgate on the day Varkesh becomes a Deep Wyrm.
 The town has 296 people, hunger at 23, and fire damage at 60. You arrive with
-42 crowns, an empty carriage in good repair, and a rested pony.
+42 crowns, a carriage in good repair, a rested pony, and the **Prophecy of the Deep Wyrm**.
+The gilt-bound book takes one cargo space. Open Company Book, then Prophecy
+(or press 5 in the book), to read it. Press E or choose Deliver to Gloamgate
+council to hand it over. The council keeps the book and the Journal records the
+delivery. The promise appears alongside ordinary town work.
 
 On a fresh offline title screen, choose **The Day of the Deep Wyrm**, then
 **Begin in Gloamgate**. For a shared company, open **Create world** and choose
@@ -11,7 +15,9 @@ Invited players join that same company and history. Saved worlds use the usual
 resume flow.
 
 ![Title screen](title.png)
-![Campaign opening](opening.png)
+The opening images below record the original campaign before the prophecy item.
+
+![Original campaign opening](opening.png)
 ![First steps in Gloamgate](gloamgate.png)
 
 ## Historical source
@@ -33,10 +39,28 @@ the original snapshot.
 
 The loader checks the recorded seed, day, versions, and complete historical
 state hash before it creates the company. It keeps the world clock, random
-state, entity counter, towns, characters, events, and dragon campaign. It resets
+state, towns, characters, events, and dragon campaign. The new prophecy book
+uses one new entity ID. It resets
 the player inventory, carriage, horses, journey, mine progress, and route
 knowledge for a fresh start in Gloamgate. The resulting company saves through
 the regular campaign system.
+
+## The starting book
+
+> Three courts shall bind their banners. A champion shall leave Gloamgate.
+> The Deep Wyrm shall fall by the narrowest measure.
+
+The inscription asks the bearer to bring the warning to Gloamgate's council.
+Roda Senn, the patron from the source history, is present in town at the opening.
+The local handover is available on day one, while the town's empty fodder market
+makes carriage departure depend on later supplies. A delivery transfers the
+physical book to the town and records a world event. The player's normal
+charter remains available for other work. The book's words stay in the Company
+Book after delivery.
+
+Fresh starts receive the book. Existing campaign saves retain their recorded
+inventory. Solo and shared companies use the same delivery action and saved
+ownership. Capture scene 23 opens the Prophecy page.
 
 ## A possible history
 

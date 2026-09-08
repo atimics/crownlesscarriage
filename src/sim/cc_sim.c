@@ -1,3 +1,4 @@
+#include "sim/cc_prophecy.h"
 #include "sim/cc_sim.h"
 #include "sim/cc_identity_internal.h"
 #include "sim/cc_archive_internal.h"
@@ -1203,6 +1204,7 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_DRAGON_TERRITORY_LOST: return "CROWN BROKEN";
         case CC_EVENT_ROYAL_CARRIAGE_BLOCKED: return "BORDER BLOCK";
         case CC_EVENT_ROYAL_CARRIAGE_REROUTED: return "CARRIAGE ROUTE";
+        case CC_EVENT_PROPHECY_DELIVERED: return "PROPHECY DELIVERED";
         case CC_EVENT_ROAD_SITE_PRODUCTION: return "ROAD WORKS";
         case CC_EVENT_NOTICE_POSTED: return "NOTICE";
     }
@@ -4510,6 +4512,8 @@ static CcTreasure *AllocateTreasure(CcSim *sim)
     treasure->id = NextId(sim, CC_ENTITY_TREASURE);
     return treasure;
 }
+
+#include "cc_prophecy.inc"
 
 static bool TreasureIsArchiveVolume(const CcTreasure *treasure)
 {
@@ -15132,6 +15136,10 @@ static bool ApplyBuyTreasure(CcSim *sim, const CcCommand *command,
 {
     CcTreasure *treasure = (CcTreasure *)CcSimTreasure(
         sim, command->target_id);
+    if (treasure != NULL && treasure == CcSimDeepWyrmProphecy(sim)) {
+        SetError(error, error_capacity, "This book is entrusted to the town council in Gloamgate.");
+        return false;
+    }
     CcSettlement *seller = CcSimSettlementMutable(
         sim, sim->player.location_id);
     if (treasure == NULL || seller == NULL ||
@@ -15173,6 +15181,10 @@ static bool ApplySellTreasure(CcSim *sim, const CcCommand *command,
 {
     CcTreasure *treasure = (CcTreasure *)CcSimTreasure(
         sim, command->target_id);
+    if (treasure != NULL && treasure == CcSimDeepWyrmProphecy(sim)) {
+        SetError(error, error_capacity, "This book is entrusted to the town council in Gloamgate.");
+        return false;
+    }
     CcSettlement *buyer = CcSimSettlementMutable(
         sim, sim->player.location_id);
     if (treasure == NULL || buyer == NULL ||
@@ -17309,6 +17321,7 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL ||
         command->kind == CC_COMMAND_BEGIN_DUNGEON_EXPEDITION ||
         command->kind == CC_COMMAND_FUND_GRAIN_SUPPLY ||
+        command->kind == CC_COMMAND_DELIVER_PROPHECY ||
         command->kind == CC_COMMAND_SUPPORT_BAKERY;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
@@ -17383,6 +17396,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_CHARACTER_RESPONSE:
             return ApplyCharacterResponse(
                 sim, command, error, error_capacity);
+        case CC_COMMAND_DELIVER_PROPHECY:
+            return ApplyDeliverProphecy(sim, command, error, error_capacity);
         case CC_COMMAND_FUND_GRAIN_SUPPLY:
             return ApplyFundGrainSupply(sim, command, error, error_capacity);
         case CC_COMMAND_SUPPORT_BAKERY:
@@ -17818,7 +17833,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_ROAD_SITE_PRODUCTION ||
+                event->kind > CC_EVENT_PROPHECY_DELIVERED ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||

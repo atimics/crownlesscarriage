@@ -653,6 +653,10 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
 {
     if (request->capture_ux && request->capture_ux_view >= 21) {
         scene->local->adventure_ui = true;
+        if (request->capture_ux_view == 23) {
+            *scene->view = VIEW_LEDGER;
+            scene->local->book_page = 4;
+        }
         return InitializeOpenWorld(scene->sim, scene->local, false);
     }
     if (request->capture_ux) {
