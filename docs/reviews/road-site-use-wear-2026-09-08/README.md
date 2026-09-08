@@ -19,3 +19,5 @@ JSON protocol 6 reports a numeric `wear` total for each site. Initial condition 
 - The ordinary production and JSON tests check observer parity, material conservation and condition accounting.
 
 Use `make production-baseline` for the repeated four-case 40-year Release capture. The recorded outcomes distinguish the natural baseline, opened sites and whole-policy dragon controls.
+
+Recorded on clean Release commit `2bdc1e7b16fab7af48420625f2abaf18323c51e1`: four policy/site cases, two matching runs each, 41 checkpoints per run. All condition, material and wear/work bounds pass at every checkpoint. All 960 historical annual hashes match the parent across the schemas in `parity.json`. The final focused checks passed after the inherited message correction. `manifest.json` and `outcomes.json` pin the capture provenance and site results.
