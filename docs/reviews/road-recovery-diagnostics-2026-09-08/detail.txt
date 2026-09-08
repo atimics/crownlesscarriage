@@ -1,0 +1,42 @@
+day=366 hash=3d5138d302e317dc average_hunger=9 maximum_hunger=29 population_weighted_hunger=7 inhabited_settlements=6 hunger_population=11415 shipments=0 events=256 blocked_shipments=0 royal_carriages=2/1/0/0/0 royal_trips=73 royal_losses=17 open_routes=8/8 legitimacy=75 live_situations=4 bandit_influence=55 monster_pressure=68 night_roads=2 monastery_reserve=481 monastery_debt=0 hoard_raids=1 goblin_guards=1 goblin_members=46 goblin_covenant=81 goblin_cohesion=96 goblin_tithes=6 wars=1 alliances=0 couriers=0 dragon_slain=0 dragon_campaign=0/0/0 dragon_stage=Crowned dragon activity=dormant age=229 crown=36 body=76 memory=100 territory=85 shadow=53 eggs=0 hunts=0 broods=0 whelps=0 afterdeath=0 ruins=0 climate=132 campaign_experience=0 lore=0 lore_lost=0 scribes=4 archive_chain=binding wheat=36 paper=14 tools=13 iron=1 gold=3 gems=0 inbound_tools=0 inbound_iron=0 sanction=41 anointed=3/3 unsanctioned_weeks=39 pretender_crises=0 people=24 births=0 deaths=0 generation=0 abbot="Tallen Goldweight" stewardship=72 anointed="Indigo March" dragon_patron="none" dragon_hero="none" landless_days=0
+  Thornford        hunger=  0 prosperity= 80 security= 69 stock=[bread:  0 iron:  4 tools:  3 weapons:  3 gold:  0 gems:  0 wood:536 wheat:284 meat:  0 wool:  0 stone:  0 paper:  0]
+  Gloamgate        hunger= 21 prosperity= 44 security= 45 stock=[bread:  0 iron:  1 tools: 13 weapons:  6 gold:  0 gems:  0 wood: 97 wheat: 36 meat:  0 wool:  0 stone:  0 paper: 14]
+  Alderwatch       hunger=  0 prosperity= 91 security=100 stock=[bread:  0 iron:  2 tools:  0 weapons: 28 gold:  0 gems:  0 wood: 86 wheat:354 meat:  0 wool:  0 stone:  3 paper:  0]
+  Silverwick       hunger=  7 prosperity= 78 security=  0 stock=[bread:  0 iron:196 tools:  0 weapons:  2 gold:  3 gems:  0 wood: 68 wheat:  1 meat:  0 wool:  0 stone:440 paper:  0]
+  Rosespire        hunger=  0 prosperity= 85 security=100 stock=[bread: 96 iron:  0 tools: 11 weapons:  8 gold:  0 gems:  0 wood:119 wheat:  0 meat: 15 wool:  0 stone:  4 paper:  4]
+  Hollowbarrow     hunger= 29 prosperity= 32 security= 45 stock=[bread:  0 iron: 10 tools:  8 weapons:  4 gold:  0 gems:  0 wood:696 wheat:  0 meat:  0 wool:  0 stone:  5 paper:  1]
+  Mara Venn              age= 39 generation= 0 home=Thornford
+  Jory Fen               age= 42 generation= 0 home=Silverwick
+  Ilyra Senn             age= 57 generation= 0 home=Gloamgate
+  Cera Mott              age= 50 generation= 0 home=Alderwatch
+  Bren Alder             age= 51 generation= 0 home=Silverwick
+  Tomas Rill             age= 59 generation= 0 home=Gloamgate
+  Harthwin Rillbank      age= 67 generation= 0 home=Thornford
+  Ferra Shallowford      age= 19 generation= 0 home=Thornford
+  Estwyn Courtward       age= 62 generation= 0 home=Thornford
+  Bela Gloamward         age= 42 generation= 0 home=Gloamgate
+  Reida Quill            age= 59 generation= 0 home=Gloamgate
+  Thoris Chainward       age= 42 generation= 0 home=Alderwatch
+  Flinn Alderbridge      age= 53 generation= 0 home=Alderwatch
+  Wardis Watchman        age= 29 generation= 0 home=Alderwatch
+  Chenric Flintbeck      age= 39 generation= 0 home=Silverwick
+  Lammen Wickman         age= 24 generation= 0 home=Silverwick
+  Tallen Goldweight      age= 48 generation= 0 home=Rosespire
+  Ingel Rosebower        age= 70 generation= 0 home=Rosespire
+  Othric Rosewell        age= 17 generation= 0 home=Rosespire
+  Reiden Spirebank       age= 24 generation= 0 home=Rosespire
+  Barwen Graveward       age= 21 generation= 0 home=Hollowbarrow
+  Rodric Oldstone        age= 20 generation= 0 home=Hollowbarrow
+  Cindra Graveward       age= 34 generation= 0 home=Hollowbarrow
+  Barra Millrace         age= 26 generation= 0 home=Hollowbarrow
+  roadside_recovery route=216172782113783818 from=144115188075855876 to=144115188075855877 closed=0 condition=72 day=366 next_work_day=448 labor_base=144115188075855877 supplier=144115188075855876 people=1811/220 food_rations=142/4 wood=536/2 stone=0/2 tools=3/1 effort=7 people_used=3 blocked=open,calendar,stone
+  roadside_recovery route=216172782113783819 from=144115188075855877 to=144115188075855878 closed=0 condition=70 day=366 next_work_day=448 labor_base=144115188075855877 supplier=144115188075855878 people=1811/220 food_rations=177/4 wood=86/2 stone=3/2 tools=0/1 effort=8 people_used=3 blocked=open,calendar,tools
+  roadside_recovery route=216172782113783820 from=144115188075855878 to=144115188075855879 closed=0 condition=82 day=366 next_work_day=448 labor_base=144115188075855879 supplier=144115188075855879 people=2392/220 food_rations=0/4 wood=68/2 stone=440/2 tools=0/1 effort=6 people_used=4 blocked=open,calendar,food,tools
+  roadside_recovery route=216172782113783821 from=144115188075855879 to=144115188075855880 closed=0 condition=80 day=366 next_work_day=448 labor_base=144115188075855880 supplier=144115188075855879 people=3120/220 food_rations=0/4 wood=68/2 stone=440/2 tools=0/1 effort=6 people_used=6 blocked=open,calendar,food,tools
+  roadside_recovery route=216172782113783822 from=144115188075855880 to=144115188075855881 closed=0 condition=90 day=366 next_work_day=448 labor_base=144115188075855880 supplier=144115188075855881 people=3120/220 food_rations=0/4 wood=696/2 stone=5/2 tools=8/1 effort=7 people_used=6 blocked=open,calendar,food
+  roadside_recovery route=216172782113783823 from=144115188075855881 to=144115188075855877 closed=0 condition=58 day=366 next_work_day=448 labor_base=144115188075855877 supplier=144115188075855881 people=1811/220 food_rations=0/4 wood=696/2 stone=5/2 tools=8/1 effort=7 people_used=3 blocked=open,calendar,food
+  roadside_recovery route=216172782113783824 from=144115188075855877 to=144115188075855879 closed=0 condition=66 day=366 next_work_day=448 labor_base=144115188075855879 supplier=144115188075855879 people=2392/220 food_rations=0/4 wood=68/2 stone=440/2 tools=0/1 effort=8 people_used=4 blocked=open,calendar,food,tools
+  roadside_recovery route=216172782113783825 from=144115188075855878 to=144115188075855880 closed=0 condition=98 day=366 next_work_day=448 labor_base=144115188075855880 supplier=144115188075855878 people=3120/220 food_rations=177/4 wood=86/2 stone=3/2 tools=0/1 effort=6 people_used=6 blocked=open,calendar,tools
+  royal[0] mode=Idle location=144115188075855877 route=0 next=0 target=0 shipment=0 depart=366 arrive=0 blocked=0 next_dispatch=371 condition=21 trips=25 losses=6
+  royal[1] mode=Seeking cargo location=144115188075855878 route=216172782113783825 next=144115188075855880 target=144115188075855880 shipment=0 depart=366 arrive=369 blocked=0 next_dispatch=360 condition=23 trips=25 losses=5
+  royal[2] mode=Idle location=144115188075855879 route=0 next=0 target=0 shipment=0 depart=360 arrive=0 blocked=0 next_dispatch=364 condition=17 trips=23 losses=6

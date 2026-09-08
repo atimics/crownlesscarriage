@@ -112,6 +112,12 @@ matches all 121 existing fields from the original main binary. Tests reconcile
 precise means with raw towns and check trace-on/trace-off state hashes, empty
 populations, large population sums, and sample boundaries.
 
+The PR later integrates main `0ce4446`, including its road and bandit
+diagnostics. The archived sweep retains the source versions listed above.
+For an exact repeat of this data, use a separate checkout at `3cfac4e` and
+create the report output directory before running these commands. A run from
+the integrated branch records a new simulation baseline.
+
 ```sh
 cmake -S . -B out/build/welfare -DCMAKE_BUILD_TYPE=Release \
   -DCC_BUILD_CLIENT=OFF -DCC_BUILD_BENCHMARKS=ON -DBUILD_TESTING=ON \
@@ -135,6 +141,7 @@ python3 tools/plot_welfare.py docs/experiments/welfare-clusters-2026-09-08/endpo
   --traces docs/experiments/welfare-clusters-2026-09-08/traces
 ```
 
-Local validation passed all 90 tests on the final code, undefined-behavior
-checks for welfare and trace tests, and static analysis. The full suite used
-loopback access for its local HTTP tests.
+Local validation passed all 90 tests before integration and all 99 tests after
+integration with main `0ce4446`. Welfare and trace tests also passed with
+undefined-behavior checks after integration. Static analysis passed before
+integration. The full suites used loopback access for their local HTTP tests.

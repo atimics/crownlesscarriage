@@ -22,6 +22,8 @@ with tempfile.TemporaryDirectory() as directory:
     observed = run("--settlements-csv", str(path), "--trace-every-days", "28")
     assert observed == annual  # Includes the full simulation state hash.
     assert run("--final-only") == annual[-1:]
+    assert run("--settlements-csv", str(path), "--route-csv", str(Path(directory) / "routes.csv"),
+               "--nutrition-csv", str(Path(directory) / "nutrition.csv")) == annual
     towns = list(csv.DictReader(path.open()))
     days = sorted({int(r["elapsed_days"]) for r in towns})
     assert days == [0, *range(28, 1096, 28), 1095], days
@@ -53,6 +55,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert sorted({int(r["elapsed_days"]) for r in towns}) == [1000, 1008, 1036, 1064, 1092, 1095]
     for args in (("--trace-every-days", "0"),
                  ("--years", "1", "--trace-start-day", "366"),
+                 ("--settlements-csv", str(path), "--route-csv", str(path)),
                  ("--settlements-csv", str(Path(directory) / "missing" / "x.csv")),
                  ("--settlements-csv", str(path), "--nutrition-csv", str(path))):
         assert subprocess.run([binary, *args], capture_output=True).returncode != 0

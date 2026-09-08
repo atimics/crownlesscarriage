@@ -1,0 +1,10 @@
+{
+  "rows": 64,
+  "seeds": 8,
+  "years": 40,
+  "annual_validations": 320,
+  "closed_at_endpoint": 62,
+  "longest_observed_outage_days": 12754,
+  "cumulative_unavailable_inhabited_route_days": 586009,
+  "cumulative_unavailable_ruin_route_days": 0
+}

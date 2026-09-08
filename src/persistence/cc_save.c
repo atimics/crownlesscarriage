@@ -6102,7 +6102,8 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 62U || legacy_version == 63U ||
          legacy_version == 64U || legacy_version == 65U ||
          legacy_version == 66U || legacy_version == 67U ||
-         legacy_version == 68U || legacy_version == 69U) &&
+         legacy_version == 68U || legacy_version == 69U ||
+         legacy_version == 70U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
