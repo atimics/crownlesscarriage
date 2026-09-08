@@ -64,10 +64,10 @@ CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
         int32_t route = -1, cost = 0, capacity = 0, reposition = 0;
         CcId hop = 0;
         if (!CcTradeFindPath(sim, source->id, seat->id, plan.good, &route, &hop,
-            &cost, &capacity, used, true, carriage->kingdom_id, false, 1)) continue;
+            &cost, &capacity, used, true, carriage->kingdom_id, sim->schema_version >= 76U, 1)) continue;
         if (carriage->location_id != source->id && !CcTradeFindPath(sim, carriage->location_id,
             source->id, plan.good, NULL, NULL, &reposition, NULL, NULL,
-            true, carriage->kingdom_id, false, 1)) continue;
+            true, carriage->kingdom_id, sim->schema_version >= 76U, 1)) continue;
         path_found = true;
         CcMoney toll = CcRouteRoyalTradeToll(sim, &sim->routes[route], carriage->kingdom_id);
         CcMoney price = Max(1, source->price[plan.good]);

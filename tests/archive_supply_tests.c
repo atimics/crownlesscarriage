@@ -83,7 +83,11 @@ int main(void)
     Fixture(); sim.settlements[1].kingdom_id = sim.kingdoms[1].id;
     plan = Query(CC_ARCHIVE_SUPPLY_READY); CC_CHECK(plan.first_leg_toll == 1);
     sim.diplomacy[0][1] = sim.diplomacy[1][0] = CC_DIPLOMACY_WAR;
+    sim.schema_version = 75U;
     (void)Query(CC_ARCHIVE_SUPPLY_ROUTE); /* The carriage must also reach the alternate supplier. */
+    sim.schema_version = 76U;
+    plan = Query(CC_ARCHIVE_SUPPLY_READY);
+    CC_CHECK(plan.first_leg_toll == 7 && plan.path_capacity == 6);
     Fixture(); sim.settlements[0].stock[CC_GOOD_WHEAT] = 0;
     plan = Query(CC_ARCHIVE_SUPPLY_READY);
     CC_CHECK(plan.good == CC_GOOD_WHEAT && plan.quantity == 2 && plan.goods_cost == 4);

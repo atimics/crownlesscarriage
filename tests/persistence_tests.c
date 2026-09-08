@@ -2712,7 +2712,7 @@ static void CheckSchema41Upgrade(void)
    future edit to that table cannot quietly widen or narrow what loads. */
 static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
 {
-    bool legacy = schema >= 2U && schema <= 74U;
+    bool legacy = schema >= 2U && schema <= 75U;
     if (!legacy && schema != CC_SIM_SCHEMA_VERSION) return false;
     if (schema == CC_SIM_SCHEMA_VERSION &&
         generator == CC_GENERATOR_VERSION) return true;
@@ -2720,7 +2720,7 @@ static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
         /* The current generator reads the oldest schemas and the recent run,
            but not 28 through 31, which shipped with generators of their own. */
         if (schema >= 2U && schema <= 27U) return true;
-        if (schema >= 32U && schema <= 74U) return true;
+        if (schema >= 32U && schema <= 75U) return true;
     }
     if (schema == 31U && generator == 24U) return true;
     if (schema == 27U && generator >= 21U && generator <= 23U) return true;
@@ -2776,6 +2776,32 @@ static void CheckSchema74ArchiveJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 74U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema75ArchiveJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema75-archive.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 75U;
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    ExecuteFixtureSql(database, "ALTER TABLE royal_carriage DROP COLUMN archive_contract;", "drop archive contract fixture");
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 75U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 75U;
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
@@ -2996,6 +3022,7 @@ int main(void)
     CheckPre68WearJournal();
     CheckSchema58SmithyCapacity();
     CheckSchema74ArchiveJournal();
+    CheckSchema75ArchiveJournal();
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
     CheckSchema41Upgrade();

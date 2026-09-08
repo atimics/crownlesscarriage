@@ -8776,6 +8776,11 @@ static const CcRoyalCarriage *RoyalCarriageForShipmentConst(
     return NULL;
 }
 
+static bool ArchivePassage(const CcSim *sim, const CcRoyalCarriage *carriage)
+{
+    return sim->schema_version >= 76U && carriage != NULL && carriage->archive_contract;
+}
+
 static void ParkRoyalCarriage(CcRoyalCarriage *carriage, CcId location_id)
 {
     if (carriage == NULL) return;
@@ -8785,6 +8790,7 @@ static void ParkRoyalCarriage(CcRoyalCarriage *carriage, CcId location_id)
     carriage->target_id = 0U;
     carriage->active_shipment_id = 0U;
     carriage->mode = CC_ROYAL_CARRIAGE_IDLE;
+    carriage->archive_contract = false;
     carriage->arrival_day = 0;
     carriage->blocked_since_day = 0;
 }
@@ -8951,16 +8957,14 @@ static bool StartRoyalRepositioningLeg(CcSim *sim,
     if (!CcTradeFindPath(sim, carriage->location_id, target_id,
                        CC_GOOD_FOOD, &route_slot, &next_hop_id,
                        NULL, NULL, NULL, true, carriage->kingdom_id,
-                       false, 1)) {
+                       ArchivePassage(sim, carriage), 1)) {
         if (!CcTradeFindPath(sim, carriage->location_id, target_id,
                            CC_GOOD_FOOD, &route_slot, &next_hop_id,
                            NULL, NULL, NULL, true,
                            carriage->kingdom_id, true, 1)) {
             return false;
         }
-        if (!CcSimRoyalCarriageCanUseRoute(
-                sim, carriage->kingdom_id,
-                sim->routes[route_slot].id)) {
+        if (!CcRouteCarriageCanUse(sim, carriage, sim->routes[route_slot].id)) {
             BlockRoyalCarriage(sim, carriage, target_id,
                                sim->routes[route_slot].id,
                                next_hop_id);
@@ -9010,8 +9014,7 @@ static void AdvanceRoyalCarriages(CcSim *sim, CcRoadProductionAccounting *site_a
         if (carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED &&
             carriage->active_shipment_id == 0U) {
             if (sim->current_day % 7 == 0 &&
-                !CcSimRoyalCarriageCanUseRoute(
-                    sim, carriage->kingdom_id, carriage->route_id)) {
+                !CcRouteCarriageCanUse(sim, carriage, carriage->route_id)) {
                 RaiseRoyalTradeSupport(sim, carriage);
             }
             if (sim->current_day - carriage->blocked_since_day >= 28) {
@@ -9020,8 +9023,7 @@ static void AdvanceRoyalCarriages(CcSim *sim, CcRoadProductionAccounting *site_a
                 reached_market = true;
                 continue;
             }
-            if (CcSimRoyalCarriageCanUseRoute(
-                    sim, carriage->kingdom_id, carriage->route_id)) {
+            if (CcRouteCarriageCanUse(sim, carriage, carriage->route_id)) {
                 if (carriage->location_id == carriage->target_id) {
                     ParkRoyalCarriage(carriage, carriage->location_id);
                     carriage->departure_day = sim->current_day;
@@ -9035,14 +9037,12 @@ static void AdvanceRoyalCarriages(CcSim *sim, CcRoadProductionAccounting *site_a
         }
         if (carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED &&
             sim->current_day % 7 == 0 &&
-            !CcSimRoyalCarriageCanUseRoute(
-                sim, carriage->kingdom_id, carriage->route_id)) {
+            !CcRouteCarriageCanUse(sim, carriage, carriage->route_id)) {
             RaiseRoyalTradeSupport(sim, carriage);
         }
         if (carriage->mode != CC_ROYAL_CARRIAGE_REPOSITIONING ||
             carriage->arrival_day > sim->current_day) continue;
-        if (!CcSimRoyalCarriageCanUseRoute(
-                sim, carriage->kingdom_id, carriage->route_id)) {
+        if (!CcRouteCarriageCanUse(sim, carriage, carriage->route_id)) {
             BlockRoyalCarriage(sim, carriage, carriage->target_id,
                                carriage->route_id,
                                carriage->destination_id);
@@ -9099,7 +9099,7 @@ static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_account
             if (!CcTradeFindPath(sim, carriage->location_id, final_id,
                                shipment->good, &route_slot, &next_hop_id,
                                NULL, NULL, sim->royal_route_slots_used, true,
-                               carriage->kingdom_id, false,
+                               carriage->kingdom_id, ArchivePassage(sim, carriage),
                                cargo_slots)) {
                 int32_t waiting_route_slot = -1;
                 CcId waiting_hop_id = 0U;
@@ -9107,7 +9107,7 @@ static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_account
                         sim, carriage->location_id, final_id,
                         shipment->good, &waiting_route_slot,
                         &waiting_hop_id, NULL, NULL, NULL, true,
-                        carriage->kingdom_id, false, cargo_slots)) {
+                        carriage->kingdom_id, ArchivePassage(sim, carriage), cargo_slots)) {
                     WaitRoyalCarriageForCapacity(
                         carriage, final_id,
                         sim->routes[waiting_route_slot].id,
@@ -9196,8 +9196,7 @@ static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_account
             continue;
         }
         if (carriage != NULL &&
-            !CcSimRoyalCarriageCanUseRoute(
-                sim, carriage->kingdom_id, shipment->route_id)) {
+            !CcRouteCarriageCanUse(sim, carriage, shipment->route_id)) {
             shipment->status = CC_SHIPMENT_BLOCKED;
             BlockRoyalCarriage(sim, carriage,
                                shipment->final_destination_id,
@@ -9291,7 +9290,7 @@ static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_account
                                   sim->royal_route_slots_used : NULL,
                               carriage != NULL,
                               carriage != NULL ? carriage->kingdom_id : 0U,
-                              false, cargo_slots)) {
+                              ArchivePassage(sim, carriage), cargo_slots)) {
                 CcRoute *next_route = &sim->routes[next_route_slot];
                 shipment->origin_id = hop->id;
                 shipment->destination_id = next_hop_id;
@@ -9334,7 +9333,7 @@ static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_account
                         sim, hop->id, final_id, shipment_good,
                         &waiting_route_slot, &waiting_hop,
                         NULL, NULL, NULL, true,
-                        carriage->kingdom_id, false, cargo_slots)) {
+                        carriage->kingdom_id, ArchivePassage(sim, carriage), cargo_slots)) {
                     WaitRoyalCarriageForCapacity(
                         carriage, final_id,
                         sim->routes[waiting_route_slot].id,
@@ -9518,8 +9517,7 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
          final_destination->kingdom_id != carriage->kingdom_id)) return false;
     CcRoute *route = &sim->routes[route_slot];
     if (royal) {
-        if (!CcSimRoyalCarriageCanUseRoute(
-                sim, carriage->kingdom_id, route->id)) return false;
+        if (!CcRouteCarriageCanUse(sim, carriage, route->id)) return false;
     } else if (CcSimRouteCrossesKingdomBorder(sim, route->id) ||
                origin->kingdom_id != final_destination->kingdom_id) {
         return false;
@@ -9686,14 +9684,20 @@ bool CcArchiveDispatchSupply(CcSim *sim, CcId carriage_id)
     if (carriage->location_id != plan.source_id) {
         /* Book rare pickup trips every four weeks. A carriage already at the
            supplier can collect a needed load within its ordinary cooldown. */
-        return StartRoyalRepositioningLeg(sim, carriage, plan.source_id);
+        carriage->archive_contract = sim->schema_version >= 76U;
+        bool started = StartRoyalRepositioningLeg(sim, carriage, plan.source_id);
+        if (!started) carriage->archive_contract = false;
+        return started;
     }
     PrepareRoyalRouteUsage(sim);
     for (int i = 0; i < sim->route_count; ++i) {
         if (sim->routes[i].id != plan.first_route_id) continue;
-        return CreateTradeShipment(sim, carriage, i, plan.first_hop_id, plan.good,
+        carriage->archive_contract = sim->schema_version >= 76U;
+        bool started = CreateTradeShipment(sim, carriage, i, plan.first_hop_id, plan.good,
             CcSimSettlementMutable(sim, plan.source_id), CcSimSettlementMutable(sim, plan.seat_id),
             plan.path_capacity, 1, sim->royal_route_slots_used, NULL, &plan);
+        if (!started) carriage->archive_contract = false;
+        return started;
     }
     return false;
 }
@@ -18249,6 +18253,11 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     if (sim->schema_version >= 38U) {
         for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
             const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+            if (carriage->archive_contract &&
+                (sim->schema_version < 76U || carriage->mode == CC_ROYAL_CARRIAGE_IDLE || IsSiteCarriage(carriage))) {
+                SetError(error, error_capacity, "Archive carriage contract is invalid.");
+                return false;
+            }
             if (IsSiteCarriage(carriage)) {
                 if (!ValidSiteCarriage(sim, carriage, i)) {
                     SetError(error, error_capacity, "Site carriage state is invalid.");
@@ -18334,6 +18343,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 carriage->departure_day > sim->current_day ||
                 carriage->next_dispatch_day < 0 ||
                 carriage->next_dispatch_day > sim->current_day + 7 ||
+                (carriage->archive_contract && shipment != NULL &&
+                 shipment->good != CC_GOOD_WHEAT && shipment->good != CC_GOOD_TOOLS && shipment->good != CC_GOOD_PAPER) ||
                 (shipment != NULL &&
                  (CcSimSettlement(sim, shipment->final_destination_id) == NULL ||
                   CcSimSettlement(sim,

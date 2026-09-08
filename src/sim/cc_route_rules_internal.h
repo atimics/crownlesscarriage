@@ -14,4 +14,6 @@ bool CcRouteRoyalCanReopen(const CcSim *sim, const CcRoute *route);
 
 CcMoney CcRouteRoyalTradeToll(const CcSim *sim, const CcRoute *route, CcId carriage_kingdom_id);
 
+bool CcRouteCarriageCanUse(const CcSim *sim, const CcRoyalCarriage *carriage, CcId route_id);
+
 #endif
