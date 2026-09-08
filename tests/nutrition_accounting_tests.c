@@ -109,6 +109,7 @@ int main(void)
 
     /* Measured and ordinary stepping share every authoritative byte and RNG. */
     CcSimInit(&observed, UINT32_C(0x5EED0001));
+    observed.schema_version = 53U;
     control = observed;
     daily = observed;
     memset(&totals, 0, sizeof(totals));
