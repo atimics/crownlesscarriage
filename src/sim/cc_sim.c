@@ -304,6 +304,7 @@ void CcSimInitializeAnimalEconomy(CcSim *sim)
         place->cow_condition = 88;
     }
     CcSimUpgradeFlockEconomy(sim);
+    CcSimSeedCommonPonyHerds(sim);
 }
 
 void CcSimUpgradeFlockEconomy(CcSim *sim)
@@ -5230,6 +5231,13 @@ static int32_t SheepCapacity(const CcSettlement *settlement)
     return MaximumI32(12, settlement->population / 20);
 }
 
+/* Common ponies are working stock, not the seven road encounters. A farm
+   raises them alongside its sheep; a stable keeps a smaller yard. */
+static int32_t PonyHerdCapacity(const CcSettlement *settlement)
+{
+    return MaximumI32(6, settlement->population / 80);
+}
+
 static int32_t StoreMutton(CcSettlement *settlement, int32_t sheep)
 {
     int32_t wanted = sheep * 2;
@@ -5347,6 +5355,103 @@ static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
         RecordSheepCull(
             sim, settlement, 1, meat, "after winter fodder runs short");
     }
+}
+
+/* Driven from the weekly settlement update, so one call is one week of
+   fodder. A working herd eats year round, unlike the flock, so hunger here
+   tracks fodder the town chose not to spend rather than the season. Foals
+   mature on the same quarter the mares are put to stud; 112 is a whole
+   number of weeks, so that day is never stepped over. */
+static void AdvancePonyHerd(CcSim *sim, CcSettlement *settlement)
+{
+    if (sim->schema_version < 51U ||
+        (!CcSettlementHasService(settlement, CC_SERVICE_FARM) &&
+         !CcSettlementHasService(settlement, CC_SERVICE_STABLE))) return;
+    int32_t herd = settlement->pony_adults + settlement->pony_foals;
+    if (herd <= 0) return;
+
+    int32_t feed_required = MaximumI32(1, (herd + 7) / 8);
+    int32_t feed_eaten = CcNutritionConsume(
+        settlement->stock, CC_NUTRITION_ANIMAL,
+        feed_required * CC_NUTRITION_PER_RATION) / CC_NUTRITION_PER_RATION;
+    int32_t feed_shortfall = feed_required - feed_eaten;
+    if (feed_shortfall > 0) {
+        settlement->pony_hunger = ClampI32(
+            settlement->pony_hunger + feed_shortfall * 12, 0, 100);
+        settlement->pony_condition = ClampI32(
+            settlement->pony_condition - feed_shortfall * 5, 1, 100);
+    } else {
+        settlement->pony_hunger = ClampI32(
+            settlement->pony_hunger - 10, 0, 100);
+        settlement->pony_condition = ClampI32(
+            settlement->pony_condition + 3, 1, 100);
+    }
+
+    if (settlement->pony_hunger >= 85) {
+        if (settlement->pony_foals > 0) {
+            settlement->pony_foals -= 1;
+        } else if (settlement->pony_adults > 0) {
+            settlement->pony_adults -= 1;
+        }
+        settlement->pony_hunger = ClampI32(
+            settlement->pony_hunger - 20, 0, 100);
+        return;
+    }
+
+    if (sim->current_day % 112 != 0 || settlement->pony_condition < 65 ||
+        settlement->pony_hunger > 30) return;
+
+    int32_t matured = MinimumI32(
+        settlement->pony_foals, MaximumI32(1, settlement->pony_foals / 3));
+    settlement->pony_foals -= matured;
+    settlement->pony_adults += matured;
+    int32_t room = MaximumI32(
+        0, PonyHerdCapacity(settlement) -
+           (settlement->pony_adults + settlement->pony_foals));
+    int32_t births = settlement->pony_adults >= 2 ?
+        MinimumI32(room, MaximumI32(1, settlement->pony_adults / 8)) : 0;
+    settlement->pony_foals += births;
+    if (births <= 0 && matured <= 0) return;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s raises %d common pony foal%s; %d join%s the working herd.",
+        settlement->name, births, births == 1 ? "" : "s",
+        matured, matured == 1 ? "s" : "");
+    (void)PushEvent(
+        sim, CC_EVENT_HORSE_BRED, settlement->id, settlement->id,
+        0U, births, text);
+}
+
+/* Seeds every farm and stable that has no herd yet. Safe to call on a
+   world that already has one, so a new world and an upgraded save can share
+   the same entry point. */
+void CcSimSeedCommonPonyHerds(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 51U) return;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) continue;
+        if (place->pony_adults > 0 || place->pony_foals > 0) continue;
+        bool farm = CcSettlementHasService(place, CC_SERVICE_FARM);
+        bool stable = CcSettlementHasService(place, CC_SERVICE_STABLE);
+        if (!farm && !stable) continue;
+        place->pony_adults = farm ? 10 : 4;
+        place->pony_foals = farm ? 3 : 1;
+        place->pony_condition = 80;
+        place->pony_hunger = 10;
+    }
+}
+
+int32_t CcSimCommonPonyCount(const CcSim *sim)
+{
+    if (sim == NULL) return 0;
+    int32_t count = 0;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        count += sim->settlements[i].pony_adults +
+                 sim->settlements[i].pony_foals;
+    }
+    return count;
 }
 
 static void MaintainSettlementStonework(CcSim *sim,
@@ -5543,6 +5648,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
     int32_t produced[CC_GOOD_COUNT] = {0};
     int32_t cow_output = AdvanceCowHerd(sim, settlement);
     AdvanceSheepFlock(sim, settlement);
+    AdvancePonyHerd(sim, settlement);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         int32_t production = EffectiveProduction(sim, settlement, index, (CcGood)good);
         produced[good] = production;
@@ -18512,7 +18618,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 49U
+#define CC_NEWEST_LEGACY_SCHEMA 50U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18530,7 +18636,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 49U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 50U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -18962,6 +19068,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 settlement->sheep_condition > 100 ||
                 settlement->sheep_hunger < 0 ||
                 settlement->sheep_hunger > 100 ||
+                settlement->pony_adults < 0 ||
+                settlement->pony_adults > CC_SIM_MAX_UNITS ||
+                settlement->pony_foals < 0 ||
+                settlement->pony_foals > CC_SIM_MAX_UNITS ||
+                settlement->pony_condition < 0 ||
+                settlement->pony_condition > 100 ||
+                settlement->pony_hunger < 0 ||
+                settlement->pony_hunger > 100 ||
                 (settlement->service_mask & ~known_services) != 0U ||
                 CcSettlementServiceCount(settlement) >
                     CcSettlementServiceCapacity(settlement->size) ||
@@ -20694,6 +20808,12 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->sheep_lambs);
             HASH_VALUE(item->sheep_condition);
             HASH_VALUE(item->sheep_hunger);
+        }
+        if (sim->schema_version >= 51U) {
+            HASH_VALUE(item->pony_adults);
+            HASH_VALUE(item->pony_foals);
+            HASH_VALUE(item->pony_condition);
+            HASH_VALUE(item->pony_hunger);
         }
         if (sim->schema_version >= 34U) {
             HASH_VALUE(item->paper_tool_wear);

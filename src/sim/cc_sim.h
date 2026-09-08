@@ -56,7 +56,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 50
+#define CC_SIM_SCHEMA_VERSION 51
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -542,6 +542,10 @@ typedef struct CcSettlement {
     int32_t sheep_lambs;
     int32_t sheep_condition;
     int32_t sheep_hunger;
+    int32_t pony_adults;
+    int32_t pony_foals;
+    int32_t pony_condition;
+    int32_t pony_hunger;
 } CcSettlement;
 
 typedef enum CcTownCondition {
@@ -1640,7 +1644,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 172832,
+_Static_assert(sizeof(CcSim) == 172928,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -1854,6 +1858,8 @@ const CcTreasure *CcSimTreasure(const CcSim *sim, CcId id);
 int32_t CcSimTreasureCountForOwner(const CcSim *sim, CcId owner_id);
 int32_t CcSettlementServiceCapacity(CcSettlementSize size);
 int32_t CcSettlementServiceCount(const CcSettlement *settlement);
+void CcSimSeedCommonPonyHerds(CcSim *sim);
+int32_t CcSimCommonPonyCount(const CcSim *sim);
 bool CcSettlementHasService(const CcSettlement *settlement,
                             CcServiceKind service);
 bool CcSimStartServiceProject(CcSim *sim, CcId settlement_id,
