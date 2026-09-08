@@ -5999,7 +5999,9 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          * hoard-return food rules; schema 54 adds paper decay. Schema 55 adds
          * dragon succession gossip and reports gathered at ruins. Historical
          * journal replay uses the original rule gates before this upgrade.
-         * Schema 56 adds the saved archive silence date, defaulting to zero. */
+         * Schema 56 adds the saved archive silence date, defaulting to zero.
+         * Schema 58 uses local name roots for new residents and descendants;
+         * saved names remain intact. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }

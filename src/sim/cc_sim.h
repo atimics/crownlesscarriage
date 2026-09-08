@@ -1756,6 +1756,11 @@ void CcGenerateCharacterName(uint32_t world_seed, CcId settlement_id,
                              int32_t generation, uint32_t ordinal,
                              char output[CC_NAME_CAPACITY]);
 
+/* Unrecognized settlement functions draw from the whole name pool. */
+void CcGenerateSettlementCharacterName(uint32_t world_seed, CcId settlement_id,
+                                       int32_t place_function, int32_t generation,
+                                       uint32_t ordinal, char output[CC_NAME_CAPACITY]);
+
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
 bool CcSimApply(CcSim *sim, const CcCommand *command,
                 char *error, size_t error_capacity);

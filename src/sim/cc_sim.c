@@ -210,6 +210,38 @@ void CcGenerateCharacterName(uint32_t world_seed, CcId settlement_id,
                    first_names[first], family_names[family]);
 }
 
+#include "cc_character_names.inc"
+
+void CcGenerateSettlementCharacterName(uint32_t world_seed, CcId settlement_id,
+                                       int32_t place_function, int32_t generation,
+                                       uint32_t ordinal, char output[CC_NAME_CAPACITY])
+{
+    if (output == NULL) return;
+    uint32_t settlement = (uint32_t)(settlement_id ^ (settlement_id >> 32U));
+    uint32_t seed = MixCharacterSeed(world_seed ^ settlement ^
+        ((uint32_t)generation + 1U) * UINT32_C(0x9e3779b9) ^
+        (ordinal + 1U) * UINT32_C(0x85ebca6b));
+    const char *given = RootedNameForm(GIVEN_NAME_ROOTS,
+        sizeof(GIVEN_NAME_ROOTS) / sizeof(GIVEN_NAME_ROOTS[0]), place_function, seed);
+    const char *family = RootedNameForm(FAMILY_NAME_ROOTS,
+        sizeof(FAMILY_NAME_ROOTS) / sizeof(FAMILY_NAME_ROOTS[0]), place_function,
+        MixCharacterSeed(seed ^ UINT32_C(0xa511e9b3)));
+    (void)snprintf(output, CC_NAME_CAPACITY, "%s %s", given, family);
+}
+
+static void GenerateResidentName(const CcSim *sim, CcId settlement_id,
+                                 int32_t generation, uint32_t ordinal,
+                                 char output[CC_NAME_CAPACITY])
+{
+    if (sim->schema_version < 58U) {
+        CcGenerateCharacterName(sim->world_seed, settlement_id, generation, ordinal, output);
+        return;
+    }
+    const CcSettlement *place = CcSimSettlement(sim, settlement_id);
+    CcGenerateSettlementCharacterName(sim->world_seed, settlement_id,
+        place != NULL ? (int32_t)place->function : -1, generation, ordinal, output);
+}
+
 int32_t CcCharacterAgeYears(const CcSim *sim,
                             const CcCharacter *character)
 {
@@ -11102,8 +11134,7 @@ static void FillSettlementResidents(CcSim *sim)
         while (residents < 4 && sim->character_count < CC_MAX_CHARACTERS) {
             char name[CC_NAME_CAPACITY];
             do {
-                CcGenerateCharacterName(
-                    sim->world_seed, settlement_id, 0, ordinal++, name);
+                GenerateResidentName(sim, settlement_id, 0, ordinal++, name);
             } while (CharacterForName(sim, name) != NULL && ordinal < 2048U);
             CcCharacterRole role = residents == 0 ? CC_CHARACTER_OFFICIAL :
                 residents == 1 ? CC_CHARACTER_LABORER :
@@ -11190,8 +11221,8 @@ static void SuccessorName(const CcSim *sim, const CcCharacter *ancestor,
     const char *family = strrchr(ancestor->name, ' ');
     for (uint32_t attempt = 0U; attempt < 2048U; ++attempt) {
         char generated[CC_NAME_CAPACITY];
-        CcGenerateCharacterName(
-            sim->world_seed, ancestor->home_settlement_id, generation,
+        GenerateResidentName(
+            sim, ancestor->home_settlement_id, generation,
             ordinal + attempt, generated);
         char *space = strchr(generated, ' ');
         if (family != NULL && space != NULL) {

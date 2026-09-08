@@ -41,7 +41,8 @@ int main(void)
 {
     char error[256];
     static CcSim legacy, current, resumed, batched, supplied;
-    ReturningRaid(&legacy);
+    CC_CHECK(CcSaveRead(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-52-generator-25-raid.ccsave",
+        &legacy, error, sizeof(error)));
     legacy.schema_version = 52U;
     CcMoney legacy_coins = legacy.hoard_raiders.carried_treasure;
     CcSimAdvanceDays(&legacy, 1);
