@@ -43,6 +43,22 @@ def main():
              'annual_checkpoints':sum(r['annual_rows'] for r in manifest['runs']),
              'gold_constant':sum(r['gold_constant'] for r in passed),'horizons':{},'plateaus':{},
              'coverage_by_horizon':{str(h):sum(r['annual_rows']>=h for r in manifest['runs']) for h in HORIZONS}}
+    common_treasure={str(h):[] for h in HORIZONS if h<=64000}
+    changed_after_16k={}
+    complete_changed_after_16k={}
+    for run in manifest['runs']:
+        seed=run['seed']
+        all_blocks=blocks[seed] if seed in blocks else read(ROOT/'blocks'/f'seed-{seed:03}.csv.gz')
+        all_annual=annual[seed] if seed in annual else read(ROOT/'annual'/f'seed-{seed:03}.csv.gz')
+        changed_after_16k[str(seed)]=sum(int(r['changes']) for r in all_blocks if r['metric']=='treasure_identity_changes' and 16000<int(r['end_year'])<=64000)
+        if run['passed']:
+            complete_changed_after_16k[str(seed)]=sum(int(r['changes']) for r in all_blocks if r['metric']=='treasure_identity_changes' and int(r['end_year'])>16000)
+        for h in common_treasure:
+            point=next(r for r in all_annual if r['year']==h)
+            common_treasure[h].append(int(point['live_treasures']))
+    summary['all_seed_treasure']={'common_horizon_counts':{h:describe(v) for h,v in common_treasure.items()},
+        'identity_changes_16k_to_64k':changed_after_16k,
+        'completed_identity_changes_16k_to_128k':complete_changed_after_16k}
     for h in HORIZONS:
         window=max(1000,h//4)
         detail={'window_years':window,'window_means':{},'endpoints':{}}

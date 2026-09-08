@@ -1,0 +1,258 @@
+[
+  {
+    "seed": 1,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 2,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 3,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 1835,
+    "complete_blocks": 84,
+    "passed_to_128000": false
+  },
+  {
+    "seed": 4,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 1931,
+    "complete_blocks": 94,
+    "passed_to_128000": false
+  },
+  {
+    "seed": 5,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 1758,
+    "complete_blocks": 76,
+    "passed_to_128000": false
+  },
+  {
+    "seed": 6,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 7,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 8,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 9,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 10,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 11,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2126,
+    "complete_blocks": 113,
+    "passed_to_128000": false
+  },
+  {
+    "seed": 12,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 13,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 14,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 15,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 1757,
+    "complete_blocks": 76,
+    "passed_to_128000": false
+  },
+  {
+    "seed": 16,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 17,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 1757,
+    "complete_blocks": 76,
+    "passed_to_128000": false
+  },
+  {
+    "seed": 18,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 1803,
+    "complete_blocks": 81,
+    "passed_to_128000": false
+  },
+  {
+    "seed": 19,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 1762,
+    "complete_blocks": 77,
+    "passed_to_128000": false
+  },
+  {
+    "seed": 20,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 21,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 22,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 23,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 1769,
+    "complete_blocks": 77,
+    "passed_to_128000": false
+  },
+  {
+    "seed": 24,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 1784,
+    "complete_blocks": 79,
+    "passed_to_128000": false
+  },
+  {
+    "seed": 25,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 26,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 27,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 1805,
+    "complete_blocks": 81,
+    "passed_to_128000": false
+  },
+  {
+    "seed": 28,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 29,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 30,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 31,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  },
+  {
+    "seed": 32,
+    "baseline_first_1000_years_match": true,
+    "treasure_bounds_pass": true,
+    "sampled_rows": 2270,
+    "complete_blocks": 128,
+    "passed_to_128000": true
+  }
+]
