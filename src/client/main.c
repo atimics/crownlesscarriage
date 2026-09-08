@@ -10962,6 +10962,16 @@ int main(int argc, char **argv)
             }
         }
         if (capture_request.capture_ux_view == 3) { view = VIEW_TRADE; local.trade_good = CC_GOOD_FOOD; local.trade_quantity = 2; }
+        if (capture_request.capture_ux_view == 15 || capture_request.capture_ux_view == 16) {
+            sim.player.location_id = sim.settlements[1].id;
+            sim.carriage.location_id = sim.player.location_id;
+            if (capture_request.capture_ux_view == 16) sim.settlements[1].service_mask &= ~(UINT32_C(1) << CC_SERVICE_BAKERY);
+            CcBakerySupportPlan plan = CcSimBakerySupportPlan(&sim, sim.player.location_id);
+            for (int good = 0; good < CC_GOOD_COUNT; ++good) sim.player.cargo[good] = plan.cargo[good];
+            sim.player.coins = 100;
+            view = VIEW_TRADE;
+            local.trade_mode = 3;
+        }
         if (capture_request.capture_ux_view == 4) { view = VIEW_LEDGER; local.book_page = 3; }
         if (capture_request.capture_ux_view == 11 || capture_request.capture_ux_view == 12) {
             view = VIEW_CARRIAGE;

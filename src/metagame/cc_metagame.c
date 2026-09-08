@@ -2258,6 +2258,23 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         };
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         if (!FinishTravel(metagame, output, output_capacity)) return false;
+    } else if (strcmp(command, "bakery") == 0) {
+        CcBakerySupportPlan plan = CcSimBakerySupportPlan(&metagame->sim, metagame->sim.player.location_id);
+        const CcCharacter *contact = CcSimCharacter(&metagame->sim, plan.contact_id);
+        if (first != NULL && strcmp(first, "support") == 0) {
+            CcCommand support = {.kind = CC_COMMAND_SUPPORT_BAKERY,
+                .target_id = metagame->sim.player.location_id, .amount = plan.building_days};
+            return ApplyCommand(metagame, &support, output, output_capacity);
+        }
+        Append(output, output_capacity, "Bakery contact: %s. %s\n", contact != NULL ? contact->name : "Awaiting a local contact", plan.reason);
+        Append(output, output_capacity, "Wages: %lld crowns. Building: %d days.\n", (long long)plan.coins, plan.building_days);
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            if (plan.cargo[good] > 0) Append(output, output_capacity, "Carriage: %d %s\n", plan.cargo[good], CcGoodName((CcGood)good));
+            if (plan.town_materials[good] > 0) Append(output, output_capacity, "Town stock required: %d %s\n", plan.town_materials[good], CcGoodName((CcGood)good));
+        }
+        if (plan.remembered) Append(output, output_capacity, "%s remembers your earlier bakery support.\n", contact->name);
+        Append(output, output_capacity, "Use bakery support to give the listed cargo and wages.\n");
+        return true;
     } else if (strcmp(command, "road") == 0) {
         if (first != NULL && (strcmp(first, "load") == 0 || strcmp(first, "unload") == 0)) {
             CcGood good;

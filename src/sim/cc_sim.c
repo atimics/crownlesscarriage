@@ -16521,6 +16521,108 @@ static void ShiftRelationshipTrust(CcSim *sim, CcRelationship *relationship,
     relationship->cause_event_id = event->id;
 }
 
+CcBakerySupportPlan CcSimBakerySupportPlan(const CcSim *sim, CcId settlement_id)
+{
+    CcBakerySupportPlan plan = {0};
+    const CcSettlement *place = CcSimSettlement(sim, settlement_id);
+    if (sim == NULL || place == NULL || CcSettlementIsAbandoned(place)) {
+        SetError(plan.reason, sizeof(plan.reason), "Choose an inhabited town.");
+        return plan;
+    }
+    plan.cargo[CC_GOOD_WHEAT] = 12;
+    plan.coins = 8;
+    if (!CcSettlementHasService(place, CC_SERVICE_BAKERY)) {
+        plan.building_days = 7;
+        plan.town_materials[CC_GOOD_WOOD] = 8;
+        plan.town_materials[CC_GOOD_STONE] = 6;
+        plan.town_materials[CC_GOOD_IRON] = 6;
+        plan.town_materials[CC_GOOD_TOOLS] = 5;
+        plan.coins = 80;
+    }
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *person = &sim->characters[i];
+        if (person->home_settlement_id == place->id &&
+            person->current_settlement_id == place->id &&
+            (person->role == CC_CHARACTER_LABORER || person->role == CC_CHARACTER_OFFICIAL) &&
+            person->death_day > sim->current_day) {
+            plan.contact_id = person->id;
+            plan.remembered = CcCharacterRemembers(person, CC_CHARACTER_MEMORY_PLAYER_HELPED, place->id);
+            break;
+        }
+    }
+    const CcSituation *promise = CcSimAcceptedSituation(sim);
+    if (sim->schema_version < 72U) {
+        SetError(plan.reason, sizeof(plan.reason), "Load this company through the current save reader first.");
+    } else if (sim->player.location_id != place->id || sim->journey.active ||
+               sim->mine.phase != CC_MINE_NONE || sim->dungeon_expedition.active) {
+        SetError(plan.reason, sizeof(plan.reason), "Meet the workers in town with your carriage.");
+    } else if (promise != NULL && promise->kind == CC_SITUATION_RELIEF_DELIVERY &&
+               promise->good == CC_GOOD_WHEAT &&
+               sim->player.cargo[CC_GOOD_WHEAT] - plan.cargo[CC_GOOD_WHEAT] <
+                   promise->quantity - promise->progress) {
+        SetError(plan.reason, sizeof(plan.reason), "Keep enough wheat for your promised delivery.");
+    } else if (plan.contact_id == 0U) {
+        SetError(plan.reason, sizeof(plan.reason), "A resident worker or town official must receive the supplies.");
+    } else if (place->service_project != CC_SERVICE_NONE) {
+        SetError(plan.reason, sizeof(plan.reason), "Let the current building work finish first.");
+    } else if (place->production[CC_GOOD_BREAD] <= 0) {
+        SetError(plan.reason, sizeof(plan.reason), "Choose a town with an established baking workshop.");
+    } else if (plan.building_days > 0 && CcSettlementServiceCount(place) >=
+               CcSettlementServiceCapacity(place->size)) {
+        SetError(plan.reason, sizeof(plan.reason), "The town needs space for another service.");
+    } else if (sim->player.coins < plan.coins || place->market_coins > CC_SIM_MAX_MONEY - plan.coins) {
+        SetError(plan.reason, sizeof(plan.reason), "Bring the stated wages in crowns.");
+    } else {
+        plan.ready = true;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            if (sim->player.cargo[good] < plan.cargo[good] ||
+                place->stock[good] < plan.town_materials[good]) plan.ready = false;
+        }
+        if (place->stock[CC_GOOD_WHEAT] > CC_SIM_MAX_UNITS - 12) plan.ready = false;
+        SetError(plan.reason, sizeof(plan.reason), plan.ready ?
+            "The workers can receive the load today." : "Bring the wheat. The town must hold the listed building materials.");
+    }
+    return plan;
+}
+
+static bool ApplyBakerySupport(CcSim *sim, const CcCommand *command,
+                               char *error, size_t error_capacity)
+{
+    CcBakerySupportPlan plan = CcSimBakerySupportPlan(sim, command->target_id);
+    if (!plan.ready) {
+        SetError(error, error_capacity, plan.reason);
+        return false;
+    }
+    if (command->amount != plan.building_days) {
+        SetError(error, error_capacity, "The bakery's needs changed. Read the offer again.");
+        return false;
+    }
+    CcSettlement *place = CcSimSettlementMutable(sim, command->target_id);
+    CcCharacter *contact = CharacterMutable(sim, plan.contact_id);
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        sim->player.cargo[good] -= plan.cargo[good];
+        place->stock[good] -= plan.town_materials[good];
+    }
+    sim->player.coins -= plan.coins;
+    place->market_coins += plan.coins;
+    place->stock[CC_GOOD_WHEAT] += plan.cargo[CC_GOOD_WHEAT];
+    if (plan.building_days > 0) {
+        place->service_project = CC_SERVICE_BAKERY;
+        place->service_project_days = plan.building_days;
+    }
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "%s receives the company's bakery supplies and %" PRId64
+        " crowns at %s. %s", contact->name, plan.coins, place->name,
+        plan.building_days > 0 ? "Building takes seven days." : "The grain joins the town's working stock.");
+    CcEvent *event = PushEvent(sim, CC_EVENT_RELIEF, contact->id, place->id,
+                              0U, plan.cargo[CC_GOOD_WHEAT], text);
+    RememberCharacter(contact, CC_CHARACTER_MEMORY_PLAYER_HELPED, place->id, event->id, sim->current_day);
+    if (!plan.remembered) contact->player_disposition = ClampI32(contact->player_disposition + 8, -100, 100);
+    RefreshSettlementGoodPrice(sim, place, CC_GOOD_WHEAT);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
                                    char *error, size_t error_capacity)
 {
@@ -19239,7 +19341,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_CHARACTER_RESPONSE ||
         command->kind == CC_COMMAND_EXCHANGE_GOSSIP ||
         command->kind == CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL ||
-        command->kind == CC_COMMAND_BEGIN_DUNGEON_EXPEDITION;
+        command->kind == CC_COMMAND_BEGIN_DUNGEON_EXPEDITION ||
+        command->kind == CC_COMMAND_SUPPORT_BAKERY;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
                  "Settlement business must wait until the carriage arrives.");
@@ -19320,6 +19423,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_LODGE_ROAD_HOUSE:
             return ApplyJourneyStopAction(
                 sim, command, error, error_capacity);
+        case CC_COMMAND_SUPPORT_BAKERY:
+            return ApplyBakerySupport(sim, command, error, error_capacity);
         case CC_COMMAND_REPAIR_ROAD_SITE:
             return ApplyRepairRoadSite(sim, command, error, error_capacity);
         case CC_COMMAND_TRANSFER_ROAD_SITE:
@@ -19643,7 +19748,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 70U
+#define CC_NEWEST_LEGACY_SCHEMA 71U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -19661,7 +19766,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 70U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 71U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -21107,6 +21212,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                     &character->memories[memory];
                 bool subject_exists =
                     CcSimSituation(sim, item->subject_id) != NULL ||
+                    (sim->schema_version >= 72U && item->kind == CC_CHARACTER_MEMORY_PLAYER_HELPED &&
+                     CcSimSettlement(sim, item->subject_id) != NULL) ||
                     (sim->schema_version >= 19U &&
                      CcSimQuestOutcome(sim, item->subject_id) != NULL);
                 if (item->kind <= CC_CHARACTER_MEMORY_NONE ||

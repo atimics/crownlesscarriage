@@ -57,7 +57,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 71
+#define CC_SIM_SCHEMA_VERSION 72
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -524,7 +524,8 @@ typedef enum CcCommandKind {
     CC_COMMAND_MINE_PACK = 53,
     CC_COMMAND_CLEAR_ROAD_SITE = 54,
     CC_COMMAND_TRANSFER_ROAD_SITE = 55,
-    CC_COMMAND_REPAIR_ROAD_SITE = 56
+    CC_COMMAND_REPAIR_ROAD_SITE = 56,
+    CC_COMMAND_SUPPORT_BAKERY = 57
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -2115,6 +2116,19 @@ const char *CcSmithyStatusName(CcSmithyStatus status);
 bool CcSimStartServiceProject(CcSim *sim, CcId settlement_id,
                               CcServiceKind service,
                               char *error, size_t error_capacity);
+
+typedef struct CcBakerySupportPlan {
+    int32_t town_materials[CC_GOOD_COUNT];
+    CcId contact_id;
+    int32_t cargo[CC_GOOD_COUNT];
+    CcMoney coins;
+    int32_t building_days;
+    bool ready;
+    bool remembered;
+    char reason[192];
+} CcBakerySupportPlan;
+
+CcBakerySupportPlan CcSimBakerySupportPlan(const CcSim *sim, CcId settlement_id);
 bool CcSimKingdomsAtWar(const CcSim *sim, CcId first, CcId second);
 bool CcSimKingdomsAllied(const CcSim *sim, CcId first, CcId second);
 const CcRoyalCarriage *CcSimRoyalCarriage(const CcSim *sim,
