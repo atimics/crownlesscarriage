@@ -53,12 +53,13 @@ The full trace was built from observer commit `64b8277`. The final observer adds
 
 The extended horizon, object creation ages, interval statistics, and file hashes are in [`summary.json`](summary.json). The exact observations are in [`trace.jsonl`](trace.jsonl) and [`first-cycle.jsonl`](first-cycle.jsonl). Event excerpts capture up to twelve recent events on a stage or creation day. Object and stage observations supply the main evidence.
 
-From this checkout:
+From this checkout, build the frozen simulation in a separate worktree:
 
 ```sh
-cmake -S . -B /tmp/crownless-seed2-build -DCC_BUILD_CLIENT=OFF -DCMAKE_BUILD_TYPE=Release
+git worktree add --detach /tmp/crownless-seed2-rules 06e5701c6d6c09bc25430685a9fd917b81a42972
+cmake -S /tmp/crownless-seed2-rules -B /tmp/crownless-seed2-build -DCC_BUILD_CLIENT=OFF -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/crownless-seed2-build --target crownless_sim
-cc -O3 -DNDEBUG -std=c17 -Wall -Wextra -Werror -I src docs/experiments/seed2-2026-09-08/trace.c /tmp/crownless-seed2-build/libcrownless_sim.a -o /tmp/crownless-seed2-trace
+cc -O3 -DNDEBUG -std=c17 -Wall -Wextra -Werror -I /tmp/crownless-seed2-rules/src docs/experiments/seed2-2026-09-08/trace.c /tmp/crownless-seed2-build/libcrownless_sim.a -o /tmp/crownless-seed2-trace
 /tmp/crownless-seed2-trace > docs/experiments/seed2-2026-09-08/trace.jsonl 2> docs/experiments/seed2-2026-09-08/trace.log
 /tmp/crownless-seed2-trace 8000 > docs/experiments/seed2-2026-09-08/first-cycle.jsonl 2> docs/experiments/seed2-2026-09-08/first-cycle.log
 python3 docs/experiments/seed2-2026-09-08/analyze.py
