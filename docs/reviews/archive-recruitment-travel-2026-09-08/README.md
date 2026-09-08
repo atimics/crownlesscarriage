@@ -57,3 +57,10 @@ the new table before replay and checks the historical hash.
 `legacy-probe.c` compares 41 annual checkpoints for each of two seeds against
 parent `77cde2a11d9b71a6e1462d0708df711a56515934`. All 82 schema 78 hashes match;
 `legacy-parity.json` records them.
+
+The strict headless build passed all 122 CTest checks. Static analysis passed
+with one reviewed baseline item. The native play build passed, followed by
+six focused checks: archive recruitment journey, archive reservation, shared
+carriage bridge, bridge scene input, world card input parity and adventure input
+flow. These checks ran against code commit
+`1d51036b24071a53dd183a4ff176e74ac30dffdc`.
