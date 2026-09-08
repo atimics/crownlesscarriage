@@ -1,0 +1,3 @@
+Verified importance, age, stable-ID ties, and reordered history retirement
+Verified 12 independent lifetime and source fields
+Received accounts survive source death and history retirement
