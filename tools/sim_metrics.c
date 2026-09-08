@@ -186,6 +186,18 @@ static void PrintCampaignMetrics(const CcSim *sim)
                  live, value, newest, live > 0 ? oldest : 0,
                  ruined_makers, ruined_locations, identity_hash,
                  (uint64_t)sim->next_entity_serial);
+    CcMoney purses = 0;
+    int32_t hungry = 0, unsheltered = 0, named_bandits = 0;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *person = &sim->characters[i];
+        purses += person->travel_coins;
+        if (person->bandit_group_id != 0U) named_bandits += 1;
+        else {
+            if (person->hungry_days > 0) hungry += 1;
+            if (person->unsheltered_nights > 0) unsheltered += 1;
+        }
+    }
+    (void)printf(",%" PRId64 ",%d,%d,%d", purses, hungry, unsheltered, named_bandits);
 }
 
 static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
@@ -544,7 +556,8 @@ int main(int argc, char **argv)
     if (campaign_metrics) {
         (void)printf(",live_treasures,live_treasure_value,newest_treasure_day,"
                      "oldest_treasure_day,treasures_from_ruins,treasures_in_ruins,"
-                     "treasure_identity_hash,next_entity_serial");
+                     "treasure_identity_hash,next_entity_serial,"
+                     "character_coins,hungry_travellers,unsheltered_travellers,named_bandits");
     }
     (void)putchar('\n');
     char error[192];
