@@ -8857,6 +8857,29 @@ static void GatherDragonSeedOfferings(CcSim *sim)
         text);
 }
 
+CcRitualOfferingPlan CcSimRitualOfferingPlan(const CcSim *sim)
+{
+    CcRitualOfferingPlan plan = {.food_rations = -1, .relics = -1, .eggs = -1};
+    if (sim == NULL) {
+        plan.blocked = CC_RITUAL_INVALID;
+        return plan;
+    }
+    const CcGoblinCult *goblins = &sim->goblins;
+    plan.food_rations = NutritionRations(goblins->lair_stock, CC_NUTRITION_CIVILIAN);
+    plan.relics = goblins->lair_stock[CC_GOOD_GOLD] + goblins->lair_stock[CC_GOOD_GEMS];
+    if (goblins->members < 48) plan.blocked |= CC_RITUAL_MEMBERS;
+    if (goblins->devotion < 75) plan.blocked |= CC_RITUAL_DEVOTION;
+    if (goblins->cohesion < 75) plan.blocked |= CC_RITUAL_COHESION;
+    if (goblins->lair_coins < 120) plan.blocked |= CC_RITUAL_COINS;
+    if (plan.relics < 2) plan.blocked |= CC_RITUAL_RELICS;
+    if (plan.food_rations < 12) plan.blocked |= CC_RITUAL_FOOD;
+    if (goblins->lair_stock[CC_GOOD_TOOLS] < 2) plan.blocked |= CC_RITUAL_TOOLS;
+    if (goblins->lair_stock[CC_GOOD_WEAPONS] < 3) plan.blocked |= CC_RITUAL_WEAPONS;
+    plan.eggs = goblins->members >= 72 && goblins->devotion >= 90 &&
+        goblins->cohesion >= 90 ? 2 : 1;
+    return plan;
+}
+
 static void AdvanceAfterdragonCult(CcSim *sim)
 {
     CcDragon *dragon = &sim->dragon;
@@ -8954,16 +8977,8 @@ static void AdvanceAfterdragonCult(CcSim *sim)
     }
     if (goblins->dragon_seed_days_remaining > 0) return;
 
-    int32_t relics = goblins->lair_stock[CC_GOOD_GOLD] +
-                     goblins->lair_stock[CC_GOOD_GEMS];
-    bool can_reveal_clutch = goblins->members >= 48 &&
-        goblins->devotion >= 75 && goblins->cohesion >= 75 &&
-        goblins->lair_coins >= 120 && relics >= 2 &&
-        NutritionRations(
-            goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 12 &&
-        goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
-        goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
-    if (!can_reveal_clutch) return;
+    CcRitualOfferingPlan offering = CcSimRitualOfferingPlan(sim);
+    if (offering.blocked != 0U) return;
 
     CcMoney ritual_coins = 120;
     goblins->lair_coins -= ritual_coins;
@@ -8979,9 +8994,7 @@ static void AdvanceAfterdragonCult(CcSim *sim)
         12 * CC_NUTRITION_PER_RATION);
     goblins->lair_stock[CC_GOOD_TOOLS] -= 1;
     goblins->lair_stock[CC_GOOD_WEAPONS] -= 1;
-    dragon->egg_count = goblins->members >= 72 &&
-                        goblins->devotion >= 90 &&
-                        goblins->cohesion >= 90 ? 2 : 1;
+    dragon->egg_count = offering.eggs;
     dragon->brood_days_remaining =
         (10 + (int32_t)(NextRandom(sim) % 6U)) * 365;
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -12744,14 +12757,14 @@ static int32_t NextSituationExpiryDay(const CcSim *sim)
     return next_day;
 }
 
-static CcSettlement *KingdomSeat(CcSim *sim, int32_t kingdom_slot)
+static const CcSettlement *KingdomSeat(const CcSim *sim, int32_t kingdom_slot)
 {
     if (sim == NULL || kingdom_slot < 0 ||
         kingdom_slot >= sim->kingdom_count) return NULL;
-    CcSettlement *best = NULL;
+    const CcSettlement *best = NULL;
     CcId kingdom_id = sim->kingdoms[kingdom_slot].id;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        CcSettlement *place = &sim->settlements[i];
+        const CcSettlement *place = &sim->settlements[i];
         if (place->kingdom_id != kingdom_id ||
             CcSettlementIsAbandoned(place)) continue;
         if (best == NULL || place->function == CC_SETTLEMENT_CAPITAL ||
@@ -13171,8 +13184,8 @@ static CcCourier *LaunchCourier(CcSim *sim, CcCourierKind kind,
         recipient_slot >= sim->kingdom_count ||
         CourierActiveBetween(sim, kind, sim->kingdoms[issuer_slot].id,
                              sim->kingdoms[recipient_slot].id)) return NULL;
-    CcSettlement *origin = KingdomSeat(sim, issuer_slot);
-    CcSettlement *destination = KingdomSeat(sim, recipient_slot);
+    const CcSettlement *origin = KingdomSeat(sim, issuer_slot);
+    const CcSettlement *destination = KingdomSeat(sim, recipient_slot);
     if (origin == NULL || destination == NULL) return NULL;
     CcCourier *courier = AllocateCourier(sim);
     if (courier == NULL) return NULL;
@@ -13506,35 +13519,60 @@ static void StockDragonCampaign(CcSim *sim, uint32_t mask)
     }
 }
 
-static void TryLaunchDragonCampaign(CcSim *sim)
+CcCampaignLaunchPlan CcSimCampaignLaunchPlan(const CcSim *sim)
 {
-    CcDragonCampaign *campaign = &sim->dragon_campaign;
-    uint32_t mask = campaign->pledged_kingdom_mask;
-    if (campaign->phase != CC_DRAGON_CAMPAIGN_IDLE ||
-        campaign->cooldown_days > 0 || sim->dragon.slain ||
-        MaskCount(mask) < 2) return;
+    CcCampaignLaunchPlan plan = {.leader_slot = -1, .pledged_count = -1,
+        .food_rations = -1, .tools = -1, .weapons = -1};
+    if (sim == NULL) {
+        plan.blocked = CC_CAMPAIGN_INVALID;
+        return plan;
+    }
+    const CcDragonCampaign *campaign = &sim->dragon_campaign;
+    plan.pledged_mask = campaign->pledged_kingdom_mask;
+    plan.pledged_count = MaskCount(plan.pledged_mask);
+    plan.food_rations = NutritionRations(campaign->supplies, CC_NUTRITION_CIVILIAN);
+    plan.tools = campaign->supplies[CC_GOOD_TOOLS];
+    plan.weapons = campaign->supplies[CC_GOOD_WEAPONS];
+    plan.patron_id = campaign->patron_character_id;
+    plan.hero_id = campaign->hero_character_id;
+    if (campaign->phase != CC_DRAGON_CAMPAIGN_IDLE) plan.blocked |= CC_CAMPAIGN_ACTIVE;
+    if (campaign->cooldown_days > 0) plan.blocked |= CC_CAMPAIGN_COOLDOWN;
+    if (sim->dragon.slain) plan.blocked |= CC_CAMPAIGN_DRAGON_SLAIN;
+    if (plan.pledged_count < 2) plan.blocked |= CC_CAMPAIGN_PLEDGES;
     if (sim->dragon.age_days < 500 * 365 &&
-        sim->dragon.life_stage != CC_DRAGON_STAGE_DEEP_WYRM) return;
-    NameDragonCampaignLeaders(sim, mask);
-    StockDragonCampaign(sim, mask);
-    if (NutritionRations(
-            campaign->supplies, CC_NUTRITION_CIVILIAN) < 32 ||
-        campaign->supplies[CC_GOOD_TOOLS] < 8 ||
-        campaign->supplies[CC_GOOD_WEAPONS] < 12 ||
-        campaign->patron_character_id == 0U ||
-        campaign->hero_character_id == 0U) return;
-    int32_t leader_slot = -1;
-    CcSettlement *origin = NULL;
+        sim->dragon.life_stage != CC_DRAGON_STAGE_DEEP_WYRM)
+        plan.blocked |= CC_CAMPAIGN_DRAGON_AGE;
+    if (plan.food_rations < 32) plan.blocked |= CC_CAMPAIGN_FOOD;
+    if (plan.tools < 8) plan.blocked |= CC_CAMPAIGN_TOOLS;
+    if (plan.weapons < 12) plan.blocked |= CC_CAMPAIGN_WEAPONS;
+    if (plan.patron_id == 0U) plan.blocked |= CC_CAMPAIGN_PATRON;
+    if (plan.hero_id == 0U) plan.blocked |= CC_CAMPAIGN_HERO;
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
-        if ((mask & (UINT32_C(1) << (uint32_t)i)) == 0U) continue;
-        CcSettlement *candidate = KingdomSeat(sim, i);
+        if ((plan.pledged_mask & (UINT32_C(1) << (uint32_t)i)) == 0U) continue;
+        const CcSettlement *candidate = KingdomSeat(sim, i);
         if (candidate != NULL) {
-            leader_slot = i;
-            origin = candidate;
+            plan.leader_slot = i;
+            plan.origin_id = candidate->id;
             break;
         }
     }
-    if (leader_slot < 0 || origin == NULL) return;
+    if (plan.origin_id == 0U) plan.blocked |= CC_CAMPAIGN_SEAT;
+    return plan;
+}
+
+static void TryLaunchDragonCampaign(CcSim *sim)
+{
+    CcCampaignLaunchPlan plan = CcSimCampaignLaunchPlan(sim);
+    if ((plan.blocked & CC_CAMPAIGN_PREPARATION_BLOCKS) != 0U) return;
+    CcDragonCampaign *campaign = &sim->dragon_campaign;
+    uint32_t mask = plan.pledged_mask;
+    NameDragonCampaignLeaders(sim, mask);
+    StockDragonCampaign(sim, mask);
+    plan = CcSimCampaignLaunchPlan(sim);
+    if (plan.blocked != 0U) return;
+    int32_t leader_slot = plan.leader_slot;
+    const CcSettlement *origin = CcSimSettlement(sim, plan.origin_id);
+    if (origin == NULL) return;
     campaign->phase = CC_DRAGON_CAMPAIGN_OUTBOUND;
     campaign->alliance_kingdom_mask = mask;
     campaign->origin_settlement_id = origin->id;
@@ -14292,10 +14330,28 @@ static int32_t ActiveShipmentsForKingdom(const CcSim *sim, CcId kingdom_id)
     return count;
 }
 
+typedef enum RoadRepairFunding {
+    ROAD_REPAIR_UNFUNDED,
+    ROAD_REPAIR_CROWN_FUNDED,
+    ROAD_REPAIR_LOCALLY_FUNDED
+} RoadRepairFunding;
+
+static RoadRepairFunding RepairFunding(const CcSettlement *base, const CcKingdom *kingdom)
+{
+    if (base == NULL || base->stock[CC_GOOD_WOOD] < 2 ||
+        base->stock[CC_GOOD_STONE] < 2) return ROAD_REPAIR_UNFUNDED;
+    if (kingdom->treasury >= 24) return ROAD_REPAIR_CROWN_FUNDED;
+    if (base->stock[CC_GOOD_TOOLS] >= 1 &&
+        NutritionRations(base->stock, CC_NUTRITION_CIVILIAN) >= 4)
+        return ROAD_REPAIR_LOCALLY_FUNDED;
+    return ROAD_REPAIR_UNFUNDED;
+}
+
 static CcSettlement *RepairBaseForKingdom(CcSim *sim,
                                           const CcRoute *route,
-                                          CcId kingdom_id)
+                                          const CcKingdom *kingdom)
 {
+    CcId kingdom_id = kingdom->id;
     CcSettlement *from = CcSimSettlementMutable(sim, route->from_id);
     CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
     CcSettlement *best = NULL;
@@ -14314,6 +14370,11 @@ static CcSettlement *RepairBaseForKingdom(CcSim *sim,
              NutritionRations(best->stock, CC_NUTRITION_CIVILIAN))) {
         best = to;
     }
+    CcSettlement *alternative = best == from ? to : from;
+    if (sim->schema_version >= 71U && RepairFunding(best, kingdom) == ROAD_REPAIR_UNFUNDED &&
+        alternative != NULL && !CcSettlementIsAbandoned(alternative) &&
+        alternative->kingdom_id == kingdom_id &&
+        RepairFunding(alternative, kingdom) != ROAD_REPAIR_UNFUNDED) best = alternative;
     return best;
 }
 
@@ -14351,43 +14412,86 @@ static int32_t RouteRecoveryScore(const CcSim *sim, const CcRoute *route,
            (100 - route->condition);
 }
 
-static void AdvanceRoadsideRecovery(CcSim *sim, CcRoute *route)
+static uint32_t RoadRecoverySupplyBlocks(const CcSettlement *supplier)
 {
-    if (sim == NULL || route == NULL || !route->closed ||
-        (CcSimRouteCrossesWarBorder(sim, route->id) &&
-         !route->smuggler_route) || sim->current_day % 112 != 0) return;
-    CcSettlement *from = CcSimSettlementMutable(sim, route->from_id);
-    CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
-    if (from == NULL || to == NULL || CcSettlementIsAbandoned(from) ||
-        CcSettlementIsAbandoned(to)) return;
+    uint32_t blocked = 0U;
+    if (NutritionRations(supplier->stock, CC_NUTRITION_CIVILIAN) < 4)
+        blocked |= CC_ROAD_RECOVERY_FOOD;
+    if (supplier->stock[CC_GOOD_WOOD] < 2) blocked |= CC_ROAD_RECOVERY_WOOD;
+    if (supplier->stock[CC_GOOD_STONE] < 2) blocked |= CC_ROAD_RECOVERY_STONE;
+    if (supplier->stock[CC_GOOD_TOOLS] < 1) blocked |= CC_ROAD_RECOVERY_TOOLS;
+    return blocked;
+}
 
+CcRoadRecoveryPlan CcSimRoadRecoveryPlan(const CcSim *sim, CcId route_id)
+{
+    CcRoadRecoveryPlan plan = {.route_id = route_id, .population = -1,
+        .food_rations = -1, .wood = -1, .stone = -1, .tools = -1,
+        .effort = -1, .people_used = -1, .next_work_day = -1};
+    const CcRoute *route = sim != NULL ? CcSimRoute(sim, route_id) : NULL;
+    if (route == NULL) {
+        plan.blocked = CC_ROAD_RECOVERY_INVALID;
+        return plan;
+    }
+    plan.next_work_day = ((int64_t)sim->current_day + 111) / 112 * 112;
+    if (!route->closed) plan.blocked |= CC_ROAD_RECOVERY_OPEN;
+    if (CcSimRouteCrossesWarBorder(sim, route_id) && !route->smuggler_route)
+        plan.blocked |= CC_ROAD_RECOVERY_WAR;
+    if (sim->current_day % 112 != 0) plan.blocked |= CC_ROAD_RECOVERY_CALENDAR;
+    const CcSettlement *from = CcSimSettlement(sim, route->from_id);
+    const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+    if (from == NULL || to == NULL) {
+        plan.blocked |= CC_ROAD_RECOVERY_INVALID;
+        return plan;
+    }
+    if (CcSettlementIsAbandoned(from) || CcSettlementIsAbandoned(to))
+        plan.blocked |= CC_ROAD_RECOVERY_ABANDONED;
     int32_t distress = MaximumI32(from->hunger, to->hunger);
-    CcSettlement *labor_base = from->population >= to->population ?
+    const CcSettlement *labor_base = from->population >= to->population ?
                                from : to;
-    CcSettlement *supplier =
+    const CcSettlement *supplier =
         NutritionRations(from->stock, CC_NUTRITION_CIVILIAN) +
             from->stock[CC_GOOD_TOOLS] + from->stock[CC_GOOD_WOOD] +
             from->stock[CC_GOOD_STONE] >=
         NutritionRations(to->stock, CC_NUTRITION_CIVILIAN) +
             to->stock[CC_GOOD_TOOLS] + to->stock[CC_GOOD_WOOD] +
             to->stock[CC_GOOD_STONE] ? from : to;
-    if (labor_base->population < 220 ||
-        NutritionRations(supplier->stock, CC_NUTRITION_CIVILIAN) < 4 ||
-        supplier->stock[CC_GOOD_WOOD] < 2 ||
-        supplier->stock[CC_GOOD_STONE] < 2 ||
-        supplier->stock[CC_GOOD_TOOLS] < 1) return;
+    const CcSettlement *alternative = supplier == from ? to : from;
+    if (sim->schema_version >= 71U && RoadRecoverySupplyBlocks(supplier) != 0U &&
+        RoadRecoverySupplyBlocks(alternative) == 0U) supplier = alternative;
+    plan.labor_base_id = labor_base->id;
+    plan.supplier_id = supplier->id;
+    plan.population = labor_base->population;
+    plan.food_rations = NutritionRations(supplier->stock, CC_NUTRITION_CIVILIAN);
+    plan.wood = supplier->stock[CC_GOOD_WOOD];
+    plan.stone = supplier->stock[CC_GOOD_STONE];
+    plan.tools = supplier->stock[CC_GOOD_TOOLS];
+    plan.effort = 6 + distress / 20 + (route->smuggler_route ? 1 : 0);
+    plan.people_used = MaximumI32(1, labor_base->population / 500);
+    if (plan.population < 220) plan.blocked |= CC_ROAD_RECOVERY_PEOPLE;
+    plan.blocked |= RoadRecoverySupplyBlocks(supplier);
+    return plan;
+}
+
+static void AdvanceRoadsideRecovery(CcSim *sim, CcRoute *route)
+{
+    if (sim == NULL || route == NULL || !route->closed || sim->current_day % 112 != 0)
+        return;
+    CcRoadRecoveryPlan plan = CcSimRoadRecoveryPlan(sim, route->id);
+    if (plan.blocked != 0U) return;
+    CcSettlement *from = CcSimSettlementMutable(sim, route->from_id);
+    CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
+    CcSettlement *labor_base = CcSimSettlementMutable(sim, plan.labor_base_id);
+    CcSettlement *supplier = CcSimSettlementMutable(sim, plan.supplier_id);
+    if (from == NULL || to == NULL || labor_base == NULL || supplier == NULL) return;
     (void)CcNutritionConsume(
         supplier->stock, CC_NUTRITION_CIVILIAN,
         4 * CC_NUTRITION_PER_RATION);
     supplier->stock[CC_GOOD_WOOD] -= 2;
     supplier->stock[CC_GOOD_STONE] -= 2;
     supplier->stock[CC_GOOD_TOOLS] -= 1;
-    int32_t effort = 6 + distress / 20 +
-                     (route->smuggler_route ? 1 : 0);
-    route->condition = ClampI32(route->condition + effort, 0, 100);
-    labor_base->population = MaximumI32(
-        0, labor_base->population - MaximumI32(1,
-        labor_base->population / 500));
+    route->condition = ClampI32(route->condition + plan.effort, 0, 100);
+    labor_base->population = MaximumI32(0, labor_base->population - plan.people_used);
     if (route->condition < 45) return;
 
     route->closed = false;
@@ -14845,23 +14949,16 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 int32_t score = RouteRecoveryScore(sim, route, kingdom->id);
                 if (score <= best_score) continue;
                 CcSettlement *base = RepairBaseForKingdom(
-                    sim, route, kingdom->id);
+                    sim, route, kingdom);
                 if (base == NULL) continue;
                 best_score = score;
                 best_route = route;
                 repair_base = base;
             }
-            bool crown_funded = best_route != NULL &&
-                                repair_base->stock[CC_GOOD_WOOD] >= 2 &&
-                                repair_base->stock[CC_GOOD_STONE] >= 2 &&
-                                kingdom->treasury >= 24;
-            bool locally_funded = best_route != NULL && !crown_funded &&
-                                  repair_base->stock[CC_GOOD_WOOD] >= 2 &&
-                                  repair_base->stock[CC_GOOD_STONE] >= 2 &&
-                                  repair_base->stock[CC_GOOD_TOOLS] >= 1 &&
-                                  NutritionRations(
-                                      repair_base->stock,
-                                      CC_NUTRITION_CIVILIAN) >= 4;
+            RoadRepairFunding funding = best_route != NULL ?
+                RepairFunding(repair_base, kingdom) : ROAD_REPAIR_UNFUNDED;
+            bool crown_funded = funding == ROAD_REPAIR_CROWN_FUNDED;
+            bool locally_funded = funding == ROAD_REPAIR_LOCALLY_FUNDED;
             if (crown_funded || locally_funded) {
                 repair_base->stock[CC_GOOD_WOOD] -= 2;
                 repair_base->stock[CC_GOOD_STONE] -= 2;
@@ -19546,7 +19643,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 69U
+#define CC_NEWEST_LEGACY_SCHEMA 70U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -19564,7 +19661,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 69U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 70U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },

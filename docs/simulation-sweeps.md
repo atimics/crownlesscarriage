@@ -62,6 +62,27 @@ out/build/release/crownless_agent_sweep --seeds 8 --years 10
 out/build/release/crownless_agent_sweep --seed 47 --years 100 --wip-limit 1
 ```
 
+Both paired worlds pass structural validation at startup, each annual boundary,
+and the endpoint. The control reaches each boundary through daily steps. The
+agent is checked after its first completed action at or beyond a boundary; its
+failure report records the scheduled boundary and the actual day. A failure
+stops the sweep with a failing exit status and includes the seed, rules versions,
+state hash, and reproduction command. Each run still emits one endpoint CSV row
+per completed seed. Validation observes the simulation through its read-only API.
+
+Hunger columns use `CcSimHungerSnapshot`: `control_hunger` and `agent_hunger`
+are averages over inhabited settlements. The maximum and population-weighted
+columns use that same population. Hunger is `-1` when every settlement is
+abandoned; the active and abandoned counts make that case explicit. Prosperity
+retains its average over all settlement slots.
+
+Each row includes the numeric world seed, requested target day, actual control
+and agent days, schema and generator versions, and final state hashes. The agent
+can finish a journey after the target day. Use the actual days when comparing
+endpoints. These rows describe whole-policy comparisons. Job and combat counters
+cover the run; world columns describe the final snapshots. Keep the build revision
+and command alongside captured CSV files.
+
 The output compares population, prosperity, hunger, active settlements, and
 closed routes, and records repairs, failed repair attempts, travel, accepted
 jobs, completed jobs, and combat decisions/outcomes. The agent has an explicit
@@ -87,3 +108,125 @@ The metrics also include political and faction exposure:
 
 Use `tools/analyze_sweep.py` for group comparisons and
 `tools/plot_archetypes.py` for report charts.
+
+## Roadside recovery diagnostics
+
+`crownless_sim_runner --detail` emits one `roadside_recovery` snapshot per route.
+The snapshot uses the same `CcSimRoadRecoveryPlan` that the daily recovery code
+executes. It identifies the route, endpoints, chosen labor base and supplier,
+work date, available and required people/materials, planned work, and every
+unmet gate. `blocked=ready` means this roadside effort can execute at that exact
+snapshot. Fields set to `-1` are unavailable because the route or endpoint is
+missing. Entity IDs of `0` are unavailable.
+
+These are engine inspection records. They describe communal roadside recovery;
+kingdom-funded repairs, routine upkeep, and recolonization have their own rules.
+An annual endpoint can differ from the next work day's state because production,
+trade, and other repairs run before the recovery decision. The report identifies
+snapshot gates; activity counts require interval accounting.
+
+## Campaign launch diagnostics
+
+Detailed runner output includes a `campaign_launch_snapshot`. The shared
+`CcSimCampaignLaunchPlan` supplies the same preparation and departure gates that
+execution uses. `prepare_eligible` reflects phase, cooldown, dragon life/age, and
+pledges. Held food, Tools, Weapons, patron, hero, and origin describe the current
+snapshot. Preparation can name leaders and draw or commission supplies before
+execution evaluates departure again. Deep wyrms satisfy the age gate at any age.
+
+The row includes all unmet gates. `attempts` is the existing lifetime departure
+count. The diagnostic describes launch prerequisites at inspection time; the
+royal diplomacy schedule controls when preparation is called. A ready snapshot
+therefore describes readiness at that instant. The same read-only inspection
+adds engine information to the runner. Coalition formation, supply availability
+above reserves, and ritual eligibility remain separate diagnostic work.
+
+## Successor ritual offerings
+
+`--detail` includes a `ritual_offering_snapshot` for the named cult and lair.
+`CcSimRitualOfferingPlan` is the offering check used by clutch revelation after
+annual gathering, cult changes, and timer advancement. It reports every unmet
+membership, devotion, cohesion, coin, relic, nutrition, Tool, and Weapon threshold.
+The planned egg count uses the same rule as execution.
+
+The snapshot also identifies the current ritual phase, timer, afterdeath age,
+tribute phase, and existing eggs. `blocked=ready` applies to held offerings;
+the annual schedule and ritual stage determine when execution checks them.
+Tools and Weapons thresholds include retained equipment: revelation consumes
+one of each after requiring two Tools and three Weapons. Food costs twelve
+rations and the transfer to the dragon uses 120 coins and two relics.
+
+## Input limits
+
+The runner accepts raw world seeds from 0 through 4294967295, including hexadecimal
+notation. Durations and intervals use complete decimal integers. Zero years saves
+or inspects the initial or loaded state. A zero report interval retains the annual
+report default, and a zero checkpoint interval disables intermediate saves.
+
+Metrics seed indexes range from 1 through 2147483647 and retain the documented
+32-bit seed mapping. A requested index range must fit within that bound. Durations
+must fit the simulation's signed day counter. Invalid numeric values, unknown
+runner options, and missing arguments produce a failing exit status before output
+files are written. Resumed chronicle headers identify the world seed from the save.
+
+## Bandit exposure scope
+
+`days_bandit_raid` and `days_bandit_influence_70_plus` count each sampled day
+once when any bandit group qualifies. The matching `years_*` columns count
+annual endpoint samples with any qualifying group. They measure endpoint
+observations, while the `days_*` columns measure daily exposure.
+
+`bandit_raid_group_days` and `bandit_influence_70_plus_group_days` sum each
+group's daily activity. Their `*_group_year_samples` counterparts sum qualifying
+groups at annual endpoints. Two active groups on one day add one day of exposure
+and two group-days. These group totals retain the previous counters' meaning.
+
+`first_bandit_id` identifies the group described by the existing `bandit_influence`,
+`bandit_members_end`, `bandit_supplies_end`, `bandit_influence_end`, and
+`bandit_raids_end` snapshots. An ID of zero means that group is absent. Per-group
+interval tables remain further diagnostic work.
+
+## Daily route observations
+
+Add `--route-csv PATH` to `crownless_sim_metrics` for one row per route at each
+reported annual checkpoint. Each row identifies its seed, rules versions, day,
+route, endpoints, endpoint owners, and endpoint populations. Condition, physical
+closure, war-border status, and smuggler status describe that checkpoint.
+
+Daily observations occur after each simulated day. `closed_days` measures physical
+closure; `war_border_days` measures the border state even on smuggler roads.
+Unavailable days use physical closure or an official road crossing a war border,
+and are split between two inhabited endpoints and a connection to a ruin.
+Physical open days equal `interval_days - closed_days`. Company-specific passage
+and disconnected-network reachability are separate measures.
+
+Interval columns cover the latest 365 observed days. Cumulative columns cover the
+run so far. Current and longest outage streaks continue across annual boundaries
+and measure observed days since this run began. `--final-only` emits the last
+interval plus full-run totals. Annual structural validation still runs, and the
+ordinary metrics output matches a run with observation disabled. Use separate
+output paths for route and nutrition CSV files.
+
+## Supplied roadside repair crews
+
+Schema 60 lets communal road recovery use the opposite endpoint when its original
+supplier lacks a complete kit and that endpoint holds at least four food rations,
+two Wood, two Stone, and one Tool. The largest population still supplies labor.
+The original stock ranking resolves cases where both endpoints are supplied or
+both lack materials. Costs, dates, border rules, and work strength stay the same.
+Schemas through 59 retain the original stock ranking for historical replay.
+
+Kingdom crews in schema 60 apply the same preference within their own inhabited
+endpoints. A paid kit needs two Wood, two Stone, and 24 treasury coins; a local
+kit needs two Wood, two Stone, one Tool, and four food rations. The shared funding
+check drives both endpoint selection and execution. Existing repair priorities
+and historic schema behavior are preserved.
+
+## Hunger analysis availability
+
+`analyze_sweep.py` summarizes average, maximum, and population-weighted hunger
+using worlds with an observed inhabited hunger value. Each hunger line reports
+the observed and unavailable world counts. The `all-abandoned` group identifies
+worlds with zero active settlements; their hunger is unavailable, including in
+older CSV files that reported a numeric value for ruins. The poor-no-dragon group
+requires observed hunger among inhabitants. Fractional medians remain visible.

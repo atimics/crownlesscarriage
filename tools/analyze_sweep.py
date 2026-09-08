@@ -3,7 +3,29 @@
 import argparse
 import csv
 import statistics as st
-from collections import Counter
+
+HUNGER_METRICS = {"average_hunger", "maximum_hunger", "population_weighted_hunger"}
+
+
+def hunger_value(row, key):
+    """Return the observed hunger, or None for a world without inhabitants."""
+    if int(row.get("active_settlements", -1)) == 0:
+        return None
+    value = int(row[key])
+    if value == -1:
+        return None
+    if not 0 <= value <= 100:
+        raise ValueError("Invalid %s: %s" % (key, row[key]))
+    return value
+
+
+def poor_without_dragon(row):
+    hunger = hunger_value(row, "average_hunger")
+    return (row["dragon_slain"] == "1"
+            and int(row["average_prosperity"]) < 30
+            and hunger is not None and hunger > 50
+            and int(row["average_legitimacy"]) < 30)
+
 
 GROUPS = {
     "all": lambda r: True,
@@ -11,11 +33,8 @@ GROUPS = {
         r["dragon_slain"] == "0"
         and int(r["dragon_crown_strength"]) >= 70
         and int(r["average_prosperity"]) >= 35),
-    "poor-no-dragon": lambda r: (
-        r["dragon_slain"] == "1"
-        and int(r["average_prosperity"]) < 30
-        and int(r["average_hunger"]) > 50
-        and int(r["average_legitimacy"]) < 30),
+    "poor-no-dragon": poor_without_dragon,
+    "all-abandoned": lambda r: int(r.get("active_settlements", -1)) == 0,
     "dragon-survived": lambda r: r["dragon_slain"] == "0",
     "dragon-slain": lambda r: r["dragon_slain"] == "1",
 }
@@ -23,7 +42,8 @@ GROUPS = {
 METRICS = [
     # humans
     "total_population", "active_settlements", "average_prosperity",
-    "average_security", "average_hunger", "average_legitimacy",
+    "average_security", "average_hunger", "maximum_hunger",
+    "population_weighted_hunger", "average_legitimacy",
     "average_inequality", "total_kingdom_treasury", "iron_ledger_debt",
     "closed_routes", "years_all_routes_closed",
     # politics
@@ -44,6 +64,8 @@ METRICS = [
     # bandits
     "bandit_members_end", "bandit_supplies_end", "bandit_influence_end",
     "bandit_raids_end", "days_bandit_raid",
+    "bandit_raid_group_days", "bandit_influence_70_plus_group_days",
+    "bandit_raid_group_year_samples", "bandit_influence_70_plus_group_year_samples",
     "days_bandit_influence_70_plus", "smuggler_routes",
     # scriptorium / monastery
     "iron_ledger_reserve", "treasure_count",
@@ -70,9 +92,18 @@ def main():
         for key in METRICS:
             if key not in group[0]:
                 continue
-            x = [int(r[key]) for r in group]
-            print("  %-34s mean=%9.2f median=%8d min=%6d max=%7d" % (
-                key, st.mean(x), st.median(x), min(x), max(x)))
+            if key in HUNGER_METRICS:
+                values = [hunger_value(r, key) for r in group]
+                x = [value for value in values if value is not None]
+                scope = " observed=%d unavailable=%d" % (len(x), len(group) - len(x))
+            else:
+                x = [int(r[key]) for r in group]
+                scope = ""
+            if not x:
+                print("  %-34s unavailable%s" % (key, scope))
+                continue
+            print("  %-34s mean=%9.2f median=%8.2f min=%6d max=%7d%s" % (
+                key, st.mean(x), st.median(x), min(x), max(x), scope))
         print()
 
 

@@ -1,0 +1,22 @@
+{
+  "parent": "fadf76bb6e7c9b3c31453523d41a886297d742a2",
+  "change": "deff730",
+  "build": "Release, CC_BUILD_CLIENT=OFF, CC_BUILD_BENCHMARKS=ON, strict warnings as errors",
+  "commands": [
+    "crownless_agent_sweep --seeds 8 --years 10",
+    "crownless_agent_sweep --seeds 2 --years 100"
+  ],
+  "seed_mapping": "uint32(index * 0x9e3779b9), indexes start at 1",
+  "tests": {
+    "passed": 73,
+    "failed": 0
+  },
+  "files": {
+    "change-100.csv": "a745a49fd44a2f44231c018fecad6c5eb0ded201f962572f91c5346976f2999a",
+    "change.csv": "7f04b4f976dd844d177724fa97ff3f1dc95911c1b855028673dfb359461b7e11",
+    "comparison-100.json": "7cddba6d7adc4caed3544ec5fdfec10d518504250ff8a37024f6ed1f0ff02284",
+    "comparison.json": "2764429637d03f9191a908ab8c2f24814b46d370d7392a52cf9a78ab437d609b",
+    "parent-100.csv": "f5bba4ccddae1dd12a18f225ec960c4515fd9300bb67c67a6f34285c81f9a7da",
+    "parent.csv": "b7211eafa6c77c52beb4b505162d3b09eeac634a956285ece799e335b559d695"
+  }
+}

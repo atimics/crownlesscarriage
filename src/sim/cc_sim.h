@@ -57,7 +57,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 70
+#define CC_SIM_SCHEMA_VERSION 71
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -1997,6 +1997,96 @@ int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimActiveFrontCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
 CcHungerSnapshot CcSimHungerSnapshot(const CcSim *sim);
+
+/* Engine diagnostics and execution share these roadside recovery gates. */
+typedef enum CcRoadRecoveryBlock {
+    CC_ROAD_RECOVERY_INVALID = 1U << 0,
+    CC_ROAD_RECOVERY_OPEN = 1U << 1,
+    CC_ROAD_RECOVERY_WAR = 1U << 2,
+    CC_ROAD_RECOVERY_CALENDAR = 1U << 3,
+    CC_ROAD_RECOVERY_ABANDONED = 1U << 4,
+    CC_ROAD_RECOVERY_PEOPLE = 1U << 5,
+    CC_ROAD_RECOVERY_FOOD = 1U << 6,
+    CC_ROAD_RECOVERY_WOOD = 1U << 7,
+    CC_ROAD_RECOVERY_STONE = 1U << 8,
+    CC_ROAD_RECOVERY_TOOLS = 1U << 9
+} CcRoadRecoveryBlock;
+
+typedef struct CcRoadRecoveryPlan {
+    uint32_t blocked;
+    CcId route_id;
+    CcId labor_base_id;
+    CcId supplier_id;
+    int32_t population;
+    int32_t food_rations;
+    int32_t wood;
+    int32_t stone;
+    int32_t tools;
+    int32_t effort;
+    int32_t people_used;
+    int64_t next_work_day;
+} CcRoadRecoveryPlan;
+
+CcRoadRecoveryPlan CcSimRoadRecoveryPlan(const CcSim *sim, CcId route_id);
+
+typedef enum CcCampaignLaunchBlock {
+    CC_CAMPAIGN_INVALID = 1U << 0,
+    CC_CAMPAIGN_ACTIVE = 1U << 1,
+    CC_CAMPAIGN_COOLDOWN = 1U << 2,
+    CC_CAMPAIGN_DRAGON_SLAIN = 1U << 3,
+    CC_CAMPAIGN_PLEDGES = 1U << 4,
+    CC_CAMPAIGN_DRAGON_AGE = 1U << 5,
+    CC_CAMPAIGN_FOOD = 1U << 6,
+    CC_CAMPAIGN_TOOLS = 1U << 7,
+    CC_CAMPAIGN_WEAPONS = 1U << 8,
+    CC_CAMPAIGN_PATRON = 1U << 9,
+    CC_CAMPAIGN_HERO = 1U << 10,
+    CC_CAMPAIGN_SEAT = 1U << 11
+} CcCampaignLaunchBlock;
+#define CC_CAMPAIGN_PREPARATION_BLOCKS (CC_CAMPAIGN_INVALID | CC_CAMPAIGN_ACTIVE | \
+    CC_CAMPAIGN_COOLDOWN | CC_CAMPAIGN_DRAGON_SLAIN | CC_CAMPAIGN_PLEDGES | \
+    CC_CAMPAIGN_DRAGON_AGE)
+
+typedef struct CcCampaignLaunchPlan {
+    uint32_t blocked;
+    uint32_t pledged_mask;
+    int32_t pledged_count;
+    int32_t food_rations;
+    int32_t tools;
+    int32_t weapons;
+    int32_t leader_slot;
+    CcId origin_id;
+    CcId patron_id;
+    CcId hero_id;
+} CcCampaignLaunchPlan;
+
+/* A snapshot of held supplies; preparation can change these before departure. */
+CcCampaignLaunchPlan CcSimCampaignLaunchPlan(const CcSim *sim);
+
+typedef enum CcRitualBlock {
+    CC_RITUAL_INVALID = 1U << 0,
+    CC_RITUAL_MEMBERS = 1U << 1,
+    CC_RITUAL_DEVOTION = 1U << 2,
+    CC_RITUAL_COHESION = 1U << 3,
+    CC_RITUAL_COINS = 1U << 4,
+    CC_RITUAL_RELICS = 1U << 5,
+    CC_RITUAL_FOOD = 1U << 6,
+    CC_RITUAL_TOOLS = 1U << 7,
+    CC_RITUAL_WEAPONS = 1U << 8
+} CcRitualBlock;
+
+typedef struct CcRitualOfferingPlan {
+    uint32_t blocked;
+    int32_t food_rations;
+    int32_t relics;
+    int32_t eggs;
+} CcRitualOfferingPlan;
+
+/* Held offerings for the clutch reveal; phase, calendar, and timer are separate. */
+CcRitualOfferingPlan CcSimRitualOfferingPlan(const CcSim *sim);
+
+
+
 CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
 const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker);
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
