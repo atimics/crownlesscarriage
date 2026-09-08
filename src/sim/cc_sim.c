@@ -17732,6 +17732,62 @@ static bool ApplyRoadSiteTransfer(CcSim *sim, const CcCommand *command,
     return true;
 }
 
+static const CcProductionRecipe RoadSiteRepairRecipe = {
+    .output = CC_GOOD_COUNT, .output_units = 1, .work_only = true,
+    .input_count = 2, .inputs = {{CC_GOOD_TOOLS, 1, 1}, {CC_GOOD_WOOD, 1, 0}},
+    .work_per_batch = 2, .tools_required = 1,
+    .hunger_soft_limit = 100, .hunger_hard_limit = 100
+};
+
+static CcProductionContext RoadSiteRepairContext(const CcSim *sim,
+    const CcRoadSite *site, int32_t *stock)
+{
+    return (CcProductionContext){.producer_id = sim->player.id,
+        .storage_id = sim->player.id, .location_id = site->id, .stock = stock,
+        .capacity = 1, .output_limit = site->condition < 100 ? 1 : 0,
+        .work_available = 2, .condition = site->condition,
+        .enabled = sim->schema_version >= 66U && site->accessible};
+}
+
+CcProductionReceipt CcSimPlanRoadSiteRepair(const CcSim *sim, CcId site_id)
+{
+    const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+    if (site == NULL || site->id != site_id)
+        return (CcProductionReceipt){.gate = CC_PRODUCTION_CLOSED, .blocked_good = CC_GOOD_COUNT};
+    int32_t stock[CC_GOOD_COUNT];
+    memcpy(stock, sim->player.cargo, sizeof(stock));
+    CcProductionContext context = RoadSiteRepairContext(sim, site, stock);
+    return CcProductionPlan(&RoadSiteRepairRecipe, &context);
+}
+
+static bool ApplyRepairRoadSite(CcSim *sim, const CcCommand *command,
+                                char *error, size_t error_capacity)
+{
+    CcProductionReceipt plan = CcSimPlanRoadSiteRepair(sim, command->target_id);
+    if (plan.gate != CC_PRODUCTION_READY) {
+        SetError(error, error_capacity, plan.gate == CC_PRODUCTION_CLOSED ?
+            "Reach an open road site first." : plan.gate == CC_PRODUCTION_OUTPUT_FULL ?
+            "This site is in full repair." :
+            "Bring two Tools and one Wood; repair uses one Tool and one Wood.");
+        return false;
+    }
+    CcRoadSite *site = &sim->road_sites[CcSimJourneyRoadSiteStop(sim) - sim->road_sites];
+    CcProductionContext context = RoadSiteRepairContext(sim, site, sim->player.cargo);
+    CcProductionReceipt receipt = CcProductionRun(&RoadSiteRepairRecipe, &context);
+    int32_t gain = MinimumI32(10, 100 - site->condition);
+    for (int32_t watch = 0; watch < receipt.work; ++watch) AdvanceJourneyRestWatch(sim);
+    site->condition += gain;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+        "The company repairs %.40s in two watches, using one Tool and one Wood. Condition rises by %d to %d.",
+        site->name, gain, site->condition);
+    CcEvent *event = PushEvent(sim, CC_EVENT_JOURNEY_BREAK, sim->player.id,
+        site->id, sim->journey.parent_event_id, gain, text);
+    sim->journey.parent_event_id = event->id;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool ApplyClearRoadSite(CcSim *sim, const CcCommand *command,
                                char *error, size_t error_capacity)
 {
@@ -19015,6 +19071,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_LODGE_ROAD_HOUSE:
             return ApplyJourneyStopAction(
                 sim, command, error, error_capacity);
+        case CC_COMMAND_REPAIR_ROAD_SITE:
+            return ApplyRepairRoadSite(sim, command, error, error_capacity);
         case CC_COMMAND_TRANSFER_ROAD_SITE:
             return ApplyRoadSiteTransfer(sim, command, error, error_capacity);
         case CC_COMMAND_CLEAR_ROAD_SITE:
@@ -19336,7 +19394,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 64U
+#define CC_NEWEST_LEGACY_SCHEMA 65U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -19354,7 +19412,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 64U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 65U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },

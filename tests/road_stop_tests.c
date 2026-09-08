@@ -1,5 +1,7 @@
 #include "persistence/cc_save.h"
 #include "test_support.h"
+#include "sim/cc_production.h"
+#include "metagame/cc_metagame.h"
 
 #include <sqlite3.h>
 #include <string.h>
@@ -396,8 +398,106 @@ static void CheckCarriageDelivery(void)
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
+static void CheckRepairs(void)
+{
+    const char *path = "road-repair-test.ccsave";
+    CC_CHECK(CcSimPlanRoadSiteRepair(NULL, 0).gate == CC_PRODUCTION_CLOSED);
+    for (int32_t slot = 0; slot < CC_MAX_ROAD_SITES; ++slot) {
+        for (int32_t reverse = 0; reverse < 2; ++reverse) {
+            PrepareStop(slot, reverse != 0);
+            CcRoadSite *site = &sim.road_sites[slot];
+            site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE;
+            site->condition = 44;
+            sim.player.cargo[CC_GOOD_TOOLS] = 2;
+            sim.player.cargo[CC_GOOD_WOOD] = 1;
+            sim.clock.minute_subticks = CC_WORLD_DAY_SUBTICKS - 1;
+            int64_t time = (int64_t)sim.current_day * CC_WORLD_DAY_SUBTICKS + sim.clock.minute_subticks;
+            int32_t progress = sim.carriage.progress_milli, elapsed = sim.journey.elapsed_subticks;
+            uint64_t before = CcSimHash(&sim);
+            CcProductionReceipt plan = CcSimPlanRoadSiteRepair(&sim, site->id);
+            CC_CHECK(plan.gate == CC_PRODUCTION_READY && plan.inputs[0] == 1 && plan.inputs[1] == 1 && plan.work == 2);
+            CC_CHECK(CcSimHash(&sim) == before);
+            CcCommand repair = {.kind = CC_COMMAND_REPAIR_ROAD_SITE, .target_id = site->id};
+            (void)remove(path);
+            CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+            CC_CHECK(journal != NULL);
+            CC_CHECK(CcJournalApply(journal, &sim, &repair, error, sizeof(error)));
+            CC_CHECK(site->condition == 54 && site->accessible);
+            CC_CHECK(sim.player.cargo[CC_GOOD_TOOLS] == 1 && sim.player.cargo[CC_GOOD_WOOD] == 0);
+            CC_CHECK(sim.carriage.progress_milli == progress && sim.journey.elapsed_subticks == elapsed);
+            CC_CHECK(CcSimJourneyRoadSiteStop(&sim) == site);
+            CC_CHECK((int64_t)sim.current_day * CC_WORLD_DAY_SUBTICKS + sim.clock.minute_subticks == time + 2 * CC_WORLD_WATCH_SUBTICKS);
+            CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+            uint64_t after = CcSimHash(&sim);
+            CC_CHECK(!CcJournalApply(journal, &sim, &repair, error, sizeof(error)));
+            CC_CHECK(CcSimHash(&sim) == after);
+            CC_CHECK(CcJournalFlush(journal, &sim, error, sizeof(error)));
+            CcJournalAbandon(&journal);
+            journal = CcJournalResume(path, &restored, error, sizeof(error));
+            CC_CHECK(journal != NULL && CcSimHash(&restored) == after);
+            CC_CHECK(restored.road_sites[slot].condition == 54);
+            CC_CHECK(CcJournalClose(&journal, &restored, error, sizeof(error)));
+            CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)) && CcSimHash(&restored) == after);
+            (void)remove(path);
+        }
+    }
+    for (int32_t failure = 0; failure < 6; ++failure) {
+        PrepareStop(2, false);
+        CcRoadSite *site = &sim.road_sites[2];
+        site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE; site->condition = 97;
+        sim.player.cargo[CC_GOOD_TOOLS] = 2; sim.player.cargo[CC_GOOD_WOOD] = 1;
+        CcCommand repair = {.kind = CC_COMMAND_REPAIR_ROAD_SITE, .target_id = site->id};
+        if (failure == 0) { site->accessible = false; site->blocker = CC_ROAD_SITE_BLOCKER_TREE; }
+        if (failure == 1) repair.target_id = sim.road_sites[3].id;
+        if (failure == 2) sim.player.cargo[CC_GOOD_TOOLS] = 1;
+        if (failure == 3) sim.player.cargo[CC_GOOD_WOOD] = 0;
+        if (failure == 4) site->condition = 100;
+        if (failure == 5) sim.schema_version = 65;
+        uint64_t hash = CcSimHash(&sim);
+        CC_CHECK(!CcSimApply(&sim, &repair, error, sizeof(error)) && CcSimHash(&sim) == hash);
+    }
+    PrepareStop(2, false);
+    CcRoadSite *site = &sim.road_sites[2];
+    site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE; site->condition = 97;
+    sim.player.cargo[CC_GOOD_TOOLS] = 2; sim.player.cargo[CC_GOOD_WOOD] = 1;
+    sim.schema_version = 65;
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    sim = restored;
+    CC_CHECK(sim.schema_version == CC_SIM_SCHEMA_VERSION && site->condition == 97);
+    CcCommand repair = {.kind = CC_COMMAND_REPAIR_ROAD_SITE, .target_id = site->id};
+    CC_CHECK(CcSimApply(&sim, &repair, error, sizeof(error)) && site->condition == 100);
+    (void)remove(path);
+}
+
+static void CheckRepairRestartsMill(void)
+{
+    static CcMetagame game;
+    static CcProductionAccounting accounting;
+    PrepareStop(2, false);
+    CcRoadSite *site = &sim.road_sites[2];
+    CC_CHECK(site->kind == CC_ROAD_SITE_MILL);
+    site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE; site->condition = 44;
+    site->stock[CC_GOOD_TOOLS] = 1; site->stock[CC_GOOD_WHEAT] = 6;
+    sim.player.cargo[CC_GOOD_TOOLS] = 2; sim.player.cargo[CC_GOOD_WOOD] = 1;
+    CC_CHECK(CcSimPlanRoadSite(&sim, site).gate == CC_PRODUCTION_CONDITION);
+    CcMetagameInit(&game, 42);
+    game.sim = sim;
+    char output[2048];
+    CC_CHECK(CcMetagameExecute(&game, "road repair", output, sizeof(output)));
+    sim = game.sim;
+    CC_CHECK(site->condition == 54 && site->stock[CC_GOOD_WHEAT] == 6 && site->stock[CC_GOOD_BREAD] == 0);
+    CC_CHECK(CcSimPlanRoadSite(&sim, site).gate == CC_PRODUCTION_READY);
+    CcSimAdvanceDaysWithProductionAccounting(&sim, 7, NULL, NULL, &accounting);
+    CC_CHECK(accounting.sites[2].input[CC_GOOD_WHEAT] == 2);
+    CC_CHECK(accounting.sites[2].output[CC_GOOD_BREAD] == 2);
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+}
+
 int main(void)
 {
+    CheckRepairs();
+    CheckRepairRestartsMill();
     CheckChoices();
     CheckPersistence();
     CheckClearing();

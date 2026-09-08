@@ -295,6 +295,15 @@ static int RunWorldCardRegression(void)
         stored = 0;
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) stored += site->stock[good];
         CARD_CHECK(stored == 0, "Loading must return the stored bundle to the carriage.");
+        sim.player.cargo[CC_GOOD_TOOLS] = 2;
+        sim.player.cargo[CC_GOOD_WOOD] = 1;
+        sim.road_sites[site - sim.road_sites].condition = 44;
+        CARD_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)), error);
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_REPAIR_ROAD_SITE, 0, mode != 0),
+            "An open site needs matching repair card and world actions.");
+        CARD_INPUT();
+        CARD_CHECK(site->condition == 54 && sim.player.cargo[CC_GOOD_TOOLS] == 1 && sim.player.cargo[CC_GOOD_WOOD] == 0,
+            "Repair uses local cargo and restores saved condition.");
         ContextActionSet opened = BuildContextActions(&sim, &local, view, selected, 0);
         CARD_CHECK(WorldCardIndex(&opened, CONTEXT_ACTION_CLEAR_ROAD_SITE, 0) < 0,
             "An opened site offers its remaining actions.");

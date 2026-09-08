@@ -1166,7 +1166,7 @@ if(BUILD_TESTING)
     add_test(NAME local_session_round_trip COMMAND client_session_tests)
 
     add_executable(road_stop_tests tests/road_stop_tests.c)
-    target_link_libraries(road_stop_tests PRIVATE crownless_persistence)
+    target_link_libraries(road_stop_tests PRIVATE crownless_persistence crownless_metagame)
     cc_strict_warnings(road_stop_tests)
     add_test(NAME roadside_camp_choices COMMAND road_stop_tests)
 

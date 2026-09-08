@@ -52,7 +52,7 @@ bool CcCoopApply(CcSim *sim, const char *action, CcId target,
     }
     CcCommand command = { .target_id = target, .good = (CcGood)good, .amount = amount };
     if (action != NULL) {
-        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_TRANSFER_ROAD_SITE; ++i) {
+        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_REPAIR_ROAD_SITE; ++i) {
             if (strcmp(action, CcCoopActionName((CcCommandKind)i)) == 0) command.kind = (CcCommandKind)i;
         }
     }

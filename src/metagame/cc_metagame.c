@@ -2271,9 +2271,10 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                 .amount = strcmp(first, "unload") == 0 ? 1 : -1};
             return ApplyCommand(metagame, &transfer, output, output_capacity);
         }
-        if (first != NULL && strcmp(first, "clear") == 0) {
+        if (first != NULL && (strcmp(first, "clear") == 0 || strcmp(first, "repair") == 0)) {
             const CcRoadSite *site = CcSimJourneyRoadSiteStop(&metagame->sim);
-            CcCommand clear = {.kind = CC_COMMAND_CLEAR_ROAD_SITE,
+            CcCommand clear = {.kind = strcmp(first, "repair") == 0 ?
+                CC_COMMAND_REPAIR_ROAD_SITE : CC_COMMAND_CLEAR_ROAD_SITE,
                 .target_id = site != NULL ? site->id : 0};
             return ApplyCommand(metagame, &clear, output, output_capacity);
         }

@@ -127,6 +127,7 @@ typedef CcProductionAccounting CcRoadProductionAccounting;
 CcProductionReceipt CcSimPlanTreasureWork(const CcSim *sim, const CcSettlement *settlement);
 
 bool CcRoadSiteRecipe(const CcRoadSite *site, CcProductionRecipe *recipe);
+CcProductionReceipt CcSimPlanRoadSiteRepair(const CcSim *sim, CcId site_id);
 CcProductionReceipt CcSimPlanRoadSite(const CcSim *sim, const CcRoadSite *site);
 void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
     CcNutritionAccounting *nutrition, CcSmithyAccounting *smithy,

@@ -90,6 +90,7 @@ static void BuildWorldActionTargets(const CcSim *sim, LocalState *local, ClientV
                 width = 5; height = 1; depth = 5;
                 break;
             case CONTEXT_ACTION_TRANSFER_ROAD_SITE:
+            case CONTEXT_ACTION_REPAIR_ROAD_SITE:
             case CONTEXT_ACTION_CLEAR_ROAD_SITE:
             case CONTEXT_ACTION_CAMP_ROAD_SITE: {
                 position = WorldActionAlongRoad(local, carriage, 2, 7);
