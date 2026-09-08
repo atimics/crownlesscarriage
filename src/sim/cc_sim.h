@@ -57,7 +57,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 80
+#define CC_SIM_SCHEMA_VERSION 81
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -1801,6 +1801,12 @@ typedef struct CcArchiveRecruitmentOrder {
     int32_t labor_days, trainer_labor_days, last_work_day, wages_paid;
 } CcArchiveRecruitmentOrder;
 
+typedef struct CcArchiveStaff {
+    CcId person_ids[CC_MAX_SCRIBES], seat_id;
+    int32_t legacy_scribes;
+    bool active;
+} CcArchiveStaff;
+
 typedef struct CcGrainSupply {
     CcId organiser_id, supplier_id, route_id, shipment_id;
     CcMoney purse, spent;
@@ -1867,6 +1873,7 @@ typedef struct CcSim {
     CcArchives archives;
     CcArchiveRecruitmentOrder archive_recruitment;
     int32_t archive_training_week;
+    CcArchiveStaff archive_staff;
     CcGossip gossip[CC_MAX_GOSSIP];
     CcGossipCarrier gossip_carriers[CC_MAX_GOSSIP_CARRIERS];
     CcId gossip_last_event_id;
@@ -1923,7 +1930,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 184400,
+_Static_assert(sizeof(CcSim) == 184448,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

@@ -94,6 +94,7 @@ add_library(crownless_sim
     src/sim/cc_sim_hash.c
     src/sim/cc_occupations.c
     src/sim/cc_gossip_topics.c
+    src/sim/cc_archive_staff.c
     src/sim/cc_archive_recruitment.c
     src/sim/cc_archive_queries.c
     src/sim/cc_archive_supply.c
@@ -1619,6 +1620,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(material_chain_tests)
     cc_large_sim_stack(material_chain_tests)
     add_test(NAME material_chain_proofs COMMAND material_chain_tests)
+
+    add_executable(archive_staff_tests tests/archive_staff_tests.c)
+    target_link_libraries(archive_staff_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(archive_staff_tests)
+    add_test(NAME archive_named_staff COMMAND archive_staff_tests)
 
     add_executable(archive_training_tests tests/archive_training_tests.c)
     target_link_libraries(archive_training_tests PRIVATE crownless_persistence)
