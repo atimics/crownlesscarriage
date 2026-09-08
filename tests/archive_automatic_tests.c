@@ -145,8 +145,11 @@ int main(void)
     CC_CHECK(journal != NULL);
     for (int day = 0; day < 18; ++day)
         CC_CHECK(CcJournalAdvanceDays(journal, &sim, 1, error, sizeof(error)));
-    CC_CHECK(sim.archive_recruitment.status == 0 && sim.archives.scribes == 1);
-    CC_CHECK(CcSimArchiveStaffCount(&sim) == 1);
+    CC_CHECK(sim.archive_recruitment.status == 0);
+    CC_CHECK(CcSimArchiveStaffWorking(&sim, sim.archive_staff.person_ids[0]));
+    CC_CHECK(sim.archive_staff.person_ids[1] == 0 && sim.archive_staff.person_ids[2] == 0 &&
+             sim.archive_staff.person_ids[3] == 0);
+    CC_CHECK(CcSimArchiveStaffCount(&sim) == sim.archive_staff.legacy_scribes + 1);
     bool plain = false;
     for (int i = 0; i < sim.treasure_count; ++i)
         if (sim.treasures[i].owner_id == sim.archive_staff.seat_id &&
