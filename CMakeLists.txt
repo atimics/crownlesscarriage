@@ -17,6 +17,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 option(CC_BUILD_CLIENT "Build the raylib fixed-pixel three-quarter 3D client" ON)
+option(CC_BUILD_GRAPHICS_PROBES "Build standalone GPU regression probes" OFF)
 option(CC_BUILD_BENCHMARKS "Build repeatable headless benchmarks" ON)
 option(CC_ENABLE_STRICT_WARNINGS "Enable strict compiler warnings" ON)
 option(CC_WARNINGS_AS_ERRORS "Treat project warnings as build errors" OFF)
@@ -267,6 +268,11 @@ if(CC_BUILD_CLIENT)
         GIT_SHALLOW TRUE
     )
     FetchContent_MakeAvailable(raylib)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" "-DRAYLIB_SOURCE_DIR=${raylib_SOURCE_DIR}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchRaylibMatrices.cmake"
+        COMMAND_ERROR_IS_FATAL ANY
+    )
     if(TARGET raylib)
         get_target_property(CC_RAYLIB_IMPORTED raylib IMPORTED)
         if(NOT CC_RAYLIB_IMPORTED)
@@ -274,6 +280,25 @@ if(CC_BUILD_CLIENT)
             if(EMSCRIPTEN)
                 set_property(TARGET raylib PROPERTY C_EXTENSIONS ON)
             endif()
+        endif()
+    endif()
+
+    if(CC_BUILD_GRAPHICS_PROBES)
+        add_executable(matrix_upload_tests tests/matrix_upload_tests.c)
+        target_link_libraries(matrix_upload_tests PRIVATE raylib)
+        cc_strict_warnings(matrix_upload_tests)
+        if(EMSCRIPTEN)
+            set_property(TARGET matrix_upload_tests PROPERTY C_EXTENSIONS ON)
+            set_target_properties(matrix_upload_tests PROPERTIES
+                OUTPUT_NAME matrix-upload SUFFIX ".html"
+                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/matrix-probe")
+            target_link_options(matrix_upload_tests PRIVATE
+                "-sMIN_WEBGL_VERSION=2" "-sMAX_WEBGL_VERSION=2")
+        else()
+            add_custom_target(run_matrix_upload_tests
+                COMMAND matrix_upload_tests DEPENDS matrix_upload_tests
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                USES_TERMINAL)
         endif()
     endif()
 
