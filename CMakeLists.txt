@@ -1380,6 +1380,13 @@ if(BUILD_TESTING)
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/transition_json_tests.py
                          $<TARGET_FILE:campaign_json_fixture>
                          $<TARGET_FILE:ritual_json_fixture>)
+        add_executable(road_network_fixture tests/road_network_fixture.c)
+        target_link_libraries(road_network_fixture PRIVATE crownless_persistence)
+        cc_strict_warnings(road_network_fixture)
+        add_test(NAME road_network_json
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/road_network_tests.py
+                         $<TARGET_FILE:road_network_fixture>)
         add_executable(road_observation_tests tests/road_observation_tests.c)
         target_link_libraries(road_observation_tests PRIVATE crownless_sim)
         cc_strict_warnings(road_observation_tests)

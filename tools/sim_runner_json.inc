@@ -10,6 +10,8 @@ static void JsonString(const char *value)
     putchar('"');
 }
 
+#include "sim_runner_network.inc"
+
 static void JsonStock(const int32_t *values)
 {
     putchar('[');
@@ -195,6 +197,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         sim->dragon.id, sim->dragon.slain ? "true" : "false", sim->dragon.slain_day,
         (int)sim->dragon.life_stage, (int)sim->dragon.activity, sim->dragon.body_condition,
         sim->dragon.crown_strength, sim->dragon.egg_count);
+    printf(",\"road_network\":"); JsonRoadNetwork(sim);
     printf(",\"threats\":"); JsonThreatSnapshot(sim);
     printf(",\"retained_history\":"); JsonRetainedHistory(sim);
     printf(",\"campaign_launch\":"); JsonCampaignPlan(sim);

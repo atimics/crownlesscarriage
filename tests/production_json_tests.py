@@ -33,6 +33,7 @@ with tempfile.TemporaryDirectory() as directory:
             assert loaded['campaign_launch'] == rows[-1]['campaign_launch']
             assert loaded['ritual_offering'] == rows[-1]['ritual_offering']
             assert loaded['retained_history'] == rows[-1]['retained_history']
+            assert loaded['road_network'] == rows[-1]['road_network']
             assert [route['context'] for route in loaded['routes']] == [route['context'] for route in rows[-1]['routes']]
             for route in loaded['routes']:
                 assert route['observation']['start_day_exclusive'] == 731
