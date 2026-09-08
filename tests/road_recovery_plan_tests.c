@@ -130,5 +130,34 @@ int main(void)
     CC_CHECK(CcSimSettlement(&sim, sim.routes[0].to_id)->stock[CC_GOOD_STONE] ==
         CcSimSettlement(&blocked, blocked.routes[0].to_id)->stock[CC_GOOD_STONE] - 2);
     CC_CHECK(CcSimTrackedGold(&sim) == CcSimTrackedGold(&blocked));
+    /* An unfunded urgent road leaves this month's crew available for a funded road. */
+    Fixture();
+    CC_CHECK(sim.route_count >= 2);
+    for (int32_t i = 0; i < sim.route_count; ++i) {
+        sim.routes[i].closed = i < 2; sim.routes[i].condition = i < 2 ? 40 : 100;
+    }
+    sim.routes[0].from_id = sim.settlements[0].id;
+    sim.routes[0].to_id = sim.settlements[1].id;
+    sim.routes[1].from_id = sim.settlements[1].id;
+    sim.routes[1].to_id = sim.settlements[2].id;
+    sim.routes[1].smuggler_route = false;
+    for (int32_t i = 0; i < 3; ++i) {
+        sim.settlements[i].kingdom_id = sim.kingdoms[0].id;
+        sim.settlements[i].population = 300;
+        sim.settlements[i].hunger = i == 0 ? 100 : 0;
+        memset(sim.settlements[i].stock, 0, sizeof(sim.settlements[i].stock));
+    }
+    sim.settlements[0].stock[CC_GOOD_WOOD] = 1000;
+    sim.settlements[2].stock[CC_GOOD_WOOD] = 8;
+    sim.settlements[2].stock[CC_GOOD_STONE] = 8;
+    sim.kingdoms[0].treasury = 1000;
+    sim.current_day = 27;
+    blocked = sim; blocked.schema_version = 60U;
+    CcSimAdvanceDays(&sim, 1); CcSimAdvanceDays(&blocked, 1);
+    CC_CHECK(sim.routes[0].closed && blocked.routes[0].closed);
+    CC_CHECK(!sim.routes[1].closed && blocked.routes[1].closed);
+    CC_CHECK(sim.settlements[2].stock[CC_GOOD_STONE] ==
+        blocked.settlements[2].stock[CC_GOOD_STONE] - 2);
+    CC_CHECK(CcSimTrackedGold(&sim) == CcSimTrackedGold(&blocked));
     return 0;
 }

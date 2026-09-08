@@ -221,3 +221,8 @@ endpoints. A paid kit needs two Wood, two Stone, and 24 treasury coins; a local
 kit needs two Wood, two Stone, one Tool, and four food rations. The shared funding
 check drives both endpoint selection and execution. Existing repair priorities
 and historic schema behavior are preserved.
+
+Schema 61 ranks funded kingdom repair jobs by the existing recovery score. A road
+waiting for its kit keeps its condition and demand while an eligible road can
+use the month's crew. The kingdom still completes at most one such job per
+monthly update. Schemas through 60 preserve the earlier selection order.
