@@ -5042,42 +5042,79 @@ static void CompleteTreasure(CcSim *sim, CcSettlement *settlement)
     settlement->treasure_work = 0;
 }
 
+const char *CcSmithyStatusName(CcSmithyStatus status)
+{
+    switch (status) {
+        case CC_SMITHY_READY: return "Ready";
+        case CC_SMITHY_SERVICE_UNAVAILABLE: return "Smithy service required";
+        case CC_SMITHY_ZERO_CAPACITY: return "Production capacity required";
+        case CC_SMITHY_RESERVE_MET: return "Reserve target met";
+        case CC_SMITHY_IRON_REQUIRED: return "Iron required";
+        case CC_SMITHY_WOOD_REQUIRED: return "Wood required";
+    }
+    return "Unknown smithy state";
+}
+
+static CcSmithyStatus SmithyLineStatus(int32_t capacity, int32_t gap,
+                                      int32_t iron, int32_t wood,
+                                      int32_t iron_cost, int32_t wood_cost)
+{
+    if (capacity <= 0) return CC_SMITHY_ZERO_CAPACITY;
+    if (gap <= 0) return CC_SMITHY_RESERVE_MET;
+    if (iron < iron_cost) return CC_SMITHY_IRON_REQUIRED;
+    if (wood_cost > 0 && wood < wood_cost) return CC_SMITHY_WOOD_REQUIRED;
+    return CC_SMITHY_READY;
+}
+
+CcSmithyPlan CcSimPlanSmithy(const CcSim *sim,
+                            const CcSettlement *settlement)
+{
+    CcSmithyPlan plan = {0};
+    plan.tools_status = CC_SMITHY_SERVICE_UNAVAILABLE;
+    plan.weapons_status = CC_SMITHY_SERVICE_UNAVAILABLE;
+    if (sim == NULL || settlement == NULL ||
+        !CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) return plan;
+    bool legacy_smithy = sim->schema_version < 27U;
+    int32_t iron = settlement->stock[CC_GOOD_IRON];
+    int32_t wood = settlement->stock[CC_GOOD_WOOD];
+    int32_t tool_gap = MaximumI32(0, settlement->reserve_target[CC_GOOD_TOOLS] * 2 -
+                                     settlement->stock[CC_GOOD_TOOLS]);
+    int32_t tool_capacity = MaximumI32(0, settlement->production[CC_GOOD_TOOLS]);
+    int32_t tool_material = iron / 2;
+    if (!legacy_smithy) tool_material = MinimumI32(tool_material, wood);
+    plan.tools_status = SmithyLineStatus(tool_capacity, tool_gap, iron, wood,
+                                         2, legacy_smithy ? 0 : 1);
+    plan.tools_made = MinimumI32(tool_capacity, MinimumI32(tool_gap, tool_material));
+    iron -= plan.tools_made * 2;
+    if (!legacy_smithy) wood -= plan.tools_made;
+
+    int32_t weapon_gap = MaximumI32(0,
+        EffectiveReserveTarget(sim, settlement, CC_GOOD_WEAPONS) * 2 -
+        settlement->stock[CC_GOOD_WEAPONS]);
+    int32_t weapon_capacity = MaximumI32(0, settlement->production[CC_GOOD_WEAPONS]);
+    int32_t weapon_material = iron / 3;
+    if (!legacy_smithy) weapon_material = MinimumI32(weapon_material, wood / 2);
+    plan.weapons_status = SmithyLineStatus(weapon_capacity, weapon_gap, iron, wood,
+                                           3, legacy_smithy ? 0 : 2);
+    plan.weapons_made = MinimumI32(weapon_capacity,
+                                  MinimumI32(weapon_gap, weapon_material));
+    plan.iron_used = plan.tools_made * 2 + plan.weapons_made * 3;
+    plan.wood_used = legacy_smithy ? 0 : plan.tools_made + plan.weapons_made * 2;
+    return plan;
+}
+
 static void RunSmithy(CcSim *sim, CcSettlement *settlement)
 {
     if (!CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) return;
     bool legacy_smithy = sim->schema_version < 27U;
     int32_t iron_before = settlement->stock[CC_GOOD_IRON];
     int32_t wood_before = settlement->stock[CC_GOOD_WOOD];
-    int32_t tools_made = 0;
-    int32_t tool_gap = MaximumI32(0, settlement->reserve_target[CC_GOOD_TOOLS] * 2 -
-                                     settlement->stock[CC_GOOD_TOOLS]);
-    int32_t tool_capacity = MaximumI32(0, settlement->production[CC_GOOD_TOOLS]);
-    int32_t tool_material = settlement->stock[CC_GOOD_IRON] / 2;
-    if (!legacy_smithy) {
-        tool_material = MinimumI32(
-            tool_material, settlement->stock[CC_GOOD_WOOD]);
-    }
-    tools_made = MinimumI32(
-        tool_capacity, MinimumI32(tool_gap, tool_material));
-    settlement->stock[CC_GOOD_IRON] -= tools_made * 2;
-    if (!legacy_smithy) settlement->stock[CC_GOOD_WOOD] -= tools_made;
+    CcSmithyPlan plan = CcSimPlanSmithy(sim, settlement);
+    int32_t tools_made = plan.tools_made;
+    int32_t weapons_made = plan.weapons_made;
+    settlement->stock[CC_GOOD_IRON] -= plan.iron_used;
+    settlement->stock[CC_GOOD_WOOD] -= plan.wood_used;
     settlement->stock[CC_GOOD_TOOLS] += tools_made;
-
-    int32_t weapons_made = 0;
-    int32_t weapon_gap = MaximumI32(0,
-        EffectiveReserveTarget(sim, settlement, CC_GOOD_WEAPONS) * 2 -
-        settlement->stock[CC_GOOD_WEAPONS]);
-    int32_t weapon_capacity = MaximumI32(
-        0, settlement->production[CC_GOOD_WEAPONS]);
-    int32_t weapon_material = settlement->stock[CC_GOOD_IRON] / 3;
-    if (!legacy_smithy) {
-        weapon_material = MinimumI32(
-            weapon_material, settlement->stock[CC_GOOD_WOOD] / 2);
-    }
-    weapons_made = MinimumI32(
-        weapon_capacity, MinimumI32(weapon_gap, weapon_material));
-    settlement->stock[CC_GOOD_IRON] -= weapons_made * 3;
-    if (!legacy_smithy) settlement->stock[CC_GOOD_WOOD] -= weapons_made * 2;
     settlement->stock[CC_GOOD_WEAPONS] += weapons_made;
 
     int32_t smith_batches = tools_made + weapons_made;

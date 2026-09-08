@@ -168,8 +168,66 @@ static void CheckWeakestRouteUpkeep(void)
     CC_CHECK(sim.kingdoms[0].treasury == control.kingdoms[0].treasury);
 }
 
+static void CheckSmithyPlan(void)
+{
+    static CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x5eed0001));
+    uint64_t before = CcSimHash(&sim);
+    CcSmithyPlan plan = CcSimPlanSmithy(&sim, &sim.settlements[3]);
+    CC_CHECK(plan.tools_status == CC_SMITHY_ZERO_CAPACITY);
+    CC_CHECK(plan.weapons_status == CC_SMITHY_ZERO_CAPACITY);
+    CC_CHECK(plan.iron_used == 0 && plan.wood_used == 0);
+    plan = CcSimPlanSmithy(&sim, &sim.settlements[2]);
+    CC_CHECK(plan.tools_status == CC_SMITHY_ZERO_CAPACITY);
+    CC_CHECK(CcSimHash(&sim) == before);
+
+    CcSettlement *place = IsolatedSettlement(&sim);
+    plan = CcSimPlanSmithy(&sim, place);
+    CC_CHECK(plan.tools_status == CC_SMITHY_SERVICE_UNAVAILABLE);
+    place->service_mask |= Service(CC_SERVICE_SMITHY);
+    place->production[CC_GOOD_TOOLS] = 1;
+    place->production[CC_GOOD_WEAPONS] = 1;
+    place->reserve_target[CC_GOOD_TOOLS] = 10;
+    place->reserve_target[CC_GOOD_WEAPONS] = 10;
+    plan = CcSimPlanSmithy(&sim, place);
+    CC_CHECK(plan.tools_status == CC_SMITHY_IRON_REQUIRED);
+    place->stock[CC_GOOD_IRON] = 5;
+    plan = CcSimPlanSmithy(&sim, place);
+    CC_CHECK(plan.tools_status == CC_SMITHY_WOOD_REQUIRED);
+    place->stock[CC_GOOD_WOOD] = 2;
+    plan = CcSimPlanSmithy(&sim, place);
+    CC_CHECK(plan.tools_made == 1 && plan.weapons_made == 0);
+    CC_CHECK(plan.weapons_status == CC_SMITHY_WOOD_REQUIRED);
+    place->stock[CC_GOOD_WOOD] = 3;
+    before = CcSimHash(&sim);
+    plan = CcSimPlanSmithy(&sim, place);
+    CC_CHECK(plan.tools_status == CC_SMITHY_READY);
+    CC_CHECK(plan.weapons_status == CC_SMITHY_READY);
+    CC_CHECK(plan.tools_made == 1 && plan.weapons_made == 1);
+    CC_CHECK(plan.iron_used == 5 && plan.wood_used == 3);
+    CC_CHECK(CcSimHash(&sim) == before);
+    CcSimAdvanceDays(&sim, 7);
+    CC_CHECK(place->stock[CC_GOOD_IRON] == 0);
+    CC_CHECK(place->stock[CC_GOOD_WOOD] == 0);
+    CC_CHECK(place->stock[CC_GOOD_TOOLS] == plan.tools_made);
+    CC_CHECK(place->stock[CC_GOOD_WEAPONS] == plan.weapons_made);
+
+    place->stock[CC_GOOD_TOOLS] = 20;
+    plan = CcSimPlanSmithy(&sim, place);
+    CC_CHECK(plan.tools_status == CC_SMITHY_RESERVE_MET);
+    place->stock[CC_GOOD_TOOLS] = 0;
+    place->stock[CC_GOOD_IRON] = 5;
+    sim.schema_version = 26U;
+    plan = CcSimPlanSmithy(&sim, place);
+    CC_CHECK(plan.tools_made == 1 && plan.weapons_made == 1);
+    CC_CHECK(plan.iron_used == 5 && plan.wood_used == 0);
+    CC_CHECK(strcmp(CcSmithyStatusName(CC_SMITHY_ZERO_CAPACITY),
+                    "Production capacity required") == 0);
+}
+
 int main(void)
 {
+    CheckSmithyPlan();
     CheckRoadUseRecovery();
     CheckWeakestRouteUpkeep();
     CC_CHECK(CC_GOOD_BREAD == 0);
