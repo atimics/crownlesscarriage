@@ -28,3 +28,5 @@ Open/closed days sample the road's closed flag after each daily update. Exact cl
 Inspection uses const state. The JSON mode advances the same daily world loop with caller-owned accounting. Tests compare its state hashes against ordinary yearly text output and both final saves, then reconcile site stocks and all freight quantities. The report includes the actual stock and cargo, so endpoint stock can be checked separately from production and transport.
 
 Validation covers the strict Debug build, the headless suite and a focused JSON test: repeated bytes, exact checkpoint days, baseline/opened fixtures, current save reload, read-only reporting, daily/yearly hash parity, reserve-aware material conservation, cargo conservation, incompatible options and manifest provenance.
+
+The recorded clean run used commit `457bef52f0829d915454ae30b51f9db5524265f3` in Release mode. All four 40-year runs completed; each fixture produced 41 checkpoints and matched its repeat byte for byte. `manifest.json` preserves their exact commands and digests. All 80 Debug headless tests passed; the focused JSON test also passed against this Release runner.
