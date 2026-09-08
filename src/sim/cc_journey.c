@@ -192,3 +192,23 @@ int32_t CcSimJourneyEtaMinutes(const CcSim *sim)
                      CC_WORLD_MINUTE_SUBTICKS);
 }
 
+const CcRoadSite *CcSimJourneyRoadSiteStop(const CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 39U ||
+        !sim->journey.active ||
+        sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) return NULL;
+    const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
+    if (route == NULL) return NULL;
+    for (int32_t i = 0; i < sim->road_site_count; ++i) {
+        const CcRoadSite *site = &sim->road_sites[i];
+        if (site->route_id != route->id ||
+            (sim->journey.road_site_stop_mask & (UINT32_C(1) << i)) != 0U)
+            continue;
+        int32_t progress = sim->journey.origin_id == route->from_id ?
+            site->progress_milli : 1000 - site->progress_milli;
+        int32_t distance = sim->carriage.progress_milli - progress;
+        if (distance >= -20 && distance <= 30) return site;
+    }
+    return NULL;
+}
+
