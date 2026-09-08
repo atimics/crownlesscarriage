@@ -2139,7 +2139,9 @@ static int32_t WarExtraConsumption(const CcSim *sim,
                                    const CcSettlement *place,
                                    CcGood good)
 {
-    if (!IsWarSeat(place)) return 0;
+    if (sim == NULL || !IsWarSeat(place)) return 0;
+    if (good != CC_GOOD_FOOD && good != CC_GOOD_TOOLS &&
+        (good != CC_GOOD_WOOL || sim->schema_version < 32U)) return 0;
     int32_t burden = CcSimWarBurdenAtSettlement(sim, place->id);
     if (burden < 20) return 0;
     if (good == CC_GOOD_FOOD) return MaximumI32(1, burden / 25);
