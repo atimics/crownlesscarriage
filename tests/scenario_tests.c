@@ -26,6 +26,11 @@ static void AdvanceUntilStop(CcSim *sim)
     char error[192];
     while (sim->journey.active) {
         if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+            const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+            if (site != NULL) {
+                CcCommand pass = {.kind=CC_COMMAND_PASS_ROAD_SITE,.target_id=site->id};
+                CC_CHECK(CcSimApply(sim,&pass,error,sizeof(error)));
+            }
             CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
         } else if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
             CcCommand rest = {
