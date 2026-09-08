@@ -1,0 +1,8 @@
+{
+  "fault": "Omit source name from hash and replace changed source name during save",
+  "mode": "--save-only",
+  "exit_code": 1,
+  "stderr": "Save round trip omitted characters[listener].knowledge[account].source_name[0]\n/private/tmp/crownless-lifetime-save-fields/tests/character_lifetime_tests.c:86: check failed: false\n",
+  "original_save_sha256": "085499e81d97bff77d2e78cc10b1a877790a39c27f16d7c9b149f69682a63642",
+  "original_hash_sha256": "7b78dede5d04af6f0a4d296bebb3da3b091d497b0d0ecbfc03131eb0cb018e3b"
+}

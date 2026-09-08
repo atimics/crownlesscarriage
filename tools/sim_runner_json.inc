@@ -10,6 +10,17 @@ static void JsonString(const char *value)
     putchar('"');
 }
 
+#include "sim_runner_network.inc"
+
+static void JsonArchiveWork(const CcSim *sim)
+{
+    CcArchiveWorkPlan plan = CcSimArchiveWorkPlan(sim);
+    printf("{\"semantics\":\"held_supply_plan_snapshot\",\"seat_id\":\"%" PRIu64
+           "\",\"nominal_scribes\":%d,\"eligible_scribes\":%d,\"wheat_required\":%d,\"recording_ready\":%s}",
+        plan.seat_id, sim->archives.scribes, plan.eligible_scribes,
+        plan.wheat_required, plan.recording_ready ? "true" : "false");
+}
+
 static void JsonStock(const int32_t *values)
 {
     putchar('[');
@@ -70,6 +81,31 @@ static void JsonThreatSnapshot(const CcSim *sim)
 static const char *const ROAD_RECOVERY_BLOCK_NAMES[] = {
     "invalid", "open", "war_border", "calendar", "abandoned_endpoint",
     "people", "food", "wood", "stone", "tools"};
+
+static void JsonRoadEndpoint(const CcSim *sim, CcId id)
+{
+    const CcSettlement *town = CcSimSettlement(sim, id);
+    if (town == NULL) { printf("null"); return; }
+    printf("{\"id\":\"%" PRIu64 "\",\"kingdom_id\":\"%" PRIu64
+           "\",\"population\":%d,\"inhabited\":%s}",
+        town->id, town->kingdom_id, town->population, town->population > 0 ? "true" : "false");
+}
+
+static void JsonRoadContext(const CcSim *sim, const CcRoute *route)
+{
+    printf("{\"semantics\":\"snapshot\",\"from\":"); JsonRoadEndpoint(sim, route->from_id);
+    printf(",\"to\":"); JsonRoadEndpoint(sim, route->to_id);
+    printf(",\"crosses_kingdom_border\":%s,\"crosses_war_border\":%s,\"smuggler_route\":%s,\"royal_carriage_rules\":[",
+        CcSimRouteCrossesKingdomBorder(sim, route->id) ? "true" : "false",
+        CcSimRouteCrossesWarBorder(sim, route->id) ? "true" : "false",
+        route->smuggler_route ? "true" : "false");
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        printf("%s{\"kingdom_id\":\"%" PRIu64 "\",\"official_route_eligible\":%s}",
+            i ? "," : "", sim->kingdoms[i].id,
+            CcSimRoyalCarriageCanUseRoute(sim, sim->kingdoms[i].id, route->id) ? "true" : "false");
+    }
+    printf("]}");
+}
 
 static void JsonRoadRecovery(const CcSim *sim, CcId route_id)
 {
@@ -161,7 +197,7 @@ static void JsonRetainedHistory(const CcSim *sim)
 static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t year,
     const char *fixture, const char *dragon_policy, const CcNutritionAccounting *nutrition,
     const CcSmithyAccounting *smithy, const CcRoadProductionAccounting *sites,
-    const int32_t *open_days)
+    const RoadObservation *roads)
 {
     CcHungerSnapshot hunger = CcSimHungerSnapshot(sim);
     printf("{\"protocol\":6,\"fixture\":"); JsonString(fixture);
@@ -170,6 +206,8 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         sim->dragon.id, sim->dragon.slain ? "true" : "false", sim->dragon.slain_day,
         (int)sim->dragon.life_stage, (int)sim->dragon.activity, sim->dragon.body_condition,
         sim->dragon.crown_strength, sim->dragon.egg_count);
+    printf(",\"archive_work\":"); JsonArchiveWork(sim);
+    printf(",\"road_network\":"); JsonRoadNetwork(sim);
     printf(",\"threats\":"); JsonThreatSnapshot(sim);
     printf(",\"retained_history\":"); JsonRetainedHistory(sim);
     printf(",\"campaign_launch\":"); JsonCampaignPlan(sim);
@@ -241,9 +279,14 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         const CcRoute *route = &sim->routes[i];
         printf("%s{\"id\":\"%" PRIu64 "\",\"condition\":%d,\"closed\":%s,\"open_days\":%d,\"closed_days\":%d,\"closure_reason\":null",
             i ? "," : "", route->id, route->condition, route->closed ? "true" : "false",
-            open_days[i], sim->current_day - start_day - open_days[i]);
+            roads[i].open_days, sim->current_day - start_day - roads[i].open_days);
         printf(",\"from_id\":\"%" PRIu64 "\",\"to_id\":\"%" PRIu64 "\",\"travel_days\":%d,\"capacity\":%d",
             route->from_id, route->to_id, route->travel_days, route->capacity);
+        printf(",\"context\":"); JsonRoadContext(sim, route);
+        printf(",\"observation\":{\"semantics\":\"run_interval\",\"start_day_exclusive\":%d,\"end_day_inclusive\":%d,\"sampling\":\"after_daily_advance\"}",
+            start_day, sim->current_day);
+        printf(",\"outage\":{\"semantics\":\"run_interval_daily_samples\",\"current_closed_days\":%d,\"longest_closed_days\":%d,\"closed_inhabited_days\":%d}",
+            roads[i].current_closed_days, roads[i].longest_closed_days, roads[i].closed_inhabited_days);
         printf(",\"recovery\":"); JsonRoadRecovery(sim, route->id); putchar('}');
     }
     printf("],\"carriages\":[");

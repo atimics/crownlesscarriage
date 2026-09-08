@@ -1,0 +1,16 @@
+{
+  "checkpoints": 80,
+  "all_fields_match": true,
+  "schemas": [
+    33,
+    37,
+    57,
+    58,
+    73
+  ],
+  "seeds": [
+    42,
+    1592590337
+  ],
+  "state_preserved": true
+}

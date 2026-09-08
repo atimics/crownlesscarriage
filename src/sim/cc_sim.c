@@ -1,5 +1,6 @@
 #include "sim/cc_sim.h"
 #include "sim/cc_identity_internal.h"
+#include "sim/cc_archive_internal.h"
 #include "sim/cc_production_internal.h"
 #include "sim/cc_food_economy_internal.h"
 #include "sim/cc_goods_internal.h"
@@ -44,7 +45,6 @@ static bool DragonIsAliveAndUncrowned(const CcSim *sim);
 static int32_t TakeAllianceGood(CcSim *sim, uint32_t mask, CcGood good,
                                 int32_t quantity);
 static CcId LatestLocalCause(const CcSim *sim, CcId location);
-static const CcSettlement *Scriptorium(const CcSim *sim);
 static void AssignHistoryOffices(CcSim *sim, bool announce);
 static void GrowBanditCamp(CcBanditGroup *bandits);
 
@@ -3393,93 +3393,6 @@ int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good)
            incoming < 0 ? 0 : (int32_t)incoming;
 }
 
-static int32_t ArchiveSpareGrain(const CcSim *sim, const CcSettlement *place)
-{
-    if (place == NULL) return 0;
-    if (sim->schema_version < 58U) return MaximumI32(
-        0, place->stock[CC_GOOD_WHEAT] - CcEconomyWeeklyFoodUse(sim, place) * 2);
-    int32_t rations = CcEconomyNutritionRations(place->stock, CC_NUTRITION_CIVILIAN);
-    int32_t spare = MaximumI32(0, rations - CcEconomyWeeklyFoodUse(sim, place) * 2);
-    /* Two wheat units provide one civilian ration. */
-    return MinimumI32(place->stock[CC_GOOD_WHEAT], spare * 2);
-}
-
-static const CcSettlement *Scriptorium(const CcSim *sim)
-{
-    if (sim == NULL) return NULL;
-    const CcSettlement *fallback = NULL;
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        const CcSettlement *place = &sim->settlements[i];
-        if (CcSettlementIsAbandoned(place)) continue;
-        if (strcmp(place->name, "Gloamgate") == 0) return place;
-        if (fallback == NULL &&
-            (place->function == CC_SETTLEMENT_MARKET ||
-             place->function == CC_SETTLEMENT_CAPITAL)) {
-            fallback = place;
-        }
-    }
-    return fallback;
-}
-
-CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim)
-{
-    CcMaterialChainSnapshot snapshot = {0};
-    const CcSettlement *place = Scriptorium(sim);
-    if (sim == NULL || place == NULL) {
-        snapshot.blocker = CC_MATERIAL_CHAIN_NO_SCRIBES;
-        return snapshot;
-    }
-    snapshot.scriptorium_id = place->id;
-    snapshot.scribes = sim->archives.scribes;
-    snapshot.wheat = place->stock[CC_GOOD_WHEAT];
-    snapshot.paper = place->stock[CC_GOOD_PAPER];
-    snapshot.tools = place->stock[CC_GOOD_TOOLS];
-    snapshot.iron = place->stock[CC_GOOD_IRON];
-    snapshot.incoming_tools = CcSimIncomingGood(
-        sim, place->id, CC_GOOD_TOOLS);
-    snapshot.incoming_iron = CcSimIncomingGood(
-        sim, place->id, CC_GOOD_IRON);
-    bool binding_available = false;
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        const CcSettlement *vault = &sim->settlements[i];
-        if (CcSettlementIsAbandoned(vault)) continue;
-        int64_t gold = (int64_t)snapshot.gold +
-            vault->stock[CC_GOOD_GOLD];
-        int64_t gems = (int64_t)snapshot.gems +
-            vault->stock[CC_GOOD_GEMS];
-        snapshot.gold = gold > CC_SIM_MAX_UNITS ?
-            CC_SIM_MAX_UNITS : (int32_t)gold;
-        snapshot.gems = gems > CC_SIM_MAX_UNITS ?
-            CC_SIM_MAX_UNITS : (int32_t)gems;
-        if (vault->stock[CC_GOOD_GOLD] > 0 &&
-            vault->stock[CC_GOOD_GEMS] > 0) {
-            binding_available = true;
-        }
-    }
-    int32_t scribe_grain = ArchiveSpareGrain(sim, place);
-    snapshot.blocker = snapshot.scribes <= 0 ?
-        CC_MATERIAL_CHAIN_NO_SCRIBES :
-        !binding_available ? CC_MATERIAL_CHAIN_BINDING :
-        snapshot.tools <= 0 ? CC_MATERIAL_CHAIN_TOOLS :
-        scribe_grain < 2 ? CC_MATERIAL_CHAIN_GRAIN :
-        snapshot.paper <= 0 ? CC_MATERIAL_CHAIN_PAPER :
-        CC_MATERIAL_CHAIN_READY;
-    return snapshot;
-}
-
-const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker)
-{
-    switch (blocker) {
-        case CC_MATERIAL_CHAIN_READY: return "ready";
-        case CC_MATERIAL_CHAIN_NO_SCRIBES: return "scribes";
-        case CC_MATERIAL_CHAIN_GRAIN: return "grain";
-        case CC_MATERIAL_CHAIN_PAPER: return "paper";
-        case CC_MATERIAL_CHAIN_TOOLS: return "tools";
-        case CC_MATERIAL_CHAIN_BINDING: return "binding";
-    }
-    return "unknown";
-}
-
 const CcTreasure *CcSimTreasure(const CcSim *sim, CcId id)
 {
     if (sim == NULL || CcIdKind(id) != CC_ENTITY_TREASURE) return NULL;
@@ -6031,7 +5944,7 @@ static void HearGossip(CcSim *sim, CcGossip *story, CcId place_id,
 {
     if (story->heard_day > 0 || story->recorded ||
         (sim->schema_version < 58U && sim->archives.scribes <= 0)) return;
-    const CcSettlement *scriptorium = Scriptorium(sim);
+    const CcSettlement *scriptorium = CcArchiveSeat(sim);
     if (scriptorium == NULL || scriptorium->id != place_id) return;
     story->heard_day = sim->current_day;
     story->heard = version;
@@ -6178,7 +6091,7 @@ static void HearLocalGossip(CcSim *sim)
 {
     if (sim->schema_version < 44U) return;
     GatherGossip(sim);
-    const CcSettlement *place = Scriptorium(sim);
+    const CcSettlement *place = CcArchiveSeat(sim);
     int32_t slot = place != NULL ? SettlementSlotById(sim, place->id) : -1;
     if (slot < 0) return;
     uint32_t town = UINT32_C(1) << (uint32_t)slot;
@@ -6457,7 +6370,7 @@ void CcSimUpgradeHistoryOffices(CcSim *sim)
 /* Find solvent crowns connected to the active archive by open roads. */
 static CcMoney FundArchiveRecovery(CcSim *sim)
 {
-    const CcSettlement *archive = Scriptorium(sim);
+    const CcSettlement *archive = CcArchiveSeat(sim);
     if (archive == NULL || CcSettlementIsAbandoned(archive)) return 0;
     CcMoney funding = 50 - sim->iron_ledger_reserve;
     if (funding <= 0 || funding > (sim->schema_version >= 58U ? 50 : 10)) return 0;
@@ -6545,23 +6458,13 @@ static void AdvanceArchives(CcSim *sim)
         archives->scribes -= 1;
     }
 
-    CcSettlement *scriptorium = NULL;
-    int32_t active_scribes = archives->scribes;
-    bool scriptorium_ready = archives->scribes > 0;
-    if (sim->schema_version >= 34U) {
-        const CcSettlement *place = Scriptorium(sim);
-        if (place != NULL) {
-            scriptorium = CcSimSettlementMutable(sim, place->id);
-        }
-        int32_t scribe_grain = ArchiveSpareGrain(sim, scriptorium);
-        active_scribes = MinimumI32(archives->scribes, scribe_grain / 2);
-        if (active_scribes > 0) {
-            scriptorium->stock[CC_GOOD_WHEAT] -= active_scribes * 2;
-            CcEconomyRefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_WHEAT);
-        }
-        scriptorium_ready = active_scribes > 0 &&
-            scriptorium->stock[CC_GOOD_PAPER] > 0 &&
-            scriptorium->stock[CC_GOOD_TOOLS] > 0;
+    CcArchiveWorkPlan work = CcSimArchiveWorkPlan(sim);
+    CcSettlement *scriptorium = CcSimSettlementMutable(sim, work.seat_id);
+    int32_t active_scribes = work.eligible_scribes;
+    bool scriptorium_ready = work.recording_ready;
+    if (work.wheat_required > 0) {
+        scriptorium->stock[CC_GOOD_WHEAT] -= work.wheat_required;
+        CcEconomyRefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_WHEAT);
     }
 
     CcId noted[CC_MAX_SCRIBES];
@@ -10698,8 +10601,11 @@ static void RefreshSituationCharacterActivities(CcSim *sim,
         sim, situation->sponsor_character_id);
     CcCharacter *affected = CharacterMutable(
         sim, situation->affected_character_id);
-    if (sponsor != NULL) sponsor->activity = CC_CHARACTER_ACTIVITY_WORKING;
-    if (affected == NULL) return;
+    bool preserve = sim->schema_version >= 74U;
+    if (sponsor != NULL && (!preserve || (sponsor->bandit_group_id == 0U &&
+        sponsor->activity != CC_CHARACTER_ACTIVITY_TRAVELLING))) sponsor->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    if (affected == NULL || (preserve && (affected->bandit_group_id != 0U ||
+        affected->activity == CC_CHARACTER_ACTIVITY_TRAVELLING))) return;
     if (situation->status == CC_SITUATION_RESOLVED) {
         affected->activity = CC_CHARACTER_ACTIVITY_RECOVERING;
         affected->stress = ClampI32(affected->stress - 30, 0, 100);
@@ -10743,7 +10649,7 @@ static CcCharacter *AdultCharacterAt(CcSim *sim, CcId settlement_id,
     return best;
 }
 
-static void AssignSituationCast(CcSim *sim, CcSituation *situation,
+static void AssignSituationCastLegacy(CcSim *sim, CcSituation *situation,
                                  bool establish_knowledge)
 {
     static const char *sponsors[CC_MAX_SETTLEMENTS] = {
@@ -10869,6 +10775,8 @@ static void AssignSituationCast(CcSim *sim, CcSituation *situation,
     RefreshSituationCharacterActivities(sim, situation);
 }
 
+#include "cc_quest_cast.inc"
+
 static void FillSettlementResidents(CcSim *sim)
 {
     if (sim == NULL) return;
@@ -10989,11 +10897,14 @@ static void SuccessorName(const CcSim *sim, const CcCharacter *ancestor,
                    ordinal % 100000U);
 }
 
+static void CloseUnstaffedSituation(CcSim *sim, CcSituation *situation);
+
 static void RecastSituationsAfterDeath(CcSim *sim, CcId character_id)
 {
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         CcSituation *situation = &sim->situations[i];
         if (situation->status != CC_SITUATION_ACTIVE) continue;
+        CcSituation original = *situation;
         bool changed = false;
         if (situation->sponsor_character_id == character_id) {
             situation->sponsor_character_id = 0U;
@@ -11016,7 +10927,10 @@ static void RecastSituationsAfterDeath(CcSim *sim, CcId character_id)
             situation->discovery_stage = CC_DISCOVERY_RUMOR;
             situation->lead_path = CC_LEAD_PATH_UNDECIDED;
         }
-        AssignSituationCast(sim, situation, sim->schema_version < 62U);
+        if (!AssignSituationCast(sim, situation, sim->schema_version < 62U)) {
+            *situation = original;
+            CloseUnstaffedSituation(sim, situation);
+        }
     }
 }
 
@@ -11511,6 +11425,20 @@ static void FinishFrontAfterSituation(CcSim *sim,
     front->portent.resolved_by_event_id = front->resolved_event_id;
 }
 
+static void CloseUnstaffedSituation(CcSim *sim, CcSituation *situation)
+{
+    situation->status = CC_SITUATION_FAILED;
+    situation->end_reason = CC_QUEST_END_INVALIDATED;
+    if (sim->player.accepted_situation_id == situation->id) sim->player.accepted_situation_id = 0U;
+    CcEvent *event = PushEvent(sim, CC_EVENT_SITUATION_FAILED, situation->id,
+        situation->target_id, situation->cause_event_id, 0,
+        "The commission closes after a death leaves its local responsibilities unfilled.");
+    CcId event_id = event->id;
+    situation->objective.danger.resolved_by_event_id = event_id;
+    FinishFrontAfterSituation(sim, situation, event_id);
+    ArchiveSituationOutcome(sim, situation, event_id);
+}
+
 static void AdvanceQuestDangerClocks(CcSim *sim)
 {
     if (sim == NULL) return;
@@ -11668,6 +11596,10 @@ static CcSituation *CreateSituation(
     CcGood good, int32_t quantity, CcMoney reward, int32_t duration)
 {
     if (HasRecentSituation(sim, kind, target)) return NULL;
+    if (sim->schema_version >= 74U && sim->current_day > 1) {
+        CcSituation proposed = {.kind = kind, .target_id = target, .issuer_faction_id = issuer};
+        if (!SelectPresentQuestCast(sim, &proposed)) return NULL;
+    }
     CcSituation *situation = AllocateSituation(sim);
     if (situation == NULL) return NULL;
     situation->id = NextId(sim, CC_ENTITY_SITUATION);
@@ -14912,7 +14844,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         AdvanceHoardRaid(sim);
         AdvanceDragonCampaign(sim);
         if (sim->current_day % 7 == 0) {
-            const CcSettlement *scriptorium = Scriptorium(sim);
+            const CcSettlement *scriptorium = CcArchiveSeat(sim);
             CcId scriptorium_id = scriptorium != NULL ?
                 scriptorium->id : 0U;
             for (int32_t settlement = 0; settlement < sim->settlement_count; ++settlement) {

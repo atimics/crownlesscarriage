@@ -57,7 +57,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 73
+#define CC_SIM_SCHEMA_VERSION 74
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -465,6 +465,13 @@ typedef struct CcWelfareSnapshot {
     double population_weighted_prosperity;
     double population_weighted_security;
 } CcWelfareSnapshot;
+
+typedef struct CcArchiveWorkPlan {
+    CcId seat_id;
+    int32_t eligible_scribes;
+    int32_t wheat_required;
+    bool recording_ready;
+} CcArchiveWorkPlan;
 
 typedef struct CcMaterialChainSnapshot {
     CcId scriptorium_id;
@@ -2129,6 +2136,8 @@ CcRitualOfferingPlan CcSimRitualOfferingPlan(const CcSim *sim);
 
 
 CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
+/* Evaluate the current staffing and held supplies without advancing archive work. */
+CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim);
 const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker);
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
                                   CcFoodEconomy *economy);
