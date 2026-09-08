@@ -1,0 +1,6 @@
+{
+  "parent": "79e1c0e",
+  "cases": 1788,
+  "sha256": "106658656ea396fe3e7dd2cb7c44da91f9759095ab4d9d82a71fbeab7cf010db",
+  "comparison": "validation result, error text, and full-state immutability"
+}

@@ -1887,6 +1887,8 @@ void CcGenerateSettlementCharacterName(uint32_t world_seed, CcId settlement_id,
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
 bool CcSimApply(CcSim *sim, const CcCommand *command,
                 char *error, size_t error_capacity);
+/* Version compatibility only; CcSimValidate also checks the saved state. */
+bool CcSimSupportsVersions(uint32_t schema_version, uint32_t generator_version);
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity);
 /* Engine/debug lookup; actor-facing code reads held account snapshots. */
 const CcHistoricCharacter *CcSimHistoricCharacter(const CcSim *sim, CcId id);

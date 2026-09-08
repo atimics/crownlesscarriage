@@ -102,6 +102,18 @@ static void PrintSummary(const CcSim *sim, bool detail)
             maximum_generation = sim->characters[i].generation;
         }
     }
+    int32_t maximum_bandit_influence = 0, maximum_monster_pressure = 0;
+    for (int32_t i = 0; i < sim->bandit_count; ++i)
+        if (sim->bandits[i].influence > maximum_bandit_influence)
+            maximum_bandit_influence = sim->bandits[i].influence;
+    for (int32_t i = 0; i < sim->monster_count; ++i)
+        if (sim->monsters[i].pressure > maximum_monster_pressure)
+            maximum_monster_pressure = sim->monsters[i].pressure;
+    char bandit_max[16] = "unavailable", monster_max[16] = "unavailable";
+    if (sim->bandit_count > 0)
+        (void)snprintf(bandit_max, sizeof(bandit_max), "%d", maximum_bandit_influence);
+    if (sim->monster_count > 0)
+        (void)snprintf(monster_max, sizeof(monster_max), "%d", maximum_monster_pressure);
     CcMaterialChainSnapshot chain = CcSimMaterialChainSnapshot(sim);
     (void)printf("day=%d hash=%016" PRIx64
                  " average_hunger=%d maximum_hunger=%d"
@@ -110,7 +122,8 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  " blocked_shipments=%d royal_carriages=%d/%d/%d/%d/%d"
                  " royal_trips=%d royal_losses=%d"
                  " open_routes=%d/%d legitimacy=%d live_situations=%d"
-                 " bandit_influence=%d monster_pressure=%d"
+                 " bandit_groups=%d bandit_influence_max=%s"
+                 " monster_groups=%d monster_pressure_max=%s"
                  " night_roads=%d monastery_reserve=%" PRId64
                  " monastery_debt=%" PRId64
                  " hoard_raids=%d goblin_guards=%d goblin_members=%d"
@@ -140,8 +153,8 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  royal_trips, royal_losses,
                  open_routes, sim->route_count, legitimacy / sim->kingdom_count,
                  CcSimActiveSituationCount(sim),
-                 sim->bandit_count > 0 ? sim->bandits[0].influence : 0,
-                 sim->monster_count > 0 ? sim->monsters[0].pressure : 0,
+                 sim->bandit_count, bandit_max,
+                 sim->monster_count, monster_max,
                  smuggler_routes, sim->iron_ledger_reserve, debt,
                  sim->hoard_raiders.raids_completed,
                  sim->goblins.hoard_defenses, sim->goblins.members,
@@ -198,12 +211,10 @@ static void PrintSummary(const CcSim *sim, bool detail)
             sim->goblins.lair_coins, offering.relics, offering.food_rations,
             sim->goblins.lair_stock[CC_GOOD_TOOLS], sim->goblins.lair_stock[CC_GOOD_WEAPONS],
             offering.eggs);
-        const char *offering_names[] = {"invalid", "members", "devotion", "cohesion",
-            "coins", "relics", "food", "tools", "weapons"};
         bool offering_separator = false;
-        for (unsigned bit = 0; bit < sizeof(offering_names) / sizeof(offering_names[0]); ++bit) {
+        for (unsigned bit = 0; bit < sizeof(RITUAL_BLOCK_NAMES) / sizeof(RITUAL_BLOCK_NAMES[0]); ++bit) {
             if ((offering.blocked & (UINT32_C(1) << bit)) == 0U) continue;
-            (void)printf("%s%s", offering_separator ? "," : "", offering_names[bit]);
+            (void)printf("%s%s", offering_separator ? "," : "", RITUAL_BLOCK_NAMES[bit]);
             offering_separator = true;
         }
         (void)puts(offering_separator ? "" : "ready");
@@ -219,12 +230,10 @@ static void PrintSummary(const CcSim *sim, bool detail)
             (launch.blocked & CC_CAMPAIGN_PREPARATION_BLOCKS) == 0U ? 1 : 0,
             launch.food_rations, launch.tools, launch.weapons,
             launch.patron_id, launch.hero_id, launch.origin_id);
-        const char *launch_names[] = {"invalid", "active", "cooldown", "dragon_slain",
-            "pledges", "dragon_age", "food", "tools", "weapons", "patron", "hero", "seat"};
         bool launch_separator = false;
-        for (unsigned bit = 0; bit < sizeof(launch_names) / sizeof(launch_names[0]); ++bit) {
+        for (unsigned bit = 0; bit < sizeof(CAMPAIGN_BLOCK_NAMES) / sizeof(CAMPAIGN_BLOCK_NAMES[0]); ++bit) {
             if ((launch.blocked & (UINT32_C(1) << bit)) == 0U) continue;
-            (void)printf("%s%s", launch_separator ? "," : "", launch_names[bit]);
+            (void)printf("%s%s", launch_separator ? "," : "", CAMPAIGN_BLOCK_NAMES[bit]);
             launch_separator = true;
         }
         (void)puts(launch_separator ? "" : "ready");
@@ -267,12 +276,10 @@ static void PrintSummary(const CcSim *sim, bool detail)
                 route->condition, sim->current_day, plan.next_work_day,
                 plan.labor_base_id, plan.supplier_id, plan.population, plan.food_rations,
                 plan.wood, plan.stone, plan.tools, plan.effort, plan.people_used);
-            const char *names[] = {"invalid", "open", "war_border", "calendar",
-                "abandoned_endpoint", "people", "food", "wood", "stone", "tools"};
             bool separator = false;
-            for (unsigned bit = 0; bit < sizeof(names) / sizeof(names[0]); ++bit) {
+            for (unsigned bit = 0; bit < sizeof(ROAD_RECOVERY_BLOCK_NAMES) / sizeof(ROAD_RECOVERY_BLOCK_NAMES[0]); ++bit) {
                 if ((plan.blocked & (UINT32_C(1) << bit)) == 0U) continue;
-                (void)printf("%s%s", separator ? "," : "", names[bit]);
+                (void)printf("%s%s", separator ? "," : "", ROAD_RECOVERY_BLOCK_NAMES[bit]);
                 separator = true;
             }
             (void)puts(separator ? "" : "ready");

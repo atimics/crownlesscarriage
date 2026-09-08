@@ -1,0 +1,24 @@
+{
+  "parent": "fd69fa0",
+  "comparisons": 1788,
+  "schemas": [
+    17,
+    26,
+    37,
+    38,
+    59,
+    73
+  ],
+  "seeds": [
+    42,
+    1592590337
+  ],
+  "ages_years": [
+    0,
+    20
+  ],
+  "valid_baselines": 24,
+  "read_only_checks": "memcmp before and after every validation",
+  "sha256": "106658656ea396fe3e7dd2cb7c44da91f9759095ab4d9d82a71fbeab7cf010db",
+  "function_bodies": "TrackIdentity and ValidateIdentityState match after entry rename; SetError copied exactly"
+}
