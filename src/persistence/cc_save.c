@@ -429,6 +429,9 @@ static bool EnsureLegendColumns(sqlite3 *database,
         EnsureColumn(database, "dragon_state", "regional_influence",
             "ALTER TABLE dragon_state ADD COLUMN regional_influence INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "wyrmheart_id",
+            "ALTER TABLE dragon_state ADD COLUMN wyrmheart_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
         EnsureColumn(database, "dragon_state", "crown_continuity_days",
             "ALTER TABLE dragon_state ADD COLUMN crown_continuity_days INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
@@ -2498,8 +2501,8 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                  "regional_influence,crown_continuity_days,hunt_cooldown_days,"
                  "hunts,egg_count,brood_days_remaining,brood_cooldown_days,"
                  "broods_laid,whelps_dispersed,afterdeath_days,lifecycle_event_id,"
-                 "territoryless_days,hair_color) "
-                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "territoryless_days,hair_color,wyrmheart_id) "
+                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     const CcDragon *dragon = &sim->dragon;
     column = 1;
@@ -2536,6 +2539,7 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
     BindId(statement, column++, dragon->lifecycle_event_id);
     BindInt(statement, column++, dragon->territoryless_days);
     BindInt(statement, column++, (int32_t)dragon->hair_color);
+    BindId(statement, column++, sim->schema_version >= 57U ? dragon->wyrmheart_id : 0U);
     result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!result) return false;
@@ -4754,7 +4758,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
                  "territory_stability,regional_influence,crown_continuity_days,"
                  "hunt_cooldown_days,hunts,egg_count,brood_days_remaining,"
                  "brood_cooldown_days,broods_laid,whelps_dispersed,afterdeath_days,"
-                 "lifecycle_event_id,territoryless_days,hair_color "
+                 "lifecycle_event_id,territoryless_days,hair_color,wyrmheart_id "
                  "FROM dragon_state WHERE slot=1;",
                  &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
@@ -4813,6 +4817,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
         (CcId)sqlite3_column_int64(statement, column++);
     dragon->territoryless_days = sqlite3_column_int(statement, column++);
     dragon->hair_color = (CcDragonHairColor)sqlite3_column_int(statement, column++);
+    dragon->wyrmheart_id = (CcId)sqlite3_column_int64(statement, column++);
     sqlite3_finalize(statement);
 
     if (sim->schema_version >= 11U) {
@@ -5970,7 +5975,8 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 48U || legacy_version == 49U ||
          legacy_version == 50U || legacy_version == 51U ||
          legacy_version == 52U || legacy_version == 53U ||
-         legacy_version == 54U || legacy_version == 55U) &&
+         legacy_version == 54U || legacy_version == 55U ||
+         legacy_version == 56U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
@@ -6440,6 +6446,25 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
 {
     uint32_t legacy_version = sim->schema_version;
     if (!UpgradeLegacyRuntimeSchema(sim, error, error_capacity)) return false;
+    if (legacy_version < 57U) {
+        /* Older saves identify hearts by their original generated name. */
+        char name[CC_MAP_NAME_CAPACITY];
+        (void)snprintf(name, sizeof(name), "Wyrmheart of %.20s", sim->dragon.name);
+        const CcTreasure *first = NULL;
+        for (int32_t i = 0; i < sim->treasure_count; ++i) {
+            const CcTreasure *heart = &sim->treasures[i];
+            if (strcmp(heart->name, name) == 0 &&
+                heart->created_day >= sim->current_day - sim->dragon.age_days &&
+                (first == NULL || heart->created_day < first->created_day)) {
+                first = heart;
+            }
+        }
+        sim->dragon.wyrmheart_id = first != NULL ? first->id : 0U;
+        if (first == NULL && sim->dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM) {
+            /* Reserve the identity of an already formed, missing heart. */
+            sim->dragon.wyrmheart_id = CcMakeId(CC_ENTITY_TREASURE, sim->next_entity_serial++);
+        }
+    }
     if (legacy_version < 51U) CcSimSeedCommonPonyHerds(sim);
     if (legacy_version < 52U) CcSimUnharnessSecondDraftAnimal(sim);
     return true;
