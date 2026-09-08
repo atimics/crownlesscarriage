@@ -93,6 +93,7 @@ add_library(crownless_sim
     src/sim/cc_sim.c
     src/sim/cc_sim_hash.c
     src/sim/cc_archive_queries.c
+    src/sim/cc_archive_supply.c
     src/sim/cc_trade_path.c
     src/sim/cc_sim_versions.c
     src/sim/cc_identity.c
@@ -1494,6 +1495,10 @@ if(BUILD_TESTING)
     target_link_libraries(trade_path_tests PRIVATE crownless_sim)
     cc_strict_warnings(trade_path_tests)
     add_test(NAME trade_path_rules COMMAND trade_path_tests)
+    add_executable(archive_supply_tests tests/archive_supply_tests.c)
+    target_link_libraries(archive_supply_tests PRIVATE crownless_sim)
+    cc_strict_warnings(archive_supply_tests)
+    add_test(NAME archive_supply_booking COMMAND archive_supply_tests)
     add_executable(archive_funding_tests tests/archive_funding_tests.c)
     target_link_libraries(archive_funding_tests PRIVATE crownless_sim)
     cc_strict_warnings(archive_funding_tests)

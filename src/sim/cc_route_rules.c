@@ -56,3 +56,20 @@ bool CcRouteRoyalCanReopen(const CcSim *sim, const CcRoute *route)
              CcSimRouteCrossesKingdomBorder(sim, route->id));
 }
 
+
+CcMoney CcRouteRoyalTradeToll(const CcSim *sim, const CcRoute *route,
+                                   CcId carriage_kingdom_id)
+{
+    CcMoney toll = CcRouteToll(sim, route);
+    const CcSettlement *from = route != NULL ?
+        CcSimSettlement(sim, route->from_id) : NULL;
+    const CcSettlement *to = route != NULL ?
+        CcSimSettlement(sim, route->to_id) : NULL;
+    if (from == NULL || to == NULL ||
+        from->kingdom_id == to->kingdom_id) return toll;
+    CcId host = from->kingdom_id == carriage_kingdom_id ?
+        to->kingdom_id : from->kingdom_id;
+    toll += CcSimKingdomsAllied(sim, carriage_kingdom_id, host) ? 1 : 3;
+    return toll;
+}
+
