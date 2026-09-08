@@ -185,3 +185,24 @@ and two group-days. These group totals retain the previous counters' meaning.
 `bandit_members_end`, `bandit_supplies_end`, `bandit_influence_end`, and
 `bandit_raids_end` snapshots. An ID of zero means that group is absent. Per-group
 interval tables remain further diagnostic work.
+
+## Daily route observations
+
+Add `--route-csv PATH` to `crownless_sim_metrics` for one row per route at each
+reported annual checkpoint. Each row identifies its seed, rules versions, day,
+route, endpoints, endpoint owners, and endpoint populations. Condition, physical
+closure, war-border status, and smuggler status describe that checkpoint.
+
+Daily observations occur after each simulated day. `closed_days` measures physical
+closure; `war_border_days` measures the border state even on smuggler roads.
+Unavailable days use physical closure or an official road crossing a war border,
+and are split between two inhabited endpoints and a connection to a ruin.
+Physical open days equal `interval_days - closed_days`. Company-specific passage
+and disconnected-network reachability are separate measures.
+
+Interval columns cover the latest 365 observed days. Cumulative columns cover the
+run so far. Current and longest outage streaks continue across annual boundaries
+and measure observed days since this run began. `--final-only` emits the last
+interval plus full-run totals. Annual structural validation still runs, and the
+ordinary metrics output matches a run with observation disabled. Use separate
+output paths for route and nutrition CSV files.
