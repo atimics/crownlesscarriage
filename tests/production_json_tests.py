@@ -32,6 +32,7 @@ with tempfile.TemporaryDirectory() as directory:
             assert loaded['threats'] == rows[-1]['threats']
             assert loaded['campaign_launch'] == rows[-1]['campaign_launch']
             assert loaded['ritual_offering'] == rows[-1]['ritual_offering']
+            assert loaded['retained_history'] == rows[-1]['retained_history']
             assert loaded['accounting_start_day'] == 731
             assert loaded['dragon_policy'] == 'loaded-save'
             assert all(sum(site['input']) == 0 for site in loaded['sites'])

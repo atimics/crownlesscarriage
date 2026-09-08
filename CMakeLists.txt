@@ -1382,6 +1382,13 @@ if(BUILD_TESTING)
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/transition_json_tests.py
                          $<TARGET_FILE:campaign_json_fixture>
                          $<TARGET_FILE:ritual_json_fixture>)
+        add_executable(retained_history_fixture tests/retained_history_fixture.c)
+        target_link_libraries(retained_history_fixture PRIVATE crownless_persistence)
+        cc_strict_warnings(retained_history_fixture)
+        add_test(NAME retained_history_json
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/retained_history_tests.py
+                         $<TARGET_FILE:retained_history_fixture>)
         add_test(NAME production_json_capture
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/production_json_tests.py
