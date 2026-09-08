@@ -1161,11 +1161,18 @@ if(BUILD_TESTING)
                          $<TARGET_FILE:crownless_sim_runner>)
         set_tests_properties(simulation_runner_resume PROPERTIES TIMEOUT 60)
 
-        add_test(NAME letter_probe_contracts
-                 COMMAND ${CC_PYTHON3_EXECUTABLE}
-                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/letter_probe_tests.py
-                         $<TARGET_FILE:crownless_letter_probe>)
-        set_tests_properties(letter_probe_contracts PROPERTIES TIMEOUT 120)
+        # crownless_letter_probe is only built under CC_BUILD_BENCHMARKS, so
+        # the test has to be registered under the same condition. Otherwise
+        # the generator expression below has no target to resolve and the
+        # whole configure step fails, which is what the release container
+        # hits when it builds with -DCC_BUILD_BENCHMARKS=OFF.
+        if(CC_BUILD_BENCHMARKS)
+            add_test(NAME letter_probe_contracts
+                     COMMAND ${CC_PYTHON3_EXECUTABLE}
+                             ${CMAKE_CURRENT_SOURCE_DIR}/tests/letter_probe_tests.py
+                             $<TARGET_FILE:crownless_letter_probe>)
+            set_tests_properties(letter_probe_contracts PROPERTIES TIMEOUT 120)
+        endif()
     endif()
 
     add_executable(interaction_tests tests/interaction_tests.c)
