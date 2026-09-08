@@ -23,3 +23,5 @@ ctest --test-dir out/build/foundation --output-on-failure -j4
 ```
 
 Use `make production-baseline` for the common 40-year Release capture. Its manifest records the commit, binary hash, build mode, seed, commands, checkpoint dates and final save/state hashes.
+
+Recorded on clean Release commit `a18cdff0fae82f767f54505dcb371e7303fc321f`: four policy/site cases, two matching runs each, 41 checkpoints per run. All 81 local Debug tests passed. All 800 annual hashes matched parent `6c3007f` across the ten schemas and two seeds in `parity.json`. `manifest.json` pins the capture provenance and `outcomes.json` records the final herd totals.
