@@ -302,6 +302,23 @@ static void CheckRelayAndBlockedRoad(void)
     CC_CHECK((Account(report)->settlement_mask & (UINT32_C(1) << 2U)) != 0U);
 }
 
+static void CheckUnfundedScriptoriumHearsNews(void)
+{
+    Prepare();
+    sim.archives.scribes = 0;
+    sim.iron_ledger_reserve = 0;
+    CcId local = AddEvent(CC_EVENT_DRAGON_OMEN, sim.dragon.id,
+        sim.settlements[1].id, 1, "Dragon tracks reach Gloamgate.");
+    CcId remote = AddEvent(CC_EVENT_DRAGON_OMEN, sim.dragon.id,
+        sim.settlements[2].id, 1, "Dragon tracks reach Alderwatch.");
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(Account(local)->heard_day == sim.current_day);
+    CC_CHECK(Account(remote)->heard_day == 0);
+    CC_CHECK(!Account(local)->recorded);
+    CC_CHECK(sim.archives.lore_stored == 0);
+    CheckValid();
+}
+
 static void CheckStorySlotReuse(void)
 {
     Prepare();
@@ -1172,6 +1189,7 @@ int main(void)
     CheckLostCourier();
     CheckJournalAndLegacyReplay();
     CheckRelayAndBlockedRoad();
+    CheckUnfundedScriptoriumHearsNews();
     CheckStorySlotReuse();
     CheckHearingOrder();
     CheckLocalRumorText();

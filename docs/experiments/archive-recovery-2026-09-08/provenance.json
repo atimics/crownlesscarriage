@@ -1,0 +1,10 @@
+{
+  "source": "b764e4e",
+  "base": "289d55e",
+  "frozen_world_source": "d478d2e",
+  "sha256": {
+    "docs/experiments/archive-recovery-2026-09-08/seed-2-year-16000.ccsave": "caeed6ecf9b9fbc1ed3dbf442afb8a1693d25d32fd61208d3385c96425c1c2b7",
+    "tests/fixtures/shipped/seed-2-before-land-loss.ccsave": "6c191e0a134cba786bbce44e6001b7c197bf9a92e40a2dd0b0f5fec90efc2443",
+    "/private/tmp/crownless-recovery-build/crownless_sim_metrics": "4647338b7623576331943982c3db0d3728bf3107cf4f2e19a287c3494d38167b"
+  }
+}
