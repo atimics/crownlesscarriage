@@ -120,12 +120,25 @@ static int32_t ArchiveSettlementSlot(const CcSim *sim, CcId id)
 CcArchiveFundingPlan CcSimArchiveFundingPlan(const CcSim *sim)
 {
     CcArchiveFundingPlan plan = {0};
-    if (sim == NULL || sim->schema_version < 56U) return plan;
+    if (sim == NULL || sim->schema_version < 56U) {
+        plan.blocker = CC_ARCHIVE_FUNDING_UNAVAILABLE;
+        return plan;
+    }
     const CcSettlement *archive = CcArchiveSeat(sim);
-    if (archive == NULL || CcSettlementIsAbandoned(archive)) return plan;
+    if (archive == NULL || CcSettlementIsAbandoned(archive)) {
+        plan.blocker = CC_ARCHIVE_FUNDING_NO_SEAT;
+        return plan;
+    }
     plan.seat_id = archive->id;
     CcMoney funding = 50 - sim->iron_ledger_reserve;
-    if (funding <= 0 || funding > (sim->schema_version >= 58U ? 50 : 10)) return plan;
+    if (funding <= 0) {
+        plan.blocker = CC_ARCHIVE_FUNDING_LEDGER_FUNDED;
+        return plan;
+    }
+    if (funding > (sim->schema_version >= 58U ? 50 : 10)) {
+        plan.blocker = CC_ARCHIVE_FUNDING_TOP_UP_LIMIT;
+        return plan;
+    }
     if (sim->schema_version >= 58U) {
         for (int32_t k = 0; k < sim->kingdom_count; ++k) {
             const CcKingdom *host = &sim->kingdoms[k];
@@ -139,7 +152,10 @@ CcArchiveFundingPlan CcSimArchiveFundingPlan(const CcSim *sim)
     }
     bool reached[CC_MAX_SETTLEMENTS] = {false};
     int32_t archive_slot = ArchiveSettlementSlot(sim, archive->id);
-    if (archive_slot < 0) return plan;
+    if (archive_slot < 0) {
+        plan.blocker = CC_ARCHIVE_FUNDING_NO_SEAT;
+        return plan;
+    }
     reached[archive_slot] = true;
     for (int32_t pass = 0; pass < sim->settlement_count; ++pass) {
         for (int32_t r = 0; r < sim->route_count; ++r) {
@@ -164,7 +180,10 @@ CcArchiveFundingPlan CcSimArchiveFundingPlan(const CcSim *sim)
             }
         }
     }
-    if (count < 2) return plan;
+    if (count < 2) {
+        plan.blocker = CC_ARCHIVE_FUNDING_CONNECTED_DONORS;
+        return plan;
+    }
     plan.donor_count = 2;
     plan.donor_ids[0] = sim->kingdoms[donors[0]].id;
     plan.donor_ids[1] = sim->kingdoms[donors[1]].id;
@@ -172,4 +191,17 @@ CcArchiveFundingPlan CcSimArchiveFundingPlan(const CcSim *sim)
     plan.shares[1] = funding - plan.shares[0];
     plan.total = funding;
     return plan;
+}
+
+const char *CcArchiveFundingBlockerName(CcArchiveFundingBlocker blocker)
+{
+    switch (blocker) {
+        case CC_ARCHIVE_FUNDING_READY: return "ready";
+        case CC_ARCHIVE_FUNDING_UNAVAILABLE: return "unavailable";
+        case CC_ARCHIVE_FUNDING_NO_SEAT: return "archive_seat";
+        case CC_ARCHIVE_FUNDING_LEDGER_FUNDED: return "ledger_funded";
+        case CC_ARCHIVE_FUNDING_TOP_UP_LIMIT: return "top_up_limit";
+        case CC_ARCHIVE_FUNDING_CONNECTED_DONORS: return "connected_solvent_donors";
+    }
+    return "unknown";
 }

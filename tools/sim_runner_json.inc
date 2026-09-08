@@ -29,7 +29,8 @@ static void JsonArchiveFunding(const CcSim *sim)
     for (int32_t i = 0; i < plan.donor_count; ++i)
         printf("%s{\"kingdom_id\":\"%" PRIu64 "\",\"amount\":%" PRId64 "}",
             i ? "," : "", plan.donor_ids[i], plan.shares[i]);
-    printf("]}");
+    printf("],\"blocker\":"); JsonString(CcArchiveFundingBlockerName(plan.blocker));
+    putchar('}');
 }
 
 static void JsonStock(const int32_t *values)

@@ -466,7 +466,17 @@ typedef struct CcWelfareSnapshot {
     double population_weighted_security;
 } CcWelfareSnapshot;
 
+typedef enum CcArchiveFundingBlocker {
+    CC_ARCHIVE_FUNDING_READY = 0,
+    CC_ARCHIVE_FUNDING_UNAVAILABLE,
+    CC_ARCHIVE_FUNDING_NO_SEAT,
+    CC_ARCHIVE_FUNDING_LEDGER_FUNDED,
+    CC_ARCHIVE_FUNDING_TOP_UP_LIMIT,
+    CC_ARCHIVE_FUNDING_CONNECTED_DONORS
+} CcArchiveFundingBlocker;
+
 typedef struct CcArchiveFundingPlan {
+    CcArchiveFundingBlocker blocker;
     CcId seat_id;
     int32_t donor_count;
     CcId donor_ids[2];
@@ -2148,6 +2158,7 @@ CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
 CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim);
 /* Treasury top-up under current funds and routes; recovery timing is separate. */
 CcArchiveFundingPlan CcSimArchiveFundingPlan(const CcSim *sim);
+const char *CcArchiveFundingBlockerName(CcArchiveFundingBlocker blocker);
 const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker);
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
                                   CcFoodEconomy *economy);

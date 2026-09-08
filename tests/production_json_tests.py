@@ -25,6 +25,7 @@ with tempfile.TemporaryDirectory() as directory:
             funding = row['archive_funding']
             assert funding['semantics'] == 'treasury_top_up_plan_snapshot'
             assert funding['total'] == sum(donor['amount'] for donor in funding['donors'])
+            assert (funding['total'] > 0) == (funding['blocker'] == 'ready')
             assert all(isinstance(donor['kingdom_id'], str) for donor in funding['donors'])
 
         policy = 'slain-at-day-1' if '--dragon-slain-day-one' in fixture else 'natural-history'
