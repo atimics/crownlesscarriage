@@ -3,6 +3,7 @@ const fs = require('node:fs/promises');
 const http = require('node:http');
 const path = require('node:path');
 const {gameControls} = require('./game_controls.cjs');
+const bufferContracts = require('./webgl_buffer_contracts.cjs');
 const {chromium} = require(process.env.CC_PLAYWRIGHT_MODULE || 'playwright');
 
 async function main() {
@@ -48,9 +49,16 @@ async function main() {
        these calls every frame. */
     const budget = window.frameBudget = {frames: 0, uploadCalls: 0, uploadBytes: 0,
       draws: 0, vertices: 0, textureBinds: 0, programBinds: 0};
+    window.frameDurations = [];
+    let lastFrameTime;
     const frame = window.requestAnimationFrame;
     window.requestAnimationFrame = function(callback) {
-      return frame.call(window, time => { budget.frames++; return callback(time); });
+      return frame.call(window, time => {
+        budget.frames++;
+        if (lastFrameTime !== undefined) window.frameDurations.push(time - lastFrameTime);
+        lastFrameTime = time;
+        return callback(time);
+      });
     };
     const upload = prototype.bufferSubData;
     prototype.bufferSubData = function(target, offset, source, sourceOffset, length) {
@@ -160,8 +168,9 @@ async function main() {
        reaches streaming this, so the ceilings guard the browser's cost, not the
        game's own heap, which stays around fifty megabytes either way. */
     const reading = () => page.evaluate(() => ({...window.frameBudget,
-      skippedUploads: window.crownlessUploads.skipped,
-      skippedBytes: window.crownlessUploads.skippedBytes}));
+      skippedUploads: window.crownlessUploads?.skipped || 0,
+      skippedBytes: window.crownlessUploads?.skippedBytes || 0}));
+    await page.evaluate(() => { window.frameDurations = []; });
     const opening = await reading();
     await page.waitForTimeout(4000);
     const closing = await reading();
@@ -170,19 +179,26 @@ async function main() {
     const perFrame = Object.fromEntries(Object.keys(opening)
       .filter(key => key !== 'frames')
       .map(key => [key, (closing[key] - opening[key]) / drawn]));
+    const frameTimes = await page.evaluate(() => window.frameDurations.slice().sort((a, b) => a - b));
+    const frameMs = Object.fromEntries([['median', 0.5], ['p95', 0.95], ['p99', 0.99]]
+      .map(([name, fraction]) => [name, frameTimes[Math.min(frameTimes.length - 1,
+        Math.floor(frameTimes.length * fraction))]]));
     await fs.writeFile(path.join(output, 'frame-budget.json'),
-      JSON.stringify({frames: drawn, perFrame}, null, 2));
-    const ceilings = {uploadCalls: 130, uploadBytes: 3 * 1024 * 1024, draws: 450,
+      JSON.stringify({frames: drawn, perFrame, frameMs}, null, 2));
+    const ceilings = {uploadCalls: 190, uploadBytes: 4 * 1024 * 1024, draws: 450,
       vertices: 720000, textureBinds: 700, programBinds: 900};
     for (const [name, ceiling] of Object.entries(ceilings)) {
       assert(perFrame[name] <= ceiling,
         `Each frame should stay under ${ceiling} ${name}, not ${perFrame[name].toFixed(1)}`);
     }
-    /* The batch resends unchanged normals and texture coordinates every flush.
-       Skipping them is a third of the uploads; a frame that skips none has lost
-       the shadow copy in web/gl-uploads.js. */
-    assert(perFrame.skippedUploads >= 25,
-      `Unchanged uploads should be skipped, not ${perFrame.skippedUploads.toFixed(1)} a frame`);
+    /* The browser owns buffer contents. #468 removes the shadow cache after
+       GPU readback exposed stale writes; traffic budgets use the direct path. */
+    const buffers = await bufferContracts(page);
+    await fs.writeFile(path.join(output, 'buffer-contracts.json'), JSON.stringify(buffers, null, 2));
+    for (const result of buffers) {
+      assert.equal(result.error, 0, `${result.name} must be a valid WebGL operation`);
+      assert.deepEqual(result.actual, result.expected, `${result.name} must preserve uploaded bytes`);
+    }
     const shaders = await page.evaluate(() => window.shaderLinks);
     assert(shaders.every(shader => shader.linked), JSON.stringify(shaders));
     assert(shaders.every(shader => shader.vectors <= 256), JSON.stringify(shaders));
