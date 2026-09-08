@@ -1971,6 +1971,7 @@ static bool RoyalCarriageMayEnter(const CcSim *sim,
 static bool RoyalRouteIsOfficial(const CcSim *sim, const CcRoute *route)
 {
     if (sim == NULL || route == NULL) return false;
+    if (sim->schema_version >= 73U && route->condition == 0) return false;
     return !(route->smuggler_route &&
              CcSimRouteCrossesKingdomBorder(sim, route->id)) &&
            !CcSimRouteCrossesWarBorder(sim, route->id);
@@ -2337,6 +2338,7 @@ CcMoney CcSimTrackedGold(const CcSim *sim)
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         total += sim->settlements[i].market_coins;
         total += sim->settlements[i].war_chest;
+        if (sim->schema_version >= 73U) total += sim->grain_supplies[i].purse;
     }
     if (sim->schema_version >= 60U) {
         for (int32_t i = 0; i < sim->character_count; ++i) {
@@ -9171,6 +9173,7 @@ int32_t CcSimDragonBattleStrength(const CcSim *sim)
 static int32_t TradeRouteCapacity(const CcSim *sim, const CcRoute *route)
 {
     if (sim == NULL || route == NULL) return 0;
+    if (sim->schema_version >= 73U && route->condition == 0) return 0;
     int32_t capacity = MaximumI32(
         3, route->capacity * MaximumI32(25, route->condition) / 100);
     if (route->closed) capacity = MaximumI32(1, capacity / 2);
@@ -9426,6 +9429,21 @@ static CcSettlement *RoyalFallbackSettlement(CcSim *sim,
     return best;
 }
 
+static void RecordGrainShipment(CcSim *sim, const CcShipment *shipment, CcId received_at, bool lost)
+{
+    if (sim->schema_version < 73U || shipment == NULL) return;
+    for (int i = 0; i < sim->settlement_count; ++i) {
+        CcGrainSupply *supply = &sim->grain_supplies[i];
+        if (supply->shipment_id != shipment->id) continue;
+        if (lost) supply->lost += shipment->quantity;
+        else if (received_at == sim->settlements[i].id) {
+            supply->delivered += shipment->quantity;
+            supply->last_arrival_day = sim->current_day;
+        } else supply->redirected += shipment->quantity;
+        supply->shipment_id = 0U;
+    }
+}
+
 static void ReleaseBlockedRoyalCarriage(CcSim *sim,
                                          CcRoyalCarriage *carriage,
                                          CcShipment *shipment,
@@ -9446,6 +9464,7 @@ static void ReleaseBlockedRoyalCarriage(CcSim *sim,
         shipment->status = CC_SHIPMENT_ARRIVED;
     }
     CcId location_id = place != NULL ? place->id : carriage->location_id;
+    RecordGrainShipment(sim, shipment, location_id, false);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
@@ -9728,6 +9747,7 @@ static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_account
         if (shipment->good < CC_GOOD_FOOD ||
             shipment->good >= CC_GOOD_COUNT) {
             shipment->status = CC_SHIPMENT_LOST;
+            RecordGrainShipment(sim, shipment, 0U, true);
             if (carriage != NULL) {
                 carriage->cargo_losses += 1;
                 carriage->condition = ClampI32(
@@ -9774,6 +9794,7 @@ static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_account
                                                shipment->id, 0U);
         if (lost) {
             shipment->status = CC_SHIPMENT_LOST;
+            RecordGrainShipment(sim, shipment, 0U, true);
             if (bandits != NULL) {
                 bandits->supplies = ClampI32(bandits->supplies + shipment->quantity, 0, 100);
             }
@@ -9918,6 +9939,7 @@ static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_account
             destination->prosperity = ClampI32(destination->prosperity + 1, 0, 100);
         }
         shipment->status = CC_SHIPMENT_ARRIVED;
+        RecordGrainShipment(sim, shipment, final_id, false);
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(text, sizeof(text), "%d units of %s reach %s.",
                        shipment->quantity, CcGoodName(shipment_good),
@@ -10059,7 +10081,8 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
                                 CcSettlement *final_destination,
                                 int32_t path_capacity,
                                 int32_t minimum_cargo_slots,
-                                int32_t route_used[CC_MAX_ROUTES])
+                                int32_t route_used[CC_MAX_ROUTES],
+                                CcGrainSupply *supply)
 {
     if (sim == NULL || route_slot < 0 ||
         route_slot >= sim->route_count || origin == NULL ||
@@ -10080,7 +10103,9 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
     }
     int32_t surplus = TradeSurplus(
         sim, origin, final_destination, good);
-    int32_t need = SettlementUnmetNeed(sim, final_destination, good);
+    int32_t need = supply != NULL ? MaximumI32(0, 12 - final_destination->stock[CC_GOOD_WHEAT] -
+        CcSimIncomingGood(sim, final_destination->id, CC_GOOD_WHEAT)) :
+        SettlementUnmetNeed(sim, final_destination, good);
     int32_t effective_capacity = TradeRouteCapacity(sim, route);
     int32_t available_capacity = effective_capacity - route_used[route_slot];
     int32_t cargo_capacity = MinimumI32(
@@ -10090,14 +10115,14 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
         (royal ? CC_ROYAL_CARRIAGE_CARGO_SLOTS : 5) *
             CcGoodsFreightUnitsPerCargoSlot(good),
         MinimumI32(cargo_capacity, MinimumI32(surplus, need)));
-    bool military_supply = WarWeeklyNeed(
+    bool military_supply = supply == NULL && WarWeeklyNeed(
         sim, final_destination, good) > 0;
-    CcMoney *buyer_coins = military_supply ?
+    CcMoney *buyer_coins = supply != NULL ? &supply->purse : military_supply ?
                            &final_destination->war_chest :
                            &final_destination->market_coins;
     CcKingdom *buyer_kingdom = KingdomMutable(
         sim, final_destination->kingdom_id);
-    bool essential_credit = IronLedgerWillFund(final_destination, good);
+    bool essential_credit = supply == NULL && IronLedgerWillFund(final_destination, good);
     int32_t unit_price = MaximumI32(1, origin->price[good]);
     CcMoney toll = royal ? RoyalTradeRouteToll(
         sim, route, carriage->kingdom_id) : CcRouteToll(sim, route);
@@ -10154,6 +10179,14 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
     shipment->arrival_day = sim->current_day + CcSimFreightLegDays(
                 sim, route->id, shipment->origin_id, shipment->destination_id);
     shipment->status = CC_SHIPMENT_TRAVELLING;
+    if (supply != NULL) {
+        supply->shipment_id = shipment->id;
+        supply->supplier_id = origin->id;
+        supply->route_id = route->id;
+        supply->spent += total_charge;
+        supply->ordered += quantity;
+        supply->last_dispatch_day = sim->current_day;
+    }
     if (royal) {
         carriage->route_id = route->id;
         carriage->destination_id = next_hop_id;
@@ -10191,18 +10224,26 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
                    final_destination->name,
                    next_hop != NULL ? next_hop->name : "the road", payment,
                    (int32_t)toll);
+    if (supply != NULL) {
+        const CcCharacter *organiser = CcSimCharacter(sim, supply->organiser_id);
+        (void)snprintf(text, sizeof(text), "%.20s books %d wheat from %.20s to %.20s for %" PRId64 " crowns.",
+            organiser != NULL ? organiser->name : "The organiser", quantity, origin->name, final_destination->name, total_charge);
+    }
     const CcEvent *need_event = LatestEvent(sim, CC_EVENT_SHORTAGE,
                                            final_destination->id,
                                            final_destination->id);
-    (void)PushEvent(sim, CC_EVENT_SHIPMENT_DEPARTED, shipment->id,
+    CcEvent *dispatch_event = PushEvent(sim, CC_EVENT_SHIPMENT_DEPARTED, shipment->id,
                     origin->id, purchase != NULL ? purchase->id :
                     need_event != NULL ? need_event->id :
                     LatestLocalCause(sim, final_destination->id),
                     quantity, text);
+    if (supply != NULL) dispatch_event->actor_id = supply->organiser_id;
     ExchangeGossip(sim, royal ? carriage->id : shipment->id,
                     origin->id, "Carriage travelers");
     return true;
 }
+
+#include "cc_grain_supply.inc"
 
 static void PlanLegacyTrade(CcSim *sim)
 {
@@ -10270,7 +10311,7 @@ static void PlanLegacyTrade(CcSim *sim)
                 sim, NULL, best_route, best_hop, (CcGood)good,
                 &sim->settlements[best_source],
                 &sim->settlements[best_destination],
-                best_path_capacity, 1, route_used);
+                best_path_capacity, 1, route_used, NULL);
         }
     }
 }
@@ -10465,6 +10506,7 @@ static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting)
             continue;
         }
         if (sim->schema_version >= 66U && DispatchSiteCarriage(sim, carriage, site_accounting)) continue;
+        if (sim->schema_version >= 73U && DispatchGrainSupply(sim, carriage, route_used)) continue;
         int32_t best_score = 0;
         int32_t best_source = -1;
         int32_t best_destination = -1;
@@ -10577,7 +10619,7 @@ static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting)
         (void)CreateTradeShipment(
             sim, carriage, best_route, best_hop, best_good, source,
             &sim->settlements[best_destination],
-            best_path_capacity, best_minimum_cargo_slots, route_used);
+            best_path_capacity, best_minimum_cargo_slots, route_used, NULL);
     }
 }
 
@@ -16155,6 +16197,151 @@ static void ShiftRelationshipTrust(CcSim *sim, CcRelationship *relationship,
     relationship->cause_event_id = event->id;
 }
 
+CcBakerySupportPlan CcSimBakerySupportPlan(const CcSim *sim, CcId settlement_id)
+{
+    CcBakerySupportPlan plan = {0};
+    const CcSettlement *place = CcSimSettlement(sim, settlement_id);
+    if (sim == NULL || place == NULL || CcSettlementIsAbandoned(place)) {
+        SetError(plan.reason, sizeof(plan.reason), "Choose an inhabited town.");
+        return plan;
+    }
+    plan.cargo[CC_GOOD_WHEAT] = 12;
+    plan.coins = 8;
+    if (!CcSettlementHasService(place, CC_SERVICE_BAKERY)) {
+        plan.building_days = 7;
+        plan.town_materials[CC_GOOD_WOOD] = 8;
+        plan.town_materials[CC_GOOD_STONE] = 6;
+        plan.town_materials[CC_GOOD_IRON] = 6;
+        plan.town_materials[CC_GOOD_TOOLS] = 5;
+        plan.coins = 80;
+    }
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *person = &sim->characters[i];
+        if (person->home_settlement_id == place->id &&
+            person->current_settlement_id == place->id &&
+            (person->role == CC_CHARACTER_LABORER || person->role == CC_CHARACTER_OFFICIAL) &&
+            person->death_day > sim->current_day) {
+            plan.contact_id = person->id;
+            plan.remembered = CcCharacterRemembers(person, CC_CHARACTER_MEMORY_PLAYER_HELPED, place->id);
+            break;
+        }
+    }
+    const CcSituation *promise = CcSimAcceptedSituation(sim);
+    if (sim->schema_version < 72U) {
+        SetError(plan.reason, sizeof(plan.reason), "Load this company through the current save reader first.");
+    } else if (sim->player.location_id != place->id || sim->journey.active ||
+               sim->mine.phase != CC_MINE_NONE || sim->dungeon_expedition.active) {
+        SetError(plan.reason, sizeof(plan.reason), "Meet the workers in town with your carriage.");
+    } else if (promise != NULL && promise->kind == CC_SITUATION_RELIEF_DELIVERY &&
+               promise->good == CC_GOOD_WHEAT &&
+               sim->player.cargo[CC_GOOD_WHEAT] - plan.cargo[CC_GOOD_WHEAT] <
+                   promise->quantity - promise->progress) {
+        SetError(plan.reason, sizeof(plan.reason), "Keep enough wheat for your promised delivery.");
+    } else if (plan.contact_id == 0U) {
+        SetError(plan.reason, sizeof(plan.reason), "A resident worker or town official must receive the supplies.");
+    } else if (place->service_project != CC_SERVICE_NONE) {
+        SetError(plan.reason, sizeof(plan.reason), "Let the current building work finish first.");
+    } else if (place->production[CC_GOOD_BREAD] <= 0) {
+        SetError(plan.reason, sizeof(plan.reason), "Choose a town with an established baking workshop.");
+    } else if (plan.building_days > 0 && CcSettlementServiceCount(place) >=
+               CcSettlementServiceCapacity(place->size)) {
+        SetError(plan.reason, sizeof(plan.reason), "The town needs space for another service.");
+    } else if (sim->player.coins < plan.coins || place->market_coins > CC_SIM_MAX_MONEY - plan.coins) {
+        SetError(plan.reason, sizeof(plan.reason), "Bring the stated wages in crowns.");
+    } else {
+        plan.ready = true;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            if (sim->player.cargo[good] < plan.cargo[good] ||
+                place->stock[good] < plan.town_materials[good]) plan.ready = false;
+        }
+        if (place->stock[CC_GOOD_WHEAT] > CC_SIM_MAX_UNITS - 12) plan.ready = false;
+        SetError(plan.reason, sizeof(plan.reason), plan.ready ?
+            "The workers can receive the load today." : "Bring the wheat. The town must hold the listed building materials.");
+    }
+    return plan;
+}
+
+static bool ApplyBakerySupport(CcSim *sim, const CcCommand *command,
+                               char *error, size_t error_capacity)
+{
+    CcBakerySupportPlan plan = CcSimBakerySupportPlan(sim, command->target_id);
+    if (!plan.ready) {
+        SetError(error, error_capacity, plan.reason);
+        return false;
+    }
+    if (command->amount != plan.building_days) {
+        SetError(error, error_capacity, "The bakery's needs changed. Read the offer again.");
+        return false;
+    }
+    CcSettlement *place = CcSimSettlementMutable(sim, command->target_id);
+    CcCharacter *contact = CharacterMutable(sim, plan.contact_id);
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        sim->player.cargo[good] -= plan.cargo[good];
+        place->stock[good] -= plan.town_materials[good];
+    }
+    sim->player.coins -= plan.coins;
+    place->market_coins += plan.coins;
+    place->stock[CC_GOOD_WHEAT] += plan.cargo[CC_GOOD_WHEAT];
+    if (plan.building_days > 0) {
+        place->service_project = CC_SERVICE_BAKERY;
+        place->service_project_days = plan.building_days;
+    }
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "%.31s accepts 12 wheat and %" PRId64
+        " crowns at %.31s. %s", contact->name, plan.coins, place->name,
+        plan.building_days > 0 ? "Bakery work begins." : "Grain enters stock.");
+    CcEvent *event = PushEvent(sim, CC_EVENT_RELIEF, contact->id, place->id,
+                              0U, plan.cargo[CC_GOOD_WHEAT], text);
+    RememberCharacter(contact, CC_CHARACTER_MEMORY_PLAYER_HELPED, place->id, event->id, sim->current_day);
+    if (!plan.remembered) contact->player_disposition = ClampI32(contact->player_disposition + 8, -100, 100);
+    CcEconomyRefreshSettlementGoodPrice(sim, place, CC_GOOD_WHEAT);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyFundGrainSupply(CcSim *sim, const CcCommand *command,
+                                 char *error, size_t error_capacity)
+{
+    CcSettlement *town = CcSimSettlementMutable(sim, command->target_id);
+    if (sim->schema_version < 73U || town == NULL || sim->player.location_id != town->id || sim->journey.active) {
+        SetError(error, error_capacity, "Meet the organiser in town with your carriage.");
+        return false;
+    }
+    CcGrainSupply *supply = (CcGrainSupply *)CcSimGrainSupply(sim, town->id);
+    if (command->amount == -1) {
+        if (sim->player.coins > CC_SIM_MAX_MONEY - supply->purse) {
+            SetError(error, error_capacity, "Make room in the company purse before collecting this fund.");
+            return false;
+        }
+        sim->player.coins += supply->purse;
+        supply->purse = 0;
+        supply->enabled = false;
+        SetError(error, error_capacity, "");
+        return true;
+    }
+    CcBakerySupportPlan offer = CcSimBakerySupportPlan(sim, town->id);
+    CcCharacter *organiser = CharacterMutable(sim, supply->organiser_id);
+    if (organiser == NULL || organiser->death_day <= sim->current_day ||
+        organiser->current_settlement_id != town->id) organiser = CharacterMutable(sim, offer.contact_id);
+    if (command->amount != 0 || organiser == NULL || CcSettlementIsAbandoned(town) ||
+        !CcSettlementHasService(town, CC_SERVICE_BAKERY) || sim->player.coins < 200 ||
+        supply->purse > CC_SIM_MAX_MONEY - 192 || organiser->travel_coins > CC_SIM_MAX_MONEY - 8) {
+        SetError(error, error_capacity, "Bring 200 crowns to a local organiser at an open bakery.");
+        return false;
+    }
+    sim->player.coins -= 200;
+    supply->purse += 192;
+    organiser->travel_coins += 8;
+    supply->organiser_id = organiser->id;
+    supply->enabled = true;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "%.31s takes 8 crowns in pay and holds 192 for grain deliveries to %.31s.", organiser->name, town->name);
+    CcEvent *event = PushEvent(sim, CC_EVENT_RELIEF, organiser->id, town->id, 0U, 0, text);
+    RememberCharacter(organiser, CC_CHARACTER_MEMORY_PLAYER_HELPED, town->id, event->id, sim->current_day);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
                                    char *error, size_t error_capacity)
 {
@@ -17636,7 +17823,9 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_CHARACTER_RESPONSE ||
         command->kind == CC_COMMAND_EXCHANGE_GOSSIP ||
         command->kind == CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL ||
-        command->kind == CC_COMMAND_BEGIN_DUNGEON_EXPEDITION;
+        command->kind == CC_COMMAND_BEGIN_DUNGEON_EXPEDITION ||
+        command->kind == CC_COMMAND_FUND_GRAIN_SUPPLY ||
+        command->kind == CC_COMMAND_SUPPORT_BAKERY;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
                  "Settlement business must wait until the carriage arrives.");
@@ -17710,6 +17899,10 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_CHARACTER_RESPONSE:
             return ApplyCharacterResponse(
                 sim, command, error, error_capacity);
+        case CC_COMMAND_FUND_GRAIN_SUPPLY:
+            return ApplyFundGrainSupply(sim, command, error, error_capacity);
+        case CC_COMMAND_SUPPORT_BAKERY:
+            return ApplyBakerySupport(sim, command, error, error_capacity);
         case CC_COMMAND_REPAIR_ROAD_SITE:
             return ApplyRepairRoadSite(sim, command, error, error_capacity);
         case CC_COMMAND_TRANSFER_ROAD_SITE:
@@ -18030,7 +18223,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 70U
+#define CC_NEWEST_LEGACY_SCHEMA 72U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18048,7 +18241,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 70U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 72U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -19494,6 +19687,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                     &character->memories[memory];
                 bool subject_exists =
                     CcSimSituation(sim, item->subject_id) != NULL ||
+                    (sim->schema_version >= 72U && item->kind == CC_CHARACTER_MEMORY_PLAYER_HELPED &&
+                     CcSimSettlement(sim, item->subject_id) != NULL) ||
                     (sim->schema_version >= 19U &&
                      CcSimQuestOutcome(sim, item->subject_id) != NULL);
                 if (item->kind <= CC_CHARACTER_MEMORY_NONE ||
@@ -19894,6 +20089,29 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             }
         }
     }
+    if (sim->schema_version >= 73U) {
+        for (int i = 0; i < sim->settlement_count; ++i) {
+            const CcGrainSupply *g = &sim->grain_supplies[i];
+            bool shipment_found = g->shipment_id == 0;
+            for (int j = 0; j < sim->shipment_count; ++j) {
+                const CcShipment *shipment = &sim->shipments[j];
+                if (shipment->id == g->shipment_id && shipment->good == CC_GOOD_WHEAT &&
+                    shipment->final_destination_id == sim->settlements[i].id &&
+                    (shipment->status == CC_SHIPMENT_TRAVELLING || shipment->status == CC_SHIPMENT_BLOCKED)) shipment_found = true;
+            }
+            if ((g->organiser_id != 0 && CcIdKind(g->organiser_id) != CC_ENTITY_CHARACTER) ||
+                (g->enabled && g->organiser_id == 0) || !shipment_found ||
+                (g->supplier_id != 0 && CcSimSettlement(sim, g->supplier_id) == NULL) ||
+                (g->route_id != 0 && CcSimRoute(sim, g->route_id) == NULL) ||
+                g->purse < 0 || g->purse > CC_SIM_MAX_MONEY || g->spent < 0 ||
+                g->ordered < 0 || g->delivered < 0 || g->lost < 0 || g->redirected < 0 ||
+                (int64_t)g->delivered + g->lost + g->redirected > g->ordered ||
+                g->last_dispatch_day < 0 || g->last_dispatch_day > sim->current_day ||
+                g->last_arrival_day < 0 || g->last_arrival_day > sim->current_day) {
+                SetError(error, error_capacity, "The grain delivery record is invalid."); return false;
+            }
+        }
+    }
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
     bool nonnegative_cargo = true;
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
@@ -20208,6 +20426,15 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(sim->mine.steps); HASH_VALUE(sim->mine.seen);
         HASH_VALUE(sim->mine.bar_open); HASH_VALUE(sim->mine.surveyed);
         for (int32_t good=0;good<CC_GOOD_COUNT;++good) HASH_VALUE(sim->mine.pack[good]);
+    }
+    if (sim->schema_version >= 73U) {
+        for (int i = 0; i < sim->settlement_count; ++i) {
+            const CcGrainSupply *g = &sim->grain_supplies[i];
+            HASH_VALUE(g->organiser_id); HASH_VALUE(g->supplier_id); HASH_VALUE(g->route_id);
+            HASH_VALUE(g->shipment_id); HASH_VALUE(g->purse); HASH_VALUE(g->spent);
+            HASH_VALUE(g->ordered); HASH_VALUE(g->delivered); HASH_VALUE(g->lost); HASH_VALUE(g->redirected);
+            HASH_VALUE(g->last_dispatch_day); HASH_VALUE(g->last_arrival_day); HASH_VALUE(g->enabled);
+        }
     }
     HASH_VALUE(sim->schema_version);
     HASH_VALUE(sim->generator_version);

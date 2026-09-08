@@ -404,6 +404,43 @@ static int RunAdventureTradeTermsRegression(void)
     (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
     ClientInputClearPressed();
     TERMS_CHECK(CcSimHash(&sim) == delivered, "Repeated delivery confirmation must preserve its result.");
+    CcSimInit(&sim, 42U);
+    sim.player.location_id = sim.settlements[1].id;
+    sim.carriage.location_id = sim.player.location_id;
+    memset(sim.player.cargo, 0, sizeof(sim.player.cargo));
+    sim.player.cargo[CC_GOOD_WHEAT] = 12;
+    memset(&local, 0, sizeof(local));
+    local.trade_mode = 3;
+    CcBakerySupportPlan bakery = CcSimBakerySupportPlan(&sim, sim.player.location_id);
+    TERMS_CHECK(bakery.ready, "The bakery fixture must have a ready offer.");
+    coins = sim.player.coins;
+    queued_key_press[KEY_ENTER] = true;
+    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
+    ClientInputClearPressed();
+    TERMS_CHECK(sim.player.coins == coins, "Bakery support must require a displayed offer.");
+    local.trade_quote_presented = true;
+    local.trade_presented_total = bakery.coins;
+    local.trade_presented_command = (CcCommand){.kind = CC_COMMAND_SUPPORT_BAKERY,
+        .target_id = sim.player.location_id, .amount = bakery.building_days};
+    queued_key_press[KEY_ENTER] = true;
+    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
+    ClientInputClearPressed();
+    TERMS_CHECK(sim.player.coins == coins - bakery.coins && sim.player.cargo[CC_GOOD_WHEAT] == 0,
+        "Bakery confirmation must transfer the displayed cargo and wages.");
+    TERMS_CHECK(CcSimBakerySupportPlan(&sim, sim.player.location_id).remembered,
+        "The receiving contact must remember the confirmed support.");
+    local.trade_mode = 4;
+    sim.player.coins = 400;
+    local.trade_presented_command = (CcCommand){.kind = CC_COMMAND_FUND_GRAIN_SUPPLY,
+        .target_id = sim.player.location_id};
+    local.trade_presented_total = 200;
+    queued_key_press[KEY_ENTER] = true;
+    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
+    ClientInputClearPressed();
+    TERMS_CHECK(sim.grain_supplies[1].enabled && sim.grain_supplies[1].purse == 192,
+        "The grain fund button must start the displayed agreement.");
+    TERMS_CHECK(strstr(local.receipt, "grain fund") != NULL,
+        "Funding must show its receipt.");
 #undef TERMS_CHECK
     puts("adventure trade terms passed");
     return 0;

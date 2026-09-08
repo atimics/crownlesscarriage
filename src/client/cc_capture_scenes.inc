@@ -674,6 +674,45 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
             }
         }
         if (request->capture_ux_view == 3) { (*scene->view) = VIEW_TRADE; scene->local->trade_good = CC_GOOD_FOOD; scene->local->trade_quantity = 2; }
+        if (request->capture_ux_view == 15 || request->capture_ux_view == 16) {
+            scene->sim->player.location_id = scene->sim->settlements[1].id;
+            scene->sim->carriage.location_id = scene->sim->player.location_id;
+            if (request->capture_ux_view == 16) scene->sim->settlements[1].service_mask &= ~(UINT32_C(1) << CC_SERVICE_BAKERY);
+            CcBakerySupportPlan plan = CcSimBakerySupportPlan(scene->sim, scene->sim->player.location_id);
+            for (int good = 0; good < CC_GOOD_COUNT; ++good) scene->sim->player.cargo[good] = plan.cargo[good];
+            scene->sim->player.coins = 100;
+            (*scene->view) = VIEW_TRADE;
+            scene->local->trade_mode = 3;
+        }
+        if (request->capture_ux_view >= 17 && request->capture_ux_view <= 19) {
+            scene->sim->player.location_id = scene->sim->settlements[1].id;
+            scene->sim->carriage.location_id = scene->sim->player.location_id;
+            scene->sim->player.coins = 400;
+            if (request->capture_ux_view >= 18) {
+                char error[192];
+                CcCommand fund = {.kind = CC_COMMAND_FUND_GRAIN_SUPPLY, .target_id = scene->sim->player.location_id};
+                if (!CcSimApply(scene->sim, &fund, error, sizeof(error))) return false;
+                for (int day = 0; day < 90 && scene->sim->grain_supplies[1].shipment_id == 0; ++day)
+                    CcSimAdvanceDays(scene->sim, 1);
+                CcId route_id = scene->sim->grain_supplies[1].route_id;
+                for (int r = 0; r < scene->sim->route_count; ++r) {
+                    if (scene->sim->routes[r].id != route_id) continue;
+                    scene->sim->routes[r].condition = 0;
+                    scene->sim->routes[r].closed = true;
+                }
+                if (request->capture_ux_view == 19) {
+                    CcSimAdvanceDays(scene->sim, 14);
+                    for (int r = 0; r < scene->sim->route_count; ++r) {
+                        if (scene->sim->routes[r].id != route_id) continue;
+                        scene->sim->routes[r].condition = 80;
+                        scene->sim->routes[r].closed = false;
+                    }
+                    CcSimAdvanceDays(scene->sim, 180);
+                }
+            }
+            (*scene->view) = VIEW_TRADE;
+            scene->local->trade_mode = 4;
+        }
         if (request->capture_ux_view == 4) { (*scene->view) = VIEW_LEDGER; scene->local->book_page = 3; }
         if (request->capture_ux_view == 11 || request->capture_ux_view == 12) {
             (*scene->view) = VIEW_CARRIAGE;
