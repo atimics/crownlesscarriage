@@ -200,9 +200,50 @@ static void CheckSeedSweep(char *error, size_t capacity)
     CC_CHECK(any_contest);
 }
 
+static void CheckSeedTwoLandLoss(char *error, size_t capacity)
+{
+    CcSim sim;
+    CC_CHECK(CcSaveRead(CC_TEST_SOURCE_DIR
+        "/tests/fixtures/shipped/seed-2-before-land-loss.ccsave",
+        &sim, error, capacity));
+    CC_CHECK(sim.current_day == 5864249);
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(sim.current_day == 5864250);
+    CC_CHECK(sim.kingdoms[1].ruler_character_id == 0U);
+    CC_CHECK(sim.kingdoms[1].monastery_patron_id == 0U);
+    CC_CHECK(CcSimValidate(&sim, error, capacity));
+}
+
+static void CheckLandlessOffices(char *error, size_t capacity)
+{
+    CcSim sim;
+    CcSimInit(&sim, 42U);
+    CcId lost_kingdom = sim.kingdoms[1].id;
+    CcId former_home = CcSimCharacter(&sim,
+        sim.kingdoms[1].ruler_character_id)->home_settlement_id;
+    for (int32_t i = 0; i < sim.settlement_count; ++i) {
+        if (sim.settlements[i].kingdom_id == lost_kingdom)
+            sim.settlements[i].kingdom_id = sim.kingdoms[0].id;
+    }
+    CcSimUpgradeHistoryOffices(&sim);
+    CC_CHECK(sim.kingdoms[1].ruler_character_id == 0U);
+    CC_CHECK(sim.kingdoms[1].monastery_patron_id == 0U);
+    CC_CHECK(CcSimValidate(&sim, error, capacity));
+    sim.kingdoms[1].ruler_character_id = sim.characters[0].id;
+    CC_CHECK(!CcSimValidate(&sim, error, capacity));
+    sim.kingdoms[1].ruler_character_id = 0U;
+    CcSimSettlementMutable(&sim, former_home)->kingdom_id = lost_kingdom;
+    CC_CHECK(!CcSimValidate(&sim, error, capacity));
+    CcSimUpgradeHistoryOffices(&sim);
+    CC_CHECK(sim.kingdoms[1].ruler_character_id != 0U);
+    CC_CHECK(CcSimValidate(&sim, error, capacity));
+}
+
 int main(void)
 {
     char error[256];
+    CheckSeedTwoLandLoss(error, sizeof(error));
+    CheckLandlessOffices(error, sizeof(error));
     CheckUncontestedSuccession(error, sizeof(error));
     CheckProclamationVictory(error, sizeof(error));
     CheckCradleFavored(error, sizeof(error));
