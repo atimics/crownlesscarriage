@@ -277,6 +277,18 @@ class CoopTests(unittest.TestCase):
         with self.assertRaises(ApiError):
             self.worlds.save_session(self.id, 'c'*64, dict(saved, sequence=4))
 
+    def test_player_session_versions(self):
+        context = self.worlds.view(self.id, self.a)['session_context']
+        for version in (7, 8):
+            saved = dict(sequence=version, context=context,
+                         session=f'CROWNLESS_SESSION {version}\nlaunch test\n')
+            self.worlds.save_session(self.id, self.a, saved)
+            self.assertEqual(self.worlds.view(self.id, self.a, campaign=True)['session'], saved)
+        for version in (6, 9):
+            with self.assertRaises(ApiError):
+                self.worlds.save_session(self.id, self.a, dict(sequence=10, context=context,
+                    session=f'CROWNLESS_SESSION {version}\nlaunch test\n'))
+
     def test_retry_survives_server_restart(self):
         body = self.command(self.a, amount=1, good=0)
         first = self.worlds.command(self.id, self.a, body)
