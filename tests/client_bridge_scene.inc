@@ -46,8 +46,8 @@ static int RunBridgeSceneRegression(void)
         "A wide bridge view must show all eight controls.");
     for (int32_t i = 0; i < before.count; ++i) {
         Rectangle a = ContextActionBounds(i, before.count, before.combat);
-        BRIDGE_CHECK(a.x >= 0 && a.y >= 0 && a.x + a.width <= ContextViewportWidth() &&
-            a.y + a.height <= ContextViewportHeight(), "Bridge controls must fit the viewport.");
+        BRIDGE_CHECK(a.x >= 0 && a.y >= 0 && a.x + a.width <= (float)ContextViewportWidth() &&
+            a.y + a.height <= (float)ContextViewportHeight(), "Bridge controls must fit the viewport.");
         for (int32_t j = 0; j < i; ++j) {
             Rectangle b = ContextActionBounds(j, before.count, before.combat);
             BRIDGE_CHECK(!CheckCollisionRecs(a, b), "Bridge controls need separate click areas.");
