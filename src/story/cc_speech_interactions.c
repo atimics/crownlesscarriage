@@ -16,7 +16,7 @@ bool CcSpeechGreeting(const CcSim *sim, CcId place_id, CcId object_id,
     if (strstr(speaker, "guard") != NULL) {
         (void)snprintf(text, sizeof(text), "Welcome to %s. Keep the gate clear for the wagons.", place->name);
     } else if (strcmp(speaker, "Traveller") == 0) {
-        (void)snprintf(text, sizeof(text), "I am stopping in %s. Try the notice board for word from the other towns.", place->name);
+        (void)snprintf(text, sizeof(text), "I am stopping in %s for a meal. How was the road?", place->name);
     } else if (strstr(speaker, "trader") != NULL) {
         (void)snprintf(text, sizeof(text), "Come into the %s. We can settle a price at the counter.", service);
     } else if (place->hunger >= 50) {
@@ -27,6 +27,50 @@ bool CcSpeechGreeting(const CcSim *sim, CcId place_id, CcId object_id,
     return CcSpeechCompose(speech, "town.greeting", object_id, speaker,
         CcSpeechLocalVoice(sim->world_seed, place_id, object_id), text,
         CC_SPEECH_PLAIN, CC_SPEECH_CONVERSATION, 0);
+}
+
+bool CcSpeechStory(const CcSim *sim, CcId character_id,
+                   const CcGossip *story, const CcGossipVersion *version,
+                   bool source, CcSpeech *speech)
+{
+    if (speech == NULL) return false;
+    *speech = (CcSpeech){0};
+    if (sim == NULL || story == NULL || version == NULL) return false;
+    const CcCharacter *speaker = CcSimCharacter(sim, character_id);
+    if (speaker == NULL) return false;
+    char text[CC_SPEECH_TEXT_CAPACITY];
+    if (source) {
+        const CcCharacter *teller = CcSimCharacter(sim, version->source_character_id);
+        if (teller != NULL && teller->id != speaker->id) {
+            (void)snprintf(text, sizeof(text),
+                "%s passed the account to me. I cannot claim I saw it happen.",
+                teller->name);
+        } else {
+            (void)snprintf(text, sizeof(text),
+                "I heard it passed around. I cannot give you a named source.");
+        }
+    } else if (!CcSpeechRealizeGossip(sim, speaker, story, version,
+                                      text, sizeof(text))) {
+        /* Do not undo the quantity/knowledge boundary with a raw-text fallback. */
+        return false;
+    }
+    return CcSpeechCompose(speech, source ? "gossip.source" : "gossip.account",
+        speaker->id, speaker->name, CcSpeechCharacterVoice(sim, speaker), text,
+        CC_SPEECH_PLAIN, CC_SPEECH_CONVERSATION, story->event_id);
+}
+
+bool CcSpeechGossip(const CcSim *sim, CcId character_id, int32_t offset,
+                      bool source, CcSpeech *speech)
+{
+    if (speech == NULL) return false;
+    *speech = (CcSpeech){0};
+    if (sim == NULL) return false;
+    const CcCharacter *person = CcSimCharacter(sim, character_id);
+    if (person == NULL) return false;
+    const CcGossipVersion *version = NULL;
+    const CcGossip *story = CcSimPersonalGossip(sim, character_id, offset, &version);
+    if (story == NULL || version == NULL) return false;
+    return CcSpeechStory(sim, character_id, story, version, source, speech);
 }
 
 bool CcSpeechRoad(const CcSim *sim, CcSpeech *speech)

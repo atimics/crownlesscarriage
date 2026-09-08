@@ -1218,10 +1218,10 @@ static Camera3D RoadCamera(Vector3 focus, bool travelling, float clock,
         return SnapCameraToArtPixels(camera, art_height);
     }
     int32_t shot = 4;
-    Vector3 destination = {48.60f, 0.95f, 40.0f};
-    const Vector3 road_offset = {3.0f, 4.4f, 14.5f};
+    Vector3 destination = {47.0f, 0.95f, 40.0f};
+    const Vector3 road_offset = {2.0f, 7.0f, 14.5f};
     FixedCameraRigAim(&road_camera_rig, shot, destination, road_offset,
-                      10.8f, clock, advance);
+                      13.8f, clock, advance);
     return SnapCameraToArtPixels(
         ExteriorCameraComposed(road_camera_rig.displayed_target,
                                road_camera_rig.displayed_offset,

@@ -34,26 +34,6 @@ static void QuietWorld(CcSim *sim, uint32_t seed)
     }
 }
 
-static int32_t AverageHunger(const CcSim *sim)
-{
-    int32_t total = 0;
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        total += sim->settlements[i].hunger;
-    }
-    return total / sim->settlement_count;
-}
-
-static int32_t MaximumHunger(const CcSim *sim)
-{
-    int32_t maximum = 0;
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        if (sim->settlements[i].hunger > maximum) {
-            maximum = sim->settlements[i].hunger;
-        }
-    }
-    return maximum;
-}
-
 int main(void)
 {
     char error[192];
@@ -117,6 +97,95 @@ int main(void)
     CC_CHECK(shared_granary.shipment_count > 0);
     CC_CHECK(shared_granary.shipments[0].good == CC_GOOD_FOOD);
     CC_CHECK(granary->stock[CC_GOOD_FOOD] < 80);
+
+    CcSim used_road;
+    CcSimInit(&used_road, UINT32_C(0xba1a0ce4));
+    used_road.settlement_count = 2;
+    used_road.route_count = 1;
+    used_road.shipment_count = 1;
+    used_road.courier_count = 0;
+    used_road.bandit_count = 0;
+    used_road.monster_count = 0;
+    used_road.dungeon_count = 0;
+    used_road.dragon.slain = true;
+    used_road.dragon.regional_influence = 0;
+    CcRoute *used_route = &used_road.routes[0];
+    used_route->from_id = used_road.settlements[0].id;
+    used_route->to_id = used_road.settlements[1].id;
+    used_route->closed = false;
+    used_route->condition = 57;
+    used_route->security = 100;
+    used_route->smuggler_route = false;
+    used_road.shipments[0] = (CcShipment){
+        .id = UINT64_C(9001),
+        .origin_id = used_route->from_id,
+        .destination_id = used_route->to_id,
+        .final_destination_id = used_route->to_id,
+        .route_id = used_route->id,
+        .good = CC_GOOD_WHEAT,
+        .quantity = 5,
+        .departure_day = used_road.current_day,
+        .arrival_day = used_road.current_day + 1,
+        .status = CC_SHIPMENT_TRAVELLING
+    };
+    CcSimAdvanceDays(&used_road, 1);
+    CC_CHECK(used_road.shipments[0].status == CC_SHIPMENT_ARRIVED);
+    CC_CHECK(used_route->condition == 58);
+
+    CcSim weakest_road;
+    CcSimInit(&weakest_road, UINT32_C(0xba1a0ce5));
+    weakest_road.settlement_count = 3;
+    weakest_road.route_count = 2;
+    weakest_road.shipment_count = 0;
+    weakest_road.courier_count = 0;
+    weakest_road.bandit_count = 0;
+    weakest_road.monster_count = 0;
+    weakest_road.dungeon_count = 0;
+    weakest_road.situation_count = 0;
+    weakest_road.dragon.slain = true;
+    weakest_road.dragon.egg_count = 0;
+    weakest_road.goblins.tribute_cooldown_days = 1000;
+    weakest_road.hoard_raiders.cooldown_days = 1000;
+    CcKingdom *road_crown = &weakest_road.kingdoms[0];
+    for (int32_t kingdom = 0;
+         kingdom < weakest_road.kingdom_count; ++kingdom) {
+        weakest_road.kingdoms[kingdom].treasury = 0;
+    }
+    road_crown->treasury = 12;
+    for (int32_t place = 0; place < weakest_road.settlement_count; ++place) {
+        CcSettlement *settlement = &weakest_road.settlements[place];
+        settlement->kingdom_id = road_crown->id;
+        settlement->prosperity = 0;
+        settlement->hunger = 0;
+        settlement->service_mask = 0U;
+        settlement->market_coins = 0;
+        settlement->war_chest = 0;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            settlement->stock[good] = 0;
+            settlement->reserve_target[good] = 0;
+            settlement->production[good] = 0;
+            settlement->consumption[good] = 0;
+        }
+    }
+    weakest_road.settlements[0].stock[CC_GOOD_WOOD] = 2;
+    weakest_road.settlements[0].stock[CC_GOOD_STONE] = 2;
+    weakest_road.routes[0].from_id = weakest_road.settlements[0].id;
+    weakest_road.routes[0].to_id = weakest_road.settlements[1].id;
+    weakest_road.routes[0].closed = false;
+    weakest_road.routes[0].condition = 50;
+    weakest_road.routes[0].smuggler_route = false;
+    weakest_road.routes[1].from_id = weakest_road.settlements[0].id;
+    weakest_road.routes[1].to_id = weakest_road.settlements[2].id;
+    weakest_road.routes[1].closed = false;
+    weakest_road.routes[1].condition = 30;
+    weakest_road.routes[1].smuggler_route = false;
+    weakest_road.current_day = 27;
+    CcSimAdvanceDays(&weakest_road, 1);
+    CC_CHECK(weakest_road.routes[0].condition == 49);
+    CC_CHECK(weakest_road.routes[1].condition == 45);
+    CC_CHECK(weakest_road.settlements[0].market_coins == 12);
+    CC_CHECK(weakest_road.settlements[0].stock[CC_GOOD_WOOD] == 1);
+    CC_CHECK(weakest_road.settlements[0].stock[CC_GOOD_STONE] == 1);
 
     CcSim road_work;
     CcSimInit(&road_work, UINT32_C(0xba1a0ce2));
@@ -259,11 +328,14 @@ int main(void)
             CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
             if (year < 20) continue;
             samples += 1;
-            int32_t average_hunger = AverageHunger(&sim);
-            int32_t maximum_hunger = MaximumHunger(&sim);
+            CcHungerSnapshot hunger = CcSimHungerSnapshot(&sim);
+            int32_t average_hunger = hunger.average;
+            int32_t maximum_hunger = hunger.maximum;
             if (average_hunger >= 60) collapse_samples += 1;
             if (maximum_hunger >= 40) crisis_samples += 1;
-            if (average_hunger < 25) quiet_samples += 1;
+            if (hunger.inhabited_settlements > 0 && average_hunger < 25) {
+                quiet_samples += 1;
+            }
             bool at_war = false;
             for (int32_t first = 0;
                  first < sim.kingdom_count; ++first) {

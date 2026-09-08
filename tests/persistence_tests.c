@@ -650,6 +650,18 @@ static void CheckDiplomacyPersistence(char *error, size_t error_capacity)
     sim.dragon.age_days = 500 * 365;
     CcSimAdvanceDays(&sim, 27);
     sim.dragon.territoryless_days = 17;
+    /* The archive's silence has to outlive the save. Before schema 56 this
+       field existed only in memory, so the five-year wait restarted on every
+       load and the recovery it gates could never come due. */
+    uint64_t before_silence = CcSimHash(&sim);
+    sim.archives.dead_since_day = 1;
+    CC_CHECK(CcSimHash(&sim) != before_silence);
+    CC_CHECK(CcSimValidate(&sim, error, error_capacity));
+    sim.archives.dead_since_day = sim.current_day + 1;
+    CC_CHECK(!CcSimValidate(&sim, error, error_capacity));
+    sim.archives.dead_since_day = -1;
+    CC_CHECK(!CcSimValidate(&sim, error, error_capacity));
+    sim.archives.dead_since_day = 1;
     CC_CHECK(sim.courier_count > 0);
     CC_CHECK(sim.couriers[0].status == CC_COURIER_WAITING);
     CC_CHECK(CcSaveWrite(path, &sim, error, error_capacity));
@@ -668,6 +680,7 @@ static void CheckDiplomacyPersistence(char *error, size_t error_capacity)
              sim.archives.abbot_character_id);
     CC_CHECK(restored.archives.stewardship_rank ==
              sim.archives.stewardship_rank);
+    CC_CHECK(restored.archives.dead_since_day == 1);
     CC_CHECK(restored.kingdoms[0].ruler_character_id ==
              sim.kingdoms[0].ruler_character_id);
     CC_CHECK(restored.kingdoms[0].monastery_patron_id ==
@@ -2576,6 +2589,13 @@ static void CheckShippedSaveCompatibility(char *error,
         }
         CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
         CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+        /* Schema 51 seeds common pony herds, so no save arrives without one. */
+        CC_CHECK(CcSimCommonPonyCount(&restored) > 0);
+        /* Schema 52 empties the second seat and puts that pony back on the
+           roads, which CcPoniesValidate checks below. */
+        CC_CHECK(restored.pony_company.team[1] == -1);
+        CC_CHECK(CcSimHorseTeamCount(&restored) == 1);
+        CC_CHECK(CcPoniesValidate(&restored));
         CC_CHECK(restored.world_seed == 42U);
         CC_CHECK(restored.current_day == 366);
         CC_CHECK(restored.kingdom_count == kingdom_count);
@@ -2686,8 +2706,63 @@ static void CheckSchema41Upgrade(void)
     RemoveDatabase(path);
 }
 
+/* The set of (schema, generator) pairs a save may carry is a compatibility
+   promise, and it now lives as a table in cc_sim.c rather than as a chain of
+   equality tests. Restate the promise independently here and sweep it, so a
+   future edit to that table cannot quietly widen or narrow what loads. */
+static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
+{
+    bool legacy = schema >= 2U && schema <= 56U;
+    if (!legacy && schema != CC_SIM_SCHEMA_VERSION) return false;
+    if (schema == CC_SIM_SCHEMA_VERSION &&
+        generator == CC_GENERATOR_VERSION) return true;
+    if (generator == CC_GENERATOR_VERSION) {
+        /* The current generator reads the oldest schemas and the recent run,
+           but not 28 through 31, which shipped with generators of their own. */
+        if (schema >= 2U && schema <= 27U) return true;
+        if (schema >= 32U && schema <= 56U) return true;
+    }
+    if (schema == 31U && generator == 24U) return true;
+    if (schema == 27U && generator >= 21U && generator <= 23U) return true;
+    if (schema == 28U && generator == 22U) return true;
+    if (schema == 29U && generator == 23U) return true;
+    if (schema == 30U && generator == 23U) return true;
+    /* Preserve older pairings; schema 52 only shipped with generator 25. */
+    if (schema >= 2U && schema <= 51U && generator >= 2U && generator <= 21U) return true;
+    return false;
+}
+
+static void CheckSupportedVersionPairings(void)
+{
+    static const char *unsupported = "Simulation version is unsupported.";
+    int32_t accepted = 0;
+    for (uint32_t schema = 0U; schema <= 60U; ++schema) {
+        for (uint32_t generator = 0U; generator <= 30U; ++generator) {
+            static CcSim sim;
+            char error[256] = {0};
+            CcSimInit(&sim, UINT32_C(0x5ca1ab1e));
+            sim.schema_version = schema;
+            sim.generator_version = generator;
+            bool expected = ExpectedSupportedPairing(schema, generator);
+            bool valid = CcSimValidate(&sim, error, sizeof(error));
+            bool rejected_on_version = strcmp(error, unsupported) == 0;
+            if (expected) {
+                /* A supported pairing may still fail a later invariant, but it
+                   must never be turned away for its version. */
+                CC_CHECK(!rejected_on_version);
+                accepted++;
+            } else {
+                CC_CHECK(!valid && rejected_on_version);
+            }
+        }
+    }
+    /* The sweep must actually exercise the accepting side. */
+    CC_CHECK(accepted > 0);
+}
+
 int main(void)
 {
+    CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
     CheckSchema41Upgrade();
     const char *path = "persistence-test.ccsave";

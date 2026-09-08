@@ -69,9 +69,102 @@ static void CheckCivicCohesionRecovery(void)
     CC_CHECK(sim.goblins.cohesion >= 50);
 }
 
+/* A quarrelling cult cannot organize anything beyond a food raid: while
+ * cohesion is below 25 the cult fails to muster tribute or equipment
+ * expeditions, but once it agrees again the muster proceeds. */
+static void CheckCohesionGatesMusters(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x60b11d));
+    sim.current_day = 6;
+    sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_IDLE;
+    sim.goblins.tribute_cooldown_days = 0;
+    sim.goblins.cohesion = 24;
+    sim.goblins.lair_stock[CC_GOOD_FOOD] = 40;
+    sim.goblins.lair_stock[CC_GOOD_TOOLS] = 4;
+    sim.goblins.lair_stock[CC_GOOD_WEAPONS] = 4;
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(sim.goblins.tribute_phase == CC_GOBLIN_TRIBUTE_IDLE);
+    CC_CHECK(sim.goblins.raid_motive == CC_GOBLIN_RAID_NONE);
+    CC_CHECK(sim.goblins.tribute_target_id == 0U);
+    CC_CHECK(sim.goblins.tribute_cooldown_days == 14);
+    CC_CHECK(CountEvents(&sim, CC_EVENT_GOBLIN_RAID_PREPARED) == 0);
+
+    sim.goblins.tribute_cooldown_days = 0;
+    sim.goblins.cohesion = 80;
+    CcSimAdvanceDays(&sim, 7);
+    CC_CHECK(sim.goblins.tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING);
+    CC_CHECK(CountEvents(&sim, CC_EVENT_GOBLIN_RAID_PREPARED) == 1);
+}
+
+/* A cult too divided to muster also cannot hold its members: the quarrel
+ * itself drives an ash-sworn away every week. */
+static void CheckCohesionDesertion(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x60b11e));
+    sim.current_day = 6;
+    sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_IDLE;
+    sim.goblins.tribute_cooldown_days = 100;
+    sim.goblins.cohesion = 20;
+    sim.goblins.members = 40;
+    sim.goblins.lair_stock[CC_GOOD_FOOD] = 40;
+    CcSimAdvanceDays(&sim, 8);
+    CC_CHECK(sim.goblins.members == 38);
+    CC_CHECK(sim.goblins.cohesion == 20);
+}
+
+/* A squabbling cult raids at half strength: below 50 cohesion the raid
+ * carries home fewer crowns than an agreed cult with the same target. */
+static void CheckCohesionWeakensRaids(void)
+{
+    CcSim control;
+    CcSimInit(&control, UINT32_C(0x60b120));
+    control.current_day = 6;
+    control.goblins.tribute_cooldown_days = 0;
+    control.goblins.lair_stock[CC_GOOD_FOOD] = 40;
+    control.goblins.lair_stock[CC_GOOD_TOOLS] = 4;
+    control.goblins.lair_stock[CC_GOOD_WEAPONS] = 4;
+    CcSimAdvanceDays(&control, 1);
+    CC_CHECK(control.goblins.tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING);
+
+    CcSim squabbling;
+    CcSimInit(&squabbling, UINT32_C(0x60b120));
+    squabbling.current_day = 6;
+    squabbling.goblins.tribute_cooldown_days = 0;
+    squabbling.goblins.lair_stock[CC_GOOD_FOOD] = 40;
+    squabbling.goblins.lair_stock[CC_GOOD_TOOLS] = 4;
+    squabbling.goblins.lair_stock[CC_GOOD_WEAPONS] = 4;
+    CcSimAdvanceDays(&squabbling, 1);
+    CC_CHECK(squabbling.goblins.tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING);
+    CC_CHECK(squabbling.goblins.tribute_target_id ==
+             control.goblins.tribute_target_id);
+    squabbling.goblins.cohesion = 40;
+
+    for (int32_t day = 0; day < 12; ++day) {
+        CcSimAdvanceDays(&control, 1);
+        CcSimAdvanceDays(&squabbling, 1);
+        if (CountEvents(&control, CC_EVENT_GOBLIN_RAIDED) >= 1 &&
+            CountEvents(&squabbling, CC_EVENT_GOBLIN_RAIDED) >= 1) break;
+    }
+    CC_CHECK(CountEvents(&control, CC_EVENT_GOBLIN_RAIDED) == 1);
+    CC_CHECK(CountEvents(&squabbling, CC_EVENT_GOBLIN_RAIDED) == 1);
+    CC_CHECK(squabbling.goblins.carried_tribute <
+             control.goblins.carried_tribute);
+    int32_t squabbling_goods = 0, control_goods = 0;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        squabbling_goods += squabbling.goblins.carried_goods[good];
+        control_goods += control.goblins.carried_goods[good];
+    }
+    CC_CHECK(squabbling_goods <= control_goods);
+}
+
 int main(void)
 {
     CheckCivicCohesionRecovery();
+    CheckCohesionGatesMusters();
+    CheckCohesionDesertion();
+    CheckCohesionWeakensRaids();
     char error[256];
 
     CcSim trade;

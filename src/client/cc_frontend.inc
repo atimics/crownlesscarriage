@@ -134,8 +134,8 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
     float x = panel.x + 36.0f;
     float y = panel.y + 148.0f;
     if (state->screen == FRONTEND_INVITATION) {
-        items[0] = (FrontendItem){FRONTEND_ACTION_FIELD_INVITATION, {x, y + 32, 848, 46}, "Invitation", true};
-        items[1] = (FrontendItem){FRONTEND_ACTION_INVITE_COPY, {x, y + 150, 412, 46}, "Copy invitation", true};
+        items[0] = (FrontendItem){FRONTEND_ACTION_FIELD_INVITATION, {x, y + 32, 848, 76}, "Invitation", true};
+        items[1] = (FrontendItem){FRONTEND_ACTION_INVITE_COPY, {x, y + 150, 412, 46}, "Share invitation", true};
         items[2] = (FrontendItem){FRONTEND_ACTION_CANCEL, {x + 436, y + 150, 412, 46}, "Back", true};
         return 3;
     }
@@ -395,6 +395,14 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
         state->avatar = CcCoopClientActive() ? CcCoopClientAppearance() :
             adventure_preferences != NULL ? adventure_preferences->avatar : 0U;
         CcLocalAgentInit(&frontend_avatar_preview, (Vector2){0, 0}, false);
+        /* The preview stands on its own level floor in every town and room. */
+        frontend_avatar_preview.position = (Vector3){0};
+        frontend_avatar_preview.facing_yaw = 0.0f;
+        CcHumanoidGaitInit(&frontend_avatar_preview.humanoid,
+            (CcLimbVec3){0}, 0.0f, NULL, NULL);
+        frontend_avatar_preview.render_pose = frontend_avatar_preview.humanoid.pose;
+        frontend_avatar_preview.cape = (CcLocalCapeState){0};
+        frontend_avatar_preview.render_cape = (CcLocalCapeState){0};
         FrontendOpen(state, FRONTEND_AVATAR);
     } else if (action >= FRONTEND_ACTION_SKIN && action <= FRONTEND_ACTION_COAT) {
         FrontendChangeAvatar(state, (int)(action - FRONTEND_ACTION_SKIN), 1);
@@ -624,7 +632,8 @@ static void DrawFrontend(const FrontendState *state,
             state->screen == FRONTEND_COMPANY ? "Your company and its shared road." :
             state->company.world_count == 0 ? "Create a world or join with an invitation." : "Choose a saved journey.", top + 120, 14, MUTED);
     } else {
-        FrontendCenteredText(CcCoopClientActive() ? "ONLINE  /  THE COMPANY KEEPS PLAYING" :
+        FrontendCenteredText(CcCoopClientActive() ?
+            (CcCoopClientPaused() ? "ONLINE  /  SHARED WORLD PAUSED" : "ONLINE  /  THE COMPANY KEEPS PLAYING") :
             TextFormat("OFFLINE  /  DAY %d", sim->current_day),
                              top + 120, 12, MUTED);
     }
@@ -654,6 +663,24 @@ static void DrawFrontend(const FrontendState *state,
             char *value = FrontendCompanyField((FrontendState *)state, item.action, &field_capacity);
             (void)field_capacity;
             const char *visible = item.action == FRONTEND_ACTION_FIELD_PASS && value[0] != '\0' ? "********" : value;
+            if (state->screen == FRONTEND_INVITATION && item.action == FRONTEND_ACTION_FIELD_INVITATION) {
+                /* The link must be readable in full; wrap it instead of clipping the world id. */
+                size_t length = strlen(visible);
+                int rows = (int)((length + 67U) / 68U);
+                if (rows < 1) rows = 1;
+                int row_size = 14 + preferences->text_size;
+                int text_top = (int)(item.bounds.y + (item.bounds.height - (float)(rows * (row_size + 4) - 4)) * 0.5f);
+                for (int row = 0; row < rows; ++row) {
+                    char line[72];
+                    (void)snprintf(line, sizeof(line), "%.68s", visible + (size_t)row * 68U);
+                    int size = row_size;
+                    while (size > 10 && MeasureText(line, size) > (int)item.bounds.width - 24) --size;
+                    DrawText(line, (int)(item.bounds.x + (item.bounds.width - (float)MeasureText(line, size)) * 0.5f),
+                        text_top + row * (row_size + 4), size, INK);
+                }
+                ClientTouchAdd(item.bounds, value, item.enabled, selected);
+                continue;
+            }
             if (strlen(visible) > 66) visible += strlen(visible) - 66;
             (void)snprintf(field_label, sizeof(field_label), "%.24s: %.66s%s", item.label, visible,
                 state->text_field == item.action ? "_" : "");
@@ -747,6 +774,8 @@ static int RunFrontendRegression(void)
     adventure_preferences = &avatar_preferences;
     FRONTEND_ACT(FRONTEND_ACTION_AVATAR);
     FRONTEND_CHECK(state.screen == FRONTEND_AVATAR && state.avatar_return == FRONTEND_TITLE);
+    FRONTEND_CHECK(frontend_avatar_preview.humanoid.feet[0].planted_point.y == 0.0f &&
+        frontend_avatar_preview.humanoid.feet[1].planted_point.y == 0.0f);
     FRONTEND_ACT(FRONTEND_ACTION_COAT);
     FRONTEND_ACT(FRONTEND_ACTION_CANCEL_AVATAR);
     FRONTEND_CHECK(state.screen == FRONTEND_TITLE && avatar_preferences.avatar == 0U);

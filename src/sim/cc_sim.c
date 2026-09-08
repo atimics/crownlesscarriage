@@ -3,6 +3,7 @@
 #include "quest/cc_quest.h"
 
 #include <inttypes.h>
+#include <ctype.h>
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
@@ -34,6 +35,7 @@ static uint32_t RoadHouseSeed(const CcSim *sim, CcId route_id);
 static const char *GeneratedRoadHouseName(const CcSim *sim, CcId route_id);
 static const CcSettlement *Scriptorium(const CcSim *sim);
 static void AssignHistoryOffices(CcSim *sim, bool announce);
+static void GrowBanditCamp(CcBanditGroup *bandits);
 
 static int32_t ClampI32(int32_t value, int32_t minimum, int32_t maximum)
 {
@@ -87,6 +89,31 @@ static uint32_t NextRandom(CcSim *sim)
 bool CcSettlementIsAbandoned(const CcSettlement *settlement)
 {
     return settlement != NULL && settlement->population <= 0;
+}
+
+CcHungerSnapshot CcSimHungerSnapshot(const CcSim *sim)
+{
+    CcHungerSnapshot result = {0, 0, 0, -1, -1, -1};
+    if (sim == NULL) return result;
+    int64_t total = 0;
+    int64_t weighted = 0;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) {
+            result.abandoned_settlements += 1;
+            continue;
+        }
+        result.inhabited_settlements += 1;
+        result.population += place->population;
+        total += place->hunger;
+        weighted += (int64_t)place->population * place->hunger;
+        if (place->hunger > result.maximum) result.maximum = place->hunger;
+    }
+    if (result.inhabited_settlements > 0) {
+        result.average = (int32_t)(total / result.inhabited_settlements);
+        result.population_weighted = (int32_t)(weighted / result.population);
+    }
+    return result;
 }
 
 int32_t CcSimClimateFactor(const CcSim *sim)
@@ -302,6 +329,7 @@ void CcSimInitializeAnimalEconomy(CcSim *sim)
         place->cow_condition = 88;
     }
     CcSimUpgradeFlockEconomy(sim);
+    CcSimSeedCommonPonyHerds(sim);
 }
 
 void CcSimUpgradeFlockEconomy(CcSim *sim)
@@ -372,6 +400,25 @@ void CcSimInitializeHorseStableSystem(CcSim *sim)
     }
 }
 
+/* One carriage, one animal in harness. The pair is still yours: ownership,
+   breeding, the save format and the world hash all go on seeing both horses,
+   and only the loops that drive the carriage narrow to the first. */
+int32_t CcSimHorseTeamCount(const CcSim *sim)
+{
+    return sim != NULL && sim->schema_version >= 52U ?
+        1 : CC_CARRIAGE_HORSE_COUNT;
+}
+
+/* The pony harnessed in `slot`, or -1 when the carriage has no such seat.
+   Every read of pony_company.team that goes on to index ponies[] or a colour
+   table comes through here, so a seat that does not exist cannot become an
+   array subscript. */
+int32_t CcSimTeamPony(const CcSim *sim, int32_t slot)
+{
+    if (sim == NULL || slot < 0 || slot >= CcSimHorseTeamCount(sim)) return -1;
+    return sim->pony_company.team[slot];
+}
+
 int32_t CcSimHorseCount(const CcSim *sim)
 {
     if (sim == NULL) return 0;
@@ -435,7 +482,7 @@ int32_t CcSimHorseTeamReadiness(const CcSim *sim)
 {
     if (sim == NULL) return 0;
     int32_t readiness = 100;
-    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
         const CcHorse *horse = &sim->horse_team[i];
         if (CcIdKind(horse->id) != CC_ENTITY_HORSE) return 0;
         int32_t value = horse->health - horse->fatigue / 2 -
@@ -1188,6 +1235,7 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_DRAGON_TERRITORY_LOST: return "CROWN BROKEN";
         case CC_EVENT_ROYAL_CARRIAGE_BLOCKED: return "BORDER BLOCK";
         case CC_EVENT_ROYAL_CARRIAGE_REROUTED: return "CARRIAGE ROUTE";
+        case CC_EVENT_NOTICE_POSTED: return "NOTICE";
     }
     return "EVENT";
 }
@@ -2024,11 +2072,11 @@ static bool IsWinter(const CcSim *sim)
     return sim != NULL && (sim->current_day / 7) % 52 >= 39;
 }
 
-static int32_t WarWeeklyNeed(const CcSim *sim, const CcSettlement *place,
-                             CcGood good)
+static int32_t WarWeeklyNeedForBurden(const CcSim *sim,
+                                      const CcSettlement *place,
+                                      CcGood good, int32_t burden)
 {
     if (!IsWarSeat(place)) return 0;
-    int32_t burden = CcSimWarBurdenAtSettlement(sim, place->id);
     if (burden < 20) return 0;
     if (good == CC_GOOD_FOOD) {
         return MinimumI32(place->consumption[CC_GOOD_FOOD],
@@ -2046,6 +2094,13 @@ static int32_t WarWeeklyNeed(const CcSim *sim, const CcSettlement *place,
         return 1 + burden / 50;
     }
     return 0;
+}
+
+static int32_t WarWeeklyNeed(const CcSim *sim, const CcSettlement *place,
+                             CcGood good)
+{
+    return WarWeeklyNeedForBurden(
+        sim, place, good, CcSimWarBurdenAtSettlement(sim, place->id));
 }
 
 static int32_t WarExtraConsumption(const CcSim *sim,
@@ -2169,7 +2224,8 @@ static int32_t NutritionStorageCapacity(const CcSim *sim,
     return CC_SIM_MAX_UNITS;
 }
 
-static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place)
+static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place,
+                                    CcTownNutritionAccounting *accounting)
 {
     static const CcGood goods[] = {
         CC_GOOD_BREAD, CC_GOOD_WHEAT, CC_GOOD_MEAT
@@ -2181,9 +2237,13 @@ static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place)
                           good == CC_GOOD_WHEAT ? 400 : 100;
         int32_t stored = place->stock[good];
         int32_t spoiled = stored / divisor;
+        if (accounting != NULL) accounting->aged_units[good] += (uint64_t)spoiled;
         stored -= spoiled;
         int32_t capacity = NutritionStorageCapacity(sim, place, good);
         if (stored > capacity) {
+            if (accounting != NULL) {
+                accounting->overflow_units[good] += (uint64_t)(stored - capacity);
+            }
             spoiled += stored - capacity;
             stored = capacity;
         }
@@ -2191,6 +2251,19 @@ static int32_t SpoilStoredNutrition(const CcSim *sim, CcSettlement *place)
         total_spoiled += spoiled;
     }
     return total_spoiled;
+}
+
+/* Paper goes the way of stored food, just far more slowly: a hoard left
+   sitting loses about a hundredth of itself a quarter, and never less than a
+   sheaf. Small working stores are left alone, so a scriptorium's own supply
+   is not ground away between deliveries -- only what a town is sitting on.
+   Silent, like the nutrition spoilage above it. */
+static void DecayStoredPaper(CcSim *sim, CcSettlement *place)
+{
+    if (sim->schema_version < 54U || place->stock[CC_GOOD_PAPER] <= 10 ||
+        sim->current_day % 91 != 0) return;
+    place->stock[CC_GOOD_PAPER] -= MaximumI32(
+        1, place->stock[CC_GOOD_PAPER] / 100);
 }
 
 static int32_t BakeryCapacity(const CcSettlement *place)
@@ -2234,11 +2307,17 @@ static int32_t RunBakery(CcSim *sim, CcSettlement *place,
     return baked;
 }
 
-static int32_t WarWeeklyWage(const CcSim *sim, const CcSettlement *place)
+static int32_t WarWeeklyWageForBurden(const CcSettlement *place,
+                                      int32_t burden)
 {
     if (!IsWarSeat(place)) return 0;
-    int32_t burden = CcSimWarBurdenAtSettlement(sim, place->id);
     return burden >= 20 ? 1 + burden / 18 : 0;
+}
+
+static int32_t WarWeeklyWage(const CcSim *sim, const CcSettlement *place)
+{
+    return WarWeeklyWageForBurden(
+        place, CcSimWarBurdenAtSettlement(sim, place->id));
 }
 
 int32_t CcSimWarSupplyCrisisAtSettlement(const CcSim *sim,
@@ -2247,10 +2326,13 @@ int32_t CcSimWarSupplyCrisisAtSettlement(const CcSim *sim,
     const CcSettlement *place = CcSimSettlement(sim, settlement_id);
     if (sim == NULL || !IsWarSeat(place)) return 0;
     int32_t burden = CcSimWarBurdenAtSettlement(sim, settlement_id);
-    int32_t food_need = WarWeeklyNeed(sim, place, CC_GOOD_FOOD);
-    int32_t tool_need = WarWeeklyNeed(sim, place, CC_GOOD_TOOLS);
-    int32_t weapon_need = WarWeeklyNeed(sim, place, CC_GOOD_WEAPONS);
-    int32_t wage = WarWeeklyWage(sim, place);
+    int32_t food_need = WarWeeklyNeedForBurden(
+        sim, place, CC_GOOD_FOOD, burden);
+    int32_t tool_need = WarWeeklyNeedForBurden(
+        sim, place, CC_GOOD_TOOLS, burden);
+    int32_t weapon_need = WarWeeklyNeedForBurden(
+        sim, place, CC_GOOD_WEAPONS, burden);
+    int32_t wage = WarWeeklyWageForBurden(place, burden);
     if (burden < 20 || food_need < 1 || wage < 1) return 0;
     int32_t food_gap = MaximumI32(
         0, food_need * 3 -
@@ -5211,6 +5293,13 @@ static int32_t SheepCapacity(const CcSettlement *settlement)
     return MaximumI32(12, settlement->population / 20);
 }
 
+/* Common ponies are working stock, not the seven road encounters. A farm
+   raises them alongside its sheep; a stable keeps a smaller yard. */
+static int32_t PonyHerdCapacity(const CcSettlement *settlement)
+{
+    return MaximumI32(6, settlement->population / 80);
+}
+
 static int32_t StoreMutton(CcSettlement *settlement, int32_t sheep)
 {
     int32_t wanted = sheep * 2;
@@ -5330,6 +5419,124 @@ static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
     }
 }
 
+/* Driven from the weekly settlement update, so one call is one week of
+   fodder. A working herd eats year round, unlike the flock, so hunger here
+   tracks fodder the town chose not to spend rather than the season. Foals
+   mature on the same quarter the mares are put to stud; 112 is a whole
+   number of weeks, so that day is never stepped over. */
+static void AdvancePonyHerd(CcSim *sim, CcSettlement *settlement)
+{
+    if (sim->schema_version < 51U ||
+        (!CcSettlementHasService(settlement, CC_SERVICE_FARM) &&
+         !CcSettlementHasService(settlement, CC_SERVICE_STABLE))) return;
+    int32_t herd = settlement->pony_adults + settlement->pony_foals;
+    if (herd <= 0) return;
+
+    int32_t feed_required = MaximumI32(1, (herd + 7) / 8);
+    int32_t feed_eaten = CcNutritionConsume(
+        settlement->stock, CC_NUTRITION_ANIMAL,
+        feed_required * CC_NUTRITION_PER_RATION) / CC_NUTRITION_PER_RATION;
+    int32_t feed_shortfall = feed_required - feed_eaten;
+    if (feed_shortfall > 0) {
+        settlement->pony_hunger = ClampI32(
+            settlement->pony_hunger + feed_shortfall * 12, 0, 100);
+        settlement->pony_condition = ClampI32(
+            settlement->pony_condition - feed_shortfall * 5, 1, 100);
+    } else {
+        settlement->pony_hunger = ClampI32(
+            settlement->pony_hunger - 10, 0, 100);
+        settlement->pony_condition = ClampI32(
+            settlement->pony_condition + 3, 1, 100);
+    }
+
+    if (settlement->pony_hunger >= 85) {
+        if (settlement->pony_foals > 0) {
+            settlement->pony_foals -= 1;
+        } else if (settlement->pony_adults > 0) {
+            settlement->pony_adults -= 1;
+        }
+        settlement->pony_hunger = ClampI32(
+            settlement->pony_hunger - 20, 0, 100);
+        return;
+    }
+
+    if (sim->current_day % 112 != 0 || settlement->pony_condition < 65 ||
+        settlement->pony_hunger > 30) return;
+
+    int32_t matured = MinimumI32(
+        settlement->pony_foals, MaximumI32(1, settlement->pony_foals / 3));
+    settlement->pony_foals -= matured;
+    settlement->pony_adults += matured;
+    int32_t room = MaximumI32(
+        0, PonyHerdCapacity(settlement) -
+           (settlement->pony_adults + settlement->pony_foals));
+    int32_t births = settlement->pony_adults >= 2 ?
+        MinimumI32(room, MaximumI32(1, settlement->pony_adults / 8)) : 0;
+    settlement->pony_foals += births;
+    if (births <= 0 && matured <= 0) return;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s raises %d common pony foal%s; %d join%s the working herd.",
+        settlement->name, births, births == 1 ? "" : "s",
+        matured, matured == 1 ? "s" : "");
+    (void)PushEvent(
+        sim, CC_EVENT_HORSE_BRED, settlement->id, settlement->id,
+        0U, births, text);
+}
+
+/* Seeds every farm and stable that has no herd yet. Safe to call on a
+   world that already has one, so a new world and an upgraded save can share
+   the same entry point. */
+void CcSimSeedCommonPonyHerds(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 51U) return;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) continue;
+        if (place->pony_adults > 0 || place->pony_foals > 0) continue;
+        bool farm = CcSettlementHasService(place, CC_SERVICE_FARM);
+        bool stable = CcSettlementHasService(place, CC_SERVICE_STABLE);
+        if (!farm && !stable) continue;
+        place->pony_adults = farm ? 10 : 4;
+        place->pony_foals = farm ? 3 : 1;
+        place->pony_condition = 80;
+        place->pony_hunger = 10;
+    }
+}
+
+/* Empties the second seat on an older campaign. The pony that was in it goes
+   back to the roads, because CcPoniesValidate ties team membership to a
+   cleared route: a pony still named in team[] must have route_id 0. The horse
+   beside it is untouched -- it is still owned, just not pulling. */
+void CcSimUnharnessSecondDraftAnimal(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 52U) return;
+    CcPonyCompany *company = &sim->pony_company;
+    int32_t released = company->team[1];
+    if (released >= 0 && released < CC_PONY_COUNT && sim->route_count > 0) {
+        CcPony *pony = &company->ponies[released];
+        if (pony->route_id == 0U) {
+            pony->route_id = sim->routes[0].id;
+            pony->last_seen_route = pony->route_id;
+            pony->last_met_day = sim->current_day;
+        }
+        pony->ready = false;
+    }
+    company->team[1] = -1;
+}
+
+int32_t CcSimCommonPonyCount(const CcSim *sim)
+{
+    if (sim == NULL) return 0;
+    int32_t count = 0;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        count += sim->settlements[i].pony_adults +
+                 sim->settlements[i].pony_foals;
+    }
+    return count;
+}
+
 static void MaintainSettlementStonework(CcSim *sim,
                                         CcSettlement *settlement)
 {
@@ -5359,14 +5566,174 @@ static void MaintainSettlementStonework(CcSim *sim,
         text);
 }
 
+/* The fall of a town is not the end of its people: the remaining
+ * households walk to the strongest living host, preferring their own
+ * kingdom and near neighbors, and the named cast flees with them. */
+/* Office holders (rulers, monastery patrons) must keep their home inside
+ * the kingdom they serve; they may only flee within their own country. */
+static bool CharacterHoldsOffice(const CcSim *sim, CcId character_id)
+{
+    if (sim == NULL || character_id == 0U) return false;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        if (sim->kingdoms[i].ruler_character_id == character_id ||
+            sim->kingdoms[i].monastery_patron_id == character_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static CcSettlement *FallenTownHost(CcSim *sim, const CcSettlement *ruin,
+                                    CcId kingdom_requirement)
+{
+    if (sim == NULL || ruin == NULL) return NULL;
+    CcSettlement *host = NULL;
+    int32_t host_score = INT32_MIN;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (place == ruin || CcSettlementIsAbandoned(place)) continue;
+        if (kingdom_requirement != 0U &&
+            place->kingdom_id != kingdom_requirement) continue;
+        int32_t score = place->prosperity - place->hunger;
+        if (place->kingdom_id == ruin->kingdom_id) score += 200;
+        for (int32_t route = 0; route < sim->route_count; ++route) {
+            const CcRoute *road = &sim->routes[route];
+            if ((road->from_id == ruin->id && road->to_id == place->id) ||
+                (road->to_id == ruin->id && road->from_id == place->id)) {
+                score += 100;
+                break;
+            }
+        }
+        if (host == NULL || score > host_score) {
+            host = place;
+            host_score = score;
+        }
+    }
+    return host;
+}
+
+static void RelocateFallenTown(CcSim *sim, CcSettlement *ruin,
+                               int32_t households, CcId cause_event_id)
+{
+    if (sim == NULL || ruin == NULL || households <= 0) return;
+    if (sim->schema_version < 47U) return;
+    CcSettlement *host = FallenTownHost(sim, ruin, 0U);
+    if (host == NULL) return;
+    host->population += households;
+    host->hunger = ClampI32(
+        host->hunger + MinimumI32(15, households / 5), 0, 100);
+    int32_t relocated = 0;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        CcCharacter *person = &sim->characters[i];
+        if (person->home_settlement_id != ruin->id) continue;
+        CcSettlement *seat = host;
+        if (CharacterHoldsOffice(sim, person->id) &&
+            host->kingdom_id != ruin->kingdom_id) {
+            seat = FallenTownHost(sim, ruin, ruin->kingdom_id);
+            if (seat == NULL) continue; /* the crown stays in its country */
+        }
+        person->home_settlement_id = seat->id;
+        person->current_settlement_id = seat->id;
+        person->role = CC_CHARACTER_REFUGEE;
+        person->goal = CC_CHARACTER_GOAL_SURVIVE_CRISIS;
+        person->activity = CC_CHARACTER_ACTIVITY_SEEKING_AID;
+        relocated += 1;
+    }
+    if (relocated == 0) return;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "The fall of %s drives %d households and %d named residents to %s.",
+        ruin->name, households, relocated, host->name);
+    (void)PushEvent(
+        sim, CC_EVENT_KINGDOM_ACTION, host->id, host->id,
+        cause_event_id != 0U ? cause_event_id :
+            LatestLocalCause(sim, host->id), households, text);
+}
+
+/* The fall of a town is a contest: while the refugees walk, the strongest
+ * outlaw company claims the ruin as a war camp. Only one camp may be held,
+ * and only while the band is strong; when its strength fails, the ruin
+ * stands open for reclamation again. */
+static bool BanditHoldsSettlement(const CcSim *sim, CcId settlement_id)
+{
+    if (sim == NULL || settlement_id == 0U) return false;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        if (sim->bandits[i].camp_settlement_id == settlement_id) return true;
+    }
+    return false;
+}
+
+static void SeizeFallenTown(CcSim *sim, CcSettlement *ruin,
+                            CcId cause_event_id)
+{
+    if (sim == NULL || ruin == NULL || sim->bandit_count <= 0) return;
+    if (sim->schema_version < 47U) return;
+    if (BanditHoldsSettlement(sim, ruin->id)) return;
+    CcBanditGroup *claimant = NULL;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        CcBanditGroup *bandits = &sim->bandits[i];
+        if (bandits->influence < 50 ||
+            bandits->camp_settlement_id != 0U) continue;
+        if (claimant == NULL || bandits->influence > claimant->influence) {
+            claimant = bandits;
+        }
+    }
+    if (claimant == NULL) return;
+    claimant->camp_settlement_id = ruin->id;
+    claimant->members = ClampI32(claimant->members + 10, 4, 120);
+    claimant->supplies = ClampI32(claimant->supplies + 10, 0, 100);
+    claimant->influence = MaximumI32(
+        claimant->influence,
+        (claimant->members + claimant->supplies) / 2 +
+        MinimumI32(20, claimant->raids_completed / 3));
+    GrowBanditCamp(claimant);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s takes fallen %s as a war camp; its banner hangs over the ruins.",
+        claimant->name, ruin->name);
+    (void)PushEvent(
+        sim, CC_EVENT_KINGDOM_ACTION, claimant->id, ruin->id,
+        cause_event_id != 0U ? cause_event_id :
+            LatestLocalCause(sim, ruin->id), claimant->members, text);
+}
+
+static void ReleaseAbandonedCamps(CcSim *sim)
+{
+    if (sim == NULL) return;
+    if (sim->schema_version < 47U) return;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        CcBanditGroup *bandits = &sim->bandits[i];
+        if (bandits->camp_settlement_id == 0U || bandits->influence >= 30) {
+            continue;
+        }
+        const CcSettlement *camp = CcSimSettlement(
+            sim, bandits->camp_settlement_id);
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(
+            text, sizeof(text),
+            "%s abandons its war camp at %s; the ruin stands open again.",
+            bandits->name,
+            camp != NULL ? camp->name : "the frontier");
+        (void)PushEvent(
+            sim, CC_EVENT_KINGDOM_ACTION, bandits->id,
+            bandits->camp_settlement_id, 0U, bandits->influence, text);
+        bandits->camp_settlement_id = 0U;
+    }
+}
+
 static void UpdateSettlement(CcSim *sim, int32_t index,
-                             CcId scriptorium_id)
+                             CcId scriptorium_id,
+                             CcTownNutritionAccounting *accounting)
 {
     CcSettlement *settlement = &sim->settlements[index];
     if (CcSettlementIsAbandoned(settlement)) return;
+    if (accounting != NULL) accounting->settlement_id = settlement->id;
     int32_t produced[CC_GOOD_COUNT] = {0};
     int32_t cow_output = AdvanceCowHerd(sim, settlement);
     AdvanceSheepFlock(sim, settlement);
+    AdvancePonyHerd(sim, settlement);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         int32_t production = EffectiveProduction(sim, settlement, index, (CcGood)good);
         produced[good] = production;
@@ -5394,9 +5761,19 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         1, WeeklyFoodUse(sim, settlement)) * CC_NUTRITION_PER_RATION;
     int32_t food_eaten = sim->schema_version >= 32U ?
         MinimumI32(food_required, cow_output) : 0;
+    int32_t before_eating[CC_GOOD_COUNT];
+    if (accounting != NULL) {
+        memcpy(before_eating, settlement->stock, sizeof(before_eating));
+    }
     food_eaten += CcNutritionConsume(
         settlement->stock, CC_NUTRITION_CIVILIAN,
         food_required - food_eaten);
+    if (accounting != NULL) {
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            accounting->civilian_units[good] +=
+                (uint64_t)(before_eating[good] - settlement->stock[good]);
+        }
+    }
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         if (CcGoodNutritionValue(
                 (CcGood)good, CC_NUTRITION_CIVILIAN) > 0) continue;
@@ -5408,7 +5785,8 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         int32_t consumed = MinimumI32(settlement->stock[good], consumption);
         settlement->stock[good] -= consumed;
     }
-    (void)SpoilStoredNutrition(sim, settlement);
+    (void)SpoilStoredNutrition(sim, settlement, accounting);
+    DecayStoredPaper(sim, settlement);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         RefreshSettlementGoodPrice(sim, settlement, (CcGood)good);
     }
@@ -5517,6 +5895,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         settlement->population = MaximumI32(
             0, settlement->population + population_delta);
         if (settlement->population < 80 && settlement->hunger >= 65) {
+            int32_t refugee_households = settlement->population;
             CcKingdom *kingdom = KingdomMutable(sim, settlement->kingdom_id);
             if (kingdom != NULL) {
                 kingdom->treasury += settlement->market_coins +
@@ -5544,10 +5923,12 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
                 text, sizeof(text),
                 "%s is abandoned after famine reduces its last households to refugees.",
                 settlement->name);
-            (void)PushEvent(
+            CcEvent *abandoned = PushEvent(
                 sim, CC_EVENT_KINGDOM_ACTION, settlement->id,
                 settlement->id, LatestLocalCause(sim, settlement->id),
                 -1, text);
+            RelocateFallenTown(sim, settlement, refugee_households, abandoned->id);
+            SeizeFallenTown(sim, settlement, abandoned->id);
             return;
         }
     }
@@ -5590,8 +5971,33 @@ static bool EventWasArchived(const CcSim *sim, CcId event_id)
     return false;
 }
 
-static bool IsNotableGossip(const CcEvent *event)
+static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
 {
+    if (event->kind == CC_EVENT_GOBLIN_CULT_RALLIED) {
+        /* A cult rally carries its weight in the telling, not the count of
+           recruits: any rally is road news. */
+        return sim->schema_version >= 50U && event->magnitude >= 1;
+    }
+    if (event->kind == CC_EVENT_DRAGON_OMEN) {
+        /* An omen is struck only when a theft starts the dragon's countdown,
+           so its modest magnitude is not a measure of its weight. */
+        return sim->schema_version >= 50U;
+    }
+    /* The dragon's succession is news because it changes the world, not
+       because a whelp is heavy. A whelp dispersing, an heir hatching, a
+       dynasty ending and an un-crowning all travel — a future chronicler
+       must be able to find them (schema 55, see GatherGossip). */
+    if (sim->schema_version >= 55U &&
+        (event->kind == CC_EVENT_DRAGON_WHELP_DISPERSED ||
+         event->kind == CC_EVENT_DRAGON_SUCCESSOR ||
+         event->kind == CC_EVENT_DRAGON_AFTERSHOCK ||
+         event->kind == CC_EVENT_DRAGON_UNCROWNED ||
+         event->kind == CC_EVENT_DRAGON_CROWNED ||
+         event->kind == CC_EVENT_DRAGON_SLAIN ||
+         event->kind == CC_EVENT_DRAGON_BROOD ||
+         event->kind == CC_EVENT_DRAGON_HOARD_RECOVERED)) {
+        return true;
+    }
     return event->magnitude >= 20 &&
         (event->kind == CC_EVENT_WAR_DECLARED ||
          event->kind == CC_EVENT_PEACE_DECLARED ||
@@ -5601,25 +6007,100 @@ static bool IsNotableGossip(const CcEvent *event)
          event->kind == CC_EVENT_TREASURE_CRAFTED ||
          event->kind == CC_EVENT_KINGDOM_ACTION ||
          event->kind == CC_EVENT_SETTLEMENT_RAIDED ||
-         event->kind == CC_EVENT_CHARACTER_DIED);
+         event->kind == CC_EVENT_CHARACTER_DIED ||
+         (sim->schema_version >= 46U &&
+          (event->kind == CC_EVENT_HARVEST_FAILED || event->kind == CC_EVENT_ROUTE_CLOSED ||
+           event->kind == CC_EVENT_BANDIT_PRESSURE || event->kind == CC_EVENT_MONSTER_PRESSURE)) ||
+         (sim->schema_version >= 49U &&
+          event->kind == CC_EVENT_SHORTAGE) ||
+         (sim->schema_version >= 50U &&
+          (event->kind == CC_EVENT_GOBLIN_RAIDED ||
+           event->kind == CC_EVENT_DRAGON_RETALIATION)));
+}
+
+/* A notice posted on a board is a fact like any other: it enters the ledger
+   at the town whose board carries it, so residents can speak of it and
+   travellers carry it between towns. Mine threads stay mouth-to-ear. */
+static void PostSituationNotice(CcSim *sim, const CcSituation *situation)
+{
+    if (sim == NULL || situation == NULL ||
+        situation->kind == CC_SITUATION_MONSTER_EXPEDITION) return;
+    CcId offer_id = CcSimSituationOfferSettlementId(sim, situation);
+    int32_t origin = SettlementSlotById(sim, offer_id);
+    if (origin < 0 || CcSettlementIsAbandoned(&sim->settlements[origin])) return;
+    const CcSettlement *town = &sim->settlements[origin];
+    const CcCharacter *sponsor = CcSimSituationSponsorCharacter(sim, situation);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "%s posts a notice at %s: %s.",
+        sponsor != NULL ? sponsor->name : "Someone",
+        town->name, CcSituationKindName(situation->kind));
+    CcEvent *posted = PushEvent(sim, CC_EVENT_NOTICE_POSTED, situation->id,
+                                town->id, situation->cause_event_id, 20, text);
+    int32_t slot = 0;
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        if (sim->gossip[i].event_id == 0U) { slot = i; break; }
+        if ((sim->gossip[i].recorded && !sim->gossip[slot].recorded) ||
+            (sim->gossip[i].recorded == sim->gossip[slot].recorded &&
+             sim->gossip[i].event_id < sim->gossip[slot].event_id)) slot = i;
+    }
+    uint32_t bit = UINT32_C(1) << (uint32_t)slot;
+    for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
+        sim->gossip_carriers[i].stories &= ~bit;
+        sim->gossip_carriers[i].told_player &= ~bit;
+        sim->gossip_carriers[i].versions[slot] = (CcGossipVersion){0};
+    }
+    sim->gossip[slot] = (CcGossip){
+        .event_id = posted->id, .origin_id = town->id,
+        .day = sim->current_day,
+        .kind = CC_EVENT_NOTICE_POSTED,
+        .settlement_mask = UINT32_C(1) << (uint32_t)origin
+    };
+    sim->gossip[slot].local[origin].source_character_id =
+        sponsor != NULL ? sponsor->id : 0U;
+    sim->gossip[slot].local[origin].confidence = 100;
+    (void)snprintf(sim->gossip[slot].text,
+                   sizeof(sim->gossip[slot].text), "%s", text);
+}
+
+/* Notices join the ledger when the ledger is next gathered, so the posting
+   day and the campaign's day agree, and downgraded chronicles never carry
+   facts their own era could not record. */
+static void PostPendingSituationNotices(CcSim *sim)
+{
+    if (sim->schema_version < 48U) return;
+    for (int32_t s = 0; s < sim->situation_count; ++s) {
+        CcSituation *situation = &sim->situations[s];
+        uint32_t bit = UINT32_C(1) << (uint32_t)s;
+        if ((sim->posted_situation_mask & bit) != 0U) continue;
+        if (situation->status != CC_SITUATION_ACTIVE ||
+            situation->kind == CC_SITUATION_MONSTER_EXPEDITION ||
+            !CcSimSituationCanAccept(sim, situation)) continue;
+        PostSituationNotice(sim, situation);
+        sim->posted_situation_mask |= bit;
+    }
 }
 
 static void GatherGossip(CcSim *sim)
 {
     if (sim->schema_version < 44U) return;
+    PostPendingSituationNotices(sim);
+    const CcEvent *newest = CcSimRecentEvent(sim, 0);
+    if (newest == NULL || newest->id <= sim->gossip_last_event_id) return;
     CcId latest = sim->gossip_last_event_id;
     for (int32_t offset = sim->event_count - 1; offset >= 0; --offset) {
         const CcEvent *event = CcSimRecentEvent(sim, offset);
         if (event == NULL || event->id <= sim->gossip_last_event_id ||
             event->day > sim->current_day) continue;
         if (event->id > latest) latest = event->id;
-        if (!IsNotableGossip(event) || EventWasArchived(sim, event->id)) continue;
+        if (!IsNotableGossip(sim, event) || EventWasArchived(sim, event->id)) continue;
         int32_t origin = SettlementSlotById(sim, event->location_id);
         if (origin < 0) {
             const CcRoute *route = CcSimRoute(sim, event->location_id);
             if (route != NULL) origin = SettlementSlotById(sim, route->from_id);
         }
-        if (origin < 0 || CcSettlementIsAbandoned(&sim->settlements[origin])) {
+        /* Schema 55 lets travelers carry reports from abandoned origins. */
+        if (origin < 0 || (sim->schema_version < 55U &&
+            CcSettlementIsAbandoned(&sim->settlements[origin]))) {
             continue;
         }
         int32_t slot = 0;
@@ -5630,8 +6111,9 @@ static void GatherGossip(CcSim *sim)
                  sim->gossip[i].event_id < sim->gossip[slot].event_id)) slot = i;
         }
         uint32_t bit = UINT32_C(1) << (uint32_t)slot;
-        for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
+        for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
             sim->gossip_carriers[i].stories &= ~bit;
+            sim->gossip_carriers[i].told_player &= ~bit;
             sim->gossip_carriers[i].versions[slot] = (CcGossipVersion){0};
         }
         sim->gossip[slot] = (CcGossip){
@@ -5647,10 +6129,85 @@ static void GatherGossip(CcSim *sim)
     sim->gossip_last_event_id = latest;
 }
 
+int32_t CcSimGossipCarrierCapacity(const CcSim *sim)
+{
+    return sim != NULL && sim->schema_version >= 46U ?
+        CC_MAX_GOSSIP_CARRIERS : CC_LEGACY_GOSSIP_CARRIERS;
+}
+
+const CcGossipCarrier *CcSimGossipCarrier(const CcSim *sim, CcId id)
+{
+    if (sim == NULL || id == 0U) return NULL;
+    for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
+        if (sim->gossip_carriers[i].id == id) return &sim->gossip_carriers[i];
+    }
+    return NULL;
+}
+
+const CcGossip *CcSimPersonalGossip(const CcSim *sim, CcId id, int32_t offset,
+                                  const CcGossipVersion **version)
+{
+    if (version != NULL) *version = NULL;
+    const CcGossipCarrier *carrier = CcSimGossipCarrier(sim, id);
+    if (carrier == NULL || offset < 0) return NULL;
+    /* Newest reports first; slot reuse leaves the ordering unchanged. */
+    CcId before = UINT64_MAX;
+    for (int32_t n = 0; n <= offset && n < CC_MAX_GOSSIP; ++n) {
+        int32_t best = -1;
+        for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+            if ((carrier->stories & (UINT32_C(1) << (uint32_t)i)) == 0U ||
+                sim->gossip[i].event_id >= before) continue;
+            if (best < 0 || sim->gossip[i].event_id > sim->gossip[best].event_id) best = i;
+        }
+        if (best < 0) return NULL;
+        if (n == offset) {
+            if (version != NULL) *version = &carrier->versions[best];
+            return &sim->gossip[best];
+        }
+        before = sim->gossip[best].event_id;
+    }
+    return NULL;
+}
+
+const CcGossip *CcSimGossipStory(const CcSim *sim, int32_t slot)
+{
+    if (sim == NULL || slot < 0 || slot >= CC_MAX_GOSSIP) return NULL;
+    return sim->gossip[slot].event_id != 0U ? &sim->gossip[slot] : NULL;
+}
+
+/* The first story the speaker has not yet told this company, newest first.
+   Returns the gossip slot, or -1 when every carried story has been told. */
+int32_t CcSimNextUntoldStory(const CcSim *sim, CcId id,
+                             const CcGossipVersion **version)
+{
+    if (version != NULL) *version = NULL;
+    const CcGossipCarrier *carrier = CcSimGossipCarrier(sim, id);
+    if (carrier == NULL) return -1;
+    CcId best_id = 0U;
+    int32_t best = -1;
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        if ((carrier->stories & (UINT32_C(1) << (uint32_t)i)) == 0U ||
+            (carrier->told_player & (UINT32_C(1) << (uint32_t)i)) != 0U ||
+            sim->gossip[i].event_id <= best_id) continue;
+        best = i;
+        best_id = sim->gossip[i].event_id;
+    }
+    if (best >= 0 && version != NULL) *version = &carrier->versions[best];
+    return best;
+}
+
+bool CcSimStoryTold(const CcSim *sim, CcId id, int32_t slot)
+{
+    const CcGossipCarrier *carrier = CcSimGossipCarrier(sim, id);
+    return carrier != NULL && slot >= 0 && slot < CC_MAX_GOSSIP &&
+        (carrier->told_player & (UINT32_C(1) << (uint32_t)slot)) != 0U;
+}
+
 static bool GossipCarrierExists(const CcSim *sim, CcId id)
 {
     if (id == 0U) return false;
     if (id == sim->player.id) return true;
+    if (sim->schema_version >= 46U && CcSimCharacter(sim, id) != NULL) return true;
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
         if (id == sim->royal_carriages[i].id) return true;
     }
@@ -5714,17 +6271,82 @@ static CcGossipVersion RetellGossip(const CcSim *sim, const CcGossip *story,
     return version;
 }
 
+/* Retellings change a few concrete details. The saved version always gives
+ * the same words, including after the scribes bind their account. */
+static void MutatedGossipText(const char *original, int32_t retellings,
+                              char *text, size_t capacity)
+{
+    static const struct {
+        const char *before;
+        const char *after;
+        int32_t hop;
+        size_t length;
+        size_t replacement;
+    } swaps[] = {
+#define CC_GOSSIP_SWAP(before_, after_, hop_) \
+        {before_, after_, hop_, sizeof(before_) - 1U, sizeof(after_) - 1U}
+        CC_GOSSIP_SWAP("one", "two", 2), CC_GOSSIP_SWAP("two", "three", 2),
+        CC_GOSSIP_SWAP("three", "five", 2), CC_GOSSIP_SWAP("four", "six", 2),
+        CC_GOSSIP_SWAP("five", "seven", 2),
+        CC_GOSSIP_SWAP("western", "northern", 4), CC_GOSSIP_SWAP("eastern", "southern", 4),
+        CC_GOSSIP_SWAP("west", "north", 4), CC_GOSSIP_SWAP("east", "south", 4),
+        CC_GOSSIP_SWAP("workers", "merchants", 6), CC_GOSSIP_SWAP("Raiders", "Deserters", 6),
+        CC_GOSSIP_SWAP("raiders", "deserters", 6), CC_GOSSIP_SWAP("guards", "soldiers", 6)
+#undef CC_GOSSIP_SWAP
+    };
+    size_t used = 0U;
+    bool changed_count = false, changed_place = false, changed_people = false;
+    for (size_t at = 0U; original[at] != '\0' && used + 1U < capacity;) {
+        /* A word interior cannot start a replacement. Avoid checking every
+           dictionary entry (and measuring its length) for every character. */
+        if (retellings < 2 ||
+            (at > 0U && isalpha((unsigned char)original[at - 1U]))) {
+            text[used++] = original[at++];
+            continue;
+        }
+        bool replaced = false;
+        for (size_t i = 0U; i < sizeof(swaps) / sizeof(swaps[0]); ++i) {
+            size_t length = swaps[i].length;
+            if (original[at] != swaps[i].before[0] || retellings < swaps[i].hop ||
+                (swaps[i].hop == 2 && changed_count) ||
+                (swaps[i].hop == 4 && changed_place) ||
+                (swaps[i].hop == 6 && changed_people) ||
+                strncmp(original + at, swaps[i].before, length) != 0 ||
+                isalpha((unsigned char)original[at + length])) continue;
+            size_t replacement = swaps[i].replacement;
+            if (used + replacement >= capacity) break;
+            memcpy(text + used, swaps[i].after, replacement);
+            used += replacement;
+            at += length;
+            changed_count |= swaps[i].hop == 2;
+            changed_place |= swaps[i].hop == 4;
+            changed_people |= swaps[i].hop == 6;
+            replaced = true;
+            break;
+        }
+        if (!replaced) text[used++] = original[at++];
+    }
+    text[used] = '\0';
+}
+
 void CcGossipText(const CcSim *sim, const CcGossip *story,
                   const CcGossipVersion *version, char *text, size_t capacity)
 {
     if (text == NULL || capacity == 0U) return;
     if (sim == NULL || story == NULL || version == NULL) { text[0] = '\0'; return; }
     if (version->retellings == 0) {
-        (void)snprintf(text, capacity, "%s", story->text);
+        /* The untold telling is a straight copy; a format-parsing
+           snprintf per archived story adds up over a chronicle. */
+        size_t length = strlen(story->text);
+        if (length >= capacity) length = capacity - 1U;
+        memcpy(text, story->text, length);
+        text[length] = '\0';
         return;
     }
     char account[CC_EVENT_TEXT_CAPACITY];
-    if (version->retellings == 1) {
+    if (sim->schema_version >= 46U) {
+        MutatedGossipText(story->text, version->retellings, account, sizeof(account));
+    } else if (version->retellings == 1) {
         (void)snprintf(account, sizeof(account), "%.85s", story->text);
     } else {
         const char *claim = "a ruler has changed things";
@@ -5748,7 +6370,19 @@ void CcGossipText(const CcSim *sim, const CcGossip *story,
     const char *bias = version->court_bias >= 15 ? " Loyal voices credit the crown." :
                        version->court_bias <= -15 ? " Some blame the court." : "";
     const char *alarm = version->alarm >= 30 ? " They fear worse is coming." : "";
-    (void)snprintf(text, capacity, "%s%s%s", account, bias, alarm);
+    /* Compose by bounded appends; a format-parsing join for every mutated
+       telling adds up over a chronicle. */
+    size_t used = strlen(account);
+    if (used >= capacity) used = capacity - 1U;
+    memcpy(text, account, used);
+    const char *const parts[2] = {bias, alarm};
+    for (size_t part = 0U; part < 2U; ++part) {
+        for (const char *at = parts[part];
+             used + 1U < capacity && *at != '\0'; ++at) {
+            text[used++] = *at;
+        }
+    }
+    text[used] = '\0';
 }
 
 static void HearGossip(CcSim *sim, CcGossip *story, CcId place_id,
@@ -5776,17 +6410,18 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
 {
     if (sim->schema_version < 44U) return;
     int32_t place = SettlementSlotById(sim, place_id);
-    if (place < 0 || CcSettlementIsAbandoned(&sim->settlements[place])) return;
+    if (place < 0 || (sim->schema_version < 55U &&
+        CcSettlementIsAbandoned(&sim->settlements[place]))) return;
     GatherGossip(sim);
     CcGossipCarrier *carrier = NULL;
-    for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
+    for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
         if (sim->gossip_carriers[i].id == carrier_id) {
             carrier = &sim->gossip_carriers[i];
             break;
         }
     }
     if (carrier == NULL) {
-        for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
+        for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
             if (!GossipCarrierExists(sim, sim->gossip_carriers[i].id)) {
                 carrier = &sim->gossip_carriers[i];
                 *carrier = (CcGossipCarrier){.id = carrier_id};
@@ -5804,8 +6439,9 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
             (story->settlement_mask & town) == 0U) {
             story->settlement_mask |= town;
             story->local[place] = RetellGossip(sim, story, carrier->versions[i],
-                                               NULL, carrier_id);
-            carrier->versions[i] = story->local[place];
+                sim->schema_version >= 46U ? CcSimCharacter(sim, carrier_id) : NULL, carrier_id);
+            if (sim->schema_version < 46U || CcIdKind(carrier_id) != CC_ENTITY_CHARACTER)
+                carrier->versions[i] = story->local[place];
             char account[CC_EVENT_TEXT_CAPACITY];
             CcGossipText(sim, story, &story->local[place], account, sizeof(account));
             char text[CC_EVENT_TEXT_CAPACITY];
@@ -5818,10 +6454,82 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
         if ((story->settlement_mask & town) != 0U &&
             (carrier->stories & bit) == 0U) {
             carrier->stories |= bit;
-            carrier->versions[i] = RetellGossip(sim, story, story->local[place],
-                GossipTellerAt(sim, place_id, story->event_id), 0U);
+            const CcCharacter *teller = GossipTellerAt(sim, place_id, story->event_id);
+            if (sim->schema_version >= 46U && CcIdKind(carrier_id) == CC_ENTITY_CHARACTER) {
+                teller = NULL;
+            }
+            carrier->versions[i] = RetellGossip(sim, story, story->local[place], teller, 0U);
         }
     }
+}
+
+void CcSimRefreshCharacterGossip(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 46U) return;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *person = &sim->characters[i];
+        if (person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
+            CcCharacterAgeYears(sim, person) < 16) continue;
+        ExchangeGossip(sim, person->id, person->current_settlement_id, person->name);
+    }
+}
+
+static bool ApplyHeardStory(CcSim *sim, const CcCommand *command,
+                            char *error, size_t error_capacity)
+{
+    if (command->amount < 0 || command->amount >= CC_MAX_GOSSIP ||
+        CcSimGossipStory(sim, command->amount) == NULL) {
+        SetError(error, error_capacity, "That story is not on the board.");
+        return false;
+    }
+    CcGossipCarrier *carrier = NULL;
+    for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
+        if (sim->gossip_carriers[i].id == command->target_id) {
+            carrier = &sim->gossip_carriers[i];
+            break;
+        }
+    }
+    uint32_t bit = UINT32_C(1) << (uint32_t)command->amount;
+    if (carrier == NULL || (carrier->stories & bit) == 0U) {
+        SetError(error, error_capacity,
+                 "That person has not told you that story.");
+        return false;
+    }
+    carrier->told_player |= bit;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyExchangeGossip(CcSim *sim, const CcCommand *command,
+                                char *error, size_t error_capacity)
+{
+    const CcCharacter *person = CcSimCharacter(sim, command->target_id);
+    if (sim->schema_version < 46U || person == NULL ||
+        person->current_settlement_id != sim->player.location_id ||
+        person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
+        CcCharacterAgeYears(sim, person) < 16) {
+        SetError(error, error_capacity, "Find that person in town to exchange news.");
+        return false;
+    }
+    const CcGossipCarrier *previous = CcSimGossipCarrier(sim, sim->player.id);
+    uint32_t known = previous != NULL ? previous->stories : 0U;
+    ExchangeGossip(sim, person->id, person->current_settlement_id, person->name);
+    ExchangeGossip(sim, sim->player.id, sim->player.location_id, "Your company");
+    const CcGossipCarrier *teller = CcSimGossipCarrier(sim, person->id);
+    if (teller != NULL) {
+        for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
+            CcGossipCarrier *listener = &sim->gossip_carriers[i];
+            if (listener->id != sim->player.id) continue;
+            for (int32_t j = 0; j < CC_MAX_GOSSIP; ++j) {
+                uint32_t bit = UINT32_C(1) << (uint32_t)j;
+                if ((known & bit) == 0U && (teller->stories & bit) != 0U)
+                    listener->versions[j] = RetellGossip(sim, &sim->gossip[j], teller->versions[j], person, 0U);
+            }
+        }
+    }
+    ExchangeGossip(sim, person->id, person->current_settlement_id, person->name);
+    SetError(error, error_capacity, "");
+    return true;
 }
 
 static void HearLocalGossip(CcSim *sim)
@@ -6102,6 +6810,48 @@ void CcSimUpgradeHistoryOffices(CcSim *sim)
     }
 }
 
+/* Find solvent crowns connected to the active archive by open roads. */
+static CcMoney FundArchiveRecovery(CcSim *sim)
+{
+    const CcSettlement *archive = Scriptorium(sim);
+    if (archive == NULL || CcSettlementIsAbandoned(archive)) return 0;
+    bool reached[CC_MAX_SETTLEMENTS] = {false};
+    int32_t archive_slot = SettlementSlotById(sim, archive->id);
+    if (archive_slot < 0) return 0;
+    reached[archive_slot] = true;
+    for (int32_t pass = 0; pass < sim->settlement_count; ++pass) {
+        for (int32_t r = 0; r < sim->route_count; ++r) {
+            const CcRoute *road = &sim->routes[r];
+            if (road->closed) continue;
+            int32_t from = SettlementSlotById(sim, road->from_id);
+            int32_t to = SettlementSlotById(sim, road->to_id);
+            if (from < 0 || to < 0 ||
+                CcSettlementIsAbandoned(&sim->settlements[from]) ||
+                CcSettlementIsAbandoned(&sim->settlements[to])) continue;
+            if (reached[from] || reached[to]) reached[from] = reached[to] = true;
+        }
+    }
+    int32_t donors[2] = {-1, -1};
+    int32_t count = 0;
+    for (int32_t k = 0; k < sim->kingdom_count && count < 2; ++k) {
+        if (sim->kingdoms[k].treasury < 800) continue;
+        for (int32_t town = 0; town < sim->settlement_count; ++town) {
+            if (reached[town] && sim->settlements[town].kingdom_id == sim->kingdoms[k].id) {
+                donors[count++] = k;
+                break;
+            }
+        }
+    }
+    if (count < 2) return 0;
+    CcMoney funding = 50 - sim->iron_ledger_reserve;
+    if (funding <= 0 || funding > 10) return 0;
+    CcMoney first = (funding + 1) / 2;
+    sim->kingdoms[donors[0]].treasury -= first;
+    sim->kingdoms[donors[1]].treasury -= funding - first;
+    sim->iron_ledger_reserve += funding;
+    return funding;
+}
+
 static void AdvanceArchives(CcSim *sim)
 {
     if (sim == NULL || sim->current_day % 7 != 0) return;
@@ -6110,8 +6860,37 @@ static void AdvanceArchives(CcSim *sim)
     int32_t target_scribes = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
         sim->iron_ledger_reserve >= 150 ? 2 :
         sim->iron_ledger_reserve >= 50 ? 1 : 0;
+    /* Date the first weekly sample with zero scribes. */
+    CcMoney crown_funding = 0;
+    if (sim->schema_version >= 56U) {
+        if (archives->scribes <= 0) {
+            if (archives->dead_since_day <= 0) {
+                archives->dead_since_day = sim->current_day;
+            }
+        } else {
+            archives->dead_since_day = 0;
+        }
+        /* After five years, two connected solvent crowns can restore a
+           ledger holding 40-49 crowns to the 50-crown staffing threshold. */
+        if (target_scribes <= 0 && archives->dead_since_day > 0 &&
+            sim->current_day - archives->dead_since_day >= 1825 &&
+            sim->iron_ledger_reserve >= 40) {
+            crown_funding = FundArchiveRecovery(sim);
+            if (crown_funding > 0) target_scribes = 1;
+        }
+    }
     if (target_scribes > archives->scribes) {
         archives->scribes = target_scribes;
+        /* A ledger that climbs back over the threshold on its own restaffs the
+           archive quietly, the way it always has. Only the crowns stepping in
+           is worth an entry. */
+        if (crown_funding > 0) {
+            (void)PushEvent(
+                sim, CC_EVENT_LORE_RECORDED, 0U, 0U, 0U, (int32_t)crown_funding,
+                "The kingdom treasuries replenish the ledger for one scribe; "
+                "the archive stirs after silence.");
+        }
+        if (sim->schema_version >= 56U) archives->dead_since_day = 0;
     } else if (target_scribes < archives->scribes) {
         archives->scribes -= 1;
     }
@@ -6181,7 +6960,7 @@ static void AdvanceArchives(CcSim *sim)
         if (event == NULL || event->day < first_day ||
             event->day > sim->current_day || event->magnitude < 20 ||
             EventWasArchived(sim, event->id)) continue;
-        if (!IsNotableGossip(event)) continue;
+        if (!IsNotableGossip(sim, event)) continue;
         noted[noted_count] = event->id;
         noted_location[noted_count] = event->location_id;
         (void)snprintf(noted_text[noted_count],
@@ -6336,6 +7115,9 @@ static void AdvanceRuins(CcSim *sim)
         CcSettlement *ruin = &sim->settlements[slot];
         if (!CcSettlementIsAbandoned(ruin) ||
             (week + slot * 37) % (8 * 52) != 0) continue;
+        /* A war camp cannot be resettled while its outlaws hold it; the
+         * kingdom must wait for the band to starve. */
+        if (BanditHoldsSettlement(sim, ruin->id)) continue;
 
         CcSettlement *donor = NULL;
         int32_t donor_score = INT32_MIN;
@@ -6567,8 +7349,12 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
     bandits->raid_days_remaining = 2;
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "%s scouts %s for a %s raid from the no-man's-land camp.",
-                   bandits->name, target->name, CcGoodName(good));
+                   "%s scouts %s for a %s raid from %s.",
+                   bandits->name, target->name, CcGoodName(good),
+                   bandits->camp_settlement_id != 0U &&
+                           CcSimSettlement(
+                               sim, bandits->camp_settlement_id) != NULL ?
+                       "its war camp" : "the no-man's-land camp");
     (void)PushEvent(sim, CC_EVENT_BANDIT_RAID_DEPARTED, bandits->id,
                     bandits->route_id, LatestLocalCause(sim, target->id),
                     bandits->members, text);
@@ -6578,6 +7364,7 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
 
 static void AdvanceBanditRaids(CcSim *sim)
 {
+    ReleaseAbandonedCamps(sim);
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         CcBanditGroup *bandits = &sim->bandits[i];
         if (bandits->raid_phase == CC_BANDIT_RAID_IDLE) continue;
@@ -6765,6 +7552,14 @@ static void PlanGoblinTribute(CcSim *sim)
     } else {
         goblins->raid_motive = CC_GOBLIN_RAID_DRAGON_TRIBUTE;
     }
+    /* A quarrelling cult cannot organize anything beyond a food raid;
+     * it reconvenes in two weeks rather than muster while divided. */
+    if (goblins->raid_motive != CC_GOBLIN_RAID_HUNGER &&
+        goblins->cohesion < 25) {
+        goblins->raid_motive = CC_GOBLIN_RAID_NONE;
+        goblins->tribute_cooldown_days = 14;
+        return;
+    }
     CcSettlement *target = NULL;
     int64_t best_score = INT64_MIN;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
@@ -6836,6 +7631,11 @@ static void AdvanceGoblinTribute(CcSim *sim)
                 goblins->cohesion = ClampI32(
                     goblins->cohesion - hunger_loss * 3, 0, 100);
             }
+            /* A cult too divided to muster also cannot hold its members:
+             * the quarrel itself drives ash-sworn away every week. */
+            if (goblins->cohesion < 25 && goblins->members > 12) {
+                goblins->members -= 1;
+            }
         }
         if (sim->schema_version >= 36U && sim->current_day % 28 == 0 &&
             NutritionRations(goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 4 &&
@@ -6903,6 +7703,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
         }
         int32_t capacity = CcGoodDefinitionFor(chosen)->raid_capacity;
         if (goblins->target_warned) capacity = MaximumI32(1, capacity / 2);
+        if (goblins->cohesion < 50) capacity = MaximumI32(1, capacity / 2);
         int32_t taken_goods = MinimumI32(target->stock[chosen], capacity);
         target->stock[chosen] -= taken_goods;
         goblins->carried_goods[chosen] = taken_goods;
@@ -6910,6 +7711,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
         if (goblins->raid_motive == CC_GOBLIN_RAID_DRAGON_TRIBUTE) {
             CcMoney wanted = 8 + goblins->members / 6;
             if (goblins->target_warned) wanted = wanted > 1 ? wanted / 2 : 1;
+            if (goblins->cohesion < 50) wanted = wanted > 1 ? wanted / 2 : 1;
             taken_coins = MinimumI32(
                 target->market_coins > INT32_MAX ? INT32_MAX :
                     (int32_t)target->market_coins,
@@ -7307,8 +8109,10 @@ static void AdvanceHoardRaid(CcSim *sim)
         raiders->war_raids_completed += 1;
     } else {
         origin->market_coins += relief;
-        origin->hunger = ClampI32(origin->hunger - MaximumI32(3, relief / 2),
-                                  0, 100);
+        if (sim->schema_version < 53U) {
+            origin->hunger = ClampI32(origin->hunger - MaximumI32(3, relief / 2),
+                                      0, 100);
+        }
         origin->prosperity = ClampI32(origin->prosperity + 2, 0, 100);
         for (int32_t i = 0; i < sim->faction_count; ++i) {
             CcFaction *faction = &sim->factions[i];
@@ -7318,6 +8122,8 @@ static void AdvanceHoardRaid(CcSim *sim)
             }
         }
         (void)snprintf(text, sizeof(text),
+                       sim->schema_version >= 53U ?
+                       "%s returns to %s with %d stolen crowns for market purchases." :
                        "%s returns to %s and spends %d stolen crowns on bread and old debts.",
                        raiders->name, origin->name, relief);
     }
@@ -7526,6 +8332,7 @@ static void HatchDragonSuccessor(CcSim *sim)
     CopyName(former_name, dragon->name);
     dragon->whelps_dispersed += MaximumI32(0, clutch - 1);
     dragon->id = NextId(sim, CC_ENTITY_DRAGON);
+    dragon->wyrmheart_id = 0U;
     static const char *successor_names[] = {
         "Ashwing the Inheritor", "Cinder-Child", "The Remembered Scale",
         "Ember Beneath Stone"
@@ -7982,6 +8789,45 @@ static void AdvanceAfterdragon(CcSim *sim)
     }
 }
 
+static CcTreasure *CreateDragonWyrmheart(CcSim *sim)
+{
+    CcDragon *dragon = &sim->dragon;
+    CcSettlement *lair = CcSimSettlementMutable(
+        sim, dragon->lair_settlement_id);
+    CcTreasure *gem = lair != NULL ? AllocateTreasure(sim) : NULL;
+    if (gem != NULL) {
+        (void)snprintf(gem->name, sizeof(gem->name),
+                       "Wyrmheart of %.20s", dragon->name);
+        gem->maker_settlement_id = lair->id;
+        gem->owner_id = dragon->id;
+        gem->location_id = lair->id;
+        gem->gold_content = 2;
+        gem->gem_content = 12;
+        gem->craft_work = 50;
+        gem->appraised_value = gem->gold_content * 40 +
+            gem->gem_content * 70 + gem->craft_work * 10;
+        gem->created_day = sim->current_day;
+    }
+    return gem;
+}
+
+static bool DragonCanBecomeDeepWyrm(const CcSim *sim)
+{
+    const CcDragon *dragon = &sim->dragon;
+    if (dragon->wyrmheart_id == 0U) {
+        if (CcSimSettlement(sim, dragon->lair_settlement_id) == NULL) return false;
+        if (sim->treasure_count < CC_MAX_TREASURES) return true;
+        for (int32_t i = 0; i < sim->treasure_count; ++i) {
+            if (sim->treasures[i].destroyed) return true;
+        }
+        return false;
+    }
+    const CcTreasure *heart = CcSimTreasure(sim, dragon->wyrmheart_id);
+    return heart != NULL && !heart->destroyed &&
+        heart->owner_id == dragon->id &&
+        heart->location_id == dragon->lair_settlement_id;
+}
+
 static void AdvanceDragonEcology(CcSim *sim)
 {
     CcDragon *dragon = &sim->dragon;
@@ -8120,25 +8966,17 @@ static void AdvanceDragonEcology(CcSim *sim)
                dragon->age_days >= 500 * 365 &&
                dragon->crown_strength >= 60 &&
                dragon->crown_continuity_days >= 200 * 365 &&
-               dragon->territory_stability >= 75) {
+               dragon->territory_stability >= 75 &&
+               (sim->schema_version < 57U || DragonCanBecomeDeepWyrm(sim))) {
         ChangeDragonStage(sim, CC_DRAGON_STAGE_DEEP_WYRM,
                           CC_EVENT_DRAGON_CROWNED,
                           "centuries of possession bind wyrm, hoard, and mountain");
-        CcSettlement *lair = CcSimSettlementMutable(
-            sim, dragon->lair_settlement_id);
-        CcTreasure *gem = lair != NULL ? AllocateTreasure(sim) : NULL;
-        if (gem != NULL) {
-            (void)snprintf(gem->name, sizeof(gem->name),
-                           "Wyrmheart of %.20s", dragon->name);
-            gem->maker_settlement_id = lair->id;
-            gem->owner_id = dragon->id;
-            gem->location_id = lair->id;
-            gem->gold_content = 2;
-            gem->gem_content = 12;
-            gem->craft_work = 50;
-            gem->appraised_value = gem->gold_content * 40 +
-                gem->gem_content * 70 + gem->craft_work * 10;
-            gem->created_day = sim->current_day;
+        /* Keep first formation in its historical event and identity order. */
+        if (sim->schema_version < 57U || dragon->wyrmheart_id == 0U) {
+            CcTreasure *heart = CreateDragonWyrmheart(sim);
+            if (sim->schema_version >= 57U && heart != NULL) {
+                dragon->wyrmheart_id = heart->id;
+            }
         }
     }
 
@@ -8679,6 +9517,24 @@ static void ReleaseBlockedRoyalCarriage(CcSim *sim,
     carriage->departure_day = sim->current_day;
 }
 
+static void SettleChangedRoyalDestinations(CcSim *sim)
+{
+    if (sim->schema_version < 46U) return;
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+        if (carriage->active_shipment_id == 0U) continue;
+        const CcSettlement *target = CcSimSettlement(sim, carriage->target_id);
+        if (target != NULL && target->kingdom_id == carriage->kingdom_id) continue;
+        for (int32_t j = 0; j < sim->shipment_count; ++j) {
+            CcShipment *shipment = &sim->shipments[j];
+            if (shipment->id == carriage->active_shipment_id) {
+                ReleaseBlockedRoyalCarriage(sim, carriage, shipment, "the destination changed crowns");
+                break;
+            }
+        }
+    }
+}
+
 static bool StartRoyalRepositioningLeg(CcSim *sim,
                                        CcRoyalCarriage *carriage,
                                        CcId target_id)
@@ -8798,8 +9654,15 @@ static void AdvanceRoyalCarriages(CcSim *sim)
             carriage->departure_day = sim->current_day;
             reached_market = true;
         } else {
-            (void)StartRoyalRepositioningLeg(
-                sim, carriage, carriage->target_id);
+            if (!StartRoyalRepositioningLeg(
+                    sim, carriage, carriage->target_id) &&
+                carriage->mode == CC_ROYAL_CARRIAGE_REPOSITIONING) {
+                // The completed leg may leave no legal next leg. Do not retain
+                // the completed leg's route while waiting for the next plan.
+                ParkRoyalCarriage(carriage, carriage->location_id);
+                carriage->departure_day = sim->current_day;
+                reached_market = true;
+            }
         }
     }
     if (reached_market && !HasRoyalCapacityWait(sim)) PlanTrade(sim);
@@ -9142,6 +10005,31 @@ static CcShipment *AllocateShipment(CcSim *sim)
     return shipment;
 }
 
+/* What a town is short of once its own stock and everything already rolling
+   towards it are counted. Four planners asked this question by hand and had to
+   agree on all three terms; now they ask here. */
+static int32_t SettlementUnmetNeed(const CcSim *sim, const CcSettlement *place,
+                                   CcGood good)
+{
+    if (place == NULL) return 0;
+    return EffectiveReserveTarget(sim, place, good) - place->stock[good] -
+           CcSimIncomingGood(sim, place->id, good);
+}
+
+/* What a buyer can actually bring to a purchase: the right purse for the good,
+   plus whatever the iron ledger will lend against it. A town at war spends
+   from the war chest, and only essentials draw credit. */
+static CcMoney BuyerPurchasingPower(CcSim *sim, const CcSettlement *buyer,
+                                    CcGood good)
+{
+    if (buyer == NULL) return 0;
+    CcMoney coins = WarWeeklyNeed(sim, buyer, good) > 0 ?
+        buyer->war_chest : buyer->market_coins;
+    if (!IronLedgerWillFund(buyer, good)) return coins;
+    return coins + IronLedgerCreditAvailable(
+        sim, KingdomMutable(sim, buyer->kingdom_id));
+}
+
 static int32_t TradeSurplus(const CcSim *sim,
                             const CcSettlement *origin,
                             const CcSettlement *destination,
@@ -9210,9 +10098,7 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
     }
     int32_t surplus = TradeSurplus(
         sim, origin, final_destination, good);
-    int32_t incoming = CcSimIncomingGood(sim, final_destination->id, good);
-    int32_t need = EffectiveReserveTarget(sim, final_destination, good) -
-                   final_destination->stock[good] - incoming;
+    int32_t need = SettlementUnmetNeed(sim, final_destination, good);
     int32_t effective_capacity = TradeRouteCapacity(sim, route);
     int32_t available_capacity = effective_capacity - route_used[route_slot];
     int32_t cargo_capacity = MinimumI32(
@@ -9353,10 +10239,7 @@ static void PlanLegacyTrade(CcSim *sim)
                  destination < sim->settlement_count; ++destination) {
                 CcSettlement *to = &sim->settlements[destination];
                 if (CcSettlementIsAbandoned(to)) continue;
-                int32_t need = EffectiveReserveTarget(
-                                   sim, to, (CcGood)good) - to->stock[good] -
-                               CcSimIncomingGood(
-                                   sim, to->id, (CcGood)good);
+                int32_t need = SettlementUnmetNeed(sim, to, (CcGood)good);
                 if (need < minimum_load) continue;
                 for (int32_t source = 0;
                      source < sim->settlement_count; ++source) {
@@ -9376,21 +10259,12 @@ static void PlanLegacyTrade(CcSim *sim)
                             &path_capacity, route_used, false, 0U,
                             false, FreightCargoSlots(
                                 (CcGood)good, minimum_load))) continue;
-                    bool military_supply = WarWeeklyNeed(
-                        sim, to, (CcGood)good) > 0;
-                    CcMoney buyer_coins = military_supply ?
-                        to->war_chest : to->market_coins;
-                    CcKingdom *buyer_kingdom = KingdomMutable(
-                        sim, to->kingdom_id);
-                    bool essential_credit = IronLedgerWillFund(
-                        to, (CcGood)good);
-                    CcMoney credit_available = essential_credit ?
-                        IronLedgerCreditAvailable(sim, buyer_kingdom) : 0;
                     CcMoney minimum_cost =
                         (CcMoney)minimum_load *
                             MaximumI32(1, from->price[good]) +
                         TradeRouteToll(sim, &sim->routes[route_slot]);
-                    if (buyer_coins + credit_available < minimum_cost) {
+                    if (BuyerPurchasingPower(sim, to, (CcGood)good) <
+                        minimum_cost) {
                         continue;
                     }
                     int32_t score = need * 3 + surplus +
@@ -9513,8 +10387,7 @@ static void BlockRoyalTradeDemand(
             CcSettlement *to = &sim->settlements[destination];
             if (CcSettlementIsAbandoned(to) ||
                 to->kingdom_id != carriage->kingdom_id) continue;
-            int32_t need = EffectiveReserveTarget(sim, to, cargo_good) -
-                to->stock[good] - CcSimIncomingGood(sim, to->id, cargo_good);
+            int32_t need = SettlementUnmetNeed(sim, to, cargo_good);
             if (need < minimum_load) continue;
             for (int32_t source = 0;
                  source < sim->settlement_count; ++source) {
@@ -9548,19 +10421,11 @@ static void BlockRoyalTradeDemand(
                     NULL, NULL, NULL, NULL, NULL, true,
                     carriage->kingdom_id, false, required_slots);
                 if (source_path_open && delivery_path_open) continue;
-                bool military_supply = WarWeeklyNeed(
-                    sim, to, cargo_good) > 0;
-                CcMoney buyer_coins = military_supply ?
-                    to->war_chest : to->market_coins;
-                CcKingdom *buyer_kingdom = KingdomMutable(
-                    sim, to->kingdom_id);
-                CcMoney credit_available = IronLedgerWillFund(
-                    to, cargo_good) ?
-                    IronLedgerCreditAvailable(sim, buyer_kingdom) : 0;
                 CcMoney minimum_cost =
                     (CcMoney)minimum_load *
                         MaximumI32(1, from->price[good]) + 3;
-                if (buyer_coins + credit_available < minimum_cost) continue;
+                if (BuyerPurchasingPower(sim, to, cargo_good) <
+                    minimum_cost) continue;
                 int32_t score = RoyalTradeScore(
                     sim, archive_chain, to, cargo_good,
                     need, surplus, 0, 0);
@@ -9632,10 +10497,7 @@ static void PlanTrade(CcSim *sim)
                 CcSettlement *to = &sim->settlements[destination];
                 if (CcSettlementIsAbandoned(to) ||
                     to->kingdom_id != carriage->kingdom_id) continue;
-                int32_t need = EffectiveReserveTarget(
-                                   sim, to, (CcGood)good) - to->stock[good] -
-                               CcSimIncomingGood(
-                                   sim, to->id, (CcGood)good);
+                int32_t need = SettlementUnmetNeed(sim, to, (CcGood)good);
                 if (need < minimum_load) continue;
                 for (int32_t source = 0;
                      source < sim->settlement_count; ++source) {
@@ -9688,16 +10550,6 @@ static void PlanTrade(CcSim *sim)
                             CC_GOOD_FOOD, NULL, NULL,
                             &reposition_cost, NULL, NULL, true,
                             carriage->kingdom_id, false, 1)) continue;
-                    bool military_supply = WarWeeklyNeed(
-                        sim, to, (CcGood)good) > 0;
-                    CcMoney buyer_coins = military_supply ?
-                        to->war_chest : to->market_coins;
-                    CcKingdom *buyer_kingdom = KingdomMutable(
-                        sim, to->kingdom_id);
-                    bool essential_credit = IronLedgerWillFund(
-                        to, (CcGood)good);
-                    CcMoney credit_available = essential_credit ?
-                        IronLedgerCreditAvailable(sim, buyer_kingdom) : 0;
                     int32_t required_units = urgent ? minimum_load :
                         MaximumI32(minimum_load,
                             (minimum_cargo_slots - 1) *
@@ -9708,7 +10560,8 @@ static void PlanTrade(CcSim *sim)
                         RoyalTradeRouteToll(
                             sim, &sim->routes[route_slot],
                             carriage->kingdom_id);
-                    if (buyer_coins + credit_available < minimum_cost) {
+                    if (BuyerPurchasingPower(sim, to, (CcGood)good) <
+                        minimum_cost) {
                         continue;
                     }
                     int32_t score = RoyalTradeScore(
@@ -9884,7 +10737,7 @@ static CcCharacter *PromoteCharacter(CcSim *sim, const char *name,
         UINT32_C(0x9e3779b9));
     InitializeCharacterLife(
         sim, character, 0U, 0,
-        22 + (int32_t)(MixCharacterSeed(character->appearance_seed) % 33U));
+        16 + (int32_t)(MixCharacterSeed(character->appearance_seed) % 58U));
     character->player_disposition = 0;
     character->stress = activity == CC_CHARACTER_ACTIVITY_SEEKING_AID ?
         68 : 28;
@@ -10273,8 +11126,8 @@ void CcSimUpgradeCharacterLifecycles(CcSim *sim)
         CcCharacter *character = &sim->characters[i];
         if (character->death_day > sim->current_day &&
             character->birth_day <= sim->current_day) continue;
-        int32_t age = 22 + (int32_t)(
-            MixCharacterSeed(character->appearance_seed) % 33U);
+        int32_t age = 16 + (int32_t)(
+            MixCharacterSeed(character->appearance_seed) % 58U);
         InitializeCharacterLife(sim, character, 0U, 0, age);
     }
     FillSettlementResidents(sim);
@@ -10382,6 +11235,23 @@ static void RecastSituationsAfterDeath(CcSim *sim, CcId character_id)
     }
 }
 
+static int32_t SuccessionClaimStrength(const CcSim *sim,
+                                       const CcKingdom *kingdom,
+                                       const CcCharacter *claimant,
+                                       bool cradle)
+{
+    const CcSettlement *home = CcSimSettlement(
+        sim, claimant->home_settlement_id);
+    int32_t score = claimant->courage;
+    if (home != NULL && home->function == CC_SETTLEMENT_CAPITAL) score += 40;
+    if (claimant->role == CC_CHARACTER_OFFICIAL) score += 30;
+    if (cradle) {
+        score -= MinimumI32(5, kingdom->pretender_crises);
+        if (!kingdom->anointed) score -= 10;
+    }
+    return score;
+}
+
 static void TransferHistoricalTitles(CcSim *sim,
                                      const CcCharacter *dead,
                                      const CcCharacter *successor)
@@ -10399,15 +11269,57 @@ static void TransferHistoricalTitles(CcSim *sim,
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         CcKingdom *kingdom = &sim->kingdoms[i];
         if (kingdom->ruler_character_id == dead->id) {
-            kingdom->ruler_character_id = successor->id;
+            bool contested = kingdom->pretender_crises > 0 ||
+                !kingdom->anointed;
+            CcCharacter *claimant = contested ?
+                BestOfficeHolder(sim, i, successor->id, false) : NULL;
+            const CcCharacter *winner = successor;
+            if (claimant != NULL) {
+                int32_t cradle_score = SuccessionClaimStrength(
+                    sim, kingdom, successor, true);
+                int32_t claim_score = SuccessionClaimStrength(
+                    sim, kingdom, claimant, false);
+                if (claim_score > cradle_score ||
+                    (claim_score == cradle_score &&
+                     claimant->id < successor->id)) winner = claimant;
+            }
+            kingdom->ruler_character_id = winner->id;
             kingdom->anointed_by_character_id = 0U;
+            kingdom->anointed = false;
             char text[CC_EVENT_TEXT_CAPACITY];
-            (void)snprintf(text, sizeof(text),
-                           "%.20s succeeds %.20s as ruler of %.20s.",
-                           successor->name, dead->name, kingdom->name);
-            (void)PushEvent(sim, CC_EVENT_ROYAL_SUCCESSION,
-                            successor->id, successor->home_settlement_id,
-                            0U, 25, text);
+            if (claimant == NULL) {
+                (void)snprintf(text, sizeof(text),
+                               "%.20s succeeds %.20s as ruler of %.20s.",
+                               successor->name, dead->name, kingdom->name);
+                (void)PushEvent(sim, CC_EVENT_ROYAL_SUCCESSION,
+                                successor->id, successor->home_settlement_id,
+                                0U, 25, text);
+            } else {
+                char contest_text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(contest_text, sizeof(contest_text),
+                               "%.16s's succession is contested: the cradle of "
+                               "%.16s against %.16s's word.", kingdom->name,
+                               successor->name, claimant->name);
+                (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, kingdom->id,
+                                kingdom->id, 0U, 0, contest_text);
+                if (winner == claimant) {
+                    (void)snprintf(text, sizeof(text),
+                                   "%.24s proclaims the rule of %.16s in place "
+                                   "of the cradle of %.16s.", claimant->name,
+                                   kingdom->name, successor->name);
+                    (void)PushEvent(sim, CC_EVENT_ROYAL_SUCCESSION,
+                                    claimant->id, claimant->home_settlement_id,
+                                    0U, 25, text);
+                } else {
+                    (void)snprintf(text, sizeof(text),
+                                   "%.16s claims %.16s by blood; the cradle "
+                                   "keeps the crown under the regency of the abbey.",
+                                   successor->name, kingdom->name);
+                    (void)PushEvent(sim, CC_EVENT_ROYAL_SUCCESSION,
+                                    successor->id, successor->home_settlement_id,
+                                    0U, 25, text);
+                }
+            }
         }
         if (kingdom->monastery_patron_id == dead->id) {
             kingdom->monastery_patron_id = successor->id;
@@ -10435,11 +11347,12 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
 {
     CcCharacter dead = sim->characters[slot];
     int32_t age = CcCharacterAgeYears(sim, &dead);
+    const CcSettlement *home = CcSimSettlement(sim, dead.home_settlement_id);
     char death_text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(death_text, sizeof(death_text),
                    "%s died at age %d after a life in %s.",
                    dead.name, age,
-                   CcSimSettlement(sim, dead.home_settlement_id)->name);
+                   home != NULL ? home->name : "a forgotten place");
     (void)PushEvent(sim, CC_EVENT_CHARACTER_DIED, dead.id,
                     dead.home_settlement_id, 0U, 30, death_text);
     sim->character_deaths += 1;
@@ -10451,6 +11364,21 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     successor.id = NextId(sim, CC_ENTITY_CHARACTER);
     successor.home_settlement_id = dead.home_settlement_id;
     successor.current_settlement_id = dead.home_settlement_id;
+    /* A heir is not born into a ghost town: when the family seat is a
+     * ruin, the successor is born wherever the family fled. */
+    if (sim->schema_version >= 47U) {
+        const CcSettlement *seat = CcSimSettlement(sim, dead.home_settlement_id);
+        if (seat != NULL && CcSettlementIsAbandoned(seat)) {
+            CcSettlement *fled_to = FallenTownHost(
+                sim, seat,
+                CharacterHoldsOffice(sim, dead.id) ?
+                    seat->kingdom_id : 0U);
+            if (fled_to != NULL) {
+                successor.home_settlement_id = fled_to->id;
+                successor.current_settlement_id = fled_to->id;
+            }
+        }
+    }
     successor.role = dead.role;
     successor.goal = dead.goal;
     successor.activity = CC_CHARACTER_ACTIVITY_WORKING;
@@ -10469,10 +11397,14 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     TransferHistoricalTitles(sim, &dead, &sim->characters[slot]);
 
     char birth_text[CC_EVENT_TEXT_CAPACITY];
-    (void)snprintf(birth_text, sizeof(birth_text),
-                   "%s was born into the family of %s in %s.",
-                   successor.name, dead.name,
-                   CcSimSettlement(sim, successor.home_settlement_id)->name);
+    {
+        const CcSettlement *birthplace = CcSimSettlement(
+            sim, successor.home_settlement_id);
+        (void)snprintf(birth_text, sizeof(birth_text),
+                       "%s was born into the family of %s in %s.",
+                       successor.name, dead.name,
+                       birthplace != NULL ? birthplace->name : "a forgotten place");
+    }
     (void)PushEvent(sim, CC_EVENT_CHARACTER_BORN, successor.id,
                     successor.home_settlement_id, 0U, 12, birth_text);
     RecastSituationsAfterDeath(sim, dead.id);
@@ -10512,6 +11444,31 @@ static CcFront *AllocateFront(CcSim *sim)
     return &sim->fronts[oldest];
 }
 
+static void PromotePendingEcho(CcSim *sim);
+
+/* An echo is a memory of a quest. Once the quest has left both the situation
+   table and the outcome archive there is nothing for the echo to be about, so
+   it is forgotten with its subject rather than left pointing at a slot the
+   world has reused. */
+static void ForgetEchoesAboutSubject(CcSim *sim, CcId subject_id)
+{
+    if (sim == NULL || subject_id == 0U) return;
+    if (sim->delayed_echo.active &&
+        sim->delayed_echo.situation_id == subject_id) {
+        sim->delayed_echo = (CcDelayedEcho){0};
+    }
+    int32_t kept = 0;
+    for (int32_t i = 0; i < sim->pending_echo_count; ++i) {
+        if (sim->pending_echoes[i].situation_id == subject_id) continue;
+        sim->pending_echoes[kept++] = sim->pending_echoes[i];
+    }
+    for (int32_t i = kept; i < sim->pending_echo_count; ++i) {
+        sim->pending_echoes[i] = (CcDelayedEcho){0};
+    }
+    sim->pending_echo_count = kept;
+    PromotePendingEcho(sim);
+}
+
 static CcQuestOutcomeRecord *AllocateQuestOutcome(CcSim *sim)
 {
     if (sim->quest_outcome_count < CC_MAX_QUEST_OUTCOMES) {
@@ -10525,7 +11482,11 @@ static CcQuestOutcomeRecord *AllocateQuestOutcome(CcSim *sim)
         if (sim->quest_outcomes[i].resolved_day <
             sim->quest_outcomes[oldest].resolved_day) oldest = i;
     }
+    CcId forgotten = sim->quest_outcomes[oldest].situation_id;
     sim->quest_outcomes[oldest] = (CcQuestOutcomeRecord){0};
+    if (CcSimSituation(sim, forgotten) == NULL) {
+        ForgetEchoesAboutSubject(sim, forgotten);
+    }
     return &sim->quest_outcomes[oldest];
 }
 
@@ -10822,14 +11783,18 @@ void CcSimUpgradeQuestArchitecture(CcSim *sim)
 static void ForgetRetiredSituation(CcSim *sim, CcId situation_id)
 {
     if (sim == NULL || situation_id == 0U) return;
-    /* Quest history lives in the outcome archive. Journey references belong
-       to the situation slot and expire when that slot is reused. */
+    /* Quest history lives in the outcome archive. Journey references and
+       echoes belong to the situation slot and expire when that slot is
+       reused and the archive no longer holds the quest. */
     if (sim->journey.situation_id == situation_id) {
         sim->journey.situation_id = 0U;
     }
     if (sim->resolved_journey_situation_id == situation_id) {
         sim->resolved_journey_situation_id = 0U;
         sim->resolved_journey_outcome = CC_JOURNEY_OUTCOME_NONE;
+    }
+    if (sim->player.accepted_situation_id == situation_id) {
+        sim->player.accepted_situation_id = 0U;
     }
     for (int32_t i = 0; i < sim->character_count; ++i) {
         CcCharacter *character = &sim->characters[i];
@@ -10864,6 +11829,9 @@ static void ForgetRetiredSituation(CcSim *sim, CcId situation_id)
         character->knowledge_write_index =
             knowledge_count % CC_CHARACTER_KNOWLEDGE_CAPACITY;
     }
+    if (CcSimQuestOutcome(sim, situation_id) == NULL) {
+        ForgetEchoesAboutSubject(sim, situation_id);
+    }
 }
 
 static CcSituation *AllocateSituation(CcSim *sim)
@@ -10883,6 +11851,7 @@ static CcSituation *AllocateSituation(CcSim *sim)
     }
     if (oldest < 0) return NULL;
     ForgetRetiredSituation(sim, sim->situations[oldest].id);
+    sim->posted_situation_mask &= ~(UINT32_C(1) << (uint32_t)oldest);
     sim->situations[oldest] = (CcSituation){0};
     return &sim->situations[oldest];
 }
@@ -10898,6 +11867,11 @@ static bool HasRecentSituation(const CcSim *sim, CcSituationKind kind, CcId targ
     return false;
 }
 
+/* A notice posted on a board is a fact like any other: it enters the ledger
+   at the town whose board carries it, so residents can speak of it and
+   travellers carry it between towns. Mine threads stay mouth-to-ear. The
+   posting happens when the ledger is next gathered, so the campaign's day
+   and the notice agree. */
 static CcSituation *CreateSituation(
     CcSim *sim, CcSituationKind kind, CcId target, CcId issuer, CcId cause,
     CcGood good, int32_t quantity, CcMoney reward, int32_t duration)
@@ -11339,7 +12313,8 @@ static void ExpireSituations(CcSim *sim)
                 affected->player_disposition = ClampI32(
                     affected->player_disposition - 12, -100, 100);
             }
-            sim->player.reputation -= 1;
+            sim->player.reputation = ClampI32(
+                sim->player.reputation - 1, -100, 100);
         }
         FinishFrontAfterSituation(sim, situation, failure_id);
         ArchiveSituationOutcome(sim, situation, failure_id);
@@ -12415,6 +13390,107 @@ static void AdvanceDragonCampaign(CcSim *sim)
         sim, campaign->origin_settlement_id);
 }
 
+/* While kingdoms war, their subjects learn each other: hard feuds and
+ * hard-won trusts are struck between the people who must fight, trade, and
+ * shelter across the line. Sparse by design - at most one bond every
+ * eighth week of war - so the quiet world stays quiet. */
+static void AdvanceWarSociety(CcSim *sim)
+{
+    if (sim == NULL) return;
+    if (sim->schema_version < 47U) return;
+    int32_t warring[2] = {-1, -1};
+    for (int32_t i = 0; i < sim->kingdom_count && warring[1] < 0; ++i) {
+        for (int32_t j = i + 1; j < sim->kingdom_count; ++j) {
+            if (sim->diplomacy[i][j] == CC_DIPLOMACY_WAR) {
+                warring[0] = i;
+                warring[1] = j;
+                break;
+            }
+        }
+    }
+    if (warring[1] < 0) return;
+    if ((sim->world_seed ^ (uint32_t)sim->current_day) % 8U != 0U) return;
+
+    CcSettlement *stages[CC_MAX_SETTLEMENTS];
+    int32_t stage_count = 0;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) continue;
+        if (place->kingdom_id != sim->kingdoms[warring[0]].id &&
+            place->kingdom_id != sim->kingdoms[warring[1]].id) continue;
+        if (stage_count < CC_MAX_SETTLEMENTS) stages[stage_count++] = place;
+    }
+    if (stage_count == 0) return;
+    CcSettlement *stage = stages[(sim->world_seed / 7U +
+        (uint32_t)sim->current_day / 13U) % (uint32_t)stage_count];
+
+    CcCharacter *candidates[CC_MAX_CHARACTERS];
+    int32_t candidate_count = 0;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        CcCharacter *person = &sim->characters[i];
+        if (person->home_settlement_id != stage->id ||
+            CcCharacterAgeYears(sim, person) < 16) continue;
+        const CcSettlement *home = CcSimSettlement(
+            sim, person->home_settlement_id);
+        if (home == NULL || home->kingdom_id == 0U) continue;
+        if (candidate_count < CC_MAX_CHARACTERS) {
+            candidates[candidate_count++] = person;
+        }
+    }
+    if (candidate_count < 2) return;
+
+    uint32_t roll = (uint32_t)(sim->world_seed ^ (uint32_t)sim->current_day ^
+                               (uint32_t)(stage->id >> 4));
+    int32_t from_index = (int32_t)(roll % (uint32_t)candidate_count);
+    int32_t to_index = (int32_t)((roll / 29U) % (uint32_t)candidate_count);
+    if (to_index == from_index) {
+        to_index = (from_index + 1) % candidate_count;
+    }
+    CcCharacter *from = candidates[from_index];
+    CcCharacter *to = candidates[to_index];
+    if (from == NULL || to == NULL || from == to) return;
+
+    uint32_t bond_roll = (uint32_t)(sim->world_seed ^ (uint32_t)sim->current_day ^
+                                    (uint32_t)(from->id >> 4) ^
+                                    (uint32_t)(to->id >> 4));
+    bool feud = (bond_roll & 1U) != 0U;
+    const CcRelationship *existing = CcSimRelationship(sim, from->id, to->id);
+    if (existing != NULL &&
+        (feud ? existing->affinity <= -3 : existing->affinity >= 3)) {
+        /* Nothing left to say in that direction this week; the quiet
+         * world stays quiet. */
+        return;
+    }
+    CcRelationship *bond = EnsureRelationship(
+        sim, from->id, to->id,
+        feud ? CC_RELATIONSHIP_HISTORY_PROFESSIONAL_RIVALS :
+               CC_RELATIONSHIP_HISTORY_COWORKERS,
+        feud ? -2 : 2, feud ? -2 : 2, 0, 0U);
+    if (bond == NULL) return;
+    if (bond->cause_event_id != 0U) {
+        bond->affinity = ClampI32(bond->affinity + (feud ? -1 : 1), -3, 3);
+        bond->trust = ClampI32(bond->trust + (feud ? -1 : 1), -3, 3);
+    }
+    char text[CC_EVENT_TEXT_CAPACITY];
+    if (feud) {
+        (void)snprintf(
+            text, sizeof(text),
+            "War between %.12s and %.12s: %.16s blames %.16s for the burned granaries.",
+            sim->kingdoms[warring[0]].name,
+            sim->kingdoms[warring[1]].name, from->name, to->name);
+    } else {
+        (void)snprintf(
+            text, sizeof(text),
+            "Under the %.12s war, %.16s and %.16s stand watch together and are glad.",
+            sim->kingdoms[warring[0]].name, from->name, to->name);
+    }
+    CcEvent *event = PushSocialEvent(
+        sim, CC_EVENT_RELATIONSHIP_CHANGED, stage->id, stage->id,
+        LatestLocalCause(sim, stage->id), from->id, to->id, 0U,
+        sim->player.id, feud ? -2 : 2, text);
+    bond->cause_event_id = event->id;
+}
+
 static void UpdateRoyalDiplomacy(CcSim *sim)
 {
     if (sim == NULL || sim->current_day % 28 != 0) return;
@@ -12635,10 +13711,82 @@ static void UpdateThreats(CcSim *sim)
         bandits->supplies = ClampI32(
             bandits->supplies - MaximumI32(1, bandits->members / 40),
             0, 100);
+        if (sim->schema_version >= 47U && route != NULL &&
+            route->smuggler_route) {
+            /* Night-road tolls keep a camp fed without charters: the tolls
+             * the bands already take in the story become their upkeep. */
+            bandits->supplies = ClampI32(bandits->supplies + 2, 0, 100);
+        }
         bandits->influence = ClampI32(
             (bandits->members + bandits->supplies) / 2 +
             MinimumI32(20, bandits->raids_completed / 3), 0, 100);
         GrowBanditCamp(bandits);
+        /* A strong idle band hunts on its own: when supplies run low it
+         * raids, as it would under the player's charter. A war camp
+         * extends its reach to every road that touches the ruin. */
+        if (sim->schema_version >= 47U &&
+            bandits->raid_phase == CC_BANDIT_RAID_IDLE &&
+            bandits->members >= 12 && bandits->supplies < 30 &&
+            (sim->world_seed ^ (uint32_t)sim->current_day) % 4U == 0U) {
+            CcSettlement *target = NULL;
+            int32_t best_score = INT32_MIN;
+            for (int32_t route_index = 0;
+                 route_index < sim->route_count; ++route_index) {
+                const CcRoute *candidate = &sim->routes[route_index];
+                bool from_camp =
+                    bandits->camp_settlement_id != 0U &&
+                    (candidate->from_id == bandits->camp_settlement_id ||
+                     candidate->to_id == bandits->camp_settlement_id);
+                bool from_route = candidate->id == bandits->route_id;
+                if (!from_camp && !from_route) continue;
+                for (int32_t endpoint = 0; endpoint < 2; ++endpoint) {
+                    CcSettlement *place = CcSimSettlementMutable(
+                        sim, endpoint == 0 ? candidate->from_id :
+                                             candidate->to_id);
+                    if (place == NULL || CcSettlementIsAbandoned(place)) {
+                        continue;
+                    }
+                    int32_t score = -place->security * 2;
+                    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+                        score += place->stock[good];
+                    }
+                    if (score > best_score) {
+                        target = place;
+                        best_score = score;
+                    }
+                }
+            }
+            if (target != NULL) {
+                CcGood good = CC_GOOD_FOOD;
+                for (int32_t candidate = 1; candidate < CC_GOOD_COUNT;
+                     ++candidate) {
+                    if (target->stock[candidate] > target->stock[good]) {
+                        good = (CcGood)candidate;
+                    }
+                }
+                if (target->stock[good] >= 4) {
+                    bandits->raid_phase = CC_BANDIT_RAID_SCOUTING;
+                    bandits->raid_target_id = target->id;
+                    bandits->raid_good = good;
+                    bandits->raid_quantity = 0;
+                    bandits->raid_days_remaining = 2;
+                    char text[CC_EVENT_TEXT_CAPACITY];
+                    (void)snprintf(
+                        text, sizeof(text),
+                        "%s scouts %s for a %s raid from %s.",
+                        bandits->name, target->name, CcGoodName(good),
+                        bandits->camp_settlement_id != 0U &&
+                                CcSimSettlement(
+                                    sim, bandits->camp_settlement_id) != NULL ?
+                            "its war camp" : "the no-man's-land camp");
+                    (void)PushEvent(
+                        sim, CC_EVENT_BANDIT_RAID_DEPARTED, bandits->id,
+                        bandits->route_id,
+                        LatestLocalCause(sim, target->id),
+                        bandits->members, text);
+                }
+            }
+        }
         CcRoute *mutable_route = RouteMutable(sim, bandits->route_id);
         if (mutable_route != NULL && sim->current_day % 28 == 0) {
             mutable_route->security = ClampI32(mutable_route->security -
@@ -13684,6 +14832,9 @@ static void AdvanceHorseTeam(CcSim *sim)
     }
 
     int32_t boarded_at_start = sim->stable_horse_count;
+    /* Both horses live here, harnessed or not: this loop ages them, feeds
+       them and carries pregnancies to term. An idle horse still rests, eats
+       and can foal. */
     for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
         CcHorse *horse = &sim->horse_team[i];
         AdvanceHorseLifecycle(sim, horse);
@@ -13734,6 +14885,12 @@ static void AdvanceHorseTeam(CcSim *sim)
 
 void CcSimAdvanceDays(CcSim *sim, int32_t days)
 {
+    CcSimAdvanceDaysWithNutritionAccounting(sim, days, NULL);
+}
+
+void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
+                                             CcNutritionAccounting *accounting)
+{
     if (sim == NULL || days <= 0 || sim->current_day < 1 ||
         sim->current_day > CC_SIM_MAX_DAY ||
         days > CC_SIM_MAX_DAY - sim->current_day) return;
@@ -13742,6 +14899,7 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
         sim->current_day += 1;
         if (sim->schema_version >= 26U) AdvanceCharacterLifecycles(sim);
         HearLocalGossip(sim);
+        CcSimRefreshCharacterGossip(sim);
         if (!sim->journey.active) {
             ExchangeGossip(sim, sim->player.id, sim->player.location_id,
                             "Your fellow travelers");
@@ -13767,19 +14925,22 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
             CcId scriptorium_id = scriptorium != NULL ?
                 scriptorium->id : 0U;
             for (int32_t settlement = 0; settlement < sim->settlement_count; ++settlement) {
-                UpdateSettlement(sim, settlement, scriptorium_id);
+                UpdateSettlement(sim, settlement, scriptorium_id,
+                    accounting != NULL ? &accounting->towns[settlement] : NULL);
             }
             AdvanceRuins(sim);
             if (sim->schema_version >= 22U) AdvanceArchives(sim);
             UpdateThreats(sim);
             UpdateRoutesAndGovernments(sim);
             UpdateRoyalDiplomacy(sim);
+            AdvanceWarSociety(sim);
             PlanTrade(sim);
             GenerateSituations(sim);
             PlanGoblinTribute(sim);
             PlanHoardRaid(sim);
             next_situation_expiry = NextSituationExpiryDay(sim);
         }
+        SettleChangedRoyalDestinations(sim);
         DeliverDelayedEchoIfReady(sim);
     }
 }
@@ -15587,7 +16748,7 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         return false;
     }
     if (sim->schema_version >= 15U) {
-        for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+        for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
             int32_t due = sim->horse_team[i].pregnancy_days_remaining;
             if (due > 0 && due <= 30) {
                 SetError(error, error_capacity,
@@ -15657,7 +16818,7 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         }
     }
     if (sim->schema_version >= 14U) {
-        for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+        for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
             sim->horse_team[i].hunger = ClampI32(
                 sim->horse_team[i].hunger -
                     preview.horse_feed_required * 12, 0, 100);
@@ -15821,8 +16982,12 @@ static void RollEncounterLoot(CcSim *sim, CcBanditGroup *bandits,
             const int32_t value = RollD6(sim) + RollD6(sim);
             (void)snprintf(trophy->name, sizeof(trophy->name),
                            "Outlaw Trophy of %.16s", bandits->name);
+            trophy->maker_settlement_id = sim->player.location_id;
             trophy->owner_id = sim->player.id;
             trophy->location_id = sim->player.location_id;
+            trophy->gold_content = 1;
+            trophy->gem_content = 1;
+            trophy->craft_work = 1;
             trophy->appraised_value = value;
             trophy->created_day = sim->current_day;
             sim->player.treasure_cargo_slots += 1;
@@ -16075,7 +17240,7 @@ static void ApplyTravelWatchStrain(CcSim *sim)
         sim->journey.pace == CC_JOURNEY_PACE_STEADY ? 1 : 0;
     sim->carriage.condition = ClampI32(
         sim->carriage.condition - road_wear - pace_wear, 0, 100);
-    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
         CcHorse *horse = &sim->horse_team[i];
         int32_t strength_strain = sim->schema_version >= 15U ?
             cargo_strain * MaximumI32(50, 150 - horse->strength) / 100 :
@@ -16095,7 +17260,7 @@ static void RecoverJourneyTeam(CcSim *sim, int32_t fatigue_recovery,
                                int32_t hunger_recovery)
 {
     if (sim->schema_version < 14U) return;
-    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
         CcHorse *horse = &sim->horse_team[i];
         horse->fatigue = ClampI32(
             horse->fatigue - fatigue_recovery, 0, 100);
@@ -16199,7 +17364,7 @@ static bool ApplyJourneyStopAction(CcSim *sim, const CcCommand *command,
             text, sizeof(text),
             "The company waters the team, checks the wheels, and reads the road before the afternoon watch.");
     } else if (command->kind == CC_COMMAND_PRESS_ON && midday) {
-        for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+        for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
             sim->horse_team[i].fatigue = ClampI32(
                 sim->horse_team[i].fatigue + 4, 0, 100);
         }
@@ -17133,7 +18298,7 @@ static bool ApplyAssignHorse(CcSim *sim, const CcCommand *command,
         return false;
     }
     int32_t team_slot = command->amount - 1;
-    if (team_slot < 0 || team_slot >= CC_CARRIAGE_HORSE_COUNT) {
+    if (team_slot < 0 || team_slot >= CcSimHorseTeamCount(sim)) {
         SetError(error, error_capacity, "Choose carriage team slot 1 or 2.");
         return false;
     }
@@ -17289,6 +18454,7 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_GOBLIN_WARN ||
         command->kind == CC_COMMAND_GOBLIN_INTERCEPT ||
         command->kind == CC_COMMAND_CHARACTER_RESPONSE ||
+        command->kind == CC_COMMAND_EXCHANGE_GOSSIP ||
         command->kind == CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL ||
         command->kind == CC_COMMAND_BEGIN_DUNGEON_EXPEDITION;
     if (sim->journey.active && settlement_action) {
@@ -17297,6 +18463,10 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         return false;
     }
     switch (command->kind) {
+        case CC_COMMAND_EXCHANGE_GOSSIP:
+            return ApplyExchangeGossip(sim, command, error, error_capacity);
+        case CC_COMMAND_HEARD_STORY:
+            return ApplyHeardStory(sim, command, error, error_capacity);
         case CC_COMMAND_PARTY_WIPE:
             return ApplyPartyWipe(sim, command, error, error_capacity);
         case CC_COMMAND_MEET_PONY:
@@ -17671,100 +18841,66 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
           (version->source_character_id & CC_ID_SERIAL_MASK) < sim->next_entity_serial));
 }
 
+/* The save compatibility contract from cc_sim.h, as data. Each row is a
+   closed range of schema versions paired with a closed range of generator
+   versions that we still accept; a save is loadable when it falls inside any
+   row. This replaced ninety lines of chained equality tests that grew by two
+   every time either version was bumped.
+
+   Adding a version means editing one row, or adding one. Keep it that way. */
+#define CC_OLDEST_SUPPORTED_SCHEMA 2U
+#define CC_NEWEST_LEGACY_SCHEMA 56U
+
+typedef struct CcVersionPairing {
+    uint32_t schema_low;
+    uint32_t schema_high;
+    uint32_t generator_low;
+    uint32_t generator_high;
+} CcVersionPairing;
+
+static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
+    /* The current pair. */
+    { CC_SIM_SCHEMA_VERSION, CC_SIM_SCHEMA_VERSION,
+      CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    /* Schemas old enough that the current generator still reads them, and the
+       run of recent schemas the current generator wrote. Note the gap: 28
+       through 31 are deliberately absent, because those schemas only ever
+       shipped alongside their own generators, listed below. */
+    { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 56U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    /* Schemas pinned to the generator they shipped with. */
+    { 31U, 31U, 24U, 24U },
+    { 27U, 27U, 21U, 23U },
+    { 28U, 28U, 22U, 22U },
+    { 29U, 29U, 23U, 23U },
+    { 30U, 30U, 23U, 23U },
+    /* Preserve the historical generator pairings. Schema 52 shipped with 25. */
+    { CC_OLDEST_SUPPORTED_SCHEMA, 51U, 2U, 21U },
+};
+
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim == NULL) {
         SetError(error, error_capacity, "Simulation is missing.");
         return false;
     }
-    bool legacy_schema = sim->schema_version == 2U ||
-                         sim->schema_version == 3U ||
-                         sim->schema_version == 4U ||
-                         sim->schema_version == 5U ||
-                         sim->schema_version == 6U ||
-                         sim->schema_version == 7U ||
-                         sim->schema_version == 8U ||
-                         sim->schema_version == 9U ||
-                         sim->schema_version == 10U ||
-                         sim->schema_version == 11U ||
-                         sim->schema_version == 12U ||
-                         sim->schema_version == 13U ||
-                         sim->schema_version == 14U ||
-                         sim->schema_version == 15U ||
-                         sim->schema_version == 16U ||
-                         sim->schema_version == 17U ||
-                         sim->schema_version == 18U ||
-                         sim->schema_version == 19U ||
-                         sim->schema_version == 20U ||
-                         sim->schema_version == 21U ||
-                         sim->schema_version == 22U ||
-                         sim->schema_version == 23U ||
-                         sim->schema_version == 24U ||
-                         sim->schema_version == 25U ||
-                         sim->schema_version == 26U ||
-                         sim->schema_version == 27U ||
-                         sim->schema_version == 28U ||
-                         sim->schema_version == 29U ||
-                         sim->schema_version == 30U ||
-                         sim->schema_version == 31U ||
-                         sim->schema_version == 32U ||
-                         sim->schema_version == 33U ||
-                         sim->schema_version == 34U ||
-                         sim->schema_version == 35U ||
-                         sim->schema_version == 36U ||
-                         sim->schema_version == 37U ||
-                         sim->schema_version == 38U ||
-                         sim->schema_version == 39U ||
-                         sim->schema_version == 40U ||
-                         sim->schema_version == 41U ||
-                         sim->schema_version == 42U ||
-                         sim->schema_version == 43U ||
-                         sim->schema_version == 44U;
-    bool supported_generator =
-        (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
-         sim->generator_version == CC_GENERATOR_VERSION) ||
-        (legacy_schema && sim->schema_version <= 27U &&
-         sim->generator_version == CC_GENERATOR_VERSION) ||
-        (sim->schema_version == 44U && sim->generator_version == 25U) ||
-        (sim->schema_version == 43U && sim->generator_version == 25U) ||
-        (sim->schema_version == 42U && sim->generator_version == 25U) ||
-        (sim->schema_version == 41U && sim->generator_version == 25U) ||
-        (sim->schema_version == 40U && sim->generator_version == 25U) ||
-        (sim->schema_version == 39U && sim->generator_version == 25U) ||
-        (sim->schema_version == 38U && sim->generator_version == 25U) ||
-        (sim->schema_version == 37U && sim->generator_version == 25U) ||
-        (sim->schema_version == 36U && sim->generator_version == 25U) ||
-        (sim->schema_version == 35U && sim->generator_version == 25U) ||
-        (sim->schema_version == 34U && sim->generator_version == 25U) ||
-        (sim->schema_version == 33U && sim->generator_version == 25U) ||
-        (sim->schema_version == 32U && sim->generator_version == 25U) ||
-        (sim->schema_version == 31U && sim->generator_version == 24U) ||
-        (sim->schema_version == 27U && sim->generator_version == 21U) ||
-        (sim->schema_version == 27U && sim->generator_version == 22U) ||
-        (sim->schema_version == 27U && sim->generator_version == 23U) ||
-        (sim->schema_version == 28U && sim->generator_version == 22U) ||
-        (sim->schema_version == 29U && sim->generator_version == 23U) ||
-        (sim->schema_version == 30U && sim->generator_version == 23U) ||
-        (legacy_schema && (sim->generator_version == 2U ||
-                           sim->generator_version == 3U ||
-                           sim->generator_version == 4U ||
-                           sim->generator_version == 5U ||
-                           sim->generator_version == 6U ||
-                           sim->generator_version == 7U ||
-                           sim->generator_version == 8U ||
-                           sim->generator_version == 9U ||
-                           sim->generator_version == 10U ||
-                           sim->generator_version == 11U ||
-                           sim->generator_version == 12U ||
-                           sim->generator_version == 13U ||
-                           sim->generator_version == 14U ||
-                           sim->generator_version == 15U ||
-                           sim->generator_version == 16U ||
-                           sim->generator_version == 17U ||
-                           sim->generator_version == 18U ||
-                           sim->generator_version == 19U ||
-                           sim->generator_version == 20U ||
-                           sim->generator_version == 21U));
+    bool legacy_schema =
+        sim->schema_version >= CC_OLDEST_SUPPORTED_SCHEMA &&
+        sim->schema_version <= CC_NEWEST_LEGACY_SCHEMA;
+    bool supported_generator = false;
+    for (size_t pairing = 0;
+         pairing < sizeof(CC_SUPPORTED_VERSIONS) /
+                   sizeof(CC_SUPPORTED_VERSIONS[0]);
+         ++pairing) {
+        const CcVersionPairing *supported = &CC_SUPPORTED_VERSIONS[pairing];
+        if (sim->schema_version >= supported->schema_low &&
+            sim->schema_version <= supported->schema_high &&
+            sim->generator_version >= supported->generator_low &&
+            sim->generator_version <= supported->generator_high) {
+            supported_generator = true;
+            break;
+        }
+    }
     if ((!legacy_schema && sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
         !supported_generator) {
         SetError(error, error_capacity, "Simulation version is unsupported.");
@@ -17797,6 +18933,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
          CcSimCharacter(sim, sim->archives.abbot_character_id) == NULL ||
          sim->archives.stewardship_rank < 0 ||
          sim->archives.stewardship_rank > 100 ||
+         sim->archives.dead_since_day < 0 ||
+         sim->archives.dead_since_day > sim->current_day ||
          sim->archives.last_recorded_day < 0 ||
          sim->archives.last_recorded_day > sim->current_day)) {
         SetError(error, error_capacity,
@@ -17825,6 +18963,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         sim->monster_count < 0 || sim->monster_count > CC_MAX_MONSTERS ||
         sim->dungeon_count < 0 || sim->dungeon_count > CC_MAX_DUNGEONS ||
         sim->situation_count < 0 || sim->situation_count > CC_MAX_SITUATIONS ||
+        (sim->situation_count < 32 &&
+         (sim->posted_situation_mask &
+          ~((UINT32_C(1) << (uint32_t)sim->situation_count) - 1U)) != 0U) ||
         sim->front_count < 0 || sim->front_count > CC_MAX_FRONTS ||
         sim->quest_outcome_count < 0 ||
         sim->quest_outcome_count > CC_MAX_QUEST_OUTCOMES ||
@@ -17884,8 +19025,11 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             }
             stories |= UINT32_C(1) << (uint32_t)i;
             CcEvent source = {.kind = story->kind, .magnitude = 20};
-            if (!IsNotableGossip(&source) || CcIdKind(story->event_id) != CC_ENTITY_EVENT ||
-                story->event_id > sim->gossip_last_event_id ||
+            bool story_kind_valid = IsNotableGossip(sim, &source) ||
+                story->kind == CC_EVENT_NOTICE_POSTED;
+            if (!story_kind_valid || CcIdKind(story->event_id) != CC_ENTITY_EVENT ||
+                (story->kind != CC_EVENT_NOTICE_POSTED &&
+                 story->event_id > sim->gossip_last_event_id) ||
                 CcSimSettlement(sim, story->origin_id) == NULL ||
                 story->day < 1 || story->day > sim->current_day ||
                 story->heard_day < 0 || story->heard_day > sim->current_day ||
@@ -17908,7 +19052,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 }
             }
         }
-        for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
+        for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
             const CcGossipCarrier *carrier = &sim->gossip_carriers[i];
             for (int32_t slot = 0; slot < CC_MAX_GOSSIP; ++slot) {
                 bool known = (carrier->stories & (UINT32_C(1) << (uint32_t)slot)) != 0U;
@@ -17919,10 +19063,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             }
             CcEntityKind kind = CcIdKind(carrier->id);
             if ((carrier->stories & ~stories) != 0U ||
+                (carrier->told_player & ~carrier->stories) != 0U ||
                 (carrier->id == 0U && carrier->stories != 0U) ||
                 (carrier->id != 0U &&
                  ((kind != CC_ENTITY_PLAYER_COMPANY && kind != CC_ENTITY_ROYAL_CARRIAGE &&
-                   kind != CC_ENTITY_SHIPMENT && kind != CC_ENTITY_COURIER) ||
+                   kind != CC_ENTITY_SHIPMENT && kind != CC_ENTITY_COURIER &&
+                   !(sim->schema_version >= 46U && kind == CC_ENTITY_CHARACTER)) ||
                   (carrier->id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial))) {
                 SetError(error, error_capacity, "A gossip carrier is invalid.");
                 return false;
@@ -18003,7 +19149,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_PARTY_WIPED ||
+                event->kind > CC_EVENT_NOTICE_POSTED ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||
@@ -18154,6 +19300,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 settlement->sheep_condition > 100 ||
                 settlement->sheep_hunger < 0 ||
                 settlement->sheep_hunger > 100 ||
+                settlement->pony_adults < 0 ||
+                settlement->pony_adults > CC_SIM_MAX_UNITS ||
+                settlement->pony_foals < 0 ||
+                settlement->pony_foals > CC_SIM_MAX_UNITS ||
+                settlement->pony_condition < 0 ||
+                settlement->pony_condition > 100 ||
+                settlement->pony_hunger < 0 ||
+                settlement->pony_hunger > 100 ||
                 (settlement->service_mask & ~known_services) != 0U ||
                 CcSettlementServiceCount(settlement) >
                     CcSettlementServiceCapacity(settlement->size) ||
@@ -18506,11 +19660,19 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 if (error != NULL && error_capacity > 0U) {
                     (void)snprintf(
                         error, error_capacity,
-                        "Royal carriage %d state is invalid"
-                        " (mode=%d route=%d timing=%d link=%d).",
+                        "Royal carriage %d invalid"
+                        " (m=%d rc=%d tm=%d lk=%d"
+                        " slots=%d/%d/%d r=%d->%d"
+                        " dep=%d arr=%d).",
                         i, (int32_t)carriage->mode,
                         route_connects ? 1 : 0, trip_timing ? 1 : 0,
-                        shipment != NULL ? 1 : 0);
+                        shipment != NULL ? 1 : 0,
+                        SettlementSlotById(sim, carriage->location_id),
+                        SettlementSlotById(sim, carriage->destination_id),
+                        SettlementSlotById(sim, carriage->target_id),
+                        route != NULL ? SettlementSlotById(sim, route->from_id) : -1,
+                        route != NULL ? SettlementSlotById(sim, route->to_id) : -1,
+                        carriage->departure_day, carriage->arrival_day);
                 }
                 return false;
             }
@@ -18626,6 +19788,11 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 (bandits->service_mask & ~known_services) != 0U ||
                 ServiceMaskCount(bandits->service_mask) >
                     CcBanditCampServiceCapacity(bandits->camp_size) ||
+                (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+                 (bandits->camp_settlement_id != 0U) !=
+                     (CcSimSettlement(sim, bandits->camp_settlement_id) != NULL &&
+                      CcSettlementIsAbandoned(
+                          CcSimSettlement(sim, bandits->camp_settlement_id)))) ||
                 bandits->raid_phase < CC_BANDIT_RAID_IDLE ||
                 bandits->raid_phase > CC_BANDIT_RAID_RETURNING ||
                 bandits->raids_completed < 0 ||
@@ -18930,6 +20097,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
              CcSimEvent(sim, dragon->lifecycle_event_id) == NULL)) {
             SetError(error, error_capacity,
                      "Dragon ecology state is invalid.");
+            return false;
+        }
+        /* A lost heart keeps its identity even after its slot is reused. */
+        if (sim->schema_version >= 57U && dragon->wyrmheart_id != 0U &&
+            (CcIdKind(dragon->wyrmheart_id) != CC_ENTITY_TREASURE ||
+             (dragon->wyrmheart_id & CC_ID_SERIAL_MASK) == 0U ||
+             (dragon->wyrmheart_id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial)) {
+            SetError(error, error_capacity, "Dragon Wyrmheart identity is invalid.");
             return false;
         }
         const CcDragonCampaign *campaign = &sim->dragon_campaign;
@@ -19874,6 +21049,12 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->sheep_condition);
             HASH_VALUE(item->sheep_hunger);
         }
+        if (sim->schema_version >= 51U) {
+            HASH_VALUE(item->pony_adults);
+            HASH_VALUE(item->pony_foals);
+            HASH_VALUE(item->pony_condition);
+            HASH_VALUE(item->pony_hunger);
+        }
         if (sim->schema_version >= 34U) {
             HASH_VALUE(item->paper_tool_wear);
         }
@@ -19978,6 +21159,9 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->raid_good); HASH_VALUE(item->raid_quantity);
             HASH_VALUE(item->raid_days_remaining);
             HASH_VALUE(item->raids_completed);
+            if (sim->schema_version >= 47U) {
+                HASH_VALUE(item->camp_settlement_id);
+            }
         }
         HASH_VALUE(sim->last_bandit_level[i]);
     }
@@ -20054,6 +21238,9 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(dragon->whelps_dispersed);
             HASH_VALUE(dragon->afterdeath_days);
             HASH_VALUE(dragon->lifecycle_event_id);
+        }
+        if (sim->schema_version >= 57U) {
+            HASH_VALUE(dragon->wyrmheart_id);
         }
         if (sim->schema_version >= 9U) {
             HASH_VALUE(dragon->stolen_treasure_id);
@@ -20516,9 +21703,17 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(sim->archives.abbot_character_id);
             HASH_VALUE(sim->archives.stewardship_rank);
         }
+        if (sim->schema_version >= 56U) {
+            HASH_VALUE(sim->archives.dead_since_day);
+        }
     }
     if (sim->schema_version >= 44U) {
         HASH_VALUE(sim->gossip_last_event_id);
+        /* Schema 48 fields hash only for schema 48 saves, so older
+           campaigns keep the hash they were stored with. */
+        if (sim->schema_version >= 48U) {
+            HASH_VALUE(sim->posted_situation_mask);
+        }
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
             const CcGossip *story = &sim->gossip[i];
             HASH_VALUE(story->event_id); HASH_VALUE(story->origin_id);
@@ -20535,9 +21730,12 @@ uint64_t CcSimHash(const CcSim *sim)
             }
             if (story->heard_day > 0) hash = HashGossipVersion(hash, &story->heard);
         }
-        for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
+        for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
             HASH_VALUE(sim->gossip_carriers[i].id);
             HASH_VALUE(sim->gossip_carriers[i].stories);
+            if (sim->schema_version >= 48U) {
+                HASH_VALUE(sim->gossip_carriers[i].told_player);
+            }
             for (int32_t slot = 0; slot < CC_MAX_GOSSIP; ++slot) {
                 if ((sim->gossip_carriers[i].stories & (UINT32_C(1) << (uint32_t)slot)) != 0U) {
                     hash = HashGossipVersion(hash, &sim->gossip_carriers[i].versions[slot]);

@@ -3,6 +3,7 @@ const fs = require('node:fs/promises');
 const http = require('node:http');
 const path = require('node:path');
 const {gameControls} = require('./game_controls.cjs');
+const bufferContracts = require('./webgl_buffer_contracts.cjs');
 const {chromium} = require(process.env.CC_PLAYWRIGHT_MODULE || 'playwright');
 
 async function main() {
@@ -43,6 +44,42 @@ async function main() {
   await page.addInitScript(() => {
     window.shaderLinks = [];
     const prototype = WebGL2RenderingContext.prototype;
+    /* Per-frame graphics work, counted where the browser pays for it. The heap
+       the game can see stays small; what reloads a tab is the traffic through
+       these calls every frame. */
+    const budget = window.frameBudget = {frames: 0, uploadCalls: 0, uploadBytes: 0,
+      draws: 0, vertices: 0, textureBinds: 0, programBinds: 0};
+    window.frameDurations = [];
+    let lastFrameTime;
+    const frame = window.requestAnimationFrame;
+    window.requestAnimationFrame = function(callback) {
+      return frame.call(window, time => {
+        budget.frames++;
+        if (lastFrameTime !== undefined) window.frameDurations.push(time - lastFrameTime);
+        lastFrameTime = time;
+        return callback(time);
+      });
+    };
+    const upload = prototype.bufferSubData;
+    prototype.bufferSubData = function(target, offset, source, sourceOffset, length) {
+      budget.uploadCalls++;
+      budget.uploadBytes += arguments.length >= 5 ? length : (source && source.byteLength) || 0;
+      return upload.apply(this, arguments);
+    };
+    const elements = prototype.drawElements;
+    prototype.drawElements = function(mode, count) {
+      budget.draws++; budget.vertices += count;
+      return elements.apply(this, arguments);
+    };
+    const arrays = prototype.drawArrays;
+    prototype.drawArrays = function(mode, first, count) {
+      budget.draws++; budget.vertices += count;
+      return arrays.apply(this, arguments);
+    };
+    const texture = prototype.bindTexture;
+    prototype.bindTexture = function() { budget.textureBinds++; return texture.apply(this, arguments); };
+    const program = prototype.useProgram;
+    prototype.useProgram = function() { budget.programBinds++; return program.apply(this, arguments); };
     const link = prototype.linkProgram;
     prototype.linkProgram = function(program) {
       link.call(this, program);
@@ -127,6 +164,41 @@ async function main() {
       .some(media => !media.paused && media.readyState >= 3), {timeout: 60000});
     assert(await page.locator('[data-crownless-music]').count() <= 4,
       'The game uses at most three playing songs and one prepared song');
+    /* A playing frame's graphics traffic. Safari holds the memory its allocator
+       reaches streaming this, so the ceilings guard the browser's cost, not the
+       game's own heap, which stays around fifty megabytes either way. */
+    const reading = () => page.evaluate(() => ({...window.frameBudget,
+      skippedUploads: window.crownlessUploads?.skipped || 0,
+      skippedBytes: window.crownlessUploads?.skippedBytes || 0}));
+    await page.evaluate(() => { window.frameDurations = []; });
+    const opening = await reading();
+    await page.waitForTimeout(4000);
+    const closing = await reading();
+    const drawn = closing.frames - opening.frames;
+    assert(drawn >= 20, `A playing game should draw frames; it drew ${drawn}`);
+    const perFrame = Object.fromEntries(Object.keys(opening)
+      .filter(key => key !== 'frames')
+      .map(key => [key, (closing[key] - opening[key]) / drawn]));
+    const frameTimes = await page.evaluate(() => window.frameDurations.slice().sort((a, b) => a - b));
+    const frameMs = Object.fromEntries([['median', 0.5], ['p95', 0.95], ['p99', 0.99]]
+      .map(([name, fraction]) => [name, frameTimes[Math.min(frameTimes.length - 1,
+        Math.floor(frameTimes.length * fraction))]]));
+    await fs.writeFile(path.join(output, 'frame-budget.json'),
+      JSON.stringify({frames: drawn, perFrame, frameMs}, null, 2));
+    const ceilings = {uploadCalls: 190, uploadBytes: 4 * 1024 * 1024, draws: 450,
+      vertices: 720000, textureBinds: 700, programBinds: 900};
+    for (const [name, ceiling] of Object.entries(ceilings)) {
+      assert(perFrame[name] <= ceiling,
+        `Each frame should stay under ${ceiling} ${name}, not ${perFrame[name].toFixed(1)}`);
+    }
+    /* The browser owns buffer contents. #468 removes the shadow cache after
+       GPU readback exposed stale writes; traffic budgets use the direct path. */
+    const buffers = await bufferContracts(page);
+    await fs.writeFile(path.join(output, 'buffer-contracts.json'), JSON.stringify(buffers, null, 2));
+    for (const result of buffers) {
+      assert.equal(result.error, 0, `${result.name} must be a valid WebGL operation`);
+      assert.deepEqual(result.actual, result.expected, `${result.name} must preserve uploaded bytes`);
+    }
     const shaders = await page.evaluate(() => window.shaderLinks);
     assert(shaders.every(shader => shader.linked), JSON.stringify(shaders));
     assert(shaders.every(shader => shader.vectors <= 256), JSON.stringify(shaders));
@@ -246,8 +318,20 @@ async function main() {
     assert.equal(await page.evaluate(() => Module.crownlessCampaignRestored), false);
     await page.locator('#canvas').focus();
     await page.keyboard.press('Enter');
-    await page.waitForFunction(() => Module.crownlessScreen === 'playing');
+    /* Starting a fresh campaign writes the journal and the first save before
+       the screen flips to playing; loaded CI runners sometimes exceed 30s. */
+    try {
+        await page.waitForFunction(() => Module.crownlessScreen === 'playing',
+            undefined, {timeout: 120000});
+    } catch {
+        const screen = await page.evaluate(() => Module.crownlessScreen);
+        throw new Error(
+            `A fresh campaign stalled on screen '${screen}' after Enter at title.`);
+    }
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision + 2);
+    /* Desktop checks are complete. Release its running game before mobile
+       startup so the phone fixture has its own browser resource budget. */
+    await context.close();
     const phone = await browser.newContext({viewport: {width: 390, height: 844},
       hasTouch: true, isMobile: true, deviceScaleFactor: 3});
     const mobile = await phone.newPage();

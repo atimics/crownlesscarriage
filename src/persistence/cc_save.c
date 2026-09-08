@@ -157,7 +157,12 @@ static bool EnsurePlayerKnowledgeColumns(sqlite3 *database,
                                          char *error,
                                          size_t error_capacity)
 {
-    return EnsureColumn(database, "map_object", "recorded_from_kingdom_id",
+    return EnsureColumn(database, "gossip_carrier", "told_player",
+            "ALTER TABLE gossip_carrier ADD COLUMN told_player INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "gossip_state", "posted_situation_mask",
+            "ALTER TABLE gossip_state ADD COLUMN posted_situation_mask INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) && EnsureColumn(database, "map_object", "recorded_from_kingdom_id",
             "ALTER TABLE map_object ADD COLUMN recorded_from_kingdom_id INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
         EnsureColumn(database, "map_object", "recorded_to_kingdom_id",
@@ -236,6 +241,9 @@ static bool EnsureRealmColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "bandit_group", "raids_completed",
             "ALTER TABLE bandit_group ADD COLUMN raids_completed INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "bandit_group", "camp_settlement_id",
+            "ALTER TABLE bandit_group ADD COLUMN camp_settlement_id INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity);
 }
 
@@ -265,6 +273,18 @@ static bool EnsureAnimalColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "settlement", "sheep_hunger",
             "ALTER TABLE settlement ADD COLUMN sheep_hunger INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "pony_adults",
+            "ALTER TABLE settlement ADD COLUMN pony_adults INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "pony_foals",
+            "ALTER TABLE settlement ADD COLUMN pony_foals INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "pony_condition",
+            "ALTER TABLE settlement ADD COLUMN pony_condition INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "pony_hunger",
+            "ALTER TABLE settlement ADD COLUMN pony_hunger INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity);
 }
 
@@ -408,6 +428,9 @@ static bool EnsureLegendColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "dragon_state", "regional_influence",
             "ALTER TABLE dragon_state ADD COLUMN regional_influence INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "wyrmheart_id",
+            "ALTER TABLE dragon_state ADD COLUMN wyrmheart_id INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
         EnsureColumn(database, "dragon_state", "crown_continuity_days",
             "ALTER TABLE dragon_state ADD COLUMN crown_continuity_days INTEGER NOT NULL DEFAULT 0;",
@@ -855,6 +878,10 @@ static bool EnsureHistoryOfficeColumns(sqlite3 *database,
             "ALTER TABLE meta ADD COLUMN archive_stewardship_rank "
             "INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
+        EnsureColumn(database, "meta", "archive_dead_since_day",
+            "ALTER TABLE meta ADD COLUMN archive_dead_since_day "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
         EnsureColumn(database, "kingdom", "ruler_character_id",
             "ALTER TABLE kingdom ADD COLUMN ruler_character_id "
             "INTEGER NOT NULL DEFAULT 0;",
@@ -905,7 +932,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " archive_lore_lost_total INTEGER NOT NULL DEFAULT 0,"
         " archive_last_recorded_day INTEGER NOT NULL DEFAULT 0,"
         " archive_lore_ceiling INTEGER NOT NULL DEFAULT 40,"
-        " archive_kit_tool_wear INTEGER NOT NULL DEFAULT 0);"
+        " archive_kit_tool_wear INTEGER NOT NULL DEFAULT 0,"
+        " archive_dead_since_day INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS route ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, from_id INTEGER NOT NULL,"
         " to_id INTEGER NOT NULL, travel_days INTEGER NOT NULL, capacity INTEGER NOT NULL,"
@@ -1000,7 +1028,11 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " sheep_adults INTEGER NOT NULL DEFAULT 0,"
         " sheep_lambs INTEGER NOT NULL DEFAULT 0,"
         " sheep_condition INTEGER NOT NULL DEFAULT 0,"
-        " sheep_hunger INTEGER NOT NULL DEFAULT 0);"
+        " sheep_hunger INTEGER NOT NULL DEFAULT 0,"
+        " pony_adults INTEGER NOT NULL DEFAULT 0,"
+        " pony_foals INTEGER NOT NULL DEFAULT 0,"
+        " pony_condition INTEGER NOT NULL DEFAULT 0,"
+        " pony_hunger INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS horse_team ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE,"
         " name TEXT NOT NULL, age_days INTEGER NOT NULL,"
@@ -1034,7 +1066,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " camp_size INTEGER NOT NULL, service_mask INTEGER NOT NULL,"
         " raid_phase INTEGER NOT NULL, raid_target_id INTEGER NOT NULL,"
         " raid_good INTEGER NOT NULL, raid_quantity INTEGER NOT NULL,"
-        " raid_days_remaining INTEGER NOT NULL, raids_completed INTEGER NOT NULL);";
+        " raid_days_remaining INTEGER NOT NULL, raids_completed INTEGER NOT NULL,"
+        " camp_settlement_id INTEGER NOT NULL DEFAULT 0);";
     const char *situation_schema =
         "CREATE TABLE IF NOT EXISTS situation ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, kind INTEGER NOT NULL,"
@@ -1359,14 +1392,16 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " accessible INTEGER NOT NULL);";
     const char *gossip_schema =
         "CREATE TABLE IF NOT EXISTS gossip_state ("
-        " id INTEGER PRIMARY KEY CHECK(id=1), last_event_id INTEGER NOT NULL);"
+        " id INTEGER PRIMARY KEY CHECK(id=1), last_event_id INTEGER NOT NULL,"
+        " posted_situation_mask INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS gossip_account ("
         " slot INTEGER PRIMARY KEY, event_id INTEGER NOT NULL, origin_id INTEGER NOT NULL,"
         " heard_event_id INTEGER NOT NULL, day INTEGER NOT NULL, heard_day INTEGER NOT NULL,"
         " settlement_mask INTEGER NOT NULL, recorded INTEGER NOT NULL,"
         " text TEXT NOT NULL, heard_from TEXT NOT NULL, kind INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS gossip_carrier ("
-        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL, stories INTEGER NOT NULL);"
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL, stories INTEGER NOT NULL,"
+        " told_player INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS gossip_version ("
         " holder_kind INTEGER NOT NULL, holder_slot INTEGER NOT NULL, gossip_slot INTEGER NOT NULL,"
         " source_character_id INTEGER NOT NULL, retellings INTEGER NOT NULL,"
@@ -1414,8 +1449,9 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
         "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling,"
         "character_births,character_deaths,archive_kit_tool_wear,"
-        "archive_abbot_character_id,archive_stewardship_rank) "
-        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+        "archive_abbot_character_id,archive_stewardship_rank,"
+        "archive_dead_since_day) "
+        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
     char hash[24];
     (void)snprintf(hash, sizeof(hash), "%016" PRIx64, CcSimHash(sim));
@@ -1449,6 +1485,7 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
     BindInt(statement, 28, sim->archives.kit_tool_wear);
     BindId(statement, 29, sim->archives.abbot_character_id);
     BindInt(statement, 30, sim->archives.stewardship_rank);
+    BindInt(statement, 31, sim->archives.dead_since_day);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
@@ -1514,7 +1551,7 @@ static bool SaveSettlements(sqlite3 *database, const CcSim *sim,
                             char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    const char *sql = "INSERT INTO settlement VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+    const char *sql = "INSERT INTO settlement VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *s = &sim->settlements[i];
@@ -1544,6 +1581,10 @@ static bool SaveSettlements(sqlite3 *database, const CcSim *sim,
         BindInt(statement, column++, s->sheep_lambs);
         BindInt(statement, column++, s->sheep_condition);
         BindInt(statement, column++, s->sheep_hunger);
+        BindInt(statement, column++, s->pony_adults);
+        BindInt(statement, column++, s->pony_foals);
+        BindInt(statement, column++, s->pony_condition);
+        BindInt(statement, column++, s->pony_hunger);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -2269,7 +2310,7 @@ static bool SaveThreats(sqlite3 *database, const CcSim *sim,
                         char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "INSERT INTO bandit_group VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+    if (!Prepare(database, "INSERT INTO bandit_group VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         const CcBanditGroup *b = &sim->bandits[i];
@@ -2285,6 +2326,7 @@ static bool SaveThreats(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 14, b->raid_quantity);
         BindInt(statement, 15, b->raid_days_remaining);
         BindInt(statement, 16, b->raids_completed);
+        BindId(statement, 17, b->camp_settlement_id);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -2459,8 +2501,8 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                  "regional_influence,crown_continuity_days,hunt_cooldown_days,"
                  "hunts,egg_count,brood_days_remaining,brood_cooldown_days,"
                  "broods_laid,whelps_dispersed,afterdeath_days,lifecycle_event_id,"
-                 "territoryless_days,hair_color) "
-                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "territoryless_days,hair_color,wyrmheart_id) "
+                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     const CcDragon *dragon = &sim->dragon;
     column = 1;
@@ -2497,6 +2539,7 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
     BindId(statement, column++, dragon->lifecycle_event_id);
     BindInt(statement, column++, dragon->territoryless_days);
     BindInt(statement, column++, (int32_t)dragon->hair_color);
+    BindId(statement, column++, sim->schema_version >= 57U ? dragon->wyrmheart_id : 0U);
     result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!result) return false;
@@ -3070,9 +3113,12 @@ static bool SaveGossip(sqlite3 *database, const CcSim *sim,
 {
     if (sim->schema_version < 44U) return true;
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "INSERT INTO gossip_state VALUES(1,?);",
+    if (!Prepare(database,
+                  "INSERT INTO gossip_state (id,last_event_id,posted_situation_mask)"
+                  " VALUES(1,?,?);",
                   &statement, error, error_capacity)) return false;
     BindId(statement, 1, sim->gossip_last_event_id);
+    BindId(statement, 2, sim->posted_situation_mask);
     bool ok = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!ok || !Prepare(database,
@@ -3096,12 +3142,13 @@ static bool SaveGossip(sqlite3 *database, const CcSim *sim,
     }
     sqlite3_finalize(statement);
     if (!ok || !Prepare(database,
-            "INSERT INTO gossip_carrier VALUES(?,?,?);",
+            "INSERT INTO gossip_carrier VALUES(?,?,?,?);",
             &statement, error, error_capacity)) return false;
-    for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS && ok; ++i) {
+    for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim) && ok; ++i) {
         BindInt(statement, 1, i);
         BindId(statement, 2, sim->gossip_carriers[i].id);
         BindId(statement, 3, sim->gossip_carriers[i].stories);
+        BindId(statement, 4, sim->gossip_carriers[i].told_player);
         ok = StepDone(database, statement, error, error_capacity) &&
              ResetStatement(database, statement, error, error_capacity);
     }
@@ -3110,7 +3157,7 @@ static bool SaveGossip(sqlite3 *database, const CcSim *sim,
                          &statement, error, error_capacity)) return false;
     for (int32_t kind = 0; kind < 3 && ok; ++kind) {
         int32_t holders = kind == 0 ? CC_MAX_SETTLEMENTS :
-                          kind == 1 ? CC_MAX_GOSSIP_CARRIERS : 1;
+                          kind == 1 ? CcSimGossipCarrierCapacity(sim) : 1;
         for (int32_t holder = 0; holder < holders && ok; ++holder) {
             for (int32_t i = 0; i < CC_MAX_GOSSIP && ok; ++i) {
                 const CcGossipVersion *version = kind == 0 ? &sim->gossip[i].local[holder] :
@@ -3138,10 +3185,14 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
 {
     if (sim->schema_version < 44U) return true;
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "SELECT last_event_id FROM gossip_state WHERE id=1;",
+    if (!Prepare(database,
+                  "SELECT last_event_id,posted_situation_mask FROM gossip_state WHERE id=1;",
                   &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) goto invalid;
     sim->gossip_last_event_id = (CcId)sqlite3_column_int64(statement, 0);
+    sqlite3_int64 posted_mask = sqlite3_column_int64(statement, 1);
+    if (posted_mask < 0 || posted_mask > UINT32_MAX) goto invalid;
+    sim->posted_situation_mask = (uint32_t)posted_mask;
     if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
     sqlite3_finalize(statement);
     if (!Prepare(database,
@@ -3173,15 +3224,18 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
     }
     if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
     sqlite3_finalize(statement);
-    if (!Prepare(database, "SELECT slot,id,stories FROM gossip_carrier ORDER BY slot;",
+    if (!Prepare(database, "SELECT slot,id,stories,told_player FROM gossip_carrier ORDER BY slot;",
                   &statement, error, error_capacity)) return false;
-    for (int32_t i = 0; i < CC_MAX_GOSSIP_CARRIERS; ++i) {
+    for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
         if (sqlite3_step(statement) != SQLITE_ROW ||
             sqlite3_column_int64(statement, 0) != i) goto invalid;
         sqlite3_int64 stories = sqlite3_column_int64(statement, 2);
-        if (stories < 0 || stories > UINT32_MAX) goto invalid;
+        sqlite3_int64 told = sqlite3_column_int64(statement, 3);
+        if (stories < 0 || stories > UINT32_MAX ||
+            told < 0 || told > UINT32_MAX) goto invalid;
         sim->gossip_carriers[i].id = (CcId)sqlite3_column_int64(statement, 1);
         sim->gossip_carriers[i].stories = (uint32_t)stories;
+        sim->gossip_carriers[i].told_player = (uint32_t)told;
     }
     if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
     sqlite3_finalize(statement);
@@ -3195,7 +3249,7 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
         sqlite3_int64 slot = sqlite3_column_int64(statement, 2);
         if (kind < 0 || kind > 2 || holder < 0 || slot < 0 || slot >= CC_MAX_GOSSIP ||
             (kind == 0 && holder >= CC_MAX_SETTLEMENTS) ||
-            (kind == 1 && holder >= CC_MAX_GOSSIP_CARRIERS) ||
+            (kind == 1 && holder >= CcSimGossipCarrierCapacity(sim)) ||
             (kind == 2 && holder != 0)) goto invalid;
         CcGossipVersion *version = kind == 0 ? &sim->gossip[slot].local[holder] :
             kind == 1 ? &sim->gossip_carriers[holder].versions[slot] : &sim->gossip[slot].heard;
@@ -3365,7 +3419,8 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
         "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling,"
         "character_births,character_deaths,archive_kit_tool_wear,"
-        "archive_abbot_character_id,archive_stewardship_rank "
+        "archive_abbot_character_id,archive_stewardship_rank,"
+        "archive_dead_since_day "
         "FROM meta WHERE id=1;", &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
         SetError(error, error_capacity, "Campaign metadata is missing.");
@@ -3407,6 +3462,7 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
     sim->archives.abbot_character_id =
         (CcId)sqlite3_column_int64(statement, 28);
     sim->archives.stewardship_rank = sqlite3_column_int(statement, 29);
+    sim->archives.dead_since_day = sqlite3_column_int(statement, 30);
     sqlite3_finalize(statement);
     return true;
 }
@@ -3607,6 +3663,12 @@ static bool ReadSettlements(sqlite3 *database, CcSim *sim,
             s->sheep_lambs = sqlite3_column_int(statement, column++);
             s->sheep_condition = sqlite3_column_int(statement, column++);
             s->sheep_hunger = sqlite3_column_int(statement, column++);
+        }
+        if (sim->schema_version >= 51U) {
+            s->pony_adults = sqlite3_column_int(statement, column++);
+            s->pony_foals = sqlite3_column_int(statement, column++);
+            s->pony_condition = sqlite3_column_int(statement, column++);
+            s->pony_hunger = sqlite3_column_int(statement, column++);
         }
         rows += 1;
     }
@@ -4435,6 +4497,7 @@ static bool ReadThreats(sqlite3 *database, CcSim *sim,
         b->raid_quantity = sqlite3_column_int(statement, 13);
         b->raid_days_remaining = sqlite3_column_int(statement, 14);
         b->raids_completed = sqlite3_column_int(statement, 15);
+        b->camp_settlement_id = (CcId)sqlite3_column_int64(statement, 16);
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -4695,7 +4758,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
                  "territory_stability,regional_influence,crown_continuity_days,"
                  "hunt_cooldown_days,hunts,egg_count,brood_days_remaining,"
                  "brood_cooldown_days,broods_laid,whelps_dispersed,afterdeath_days,"
-                 "lifecycle_event_id,territoryless_days,hair_color "
+                 "lifecycle_event_id,territoryless_days,hair_color,wyrmheart_id "
                  "FROM dragon_state WHERE slot=1;",
                  &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
@@ -4754,6 +4817,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
         (CcId)sqlite3_column_int64(statement, column++);
     dragon->territoryless_days = sqlite3_column_int(statement, column++);
     dragon->hair_color = (CcDragonHairColor)sqlite3_column_int(statement, column++);
+    dragon->wyrmheart_id = (CcId)sqlite3_column_int64(statement, column++);
     sqlite3_finalize(statement);
 
     if (sim->schema_version >= 11U) {
@@ -5899,15 +5963,32 @@ static void InitializeExtendedGoods(CcSim *sim)
     CcSimInitializePaperEconomy(sim);
 }
 
-static bool UpgradeLegacyRuntime(CcSim *sim,
-                                 char *error, size_t error_capacity)
+static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
+                                       char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
     if ((legacy_version == 38U || legacy_version == 39U ||
          legacy_version == 40U || legacy_version == 41U ||
          legacy_version == 42U || legacy_version == 43U ||
-         legacy_version == 44U) &&
+         legacy_version == 44U || legacy_version == 45U ||
+         legacy_version == 46U || legacy_version == 47U ||
+         legacy_version == 48U || legacy_version == 49U ||
+         legacy_version == 50U || legacy_version == 51U ||
+         legacy_version == 52U || legacy_version == 53U ||
+         legacy_version == 54U || legacy_version == 55U ||
+         legacy_version == 56U) &&
         sim->generator_version == 25U) {
+        /* Schema 47 adds bandit war camps (camp_settlement_id, default
+         * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
+         * default 0). Schema 49 makes notable famine accounts gossip and
+         * schema 50 adds goblin raids, cult rallies, dragon omens and dragon
+         * fires; both changes are derived from events, so older saves need
+         * no data migration. Schema 51 seeds pony herds and schema 52
+         * unharnesses the second animal in the caller below. Schema 53 changes
+         * hoard-return food rules; schema 54 adds paper decay. Schema 55 adds
+         * dragon succession gossip and reports gathered at ruins. Historical
+         * journal replay uses the original rule gates before this upgrade.
+         * Schema 56 adds the saved archive silence date, defaulting to zero. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }
@@ -6357,6 +6438,35 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     CcSimInitializeAnimalEconomy(sim);
     CcSimInitializeCharacters(sim);
     FinishLegacyRuntimeUpgrade(sim);
+    return true;
+}
+
+static bool UpgradeLegacyRuntime(CcSim *sim,
+                                 char *error, size_t error_capacity)
+{
+    uint32_t legacy_version = sim->schema_version;
+    if (!UpgradeLegacyRuntimeSchema(sim, error, error_capacity)) return false;
+    if (legacy_version < 57U) {
+        /* Older saves identify hearts by their original generated name. */
+        char name[CC_MAP_NAME_CAPACITY];
+        (void)snprintf(name, sizeof(name), "Wyrmheart of %.20s", sim->dragon.name);
+        const CcTreasure *first = NULL;
+        for (int32_t i = 0; i < sim->treasure_count; ++i) {
+            const CcTreasure *heart = &sim->treasures[i];
+            if (strcmp(heart->name, name) == 0 &&
+                heart->created_day >= sim->current_day - sim->dragon.age_days &&
+                (first == NULL || heart->created_day < first->created_day)) {
+                first = heart;
+            }
+        }
+        sim->dragon.wyrmheart_id = first != NULL ? first->id : 0U;
+        if (first == NULL && sim->dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM) {
+            /* Reserve the identity of an already formed, missing heart. */
+            sim->dragon.wyrmheart_id = CcMakeId(CC_ENTITY_TREASURE, sim->next_entity_serial++);
+        }
+    }
+    if (legacy_version < 51U) CcSimSeedCommonPonyHerds(sim);
+    if (legacy_version < 52U) CcSimUnharnessSecondDraftAnimal(sim);
     return true;
 }
 

@@ -12,6 +12,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 import wave
@@ -117,6 +118,45 @@ class SpeechWorkerTests(unittest.TestCase):
         self.assertIsNone(cached_record(self.folder, self.record))
         self.assertIsNotNone(cached_record(self.folder, second))
         self.assertLessEqual(sum(p.stat().st_size for p in self.folder.glob('*.wav')), 10000)
+
+    def test_http_retries_when_generation_finishes_during_a_cache_miss(self):
+        started, finish = threading.Event(), threading.Event()
+        def blocked(record, path):
+            started.set()
+            finish.wait()
+            tone(record, path)
+        jobs = self.jobs(blocked)
+        self.addCleanup(finish.set)
+        key, _ = jobs.submit(self.record)
+        self.assertTrue(started.wait(1))
+        receipt = self.folder / (key + '.json')
+        read_text = Path.read_text
+        missed = threading.Event()
+        def complete_after_miss(path, *args, **kwargs):
+            if path == receipt and not missed.is_set():
+                missed.set()
+                try:
+                    return read_text(path, *args, **kwargs)
+                except FileNotFoundError:
+                    finish.set()
+                    jobs.queue.join()
+                    raise
+            return read_text(path, *args, **kwargs)
+        server = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(jobs))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        url = f'http://127.0.0.1:{server.server_port}/v1/speech/{key}'
+        with patch.object(Path, 'read_text', complete_after_miss):
+            with urlopen(url, timeout=2) as response:
+                self.assertEqual(response.status, 202)
+        self.assertTrue(missed.is_set())
+        self.assertEqual(jobs.status(key), 'ready')
+        with urlopen(url, timeout=2) as response:
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.headers['Content-Type'], 'audio/wav')
+            self.assertTrue(response.read().startswith(b'RIFF'))
 
     def test_http_returns_only_complete_recordings(self):
         jobs = self.jobs()

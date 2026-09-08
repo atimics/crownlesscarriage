@@ -61,6 +61,18 @@ bool CcSpeechPath(const CcSpeech *speech, char *path, size_t capacity);
 bool CcSpeechJson(const CcSpeech *speech, char *json, size_t capacity);
 bool CcSpeechGreeting(const CcSim *sim, CcId place_id, CcId object_id,
                        const char *speaker, const char *service, CcSpeech *speech);
+/* Realize an already-held account. Roles change wording, not evidence.
+   Unsupported numerical claims get a cautious non-numeric fallback.
+   False means invalid input or insufficient space, never permission to
+   bypass the knowledge boundary by quoting the raw account. */
+bool CcSpeechRealizeGossip(const CcSim *sim, const CcCharacter *speaker,
+                           const CcGossip *story, const CcGossipVersion *version,
+                           char *text, size_t capacity);
+bool CcSpeechGossip(const CcSim *sim, CcId character_id, int32_t offset,
+                      bool source, CcSpeech *speech);
+bool CcSpeechStory(const CcSim *sim, CcId character_id,
+                   const CcGossip *story, const CcGossipVersion *version,
+                   bool source, CcSpeech *speech);
 bool CcSpeechRoad(const CcSim *sim, CcSpeech *speech);
 bool CcSpeechPlayerChoice(const CcSim *sim, const CcSituation *situation,
                            CcStoryPlayerChoice choice, uint32_t voice_index,

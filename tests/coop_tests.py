@@ -454,6 +454,23 @@ class CoopTests(unittest.TestCase):
         self.worlds.tick(wall_now=base+3600)
         self.assertGreater(self.worlds.view(self.id, self.a, present=False)['state']['day'], 1)
 
+    def test_one_stranded_world_keeps_the_host_and_its_neighbours_serving(self):
+        other = '2' * 32
+        self.create_world(other)
+        self.worlds.view(self.id, self.a)
+        base = self.worlds.db.execute('SELECT last_human FROM away_clocks WHERE world=?', (self.id,)).fetchone()[0]
+        self.worlds.seen.clear()
+        self.worlds.db.execute("CREATE TRIGGER failed_world_write BEFORE UPDATE OF state ON worlds BEGIN SELECT RAISE(ABORT,'disk failure'); END")
+        with self.assertLogs(level='ERROR'):
+            self.worlds.tick(wall_now=base+3600)
+        self.worlds.db.execute('DROP TRIGGER failed_world_write')
+        self.assertIn(self.id, self.worlds.failed)
+        status, health = self.request('/healthz')
+        self.assertEqual((status, health['status']), (200, 'ready'))
+        self.assertEqual(health['worlds_needing_recovery'], len(self.worlds.failed))
+        self.assertEqual(self.request('/api/worlds/' + other + '/state')[0], 200)
+        self.assertTrue(self.worlds.view(self.id, self.a)['recovery_required'])
+
     def test_travel_resume_and_tick_batch_equivalence(self):
         with self.engine.open(0xc0a71a9e) as a:
             target = a.snapshot()['travel'][0]['id']

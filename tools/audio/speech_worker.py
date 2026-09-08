@@ -179,6 +179,8 @@ def make_handler(jobs, allowed_origins=()):
             key = match[1]
             path = jobs.folder / (key + '.wav')
             receipt = path.with_suffix('.json')
+            # Generation can finish while the first cache lookup misses.
+            state = jobs.status(key)
             try:
                 data = json.loads(receipt.read_text())
                 record = validate_record(data, jobs.cast)
@@ -188,7 +190,6 @@ def make_handler(jobs, allowed_origins=()):
                     return
             except (OSError, ValueError, KeyError):
                 pass
-            state = jobs.status(key)
             self.respond(202 if state in ('queued', 'running') else 503 if state == 'failed' else 404,
                          {'key': key, 'state': state})
     return Handler

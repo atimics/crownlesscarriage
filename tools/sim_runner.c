@@ -8,8 +8,7 @@
 
 static void PrintSummary(const CcSim *sim, bool detail)
 {
-    int32_t total_hunger = 0;
-    int32_t maximum_hunger = 0;
+    CcHungerSnapshot hunger = CcSimHungerSnapshot(sim);
     int32_t travelling = 0;
     int32_t blocked_shipments = 0;
     int32_t royal_idle = 0;
@@ -25,7 +24,6 @@ static void PrintSummary(const CcSim *sim, bool detail)
     int32_t wars = 0;
     int32_t alliances = 0;
     int32_t active_couriers = 0;
-    int32_t abandoned_settlements = 0;
     int32_t maximum_generation = 0;
     int32_t sanction = 0;
     int32_t anointed_count = 0;
@@ -39,15 +37,6 @@ static void PrintSummary(const CcSim *sim, bool detail)
     const CcCharacter *campaign_hero = CcSimCharacter(
         sim, sim->dragon_campaign.hero_character_id);
     const CcKingdom *anointed_kingdom = NULL;
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        if (CcSettlementIsAbandoned(&sim->settlements[i])) {
-            abandoned_settlements += 1;
-        }
-        total_hunger += sim->settlements[i].hunger;
-        if (sim->settlements[i].hunger > maximum_hunger) {
-            maximum_hunger = sim->settlements[i].hunger;
-        }
-    }
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         if (sim->shipments[i].status == CC_SHIPMENT_TRAVELLING) travelling += 1;
         if (sim->shipments[i].status == CC_SHIPMENT_BLOCKED) {
@@ -107,7 +96,9 @@ static void PrintSummary(const CcSim *sim, bool detail)
     }
     CcMaterialChainSnapshot chain = CcSimMaterialChainSnapshot(sim);
     (void)printf("day=%d hash=%016" PRIx64
-                 " average_hunger=%d maximum_hunger=%d shipments=%d events=%d"
+                 " average_hunger=%d maximum_hunger=%d"
+                 " population_weighted_hunger=%d inhabited_settlements=%d"
+                 " hunger_population=%" PRId64 " shipments=%d events=%d"
                  " blocked_shipments=%d royal_carriages=%d/%d/%d/%d/%d"
                  " royal_trips=%d royal_losses=%d"
                  " open_routes=%d/%d legitimacy=%d live_situations=%d"
@@ -133,7 +124,8 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  " dragon_patron=\"%s\" dragon_hero=\"%s\""
                  " landless_days=%d\n",
                  sim->current_day, CcSimHash(sim),
-                 total_hunger / sim->settlement_count, maximum_hunger,
+                 hunger.average, hunger.maximum, hunger.population_weighted,
+                 hunger.inhabited_settlements, hunger.population,
                  travelling, sim->event_count,
                  blocked_shipments, royal_idle, royal_repositioning,
                  royal_delivering, royal_blocked, royal_waiting_capacity,
@@ -164,7 +156,7 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  sim->dragon.broods_laid,
                  sim->dragon.whelps_dispersed,
                  sim->dragon.afterdeath_days,
-                 abandoned_settlements, CcSimClimateFactor(sim),
+                 hunger.abandoned_settlements, CcSimClimateFactor(sim),
                  CcDragonCampaignExperience(sim),
                  sim->archives.lore_stored,
                  sim->archives.lore_lost_total,
@@ -231,6 +223,32 @@ static void PrintSummary(const CcSim *sim, bool detail)
         }
     }
 }
+static bool chronicle = false;
+static int32_t chronicle_last_day = -1;
+
+static void PrintChronicleNewEvents(const CcSim *sim)
+{
+    int32_t count = sim->event_count;
+    if (count > CC_MAX_EVENTS) count = CC_MAX_EVENTS;
+    int32_t oldest_new = count;
+    for (int32_t offset = count - 1; offset >= 0; --offset) {
+        const CcEvent *event = CcSimRecentEvent(sim, offset);
+        if (event == NULL) { oldest_new = offset; continue; }
+        if (event->day <= chronicle_last_day) break;
+        oldest_new = offset;
+    }
+    for (int32_t offset = oldest_new; offset >= 0; --offset) {
+        const CcEvent *event = CcSimRecentEvent(sim, offset);
+        if (event == NULL || event->day <= chronicle_last_day) continue;
+        (void)printf("  day=%-5d %-14s | %s\n",
+                     event->day, CcEventKindName(event->kind), event->text);
+    }
+    const CcEvent *newest = CcSimRecentEvent(sim, 0);
+    if (newest != NULL && newest->day > chronicle_last_day) {
+        chronicle_last_day = newest->day;
+    }
+}
+
 int main(int argc, char **argv)
 {
     uint32_t seed = UINT32_C(0xc0a71a9e);
@@ -260,6 +278,8 @@ int main(int argc, char **argv)
             checkpoint_every = (int32_t)strtol(argv[++argument], NULL, 10);
         } else if (strcmp(argv[argument], "--detail") == 0) {
             detail = true;
+        } else if (strcmp(argv[argument], "--chronicle") == 0) {
+            chronicle = true;
         }
     }
 
@@ -283,8 +303,27 @@ int main(int argc, char **argv)
         return 1;
     }
     if (report_every < 1) report_every = 1;
+    if (chronicle) {
+        (void)printf("== world seed=%" PRIu32 " ==\n", seed);
+        for (int32_t i = 0; i < sim.kingdom_count; ++i) {
+            (void)printf("kingdom: %s\n", sim.kingdoms[i].name);
+        }
+        for (int32_t i = 0; i < sim.settlement_count; ++i) {
+            (void)printf("settlement: %s\n", sim.settlements[i].name);
+        }
+        PrintChronicleNewEvents(&sim);
+    }
     for (int32_t year = 0; year < years; ++year) {
-        CcSimAdvanceDays(&sim, 365);
+        if (chronicle) {
+            /* Monthly scans: a busy year pushes more than the event ring
+             * holds, so a yearly window would lose mid-year events. */
+            for (int32_t month = 0; month < 12; ++month) {
+                CcSimAdvanceDays(&sim, month == 11 ? 35 : 30);
+                PrintChronicleNewEvents(&sim);
+            }
+        } else {
+            CcSimAdvanceDays(&sim, 365);
+        }
         if (!CcSimValidate(&sim, error, sizeof(error))) {
             (void)fprintf(stderr, "validation failed in year %d: %s\n", year + 1, error);
             if (detail) PrintSummary(&sim, true);
@@ -295,7 +334,11 @@ int main(int argc, char **argv)
             (void)fprintf(stderr, "checkpoint failed: %s\n", error);
             return 1;
         }
-        if (year == 0 || year + 1 == years ||
+        if (chronicle) {
+            (void)printf("== year %d (day %d) ==\n", year + 1, sim.current_day);
+            PrintChronicleNewEvents(&sim);
+            PrintSummary(&sim, detail);
+        } else if (year == 0 || year + 1 == years ||
             (year + 1) % report_every == 0) {
             PrintSummary(&sim, detail);
             (void)fflush(stdout);

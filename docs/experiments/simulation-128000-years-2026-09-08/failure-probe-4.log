@@ -1,0 +1,5 @@
+seed=4 year=94169 day=34371686 error=Royal carriage 0 invalid (m=0 rc=0 tm=0 lk=0 slots=1/-1/-1 r=-1->-1 dep=34371670 arr=0).
+carriage=0 trips=1000001 losses=87264 condition=21 mode=0 next_dispatch=34371675 counter_limit=1000000
+carriage=1 trips=149 losses=33 condition=22 mode=0 next_dispatch=84875 counter_limit=1000000
+carriage=2 trips=574 losses=106 condition=21 mode=0 next_dispatch=44408 counter_limit=1000000
+bandits=0 raids=1682 phase=0 remaining=0 counter_limit=1000000

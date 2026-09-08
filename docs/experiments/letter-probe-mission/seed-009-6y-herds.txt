@@ -1,0 +1,9 @@
+letter probe — world seeds 9..9, 6 years, purpose "report", topic "all"
+
+== RESEARCH MISSION: herds — seed 2415085441, day 2191 ==
+   Book: Scriptorium research copy on "herds" — baseline day 365 (archive knew 0 facts before the scout left)
+
+   Scout route: Thornford → Gloamgate → Alderwatch → Silverwick → Rosespire → Hollowbarrow
+
+  Book summary: 0 pages / 0 facts — 0 novel since baseline, 0 repeats, 0 further accounts, 0 pages by a craft-witness
+

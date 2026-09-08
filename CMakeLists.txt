@@ -1,8 +1,13 @@
 cmake_minimum_required(VERSION 3.24)
 
-if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+# An empty cache entry still counts as DEFINED, and a plain set(CACHE) will not
+# overwrite one, so a build directory that once configured without a target
+# would keep inheriting the host version forever. Test both, and FORCE past the
+# stale entry. An explicit -DCMAKE_OSX_DEPLOYMENT_TARGET short-circuits the
+# guard, so it is still respected.
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING
-        "Oldest supported macOS version")
+        "Oldest supported macOS version" FORCE)
 endif()
 
 project(crownless_carriage VERSION 0.1.0 LANGUAGES C)
@@ -12,6 +17,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 option(CC_BUILD_CLIENT "Build the raylib fixed-pixel three-quarter 3D client" ON)
+option(CC_BUILD_GRAPHICS_PROBES "Build standalone GPU regression probes" OFF)
 option(CC_BUILD_BENCHMARKS "Build repeatable headless benchmarks" ON)
 option(CC_ENABLE_STRICT_WARNINGS "Enable strict compiler warnings" ON)
 option(CC_WARNINGS_AS_ERRORS "Treat project warnings as build errors" OFF)
@@ -94,6 +100,7 @@ add_library(crownless_story
     src/story/cc_story.c
     src/story/cc_speech.c
     src/story/cc_speech_interactions.c
+    src/story/cc_speech_lexicon.c
     src/story/cc_speech_json.c
 )
 target_include_directories(crownless_story PUBLIC src)
@@ -239,6 +246,14 @@ if(CC_BUILD_BENCHMARKS)
     add_executable(crownless_sim_metrics tools/sim_metrics.c)
     target_link_libraries(crownless_sim_metrics PRIVATE crownless_sim)
     cc_strict_warnings(crownless_sim_metrics)
+
+    add_executable(crownless_letter_probe tools/letter_probe.c)
+    target_link_libraries(crownless_letter_probe PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_letter_probe)
+
+    add_executable(crownless_agent_sweep tools/agent_sweep.c)
+    target_link_libraries(crownless_agent_sweep PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_agent_sweep)
 endif()
 
 if(CC_BUILD_CLIENT)
@@ -257,6 +272,11 @@ if(CC_BUILD_CLIENT)
         GIT_SHALLOW TRUE
     )
     FetchContent_MakeAvailable(raylib)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" "-DRAYLIB_SOURCE_DIR=${raylib_SOURCE_DIR}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchRaylibMatrices.cmake"
+        COMMAND_ERROR_IS_FATAL ANY
+    )
     if(TARGET raylib)
         get_target_property(CC_RAYLIB_IMPORTED raylib IMPORTED)
         if(NOT CC_RAYLIB_IMPORTED)
@@ -264,6 +284,25 @@ if(CC_BUILD_CLIENT)
             if(EMSCRIPTEN)
                 set_property(TARGET raylib PROPERTY C_EXTENSIONS ON)
             endif()
+        endif()
+    endif()
+
+    if(CC_BUILD_GRAPHICS_PROBES)
+        add_executable(matrix_upload_tests tests/matrix_upload_tests.c)
+        target_link_libraries(matrix_upload_tests PRIVATE raylib)
+        cc_strict_warnings(matrix_upload_tests)
+        if(EMSCRIPTEN)
+            set_property(TARGET matrix_upload_tests PROPERTY C_EXTENSIONS ON)
+            set_target_properties(matrix_upload_tests PROPERTIES
+                OUTPUT_NAME matrix-upload SUFFIX ".html"
+                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/matrix-probe")
+            target_link_options(matrix_upload_tests PRIVATE
+                "-sMIN_WEBGL_VERSION=2" "-sMAX_WEBGL_VERSION=2")
+        else()
+            add_custom_target(run_matrix_upload_tests
+                COMMAND matrix_upload_tests DEPENDS matrix_upload_tests
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                USES_TERMINAL)
         endif()
     endif()
 
@@ -975,6 +1014,14 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(war_society_tests tests/war_society_tests.c)
+    target_link_libraries(war_society_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(war_society_tests)
+    add_test(NAME war_society_from_ruins COMMAND war_society_tests)
+    add_executable(succession_tests tests/succession_tests.c)
+    target_link_libraries(succession_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(succession_tests)
+    add_test(NAME crisis_contested_succession COMMAND succession_tests)
     add_executable(music_tests tests/music_tests.c)
     target_link_libraries(music_tests PRIVATE crownless_music)
     cc_strict_warnings(music_tests)
@@ -1041,7 +1088,11 @@ if(BUILD_TESTING)
         add_test(NAME robotics_benchmark COMMAND crownless_robotics_benchmark)
         set_tests_properties(robotics_benchmark PROPERTIES RUN_SERIAL TRUE)
         set(CC_BENCHMARK_TEST_ARGUMENTS --quick)
-        if(CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+        # The simulation budget is calibrated on the Linux CI runner. Keep
+        # the benchmark smoke test on Apple hosts, but do not compare CPU-time
+        # thresholds across different architectures and host schedulers.
+        if(CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$" AND
+           NOT APPLE)
             list(APPEND CC_BENCHMARK_TEST_ARGUMENTS --assert-budget)
         endif()
         add_test(NAME headless_performance_budget
@@ -1133,6 +1184,19 @@ if(BUILD_TESTING)
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/sim_runner_tests.py
                          $<TARGET_FILE:crownless_sim_runner>)
         set_tests_properties(simulation_runner_resume PROPERTIES TIMEOUT 60)
+
+        # crownless_letter_probe is only built under CC_BUILD_BENCHMARKS, so
+        # the test has to be registered under the same condition. Otherwise
+        # the generator expression below has no target to resolve and the
+        # whole configure step fails, which is what the release container
+        # hits when it builds with -DCC_BUILD_BENCHMARKS=OFF.
+        if(CC_BUILD_BENCHMARKS)
+            add_test(NAME letter_probe_contracts
+                     COMMAND ${CC_PYTHON3_EXECUTABLE}
+                             ${CMAKE_CURRENT_SOURCE_DIR}/tests/letter_probe_tests.py
+                             $<TARGET_FILE:crownless_letter_probe>)
+            set_tests_properties(letter_probe_contracts PROPERTIES TIMEOUT 120)
+        endif()
     endif()
 
     add_executable(interaction_tests tests/interaction_tests.c)
@@ -1166,6 +1230,34 @@ if(BUILD_TESTING)
     target_link_libraries(horse_stable_tests PRIVATE crownless_persistence)
     cc_strict_warnings(horse_stable_tests)
     add_test(NAME horse_stable_breeding COMMAND horse_stable_tests)
+
+    add_executable(hunger_metrics_tests tests/hunger_metrics_tests.c)
+    target_link_libraries(hunger_metrics_tests PRIVATE crownless_sim)
+    cc_strict_warnings(hunger_metrics_tests)
+    add_test(NAME inhabited_hunger_metrics COMMAND hunger_metrics_tests)
+    if(CC_PYTHON3_EXECUTABLE AND CC_BUILD_BENCHMARKS)
+        add_test(NAME hunger_report_agreement
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/hunger_report_tests.py
+                         $<TARGET_FILE:crownless_sim_runner>
+                         $<TARGET_FILE:crownless_sim_metrics>)
+    endif()
+
+    add_executable(nutrition_accounting_tests tests/nutrition_accounting_tests.c)
+    target_link_libraries(nutrition_accounting_tests PRIVATE crownless_sim)
+    cc_strict_warnings(nutrition_accounting_tests)
+    add_test(NAME nutrition_storage_accounting COMMAND nutrition_accounting_tests)
+    if(CC_PYTHON3_EXECUTABLE AND CC_BUILD_BENCHMARKS)
+        add_test(NAME nutrition_accounting_csv
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/nutrition_accounting_tests.py
+                         $<TARGET_FILE:crownless_sim_metrics>)
+    endif()
+
+    add_executable(raid_food_tests tests/raid_food_tests.c)
+    target_link_libraries(raid_food_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(raid_food_tests)
+    add_test(NAME hoard_raid_food_accounting COMMAND raid_food_tests)
 
     add_executable(balance_tests tests/balance_tests.c)
     target_link_libraries(balance_tests PRIVATE crownless_sim)
@@ -1348,6 +1440,8 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-adventure-town-routes)
         add_test(NAME adventure_trade_terms
                  COMMAND crownless_carriage --test-adventure-trade)
+        add_test(NAME bridge_scene_input
+                 COMMAND crownless_carriage --test-bridge-scene)
         add_test(NAME world_card_input_parity
                  COMMAND crownless_carriage --test-world-cards)
         add_test(NAME adventure_input_flow
@@ -1381,7 +1475,8 @@ if(BUILD_TESTING)
         add_custom_target(run_renderer_graphics_tests
             COMMAND renderer_regression_tests --graphics
                 "${CMAKE_CURRENT_BINARY_DIR}/renderer-viewport.png"
-            DEPENDS renderer_regression_tests
+            COMMAND crownless_carriage --test-map-texture-lifetime
+            DEPENDS renderer_regression_tests crownless_carriage
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             USES_TERMINAL
         )
@@ -1411,6 +1506,19 @@ if(BUILD_TESTING)
         target_link_libraries(creature_frame_tests PRIVATE crownless_local_renderer raylib)
         cc_strict_warnings(creature_frame_tests)
         add_test(NAME fixed_creature_gait_timing COMMAND creature_frame_tests)
+
+        add_executable(creature_teleport_tests tests/creature_teleport_tests.c)
+        target_link_libraries(creature_teleport_tests PRIVATE crownless_local_renderer raylib)
+        cc_strict_warnings(creature_teleport_tests)
+        add_test(NAME creature_pose_after_a_jump COMMAND creature_teleport_tests)
+
+        add_executable(travel_animation_tests tests/travel_animation_tests.c)
+        target_link_libraries(travel_animation_tests PRIVATE
+            crownless_local_renderer crownless_client_policy raylib
+        )
+        cc_strict_warnings(travel_animation_tests)
+        add_test(NAME travel_animation_follows_the_road
+                 COMMAND travel_animation_tests)
 
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c

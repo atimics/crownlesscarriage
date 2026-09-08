@@ -1,0 +1,5 @@
+seed=5 year=76871 day=28057916 error=Bandit expedition state is invalid.
+carriage=0 trips=399 losses=249 condition=23 mode=0 next_dispatch=21049 counter_limit=1000000
+carriage=1 trips=225 losses=38 condition=23 mode=0 next_dispatch=145190 counter_limit=1000000
+carriage=2 trips=605 losses=101 condition=23 mode=0 next_dispatch=139671 counter_limit=1000000
+bandits=0 raids=1000008 phase=0 remaining=0 counter_limit=1000000

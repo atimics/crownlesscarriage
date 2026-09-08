@@ -252,10 +252,6 @@ int main(void)
     CC_CHECK(!CcClientMapCommandEnabled(false, true, false, 1.0f));
     CC_CHECK(!CcClientMapCommandEnabled(false, false, true, 1.0f));
 
-    CC_CHECK(CcClientPromiseCanBeAccepted(false, 1.0f));
-    CC_CHECK(!CcClientPromiseCanBeAccepted(false, 2.0f));
-    CC_CHECK(!CcClientPromiseCanBeAccepted(true, 1.0f));
-
     CC_CHECK(!CcClientInteractionActivated(false, 0.0f, 1.25f));
     CC_CHECK(CcClientInteractionActivated(true, 1.24f, 1.25f));
     CC_CHECK(!CcClientInteractionActivated(true, 1.25f, 1.25f));

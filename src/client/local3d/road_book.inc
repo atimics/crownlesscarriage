@@ -36,6 +36,40 @@ float CcLocalRoadHorseLongitudinalOffsetInternal(void)
     return 5.55f;
 }
 
+/* A wheel that is not slipping turns once for every circumference of road it
+   covers, so its angle is the ground behind it divided by its radius. There
+   is no clock in that, and that is the whole of it: the same stretch of road
+   puts the spokes in the same place at any frame rate or clock, a carriage
+   standing still does not spin its wheels, and ground given back turns them
+   back. */
+float CcLocalCarriageWheelAngleInternal(float travelled, float radius)
+{
+    if (!isfinite(travelled) || !(radius > 0.0f)) return 0.0f;
+    float angle = fmodf(travelled / radius, 2.0f * PI);
+    return angle < 0.0f ? angle + 2.0f * PI : angle;
+}
+
+/* One turn of the gait cycle carries the team one stride down the road. The
+   pony is drawn at 0.96 of a horse rig 1.32 units through the body, so it is
+   1.27 units of animal, and a walking horse covers a little over its own
+   length in a stride. 1.40 units also lands the road book's cruise on the
+   cadence that was tuned by eye: 52 units of road in the 64 seconds a
+   four-watch journey takes is 0.81 a second, which at this stride is 3.65
+   radians a second against a walk's 3.6. So cruise still looks like cruise,
+   and every other speed now looks like itself instead of like cruise. */
+float CcLocalRoadTeamStrideInternal(void)
+{
+    return 1.40f;
+}
+
+float CcLocalRoadTeamGaitPhaseInternal(float travelled)
+{
+    if (!isfinite(travelled)) return 0.0f;
+    float phase = fmodf(
+        travelled / CcLocalRoadTeamStrideInternal() * 2.0f * PI, 2.0f * PI);
+    return phase < 0.0f ? phase + 2.0f * PI : phase;
+}
+
 static Vector3 RoadPonySkinPoint(Vector3 base, float yaw, Vector3 point,
                                  CcQuadrupedBone part)
 {
@@ -97,7 +131,12 @@ static void DrawRoadHorseHarness(Vector3 base, float yaw)
     }
 }
 
-static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock, float pace,
+/* Pace still says which gait the team is in; the road says how fast it steps.
+   A cadence in beats a second is a guess about speed, and it was wrong every
+   time the carriage was not doing exactly what the guess assumed -- feet
+   walking on the spot at a halt, skating at a canter. */
+static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
+                              float pace, float travelled,
                               float yaw, bool bridge_checkpoint)
 {
     CcClientConvoyGait convoy_gait = CcClientConvoyGaitForPace(pace);
@@ -107,15 +146,17 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock, float
         convoy_gait == CC_CLIENT_CONVOY_GAIT_TROT ?
             CC_CREATURE_RIG_GAIT_TROT : CC_CREATURE_RIG_GAIT_WALK;
     bool moving = convoy_gait != CC_CLIENT_CONVOY_GAIT_HALT;
-    float cadence = CcClientConvoyGaitCadence(convoy_gait);
+    float stride_phase = CcLocalRoadTeamGaitPhaseInternal(travelled);
     CcCreaturePose left_pose = CcCreatureSteppedPose(
-        CC_CREATURE_HORSE, clock * cadence, moving);
+        CC_CREATURE_HORSE, stride_phase, moving);
     CcCreaturePose right_pose = CcCreatureSteppedPose(
-        CC_CREATURE_HORSE, clock * cadence + PI, moving);
+        CC_CREATURE_HORSE, stride_phase + PI, moving);
     float lateral_spacing =
         CcLocalRoadHorseLateralSpacingInternal(bridge_checkpoint);
-    for (int32_t horse = -1; horse <= 1; horse += 2) {
-        Color coat = PONY_COLORS[sim->pony_company.team[horse < 0 ? 0 : 1]][0];
+    bool paired = CcSimHorseTeamCount(sim) > 1;
+    for (int32_t horse = paired ? -1 : 0; horse <= 1; horse += paired ? 2 : 3) {
+        int32_t seat = CcSimTeamPony(sim, horse > 0 ? 1 : 0);
+        Color coat = PONY_COLORS[seat >= 0 ? seat : 0][0];
         Vector3 horse_base = LocalPoint(
             base, (float)horse * lateral_spacing, 0.0f,
             CcLocalRoadHorseLongitudinalOffsetInternal(), yaw);
@@ -131,7 +172,7 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock, float
                              CcLocalTerrainHeightAt(base.x, base.z);
         }
         CcCreaturePose pose = horse < 0 ? left_pose : right_pose;
-        float gait_phase = clock * cadence + (horse < 0 ? 0.0f : PI);
+        float gait_phase = stride_phase + (horse < 0 ? 0.0f : PI);
         CcCreatureRigPose controlled_pose;
         CreatureGaitSlot slot = horse < 0 ? CREATURE_GAIT_ROAD_HORSE_LEFT :
                                             CREATURE_GAIT_ROAD_HORSE_RIGHT;
@@ -192,7 +233,8 @@ static Camera3D PonyConversationCamera(Camera3D road, Vector3 carriage, float ya
 }
 
 static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
-                             float clock, float pace, float yaw,
+                             float clock, float pace, float travelled,
+                             float yaw,
                              bool horses_hitched, bool bridge_checkpoint)
 {
     const CcPlayerCompany *player = &sim->player;
@@ -213,12 +255,6 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
     }
     RuntimeAsset *carriage = &runtime_assets[RUNTIME_ASSET_CARRIAGE];
     if (carriage->ready) {
-        static float wheel_phase[2] = {0};
-        static float last_wheel_clock = 0.0f;
-        float step = fmaxf(0.0f, fminf(0.1f, clock - last_wheel_clock));
-        wheel_phase[0] = fmodf(wheel_phase[0] + step * pace * 2.2f / 0.80f, 2.0f * PI);
-        wheel_phase[1] = fmodf(wheel_phase[1] + step * pace * 2.2f / 0.62f, 2.0f * PI);
-        last_wheel_clock = clock;
         for (int mesh = 0; mesh < carriage->model.meshCount; ++mesh) {
             Model part = carriage->model;
             part.meshCount = 1;
@@ -227,9 +263,11 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
             int wheel = mesh < 144 ? (int)carriage_wheel_mesh[mesh] - 1 : -1;
             if (wheel >= 0) {
                 Vector3 center = carriage_wheel_centers[wheel];
+                float angle = CcLocalCarriageWheelAngleInternal(
+                    travelled, CcLocalCarriageWheelRadiusInternal(wheel));
                 Matrix spin = MatrixMultiply(
                     MatrixTranslate(-center.x, -center.y, -center.z),
-                    MatrixRotateZ(-wheel_phase[wheel < 2 ? 0 : 1]));
+                    MatrixRotateZ(-angle));
                 spin = MatrixMultiply(spin, MatrixTranslate(center.x, center.y, center.z));
                 part.transform = MatrixMultiply(spin, part.transform);
             }
@@ -269,7 +307,8 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
     DrawCarriedCargoBoxes(player, base, yaw);
     if (follow_ground) rlPopMatrix();
     if (horses_hitched) {
-        DrawRoadHorseTeam(sim, base, clock, pace, yaw, bridge_checkpoint);
+        DrawRoadHorseTeam(sim, base, clock, pace, travelled, yaw,
+                          bridge_checkpoint);
         int32_t pony = CcPonyOnRoad(sim);
         if (pony >= 0) {
             Vector3 position = LocalPoint(base, 2.7f, 0.0f, 3.3f, yaw);
@@ -308,9 +347,10 @@ static void DrawStableHorseTeam(const CcSim *sim, float clock)
             rail_cap = WORLD_VIOLET;
             break;
     }
-    for (int32_t horse = 0; horse < 2; ++horse) {
+    for (int32_t horse = 0; horse < CcSimHorseTeamCount(sim); ++horse) {
         Vector3 base = TerrainWorldPoint(stalls[horse].x, stalls[horse].y);
-        Color coat = PONY_COLORS[sim->pony_company.team[horse]][0];
+        int32_t seat = CcSimTeamPony(sim, horse);
+        Color coat = PONY_COLORS[seat >= 0 ? seat : 0][0];
         CcCreaturePose pose = CcCreatureSteppedPose(
             CC_CREATURE_HORSE, clock * 0.35f + (float)horse * PI, false);
         (void)DrawCreatureGait3D(
@@ -538,19 +578,26 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
     }
     Vector3 carriage;
     float carriage_heading;
+    /* The turn is two lerped legs, so the ground under the wheels is the
+       first leg plus however much of the second has been driven. */
+    float approach_length = Vector3Distance(carriage_start, junction);
+    float carriage_travel;
     if (turn < 0.68f || !selected_branch_found) {
         float amount = fminf(1.0f, turn / 0.68f);
         carriage = Vector3Lerp(carriage_start, junction, amount);
         carriage_heading = 0.5f * PI;
+        carriage_travel = approach_length * amount;
     } else {
         float amount = (turn - 0.68f) / 0.32f;
         carriage = Vector3Lerp(junction, selected_branch_end,
                                amount * 0.24f);
         carriage_heading = 0.5f * PI +
             WrapAngle(branch_heading - 0.5f * PI) * SmoothStep01(amount);
+        carriage_travel = approach_length +
+            Vector3Distance(junction, selected_branch_end) * amount * 0.24f;
     }
     DrawRoadCarriage(carriage, sim, clock,
-                     turn < 1.0f ? 0.72f : 0.0f,
+                     turn < 1.0f ? 0.72f : 0.0f, carriage_travel,
                      carriage_heading, true, false);
     DrawVisibleNpcFigure3D(
         (Vector3){33.0f, 0.0f, 35.6f}, 0.90f, 1.42f,
@@ -705,6 +752,7 @@ static void DrawRoadTerrain(uint32_t world_seed, const CcRoute *route,
         float z = far_side ? 45.4f + verge : 34.6f - verge;
         x += far_side ? -regional_style.cluster_pull :
                         regional_style.cluster_pull;
+        if (bridge_checkpoint && x > 38.0f && x < 60.0f) continue;
         if (!SceneryPointVisible(x, z, focus)) continue;
         TreeFamily family = (seed % 7U) == 0U ? TREE_FAMILY_OAK :
                             (seed % 5U) == 0U ? TREE_FAMILY_POLLARD :
@@ -811,11 +859,26 @@ static bool DrawBridgeCheckpoint(void)
     return true;
 }
 
-float CcLocalRoadCarriageX(int32_t progress_milli)
+/* The road book lays every journey out along the same 52 units of road, so
+   the ground the carriage has covered is the journey's progress read in world
+   units. The carriage's place on the road and the turn of its wheels come off
+   the one number, and cannot drift apart. */
+float CcLocalRoadCarriageTravelInternal(int32_t progress_milli)
 {
     if (progress_milli < 0) progress_milli = 0;
     if (progress_milli > 1000) progress_milli = 1000;
-    return 20.15f + (float)progress_milli * 0.052f;
+    return (float)progress_milli * 0.052f;
+}
+
+/* Leave room for the team, the hero, and the west bridge approach. */
+float CcLocalRoadEncounterCarriageXInternal(void)
+{
+    return 38.35f;
+}
+
+float CcLocalRoadCarriageX(int32_t progress_milli)
+{
+    return 20.15f + CcLocalRoadCarriageTravelInternal(progress_milli);
 }
 
 void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
@@ -841,8 +904,13 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     bool authored_checkpoint = !travelling &&
         runtime_assets[RUNTIME_ASSET_BRIDGE].ready;
-    float carriage_x = CcLocalRoadCarriageX(sim->carriage.progress_milli);
-    float lateral_offset = convoy != NULL ? convoy->lateral_offset : 0.0f;
+    float carriage_x = travelling ?
+        CcLocalRoadCarriageX(sim->carriage.progress_milli) :
+        CcLocalRoadEncounterCarriageXInternal();
+    float carriage_travel = CcLocalRoadCarriageTravelInternal(
+        sim->carriage.progress_milli);
+    float lateral_offset = travelling && convoy != NULL ?
+        convoy->lateral_offset : 0.0f;
     float carriage_pace = travelling && convoy != NULL ?
         convoy->pace : travelling ? 0.72f : 0.0f;
     bool carriage_moving = carriage_pace > 0.02f;
@@ -866,10 +934,9 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                              &travelling_hero);
     }
     Vector3 camera_focus = travelling ? carriage_base : agent->position;
-    Camera3D base_camera = RoadCamera(camera_focus, travelling, clock, true,
-                                      target.texture.height);
-    Camera3D camera = CcLocalCombatCameraInternal(
-        base_camera, agent, course, clock, true, target.texture.height);
+    /* Keep the whole crossing visible as the player changes targets. */
+    Camera3D camera = RoadCamera(camera_focus, travelling, clock, true,
+                                  target.texture.height);
     if (travelling) camera = PonyConversationCamera(camera, carriage_base, 0.5f * PI, sim);
     if (!travelling) {
         camera = KeepHeroInsideStreetFrame(
@@ -881,8 +948,6 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     bool combat_presentation = !travelling && course->alarm_active &&
                                camera.projection == CAMERA_PERSPECTIVE;
-    const CcLocalAgent *duel_opponent = combat_presentation ?
-        CombatCameraOpponent(course, agent) : NULL;
     RememberPresentedCamera(CC_LOCAL_SCENE_ROAD, camera, agent,
                             target.texture.width, target.texture.height);
     ArtComposition road_art = ROAD_ART_COMPOSITION;
@@ -927,7 +992,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
             0.0f, 0.78f, clock);
     }
     if (!travelling) DrawAgentPath(agent, false);
-    DrawRoadCarriage(carriage_base, sim, clock, carriage_pace,
+    DrawRoadCarriage(carriage_base, sim, clock, carriage_pace, carriage_travel,
                      0.5f * PI, true, authored_checkpoint);
     int32_t roadside_cattle = 0;
     if (origin != NULL) {
@@ -1012,8 +1077,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
 
     if (!travelling) {
-        if (combat_presentation) DrawCourseRaider(duel_opponent);
-        else DrawCourseRunners(course, camera.target);
+        DrawCourseRunners(course, camera.target);
     }
     if (parley && !course->alarm_active) {
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
@@ -1482,6 +1546,8 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
     float carriage_x = travelling ?
         returning ? 62.0f - amount * 40.0f : 22.0f + amount * 40.0f :
         CC_LOCAL_SITE_CARRIAGE_X;
+    /* The approach road is forty units either way round. */
+    float carriage_travel = travelling ? amount * 40.0f : 0.0f;
     Vector3 carriage = {carriage_x, 0.0f, CC_LOCAL_SITE_CARRIAGE_Z};
     Camera3D camera;
     if (travelling && returning) {
@@ -1535,7 +1601,7 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawRemoteSiteEntrance(sim, site, clock);
     if (site != CC_LOCAL_SITE_DRAGON_CAVE) {
         DrawRoadCarriage(carriage, sim, clock,
-                         travelling ? 0.72f : 0.0f,
+                         travelling ? 0.72f : 0.0f, carriage_travel,
                          returning ? -0.5f * PI : 0.5f * PI,
                          true, false);
     }
@@ -1901,7 +1967,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     if (convoy_visible) {
         DrawRoadCarriage(convoy->town_position, sim, clock,
-                         convoy->pace,
+                         convoy->pace, convoy->travelled,
                          convoy->town_heading_yaw, true, false);
         if (agent != NULL) DrawRobotShell(&convoy_hero);
     }
