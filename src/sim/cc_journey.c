@@ -1,6 +1,9 @@
 #include "sim/cc_journey_internal.h"
 
+#include "sim/cc_route_rules_internal.h"
+
 #include <limits.h>
+#include <stdio.h>
 
 static int32_t MinimumI32(int32_t a, int32_t b) { return a < b ? a : b; }
 static int32_t MaximumI32(int32_t a, int32_t b) { return a > b ? a : b; }
@@ -210,5 +213,112 @@ const CcRoadSite *CcSimJourneyRoadSiteStop(const CcSim *sim)
         if (distance >= -20 && distance <= 30) return site;
     }
     return NULL;
+}
+
+
+static int32_t ClampI32(int32_t value, int32_t minimum, int32_t maximum)
+{
+    if (value < minimum) return minimum;
+    if (value > maximum) return maximum;
+    return value;
+}
+
+static void SetError(char *error, size_t capacity, const char *message)
+{
+    if (error == NULL || capacity == 0U) return;
+    (void)snprintf(error, capacity, "%s", message);
+}
+
+static int32_t HorseFeedRequired(int32_t travel_days)
+{
+    return MaximumI32(1, (travel_days + 1) / 2);
+}
+
+static bool JourneyCrossesRain(const CcSim *sim, const CcRoute *route,
+                               int32_t departure_day)
+{
+    if (sim == NULL || route == NULL) return false;
+    uint32_t value = sim->world_seed ^ (uint32_t)route->id ^
+        (uint32_t)(route->id >> 32U) ^
+        ((uint32_t)departure_day * UINT32_C(0x9e3779b9));
+    value ^= value >> 16U;
+    value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15U;
+    value *= UINT32_C(0x846ca68b);
+    value ^= value >> 16U;
+    return value % 100U < 35U;
+}
+
+bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
+                        CcTravelPreview *preview, char *error,
+                        size_t error_capacity)
+{
+    if (sim == NULL || preview == NULL) {
+        SetError(error, error_capacity, "Travel preview state is missing.");
+        return false;
+    }
+    const CcSettlement *destination = CcSimSettlement(sim, destination_id);
+    if (destination == NULL) {
+        SetError(error, error_capacity, "That destination does not exist.");
+        return false;
+    }
+    const CcRoute *route = CcSimRouteBetween(
+        sim, sim->player.location_id, destination->id);
+    if (route == NULL) {
+        SetError(error, error_capacity,
+                 "No direct carriage route connects those places.");
+        return false;
+    }
+    const CcMap *map = CcSimMapForRoute(sim, route->id, sim->player.id);
+    const CcSituation *accepted = CcSimAcceptedSituation(sim);
+    bool sponsored_night_passage = route->smuggler_route &&
+        accepted != NULL &&
+        accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
+        route->to_id == accepted->target_id;
+    bool uncharted = map == NULL && !sponsored_night_passage;
+    int32_t readiness = sim->schema_version >= 14U ?
+        CcSimHorseTeamReadiness(sim) : 100;
+    int32_t days = route->travel_days + (uncharted ? 2 : 0) +
+                   (readiness < 70 ? 1 : 0) +
+                   (readiness < 45 ? 1 : 0);
+    bool opening_half_day = sim->journey.total_subticks == 0;
+    int32_t travel_watches = opening_half_day ? 1 :
+        MaximumI32(3, days * 2);
+    int32_t base_fare = days + (route->smuggler_route ? 3 : 0);
+    int32_t shadow_danger = CcRouteDragonShadowDanger(sim, route);
+    bool waits_for_morning = !opening_half_day &&
+        sim->clock.minute_subticks > 0;
+    int32_t departure_day = sim->current_day +
+        (waits_for_morning ? 1 : 0);
+    *preview = (CcTravelPreview){
+        .route_id = route->id,
+        .destination_id = destination->id,
+        .provision_cost = sim->schema_version >= 41U ? 0 :
+            base_fare + CcRouteToll(sim, route),
+        .travel_days = days,
+        .claimed_condition = map != NULL ? map->recorded_condition : -1,
+        .claimed_danger = map != NULL ?
+            ClampI32(map->recorded_danger + shadow_danger, 0, 95) : -1,
+        .chart_accuracy = map != NULL ? map->accuracy : 0,
+        .horse_feed_required = HorseFeedRequired(days),
+        .horse_readiness = readiness,
+        .travel_watches = travel_watches,
+        .overnight_stops = (travel_watches - 1) / 2,
+        .departure_wait_minutes = waits_for_morning ?
+            (CC_WORLD_DAY_SUBTICKS - sim->clock.minute_subticks) /
+                CC_WORLD_MINUTE_SUBTICKS : 0,
+        .road_house_distance_miles = CcSimRoadHouseDistanceMiles(
+            sim, route->id),
+        .road_house_cost = CcSimRoadHouseCost(sim, route->id),
+        .road_house_name = CcSimRoadHouseName(sim, route->id),
+        .rain_expected = JourneyCrossesRain(
+            sim, route, departure_day),
+        .opening_half_day = opening_half_day,
+        .charted = map != NULL,
+        .destination_known = !route->smuggler_route || map != NULL ||
+                             sponsored_night_passage,
+        .sponsored_guide = sponsored_night_passage
+    };
+    return true;
 }
 

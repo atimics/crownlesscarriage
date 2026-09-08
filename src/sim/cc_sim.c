@@ -1,5 +1,6 @@
 #include "sim/cc_sim.h"
 #include "sim/cc_journey_internal.h"
+#include "sim/cc_route_rules_internal.h"
 #include "sim/cc_mine.h"
 
 #include "quest/cc_quest.h"
@@ -9213,17 +9214,6 @@ static void AdvanceDragonRetaliation(CcSim *sim)
     }
 }
 
-static int32_t DragonRouteShadowDanger(const CcSim *sim,
-                                       const CcRoute *route)
-{
-    if (sim == NULL || route == NULL ||
-        (route->from_id != sim->dragon.lair_settlement_id &&
-         route->to_id != sim->dragon.lair_settlement_id)) return 0;
-    int32_t influence = sim->dragon.regional_influence;
-    return sim->dragon.slain ? (influence >= 60 ? 1 : 0) :
-           influence >= 80 ? 2 : influence >= 50 ? 1 : 0;
-}
-
 int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id)
 {
     const CcRoute *route = CcSimRoute(sim, route_id);
@@ -9258,18 +9248,6 @@ int32_t CcSimDragonBattleStrength(const CcSim *sim)
            dragon->crown_strength / 12 +
            dragon->territory_stability / 20 +
            dragon->memory_integrity / 25;
-}
-
-static CcMoney TradeRouteToll(const CcSim *sim, const CcRoute *route)
-{
-    if (sim == NULL || route == NULL) return 0;
-    CcMoney toll = route->closed ? 4 : 0;
-    if (route->smuggler_route) {
-        toll += 2;
-    } else if (CcSimRouteCrossesWarBorder(sim, route->id)) {
-        toll += 4;
-    }
-    return toll;
 }
 
 static int32_t TradeRouteCapacity(const CcSim *sim, const CcRoute *route)
@@ -10105,7 +10083,7 @@ static int32_t TradeSurplus(const CcSim *sim,
 static CcMoney RoyalTradeRouteToll(const CcSim *sim, const CcRoute *route,
                                    CcId carriage_kingdom_id)
 {
-    CcMoney toll = TradeRouteToll(sim, route);
+    CcMoney toll = CcRouteToll(sim, route);
     const CcSettlement *from = route != NULL ?
         CcSimSettlement(sim, route->from_id) : NULL;
     const CcSettlement *to = route != NULL ?
@@ -10165,7 +10143,7 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
     bool essential_credit = IronLedgerWillFund(final_destination, good);
     int32_t unit_price = MaximumI32(1, origin->price[good]);
     CcMoney toll = royal ? RoyalTradeRouteToll(
-        sim, route, carriage->kingdom_id) : TradeRouteToll(sim, route);
+        sim, route, carriage->kingdom_id) : CcRouteToll(sim, route);
     CcMoney credit_available = essential_credit ?
         IronLedgerCreditAvailable(sim, buyer_kingdom) : 0;
     CcMoney purchasing_power = *buyer_coins + credit_available;
@@ -10309,7 +10287,7 @@ static void PlanLegacyTrade(CcSim *sim)
                     CcMoney minimum_cost =
                         (CcMoney)minimum_load *
                             MaximumI32(1, from->price[good]) +
-                        TradeRouteToll(sim, &sim->routes[route_slot]);
+                        CcRouteToll(sim, &sim->routes[route_slot]);
                     if (BuyerPurchasingPower(sim, to, (CcGood)good) <
                         minimum_cost) {
                         continue;
@@ -16527,99 +16505,6 @@ static void InterruptJourney(CcSim *sim)
     sim->carriage.speed_milli_per_second = 0;
 }
 
-static int32_t HorseFeedRequired(int32_t travel_days)
-{
-    return MaximumI32(1, (travel_days + 1) / 2);
-}
-
-static bool JourneyCrossesRain(const CcSim *sim, const CcRoute *route,
-                               int32_t departure_day)
-{
-    if (sim == NULL || route == NULL) return false;
-    uint32_t value = sim->world_seed ^ (uint32_t)route->id ^
-        (uint32_t)(route->id >> 32U) ^
-        ((uint32_t)departure_day * UINT32_C(0x9e3779b9));
-    value ^= value >> 16U;
-    value *= UINT32_C(0x7feb352d);
-    value ^= value >> 15U;
-    value *= UINT32_C(0x846ca68b);
-    value ^= value >> 16U;
-    return value % 100U < 35U;
-}
-
-bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
-                        CcTravelPreview *preview, char *error,
-                        size_t error_capacity)
-{
-    if (sim == NULL || preview == NULL) {
-        SetError(error, error_capacity, "Travel preview state is missing.");
-        return false;
-    }
-    const CcSettlement *destination = CcSimSettlement(sim, destination_id);
-    if (destination == NULL) {
-        SetError(error, error_capacity, "That destination does not exist.");
-        return false;
-    }
-    const CcRoute *route = CcSimRouteBetween(
-        sim, sim->player.location_id, destination->id);
-    if (route == NULL) {
-        SetError(error, error_capacity,
-                 "No direct carriage route connects those places.");
-        return false;
-    }
-    const CcMap *map = CcSimMapForRoute(sim, route->id, sim->player.id);
-    const CcSituation *accepted = CcSimAcceptedSituation(sim);
-    bool sponsored_night_passage = route->smuggler_route &&
-        accepted != NULL &&
-        accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
-        route->to_id == accepted->target_id;
-    bool uncharted = map == NULL && !sponsored_night_passage;
-    int32_t readiness = sim->schema_version >= 14U ?
-        CcSimHorseTeamReadiness(sim) : 100;
-    int32_t days = route->travel_days + (uncharted ? 2 : 0) +
-                   (readiness < 70 ? 1 : 0) +
-                   (readiness < 45 ? 1 : 0);
-    bool opening_half_day = sim->journey.total_subticks == 0;
-    int32_t travel_watches = opening_half_day ? 1 :
-        MaximumI32(3, days * 2);
-    int32_t base_fare = days + (route->smuggler_route ? 3 : 0);
-    int32_t shadow_danger = DragonRouteShadowDanger(sim, route);
-    bool waits_for_morning = !opening_half_day &&
-        sim->clock.minute_subticks > 0;
-    int32_t departure_day = sim->current_day +
-        (waits_for_morning ? 1 : 0);
-    *preview = (CcTravelPreview){
-        .route_id = route->id,
-        .destination_id = destination->id,
-        .provision_cost = sim->schema_version >= 41U ? 0 :
-            base_fare + TradeRouteToll(sim, route),
-        .travel_days = days,
-        .claimed_condition = map != NULL ? map->recorded_condition : -1,
-        .claimed_danger = map != NULL ?
-            ClampI32(map->recorded_danger + shadow_danger, 0, 95) : -1,
-        .chart_accuracy = map != NULL ? map->accuracy : 0,
-        .horse_feed_required = HorseFeedRequired(days),
-        .horse_readiness = readiness,
-        .travel_watches = travel_watches,
-        .overnight_stops = (travel_watches - 1) / 2,
-        .departure_wait_minutes = waits_for_morning ?
-            (CC_WORLD_DAY_SUBTICKS - sim->clock.minute_subticks) /
-                CC_WORLD_MINUTE_SUBTICKS : 0,
-        .road_house_distance_miles = CcSimRoadHouseDistanceMiles(
-            sim, route->id),
-        .road_house_cost = CcSimRoadHouseCost(sim, route->id),
-        .road_house_name = CcSimRoadHouseName(sim, route->id),
-        .rain_expected = JourneyCrossesRain(
-            sim, route, departure_day),
-        .opening_half_day = opening_half_day,
-        .charted = map != NULL,
-        .destination_known = !route->smuggler_route || map != NULL ||
-                             sponsored_night_passage,
-        .sponsored_guide = sponsored_night_passage
-    };
-    return true;
-}
-
 static void SpoilPlayerJourneyCargo(CcSim *sim, bool rain_expected,
                                     int32_t *meat_spoiled,
                                     int32_t *grain_spoiled)
@@ -16681,7 +16566,7 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
     int32_t base_fare = sim->schema_version >= 41U ? 0 :
         days + (route->smuggler_route ? 3 : 0);
     CcMoney toll = sim->schema_version >= 41U ? 0 :
-        TradeRouteToll(sim, route);
+        CcRouteToll(sim, route);
     CcMoney fare = preview.provision_cost;
     const CcSettlement *origin = CcSimSettlement(
         sim, sim->player.location_id);
@@ -16737,7 +16622,7 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
           route->smuggler_route));
     int32_t danger = ClampI32(
         CcSimRouteDanger(sim, route->id) +
-        DragonRouteShadowDanger(sim, route), 0, 95);
+        CcRouteDragonShadowDanger(sim, route), 0, 95);
     if (uncharted) danger = ClampI32(danger + 20, 0, 95);
     int32_t reaction = CcSimBanditReactionRoll(sim, route->id);
     int32_t bargain_cost = ClampI32(
