@@ -58,7 +58,7 @@ bool CcCoopApply(CcSim *sim, const char *action, CcId target,
     }
     CcCommand command = { .target_id = target, .good = (CcGood)good, .amount = amount };
     if (action != NULL) {
-        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_FUND_GRAIN_SUPPLY; ++i) {
+        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_DELIVER_PROPHECY; ++i) {
             if (strcmp(action, CcCoopActionName((CcCommandKind)i)) == 0) command.kind = (CcCommandKind)i;
         }
     }
@@ -245,7 +245,21 @@ bool CcCoopSnapshot(const CcSim *sim, char *text, size_t capacity)
         Put(&json, ",\"good\":%d,\"quantity\":%d,\"progress\":%d,\"reward\":%" PRId64 ",\"accepted\":%s}",
             (int)s->good, s->quantity, s->progress, (int64_t)s->reward, accepted ? "true" : "false");
     }
-    Put(&json, "],\"events\":[");
+    Put(&json, "],\"prophecy\":");
+    const CcTreasure *book = CcSimDeepWyrmProphecy(sim);
+    if (book == NULL) Put(&json, "null");
+    else {
+        const CcSettlement *destination = CcSimProphecyDestination(sim);
+        Put(&json, "{\"id\":\"%" PRIu64 "\",\"title\":", book->id);
+        Quote(&json, CC_PROPHECY_TITLE);
+        Put(&json, ",\"words\":"); Quote(&json, CC_PROPHECY_WORDS);
+        Put(&json, ",\"destination\":\"%" PRIu64 "\",\"carried\":%s,\"can_deliver\":%s,\"delivered\":%s}",
+            destination != NULL ? destination->id : 0U,
+            !book->destroyed && book->owner_id == sim->player.id ? "true" : "false",
+            CcSimCanDeliverProphecy(sim) ? "true" : "false",
+            !book->destroyed && destination != NULL && book->owner_id == destination->id ? "true" : "false");
+    }
+    Put(&json, ",\"events\":[");
     comma = false;
     for (int32_t i = 0; i < sim->event_count && i < 24; ++i) {
         const CcEvent *event = CcSimRecentEvent(sim, i);

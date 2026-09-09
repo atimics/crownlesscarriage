@@ -675,8 +675,8 @@ static void DrawFrontend(const FrontendState *state,
         FrontendCenteredText("Today, Varkesh the Unappeased becomes a Deep Wyrm.", top + 182, 18, INK);
         FrontendCenteredText("Gloamgate bears the scars of dragon fire. Its people need food.", top + 216, 16, INK);
         FrontendCenteredText("Beyond its gates, three courts face an ancient power.", top + 250, 16, INK);
-        FrontendCenteredText("Your carriage arrives with 42 crowns and a rested pony.", top + 294, 16, MUTED);
-        FrontendCenteredText("Find work, meet the townspeople, and choose your part in what follows.", top + 322, 16, MUTED);
+        FrontendCenteredText("Your carriage holds 42 crowns and a prophecy book. Your pony is rested.", top + 294, 16, MUTED);
+        FrontendCenteredText("Read the book in your Company Book. Carry its warning to Gloamgate.", top + 322, 16, MUTED);
     } else if (state->screen == FRONTEND_DELETE) {
         FrontendCenteredText(CcCoopClientActive() || state->deleting_company ? "This removes the shared world and progress" :
             "This removes your world and its progress", top + 165, 16, INK);
@@ -900,7 +900,7 @@ static int RunFrontendRegression(void)
     FRONTEND_ACT(FRONTEND_ACTION_BOOK);
     FRONTEND_CHECK(state.screen == FRONTEND_PLAYING && view == VIEW_LEDGER && return_view == VIEW_PAUSE);
     queued_key_press[KEY_ESCAPE] = true;
-    FRONTEND_CHECK(HandleAdventureBook(&sim, &local, &view, &return_view));
+    FRONTEND_CHECK(HandleAdventureBook(journal, &sim, &local, &view, &return_view, state.feedback, sizeof(state.feedback)));
     ClientInputClearPressed();
     FrontendReturnFromBook(&state, &local, &view);
     FRONTEND_CHECK(state.screen == FRONTEND_PAUSED && view == VIEW_MAP);
@@ -974,6 +974,21 @@ static int RunFrontendRegression(void)
     uint64_t campaign_hash = CcSimHash(&sim);
     FRONTEND_ACT(FRONTEND_ACTION_BEGIN_DEEP_WYRM);
     FRONTEND_CHECK(CcSimHash(&sim) == campaign_hash);
+    FRONTEND_CHECK(CcJournalClose(&journal, &sim, error, sizeof(error)));
+    journal = CcJournalResume(save_path, &sim, error, sizeof(error));
+    FRONTEND_CHECK(journal != NULL && CcSimHash(&sim) == campaign_hash);
+    view = VIEW_LEDGER;
+    local.book_page = 0;
+    queued_key_press[KEY_FIVE] = true;
+    FRONTEND_CHECK(HandleAdventureBook(journal, &sim, &local, &view, &return_view, error, sizeof(error)));
+    ClientInputClearPressed();
+    FRONTEND_CHECK(local.book_page == 4 && CcSimCanDeliverProphecy(&sim));
+    queued_key_press[KEY_E] = true;
+    FRONTEND_CHECK(HandleAdventureBook(journal, &sim, &local, &view, &return_view, error, sizeof(error)));
+    ClientInputClearPressed();
+    FRONTEND_CHECK(!CcSimCanDeliverProphecy(&sim) && sim.player.treasure_cargo_slots == 0);
+    FRONTEND_CHECK(CcSimRecentEvent(&sim, 0)->kind == CC_EVENT_PROPHECY_DELIVERED);
+    campaign_hash = CcSimHash(&sim);
     FRONTEND_CHECK(CcJournalClose(&journal, &sim, error, sizeof(error)));
     journal = CcJournalResume(save_path, &sim, error, sizeof(error));
     FRONTEND_CHECK(journal != NULL && CcSimHash(&sim) == campaign_hash);

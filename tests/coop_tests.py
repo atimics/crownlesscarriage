@@ -45,6 +45,9 @@ class CoopTests(unittest.TestCase):
                     world_pass=issue_world_pass(self.path))
         first = self.worlds.create(self.a, body)
         self.assertEqual(first['state']['day'], 73366)
+        self.assertTrue(first['state']['prophecy']['carried'])
+        self.assertTrue(first['state']['prophecy']['can_deliver'])
+        self.assertEqual(first['state']['company']['cargo_used'], 1)
         with self.engine.open(campaign='deep-wyrm') as sim:
             self.assertEqual(first['state'], sim.snapshot())
         invitation = self.worlds.invite(world, self.a)['invite']
@@ -56,6 +59,24 @@ class CoopTests(unittest.TestCase):
         self.worlds.close()
         self.worlds = Worlds(self.path, self.engine)
         self.assertEqual(self.worlds.view(world, self.b)['state'], first['state'])
+        view = self.worlds.view(world, self.a)
+        command = dict(protocol=1, sequence=view['next_sequence'],
+                       action_revision=view['action_revision'], action='deliver_prophecy',
+                       target=first['state']['prophecy']['id'])
+        result = self.worlds.command(world, self.a, command)
+        self.assertTrue(result['accepted'])
+        delivered = self.worlds.view(world, self.b)
+        self.assertTrue(delivered['state']['prophecy']['delivered'])
+        self.assertEqual(delivered['state']['company']['cargo_used'], 0)
+        retry = self.worlds.command(world, self.a, command)
+        self.assertTrue(retry['duplicate'])
+        self.assertEqual(retry['world']['state'], result['world']['state'])
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        view = self.worlds.view(world, self.a)
+        self.assertTrue(view['state']['prophecy']['delivered'])
+        again = dict(command, sequence=view['next_sequence'], action_revision=view['action_revision'])
+        self.assertFalse(self.worlds.command(world, self.a, again)['accepted'])
         self.worlds.owner_action(world, self.a, 'delete')
         self.assertIsNone(self.worlds.db.execute(
             'SELECT campaign FROM world_starts WHERE world=?', (world,)).fetchone())
