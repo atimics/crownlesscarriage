@@ -7,6 +7,7 @@ static CcSim sim, before;
 static void Fixture(void)
 {
     CcSimInit(&sim, 42U);
+    sim.schema_version = 84U;
     sim.settlement_count = 3; sim.route_count = 2; sim.shipment_count = 0;
     sim.royal_carriage_count = 1; sim.royal_trade_week = sim.current_day / 7;
     memset(sim.royal_route_slots_used, 0, sizeof(sim.royal_route_slots_used));
@@ -145,6 +146,17 @@ int main(void)
         sim.schema_version = 82U; (void)Query(CC_ARCHIVE_SUPPLY_STOCKED);
         sim.schema_version = 83U; sim.archive_staff.active = false;
         (void)Query(CC_ARCHIVE_SUPPLY_STOCKED);
+    }
+    for (int staff = 0; staff <= CC_MAX_SCRIBES; ++staff) {
+        Fixture(); sim.schema_version = 85U; sim.archives.scribes = staff;
+        CcMoney floor = staff >= 3 ? 300 : staff == 2 ? 150 : staff == 1 ? 50 : 0;
+        sim.iron_ledger_reserve = floor + 2; (void)Query(CC_ARCHIVE_SUPPLY_FUNDS);
+        sim.iron_ledger_reserve = floor + 3;
+        plan = Query(CC_ARCHIVE_SUPPLY_READY); CC_CHECK(plan.total_charge == 3);
+        sim.iron_ledger_reserve = floor; (void)Query(CC_ARCHIVE_SUPPLY_FUNDS);
+        sim.archive_staff.active = true; sim.archive_staff.seat_id = sim.settlements[0].id;
+        sim.archive_staff.legacy_scribes = 0; sim.iron_ledger_reserve = 3;
+        plan = Query(CC_ARCHIVE_SUPPLY_READY); CC_CHECK(plan.total_charge == 3);
     }
     Fixture(); sim.schema_version = 57U; (void)Query(CC_ARCHIVE_SUPPLY_UNAVAILABLE);
     Fixture();

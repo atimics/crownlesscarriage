@@ -197,8 +197,36 @@ static void CheckBindingDelivery(void)
     }
 }
 
+static void CheckStaffingReserve(void)
+{
+    Fixture();
+    int staff = sim.archives.scribes;
+    CcMoney floor = staff >= 3 ? 300 : staff == 2 ? 150 : staff == 1 ? 50 : 0;
+    CcArchiveSupplyPlan plan = CcSimArchiveSupplyPlan(&sim, carriage_id);
+    CC_CHECK(plan.gate == CC_ARCHIVE_SUPPLY_READY);
+    sim.iron_ledger_reserve = floor + plan.total_charge - 1;
+    before = sim;
+    CC_CHECK(!CcArchiveDispatchSupply(&sim, carriage_id));
+    CC_CHECK(memcmp(&before, &sim, sizeof(sim)) == 0);
+    sim.iron_ledger_reserve += 1;
+    CcMoney coins = CcSimTrackedGold(&sim);
+    CC_CHECK(CcArchiveDispatchSupply(&sim, carriage_id));
+    CC_CHECK(sim.iron_ledger_reserve == floor && CcSimTrackedGold(&sim) == coins);
+    Valid(); RoundTrip();
+    const char *path = "archive-reserve-test.ccsave";
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 7, error, sizeof(error)));
+    CC_CHECK(sim.archives.scribes >= staff);
+    CcJournalAbandon(&journal);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+    (void)remove(path);
+}
+
 int main(void)
 {
+    CheckStaffingReserve();
     CheckBindingDelivery();
     CheckHostileContract();
     CheckDisruption();
