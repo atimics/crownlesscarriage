@@ -39,6 +39,40 @@ class CoopTests(unittest.TestCase):
         return self.worlds.create(self.a, {'id': world, 'name': 'Lantern Road',
             'player': 'Mara', 'seed': seed, 'world_pass': issue_world_pass(self.path)})
 
+    def test_deep_wyrm_shared_start_join_and_restart(self):
+        world = 'd' * 32
+        body = dict(id=world, name='Deep Wyrm', player='Mara', campaign='deep-wyrm',
+                    world_pass=issue_world_pass(self.path))
+        first = self.worlds.create(self.a, body)
+        self.assertEqual(first['state']['day'], 73366)
+        with self.engine.open(campaign='deep-wyrm') as sim:
+            self.assertEqual(first['state'], sim.snapshot())
+        invitation = self.worlds.invite(world, self.a)['invite']
+        joined = self.worlds.join(world, self.b, dict(player='Bren', invite=invitation))
+        self.assertEqual(joined['state'], first['state'])
+        self.assertEqual(self.worlds.create(self.a, body)['state'], first['state'])
+        with self.assertRaises(ApiError):
+            self.worlds.create(self.a, dict(body, campaign='new-world'))
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.assertEqual(self.worlds.view(world, self.b)['state'], first['state'])
+        self.worlds.owner_action(world, self.a, 'delete')
+        self.assertIsNone(self.worlds.db.execute(
+            'SELECT campaign FROM world_starts WHERE world=?', (world,)).fetchone())
+
+    def test_starting_campaign_failure_preserves_world_pass(self):
+        body = dict(id='d' * 32, name='Deep Wyrm', player='Mara', campaign='unknown',
+                    world_pass=issue_world_pass(self.path))
+        with self.assertRaises(ApiError):
+            self.worlds.create(self.a, body)
+        body['campaign'] = 'deep-wyrm'
+        with patch.object(self.engine, 'open', side_effect=RuntimeError('Opening unavailable')):
+            with self.assertRaises(RuntimeError):
+                self.worlds.create(self.a, body)
+        self.assertIsNone(self.worlds.db.execute(
+            'SELECT id FROM worlds WHERE id=?', (body['id'],)).fetchone())
+        self.assertEqual(self.worlds.create(self.a, body)['state']['day'], 73366)
+
     def command(self, token, action='trade', **values):
         view = self.worlds.view(self.id, token)
         return {'protocol': 1, 'sequence': view['next_sequence'],
@@ -657,7 +691,8 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(result, {'deleted': True})
         for table, column in [('worlds', 'id'), ('members', 'world'), ('receipts', 'world'),
                               ('sessions', 'world'), ('appearances', 'world'),
-                              ('scene_contexts', 'world'), ('away_clocks', 'world')]:
+                              ('scene_contexts', 'world'), ('away_clocks', 'world'),
+                              ('world_starts', 'world')]:
             self.assertEqual(self.worlds.db.execute(f'SELECT count(*) FROM {table} WHERE {column}=?', (self.id,)).fetchone()[0], 0)
         self.assertFalse(any(key[0] == self.id for key in self.worlds.seen))
         self.assertFalse(any(key[0] == self.id for key in self.worlds.visits))

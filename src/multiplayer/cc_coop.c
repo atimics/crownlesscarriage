@@ -1,6 +1,7 @@
 #include "multiplayer/cc_coop.h"
 #include "multiplayer/cc_coop_commands.h"
 #include "persistence/cc_save.h"
+#include "persistence/cc_starting_campaign.h"
 
 #include <inttypes.h>
 #include <stdarg.h>
@@ -13,6 +14,11 @@ CcSim *CcCoopCreate(uint32_t seed)
     CcSim *sim = malloc(sizeof(*sim));
     if (sim != NULL) CcSimInit(sim, seed);
     return sim;
+}
+
+bool CcCoopStartDeepWyrm(CcSim *sim, const char *path, char *error, size_t capacity)
+{
+    return CcStartingCampaignDeepWyrm(sim, path, error, capacity);
 }
 
 void CcCoopDestroy(CcSim *sim) { free(sim); }

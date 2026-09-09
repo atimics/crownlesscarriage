@@ -16,6 +16,7 @@ class Engine:
         self.lib.CcCoopFree.argtypes = [pointer]
         self.lib.CcCoopFree.restype = None
         signatures = {
+            "CcCoopStartDeepWyrm": [pointer, text, text, size],
             "CcCoopApply": [pointer, text, c.c_uint64, c.c_int32, c.c_int32, text, size],
             "CcCoopAdvance": [pointer, c.c_int32, text, size],
             "CcCoopAdvanceAway": [pointer, c.c_int32, text, size],
@@ -27,17 +28,22 @@ class Engine:
             fn = getattr(self.lib, name)
             fn.argtypes, fn.restype = args, c.c_bool
 
-    def open(self, seed=42, saved=None):
-        return Campaign(self, seed, saved)
+    def open(self, seed=42, saved=None, campaign="new-world"):
+        return Campaign(self, seed, saved, campaign)
 
 
 class Campaign:
-    def __init__(self, engine, seed, saved):
+    def __init__(self, engine, seed, saved, campaign="new-world"):
         self.lib = engine.lib
         self.handle = self.lib.CcCoopCreate(seed)
         self.error = c.create_string_buffer(512)
         if not self.handle:
             raise RuntimeError("The campaign could not allocate memory.")
+        if saved is None and campaign == "deep-wyrm":
+            path = Path(__file__).resolve().parents[2] / 'assets/campaigns/deep-wyrm.ccsave'
+            if not self.lib.CcCoopStartDeepWyrm(self.handle, str(path).encode(), self.error, len(self.error)):
+                self.close()
+                raise RuntimeError("Campaign opening failed: " + self.error.value.decode("utf-8"))
         if saved is not None and not self.lib.CcCoopDecode(
             self.handle, saved, len(saved), self.error, len(self.error)
         ):

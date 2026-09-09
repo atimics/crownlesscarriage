@@ -1,3 +1,4 @@
+#include "persistence/cc_starting_campaign.h"
 #include "client/cc_audio.h"
 #include "client/cc_client_policy.h"
 #include "client/cc_interaction.h"
@@ -634,6 +635,8 @@ static int32_t OpeningSituationIndex(const CcSim *sim)
 
 static bool OpeningRequired(const CcSim *sim)
 {
+    if (sim != NULL && sim->world_seed == CC_DEEP_WYRM_SEED &&
+        sim->current_day >= CC_DEEP_WYRM_DAY) return false;
     int32_t index = OpeningSituationIndex(sim);
     return sim != NULL && index >= 0 && sim->player.reputation == 0 &&
         sim->player.accepted_situation_id == 0U &&
@@ -10759,6 +10762,7 @@ int main(int argc, char **argv)
             frontend.screen == FRONTEND_DELETE ? "delete" :
             frontend.screen == FRONTEND_AVATAR ? "avatar" :
             frontend.screen == FRONTEND_SOUND ? "sound" :
+            frontend.screen == FRONTEND_CAMPAIGN ? "campaign" :
             frontend.screen == FRONTEND_WORLDS ? "worlds" :
             frontend.screen == FRONTEND_CREATE_WORLD ? "create" :
             frontend.screen == FRONTEND_JOIN_WORLD ? "join" :

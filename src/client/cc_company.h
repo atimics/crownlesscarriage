@@ -19,6 +19,7 @@ typedef struct CcCompany {
 void CcCompanyConfigure(const char *identity_path);
 bool CcCompanyList(CcCompany *company, char *error, size_t capacity);
 bool CcCompanyLoad(CcCompany *company, const char *world, char *error, size_t capacity);
+bool CcCompanyCreateCampaign(CcCompany *company, const char *player, const char *name, const char *pass, bool deep_wyrm, char *error, size_t capacity);
 bool CcCompanyCreate(CcCompany *company, const char *player, const char *name, const char *pass, char *error, size_t capacity);
 bool CcCompanyJoin(CcCompany *company, const char *player, const char *invitation, char *error, size_t capacity);
 bool CcCompanyInvite(CcCompany *company, bool rotate, char *error, size_t capacity);
