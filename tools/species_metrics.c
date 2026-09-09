@@ -26,7 +26,7 @@ static bool Positive(const char *text, int32_t max, int32_t *out)
 
 static void Observe(const CcSim *sim, History *h)
 {
-    const CcGoblinCult *g = &sim->goblins;
+    const CcGoblinSociety *g = &sim->goblins;
     bool active = g->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE;
     h->active_days += active;
     h->hunger_days += active && g->raid_motive == CC_GOBLIN_RAID_HUNGER;
@@ -36,7 +36,8 @@ static void Observe(const CcSim *sim, History *h)
     h->divided_days += g->cohesion < 25;
     if (sim->dragon.slain) {
         h->afterdragon_days++;
-        h->ritual_due_days += g->dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_PREPARING && g->dragon_seed_days_remaining <= 0;
+        h->ritual_due_days += sim->dragon_cult.dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_PREPARING &&
+            sim->dragon_cult.dragon_seed_days_remaining <= 0;
         CcRitualOfferingPlan plan = CcSimRitualOfferingPlan(sim);
         h->blocked_members += (plan.blocked & CC_RITUAL_MEMBERS) != 0;
         h->blocked_devotion += (plan.blocked & CC_RITUAL_DEVOTION) != 0;
@@ -82,7 +83,7 @@ static void Print(const CcSim *s, const History *h, int seed, int year)
         cows += town->cow_adults + town->cow_calves;
         sheep += town->sheep_adults + town->sheep_lambs;
     }
-    const CcGoblinCult *g = &s->goblins;
+    const CcGoblinSociety *g = &s->goblins;
     int common = CcSimCommonPonyCount(s);
     CcHungerSnapshot hunger = CcSimHungerSnapshot(s);
     printf("%d,%" PRIu32 ",%d,%d,%u,%u,%016" PRIx64 ",%d,%" PRId64 ",%d,%d,%" PRId64 ",%" PRId64,
@@ -91,8 +92,8 @@ static void Print(const CcSim *s, const History *h, int seed, int year)
         humans, g->members, common + CC_PONY_COUNT, cows, sheep);
     printf(",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
         common, CC_PONY_COUNT, s->dragon.egg_count, s->dragon.whelps_dispersed,
-        (int)s->dragon.life_stage, g->devotion, g->cohesion,
-        (int)g->tribute_phase, (int)g->dragon_seed_phase,
+        (int)s->dragon.life_stage, s->dragon_cult.devotion, g->cohesion,
+        (int)g->tribute_phase, (int)s->dragon_cult.dragon_seed_phase,
         s->dragon_campaign.victories, g->tributes_delivered, hunger.population_weighted);
 #define OUT(field) printf(",%" PRIu64, h->field)
     OUT(active_days); OUT(hunger_days); OUT(equipment_days); OUT(tribute_days);

@@ -49,9 +49,15 @@ static void CheckHistoricalSave(void)
     CC_CHECK(ferror(input) == 0);
     CC_CHECK(fclose(input) == 0 && fclose(output) == 0);
     HistoricalSnapshot();
-    before = sim; before.schema_version = CC_SIM_SCHEMA_VERSION;
+    before = sim;
     CC_CHECK(CcSaveRead(fixture, &sim, error, sizeof(error)));
+    /* Compare the worlds at the fixture's own schema. State introduced after 73
+       is initialised by migration on load and never simulated in the snapshot,
+       so hashing it here would compare two migration paths, not the world. */
+    uint32_t loaded_schema = sim.schema_version;
+    sim.schema_version = before.schema_version;
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&before));
+    sim.schema_version = loaded_schema;
     CC_CHECK(sim.player.coins == before.player.coins);
     for (int i = 0; i < sim.situation_count; ++i) {
         CC_CHECK(sim.situations[i].sponsor_character_id == before.situations[i].sponsor_character_id);
