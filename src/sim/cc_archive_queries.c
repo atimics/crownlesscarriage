@@ -21,6 +21,10 @@ int32_t CcArchiveSpareGrain(const CcSim *sim, const CcSettlement *place)
 const CcSettlement *CcArchiveSeat(const CcSim *sim)
 {
     if (sim == NULL) return NULL;
+    if (sim->schema_version >= 88U && sim->archives.seat_id != 0) {
+        const CcSettlement *seat = CcSimSettlement(sim, sim->archives.seat_id);
+        return seat != NULL && !CcSettlementIsAbandoned(seat) ? seat : NULL;
+    }
     const CcSettlement *fallback = NULL;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *place = &sim->settlements[i];

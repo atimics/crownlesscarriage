@@ -1,3 +1,30 @@
+static bool SaveArchiveSeat(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 88U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "INSERT INTO archive_seat VALUES(1,?,?);", &statement, error, error_capacity)) return false;
+    sqlite3_bind_int64(statement, 1, (sqlite3_int64)sim->archives.seat_id);
+    sqlite3_bind_int64(statement, 2, sim->archives.seat_failed_since_day);
+    bool ok = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement); return ok;
+}
+static bool ReadArchiveSeat(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 88U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "SELECT id,seat_id,failed_since FROM archive_seat ORDER BY id;", &statement, error, error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW || sqlite3_column_int64(statement, 0) != 1 ||
+        sqlite3_column_type(statement, 1) != SQLITE_INTEGER || sqlite3_column_type(statement, 2) != SQLITE_INTEGER) {
+        SetError(error, error_capacity, "Archive seat row is invalid.");
+        sqlite3_finalize(statement); return false;
+    }
+    sim->archives.seat_id = (CcId)sqlite3_column_int64(statement, 1);
+    sim->archives.seat_failed_since_day = sqlite3_column_int64(statement, 2);
+    bool ok = sqlite3_step(statement) == SQLITE_DONE;
+    if (!ok) SetError(error, error_capacity, "Archive seat has extra rows.");
+    sqlite3_finalize(statement); return ok;
+}
+
 static bool SaveArchiveStaff(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim->schema_version < 85U) return true;
@@ -166,7 +193,8 @@ static bool SaveArchiveRecruitment(sqlite3 *database, const CcSim *sim, char *er
     sqlite3_finalize(statement);
     return ok && SaveRecruitmentJourney(database, sim, error, error_capacity) &&
         SaveRecruitmentTraining(database, sim, error, error_capacity) &&
-        SaveArchiveStaff(database, sim, error, error_capacity);
+        SaveArchiveStaff(database, sim, error, error_capacity) &&
+        SaveArchiveSeat(database, sim, error, error_capacity);
 }
 
 static bool ReadArchiveRecruitment(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
@@ -238,5 +266,6 @@ static bool ReadArchiveRecruitment(sqlite3 *database, CcSim *sim, char *error, s
     if (!ok) SetError(error, error_capacity, "Recruitment reservation has extra rows.");
     sqlite3_finalize(statement); return ok && ReadRecruitmentJourney(database, sim, error, error_capacity) &&
         ReadRecruitmentTraining(database, sim, error, error_capacity) &&
-        ReadArchiveStaff(database, sim, error, error_capacity);
+        ReadArchiveStaff(database, sim, error, error_capacity) &&
+        ReadArchiveSeat(database, sim, error, error_capacity);
 }
