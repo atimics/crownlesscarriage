@@ -1,0 +1,10 @@
+{
+  "implementation_revision": "19716cb92f2515f58bf487154a5060d0bdf0366d",
+  "parent_revision": "e529a3f814dc74078fc92323eca47927b9c4bde4",
+  "schema": 89,
+  "generation": 25,
+  "simulation_bytes": 184576,
+  "probe_sha256": "ac6e481e7d915e63627ffb5787102eb72012346df30897ea369ad28f59bd789c",
+  "library_sha256": "da2e046ef56cc1a73c625faae99061a956d11723bd7e0ad9aa617ff29c06ded1",
+  "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)\nTarget: arm64-apple-darwin25.3.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n"
+}
