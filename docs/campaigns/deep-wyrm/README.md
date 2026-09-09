@@ -105,7 +105,7 @@ Capture scenes 21 and 22 show the introduction and the town respectively.
 
 ## Prophecy delivery validation
 
-All 117 headless checks pass. The native Release build and interface regression
+All 125 headless checks pass after the merge. The native Release build and interface regression
 pass, including opening the Prophecy page, handing over the book, and resuming
 the saved result. All 44 shared host checks pass, including a second player's
 view of the delivery, repeated requests, and server restart. Static analysis
@@ -113,9 +113,11 @@ passes with the repository's one reviewed baseline item.
 
 A further 120-day replay after immediate delivery kept the source sequence:
 Roda funds the host on day 73388, Quill leaves Gloamgate on day 73472, the
-wyrm's named trophy appears on day 73477, and the host returns 3185 crowns to
-three allied realms on day 73482. The company took no further actions during
-that replay.
+wyrm's named trophy appears on day 73477, and the host returns to three allied
+realms on day 73482. After the merge with main's schemas 75–77 (goblin faction
+split, rot diet, archive dispatch renumber), the returned crowns shift from
+the source's 3,185 to 3,186; the source table below records the original run.
+The company took no further actions during that replay.
 
 The desktop window server was unavailable for the new Prophecy-page capture.
 The earlier campaign images above remain labeled as the original opening.

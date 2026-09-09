@@ -18,6 +18,9 @@ static int RunCaptureRequestRegression(void)
     if (!CcCaptureRequestParse(6, ux, &request))
         return ClientRegressionFailure("Campaign capture must be available.");
     ux[2] = "23";
+    if (!CcCaptureRequestParse(6, ux, &request))
+        return ClientRegressionFailure("Ledger capture must be available.");
+    ux[2] = "24";
     if (CcCaptureRequestParse(6, ux, &request))
         return ClientRegressionFailure("UX capture must enforce its view range.");
     char *storybook[] = {"crownless", "--capture-storybook", "0.25", "0.75", "story.png"};
