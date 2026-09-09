@@ -6251,7 +6251,7 @@ static bool AppointArchiveRecruitReady(CcSim *sim, CcArchiveAppointmentPlan plan
         HearGossip(sim, &sim->gossip[plan.account_slot], seat->id, plan.source_event_id,
             person != NULL ? person->name : "The trained recruit", held->versions[plan.account_slot]);
         sim->gossip[plan.account_slot].recorded = true;
-        (void)snprintf(text, sizeof(text), "%.24s joins the archive. Their first page records: %.75s",
+        (void)snprintf(text, sizeof(text), "%.24s joins the archive. Their first page records: %.73s",
             person != NULL ? person->name : "The trained recruit", account);
     }
     (void)PushSocialEvent(sim, CC_EVENT_LORE_RECORDED, volume->id, seat->id, plan.source_event_id,
