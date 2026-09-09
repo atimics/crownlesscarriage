@@ -76,6 +76,8 @@ static bool ParseGood(const char *text, CcGood *good)
     else if (strcmp(text, "wheat") == 0) *good = CC_GOOD_WHEAT;
     else if (strcmp(text, "meat") == 0) *good = CC_GOOD_MEAT;
     else if (strcmp(text, "wool") == 0) *good = CC_GOOD_WOOL;
+    else if (strcmp(text, "rotten-meat") == 0) *good = CC_GOOD_ROTTEN_MEAT;
+    else if (strcmp(text, "rotten-grain") == 0 || strcmp(text, "rotten-wheat") == 0) *good = CC_GOOD_ROTTEN_GRAIN;
     else if (strcmp(text, "stone") == 0) *good = CC_GOOD_STONE;
     else return false;
     return true;
@@ -1218,6 +1220,8 @@ static void DescribeGoblins(const CcMetagame *metagame,
            goblins->lair_stock[CC_GOOD_TOOLS],
            goblins->lair_stock[CC_GOOD_WEAPONS], goblins->lair_coins,
            goblins->expeditions_intercepted);
+    Append(output, capacity, "Rot food: %d Rotten Meat, %d Rotten Grain.\n",
+           goblins->lair_stock[CC_GOOD_ROTTEN_MEAT], goblins->lair_stock[CC_GOOD_ROTTEN_GRAIN]);
     if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ||
         goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND) {
         const CcSettlement *target = CcSimSettlement(
@@ -1246,7 +1250,7 @@ static void DescribeGoblins(const CcMetagame *metagame,
     }
     if (sim->player.location_id == goblins->lair_settlement_id) {
         Append(output, capacity,
-               "Here you may use 'goblins trade food|tools|weapons COUNT'.\n");
+               "Here you may use 'goblins trade food|rotten-meat|rotten-wheat|tools|weapons COUNT'.\n");
     }
     if (sim->player.location_id == goblins->tribute_target_id &&
         (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ||
@@ -1645,7 +1649,7 @@ static void DescribeHelp(char *output, size_t capacity)
            "  dragon steal COUNT, dragon return COUNT (at the cave)\n"
            "  dragon steal-treasure NUMBER, dragon return-treasure\n"
            "  dragon intercept (when tribute approaches the cave)\n"
-           "  goblins trade food|tools|weapons COUNT (at their lair)\n"
+           "  goblins trade food|rotten-meat|rotten-wheat|tools|weapons COUNT (at their lair)\n"
            "  goblins warn|intercept (at the threatened settlement)\n"
            "Keep the test:\n"
            "  save PATH, load PATH, debrief, quit\n");
@@ -1986,7 +1990,7 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             action.kind = CC_COMMAND_GOBLIN_INTERCEPT;
         } else {
             Append(output, output_capacity,
-                   "Use 'goblins trade food|tools|weapons COUNT', 'goblins warn', or 'goblins intercept'.\n");
+                   "Use 'goblins trade food|rotten-meat|rotten-wheat|tools|weapons COUNT', 'goblins warn', or 'goblins intercept'.\n");
             return false;
         }
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;

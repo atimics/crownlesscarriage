@@ -1613,6 +1613,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(dragon_cycle_tests)
     add_test(NAME goblin_dragon_causal_cycle COMMAND dragon_cycle_tests)
 
+    add_executable(rot_diet_tests tests/rot_diet_tests.c)
+    target_link_libraries(rot_diet_tests PRIVATE crownless_metagame)
+    cc_strict_warnings(rot_diet_tests)
+    add_test(NAME goblin_dragon_rot_diet COMMAND rot_diet_tests)
+
     add_executable(goblin_cult_split_tests tests/goblin_cult_split_tests.c)
     target_link_libraries(goblin_cult_split_tests PRIVATE crownless_persistence)
     cc_strict_warnings(goblin_cult_split_tests)

@@ -57,7 +57,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 75
+#define CC_SIM_SCHEMA_VERSION 76
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -135,7 +135,8 @@ typedef struct CcGoodDefinition {
 typedef enum CcNutritionPurpose {
     CC_NUTRITION_CIVILIAN,
     CC_NUTRITION_TRAVEL,
-    CC_NUTRITION_ANIMAL
+    CC_NUTRITION_ANIMAL,
+    CC_NUTRITION_SCAVENGER
 } CcNutritionPurpose;
 
 typedef enum CcSettlementFunction {
