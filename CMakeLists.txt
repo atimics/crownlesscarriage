@@ -99,6 +99,7 @@ add_library(crownless_sim
     src/sim/cc_archive_recruitment.c
     src/sim/cc_archive_queries.c
     src/sim/cc_archive_supply.c
+    src/sim/cc_archive_relocation.c
     src/sim/cc_archive_seat_plan.c
     src/sim/cc_trade_path.c
     src/sim/cc_sim_versions.c
@@ -1505,6 +1506,11 @@ if(BUILD_TESTING)
     target_link_libraries(archive_dispatch_tests PRIVATE crownless_persistence)
     cc_strict_warnings(archive_dispatch_tests)
     add_test(NAME archive_supply_dispatch COMMAND archive_dispatch_tests)
+    add_executable(archive_relocation_tests tests/archive_relocation_tests.c)
+    target_link_libraries(archive_relocation_tests PRIVATE crownless_sim)
+    cc_strict_warnings(archive_relocation_tests)
+    add_test(NAME archive_relocation_plan COMMAND archive_relocation_tests)
+
     add_executable(archive_seat_tests tests/archive_seat_tests.c)
     target_link_libraries(archive_seat_tests PRIVATE crownless_persistence)
     cc_strict_warnings(archive_seat_tests)
