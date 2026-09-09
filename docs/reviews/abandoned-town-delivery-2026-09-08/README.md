@@ -26,4 +26,4 @@ Build `probe.c` against each revision's simulation library and headers with `-lm
 
 ## Checks
 
-Strict headless build and all 118 tests passed. Static analysis passed with one reviewed baseline entry. Native persistence/trade checks and the final legacy comparison are being collected. These are local results.
+Strict headless build and all 118 tests passed. Static analysis passed with one reviewed baseline entry. The native build and all four focused trade, quest-cast, and persistence checks passed. All 3200 annual schema-74 hashes match the parent across 32 worlds of 100 years each. Code head 7291f53 was tested. These are local results; remote CI is tracked on draft PR #624.
