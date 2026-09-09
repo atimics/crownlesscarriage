@@ -837,6 +837,10 @@ uint64_t CcSimHash(const CcSim *sim)
         }
         HASH_VALUE(item->magnitude); hash = HashString(hash, item->text);
     }
+    if (sim->schema_version >= 93U) {
+        HASH_VALUE(sim->archive_convoy.departure_day);
+        HASH_VALUE(sim->archive_convoy.arrival_day);
+    }
     if (sim->schema_version >= 92U) {
         HASH_VALUE(sim->archive_convoy.origin_id);
         HASH_VALUE(sim->archive_convoy.destination_id);

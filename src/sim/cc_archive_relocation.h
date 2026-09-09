@@ -39,4 +39,13 @@ const char *CcArchiveRelocationGateName(CcArchiveRelocationGate gate);
 bool CcSimReserveArchiveConvoy(CcSim *sim);
 bool CcSimCancelArchiveConvoy(CcSim *sim);
 bool CcSimArchiveConvoyValid(const CcSim *sim);
+typedef enum CcArchiveConvoyStep {
+    CC_ARCHIVE_CONVOY_WAIT,
+    CC_ARCHIVE_CONVOY_DEPARTED,
+    CC_ARCHIVE_CONVOY_BLOCKED,
+    CC_ARCHIVE_CONVOY_ARRIVED,
+    CC_ARCHIVE_CONVOY_LOST
+} CcArchiveConvoyStep;
+bool CcSimArchiveConvoyCarriesBook(const CcSim *sim, CcId book_id);
+CcArchiveConvoyStep CcSimAdvanceArchiveConvoy(CcSim *sim, uint32_t road_roll);
 #endif

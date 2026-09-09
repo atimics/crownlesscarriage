@@ -1,6 +1,10 @@
 #include "sim/cc_archive_relocation.h"
 #include "sim/cc_identity_internal.h"
 #include "sim/cc_food_economy_internal.h"
+#include "sim/cc_archive_volumes_internal.h"
+#include "sim/cc_route_rules_internal.h"
+#include "sim/cc_trade_path_internal.h"
+#include <string.h>
 
 static CcKingdom *Funding(CcSim *sim, CcId id)
 {
@@ -22,14 +26,16 @@ bool CcSimArchiveConvoyValid(const CcSim *sim)
     if (sim == NULL) return false;
     if (sim->schema_version < 92U) return true;
     const CcArchiveConvoyOrder *o = &sim->archive_convoy;
+    if (sim->schema_version >= 93U && o->status <= 1 && (o->departure_day != 0 || o->arrival_day != 0)) return false;
     if (o->status == 0) {
         for (int i = 0; i < 4; ++i) if (o->book_ids[i] != 0) return false;
         return o->origin_id == 0 && o->destination_id == 0 && o->sponsor_id == 0 &&
             o->funding_kingdom_id == 0 && o->carriage_id == 0 && o->first_route_id == 0 &&
             o->first_hop_id == 0 && o->purse == 0 && o->wheat == 0 && o->book_count == 0 && o->reserved_day == 0;
     }
-    if (o->status != 1 || o->book_count < 1 || o->book_count > 4 ||
-        o->wheat < 1 || o->wheat > CC_SIM_MAX_UNITS || o->purse < 0 || o->purse > CC_SIM_MAX_MONEY ||
+    bool journey = sim->schema_version >= 93U && o->status >= 2 && o->status <= 5;
+    if ((!journey && o->status != 1) || o->book_count < 1 || o->book_count > 4 ||
+        o->wheat < (journey ? 0 : 1) || o->wheat > CC_SIM_MAX_UNITS || o->purse < 0 || o->purse > CC_SIM_MAX_MONEY ||
         o->reserved_day < 1 || o->reserved_day > sim->current_day ||
         o->origin_id == o->destination_id || CcSimSettlement(sim, o->origin_id) == NULL ||
         CcSimSettlement(sim, o->destination_id) == NULL ||
@@ -38,16 +44,34 @@ bool CcSimArchiveConvoyValid(const CcSim *sim)
     for (int i = 0; i < sim->kingdom_count; ++i) funding |= sim->kingdoms[i].id == o->funding_kingdom_id;
     for (int i = 0; i < sim->royal_carriage_count; ++i) {
         const CcRoyalCarriage *item = &sim->royal_carriages[i];
-        if (item->id == o->carriage_id) carriage = item->mode == CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED &&
-            item->kingdom_id == o->funding_kingdom_id && item->location_id == o->origin_id;
+        if (item->id != o->carriage_id) continue;
+        if (o->status == 3 || o->status == 4) { carriage = true; continue; }
+        if (o->status == 2 || o->status == 5) {
+            carriage = item->mode == (o->status == 2 ? CC_ROYAL_CARRIAGE_ARCHIVE_TRAVELLING : CC_ROYAL_CARRIAGE_ARCHIVE_WAITING) &&
+                item->kingdom_id == o->funding_kingdom_id && item->location_id == o->origin_id &&
+                item->active_shipment_id == 0 && item->route_id == o->first_route_id &&
+                item->destination_id == o->first_hop_id && item->target_id == o->destination_id &&
+                item->departure_day == o->departure_day && item->arrival_day == o->arrival_day &&
+                item->blocked_since_day == 0 && item->archive_contract;
+        } else carriage = item->mode == CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED &&
+            item->kingdom_id == o->funding_kingdom_id && item->location_id == o->origin_id &&
+            item->active_shipment_id == 0 && item->route_id == 0 && item->destination_id == 0 &&
+            item->target_id == 0 && item->arrival_day == 0 && item->blocked_since_day == 0 && !item->archive_contract;
     }
     const CcRoute *route = CcSimRoute(sim, o->first_route_id);
     if (!funding || !carriage || route == NULL ||
         !((route->from_id == o->origin_id && route->to_id == o->first_hop_id) ||
           (route->to_id == o->origin_id && route->from_id == o->first_hop_id))) return false;
+    if (journey && (o->departure_day < o->reserved_day || o->departure_day > sim->current_day ||
+        o->arrival_day <= o->departure_day || o->arrival_day > CC_SIM_MAX_DAY ||
+        (o->status == 2 ? o->arrival_day <= sim->current_day : o->arrival_day > sim->current_day))) return false;
     for (int i = 0; i < 4; ++i) {
         if (i >= o->book_count) { if (o->book_ids[i] != 0) return false; continue; }
         if (!Issued(sim, o->book_ids[i], CC_ENTITY_TREASURE)) return false;
+        if (o->status == 2 || o->status == 5) {
+            const CcTreasure *book = CcSimTreasure(sim, o->book_ids[i]);
+            if (!CcArchiveVolumeIsLive(book) || book->owner_id != o->origin_id || book->location_id != o->carriage_id) return false;
+        }
         for (int j = 0; j < i; ++j) if (o->book_ids[j] == o->book_ids[i]) return false;
     }
     return true;
@@ -78,11 +102,13 @@ bool CcSimReserveArchiveConvoy(CcSim *sim)
 
 bool CcSimCancelArchiveConvoy(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 92U || sim->archive_convoy.status != 1 ||
+    if (sim == NULL || sim->schema_version < 92U ||
+        (sim->archive_convoy.status != 1 && !(sim->schema_version >= 93U &&
+         (sim->archive_convoy.status == 3 || sim->archive_convoy.status == 4))) ||
         !CcSimArchiveConvoyValid(sim)) return false;
     const CcArchiveConvoyOrder *order = &sim->archive_convoy;
     CcKingdom *kingdom = Funding(sim, order->funding_kingdom_id);
-    CcSettlement *origin = CcSimSettlementMutable(sim, order->origin_id);
+    CcSettlement *origin = CcSimSettlementMutable(sim, order->status == 1 ? order->origin_id : order->first_hop_id);
     CcRoyalCarriage *carriage = Carriage(sim, order->carriage_id);
     if (kingdom == NULL || origin == NULL || carriage == NULL ||
         kingdom->treasury > CC_SIM_MAX_MONEY - order->purse ||
@@ -90,7 +116,101 @@ bool CcSimCancelArchiveConvoy(CcSim *sim)
     kingdom->treasury += order->purse;
     origin->stock[CC_GOOD_WHEAT] += order->wheat;
     CcEconomyRefreshSettlementGoodPrice(sim, origin, CC_GOOD_WHEAT);
-    carriage->mode = CC_ROYAL_CARRIAGE_IDLE;
+    if (order->status == 1) carriage->mode = CC_ROYAL_CARRIAGE_IDLE;
     sim->archive_convoy = (CcArchiveConvoyOrder){0};
     return true;
+}
+
+bool CcSimArchiveConvoyCarriesBook(const CcSim *sim, CcId book_id)
+{
+    if (sim == NULL || sim->schema_version < 93U || book_id == 0 ||
+        (sim->archive_convoy.status != 2 && sim->archive_convoy.status != 5)) return false;
+    for (int i = 0; i < sim->archive_convoy.book_count && i < 4; ++i)
+        if (sim->archive_convoy.book_ids[i] == book_id) return true;
+    return false;
+}
+static CcTreasure *Book(CcSim *sim, CcId id)
+{
+    for (int i = 0; i < sim->treasure_count; ++i) if (sim->treasures[i].id == id) return &sim->treasures[i];
+    return NULL;
+}
+CcArchiveConvoyStep CcSimAdvanceArchiveConvoy(CcSim *sim, uint32_t road_roll)
+{
+    if (sim == NULL || sim->schema_version < 93U) return CC_ARCHIVE_CONVOY_WAIT;
+    CcArchiveConvoyOrder *o = &sim->archive_convoy;
+    if (o->status != 1 && o->status != 2 && o->status != 5) return CC_ARCHIVE_CONVOY_WAIT;
+    CcRoyalCarriage *carriage = Carriage(sim, o->carriage_id);
+    if (carriage == NULL) return CC_ARCHIVE_CONVOY_WAIT;
+    if (o->status == 1) {
+        if (!CcSimArchiveConvoyValid(sim)) return CC_ARCHIVE_CONVOY_WAIT;
+        const CcCharacter *sponsor = CcSimCharacter(sim, o->sponsor_id);
+        if (sponsor == NULL || sponsor->death_day <= sim->current_day) return CC_ARCHIVE_CONVOY_WAIT;
+        for (int i = 0; i < o->book_count; ++i) {
+            CcTreasure *book = Book(sim, o->book_ids[i]);
+            if (!CcArchiveVolumeIsLive(book) || book->owner_id != o->origin_id || book->location_id != o->origin_id)
+                return CC_ARCHIVE_CONVOY_WAIT;
+        }
+        int slot = -1; CcId hop = 0;
+        const int32_t *used = sim->royal_trade_week == sim->current_day / 7 ? sim->royal_route_slots_used : NULL;
+        if (!CcTradeFindPath(sim, o->origin_id, o->destination_id, CC_GOOD_PAPER, &slot, &hop,
+            NULL, NULL, used, true, carriage->kingdom_id, true, o->book_count) ||
+            sim->routes[slot].id != o->first_route_id || hop != o->first_hop_id) return CC_ARCHIVE_CONVOY_WAIT;
+        int days = CcSimFreightLegDays(sim, o->first_route_id, o->origin_id, o->first_hop_id);
+        int wheat = 2 * ((days + 6) / 7);
+        CcMoney toll = CcRouteRoyalTradeToll(sim, &sim->routes[slot], carriage->kingdom_id);
+        const CcSettlement *stop = CcSimSettlement(sim, hop);
+        CcKingdom *receiver = stop != NULL ? Funding(sim, stop->kingdom_id) : NULL;
+        if (days < 1 || sim->current_day > CC_SIM_MAX_DAY - days || o->wheat < wheat || o->purse < toll ||
+            receiver == NULL || receiver->treasury > CC_SIM_MAX_MONEY - toll) return CC_ARCHIVE_CONVOY_WAIT;
+        o->purse -= toll; receiver->treasury += toll; o->wheat -= wheat;
+        o->departure_day = sim->current_day; o->arrival_day = sim->current_day + days; o->status = 2;
+        for (int i = 0; i < o->book_count; ++i) Book(sim, o->book_ids[i])->location_id = carriage->id;
+        carriage->mode = CC_ROYAL_CARRIAGE_ARCHIVE_TRAVELLING; carriage->archive_contract = true;
+        carriage->route_id = o->first_route_id; carriage->destination_id = o->first_hop_id;
+        carriage->target_id = o->destination_id; carriage->departure_day = o->departure_day;
+        carriage->arrival_day = o->arrival_day;
+        if (sim->royal_trade_week != sim->current_day / 7) {
+            sim->royal_trade_week = sim->current_day / 7;
+            memset(sim->royal_route_slots_used, 0, sizeof(sim->royal_route_slots_used));
+        }
+        sim->royal_route_slots_used[slot] += o->book_count;
+        return CC_ARCHIVE_CONVOY_DEPARTED;
+    }
+    if (sim->current_day < o->arrival_day) return CC_ARCHIVE_CONVOY_WAIT;
+    const CcRoute *route = CcSimRoute(sim, o->first_route_id);
+    if (route == NULL || route->condition == 0 || !CcRouteCarriageCanUse(sim, carriage, route->id)) {
+        if (o->status == 5) return CC_ARCHIVE_CONVOY_WAIT;
+        o->status = 5; carriage->mode = CC_ROYAL_CARRIAGE_ARCHIVE_WAITING;
+        return CC_ARCHIVE_CONVOY_BLOCKED;
+    }
+    int danger = CcSimRouteDanger(sim, route->id);
+    if (CcSimRouteCrossesWarBorder(sim, route->id) && !route->smuggler_route) {
+        danger += 25; if (danger > 85) danger = 85;
+    }
+    bool lost = (int)(road_roll % 100U) < danger;
+    int64_t lore_lost = 0;
+    for (int i = 0; i < o->book_count; ++i) {
+        CcTreasure *book = Book(sim, o->book_ids[i]);
+        if (book == NULL) continue;
+        book->location_id = o->first_hop_id;
+        if (lost && !book->destroyed) { lore_lost += book->craft_work; book->destroyed = true; }
+    }
+    if (lost) {
+        int64_t total = (int64_t)sim->archives.lore_lost_total + lore_lost;
+        sim->archives.lore_lost_total = total > CC_SIM_MAX_UNITS ? CC_SIM_MAX_UNITS : (int32_t)total;
+        CcSimUpgradeArchivePhysicalLore(sim);
+    }
+    o->status = lost ? 4 : 3;
+    carriage->mode = CC_ROYAL_CARRIAGE_IDLE; carriage->archive_contract = false;
+    carriage->location_id = o->first_hop_id; carriage->route_id = 0; carriage->destination_id = 0;
+    carriage->target_id = 0; carriage->departure_day = sim->current_day; carriage->arrival_day = 0;
+    carriage->next_dispatch_day = sim->current_day + 7;
+    if (lost) {
+        if (carriage->cargo_losses < CC_SIM_MAX_UNITS) carriage->cargo_losses++;
+        carriage->condition = carriage->condition > 12 ? carriage->condition - 12 : 0;
+    } else {
+        if (carriage->trips_completed < CC_SIM_MAX_UNITS) carriage->trips_completed++;
+        if (carriage->condition > 0) carriage->condition--;
+    }
+    return lost ? CC_ARCHIVE_CONVOY_LOST : CC_ARCHIVE_CONVOY_ARRIVED;
 }
