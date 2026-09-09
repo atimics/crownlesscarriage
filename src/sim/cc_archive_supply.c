@@ -9,10 +9,12 @@
 static int32_t Min(int32_t a, int32_t b) { return a < b ? a : b; }
 static int32_t Max(int32_t a, int32_t b) { return a > b ? a : b; }
 
-/* Protect the town's food reserve while supplying one weekly archive task. */
+/* Current freight buys one weekly writing ration; earlier worlds also fund
+   the town food deficit. Archive work still respects the town food reserve. */
 static int32_t WheatNeed(const CcSim *sim, const CcSettlement *town)
 {
     int32_t work = 2 * Max(1, sim->archives.scribes);
+    if (sim->schema_version >= 87U) return Max(0, work - town->stock[CC_GOOD_WHEAT]);
     int32_t rations = CcEconomyNutritionRations(town->stock, CC_NUTRITION_CIVILIAN);
     int32_t deficit = Max(0, 2 * CcEconomyWeeklyFoodUse(sim, town) - rations);
     return Max(work - CcArchiveSpareGrain(sim, town), deficit * 2 + (deficit > 0 ? work : 0));
@@ -28,7 +30,7 @@ static CcMoney FreightFunds(const CcSim *sim)
     return sim->iron_ledger_reserve > floor ? sim->iron_ledger_reserve - floor : 0;
 }
 
-CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
+static CcArchiveSupplyPlan SupplyPlanForGood(const CcSim *sim, CcId carriage_id, int requested)
 {
     CcArchiveSupplyPlan plan = {.gate = CC_ARCHIVE_SUPPLY_UNAVAILABLE, .good = CC_GOOD_COUNT};
     if (sim == NULL || sim->schema_version < 58U) return plan;
@@ -54,6 +56,7 @@ CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
     int32_t need = 0;
     for (int i = 0; i < good_count; ++i) {
         CcGood good = goods[i];
+        if (requested >= 0 && requested != (int)good) continue;
         int32_t current = good == CC_GOOD_WHEAT ? WheatNeed(sim, seat) : Max(0, 1 - seat->stock[good]);
         if (current <= 0) continue;
         shortage = true;
@@ -116,6 +119,24 @@ CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
             plan.first_dispatch_day = (((int64_t)sim->current_day + 27) / 28) * 28;
     }
     return plan;
+}
+
+CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
+{
+    if (sim == NULL || sim->schema_version < 87U) return SupplyPlanForGood(sim, carriage_id, -1);
+    const CcGood priority[] = {CC_GOOD_PAPER, CC_GOOD_TOOLS, CC_GOOD_WHEAT};
+    CcArchiveSupplyPlan result = {.gate = CC_ARCHIVE_SUPPLY_STOCKED, .good = CC_GOOD_COUNT};
+    bool blocked = false;
+    for (int i = 0; i < 3; ++i) {
+        CcArchiveSupplyPlan next = SupplyPlanForGood(sim, carriage_id, (int)priority[i]);
+        if (next.gate == CC_ARCHIVE_SUPPLY_READY) return next;
+        if (!blocked) {
+            if (next.gate != CC_ARCHIVE_SUPPLY_STOCKED && next.gate != CC_ARCHIVE_SUPPLY_INCOMING) {
+                result = next; blocked = true;
+            } else if (result.gate == CC_ARCHIVE_SUPPLY_STOCKED) result = next;
+        }
+    }
+    return result;
 }
 
 const char *CcArchiveSupplyGateName(CcArchiveSupplyGate gate)

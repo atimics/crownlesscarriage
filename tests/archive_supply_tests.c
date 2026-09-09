@@ -45,8 +45,35 @@ static CcArchiveSupplyPlan Query(CcArchiveSupplyGate gate)
     CC_CHECK(plan.gate == gate);
     return plan;
 }
+static void CheckWritingKitBudget(void)
+{
+    Fixture(); sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSettlement *seat = &sim.settlements[0];
+    seat->stock[CC_GOOD_FOOD] = 0; seat->stock[CC_GOOD_WHEAT] = 0;
+    seat->stock[CC_GOOD_TOOLS] = 0;
+    CcArchiveSupplyPlan plan = Query(CC_ARCHIVE_SUPPLY_READY);
+    CC_CHECK(plan.good == CC_GOOD_PAPER && plan.quantity == 1);
+    for (int i = 1; i < 3; ++i) sim.settlements[i].stock[CC_GOOD_PAPER] = 0;
+    plan = Query(CC_ARCHIVE_SUPPLY_READY);
+    CC_CHECK(plan.good == CC_GOOD_TOOLS && plan.quantity == 1);
+    seat->stock[CC_GOOD_PAPER] = 1; seat->stock[CC_GOOD_TOOLS] = 1;
+    plan = Query(CC_ARCHIVE_SUPPLY_READY);
+    CC_CHECK(plan.good == CC_GOOD_WHEAT && plan.quantity == 2);
+    sim.shipment_count = 1;
+    sim.shipments[0] = (CcShipment){.id = 999, .final_destination_id = seat->id,
+        .good = CC_GOOD_WHEAT, .quantity = 2, .status = CC_SHIPMENT_TRAVELLING};
+    (void)Query(CC_ARCHIVE_SUPPLY_INCOMING);
+    sim.shipments[0].status = CC_SHIPMENT_LOST;
+    plan = Query(CC_ARCHIVE_SUPPLY_READY); CC_CHECK(plan.quantity == 2);
+    seat->stock[CC_GOOD_WHEAT] = 2;
+    (void)Query(CC_ARCHIVE_SUPPLY_STOCKED);
+    sim.schema_version = 86U;
+    plan = Query(CC_ARCHIVE_SUPPLY_READY); CC_CHECK(plan.good == CC_GOOD_WHEAT && plan.quantity > 2);
+}
+
 int main(void)
 {
+    CheckWritingKitBudget();
     Fixture();
     CcArchiveSupplyPlan plan = Query(CC_ARCHIVE_SUPPLY_READY);
     CC_CHECK(plan.source_id == sim.settlements[1].id && plan.seat_id == sim.settlements[0].id);
