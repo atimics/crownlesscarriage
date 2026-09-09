@@ -9561,8 +9561,8 @@ static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_account
                 unload = MaximumI32(0, unload);
                 if (unload > 0) {
                     hop->stock[shipment_good] += unload;
-                    hop->prosperity = ClampI32(
-                        hop->prosperity + 1, 0, 100);
+                    if (sim->schema_version < 86U || !CcSettlementIsAbandoned(hop))
+                        hop->prosperity = ClampI32(hop->prosperity + 1, 0, 100);
                     shipment->quantity -= unload;
                 }
             }
@@ -9660,7 +9660,8 @@ static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_account
         CcSettlement *destination = CcSimSettlementMutable(sim, final_id);
         if (destination != NULL) {
             destination->stock[shipment_good] += shipment->quantity;
-            destination->prosperity = ClampI32(destination->prosperity + 1, 0, 100);
+            if (sim->schema_version < 86U || !CcSettlementIsAbandoned(destination))
+                destination->prosperity = ClampI32(destination->prosperity + 1, 0, 100);
         }
         shipment->status = CC_SHIPMENT_ARRIVED;
         RecordGrainShipment(sim, shipment, final_id, false);
@@ -11706,6 +11707,25 @@ static void ForgetRetiredSituation(CcSim *sim, CcId situation_id)
     }
 }
 
+static bool SituationHasActiveCourier(const CcSim *sim, CcId situation_id)
+{
+    for (int32_t i = 0; i < sim->courier_count; ++i) {
+        const CcCourier *courier = &sim->couriers[i];
+        if (courier->situation_id == situation_id &&
+            (courier->status == CC_COURIER_WAITING || courier->status == CC_COURIER_TRAVELLING ||
+             courier->status == CC_COURIER_WITH_PLAYER)) return true;
+    }
+    return false;
+}
+
+static bool CourierHasRetainedSituation(const CcSim *sim, CcId courier_id)
+{
+    for (int32_t i = 0; i < sim->situation_count; ++i)
+        if (sim->situations[i].kind == CC_SITUATION_COURIER_DELIVERY &&
+            sim->situations[i].target_id == courier_id) return true;
+    return false;
+}
+
 static CcSituation *AllocateSituation(CcSim *sim)
 {
     if (sim->situation_count < CC_MAX_SITUATIONS) {
@@ -11717,6 +11737,7 @@ static CcSituation *AllocateSituation(CcSim *sim)
     int32_t oldest = -1;
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         if (sim->situations[i].status == CC_SITUATION_ACTIVE) continue;
+        if (sim->schema_version >= 86U && SituationHasActiveCourier(sim, sim->situations[i].id)) continue;
         if (oldest < 0 || sim->situations[i].created_day < sim->situations[oldest].created_day) {
             oldest = i;
         }
@@ -12405,6 +12426,7 @@ static CcCourier *AllocateCourier(CcSim *sim)
         if (status == CC_COURIER_WAITING ||
             status == CC_COURIER_TRAVELLING ||
             status == CC_COURIER_WITH_PLAYER) continue;
+        if (sim->schema_version >= 86U && CourierHasRetainedSituation(sim, sim->couriers[i].id)) continue;
         if (oldest < 0 || sim->couriers[i].departure_day <
                           sim->couriers[oldest].departure_day) oldest = i;
     }
