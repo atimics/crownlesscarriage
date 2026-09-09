@@ -3,6 +3,7 @@
 #include "persistence/cc_save.h"
 #include "test_support.h"
 #include <string.h>
+#include <sqlite3.h>
 static CcSim sim, before;
 static void Fixture(void)
 {
@@ -67,6 +68,12 @@ static void CheckSavedSeat(void)
     CC_CHECK(CcSaveRead(path, &before, error, sizeof(error)));
     CC_CHECK(CcSimHash(&before) == CcSimHash(&sim));
     CC_CHECK(before.archives.seat_id == original);
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    CC_CHECK(sqlite3_exec(database, "UPDATE archive_seat SET failed_since=0.5;", NULL, NULL, NULL) == SQLITE_OK);
+    CC_CHECK(sqlite3_close(database) == SQLITE_OK);
+    CC_CHECK(!CcSaveRead(path, &before, error, sizeof(error)));
+
     (void)remove(path); (void)remove("archive-seat-test.ccsave-wal"); (void)remove("archive-seat-test.ccsave-shm");
     before = sim;
     sim.archives.seat_id = sim.player.id;
