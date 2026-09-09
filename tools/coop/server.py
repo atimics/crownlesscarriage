@@ -366,7 +366,7 @@ class Worlds:
         require(set(body) == {"sequence", "context", "session"}, "Send your saved place in the world.")
         sequence = number(body["sequence"], 1, 2**53 - 1, "session sequence")
         session = body["session"]
-        require(isinstance(session, str) and session.startswith("CROWNLESS_SESSION 7\n") and
+        require(isinstance(session, str) and session.startswith(("CROWNLESS_SESSION 7\n", "CROWNLESS_SESSION 8\n")) and
                 len(session) <= 6000 and session.isascii() and '\0' not in session,
                 "Send a complete player session.")
         with self.transaction():

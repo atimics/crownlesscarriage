@@ -1,0 +1,94 @@
+--- a/src/sim/cc_sim.c
++++ b/src/sim/cc_sim.c
+@@ -9416,28 +9416,6 @@
+ /* What a town is short of once its own stock and everything already rolling
+    towards it are counted. Four planners asked this question by hand and had to
+    agree on all three terms; now they ask here. */
+-static int32_t SettlementUnmetNeed(const CcSim *sim, const CcSettlement *place,
+-                                   CcGood good)
+-{
+-    if (place == NULL) return 0;
+-    return CcEconomyEffectiveReserveTarget(sim, place, good) - place->stock[good] -
+-           CcSimIncomingGood(sim, place->id, good);
+-}
+-
+-/* What a buyer can actually bring to a purchase: the right purse for the good,
+-   plus whatever the iron ledger will lend against it. A town at war spends
+-   from the war chest, and only essentials draw credit. */
+-static CcMoney BuyerPurchasingPower(CcSim *sim, const CcSettlement *buyer,
+-                                    CcGood good)
+-{
+-    if (buyer == NULL) return 0;
+-    CcMoney coins = WarWeeklyNeed(sim, buyer, good) > 0 ?
+-        buyer->war_chest : buyer->market_coins;
+-    if (!IronLedgerWillFund(buyer, good)) return coins;
+-    return coins + IronLedgerCreditAvailable(
+-        sim, KingdomMutable(sim, buyer->kingdom_id));
+-}
+-
+ static int32_t TradeSurplus(const CcSim *sim,
+                             const CcSettlement *origin,
+                             const CcSettlement *destination,
+@@ -9543,7 +9521,7 @@
+         sim, origin, final_destination, good);
+     int32_t need = supply != NULL ? MaximumI32(0, 12 - final_destination->stock[CC_GOOD_WHEAT] -
+         CcSimIncomingGood(sim, final_destination->id, CC_GOOD_WHEAT)) :
+-        SettlementUnmetNeed(sim, final_destination, good);
++        (CcEconomyEffectiveReserveTarget(sim, final_destination, good) - final_destination->stock[good] - CcSimIncomingGood(sim, final_destination->id, good));
+     int32_t effective_capacity = CcTradeRouteCapacity(sim, route);
+     int32_t available_capacity = effective_capacity - route_used[route_slot];
+     int32_t cargo_capacity = MinimumI32(
+@@ -9701,7 +9679,7 @@
+                  destination < sim->settlement_count; ++destination) {
+                 CcSettlement *to = &sim->settlements[destination];
+                 if (CcSettlementIsAbandoned(to)) continue;
+-                int32_t need = SettlementUnmetNeed(sim, to, (CcGood)good);
++                int32_t need = (CcEconomyEffectiveReserveTarget(sim, to, (CcGood)good) - to->stock[(CcGood)good] - CcSimIncomingGood(sim, to->id, (CcGood)good));
+                 if (need < minimum_load) continue;
+                 for (int32_t source = 0;
+                      source < sim->settlement_count; ++source) {
+@@ -9725,7 +9703,7 @@
+                         (CcMoney)minimum_load *
+                             MaximumI32(1, from->price[good]) +
+                         CcRouteToll(sim, &sim->routes[route_slot]);
+-                    if (BuyerPurchasingPower(sim, to, (CcGood)good) <
++                    if (((WarWeeklyNeed(sim, to, (CcGood)good) > 0 ? to->war_chest : to->market_coins) + (IronLedgerWillFund(to, (CcGood)good) ? IronLedgerCreditAvailable(sim, KingdomMutable(sim, to->kingdom_id)) : 0)) <
+                         minimum_cost) {
+                         continue;
+                     }
+@@ -9849,7 +9827,7 @@
+             CcSettlement *to = &sim->settlements[destination];
+             if (CcSettlementIsAbandoned(to) ||
+                 to->kingdom_id != carriage->kingdom_id) continue;
+-            int32_t need = SettlementUnmetNeed(sim, to, cargo_good);
++            int32_t need = (CcEconomyEffectiveReserveTarget(sim, to, cargo_good) - to->stock[cargo_good] - CcSimIncomingGood(sim, to->id, cargo_good));
+             if (need < minimum_load) continue;
+             for (int32_t source = 0;
+                  source < sim->settlement_count; ++source) {
+@@ -9886,7 +9864,7 @@
+                 CcMoney minimum_cost =
+                     (CcMoney)minimum_load *
+                         MaximumI32(1, from->price[good]) + 3;
+-                if (BuyerPurchasingPower(sim, to, cargo_good) <
++                if (((WarWeeklyNeed(sim, to, cargo_good) > 0 ? to->war_chest : to->market_coins) + (IronLedgerWillFund(to, cargo_good) ? IronLedgerCreditAvailable(sim, KingdomMutable(sim, to->kingdom_id)) : 0)) <
+                     minimum_cost) continue;
+                 int32_t score = RoyalTradeScore(
+                     sim, archive_chain, to, cargo_good,
+@@ -9961,7 +9939,7 @@
+                 CcSettlement *to = &sim->settlements[destination];
+                 if (CcSettlementIsAbandoned(to) ||
+                     to->kingdom_id != carriage->kingdom_id) continue;
+-                int32_t need = SettlementUnmetNeed(sim, to, (CcGood)good);
++                int32_t need = (CcEconomyEffectiveReserveTarget(sim, to, (CcGood)good) - to->stock[(CcGood)good] - CcSimIncomingGood(sim, to->id, (CcGood)good));
+                 if (need < minimum_load) continue;
+                 for (int32_t source = 0;
+                      source < sim->settlement_count; ++source) {
+@@ -10024,7 +10002,7 @@
+                         RoyalTradeRouteToll(
+                             sim, &sim->routes[route_slot],
+                             carriage->kingdom_id);
+-                    if (BuyerPurchasingPower(sim, to, (CcGood)good) <
++                    if (((WarWeeklyNeed(sim, to, (CcGood)good) > 0 ? to->war_chest : to->market_coins) + (IronLedgerWillFund(to, (CcGood)good) ? IronLedgerCreditAvailable(sim, KingdomMutable(sim, to->kingdom_id)) : 0)) <
+                         minimum_cost) {
+                         continue;
+                     }

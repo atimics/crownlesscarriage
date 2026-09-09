@@ -71,8 +71,9 @@ CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
         path_found = true;
         CcMoney toll = CcRouteRoyalTradeToll(sim, &sim->routes[route], carriage->kingdom_id);
         CcMoney price = Max(1, source->price[plan.good]);
-        if (sim->iron_ledger_reserve <= toll) continue;
-        CcMoney affordable = (sim->iron_ledger_reserve - toll) / price;
+        /* Spend only the surplus above the scribe payroll floor. */
+        if (sim->iron_ledger_reserve - CC_ARCHIVE_PAYROLL_FLOOR <= toll) continue;
+        CcMoney affordable = (sim->iron_ledger_reserve - CC_ARCHIVE_PAYROLL_FLOOR - toll) / price;
         int32_t quantity = Min(need, Min(surplus, Min(capacity, CC_ROYAL_CARRIAGE_CARGO_SLOTS) *
             CcGoodsFreightUnitsPerCargoSlot(plan.good)));
         quantity = Min(quantity, affordable > INT32_MAX ? INT32_MAX : (int32_t)affordable);
@@ -91,7 +92,7 @@ CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
         plan.source_id == 0U ? CC_ARCHIVE_SUPPLY_FUNDS : CC_ARCHIVE_SUPPLY_READY;
     if (plan.gate == CC_ARCHIVE_SUPPLY_READY) {
         plan.first_dispatch_day = sim->current_day;
-        if (sim->schema_version >= 75U && carriage->location_id != plan.source_id)
+        if (sim->schema_version >= 77U && carriage->location_id != plan.source_id)
             plan.first_dispatch_day = (((int64_t)sim->current_day + 27) / 28) * 28;
     }
     return plan;

@@ -92,8 +92,10 @@ add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
     src/sim/cc_sim_hash.c
+    src/sim/cc_gossip_topics.c
     src/sim/cc_archive_queries.c
     src/sim/cc_archive_supply.c
+    src/sim/cc_archive_seat_plan.c
     src/sim/cc_trade_path.c
     src/sim/cc_sim_versions.c
     src/sim/cc_identity.c
@@ -233,6 +235,10 @@ target_link_libraries(crownless_metagame PUBLIC
     crownless_persistence crownless_story)
 cc_strict_warnings(crownless_metagame)
 
+add_executable(crownless_gossip_corpus tools/gossip_corpus.c)
+target_link_libraries(crownless_gossip_corpus PRIVATE crownless_story)
+cc_strict_warnings(crownless_gossip_corpus)
+
 add_executable(crownless_sim_runner tools/sim_runner.c)
 target_link_libraries(crownless_sim_runner PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_sim_runner)
@@ -261,6 +267,10 @@ if(CC_BUILD_BENCHMARKS)
         DEPENDS crownless_benchmark crownless_robotics_benchmark
         USES_TERMINAL
     )
+
+    add_executable(crownless_species_metrics tools/species_metrics.c)
+    target_link_libraries(crownless_species_metrics PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_species_metrics)
 
     add_executable(crownless_sim_metrics tools/sim_metrics.c)
     target_link_libraries(crownless_sim_metrics PRIVATE crownless_sim)
@@ -1199,6 +1209,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(story_tests)
     add_test(NAME authored_story_beats COMMAND story_tests)
 
+    add_executable(gossip_language_tests tests/gossip_language_tests.c)
+    target_link_libraries(gossip_language_tests PRIVATE crownless_story)
+    cc_strict_warnings(gossip_language_tests)
+    add_test(NAME grounded_gossip_language COMMAND gossip_language_tests)
+
     add_executable(speech_tests tests/speech_tests.c)
     target_link_libraries(speech_tests PRIVATE crownless_story)
     cc_strict_warnings(speech_tests)
@@ -1258,6 +1273,18 @@ if(BUILD_TESTING)
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
     if(CC_PYTHON3_EXECUTABLE)
+        if(CC_BUILD_BENCHMARKS)
+            add_test(NAME species_sweep_integrity COMMAND ${CC_PYTHON3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/species_sweep_tests.py
+                $<TARGET_FILE:crownless_species_metrics> $<TARGET_FILE:crownless_sim_metrics>)
+        endif()
+        add_test(NAME gossip_corpus_integrity
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/gossip_corpus_tests.py
+                         $<TARGET_FILE:crownless_gossip_corpus>)
+        add_test(NAME age_of_dragons_sweep_integrity
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/age_of_dragons_sweep_tests.py)
         add_test(NAME sweep_hunger_analysis
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/sweep_analysis_tests.py)
@@ -1499,6 +1526,10 @@ if(BUILD_TESTING)
     target_link_libraries(archive_dispatch_tests PRIVATE crownless_persistence)
     cc_strict_warnings(archive_dispatch_tests)
     add_test(NAME archive_supply_dispatch COMMAND archive_dispatch_tests)
+    add_executable(archive_seat_tests tests/archive_seat_tests.c)
+    target_link_libraries(archive_seat_tests PRIVATE crownless_sim)
+    cc_strict_warnings(archive_seat_tests)
+    add_test(NAME archive_seat_selection COMMAND archive_seat_tests)
     add_executable(archive_supply_tests tests/archive_supply_tests.c)
     target_link_libraries(archive_supply_tests PRIVATE crownless_sim)
     cc_strict_warnings(archive_supply_tests)
@@ -1586,6 +1617,16 @@ if(BUILD_TESTING)
     cc_strict_warnings(dragon_cycle_tests)
     add_test(NAME goblin_dragon_causal_cycle COMMAND dragon_cycle_tests)
 
+    add_executable(rot_diet_tests tests/rot_diet_tests.c)
+    target_link_libraries(rot_diet_tests PRIVATE crownless_metagame)
+    cc_strict_warnings(rot_diet_tests)
+    add_test(NAME goblin_dragon_rot_diet COMMAND rot_diet_tests)
+
+    add_executable(goblin_cult_split_tests tests/goblin_cult_split_tests.c)
+    target_link_libraries(goblin_cult_split_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(goblin_cult_split_tests)
+    add_test(NAME goblin_cult_split COMMAND goblin_cult_split_tests)
+
     add_executable(goblin_society_tests tests/goblin_society_tests.c)
     target_link_libraries(goblin_society_tests PRIVATE crownless_persistence)
     cc_strict_warnings(goblin_society_tests)
@@ -1611,6 +1652,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(material_chain_tests)
     cc_large_sim_stack(material_chain_tests)
     add_test(NAME material_chain_proofs COMMAND material_chain_tests)
+
+    add_executable(gossip_topic_tests tests/gossip_topic_tests.c)
+    target_link_libraries(gossip_topic_tests PRIVATE crownless_sim)
+    cc_strict_warnings(gossip_topic_tests)
+    add_test(NAME gossip_topic_contract COMMAND gossip_topic_tests)
 
     add_executable(gossip_tests tests/gossip_tests.c)
     target_link_libraries(gossip_tests PRIVATE crownless_persistence crownless_metagame)
@@ -1726,6 +1772,8 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-world-cards)
         add_test(NAME silverwick_mine_input
                  COMMAND crownless_carriage --test-mine-input)
+        add_test(NAME road_journey_save
+                 COMMAND crownless_carriage --test-road-journey-save)
         add_test(NAME adventure_input_flow
                  COMMAND crownless_carriage --test-adventure-input)
         add_test(NAME title_and_pause_menu

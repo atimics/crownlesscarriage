@@ -1,0 +1,45 @@
+{
+  "source": "d665eccedeb2f3795edd72dbe401ac2c5b471033",
+  "original_source_sha256": "e348b0a709025c872d6337e6c90fb0fd1e40c5e4a5928b8386651590fe2c6027",
+  "library_sha256": "661ff63381c58cfbf2fca4e1ceee8577b4c495ef609c287a395e459ed6ead5d4",
+  "method": "The temporary build prints the true clauses of two validation checks. Simulation updates are unchanged.",
+  "runs": [
+    {
+      "seed": 148,
+      "reproduced": true,
+      "returncode": 1,
+      "diagnostic": "!target_exists\nsituation_kind=4 status=2 target_kind=17 target_id=1224979098645127346\nSeed 148 failed in year 845: Situation data is invalid."
+    },
+    {
+      "seed": 189,
+      "reproduced": true,
+      "returncode": 1,
+      "diagnostic": "!valid_ruin\ntown=Silverwick population=0 security=0 prosperity=1 services=0 project=-1 project_days=0\nSeed 189 failed in year 191: Settlement service state is invalid."
+    },
+    {
+      "seed": 197,
+      "reproduced": true,
+      "returncode": 1,
+      "diagnostic": "!valid_ruin\ntown=Hollowbarrow population=0 security=0 prosperity=1 services=0 project=-1 project_days=0\nSeed 197 failed in year 69: Settlement service state is invalid."
+    },
+    {
+      "seed": 372,
+      "reproduced": true,
+      "returncode": 1,
+      "diagnostic": "!target_exists\nsituation_kind=4 status=2 target_kind=17 target_id=1224979098645259679\nSeed 372 failed in year 884: Situation data is invalid."
+    },
+    {
+      "seed": 392,
+      "reproduced": true,
+      "returncode": 1,
+      "diagnostic": "!target_exists\nsituation_kind=4 status=2 target_kind=17 target_id=1224979098645129661\nSeed 392 failed in year 761: Situation data is invalid."
+    },
+    {
+      "seed": 726,
+      "reproduced": true,
+      "returncode": 1,
+      "diagnostic": "!target_exists\nsituation_kind=4 status=2 target_kind=17 target_id=1224979098645135593\nSeed 726 failed in year 645: Situation data is invalid."
+    }
+  ],
+  "diagnostic_binary_sha256": "481871bb53aba4a52cc8d8fcfc25c5c6f8ef22322867094c977dbe3b44edcee5"
+}

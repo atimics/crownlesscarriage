@@ -1,0 +1,227 @@
+[
+  {
+    "file": "tests/fixtures/shipped/schema-11-generator-11.ccsave",
+    "schema": 11,
+    "generator": 11
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-12-generator-12.ccsave",
+    "schema": 12,
+    "generator": 12
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-13-generator-13.ccsave",
+    "schema": 13,
+    "generator": 13
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-14-generator-14.ccsave",
+    "schema": 14,
+    "generator": 14
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-15-generator-15.ccsave",
+    "schema": 15,
+    "generator": 15
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-16-generator-15.ccsave",
+    "schema": 16,
+    "generator": 15
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-17-generator-16.ccsave",
+    "schema": 17,
+    "generator": 16
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-18-generator-16.ccsave",
+    "schema": 18,
+    "generator": 16
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-18-generator-17.ccsave",
+    "schema": 18,
+    "generator": 17
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-19-generator-18.ccsave",
+    "schema": 19,
+    "generator": 18
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-2-generator-2.ccsave",
+    "schema": 2,
+    "generator": 2
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-20-generator-19.ccsave",
+    "schema": 20,
+    "generator": 19
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-21-generator-20-weekly-journal.ccsave",
+    "schema": 21,
+    "generator": 20
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-21-generator-20-weekly-runtime-journal.ccsave",
+    "schema": 21,
+    "generator": 20
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-21-generator-20.ccsave",
+    "schema": 21,
+    "generator": 20
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-22-generator-20.ccsave",
+    "schema": 22,
+    "generator": 20
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-23-generator-20.ccsave",
+    "schema": 23,
+    "generator": 20
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-24-generator-20.ccsave",
+    "schema": 24,
+    "generator": 20
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-25-generator-20.ccsave",
+    "schema": 25,
+    "generator": 20
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-26-generator-21.ccsave",
+    "schema": 26,
+    "generator": 21
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-27-generator-21.ccsave",
+    "schema": 27,
+    "generator": 21
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-27-generator-22.ccsave",
+    "schema": 27,
+    "generator": 22
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-28-generator-22.ccsave",
+    "schema": 28,
+    "generator": 22
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-29-generator-23.ccsave",
+    "schema": 29,
+    "generator": 23
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-3-generator-3.ccsave",
+    "schema": 3,
+    "generator": 3
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-30-generator-23.ccsave",
+    "schema": 30,
+    "generator": 23
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-31-generator-24.ccsave",
+    "schema": 31,
+    "generator": 24
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-32-generator-25.ccsave",
+    "schema": 32,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-33-generator-25.ccsave",
+    "schema": 33,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-34-generator-25.ccsave",
+    "schema": 34,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-35-generator-25-decay-journal.ccsave",
+    "schema": 35,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-35-generator-25.ccsave",
+    "schema": 35,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-36-generator-25-paper-journal.ccsave",
+    "schema": 36,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-4-generator-3.ccsave",
+    "schema": 4,
+    "generator": 3
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-42-generator-25.ccsave",
+    "schema": 42,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-43-generator-25.ccsave",
+    "schema": 43,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-5-generator-4.ccsave",
+    "schema": 5,
+    "generator": 4
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-52-generator-25-raid.ccsave",
+    "schema": 52,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-53-generator-25-nutrition.ccsave",
+    "schema": 53,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-57-generator-25-names-journal.ccsave",
+    "schema": 57,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-58-generator-25-names-journal.ccsave",
+    "schema": 58,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-60-traveller-day-1461.ccsave",
+    "schema": 60,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-73-generator-25-cast-journal.ccsave",
+    "schema": 73,
+    "generator": 25
+  },
+  {
+    "file": "tests/fixtures/shipped/schema-9-generator-9.ccsave",
+    "schema": 9,
+    "generator": 9
+  },
+  {
+    "file": "tests/fixtures/shipped/seed-2-before-land-loss.ccsave",
+    "schema": 57,
+    "generator": 25
+  }
+]

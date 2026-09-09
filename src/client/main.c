@@ -2013,7 +2013,8 @@ static bool LocalSessionEligible(const LocalState *local)
     }
     return
            (!local->road_choice_active || StableWorldRoadChoice(local)) &&
-           !local->journey_travel_active &&
+           (!local->journey_travel_active ||
+            (!local->site_travel_active && !local->market_interior)) &&
            !local->journey_combat_active && !local->journey_parley_active &&
            (!local->open_world || !local->market_interior);
 }
@@ -2111,6 +2112,7 @@ static CcLocalSiteKind LocalSiteForClientScene(CcClientSessionScene scene)
             return CC_LOCAL_SITE_GOBLIN_CAVE;
         case CC_CLIENT_SESSION_DRAGON_SITE:
             return CC_LOCAL_SITE_DRAGON_CAVE;
+        case CC_CLIENT_SESSION_ROAD_TRAVEL:
         case CC_CLIENT_SESSION_STREET:
         case CC_CLIENT_SESSION_MARKET:
             return CC_LOCAL_SITE_NONE;
@@ -2122,7 +2124,10 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
                              const LocalState *local,
                              char *error, size_t error_capacity)
 {
-    if (!LocalSessionEligible(local)) {
+    if (!LocalSessionEligible(local) ||
+        (local->journey_travel_active && (!sim->journey.active ||
+         (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING &&
+          sim->journey.phase != CC_JOURNEY_PHASE_RESTING)))) {
         if (error != NULL && error_capacity > 0U) {
             (void)snprintf(error, error_capacity,
                            "Finish the current movement before saving.");
@@ -2133,11 +2138,12 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
         .version = CC_CLIENT_SESSION_VERSION,
         .world_seed = sim->world_seed,
         .location_id = sim->player.location_id,
-        .scene = ClientSceneForLocalState(local),
+        .scene = local->journey_travel_active ? CC_CLIENT_SESSION_ROAD_TRAVEL :
+            ClientSceneForLocalState(local),
         .coordinate_space = local->open_world ?
             CC_CLIENT_SESSION_WORLD : CC_CLIENT_SESSION_LEGACY_LOCAL,
-        .route_id = local->open_world ?
-            local->world_carriage.route_id : 0U,
+        .route_id = local->journey_travel_active ? sim->journey.route_id :
+            local->open_world ? local->world_carriage.route_id : 0U,
         .position_x = local->agent.position.x,
         .position_z = local->agent.position.z,
         .facing_yaw = local->agent.facing_yaw,
@@ -2369,6 +2375,8 @@ static void RestoreRoadEncounter(LocalState *local,
     }
 }
 
+static void BeginRoadTravelState(const CcSim *sim, LocalState *local);
+
 static bool RestoreLocalSession(const char *path, const CcSim *sim,
                                 LocalState *local)
 {
@@ -2393,6 +2401,22 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
                                &session.athletics);
         return true;
     }
+    if (session.scene == CC_CLIENT_SESSION_ROAD_TRAVEL) {
+        if (!sim->journey.active || session.route_id != sim->journey.route_id ||
+            (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING &&
+             sim->journey.phase != CC_JOURNEY_PHASE_RESTING)) return false;
+        BeginRoadTravelState(sim, local);
+        RestoreRoadEncounter(local, &session.road_encounter);
+        RestoreAthleticProfile(&local->agent.athletics, &session.athletics);
+        /* Resume at the saved road progress with the team held for the player. */
+        local->convoy.pace = 0.0f;
+        local->world_carriage.pace = 0.0f;
+        local->carriage_stopped = true;
+        local->travel_fast_forward = false;
+        local->travel_attention = true;
+        return true;
+    }
+    if (sim->journey.active) return false;
     if (session.coordinate_space == CC_CLIENT_SESSION_WORLD) {
         bool restored = RestoreWorldSession(sim, local, &session);
         if (restored) {
@@ -2448,7 +2472,7 @@ static bool RestoreClientStartupSession(const char *path, const CcSim *sim,
                                         int32_t *selected)
 {
     if (view == NULL || !RestoreLocalSession(path, sim, local)) return false;
-    *view = local->open_world ? VIEW_ROADS : VIEW_LOCAL;
+    *view = local->open_world && !local->journey_travel_active ? VIEW_ROADS : VIEW_LOCAL;
     if (local->open_world && selected != NULL) {
         *selected = OpenWorldRouteIndex(
             sim, local->world_carriage.route_id);
@@ -3545,9 +3569,9 @@ static void DrawDragonCavePanel(const CcSim *sim)
                    dragon->hoard_goods[CC_GOOD_GEMS], named_count),
         x, y + 92, 12, CC_GOLD);
     CcOverlayDrawText(
-        TextFormat("BATTLE STRENGTH  %d   GOBLIN COURT  %d members / %d devotion",
-                   CcSimDragonBattleStrength(sim), sim->goblins.members,
-                   sim->goblins.devotion),
+        TextFormat("STRENGTH %d   CULT %d humans / %d goblins   CROWN %s",
+                   CcSimDragonBattleStrength(sim), CcSimCultMembers(sim, CC_CULT_HUMAN),
+                   CcSimCultMembers(sim, CC_CULT_GOBLIN), CcGoblinColorName(sim->goblin_politics.crown_faction)),
         x, y + 116, 10, INK);
 
     int left = x;
@@ -8560,6 +8584,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 }
             }
             if (sim->journey.active && sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+                if (local->carriage_stopped) return;
                 if (!CcCoopClientActive()) {
                     CcCommand rest = {.kind = CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
                         CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP};
@@ -9863,6 +9888,7 @@ int main(int argc, char **argv)
     if (argc == 2 && strcmp(argv[1], "--test-bridge-scene") == 0) return RunBridgeSceneRegression();
     if (argc == 2 && strcmp(argv[1], "--test-world-cards") == 0) return RunWorldCardRegression();
     if (argc == 2 && strcmp(argv[1], "--test-mine-input") == 0) return RunMineInputRegression();
+    if (argc == 2 && strcmp(argv[1], "--test-road-journey-save") == 0) return RunRoadJourneySaveRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-input") == 0) return RunAdventureInputRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-trade") == 0) return RunAdventureTradeTermsRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-town-routes") == 0) return RunAdventureTownRoutesRegression();
