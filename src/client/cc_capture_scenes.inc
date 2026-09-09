@@ -207,6 +207,11 @@ static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, c
             town->prosperity = 25;
         }
         if (strcmp(argv[6], "lawless") == 0) town->security = 15;
+        if (strcmp(argv[6], "hungry") == 0) {
+            town->hunger = 70;
+            town->stock[CC_GOOD_BREAD] = 0;
+            town->stock[CC_GOOD_WHEAT] = 0;
+        }
         for (int32_t a = 0; a < sim->kingdom_count; ++a) {
             for (int32_t b = 0; b < sim->kingdom_count; ++b) {
                 sim->diplomacy[a][b] = CC_DIPLOMACY_PEACE;

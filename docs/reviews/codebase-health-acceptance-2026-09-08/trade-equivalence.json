@@ -1,0 +1,17 @@
+{
+  "base": "4f7635c",
+  "need_calls": 4,
+  "purchasing_power_calls": 3,
+  "runs": [
+    {
+      "seed": "42",
+      "identical_json_checkpoints": 41,
+      "sha256": "150488d923875c5241dd7233098700e89fef5e7577c67e08e437a5a57a07d924"
+    },
+    {
+      "seed": "0x5eed0001",
+      "identical_json_checkpoints": 41,
+      "sha256": "6ea49ebbdfb62746114db6647df6bbbabe98ceca2cc99789da7f87d9c2a8d5af"
+    }
+  ]
+}

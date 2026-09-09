@@ -21,8 +21,98 @@ static void RoundTrip(void)
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
 }
 
-int main(void)
+static void HistoricalSnapshot(void)
 {
+    CcSimInit(&sim, UINT32_C(0x9e3779b9));
+    sim.schema_version = 73U;
+    for (int day = 0; day < 12410; ++day) CcSimAdvanceDays(&sim, 1);
+    bool retired = false;
+    for (int i = 0; i < sim.situation_count; ++i) {
+        const CcSituation *quest = &sim.situations[i];
+        retired |= quest->status != CC_SITUATION_ACTIVE &&
+            (CcSimCharacter(&sim, quest->sponsor_character_id) == NULL ||
+             CcSimCharacter(&sim, quest->affected_character_id) == NULL);
+    }
+    CC_CHECK(retired);
+    Valid();
+}
+
+static void CheckHistoricalSave(void)
+{
+    const char *fixture = "quest-history-fixture.ccsave";
+    FILE *input = fopen(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-73-retired-cast.ccsave", "rb");
+    FILE *output = fopen(fixture, "wb");
+    CC_CHECK(input != NULL && output != NULL);
+    unsigned char buffer[8192]; size_t count;
+    while ((count = fread(buffer, 1, sizeof(buffer), input)) > 0)
+        CC_CHECK(fwrite(buffer, 1, count, output) == count);
+    CC_CHECK(ferror(input) == 0);
+    CC_CHECK(fclose(input) == 0 && fclose(output) == 0);
+    HistoricalSnapshot();
+    before = sim;
+    CC_CHECK(CcSaveRead(fixture, &sim, error, sizeof(error)));
+    /* Compare the worlds at the fixture's own schema. State introduced after 73
+       is initialised by migration on load and never simulated in the snapshot,
+       so hashing it here would compare two migration paths, not the world. */
+    uint32_t loaded_schema = sim.schema_version;
+    sim.schema_version = before.schema_version;
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&before));
+    sim.schema_version = loaded_schema;
+    CC_CHECK(sim.player.coins == before.player.coins);
+    for (int i = 0; i < sim.situation_count; ++i) {
+        CC_CHECK(sim.situations[i].sponsor_character_id == before.situations[i].sponsor_character_id);
+        CC_CHECK(sim.situations[i].affected_character_id == before.situations[i].affected_character_id);
+        CC_CHECK(strcmp(sim.situations[i].sponsor_name, before.situations[i].sponsor_name) == 0);
+        CC_CHECK(strcmp(sim.situations[i].affected_name, before.situations[i].affected_name) == 0);
+    }
+    CC_CHECK(sim.current_day == 12411 && sim.schema_version == CC_SIM_SCHEMA_VERSION);
+    Valid(); RoundTrip();
+    (void)remove(fixture);
+    before = sim;
+    /* A completed record accepts its issued ID; an active offer needs its cast. */
+    int slot = -1;
+    for (int i = 0; i < sim.situation_count; ++i)
+        if (sim.situations[i].status != CC_SITUATION_ACTIVE &&
+            (CcSimCharacter(&sim, sim.situations[i].sponsor_character_id) == NULL ||
+             CcSimCharacter(&sim, sim.situations[i].affected_character_id) == NULL)) slot = i;
+    CC_CHECK(slot >= 0);
+    sim.schema_version = 73U;
+    sim.situations[slot].status = CC_SITUATION_ACTIVE;
+    CC_CHECK(!CcSimValidate(&sim, error, sizeof(error)));
+    sim = before; sim.schema_version = 73U;
+    sim.situations[slot].sponsor_character_id = CcMakeId(CC_ENTITY_CHARACTER, sim.next_entity_serial);
+    CC_CHECK(!CcSimValidate(&sim, error, sizeof(error)));
+    sim = before; sim.schema_version = 73U;
+    sim.situations[slot].sponsor_character_id = sim.settlements[0].id;
+    CC_CHECK(!CcSimValidate(&sim, error, sizeof(error)));
+    sim = before;
+    const char *path = "quest-history-restart.ccsave";
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 1, error, sizeof(error)));
+    CC_CHECK(CcJournalFlush(journal, &sim, error, sizeof(error)));
+    CcJournalAbandon(&journal);
+    journal = CcJournalResume(path, &restored, error, sizeof(error));
+    CC_CHECK(journal != NULL && CcSimHash(&sim) == CcSimHash(&restored));
+    CC_CHECK(CcJournalClose(&journal, &restored, error, sizeof(error)));
+    (void)remove(path);
+    (void)remove("quest-history-restart.ccsave-wal");
+    (void)remove("quest-history-restart.ccsave-shm");
+}
+
+int main(int argc, char **argv)
+{
+    if (argc == 2 && strcmp(argv[1], "--write-history-fixture") == 0) {
+        HistoricalSnapshot();
+        unsigned char *bytes = NULL; size_t length = 0;
+        CC_CHECK(CcSaveEncode(&sim, &bytes, &length, error, sizeof(error)));
+        FILE *file = fopen(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-73-retired-cast.ccsave", "wb");
+        CC_CHECK(file != NULL && fwrite(bytes, 1, length, file) == length);
+        CC_CHECK(fclose(file) == 0);
+        CcSaveFreeBuffer(bytes);
+        return 0;
+    }
+    CheckHistoricalSave();
     CcSimInit(&sim, 42U);
     sim.current_day = 2;
     /* Existing casts retain their identities even when their lives move on. */
@@ -121,6 +211,7 @@ int main(void)
     CC_CHECK(CcSaveDecode(bytes, length, &restored, error, sizeof(error)));
     CcSaveFreeBuffer(bytes);
     sim.schema_version = CC_SIM_SCHEMA_VERSION;
+        CcSimInitializeGoblinPolitics(&sim);
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
     FILE *source = fopen(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-73-generator-25-cast-journal.ccsave", "rb");
     FILE *copy = fopen(path, "wb");
@@ -137,6 +228,7 @@ int main(void)
     sim.schema_version = 73U;
     CC_CHECK(CcSimHash(&sim) == UINT64_C(17607823286729841219));
     sim.schema_version = CC_SIM_SCHEMA_VERSION;
+        CcSimInitializeGoblinPolitics(&sim);
     Valid();
     CC_CHECK(CcJournalClose(&journal, &sim, error, sizeof(error)));
     (void)remove(path);

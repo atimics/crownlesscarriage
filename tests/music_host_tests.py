@@ -12,6 +12,15 @@ spec.loader.exec_module(host)
 folder = root / 'assets/audio/music'
 offline = json.loads((folder / 'offline.json').read_text())['tracks']
 catalog = json.loads((folder / 'catalog.json').read_text())
+hosted = json.loads((folder / 'hosted.json').read_text())['tracks']
+expected_hosted = {'61-01', '62-01'} | {f'{cue:02d}-01' for cue in range(65, 83)}
+assert {t['stem'] for t in hosted} == expected_hosted
+assert {p.stem for p in (folder / 'hosted').glob('*.mp3')} == expected_hosted
+for track in hosted:
+    assert track['file'] == 'hosted/' + track['stem'] + '.mp3'
+    data = (folder / track['file']).read_bytes()
+    assert len(data) == track['bytes']
+    assert hashlib.sha256(data).hexdigest() == track['sha256']
 assert len(offline) == 27
 assert {p.stem for p in folder.glob('*.mp3')} == {t['stem'] for t in offline}
 for track in offline:
@@ -22,6 +31,10 @@ for track in offline:
     assert f'"{track["stem"]}"' in (root / 'src/client/cc_music_offline.inc').read_text()
 with tempfile.TemporaryDirectory() as tmp:
     directory = Path(tmp)
+    complete = host.build(folder, directory / 'complete', folder / 'catalog.json')
+    assert complete['available_takes'] == 47
+    assert {t['stem'] for t in complete['tracks']} == (
+        expected_hosted | {t['stem'] for t in offline})
     audio = directory / 'source'
     audio.mkdir()
     # A later export grows the online library independently of the bundled set.
@@ -45,6 +58,20 @@ with tempfile.TemporaryDirectory() as tmp:
     }
     public = json.dumps(manifest)
     assert 'suno.com' not in public and '/Users/' not in public
+    hosted = audio / 'hosted'
+    hosted.mkdir()
+    (hosted / '61-01.mp3').write_bytes(b'B' * 2048)
+    manifest = host.build(audio, output, folder / 'catalog.json')
+    assert manifest['available_takes'] == 6
+    assert any(t['stem'] == '61-01' for t in manifest['tracks'])
+    (hosted / '03-01.mp3').write_bytes(b'B' * 2048)
+    try:
+        host.build(audio, output, folder / 'catalog.json')
+    except ValueError as error:
+        assert 'Duplicate soundtrack stem' in str(error)
+    else:
+        raise AssertionError('duplicate stem accepted')
+    (hosted / '03-01.mp3').unlink()
     (audio / '99-99.mp3').write_bytes(b'A' * 2048)
     try:
         host.build(audio, output, folder / 'catalog.json')
