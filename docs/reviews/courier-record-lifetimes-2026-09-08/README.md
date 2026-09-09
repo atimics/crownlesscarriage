@@ -23,4 +23,4 @@ Build `probe.c` against each revision's simulation library and headers with `-lm
 
 ## Validation
 
-The strict headless build and all 118 tests passed. Final native checks, static analysis, and the earlier-schema comparison are being collected. These are local results.
+The strict headless build and all 118 tests passed. Code head dc1e514 also passed the native build and all four focused quest-cast, persistence, and trade checks. Static analysis passed with one reviewed baseline entry. All 3200 annual schema-75 hashes match the parent across 32 worlds of 100 years each. The generated fixture hash remains unchanged after testing. These are local results; remote CI is tracked on draft PR #625.
