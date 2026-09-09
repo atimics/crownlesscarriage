@@ -23,13 +23,13 @@ int main(void)
 {
     Fixture(); Emit();
 #ifdef CC_RITUAL_JSON_FIXTURE
-    sim.goblins.lair_coins = 119;
+    sim.dragon_cult.offering_coins = 119;
 #else
     sim.dragon_campaign.supplies[CC_GOOD_BREAD] = 0;
 #endif
     Emit(); Fixture(); Emit();
 #ifdef CC_RITUAL_JSON_FIXTURE
-    sim.goblins.dragon_seed_days_remaining = 9;
+    sim.dragon_cult.dragon_seed_days_remaining = 9;
 #else
     sim.dragon_campaign.cooldown_days = 9;
 #endif

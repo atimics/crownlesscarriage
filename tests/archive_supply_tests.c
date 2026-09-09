@@ -11,7 +11,7 @@ static void Fixture(void)
     sim.royal_carriage_count = 1; sim.royal_trade_week = sim.current_day / 7;
     memset(sim.royal_route_slots_used, 0, sizeof(sim.royal_route_slots_used));
     sim.bandit_count = 0; sim.monster_count = 0;
-    sim.iron_ledger_reserve = 100; sim.archives.scribes = 1;
+    sim.iron_ledger_reserve = 400; sim.archives.scribes = 1;
     for (int i = 0; i < 3; ++i) {
         CcSettlement *town = &sim.settlements[i];
         town->kingdom_id = sim.kingdoms[0].id; town->population = 100;
@@ -52,8 +52,8 @@ int main(void)
     CC_CHECK(plan.good == CC_GOOD_PAPER && plan.quantity == 1 && plan.goods_cost == 3);
     CC_CHECK(plan.first_leg_toll == 0 && plan.total_charge == 3 && plan.reposition_cost == 0);
     CC_CHECK(plan.first_route_id == sim.routes[0].id && plan.first_hop_id == plan.seat_id);
-    sim.iron_ledger_reserve = 2; (void)Query(CC_ARCHIVE_SUPPLY_FUNDS);
-    sim.iron_ledger_reserve = 3; (void)Query(CC_ARCHIVE_SUPPLY_READY);
+    sim.iron_ledger_reserve = 302; (void)Query(CC_ARCHIVE_SUPPLY_FUNDS);
+    sim.iron_ledger_reserve = 303; (void)Query(CC_ARCHIVE_SUPPLY_READY);
     sim.settlements[0].stock[CC_GOOD_PAPER] = 1; (void)Query(CC_ARCHIVE_SUPPLY_STOCKED);
     sim.settlements[0].stock[CC_GOOD_PAPER] = 0;
     sim.shipment_count = 1;
@@ -87,7 +87,7 @@ int main(void)
     Fixture(); sim.settlements[0].stock[CC_GOOD_WHEAT] = 0;
     plan = Query(CC_ARCHIVE_SUPPLY_READY);
     CC_CHECK(plan.good == CC_GOOD_WHEAT && plan.quantity == 2 && plan.goods_cost == 4);
-    sim.iron_ledger_reserve = 2;
+    sim.iron_ledger_reserve = 302;
     plan = Query(CC_ARCHIVE_SUPPLY_READY); CC_CHECK(plan.quantity == 1);
     Fixture(); sim.settlements[0].stock[CC_GOOD_TOOLS] = 0;
     plan = Query(CC_ARCHIVE_SUPPLY_READY); CC_CHECK(plan.good == CC_GOOD_TOOLS);

@@ -3572,9 +3572,9 @@ static void DrawDragonCavePanel(const CcSim *sim)
                    dragon->hoard_goods[CC_GOOD_GEMS], named_count),
         x, y + 92, 12, CC_GOLD);
     CcOverlayDrawText(
-        TextFormat("BATTLE STRENGTH  %d   GOBLIN COURT  %d members / %d devotion",
-                   CcSimDragonBattleStrength(sim), sim->goblins.members,
-                   sim->goblins.devotion),
+        TextFormat("STRENGTH %d   CULT %d humans / %d goblins   CROWN %s",
+                   CcSimDragonBattleStrength(sim), CcSimCultMembers(sim, CC_CULT_HUMAN),
+                   CcSimCultMembers(sim, CC_CULT_GOBLIN), CcGoblinColorName(sim->goblin_politics.crown_faction)),
         x, y + 116, 10, INK);
 
     int left = x;

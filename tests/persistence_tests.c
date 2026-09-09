@@ -884,7 +884,7 @@ static void CheckSchema13Compatibility(char *error, size_t error_capacity)
     CC_CHECK(CcIdKind(restored.horse_team[1].id) == CC_ENTITY_HORSE);
     CC_CHECK(restored.settlements[0].cow_adults > 0);
     CC_CHECK(restored.goblins.cohesion == 60);
-    CC_CHECK(restored.goblins.dragon_seed_phase ==
+    CC_CHECK(restored.dragon_cult.dragon_seed_phase ==
              CC_GOBLIN_DRAGON_SEED_NONE);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
@@ -909,7 +909,7 @@ static void CheckSchema14Compatibility(char *error, size_t error_capacity)
     CC_CHECK(restored.horse_team[0].training == 100);
     CC_CHECK(restored.horse_team[0].strength > 0);
     CC_CHECK(restored.goblins.cohesion == 60);
-    CC_CHECK(restored.goblins.dragon_seed_phase ==
+    CC_CHECK(restored.dragon_cult.dragon_seed_phase ==
              CC_GOBLIN_DRAGON_SEED_NONE);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
@@ -930,7 +930,7 @@ static void CheckSchema15Compatibility(char *error, size_t error_capacity)
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
     CC_CHECK(restored.goblins.cohesion == 60);
-    CC_CHECK(restored.goblins.dragon_seed_phase ==
+    CC_CHECK(restored.dragon_cult.dragon_seed_phase ==
              CC_GOBLIN_DRAGON_SEED_NONE);
     CC_CHECK(restored.stable_horse_count == legacy.stable_horse_count);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
@@ -2682,6 +2682,7 @@ static void CheckDragonHairPersistence(void)
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.dragon.hair_color == CC_DRAGON_HAIR_PURPLE);
     court.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&court);
     CC_CHECK(CcSimHash(&court) == CcSimHash(&restored));
     RemoveDatabase(path);
 }
@@ -2700,6 +2701,7 @@ static void CheckSchema41Upgrade(void)
     CC_CHECK(CcSaveRead(path, restored, error, sizeof(error)));
     CC_CHECK(restored->schema_version == CC_SIM_SCHEMA_VERSION);
     legacy->schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(legacy);
     CC_CHECK(CcSimHash(restored) == CcSimHash(legacy));
     free(restored);
     free(legacy);
@@ -2712,7 +2714,7 @@ static void CheckSchema41Upgrade(void)
    future edit to that table cannot quietly widen or narrow what loads. */
 static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
 {
-    bool legacy = schema >= 2U && schema <= 74U;
+    bool legacy = schema >= 2U && schema <= 76U;
     if (!legacy && schema != CC_SIM_SCHEMA_VERSION) return false;
     if (schema == CC_SIM_SCHEMA_VERSION &&
         generator == CC_GENERATOR_VERSION) return true;
@@ -2720,7 +2722,7 @@ static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
         /* The current generator reads the oldest schemas and the recent run,
            but not 28 through 31, which shipped with generators of their own. */
         if (schema >= 2U && schema <= 27U) return true;
-        if (schema >= 32U && schema <= 74U) return true;
+        if (schema >= 32U && schema <= 76U) return true;
     }
     if (schema == 31U && generator == 24U) return true;
     if (schema == 27U && generator >= 21U && generator <= 23U) return true;
@@ -2760,22 +2762,22 @@ static void CheckSupportedVersionPairings(void)
     CC_CHECK(accepted > 0);
 }
 
-static void CheckSchema74ArchiveJournal(void)
+static void CheckSchema76ArchiveJournal(void)
 {
     static CcSim legacy, after, restored;
     char error[256];
-    const char *path = "persistence-schema74-archive.ccsave";
+    const char *path = "persistence-schema76-archive.ccsave";
     RemoveDatabase(path);
     CcSimInit(&legacy, 42U);
-    legacy.schema_version = 74U;
+    legacy.schema_version = 76U;
     CcSimAdvanceDays(&legacy, 6);
     after = legacy;
     CcSimAdvanceDays(&after, 1);
     CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
-    AddLegacyDayJournalSuffix(path, &legacy, &after, 74U, 25U);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 76U, 25U);
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
-    restored.schema_version = 74U;
+    restored.schema_version = 76U;
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
@@ -2806,6 +2808,7 @@ static void CheckSchema58SmithyCapacity(void)
     restored.schema_version = 58U;
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&legacy));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&restored);
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     CC_CHECK(CcSaveRead(path, &legacy, error, sizeof(error)));
     CC_CHECK(legacy.settlements[3].production[CC_GOOD_TOOLS] == 0);
@@ -2861,6 +2864,7 @@ static void CheckPre61KnowledgeJournal(void)
     restored.schema_version = 60U;
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&restored);
     for (int32_t i = 0; i < restored.character_count; ++i) {
         for (int32_t j = 0; j < restored.characters[i].knowledge_count; ++j) {
             const CcCharacterKnowledge *item = &restored.characters[i].knowledge[j];
@@ -2895,6 +2899,7 @@ static void CheckPre64SiteJournal(void)
     restored.schema_version = 64;
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&restored);
     CcSimAdvanceDays(&restored, 7);
     CC_CHECK(restored.road_sites[2].stock[CC_GOOD_BREAD] == 2);
     CC_CHECK(restored.road_sites[2].stock[CC_GOOD_WHEAT] == 4);
@@ -2928,6 +2933,7 @@ static void CheckPre65FreightJournal(void)
     restored.schema_version = 65;
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&restored);
     CcSimAdvanceDays(&restored, 35);
     CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -2953,6 +2959,7 @@ static void CheckPre67MaintenanceJournal(void)
     restored.schema_version = 67;
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&restored);
     CcSimAdvanceDays(&restored, 7);
     CC_CHECK(restored.road_sites[2].condition == 54);
     CC_CHECK(restored.road_sites[2].stock[CC_GOOD_TOOLS] == 1 && restored.road_sites[2].stock[CC_GOOD_WOOD] == 0);
@@ -2980,6 +2987,7 @@ static void CheckPre68WearJournal(void)
     restored.schema_version = 68;
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&restored);
     CcSimAdvanceDays(&restored, 7);
     CC_CHECK(restored.road_sites[2].condition == 59 && restored.road_sites[2].stock[CC_GOOD_WHEAT] == 3);
     CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
@@ -2995,7 +3003,7 @@ int main(void)
     CheckPre67MaintenanceJournal();
     CheckPre68WearJournal();
     CheckSchema58SmithyCapacity();
-    CheckSchema74ArchiveJournal();
+    CheckSchema76ArchiveJournal();
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
     CheckSchema41Upgrade();

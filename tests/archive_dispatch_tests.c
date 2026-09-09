@@ -148,7 +148,7 @@ int main(void)
     Valid(); RoundTrip();
     Fixture(); sim.iron_ledger_reserve = 0; before = sim;
     CC_CHECK(!CcArchiveDispatchSupply(&sim, carriage_id)); CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
-    Fixture(); sim.schema_version = 74U; before = sim;
+    Fixture(); sim.schema_version = 76U; before = sim;
     CC_CHECK(!CcArchiveDispatchSupply(&sim, carriage_id)); CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
     Fixture();
     CcSimAdvanceDays(&sim, 27);

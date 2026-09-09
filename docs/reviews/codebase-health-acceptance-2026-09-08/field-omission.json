@@ -1,0 +1,32 @@
+{
+  "revision": "4f7635cc3a115492470a60ef9223dab0d3c859db",
+  "structure_size_unchanged": 184152,
+  "runs": [
+    {
+      "args": [],
+      "exit_code": 1,
+      "output": "Hash omitted grain_supplies[town].redirected\n/private/tmp/crownless-codebase-health-acceptance/tests/persistence_fields_tests.c:21: check failed: false"
+    },
+    {
+      "args": [
+        "--save-only"
+      ],
+      "exit_code": 1,
+      "output": "Save round trip omitted grain_supplies[town].redirected\n/private/tmp/crownless-codebase-health-acceptance/tests/persistence_fields_tests.c:97: check failed: false"
+    },
+    {
+      "args": [],
+      "restored": true,
+      "exit_code": 0,
+      "output": "Verified 592 independent hash and saved-field mutations"
+    },
+    {
+      "args": [
+        "--save-only"
+      ],
+      "restored": true,
+      "exit_code": 0,
+      "output": "Verified 592 independent saved-field mutations"
+    }
+  ]
+}
