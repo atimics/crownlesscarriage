@@ -1617,7 +1617,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         DrawRoadCarriage(carriage_base, sim, clock,
                          carriage->pace, carriage->travelled,
                          carriage->heading_yaw,
-                         true, false);
+                         true, false, CC_LOCAL_SCENE_ROAD);
         rlPopMatrix();
         if (kingdom_view) {
             float marker_radius = fmaxf(2.8f, kingdom_span * 0.0055f);

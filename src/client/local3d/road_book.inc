@@ -137,7 +137,7 @@ static void DrawRoadHorseHarness(Vector3 base, float yaw)
    walking on the spot at a halt, skating at a canter. */
 static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
                               float pace, float travelled,
-                              float yaw, bool bridge_checkpoint)
+                              float yaw, bool bridge_checkpoint, CcLocalSceneKind scene)
 {
     CcClientConvoyGait convoy_gait = CcClientConvoyGaitForPace(pace);
     CcCreatureRigGait rig_gait =
@@ -167,7 +167,7 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
                 CcLocalRoadCheckpointSurfaceYInternal(
                     horse_base.x, horse_base.z);
             horse_base.y += horse_support - carriage_support;
-        } else if (active_world_stream != NULL) {
+        } else if (active_world_stream != NULL || scene == CC_LOCAL_SCENE_STREET) {
             horse_base.y += CcLocalTerrainHeightAt(horse_base.x, horse_base.z) -
                              CcLocalTerrainHeightAt(base.x, base.z);
         }
@@ -179,7 +179,7 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
         bool controlled = CcLocalCreatureGaitPoseInternal(
             (int32_t)slot, CC_CREATURE_RIG_HORSE, rig_gait, clock,
             horse < 0 ? 0.0f : 0.5f,
-            horse_base, yaw, 0.96f, CC_LOCAL_SCENE_ROAD,
+            horse_base, yaw, 0.96f, scene,
             &controlled_pose);
         (void)DrawCreatureGait3D(
             CC_CREATURE_HORSE, pose, horse_base,
@@ -235,11 +235,12 @@ static Camera3D PonyConversationCamera(Camera3D road, Vector3 carriage, float ya
 static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
                              float clock, float pace, float travelled,
                              float yaw,
-                             bool horses_hitched, bool bridge_checkpoint)
+                             bool horses_hitched, bool bridge_checkpoint, CcLocalSceneKind scene)
 {
     const CcPlayerCompany *player = &sim->player;
     float asset_yaw_degrees = yaw * RAD2DEG - 90.0f;
-    bool follow_ground = active_world_stream != NULL && !bridge_checkpoint;
+    bool follow_ground = (active_world_stream != NULL ||
+                          scene == CC_LOCAL_SCENE_STREET) && !bridge_checkpoint;
     if (follow_ground) {
         Vector3 front = LocalPoint(base, 0.0f, 0.0f, 1.38f, yaw);
         Vector3 rear = LocalPoint(base, 0.0f, 0.0f, -1.38f, yaw);
@@ -308,20 +309,37 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
     if (follow_ground) rlPopMatrix();
     if (horses_hitched) {
         DrawRoadHorseTeam(sim, base, clock, pace, travelled, yaw,
-                          bridge_checkpoint);
+                          bridge_checkpoint, scene);
         int32_t pony = CcPonyOnRoad(sim);
         if (pony >= 0) {
             Vector3 position = LocalPoint(base, 2.7f, 0.0f, 3.3f, yaw);
             if (follow_ground) position.y = CcLocalTerrainHeightAt(position.x, position.z);
-            (void)DrawCreatureGait3D(CC_CREATURE_HORSE, CC_CREATURE_POSE_IDLE,
-                position, yaw - 0.6f, 0.96f, PONY_COLORS[pony][0], clock * 0.35f, false, NULL);
+            CcClientConvoyGait gait = CcClientConvoyGaitForPace(pace);
+            CcCreatureRigGait rig_gait = gait == CC_CLIENT_CONVOY_GAIT_CANTER ?
+                CC_CREATURE_RIG_GAIT_CANTER : gait == CC_CLIENT_CONVOY_GAIT_TROT ?
+                CC_CREATURE_RIG_GAIT_TROT : CC_CREATURE_RIG_GAIT_WALK;
+            bool moving = gait != CC_CLIENT_CONVOY_GAIT_HALT;
+            CcCreatureRigPose controlled_pose;
+            bool controlled = CcLocalCreatureGaitPoseInternal(
+                CREATURE_GAIT_ROAD_PONY, CC_CREATURE_RIG_HORSE, rig_gait,
+                clock, 0.25f, position, yaw, 0.96f, scene, &controlled_pose);
+            float phase = CcLocalRoadTeamGaitPhaseInternal(travelled) + 0.5f * PI;
+            (void)DrawCreatureGait3D(CC_CREATURE_HORSE,
+                CcCreatureSteppedPose(CC_CREATURE_HORSE, phase, moving),
+                position, yaw, 0.96f, PONY_COLORS[pony][0], phase, moving,
+                controlled ? &controlled_pose : NULL);
         }
     }
 }
 
+Vector3 CcLocalStablePonyPositionInternal(int32_t horse)
+{
+    return TerrainWorldPoint(CC_LOCAL_CARRIAGE_X - 2.0f + (float)horse * 2.8f,
+                             CC_LOCAL_CARRIAGE_Z + 5.3f);
+}
+
 static void DrawStableHorseTeam(const CcSim *sim, float clock)
 {
-    static const Vector2 stalls[] = {{40.55f, 30.25f}, {40.55f, 33.05f}};
     Color rail = WORLD_WOOD_SHADOW;
     Color rail_cap = WORLD_WOOD_LIGHT;
     switch (ActiveTownRoadSurface()) {
@@ -348,20 +366,39 @@ static void DrawStableHorseTeam(const CcSim *sim, float clock)
             break;
     }
     for (int32_t horse = 0; horse < CcSimHorseTeamCount(sim); ++horse) {
-        Vector3 base = TerrainWorldPoint(stalls[horse].x, stalls[horse].y);
+        Vector3 base = CcLocalStablePonyPositionInternal(horse);
         int32_t seat = CcSimTeamPony(sim, horse);
         Color coat = PONY_COLORS[seat >= 0 ? seat : 0][0];
         CcCreaturePose pose = CcCreatureSteppedPose(
             CC_CREATURE_HORSE, clock * 0.35f + (float)horse * PI, false);
+        CcCreatureRigPose controlled_pose;
+        bool controlled = CcLocalCreatureGaitPoseInternal(
+            horse == 0 ? CREATURE_GAIT_STABLE_LEFT : CREATURE_GAIT_STABLE_RIGHT,
+            CC_CREATURE_RIG_HORSE, CC_CREATURE_RIG_GAIT_WALK, clock,
+            (float)horse * 0.5f, base, 0.0f, 0.96f,
+            CC_LOCAL_SCENE_STREET, &controlled_pose);
         (void)DrawCreatureGait3D(
-            CC_CREATURE_HORSE, pose, base, 0.5f * PI, 0.96f, coat,
-            clock * 0.35f + (float)horse * PI, false, NULL);
+            CC_CREATURE_HORSE, pose, base, 0.0f, 0.96f, coat,
+            clock * 0.35f + (float)horse * PI, false,
+            controlled ? &controlled_pose : NULL);
     }
-    float rail_y = CcLocalTerrainHeightAt(39.45f, 31.65f);
-    DrawBox((Vector3){39.45f, rail_y + 0.72f, 31.65f},
-            (Vector3){0.12f, 1.44f, 4.15f}, rail);
-    DrawBox((Vector3){39.45f, rail_y + 1.12f, 31.65f},
-            (Vector3){0.18f, 0.12f, 4.25f}, rail_cap);
+    Vector3 first = CcLocalStablePonyPositionInternal(0);
+    float rail_z = first.z + 1.5f;
+    float start_x = first.x - 1.1f;
+    float end_x = first.x + (float)(CcSimHorseTeamCount(sim) - 1) * 2.8f + 1.1f;
+    float rail_y = CcLocalTerrainHeightAt((start_x + end_x) * 0.5f, rail_z);
+    for (int32_t post = 0; post < 2; ++post) {
+        float x = post == 0 ? start_x : end_x;
+        float ground = CcLocalTerrainHeightAt(x, rail_z);
+        DrawBox((Vector3){x, ground + 0.62f, rail_z},
+                (Vector3){0.14f, 1.24f, 0.14f}, rail);
+    }
+    for (int32_t bar = 0; bar < 2; ++bar) {
+        DrawBox((Vector3){(start_x + end_x) * 0.5f,
+                          rail_y + 0.55f + (float)bar * 0.50f, rail_z},
+                (Vector3){end_x - start_x, 0.10f, 0.10f},
+                bar == 0 ? rail : rail_cap);
+    }
 }
 
 static bool ForkRouteLeaves(const CcSim *sim, const CcRoute *route)
@@ -598,7 +635,7 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
     }
     DrawRoadCarriage(carriage, sim, clock,
                      turn < 1.0f ? 0.72f : 0.0f, carriage_travel,
-                     carriage_heading, true, false);
+                     carriage_heading, true, false, CC_LOCAL_SCENE_ROAD);
     DrawVisibleNpcFigure3D(
         (Vector3){33.0f, 0.0f, 35.6f}, 0.90f, 1.42f,
         UINT32_C(0x666f726b), CC_NPC_ROLE_SCOUT, kingdom,
@@ -993,7 +1030,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     if (!travelling) DrawAgentPath(agent, false);
     DrawRoadCarriage(carriage_base, sim, clock, carriage_pace, carriage_travel,
-                     0.5f * PI, true, authored_checkpoint);
+                     0.5f * PI, true, authored_checkpoint, CC_LOCAL_SCENE_ROAD);
     int32_t roadside_cattle = 0;
     if (origin != NULL) {
         roadside_cattle += origin->cow_adults + origin->cow_calves;
@@ -1603,7 +1640,7 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawRoadCarriage(carriage, sim, clock,
                          travelling ? 0.72f : 0.0f, carriage_travel,
                          returning ? -0.5f * PI : 0.5f * PI,
-                         true, false);
+                         true, false, CC_LOCAL_SCENE_ROAD);
     }
     if (!travelling) {
         DrawAgentPath(agent, false);
@@ -1959,7 +1996,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     if (convoy_visible) {
         DrawRoadCarriage(convoy->town_position, sim, clock,
                          convoy->pace, convoy->travelled,
-                         convoy->town_heading_yaw, true, false);
+                         convoy->town_heading_yaw, true, false, CC_LOCAL_SCENE_STREET);
         if (agent != NULL) DrawRobotShell(&convoy_hero);
     }
     if (SceneryPointVisible(CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z,

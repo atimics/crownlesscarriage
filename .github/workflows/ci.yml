@@ -214,6 +214,8 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: 1
         run: |
           mkdir -p build/gloamgate-review
+          xvfb-run -a ./build/renderer_regression_tests --pony-gait-captures build/gloamgate-review/gait
+          xvfb-run -a ./build/crownless_carriage --capture-town-state 1 37 58 build/gloamgate-review/ponies.png peaceful
           xvfb-run -a ./build/crownless_carriage --capture-town-state 1 82 36 build/gloamgate-review/arrival.png peaceful
           xvfb-run -a ./build/crownless_carriage --capture-town-state 1 44.25 28.85 build/gloamgate-review/market.png peaceful
           xvfb-run -a ./build/crownless_carriage --capture-town-state 1 42 47 build/gloamgate-review/coach-court.png peaceful
