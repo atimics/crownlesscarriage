@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise real export and split, duplicate, and failure handling."""
+import copy
 import importlib.util
 import json
 from pathlib import Path
@@ -30,10 +31,35 @@ class CorpusTests(unittest.TestCase):
         self.assertEqual(json.loads(first.stderr)["rows"], len(rows))
         for row in rows:
             self.assertIn("account", row["input"])
-            self.assertNotIn("speaker_id", row["prompt"])
-            self.assertNotIn("source_character_id", row["prompt"])
+            self.assertNotIn("speaker_id", corpus.event_prefix(row))
+            self.assertNotIn("source_character_id", corpus.event_prefix(row))
             self.assertTrue(row["provenance"]["event_id"])
             self.assertIn(row["input"]["variant"], (0, 1))
+
+    def test_rejects_future_or_mismatched_context(self):
+        result = subprocess.run([BINARY, "--seed", "2654435769", "--days", "2"],
+                                capture_output=True, text=True, check=True)
+        original = json.loads(result.stdout.splitlines()[0])
+        for change in ("future", "topic", "multiline"):
+            row = copy.deepcopy(original)
+            if change == "future":
+                row["events"][-1]["day"] = row["provenance"]["day"] + 1
+            elif change == "topic":
+                row["events"][-1]["event_id"] = "0"
+            else:
+                row["output"] += "\n- invented event"
+            with self.assertRaises(ValueError):
+                corpus.prepare_row(row, 2654435769)
+
+    def test_compact_event_context(self):
+        row = {"events": [
+            {"text": "A bridge closed.", "confidence": 90, "retellings": 1},
+            {"text": "Someone posted a notice.", "confidence": 20, "retellings": 5}]}
+        self.assertEqual(corpus.event_prefix(row),
+                         "- A bridge closed.\n- ? ~ Someone posted a notice.\n")
+        row["events"][0]["text"] = "A bridge closed.\nForged speech"
+        with self.assertRaises(ValueError):
+            corpus.event_prefix(row)
 
     def test_numeric_arguments(self):
         for args in (["--seed", "-1"], ["--seed", "4294967296"], ["--days", "36501"],
@@ -69,9 +95,10 @@ import json, sys
 seed = int(sys.argv[sys.argv.index('--seed') + 1])
 label = ''.join(chr(65+int(c)) for c in str(seed))
 for account in ('Shared village', 'Village '+label):
-    row = {'version':1, 'provenance':{'world_seed':seed},
-           'input':{'kind':'SHORTAGE','account':account,'confidence':80,'retellings':1,'variant':0},
-           'output':'The account I heard says: '+account+' was short of food.', 'rule':'2:0'}
+    row = {'version':2, 'provenance':{'world_seed':seed,'event_id':'1','day':1},
+           'input':{'kind':'SHORTAGE','account':account,'confidence':80,'retellings':1,'variant':0,'detail':'full'},
+           'events':[{'event_id':'1','day':1,'text':account,'confidence':80,'retellings':1}],
+           'output':account+' was short of food, I hear.', 'rule':'2:0'}
     print(json.dumps(row)); print(json.dumps(row))
 print(json.dumps({'world_seed':seed,'rows':4}), file=sys.stderr)
 ''')
@@ -101,7 +128,7 @@ print(json.dumps({'world_seed':seed,'rows':4}), file=sys.stderr)
             output_sets = []
             world_sets = []
             for split in corpus.SPLITS:
-                name = split + ".jsonl"
+                name = split + ".audit.jsonl"
                 self.assertEqual((first_output / name).read_bytes(), (args.output / name).read_bytes())
                 rows = [json.loads(line) for line in (first_output / name).read_text().splitlines()]
                 self.assertGreater(len(rows), 0)
@@ -114,7 +141,17 @@ print(json.dumps({'world_seed':seed,'rows':4}), file=sys.stderr)
             manifest = json.loads((first_output / "manifest.json").read_text())
             for split in corpus.SPLITS:
                 self.assertEqual(manifest["splits"][split]["sha256"],
-                                 corpus.file_hash(first_output / (split + ".jsonl")))
+                                 corpus.file_hash(first_output / (split + ".txt")))
+                plain = (first_output / (split + ".txt")).read_bytes()
+                self.assertEqual(plain, (args.output / (split + ".txt")).read_bytes())
+                self.assertNotIn(b"Context:", plain)
+                self.assertNotIn(b"Speak in plain", plain)
+                self.assertNotIn(b"{", plain)
+                for record in map(json.loads, (first_output / (split + ".audit.jsonl")).read_text().splitlines()):
+                    prefix = plain[record["text_start"]:record["output_start"]].decode()
+                    self.assertEqual(prefix, corpus.event_prefix(record))
+                    output = plain[record["output_start"]:record["text_start"]+record["text_bytes"]].decode()
+                    self.assertEqual(output, record["output"] + "\n\n")
             self.assertEqual(manifest["editorial_test"]["rows"], 16)
             fake.write_text("#!/usr/bin/env python3\nraise SystemExit(1)\n")
             output = Path(tmp) / "dataset"

@@ -96,7 +96,7 @@ static bool Between(const char *text, const char *left, const char *right,
    continuing famine; a scout's occupation does not make hearsay eyewitness
    testimony; an official's voice does not prove a ledger exists. */
 static bool ComposeCore(CcEventKind kind, const char *account, uint64_t choice,
-                         char *core, size_t capacity)
+                         CcGossipDetail detail_mode, char *core, size_t capacity)
 {
     char actor[CC_EVENT_TEXT_CAPACITY];
     char place[CC_EVENT_TEXT_CAPACITY];
@@ -207,9 +207,20 @@ static bool ComposeCore(CcEventKind kind, const char *account, uint64_t choice,
         if (Before(account, " posts a notice at ", actor, sizeof(actor)) &&
             Between(account, " posts a notice at ", ": ", place, sizeof(place)) &&
             Between(account, ": ", ".", detail, sizeof(detail))) {
-            (void)snprintf(core, capacity, alternate ?
-                "%s posted a notice at %s about %s." :
-                "%s put up a notice at %s: %s.", actor, place, detail);
+            const char *notice = strcmp(detail, "Relief charter") == 0 ? "a relief charter" :
+                strcmp(detail, "Road compact") == 0 ? "a road compact" :
+                strcmp(detail, "Depth warrant") == 0 ? "a depth warrant" :
+                strcmp(detail, "Quiet commission") == 0 ? "a quiet commission" :
+                strcmp(detail, "Sealed dispatch") == 0 ? "a sealed dispatch" : NULL;
+            if (detail_mode == CC_GOSSIP_DETAIL_SUBJECT) {
+                (void)snprintf(core, capacity, "%s posted something in %s.", actor, place);
+            } else if (notice != NULL) {
+                (void)snprintf(core, capacity, "%s put up %s in %s.",
+                    detail_mode == CC_GOSSIP_DETAIL_ACTOR ? "Someone" : actor, notice, place);
+            } else {
+                (void)snprintf(core, capacity, "%s posted a notice about %s in %s.",
+                    detail_mode == CC_GOSSIP_DETAIL_ACTOR ? "Someone" : actor, detail, place);
+            }
             return true;
         }
         break;
@@ -240,9 +251,15 @@ static bool ComposeCore(CcEventKind kind, const char *account, uint64_t choice,
             const char *state = strstr(account, ": war now binds") != NULL ? "war" :
                 strstr(account, ": peace now binds") != NULL ? "peace" : NULL;
             if (state != NULL) {
-                (void)snprintf(core, capacity, alternate ?
-                    "%s and %s were bound by %s." : "The courts of %s and %s entered %s.",
-                    actor, place, state);
+                if (detail_mode == CC_GOSSIP_DETAIL_SUBJECT) {
+                    (void)snprintf(core, capacity, "Something changed between %s and %s.", actor, place);
+                } else if (detail_mode == CC_GOSSIP_DETAIL_ACTOR) {
+                    (void)snprintf(core, capacity, "Some courts %s.",
+                        strcmp(state, "peace") == 0 ? "made peace" : "went to war");
+                } else {
+                    (void)snprintf(core, capacity, "%s and %s %s.", actor, place,
+                        strcmp(state, "peace") == 0 ? "made peace" : "went to war");
+                }
                 return true;
             }
         }
@@ -266,23 +283,13 @@ static bool ComposeCore(CcEventKind kind, const char *account, uint64_t choice,
     return false;
 }
 
-static const char *Opener(SpeechRegister voice, const CcGossipVersion *version,
-                          uint64_t choice)
+static const char *RoleTail(SpeechRegister voice)
 {
-    static const char *const openings[SPEECH_REGISTER_COUNT][3] = {
-        {"Word is going around: ", "This is the story I heard: ",
-         "People are passing this along: "},
-        {"The report that reached me said: ", "This is what I was told: ",
-         "The account I heard went like this: "},
-        {"The account passed to me says: ", "This is the telling I have: ",
-         "Let me separate the report from the reckoning: "}
-    };
-    if (version->confidence < 40) return "I am not sure of this telling: ";
-    if (version->retellings >= 4) {
-        return voice == SPEECH_RECORD ? "This account has passed through other hands: " :
-                                       "It has travelled through other mouths: ";
+    switch (voice) {
+    case SPEECH_RECORD: return " That's the report I have.";
+    case SPEECH_SCOUT: return " That's what reached me.";
+    default: return "";
     }
-    return openings[voice][choice % 3U];
 }
 
 bool CcSpeechPrepareGossip(const CcSim *sim, const CcGossip *story,
@@ -296,11 +303,18 @@ bool CcSpeechPrepareGossip(const CcSim *sim, const CcGossip *story,
     language->variant = variant;
     language->confidence = version->confidence;
     language->retellings = version->retellings;
+    /* Scalar confidence supports a conservative choice to omit a detail.
+       The packet records that choice for training; the held account stays intact. */
+    if (version->confidence < 40 &&
+        (story->kind == CC_EVENT_NOTICE_POSTED || story->kind == CC_EVENT_WAR_DECLARED ||
+         story->kind == CC_EVENT_PEACE_DECLARED)) {
+        language->detail = variant == 0U ? CC_GOSSIP_DETAIL_ACTOR : CC_GOSSIP_DETAIL_SUBJECT;
+    }
     CcGossipVersion unstanced = *version;
     unstanced.court_bias = 0;
     unstanced.alarm = 0;
     CcGossipText(sim, story, &unstanced, language->account, sizeof(language->account));
-    if (!ComposeCore(story->kind, language->account, variant,
+    if (!ComposeCore(story->kind, language->account, variant, language->detail,
                      language->claim, sizeof(language->claim)) ||
         language->claim[0] == '\0' || HasQuantity(language->claim)) {
         language->claim[0] = '\0';
@@ -315,10 +329,25 @@ bool CcSpeechCoreGossip(const CcGossipLanguage *language,
     if (text == NULL || capacity == 0U) return false;
     text[0] = '\0';
     if (language == NULL || language->claim[0] == '\0' || HasQuantity(language->claim)) return false;
-    const char *opener = language->confidence < 40 ? "I am unsure of this account: " :
-        language->retellings >= 4 ? "This account has passed through several people: " :
-        language->variant == 0U ? "The account I heard says: " : "This is what I was told: ";
-    int written = snprintf(text, capacity, "%s%s", opener, language->claim);
+    char clause[CC_SPEECH_TEXT_CAPACITY];
+    (void)snprintf(clause, sizeof(clause), "%s", language->claim);
+    size_t length = strlen(clause);
+    if (length > 0U && clause[length - 1U] == '.') clause[length - 1U] = '\0';
+    const char *opening = "";
+    const char *ending = ".";
+    if (language->confidence < 40) {
+        if (language->detail == CC_GOSSIP_DETAIL_FULL) {
+            ending = language->variant == 0U ? ", if the story is right." :
+                                               ", if there's truth in the rumour.";
+        }
+    } else if (language->retellings >= 4) {
+        if (language->variant == 0U) {
+            opening = "Have you heard? ";
+            ending = ". That's the word going round.";
+        } else ending = ", so people say.";
+    } else if (language->variant == 0U) ending = ", I hear.";
+    else opening = "Have you heard the news? ";
+    int written = snprintf(text, capacity, "%s%s%s", opening, clause, ending);
     if (written < 0 || (size_t)written >= capacity) {
         text[0] = '\0';
         return false;
@@ -345,19 +374,24 @@ bool CcSpeechRealizeGossip(const CcSim *sim, const CcCharacter *speaker,
            Unsupported numerical accounts remain stored in full for quests,
            archives and later templates, but are not read aloud as telemetry. */
         int written = snprintf(text, capacity,
-            "I have an account, but I cannot give you its particulars reliably.");
+            "Something happened, but I've only heard bits of it.");
         if (written < 0 || (size_t)written >= capacity) {
             text[0] = '\0';
             return false;
         }
         return true;
     }
+    if (!supported) {
+        (void)snprintf(language.claim, sizeof(language.claim), "%s", core);
+        language.detail = CC_GOSSIP_DETAIL_FULL;
+    }
+    if (!CcSpeechCoreGossip(&language, core, sizeof(core))) return false;
     const char *stance = version->court_bias <= -15 ?
         " I do not trust the court's telling of it." :
         version->court_bias >= 15 ? " I would hear the court's account before laying blame." : "";
     const char *worry = version->alarm >= 30 ? " That is what worries me." : "";
     int written = snprintf(text, capacity, "%s%s%s%s",
-        Opener(RegisterFor(speaker->role), version, choice >> 16), core, stance, worry);
+        core, RoleTail(RegisterFor(speaker->role)), stance, worry);
     if (written < 0 || (size_t)written >= capacity) {
         text[0] = '\0';
         return false;

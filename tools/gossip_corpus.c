@@ -31,6 +31,44 @@ static void JsonString(FILE *stream, const char *text)
     (void)fputc('"', stream);
 }
 
+static void JsonEvent(const CcGossip *story, const CcGossipVersion *version,
+                       const CcGossipLanguage *language)
+{
+    (void)printf("{\"event_id\":\"%" PRIu64 "\",\"day\":%" PRId32 ",\"text\":",
+                 story->event_id, story->day);
+    /* Generalised details are also removed from the model's visible event. */
+    JsonString(stdout, language->detail == CC_GOSSIP_DETAIL_FULL || language->claim[0] == '\0' ?
+        language->account : language->claim);
+    (void)printf(",\"confidence\":%" PRId32 ",\"retellings\":%" PRId32 "}",
+                 version->confidence, version->retellings);
+}
+
+static void JsonEvents(const CcCharacter *speaker, int32_t offset,
+                        const CcGossip *story, const CcGossipVersion *version,
+                        const CcGossipLanguage *language)
+{
+    const CcGossip *prior[2];
+    const CcGossipVersion *versions[2];
+    int32_t count = 0;
+    for (int32_t i = offset + 1; i < CC_MAX_GOSSIP && count < 2; ++i) {
+        const CcGossipVersion *held = NULL;
+        const CcGossip *older = CcSimPersonalGossip(&sim, speaker->id, i, &held);
+        if (older == NULL || held == NULL) break;
+        if (older->day > story->day) continue;
+        prior[count] = older;
+        versions[count++] = held;
+    }
+    (void)printf(",\"events\":[");
+    for (int32_t i = count; i > 0; --i) {
+        CcGossipLanguage earlier;
+        (void)CcSpeechPrepareGossip(&sim, prior[i - 1], versions[i - 1], 0U, &earlier);
+        JsonEvent(prior[i - 1], versions[i - 1], &earlier);
+        (void)putchar(',');
+    }
+    JsonEvent(story, version, language);
+    (void)putchar(']');
+}
+
 static bool Number(const char *text, uint32_t maximum, uint32_t *value)
 {
     if (text[0] < '0' || text[0] > '9') return false;
@@ -53,7 +91,10 @@ static bool ExportDay(uint64_t *rows, uint64_t *unsupported)
             if (story == NULL || version == NULL) break;
             CcGossipLanguage language;
             bool supported = CcSpeechPrepareGossip(&sim, story, version, 0U, &language);
-            SeenAccount *previous = &seen[c][offset];
+            /* Personal offsets move as newer stories arrive. The backing gossip
+               slot stays stable for this event, so keep its sample there. */
+            size_t story_slot = (size_t)(story - sim.gossip);
+            SeenAccount *previous = &seen[c][story_slot];
             if (previous->speaker == speaker->id && previous->event == story->event_id &&
                 memcmp(&previous->language, &language, sizeof(language)) == 0) continue;
             previous->speaker = speaker->id;
@@ -84,10 +125,14 @@ static bool ExportDay(uint64_t *rows, uint64_t *unsupported)
                 JsonString(stdout, CcEventKindName(language.kind));
                 (void)printf(",\"account\":");
                 JsonString(stdout, language.account);
+                (void)printf(",\"detail\":");
+                JsonString(stdout, language.detail == CC_GOSSIP_DETAIL_ACTOR ? "actor" :
+                    language.detail == CC_GOSSIP_DETAIL_SUBJECT ? "subject" : "full");
                 (void)printf(",\"confidence\":%" PRId32 ",\"retellings\":%" PRId32
                     ",\"variant\":%" PRIu32 "},\"output\":", language.confidence,
                     language.retellings, variant);
                 JsonString(stdout, speech);
+                JsonEvents(speaker, offset, story, version, &language);
                 (void)printf(",\"rule\":\"%d:%" PRIu32 "\"}\n", (int)language.kind, variant);
                 ++*rows;
             }

@@ -1,9 +1,45 @@
 # Crownless core language corpus
 
-The core language dataset shares its claim rules with NPC gossip. Improving a
-rule improves both the game's spoken accounts and the training examples.
-The first version uses local simulation and authored language patterns. Provider
-cost is zero. Voice adapters are a later step.
+The dataset shares its claim rules with NPC gossip. Improving a rule improves
+both the game's spoken accounts and the training examples. Generation runs
+locally with zero provider cost. Voice adapters are a later step.
+
+## Training format
+
+The model reads a short list of held events and continues with a spoken line:
+
+```text
+- Alderwatch closes the treaty bridge and delays the relief convoy.
+- Willow Republic's courier reaches Ashen Throne: peace now binds the two courts.
+Have you heard the news? Willow Republic and Ashen Throne made peace.
+
+```
+
+Each example has one to three events, followed by one line of speech and a blank
+line. The final event supplies the topic. Earlier lines give the speaker's held
+context. The small evidence cues `?` and `~` mean uncertain and widely retold:
+
+```text
+- ? Someone put up a relief charter in Thornford.
+Someone put up a relief charter in Thornford.
+
+```
+
+Low-confidence notices and diplomatic accounts can generalise the actor or the
+subject. Both the visible event and the spoken line use that reduced detail.
+These examples teach the model to preserve vagueness. Other account types keep
+the held details and use a qualifier such as "if the story is right."
+
+The training files are `train.txt`, `validation.txt`, `test.txt`, and
+`editorial_test.txt`. Load the text directly into the tokenizer. Use an event
+list ending in a newline as the runtime prefix. The next generated line is the
+speech; a newline ends that output.
+
+Each text file has a matching `.audit.jsonl` file. It stores source accounts,
+world and character IDs, confidence, wording choices, and UTF-8 byte offsets.
+`text_start`, `output_start`, and `text_bytes` locate each example and its target.
+A trainer can use these offsets to apply loss to the spoken output. The model's
+text contains the event lines and speech.
 
 ## Build and collect
 
@@ -12,78 +48,60 @@ Use Python 3.9 or later and a C17 compiler with CMake. Run from the repository:
 ```sh
 cmake -S . -B out/build/core -DCC_BUILD_CLIENT=OFF -DCC_BUILD_BENCHMARKS=OFF -DBUILD_TESTING=ON -DCC_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=Release
 cmake --build out/build/core --target crownless_gossip_corpus gossip_language_tests -j 4
-python3 tools/build_gossip_corpus.py --output out/corpus/pilot --seeds 48 --days 365 --max-examples 5000
+python3 tools/build_gossip_corpus.py --output out/corpus/core-v2 --seeds 96 --days 730 --max-examples 5000
 ```
 
-Each seed creates an independent world. The exporter reads each living
-character's personal accounts every day. It samples a telling again when its
-account, confidence, retelling count, speaker, or event changes. It exports two
-wording variants for each supported telling. The simulation hash is checked
-before and after every export pass, and the final world is validated.
+Each seed creates an independent world. The exporter reads characters' personal
+accounts every day. It samples again when an account, confidence, retelling
+count, speaker, or event changes. Two wording variants are generated. Up to two
+older held accounts supply context. Every context event occurred by the topic
+event's day. The simulation hash is checked before and after each export pass,
+and the final world is validated.
 
-The command writes a fresh output directory after every world succeeds. Its
-files are `train.jsonl`, `validation.jsonl`, `test.jsonl`, `editorial_test.jsonl`,
-and `manifest.json`. Each generated row includes:
-
-- `input`: held account, event kind, confidence, retellings, and wording variant.
-- `output`: a plain spoken report with appropriate uncertainty.
-- `prompt`: the same context in a reusable training prompt.
-- `provenance`: world seed, simulation schema, observation day, event, speaker,
-  and immediate source IDs.
-- `rule`: the event kind and wording variant used by the shared C generator.
-- `id`: SHA-256 of the input and output pair.
-
-Training uses `prompt` and `output`. Keep provenance and rule IDs as audit data.
-At runtime, variant is a stable choice of phrasing. It has two values in v1.
+The builder publishes a fresh output directory after every world succeeds.
+The source and binary must stay stable during collection. `manifest.json`
+records source and binary hashes, generation settings, coverage, file hashes,
+and the number of examples actually written. Language format version 2 uses
+plain event-to-speech text. The world split function remains stable across
+versions for comparisons.
 
 ## Shared game rules
 
-`CcSpeechPrepareGossip` gets the held telling through `CcGossipText`, then
-composes a supported claim. Both the existing NPC speech path and the core
-exporter call this function. NPC speech retains its existing role, bias, and
-alarm wording. `CcSpeechCoreGossip` supplies the plain core wording.
+`CcSpeechPrepareGossip` reads the held telling through `CcGossipText` and composes
+its claim. `CcSpeechCoreGossip` uses conversational openings, short hearsay
+phrases, and reduced detail. Both the game and dataset use these functions.
+NPC speech can add role, bias, and alarm wording. The plain core keeps the
+shared language.
 
 Rules cover shortages, raids, omens, dragon fire, cult gatherings, broods,
 dragon deaths, personal deaths, crafted treasure, war, peace, harvest trouble,
-the treaty bridge closure, bandit recruitment, and posted notices. Support is
-specific to recognised account forms. The coverage report records other forms
-by kind and includes an example for the next writing pass.
+bridge closures, bandit recruitment, and posted notices. Support is specific
+to recognised account forms. The coverage report groups other forms by kind
+and includes samples for the next writing pass.
 
-The held account supplies names, direction, actors, and diplomatic state.
-Retelling changes remain part of that account. Statements describe past reports.
-Confidence and retelling count control expressions of uncertainty. Numerical
-claims remain general in gossip; trade and quest speech retain their own rules.
+Add new forms in `cc_speech_lexicon.c` with factual regression cases in
+`gossip_language_tests.c`. The simulation currently supplies overall confidence;
+the actor/subject omission is a conservative language choice recorded in the
+packet. Retelling changes and original source accounts remain intact.
 
-To extend coverage, add a matching clause in `cc_speech_lexicon.c`, add a factual
-regression in `gossip_language_tests.c`, and run the gossip and corpus tests.
-Use live account samples from the manifest to choose the next useful rule.
+## Splits and evaluation
 
-## Diversity, splits, and evaluation
-
-A stable SHA-256 rule assigns whole worlds to train, validation, or test with
-80/10/10 expected proportions. Related events and their retellings stay in the
-same split. SQLite removes repeated input/output pairs. Exact output text is
-reserved for the split where it first appears; later copies in other splits
-are counted and skipped. Collection follows seed order, so common fixed names
-can leave small held-out splits. The manifest shows the resulting sizes.
+Stable hashes assign whole worlds to training, validation, or test with expected
+80/10/10 proportions. Related events and retellings stay in the same split.
+SQLite deduplicates the visible event prefix and output pair. Exact spoken text
+is reserved for the split where it first appears. Later cross-split copies are
+counted and skipped. This can reduce held-out topic coverage; the manifest
+shows the resulting distribution.
 
 Selection rotates across event kinds with a per-kind cap. `--max-examples` is
 an upper target with 80/10/10 row budgets. `--max-per-kind` defaults to 1000 per
-split. A larger target may need a larger cap, more worlds, and more authored
-language. The generator records the number actually written.
+split. More varied writing and richer simulation coverage can expand the corpus.
+The manifest reports distinct spoken outputs separately from example counts.
 
-The manifest includes per-kind counts, rule counts, unique spoken outputs,
-output word counts, file hashes, binary hash, source commit, source file hashes,
-and unsupported observations. Repeated observations can recur as the rolling
-gossip list changes slots. Corpus deduplication handles those copies. Word and
-byte counts support planning; token counts require the chosen model tokenizer.
-The source and binary must remain stable throughout collection.
-
-Generated holdouts measure new simulation worlds using shared language rules.
-The 16 separately authored editorial examples use fresh names and phrasing to
-probe broader language understanding. These examples are a small challenge set
-for review. Model quality will need a larger independently reviewed evaluation.
-Keep every held-out file separate from training.
+The 16 separately authored editorial examples probe fresh names and phrasing.
+They are a small challenge set for human review. Generated holdouts assess fresh
+worlds under shared language rules. Broader model evaluation will need more
+independent writing. Keep all held-out text files separate from training.
 
 ## Checks
 
@@ -92,7 +110,6 @@ cmake --build out/build/core --target crownless_gossip_corpus gossip_language_te
 ctest --test-dir out/build/core -R 'grounded_gossip_language|gossip_corpus_integrity|speech_identity_and_words|traveler_gossip_network' --output-on-failure
 ```
 
-Checks cover actual deterministic export, world assignment, repeat removal,
-rare-kind selection, argument limits, failed-run cleanup, quantity handling,
-source-account stability, retelling mutations, small output buffers, and the
-existing game gossip path.
+Checks cover reduced detail, conversational hearsay, retelling changes, real
+export reproducibility, compact event prefixes, source ordering, world splits,
+deduplication, byte offsets, file hashes, failed-run cleanup, and game speech.
