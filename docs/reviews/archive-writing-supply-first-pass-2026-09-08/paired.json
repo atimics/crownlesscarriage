@@ -1,0 +1,38 @@
+{
+  "zero_staff": {
+    "higher": 1,
+    "equal": 28,
+    "lower": 3,
+    "total_delta": -752
+  },
+  "ready": {
+    "higher": 4,
+    "equal": 5,
+    "lower": 23,
+    "total_delta": -220
+  },
+  "staff_sum": {
+    "higher": 31,
+    "equal": 0,
+    "lower": 1,
+    "total_delta": 26425
+  },
+  "lore_sum": {
+    "higher": 4,
+    "equal": 0,
+    "lower": 28,
+    "total_delta": -1324807
+  },
+  "end_lore": {
+    "higher": 0,
+    "equal": 31,
+    "lower": 1,
+    "total_delta": -11
+  },
+  "spent": {
+    "higher": 1,
+    "equal": 0,
+    "lower": 31,
+    "total_delta": -61465
+  }
+}

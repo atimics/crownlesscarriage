@@ -1,0 +1,8 @@
+{
+  "runs": 32,
+  "failures": 0,
+  "observer_parity_annual_hashes": 3200,
+  "legacy_parity_annual_hashes": 3200,
+  "trace_hashes_verified": 32,
+  "cargo_accounting": "ordered = delivered + redirected + lost + unresolved"
+}

@@ -1,0 +1,18 @@
+{
+  "code_revision": "92dd5ddbd9158cd32ff6b24ca9124e7443275ca9",
+  "parent_revision": "382bffb23918a67b38430cdab0ae2cdec55e51d5",
+  "schema": 87,
+  "generation": 25,
+  "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)\nTarget: arm64-apple-darwin25.3.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+  "generated_files_sha256": {
+    "protected/cc_sim.c": "2287538f938e4d2b12e4bc91d728ff6bdb03f08033456474102e448045b2f4be",
+    "protected/libstudy.a": "04ce24dec1daef87bd3a7f8bfa01006978d5a5b69d11b8554bbb87bf2006947a",
+    "protected/cc_archive_supply.c.o": "79e933cddb54b5d35b03fede0208af19309dcd96b1da8dfeb67afcb096e438d2",
+    "protected/cc_archive_supply.c": "ffb49d2299802a03d72ef67f40831b8351e41fe5fabd062482669c6f74a837a2",
+    "protected/cc_sim.c.o": "e573b154717f5f575bebf03e3b96612abf526beab453be7ae0e6485f3f0bcede",
+    "protected/probe": "38af0c649a6067caf88d42339f428fd95d8f8969deddb2123aab8412445e1ec5"
+  },
+  "worlds": 32,
+  "years": 100,
+  "seed_rule": "ordinal * 0x9e3779b9 modulo 2^32"
+}
