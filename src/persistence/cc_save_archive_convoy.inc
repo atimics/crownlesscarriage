@@ -1,3 +1,35 @@
+static bool SaveArchiveConvoyJourney(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 90U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "INSERT INTO archive_convoy_journey VALUES(1,?,?);", &statement, error, error_capacity)) return false;
+    sqlite3_bind_int64(statement, 1, sim->archive_convoy.departure_day);
+    sqlite3_bind_int64(statement, 2, sim->archive_convoy.arrival_day);
+    bool ok = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement); return ok;
+}
+static bool ReadArchiveConvoyJourney(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 90U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "SELECT id,departure_day,arrival_day FROM archive_convoy_journey ORDER BY id;", &statement, error, error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW || sqlite3_column_int64(statement, 0) != 1) {
+        SetError(error, error_capacity, "Archive convoy journey is missing.");
+        sqlite3_finalize(statement); return false;
+    }
+    for (int i = 1; i <= 2; ++i) {
+        if (sqlite3_column_type(statement, i) != SQLITE_INTEGER || sqlite3_column_int64(statement, i) < 0 || sqlite3_column_int64(statement, i) > INT32_MAX) {
+            SetError(error, error_capacity, "Archive convoy journey value is invalid.");
+            sqlite3_finalize(statement); return false;
+        }
+    }
+    sim->archive_convoy.departure_day = (int32_t)sqlite3_column_int64(statement, 1);
+    sim->archive_convoy.arrival_day = (int32_t)sqlite3_column_int64(statement, 2);
+    bool ok = sqlite3_step(statement) == SQLITE_DONE;
+    if (!ok) SetError(error, error_capacity, "Archive convoy journey has extra rows.");
+    sqlite3_finalize(statement); return ok;
+}
+
 static bool SaveArchiveConvoy(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim->schema_version < 89U) return true;
@@ -20,7 +52,7 @@ static bool SaveArchiveConvoy(sqlite3 *database, const CcSim *sim, char *error, 
     sqlite3_bind_int64(statement, 15, (sqlite3_int64)sim->archive_convoy.reserved_day);
     sqlite3_bind_int64(statement, 16, (sqlite3_int64)sim->archive_convoy.status);
     bool ok = StepDone(database, statement, error, error_capacity);
-    sqlite3_finalize(statement); return ok;
+    sqlite3_finalize(statement); return ok && SaveArchiveConvoyJourney(database, sim, error, error_capacity);
 }
 static bool ReadArchiveConvoy(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
 {
@@ -113,5 +145,5 @@ static bool ReadArchiveConvoy(sqlite3 *database, CcSim *sim, char *error, size_t
     sim->archive_convoy.status = (int32_t)sqlite3_column_int64(statement, 16);
     bool ok = sqlite3_step(statement) == SQLITE_DONE;
     if (!ok) SetError(error, error_capacity, "Archive convoy has extra rows.");
-    sqlite3_finalize(statement); return ok;
+    sqlite3_finalize(statement); return ok && ReadArchiveConvoyJourney(database, sim, error, error_capacity);
 }
