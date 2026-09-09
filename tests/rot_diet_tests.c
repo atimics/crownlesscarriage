@@ -183,10 +183,10 @@ static void CheckLegacyAndPersistence(void)
     CC_CHECK(CcSaveEncode(&legacy, &bytes, &length, error, sizeof(error)));
     CC_CHECK(CcSaveDecode(bytes, length, &loaded, error, sizeof(error)));
     CcSaveFreeBuffer(bytes);
-    CC_CHECK(loaded.schema_version == 76U);
+    CC_CHECK(loaded.schema_version == 77U);
     loaded.schema_version = 75U;
     CC_CHECK(CcSimHash(&loaded) == hash);
-    loaded.schema_version = 76U;
+    loaded.schema_version = 77U;
     sim = loaded;
     CcSimAdvanceDays(&sim, 100);
     CcSimAdvanceDays(&loaded, 100);

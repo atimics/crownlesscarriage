@@ -116,7 +116,7 @@ static bool DispatchGrainSupply(CcSim *sim, CcRoyalCarriage *carriage,
             if (sim->routes[route].id != plan.route_id) continue;
             return CreateTradeShipment(sim, carriage, route, plan.next_hop_id, CC_GOOD_WHEAT,
                 CcSimSettlementMutable(sim, plan.supplier_id), town, plan.path_capacity, 1,
-                route_used, supply);
+                route_used, supply, NULL);
         }
     }
     return false;
