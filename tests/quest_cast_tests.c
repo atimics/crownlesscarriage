@@ -94,6 +94,105 @@ static void CheckHistoricalSave(void)
     (void)remove("quest-history-restart.ccsave-shm");
 }
 
+static void CheckCourierRecordLifetimes(void)
+{
+    static CcSim checkpoint, legacy;
+    CcSimInit(&sim, 426U * UINT32_C(0x9e3779b9));
+    sim.schema_version = 75U;
+    for (int year = 0; year < 208; ++year) CcSimAdvanceDays(&sim, 365);
+    Valid(); checkpoint = sim; legacy = sim;
+    CcSimAdvanceDays(&legacy, 365);
+    bool orphan = false;
+    for (int i = 0; i < legacy.courier_count; ++i) {
+        const CcCourier *courier = &legacy.couriers[i];
+        bool active = courier->status == CC_COURIER_WAITING || courier->status == CC_COURIER_TRAVELLING ||
+            courier->status == CC_COURIER_WITH_PLAYER;
+        const CcSituation *quest = CcSimSituation(&legacy, courier->situation_id);
+        orphan |= active && (quest == NULL || quest->target_id != courier->id);
+    }
+    CC_CHECK(orphan);
+    sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    Valid();
+    const char *path = "courier-history-restart.ccsave";
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 365, error, sizeof(error)));
+    Valid();
+    for (int i = 0; i < sim.situation_count; ++i) {
+        const CcSituation *quest = &sim.situations[i];
+        if (quest->kind != CC_SITUATION_COURIER_DELIVERY) continue;
+        bool found = false;
+        for (int j = 0; j < sim.courier_count; ++j) found |= sim.couriers[j].id == quest->target_id;
+        CC_CHECK(found);
+    }
+    CcJournalAbandon(&journal);
+    journal = CcJournalResume(path, &restored, error, sizeof(error));
+    CC_CHECK(journal != NULL && CcSimHash(&sim) == CcSimHash(&restored));
+    CC_CHECK(CcJournalClose(&journal, &restored, error, sizeof(error)));
+    int reused = 0;
+    for (int i = 0; i < checkpoint.courier_count; ++i) {
+        bool retained = false;
+        for (int j = 0; j < sim.courier_count; ++j) retained |= checkpoint.couriers[i].id == sim.couriers[j].id;
+        reused += !retained;
+    }
+    CC_CHECK(reused > 0);
+    checkpoint.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimAdvanceDays(&checkpoint, 365);
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&checkpoint));
+    (void)remove(path);
+    (void)remove("courier-history-restart.ccsave-wal");
+    (void)remove("courier-history-restart.ccsave-shm");
+}
+
+static CcId MissingCourierTarget(const CcSim *world)
+{
+    for (int i = 0; i < world->situation_count; ++i) {
+        const CcSituation *quest = &world->situations[i];
+        if (quest->kind != CC_SITUATION_COURIER_DELIVERY) continue;
+        bool found = false;
+        for (int j = 0; j < world->courier_count; ++j) found |= world->couriers[j].id == quest->target_id;
+        if (!found) return quest->target_id;
+    }
+    return 0;
+}
+
+static void CheckCourierRetirementFixture(void)
+{
+    static CcSim legacy;
+    const char *path = "courier-retirement-fixture.ccsave";
+    FILE *input = fopen(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-75-courier-before-retirement.ccsave", "rb");
+    FILE *output = fopen(path, "wb");
+    CC_CHECK(input != NULL && output != NULL);
+    unsigned char buffer[8192]; size_t count;
+    while ((count = fread(buffer, 1, sizeof(buffer), input)) > 0)
+        CC_CHECK(fwrite(buffer, 1, count, output) == count);
+    CC_CHECK(ferror(input) == 0);
+    CC_CHECK(fclose(input) == 0 && fclose(output) == 0);
+    CC_CHECK(CcSaveRead(path, &sim, error, sizeof(error)));
+    CC_CHECK(sim.current_day == 308335);
+    CC_CHECK(MissingCourierTarget(&sim) == 0);
+    legacy = sim; legacy.schema_version = 75U;
+    CcSimAdvanceDays(&legacy, 1);
+    CcId retained_id = MissingCourierTarget(&legacy);
+    CC_CHECK(retained_id != 0);
+    (void)remove(path);
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 1, error, sizeof(error)));
+    CC_CHECK(MissingCourierTarget(&sim) == 0);
+    bool retained = false;
+    for (int i = 0; i < sim.courier_count; ++i) retained |= sim.couriers[i].id == retained_id;
+    CC_CHECK(retained);
+    Valid();
+    CcJournalAbandon(&journal);
+    journal = CcJournalResume(path, &restored, error, sizeof(error));
+    CC_CHECK(journal != NULL && CcSimHash(&sim) == CcSimHash(&restored));
+    CC_CHECK(CcJournalClose(&journal, &restored, error, sizeof(error)));
+    (void)remove(path);
+    (void)remove("courier-retirement-fixture.ccsave-wal");
+    (void)remove("courier-retirement-fixture.ccsave-shm");
+}
+
 int main(int argc, char **argv)
 {
     if (argc == 2 && strcmp(argv[1], "--write-history-fixture") == 0) {
@@ -107,6 +206,8 @@ int main(int argc, char **argv)
         return 0;
     }
     CheckHistoricalSave();
+    CheckCourierRecordLifetimes();
+    CheckCourierRetirementFixture();
     CcSimInit(&sim, 42U);
     sim.current_day = 2;
     /* Existing casts retain their identities even when their lives move on. */

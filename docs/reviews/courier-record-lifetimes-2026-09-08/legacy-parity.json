@@ -1,0 +1,166 @@
+{
+  "schema": 75,
+  "matching_annual_hashes": 3200,
+  "worlds": [
+    {
+      "ordinal": 1,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 2,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 3,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 4,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 5,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 6,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 7,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 8,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 9,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 10,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 11,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 12,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 13,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 14,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 15,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 16,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 17,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 18,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 19,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 20,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 21,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 22,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 23,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 24,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 25,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 26,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 27,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 28,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 29,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 30,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 31,
+      "hashes_matched": 100,
+      "failed_year": 0
+    },
+    {
+      "ordinal": 32,
+      "hashes_matched": 100,
+      "failed_year": 0
+    }
+  ]
+}

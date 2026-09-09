@@ -11380,6 +11380,25 @@ static void ForgetRetiredSituation(CcSim *sim, CcId situation_id)
     }
 }
 
+static bool SituationHasActiveCourier(const CcSim *sim, CcId situation_id)
+{
+    for (int32_t i = 0; i < sim->courier_count; ++i) {
+        const CcCourier *courier = &sim->couriers[i];
+        if (courier->situation_id == situation_id &&
+            (courier->status == CC_COURIER_WAITING || courier->status == CC_COURIER_TRAVELLING ||
+             courier->status == CC_COURIER_WITH_PLAYER)) return true;
+    }
+    return false;
+}
+
+static bool CourierHasRetainedSituation(const CcSim *sim, CcId courier_id)
+{
+    for (int32_t i = 0; i < sim->situation_count; ++i)
+        if (sim->situations[i].kind == CC_SITUATION_COURIER_DELIVERY &&
+            sim->situations[i].target_id == courier_id) return true;
+    return false;
+}
+
 static CcSituation *AllocateSituation(CcSim *sim)
 {
     if (sim->situation_count < CC_MAX_SITUATIONS) {
@@ -11391,6 +11410,7 @@ static CcSituation *AllocateSituation(CcSim *sim)
     int32_t oldest = -1;
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         if (sim->situations[i].status == CC_SITUATION_ACTIVE) continue;
+        if (sim->schema_version >= 76U && SituationHasActiveCourier(sim, sim->situations[i].id)) continue;
         if (oldest < 0 || sim->situations[i].created_day < sim->situations[oldest].created_day) {
             oldest = i;
         }
@@ -12079,6 +12099,7 @@ static CcCourier *AllocateCourier(CcSim *sim)
         if (status == CC_COURIER_WAITING ||
             status == CC_COURIER_TRAVELLING ||
             status == CC_COURIER_WITH_PLAYER) continue;
+        if (sim->schema_version >= 76U && CourierHasRetainedSituation(sim, sim->couriers[i].id)) continue;
         if (oldest < 0 || sim->couriers[i].departure_day <
                           sim->couriers[oldest].departure_day) oldest = i;
     }
