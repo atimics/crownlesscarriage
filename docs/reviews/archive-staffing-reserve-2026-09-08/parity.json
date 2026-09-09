@@ -1,0 +1,9 @@
+{
+  "parent_revision": "bb51f8a9bbae6b1ee42183dcd3edfcaf970ce99b",
+  "candidate_code_revision": "f638bc2",
+  "schema": 84,
+  "completed_worlds": 32,
+  "years_per_world": 100,
+  "matching_annual_hashes": 3200,
+  "all_reported_fields_match": true
+}

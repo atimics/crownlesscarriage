@@ -29,7 +29,7 @@ The policy improves staff continuity and retained lore in this sample. Writing r
 
 The first comparison ran schema 84 through the newer validator. Twenty-nine worlds failed with `Situation data is invalid`. Their completed quest records retain lifetime IDs after the people leave the live character array. Historical cast validation had applied only to the current schema. The repair applies that same issued-ID rule to completed situations across supported cast-bearing schemas. Active situations retain the live-person checks.
 
-`compatibility-measurements.json` preserves the original failures. The authoritative parent arm was rerun against the actual parent library, where all 32 worlds passed. A separate run through the repaired validator checks the earlier schema's annual hashes. A century-old schema-84 save and day-journal replay regression covers this failure. This finding informs #614; the live saved world still needs its own reproduction.
+`compatibility-measurements.json` preserves the original failures. The authoritative parent arm was rerun against the actual parent library, where all 32 worlds passed. A separate run through the repaired validator completes all 32 worlds. All 3200 annual hashes and every reported measure match the actual parent library; `parity.json` records this result. A century-old schema-84 save and day-journal replay regression covers this failure. This finding informs #614; the live saved world still needs its own reproduction.
 
 ## Reproduction
 
@@ -37,4 +37,4 @@ Build `probe.c` against each revision's `libcrownless_sim.a`, with that revision
 
 ## Validation
 
-Tests cover the protected payment boundary for zero through four inherited scribes, named-only staff, exact failed-dispatch state, coin conservation, delivery, staffing continuity, save/load, and journal replay. Existing disrupted-delivery and recruitment tests remain part of the suite. Final validation results are being collected.
+Tests cover the protected payment boundary for zero through four inherited scribes, named-only staff, exact failed-dispatch state, coin conservation, delivery, staffing continuity, save/load, and journal replay. Existing disrupted-delivery and recruitment tests remain part of the suite. Code head f638bc2 passed the strict headless build and all 125 tests, the native build and all 13 archive and persistence checks, and static analysis with one reviewed baseline entry. Generator 25, SQLite schema 32, and the simulation structure size remain unchanged. These are local results; remote CI is tracked on draft PR #622.
