@@ -525,7 +525,7 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
     rlTranslatef(-48.0f, 0.0f, -36.0f);
 
     if (profile->lane_count > 0) {
-        Color road_color = TerrainBrightRoadColor(CC_LOCAL_ROAD_FARM_TRACK,
+        Color road_color = TerrainBrightRoadColor((CcLocalRoadSurface)profile->function,
             (float)settlement->prosperity / 100.0f);
         for (int32_t lane = 0; lane < profile->lane_count; ++lane) {
             const CcLocalLane *path = &profile->lane[lane];
@@ -560,6 +560,8 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
         }
     }
 
+    if (profile->function == CC_SETTLEMENT_MARKET) DrawGloamgateFountain(0.0f);
+
     for (int32_t building_index = 0;
          building_index < profile->building_count; ++building_index) {
         const CcLocalPlaceBuilding *source =
@@ -576,7 +578,7 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
         DrawSettlementBuilding(
             &building, BuildingWallColor(building.style, profile),
             BuildingRoofColor(building.style, kingdom, profile),
-            profile, building_index);
+            profile, building_index, false);
         rlPopMatrix();
     }
 

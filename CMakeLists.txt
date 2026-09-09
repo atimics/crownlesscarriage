@@ -235,6 +235,10 @@ target_link_libraries(crownless_metagame PUBLIC
     crownless_persistence crownless_story)
 cc_strict_warnings(crownless_metagame)
 
+add_executable(crownless_gossip_corpus tools/gossip_corpus.c)
+target_link_libraries(crownless_gossip_corpus PRIVATE crownless_story)
+cc_strict_warnings(crownless_gossip_corpus)
+
 add_executable(crownless_sim_runner tools/sim_runner.c)
 target_link_libraries(crownless_sim_runner PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_sim_runner)
@@ -1205,6 +1209,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(story_tests)
     add_test(NAME authored_story_beats COMMAND story_tests)
 
+    add_executable(gossip_language_tests tests/gossip_language_tests.c)
+    target_link_libraries(gossip_language_tests PRIVATE crownless_story)
+    cc_strict_warnings(gossip_language_tests)
+    add_test(NAME grounded_gossip_language COMMAND gossip_language_tests)
+
     add_executable(speech_tests tests/speech_tests.c)
     target_link_libraries(speech_tests PRIVATE crownless_story)
     cc_strict_warnings(speech_tests)
@@ -1269,6 +1278,10 @@ if(BUILD_TESTING)
                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/species_sweep_tests.py
                 $<TARGET_FILE:crownless_species_metrics> $<TARGET_FILE:crownless_sim_metrics>)
         endif()
+        add_test(NAME gossip_corpus_integrity
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/gossip_corpus_tests.py
+                         $<TARGET_FILE:crownless_gossip_corpus>)
         add_test(NAME age_of_dragons_sweep_integrity
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/age_of_dragons_sweep_tests.py)

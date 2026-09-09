@@ -225,3 +225,13 @@ with you. Who will head out on a new adventure?"
 speaker has no authored line. The debrief sheet asks: "Tell the story of what
 happened. Which choice felt hardest, and why? What surprised you later? Who do
 you now trust or distrust? What would you do next?"
+## Shared core-language rules
+
+Gossip claim wording now also supports personal deaths, crafted treasure,
+courier war and peace reports, drought harvests, treaty bridge closures, bandit
+recruitment, and posted notices. Each receives two stable phrasings. These rules
+read the speaker's held account and preserve retelling changes.
+
+The game's claim composer also supplies the plain core-language dataset.
+See [Core language corpus](core-language-corpus.md) for collection, coverage,
+source records, and evaluation.
