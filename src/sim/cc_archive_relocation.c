@@ -71,6 +71,9 @@ CcArchiveRelocationPlan CcSimArchiveRelocationPlan(const CcSim *sim)
 {
     CcArchiveRelocationPlan plan = {.gate = CC_ARCHIVE_MOVE_SEAT};
     if (sim == NULL || sim->schema_version < 91U || sim->archives.seat_id == 0) return plan;
+    if (sim->schema_version >= 92U && sim->archive_convoy.status != 0) {
+        plan.gate = CC_ARCHIVE_MOVE_BUSY; return plan;
+    }
     plan.origin_id = sim->archives.seat_id;
     if (CcSimSettlement(sim, plan.origin_id) == NULL) return plan;
     plan.gate = CC_ARCHIVE_MOVE_HEALTHY;
@@ -100,6 +103,7 @@ CcArchiveRelocationPlan CcSimArchiveRelocationPlan(const CcSim *sim)
 const char *CcArchiveRelocationGateName(CcArchiveRelocationGate gate)
 {
     switch (gate) {
+        case CC_ARCHIVE_MOVE_BUSY: return "convoy_order";
         case CC_ARCHIVE_MOVE_READY: return "ready";
         case CC_ARCHIVE_MOVE_SEAT: return "saved_seat";
         case CC_ARCHIVE_MOVE_HEALTHY: return "healthy_seat";
