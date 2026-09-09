@@ -1,4 +1,5 @@
 #include "sim/cc_archive_staff.h"
+#include "sim/cc_archive_relocation.h"
 #include "sim/cc_sim.h"
 #include "sim/cc_occupations.h"
 #include "sim/cc_archive_recruitment.h"
@@ -989,6 +990,7 @@ const char *CcRoyalCarriageModeName(CcRoyalCarriageMode mode)
         case CC_ROYAL_CARRIAGE_BLOCKED: return "Blocked";
         case CC_ROYAL_CARRIAGE_SITE_TRAVELLING: return "Site delivery";
         case CC_ROYAL_CARRIAGE_SITE_WAITING: return "Waiting at site road";
+        case CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED: return "Reserved for archive books";
         case CC_ROYAL_CARRIAGE_SITE_UNLOADING: return "Unloading at stop";
         case CC_ROYAL_CARRIAGE_WAITING_CAPACITY:
             return "Waiting for road space";
@@ -2293,6 +2295,7 @@ CcMoney CcSimTrackedGold(const CcSim *sim)
                     sim->hoard_raiders.carried_treasure +
                     sim->dragon_campaign.recovered_coins;
     if (sim->schema_version >= 82U) total += sim->archive_recruitment.purse;
+    if (sim->schema_version >= 89U) total += sim->archive_convoy.purse;
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         total += sim->kingdoms[i].treasury;
     }
@@ -2318,6 +2321,7 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
                     sim->goblins.lair_stock[good] +
                     sim->dragon.hoard_goods[good] +
                     sim->dragon_campaign.supplies[good];
+    if (sim->schema_version >= 89U && good == CC_GOOD_WHEAT) total += sim->archive_convoy.wheat;
     if (sim->schema_version >= 82U) {
         if (good == CC_GOOD_WHEAT) total += sim->archive_recruitment.wheat + sim->archive_recruitment.travel_wheat;
         else if (good == CC_GOOD_PAPER) total += sim->archive_recruitment.paper;
@@ -9209,7 +9213,8 @@ static void AdvanceRoyalCarriages(CcSim *sim, CcRoadProductionAccounting *site_a
     bool reached_market = false;
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
         CcRoyalCarriage *carriage = &sim->royal_carriages[i];
-        if (IsSiteCarriage(carriage)) continue;
+        if (IsSiteCarriage(carriage) ||
+            (sim->schema_version >= 89U && carriage->mode == CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED)) continue;
         const CcSettlement *location = CcSimSettlement(
             sim, carriage->location_id);
         if ((location == NULL || CcSettlementIsAbandoned(location)) &&
@@ -18623,6 +18628,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                     break;
                 }
             }
+            bool reserved = sim->schema_version >= 89U && carriage->mode == CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED &&
+                sim->archive_convoy.status == 1 && sim->archive_convoy.carriage_id == carriage->id &&
+                sim->archive_convoy.origin_id == carriage->location_id;
             bool idle = carriage->mode == CC_ROYAL_CARRIAGE_IDLE;
             bool repositioning =
                 carriage->mode == CC_ROYAL_CARRIAGE_REPOSITIONING;
@@ -18640,7 +18648,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 (int64_t)carriage->arrival_day ==
                     (int64_t)carriage->departure_day + carriage_leg.travel_days;
             bool mode_valid =
-                (idle && carriage->active_shipment_id == 0U &&
+                ((idle || reserved) && carriage->active_shipment_id == 0U &&
                  carriage->route_id == 0U &&
                  carriage->destination_id == 0U &&
                  carriage->target_id == 0U &&
@@ -18676,7 +18684,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 carriage->kingdom_id != sim->kingdoms[i].id ||
                 location == NULL ||
                 carriage->mode < CC_ROYAL_CARRIAGE_IDLE ||
-                carriage->mode > CC_ROYAL_CARRIAGE_WAITING_CAPACITY ||
+                carriage->mode > (sim->schema_version >= 89U ? CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED : CC_ROYAL_CARRIAGE_WAITING_CAPACITY) ||
                 carriage->condition < 0 || carriage->condition > 100 ||
                 carriage->trips_completed < 0 ||
                 carriage->trips_completed > CC_SIM_MAX_UNITS ||
@@ -20023,6 +20031,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
          sim->archives.seat_failed_since_day < 0 || sim->archives.seat_failed_since_day > sim->current_day ||
          (sim->archives.seat_id == 0 && sim->archives.seat_failed_since_day != 0))) {
         SetError(error, error_capacity, "Archive seat state is invalid.");
+        return false;
+    }
+    if (!CcSimArchiveConvoyValid(sim)) {
+        SetError(error, error_capacity, "Archive convoy reservation is invalid.");
         return false;
     }
     if (!CcSimArchiveRecruitmentOrderValid(sim)) {

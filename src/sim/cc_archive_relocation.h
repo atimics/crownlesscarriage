@@ -17,7 +17,8 @@ typedef enum CcArchiveRelocationGate {
     CC_ARCHIVE_MOVE_CARRIAGE,
     CC_ARCHIVE_MOVE_ROUTE,
     CC_ARCHIVE_MOVE_FOOD,
-    CC_ARCHIVE_MOVE_FUNDS
+    CC_ARCHIVE_MOVE_FUNDS,
+    CC_ARCHIVE_MOVE_BUSY
 } CcArchiveRelocationGate;
 
 typedef struct CcArchiveRelocationPlan {
@@ -35,4 +36,7 @@ typedef struct CcArchiveRelocationPlan {
    recheck this quote before spending funds, reserving cargo, or departing. */
 CcArchiveRelocationPlan CcSimArchiveRelocationPlan(const CcSim *sim);
 const char *CcArchiveRelocationGateName(CcArchiveRelocationGate gate);
+bool CcSimReserveArchiveConvoy(CcSim *sim);
+bool CcSimCancelArchiveConvoy(CcSim *sim);
+bool CcSimArchiveConvoyValid(const CcSim *sim);
 #endif

@@ -57,7 +57,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 88
+#define CC_SIM_SCHEMA_VERSION 89
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -335,6 +335,13 @@ typedef enum CcEventKind {
     CC_EVENT_NOTICE_POSTED = 133,
     CC_EVENT_ROAD_SITE_PRODUCTION = 134
 } CcEventKind;
+
+typedef struct CcArchiveConvoyOrder {
+    CcId origin_id, destination_id, sponsor_id, funding_kingdom_id;
+    CcId carriage_id, first_route_id, first_hop_id, book_ids[4];
+    CcMoney purse;
+    int32_t wheat, book_count, reserved_day, status;
+} CcArchiveConvoyOrder;
 
 typedef struct CcArchives {
     int32_t scribes;
@@ -911,7 +918,8 @@ typedef enum CcRoyalCarriageMode {
     CC_ROYAL_CARRIAGE_WAITING_CAPACITY,
     CC_ROYAL_CARRIAGE_SITE_TRAVELLING,
     CC_ROYAL_CARRIAGE_SITE_WAITING,
-    CC_ROYAL_CARRIAGE_SITE_UNLOADING
+    CC_ROYAL_CARRIAGE_SITE_UNLOADING,
+    CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED
 } CcRoyalCarriageMode;
 
 typedef struct CcRoyalCarriage {
@@ -1876,6 +1884,7 @@ typedef struct CcSim {
     CcArchiveRecruitmentOrder archive_recruitment;
     int32_t archive_training_week;
     CcArchiveStaff archive_staff;
+    CcArchiveConvoyOrder archive_convoy;
     CcGossip gossip[CC_MAX_GOSSIP];
     CcGossipCarrier gossip_carriers[CC_MAX_GOSSIP_CARRIERS];
     CcId gossip_last_event_id;
@@ -1932,7 +1941,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 184464,
+_Static_assert(sizeof(CcSim) == 184576,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
