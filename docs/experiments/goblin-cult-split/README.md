@@ -64,7 +64,7 @@ promotions and hunts. They express the goblins' continuing hope of favour.
 The metrics CSV adds `goblin_crown_color` (-1 unchosen, 0 red, 1 purple, 2 blue),
 `cult_human_members`, `cult_goblin_members`, `cult_devotion`, per-colour population,
 lair value, tribute and hunting losses, and each species' four cult ranks.
-Existing `goblin_devotion` remains a compatibility alias for cult devotion.
+Existing `goblin_devotion_end` remains a compatibility alias for cult devotion.
 JSON reports include a `goblin_society` section and use the cult's actual
 membership and chest in the ritual plan.
 
@@ -85,3 +85,10 @@ membership and chest in the ritual plan.
 The older dragon, ritual, journal, save migration and conservation tests cover
 the connected systems. The ritual fixtures now provision the cult chest and
 name the worshippers separately from the goblin population.
+
+## Validation result
+
+All 119 local checks passed. The speech HTTP checks used local server access.
+Strict release builds passed for the headless tools and the full game client.
+A one-year metrics row and eleven yearly JSON snapshots agreed on species,
+faction and cult counts. The new regression suite passed its 20 x 100-year run.
