@@ -14,6 +14,6 @@ The fixture generator is `quest_cast_tests --write-history-fixture`. It uses the
 
 ## Scope and checks
 
-This changes validation only. Schema 74, generator 25, SQLite schema 32, gameplay, and saved fields retain their existing formats. Final strict build, full tests, native persistence checks, and static analysis are running.
+This changes validation only. Schema 74, generator 25, SQLite schema 32, gameplay, and saved fields retain their existing formats. Code head 6e73c9d passed the strict headless build and all 118 tests, the native build and all four focused quest-cast, persistence, and shared-world checks, and static analysis with one reviewed baseline entry. The source fixture hash remains unchanged after the tests. These are local results; remote CI is tracked on draft PR #623.
 
 Issue #614 remains open. Its actual hosted saved world still requires a private backup and reproduction, followed by recovery and restart checks on the live service. This generated fixture proves a specific old-save failure and its repair.
