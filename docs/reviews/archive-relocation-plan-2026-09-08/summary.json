@@ -1,0 +1,6 @@
+{
+  "worlds": 32,
+  "matching_annual_hashes": 3200,
+  "immutable_annual_queries": 3200,
+  "valid_annual_states": 3200
+}
