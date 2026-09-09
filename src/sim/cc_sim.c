@@ -19175,9 +19175,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             sim, situation->affected_character_id);
         bool cast_valid = true;
         if (sim->schema_version >= 17U) {
-            bool historical_cast =
-                sim->schema_version == CC_SIM_SCHEMA_VERSION &&
-                situation->status != CC_SITUATION_ACTIVE;
+            /* Completed quests retain issued lifetime IDs across save versions. */
+            bool historical_cast = situation->status != CC_SITUATION_ACTIVE;
             cast_valid = historical_cast ?
                 IsIssuedCharacterId(
                     sim, situation->sponsor_character_id) &&
