@@ -77,6 +77,14 @@ int main(void)
     int32_t old_wheat=origin->stock[CC_GOOD_WHEAT];origin->stock[CC_GOOD_WHEAT]=CC_SIM_MAX_UNITS;
     before=sim;CC_CHECK(!CcSimCancelArchiveConvoy(&sim));CC_CHECK(memcmp(&before,&sim,sizeof(sim))==0);
     origin->stock[CC_GOOD_WHEAT]=old_wheat;
+    CcKingdom *funder=NULL;
+    for(int i=0;i<sim.kingdom_count;i++)if(sim.kingdoms[i].id==sim.archive_convoy.funding_kingdom_id)funder=&sim.kingdoms[i];
+    CC_CHECK(funder!=NULL);CcMoney held=funder->treasury;funder->treasury=CC_SIM_MAX_MONEY;
+    before=sim;CC_CHECK(!CcSimCancelArchiveConvoy(&sim));CC_CHECK(memcmp(&before,&sim,sizeof(sim))==0);
+    funder->treasury=held;
+    before=sim;sim.archive_convoy.book_ids[1]=sim.archive_convoy.book_ids[0];
+    CC_CHECK(!CcSimArchiveConvoyValid(&sim));sim=before;
+    sim.archive_convoy.reserved_day=sim.current_day+1;CC_CHECK(!CcSimArchiveConvoyValid(&sim));sim=before;
     CC_CHECK(CcSimCancelArchiveConvoy(&sim));Valid();
     sqlite3 *db=NULL;CC_CHECK(sqlite3_open(path,&db)==SQLITE_OK);
     CC_CHECK(sqlite3_exec(db,"UPDATE archive_convoy SET wheat=2147483648;",NULL,NULL,NULL)==SQLITE_OK);

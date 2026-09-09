@@ -39,7 +39,9 @@ bool CcSimArchiveConvoyValid(const CcSim *sim)
     for (int i = 0; i < sim->royal_carriage_count; ++i) {
         const CcRoyalCarriage *item = &sim->royal_carriages[i];
         if (item->id == o->carriage_id) carriage = item->mode == CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED &&
-            item->kingdom_id == o->funding_kingdom_id && item->location_id == o->origin_id;
+            item->kingdom_id == o->funding_kingdom_id && item->location_id == o->origin_id &&
+            item->active_shipment_id == 0 && item->route_id == 0 && item->destination_id == 0 &&
+            item->target_id == 0 && item->arrival_day == 0 && item->blocked_since_day == 0 && !item->archive_contract;
     }
     const CcRoute *route = CcSimRoute(sim, o->first_route_id);
     if (!funding || !carriage || route == NULL ||
