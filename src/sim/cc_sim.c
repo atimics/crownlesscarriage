@@ -9275,8 +9275,8 @@ static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_account
                 unload = MaximumI32(0, unload);
                 if (unload > 0) {
                     hop->stock[shipment_good] += unload;
-                    hop->prosperity = ClampI32(
-                        hop->prosperity + 1, 0, 100);
+                    if (sim->schema_version < 75U || !CcSettlementIsAbandoned(hop))
+                        hop->prosperity = ClampI32(hop->prosperity + 1, 0, 100);
                     shipment->quantity -= unload;
                 }
             }
@@ -9374,7 +9374,8 @@ static void UpdateShipments(CcSim *sim, CcRoadProductionAccounting *site_account
         CcSettlement *destination = CcSimSettlementMutable(sim, final_id);
         if (destination != NULL) {
             destination->stock[shipment_good] += shipment->quantity;
-            destination->prosperity = ClampI32(destination->prosperity + 1, 0, 100);
+            if (sim->schema_version < 75U || !CcSettlementIsAbandoned(destination))
+                destination->prosperity = ClampI32(destination->prosperity + 1, 0, 100);
         }
         shipment->status = CC_SHIPMENT_ARRIVED;
         RecordGrainShipment(sim, shipment, final_id, false);
