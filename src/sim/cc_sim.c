@@ -4,6 +4,7 @@
 #include "sim/cc_archive_recruitment.h"
 #include "sim/cc_identity_internal.h"
 #include "sim/cc_archive_internal.h"
+#include "sim/cc_archive_volumes_internal.h"
 #include "sim/cc_production_internal.h"
 #include "sim/cc_food_economy_internal.h"
 #include "sim/cc_goods_internal.h"
@@ -4535,84 +4536,6 @@ static CcTreasure *AllocateTreasure(CcSim *sim)
     return treasure;
 }
 
-static bool ArchiveTitle(const char *name)
-{
-    return strncmp(name, "Chronicle ", 10) == 0 ||
-           strncmp(name, "Ledger ", 7) == 0 ||
-           strncmp(name, "Annal ", 6) == 0 ||
-           strncmp(name, "Register ", 9) == 0 ||
-           strncmp(name, "Codex of ", 9) == 0;
-}
-
-static bool TreasureIsArchiveVolume(const CcTreasure *treasure)
-{
-    return treasure != NULL && !treasure->destroyed && ArchiveTitle(treasure->name);
-}
-
-int32_t CcSimArchivePhysicalLore(const CcSim *sim)
-{
-    if (sim == NULL) return 0;
-    int64_t lore = 0;
-    for (int32_t i = 0; i < sim->treasure_count; ++i) {
-        const CcTreasure *volume = &sim->treasures[i];
-        if (TreasureIsArchiveVolume(volume)) lore += volume->craft_work;
-    }
-    return lore > INT32_MAX ? INT32_MAX : (int32_t)lore;
-}
-
-void CcSimUpgradeArchivePhysicalLore(CcSim *sim)
-{
-    if (sim == NULL) return;
-    sim->archives.lore_stored = CcSimArchivePhysicalLore(sim);
-}
-
-static bool EarlierArchiveVolume(const CcSim *sim, int32_t first,
-                                 int32_t second)
-{
-    if (second < 0) return true;
-    const CcTreasure *a = &sim->treasures[first];
-    const CcTreasure *b = &sim->treasures[second];
-    return a->created_day < b->created_day ||
-        (a->created_day == b->created_day && first < second);
-}
-
-static bool FindArchiveVolumesToBind(const CcSim *sim, int32_t slots[4])
-{
-    int32_t best[4] = {-1, -1, -1, -1};
-    for (int32_t anchor = 0; anchor < sim->treasure_count; ++anchor) {
-        const CcTreasure *volume = &sim->treasures[anchor];
-        if (!TreasureIsArchiveVolume(volume) ||
-            volume->owner_id == sim->player.id) continue;
-
-        int32_t candidate[4] = {-1, -1, -1, -1};
-        for (int32_t i = 0; i < sim->treasure_count; ++i) {
-            const CcTreasure *other = &sim->treasures[i];
-            if (!TreasureIsArchiveVolume(other) ||
-                other->owner_id == sim->player.id ||
-                other->owner_id != volume->owner_id ||
-                other->location_id != volume->location_id) continue;
-            for (int32_t position = 0; position < 4; ++position) {
-                if (!EarlierArchiveVolume(sim, i, candidate[position])) {
-                    continue;
-                }
-                for (int32_t move = 3; move > position; --move) {
-                    candidate[move] = candidate[move - 1];
-                }
-                candidate[position] = i;
-                break;
-            }
-        }
-        if (candidate[3] < 0) continue;
-        if (best[0] < 0 ||
-            EarlierArchiveVolume(sim, candidate[0], best[0])) {
-            for (int32_t i = 0; i < 4; ++i) best[i] = candidate[i];
-        }
-    }
-    if (best[0] < 0) return false;
-    for (int32_t i = 0; i < 4; ++i) slots[i] = best[i];
-    return true;
-}
-
 static CcProductionReceipt RunTreasureWork(const CcSim *sim,
     const CcSettlement *settlement, int32_t *stock)
 {
@@ -6255,7 +6178,7 @@ CcArchiveAppointmentPlan CcSimArchiveAppointmentPlan(const CcSim *sim)
     plan.gate = CC_ARCHIVE_RECRUIT_RECORDS;
     for (int32_t i = 0; i < sim->treasure_count; ++i) {
         const CcTreasure *volume = &sim->treasures[i];
-        if (TreasureIsArchiveVolume(volume) && volume->owner_id == seat->id && volume->location_id == seat->id &&
+        if (CcArchiveVolumeIsLive(volume) && volume->owner_id == seat->id && volume->location_id == seat->id &&
             volume->craft_work < CC_SIM_MAX_UNITS && volume->appraised_value < CC_SIM_MAX_UNITS &&
             (plan.volume_id == 0 || volume->id < plan.volume_id)) plan.volume_id = volume->id;
     }
@@ -6779,7 +6702,7 @@ static void AdvanceArchives(CcSim *sim)
 
     if (sim->treasure_count >= CC_MAX_TREASURES - 4) {
         int32_t tome_slots[4];
-        if (FindArchiveVolumesToBind(sim, tome_slots)) {
+        if (CcArchiveFindVolumesToBind(sim, tome_slots)) {
             CcId oldest_owner = sim->treasures[tome_slots[0]].owner_id;
             CcId oldest_location =
                 sim->treasures[tome_slots[0]].location_id;
@@ -6857,8 +6780,8 @@ static void AdvanceArchives(CcSim *sim)
     } else if (archives->scribes == 0 && archives->lore_stored > 0) {
         int32_t oldest = -1;
         for (int32_t i = 0; i < sim->treasure_count; ++i) {
-            if (TreasureIsArchiveVolume(&sim->treasures[i]) &&
-                EarlierArchiveVolume(sim, i, oldest)) {
+            if (CcArchiveVolumeIsLive(&sim->treasures[i]) &&
+                CcArchiveVolumeEarlier(sim, i, oldest)) {
                 oldest = i;
             }
         }
@@ -12360,7 +12283,7 @@ static void ResolveWarSettlement(CcSim *sim, int32_t first,
     int32_t captured = 0;
     for (int32_t i = 0; i < sim->treasure_count; ++i) {
         CcTreasure *t = &sim->treasures[i];
-        if (!TreasureIsArchiveVolume(t) ||
+        if (!CcArchiveVolumeIsLive(t) ||
             t->location_id != ceded->id) continue;
         captured += 1;
     }
@@ -14186,7 +14109,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 int32_t lore_burned = 0;
                 for (int32_t i = 0; i < sim->treasure_count; ++i) {
                     CcTreasure *t = &sim->treasures[i];
-                    if (!TreasureIsArchiveVolume(t)) continue;
+                    if (!CcArchiveVolumeIsLive(t)) continue;
                     CcSettlement *vault = CcSimSettlementMutable(
                         sim, t->owner_id);
                     if (vault == NULL ||
@@ -14197,7 +14120,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 for (int32_t i = 0;
                      i < sim->treasure_count && burned < burn_target; ++i) {
                     CcTreasure *t = &sim->treasures[i];
-                    if (!TreasureIsArchiveVolume(t)) continue;
+                    if (!CcArchiveVolumeIsLive(t)) continue;
                     CcSettlement *vault = CcSimSettlementMutable(
                         sim, t->owner_id);
                     if (vault == NULL ||
@@ -18592,8 +18515,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             treasure->owner_id == sim->dragon.id ||
             treasure->owner_id == sim->player.id ||
             treasure->owner_id == sim->hoard_raiders.id;
-        bool archive_material = ArchiveTitle(treasure->name) ||
-            (strncmp(treasure->name, "Ruined ", 7) == 0 && ArchiveTitle(treasure->name + 7));
+        bool archive_material = CcArchiveVolumeHasTitle(treasure->name) ||
+            (strncmp(treasure->name, "Ruined ", 7) == 0 && CcArchiveVolumeHasTitle(treasure->name + 7));
         bool plain_archive = sim->schema_version >= 84U && archive_material &&
             treasure->gold_content == 0 && treasure->gem_content == 0;
         if (CcIdKind(treasure->id) != CC_ENTITY_TREASURE ||

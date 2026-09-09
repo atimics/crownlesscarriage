@@ -94,6 +94,7 @@ add_library(crownless_sim
     src/sim/cc_sim_hash.c
     src/sim/cc_occupations.c
     src/sim/cc_gossip_topics.c
+    src/sim/cc_archive_volumes.c
     src/sim/cc_archive_staff.c
     src/sim/cc_archive_recruitment.c
     src/sim/cc_archive_queries.c
