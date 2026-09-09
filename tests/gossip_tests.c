@@ -784,7 +784,8 @@ static void CheckShortageRegisters(void)
     CC_CHECK(strstr(deep.text, town) != NULL);
     CC_CHECK(strstr(deep.text, "weeks") == NULL);
     CC_CHECK(strstr(deep.text, "food") != NULL);
-    CC_CHECK(strstr(deep.text, "other mouths") != NULL);
+    CC_CHECK(strstr(deep.text, "word going round") != NULL ||
+             strstr(deep.text, "so people say") != NULL);
     printf("Deep hearsay: %s\n", deep.text);
     /* The telling is stable: same account, same speaker, same words. */
     CcSpeech again;
@@ -1013,7 +1014,8 @@ static void CheckHeldAccountBoundary(void)
         int32_t slot = GossipSlotOf(id);
         CarrierOf(speaker->id)->versions[slot].confidence = 10;
         CC_CHECK(CcSpeechGossip(&sim, speaker->id, offset, false, &again));
-        CC_CHECK(strstr(again.text, "not sure") != NULL);
+        CC_CHECK(strstr(again.text, "if the story is right") != NULL ||
+                 strstr(again.text, "if there's truth in the rumour") != NULL);
         printf("Held account: %s\n", first.text);
     }
     Prepare();

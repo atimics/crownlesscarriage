@@ -70,10 +70,16 @@ bool CcSpeechRealizeGossip(const CcSim *sim, const CcCharacter *speaker,
                            char *text, size_t capacity);
 /* Shared language packet for game speech and core-model examples.
    account is the held telling; claim is a supported, quantity-free rendering. */
-#define CC_GOSSIP_LANGUAGE_VERSION 1
+#define CC_GOSSIP_LANGUAGE_VERSION 2
+typedef enum CcGossipDetail {
+    CC_GOSSIP_DETAIL_FULL,
+    CC_GOSSIP_DETAIL_ACTOR,
+    CC_GOSSIP_DETAIL_SUBJECT
+} CcGossipDetail;
 typedef struct CcGossipLanguage {
     CcEventKind kind;
     uint32_t variant;
+    CcGossipDetail detail;
     int32_t confidence;
     int32_t retellings;
     char account[CC_EVENT_TEXT_CAPACITY];

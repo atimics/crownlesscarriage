@@ -34,21 +34,51 @@ def world_split(seed):
     return "train" if bucket < 80 else "validation" if bucket < 90 else "test"
 
 
+def event_prefix(row):
+    events = row.get("events")
+    if events is None:
+        context = row["input"]
+        events = [{"text": context["account"], "confidence": context["confidence"],
+                   "retellings": context["retellings"]}]
+    if not 1 <= len(events) <= 3:
+        raise ValueError("Expected one to three held events")
+    lines = []
+    for event in events:
+        text = event["text"]
+        if not text or "\n" in text or "\r" in text:
+            raise ValueError("Each event must be one line")
+        # Two compact evidence cues: uncertain and widely retold.
+        cue = ("? " if event["confidence"] < 40 else "") + ("~ " if event["retellings"] >= 4 else "")
+        lines.append("- " + cue + text)
+    return "\n".join(lines) + "\n"
+
+
 def prepare_row(row, seed):
-    if row["version"] != 1 or row["provenance"]["world_seed"] != seed:
+    if row["version"] != 2 or row["provenance"]["world_seed"] != seed:
         raise ValueError("Exporter version or world seed mismatch")
     context = row["input"]
     if not context["account"] or not row["output"] or any(c.isdigit() for c in row["output"]):
         raise ValueError("Expected a held account and quantity-free speech")
-    expected = ("I am unsure of this account: " if context["confidence"] < 40 else
-                "This account has passed through several people: " if context["retellings"] >= 4 else
-                "The account I heard says: " if context["variant"] == 0 else "This is what I was told: ")
-    if not row["output"].startswith(expected):
-        raise ValueError("Speech must preserve the account's uncertainty")
-    row["id"] = digest(encode([context, row["output"]]).encode())
-    row["prompt"] = ("Speak in plain Crownless English from this held account. "
-                     "Express its uncertainty and keep quantities general.\nContext: " +
-                     encode(context) + "\nSpeech:")
+    if context["detail"] not in ("full", "actor", "subject"):
+        raise ValueError("Expected the chosen level of detail")
+    if context["detail"] != "full" and (context["confidence"] >= 40 or
+            context["kind"] not in ("NOTICE", "WAR DECLARED", "PEACE")):
+        raise ValueError("Generalised details require a supported low-confidence account")
+    if any(marker in row["output"] for marker in (
+            "I am unsure of this account:", "This account has passed through several people:",
+            "The account I heard says:", "This is what I was told:")):
+        raise ValueError("Use conversational wording for uncertainty and circulation")
+    prefix = event_prefix(row)
+    if "\n" in row["output"] or "\r" in row["output"]:
+        raise ValueError("Speech must fit on one line")
+    events = row["events"]
+    if events[-1]["event_id"] != row["provenance"]["event_id"]:
+        raise ValueError("The final event must match the spoken account")
+    if any(event["day"] > events[-1]["day"] for event in events) or events[-1]["day"] > row["provenance"]["day"]:
+        raise ValueError("Events must have occurred by the observation day")
+    if any(int(a["event_id"]) >= int(b["event_id"]) for a, b in zip(events, events[1:])):
+        raise ValueError("Held events must follow event order")
+    row["id"] = digest(encode([prefix, row["output"]]).encode())
     return row
 
 
@@ -111,16 +141,25 @@ def select_rows(database, split, limit, per_kind):
 
 
 def write_split(directory, split, rows):
-    path = directory / f"{split}.jsonl"
-    with path.open("w") as stream:
+    path = directory / f"{split}.txt"
+    audit = directory / f"{split}.audit.jsonl"
+    with path.open("wb") as text_stream, audit.open("w") as audit_stream:
         for row in rows:
-            stream.write(encode(row) + "\n")
-    return {"rows": len(rows), "sha256": file_hash(path), "bytes": path.stat().st_size,
+            prefix = event_prefix(row).encode("utf-8")
+            sample = prefix + row["output"].encode("utf-8") + b"\n\n"
+            record = dict(row)
+            record["text_start"] = text_stream.tell()
+            record["output_start"] = text_stream.tell() + len(prefix)
+            record["text_bytes"] = len(sample)
+            text_stream.write(sample)
+            audit_stream.write(encode(record) + "\n")
+    return {"rows": len(rows), "sha256": file_hash(path), "audit_sha256": file_hash(audit),
+            "bytes": path.stat().st_size,
             "output_words": sum(len(row["output"].split()) for row in rows),
             "unique_outputs": len({row["output"] for row in rows}),
-            "world_seeds": sorted({row["provenance"]["world_seed"] for row in rows}),
+            "world_seeds": sorted({row["provenance"]["world_seed"] for row in rows if "provenance" in row}),
             "event_kinds": dict(sorted(Counter(row["input"]["kind"] for row in rows).items())),
-            "rules": dict(sorted(Counter(row["rule"] for row in rows).items()))}
+            "rules": dict(sorted(Counter(row.get("rule", "editorial") for row in rows).items()))}
 
 
 def source_record():
@@ -160,17 +199,17 @@ def build(args):
         if source_record() != source or file_hash(binary) != binary_hash:
             raise ValueError("Source or exporter changed during collection; rerun with a stable build")
         editorial_source = Path(__file__).resolve().parent / "data/gossip_core_editorial.jsonl"
-        shutil.copyfile(editorial_source, staging / "editorial_test.jsonl")
-        manifest = {"version": 1, "generator": "crownless-personal-gossip",
-                    "language": "plain English", "source": source,
+        editorial_rows = [json.loads(line) for line in editorial_source.read_text().splitlines()]
+        editorial_report = write_split(staging, "editorial_test", editorial_rows)
+        manifest = {"version": 2, "generator": "crownless-personal-gossip",
+                    "language": "plain English", "training_format": "event lines followed by speech", "source": source,
                     "binary_sha256": binary_hash,
                     "settings": {key: getattr(args, key) for key in
                                  ("first_seed", "seeds", "days", "max_examples", "max_per_kind")},
                     "worlds": logs, "counts": dict(counts), "splits": reports,
                     "requested_examples": args.max_examples,
                     "written_examples": sum(report["rows"] for report in reports.values()),
-                    "editorial_test": {"rows": len(editorial_source.read_text().splitlines()),
-                                       "sha256": file_hash(editorial_source),
+                    "editorial_test": {**editorial_report,
                                        "origin": "Separately authored challenge examples; human review pending"},
                     "evaluation_scope": "Simulation-world holdout using shared authored language rules",
                     "next_evaluation": "Add separately written test phrasing before assessing language generalisation"}
