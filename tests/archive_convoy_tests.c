@@ -107,6 +107,21 @@ static void CheckFirstLeg(void)
     CC_CHECK(CcSimHash(&sim)==CcSimHash(&restored));
     CC_CHECK(sim.archive_convoy.status==3 || sim.archive_convoy.status==4);
     (void)remove(path);(void)remove("archive-convoy-road-test.ccsave-wal");(void)remove("archive-convoy-road-test.ccsave-shm");
+    plan=Fixture();
+    CC_CHECK(CcSimReserveArchiveConvoy(&sim));
+    CcTreasure *changed=(CcTreasure *)CcSimTreasure(&sim,sim.archive_convoy.book_ids[0]);
+    CC_CHECK(changed!=NULL);changed->location_id=plan.first_hop_id;
+    before=sim;CC_CHECK(CcSimAdvanceArchiveConvoy(&sim,99)==CC_ARCHIVE_CONVOY_WAIT);
+    CC_CHECK(memcmp(&before,&sim,sizeof(sim))==0);
+    changed->location_id=plan.origin_id;
+    sim.schema_version=89U;
+    CcSimAdvanceDays(&sim,7);CC_CHECK(sim.archive_convoy.status==1);Valid();
+    bytes=NULL;size=0;
+    CC_CHECK(CcSaveEncode(&sim,&bytes,&size,error,sizeof(error)));
+    CC_CHECK(CcSaveDecode(bytes,size,&restored,error,sizeof(error)));CcSaveFreeBuffer(bytes);
+    CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION);
+    restored.schema_version=89U;CC_CHECK(CcSimHash(&sim)==CcSimHash(&restored));
+
 }
 
 int main(void)
