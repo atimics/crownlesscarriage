@@ -289,9 +289,9 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(sim->last_bandit_level[i]);
     }
     if (sim->schema_version >= 6U) {
-        const CcGoblinCult *goblins = &sim->goblins;
+        const CcGoblinSociety *goblins = &sim->goblins;
         HASH_VALUE(goblins->id); hash = HashString(hash, goblins->name);
-        HASH_VALUE(goblins->members); HASH_VALUE(goblins->devotion);
+        HASH_VALUE(goblins->members); HASH_VALUE(sim->dragon_cult.devotion);
         HASH_VALUE(goblins->tribute_phase);
         HASH_VALUE(goblins->tribute_target_id);
         HASH_VALUE(goblins->last_tribute_origin_id);
@@ -307,8 +307,8 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(goblins->cohesion);
             HASH_VALUE(goblins->target_warned);
             HASH_VALUE(goblins->expeditions_intercepted);
-            HASH_VALUE(goblins->dragon_seed_phase);
-            HASH_VALUE(goblins->dragon_seed_days_remaining);
+            HASH_VALUE(sim->dragon_cult.dragon_seed_phase);
+            HASH_VALUE(sim->dragon_cult.dragon_seed_days_remaining);
         }
         if (sim->schema_version >= 9U) {
             HASH_VALUE(goblins->lair_settlement_id);
@@ -903,6 +903,42 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(pony->hunger);
             HASH_VALUE(pony->seen);
             HASH_VALUE(pony->ready);
+        }
+    }
+    if (sim->schema_version >= 75U) {
+        HASH_VALUE(sim->dragon_cult.offering_coins);
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            HASH_VALUE(sim->dragon_cult.offering_stock[good]);
+        }
+        const CcGoblinPolitics *p = &sim->goblin_politics;
+        HASH_VALUE(p->dragon_id);
+        HASH_VALUE(p->contest_started_day);
+        HASH_VALUE(p->crown_faction);
+        HASH_VALUE(p->raid_faction);
+        HASH_VALUE(p->next_hunt_faction);
+        for (int32_t i = 0; i < CC_GOBLIN_FACTION_COUNT; ++i) {
+            const CcGoblinFaction *f = &p->factions[i];
+            HASH_VALUE(f->members);
+            HASH_VALUE(f->dungeon_id);
+            HASH_VALUE(f->lair_room);
+            HASH_VALUE(f->porter_room);
+            HASH_VALUE(f->target_room);
+            HASH_VALUE(f->coins);
+            HASH_VALUE(f->gold);
+            HASH_VALUE(f->gems);
+            HASH_VALUE(f->carried_coins);
+            HASH_VALUE(f->carried_gold);
+            HASH_VALUE(f->carried_gems);
+            HASH_VALUE(f->tribute);
+            HASH_VALUE(f->deliveries);
+            HASH_VALUE(f->hunted);
+            HASH_VALUE(f->journey_event_id);
+        }
+        for (int32_t species = 0; species < CC_CULT_SPECIES_COUNT; ++species) {
+            for (int32_t rank = 0; rank < CC_CULT_RANK_COUNT; ++rank) {
+                HASH_VALUE(sim->dragon_cult.ranks[species][rank]);
+            }
+            HASH_VALUE(sim->dragon_cult.service[species]);
         }
     }
 #undef HASH_VALUE

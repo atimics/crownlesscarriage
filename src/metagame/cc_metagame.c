@@ -1174,7 +1174,7 @@ static void DescribeDragon(const CcMetagame *metagame,
                "The dragon is calm. Goblins raid for food, gear, and offerings; only theft from the delivered hoard brings dragon fire.\n");
     } else {
         Append(output, capacity,
-               "No dragon remains to retaliate. Goblins still raid when their lair runs short of food, tools, or weapons.\n");
+               "The dragon has fallen. Red, Purple and Blue compete to fill their own lairs with treasure.\n");
     }
     if (!sim->dragon.slain &&
         sim->player.location_id == sim->dragon.lair_settlement_id) {
@@ -1187,20 +1187,30 @@ static void DescribeGoblins(const CcMetagame *metagame,
                             char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
-    const CcGoblinCult *goblins = &sim->goblins;
+    const CcGoblinSociety *goblins = &sim->goblins;
     const CcSettlement *lair = CcSimSettlement(
         sim, goblins->lair_settlement_id);
-    const char *future = goblins->devotion >= 60 ?
-        goblins->cohesion >= 60 ? "a united dragon court" :
-                                  "fanatical ash-splinters" :
-        goblins->cohesion >= 60 ? "a free lair beyond the dragon" :
-                                  "scattered hungry bands";
     Append(output, capacity,
-           "%s lives beneath %s. Nara Soot-Tongue speaks for its Hoardkeepers, Ashkeepers, Tongues, and Foragers.\n",
-           goblins->name, lair != NULL ? lair->name : "an unknown lair");
+           "Underroad goblins live beneath %s. Nara Soot-Tongue speaks for the porters.\n"
+           "%d goblins; cohesion %d/100. Red, Purple and Blue gather treasure in separate lairs.\n",
+           lair != NULL ? lair->name : "the mountains", goblins->members, goblins->cohesion);
     Append(output, capacity,
-           "%d members; covenant %d/100, cohesion %d/100. Its present course points toward %s.\n",
-           goblins->members, goblins->devotion, goblins->cohesion, future);
+           "Dragon cult: %d humans, %d goblins; covenant %d/100.\n",
+           CcSimCultMembers(sim, CC_CULT_HUMAN), CcSimCultMembers(sim, CC_CULT_GOBLIN), sim->dragon_cult.devotion);
+    Append(output, capacity, "Cult offering chest: %" PRId64 " crowns, %d gold, %d gems.\n",
+           sim->dragon_cult.offering_coins, sim->dragon_cult.offering_stock[CC_GOOD_GOLD], sim->dragon_cult.offering_stock[CC_GOOD_GEMS]);
+    for (int32_t rank = 0; rank < CC_CULT_RANK_COUNT; ++rank) {
+        Append(output, capacity, "%s: %d humans, %d goblins.\n", CcCultRankName(rank),
+               sim->dragon_cult.ranks[CC_CULT_HUMAN][rank], sim->dragon_cult.ranks[CC_CULT_GOBLIN][rank]);
+    }
+    for (int32_t color = 0; color < CC_GOBLIN_FACTION_COUNT; ++color) {
+        const CcGoblinFaction *f = &sim->goblin_politics.factions[color];
+        Append(output, capacity,
+               "%s: %d goblins, %" PRId64 " crowns, %d gold, %d gems in its lair; %" PRId64 " tribute delivered.\n",
+               CcGoblinColorName(color), f->members, f->coins, f->gold, f->gems, f->tribute);
+    }
+    Append(output, capacity, "Dragon crown: %s. All three factions believe further gifts can win favour.\n",
+           CcGoblinColorName(sim->goblin_politics.crown_faction));
     Append(output, capacity,
            "Lair stores: %d Food, %d Tools, %d Weapons, %" PRId64
            " crowns. %d expeditions have been intercepted.\n",
@@ -1227,12 +1237,12 @@ static void DescribeGoblins(const CcMetagame *metagame,
     } else {
         Append(output, capacity, "No expedition is active.\n");
     }
-    if (goblins->dragon_seed_phase != CC_GOBLIN_DRAGON_SEED_NONE) {
+    if (sim->dragon_cult.dragon_seed_phase != CC_GOBLIN_DRAGON_SEED_NONE) {
         Append(output, capacity,
                "The ash-vault project is %s, with about %d years left before it can reveal a dragon seed.\n",
-               goblins->dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_RUMORED ?
+               sim->dragon_cult.dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_RUMORED ?
                    "an open rumor" : "under public preparation",
-               (goblins->dragon_seed_days_remaining + 364) / 365);
+               (sim->dragon_cult.dragon_seed_days_remaining + 364) / 365);
     }
     if (sim->player.location_id == goblins->lair_settlement_id) {
         Append(output, capacity,
@@ -2980,7 +2990,7 @@ bool CcMetagameAgentCounterfactual(const CcMetagame *metagame,
            "Goblin cohesion %d/%d and covenant %d/%d. Dragon shadow %d/%d.\n",
            actual_resolved, control_resolved, actual_failed, control_failed,
            metagame->sim.goblins.cohesion, control->sim.goblins.cohesion,
-           metagame->sim.goblins.devotion, control->sim.goblins.devotion,
+           metagame->sim.dragon_cult.devotion, control->sim.dragon_cult.devotion,
            metagame->sim.dragon.regional_influence,
            control->sim.dragon.regional_influence);
     DescribeCounterfactualEvents(&metagame->sim, &control->sim,
