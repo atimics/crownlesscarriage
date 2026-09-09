@@ -27,6 +27,7 @@ static CcMoney FreightFunds(const CcSim *sim)
     if (sim->schema_version < 85U) return sim->iron_ledger_reserve;
     int32_t staff = sim->archive_staff.active ? sim->archive_staff.legacy_scribes : sim->archives.scribes;
     CcMoney floor = staff >= 3 ? 300 : staff == 2 ? 150 : staff == 1 ? 50 : 0;
+    if (sim->schema_version >= 87U && floor < 50) floor = 50;
     return sim->iron_ledger_reserve > floor ? sim->iron_ledger_reserve - floor : 0;
 }
 

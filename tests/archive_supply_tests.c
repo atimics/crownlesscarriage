@@ -48,6 +48,11 @@ static CcArchiveSupplyPlan Query(CcArchiveSupplyGate gate)
 static void CheckWritingKitBudget(void)
 {
     Fixture(); sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    sim.archives.scribes = 0; sim.iron_ledger_reserve = 52;
+    (void)Query(CC_ARCHIVE_SUPPLY_FUNDS);
+    sim.iron_ledger_reserve = 53;
+    CC_CHECK(Query(CC_ARCHIVE_SUPPLY_READY).total_charge == 3);
+    sim.archives.scribes = 1; sim.iron_ledger_reserve = 100;
     CcSettlement *seat = &sim.settlements[0];
     seat->stock[CC_GOOD_FOOD] = 0; seat->stock[CC_GOOD_WHEAT] = 0;
     seat->stock[CC_GOOD_TOOLS] = 0;

@@ -613,6 +613,8 @@ int main(void)
     tool_convoy.settlement_count = 2;
     tool_convoy.route_count = 1;
     tool_convoy.shipment_count = 0;
+    /* The town market funds this ordinary tool convoy. */
+    tool_convoy.iron_ledger_reserve = 0;
     tool_convoy.bandit_count = 0;
     tool_convoy.monster_count = 0;
     tool_convoy.dungeon_count = 0;
