@@ -1765,7 +1765,7 @@ static void DrawSettlementCreatures(const CcSim *sim,
                                     float clock, Vector3 scenery_focus)
 {
     if (sim == NULL || place == NULL) return;
-    const CcGoblinCult *goblins = &sim->goblins;
+    const CcGoblinSociety *goblins = &sim->goblins;
 
     if (place->cow_adults + place->cow_calves > 0 &&
         SceneryPointVisible(63.0f, 38.3f, scenery_focus)) {

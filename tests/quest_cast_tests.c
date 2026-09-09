@@ -121,6 +121,7 @@ int main(void)
     CC_CHECK(CcSaveDecode(bytes, length, &restored, error, sizeof(error)));
     CcSaveFreeBuffer(bytes);
     sim.schema_version = CC_SIM_SCHEMA_VERSION;
+        CcSimInitializeGoblinPolitics(&sim);
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
     FILE *source = fopen(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-73-generator-25-cast-journal.ccsave", "rb");
     FILE *copy = fopen(path, "wb");
@@ -137,6 +138,7 @@ int main(void)
     sim.schema_version = 73U;
     CC_CHECK(CcSimHash(&sim) == UINT64_C(17607823286729841219));
     sim.schema_version = CC_SIM_SCHEMA_VERSION;
+        CcSimInitializeGoblinPolitics(&sim);
     Valid();
     CC_CHECK(CcJournalClose(&journal, &sim, error, sizeof(error)));
     (void)remove(path);

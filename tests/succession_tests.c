@@ -163,6 +163,7 @@ static void CheckSuccessionSaves(void)
         CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
         CC_CHECK(restored.kingdoms[slot].ruler_character_id == winner_id);
         sim.schema_version = CC_SIM_SCHEMA_VERSION;
+        if (version < 75U) CcSimInitializeGoblinPolitics(&sim);
         CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
         (void)remove(path);
     }
