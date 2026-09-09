@@ -168,9 +168,11 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
         items[1] = (FrontendItem){create ? FRONTEND_ACTION_FIELD_WORLD : FRONTEND_ACTION_FIELD_INVITATION,
             {x, y + 64, 848, 46}, create ? "World name" : "Invitation", true};
         int count = 2;
-        if (create) items[count++] = (FrontendItem){FRONTEND_ACTION_FIELD_PASS, {x, y + 128, 848, 46}, "World pass", true};
-        if (create) items[count++] = (FrontendItem){FRONTEND_ACTION_CAMPAIGN_CHOICE,
-            {x, y + 186, 848, 36}, state->deep_wyrm_start ? "Campaign: The Day of the Deep Wyrm" : "Campaign: A new world", true};
+        if (create) {
+            items[count++] = (FrontendItem){FRONTEND_ACTION_FIELD_PASS, {x, y + 128, 848, 46}, "World pass", true};
+            items[count++] = (FrontendItem){FRONTEND_ACTION_CAMPAIGN_CHOICE,
+                {x, y + 186, 848, 36}, state->deep_wyrm_start ? "Campaign: The Day of the Deep Wyrm" : "Campaign: A new world", true};
+        }
         items[count++] = (FrontendItem){create ? FRONTEND_ACTION_CREATE_SUBMIT : FRONTEND_ACTION_JOIN_SUBMIT,
             {x, y + 240, 412, 46}, create ? "Create world" : "Join company", true};
         items[count++] = (FrontendItem){FRONTEND_ACTION_WORLD_LIST, {x + 436, y + 240, 412, 46}, "Back", true};
