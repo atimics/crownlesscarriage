@@ -8,6 +8,9 @@ const CcSettlement *CcArchiveSeat(const CcSim *sim);
 /* The simulation is required; an unavailable settlement yields zero grain. */
 int32_t CcArchiveSpareGrain(const CcSim *sim, const CcSettlement *place);
 
+/* Remember the established seat and its continuous material failure period. */
+void CcArchiveRememberSeat(CcSim *sim);
+
 /* Commit a fresh booking through the shared carriage and shipment pool. */
 bool CcArchiveDispatchSupply(CcSim *sim, CcId carriage_id);
 

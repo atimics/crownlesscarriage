@@ -6527,6 +6527,7 @@ bool CcSimAutoArchiveRecruitment(CcSim *sim)
 static void AdvanceArchives(CcSim *sim)
 {
     if (sim == NULL || sim->current_day % 7 != 0) return;
+    CcArchiveRememberSeat(sim);
     CcArchives *archives = &sim->archives;
 
     int32_t target_scribes = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
@@ -20015,6 +20016,13 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     }
     if (sim->schema_version >= 59U && !CcMineValidate(sim)) {
         SetError(error, error_capacity, "Mine visit state is invalid.");
+        return false;
+    }
+    if (sim->schema_version >= 88U &&
+        ((sim->archives.seat_id != 0 && CcSimSettlement(sim, sim->archives.seat_id) == NULL) ||
+         sim->archives.seat_failed_since_day < 0 || sim->archives.seat_failed_since_day > sim->current_day ||
+         (sim->archives.seat_id == 0 && sim->archives.seat_failed_since_day != 0))) {
+        SetError(error, error_capacity, "Archive seat state is invalid.");
         return false;
     }
     if (!CcSimArchiveRecruitmentOrderValid(sim)) {
