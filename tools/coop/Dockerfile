@@ -3,6 +3,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /source
 COPY CMakeLists.txt CMakePresets.json LICENSE THIRD_PARTY_NOTICES.txt ./
+COPY assets/campaigns ./assets/campaigns
 COPY src ./src
 COPY tests ./tests
 COPY tools/*.c ./tools/
@@ -18,6 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY --from=native /source/build/libcrownless_coop.so ./libcrownless_coop.so
 COPY tools/coop ./tools/coop
 COPY web/coop ./web/coop
+COPY assets/campaigns ./assets/campaigns
 COPY out/build/web/site ./game
 ARG CROWNLESS_REVISION=development
 ENV CROWNLESS_REVISION=$CROWNLESS_REVISION PYTHONUNBUFFERED=1

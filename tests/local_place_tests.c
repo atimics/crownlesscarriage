@@ -61,7 +61,8 @@ static int ProfileContract(void)
                 camera->camera_offset_x * camera->camera_offset_x +
                 camera->camera_offset_z * camera->camera_offset_z;
             CHECK(camera_distance_squared >= 5.0f * 5.0f);
-            bool valley_view = profile->function == CC_SETTLEMENT_FARMING &&
+            bool valley_view = (profile->function == CC_SETTLEMENT_FARMING ||
+                                profile->function == CC_SETTLEMENT_MARKET) &&
                 (camera->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ||
                  camera->kind == CC_LOCAL_TOWN_SCENE_HEART ||
                  camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK);
@@ -72,13 +73,16 @@ static int ProfileContract(void)
             if (camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
                 CHECK(camera->fovy >= 9.0f);
             } else if (camera->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST) {
-                CHECK(camera->fovy <= 6.6f);
+                bool pony_yard = profile->function == CC_SETTLEMENT_MARKET &&
+                    camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD;
+                CHECK(camera->fovy <= (pony_yard ? 9.0f : 6.6f));
             }
             if (camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD) {
                 CHECK(camera->trigger_x >= 42.0f && camera->trigger_x <= 43.0f);
                 CHECK(camera->trigger_z >= 54.5f && camera->trigger_z <= 56.0f);
                 CHECK(camera->target_x >= 38.0f && camera->target_x <= 41.0f);
-                CHECK(camera->target_z >= 51.0f && camera->target_z <= 53.0f);
+                CHECK(camera->target_z >= 51.0f && camera->target_z <=
+                      (profile->function == CC_SETTLEMENT_MARKET ? 54.0f : 53.0f));
             }
             for (int32_t previous = 0; previous < scene; ++previous) {
                 CHECK(strcmp(camera->name,
@@ -138,7 +142,8 @@ static int ProfileContract(void)
             CHECK(structure->name != NULL && structure->name[0] != '\0');
             CHECK(structure->width >= 4.5f);
             CHECK(structure->depth >= 4.5f);
-            float minimum_height = function == CC_SETTLEMENT_FARMING ? 3.0f : 4.5f;
+            float minimum_height = function == CC_SETTLEMENT_FARMING ? 3.0f :
+                function == CC_SETTLEMENT_MARKET ? 4.0f : 4.5f;
             CHECK(structure->height >= minimum_height);
             CHECK(structure->style >= CC_LOCAL_BUILDING_DOMESTIC);
             CHECK(structure->style <= CC_LOCAL_BUILDING_WORKER_ROW);
@@ -405,7 +410,8 @@ static int AuthoredTownMaps(void)
         const CcLocalPlaceBuilding *primary = CcLocalPlaceBuildingAt(
             (CcSettlementFunction)function, profile->primary_building);
         CHECK(primary != NULL);
-        CHECK(primary->x == 44.0f && primary->z == 16.0f);
+        CHECK(primary->x == 44.0f);
+        CHECK(primary->z == (function == CC_SETTLEMENT_MARKET ? 12.0f : 16.0f));
         CHECK(primary->width == 12.0f && primary->depth == 10.0f);
         CHECK(primary->door);
 
