@@ -175,7 +175,7 @@ int main(void)
     CC_CHECK(sim.archives.lore_stored == before.archives.lore_stored - 1);
     RoundTrip();
     sim = before;
-    char old_name[CC_NAME_CAPACITY];
+    char old_name[CC_MAP_NAME_CAPACITY];
     (void)snprintf(old_name, sizeof(old_name), "%s", Volume()->name);
     (void)snprintf(Volume()->name, sizeof(Volume()->name), "Ruined %.40s", old_name);
     CcSimUpgradeArchivePhysicalLore(&sim);
