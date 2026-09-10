@@ -59,7 +59,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schema 75 (goblin/dragon faction split) and 76 (rot diet) shipped from
    other branches; this branch's archive supply dispatch is schema 77. */
-#define CC_SIM_SCHEMA_VERSION 77
+#define CC_SIM_SCHEMA_VERSION 78
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -1554,6 +1554,10 @@ typedef struct CcCharacter {
     CcId bandit_group_id;
     int32_t hungry_days;
     int32_t unsheltered_nights;
+    /* A journey in progress. News rides with the traveller: arriving syncs the
+       carrier's stories into the new town, which is what makes retelling happen. */
+    CcId travel_destination_id;
+    int32_t travel_arrival_day;
     CcCharacterMemory memories[CC_CHARACTER_MEMORY_CAPACITY];
     int32_t memory_count;
     int32_t memory_write_index;
@@ -1945,7 +1949,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 184552,
+_Static_assert(sizeof(CcSim) == 184936,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

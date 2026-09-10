@@ -17,7 +17,7 @@ bool CcStartingCampaignDeepWyrm(CcSim *sim, const char *path,
     if (!CcSaveRead(path, world, error, capacity)) goto done;
     if (world->world_seed != CC_DEEP_WYRM_SEED || world->current_day != CC_DEEP_WYRM_DAY ||
         world->schema_version != CC_SIM_SCHEMA_VERSION || world->generator_version != 25U ||
-        CcSimHash(world) != UINT64_C(0xb3674235d45d3345)) {
+        CcSimHash(world) != UINT64_C(0xe0565bf255a56546)) {
         (void)snprintf(error, capacity, "The starting world differs from the recorded campaign. Restore its campaign file.");
         goto done;
     }
