@@ -25,7 +25,7 @@
 #define CC_MAX_QUEST_OUTCOMES 24
 #define CC_MAX_QUEST_EVIDENCE 8
 #define CC_MAX_PENDING_ECHOES 3
-#define CC_MAX_CHARACTERS 24
+#define CC_MAX_CHARACTERS 80
 #define CC_MAX_HISTORIC_CHARACTERS 32
 #define CC_MAX_SCRIBES 4
 #define CC_MAX_GOSSIP 32
@@ -1949,7 +1949,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 184936,
+_Static_assert(sizeof(CcSim) == 281704,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

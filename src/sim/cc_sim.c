@@ -10734,6 +10734,47 @@ static void AssignSituationCastLegacy(CcSim *sim, CcSituation *situation,
 
 #include "cc_quest_cast.inc"
 
+/* How many named residents a town carries. Before schema 78 every settlement
+   held exactly four regardless of size, so a capital of 8,700 people and a
+   dying town of 349 had the same cast. Scale it with the population the named
+   people are meant to stand for, and keep older worlds on the flat four. */
+static int32_t ResidentTarget(const CcSim *sim, const CcSettlement *place)
+{
+    if (sim->schema_version < 78U) return 4;
+    if (place == NULL || CcSettlementIsAbandoned(place)) return 4;
+    int32_t scaled = 3 + place->population / 300;
+    return ClampI32(scaled, 3, 16);
+}
+
+/* The trades a town seeds, in order. The first four hold the shape older
+   worlds had; past that the mix leans on what the settlement is for, so a
+   market raises travellers and couriers and a fortress raises scouts. */
+static CcCharacterRole ResidentRole(const CcSettlement *place, int32_t index)
+{
+    static const CcCharacterRole base[] = {
+        CC_CHARACTER_OFFICIAL, CC_CHARACTER_LABORER,
+        CC_CHARACTER_SCOUT, CC_CHARACTER_TRAVELLER
+    };
+    if (index < 4) return base[index];
+    static const CcCharacterRole trade[] = {
+        CC_CHARACTER_TRAVELLER, CC_CHARACTER_COURIER, CC_CHARACTER_LABORER,
+        CC_CHARACTER_OFFICIAL, CC_CHARACTER_TRAVELLER, CC_CHARACTER_REFUGEE
+    };
+    static const CcCharacterRole guard[] = {
+        CC_CHARACTER_SCOUT, CC_CHARACTER_LABORER, CC_CHARACTER_COURIER,
+        CC_CHARACTER_SCOUT, CC_CHARACTER_OFFICIAL, CC_CHARACTER_REFUGEE
+    };
+    static const CcCharacterRole common[] = {
+        CC_CHARACTER_LABORER, CC_CHARACTER_SCOUT, CC_CHARACTER_TRAVELLER,
+        CC_CHARACTER_LABORER, CC_CHARACTER_COURIER, CC_CHARACTER_REFUGEE
+    };
+    const CcCharacterRole *ladder =
+        place->function == CC_SETTLEMENT_MARKET ||
+        place->function == CC_SETTLEMENT_CAPITAL ? trade :
+        place->function == CC_SETTLEMENT_FORTRESS ? guard : common;
+    return ladder[(index - 4) % 6];
+}
+
 static void FillSettlementResidents(CcSim *sim)
 {
     if (sim == NULL) return;
@@ -10746,19 +10787,22 @@ static void FillSettlementResidents(CcSim *sim)
                 residents += 1;
             }
         }
+        int32_t target = ResidentTarget(sim, &sim->settlements[settlement]);
         uint32_t ordinal = 0U;
-        while (residents < 4 && sim->character_count < CC_MAX_CHARACTERS) {
+        while (residents < target && sim->character_count < CC_MAX_CHARACTERS) {
             char name[CC_NAME_CAPACITY];
             do {
                 GenerateResidentName(sim, settlement_id, 0, ordinal++, name);
             } while (CharacterForName(sim, name) != NULL && ordinal < 2048U);
-            CcCharacterRole role = residents == 0 ? CC_CHARACTER_OFFICIAL :
-                residents == 1 ? CC_CHARACTER_LABORER :
-                residents == 2 ? CC_CHARACTER_SCOUT :
-                                 CC_CHARACTER_TRAVELLER;
+            CcCharacterRole role = ResidentRole(&sim->settlements[settlement],
+                                                residents);
             CcCharacterGoal goal = role == CC_CHARACTER_OFFICIAL ?
                 CC_CHARACTER_GOAL_KEEP_ORDER :
-                CC_CHARACTER_GOAL_SECURE_LIVELIHOOD;
+                role == CC_CHARACTER_COURIER ?
+                    CC_CHARACTER_GOAL_CARRY_NEWS :
+                role == CC_CHARACTER_REFUGEE ?
+                    CC_CHARACTER_GOAL_SURVIVE_CRISIS :
+                    CC_CHARACTER_GOAL_SECURE_LIVELIHOOD;
             if (PromoteCharacter(sim, name, settlement_id, 0U, role, goal,
                                  CC_CHARACTER_ACTIVITY_WORKING) == NULL) {
                 break;
@@ -17790,6 +17834,15 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
           (version->source_character_id & CC_ID_SERIAL_MASK) < sim->next_entity_serial));
 }
 
+static int32_t InhabitedSettlements(const CcSim *sim)
+{
+    int32_t count = 0;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        if (!CcSettlementIsAbandoned(&sim->settlements[i])) count += 1;
+    }
+    return count;
+}
+
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim == NULL) {
@@ -17868,7 +17921,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         sim->character_count < 0 ||
         sim->character_count > CC_MAX_CHARACTERS ||
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
-         (sim->character_count != CC_MAX_CHARACTERS ||
+         /* Before 78 the cast was seeded flat at four per town and the cap was
+            set to match exactly, so the world was always precisely full. Now
+            the target scales with population, so the total varies by world and
+            the invariant becomes a floor: every inhabited town keeps at least
+            the three residents ResidentTarget guarantees. */
+         ((sim->schema_version < 78U ?
+             sim->character_count != CC_MAX_CHARACTERS :
+             sim->character_count < InhabitedSettlements(sim) * 3) ||
           sim->character_births < 0 ||
           sim->character_births > CC_SIM_MAX_DAY ||
           sim->character_deaths < 0 ||
