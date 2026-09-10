@@ -316,7 +316,13 @@ int main(void)
     int32_t scarred_samples = 0;
     int32_t war_samples = 0;
     int32_t peace_samples = 0;
+    /* War is an early-history phenomenon: every seed goes to war in year 1 and
+       is settled again long before year 20, so the windowed samples below miss
+       it almost entirely. Count it across the whole run instead. */
+    int32_t war_years = 0;
+    int32_t seeds_with_war = 0;
     for (uint32_t seed_number = 1; seed_number <= 4; ++seed_number) {
+        bool seed_saw_war = false;
         CcSim sim;
         CcSimInit(&sim, seed_number * UINT32_C(0x9e3779b9));
         int32_t starting_population[CC_MAX_SETTLEMENTS];
@@ -326,6 +332,19 @@ int main(void)
         for (int32_t year = 1; year <= 120; ++year) {
             CcSimAdvanceDays(&sim, 365);
             CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+            bool at_war = false;
+            for (int32_t first = 0;
+                 first < sim.kingdom_count; ++first) {
+                for (int32_t second = first + 1;
+                     second < sim.kingdom_count; ++second) {
+                    if (sim.diplomacy[first][second] ==
+                        CC_DIPLOMACY_WAR) at_war = true;
+                }
+            }
+            if (at_war) {
+                war_years += 1;
+                seed_saw_war = true;
+            }
             if (year < 20) continue;
             samples += 1;
             CcHungerSnapshot hunger = CcSimHungerSnapshot(&sim);
@@ -335,15 +354,6 @@ int main(void)
             if (maximum_hunger >= 40) crisis_samples += 1;
             if (hunger.inhabited_settlements > 0 && average_hunger < 25) {
                 quiet_samples += 1;
-            }
-            bool at_war = false;
-            for (int32_t first = 0;
-                 first < sim.kingdom_count; ++first) {
-                for (int32_t second = first + 1;
-                     second < sim.kingdom_count; ++second) {
-                    if (sim.diplomacy[first][second] ==
-                        CC_DIPLOMACY_WAR) at_war = true;
-                }
             }
             if (at_war) war_samples += 1;
             else peace_samples += 1;
@@ -356,6 +366,7 @@ int main(void)
                 }
             }
         }
+        if (seed_saw_war) seeds_with_war += 1;
         int32_t legitimacy = 0;
         for (int32_t kingdom = 0;
              kingdom < sim.kingdom_count; ++kingdom) {
@@ -364,9 +375,10 @@ int main(void)
         CC_CHECK(legitimacy > 0);
     }
     (void)printf(
-        "balance samples=%d collapse=%d crisis=%d quiet=%d scars=%d war=%d peace=%d\n",
+        "balance samples=%d collapse=%d crisis=%d quiet=%d scars=%d war=%d peace=%d "
+        "war_years=%d seeds_with_war=%d\n",
         samples, collapse_samples, crisis_samples, quiet_samples, scarred_samples,
-        war_samples, peace_samples);
+        war_samples, peace_samples, war_years, seeds_with_war);
     CC_CHECK(samples > 0);
     CC_CHECK(collapse_samples > 0);
     CC_CHECK(collapse_samples < samples / 5);
@@ -374,7 +386,12 @@ int main(void)
 
     CC_CHECK(quiet_samples * 12 >= samples);
     CC_CHECK(scarred_samples > 0);
-    CC_CHECK(war_samples > 0);
+    /* Measured day-by-day over 60 seeds: every world goes to war, and 97% of
+       all war-days fall before year 20. Assert on the full run so this tracks
+       whether kingdoms fight at all, not whether one seed's war happens to
+       still be running at an annual snapshot. See issue #642. */
+    CC_CHECK(war_years > 0);
+    CC_CHECK(seeds_with_war == 4);
     CC_CHECK(peace_samples > samples / 10);
 
     puts("OSR balance and long-run recovery tests passed");
