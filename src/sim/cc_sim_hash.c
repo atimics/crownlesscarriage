@@ -588,6 +588,10 @@ uint64_t CcSimHash(const CcSim *sim)
                 HASH_VALUE(character->hungry_days);
                 HASH_VALUE(character->unsheltered_nights);
             }
+            if (sim->schema_version >= 78U) {
+                HASH_VALUE(character->travel_destination_id);
+                HASH_VALUE(character->travel_arrival_day);
+            }
             HASH_VALUE(character->memory_count);
             HASH_VALUE(character->memory_write_index);
             for (int32_t memory = 0;

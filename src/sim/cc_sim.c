@@ -11109,6 +11109,9 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     successor.occupation = sim->schema_version >= 79U ? dead.occupation : CC_OCCUPATION_NONE;
     successor.goal = dead.goal;
     successor.activity = CC_CHARACTER_ACTIVITY_WORKING;
+    /* An heir inherits the office, not the journey. */
+    successor.travel_destination_id = 0U;
+    successor.travel_arrival_day = 0;
     successor.appearance_seed = (uint32_t)(
         successor.id ^ (successor.id >> 32U) ^ sim->world_seed ^
         UINT32_C(0x9e3779b9));
@@ -14733,6 +14736,116 @@ static const CcBanditGroup *TravellerBanditCamp(const CcSim *sim, CcId id)
     return NULL;
 }
 
+/* A private, deterministic roll for travel decisions. Deliberately NOT
+   NextRandom: sharing the simulation stream would shift every other random
+   outcome in the day and make this change ripple far beyond travel. */
+static uint32_t TravelRoll(const CcSim *sim, const CcCharacter *person,
+                           uint32_t salt)
+{
+    uint32_t value = sim->world_seed ^ UINT32_C(0x9e3779b9);
+    value ^= (uint32_t)person->id ^ (uint32_t)(person->id >> 32U);
+    value ^= (uint32_t)sim->current_day * UINT32_C(0x85ebca6b);
+    value ^= salt * UINT32_C(0xc2b2ae35);
+    value ^= value >> 16; value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15; value *= UINT32_C(0x846ca68b);
+    value ^= value >> 16;
+    return value;
+}
+
+/* Characters walk the roads between towns. This exists for gossip: a carrier
+   arriving in a town shares its held stories there and learns that town's,
+   and every such exchange runs RetellGossip, which raises `retellings` and
+   drops `confidence`. Without movement each carrier only ever syncs with its
+   home town, so accounts stay first-hand and never degrade. */
+static void AdvanceCharacterTravel(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 78U) return;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        CcCharacter *person = &sim->characters[i];
+        if (person->death_day > 0 && person->death_day <= sim->current_day) continue;
+
+        if (person->travel_destination_id != 0U) {
+            if (sim->current_day < person->travel_arrival_day) continue;
+            const CcSettlement *arrived =
+                CcSimSettlement(sim, person->travel_destination_id);
+            if (arrived != NULL && !CcSettlementIsAbandoned(arrived)) {
+                person->current_settlement_id = arrived->id;
+            }
+            person->travel_destination_id = 0U;
+            person->travel_arrival_day = 0;
+            person->activity = CC_CHARACTER_ACTIVITY_WORKING;
+            continue;
+        }
+
+        /* Only road-going roles leave town, and only on a weekly cadence so the
+           random stream stays cheap and predictable. */
+        if (person->role != CC_CHARACTER_TRAVELLER &&
+            person->role != CC_CHARACTER_COURIER &&
+            person->role != CC_CHARACTER_SCOUT) continue;
+        if (person->bandit_group_id != 0U) continue;
+        if (CcCharacterAgeYears(sim, person) < 16) continue;
+        if (person->activity == CC_CHARACTER_ACTIVITY_HIDING ||
+            person->activity == CC_CHARACTER_ACTIVITY_SEEKING_AID) continue;
+        if ((sim->current_day + i) % 7 != 0) continue;
+
+        const CcSettlement *here = CcSimSettlement(sim, person->current_settlement_id);
+        if (here == NULL) continue;
+
+        /* Somebody of each trade has to mind the town. SelectPresentQuestCast
+           needs a character of the right role *present* to cast a situation, so
+           the last of a trade stays put rather than silently stopping quests
+           from being created there. At the current cast size this binds often;
+           see the note in the pull request. */
+        int32_t same_role_here = 0;
+        for (int32_t o = 0; o < sim->character_count; ++o) {
+            const CcCharacter *other = &sim->characters[o];
+            if (o == i || other->role != person->role) continue;
+            if (other->death_day > 0 && other->death_day <= sim->current_day) continue;
+            if (other->travel_destination_id != 0U) continue;
+            if (other->current_settlement_id != here->id) continue;
+            same_role_here += 1;
+        }
+        if (same_role_here == 0) continue;
+
+
+        CcId options[CC_MAX_ROUTES];
+        int32_t travel_days[CC_MAX_ROUTES];
+        int32_t option_count = 0;
+        for (int32_t r = 0; r < sim->route_count; ++r) {
+            const CcRoute *route = &sim->routes[r];
+            if (route->closed) continue;
+            if (route->from_id != here->id && route->to_id != here->id) continue;
+            CcId far_id = route->from_id == here->id ? route->to_id : route->from_id;
+            const CcSettlement *far = CcSimSettlement(sim, far_id);
+            if (far == NULL || far->id == here->id ||
+                CcSettlementIsAbandoned(far)) continue;
+            if (option_count >= CC_MAX_ROUTES) break;
+            options[option_count] = far->id;
+            travel_days[option_count] = MaximumI32(1, route->travel_days);
+            option_count += 1;
+        }
+        if (option_count <= 0) continue;
+
+        bool away = person->current_settlement_id != person->home_settlement_id;
+        int32_t chosen = -1;
+        if (away) {
+            /* A traveller who is already out looks for the way home first. */
+            for (int32_t o = 0; o < option_count; ++o) {
+                if (options[o] == person->home_settlement_id) chosen = o;
+            }
+        }
+        if (chosen < 0) {
+            /* Settled people mostly stay put; those already on the road move on. */
+            if (TravelRoll(sim, person, 1U) % 100U >= (away ? 60U : 25U)) continue;
+            chosen = (int32_t)(TravelRoll(sim, person, 2U) % (uint32_t)option_count);
+        }
+
+        person->travel_destination_id = options[chosen];
+        person->travel_arrival_day = sim->current_day + travel_days[chosen];
+        person->activity = CC_CHARACTER_ACTIVITY_TRAVELLING;
+    }
+}
+
 static void AdvanceTravellerNeeds(CcSim *sim)
 {
     for (int32_t i = 0; i < sim->character_count; ++i) {
@@ -14855,6 +14968,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         sim->current_day += 1;
         if (sim->schema_version >= 26U) AdvanceCharacterLifecycles(sim);
         if (sim->schema_version >= 60U) AdvanceTravellerNeeds(sim);
+        AdvanceCharacterTravel(sim);
         HearLocalGossip(sim);
         CcSimRefreshCharacterGossip(sim);
         if (!sim->journey.active) {
@@ -19197,6 +19311,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                   character->unsheltered_nights < 0 || character->unsheltered_nights > 7 ||
                   (character->bandit_group_id != 0U &&
                    TravellerBanditCamp(sim, character->bandit_group_id) == NULL))) ||
+                (sim->schema_version >= 78U &&
+                 (character->travel_arrival_day < 0 ||
+                  character->travel_arrival_day > CC_SIM_MAX_DAY ||
+                  (character->travel_destination_id != 0U &&
+                   (CcSimSettlement(sim, character->travel_destination_id) == NULL ||
+                    character->travel_arrival_day <= 0)) ||
+                  (character->travel_destination_id == 0U &&
+                   character->travel_arrival_day != 0))) ||
                 (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
                  ((character->ancestor_id != 0U &&
                    (!IsIssuedCharacterId(sim, character->ancestor_id) ||
