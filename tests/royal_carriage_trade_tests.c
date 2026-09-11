@@ -159,8 +159,46 @@ static void CheckChangedDestination(void)
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
+static void CheckAbandonedDelivery(void)
+{
+    static CcSim sim, before, restored;
+    char error[256];
+    CcSimInit(&sim, 353U * UINT32_C(0x9e3779b9));
+    sim.schema_version = 74U;
+    for (int year = 0; year < 80; ++year) CcSimAdvanceDays(&sim, 365);
+    for (int day = 0; day < 257; ++day) CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(sim.current_day == 29458);
+    CcSettlement *town = &sim.settlements[5];
+    CC_CHECK(town->population == 0 && town->prosperity == 0);
+    int wheat = town->stock[CC_GOOD_WHEAT];
+    before = sim;
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(town->prosperity == 1 && town->stock[CC_GOOD_WHEAT] == wheat + 12);
+    sim = before; sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    /* The world ran under schema 74, before goblin factions existed;
+       re-initialise them for the current-schema checks this test is about. */
+    CcSimInitializeGoblinPolitics(&sim);
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+    const char *path = "abandoned-delivery.ccsave";
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 1, error, sizeof(error)));
+    CC_CHECK(town->population == 0 && town->prosperity == 0 && town->stock[CC_GOOD_WHEAT] == wheat + 12);
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+    CcJournalAbandon(&journal);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+    CcSimAdvanceDays(&sim, 7); CcSimAdvanceDays(&restored, 7);
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+    (void)remove(path);
+    (void)remove("abandoned-delivery.ccsave-wal");
+    (void)remove("abandoned-delivery.ccsave-shm");
+}
+
 int main(void)
 {
+    CheckAbandonedDelivery();
     CheckSeedTenLongRun();
     CheckChangedDestination();
     CcSim sim;
