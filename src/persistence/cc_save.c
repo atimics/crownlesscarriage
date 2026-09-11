@@ -2969,8 +2969,8 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
         BindInt(character_statement, column++, sim->schema_version >= 60U ? character->hungry_days : 0);
         BindInt(character_statement, column++, sim->schema_version >= 60U ? character->unsheltered_nights : 0);
         BindInt(character_statement, column++, sim->schema_version >= 79U ? (int32_t)character->occupation : 0);
-        BindId(character_statement, column++, sim->schema_version >= 80U ? character->travel_destination_id : 0U);
-        BindInt(character_statement, column++, sim->schema_version >= 80U ? character->travel_arrival_day : 0);
+        BindId(character_statement, column++, sim->schema_version >= 82U ? character->travel_destination_id : 0U);
+        BindInt(character_statement, column++, sim->schema_version >= 82U ? character->travel_arrival_day : 0);
         if (!StepDone(database, character_statement, error, error_capacity) ||
             !ResetStatement(database, character_statement,
                             error, error_capacity)) goto failed;
@@ -5437,7 +5437,7 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
             character->hungry_days = sqlite3_column_int(statement, 23);
             character->unsheltered_nights = sqlite3_column_int(statement, 24);
         }
-        if (sim->schema_version >= 80U) {
+        if (sim->schema_version >= 82U) {
             character->travel_destination_id = (CcId)sqlite3_column_int64(statement, 26);
             character->travel_arrival_day = sqlite3_column_int(statement, 27);
         }

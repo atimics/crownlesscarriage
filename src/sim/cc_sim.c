@@ -5705,8 +5705,12 @@ static void GatherGossip(CcSim *sim)
 
 int32_t CcSimGossipCarrierCapacity(const CcSim *sim)
 {
-    return sim != NULL && sim->schema_version >= 46U ?
-        CC_MAX_GOSSIP_CARRIERS : CC_LEGACY_GOSSIP_CARRIERS;
+    if (sim == NULL || sim->schema_version < 46U) {
+        return CC_LEGACY_GOSSIP_CARRIERS;
+    }
+    return CC_LEGACY_GOSSIP_CARRIERS +
+        (sim->schema_version >= 82U ? CC_MAX_CHARACTERS
+                                    : CC_LEGACY_CHARACTER_CAP);
 }
 
 const CcGossipCarrier *CcSimGossipCarrier(const CcSim *sim, CcId id)
@@ -10804,7 +10808,7 @@ static void AssignSituationCastLegacy(CcSim *sim, CcSituation *situation,
    people are meant to stand for, and keep older worlds on the flat four. */
 static int32_t ResidentTarget(const CcSim *sim, const CcSettlement *place)
 {
-    if (sim->schema_version < 78U) return 4;
+    if (sim->schema_version < 82U) return 4;
     if (place == NULL || CcSettlementIsAbandoned(place)) return 4;
     int32_t scaled = 3 + place->population / 150;
     return ClampI32(scaled, 3, 24);
@@ -14803,7 +14807,7 @@ static uint32_t TravelRoll(const CcSim *sim, const CcCharacter *person,
    home town, so accounts stay first-hand and never degrade. */
 static void AdvanceCharacterTravel(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 78U) return;
+    if (sim == NULL || sim->schema_version < 82U) return;
     for (int32_t i = 0; i < sim->character_count; ++i) {
         CcCharacter *person = &sim->characters[i];
         if (person->death_day > 0 && person->death_day <= sim->current_day) continue;
@@ -19355,7 +19359,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                   character->unsheltered_nights < 0 || character->unsheltered_nights > 7 ||
                   (character->bandit_group_id != 0U &&
                    TravellerBanditCamp(sim, character->bandit_group_id) == NULL))) ||
-                (sim->schema_version >= 78U &&
+                (sim->schema_version >= 82U &&
                  (character->travel_arrival_day < 0 ||
                   character->travel_arrival_day > CC_SIM_MAX_DAY ||
                   (character->travel_destination_id != 0U &&
