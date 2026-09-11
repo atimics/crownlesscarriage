@@ -48,6 +48,10 @@ int main(int argc, char **argv)
     CC_CHECK(argc == 1 || (argc == 2 && strcmp(argv[1], "--save-only") == 0));
     check_hash = argc == 1;
     CcSimInit(&baseline, UINT32_C(0x5eed0001));
+    for (int32_t person = 0; person < baseline.character_count; ++person) {
+        CHECK_FIELD(characters[person].occupation,
+            (CcCharacterOccupation)((baseline.characters[person].occupation + 1) % CC_OCCUPATION_COUNT));
+    }
     for (int32_t town = 0; town < baseline.settlement_count; ++town) {
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             CHECK_FIELD(settlements[town].stock[good],

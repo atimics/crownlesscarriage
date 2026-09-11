@@ -31,9 +31,9 @@ def main():
     # Fixed seed, 1 year, compare mode exercises all four purposes on the
     # same writer so the letter surface is rich enough to assert on.
     first = run(binary, "--seed", "2", "--seeds", "1", "--years", "1",
-                "--compare", "--max-accounts", "3").stdout
+                "--compare", "--max-accounts", "3", "--sealed").stdout
     again = run(binary, "--seed", "2", "--seeds", "1", "--years", "1",
-                "--compare", "--max-accounts", "3").stdout
+                "--compare", "--max-accounts", "3", "--sealed").stdout
     if first != again:
         print("FAIL: identical invocations produced different letters")
         return 1
@@ -78,6 +78,16 @@ def main():
         return 1
     if "repeat" not in mission and "further account" not in mission:
         print("FAIL: expected lineage repeat/further-account terminology")
+        return 1
+
+    herd = run(binary, "--seed", "42", "--seeds", "1", "--years", "2",
+               "--mission", "herds").stdout
+    if "--- page 1:" not in herd or "[by craft]" not in herd:
+        print("FAIL: expected a herd page from a skilled witness")
+        return 1
+    conflict = subprocess.run([binary, "--diary", "--sealed"], capture_output=True)
+    if conflict.returncode != 2:
+        print("FAIL: conflicting writer filters need a clear choice")
         return 1
 
     print("letter probe contracts passed.")

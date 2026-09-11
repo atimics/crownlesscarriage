@@ -1,4 +1,5 @@
 #include "persistence/cc_save.h"
+#include "sim/cc_occupations.h"
 #include "persistence/cc_journal_internal.h"
 #include "persistence/cc_legacy_runtime_internal.h"
 
@@ -499,6 +500,9 @@ static bool EnsureCharacterLifecycleColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "npc_character", "unsheltered_nights",
             "ALTER TABLE npc_character ADD COLUMN unsheltered_nights INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "occupation",
+            "ALTER TABLE npc_character ADD COLUMN occupation INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
         EnsureColumn(database, "meta", "character_births",
             "ALTER TABLE meta ADD COLUMN character_births INTEGER NOT NULL DEFAULT 0;",
@@ -2902,8 +2906,8 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
                  "role,goal,activity,appearance_seed,player_disposition,stress,courage,"
                  "memory_count,memory_write_index,knowledge_count,"
                  "knowledge_write_index,ancestor_id,birth_day,death_day,generation,"
-                 "travel_coins,bandit_group_id,hungry_days,unsheltered_nights) "
-                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "travel_coins,bandit_group_id,hungry_days,unsheltered_nights,occupation) "
+                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &character_statement, error, error_capacity) ||
         !Prepare(database,
                  "INSERT INTO character_memory VALUES(?,?,?,?,?,?);",
@@ -2955,6 +2959,7 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
         BindId(character_statement, column++, sim->schema_version >= 60U ? character->bandit_group_id : 0U);
         BindInt(character_statement, column++, sim->schema_version >= 60U ? character->hungry_days : 0);
         BindInt(character_statement, column++, sim->schema_version >= 60U ? character->unsheltered_nights : 0);
+        BindInt(character_statement, column++, sim->schema_version >= 79U ? (int32_t)character->occupation : 0);
         if (!StepDone(database, character_statement, error, error_capacity) ||
             !ResetStatement(database, character_statement,
                             error, error_capacity)) goto failed;
@@ -5378,6 +5383,16 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
         character->current_settlement_id =
             (CcId)sqlite3_column_int64(statement, 4);
         character->faction_id = (CcId)sqlite3_column_int64(statement, 5);
+        character->occupation = CC_OCCUPATION_NONE;
+        if (sim->schema_version >= 79U) {
+            int64_t occupation = sqlite3_column_int64(statement, 25);
+            if (occupation < CC_OCCUPATION_NONE || occupation >= CC_OCCUPATION_COUNT) {
+                SetError(error, error_capacity, "Character occupation is outside the trade list.");
+                sqlite3_finalize(statement);
+                return false;
+            }
+            character->occupation = (CcCharacterOccupation)occupation;
+        }
         character->role =
             (CcCharacterRole)sqlite3_column_int(statement, 6);
         character->goal =
@@ -5830,6 +5845,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
     uint32_t stored_schema_version = sim->schema_version;
     uint32_t stored_generator_version = sim->generator_version;
     if (!CcSaveUpgradeLegacyRuntime(sim, error, error_capacity)) return false;
+    if (stored_schema_version < 79U) CcSimInitializeOccupations(sim);
     if (stored_schema_version < 34U) CcSimUpgradePlayerKnowledge(sim);
     if (stored_schema_version < 40U) CcPoniesInit(sim);
     if (upgraded != NULL) {

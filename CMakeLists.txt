@@ -92,6 +92,7 @@ add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
     src/sim/cc_sim_hash.c
+    src/sim/cc_occupations.c
     src/sim/cc_gossip_topics.c
     src/sim/cc_archive_queries.c
     src/sim/cc_archive_supply.c
@@ -1670,6 +1671,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(material_chain_tests)
     cc_large_sim_stack(material_chain_tests)
     add_test(NAME material_chain_proofs COMMAND material_chain_tests)
+
+    add_executable(occupation_tests tests/occupation_tests.c)
+    target_link_libraries(occupation_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(occupation_tests)
+    add_test(NAME occupation_identity_and_observation COMMAND occupation_tests)
 
     add_executable(gossip_topic_tests tests/gossip_topic_tests.c)
     target_link_libraries(gossip_topic_tests PRIVATE crownless_sim)

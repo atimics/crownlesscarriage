@@ -57,10 +57,10 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-/* Schema 75 (goblin/dragon faction split), 76 (rot diet) and 77 (archive
-   supply dispatch) shipped ahead of this branch; hostile-border archive
-   contracts are schema 78. */
-#define CC_SIM_SCHEMA_VERSION 78
+/* Schemas 75-78 shipped ahead of this branch (goblin/dragon split, rot diet,
+   archive supply dispatch, hostile-border contracts); saved character
+   occupations are schema 79. */
+#define CC_SIM_SCHEMA_VERSION 79
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -1436,6 +1436,21 @@ typedef enum CcCharacterRole {
     CC_CHARACTER_COURIER
 } CcCharacterRole;
 
+typedef enum CcCharacterOccupation {
+    CC_OCCUPATION_NONE,
+    CC_OCCUPATION_WOODCUTTER,
+    CC_OCCUPATION_SHEPHERD,
+    CC_OCCUPATION_MILLER,
+    CC_OCCUPATION_SMITH,
+    CC_OCCUPATION_QUARRYMAN,
+    CC_OCCUPATION_FARMER,
+    CC_OCCUPATION_BAKER,
+    CC_OCCUPATION_INNKEEPER,
+    CC_OCCUPATION_CARTWRIGHT,
+    CC_OCCUPATION_SCRIBE,
+    CC_OCCUPATION_COUNT
+} CcCharacterOccupation;
+
 typedef enum CcCharacterGoal {
     CC_CHARACTER_GOAL_KEEP_ORDER,
     CC_CHARACTER_GOAL_SECURE_LIVELIHOOD,
@@ -1546,6 +1561,7 @@ typedef struct CcCharacter {
     CcId current_settlement_id;
     CcId faction_id;
     CcCharacterRole role;
+    CcCharacterOccupation occupation;
     CcCharacterGoal goal;
     CcCharacterActivity activity;
     uint32_t appearance_seed;
