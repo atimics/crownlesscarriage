@@ -48,13 +48,17 @@ const char *CcGoodName(CcGood good)
 
 int32_t CcGoodNutritionValue(CcGood good, CcNutritionPurpose purpose)
 {
+    if (purpose == CC_NUTRITION_SCAVENGER) {
+        if (good == CC_GOOD_ROTTEN_MEAT) return CC_NUTRITION_PER_RATION;
+        if (good == CC_GOOD_ROTTEN_GRAIN) return 1;
+    }
     if (purpose == CC_NUTRITION_ANIMAL) {
         return good == CC_GOOD_WHEAT ? CC_NUTRITION_PER_RATION : 0;
     }
     if (good == CC_GOOD_BREAD || good == CC_GOOD_MEAT) {
         return CC_NUTRITION_PER_RATION;
     }
-    if (purpose == CC_NUTRITION_CIVILIAN && good == CC_GOOD_WHEAT) {
+    if ((purpose == CC_NUTRITION_CIVILIAN || purpose == CC_NUTRITION_SCAVENGER) && good == CC_GOOD_WHEAT) {
         return 1;
     }
     return 0;
@@ -73,17 +77,14 @@ int32_t CcNutritionAvailable(const int32_t goods[CC_GOOD_COUNT],
     return nutrition > INT32_MAX ? INT32_MAX : (int32_t)nutrition;
 }
 
-int32_t CcNutritionConsume(int32_t goods[CC_GOOD_COUNT],
-                           CcNutritionPurpose purpose,
-                           int32_t requested_nutrition)
+static int32_t ConsumeNutritionOrder(int32_t goods[CC_GOOD_COUNT],
+    CcNutritionPurpose purpose, int32_t requested_nutrition,
+    const CcGood *order, size_t count)
 {
     if (goods == NULL || requested_nutrition <= 0) return 0;
-    static const CcGood order[] = {
-        CC_GOOD_BREAD, CC_GOOD_MEAT, CC_GOOD_WHEAT
-    };
     int64_t delivered = 0;
     for (size_t i = 0;
-         i < sizeof(order) / sizeof(order[0]) &&
+         i < count &&
          delivered < requested_nutrition; ++i) {
         CcGood good = order[i];
         int32_t value = CcGoodNutritionValue(good, purpose);
@@ -98,9 +99,40 @@ int32_t CcNutritionConsume(int32_t goods[CC_GOOD_COUNT],
         (int32_t)delivered : requested_nutrition;
 }
 
+int32_t CcGoodsRotNutrition(const int32_t goods[CC_GOOD_COUNT])
+{
+    if (goods == NULL) return 0;
+    int64_t nutrition = (int64_t)MaximumI32(0, goods[CC_GOOD_ROTTEN_MEAT]) * CC_NUTRITION_PER_RATION +
+        MaximumI32(0, goods[CC_GOOD_ROTTEN_GRAIN]);
+    return nutrition > INT32_MAX ? INT32_MAX : (int32_t)nutrition;
+}
+
+int32_t CcGoodsConsumeRot(int32_t goods[CC_GOOD_COUNT], int32_t requested_nutrition)
+{
+    static const CcGood order[] = {CC_GOOD_ROTTEN_MEAT, CC_GOOD_ROTTEN_GRAIN};
+    return ConsumeNutritionOrder(goods, CC_NUTRITION_SCAVENGER, requested_nutrition,
+        order, sizeof(order) / sizeof(order[0]));
+}
+
+int32_t CcNutritionConsume(int32_t goods[CC_GOOD_COUNT], CcNutritionPurpose purpose,
+    int32_t requested_nutrition)
+{
+    static const CcGood order[] = {
+        CC_GOOD_ROTTEN_MEAT, CC_GOOD_ROTTEN_GRAIN,
+        CC_GOOD_BREAD, CC_GOOD_MEAT, CC_GOOD_WHEAT
+    };
+    return ConsumeNutritionOrder(goods, purpose, requested_nutrition,
+        order, sizeof(order) / sizeof(order[0]));
+}
+
 CcGood CcGoodsPreferredNutritionGood(
     const int32_t goods[CC_GOOD_COUNT], CcNutritionPurpose purpose)
 {
+    if (goods == NULL) return CC_GOOD_BREAD;
+    if (purpose == CC_NUTRITION_SCAVENGER && CcGoodsRotNutrition(goods) > 0) {
+        return (int64_t)goods[CC_GOOD_ROTTEN_MEAT] * CC_NUTRITION_PER_RATION >= goods[CC_GOOD_ROTTEN_GRAIN] ?
+            CC_GOOD_ROTTEN_MEAT : CC_GOOD_ROTTEN_GRAIN;
+    }
     static const CcGood order[] = {
         CC_GOOD_BREAD, CC_GOOD_MEAT, CC_GOOD_WHEAT
     };

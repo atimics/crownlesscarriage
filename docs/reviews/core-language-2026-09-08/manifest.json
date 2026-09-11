@@ -1,0 +1,1523 @@
+{
+  "binary_sha256": "4a4652639b78a9687feace1b2a5af5c9ebfd9fa07c4b84dd05a81c7ee3f4359f",
+  "counts": {
+    "cross_split_output_duplicates": 606624,
+    "duplicate_pairs": 3068216,
+    "raw_rows": 3694200,
+    "unique_pairs": 19360
+  },
+  "editorial_test": {
+    "origin": "Separately authored challenge examples; human review pending",
+    "rows": 16,
+    "sha256": "4d0d97ebf7f0da275622da17a05f7241b309046df1446aed57ea5d15e33cac35"
+  },
+  "evaluation_scope": "Simulation-world holdout using shared authored language rules",
+  "generator": "crownless-personal-gossip",
+  "language": "plain English",
+  "next_evaluation": "Add separately written test phrasing before assessing language generalisation",
+  "requested_examples": 5000,
+  "settings": {
+    "days": 730,
+    "first_seed": 1,
+    "max_examples": 5000,
+    "max_per_kind": 1000,
+    "seeds": 96
+  },
+  "source": {
+    "commit": "1f53e4e451c357b7d3e7a89ed3c026c4a99251ae",
+    "files": {
+      "CMakeLists.txt": "fe27f509fe859f4b374f9cdf53f3e2ce8b603e82e4edd69d755788dbb876c894",
+      "src/client/cc_audio.c": "e81e22461a21455d11c4d79e88e5c60108f0e6808b08d48865f1eaf26eb2c778",
+      "src/client/cc_audio.h": "6a54bbc1023a1cdf0a631eac759c10c896602ec7eaa29175020bb47aa102e940",
+      "src/client/cc_client_policy.c": "361e2d7242ad599f4ae9ff9009e877a849b5ef16a11fd897e0191b819fc873b0",
+      "src/client/cc_client_policy.h": "ba3aab2937e762c336230cae722ed9188ed42afa9c161bcaf2a3925069e5df25",
+      "src/client/cc_client_session.c": "9805a03b6034e7aa196b3f0f97ae30b2407c6feda9bfb81bb5d7c65b2aaf3d56",
+      "src/client/cc_client_session.h": "72085161a211d24ebec0ad26108af82b979b20a483758574aba6e71c2cb04813",
+      "src/client/cc_company.c": "f48d1bd0497776a96f6b482e7cf77b32eccd6e1e74d12724fb974d90092325f7",
+      "src/client/cc_company.h": "67e9cda32162e8dbc5af8d28704855eaf4ddf19a82c451f574d9ed38c0d8e2db",
+      "src/client/cc_coop_client.c": "f082b4fb6af113f814315ebbac0c4a2ecd9ea8fab22e853e5d8e0fde98c6dadd",
+      "src/client/cc_coop_client.h": "bb646addfa0b72004027a72b3bd206ad1187379d88004c3cb9bcb8a3be941694",
+      "src/client/cc_creature_catalog.c": "e073339a5f94642bddc9f861a29109b6fa986cbb312e163824b720b85865b6e5",
+      "src/client/cc_creature_catalog.h": "331feffc13775a51054ce5ac023a01486c4096439a176d1af5b15699d03a4d8a",
+      "src/client/cc_crew.h": "238f6e8a7440238c59b430d74a4f4ac19b5354f9c0935e7cc4a52e26fa3f0436",
+      "src/client/cc_heraldry.c": "7e98236a3144494638050ce9d2f7f7d8f9be024114ee74fee0ef30565b72791c",
+      "src/client/cc_heraldry.h": "fb2076cd1b25a666dc40ae3221778522a0a39c81a8e955dd709fb3f9ee037569",
+      "src/client/cc_interaction.c": "923c7acf03d6a917eca4684171c501105fff0c42b51c11d70c63ba9cc0856966",
+      "src/client/cc_interaction.h": "936e8fcd32d40c1cdd2a2664e4a5888b4fc800913caf32c5be863ac87010c81c",
+      "src/client/cc_local3d.c": "1c534e4570c24911fd539e4594d5dbc9974c972b1813fcac334a01ee107fc374",
+      "src/client/cc_local3d.h": "e2e145af3ffd531ae7f89d705150e7b1d2c60e3623913385e8853ae1b311c530",
+      "src/client/cc_local3d_internal.h": "7adf16cf759b415a9c2dfe63ba69ca833e28894021a8bdcfdc9d85406e53d895",
+      "src/client/cc_local_place.c": "5215bc89e0b7b8aa22ddff99a13ba46f519a097c9b3731baf6cce187692fb02b",
+      "src/client/cc_local_place.h": "bd5ca1684aa9b281a41ac4e2b561dc1977260e7b1c6d5adb3684e373effbd27a",
+      "src/client/cc_local_renderer_stats.c": "c58a4859cc2d046372a86539732bd19ab26f5ad59e754da00b9bf4ad6a51bcdf",
+      "src/client/cc_local_runtime.c": "7b5bf6b199c5c49f3d944417745e91225b7e627f721eb950f3418b818a5401c4",
+      "src/client/cc_local_viewport.h": "3d313e244d7d27de8a9c92b460ef33382500423b6b81eba8999696edc0c30630",
+      "src/client/cc_music.c": "b2f2274a7b689a6065d9383bd28ba2c32163bca43d8302813485c70aaeaf5269",
+      "src/client/cc_music.h": "67cac285fe41060f03a091801b943bf2a9124092db720c8a400528aa47301e93",
+      "src/client/cc_music_catalog.h": "46178ff6874aa330f6bb4c95aaaba0b245059e502347449cd88d5b19ec54a4ad",
+      "src/client/cc_music_library.c": "8eeacb1d339beb6572b15508ea7b793612af3c7af404e2c107172bfa45569734",
+      "src/client/cc_music_library.h": "f237a7f397b463bad1e9a9ec7d813b648f7c6d600ad66c9655c2cce219f678eb",
+      "src/client/cc_music_net.c": "7fb00ae2729e257b6a6fe822c27963ca9a2111c4985eaaa9fb3f2e5f3364e160",
+      "src/client/cc_music_net.h": "f433cb322a0f2f23c496aea330c17edc5960a15b5e926b1d0ce371e35936df2b",
+      "src/client/cc_music_player.c": "e03f40b6aa11ef99dfb92e92af092a71add065e21a2db9940de794bf469769d2",
+      "src/client/cc_music_player.h": "d2b71c2c43be5837ae33f84a82c7686f5ec583a05963d7bd84291088ba309963",
+      "src/client/cc_music_stream.c": "4de25ab714b33e5129c2e08e3cc67042722ff69ef202a77f5283cf896b49977e",
+      "src/client/cc_music_stream.h": "ada7bbe5522b5e51a2337f788592f93ca36badd101a5d95096e8c9cb5f7f2dac",
+      "src/client/cc_npc_appearance.c": "fa671e1b0ef9c9afa6aaac6b7ed06a3e04b46739bef6654fb6e12048f34396e2",
+      "src/client/cc_npc_appearance.h": "6a310e16320ae24ed6286424d9874354808d94bb0cb3e6b0ceccac09952f10bf",
+      "src/client/cc_overlay.c": "21e9173e22ae7d8407062c0b211b48c50ed2b6bfe5b1320bae8c34230c188635",
+      "src/client/cc_overlay.h": "4b4a0de1fbf9d519e2abe6632a0e3f26fd202628518a7f8c37c4bd29c851988f",
+      "src/client/cc_road_book.c": "e4622cdfa4176811e3fba9fafa3df01df1971cc030cbeb039e02ac34e6f7a6d1",
+      "src/client/cc_road_book.h": "dacd3548770a25394ed853b00422fc84520598be0defa5c4e33e46981151e9a7",
+      "src/client/cc_soundscape.c": "18f12bfb089e2e0d9f79f1765e44092fef3d97551c5ba6834b82e9157c4b5b90",
+      "src/client/cc_soundscape.h": "7ae459ce1952858a387c6e98fba5d409463a3d1f04e2a94b6e0df6d03bba0bab",
+      "src/client/cc_visual_style.h": "ad76e976dd97a086c91d980565df74f3d5269c02118ba2f361cfb2383a2516f7",
+      "src/client/cc_voice_net.c": "ac0bf22fdb81f4f0ee6f296455d2340cf9a1cc5653b3f9323d328bd76e28abe0",
+      "src/client/cc_voice_net.h": "6738e26049378a4c2db6bbe7f8c0814cde15f98df02731ba47ecb620231f519f",
+      "src/client/main.c": "4d7a88e599e2afec5ef67933a8762ef240514b940c8adacdee76885fc97bae48",
+      "src/locomotion/cc_biomech.c": "62e65db13b392c94d3fc1dbdcfc19aab79eecf522c941e28ab1cfa09efd824ee",
+      "src/locomotion/cc_biomech.h": "e9b72bd5c4c6925525683d3ed60952859a6c945fad92b2b6ed0c24c2a5abbda6",
+      "src/locomotion/cc_collision.c": "c7f84b34a4033bda241ceda48aba0a91272f8f6dad594419a8dfcc9b54caeb89",
+      "src/locomotion/cc_collision.h": "25a5dd2f4b489d948c7c3170d7aa55f405482deb7bcca4bc651bfe92e3317056",
+      "src/locomotion/cc_creature.c": "ba3df65f85b8479b88b7391fdf1a35dd5004d62921a742f90f34f7d7261cdfd1",
+      "src/locomotion/cc_creature.h": "7f0c92f35cc7441d07aeba68cac53c07bb090102ac021c715455563319f50a11",
+      "src/locomotion/cc_footing.c": "6aa6b2a3cfbe33bf6a3a45599d75c312a0423a351e0d080664e400d70fe69ea7",
+      "src/locomotion/cc_footing.h": "51706a4f9da60c61b9ceb8fa925104af152731d47511286ccf501384e6d3e0c4",
+      "src/locomotion/cc_humanoid.c": "074fcf1076f9b0f4a59dd537a1f72b429586d5f0834806b8545b0980df448fb2",
+      "src/locomotion/cc_humanoid.h": "f25a05158321e24d62ca5184a9e6398fe83b4ce8a1ffa96bc68c203d688ffbf7",
+      "src/locomotion/cc_humanoid_skin.c": "c938247ce115b6333ea29a30d8c9f3ea1d32b15137258991ee13057df1094328",
+      "src/locomotion/cc_humanoid_skin.h": "d5a4f6853557439e414f41b1ef532a2c93157ce499ca35c0a32e5e6a1be7cf80",
+      "src/locomotion/cc_limb.c": "90cb50d1ab07f8de0599a9b558fb10c2b3b5ce1cf085a39f40beac2b2249aded",
+      "src/locomotion/cc_limb.h": "d2500463213632b2430843a26c3d2137548b566c31afbe0cb0c2095d72c7ef8e",
+      "src/locomotion/cc_motion.c": "6764c5178918c6db766c03ef7d055a18f247137dbe93a433637a0773a51ad950",
+      "src/locomotion/cc_motion.h": "2dc3e9bcb7ed527d42f149a655c8628e5a4f2f0bd3a35f063513dfbe73e8a47b",
+      "src/locomotion/cc_multileg.c": "86f176d72b0180bce68078c67f535f678a83dddb992521178d3338b3a3570551",
+      "src/locomotion/cc_multileg.h": "6e5ab217d637e51da05a85ee72eefea2bda857e080453d406460c61d53ebdf06",
+      "src/locomotion/cc_quadruped.c": "3f71f85793be5098cfd6731c80ff5dc8711f75da58647b7b7e50cb6a6032d859",
+      "src/locomotion/cc_quadruped.h": "9cdb00f0e85852a9f7cdff4672ca049aa8b7c9f168d3ad42c63777c31da24f51",
+      "src/locomotion/cc_robotics.c": "491aaa241f538db93b22d85fcf4da51c403aa7cb9a30f5ddb0de64693b0ae3bf",
+      "src/locomotion/cc_robotics.h": "d3893b4973cf9b3361fb8d8514e2d6f3a2097b7fece9bd0c8617b0b16678ee1b",
+      "src/metagame/cc_metagame.c": "487a53dc2489ae009c949c4c7997eaad21afe1e488c88b07e51a89b3010f8058",
+      "src/metagame/cc_metagame.h": "d23ab5bf7018c8eb311ecce08a7d608051e98f7dcc6c83a356f5799ad4fac751",
+      "src/multiplayer/cc_coop.c": "609b1264683ed6c23a958a4a2729f2f2e129849dbff3349cc7f872d72445409f",
+      "src/multiplayer/cc_coop.h": "6a18eae1ba5647c08f0fb7a24f221487128a5944065f39d46668ad9ccdfaaa3b",
+      "src/multiplayer/cc_coop_commands.h": "d2b644b3914452fbe400c64acd5660c7623cb3f0cd588f9977dac5f1958dfa0c",
+      "src/persistence/cc_journal_internal.h": "8c655e1a2ca5b7befa27520fc09f5f2363506f7b22c2a0aa696b8ceee44f13af",
+      "src/persistence/cc_journal_replay.c": "48b6280f45328bbc5d09081fc53823cf809c02aa6d67e6f63415dbfa7a36c255",
+      "src/persistence/cc_legacy_runtime.c": "fbeb2468c2cdb7845ef4b0d55a0c828154b781c8c6fa50e35c41cb8781e8c9ae",
+      "src/persistence/cc_legacy_runtime_internal.h": "3235e4599ab7f0f8829d10b6381bee6d23ae247bb0b339a9e94b132a0713af3b",
+      "src/persistence/cc_save.c": "e9f38ea8659ce3562a536913f5b61ddcf258bca9adbbb4b19f8a6d2f34a681b8",
+      "src/persistence/cc_save.h": "ae00d6fc1d5048b538f0e6ed6ce98633f239717e088b8c79baf2097796c1abf1",
+      "src/quest/cc_quest.c": "b343df8f55f7040239207c70d000744decb70d6940f979814675a790374bb902",
+      "src/quest/cc_quest.h": "e362d31fdbec6cdfe4bddef017cc6f6b5fa13a788909b22934a36155056387a7",
+      "src/sim/cc_archive_internal.h": "a496b8f71966dd9748d913a7f954897a6bf4bf4d0d59ed1484d28856e409214f",
+      "src/sim/cc_archive_queries.c": "8e7469bcac256a2e3b2322a7e6c3ca2a3216964b32655702da25e8398676d9b3",
+      "src/sim/cc_archive_seat_plan.c": "df3ced4dc719fcee62c9cb05a57ac790c3d7739a8044b77e584b37d3ad658df5",
+      "src/sim/cc_archive_supply.c": "79e2f6510eacf9e69c48ce0a7a8e1ba94e99d3f2f259dab916799f3ab708ed32",
+      "src/sim/cc_food_economy.c": "ee0a40e9e98bd58de7bc68559b705d19d1307ee7eb7311c0314f96d4634634c9",
+      "src/sim/cc_food_economy_internal.h": "bb89e38fbcf5f7916b070fc0fffce6395d724034ef22a1164cd3142ad393fb3f",
+      "src/sim/cc_goods.c": "0604d3f278f3c77e22a0bd0fa06c6a264544585adf7d0ab857b6dd09e9f6acdd",
+      "src/sim/cc_goods_internal.h": "459c21ff661f956f119827b3bdf6d359bdae7b9a1df8f2ecc122044da8fe467c",
+      "src/sim/cc_gossip_topics.c": "7f649df40c88ee143d22a8a02cb148c320ad6028feb8e82830b081225de03fb8",
+      "src/sim/cc_gossip_topics.h": "ec9f430960b00af914bed584fba077f67c2bc60bfad239d82927c6fe9bf408f6",
+      "src/sim/cc_identity.c": "346b1973f0d486c05f26779d16518be94ed4232123de996ee01a1a0b03d76ff4",
+      "src/sim/cc_identity_internal.h": "8950969169cf8d1add8876f9cd8c2d15ff13d50c2adde115e416963ee5ab0f0b",
+      "src/sim/cc_journey.c": "01a3ccfd85ff1f9a85e5165577a403dad0a4f342bb8b5ab52a2145eff06a75ef",
+      "src/sim/cc_journey_commands.c": "3bd6cd9d5c11d64ee0776e1850f1f4c94f5a40459967a7f38612603dd4e220c8",
+      "src/sim/cc_journey_departure.c": "2f1ba8632ddf50db17d828f0311f739e22aabb2d5b93cce48f1417a316864e98",
+      "src/sim/cc_journey_encounter.c": "188f3ecaac6320967fc22ab7506e1206682b6318b809f867c2f45bc11f4f2f7f",
+      "src/sim/cc_journey_internal.h": "002250786c5ee6d1c65ae32476b92605a40685e210b9609f7d872b717cdd0a23",
+      "src/sim/cc_journey_runtime.c": "12357cc2091415f06f927d2f25b21a1e94885184a5788871bce496e2ef61b178",
+      "src/sim/cc_mine.c": "225d1adecce308b2529a163d45b821bd438bc86fda9be93c658ad42e6b6aeb52",
+      "src/sim/cc_mine.h": "24f0d3d3a2c4857fa25493b51fc9d0024ac64a9e4d0408704fff83c2f4c0e6f4",
+      "src/sim/cc_ponies.c": "55cc18f1a5d376f43a6defbaafbcc2b6ff6ff293b6c4f4d740c4a05f32731361",
+      "src/sim/cc_production.c": "d08bdfc4fed503c41d31d6f4aac620f93a395fca93b1a58e6f820402126d4849",
+      "src/sim/cc_production.h": "a03b073e268a56d8a952ba7f90602b1db069ac45a1878a0e6ccf3b4fdcad1018",
+      "src/sim/cc_production_internal.h": "aa217795abefe0d90dcd58bb510c447395f9edaab9bd048f05a41f5eb11c3bd0",
+      "src/sim/cc_road_council.c": "500c4d8b26b48da4e1cc614d659a879d9e08ceff63862f66068e8abb5d66e36a",
+      "src/sim/cc_road_council.h": "4a4360157e2aee3a078f7f763ee72a80ad6945ff9452fad6eb354b35ef2b5f15",
+      "src/sim/cc_route_rules.c": "07b04880a9b08c0850928a7accdeee7e274f044716cbc06209be14cecc0ef80f",
+      "src/sim/cc_route_rules_internal.h": "4ecf80cfa06dad112250fd8ddcc099e1ef0f9352f07dd7fe2d8e2e8ff86f2fdf",
+      "src/sim/cc_sim.c": "171e8e3af46433464eab37454633b2b7c021f3f8b884f2153505a29c78a98822",
+      "src/sim/cc_sim.h": "77d8ebb651a534469559eed9ddd1a4aff17d800ef6a2633aa7df69cbd56e4286",
+      "src/sim/cc_sim_hash.c": "7b78dede5d04af6f0a4d296bebb3da3b091d497b0d0ecbfc03131eb0cb018e3b",
+      "src/sim/cc_sim_versions.c": "691234a0b6f0da057edd4fe51598f3104aa2690ead808447e0bebffa948dd57d",
+      "src/sim/cc_trade_path.c": "4b526e090577fe7c9da6665919291f2c45327609aae9568df93259a12dd7dcda",
+      "src/sim/cc_trade_path_internal.h": "b8307f8a7e7701decb7395fbcac9229337f89a97067682502c2300026c55c379",
+      "src/story/cc_speech.c": "55466511eb027bf20a0e0bee8f1540040ea5c268cad74b95294d43c15cd2681f",
+      "src/story/cc_speech.h": "68d201dd60218ce4ebdf54a1aac447237c21cb961941b46a03c4860c2d6fa62d",
+      "src/story/cc_speech_interactions.c": "2cabe7c97a0917ece72e049fbb37ed5039fc181e916e6f43e0b1129d786a7e8c",
+      "src/story/cc_speech_json.c": "587fafd2b55ce48e24143938e824bfa05e58b4118e8d7bce30880d0af9ee33ad",
+      "src/story/cc_speech_lexicon.c": "5ac437fad83cd6ac768bc98f2a673b5dd73c11a9edcc83c0d8104813066ab323",
+      "src/story/cc_story.c": "fe84dda8c67f235e0a02c8b10225c81e1f84a217abfc6b5f8dc59def592bd0f3",
+      "src/story/cc_story.h": "c15dc16b51d366cfd8e9a3e928c2d0fa63fa9ecb5bbc609ab66b0da40f9f267a",
+      "src/world/cc_world.c": "fe2b371f2b5745045cded1f81cbb534b81511fe2b6b830f3623a6d01340c8a21",
+      "src/world/cc_world.h": "67d2b268846c53d8ba5d91fb59dd636a7a2d756d1fc463d16dfcb7b4d7a1ddc7",
+      "tools/build_gossip_corpus.py": "ac9fb49aec49c0b1cad01a522adc4d2efe382b4a7932e6dd9512cb7229a457ca",
+      "tools/data/gossip_core_editorial.jsonl": "4d0d97ebf7f0da275622da17a05f7241b309046df1446aed57ea5d15e33cac35",
+      "tools/gossip_corpus.c": "eb0035bb8991fcea7984bfb80b87c056b939ae4a529070203d8984ae49d39fd2"
+    }
+  },
+  "splits": {
+    "test": {
+      "bytes": 405023,
+      "event_kinds": {
+        "BANDITS": 2,
+        "DEATH": 70,
+        "GOBLIN RAID": 8,
+        "NOTICE": 408,
+        "TREASURE": 12
+      },
+      "output_words": 7888,
+      "rows": 500,
+      "rules": {
+        "115:0": 35,
+        "115:1": 35,
+        "133:0": 220,
+        "133:1": 188,
+        "49:0": 6,
+        "49:1": 6,
+        "51:0": 4,
+        "51:1": 4,
+        "5:0": 1,
+        "5:1": 1
+      },
+      "sha256": "e6ab3746a0fd7c18356cd9424907d4b5088ce6aa82117f1fea7d20ac04b6e26e",
+      "unique_outputs": 124,
+      "world_seeds": [
+        500282817,
+        1013904242,
+        1161830871,
+        2084311414,
+        2710938699,
+        3154718586,
+        3816266640,
+        4020696199,
+        4055616968
+      ]
+    },
+    "train": {
+      "bytes": 3298401,
+      "event_kinds": {
+        "BANDITS": 700,
+        "CULT RALLIES": 2,
+        "DEATH": 284,
+        "DRAGON FIRE": 90,
+        "DRAGON OMEN": 84,
+        "GOBLIN RAID": 700,
+        "HARVEST": 190,
+        "NOTICE": 700,
+        "PEACE": 50,
+        "ROUTE": 178,
+        "SHORTAGE": 700,
+        "TREASURE": 322
+      },
+      "output_words": 59448,
+      "rows": 4000,
+      "rules": {
+        "0:0": 95,
+        "0:1": 95,
+        "115:0": 142,
+        "115:1": 142,
+        "133:0": 333,
+        "133:1": 367,
+        "1:0": 89,
+        "1:1": 89,
+        "2:0": 345,
+        "2:1": 355,
+        "37:0": 42,
+        "37:1": 42,
+        "39:0": 45,
+        "39:1": 45,
+        "49:0": 161,
+        "49:1": 161,
+        "51:0": 355,
+        "51:1": 345,
+        "5:0": 353,
+        "5:1": 347,
+        "62:0": 25,
+        "62:1": 25,
+        "75:0": 1,
+        "75:1": 1
+      },
+      "sha256": "39459cd86000a6f2e1619dc578b18e59ce867f83c3534e70e576a391fb335e4b",
+      "unique_outputs": 684,
+      "world_seeds": [
+        21582161,
+        56502930,
+        113005860,
+        147926629,
+        260932489,
+        295853258,
+        352356188,
+        387276957,
+        408859118,
+        443779887,
+        535203586,
+        648209446,
+        683130215,
+        739633145,
+        774553914,
+        887559774,
+        922480543,
+        978983473,
+        1035486403,
+        1070407172,
+        1126910102,
+        1218333801,
+        1274836731,
+        1309757500,
+        1366260430,
+        1401181199,
+        1422763360,
+        1457684129,
+        1514187059,
+        1549107828,
+        1605610758,
+        1662113688,
+        1697034457,
+        1753537387,
+        1788458156,
+        1844961086,
+        1901464016,
+        1992887715,
+        2049390645,
+        2140814344,
+        2175735113,
+        2232238043,
+        2288740973,
+        2323661742,
+        2380164672,
+        2415085441,
+        2471588371,
+        2563012070,
+        2619515000,
+        2654435769,
+        2676017930,
+        2767441629,
+        2802362398,
+        2858865328,
+        2915368258,
+        2950289027,
+        3006791957,
+        3063294887,
+        3189639355,
+        3246142285,
+        3302645215,
+        3337565984,
+        3428989683,
+        3485492613,
+        3541995543,
+        3576916312,
+        3633419242,
+        3668340011,
+        3689922172,
+        3724842941,
+        3781345871,
+        3872769570,
+        3964193269,
+        4112119898,
+        4168622828,
+        4203543597,
+        4260046527
+      ]
+    },
+    "validation": {
+      "bytes": 408481,
+      "event_kinds": {
+        "BANDITS": 36,
+        "DEATH": 56,
+        "DRAGON FIRE": 12,
+        "DRAGON OMEN": 12,
+        "NOTICE": 376,
+        "TREASURE": 8
+      },
+      "output_words": 8076,
+      "rows": 500,
+      "rules": {
+        "115:0": 28,
+        "115:1": 28,
+        "133:0": 184,
+        "133:1": 192,
+        "37:0": 6,
+        "37:1": 6,
+        "39:0": 6,
+        "39:1": 6,
+        "49:0": 4,
+        "49:1": 4,
+        "5:0": 18,
+        "5:1": 18
+      },
+      "sha256": "7d40aa0767dfe7a73ce22259b46535af129fdc33352827eac04ffcbed01ada7a",
+      "unique_outputs": 128,
+      "world_seeds": [
+        204429559,
+        591706516,
+        831056844,
+        1936384785,
+        2027808484,
+        2528091301,
+        3041712726,
+        3098215656,
+        3394068914,
+        3929272500
+      ]
+    }
+  },
+  "version": 1,
+  "worlds": [
+    {
+      "rows": 45096,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 7076,
+          "sample": "Moss Compact moves 28 crowns into Gloamgate's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 7076,
+      "world_seed": 2654435769
+    },
+    {
+      "rows": 42184,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1932,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1932,
+      "world_seed": 1013904242
+    },
+    {
+      "rows": 38256,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 3956,
+          "sample": "Moss Compact moves 28 crowns into Gloamgate's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 3956,
+      "world_seed": 3668340011
+    },
+    {
+      "rows": 45280,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2208,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2208,
+      "world_seed": 2027808484
+    },
+    {
+      "rows": 34796,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1870,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1870,
+      "world_seed": 387276957
+    },
+    {
+      "rows": 35834,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1212,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1212,
+      "world_seed": 3041712726
+    },
+    {
+      "rows": 33408,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2172,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2172,
+      "world_seed": 1401181199
+    },
+    {
+      "rows": 32680,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2100,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2100,
+      "world_seed": 4055616968
+    },
+    {
+      "rows": 31016,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1584,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1584,
+      "world_seed": 2415085441
+    },
+    {
+      "rows": 50424,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 5784,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 5784,
+      "world_seed": 774553914
+    },
+    {
+      "rows": 31938,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1561,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1561,
+      "world_seed": 3428989683
+    },
+    {
+      "rows": 39700,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1525,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1525,
+      "world_seed": 1788458156
+    },
+    {
+      "rows": 37008,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2180,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2180,
+      "world_seed": 147926629
+    },
+    {
+      "rows": 38776,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 6160,
+          "sample": "Willow Republic moves 28 crowns into Gloamgate's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 6160,
+      "world_seed": 2802362398
+    },
+    {
+      "rows": 37460,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 3598,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 3598,
+      "world_seed": 1161830871
+    },
+    {
+      "rows": 39920,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2144,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2144,
+      "world_seed": 3816266640
+    },
+    {
+      "rows": 42600,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2976,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2976,
+      "world_seed": 2175735113
+    },
+    {
+      "rows": 40496,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 3148,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 3148,
+      "world_seed": 535203586
+    },
+    {
+      "rows": 35656,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2480,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2480,
+      "world_seed": 3189639355
+    },
+    {
+      "rows": 44424,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2116,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2116,
+      "world_seed": 1549107828
+    },
+    {
+      "rows": 34456,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1936,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1936,
+      "world_seed": 4203543597
+    },
+    {
+      "rows": 40136,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1608,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1608,
+      "world_seed": 2563012070
+    },
+    {
+      "rows": 39144,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2356,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2356,
+      "world_seed": 922480543
+    },
+    {
+      "rows": 34230,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1722,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1722,
+      "world_seed": 3576916312
+    },
+    {
+      "rows": 38712,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2436,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2436,
+      "world_seed": 1936384785
+    },
+    {
+      "rows": 41888,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2684,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2684,
+      "world_seed": 295853258
+    },
+    {
+      "rows": 34896,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1832,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1832,
+      "world_seed": 2950289027
+    },
+    {
+      "rows": 35224,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2484,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2484,
+      "world_seed": 1309757500
+    },
+    {
+      "rows": 42072,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2976,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2976,
+      "world_seed": 3964193269
+    },
+    {
+      "rows": 32958,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1865,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1865,
+      "world_seed": 2323661742
+    },
+    {
+      "rows": 38272,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2468,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2468,
+      "world_seed": 683130215
+    },
+    {
+      "rows": 31216,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1692,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1692,
+      "world_seed": 3337565984
+    },
+    {
+      "rows": 36120,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2008,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2008,
+      "world_seed": 1697034457
+    },
+    {
+      "rows": 40424,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2384,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2384,
+      "world_seed": 56502930
+    },
+    {
+      "rows": 37916,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 3047,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 3047,
+      "world_seed": 2710938699
+    },
+    {
+      "rows": 39240,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2372,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2372,
+      "world_seed": 1070407172
+    },
+    {
+      "rows": 39312,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 3380,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 3380,
+      "world_seed": 3724842941
+    },
+    {
+      "rows": 40206,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2252,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2252,
+      "world_seed": 2084311414
+    },
+    {
+      "rows": 36904,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2612,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2612,
+      "world_seed": 443779887
+    },
+    {
+      "rows": 38832,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2492,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2492,
+      "world_seed": 3098215656
+    },
+    {
+      "rows": 40082,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1943,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1943,
+      "world_seed": 1457684129
+    },
+    {
+      "rows": 38872,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1916,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1916,
+      "world_seed": 4112119898
+    },
+    {
+      "rows": 40768,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1628,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1628,
+      "world_seed": 2471588371
+    },
+    {
+      "rows": 34352,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1888,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1888,
+      "world_seed": 831056844
+    },
+    {
+      "rows": 32880,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1660,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1660,
+      "world_seed": 3485492613
+    },
+    {
+      "rows": 36542,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2402,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2402,
+      "world_seed": 1844961086
+    },
+    {
+      "rows": 38460,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2391,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2391,
+      "world_seed": 204429559
+    },
+    {
+      "rows": 40944,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2592,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2592,
+      "world_seed": 2858865328
+    },
+    {
+      "rows": 45402,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 3312,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 3312,
+      "world_seed": 1218333801
+    },
+    {
+      "rows": 44508,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 3265,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 3265,
+      "world_seed": 3872769570
+    },
+    {
+      "rows": 37880,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1928,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1928,
+      "world_seed": 2232238043
+    },
+    {
+      "rows": 36980,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2499,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2499,
+      "world_seed": 591706516
+    },
+    {
+      "rows": 44504,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2668,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2668,
+      "world_seed": 3246142285
+    },
+    {
+      "rows": 45592,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 3412,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 3412,
+      "world_seed": 1605610758
+    },
+    {
+      "rows": 36028,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1724,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1724,
+      "world_seed": 4260046527
+    },
+    {
+      "rows": 35886,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2543,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2543,
+      "world_seed": 2619515000
+    },
+    {
+      "rows": 39464,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2404,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2404,
+      "world_seed": 978983473
+    },
+    {
+      "rows": 38598,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2391,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2391,
+      "world_seed": 3633419242
+    },
+    {
+      "rows": 40044,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2312,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2312,
+      "world_seed": 1992887715
+    },
+    {
+      "rows": 32696,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1368,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1368,
+      "world_seed": 352356188
+    },
+    {
+      "rows": 39312,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2008,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2008,
+      "world_seed": 3006791957
+    },
+    {
+      "rows": 35984,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2032,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2032,
+      "world_seed": 1366260430
+    },
+    {
+      "rows": 41472,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2168,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2168,
+      "world_seed": 4020696199
+    },
+    {
+      "rows": 35384,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1876,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1876,
+      "world_seed": 2380164672
+    },
+    {
+      "rows": 37512,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2100,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2100,
+      "world_seed": 739633145
+    },
+    {
+      "rows": 33616,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1688,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1688,
+      "world_seed": 3394068914
+    },
+    {
+      "rows": 41880,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2640,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2640,
+      "world_seed": 1753537387
+    },
+    {
+      "rows": 35516,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2285,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2285,
+      "world_seed": 113005860
+    },
+    {
+      "rows": 40648,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2456,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2456,
+      "world_seed": 2767441629
+    },
+    {
+      "rows": 43776,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 3920,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 3920,
+      "world_seed": 1126910102
+    },
+    {
+      "rows": 37112,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2536,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2536,
+      "world_seed": 3781345871
+    },
+    {
+      "rows": 26880,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 712,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 712,
+      "world_seed": 2140814344
+    },
+    {
+      "rows": 47126,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 5160,
+          "sample": "Willow Republic moves 28 crowns into Gloamgate's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 5160,
+      "world_seed": 500282817
+    },
+    {
+      "rows": 33892,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2271,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2271,
+      "world_seed": 3154718586
+    },
+    {
+      "rows": 33728,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2136,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2136,
+      "world_seed": 1514187059
+    },
+    {
+      "rows": 43072,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2316,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2316,
+      "world_seed": 4168622828
+    },
+    {
+      "rows": 41972,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 4275,
+          "sample": "Willow Republic moves 28 crowns into Gloamgate's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 4275,
+      "world_seed": 2528091301
+    },
+    {
+      "rows": 32488,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1988,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1988,
+      "world_seed": 887559774
+    },
+    {
+      "rows": 40712,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1940,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1940,
+      "world_seed": 3541995543
+    },
+    {
+      "rows": 53440,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 5816,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 5816,
+      "world_seed": 1901464016
+    },
+    {
+      "rows": 39502,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2178,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2178,
+      "world_seed": 260932489
+    },
+    {
+      "rows": 39696,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 3032,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 3032,
+      "world_seed": 2915368258
+    },
+    {
+      "rows": 39696,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 3772,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 3772,
+      "world_seed": 1274836731
+    },
+    {
+      "rows": 33818,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2425,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2425,
+      "world_seed": 3929272500
+    },
+    {
+      "rows": 46942,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 5223,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 5223,
+      "world_seed": 2288740973
+    },
+    {
+      "rows": 39096,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 6460,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 6460,
+      "world_seed": 648209446
+    },
+    {
+      "rows": 40304,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2692,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2692,
+      "world_seed": 3302645215
+    },
+    {
+      "rows": 36720,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1836,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1836,
+      "world_seed": 1662113688
+    },
+    {
+      "rows": 35472,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1772,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1772,
+      "world_seed": 21582161
+    },
+    {
+      "rows": 32438,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1253,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1253,
+      "world_seed": 2676017930
+    },
+    {
+      "rows": 38560,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 1936,
+          "sample": "Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 1936,
+      "world_seed": 1035486403
+    },
+    {
+      "rows": 43840,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 3018,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 3018,
+      "world_seed": 3689922172
+    },
+    {
+      "rows": 37902,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 4405,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 4405,
+      "world_seed": 2049390645
+    },
+    {
+      "rows": 32304,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2452,
+          "sample": "Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2452,
+      "world_seed": 408859118
+    },
+    {
+      "rows": 39612,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2311,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2311,
+      "world_seed": 3063294887
+    },
+    {
+      "rows": 33184,
+      "unsupported_kinds": [
+        {
+          "kind": "DECREE",
+          "observations": 2588,
+          "sample": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments."
+        }
+      ],
+      "unsupported_observations": 2588,
+      "world_seed": 1422763360
+    }
+  ],
+  "written_examples": 5000
+}

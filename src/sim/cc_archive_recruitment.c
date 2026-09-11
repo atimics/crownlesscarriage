@@ -146,7 +146,7 @@ CcArchiveRecruitmentPlan CcSimArchiveRecruitmentPlan(const CcSim *sim)
 {
     CcArchiveRecruitmentPlan result = {.gate = CC_ARCHIVE_RECRUIT_UNAVAILABLE};
     if (sim == NULL || sim->schema_version < 77U) return result;
-    if (sim->schema_version >= 78U && sim->archive_recruitment.status != 0) {
+    if (sim->schema_version >= 80U && sim->archive_recruitment.status != 0) {
         result.gate = CC_ARCHIVE_RECRUIT_BUSY; return result;
     }
     if (sim->archives.scribes >= CC_MAX_SCRIBES) { result.gate = CC_ARCHIVE_RECRUIT_FULL; return result; }
@@ -183,7 +183,7 @@ const char *CcArchiveRecruitmentGateName(CcArchiveRecruitmentGate gate)
 
 bool CcSimBeginArchiveRecruitment(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 78U) return false;
+    if (sim == NULL || sim->schema_version < 80U) return false;
     CcArchiveRecruitmentPlan plan = CcSimArchiveRecruitmentPlan(sim);
     if (plan.gate != CC_ARCHIVE_RECRUIT_READY) return false;
     CcArchiveRecruitmentOrder order = {.status = 1, .person_id = plan.person_id,
@@ -219,7 +219,7 @@ bool CcSimBeginArchiveRecruitment(CcSim *sim)
 bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
 {
     if (sim == NULL) return false;
-    if (sim->schema_version < 78U) return true;
+    if (sim->schema_version < 80U) return true;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
     if (o->status == 0) {
         return o->person_id == 0 &&
@@ -285,7 +285,7 @@ bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
 
 bool CcSimCancelArchiveRecruitment(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 78U || sim->archive_recruitment.status != 1 ||
+    if (sim == NULL || sim->schema_version < 80U || sim->archive_recruitment.status != 1 ||
         !CcSimArchiveRecruitmentOrderValid(sim)) return false;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
     CcSettlement *seat = CcSimSettlementMutable(sim, o->seat_id);

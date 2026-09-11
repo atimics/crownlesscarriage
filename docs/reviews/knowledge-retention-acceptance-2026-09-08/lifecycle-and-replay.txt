@@ -1,0 +1,9 @@
+Test project /private/tmp/crownless-smithy-acceptance-audit/out/build/headless
+    Start 80: received_account_lifetimes
+1/2 Test #80: received_account_lifetimes .......   Passed    0.23 sec
+    Start 83: sqlite_round_trip
+2/2 Test #83: sqlite_round_trip ................   Passed    2.17 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   2.40 sec

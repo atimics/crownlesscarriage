@@ -1,3 +1,4 @@
+#include "sim/cc_prophecy.h"
 #include "sim/cc_sim.h"
 #include "sim/cc_occupations.h"
 #include "sim/cc_archive_recruitment.h"
@@ -306,7 +307,7 @@ void CcSimInitializeDragonCycle(CcSim *sim)
     sim->goblins.id = NextId(sim, CC_ENTITY_GOBLIN_CULT);
     CopyName(sim->goblins.name, "The Cinder Tithe");
     sim->goblins.members = 48;
-    sim->goblins.devotion = 74;
+    sim->dragon_cult.devotion = 74;
     sim->goblins.cohesion = 68;
     sim->goblins.tribute_phase = CC_GOBLIN_TRIBUTE_IDLE;
     sim->goblins.raid_motive = CC_GOBLIN_RAID_NONE;
@@ -883,7 +884,7 @@ static CcEvent *PushEvent(CcSim *sim, CcEventKind kind, CcId subject,
         sim, kind, subject, location, parent, magnitude, text);
     LearnPlayerKnowledgeFromEvent(
         sim, event, CC_PLAYER_KNOWLEDGE_EVENT);
-    if (sim->schema_version >= 77U && CcGossipCraftEvent(kind)) GatherGossipEvents(sim);
+    if (sim->schema_version >= 79U && CcGossipCraftEvent(kind)) GatherGossipEvents(sim);
     return event;
 }
 
@@ -904,7 +905,7 @@ static CcEvent *PushSocialEvent(CcSim *sim, CcEventKind kind, CcId subject,
         kind == CC_EVENT_RUMOR_SHARED ? CC_PLAYER_KNOWLEDGE_RUMOR :
         witness == sim->player.id ? CC_PLAYER_KNOWLEDGE_WITNESS :
                                     CC_PLAYER_KNOWLEDGE_EVENT);
-    if (sim->schema_version >= 77U && CcGossipCraftEvent(kind)) GatherGossipEvents(sim);
+    if (sim->schema_version >= 79U && CcGossipCraftEvent(kind)) GatherGossipEvents(sim);
     return event;
 }
 
@@ -1209,6 +1210,7 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_DRAGON_TERRITORY_LOST: return "CROWN BROKEN";
         case CC_EVENT_ROYAL_CARRIAGE_BLOCKED: return "BORDER BLOCK";
         case CC_EVENT_ROYAL_CARRIAGE_REROUTED: return "CARRIAGE ROUTE";
+        case CC_EVENT_PROPHECY_DELIVERED: return "PROPHECY DELIVERED";
         case CC_EVENT_ROAD_SITE_PRODUCTION: return "ROAD WORKS";
         case CC_EVENT_NOTICE_POSTED: return "NOTICE";
     }
@@ -2280,6 +2282,12 @@ CcMoney CcSimTrackedGold(const CcSim *sim)
                     sim->goblins.lair_coins +
                     sim->hoard_raiders.carried_treasure +
                     sim->dragon_campaign.recovered_coins;
+    if (sim->schema_version >= 75U) {
+        total += sim->dragon_cult.offering_coins;
+        for (int32_t i = 0; i < CC_GOBLIN_FACTION_COUNT; ++i) {
+            total += sim->goblin_politics.factions[i].coins + sim->goblin_politics.factions[i].carried_coins;
+        }
+    }
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         total += sim->kingdoms[i].treasury;
     }
@@ -2322,6 +2330,14 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
                     &sim->dungeons[dungeon].rooms[room];
                 if (cache->loot_good == good) total += cache->loot_quantity;
             }
+        }
+    }
+    if (sim->schema_version >= 75U) {
+        total += sim->dragon_cult.offering_stock[good];
+        for (int32_t i = 0; i < CC_GOBLIN_FACTION_COUNT; ++i) {
+            const CcGoblinFaction *f = &sim->goblin_politics.factions[i];
+            if (good == CC_GOOD_GOLD) total += f->gold + f->carried_gold;
+            if (good == CC_GOOD_GEMS) total += f->gems + f->carried_gems;
         }
     }
     if (good == CC_GOOD_GOLD || good == CC_GOOD_GEMS) {
@@ -4359,6 +4375,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     InitMaps(sim);
     CcSimInitializePlayerRouteKnowledge(sim);
     CcSimInitializeDragonCycle(sim);
+    CcSimInitializeGoblinPolitics(sim);
     CcSimInitializeHoardRaiders(sim);
 
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -4517,6 +4534,8 @@ static CcTreasure *AllocateTreasure(CcSim *sim)
     treasure->id = NextId(sim, CC_ENTITY_TREASURE);
     return treasure;
 }
+
+#include "cc_prophecy.inc"
 
 static bool TreasureIsArchiveVolume(const CcTreasure *treasure)
 {
@@ -5519,7 +5538,7 @@ static bool EventWasArchived(const CcSim *sim, CcId event_id)
 
 static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
 {
-    if (sim->schema_version >= 77U && CcGossipCraftEvent(event->kind)) return true;
+    if (sim->schema_version >= 79U && CcGossipCraftEvent(event->kind)) return true;
     if (event->kind == CC_EVENT_GOBLIN_CULT_RALLIED) {
         /* A cult rally carries its weight in the telling, not the count of
            recruits: any rally is road news. */
@@ -5671,7 +5690,7 @@ static void GatherGossipEvents(CcSim *sim)
         sim->gossip[slot].local[origin].confidence = 100;
         (void)snprintf(sim->gossip[slot].text,
                        sizeof(sim->gossip[slot].text), "%s", event->text);
-        if (sim->schema_version >= 77U && CcGossipCraftEvent(event->kind))
+        if (sim->schema_version >= 79U && CcGossipCraftEvent(event->kind))
             ObserveCraftStory(sim, slot);
     }
     sim->gossip_last_event_id = latest;
@@ -5825,7 +5844,7 @@ static const CcCharacter *GossipTellerAt(const CcSim *sim, CcId place_id,
 {
     if (sim->character_count == 0) return NULL;
     int32_t craft_slot = -1;
-    if (sim->schema_version >= 77U) {
+    if (sim->schema_version >= 79U) {
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i)
             if (sim->gossip[i].event_id == story_id && CcGossipCraftEvent(sim->gossip[i].kind))
                 craft_slot = i;
@@ -6047,7 +6066,7 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
         if ((story->settlement_mask & town) != 0U &&
             (carrier->stories & bit) == 0U) {
             /* Direct craft accounts were captured when the event entered the ledger. */
-            if (sim->schema_version >= 77U && CcSimCharacter(sim, carrier_id) != NULL &&
+            if (sim->schema_version >= 79U && CcSimCharacter(sim, carrier_id) != NULL &&
                 story->origin_id == place_id && story->local[place].retellings == 0 &&
                 CcGossipCraftEvent(story->kind)) continue;
             carrier->stories |= bit;
@@ -6427,7 +6446,7 @@ static void AdvanceArchives(CcSim *sim)
     int32_t target_scribes = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
         sim->iron_ledger_reserve >= 150 ? 2 :
         sim->iron_ledger_reserve >= 50 ? 1 : 0;
-    bool recruitment_reserved = sim->schema_version >= 78U && sim->archive_recruitment.status == 1;
+    bool recruitment_reserved = sim->schema_version >= 80U && sim->archive_recruitment.status == 1;
     if (recruitment_reserved) target_scribes = MinimumI32(target_scribes, archives->scribes);
     /* Date the first weekly sample with zero scribes. */
     CcMoney crown_funding = 0;
@@ -7087,19 +7106,26 @@ static CcId StartDragonTheft(CcSim *sim, CcId thief_id,
     return theft_event_id;
 }
 
+#include "sim/cc_goblin_politics.inc"
+
+static CcNutritionPurpose GoblinDiet(const CcSim *sim)
+{
+    return sim->schema_version >= 76U ? CC_NUTRITION_SCAVENGER : CC_NUTRITION_CIVILIAN;
+}
+
 static void PlanGoblinTribute(CcSim *sim)
 {
-    CcGoblinCult *goblins = &sim->goblins;
+    CcGoblinSociety *goblins = &sim->goblins;
     if (goblins->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE ||
         goblins->tribute_cooldown_days > 0 ||
         sim->dragon.stolen_outstanding > 0) return;
     if (CcEconomyNutritionRations(
-            goblins->lair_stock, CC_NUTRITION_CIVILIAN) < 8) {
+            goblins->lair_stock, GoblinDiet(sim)) < 8) {
         goblins->raid_motive = CC_GOBLIN_RAID_HUNGER;
     } else if (goblins->lair_stock[CC_GOOD_TOOLS] < 2 ||
                goblins->lair_stock[CC_GOOD_WEAPONS] < 3) {
         goblins->raid_motive = CC_GOBLIN_RAID_EQUIPMENT;
-    } else if (sim->dragon.slain) {
+    } else if (sim->dragon.slain && sim->schema_version < 75U) {
 
         goblins->tribute_cooldown_days = 14;
         return;
@@ -7114,6 +7140,12 @@ static void PlanGoblinTribute(CcSim *sim)
         goblins->tribute_cooldown_days = 14;
         return;
     }
+    if (sim->schema_version >= 75U) {
+        for (int32_t turn = 0; turn < CC_GOBLIN_FACTION_COUNT; ++turn) {
+            sim->goblin_politics.raid_faction = (sim->goblin_politics.raid_faction + 1) % 3;
+            if (sim->goblin_politics.factions[sim->goblin_politics.raid_faction].members > 0) break;
+        }
+    }
     CcSettlement *target = NULL;
     int64_t best_score = INT64_MIN;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
@@ -7124,7 +7156,7 @@ static void PlanGoblinTribute(CcSim *sim)
         int64_t score = -(int64_t)place->security * 2;
         if (goblins->raid_motive == CC_GOBLIN_RAID_HUNGER) {
             score += CcEconomyNutritionRations(
-                place->stock, CC_NUTRITION_CIVILIAN) * 4;
+                place->stock, GoblinDiet(sim)) * 4;
         } else if (goblins->raid_motive == CC_GOBLIN_RAID_EQUIPMENT) {
             score += place->stock[CC_GOOD_IRON] +
                      place->stock[CC_GOOD_TOOLS] * 10 +
@@ -7169,13 +7201,13 @@ static void PlanGoblinTribute(CcSim *sim)
 
 static void AdvanceGoblinTribute(CcSim *sim)
 {
-    CcGoblinCult *goblins = &sim->goblins;
+    CcGoblinSociety *goblins = &sim->goblins;
     if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_IDLE) {
         if (sim->current_day % 7 == 0) {
             int32_t food_needed = sim->dragon.slain ?
                 1 + (goblins->members - 1) / 24 : 1;
             int32_t food_eaten = CcNutritionConsume(
-                goblins->lair_stock, CC_NUTRITION_CIVILIAN,
+                goblins->lair_stock, GoblinDiet(sim),
                 food_needed * CC_NUTRITION_PER_RATION) /
                 CC_NUTRITION_PER_RATION;
             int32_t hunger_loss = food_needed - food_eaten;
@@ -7192,7 +7224,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
             }
         }
         if (sim->schema_version >= 36U && sim->current_day % 28 == 0 &&
-            CcEconomyNutritionRations(goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 4 &&
+            CcEconomyNutritionRations(goblins->lair_stock, GoblinDiet(sim)) >= 4 &&
             goblins->lair_stock[CC_GOOD_TOOLS] >= 1) {
             goblins->cohesion = MinimumI32(100, goblins->cohesion + 1);
         }
@@ -7238,7 +7270,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
 
     if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND) {
         CcGood chosen = CcGoodsPreferredNutritionGood(
-            target->stock, CC_NUTRITION_CIVILIAN);
+            target->stock, GoblinDiet(sim));
         if (goblins->raid_motive == CC_GOBLIN_RAID_EQUIPMENT) {
             chosen = target->stock[CC_GOOD_WEAPONS] > 0 ?
                 CC_GOOD_WEAPONS : target->stock[CC_GOOD_TOOLS] > 0 ?
@@ -7253,7 +7285,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
             chosen = target->stock[CC_GOOD_GEMS] > 0 ? CC_GOOD_GEMS :
                      target->stock[CC_GOOD_GOLD] > 0 ? CC_GOOD_GOLD :
                      CcGoodsPreferredNutritionGood(
-                         target->stock, CC_NUTRITION_CIVILIAN);
+                         target->stock, GoblinDiet(sim));
         }
         int32_t capacity = CcGoodDefinitionFor(chosen)->raid_capacity;
         if (goblins->target_warned) capacity = MaximumI32(1, capacity / 2);
@@ -7328,6 +7360,8 @@ static void AdvanceGoblinTribute(CcSim *sim)
             goblins->members, text);
         goblins->tribute_event_id = event->id;
 
+        if (sim->schema_version >= 75U) StoreGoblinRaid(sim);
+
         if (sim->dragon.slain) {
             bool relic_raid = goblins->raid_motive ==
                               CC_GOBLIN_RAID_DRAGON_TRIBUTE;
@@ -7347,8 +7381,8 @@ static void AdvanceGoblinTribute(CcSim *sim)
             goblins->target_warned = false;
             goblins->tribute_days_remaining = 0;
             if (relic_raid) {
-                goblins->devotion = ClampI32(
-                    goblins->devotion + 2, 0, 100);
+                sim->dragon_cult.devotion = ClampI32(
+                    sim->dragon_cult.devotion + 2, 0, 100);
                 goblins->tribute_cooldown_days = 120 +
                     (int32_t)(NextRandom(sim) % 121U);
             } else {
@@ -7386,6 +7420,15 @@ static void AdvanceGoblinTribute(CcSim *sim)
         goblins->carried_treasure_id = 0U;
     } else {
         CcMoney delivered = goblins->carried_tribute;
+        if (sim->schema_version >= 75U &&
+            goblins->carried_treasure_id != 0U) {
+            const CcTreasure *named = CcSimTreasure(sim, goblins->carried_treasure_id);
+            if (named != NULL) {
+                CcGoblinFaction *f = &sim->goblin_politics.factions[sim->goblin_politics.raid_faction];
+                f->tribute += MinimumI64(named->appraised_value, CC_SIM_MAX_MONEY - f->tribute);
+                CultService(sim, CC_CULT_GOBLIN, named->appraised_value);
+            }
+        }
         sim->dragon.hoard += delivered;
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             sim->dragon.hoard_goods[good] += goblins->carried_goods[good];
@@ -7400,7 +7443,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
             }
         }
         goblins->tributes_delivered += 1;
-        goblins->devotion = ClampI32(goblins->devotion + 1, 0, 100);
+        sim->dragon_cult.devotion = ClampI32(sim->dragon_cult.devotion + 1, 0, 100);
         goblins->cohesion = ClampI32(goblins->cohesion + 1, 0, 100);
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(text, sizeof(text),
@@ -7604,18 +7647,18 @@ static void AdvanceHoardRaid(CcSim *sim)
         char text[CC_EVENT_TEXT_CAPACITY];
         CcId theft_parent_id = raiders->cause_event_id;
         if (stolen > 1 && sim->goblins.members >= 12 &&
-            sim->goblins.devotion >= 40) {
+            sim->dragon_cult.devotion >= 40) {
             int32_t weapons_used =
                 sim->goblins.lair_stock[CC_GOOD_WEAPONS] > 0 ? 1 : 0;
             int32_t defended = sim->goblins.members / 24 +
-                               sim->goblins.devotion / 25 +
+                               sim->dragon_cult.devotion / 25 +
                                weapons_used * 3;
             defended = ClampI32(defended, 1, stolen - 1);
             sim->goblins.lair_stock[CC_GOOD_WEAPONS] -= weapons_used;
             sim->goblins.members = MaximumI32(
                 12, sim->goblins.members - MaximumI32(1, defended / 4));
-            sim->goblins.devotion = ClampI32(
-                sim->goblins.devotion + 1, 0, 100);
+            sim->dragon_cult.devotion = ClampI32(
+                sim->dragon_cult.devotion + 1, 0, 100);
             sim->goblins.cohesion = ClampI32(
                 sim->goblins.cohesion + 2, 0, 100);
             sim->goblins.hoard_defenses += 1;
@@ -7738,7 +7781,7 @@ static int32_t CalculateDragonCrownStrength(const CcSim *sim)
                                       mineral_value);
     int32_t continuity_score = MinimumI32(
         15, dragon->crown_continuity_days / (20 * 365));
-    int32_t devotion_score = sim->goblins.devotion * 15 / 100;
+    int32_t devotion_score = sim->dragon_cult.devotion * 15 / 100;
     int32_t physical_score = DragonCoinCrownScore(dragon->hoard) +
         mineral_score + DragonNamedTreasureScore(sim) + continuity_score +
         devotion_score;
@@ -7785,8 +7828,56 @@ static CcSettlement *DragonHuntTarget(CcSim *sim)
     return best;
 }
 
+/* Clearing carrion and spoiled grain is a meal in its own right. A partial
+   meal leads to an earlier return. Fresh prey follows when rot runs out. */
+static bool DragonScavengeRot(CcSim *sim)
+{
+    if (sim->schema_version < 76U) return false;
+    int32_t *stock = sim->dragon.hoard_goods;
+    CcId location = sim->dragon.lair_settlement_id;
+    int32_t available = CcGoodsRotNutrition(stock);
+    int32_t lair_rot = CcGoodsRotNutrition(sim->goblins.lair_stock);
+    if (lair_rot > available) {
+        stock = sim->goblins.lair_stock;
+        available = lair_rot;
+        location = sim->goblins.lair_settlement_id;
+    }
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *town = &sim->settlements[i];
+        int32_t rot = CcGoodsRotNutrition(town->stock);
+        if (rot > available) {
+            stock = town->stock;
+            location = town->id;
+            available = rot;
+        }
+    }
+    if (available <= 0) return false;
+    CcDragon *dragon = &sim->dragon;
+    int32_t appetite = dragon->life_stage == CC_DRAGON_STAGE_WHELP ? 4 :
+        dragon->life_stage == CC_DRAGON_STAGE_WANDERER ? 6 :
+        dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM ? 12 : 8;
+    int32_t meat = stock[CC_GOOD_ROTTEN_MEAT];
+    int32_t grain = stock[CC_GOOD_ROTTEN_GRAIN];
+    int32_t eaten = CcGoodsConsumeRot(stock, appetite * CC_NUTRITION_PER_RATION);
+    meat -= stock[CC_GOOD_ROTTEN_MEAT];
+    grain -= stock[CC_GOOD_ROTTEN_GRAIN];
+    dragon->body_condition = MinimumI32(100, dragon->body_condition + eaten * 5 / CC_NUTRITION_PER_RATION);
+    dragon->hunt_cooldown_days = eaten >= appetite * CC_NUTRITION_PER_RATION ? 42 : 14;
+    dragon->hunts += 1;
+    dragon->activity = CC_DRAGON_ACTIVITY_HUNTING;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "%s eats %d Rotten Meat and %d Rotten Grain, clearing the spoiled stores.",
+        dragon->name, meat, grain);
+    CcEvent *event = PushEvent(sim, CC_EVENT_DRAGON_HUNT, dragon->id, location,
+        LatestLocalCause(sim, location), eaten, text);
+    dragon->lifecycle_event_id = event->id;
+    return true;
+}
+
 static void DragonHunt(CcSim *sim)
 {
+    if (HuntGoblinFaction(sim)) return;
+    if (DragonScavengeRot(sim)) return;
     CcDragon *dragon = &sim->dragon;
     CcSettlement *target = DragonHuntTarget(sim);
     if (target == NULL) {
@@ -7918,10 +8009,10 @@ static void HatchDragonSuccessor(CcSim *sim)
             treasure->location_id = dragon->lair_settlement_id;
         }
     }
-    sim->goblins.devotion = MaximumI32(sim->goblins.devotion, 28);
+    sim->dragon_cult.devotion = MaximumI32(sim->dragon_cult.devotion, 28);
     dragon->crown_strength = CalculateDragonCrownStrength(sim);
-    sim->goblins.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
-    sim->goblins.dragon_seed_days_remaining = 0;
+    sim->dragon_cult.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
+    sim->dragon_cult.dragon_seed_days_remaining = 0;
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
@@ -7982,7 +8073,9 @@ static void ChangeDragonStage(CcSim *sim, CcDragonLifeStage stage,
 
 static void GatherDragonSeedOfferings(CcSim *sim)
 {
-    CcGoblinCult *goblins = &sim->goblins;
+    CcGoblinSociety *goblins = &sim->goblins;
+    int32_t *stock = sim->schema_version >= 75U ? sim->dragon_cult.offering_stock : goblins->lair_stock;
+    CcMoney *coins = sim->schema_version >= 75U ? &sim->dragon_cult.offering_coins : &goblins->lair_coins;
     CcDragon *dragon = &sim->dragon;
     if (dragon->afterdeath_days < 100 * 365 ||
         dragon->afterdeath_days % 365 != 0) return;
@@ -8002,8 +8095,8 @@ static void GatherDragonSeedOfferings(CcSim *sim)
     }
     if (donor == NULL) return;
 
-    int32_t saved_coins = goblins->lair_coins >= 120 ?
-        120 : (int32_t)goblins->lair_coins;
+    int32_t saved_coins = (*coins) >= 120 ?
+        120 : (int32_t)(*coins);
     CcMoney coin_need = MaximumI32(0, 120 - saved_coins);
     CcMoney coin_taken = coin_need < 30 ? coin_need : 30;
     CcMoney market_take = donor->market_coins < coin_taken ?
@@ -8019,13 +8112,13 @@ static void GatherDragonSeedOfferings(CcSim *sim)
         crown_take += taken;
     }
     CcMoney gathered_coins = market_take + crown_take;
-    goblins->lair_coins += gathered_coins;
+    (*coins) += gathered_coins;
 
     int32_t weekly_rations = 1 + (goblins->members - 1) / 24;
     int32_t nutrition_need = MaximumI32(
-        0, 60 * weekly_rations * CC_NUTRITION_PER_RATION -
+        0, (sim->schema_version >= 75U ? 12 : 60 * weekly_rations) * CC_NUTRITION_PER_RATION -
            CcNutritionAvailable(
-               goblins->lair_stock, CC_NUTRITION_CIVILIAN));
+               stock, CC_NUTRITION_CIVILIAN));
     for (int32_t i = 0;
          i < sim->settlement_count && nutrition_need > 0; ++i) {
         CcSettlement *place = &sim->settlements[i];
@@ -8038,13 +8131,13 @@ static void GatherDragonSeedOfferings(CcSim *sim)
             place->stock, CC_NUTRITION_CIVILIAN, nutrition_need);
         nutrition_need -= gathered;
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-            goblins->lair_stock[good] +=
+            stock[good] +=
                 before[good] - place->stock[good];
         }
     }
 
-    int32_t relics = goblins->lair_stock[CC_GOOD_GOLD] +
-                     goblins->lair_stock[CC_GOOD_GEMS];
+    int32_t relics = stock[CC_GOOD_GOLD] +
+                     stock[CC_GOOD_GEMS];
     if (relics < 2) {
         CcSettlement *relic_donor = NULL;
         CcGood rare_good = CC_GOOD_GEMS;
@@ -8063,29 +8156,29 @@ static void GatherDragonSeedOfferings(CcSim *sim)
         }
         if (relic_donor != NULL) {
             relic_donor->stock[rare_good] -= 1;
-            goblins->lair_stock[rare_good] += 1;
+            stock[rare_good] += 1;
         }
     }
 
     for (int32_t good = CC_GOOD_TOOLS;
          good <= CC_GOOD_WEAPONS; ++good) {
         int32_t target = good == CC_GOOD_TOOLS ? 2 : 3;
-        int32_t need = MaximumI32(0, target - goblins->lair_stock[good]);
+        int32_t need = MaximumI32(0, target - stock[good]);
         for (int32_t i = 0;
              i < sim->settlement_count && need > 0; ++i) {
             CcSettlement *place = &sim->settlements[i];
             int32_t taken = MinimumI32(need, place->stock[good]);
             place->stock[good] -= taken;
-            goblins->lair_stock[good] += taken;
+            stock[good] += taken;
             need -= taken;
         }
         if (need > 0) {
             int32_t iron_per_item = good == CC_GOOD_TOOLS ? 2 : 3;
             int32_t crafted = MinimumI32(
-                need, goblins->lair_stock[CC_GOOD_IRON] / iron_per_item);
-            goblins->lair_stock[CC_GOOD_IRON] -=
+                need, stock[CC_GOOD_IRON] / iron_per_item);
+            stock[CC_GOOD_IRON] -=
                 crafted * iron_per_item;
-            goblins->lair_stock[good] += crafted;
+            stock[good] += crafted;
             need -= crafted;
         }
         if (need > 0) {
@@ -8097,7 +8190,7 @@ static void GatherDragonSeedOfferings(CcSim *sim)
                 int32_t crafted = MinimumI32(
                     need, place->stock[CC_GOOD_WOOD] / wood_per_item);
                 place->stock[CC_GOOD_WOOD] -= crafted * wood_per_item;
-                goblins->lair_stock[good] += crafted;
+                stock[good] += crafted;
                 need -= crafted;
             }
         }
@@ -8122,18 +8215,20 @@ CcRitualOfferingPlan CcSimRitualOfferingPlan(const CcSim *sim)
         plan.blocked = CC_RITUAL_INVALID;
         return plan;
     }
-    const CcGoblinCult *goblins = &sim->goblins;
-    plan.food_rations = CcEconomyNutritionRations(goblins->lair_stock, CC_NUTRITION_CIVILIAN);
-    plan.relics = goblins->lair_stock[CC_GOOD_GOLD] + goblins->lair_stock[CC_GOOD_GEMS];
-    if (goblins->members < 48) plan.blocked |= CC_RITUAL_MEMBERS;
-    if (goblins->devotion < 75) plan.blocked |= CC_RITUAL_DEVOTION;
+    const CcGoblinSociety *goblins = &sim->goblins;
+    const int32_t *stock = sim->schema_version >= 75U ? sim->dragon_cult.offering_stock : goblins->lair_stock;
+    CcMoney coins = sim->schema_version >= 75U ? sim->dragon_cult.offering_coins : goblins->lair_coins;
+    plan.food_rations = CcEconomyNutritionRations(stock, CC_NUTRITION_CIVILIAN);
+    plan.relics = stock[CC_GOOD_GOLD] + stock[CC_GOOD_GEMS];
+    if (DragonRitualMembers(sim) < 48) plan.blocked |= CC_RITUAL_MEMBERS;
+    if (sim->dragon_cult.devotion < 75) plan.blocked |= CC_RITUAL_DEVOTION;
     if (goblins->cohesion < 75) plan.blocked |= CC_RITUAL_COHESION;
-    if (goblins->lair_coins < 120) plan.blocked |= CC_RITUAL_COINS;
+    if (coins < 120) plan.blocked |= CC_RITUAL_COINS;
     if (plan.relics < 2) plan.blocked |= CC_RITUAL_RELICS;
     if (plan.food_rations < 12) plan.blocked |= CC_RITUAL_FOOD;
-    if (goblins->lair_stock[CC_GOOD_TOOLS] < 2) plan.blocked |= CC_RITUAL_TOOLS;
-    if (goblins->lair_stock[CC_GOOD_WEAPONS] < 3) plan.blocked |= CC_RITUAL_WEAPONS;
-    plan.eggs = goblins->members >= 72 && goblins->devotion >= 90 &&
+    if (stock[CC_GOOD_TOOLS] < 2) plan.blocked |= CC_RITUAL_TOOLS;
+    if (stock[CC_GOOD_WEAPONS] < 3) plan.blocked |= CC_RITUAL_WEAPONS;
+    plan.eggs = DragonRitualMembers(sim) >= 72 && sim->dragon_cult.devotion >= 90 &&
         goblins->cohesion >= 90 ? 2 : 1;
     return plan;
 }
@@ -8141,44 +8236,45 @@ CcRitualOfferingPlan CcSimRitualOfferingPlan(const CcSim *sim)
 static void AdvanceAfterdragonCult(CcSim *sim)
 {
     CcDragon *dragon = &sim->dragon;
-    CcGoblinCult *goblins = &sim->goblins;
+    CcGoblinSociety *goblins = &sim->goblins;
     if (dragon->afterdeath_days == 0 ||
         dragon->afterdeath_days % 365 != 0 ||
-        goblins->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE) return;
+        (sim->schema_version < 75U && goblins->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE)) return;
 
     GatherDragonSeedOfferings(sim);
 
     bool provisioned = CcEconomyNutritionRations(
-        goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 8;
+        goblins->lair_stock, GoblinDiet(sim)) >= 8;
     bool armed = goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
                  goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
-    bool preserve_clutch_provisions =
-        goblins->dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_PREPARING &&
-        goblins->dragon_seed_days_remaining <= 0 &&
-        goblins->members >= 48 && goblins->devotion >= 75 &&
+    bool preserve_clutch_provisions = sim->schema_version < 75U &&
+        sim->dragon_cult.dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_PREPARING &&
+        sim->dragon_cult.dragon_seed_days_remaining <= 0 &&
+        DragonRitualMembers(sim) >= 48 && sim->dragon_cult.devotion >= 75 &&
         goblins->cohesion >= 75;
     int32_t cult_limit = goblins->cohesion < 35 ?
         (armed && provisioned ? 36 : 24) : armed ? 84 :
-        goblins->devotion >= 60 ? 48 : 24;
+        sim->dragon_cult.devotion >= 60 ? 48 : 24;
     if (!preserve_clutch_provisions && provisioned &&
         goblins->members < cult_limit) {
-        int32_t recruits = armed ? 1 + goblins->devotion / 40 : 1;
+        int32_t recruits = armed ? 1 + (sim->schema_version >= 75U ? goblins->cohesion : sim->dragon_cult.devotion) / 40 : 1;
         recruits = MinimumI32(
             recruits, cult_limit - goblins->members);
         int32_t food_cost = 2 + recruits;
         if (CcEconomyNutritionRations(
-                goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= food_cost) {
+                goblins->lair_stock, GoblinDiet(sim)) >= food_cost) {
             (void)CcNutritionConsume(
-                goblins->lair_stock, CC_NUTRITION_CIVILIAN,
+                goblins->lair_stock, GoblinDiet(sim),
                 food_cost * CC_NUTRITION_PER_RATION);
             goblins->members += recruits;
-            goblins->devotion = ClampI32(
-                goblins->devotion + 2, 0, 100);
+            sim->dragon_cult.devotion = ClampI32(
+                sim->dragon_cult.devotion + 2, 0, 100);
             goblins->cohesion = ClampI32(
                 goblins->cohesion + 2, 0, 100);
             char text[CC_EVENT_TEXT_CAPACITY];
             (void)snprintf(
                 text, sizeof(text),
+                sim->schema_version >= 75U ? "%s welcomes %d porters; its population reaches %d." :
                 "%s feeds and binds %d new ash-sworn; the dead dragon's court reaches %d.",
                 goblins->name, recruits, goblins->members);
             (void)PushEvent(
@@ -8187,23 +8283,23 @@ static void AdvanceAfterdragonCult(CcSim *sim)
                 recruits, text);
         }
     } else if (!preserve_clutch_provisions && !provisioned) {
-        goblins->devotion = MaximumI32(20, goblins->devotion - 1);
+        sim->dragon_cult.devotion = MaximumI32(20, sim->dragon_cult.devotion - 1);
         goblins->cohesion = MaximumI32(0, goblins->cohesion - 2);
     } else if (!preserve_clutch_provisions) {
-        goblins->devotion = ClampI32(goblins->devotion + 1, 0, 100);
+        sim->dragon_cult.devotion = ClampI32(sim->dragon_cult.devotion + 1, 0, 100);
         if (provisioned && goblins->cohesion < 50) {
             goblins->cohesion += 1;
         }
     }
 
     if (dragon->egg_count != 0) return;
-    if (goblins->dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_NONE) {
+    if (sim->dragon_cult.dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_NONE) {
         bool can_begin = dragon->afterdeath_days >= 100 * 365 &&
-            goblins->members >= 36 && goblins->devotion >= 60 &&
+            DragonRitualMembers(sim) >= 36 && sim->dragon_cult.devotion >= 60 &&
             goblins->cohesion >= 50;
         if (!can_begin) return;
-        goblins->dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_RUMORED;
-        goblins->dragon_seed_days_remaining = 20 * 365;
+        sim->dragon_cult.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_RUMORED;
+        sim->dragon_cult.dragon_seed_days_remaining = 20 * 365;
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(
             text, sizeof(text),
@@ -8212,16 +8308,16 @@ static void AdvanceAfterdragonCult(CcSim *sim)
         CcEvent *event = PushEvent(
             sim, CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED, goblins->id,
             dragon->lair_settlement_id, dragon->lifecycle_event_id,
-            goblins->dragon_seed_days_remaining, text);
+            sim->dragon_cult.dragon_seed_days_remaining, text);
         dragon->lifecycle_event_id = event->id;
         return;
     }
 
-    goblins->dragon_seed_days_remaining = MaximumI32(
-        0, goblins->dragon_seed_days_remaining - 365);
-    if (goblins->dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_RUMORED &&
-        goblins->dragon_seed_days_remaining <= 15 * 365) {
-        goblins->dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_PREPARING;
+    sim->dragon_cult.dragon_seed_days_remaining = MaximumI32(
+        0, sim->dragon_cult.dragon_seed_days_remaining - 365);
+    if (sim->dragon_cult.dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_RUMORED &&
+        sim->dragon_cult.dragon_seed_days_remaining <= 15 * 365) {
+        sim->dragon_cult.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_PREPARING;
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(
             text, sizeof(text),
@@ -8230,28 +8326,30 @@ static void AdvanceAfterdragonCult(CcSim *sim)
         CcEvent *event = PushEvent(
             sim, CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED, goblins->id,
             dragon->lair_settlement_id, dragon->lifecycle_event_id,
-            goblins->dragon_seed_days_remaining, text);
+            sim->dragon_cult.dragon_seed_days_remaining, text);
         dragon->lifecycle_event_id = event->id;
     }
-    if (goblins->dragon_seed_days_remaining > 0) return;
+    if (sim->dragon_cult.dragon_seed_days_remaining > 0) return;
 
     CcRitualOfferingPlan offering = CcSimRitualOfferingPlan(sim);
     if (offering.blocked != 0U) return;
 
+    int32_t *stock = sim->schema_version >= 75U ? sim->dragon_cult.offering_stock : goblins->lair_stock;
+    CcMoney *coins = sim->schema_version >= 75U ? &sim->dragon_cult.offering_coins : &goblins->lair_coins;
     CcMoney ritual_coins = 120;
-    goblins->lair_coins -= ritual_coins;
+    *coins -= ritual_coins;
     dragon->hoard += ritual_coins;
     for (int32_t relic = 0; relic < 2; ++relic) {
-        CcGood good = goblins->lair_stock[CC_GOOD_GEMS] > 0 ?
+        CcGood good = stock[CC_GOOD_GEMS] > 0 ?
                       CC_GOOD_GEMS : CC_GOOD_GOLD;
-        goblins->lair_stock[good] -= 1;
+        stock[good] -= 1;
         dragon->hoard_goods[good] += 1;
     }
     (void)CcNutritionConsume(
-        goblins->lair_stock, CC_NUTRITION_CIVILIAN,
+        stock, CC_NUTRITION_CIVILIAN,
         12 * CC_NUTRITION_PER_RATION);
-    goblins->lair_stock[CC_GOOD_TOOLS] -= 1;
-    goblins->lair_stock[CC_GOOD_WEAPONS] -= 1;
+    stock[CC_GOOD_TOOLS] -= 1;
+    stock[CC_GOOD_WEAPONS] -= 1;
     dragon->egg_count = offering.eggs;
     dragon->brood_days_remaining =
         (10 + (int32_t)(NextRandom(sim) % 6U)) * 365;
@@ -8266,25 +8364,25 @@ static void AdvanceAfterdragonCult(CcSim *sim)
         dragon->lair_settlement_id, dragon->lifecycle_event_id,
         dragon->egg_count, text);
     dragon->lifecycle_event_id = event->id;
-    goblins->dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
-    goblins->dragon_seed_days_remaining = 0;
+    sim->dragon_cult.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
+    sim->dragon_cult.dragon_seed_days_remaining = 0;
 }
 
 static void AdvanceLivingDragonCult(CcSim *sim)
 {
     CcDragon *dragon = &sim->dragon;
-    CcGoblinCult *goblins = &sim->goblins;
+    CcGoblinSociety *goblins = &sim->goblins;
     if (sim->current_day % (2 * 365) != 0 ||
         goblins->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE ||
         goblins->members >= 48 ||
         CcEconomyNutritionRations(
-            goblins->lair_stock, CC_NUTRITION_CIVILIAN) < 6 ||
+            goblins->lair_stock, GoblinDiet(sim)) < 6 ||
         goblins->cohesion < 35) return;
 
     bool armed = goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
                  goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
     int32_t cult_limit = armed ? 48 : 36;
-    bool ash_poor_muster = !armed && goblins->devotion >= 75 &&
+    bool ash_poor_muster = !armed && (sim->schema_version >= 75U ? goblins->cohesion : sim->dragon_cult.devotion) >= 75 &&
                            sim->current_day % (4 * 365) == 0;
     if (goblins->members >= cult_limit || (!armed && !ash_poor_muster)) {
         return;
@@ -8292,7 +8390,7 @@ static void AdvanceLivingDragonCult(CcSim *sim)
     int32_t recruits = 1;
     int32_t food_cost = 3;
     (void)CcNutritionConsume(
-        goblins->lair_stock, CC_NUTRITION_CIVILIAN,
+        goblins->lair_stock, GoblinDiet(sim),
         food_cost * CC_NUTRITION_PER_RATION);
     goblins->members += recruits;
     goblins->cohesion = ClampI32(goblins->cohesion + 1, 0, 100);
@@ -8329,7 +8427,7 @@ static void AdvanceAfterdragon(CcSim *sim)
     if (dragon->egg_count > 0) {
         if (sim->current_day % 14 == 0) {
             if (CcNutritionConsume(
-                    sim->goblins.lair_stock, CC_NUTRITION_CIVILIAN,
+                    sim->goblins.lair_stock, GoblinDiet(sim),
                     CC_NUTRITION_PER_RATION) <
                 CC_NUTRITION_PER_RATION) {
                 dragon->brood_days_remaining += 7;
@@ -8420,12 +8518,12 @@ static void AdvanceDragonEcology(CcSim *sim)
         }
         int32_t stability_change = 0;
         if (CcEconomyNutritionRations(
-                sim->goblins.lair_stock, CC_NUTRITION_CIVILIAN) >= 4 &&
+                sim->goblins.lair_stock, GoblinDiet(sim)) >= 4 &&
             sim->goblins.lair_stock[CC_GOOD_TOOLS] >= 1 &&
-            sim->goblins.devotion >= 50 &&
+            sim->dragon_cult.devotion >= 50 &&
             sim->goblins.cohesion >= 50) stability_change += 1;
         if (CcEconomyNutritionRations(
-                sim->goblins.lair_stock, CC_NUTRITION_CIVILIAN) == 0) {
+                sim->goblins.lair_stock, GoblinDiet(sim)) == 0) {
             stability_change -= 2;
         }
         if (DragonTerritoryAtWar(sim)) stability_change -= 1;
@@ -8474,7 +8572,7 @@ static void AdvanceDragonEcology(CcSim *sim)
     if (dragon->egg_count > 0) {
         if (sim->current_day % 14 == 0) {
             if (CcNutritionConsume(
-                    sim->goblins.lair_stock, CC_NUTRITION_CIVILIAN,
+                    sim->goblins.lair_stock, GoblinDiet(sim),
                     CC_NUTRITION_PER_RATION) <
                 CC_NUTRITION_PER_RATION) {
                 dragon->brood_days_remaining += 7;
@@ -8520,7 +8618,7 @@ static void AdvanceDragonEcology(CcSim *sim)
                dragon->crown_strength >= 25 &&
                dragon->memory_integrity >= 60 &&
                dragon->territory_stability >= 50 &&
-               sim->goblins.devotion >= 50) {
+               sim->dragon_cult.devotion >= 50) {
         ChangeDragonStage(sim, CC_DRAGON_STAGE_CROWNED,
                           CC_EVENT_DRAGON_CROWNED,
                           "hoard, goblin court, and territory hold together");
@@ -8553,7 +8651,7 @@ static void AdvanceDragonEcology(CcSim *sim)
         dragon->body_condition >= 68 && dragon->crown_strength >= 58 &&
         dragon->territory_stability >= 60 &&
         dragon->crown_continuity_days >= 30 * 365 &&
-        sim->goblins.devotion >= 65 &&
+        sim->dragon_cult.devotion >= 65 &&
         dragon->stolen_outstanding == 0) {
         BeginDragonBrood(sim);
     }
@@ -8836,7 +8934,7 @@ static const CcRoyalCarriage *RoyalCarriageForShipmentConst(
 
 static bool ArchivePassage(const CcSim *sim, const CcRoyalCarriage *carriage)
 {
-    return sim->schema_version >= 76U && carriage != NULL && carriage->archive_contract;
+    return sim->schema_version >= 78U && carriage != NULL && carriage->archive_contract;
 }
 
 static void ParkRoyalCarriage(CcRoyalCarriage *carriage, CcId location_id)
@@ -9732,7 +9830,7 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
 
 bool CcArchiveDispatchSupply(CcSim *sim, CcId carriage_id)
 {
-    if (sim == NULL || sim->schema_version < 75U) return false;
+    if (sim == NULL || sim->schema_version < 77U) return false;
     CcArchiveSupplyPlan plan = CcSimArchiveSupplyPlan(sim, carriage_id);
     if (plan.gate != CC_ARCHIVE_SUPPLY_READY || plan.first_dispatch_day > sim->current_day) return false;
     CcRoyalCarriage *carriage = NULL;
@@ -9742,7 +9840,7 @@ bool CcArchiveDispatchSupply(CcSim *sim, CcId carriage_id)
     if (carriage->location_id != plan.source_id) {
         /* Book rare pickup trips every four weeks. A carriage already at the
            supplier can collect a needed load within its ordinary cooldown. */
-        carriage->archive_contract = sim->schema_version >= 76U;
+        carriage->archive_contract = sim->schema_version >= 78U;
         bool started = StartRoyalRepositioningLeg(sim, carriage, plan.source_id);
         if (!started) carriage->archive_contract = false;
         return started;
@@ -9750,7 +9848,7 @@ bool CcArchiveDispatchSupply(CcSim *sim, CcId carriage_id)
     PrepareRoyalRouteUsage(sim);
     for (int i = 0; i < sim->route_count; ++i) {
         if (sim->routes[i].id != plan.first_route_id) continue;
-        carriage->archive_contract = sim->schema_version >= 76U;
+        carriage->archive_contract = sim->schema_version >= 78U;
         bool started = CreateTradeShipment(sim, carriage, i, plan.first_hop_id, plan.good,
             CcSimSettlementMutable(sim, plan.source_id), CcSimSettlementMutable(sim, plan.seat_id),
             plan.path_capacity, 1, sim->royal_route_slots_used, NULL, &plan);
@@ -10273,7 +10371,7 @@ static CcCharacter *PromoteCharacter(CcSim *sim, const char *name,
     character->current_settlement_id = settlement_id;
     character->faction_id = faction_id;
     character->role = role;
-    character->occupation = sim->schema_version >= 77U ?
+    character->occupation = sim->schema_version >= 79U ?
         CcSimInitialOccupation(sim, settlement_id, character->id) : CC_OCCUPATION_NONE;
     character->goal = goal;
     character->activity = activity;
@@ -11008,7 +11106,7 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
         }
     }
     successor.role = dead.role;
-    successor.occupation = sim->schema_version >= 77U ? dead.occupation : CC_OCCUPATION_NONE;
+    successor.occupation = sim->schema_version >= 79U ? dead.occupation : CC_OCCUPATION_NONE;
     successor.goal = dead.goal;
     successor.activity = CC_CHARACTER_ACTIVITY_WORKING;
     successor.appearance_seed = (uint32_t)(
@@ -12904,7 +13002,7 @@ static void AdvanceDragonCampaign(CcSim *sim)
                      (int32_t)(NextRandom(sim) % 21U);
     int32_t defense = CcSimDragonBattleStrength(sim) +
                       sim->goblins.members / 2 +
-                      (sim->goblins.devotion + sim->goblins.cohesion) / 8 +
+                      (sim->dragon_cult.devotion + sim->goblins.cohesion) / 8 +
                       MinimumI32(18, sim->goblins.hoard_defenses * 3) +
                       (int32_t)(NextRandom(sim) % 31U);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
@@ -12925,8 +13023,8 @@ static void AdvanceDragonCampaign(CcSim *sim)
             origin->population = MaximumI32(100, origin->population - 120);
         }
         sim->goblins.members = MaximumI32(12, sim->goblins.members - 6);
-        sim->goblins.devotion = ClampI32(
-            sim->goblins.devotion + 4, 0, 100);
+        sim->dragon_cult.devotion = ClampI32(
+            sim->dragon_cult.devotion + 4, 0, 100);
         sim->goblins.cohesion = ClampI32(
             sim->goblins.cohesion + 2, 0, 100);
         sim->dragon.body_condition = MaximumI32(
@@ -12992,8 +13090,8 @@ static void AdvanceDragonCampaign(CcSim *sim)
     sim->goblins.tribute_target_id = 0U;
     sim->goblins.tribute_event_id = 0U;
     sim->goblins.tribute_days_remaining = 0;
-    sim->goblins.devotion = ClampI32(MaximumI32(
-        25, sim->goblins.devotion * 2 / 3 +
+    sim->dragon_cult.devotion = ClampI32(MaximumI32(
+        25, sim->dragon_cult.devotion * 2 / 3 +
             sim->goblins.hoard_defenses * 2), 0, 100);
     sim->goblins.cohesion = ClampI32(
         sim->goblins.cohesion - 15, 0, 100);
@@ -14792,6 +14890,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         }
         SettleChangedRoyalDestinations(sim);
         DeliverDelayedEchoIfReady(sim);
+        AdvanceGoblinPolitics(sim);
     }
 }
 
@@ -14904,7 +15003,7 @@ static bool ApplyGoblinTrade(CcSim *sim, const CcCommand *command,
                              char *error, size_t error_capacity)
 {
     bool useful_good = CcGoodNutritionValue(
-            command->good, CC_NUTRITION_CIVILIAN) > 0 ||
+            command->good, GoblinDiet(sim)) > 0 ||
         command->good == CC_GOOD_TOOLS ||
         command->good == CC_GOOD_WEAPONS;
     if (!useful_good || command->amount <= 0) {
@@ -14942,8 +15041,8 @@ static bool ApplyGoblinTrade(CcSim *sim, const CcCommand *command,
     int32_t social_change = MinimumI32(8, 1 + command->amount / 2);
     sim->goblins.cohesion = ClampI32(
         sim->goblins.cohesion + social_change, 0, 100);
-    sim->goblins.devotion = ClampI32(
-        sim->goblins.devotion - MinimumI32(4, 1 + command->amount / 6),
+    sim->dragon_cult.devotion = ClampI32(
+        sim->dragon_cult.devotion - MinimumI32(4, 1 + command->amount / 6),
         0, 100);
     sim->player.reputation = ClampI32(
         sim->player.reputation + MinimumI32(5, command->amount), -100, 100);
@@ -14963,7 +15062,7 @@ static bool ApplyGoblinTrade(CcSim *sim, const CcCommand *command,
 static bool ApplyGoblinWarning(CcSim *sim,
                                char *error, size_t error_capacity)
 {
-    CcGoblinCult *goblins = &sim->goblins;
+    CcGoblinSociety *goblins = &sim->goblins;
     bool warning_window =
         goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ||
         goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND;
@@ -15006,7 +15105,7 @@ static bool ApplyGoblinWarning(CcSim *sim,
 static bool ApplyGoblinIntercept(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
-    CcGoblinCult *goblins = &sim->goblins;
+    CcGoblinSociety *goblins = &sim->goblins;
     bool intercept_window =
         goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ||
         goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND;
@@ -15025,7 +15124,7 @@ static bool ApplyGoblinIntercept(CcSim *sim,
     int32_t losses = MaximumI32(2, goblins->members / 24);
     goblins->members = MaximumI32(12, goblins->members - losses);
     goblins->cohesion = ClampI32(goblins->cohesion - 8, 0, 100);
-    goblins->devotion = ClampI32(goblins->devotion + 3, 0, 100);
+    sim->dragon_cult.devotion = ClampI32(sim->dragon_cult.devotion + 3, 0, 100);
     goblins->expeditions_intercepted += 1;
     sim->carriage.condition = ClampI32(sim->carriage.condition - 6, 0, 100);
     sim->player.reputation = ClampI32(sim->player.reputation + 5, -100, 100);
@@ -15197,6 +15296,10 @@ static bool ApplyBuyTreasure(CcSim *sim, const CcCommand *command,
 {
     CcTreasure *treasure = (CcTreasure *)CcSimTreasure(
         sim, command->target_id);
+    if (treasure != NULL && treasure == CcSimDeepWyrmProphecy(sim)) {
+        SetError(error, error_capacity, "This book is entrusted to the town council in Gloamgate.");
+        return false;
+    }
     CcSettlement *seller = CcSimSettlementMutable(
         sim, sim->player.location_id);
     if (treasure == NULL || seller == NULL ||
@@ -15238,6 +15341,10 @@ static bool ApplySellTreasure(CcSim *sim, const CcCommand *command,
 {
     CcTreasure *treasure = (CcTreasure *)CcSimTreasure(
         sim, command->target_id);
+    if (treasure != NULL && treasure == CcSimDeepWyrmProphecy(sim)) {
+        SetError(error, error_capacity, "This book is entrusted to the town council in Gloamgate.");
+        return false;
+    }
     CcSettlement *buyer = CcSimSettlementMutable(
         sim, sim->player.location_id);
     if (treasure == NULL || buyer == NULL ||
@@ -15404,7 +15511,7 @@ static bool ApplyReturnDragonNamedTreasure(
 static bool ApplyInterceptDragonTribute(
     CcSim *sim, char *error, size_t error_capacity)
 {
-    CcGoblinCult *goblins = &sim->goblins;
+    CcGoblinSociety *goblins = &sim->goblins;
     if (sim->journey.active ||
         sim->player.location_id != sim->dragon.lair_settlement_id) {
         SetError(error, error_capacity,
@@ -15477,7 +15584,7 @@ static bool ApplyInterceptDragonTribute(
     goblins->carried_treasure_id = 0U;
     goblins->tribute_days_remaining = 0;
     goblins->tribute_cooldown_days = 35;
-    goblins->devotion = ClampI32(goblins->devotion - 8, 0, 100);
+    sim->dragon_cult.devotion = ClampI32(sim->dragon_cult.devotion - 8, 0, 100);
     sim->player.reputation = ClampI32(
         sim->player.reputation - 3, -100, 100);
     SetError(error, error_capacity, "");
@@ -17327,7 +17434,7 @@ static bool ApplyPartyWipe(CcSim *sim, const CcCommand *command,
 static bool ApplyArchiveRecruitment(CcSim *sim, const CcCommand *command,
                                      char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 78U) {
+    if (sim->schema_version < 80U) {
         SetError(error, error_capacity, "This campaign needs the recruitment save upgrade.");
         return false;
     }
@@ -17364,7 +17471,7 @@ static bool ApplyArchiveRecruitment(CcSim *sim, const CcCommand *command,
     return true;
 }
 
-bool CcSimApply(CcSim *sim, const CcCommand *command,
+static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
                 char *error, size_t error_capacity)
 {
     if (sim == NULL || command == NULL) {
@@ -17414,6 +17521,7 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL ||
         command->kind == CC_COMMAND_BEGIN_DUNGEON_EXPEDITION ||
         command->kind == CC_COMMAND_FUND_GRAIN_SUPPLY ||
+        command->kind == CC_COMMAND_DELIVER_PROPHECY ||
         command->kind == CC_COMMAND_RESERVE_ARCHIVE_RECRUITMENT ||
         command->kind == CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT ||
         command->kind == CC_COMMAND_SUPPORT_BAKERY;
@@ -17493,6 +17601,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_CHARACTER_RESPONSE:
             return ApplyCharacterResponse(
                 sim, command, error, error_capacity);
+        case CC_COMMAND_DELIVER_PROPHECY:
+            return ApplyDeliverProphecy(sim, command, error, error_capacity);
         case CC_COMMAND_FUND_GRAIN_SUPPLY:
             return ApplyFundGrainSupply(sim, command, error, error_capacity);
         case CC_COMMAND_SUPPORT_BAKERY:
@@ -17644,6 +17754,13 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
     }
     SetError(error, error_capacity, "Command kind is invalid.");
     return false;
+}
+
+bool CcSimApply(CcSim *sim, const CcCommand *command, char *error, size_t error_capacity)
+{
+    bool ok = ApplySimCommand(sim, command, error, error_capacity);
+    if (ok && sim->schema_version >= 75U) ReconcileGoblinFactions(sim);
+    return ok;
 }
 
 static bool IsIssuedCharacterId(const CcSim *sim, CcId id)
@@ -17928,7 +18045,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_ROAD_SITE_PRODUCTION ||
+                event->kind > CC_EVENT_PROPHECY_DELIVERED ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||
@@ -18360,7 +18477,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
             const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
             if (carriage->archive_contract &&
-                (sim->schema_version < 76U || carriage->mode == CC_ROYAL_CARRIAGE_IDLE || IsSiteCarriage(carriage))) {
+                (sim->schema_version < 78U || carriage->mode == CC_ROYAL_CARRIAGE_IDLE || IsSiteCarriage(carriage))) {
                 SetError(error, error_capacity, "Archive carriage contract is invalid.");
                 return false;
             }
@@ -18753,8 +18870,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             }
         }
     }
+    if (sim->schema_version >= 75U && !ValidateGoblinPolitics(sim)) {
+        SetError(error, error_capacity, "Goblin factions or dragon cult state is invalid.");
+        return false;
+    }
     if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
-        const CcGoblinCult *goblins = &sim->goblins;
+        const CcGoblinSociety *goblins = &sim->goblins;
         const CcDragon *dragon = &sim->dragon;
         bool goblins_idle = goblins->tribute_phase ==
                             CC_GOBLIN_TRIBUTE_IDLE;
@@ -18786,8 +18907,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         if (CcIdKind(goblins->id) != CC_ENTITY_GOBLIN_CULT ||
             !ValidBoundedText(goblins->name, sizeof(goblins->name)) ||
             goblins->members < 1 ||
-            goblins->members > 120 || goblins->devotion < 0 ||
-            goblins->devotion > 100 || goblins->cohesion < 0 ||
+            goblins->members > 120 || sim->dragon_cult.devotion < 0 ||
+            sim->dragon_cult.devotion > 100 || goblins->cohesion < 0 ||
             goblins->cohesion > 100 ||
             goblins->tribute_phase < CC_GOBLIN_TRIBUTE_IDLE ||
             goblins->tribute_phase > CC_GOBLIN_TRIBUTE_PREPARING ||
@@ -18808,12 +18929,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             (goblins->target_warned &&
              goblins->tribute_phase != CC_GOBLIN_TRIBUTE_PREPARING &&
              goblins->tribute_phase != CC_GOBLIN_TRIBUTE_OUTBOUND) ||
-            goblins->dragon_seed_phase < CC_GOBLIN_DRAGON_SEED_NONE ||
-            goblins->dragon_seed_phase > CC_GOBLIN_DRAGON_SEED_PREPARING ||
-            goblins->dragon_seed_days_remaining < 0 ||
-            (goblins->dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_NONE &&
-             goblins->dragon_seed_days_remaining != 0) ||
-            (goblins->dragon_seed_phase != CC_GOBLIN_DRAGON_SEED_NONE &&
+            sim->dragon_cult.dragon_seed_phase < CC_GOBLIN_DRAGON_SEED_NONE ||
+            sim->dragon_cult.dragon_seed_phase > CC_GOBLIN_DRAGON_SEED_PREPARING ||
+            sim->dragon_cult.dragon_seed_days_remaining < 0 ||
+            (sim->dragon_cult.dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_NONE &&
+             sim->dragon_cult.dragon_seed_days_remaining != 0) ||
+            (sim->dragon_cult.dragon_seed_phase != CC_GOBLIN_DRAGON_SEED_NONE &&
              (!dragon->slain || dragon->egg_count != 0)) ||
             !goblin_trip_valid ||
             (goblins->last_tribute_origin_id != 0U &&
@@ -19033,7 +19154,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !faction_exists ||
                 character->role < CC_CHARACTER_OFFICIAL ||
                 character->role > CC_CHARACTER_COURIER ||
-                (sim->schema_version >= 77U &&
+                (sim->schema_version >= 79U &&
                  (character->occupation < CC_OCCUPATION_NONE ||
                   character->occupation >= CC_OCCUPATION_COUNT)) ||
                 character->goal < CC_CHARACTER_GOAL_KEEP_ORDER ||
@@ -19222,9 +19343,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             sim, situation->affected_character_id);
         bool cast_valid = true;
         if (sim->schema_version >= 17U) {
-            bool historical_cast =
-                sim->schema_version == CC_SIM_SCHEMA_VERSION &&
-                situation->status != CC_SITUATION_ACTIVE;
+            /* Completed quests retain issued lifetime IDs across save versions. */
+            bool historical_cast = situation->status != CC_SITUATION_ACTIVE;
             cast_valid = historical_cast ?
                 IsIssuedCharacterId(
                     sim, situation->sponsor_character_id) &&

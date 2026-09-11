@@ -1,0 +1,322 @@
+{
+  "arms": {
+    "main": {
+      "passed": 997,
+      "requested": 1000,
+      "empty_worlds": 0,
+      "final_dragon_slain": 614,
+      "worlds_with_campaign_victory": 787,
+      "zero_lore": 907,
+      "zero_scribes": 196,
+      "all_roads_closed_at_least_once": 995,
+      "final_stage_counts": {
+        "Egg": 0,
+        "Whelp": 86,
+        "Wanderer": 66,
+        "Crowned": 7,
+        "Deep wyrm": 186,
+        "Uncrowned": 38,
+        "Afterdragon": 614
+      },
+      "metrics": {
+        "total_population": {
+          "mean": 12784.196589769308,
+          "median": 13200.0,
+          "p10": 12682.6,
+          "p90": 13357.4,
+          "minimum": 3175.0,
+          "maximum": 18160.0
+        },
+        "weighted_hunger": {
+          "mean": 1.3352988355065194,
+          "median": 0.48589,
+          "p10": 0.2526956,
+          "p90": 2.6678645999999993,
+          "minimum": 0.0,
+          "maximum": 72.507966
+        },
+        "weighted_prosperity": {
+          "mean": 74.07191618555666,
+          "median": 75.769607,
+          "p10": 72.8098108,
+          "p90": 76.7116386,
+          "minimum": 17.057689,
+          "maximum": 92.956465
+        },
+        "dragon_campaign_victories": {
+          "mean": 1.4102306920762286,
+          "median": 2.0,
+          "p10": 0.0,
+          "p90": 2.0,
+          "minimum": 0.0,
+          "maximum": 2.0
+        },
+        "lore_stored": {
+          "mean": 0.7011033099297894,
+          "median": 0.0,
+          "p10": 0.0,
+          "p90": 0.0,
+          "minimum": 0.0,
+          "maximum": 32.0
+        },
+        "archive_scribes": {
+          "mean": 3.1374122367101305,
+          "median": 4.0,
+          "p10": 0.0,
+          "p90": 4.0,
+          "minimum": 0.0,
+          "maximum": 4.0
+        },
+        "years_all_routes_closed": {
+          "mean": 857.6770310932799,
+          "median": 900.0,
+          "p10": 699.6,
+          "p90": 972.0,
+          "minimum": 0.0,
+          "maximum": 990.0
+        },
+        "active_settlements": {
+          "mean": 3.832497492477432,
+          "median": 4.0,
+          "p10": 3.0,
+          "p90": 4.0,
+          "minimum": 2.0,
+          "maximum": 5.0
+        },
+        "years_population_weighted_hunger_40_plus": {
+          "mean": 6.537612838515547,
+          "median": 0.0,
+          "p10": 0.0,
+          "p90": 25.0,
+          "minimum": 0.0,
+          "maximum": 117.0
+        }
+      }
+    },
+    "candidate": {
+      "passed": 994,
+      "requested": 1000,
+      "empty_worlds": 0,
+      "final_dragon_slain": 404,
+      "worlds_with_campaign_victory": 601,
+      "zero_lore": 993,
+      "zero_scribes": 526,
+      "all_roads_closed_at_least_once": 988,
+      "final_stage_counts": {
+        "Egg": 0,
+        "Whelp": 44,
+        "Wanderer": 44,
+        "Crowned": 11,
+        "Deep wyrm": 398,
+        "Uncrowned": 93,
+        "Afterdragon": 404
+      },
+      "metrics": {
+        "total_population": {
+          "mean": 12775.327967806841,
+          "median": 13200.0,
+          "p10": 12648.3,
+          "p90": 13360.0,
+          "minimum": 3058.0,
+          "maximum": 18418.0
+        },
+        "weighted_hunger": {
+          "mean": 1.2480506770623743,
+          "median": 0.47509199999999996,
+          "p10": 0.0,
+          "p90": 2.8106262,
+          "minimum": 0.0,
+          "maximum": 73.588927
+        },
+        "weighted_prosperity": {
+          "mean": 73.55498916599598,
+          "median": 76.062468,
+          "p10": 72.4407964,
+          "p90": 76.9205217,
+          "minimum": 18.578875,
+          "maximum": 89.372375
+        },
+        "dragon_campaign_victories": {
+          "mean": 0.9627766599597586,
+          "median": 1.0,
+          "p10": 0.0,
+          "p90": 2.0,
+          "minimum": 0.0,
+          "maximum": 2.0
+        },
+        "lore_stored": {
+          "mean": 0.001006036217303823,
+          "median": 0.0,
+          "p10": 0.0,
+          "p90": 0.0,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "archive_scribes": {
+          "mean": 1.4839034205231387,
+          "median": 0.0,
+          "p10": 0.0,
+          "p90": 4.0,
+          "minimum": 0.0,
+          "maximum": 4.0
+        },
+        "years_all_routes_closed": {
+          "mean": 832.1700201207243,
+          "median": 876.0,
+          "p10": 635.2,
+          "p90": 971.0,
+          "minimum": 0.0,
+          "maximum": 986.0
+        },
+        "active_settlements": {
+          "mean": 3.817907444668008,
+          "median": 4.0,
+          "p10": 3.0,
+          "p90": 4.0,
+          "minimum": 2.0,
+          "maximum": 5.0
+        },
+        "years_population_weighted_hunger_40_plus": {
+          "mean": 6.990945674044266,
+          "median": 0.0,
+          "p10": 0.0,
+          "p90": 24.700000000000045,
+          "minimum": 0.0,
+          "maximum": 103.0
+        }
+      }
+    }
+  },
+  "paired": {
+    "worlds": 991,
+    "metrics": {
+      "total_population": {
+        "observed": 991,
+        "changed": 982,
+        "increased": 487,
+        "decreased": 495,
+        "delta": {
+          "mean": -8.084762865792129,
+          "median": 0.0,
+          "p10": -612.0,
+          "p90": 519.0,
+          "minimum": -10188.0,
+          "maximum": 10101.0
+        }
+      },
+      "weighted_hunger": {
+        "observed": 991,
+        "changed": 979,
+        "increased": 487,
+        "decreased": 492,
+        "delta": {
+          "mean": -0.08707012613521697,
+          "median": 0.0,
+          "p10": -1.515037,
+          "p90": 1.441776,
+          "minimum": -71.920525,
+          "maximum": 71.99086399999999
+        }
+      },
+      "weighted_prosperity": {
+        "observed": 991,
+        "changed": 986,
+        "increased": 522,
+        "decreased": 464,
+        "delta": {
+          "mean": -0.5151706599394551,
+          "median": 0.013369999999994775,
+          "p10": -3.5784870000000097,
+          "p90": 3.4609319999999997,
+          "minimum": -66.470292,
+          "maximum": 57.43000699999999
+        }
+      },
+      "dragon_campaign_victories": {
+        "observed": 991,
+        "changed": 517,
+        "increased": 114,
+        "decreased": 403,
+        "delta": {
+          "mean": -0.44803229061553984,
+          "median": 0.0,
+          "p10": -2.0,
+          "p90": 1.0,
+          "minimum": -2.0,
+          "maximum": 2.0
+        }
+      },
+      "lore_stored": {
+        "observed": 991,
+        "changed": 88,
+        "increased": 1,
+        "decreased": 87,
+        "delta": {
+          "mean": -0.6740665993945509,
+          "median": 0.0,
+          "p10": 0.0,
+          "p90": 0.0,
+          "minimum": -32.0,
+          "maximum": 1.0
+        }
+      },
+      "archive_scribes": {
+        "observed": 991,
+        "changed": 601,
+        "increased": 78,
+        "decreased": 523,
+        "delta": {
+          "mean": -1.6528758829465187,
+          "median": -2.0,
+          "p10": -4.0,
+          "p90": 0.0,
+          "minimum": -4.0,
+          "maximum": 4.0
+        }
+      },
+      "years_all_routes_closed": {
+        "observed": 991,
+        "changed": 977,
+        "increased": 440,
+        "decreased": 537,
+        "delta": {
+          "mean": -25.734611503531784,
+          "median": -5.0,
+          "p10": -215.0,
+          "p90": 135.0,
+          "minimum": -977.0,
+          "maximum": 954.0
+        }
+      },
+      "active_settlements": {
+        "observed": 991,
+        "changed": 271,
+        "increased": 130,
+        "decreased": 141,
+        "delta": {
+          "mean": -0.015136226034308779,
+          "median": 0.0,
+          "p10": -1.0,
+          "p90": 1.0,
+          "minimum": -2.0,
+          "maximum": 2.0
+        }
+      },
+      "years_population_weighted_hunger_40_plus": {
+        "observed": 991,
+        "changed": 513,
+        "increased": 252,
+        "decreased": 261,
+        "delta": {
+          "mean": 0.467204843592331,
+          "median": 0.0,
+          "p10": -7.0,
+          "p90": 11.0,
+          "minimum": -117.0,
+          "maximum": 98.0
+        }
+      }
+    },
+    "worlds_with_any_endpoint_metric_change": 991
+  }
+}

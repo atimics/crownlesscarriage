@@ -513,7 +513,7 @@ static const CcCharacter *BestHeldWriterAt(const CcSim *sim,
         if (CcCharacterAgeYears(sim, person) < 16 ||
             person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING) continue;
         int32_t held = HeldCount(sim, person->id);
-        if (sim->schema_version >= 77U) {
+        if (sim->schema_version >= 79U) {
             held = 0;
             for (int32_t offset = 0; offset < CC_MAX_GOSSIP; ++offset) {
                 const CcGossip *story = CcSimPersonalGossip(sim, person->id, offset, NULL);
@@ -586,7 +586,7 @@ static void RunMission(const CcSim *sim, int topic, int32_t baseline,
         const CcSettlement *place = &sim->settlements[s];
         const CcCharacter *teller = BestHeldWriterAt(sim, place->id, topic);
         if (teller == NULL) continue;
-        bool by_craft = sim->schema_version >= 77U ?
+        bool by_craft = sim->schema_version >= 79U ?
             CcOccupationTopic(teller->occupation) == (CcGossipTopic)topic :
             RoleNotableTopic(teller->role) == topic;
 

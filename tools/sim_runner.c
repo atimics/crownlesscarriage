@@ -160,7 +160,7 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  smuggler_routes, sim->iron_ledger_reserve, debt,
                  sim->hoard_raiders.raids_completed,
                  sim->goblins.hoard_defenses, sim->goblins.members,
-                 sim->goblins.devotion, sim->goblins.cohesion,
+                 sim->dragon_cult.devotion, sim->goblins.cohesion,
                  sim->goblins.tributes_delivered,
                  wars, alliances,
                  active_couriers, sim->dragon.slain ? 1 : 0,
@@ -207,9 +207,9 @@ static void PrintSummary(const CcSim *sim, bool detail)
             " coins=%" PRId64 "/120 relics=%d/2 food_rations=%d/12 tools=%d/2 weapons=%d/3"
             " planned_eggs=%d blocked=",
             sim->goblins.id, sim->goblins.lair_settlement_id,
-            (int)sim->goblins.dragon_seed_phase, sim->goblins.dragon_seed_days_remaining,
+            (int)sim->dragon_cult.dragon_seed_phase, sim->dragon_cult.dragon_seed_days_remaining,
             sim->dragon.afterdeath_days, (int)sim->goblins.tribute_phase, sim->dragon.egg_count,
-            sim->goblins.members, sim->goblins.devotion, sim->goblins.cohesion,
+            sim->goblins.members, sim->dragon_cult.devotion, sim->goblins.cohesion,
             sim->goblins.lair_coins, offering.relics, offering.food_rations,
             sim->goblins.lair_stock[CC_GOOD_TOOLS], sim->goblins.lair_stock[CC_GOOD_WEAPONS],
             offering.eggs);

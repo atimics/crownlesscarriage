@@ -208,6 +208,28 @@ jobs:
         run: cmake --build build --parallel
       - name: Test
         run: ctest --test-dir build --output-on-failure
+      - name: Capture Gloamgate town views
+        if: runner.os == 'Linux'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: |
+          mkdir -p build/gloamgate-review
+          xvfb-run -a ./build/renderer_regression_tests --pony-gait-captures build/gloamgate-review/gait
+          xvfb-run -a ./build/crownless_carriage --capture-town-state 1 37 58 build/gloamgate-review/ponies.png peaceful
+          xvfb-run -a ./build/crownless_carriage --capture-town-state 1 82 36 build/gloamgate-review/arrival.png peaceful
+          xvfb-run -a ./build/crownless_carriage --capture-town-state 1 44.25 28.85 build/gloamgate-review/market.png peaceful
+          xvfb-run -a ./build/crownless_carriage --capture-town-state 1 42 47 build/gloamgate-review/coach-court.png peaceful
+          xvfb-run -a ./build/crownless_carriage --capture-town-arrival 1 0.58 build/gloamgate-review/carriage.png
+          for state in burnt rebuilding lawless thriving hungry; do
+            xvfb-run -a ./build/crownless_carriage --capture-town-state 1 44.25 28.85 build/gloamgate-review/$state.png $state
+          done
+      - name: Upload Gloamgate town views
+        if: runner.os == 'Linux' && !cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gloamgate-review
+          path: build/gloamgate-review/
+          if-no-files-found: error
       - name: Capture interaction screens
         if: runner.os == 'Linux'
         env:
