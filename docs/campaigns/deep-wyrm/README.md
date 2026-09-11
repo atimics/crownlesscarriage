@@ -29,7 +29,7 @@ The opening images below record the original campaign before the prophecy item.
 | Opening day | 73366, Year 202 |
 | Source simulation commit | d665eccedeb2f3795edd72dbe401ac2c5b471033 |
 | Save schema / world generator | 74 / 25 (relabeled; see below) |
-| Historical state hash | 0xb3674235d45d3345 |
+| Historical state hash | 0xb0e9e673428e3ac6 |
 | Asset SHA-256 | 501e6d16f3d1837e4e4a0e47f1fd1433b37035a1d772cd711a7fdb31e636f7ec |
 
 The source uses the archive supply dispatch rules in PR #592. This campaign
@@ -44,7 +44,8 @@ fields), so its stored schema was relabeled from 75 to 74 during the merge;
 the historical state is byte-identical apart from that label. Loading migrates
 it to the current schema, which initializes the goblin-politics and rot-diet
 state, so the recorded historical state hash changed from 0x8c55991e74f0d280
-to 0xb3674235d45d3345.
+to 0xb3674235d45d3345 and then to 0xb0e9e673428e3ac6 when schema 78 changed
+the replay rules for the famine casus belli.
 
 The loader checks the recorded seed, day, versions, and complete historical
 state hash before it creates the company. It keeps the world clock, random
