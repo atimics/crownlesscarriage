@@ -1,3 +1,4 @@
+#include "sim/cc_archive_staff.h"
 #include "sim/cc_archive_internal.h"
 #include "sim/cc_food_economy_internal.h"
 
@@ -98,7 +99,7 @@ CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim)
 {
     CcArchiveWorkPlan plan = {0};
     if (sim == NULL) return plan;
-    plan.eligible_scribes = sim->archives.scribes;
+    plan.eligible_scribes = CcSimArchiveStaffCount(sim);
     if (sim->schema_version >= 84U && sim->archive_training_week == (sim->current_day + 6) / 7 &&
         plan.eligible_scribes > 0) plan.eligible_scribes -= 1;
     plan.recording_ready = plan.eligible_scribes > 0;
@@ -108,7 +109,9 @@ CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim)
     plan.eligible_scribes = MinimumI32(plan.eligible_scribes, CcArchiveSpareGrain(sim, seat) / 2);
     plan.wheat_required = plan.eligible_scribes * 2;
     plan.recording_ready = plan.eligible_scribes > 0 &&
-        seat->stock[CC_GOOD_PAPER] > 0 && seat->stock[CC_GOOD_TOOLS] > 0;
+        seat->stock[CC_GOOD_PAPER] > 0 && seat->stock[CC_GOOD_TOOLS] > 0 &&
+        (sim->schema_version < 85U || !sim->archive_staff.active ||
+         (seat->stock[CC_GOOD_GOLD] > 0 && seat->stock[CC_GOOD_GEMS] > 0));
     return plan;
 }
 

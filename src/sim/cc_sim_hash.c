@@ -862,6 +862,12 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(sim->archive_recruitment.trainer_days);
             HASH_VALUE(sim->archive_recruitment.arrival_estimate);
             HASH_VALUE(sim->archive_recruitment.ready_estimate);
+            if (sim->schema_version >= 85U) {
+                for (int32_t i = 0; i < CC_MAX_SCRIBES; ++i) HASH_VALUE(sim->archive_staff.person_ids[i]);
+                HASH_VALUE(sim->archive_staff.seat_id);
+                HASH_VALUE(sim->archive_staff.legacy_scribes);
+                HASH_VALUE(sim->archive_staff.active);
+            }
             if (sim->schema_version >= 84U) {
                 HASH_VALUE(sim->archive_training_week);
                 HASH_VALUE(sim->archive_recruitment.labor_days);

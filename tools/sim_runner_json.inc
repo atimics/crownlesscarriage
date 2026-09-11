@@ -12,6 +12,18 @@ static void JsonString(const char *value)
 
 #include "sim_runner_network.inc"
 
+static void JsonArchiveStaff(const CcSim *sim)
+{
+    CcArchiveAppointmentPlan plan = CcSimArchiveAppointmentPlan(sim);
+    printf("{\"active\":%s,\"legacy_scribes\":%d,\"seat_id\":\"%" PRIu64 "\",\"person_ids\":[",
+        sim->archive_staff.active ? "true" : "false", sim->archive_staff.legacy_scribes, sim->archive_staff.seat_id);
+    for (int32_t i = 0; i < CC_MAX_SCRIBES; ++i)
+        printf("%s\"%" PRIu64 "\"", i == 0 ? "" : ",", sim->archive_staff.person_ids[i]);
+    printf("],\"appointment_gate\":"); JsonString(CcArchiveRecruitmentGateName(plan.gate));
+    printf(",\"first_volume_id\":\"%" PRIu64 "\",\"source_event_id\":\"%" PRIu64 "\"}",
+        plan.volume_id, plan.source_event_id);
+}
+
 static void JsonArchiveRecruitmentOrder(const CcSim *sim)
 {
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
@@ -360,6 +372,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         sim->dragon.crown_strength, sim->dragon.egg_count);
     printf(",\"archive_work\":"); JsonArchiveWork(sim);
     printf(",\"archive_funding\":"); JsonArchiveFunding(sim);
+    printf(",\"archive_staff\":"); JsonArchiveStaff(sim);
     printf(",\"archive_recruitment_order\":"); JsonArchiveRecruitmentOrder(sim);
     printf(",\"archive_recruitment\":"); JsonArchiveRecruitment(sim);
     printf(",\"archive_supply\":"); JsonArchiveSupply(sim);
