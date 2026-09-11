@@ -57,9 +57,9 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-/* Schemas 75-79 shipped ahead of this branch; reserved archive
-   recruitment funds and supplies are schema 80. */
-#define CC_SIM_SCHEMA_VERSION 80
+/* Schemas 75-80 shipped ahead of this branch; the famine legitimacy
+   decoupling is schema 81. */
+#define CC_SIM_SCHEMA_VERSION 81
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60

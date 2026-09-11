@@ -13413,7 +13413,7 @@ static void UpdateRoyalDiplomacy(CcSim *sim)
                    so the intended window barely existed.  Compare the issuer
                    against the neighbour instead, so a desperate state can
                    still fight a target it is at least as legitimate as. */
-                bool legitimate_enough = sim->schema_version >= 78U ?
+                bool legitimate_enough = sim->schema_version >= 81U ?
                     issuer_legitimacy >= recipient_legitimacy :
                     issuer_legitimacy >= 30;
                 if (pressure >= 110 && issuer_hunger >= 25 &&
