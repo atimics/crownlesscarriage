@@ -1679,6 +1679,11 @@ if(BUILD_TESTING)
     cc_large_sim_stack(material_chain_tests)
     add_test(NAME material_chain_proofs COMMAND material_chain_tests)
 
+    add_executable(archive_automatic_tests tests/archive_automatic_tests.c)
+    target_link_libraries(archive_automatic_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(archive_automatic_tests)
+    add_test(NAME archive_automatic_recruitment COMMAND archive_automatic_tests)
+
     add_executable(archive_staff_tests tests/archive_staff_tests.c)
     target_link_libraries(archive_staff_tests PRIVATE crownless_persistence)
     cc_strict_warnings(archive_staff_tests)
