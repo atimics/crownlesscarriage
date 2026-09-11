@@ -829,7 +829,7 @@ static void CompactEventLedger(CcSim *sim, CcId incoming_parent)
     /* Resolve the hoard's five-event causal chain once per compaction.
        CcSimEvent is a linear scan, so walking it for every scanned event
        made the ledger quadratic (#655). */
-    CcId hoard_chain[5];
+    CcId hoard_chain[5] = {0};
     int32_t hoard_chain_count = 0;
     if (sim->schema_version >= 84U) {
         const CcEvent *cause = CcSimEvent(sim, sim->dragon.hoard_event_id);
