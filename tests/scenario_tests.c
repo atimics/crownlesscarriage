@@ -164,6 +164,11 @@ int main(void)
     }
     dispatch.routes[6].smuggler_route = false;
     dispatch.bandit_count = 0;
+    /* Removing the bandits orphans any traveller who joined them; clear the
+       references the forced removal would otherwise leave dangling. */
+    for (int32_t i = 0; i < dispatch.character_count; ++i) {
+        dispatch.characters[i].bandit_group_id = 0U;
+    }
     CcSituation *dispatch_offer = (CcSituation *)CcSimSituation(
         &dispatch, seal->situation_id);
     CC_CHECK(dispatch_offer != NULL);

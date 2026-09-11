@@ -177,7 +177,12 @@ int main(int argc, char **argv)
     FIELD(person_id, baseline.characters[0].id);
     FIELD(trainer_id, baseline.characters[1].id);
     FIELD(seat_id, baseline.settlements[0].id);
-    FIELD(origin_id, baseline.settlements[0].id);
+    /* The planning seed picks a different origin now that the cast is larger;
+       choose a settlement that differs from whatever the baseline used. */
+    FIELD(origin_id, baseline.archive_recruitment.origin_id ==
+                          baseline.settlements[0].id ?
+                      baseline.settlements[1].id :
+                      baseline.settlements[0].id);
     FIELD(first_route_id, 0);
     FIELD(first_hop_id, 0);
     FIELD(donor_ids[0], baseline.kingdoms[2].id);
