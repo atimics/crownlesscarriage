@@ -18,6 +18,20 @@ static int32_t WheatNeed(const CcSim *sim, const CcSettlement *town)
     return Max(work - CcArchiveSpareGrain(sim, town), deficit * 2 + (deficit > 0 ? work : 0));
 }
 
+/* Named staff have already received their wages. Inherited staff still use
+   the weekly ledger thresholds, so freight spends only above that floor. */
+static CcMoney FreightFunds(const CcSim *sim)
+{
+    if (sim == NULL) return 0;
+    if (sim->schema_version < 89U) {
+        return sim->iron_ledger_reserve > CC_ARCHIVE_PAYROLL_FLOOR ?
+            sim->iron_ledger_reserve - CC_ARCHIVE_PAYROLL_FLOOR : 0;
+    }
+    int32_t staff = sim->archive_staff.active ? sim->archive_staff.legacy_scribes : sim->archives.scribes;
+    CcMoney floor = staff >= 3 ? 300 : staff == 2 ? 150 : staff == 1 ? 50 : 0;
+    return sim->iron_ledger_reserve > floor ? sim->iron_ledger_reserve - floor : 0;
+}
+
 CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
 {
     CcArchiveSupplyPlan plan = {.gate = CC_ARCHIVE_SUPPLY_UNAVAILABLE, .good = CC_GOOD_COUNT};
@@ -61,6 +75,7 @@ CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
         carriage->condition < 20 || sim->current_day < carriage->next_dispatch_day) return plan;
     plan.carriage_id = carriage_id;
     const int32_t *used = sim->royal_trade_week == sim->current_day / 7 ? sim->royal_route_slots_used : NULL;
+    CcMoney funds = FreightFunds(sim);
     bool source_found = false, path_found = false;
     int64_t best_score = INT64_MAX;
     for (int i = 0; i < sim->settlement_count; ++i) {
@@ -82,8 +97,8 @@ CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
         CcMoney toll = CcRouteRoyalTradeToll(sim, &sim->routes[route], carriage->kingdom_id);
         CcMoney price = Max(1, source->price[plan.good]);
         /* Spend only the surplus above the scribe payroll floor. */
-        if (sim->iron_ledger_reserve - CC_ARCHIVE_PAYROLL_FLOOR <= toll) continue;
-        CcMoney affordable = (sim->iron_ledger_reserve - CC_ARCHIVE_PAYROLL_FLOOR - toll) / price;
+        if (funds <= toll) continue;
+        CcMoney affordable = (funds - toll) / price;
         int32_t quantity = Min(need, Min(surplus, Min(capacity, CC_ROYAL_CARRIAGE_CARGO_SLOTS) *
             CcGoodsFreightUnitsPerCargoSlot(plan.good)));
         quantity = Min(quantity, affordable > INT32_MAX ? INT32_MAX : (int32_t)affordable);
