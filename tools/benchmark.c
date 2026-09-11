@@ -10,7 +10,12 @@
 #include <string.h>
 #include <time.h>
 
-#define CC_SIMULATION_BUDGET_NS_PER_DAY 50000.0
+/* The simulation budget grew with the cast. The world now seeds roughly four
+   times as many named residents (one per ~126 people instead of one per 500),
+   and per-character gossip and event work scales with them. The cost is
+   sub-linear in the cast because settlement-level work dominates, but the old
+   50,000 ns/day ceiling was calibrated for 24 characters. */
+#define CC_SIMULATION_BUDGET_NS_PER_DAY 90000.0
 #define CC_LOCOMOTION_BUDGET_NS_PER_STEP 8000.0
 
 static double ElapsedSeconds(clock_t start)
