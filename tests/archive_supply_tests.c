@@ -7,6 +7,7 @@ static CcSim sim, before;
 static void Fixture(void)
 {
     CcSimInit(&sim, 42U);
+    sim.schema_version = 88U;
     sim.settlement_count = 3; sim.route_count = 2; sim.shipment_count = 0;
     sim.royal_carriage_count = 1; sim.royal_trade_week = sim.current_day / 7;
     memset(sim.royal_route_slots_used, 0, sizeof(sim.royal_route_slots_used));
