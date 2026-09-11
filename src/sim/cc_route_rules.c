@@ -78,7 +78,7 @@ CcMoney CcRouteRoyalTradeToll(const CcSim *sim, const CcRoute *route,
 bool CcRouteCarriageCanUse(const CcSim *sim, const CcRoyalCarriage *carriage, CcId route_id)
 {
     if (sim == NULL || carriage == NULL) return false;
-    if (sim->schema_version >= 76U && carriage->archive_contract) {
+    if (sim->schema_version >= 78U && carriage->archive_contract) {
         const CcRoute *route = CcSimRoute(sim, route_id);
         return CcRouteRoyalCanReopen(sim, route) && CcTradeRouteCapacity(sim, route) > 0;
     }

@@ -267,7 +267,9 @@ static void NativeRestoreSession(const char *json)
             strcmp(context, coop_native.context) != 0 ||
             (coop_native.checkpoint != NULL && sequence <= CcCompanyJsonNumber(coop_native.checkpoint, "$.sequence"))) continue;
         char *session = CcCompanyJsonValue(candidates[i], "$.session");
-        if (session != NULL && strlen(session) <= 6000 && strncmp(session, "CROWNLESS_SESSION 7\n", 20) == 0) {
+        if (session != NULL && strlen(session) <= 6000 &&
+            (strncmp(session, "CROWNLESS_SESSION 7\n", 20) == 0 ||
+             strncmp(session, "CROWNLESS_SESSION 8\n", 20) == 0)) {
             char path[768];
             (void)snprintf(path, sizeof(path), "%s.session", coop_native.save);
             if (NativeWrite(path, session)) {

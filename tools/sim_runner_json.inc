@@ -222,17 +222,45 @@ static void JsonCampaignPlan(const CcSim *sim)
 
 static void JsonRitualPlan(const CcSim *sim)
 {
+    int32_t members = sim->schema_version >= 75U ? CcSimCultMembers(sim, CC_CULT_HUMAN) + CcSimCultMembers(sim, CC_CULT_GOBLIN) : sim->goblins.members;
+    CcMoney coins = sim->schema_version >= 75U ? sim->dragon_cult.offering_coins : sim->goblins.lair_coins;
+    const int32_t *stock = sim->schema_version >= 75U ? sim->dragon_cult.offering_stock : sim->goblins.lair_stock;
     CcRitualOfferingPlan plan = CcSimRitualOfferingPlan(sim);
     printf("{\"semantics\":\"held_offering_plan_snapshot\",");
     JsonPlanBlocks(plan.blocked, RITUAL_BLOCK_NAMES, sizeof(RITUAL_BLOCK_NAMES) / sizeof(RITUAL_BLOCK_NAMES[0]));
-    printf(",\"cult_id\":\"%" PRIu64 "\",\"lair_id\":\"%" PRIu64 "\",\"phase\":%d,\"days_remaining\":%d,\"afterdeath_days\":%d,\"tribute_phase\":%d",
-        sim->goblins.id, sim->goblins.lair_settlement_id, (int)sim->goblins.dragon_seed_phase,
-        sim->goblins.dragon_seed_days_remaining, sim->dragon.afterdeath_days, (int)sim->goblins.tribute_phase);
+    printf(",\"sponsor_goblin_id\":\"%" PRIu64 "\",\"lair_id\":\"%" PRIu64 "\",\"phase\":%d,\"days_remaining\":%d,\"afterdeath_days\":%d,\"tribute_phase\":%d",
+        sim->goblins.id, sim->goblins.lair_settlement_id, (int)sim->dragon_cult.dragon_seed_phase,
+        sim->dragon_cult.dragon_seed_days_remaining, sim->dragon.afterdeath_days, (int)sim->goblins.tribute_phase);
     printf(",\"members\":%d,\"devotion\":%d,\"cohesion\":%d,\"coins\":%" PRId64
            ",\"relics\":%d,\"food_rations\":%d,\"tools\":%d,\"weapons\":%d,\"planned_eggs\":%d,\"existing_eggs\":%d}",
-        sim->goblins.members, sim->goblins.devotion, sim->goblins.cohesion, sim->goblins.lair_coins,
-        plan.relics, plan.food_rations, sim->goblins.lair_stock[CC_GOOD_TOOLS],
-        sim->goblins.lair_stock[CC_GOOD_WEAPONS], plan.eggs, sim->dragon.egg_count);
+        members, sim->dragon_cult.devotion, sim->goblins.cohesion, coins,
+        plan.relics, plan.food_rations, stock[CC_GOOD_TOOLS],
+        stock[CC_GOOD_WEAPONS], plan.eggs, sim->dragon.egg_count);
+}
+
+static void JsonGoblinSociety(const CcSim *sim)
+{
+    printf("{\"members\":%d,\"crown_faction\":%d,\"factions\":[", sim->goblins.members, sim->goblin_politics.crown_faction);
+    for (int32_t color = 0; color < CC_GOBLIN_FACTION_COUNT; ++color) {
+        const CcGoblinFaction *f = &sim->goblin_politics.factions[color];
+        if (color) putchar(',');
+        printf("{\"color\":"); JsonString(CcGoblinColorName(color));
+        printf(",\"members\":%d,\"lair_room\":%d,\"porter_room\":%d,\"target_room\":%d,\"coins\":%" PRId64
+               ",\"gold\":%d,\"gems\":%d,\"tribute\":%" PRId64 ",\"hunted\":%d}",
+            f->members, f->lair_room, f->porter_room, f->target_room, f->coins, f->gold, f->gems, f->tribute, f->hunted);
+    }
+    printf("],\"dragon_cult\":{\"human_members\":%d,\"goblin_members\":%d,\"ranks\":[",
+        CcSimCultMembers(sim, CC_CULT_HUMAN), CcSimCultMembers(sim, CC_CULT_GOBLIN));
+    for (int32_t species = 0; species < CC_CULT_SPECIES_COUNT; ++species) {
+        if (species) putchar(',');
+        putchar('[');
+        for (int32_t rank = 0; rank < CC_CULT_RANK_COUNT; ++rank) {
+            if (rank) putchar(',');
+            printf("%d", sim->dragon_cult.ranks[species][rank]);
+        }
+        putchar(']');
+    }
+    printf("]}}");
 }
 
 static void JsonRetainedHistory(const CcSim *sim)
@@ -273,6 +301,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
     printf(",\"retained_history\":"); JsonRetainedHistory(sim);
     printf(",\"campaign_launch\":"); JsonCampaignPlan(sim);
     printf(",\"ritual_offering\":"); JsonRitualPlan(sim);
+    printf(",\"goblin_society\":"); JsonGoblinSociety(sim);
     printf(",\"world_seed\":%" PRIu32 ",\"schema\":%" PRIu32 ",\"generator\":%" PRIu32
            ",\"accounting_start_day\":%d,\"elapsed_years\":%d,\"day\":%d,\"state_hash\":\"%016" PRIx64 "\",\"goods\":[",
         sim->world_seed, sim->schema_version, sim->generator_version, start_day, year, sim->current_day, CcSimHash(sim));

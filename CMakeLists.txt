@@ -210,6 +210,7 @@ else()
     set(CC_SQLITE_TARGET SQLite::SQLite3)
 endif()
 add_library(crownless_persistence
+    src/persistence/cc_starting_campaign.c
     src/persistence/cc_save.c
     src/persistence/cc_journal_replay.c
     src/persistence/cc_legacy_runtime.c
@@ -235,6 +236,10 @@ target_include_directories(crownless_metagame PUBLIC src)
 target_link_libraries(crownless_metagame PUBLIC
     crownless_persistence crownless_story)
 cc_strict_warnings(crownless_metagame)
+
+add_executable(crownless_gossip_corpus tools/gossip_corpus.c)
+target_link_libraries(crownless_gossip_corpus PRIVATE crownless_story)
+cc_strict_warnings(crownless_gossip_corpus)
 
 add_executable(crownless_sim_runner tools/sim_runner.c)
 target_link_libraries(crownless_sim_runner PRIVATE crownless_persistence)
@@ -264,6 +269,10 @@ if(CC_BUILD_BENCHMARKS)
         DEPENDS crownless_benchmark crownless_robotics_benchmark
         USES_TERMINAL
     )
+
+    add_executable(crownless_species_metrics tools/species_metrics.c)
+    target_link_libraries(crownless_species_metrics PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_species_metrics)
 
     add_executable(crownless_sim_metrics tools/sim_metrics.c)
     target_link_libraries(crownless_sim_metrics PRIVATE crownless_sim)
@@ -399,6 +408,17 @@ if(CC_BUILD_CLIENT)
             VERBATIM)
         add_dependencies(crownless_voice_assets crownless_carriage)
     endif()
+    if(NOT EMSCRIPTEN)
+        if(APPLE)
+            set(CC_CAMPAIGN_DEST "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/campaigns")
+        else()
+            set(CC_CAMPAIGN_DEST "$<TARGET_FILE_DIR:crownless_carriage>/assets/campaigns")
+        endif()
+        add_custom_command(TARGET crownless_carriage POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CC_CAMPAIGN_DEST}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/campaigns/deep-wyrm.ccsave" "${CC_CAMPAIGN_DEST}/deep-wyrm.ccsave")
+    endif()
     target_link_libraries(crownless_carriage PRIVATE
         crownless_local_renderer
         crownless_persistence crownless_locomotion
@@ -507,6 +527,7 @@ if(CC_BUILD_CLIENT)
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/gloamgate_to_alderwatch.png"
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/collectible_map_atlas.png"
         )
+        list(APPEND CC_WEB_STARTUP_ASSET_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/assets/campaigns/deep-wyrm.ccsave")
         set(CC_WEB_STARTUP_ASSET_OUTPUTS)
         foreach(asset IN LISTS CC_WEB_STARTUP_ASSET_SOURCES)
             file(RELATIVE_PATH relative_asset
@@ -1202,6 +1223,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(story_tests)
     add_test(NAME authored_story_beats COMMAND story_tests)
 
+    add_executable(gossip_language_tests tests/gossip_language_tests.c)
+    target_link_libraries(gossip_language_tests PRIVATE crownless_story)
+    cc_strict_warnings(gossip_language_tests)
+    add_test(NAME grounded_gossip_language COMMAND gossip_language_tests)
+
     add_executable(speech_tests tests/speech_tests.c)
     target_link_libraries(speech_tests PRIVATE crownless_story)
     cc_strict_warnings(speech_tests)
@@ -1261,6 +1287,18 @@ if(BUILD_TESTING)
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
     if(CC_PYTHON3_EXECUTABLE)
+        if(CC_BUILD_BENCHMARKS)
+            add_test(NAME species_sweep_integrity COMMAND ${CC_PYTHON3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/species_sweep_tests.py
+                $<TARGET_FILE:crownless_species_metrics> $<TARGET_FILE:crownless_sim_metrics>)
+        endif()
+        add_test(NAME gossip_corpus_integrity
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/gossip_corpus_tests.py
+                         $<TARGET_FILE:crownless_gossip_corpus>)
+        add_test(NAME age_of_dragons_sweep_integrity
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/age_of_dragons_sweep_tests.py)
         add_test(NAME sweep_hunger_analysis
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/sweep_analysis_tests.py)
@@ -1498,6 +1536,11 @@ if(BUILD_TESTING)
     target_link_libraries(trade_path_tests PRIVATE crownless_sim)
     cc_strict_warnings(trade_path_tests)
     add_test(NAME trade_path_rules COMMAND trade_path_tests)
+    add_executable(starting_campaign_tests tests/starting_campaign_tests.c)
+    target_link_libraries(starting_campaign_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(starting_campaign_tests)
+    add_test(NAME deep_wyrm_starting_campaign COMMAND starting_campaign_tests
+             "${CMAKE_CURRENT_SOURCE_DIR}/assets/campaigns/deep-wyrm.ccsave")
     add_executable(archive_dispatch_tests tests/archive_dispatch_tests.c)
     target_link_libraries(archive_dispatch_tests PRIVATE crownless_persistence)
     cc_strict_warnings(archive_dispatch_tests)
@@ -1592,6 +1635,16 @@ if(BUILD_TESTING)
     target_link_libraries(dragon_cycle_tests PRIVATE crownless_persistence)
     cc_strict_warnings(dragon_cycle_tests)
     add_test(NAME goblin_dragon_causal_cycle COMMAND dragon_cycle_tests)
+
+    add_executable(rot_diet_tests tests/rot_diet_tests.c)
+    target_link_libraries(rot_diet_tests PRIVATE crownless_metagame)
+    cc_strict_warnings(rot_diet_tests)
+    add_test(NAME goblin_dragon_rot_diet COMMAND rot_diet_tests)
+
+    add_executable(goblin_cult_split_tests tests/goblin_cult_split_tests.c)
+    target_link_libraries(goblin_cult_split_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(goblin_cult_split_tests)
+    add_test(NAME goblin_cult_split COMMAND goblin_cult_split_tests)
 
     add_executable(goblin_society_tests tests/goblin_society_tests.c)
     target_link_libraries(goblin_society_tests PRIVATE crownless_persistence)
@@ -1743,6 +1796,8 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-world-cards)
         add_test(NAME silverwick_mine_input
                  COMMAND crownless_carriage --test-mine-input)
+        add_test(NAME road_journey_save
+                 COMMAND crownless_carriage --test-road-journey-save)
         add_test(NAME adventure_input_flow
                  COMMAND crownless_carriage --test-adventure-input)
         add_test(NAME title_and_pause_menu

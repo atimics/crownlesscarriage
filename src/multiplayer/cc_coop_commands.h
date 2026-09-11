@@ -62,8 +62,8 @@ static inline const char *CcCoopActionName(CcCommandKind kind)
         "clear_road_site",
         "transfer_road_site",
         "repair_road_site",
-        "support_bakery", "fund_grain_supply",
+        "support_bakery", "fund_grain_supply", "deliver_prophecy",
     };
-    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_FUND_GRAIN_SUPPLY ? names[(int)kind] : "";
+    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_DELIVER_PROPHECY ? names[(int)kind] : "";
 }
 #endif

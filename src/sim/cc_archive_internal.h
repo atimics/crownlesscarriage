@@ -11,4 +11,9 @@ int32_t CcArchiveSpareGrain(const CcSim *sim, const CcSettlement *place);
 /* Commit a fresh booking through the shared carriage and shipment pool. */
 bool CcArchiveDispatchSupply(CcSim *sim, CcId carriage_id);
 
+/* Scribes draw their payroll from the iron ledger. Supply dispatch may only
+   spend the surplus above this full-payroll threshold, so freight bookings
+   never silence the scriptorium. */
+#define CC_ARCHIVE_PAYROLL_FLOOR ((CcMoney)300)
+
 #endif
