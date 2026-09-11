@@ -1673,6 +1673,11 @@ if(BUILD_TESTING)
     cc_large_sim_stack(material_chain_tests)
     add_test(NAME material_chain_proofs COMMAND material_chain_tests)
 
+    add_executable(archive_order_tests tests/archive_order_tests.c)
+    target_link_libraries(archive_order_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(archive_order_tests)
+    add_test(NAME archive_recruitment_reservation COMMAND archive_order_tests)
+
     add_executable(archive_recruitment_tests tests/archive_recruitment_tests.c)
     target_link_libraries(archive_recruitment_tests PRIVATE crownless_sim)
     cc_strict_warnings(archive_recruitment_tests)

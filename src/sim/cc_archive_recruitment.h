@@ -15,6 +15,7 @@ typedef enum CcArchiveRecruitmentGate {
     CC_ARCHIVE_RECRUIT_SILENCE,
     CC_ARCHIVE_RECRUIT_FUNDS,
     CC_ARCHIVE_RECRUIT_PATRON,
+    CC_ARCHIVE_RECRUIT_BUSY,
     CC_ARCHIVE_RECRUIT_CALENDAR
 } CcArchiveRecruitmentGate;
 
@@ -35,4 +36,9 @@ typedef struct CcArchiveRecruitmentPlan {
    A work order must recheck this quote before committing costs or departure. */
 CcArchiveRecruitmentPlan CcSimArchiveRecruitmentPlan(const CcSim *sim);
 const char *CcArchiveRecruitmentGateName(CcArchiveRecruitmentGate gate);
+/* Rechecks the quote and transfers its funds and stock into a saved reservation. */
+bool CcSimBeginArchiveRecruitment(CcSim *sim);
+/* Return an unused reservation to its original funders and stores. */
+bool CcSimCancelArchiveRecruitment(CcSim *sim);
+bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim);
 #endif

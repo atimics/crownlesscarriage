@@ -12,6 +12,36 @@ static void JsonString(const char *value)
 
 #include "sim_runner_network.inc"
 
+static void JsonArchiveRecruitmentOrder(const CcSim *sim)
+{
+    const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    printf("{\"semantics\":\"stored_reservation\"");
+    printf(",\"status\":%d", o->status);
+    printf(",\"person_id\":\"%" PRIu64 "\"", o->person_id);
+    printf(",\"trainer_id\":\"%" PRIu64 "\"", o->trainer_id);
+    printf(",\"seat_id\":\"%" PRIu64 "\"", o->seat_id);
+    printf(",\"origin_id\":\"%" PRIu64 "\"", o->origin_id);
+    printf(",\"first_route_id\":\"%" PRIu64 "\"", o->first_route_id);
+    printf(",\"first_hop_id\":\"%" PRIu64 "\"", o->first_hop_id);
+    printf(",\"donor_ids_0\":\"%" PRIu64 "\"", o->donor_ids[0]);
+    printf(",\"donor_ids_1\":\"%" PRIu64 "\"", o->donor_ids[1]);
+    printf(",\"patron_ids_0\":\"%" PRIu64 "\"", o->patron_ids[0]);
+    printf(",\"patron_ids_1\":\"%" PRIu64 "\"", o->patron_ids[1]);
+    printf(",\"donor_shares_0\":%" PRId64, o->donor_shares[0]);
+    printf(",\"donor_shares_1\":%" PRId64, o->donor_shares[1]);
+    printf(",\"purse\":%" PRId64, o->purse);
+    printf(",\"wheat\":%d", o->wheat);
+    printf(",\"paper\":%d", o->paper);
+    printf(",\"tools\":%d", o->tools);
+    printf(",\"travel_wheat\":%d", o->travel_wheat);
+    printf(",\"start_day\":%d", o->start_day);
+    printf(",\"training_days\":%d", o->training_days);
+    printf(",\"trainer_days\":%d", o->trainer_days);
+    printf(",\"arrival_estimate\":%" PRId64, o->arrival_estimate);
+    printf(",\"ready_estimate\":%" PRId64, o->ready_estimate);
+    printf("}");
+}
+
 static void JsonArchiveRecruitment(const CcSim *sim)
 {
     CcArchiveRecruitmentPlan p = CcSimArchiveRecruitmentPlan(sim);
@@ -317,6 +347,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         sim->dragon.crown_strength, sim->dragon.egg_count);
     printf(",\"archive_work\":"); JsonArchiveWork(sim);
     printf(",\"archive_funding\":"); JsonArchiveFunding(sim);
+    printf(",\"archive_recruitment_order\":"); JsonArchiveRecruitmentOrder(sim);
     printf(",\"archive_recruitment\":"); JsonArchiveRecruitment(sim);
     printf(",\"archive_supply\":"); JsonArchiveSupply(sim);
     printf(",\"archive_seat_plan\":"); JsonArchiveSeatPlan(sim);

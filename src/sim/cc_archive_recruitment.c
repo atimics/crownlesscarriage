@@ -1,5 +1,7 @@
 #include "sim/cc_archive_recruitment.h"
 #include "sim/cc_archive_internal.h"
+#include "sim/cc_food_economy_internal.h"
+#include "sim/cc_identity_internal.h"
 #include "sim/cc_trade_path_internal.h"
 
 static bool Available(const CcSim *sim, const CcCharacter *person)
@@ -144,6 +146,9 @@ CcArchiveRecruitmentPlan CcSimArchiveRecruitmentPlan(const CcSim *sim)
 {
     CcArchiveRecruitmentPlan result = {.gate = CC_ARCHIVE_RECRUIT_UNAVAILABLE};
     if (sim == NULL || sim->schema_version < 77U) return result;
+    if (sim->schema_version >= 80U && sim->archive_recruitment.status != 0) {
+        result.gate = CC_ARCHIVE_RECRUIT_BUSY; return result;
+    }
     if (sim->archives.scribes >= CC_MAX_SCRIBES) { result.gate = CC_ARCHIVE_RECRUIT_FULL; return result; }
     const CcSettlement *seat = CcArchiveSeat(sim);
     result.gate = CC_ARCHIVE_RECRUIT_SEAT;
@@ -171,7 +176,143 @@ CcArchiveRecruitmentPlan CcSimArchiveRecruitmentPlan(const CcSim *sim)
 const char *CcArchiveRecruitmentGateName(CcArchiveRecruitmentGate gate)
 {
     static const char *const names[] = {"ready", "unavailable", "full", "seat", "candidate",
-        "trainer", "route", "travel_food", "materials", "silence", "funds", "patron", "calendar"};
+        "trainer", "route", "travel_food", "materials", "silence", "funds", "patron", "busy", "calendar"};
     return gate >= CC_ARCHIVE_RECRUIT_READY && gate <= CC_ARCHIVE_RECRUIT_CALENDAR ?
         names[gate] : "unknown";
+}
+
+bool CcSimBeginArchiveRecruitment(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 80U) return false;
+    CcArchiveRecruitmentPlan plan = CcSimArchiveRecruitmentPlan(sim);
+    if (plan.gate != CC_ARCHIVE_RECRUIT_READY) return false;
+    CcArchiveRecruitmentOrder order = {.status = 1, .person_id = plan.person_id,
+        .trainer_id = plan.trainer_id, .seat_id = plan.seat_id, .origin_id = plan.origin_id,
+        .first_route_id = plan.first_route_id, .first_hop_id = plan.first_hop_id,
+        .purse = plan.wages, .wheat = plan.wheat, .paper = plan.paper, .tools = plan.tools,
+        .travel_wheat = plan.travel_wheat, .start_day = sim->current_day,
+        .training_days = plan.training_days, .trainer_days = plan.trainer_days,
+        .arrival_estimate = plan.arrival_day, .ready_estimate = plan.ready_day};
+    for (int32_t i = 0; i < plan.funding.donor_count; ++i) {
+        order.donor_ids[i] = plan.funding.donor_ids[i];
+        order.patron_ids[i] = plan.patron_ids[i];
+        order.donor_shares[i] = plan.funding.shares[i];
+        for (int32_t k = 0; k < sim->kingdom_count; ++k)
+            if (sim->kingdoms[k].id == order.donor_ids[i])
+                sim->kingdoms[k].treasury -= order.donor_shares[i];
+    }
+    sim->iron_ledger_reserve += plan.funding.total - plan.wages;
+    CcSettlement *seat = CcSimSettlementMutable(sim, plan.seat_id);
+    CcSettlement *origin = CcSimSettlementMutable(sim, plan.origin_id);
+    seat->stock[CC_GOOD_WHEAT] -= plan.wheat;
+    seat->stock[CC_GOOD_PAPER] -= plan.paper;
+    seat->stock[CC_GOOD_TOOLS] -= plan.tools;
+    origin->stock[CC_GOOD_WHEAT] -= plan.travel_wheat;
+    CcEconomyRefreshSettlementGoodPrice(sim, seat, CC_GOOD_WHEAT);
+    CcEconomyRefreshSettlementGoodPrice(sim, seat, CC_GOOD_PAPER);
+    CcEconomyRefreshSettlementGoodPrice(sim, seat, CC_GOOD_TOOLS);
+    CcEconomyRefreshSettlementGoodPrice(sim, origin, CC_GOOD_WHEAT);
+    sim->archive_recruitment = order;
+    return true;
+}
+
+bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
+{
+    if (sim == NULL) return false;
+    if (sim->schema_version < 80U) return true;
+    const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    if (o->status == 0) {
+        return o->person_id == 0 &&
+            o->trainer_id == 0 &&
+            o->seat_id == 0 &&
+            o->origin_id == 0 &&
+            o->first_route_id == 0 &&
+            o->first_hop_id == 0 &&
+            o->donor_ids[0] == 0 &&
+            o->donor_ids[1] == 0 &&
+            o->patron_ids[0] == 0 &&
+            o->patron_ids[1] == 0 &&
+            o->donor_shares[0] == 0 &&
+            o->donor_shares[1] == 0 &&
+            o->purse == 0 &&
+            o->wheat == 0 &&
+            o->paper == 0 &&
+            o->tools == 0 &&
+            o->travel_wheat == 0 &&
+            o->start_day == 0 &&
+            o->training_days == 0 &&
+            o->trainer_days == 0 &&
+            o->arrival_estimate == 0 &&
+            o->ready_estimate == 0;
+    }
+    if (o->status != 1 || CcIdKind(o->person_id) != CC_ENTITY_CHARACTER ||
+        (o->person_id & CC_ID_SERIAL_MASK) == 0 ||
+        (o->person_id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial ||
+        (o->trainer_id != 0 && (CcIdKind(o->trainer_id) != CC_ENTITY_CHARACTER ||
+         (o->trainer_id & CC_ID_SERIAL_MASK) == 0 ||
+         (o->trainer_id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial || o->trainer_id == o->person_id)) ||
+        CcSimSettlement(sim, o->seat_id) == NULL || CcSimSettlement(sim, o->origin_id) == NULL ||
+        (o->first_route_id != 0 && CcSimRoute(sim, o->first_route_id) == NULL) ||
+        (o->first_hop_id != 0 && CcSimSettlement(sim, o->first_hop_id) == NULL) ||
+        o->purse < 0 || o->purse > 50 || o->wheat < 0 || o->wheat > 18 ||
+        o->paper < 0 || o->paper > 5 || o->tools < 0 || o->tools > 1 ||
+        o->travel_wheat < 0 || o->travel_wheat > CC_SIM_MAX_UNITS ||
+        o->start_day < 1 || o->start_day > sim->current_day ||
+        (o->training_days != 7 && o->training_days != 28) ||
+        o->trainer_days < 0 || o->trainer_days > 28 ||
+        o->arrival_estimate < o->start_day || o->arrival_estimate > CC_SIM_MAX_DAY ||
+        o->ready_estimate < o->arrival_estimate || o->ready_estimate > CC_SIM_MAX_DAY) return false;
+    if (o->donor_shares[0] < 0 || o->donor_shares[0] > 50 ||
+        o->donor_shares[1] < 0 || o->donor_shares[1] > 50 ||
+        o->donor_shares[0] + o->donor_shares[1] > o->purse ||
+        (o->donor_ids[0] != 0 && o->donor_ids[0] == o->donor_ids[1])) return false;
+    for (int32_t i = 0; i < 2; ++i) {
+        if (o->donor_ids[i] == 0) {
+            if (o->patron_ids[i] != 0 || o->donor_shares[i] != 0) return false;
+            continue;
+        }
+        bool donor_exists = false;
+        for (int32_t k = 0; k < sim->kingdom_count; ++k)
+            if (sim->kingdoms[k].id == o->donor_ids[i]) donor_exists = true;
+        if (!donor_exists ||
+            o->patron_ids[i] == 0 || CcIdKind(o->patron_ids[i]) != CC_ENTITY_CHARACTER ||
+            (o->patron_ids[i] & CC_ID_SERIAL_MASK) == 0 ||
+            (o->patron_ids[i] & CC_ID_SERIAL_MASK) >= sim->next_entity_serial ||
+            o->donor_shares[i] <= 0 || o->donor_shares[i] > 50) return false;
+    }
+    return true;
+}
+
+bool CcSimCancelArchiveRecruitment(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 80U || sim->archive_recruitment.status != 1 ||
+        !CcSimArchiveRecruitmentOrderValid(sim)) return false;
+    const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
+    CcSettlement *seat = CcSimSettlementMutable(sim, o->seat_id);
+    CcSettlement *origin = CcSimSettlementMutable(sim, o->origin_id);
+    CcMoney donors = o->donor_shares[0] + o->donor_shares[1];
+    if (donors > o->purse || sim->iron_ledger_reserve > CC_SIM_MAX_MONEY - (o->purse - donors)) return false;
+    int32_t seat_wheat = o->wheat + (origin == seat ? o->travel_wheat : 0);
+    if (seat->stock[CC_GOOD_WHEAT] > CC_SIM_MAX_UNITS - seat_wheat ||
+        seat->stock[CC_GOOD_PAPER] > CC_SIM_MAX_UNITS - o->paper ||
+        seat->stock[CC_GOOD_TOOLS] > CC_SIM_MAX_UNITS - o->tools ||
+        (origin != seat && origin->stock[CC_GOOD_WHEAT] > CC_SIM_MAX_UNITS - o->travel_wheat)) return false;
+    for (int32_t i = 0; i < 2; ++i)
+        for (int32_t k = 0; k < sim->kingdom_count; ++k)
+            if (sim->kingdoms[k].id == o->donor_ids[i] &&
+                sim->kingdoms[k].treasury > CC_SIM_MAX_MONEY - o->donor_shares[i]) return false;
+    for (int32_t i = 0; i < 2; ++i)
+        for (int32_t k = 0; k < sim->kingdom_count; ++k)
+            if (sim->kingdoms[k].id == o->donor_ids[i]) sim->kingdoms[k].treasury += o->donor_shares[i];
+    sim->iron_ledger_reserve += o->purse - donors;
+    seat->stock[CC_GOOD_WHEAT] += o->wheat;
+    seat->stock[CC_GOOD_PAPER] += o->paper;
+    seat->stock[CC_GOOD_TOOLS] += o->tools;
+    origin->stock[CC_GOOD_WHEAT] += o->travel_wheat;
+    CcEconomyRefreshSettlementGoodPrice(sim, seat, CC_GOOD_WHEAT);
+    CcEconomyRefreshSettlementGoodPrice(sim, seat, CC_GOOD_PAPER);
+    CcEconomyRefreshSettlementGoodPrice(sim, seat, CC_GOOD_TOOLS);
+    CcEconomyRefreshSettlementGoodPrice(sim, origin, CC_GOOD_WHEAT);
+    sim->archive_recruitment = (CcArchiveRecruitmentOrder){0};
+    return true;
 }
