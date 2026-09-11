@@ -2994,9 +2994,60 @@ static void CheckPre68WearJournal(void)
     RemoveDatabase(path);
 }
 
+/* #653: the character cap is an upper bound, not the population target.
+   A cast at or above the inhabited-settlement floor validates even when it
+   is not exactly CC_MAX_CHARACTERS. */
+static void CheckCastNotPinnedToCap(char *error, size_t error_capacity)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x653ca9));
+    int32_t inhabited = 0;
+    for (int32_t i = 0; i < sim.settlement_count; ++i) {
+        if (!CcSettlementIsAbandoned(&sim.settlements[i])) inhabited += 1;
+    }
+    CC_CHECK(inhabited > 0);
+    sim.character_count = inhabited * 3;
+    CC_CHECK(CcSimValidate(&sim, error, error_capacity));
+    sim.character_count = inhabited * 3 - 1;
+    CC_CHECK(!CcSimValidate(&sim, error, error_capacity));
+}
+
+/* #653: a save written when the cast cap was smaller has fewer
+   gossip_carrier rows. Loading must tolerate the shorter table rather than
+   fail with "Gossip rows are invalid or incomplete." */
+static void CheckGossipCarrierCapacityGrowth(char *error,
+                                             size_t error_capacity)
+{
+    const char *path = "persistence-gossip-carrier-growth.ccsave";
+    RemoveDatabase(path);
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x653ca9ca));
+    CC_CHECK(CcSaveWrite(path, &sim, error, error_capacity));
+
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database, SQLITE_OPEN_READWRITE, NULL),
+                  database, "could not open gossip carrier fixture");
+    ExecuteFixtureSql(database, "DELETE FROM gossip_carrier WHERE slot >= 1;",
+                      "could not shorten gossip carrier table");
+    sqlite3_close(database);
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.gossip_carriers[0].id == sim.gossip_carriers[0].id);
+    for (int32_t i = 1; i < CcSimGossipCarrierCapacity(&restored); ++i) {
+        CC_CHECK(restored.gossip_carriers[i].id == 0U);
+        CC_CHECK(restored.gossip_carriers[i].stories == 0U);
+    }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 int main(void)
 {
+    char error[256];
     CheckShippedTravellerSave();
+    CheckCastNotPinnedToCap(error, sizeof(error));
+    CheckGossipCarrierCapacityGrowth(error, sizeof(error));
     CheckPre61KnowledgeJournal();
     CheckPre64SiteJournal();
     CheckPre65FreightJournal();
@@ -3019,7 +3070,6 @@ int main(void)
     original.hoard_raiders.social_raid_latched = true;
     original.hoard_raiders.war_raid_latched = true;
     CcSimAdvanceDays(&original, 23);
-    char error[256];
     CcSettlement *capital = &original.settlements[4];
     original.goblins.tribute_cooldown_days = 1000;
     original.hoard_raiders.cooldown_days = 1000;
