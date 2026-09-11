@@ -8,7 +8,10 @@ static CcCharacter *PresentQuestActor(CcSim *sim, CcId town,
     for (int i = 0; i < sim->character_count; ++i) {
         CcCharacter *person = &sim->characters[i];
         if ((sim->schema_version >= 83U && sim->archive_recruitment.status > 0 &&
-             sim->archive_recruitment.status < 4 && sim->archive_recruitment.person_id == person->id) ||
+             (sim->archive_recruitment.status < 4 || (sim->schema_version >= 84U && sim->archive_recruitment.status == 5)) &&
+             (sim->archive_recruitment.person_id == person->id ||
+              (sim->schema_version >= 84U && sim->archive_recruitment.status == 3 &&
+               sim->archive_recruitment.trainer_id == person->id))) ||
             person->id == first || person->id == second ||
             person->current_settlement_id != town ||
             person->death_day <= sim->current_day || CcCharacterAgeYears(sim, person) < 16 ||
