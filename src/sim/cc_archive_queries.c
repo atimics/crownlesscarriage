@@ -53,7 +53,7 @@ CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim)
         sim, place->id, CC_GOOD_TOOLS);
     snapshot.incoming_iron = CcSimIncomingGood(
         sim, place->id, CC_GOOD_IRON);
-    bool binding_available = false;
+    bool binding_available = sim->schema_version >= 88U && sim->archive_staff.active;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *vault = &sim->settlements[i];
         if (CcSettlementIsAbandoned(vault)) continue;
@@ -110,7 +110,7 @@ CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim)
     plan.wheat_required = plan.eligible_scribes * 2;
     plan.recording_ready = plan.eligible_scribes > 0 &&
         seat->stock[CC_GOOD_PAPER] > 0 && seat->stock[CC_GOOD_TOOLS] > 0 &&
-        (sim->schema_version < 85U || !sim->archive_staff.active ||
+        (sim->schema_version < 85U || sim->schema_version >= 88U || !sim->archive_staff.active ||
          (seat->stock[CC_GOOD_GOLD] > 0 && seat->stock[CC_GOOD_GEMS] > 0));
     return plan;
 }
