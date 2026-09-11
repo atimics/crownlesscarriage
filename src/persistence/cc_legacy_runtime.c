@@ -698,6 +698,9 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
     if (legacy_version < 62U) CcSimUpgradeKnowledgeSourceNames(sim);
     if (legacy_version < 51U) CcSimSeedCommonPonyHerds(sim);
     if (legacy_version < 52U) CcSimUnharnessSecondDraftAnimal(sim);
+    /* Legacy upgrades can seed residents and situation casts through
+       separate paths; make the final living cast unique before validation. */
+    MakeLegacyCharacterNamesUnique(sim);
     return true;
 }
 

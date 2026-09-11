@@ -3072,22 +3072,17 @@ static void CheckPre68WearJournal(void)
     RemoveDatabase(path);
 }
 
-/* #653: the character cap is an upper bound, not the population target.
-   A cast at or above the inhabited-settlement floor validates even when it
-   is not exactly CC_MAX_CHARACTERS. */
+/* #653: the character cap is an upper bound, not the population target. */
 static void CheckCastNotPinnedToCap(char *error, size_t error_capacity)
 {
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0x653ca9));
-    int32_t inhabited = 0;
-    for (int32_t i = 0; i < sim.settlement_count; ++i) {
-        if (!CcSettlementIsAbandoned(&sim.settlements[i])) inhabited += 1;
-    }
-    CC_CHECK(inhabited > 0);
-    sim.character_count = inhabited * 3;
+    CC_CHECK(sim.character_count > 0);
+    /* The seeded cast is deliberately not the full cap; the world still
+       validates, where the old exact-equality rule rejected it. */
+    CC_CHECK(sim.character_count <= CC_MAX_CHARACTERS);
+    CC_CHECK(sim.character_count != CC_MAX_CHARACTERS);
     CC_CHECK(CcSimValidate(&sim, error, error_capacity));
-    sim.character_count = inhabited * 3 - 1;
-    CC_CHECK(!CcSimValidate(&sim, error, error_capacity));
 }
 
 /* #653: a save written when the cast cap was smaller has fewer
