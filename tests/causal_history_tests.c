@@ -56,7 +56,8 @@ static void CheckPopulationTurnover(void)
     }
     CC_CHECK(sim.character_deaths > 0);
     CC_CHECK(sim.character_births == sim.character_deaths);
-    CC_CHECK(sim.character_count == CC_MAX_CHARACTERS);
+    CC_CHECK(sim.character_count > 0 &&
+             sim.character_count <= CC_MAX_CHARACTERS);
     bool heir_exists = false;
     for (int32_t i = 0; i < sim.character_count; ++i) {
         if (sim.characters[i].generation > 0) heir_exists = true;

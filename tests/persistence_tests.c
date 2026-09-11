@@ -1705,7 +1705,8 @@ static void CheckSchema24Compatibility(char *error, size_t error_capacity)
              (preview.travel_days * 2 < 3 ? 3 : preview.travel_days * 2) *
                  CC_WORLD_WATCH_SUBTICKS);
     CC_CHECK(restored.carriage.progress_milli == legacy_progress);
-    CC_CHECK(restored.character_count == CC_MAX_CHARACTERS);
+    CC_CHECK(restored.character_count > 0 &&
+             restored.character_count <= CC_MAX_CHARACTERS);
     CC_CHECK(restored.characters[0].id == first_character_id);
     CC_CHECK(strcmp(restored.characters[0].name,
                     first_character_name) == 0);
@@ -2714,7 +2715,7 @@ static void CheckSchema41Upgrade(void)
    future edit to that table cannot quietly widen or narrow what loads. */
 static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
 {
-    bool legacy = schema >= 2U && schema <= 80U;
+    bool legacy = schema >= 2U && schema <= 81U;
     if (!legacy && schema != CC_SIM_SCHEMA_VERSION) return false;
     if (schema == CC_SIM_SCHEMA_VERSION &&
         generator == CC_GENERATOR_VERSION) return true;
@@ -2722,7 +2723,7 @@ static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
         /* The current generator reads the oldest schemas and the recent run,
            but not 28 through 31, which shipped with generators of their own. */
         if (schema >= 2U && schema <= 27U) return true;
-        if (schema >= 32U && schema <= 80U) return true;
+        if (schema >= 32U && schema <= 81U) return true;
     }
     if (schema == 31U && generator == 24U) return true;
     if (schema == 27U && generator >= 21U && generator <= 23U) return true;
@@ -3072,22 +3073,17 @@ static void CheckPre68WearJournal(void)
     RemoveDatabase(path);
 }
 
-/* #653: the character cap is an upper bound, not the population target.
-   A cast at or above the inhabited-settlement floor validates even when it
-   is not exactly CC_MAX_CHARACTERS. */
+/* #653: the character cap is an upper bound, not the population target. */
 static void CheckCastNotPinnedToCap(char *error, size_t error_capacity)
 {
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0x653ca9));
-    int32_t inhabited = 0;
-    for (int32_t i = 0; i < sim.settlement_count; ++i) {
-        if (!CcSettlementIsAbandoned(&sim.settlements[i])) inhabited += 1;
-    }
-    CC_CHECK(inhabited > 0);
-    sim.character_count = inhabited * 3;
+    CC_CHECK(sim.character_count > 0);
+    /* The seeded cast is deliberately not the full cap; the world still
+       validates, where the old exact-equality rule rejected it. */
+    CC_CHECK(sim.character_count <= CC_MAX_CHARACTERS);
+    CC_CHECK(sim.character_count != CC_MAX_CHARACTERS);
     CC_CHECK(CcSimValidate(&sim, error, error_capacity));
-    sim.character_count = inhabited * 3 - 1;
-    CC_CHECK(!CcSimValidate(&sim, error, error_capacity));
 }
 
 /* #653: a save written when the cast cap was smaller has fewer

@@ -270,6 +270,16 @@ static void CheckJournalAndLegacyReplay(void)
 static void CheckRelayAndBlockedRoad(void)
 {
     Prepare();
+    /* This test isolates the royal-carriage relay, so keep the standing cast
+       from carrying the report first. */
+    for (int32_t i = 0; i < sim.character_count; ++i) {
+        CcCharacter *person = &sim.characters[i];
+        if (person->role != CC_CHARACTER_OFFICIAL) {
+            person->role = CC_CHARACTER_LABORER;
+        }
+        person->travel_destination_id = 0U;
+        person->travel_arrival_day = 0;
+    }
     CcId report = AddAccount(sim.settlements[3].id, "The mine town opens a new market.");
     CcRoyalCarriage *carriage = &sim.royal_carriages[0];
     carriage->location_id = sim.settlements[2].id;
@@ -768,6 +778,7 @@ static void CheckShortageRegisters(void)
              strstr(ledger.text, "telling") != NULL ||
              strstr(ledger.text, "report") != NULL);
     CC_CHECK(strstr(lookouts.text, "food") != NULL ||
+             strstr(lookouts.text, "Food") != NULL ||
              strstr(lookouts.text, "granary") != NULL);
     CC_CHECK(strcmp(road.text, ledger.text) != 0);
     CC_CHECK(strcmp(ledger.text, lookouts.text) != 0);

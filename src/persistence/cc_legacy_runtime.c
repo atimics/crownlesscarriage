@@ -137,6 +137,21 @@ static void MakeLegacyCharacterNamesUnique(CcSim *sim)
                 character->generation, ordinal++, name);
         } while (LegacyCharacterNameExists(sim, i, name) && ordinal < 2048U);
         (void)snprintf(character->name, sizeof(character->name), "%s", name);
+        /* Situations keep a name snapshot next to the character id; keep it
+           in step so the migrated cast still validates. */
+        for (int32_t s = 0; s < sim->situation_count; ++s) {
+            CcSituation *situation = &sim->situations[s];
+            if (situation->sponsor_character_id == character->id) {
+                (void)snprintf(situation->sponsor_name,
+                               sizeof(situation->sponsor_name), "%s",
+                               character->name);
+            }
+            if (situation->affected_character_id == character->id) {
+                (void)snprintf(situation->affected_name,
+                               sizeof(situation->affected_name), "%s",
+                               character->name);
+            }
+        }
     }
 }
 
@@ -201,7 +216,7 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 68U || legacy_version == 69U ||
          legacy_version == 70U || legacy_version == 71U || legacy_version == 72U || legacy_version == 73U ||
          legacy_version == 74U || legacy_version == 75U || legacy_version == 76U ||
-         legacy_version == 77U || legacy_version == 78U || legacy_version == 79U || legacy_version == 80U) &&
+         legacy_version == 77U || legacy_version == 78U || legacy_version == 79U || legacy_version == 80U || legacy_version == 81U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
@@ -698,6 +713,9 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
     if (legacy_version < 62U) CcSimUpgradeKnowledgeSourceNames(sim);
     if (legacy_version < 51U) CcSimSeedCommonPonyHerds(sim);
     if (legacy_version < 52U) CcSimUnharnessSecondDraftAnimal(sim);
+    /* Legacy upgrades can seed residents and situation casts through
+       separate paths; make the final living cast unique before validation. */
+    MakeLegacyCharacterNamesUnique(sim);
     return true;
 }
 

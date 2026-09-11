@@ -286,11 +286,12 @@ int main(void)
     for (int32_t i = 0; i < fall.settlement_count; ++i) {
         before_population[i] = fall.settlements[i].population;
     }
+    CcId thornford_ids[CC_MAX_CHARACTERS];
     int32_t thornford_residents = 0;
     for (int32_t i = 0; i < fall.character_count; ++i) {
         if (fall.characters[i].home_settlement_id ==
             fall.settlements[thornford].id) {
-            thornford_residents += 1;
+            thornford_ids[thornford_residents++] = fall.characters[i].id;
         }
     }
     CC_CHECK(thornford_residents > 0);
@@ -311,6 +312,16 @@ int main(void)
     CC_CHECK(hosts > 0);
     for (int32_t i = 0; i < fall.character_count; ++i) {
         if (fall.characters[i].role != CC_CHARACTER_REFUGEE) continue;
+        bool from_thornford = false;
+        for (int32_t t = 0; t < thornford_residents; ++t) {
+            if (fall.characters[i].id == thornford_ids[t]) {
+                from_thornford = true;
+                break;
+            }
+        }
+        /* Resident seeding can place refugees in standing towns; only the
+           fallen town's own people are this fall's refugees. */
+        if (!from_thornford) continue;
         refugees += 1;
         bool hosted = false;
         for (int32_t h = 0; h < hosts; ++h) {
@@ -401,8 +412,12 @@ int main(void)
     CC_CHECK(CcSimHash(&restored) == hash);
     int32_t restored_refugees = 0;
     for (int32_t i = 0; i < restored.character_count; ++i) {
-        if (restored.characters[i].role == CC_CHARACTER_REFUGEE) {
-            restored_refugees += 1;
+        if (restored.characters[i].role != CC_CHARACTER_REFUGEE) continue;
+        for (int32_t t = 0; t < thornford_residents; ++t) {
+            if (restored.characters[i].id == thornford_ids[t]) {
+                restored_refugees += 1;
+                break;
+            }
         }
     }
     CC_CHECK(restored_refugees == refugees);

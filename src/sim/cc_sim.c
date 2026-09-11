@@ -613,76 +613,111 @@ static int32_t Jitter(CcSim *sim, int32_t center, int32_t radius)
     return center + (int32_t)(NextRandom(sim) % span) - radius;
 }
 
-static bool EventIsPinned(const CcSim *sim, CcId event_id,
-                          CcId incoming_parent)
+/* Every event the ledger must keep is gathered once per compaction into a
+   small open-addressed set. Checking membership per event avoids rescanning
+   every reference for every event, which a full ledger makes quadratic. */
+#define CC_EVENT_PIN_SET_SIZE 4096U
+
+typedef struct CcEventPinSet {
+    CcId slots[CC_EVENT_PIN_SET_SIZE];
+} CcEventPinSet;
+
+static uint32_t EventPinHash(CcId id)
 {
-    if (event_id == 0U) return false;
+    uint64_t value = (uint64_t)id;
+    value ^= value >> 33;
+    value *= UINT64_C(0xff51afd7ed558ccd);
+    value ^= value >> 33;
+    return (uint32_t)value;
+}
+
+static void PinEvent(CcEventPinSet *set, CcId id)
+{
+    if (id == 0U) return;
+    uint32_t index = EventPinHash(id) & (CC_EVENT_PIN_SET_SIZE - 1U);
+    while (set->slots[index] != 0U) {
+        if (set->slots[index] == id) return;
+        index = (index + 1U) & (CC_EVENT_PIN_SET_SIZE - 1U);
+    }
+    set->slots[index] = id;
+}
+
+static bool EventIsPinned(const CcEventPinSet *set, CcId id)
+{
+    if (id == 0U) return false;
+    uint32_t index = EventPinHash(id) & (CC_EVENT_PIN_SET_SIZE - 1U);
+    while (set->slots[index] != 0U) {
+        if (set->slots[index] == id) return true;
+        index = (index + 1U) & (CC_EVENT_PIN_SET_SIZE - 1U);
+    }
+    return false;
+}
+
+static void GatherPinnedEvents(const CcSim *sim, CcId incoming_parent,
+                               CcEventPinSet *set)
+{
     if (sim->schema_version >= 44U) {
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
-            if (!sim->gossip[i].recorded &&
-                (sim->gossip[i].event_id == event_id ||
-                 sim->gossip[i].heard_event_id == event_id)) return true;
+            if (!sim->gossip[i].recorded) {
+                PinEvent(set, sim->gossip[i].event_id);
+                PinEvent(set, sim->gossip[i].heard_event_id);
+            }
         }
     }
-    if (event_id == incoming_parent ||
-        event_id == sim->journey.parent_event_id ||
-        event_id == sim->delayed_echo.parent_event_id ||
-        event_id == sim->goblins.tribute_event_id ||
-        event_id == sim->dragon.hoard_event_id ||
-        event_id == sim->dragon.omen_event_id ||
-        event_id == sim->dragon.lifecycle_event_id ||
-        event_id == sim->hoard_raiders.cause_event_id ||
-        event_id == sim->dragon_campaign.cause_event_id) return true;
+    PinEvent(set, incoming_parent);
+    PinEvent(set, sim->journey.parent_event_id);
+    PinEvent(set, sim->delayed_echo.parent_event_id);
+    PinEvent(set, sim->goblins.tribute_event_id);
+    PinEvent(set, sim->dragon.hoard_event_id);
+    PinEvent(set, sim->dragon.omen_event_id);
+    PinEvent(set, sim->dragon.lifecycle_event_id);
+    PinEvent(set, sim->hoard_raiders.cause_event_id);
+    PinEvent(set, sim->dragon_campaign.cause_event_id);
     for (int32_t i = 0; i < sim->pending_echo_count; ++i) {
-        if (sim->pending_echoes[i].parent_event_id == event_id) return true;
+        PinEvent(set, sim->pending_echoes[i].parent_event_id);
     }
     for (int32_t i = 0; i < sim->courier_count; ++i) {
-        if (sim->couriers[i].cause_event_id == event_id) return true;
+        PinEvent(set, sim->couriers[i].cause_event_id);
     }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *situation = &sim->situations[i];
-        if (situation->cause_event_id == event_id ||
-            situation->lead_event_id == event_id ||
-            situation->objective.progress.created_by_event_id == event_id ||
-            situation->objective.progress.resolved_by_event_id == event_id ||
-            situation->objective.danger.created_by_event_id == event_id ||
-            situation->objective.danger.resolved_by_event_id == event_id) {
-            return true;
-        }
+        PinEvent(set, situation->cause_event_id);
+        PinEvent(set, situation->lead_event_id);
+        PinEvent(set, situation->objective.progress.created_by_event_id);
+        PinEvent(set, situation->objective.progress.resolved_by_event_id);
+        PinEvent(set, situation->objective.danger.created_by_event_id);
+        PinEvent(set, situation->objective.danger.resolved_by_event_id);
         for (int32_t evidence = 0;
              evidence < situation->objective.evidence_count; ++evidence) {
-            if (situation->objective.evidence_event_ids[evidence] == event_id) {
-                return true;
-            }
+            PinEvent(set, situation->objective.evidence_event_ids[evidence]);
         }
     }
     for (int32_t i = 0; i < sim->front_count; ++i) {
         const CcFront *front = &sim->fronts[i];
-        if (front->cause_event_id == event_id ||
-            front->created_event_id == event_id ||
-            front->resolved_event_id == event_id ||
-            front->portent.created_by_event_id == event_id ||
-            front->portent.resolved_by_event_id == event_id) return true;
+        PinEvent(set, front->cause_event_id);
+        PinEvent(set, front->created_event_id);
+        PinEvent(set, front->resolved_event_id);
+        PinEvent(set, front->portent.created_by_event_id);
+        PinEvent(set, front->portent.resolved_by_event_id);
     }
     for (int32_t i = 0; i < sim->quest_outcome_count; ++i) {
         const CcQuestOutcomeRecord *outcome = &sim->quest_outcomes[i];
-        if (outcome->cause_event_id == event_id ||
-            outcome->resolved_event_id == event_id) return true;
+        PinEvent(set, outcome->cause_event_id);
+        PinEvent(set, outcome->resolved_event_id);
     }
     for (int32_t i = 0; i < sim->character_count; ++i) {
         const CcCharacter *character = &sim->characters[i];
         for (int32_t memory = 0; memory < character->memory_count; ++memory) {
-            if (character->memories[memory].event_id == event_id) return true;
+            PinEvent(set, character->memories[memory].event_id);
         }
         for (int32_t knowledge = 0;
              knowledge < character->knowledge_count; ++knowledge) {
-            if (character->knowledge[knowledge].event_id == event_id) return true;
+            PinEvent(set, character->knowledge[knowledge].event_id);
         }
     }
     for (int32_t i = 0; i < sim->relationship_count; ++i) {
-        if (sim->relationships[i].cause_event_id == event_id) return true;
+        PinEvent(set, sim->relationships[i].cause_event_id);
     }
-    return false;
 }
 
 static void RedirectEventReference(CcSim *sim, CcId removed_id,
@@ -821,8 +856,13 @@ static void CompactEventLedger(CcSim *sim, CcId incoming_parent)
     }
 
     int32_t removed = -1;
+    /* Static: 32 KB does not belong on the stack, especially under ASan. The
+       ledger is single-threaded and compaction is not reentrant. */
+    static CcEventPinSet pinned_events;
+    memset(&pinned_events, 0, sizeof(pinned_events));
+    GatherPinnedEvents(sim, incoming_parent, &pinned_events);
     for (int32_t i = 0; i < sim->event_count; ++i) {
-        if (!EventIsPinned(sim, ordered[i].id, incoming_parent)) {
+        if (!EventIsPinned(&pinned_events, ordered[i].id)) {
             removed = i;
             break;
         }
@@ -5705,8 +5745,12 @@ static void GatherGossip(CcSim *sim)
 
 int32_t CcSimGossipCarrierCapacity(const CcSim *sim)
 {
-    return sim != NULL && sim->schema_version >= 46U ?
-        CC_MAX_GOSSIP_CARRIERS : CC_LEGACY_GOSSIP_CARRIERS;
+    if (sim == NULL || sim->schema_version < 46U) {
+        return CC_LEGACY_GOSSIP_CARRIERS;
+    }
+    return CC_LEGACY_GOSSIP_CARRIERS +
+        (sim->schema_version >= 82U ? CC_MAX_CHARACTERS
+                                    : CC_LEGACY_CHARACTER_CAP);
 }
 
 const CcGossipCarrier *CcSimGossipCarrier(const CcSim *sim, CcId id)
@@ -7094,7 +7138,6 @@ static CcId StartDragonTheft(CcSim *sim, CcId thief_id,
         sim->dragon.lair_settlement_id, parent_event_id,
         amount, theft_text);
     CcId theft_event_id = theft->id;
-    sim->dragon.hoard_event_id = theft_event_id;
     char omen_text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(omen_text, sizeof(omen_text),
                    "Smoke falls into %s's chimneys; old readers count 14 nights until %s comes.",
@@ -7102,6 +7145,9 @@ static CcId StartDragonTheft(CcSim *sim, CcId thief_id,
     CcEvent *omen = PushEvent(
         sim, CC_EVENT_DRAGON_OMEN, sim->dragon.id, target->id,
         theft_event_id, 14, omen_text);
+    /* Move the pin to the theft only after the omen is recorded, so the
+       theft's own parent survives both pushes while it is still pinned. */
+    sim->dragon.hoard_event_id = theft_event_id;
     sim->dragon.omen_event_id = omen->id;
     return theft_event_id;
 }
@@ -10798,6 +10844,47 @@ static void AssignSituationCastLegacy(CcSim *sim, CcSituation *situation,
 
 #include "cc_quest_cast.inc"
 
+/* How many named residents a town carries. Before schema 78 every settlement
+   held exactly four regardless of size, so a capital of 8,700 people and a
+   dying town of 349 had the same cast. Scale it with the population the named
+   people are meant to stand for, and keep older worlds on the flat four. */
+static int32_t ResidentTarget(const CcSim *sim, const CcSettlement *place)
+{
+    if (sim->schema_version < 82U) return 4;
+    if (place == NULL || CcSettlementIsAbandoned(place)) return 4;
+    int32_t scaled = 3 + place->population / 150;
+    return ClampI32(scaled, 3, 24);
+}
+
+/* The trades a town seeds, in order. The first four hold the shape older
+   worlds had; past that the mix leans on what the settlement is for, so a
+   market raises travellers and couriers and a fortress raises scouts. */
+static CcCharacterRole ResidentRole(const CcSettlement *place, int32_t index)
+{
+    static const CcCharacterRole base[] = {
+        CC_CHARACTER_OFFICIAL, CC_CHARACTER_LABORER,
+        CC_CHARACTER_SCOUT, CC_CHARACTER_TRAVELLER
+    };
+    if (index < 4) return base[index];
+    static const CcCharacterRole trade[] = {
+        CC_CHARACTER_TRAVELLER, CC_CHARACTER_COURIER, CC_CHARACTER_LABORER,
+        CC_CHARACTER_OFFICIAL, CC_CHARACTER_TRAVELLER, CC_CHARACTER_REFUGEE
+    };
+    static const CcCharacterRole guard[] = {
+        CC_CHARACTER_SCOUT, CC_CHARACTER_LABORER, CC_CHARACTER_COURIER,
+        CC_CHARACTER_SCOUT, CC_CHARACTER_OFFICIAL, CC_CHARACTER_REFUGEE
+    };
+    static const CcCharacterRole common[] = {
+        CC_CHARACTER_LABORER, CC_CHARACTER_SCOUT, CC_CHARACTER_TRAVELLER,
+        CC_CHARACTER_LABORER, CC_CHARACTER_COURIER, CC_CHARACTER_REFUGEE
+    };
+    const CcCharacterRole *ladder =
+        place->function == CC_SETTLEMENT_MARKET ||
+        place->function == CC_SETTLEMENT_CAPITAL ? trade :
+        place->function == CC_SETTLEMENT_FORTRESS ? guard : common;
+    return ladder[(index - 4) % 6];
+}
+
 static void FillSettlementResidents(CcSim *sim)
 {
     if (sim == NULL) return;
@@ -10810,19 +10897,22 @@ static void FillSettlementResidents(CcSim *sim)
                 residents += 1;
             }
         }
+        int32_t target = ResidentTarget(sim, &sim->settlements[settlement]);
         uint32_t ordinal = 0U;
-        while (residents < 4 && sim->character_count < CC_MAX_CHARACTERS) {
+        while (residents < target && sim->character_count < CC_MAX_CHARACTERS) {
             char name[CC_NAME_CAPACITY];
             do {
                 GenerateResidentName(sim, settlement_id, 0, ordinal++, name);
             } while (CharacterForName(sim, name) != NULL && ordinal < 2048U);
-            CcCharacterRole role = residents == 0 ? CC_CHARACTER_OFFICIAL :
-                residents == 1 ? CC_CHARACTER_LABORER :
-                residents == 2 ? CC_CHARACTER_SCOUT :
-                                 CC_CHARACTER_TRAVELLER;
+            CcCharacterRole role = ResidentRole(&sim->settlements[settlement],
+                                                residents);
             CcCharacterGoal goal = role == CC_CHARACTER_OFFICIAL ?
                 CC_CHARACTER_GOAL_KEEP_ORDER :
-                CC_CHARACTER_GOAL_SECURE_LIVELIHOOD;
+                role == CC_CHARACTER_COURIER ?
+                    CC_CHARACTER_GOAL_CARRY_NEWS :
+                role == CC_CHARACTER_REFUGEE ?
+                    CC_CHARACTER_GOAL_SURVIVE_CRISIS :
+                    CC_CHARACTER_GOAL_SECURE_LIVELIHOOD;
             if (PromoteCharacter(sim, name, settlement_id, 0U, role, goal,
                                  CC_CHARACTER_ACTIVITY_WORKING) == NULL) {
                 break;
@@ -11109,6 +11199,9 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     successor.occupation = sim->schema_version >= 79U ? dead.occupation : CC_OCCUPATION_NONE;
     successor.goal = dead.goal;
     successor.activity = CC_CHARACTER_ACTIVITY_WORKING;
+    /* An heir inherits the office, not the journey. */
+    successor.travel_destination_id = 0U;
+    successor.travel_arrival_day = 0;
     successor.appearance_seed = (uint32_t)(
         successor.id ^ (successor.id >> 32U) ^ sim->world_seed ^
         UINT32_C(0x9e3779b9));
@@ -14733,6 +14826,116 @@ static const CcBanditGroup *TravellerBanditCamp(const CcSim *sim, CcId id)
     return NULL;
 }
 
+/* A private, deterministic roll for travel decisions. Deliberately NOT
+   NextRandom: sharing the simulation stream would shift every other random
+   outcome in the day and make this change ripple far beyond travel. */
+static uint32_t TravelRoll(const CcSim *sim, const CcCharacter *person,
+                           uint32_t salt)
+{
+    uint32_t value = sim->world_seed ^ UINT32_C(0x9e3779b9);
+    value ^= (uint32_t)person->id ^ (uint32_t)(person->id >> 32U);
+    value ^= (uint32_t)sim->current_day * UINT32_C(0x85ebca6b);
+    value ^= salt * UINT32_C(0xc2b2ae35);
+    value ^= value >> 16; value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15; value *= UINT32_C(0x846ca68b);
+    value ^= value >> 16;
+    return value;
+}
+
+/* Characters walk the roads between towns. This exists for gossip: a carrier
+   arriving in a town shares its held stories there and learns that town's,
+   and every such exchange runs RetellGossip, which raises `retellings` and
+   drops `confidence`. Without movement each carrier only ever syncs with its
+   home town, so accounts stay first-hand and never degrade. */
+static void AdvanceCharacterTravel(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 82U) return;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        CcCharacter *person = &sim->characters[i];
+        if (person->death_day > 0 && person->death_day <= sim->current_day) continue;
+
+        if (person->travel_destination_id != 0U) {
+            if (sim->current_day < person->travel_arrival_day) continue;
+            const CcSettlement *arrived =
+                CcSimSettlement(sim, person->travel_destination_id);
+            if (arrived != NULL && !CcSettlementIsAbandoned(arrived)) {
+                person->current_settlement_id = arrived->id;
+            }
+            person->travel_destination_id = 0U;
+            person->travel_arrival_day = 0;
+            person->activity = CC_CHARACTER_ACTIVITY_WORKING;
+            continue;
+        }
+
+        /* Only road-going roles leave town, and only on a weekly cadence so the
+           random stream stays cheap and predictable. */
+        if (person->role != CC_CHARACTER_TRAVELLER &&
+            person->role != CC_CHARACTER_COURIER &&
+            person->role != CC_CHARACTER_SCOUT) continue;
+        if (person->bandit_group_id != 0U) continue;
+        if (CcCharacterAgeYears(sim, person) < 16) continue;
+        if (person->activity == CC_CHARACTER_ACTIVITY_HIDING ||
+            person->activity == CC_CHARACTER_ACTIVITY_SEEKING_AID) continue;
+        if ((sim->current_day + i) % 7 != 0) continue;
+
+        const CcSettlement *here = CcSimSettlement(sim, person->current_settlement_id);
+        if (here == NULL) continue;
+
+        /* Somebody of each trade has to mind the town. SelectPresentQuestCast
+           needs a character of the right role *present* to cast a situation, so
+           the last of a trade stays put rather than silently stopping quests
+           from being created there. At the current cast size this binds often;
+           see the note in the pull request. */
+        int32_t same_role_here = 0;
+        for (int32_t o = 0; o < sim->character_count; ++o) {
+            const CcCharacter *other = &sim->characters[o];
+            if (o == i || other->role != person->role) continue;
+            if (other->death_day > 0 && other->death_day <= sim->current_day) continue;
+            if (other->travel_destination_id != 0U) continue;
+            if (other->current_settlement_id != here->id) continue;
+            same_role_here += 1;
+        }
+        if (same_role_here == 0) continue;
+
+
+        CcId options[CC_MAX_ROUTES];
+        int32_t travel_days[CC_MAX_ROUTES];
+        int32_t option_count = 0;
+        for (int32_t r = 0; r < sim->route_count; ++r) {
+            const CcRoute *route = &sim->routes[r];
+            if (route->closed) continue;
+            if (route->from_id != here->id && route->to_id != here->id) continue;
+            CcId far_id = route->from_id == here->id ? route->to_id : route->from_id;
+            const CcSettlement *far = CcSimSettlement(sim, far_id);
+            if (far == NULL || far->id == here->id ||
+                CcSettlementIsAbandoned(far)) continue;
+            if (option_count >= CC_MAX_ROUTES) break;
+            options[option_count] = far->id;
+            travel_days[option_count] = MaximumI32(1, route->travel_days);
+            option_count += 1;
+        }
+        if (option_count <= 0) continue;
+
+        bool away = person->current_settlement_id != person->home_settlement_id;
+        int32_t chosen = -1;
+        if (away) {
+            /* A traveller who is already out looks for the way home first. */
+            for (int32_t o = 0; o < option_count; ++o) {
+                if (options[o] == person->home_settlement_id) chosen = o;
+            }
+        }
+        if (chosen < 0) {
+            /* Settled people mostly stay put; those already on the road move on. */
+            if (TravelRoll(sim, person, 1U) % 100U >= (away ? 60U : 25U)) continue;
+            chosen = (int32_t)(TravelRoll(sim, person, 2U) % (uint32_t)option_count);
+        }
+
+        person->travel_destination_id = options[chosen];
+        person->travel_arrival_day = sim->current_day + travel_days[chosen];
+        person->activity = CC_CHARACTER_ACTIVITY_TRAVELLING;
+    }
+}
+
 static void AdvanceTravellerNeeds(CcSim *sim)
 {
     for (int32_t i = 0; i < sim->character_count; ++i) {
@@ -14855,6 +15058,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         sim->current_day += 1;
         if (sim->schema_version >= 26U) AdvanceCharacterLifecycles(sim);
         if (sim->schema_version >= 60U) AdvanceTravellerNeeds(sim);
+        AdvanceCharacterTravel(sim);
         HearLocalGossip(sim);
         CcSimRefreshCharacterGossip(sim);
         if (!sim->journey.active) {
@@ -19197,6 +19401,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                   character->unsheltered_nights < 0 || character->unsheltered_nights > 7 ||
                   (character->bandit_group_id != 0U &&
                    TravellerBanditCamp(sim, character->bandit_group_id) == NULL))) ||
+                (sim->schema_version >= 82U &&
+                 (character->travel_arrival_day < 0 ||
+                  character->travel_arrival_day > CC_SIM_MAX_DAY ||
+                  (character->travel_destination_id != 0U &&
+                   (CcSimSettlement(sim, character->travel_destination_id) == NULL ||
+                    character->travel_arrival_day <= 0)) ||
+                  (character->travel_destination_id == 0U &&
+                   character->travel_arrival_day != 0))) ||
                 (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
                  ((character->ancestor_id != 0U &&
                    (!IsIssuedCharacterId(sim, character->ancestor_id) ||
