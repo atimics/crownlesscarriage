@@ -10742,8 +10742,8 @@ static int32_t ResidentTarget(const CcSim *sim, const CcSettlement *place)
 {
     if (sim->schema_version < 78U) return 4;
     if (place == NULL || CcSettlementIsAbandoned(place)) return 4;
-    int32_t scaled = 3 + place->population / 300;
-    return ClampI32(scaled, 3, 16);
+    int32_t scaled = 3 + place->population / 150;
+    return ClampI32(scaled, 3, 24);
 }
 
 /* The trades a town seeds, in order. The first four hold the shape older
