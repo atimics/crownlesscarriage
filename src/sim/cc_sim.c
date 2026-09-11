@@ -615,17 +615,12 @@ static int32_t Jitter(CcSim *sim, int32_t center, int32_t radius)
 }
 
 static bool EventIsPinned(const CcSim *sim, CcId event_id,
-                          CcId incoming_parent)
+                          CcId incoming_parent,
+                          const CcId *hoard_chain, int32_t hoard_chain_count)
 {
     if (event_id == 0U) return false;
-    if (sim->schema_version >= 84U) {
-        /* Keep the hoard's short causal chain through theft and its omen.
-           The motive reader follows the same five-event bound. */
-        const CcEvent *cause = CcSimEvent(sim, sim->dragon.hoard_event_id);
-        for (int depth = 0; cause != NULL && depth < 5; ++depth) {
-            if (cause->id == event_id) return true;
-            cause = CcSimEvent(sim, cause->parent_id);
-        }
+    for (int32_t i = 0; i < hoard_chain_count; ++i) {
+        if (hoard_chain[i] == event_id) return true;
     }
     if (sim->schema_version >= 44U) {
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
@@ -831,8 +826,21 @@ static void CompactEventLedger(CcSim *sim, CcId incoming_parent)
     }
 
     int32_t removed = -1;
+    /* Resolve the hoard's five-event causal chain once per compaction.
+       CcSimEvent is a linear scan, so walking it for every scanned event
+       made the ledger quadratic (#655). */
+    CcId hoard_chain[5];
+    int32_t hoard_chain_count = 0;
+    if (sim->schema_version >= 84U) {
+        const CcEvent *cause = CcSimEvent(sim, sim->dragon.hoard_event_id);
+        for (int depth = 0; cause != NULL && depth < 5; ++depth) {
+            hoard_chain[hoard_chain_count++] = cause->id;
+            cause = CcSimEvent(sim, cause->parent_id);
+        }
+    }
     for (int32_t i = 0; i < sim->event_count; ++i) {
-        if (!EventIsPinned(sim, ordered[i].id, incoming_parent)) {
+        if (!EventIsPinned(sim, ordered[i].id, incoming_parent,
+                           hoard_chain, hoard_chain_count)) {
             removed = i;
             break;
         }
