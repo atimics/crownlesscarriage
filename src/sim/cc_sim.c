@@ -613,76 +613,111 @@ static int32_t Jitter(CcSim *sim, int32_t center, int32_t radius)
     return center + (int32_t)(NextRandom(sim) % span) - radius;
 }
 
-static bool EventIsPinned(const CcSim *sim, CcId event_id,
-                          CcId incoming_parent)
+/* Every event the ledger must keep is gathered once per compaction into a
+   small open-addressed set. Checking membership per event avoids rescanning
+   every reference for every event, which a full ledger makes quadratic. */
+#define CC_EVENT_PIN_SET_SIZE 4096U
+
+typedef struct CcEventPinSet {
+    CcId slots[CC_EVENT_PIN_SET_SIZE];
+} CcEventPinSet;
+
+static uint32_t EventPinHash(CcId id)
 {
-    if (event_id == 0U) return false;
+    uint64_t value = (uint64_t)id;
+    value ^= value >> 33;
+    value *= UINT64_C(0xff51afd7ed558ccd);
+    value ^= value >> 33;
+    return (uint32_t)value;
+}
+
+static void PinEvent(CcEventPinSet *set, CcId id)
+{
+    if (id == 0U) return;
+    uint32_t index = EventPinHash(id) & (CC_EVENT_PIN_SET_SIZE - 1U);
+    while (set->slots[index] != 0U) {
+        if (set->slots[index] == id) return;
+        index = (index + 1U) & (CC_EVENT_PIN_SET_SIZE - 1U);
+    }
+    set->slots[index] = id;
+}
+
+static bool EventIsPinned(const CcEventPinSet *set, CcId id)
+{
+    if (id == 0U) return false;
+    uint32_t index = EventPinHash(id) & (CC_EVENT_PIN_SET_SIZE - 1U);
+    while (set->slots[index] != 0U) {
+        if (set->slots[index] == id) return true;
+        index = (index + 1U) & (CC_EVENT_PIN_SET_SIZE - 1U);
+    }
+    return false;
+}
+
+static void GatherPinnedEvents(const CcSim *sim, CcId incoming_parent,
+                               CcEventPinSet *set)
+{
     if (sim->schema_version >= 44U) {
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
-            if (!sim->gossip[i].recorded &&
-                (sim->gossip[i].event_id == event_id ||
-                 sim->gossip[i].heard_event_id == event_id)) return true;
+            if (!sim->gossip[i].recorded) {
+                PinEvent(set, sim->gossip[i].event_id);
+                PinEvent(set, sim->gossip[i].heard_event_id);
+            }
         }
     }
-    if (event_id == incoming_parent ||
-        event_id == sim->journey.parent_event_id ||
-        event_id == sim->delayed_echo.parent_event_id ||
-        event_id == sim->goblins.tribute_event_id ||
-        event_id == sim->dragon.hoard_event_id ||
-        event_id == sim->dragon.omen_event_id ||
-        event_id == sim->dragon.lifecycle_event_id ||
-        event_id == sim->hoard_raiders.cause_event_id ||
-        event_id == sim->dragon_campaign.cause_event_id) return true;
+    PinEvent(set, incoming_parent);
+    PinEvent(set, sim->journey.parent_event_id);
+    PinEvent(set, sim->delayed_echo.parent_event_id);
+    PinEvent(set, sim->goblins.tribute_event_id);
+    PinEvent(set, sim->dragon.hoard_event_id);
+    PinEvent(set, sim->dragon.omen_event_id);
+    PinEvent(set, sim->dragon.lifecycle_event_id);
+    PinEvent(set, sim->hoard_raiders.cause_event_id);
+    PinEvent(set, sim->dragon_campaign.cause_event_id);
     for (int32_t i = 0; i < sim->pending_echo_count; ++i) {
-        if (sim->pending_echoes[i].parent_event_id == event_id) return true;
+        PinEvent(set, sim->pending_echoes[i].parent_event_id);
     }
     for (int32_t i = 0; i < sim->courier_count; ++i) {
-        if (sim->couriers[i].cause_event_id == event_id) return true;
+        PinEvent(set, sim->couriers[i].cause_event_id);
     }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *situation = &sim->situations[i];
-        if (situation->cause_event_id == event_id ||
-            situation->lead_event_id == event_id ||
-            situation->objective.progress.created_by_event_id == event_id ||
-            situation->objective.progress.resolved_by_event_id == event_id ||
-            situation->objective.danger.created_by_event_id == event_id ||
-            situation->objective.danger.resolved_by_event_id == event_id) {
-            return true;
-        }
+        PinEvent(set, situation->cause_event_id);
+        PinEvent(set, situation->lead_event_id);
+        PinEvent(set, situation->objective.progress.created_by_event_id);
+        PinEvent(set, situation->objective.progress.resolved_by_event_id);
+        PinEvent(set, situation->objective.danger.created_by_event_id);
+        PinEvent(set, situation->objective.danger.resolved_by_event_id);
         for (int32_t evidence = 0;
              evidence < situation->objective.evidence_count; ++evidence) {
-            if (situation->objective.evidence_event_ids[evidence] == event_id) {
-                return true;
-            }
+            PinEvent(set, situation->objective.evidence_event_ids[evidence]);
         }
     }
     for (int32_t i = 0; i < sim->front_count; ++i) {
         const CcFront *front = &sim->fronts[i];
-        if (front->cause_event_id == event_id ||
-            front->created_event_id == event_id ||
-            front->resolved_event_id == event_id ||
-            front->portent.created_by_event_id == event_id ||
-            front->portent.resolved_by_event_id == event_id) return true;
+        PinEvent(set, front->cause_event_id);
+        PinEvent(set, front->created_event_id);
+        PinEvent(set, front->resolved_event_id);
+        PinEvent(set, front->portent.created_by_event_id);
+        PinEvent(set, front->portent.resolved_by_event_id);
     }
     for (int32_t i = 0; i < sim->quest_outcome_count; ++i) {
         const CcQuestOutcomeRecord *outcome = &sim->quest_outcomes[i];
-        if (outcome->cause_event_id == event_id ||
-            outcome->resolved_event_id == event_id) return true;
+        PinEvent(set, outcome->cause_event_id);
+        PinEvent(set, outcome->resolved_event_id);
     }
     for (int32_t i = 0; i < sim->character_count; ++i) {
         const CcCharacter *character = &sim->characters[i];
         for (int32_t memory = 0; memory < character->memory_count; ++memory) {
-            if (character->memories[memory].event_id == event_id) return true;
+            PinEvent(set, character->memories[memory].event_id);
         }
         for (int32_t knowledge = 0;
              knowledge < character->knowledge_count; ++knowledge) {
-            if (character->knowledge[knowledge].event_id == event_id) return true;
+            PinEvent(set, character->knowledge[knowledge].event_id);
         }
     }
     for (int32_t i = 0; i < sim->relationship_count; ++i) {
-        if (sim->relationships[i].cause_event_id == event_id) return true;
+        PinEvent(set, sim->relationships[i].cause_event_id);
     }
-    return false;
 }
 
 static void RedirectEventReference(CcSim *sim, CcId removed_id,
@@ -821,8 +856,11 @@ static void CompactEventLedger(CcSim *sim, CcId incoming_parent)
     }
 
     int32_t removed = -1;
+    CcEventPinSet pinned_events;
+    memset(&pinned_events, 0, sizeof(pinned_events));
+    GatherPinnedEvents(sim, incoming_parent, &pinned_events);
     for (int32_t i = 0; i < sim->event_count; ++i) {
-        if (!EventIsPinned(sim, ordered[i].id, incoming_parent)) {
+        if (!EventIsPinned(&pinned_events, ordered[i].id)) {
             removed = i;
             break;
         }
