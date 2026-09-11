@@ -99,7 +99,7 @@ CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim)
     CcArchiveWorkPlan plan = {0};
     if (sim == NULL) return plan;
     plan.eligible_scribes = sim->archives.scribes;
-    if (sim->schema_version >= 80U && sim->archive_training_week == (sim->current_day + 6) / 7 &&
+    if (sim->schema_version >= 84U && sim->archive_training_week == (sim->current_day + 6) / 7 &&
         plan.eligible_scribes > 0) plan.eligible_scribes -= 1;
     plan.recording_ready = plan.eligible_scribes > 0;
     if (sim->schema_version < 34U) return plan;

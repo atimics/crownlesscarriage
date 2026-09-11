@@ -14873,6 +14873,11 @@ static void AdvanceCharacterTravel(CcSim *sim)
             person->role != CC_CHARACTER_COURIER &&
             person->role != CC_CHARACTER_SCOUT) continue;
         if (person->bandit_group_id != 0U) continue;
+        /* An active archive recruit or trainer stays at the seat; the recruit
+           journey and training own their movement. */
+        if (sim->archive_recruitment.status > 0 &&
+            (person->id == sim->archive_recruitment.person_id ||
+             person->id == sim->archive_recruitment.trainer_id)) continue;
         if (CcCharacterAgeYears(sim, person) < 16) continue;
         if (person->activity == CC_CHARACTER_ACTIVITY_HIDING ||
             person->activity == CC_CHARACTER_ACTIVITY_SEEKING_AID) continue;
@@ -14940,14 +14945,10 @@ static void AdvanceTravellerNeeds(CcSim *sim)
 {
     for (int32_t i = 0; i < sim->character_count; ++i) {
         CcCharacter *person = &sim->characters[i];
-<<<<<<< HEAD
-        if (sim->schema_version >= 83U && sim->archive_recruitment.status == 2 &&
-=======
-        if (sim->schema_version >= 80U &&
+        if (sim->schema_version >= 84U &&
             (sim->archive_recruitment.person_id == person->id || sim->archive_recruitment.trainer_id == person->id) &&
             CcSimArchiveRecruitmentTrainingGate(sim) == CC_ARCHIVE_RECRUIT_READY) continue;
-        if (sim->schema_version >= 79U && sim->archive_recruitment.status == 2 &&
->>>>>>> b5a483f (Train named archive recruits with paid work and supplies)
+        if (sim->schema_version >= 83U && sim->archive_recruitment.status == 2 &&
             sim->archive_recruitment.person_id == person->id) continue;
         if ((person->role != CC_CHARACTER_TRAVELLER &&
              person->role != CC_CHARACTER_REFUGEE) ||
