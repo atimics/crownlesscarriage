@@ -42,7 +42,7 @@ def away_days(seconds):
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 WORLD_ID = re.compile(r"^[0-9a-f]{32}$")
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 '\-]{0,30}$")
-ACTIONS = {'repair_road_site', 'transfer_road_site', 'clear_road_site', 'exchange_gossip', 'camp_road_site', 'pass_road_site', 'meet_pony', 'help_pony', 'swap_pony', 'leave_pony', 'skip_watch', 'negotiate', 'refuse', 'retrieve_map', 'return_treasure', 'goblin_intercept', 'provisions', 'pace', 'abandon', 'fight', 'withdraw', 'breed_horses', 'buy_map', 'dungeon_encounter', 'goblin_trade', 'enter_dungeon', 'press_on', 'trade', 'goblin_warn', 'goblin_tunnel', 'sell_map', 'intercept_tribute', 'search_dungeon', 'break', 'accept', 'open_shortcut', 'return_named_treasure', 'change_dungeon', 'camp', 'repair', 'archive_map', 'assign_horse', 'lodge', 'sell_treasure', 'talk', 'buy_treasure', 'leave_dungeon', 'move_dungeon', 'steal_named_treasure', 'travel', 'steal_hoard'}
+ACTIONS = {'deliver_prophecy', 'repair_road_site', 'transfer_road_site', 'clear_road_site', 'exchange_gossip', 'camp_road_site', 'pass_road_site', 'meet_pony', 'help_pony', 'swap_pony', 'leave_pony', 'skip_watch', 'negotiate', 'refuse', 'retrieve_map', 'return_treasure', 'goblin_intercept', 'provisions', 'pace', 'abandon', 'fight', 'withdraw', 'breed_horses', 'buy_map', 'dungeon_encounter', 'goblin_trade', 'enter_dungeon', 'press_on', 'trade', 'goblin_warn', 'goblin_tunnel', 'sell_map', 'intercept_tribute', 'search_dungeon', 'break', 'accept', 'open_shortcut', 'return_named_treasure', 'change_dungeon', 'camp', 'repair', 'archive_map', 'assign_horse', 'lodge', 'sell_treasure', 'talk', 'buy_treasure', 'leave_dungeon', 'move_dungeon', 'steal_named_treasure', 'travel', 'steal_hoard'}
 
 
 class ApiError(Exception):
@@ -108,6 +108,8 @@ class Worlds:
           invite_nonce TEXT NOT NULL, invite_hash TEXT NOT NULL,
           state BLOB NOT NULL, view TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0,
           action_revision INTEGER NOT NULL DEFAULT 0, paused INTEGER NOT NULL DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS world_starts (
+          world TEXT PRIMARY KEY REFERENCES worlds(id), campaign TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS members (
           world TEXT NOT NULL REFERENCES worlds(id), token_hash TEXT NOT NULL,
           id TEXT NOT NULL, name TEXT NOT NULL, sequence INTEGER NOT NULL DEFAULT 0,
@@ -321,10 +323,14 @@ class Worlds:
         require(isinstance(name, str) and NAME.fullmatch(name), "Use a world name of 1 to 31 letters.")
         require(isinstance(player, str) and NAME.fullmatch(player), "Use a crew name of 1 to 31 letters.")
         seed = number(body.get("seed", 3232176798), 0, 2**32 - 1, "world seed")
+        campaign = body.get("campaign", "new-world")
+        require(campaign in ("new-world", "deep-wyrm"), "Choose an available starting campaign.")
         with self.transaction():
-            existing = self.db.execute("SELECT owner FROM worlds WHERE id=?", (world,)).fetchone()
+            existing = self.db.execute("SELECT w.owner,coalesce(s.campaign,'new-world') AS campaign "
+                                       "FROM worlds w LEFT JOIN world_starts s ON s.world=w.id WHERE w.id=?", (world,)).fetchone()
             if existing:
                 require(existing["owner"] == digest(token), "That world identity is already in use.", 409)
+                require(existing["campaign"] == campaign, "Open the starting campaign already created for this world.", 409)
             else:
                 permission = body.get("world_pass")
                 require(isinstance(permission, str) and HEX64.fullmatch(permission),
@@ -337,10 +343,11 @@ class Worlds:
                         "This host has reached its world limit.", 409)
                 nonce = secrets.token_hex(16)
                 invitation = hmac.new(token.encode(), (world + nonce).encode(), hashlib.sha256).hexdigest()
-                with self.engine.open(seed) as sim:
+                with self.engine.open(seed, campaign=campaign) as sim:
                     saved, view = sim.save(), json.dumps(sim.snapshot())
                 self.db.execute("INSERT INTO worlds(id,name,owner,invite_nonce,invite_hash,state,view) VALUES(?,?,?,?,?,?,?)",
                                 (world, name, digest(token), nonce, digest(invitation), saved, view))
+                self.db.execute("INSERT INTO world_starts(world,campaign) VALUES(?,?)", (world, campaign))
                 self.db.execute("INSERT INTO members(world,token_hash,id,name) VALUES(?,?,?,?)",
                                 (world, digest(token), secrets.token_hex(8), player))
                 self.db.execute("UPDATE world_passes SET claimed_world=? WHERE pass_hash=?",
@@ -366,7 +373,7 @@ class Worlds:
         require(set(body) == {"sequence", "context", "session"}, "Send your saved place in the world.")
         sequence = number(body["sequence"], 1, 2**53 - 1, "session sequence")
         session = body["session"]
-        require(isinstance(session, str) and session.startswith("CROWNLESS_SESSION 7\n") and
+        require(isinstance(session, str) and session.startswith(("CROWNLESS_SESSION 7\n", "CROWNLESS_SESSION 8\n")) and
                 len(session) <= 6000 and session.isascii() and '\0' not in session,
                 "Send a complete player session.")
         with self.transaction():
@@ -529,6 +536,7 @@ class Worlds:
                 self.db.execute("DELETE FROM party_lives WHERE world=?", (world,))
                 self.db.execute("DELETE FROM party_wipes WHERE world=?", (world,))
                 self.db.execute("DELETE FROM members WHERE world=?", (world,))
+                self.db.execute("DELETE FROM world_starts WHERE world=?", (world,))
                 self.db.execute("DELETE FROM worlds WHERE id=?", (world,))
             self.seen = {key: value for key, value in self.seen.items() if key[0] != world}
             self.visits = {key: value for key, value in self.visits.items() if key[0] != world}

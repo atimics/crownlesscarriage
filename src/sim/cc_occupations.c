@@ -72,7 +72,7 @@ CcCharacterOccupation CcSimInitialOccupation(const CcSim *sim, CcId home, CcId p
 
 void CcSimInitializeOccupations(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 77U) return;
+    if (sim == NULL || sim->schema_version < 79U) return;
     for (int32_t i = 0; i < sim->character_count; ++i)
         sim->characters[i].occupation = CcSimInitialOccupation(sim,
             sim->characters[i].home_settlement_id, sim->characters[i].id);

@@ -142,6 +142,15 @@ static void CcCapturePrepareJourney(const CcCaptureRequest *request, CcSim *sim)
 
 static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, char **argv)
 {
+    if (request->capture_ux && request->capture_ux_view >= 21) {
+        char path[1024], error[256];
+        if (!ResolveClientAssetPath(CC_DEEP_WYRM_ASSET, path, sizeof(path))) return false;
+        if (!CcStartingCampaignDeepWyrm(sim, path, error, sizeof(error))) {
+            (void)fprintf(stderr, "%s\n", error);
+            return false;
+        }
+        return true;
+    }
     if (request->capture_creature_media &&
         strcmp(request->capture_creature_family, "goblins") == 0) {
         sim->player.location_id = sim->goblins.lair_settlement_id;
@@ -198,6 +207,11 @@ static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, c
             town->prosperity = 25;
         }
         if (strcmp(argv[6], "lawless") == 0) town->security = 15;
+        if (strcmp(argv[6], "hungry") == 0) {
+            town->hunger = 70;
+            town->stock[CC_GOOD_BREAD] = 0;
+            town->stock[CC_GOOD_WHEAT] = 0;
+        }
         for (int32_t a = 0; a < sim->kingdom_count; ++a) {
             for (int32_t b = 0; b < sim->kingdom_count; ++b) {
                 sim->diplomacy[a][b] = CC_DIPLOMACY_PEACE;
@@ -642,6 +656,14 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
 
 static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *scene)
 {
+    if (request->capture_ux && request->capture_ux_view >= 21) {
+        scene->local->adventure_ui = true;
+        if (request->capture_ux_view == 23) {
+            *scene->view = VIEW_LEDGER;
+            scene->local->book_page = 4;
+        }
+        return InitializeOpenWorld(scene->sim, scene->local, false);
+    }
     if (request->capture_ux) {
         scene->local->adventure_ui = true;
         scene->local->course.automatic_alarm = false;

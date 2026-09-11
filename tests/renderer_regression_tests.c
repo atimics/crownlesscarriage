@@ -163,6 +163,7 @@ int main(int argc, char **argv)
                       strcmp(argv[1], "--travel-graphics") == 0 ||
                       strcmp(argv[1], "--creature-captures") == 0 ||
                       strcmp(argv[1], "--pony-captures") == 0 ||
+                      strcmp(argv[1], "--pony-gait-captures") == 0 ||
                       strcmp(argv[1], "--material-captures") == 0 ||
                       strcmp(argv[1], "--hero-face-captures") == 0 ||
                       strcmp(argv[1], "--animation-captures") == 0)) {
@@ -194,6 +195,8 @@ int main(int argc, char **argv)
             CaptureHumanoidAnimation(argv[2]);
         } else if (strcmp(argv[1], "--creature-captures") == 0) {
             CaptureCreatures(argv[2]);
+        } else if (strcmp(argv[1], "--pony-gait-captures") == 0) {
+            CapturePonyGait(argv[2]);
         } else if (strcmp(argv[1], "--pony-captures") == 0) {
             CapturePonies(argv[2]);
         } else if (strcmp(argv[1], "--hero-face-captures") == 0) {

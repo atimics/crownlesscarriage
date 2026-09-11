@@ -1395,6 +1395,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " source_character_id INTEGER NOT NULL, retellings INTEGER NOT NULL,"
         " court_bias INTEGER NOT NULL, alarm INTEGER NOT NULL, confidence INTEGER NOT NULL,"
         " PRIMARY KEY(holder_kind,holder_slot,gossip_slot));";
+    const char *goblin_schema =
+        "CREATE TABLE IF NOT EXISTS dragon_cult_store(good INTEGER PRIMARY KEY,quantity INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS goblin_faction (slot INTEGER PRIMARY KEY,members INTEGER NOT NULL,dungeon_id INTEGER NOT NULL,lair_room INTEGER NOT NULL,porter_room INTEGER NOT NULL,target_room INTEGER NOT NULL,coins INTEGER NOT NULL,gold INTEGER NOT NULL,gems INTEGER NOT NULL,carried_coins INTEGER NOT NULL,carried_gold INTEGER NOT NULL,carried_gems INTEGER NOT NULL,tribute INTEGER NOT NULL,deliveries INTEGER NOT NULL,hunted INTEGER NOT NULL,journey_event_id INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS goblin_politics (slot INTEGER PRIMARY KEY,dragon_id INTEGER NOT NULL,contest_started_day INTEGER NOT NULL,crown_faction INTEGER NOT NULL,raid_faction INTEGER NOT NULL,next_hunt_faction INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS dragon_cult (species INTEGER PRIMARY KEY,initiate INTEGER NOT NULL,bearer INTEGER NOT NULL,keeper INTEGER NOT NULL,voice INTEGER NOT NULL,service INTEGER NOT NULL);";
     const char *mine_schema =
         "CREATE TABLE IF NOT EXISTS mine_visit (slot INTEGER PRIMARY KEY CHECK(slot=1),"
         " phase INTEGER NOT NULL,site_id INTEGER NOT NULL,x INTEGER NOT NULL,y INTEGER NOT NULL,"
@@ -1402,6 +1405,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " steps INTEGER NOT NULL,seen INTEGER NOT NULL,bar_open INTEGER NOT NULL,surveyed INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS mine_pack (good INTEGER PRIMARY KEY,quantity INTEGER NOT NULL);";
     return Execute(database, "CREATE TABLE IF NOT EXISTS grain_supply (slot INTEGER PRIMARY KEY,organiser_id INTEGER NOT NULL,supplier_id INTEGER NOT NULL,route_id INTEGER NOT NULL,shipment_id INTEGER NOT NULL,purse INTEGER NOT NULL,spent INTEGER NOT NULL,ordered INTEGER NOT NULL,delivered INTEGER NOT NULL,lost INTEGER NOT NULL,redirected INTEGER NOT NULL,last_dispatch_day INTEGER NOT NULL,last_arrival_day INTEGER NOT NULL,enabled INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, goblin_schema, error, error_capacity) &&
         Execute(database, mine_schema, error, error_capacity) &&
            Execute(database, gossip_schema, error, error_capacity) &&
            Execute(database, pony_schema, error, error_capacity) &&
@@ -2472,12 +2476,12 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                  "dragon_seed_phase,dragon_seed_days_remaining) "
                  "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
-    const CcGoblinCult *goblins = &sim->goblins;
+    const CcGoblinSociety *goblins = &sim->goblins;
     int column = 1;
     BindId(statement, column++, goblins->id);
     BindText(statement, column++, goblins->name);
     BindInt(statement, column++, goblins->members);
-    BindInt(statement, column++, goblins->devotion);
+    BindInt(statement, column++, sim->dragon_cult.devotion);
     BindInt(statement, column++, (int32_t)goblins->tribute_phase);
     BindId(statement, column++, goblins->tribute_target_id);
     BindId(statement, column++, goblins->last_tribute_origin_id);
@@ -2490,8 +2494,8 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
     BindInt(statement, column++, goblins->cohesion);
     BindInt(statement, column++, goblins->target_warned ? 1 : 0);
     BindInt(statement, column++, goblins->expeditions_intercepted);
-    BindInt(statement, column++, (int32_t)goblins->dragon_seed_phase);
-    BindInt(statement, column++, goblins->dragon_seed_days_remaining);
+    BindInt(statement, column++, (int32_t)sim->dragon_cult.dragon_seed_phase);
+    BindInt(statement, column++, sim->dragon_cult.dragon_seed_days_remaining);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!result) return false;
@@ -2955,7 +2959,7 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
         BindId(character_statement, column++, sim->schema_version >= 60U ? character->bandit_group_id : 0U);
         BindInt(character_statement, column++, sim->schema_version >= 60U ? character->hungry_days : 0);
         BindInt(character_statement, column++, sim->schema_version >= 60U ? character->unsheltered_nights : 0);
-        BindInt(character_statement, column++, sim->schema_version >= 77U ? (int32_t)character->occupation : 0);
+        BindInt(character_statement, column++, sim->schema_version >= 79U ? (int32_t)character->occupation : 0);
         if (!StepDone(database, character_statement, error, error_capacity) ||
             !ResetStatement(database, character_statement,
                             error, error_capacity)) goto failed;
@@ -3306,6 +3310,7 @@ invalid:
 }
 
 #include "persistence/cc_save_mine.inc"
+#include "persistence/cc_save_goblin_politics.inc"
 
 static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
                                  uint64_t journal_generation,
@@ -3320,6 +3325,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         return false;
     }
     return Execute(database,
+            "DELETE FROM goblin_faction; DELETE FROM goblin_politics; DELETE FROM dragon_cult; DELETE FROM dragon_cult_store;"
             "DELETE FROM mine_visit; DELETE FROM mine_pack;"
             "DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
             "DELETE FROM gossip_version;"
@@ -3396,6 +3402,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SavePlayer(database, sim, error, error_capacity) &&
         SavePlayerCommitment(database, sim, error, error_capacity) &&
         SaveJourneyState(database, sim, error, error_capacity) &&
+        SaveGoblinPolitics(database, sim, error, error_capacity) &&
         SaveMine(database, sim, error, error_capacity);
 }
 
@@ -4465,7 +4472,7 @@ static bool ReadRoyalCarriages(sqlite3 *database, CcSim *sim,
             SetError(error, error_capacity, "Archive carriage contract is invalid.");
             return false;
         }
-        carriage->archive_contract = sim->schema_version >= 76U && archive_contract != 0;
+        carriage->archive_contract = sim->schema_version >= 78U && archive_contract != 0;
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -4761,7 +4768,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
         sqlite3_finalize(statement);
         return false;
     }
-    CcGoblinCult *goblins = &sim->goblins;
+    CcGoblinSociety *goblins = &sim->goblins;
     int column = 0;
     goblins->id = (CcId)sqlite3_column_int64(statement, column++);
     if (!ReadTextColumn(statement, column++, goblins->name,
@@ -4771,7 +4778,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
         return false;
     }
     goblins->members = sqlite3_column_int(statement, column++);
-    goblins->devotion = sqlite3_column_int(statement, column++);
+    sim->dragon_cult.devotion = sqlite3_column_int(statement, column++);
     goblins->tribute_phase =
         (CcGoblinTributePhase)sqlite3_column_int(statement, column++);
     goblins->tribute_target_id =
@@ -4792,9 +4799,9 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     goblins->target_warned = sqlite3_column_int(statement, column++) != 0;
     goblins->expeditions_intercepted =
         sqlite3_column_int(statement, column++);
-    goblins->dragon_seed_phase =
+    sim->dragon_cult.dragon_seed_phase =
         (CcGoblinDragonSeedPhase)sqlite3_column_int(statement, column++);
-    goblins->dragon_seed_days_remaining =
+    sim->dragon_cult.dragon_seed_days_remaining =
         sqlite3_column_int(statement, column++);
     sqlite3_finalize(statement);
 
@@ -5377,7 +5384,7 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
             (CcId)sqlite3_column_int64(statement, 4);
         character->faction_id = (CcId)sqlite3_column_int64(statement, 5);
         character->occupation = CC_OCCUPATION_NONE;
-        if (sim->schema_version >= 77U) {
+        if (sim->schema_version >= 79U) {
             int64_t occupation = sqlite3_column_int64(statement, 25);
             if (occupation < CC_OCCUPATION_NONE || occupation >= CC_OCCUPATION_COUNT) {
                 SetError(error, error_capacity, "Character occupation is outside the trade list.");
@@ -5815,6 +5822,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadJourneyState(database, sim, error, error_capacity) &&
               ReadPonies(database, sim, error, error_capacity) &&
               ReadGossip(database, sim, error, error_capacity) &&
+              ReadGoblinPolitics(database, sim, error, error_capacity) &&
               ReadMine(database, sim, error, error_capacity);
     if (!ok) {
         return false;
@@ -5837,7 +5845,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
     uint32_t stored_schema_version = sim->schema_version;
     uint32_t stored_generator_version = sim->generator_version;
     if (!CcSaveUpgradeLegacyRuntime(sim, error, error_capacity)) return false;
-    if (stored_schema_version < 77U) CcSimInitializeOccupations(sim);
+    if (stored_schema_version < 79U) CcSimInitializeOccupations(sim);
     if (stored_schema_version < 34U) CcSimUpgradePlayerKnowledge(sim);
     if (stored_schema_version < 40U) CcPoniesInit(sim);
     if (upgraded != NULL) {

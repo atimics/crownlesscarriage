@@ -165,7 +165,7 @@ static bool ClientSessionValidateBase(const CcClientSession *session)
            session->version == CC_CLIENT_SESSION_VERSION &&
            session->location_id != 0U &&
            session->scene >= CC_CLIENT_SESSION_STREET &&
-           session->scene <= CC_CLIENT_SESSION_DRAGON_SITE &&
+           session->scene <= CC_CLIENT_SESSION_ROAD_TRAVEL &&
            session->coordinate_space >= CC_CLIENT_SESSION_LEGACY_LOCAL &&
            session->coordinate_space <= CC_CLIENT_SESSION_WORLD &&
            isfinite(session->position_x) && isfinite(session->position_z) &&
@@ -182,6 +182,10 @@ bool CcClientSessionValidate(const CcClientSession *session)
     return ClientSessionValidateBase(session) &&
            (session->coordinate_space != CC_CLIENT_SESSION_WORLD ||
             session->route_id != 0U) &&
+           (session->scene != CC_CLIENT_SESSION_ROAD_TRAVEL ||
+            (session->route_id != 0U && !session->site_travel_active &&
+             !session->site_returning &&
+             session->road_encounter.mode == CC_CLIENT_ROAD_ENCOUNTER_LOCAL)) &&
            AthleticProfileValidate(&session->athletics) &&
            RoadEncounterValidate(session);
 }
@@ -445,7 +449,7 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
     int header_fields = fscanf(file, "%31s %u", marker, &version);
     int body_fields = 0;
     if (header_fields == 2 &&
-        (version == CC_CLIENT_SESSION_VERSION || version == 6U || version == 5U)) {
+        (version == CC_CLIENT_SESSION_VERSION || version == 7U || version == 6U || version == 5U)) {
         body_fields = fscanf(file, "%u %llu %d %d %llu %f %f %f %u %d",
                              &world_seed, &location_id, &scene,
                              &coordinate_space, &route_id, &position_x,
@@ -481,11 +485,11 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
         .road_encounter.mode =
             (CcClientRoadEncounterMode)road_encounter_mode
     };
-    bool current_payload = (version == CC_CLIENT_SESSION_VERSION || version == 6U) &&
+    bool current_payload = (version == CC_CLIENT_SESSION_VERSION || version == 7U || version == 6U) &&
                            body_fields == 10 &&
                            ReadAthleticProfile(file, &loaded.athletics) &&
                            ReadRoadEncounter(file, &loaded.road_encounter);
-    if (current_payload && version == CC_CLIENT_SESSION_VERSION) {
+    if (current_payload && version >= 7U) {
         char travel_marker[16] = "";
         int active = 0, returning = 0;
         current_payload = fscanf(file, "%15s %d %d %f", travel_marker,
@@ -515,6 +519,7 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
         }
         if (version_one) loaded.opening_step = 2U;
     }
+    if (version < 8U && scene > CC_CLIENT_SESSION_DRAGON_SITE) current_payload = false;
     bool valid = current_payload || version_five_payload || version_four ?
         CcClientSessionValidate(&loaded) : ClientSessionValidateBase(&loaded);
     if ((!version_one && !version_two && !version_three && !version_four &&

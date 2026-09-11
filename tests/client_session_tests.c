@@ -53,7 +53,7 @@ static bool RewriteSessionAsLegacy(const char *path, int version)
         fputs(line, target) >= 0 &&
         fgets(line, sizeof(line), source) != NULL &&
         strncmp(line, "ATHLETICS ", 10U) == 0;
-    if (ok && version == 6) ok = fputs(line, target) >= 0;
+    if (ok && version >= 6) ok = fputs(line, target) >= 0;
     while (ok && fgets(line, sizeof(line), source) != NULL) {
         ok = fputs(line, target) >= 0;
     }
@@ -108,6 +108,11 @@ int main(void)
     CC_CHECK(restored.opening_step == original.opening_step);
     CC_CHECK(AthleticProfilesMatch(&restored.athletics,
                                    &original.athletics));
+
+    CC_CHECK(RewriteSessionAsLegacy(session_path, 7));
+    CC_CHECK(CcClientSessionRead(session_path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.version == CC_CLIENT_SESSION_VERSION);
+    CC_CHECK(AthleticProfilesMatch(&restored.athletics, &original.athletics));
 
     CC_CHECK(RewriteSessionAsLegacy(session_path, 6));
     CC_CHECK(CcClientSessionRead(session_path, &restored,

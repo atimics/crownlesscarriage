@@ -1,0 +1,23 @@
+{
+  "fixture": "tests/fixtures/shipped/schema-73-retired-cast.ccsave",
+  "seed": 2654435769,
+  "schema": 73,
+  "generator": 25,
+  "day": 12411,
+  "bytes": 573440,
+  "sha256": "9b353cc8753194246c7779fc2cf224d279aa3edd2d9d4ed8192c5811c030a9b9",
+  "results": [
+    {
+      "arm": "main-ce4f6c9",
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "Situation data is invalid.\n"
+    },
+    {
+      "arm": "repair",
+      "exit_code": 0,
+      "stdout": "day=12411 schema=74 hash=be7b499f24dd7e9b\n",
+      "stderr": ""
+    }
+  ]
+}

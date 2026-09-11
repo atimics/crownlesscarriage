@@ -1,3 +1,95 @@
+static int RunRoadJourneySaveRegression(void)
+{
+    static CcSim sim, loaded;
+    static LocalState local, restored;
+    const char *path = "road-journey-save.ccsave";
+    const char *session_path = "road-journey-save.session";
+    char error[256] = "", feedback[256] = "";
+    (void)remove(path); (void)remove(session_path);
+    CcSimInit(&sim, 42U);
+    CcLocalBindPlace(&sim);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+#define ROAD_SAVE_CHECK(condition, text) do { if (!(condition)) { \
+    CcJournalAbandon(&journal); return ClientRegressionFailure(text); } } while (0)
+    ROAD_SAVE_CHECK(journal != NULL, "Start the road save journal.");
+    ROAD_SAVE_CHECK(SaveClientWorld(journal, &sim, &local, path, session_path,
+        feedback, sizeof(feedback)), "Save the initial town checkpoint.");
+    CcCommand travel = {.kind = CC_COMMAND_TRAVEL, .target_id = sim.settlements[1].id};
+    ROAD_SAVE_CHECK(CcJournalApply(journal, &sim, &travel, error, sizeof(error)), "Start a real journey.");
+    ROAD_SAVE_CHECK(CcJournalAdvanceRuntimeTicks(journal, &sim, 8, error, sizeof(error)), "Advance along the road.");
+    ROAD_SAVE_CHECK(sim.journey.active && sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING,
+        "The fixture must remain on the road.");
+    ResetLocalState(&restored);
+    ROAD_SAVE_CHECK(!RestoreLocalSession(session_path, &sim, &restored),
+        "A previous town scene must yield to the active journey.");
+    BeginRoadTravelState(&sim, &local);
+    local.adventure_ui = true;
+    local.agent.athletics.travel_training_distance = 5.5f;
+    local.agent.combat.health = 77.0f;
+    for (int scenario = 0; scenario < 5; ++scenario) {
+        if (scenario == 2) {
+            ROAD_SAVE_CHECK(InitializeOpenWorld(&sim, &local, false), "Build the world road scene.");
+            BeginRoadTravelState(&sim, &local);
+        }
+        if (scenario == 4) {
+            sim.journey.total_subticks = 2 * CC_WORLD_WATCH_SUBTICKS;
+            sim.journey.elapsed_subticks = CC_WORLD_WATCH_SUBTICKS;
+            sim.journey.phase = CC_JOURNEY_PHASE_RESTING;
+            sim.clock.game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND;
+            sim.carriage.mode = CC_CARRIAGE_STOPPED;
+            sim.carriage.speed_milli_per_second = 0;
+            sim.carriage.progress_milli = (int32_t)(
+                (int64_t)sim.journey.elapsed_subticks * 1000 / sim.journey.total_subticks);
+        }
+        local.agent.combat.health = 77.0f;
+        local.agent.athletics.travel_training_distance = 5.5f;
+        local.convoy.pace = scenario % 2 ? 0.0f : 0.72f;
+        uint64_t expected = CcSimHash(&sim);
+        ROAD_SAVE_CHECK(SaveClientWorld(journal, &sim, &local, path, session_path,
+            feedback, sizeof(feedback)), feedback);
+        ROAD_SAVE_CHECK(CcSimHash(&sim) == expected, "Saving must preserve the world.");
+        CcJournalAbandon(&journal);
+        journal = CcJournalResume(path, &loaded, error, sizeof(error));
+        ROAD_SAVE_CHECK(journal != NULL && CcSimHash(&loaded) == expected,
+            "Resume the exact saved cargo, clock, and journey progress.");
+        ResetLocalState(&restored);
+        ClientView view = VIEW_LOCAL;
+        int32_t selected = 0;
+        ROAD_SAVE_CHECK(RestoreClientStartupSession(session_path, &loaded, &restored, &view, &selected),
+            "Restore the road scene from its journey checkpoint.");
+        ROAD_SAVE_CHECK(view == VIEW_LOCAL && restored.journey_travel_active &&
+            restored.convoy.pace == 0.0f && restored.carriage_stopped && !restored.travel_fast_forward,
+            "Resume with the carriage held until the player drives.");
+        ROAD_SAVE_CHECK(SessionTestFloatMatches(restored.agent.athletics.travel_training_distance, 5.5f),
+            "Keep the traveller's athletic progress.");
+        ROAD_SAVE_CHECK(SessionTestFloatMatches(restored.agent.combat.health, 77.0f),
+            "Keep the traveller's health on the road.");
+        int32_t situation = 0;
+        ClientView return_view = VIEW_LOCAL;
+        float feedback_age = 0;
+        restored.adventure_ui = true;
+        HandleInput(&journal, &loaded, &selected, &situation, &view, &return_view,
+            &restored, (RenderTexture2D){0}, (Rectangle){0}, 1.0f / 60.0f,
+            path, session_path, error, sizeof(error), feedback, sizeof(feedback), &feedback_age);
+        ROAD_SAVE_CHECK(CcSimHash(&loaded) == expected && restored.carriage_stopped,
+            "An idle frame after loading must keep the saved world and stop state.");
+        sim = loaded;
+    }
+    CcClientSession session;
+    ROAD_SAVE_CHECK(CcClientSessionRead(session_path, &session, error, sizeof(error)), "Read the road checkpoint.");
+    session.route_id = sim.routes[1].id;
+    ROAD_SAVE_CHECK(CcClientSessionWrite(session_path, &session, error, sizeof(error)), "Write a different route fixture.");
+    ROAD_SAVE_CHECK(!RestoreLocalSession(session_path, &sim, &restored), "Reject a checkpoint for another road.");
+    ROAD_SAVE_CHECK(CcJournalClose(&journal, &sim, error, sizeof(error)), "Close the road journal.");
+    (void)remove(path); (void)remove(session_path);
+    LeaveOpenWorld(&local); LeaveOpenWorld(&restored);
+#undef ROAD_SAVE_CHECK
+    puts("Moving and stopped road saves resume exact progress with the team held.");
+    return 0;
+}
+
 static int RunAdventureInputRegression(void)
 {
     static CcSim sim;
