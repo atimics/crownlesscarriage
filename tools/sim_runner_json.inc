@@ -12,6 +12,29 @@ static void JsonString(const char *value)
 
 #include "sim_runner_network.inc"
 
+static void JsonArchiveRecruitment(const CcSim *sim)
+{
+    CcArchiveRecruitmentPlan p = CcSimArchiveRecruitmentPlan(sim);
+    printf("{\"semantics\":\"recruitment_quote_snapshot\",\"gate\":");
+    JsonString(CcArchiveRecruitmentGateName(p.gate));
+    printf(",\"seat_id\":\"%" PRIu64 "\",\"person_id\":\"%" PRIu64
+        "\",\"trainer_id\":\"%" PRIu64 "\",\"origin_id\":\"%" PRIu64
+        "\",\"first_route_id\":\"%" PRIu64 "\",\"first_hop_id\":\"%" PRIu64 "\"",
+        p.seat_id, p.person_id, p.trainer_id, p.origin_id, p.first_route_id, p.first_hop_id);
+    printf(",\"wages\":%" PRId64 ",\"wheat\":%d,\"paper\":%d,\"tools\":%d,"
+        "\"training_days\":%d,\"trainer_days\":%d,\"travel_days\":%d,\"travel_wheat\":%d,"
+        "\"arrival_day\":%" PRId64 ",\"ready_day\":%" PRId64
+        ",\"training\":%s,\"recovery\":%s,\"dangerous\":%s,\"first_task_wheat\":%d,\"first_task_paper\":%d,\"donors\":[",
+        p.wages, p.wheat, p.paper, p.tools, p.training_days, p.trainer_days,
+        p.travel_days, p.travel_wheat, p.arrival_day, p.ready_day,
+        p.training ? "true" : "false", p.recovery ? "true" : "false", p.dangerous ? "true" : "false",
+        p.first_task_wheat, p.first_task_paper);
+    for (int i = 0; i < p.funding.donor_count; ++i)
+        printf("%s{\"kingdom_id\":\"%" PRIu64 "\",\"patron_id\":\"%" PRIu64 "\",\"amount\":%" PRId64 "}",
+            i ? "," : "", p.funding.donor_ids[i], p.patron_ids[i], p.funding.shares[i]);
+    printf("]}");
+}
+
 static void JsonArchiveSeatPlan(const CcSim *sim)
 {
     CcId current = CcSimMaterialChainSnapshot(sim).scriptorium_id;
@@ -294,6 +317,7 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         sim->dragon.crown_strength, sim->dragon.egg_count);
     printf(",\"archive_work\":"); JsonArchiveWork(sim);
     printf(",\"archive_funding\":"); JsonArchiveFunding(sim);
+    printf(",\"archive_recruitment\":"); JsonArchiveRecruitment(sim);
     printf(",\"archive_supply\":"); JsonArchiveSupply(sim);
     printf(",\"archive_seat_plan\":"); JsonArchiveSeatPlan(sim);
     printf(",\"road_network\":"); JsonRoadNetwork(sim);

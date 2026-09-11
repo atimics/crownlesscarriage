@@ -1,4 +1,5 @@
 #include "sim/cc_production.h"
+#include "sim/cc_archive_recruitment.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
 
