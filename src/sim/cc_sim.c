@@ -7098,7 +7098,6 @@ static CcId StartDragonTheft(CcSim *sim, CcId thief_id,
         sim->dragon.lair_settlement_id, parent_event_id,
         amount, theft_text);
     CcId theft_event_id = theft->id;
-    sim->dragon.hoard_event_id = theft_event_id;
     char omen_text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(omen_text, sizeof(omen_text),
                    "Smoke falls into %s's chimneys; old readers count 14 nights until %s comes.",
@@ -7106,6 +7105,9 @@ static CcId StartDragonTheft(CcSim *sim, CcId thief_id,
     CcEvent *omen = PushEvent(
         sim, CC_EVENT_DRAGON_OMEN, sim->dragon.id, target->id,
         theft_event_id, 14, omen_text);
+    /* Move the pin to the theft only after the omen is recorded, so the
+       theft's own parent survives both pushes while it is still pinned. */
+    sim->dragon.hoard_event_id = theft_event_id;
     sim->dragon.omen_event_id = omen->id;
     return theft_event_id;
 }

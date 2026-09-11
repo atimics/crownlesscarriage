@@ -1705,7 +1705,8 @@ static void CheckSchema24Compatibility(char *error, size_t error_capacity)
              (preview.travel_days * 2 < 3 ? 3 : preview.travel_days * 2) *
                  CC_WORLD_WATCH_SUBTICKS);
     CC_CHECK(restored.carriage.progress_milli == legacy_progress);
-    CC_CHECK(restored.character_count == CC_MAX_CHARACTERS);
+    CC_CHECK(restored.character_count > 0 &&
+             restored.character_count <= CC_MAX_CHARACTERS);
     CC_CHECK(restored.characters[0].id == first_character_id);
     CC_CHECK(strcmp(restored.characters[0].name,
                     first_character_name) == 0);

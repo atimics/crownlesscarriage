@@ -137,6 +137,21 @@ static void MakeLegacyCharacterNamesUnique(CcSim *sim)
                 character->generation, ordinal++, name);
         } while (LegacyCharacterNameExists(sim, i, name) && ordinal < 2048U);
         (void)snprintf(character->name, sizeof(character->name), "%s", name);
+        /* Situations keep a name snapshot next to the character id; keep it
+           in step so the migrated cast still validates. */
+        for (int32_t s = 0; s < sim->situation_count; ++s) {
+            CcSituation *situation = &sim->situations[s];
+            if (situation->sponsor_character_id == character->id) {
+                (void)snprintf(situation->sponsor_name,
+                               sizeof(situation->sponsor_name), "%s",
+                               character->name);
+            }
+            if (situation->affected_character_id == character->id) {
+                (void)snprintf(situation->affected_name,
+                               sizeof(situation->affected_name), "%s",
+                               character->name);
+            }
+        }
     }
 }
 
