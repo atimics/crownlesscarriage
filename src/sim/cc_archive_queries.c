@@ -99,13 +99,8 @@ CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim)
 {
     CcArchiveWorkPlan plan = {0};
     if (sim == NULL) return plan;
-<<<<<<< HEAD
-    plan.eligible_scribes = sim->archives.scribes;
-    if (sim->schema_version >= 84U && sim->archive_training_week == (sim->current_day + 6) / 7 &&
-=======
     plan.eligible_scribes = CcSimArchiveStaffCount(sim);
-    if (sim->schema_version >= 80U && sim->archive_training_week == (sim->current_day + 6) / 7 &&
->>>>>>> 78e1c5f (Appoint named archive staff and record their first work)
+    if (sim->schema_version >= 84U && sim->archive_training_week == (sim->current_day + 6) / 7 &&
         plan.eligible_scribes > 0) plan.eligible_scribes -= 1;
     plan.recording_ready = plan.eligible_scribes > 0;
     if (sim->schema_version < 34U) return plan;
@@ -115,7 +110,7 @@ CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim)
     plan.wheat_required = plan.eligible_scribes * 2;
     plan.recording_ready = plan.eligible_scribes > 0 &&
         seat->stock[CC_GOOD_PAPER] > 0 && seat->stock[CC_GOOD_TOOLS] > 0 &&
-        (sim->schema_version < 81U || !sim->archive_staff.active ||
+        (sim->schema_version < 85U || !sim->archive_staff.active ||
          (seat->stock[CC_GOOD_GOLD] > 0 && seat->stock[CC_GOOD_GEMS] > 0));
     return plan;
 }

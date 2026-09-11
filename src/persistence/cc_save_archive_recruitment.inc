@@ -1,6 +1,6 @@
 static bool SaveArchiveStaff(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 81U) return true;
+    if (sim->schema_version < 85U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "INSERT INTO archive_staff VALUES(1,?,?,?,?,?,?,?);", &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < CC_MAX_SCRIBES; ++i)
@@ -13,7 +13,7 @@ static bool SaveArchiveStaff(sqlite3 *database, const CcSim *sim, char *error, s
 }
 static bool ReadArchiveStaff(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 81U) return true;
+    if (sim->schema_version < 85U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "SELECT * FROM archive_staff ORDER BY id;", &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW || sqlite3_column_int64(statement, 0) != 1) {

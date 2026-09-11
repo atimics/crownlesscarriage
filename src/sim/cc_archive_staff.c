@@ -4,7 +4,7 @@
 
 bool CcSimArchiveStaffMember(const CcSim *sim, CcId person_id)
 {
-    if (sim == NULL || sim->schema_version < 81U || !sim->archive_staff.active || person_id == 0) return false;
+    if (sim == NULL || sim->schema_version < 85U || !sim->archive_staff.active || person_id == 0) return false;
     for (int32_t i = 0; i < CC_MAX_SCRIBES; ++i)
         if (sim->archive_staff.person_ids[i] == person_id) return true;
     return false;
@@ -22,7 +22,7 @@ bool CcSimArchiveStaffWorking(const CcSim *sim, CcId person_id)
 int32_t CcSimArchiveStaffSlots(const CcSim *sim)
 {
     if (sim == NULL) return 0;
-    if (sim->schema_version < 81U || !sim->archive_staff.active) return sim->archives.scribes;
+    if (sim->schema_version < 85U || !sim->archive_staff.active) return sim->archives.scribes;
     int32_t count = sim->archive_staff.legacy_scribes;
     for (int32_t i = 0; i < CC_MAX_SCRIBES; ++i) count += sim->archive_staff.person_ids[i] != 0;
     return count;
@@ -30,7 +30,7 @@ int32_t CcSimArchiveStaffSlots(const CcSim *sim)
 int32_t CcSimArchiveStaffCount(const CcSim *sim)
 {
     if (sim == NULL) return 0;
-    if (sim->schema_version < 81U || !sim->archive_staff.active) return sim->archives.scribes;
+    if (sim->schema_version < 85U || !sim->archive_staff.active) return sim->archives.scribes;
     const CcSettlement *seat = CcArchiveSeat(sim);
     if (seat == NULL || seat->id != sim->archive_staff.seat_id) return 0;
     int32_t count = sim->archive_staff.legacy_scribes;
@@ -40,7 +40,7 @@ int32_t CcSimArchiveStaffCount(const CcSim *sim)
 }
 void CcSimRefreshArchiveStaff(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 81U || !sim->archive_staff.active) return;
+    if (sim == NULL || sim->schema_version < 85U || !sim->archive_staff.active) return;
     for (int32_t i = 0; i < CC_MAX_SCRIBES; ++i) {
         const CcCharacter *person = CcSimCharacter(sim, sim->archive_staff.person_ids[i]);
         if (person == NULL || person->death_day <= sim->current_day) sim->archive_staff.person_ids[i] = 0;
@@ -50,7 +50,7 @@ void CcSimRefreshArchiveStaff(CcSim *sim)
 bool CcSimArchiveStaffValid(const CcSim *sim)
 {
     if (sim == NULL) return false;
-    if (sim->schema_version < 81U) return true;
+    if (sim->schema_version < 85U) return true;
     const CcArchiveStaff *staff = &sim->archive_staff;
     if (staff->legacy_scribes < 0 || staff->legacy_scribes > CC_MAX_SCRIBES) return false;
     if (staff->active ? CcSimSettlement(sim, staff->seat_id) == NULL :

@@ -38,7 +38,7 @@ static bool Incumbent(const CcSim *sim, CcId seat, const CcCharacter *person)
             other->current_settlement_id == seat && Available(sim, other) &&
             !CcSimArchiveStaffMember(sim, other->id)) ++earlier;
     }
-    return earlier < (sim->schema_version >= 81U && sim->archive_staff.active ?
+    return earlier < (sim->schema_version >= 85U && sim->archive_staff.active ?
         sim->archive_staff.legacy_scribes : sim->archives.scribes);
 }
 
@@ -340,16 +340,10 @@ bool CcSimCanRefundArchiveRecruitment(const CcSim *sim, int32_t used_wheat, int3
            (sim->schema_version >= 84U && sim->archive_recruitment.status == 5)))) ||
         !CcSimArchiveRecruitmentOrderValid(sim)) return false;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
-<<<<<<< HEAD
-    CcSettlement *seat = CcSimSettlementMutable(sim, o->seat_id);
-    CcSettlement *origin = CcSimSettlementMutable(sim,
-        sim->schema_version >= 83U && o->current_id != 0 ? o->current_id : o->origin_id);
-=======
     if (used_wheat < 0 || used_wheat > o->wheat || used_paper < 0 || used_paper > o->paper) return false;
     const CcSettlement *seat = CcSimSettlement(sim, o->seat_id);
     const CcSettlement *origin = CcSimSettlement(sim,
-        sim->schema_version >= 79U && o->current_id != 0 ? o->current_id : o->origin_id);
->>>>>>> 78e1c5f (Appoint named archive staff and record their first work)
+        sim->schema_version >= 83U && o->current_id != 0 ? o->current_id : o->origin_id);
     CcMoney refunds[2] = {o->donor_shares[0], o->donor_shares[1]};
     if (sim->schema_version >= 84U && o->wages_paid == 50) refunds[0] = refunds[1] = 0;
     CcMoney donors = refunds[0] + refunds[1];

@@ -1,8 +1,5 @@
-<<<<<<< HEAD
-#include "sim/cc_prophecy.h"
-=======
 #include "sim/cc_archive_staff.h"
->>>>>>> 78e1c5f (Appoint named archive staff and record their first work)
+#include "sim/cc_prophecy.h"
 #include "sim/cc_sim.h"
 #include "sim/cc_occupations.h"
 #include "sim/cc_archive_recruitment.h"
@@ -6267,7 +6264,7 @@ static bool BindArchiveTome(CcSim *sim)
 {
     if (sim == NULL || sim->kingdom_count <= 0) return false;
     int32_t holder = (int32_t)(sim->treasure_count % sim->kingdom_count);
-    CcSettlement *vault = sim->schema_version >= 81U && sim->archive_staff.active ?
+    CcSettlement *vault = sim->schema_version >= 85U && sim->archive_staff.active ?
         CcSimSettlementMutable(sim, sim->archive_staff.seat_id) : ArchiveVaultWithBindingMaterials(sim, holder);
     return BindArchiveTomeAt(sim, vault) != NULL;
 }
@@ -6275,7 +6272,7 @@ static bool BindArchiveTome(CcSim *sim)
 CcArchiveAppointmentPlan CcSimArchiveAppointmentPlan(const CcSim *sim)
 {
     CcArchiveAppointmentPlan plan = {.gate = CC_ARCHIVE_RECRUIT_UNAVAILABLE, .account_slot = -1};
-    if (sim == NULL || sim->schema_version < 81U || sim->archive_recruitment.status != 5) return plan;
+    if (sim == NULL || sim->schema_version < 85U || sim->archive_recruitment.status != 5) return plan;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
     plan.person_id = o->person_id; plan.seat_id = o->seat_id;
     plan.gate = CC_ARCHIVE_RECRUIT_BUSY;
@@ -6619,17 +6616,13 @@ static void AdvanceArchives(CcSim *sim)
     int32_t target_scribes = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
         sim->iron_ledger_reserve >= 150 ? 2 :
         sim->iron_ledger_reserve >= 50 ? 1 : 0;
-<<<<<<< HEAD
-    bool recruitment_reserved = sim->schema_version >= 80U && sim->archive_recruitment.status != 0;
-=======
-    bool named_staff = sim->schema_version >= 81U && sim->archive_staff.active;
+    bool named_staff = sim->schema_version >= 85U && sim->archive_staff.active;
     if (named_staff) {
         sim->archive_staff.legacy_scribes = MinimumI32(sim->archive_staff.legacy_scribes, target_scribes);
         CcSimRefreshArchiveStaff(sim);
         target_scribes = archives->scribes;
     }
-    bool recruitment_reserved = named_staff || (sim->schema_version >= 78U && sim->archive_recruitment.status != 0);
->>>>>>> 78e1c5f (Appoint named archive staff and record their first work)
+    bool recruitment_reserved = named_staff || (sim->schema_version >= 80U && sim->archive_recruitment.status != 0);
     if (recruitment_reserved) target_scribes = MinimumI32(target_scribes, archives->scribes);
     /* Date the first weekly sample with zero scribes. */
     CcMoney crown_funding = 0;
@@ -15056,6 +15049,8 @@ static void AdvanceCharacterTravel(CcSim *sim)
         if (sim->archive_recruitment.status > 0 &&
             (person->id == sim->archive_recruitment.person_id ||
              person->id == sim->archive_recruitment.trainer_id)) continue;
+        /* Appointed archive staff work at the seat. */
+        if (CcSimArchiveStaffMember(sim, person->id)) continue;
         if (CcCharacterAgeYears(sim, person) < 16) continue;
         if (person->activity == CC_CHARACTER_ACTIVITY_HIDING ||
             person->activity == CC_CHARACTER_ACTIVITY_SEEKING_AID) continue;
@@ -15285,7 +15280,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
     for (int32_t day = 0; day < days; ++day) {
         sim->current_day += 1;
         if (sim->schema_version >= 26U) AdvanceCharacterLifecycles(sim);
-        if (sim->schema_version >= 81U && sim->archive_staff.active) {
+        if (sim->schema_version >= 85U && sim->archive_staff.active) {
             CcId previous[CC_MAX_SCRIBES];
             memcpy(previous, sim->archive_staff.person_ids, sizeof(previous));
             CcSimRefreshArchiveStaff(sim);
@@ -15299,7 +15294,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         AdvanceCharacterTravel(sim);
         AdvanceArchiveRecruitJourney(sim);
         AdvanceArchiveRecruitTraining(sim);
-        if (sim->schema_version >= 81U) (void)CcSimAppointArchiveRecruit(sim);
+        if (sim->schema_version >= 85U) (void)CcSimAppointArchiveRecruit(sim);
         HearLocalGossip(sim);
         CcSimRefreshCharacterGossip(sim);
         if (!sim->journey.active) {
