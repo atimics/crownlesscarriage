@@ -26,6 +26,10 @@
 #define CC_MAX_QUEST_EVIDENCE 8
 #define CC_MAX_PENDING_ECHOES 3
 #define CC_MAX_CHARACTERS 128
+/* The character cap was 24 through schema 79. Saves written then carry that
+   many gossip carrier slots and hash exactly those, so the carrier capacity
+   must come from the schema rather than the current cap. */
+#define CC_LEGACY_CHARACTER_CAP 24
 #define CC_MAX_HISTORIC_CHARACTERS 32
 #define CC_MAX_SCRIBES 4
 #define CC_MAX_GOSSIP 32
@@ -1979,7 +1983,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 364648,
+_Static_assert(sizeof(CcSim) == 364672,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

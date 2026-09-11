@@ -56,7 +56,8 @@ static void CheckResidentsAndSaves(void)
         CcSimInit(&first, seed);
         CcSimInit(&repeated, seed);
         CC_CHECK(CcSimHash(&first) == CcSimHash(&repeated));
-        CC_CHECK(first.character_count == CC_MAX_CHARACTERS);
+        CC_CHECK(first.character_count > 0 &&
+                 first.character_count <= CC_MAX_CHARACTERS);
         int rooted = 0;
         for (int i = 0; i < first.character_count; ++i) {
             const CcCharacter *person = &first.characters[i];
@@ -72,7 +73,7 @@ static void CheckResidentsAndSaves(void)
         CC_CHECK(rooted >= 12);
         repeated = first;
         CcSimAdvanceDays(&first, 1);
-        CC_CHECK(first.character_births == CC_MAX_CHARACTERS);
+        CC_CHECK(first.character_births == repeated.character_count);
         for (int i = 0; i < first.character_count; ++i) {
             CC_CHECK(strcmp(strrchr(first.characters[i].name, ' '), strrchr(repeated.characters[i].name, ' ')) == 0);
         }

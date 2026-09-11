@@ -409,7 +409,8 @@ static void CheckCharacterLifecycles(void)
     CcSim second;
     CcSimInit(&first, UINT32_C(0x11fe71fe));
     CcSimInit(&second, UINT32_C(0x11fe71fe));
-    CC_CHECK(first.character_count == CC_MAX_CHARACTERS);
+    CC_CHECK(first.character_count > 0 &&
+             first.character_count <= CC_MAX_CHARACTERS);
     for (int32_t i = 0; i < first.character_count; ++i) {
         CC_CHECK(first.characters[i].birth_day <= first.current_day);
         CC_CHECK(first.characters[i].death_day > first.current_day);

@@ -588,7 +588,7 @@ uint64_t CcSimHash(const CcSim *sim)
                 HASH_VALUE(character->hungry_days);
                 HASH_VALUE(character->unsheltered_nights);
             }
-            if (sim->schema_version >= 78U) {
+            if (sim->schema_version >= 80U) {
                 HASH_VALUE(character->travel_destination_id);
                 HASH_VALUE(character->travel_arrival_day);
             }

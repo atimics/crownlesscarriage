@@ -510,7 +510,6 @@ static bool EnsureCharacterLifecycleColumns(sqlite3 *database,
         EnsureColumn(database, "npc_character", "travel_arrival_day",
             "ALTER TABLE npc_character ADD COLUMN travel_arrival_day INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
-            error, error_capacity) &&
         EnsureColumn(database, "meta", "character_births",
             "ALTER TABLE meta ADD COLUMN character_births INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
@@ -5438,9 +5437,9 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
             character->hungry_days = sqlite3_column_int(statement, 23);
             character->unsheltered_nights = sqlite3_column_int(statement, 24);
         }
-        if (sim->schema_version >= 78U) {
-            character->travel_destination_id = (CcId)sqlite3_column_int64(statement, 25);
-            character->travel_arrival_day = sqlite3_column_int(statement, 26);
+        if (sim->schema_version >= 80U) {
+            character->travel_destination_id = (CcId)sqlite3_column_int64(statement, 26);
+            character->travel_arrival_day = sqlite3_column_int(statement, 27);
         }
         rows += 1;
     }
