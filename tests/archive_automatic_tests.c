@@ -123,6 +123,26 @@ int main(void)
     CcSimAdvanceDays(&sim, 1);
     CC_CHECK(sim.archives.scribes == 0);
     CC_CHECK(sim.archive_recruitment.status == 1);
+    /* The ordinary world reaches its first binding shortage on day 19. */
+    CcSimInit(&sim, 42U);
+    for (int day = 0; day < 18; ++day) CcSimAdvanceDays(&sim, 1);
+    CcArchiveAppointmentPlan appointment = CcSimArchiveAppointmentPlan(&sim);
+    CC_CHECK(appointment.gate == CC_ARCHIVE_RECRUIT_MATERIALS && appointment.account_slot >= 0);
+    CcArchiveSupplyPlan supply = CcSimArchiveSupplyPlan(&sim, sim.royal_carriages[0].id);
+    /* The larger cast reaches a wheat shortage before the binding shortage;
+       keep the seat fed so this exercises the binding it is about. */
+    CcSimSettlementMutable(&sim, appointment.seat_id)->stock[CC_GOOD_WHEAT] = 500;
+    supply = CcSimArchiveSupplyPlan(&sim, sim.royal_carriages[0].id);
+    CC_CHECK(supply.gate == CC_ARCHIVE_SUPPLY_CARRIAGE && supply.good == CC_GOOD_GOLD);
+    CcRoyalCarriage *carrier = &sim.royal_carriages[0];
+    carrier->kingdom_id = CcSimSettlement(&sim, appointment.seat_id)->kingdom_id;
+    carrier->mode = CC_ROYAL_CARRIAGE_IDLE; carrier->active_shipment_id = 0;
+    carrier->condition = 100; carrier->next_dispatch_day = 0;
+    supply = CcSimArchiveSupplyPlan(&sim, carrier->id);
+    CC_CHECK(supply.gate == CC_ARCHIVE_SUPPLY_SOURCE && supply.good == CC_GOOD_GOLD);
+    CcSimSettlementMutable(&sim, appointment.seat_id)->stock[CC_GOOD_GOLD] = 1;
+    supply = CcSimArchiveSupplyPlan(&sim, sim.royal_carriages[0].id);
+    CC_CHECK(supply.gate == CC_ARCHIVE_SUPPLY_SOURCE && supply.good == CC_GOOD_GEMS);
     puts("Automatic recruitment pays real funders and reaches named work through travel, training and replay.");
     return 0;
 }
