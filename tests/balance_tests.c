@@ -392,6 +392,9 @@ int main(void)
        still be running at an annual snapshot. See issue #642. */
     CC_CHECK(war_years > 0);
     CC_CHECK(seeds_with_war == 4);
+    /* #644: with the legitimacy gate decoupled from hunger, war is no longer
+       only a startup transient, so the post-year-20 window must see some. */
+    CC_CHECK(war_samples > 0);
     CC_CHECK(peace_samples > samples / 10);
 
     puts("OSR balance and long-run recovery tests passed");

@@ -13403,9 +13403,22 @@ static void UpdateRoyalDiplomacy(CcSim *sim)
                 int32_t issuer_legitimacy = issuer == first ?
                     sim->kingdoms[first].legitimacy :
                     sim->kingdoms[second].legitimacy;
+                int32_t recipient_legitimacy = issuer == first ?
+                    sim->kingdoms[second].legitimacy :
+                    sim->kingdoms[first].legitimacy;
+                /* Schema 78 decouples legitimacy from hunger.  The absolute
+                   floor of 30 failed exactly when hunger was high enough to
+                   motivate war, because hunger erodes legitimacy
+                   (r = -0.81): the two required gates were anti-correlated,
+                   so the intended window barely existed.  Compare the issuer
+                   against the neighbour instead, so a desperate state can
+                   still fight a target it is at least as legitimate as. */
+                bool legitimate_enough = sim->schema_version >= 81U ?
+                    issuer_legitimacy >= recipient_legitimacy :
+                    issuer_legitimacy >= 30;
                 if (pressure >= 110 && issuer_hunger >= 25 &&
                     issuer_hunger <= 55 &&
-                    issuer_legitimacy >= 30 &&
+                    legitimate_enough &&
                     KingdomAverageProsperity(sim, recipient) >=
                         KingdomAverageProsperity(sim, issuer)) {
                     (void)LaunchCourier(

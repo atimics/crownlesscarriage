@@ -196,9 +196,77 @@ static void CheckWarSocietyEvents(char *error, size_t capacity)
     CC_CHECK(bonded > 0);
 }
 
+static bool WarDeclarationInFlight(const CcSim *sim)
+{
+    for (int32_t i = 0; i < sim->courier_count; ++i) {
+        if (sim->couriers[i].kind == CC_COURIER_WAR_DECLARATION) return true;
+    }
+    return false;
+}
+
+static void SetupLegitimacyGateWorld(CcSim *sim, uint32_t seed)
+{
+    CcSimInit(sim, seed);
+    /* The dragon is a young wyrm at world start, so the campaign crisis
+       path stays dormant and the day reaches the famine casus belli. */
+    sim->dragon_campaign.cooldown_days = 0;
+    /* Day 1120 is divisible by 7 (royal diplomacy runs) and 112 (the
+       famine casus belli is evaluated), and is older than 1092 days of
+       peace. */
+    sim->current_day = 1120 - 1;
+    for (int32_t a = 0; a < sim->kingdom_count; ++a) {
+        for (int32_t b = a + 1; b < sim->kingdom_count; ++b) {
+            sim->diplomacy[a][b] = CC_DIPLOMACY_PEACE;
+            sim->diplomacy[b][a] = CC_DIPLOMACY_PEACE;
+            sim->diplomacy_changed_day[a][b] = 1;
+            sim->diplomacy_changed_day[b][a] = 1;
+        }
+    }
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (place->kingdom_id == sim->kingdoms[0].id) {
+            place->hunger = 55;
+            place->prosperity = 30;
+            place->security = 60;
+            place->stock[CC_GOOD_FOOD] = 0;
+        } else {
+            place->hunger = 0;
+            place->prosperity = 90;
+            place->security = 60;
+            place->stock[CC_GOOD_FOOD] = 200;
+        }
+    }
+    /* The issuer is hungry enough to want war, legitimate enough relative
+       to its neighbour, but below the old absolute floor of 30. */
+    sim->kingdoms[0].legitimacy = 20;
+    sim->kingdoms[1].legitimacy = 15;
+    sim->kingdoms[2].legitimacy = 55;
+}
+
+/* #644: the legitimacy gate must not collapse with hunger.  The same
+   desperate-but-functional state must be able to declare war at schema 78
+   while a schema-77 replay keeps the old absolute floor. */
+static void CheckLegitimacyGateDecoupled(char *error, size_t capacity)
+{
+    CcSim current;
+    SetupLegitimacyGateWorld(&current, UINT32_C(0x6440c0de));
+    CC_CHECK(current.schema_version >= 78U);
+    CcSimAdvanceDays(&current, 1);
+    CC_CHECK(WarDeclarationInFlight(&current));
+    CC_CHECK(CcSimValidate(&current, error, capacity));
+
+    CcSim legacy;
+    SetupLegitimacyGateWorld(&legacy, UINT32_C(0x6440c0de));
+    legacy.schema_version = 77U;
+    CcSimAdvanceDays(&legacy, 1);
+    CC_CHECK(!WarDeclarationInFlight(&legacy));
+    CC_CHECK(CcSimValidate(&legacy, error, capacity));
+}
+
 int main(void)
 {
     char error[192];
+    CheckLegitimacyGateDecoupled(error, sizeof(error));
     CheckWarSocietyEvents(error, sizeof(error));
     CheckWarCampContest(error, sizeof(error));
 
