@@ -41,4 +41,14 @@ bool CcSimBeginArchiveRecruitment(CcSim *sim);
 /* Return an unused reservation to its original funders and stores. */
 bool CcSimCancelArchiveRecruitment(CcSim *sim);
 bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim);
+typedef enum CcArchiveJourneyStep {
+    CC_ARCHIVE_JOURNEY_WAIT,
+    CC_ARCHIVE_JOURNEY_DEPARTED,
+    CC_ARCHIVE_JOURNEY_STOP,
+    CC_ARCHIVE_JOURNEY_ARRIVED,
+    CC_ARCHIVE_JOURNEY_FAILED
+} CcArchiveJourneyStep;
+/* Daily progress; road_roll is used at a due road arrival, with courier risk. */
+CcArchiveJourneyStep CcSimAdvanceArchiveRecruitmentJourney(CcSim *sim, uint32_t road_roll);
+CcArchiveRecruitmentGate CcSimArchiveRecruitmentJourneyGate(const CcSim *sim);
 #endif

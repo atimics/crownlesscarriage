@@ -1410,7 +1410,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " revision INTEGER NOT NULL,return_speed INTEGER NOT NULL,light INTEGER NOT NULL,"
         " steps INTEGER NOT NULL,seen INTEGER NOT NULL,bar_open INTEGER NOT NULL,surveyed INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS mine_pack (good INTEGER PRIMARY KEY,quantity INTEGER NOT NULL);";
-    return Execute(database, "CREATE TABLE IF NOT EXISTS archive_recruitment (id INTEGER PRIMARY KEY CHECK(id=1),status INTEGER NOT NULL,person_id INTEGER NOT NULL,trainer_id INTEGER NOT NULL,seat_id INTEGER NOT NULL,origin_id INTEGER NOT NULL,first_route_id INTEGER NOT NULL,first_hop_id INTEGER NOT NULL,donor_ids_0 INTEGER NOT NULL,donor_ids_1 INTEGER NOT NULL,patron_ids_0 INTEGER NOT NULL,patron_ids_1 INTEGER NOT NULL,donor_shares_0 INTEGER NOT NULL,donor_shares_1 INTEGER NOT NULL,purse INTEGER NOT NULL,wheat INTEGER NOT NULL,paper INTEGER NOT NULL,tools INTEGER NOT NULL,travel_wheat INTEGER NOT NULL,start_day INTEGER NOT NULL,training_days INTEGER NOT NULL,trainer_days INTEGER NOT NULL,arrival_estimate INTEGER NOT NULL,ready_estimate INTEGER NOT NULL);", error, error_capacity) &&
+    return Execute(database, "CREATE TABLE IF NOT EXISTS archive_recruitment_journey (id INTEGER PRIMARY KEY CHECK(id=1),current_id INTEGER NOT NULL,leg_route_id INTEGER NOT NULL,leg_hop_id INTEGER NOT NULL,leg_arrival_day INTEGER NOT NULL,provisioned_days INTEGER NOT NULL,arrived_day INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS archive_recruitment (id INTEGER PRIMARY KEY CHECK(id=1),status INTEGER NOT NULL,person_id INTEGER NOT NULL,trainer_id INTEGER NOT NULL,seat_id INTEGER NOT NULL,origin_id INTEGER NOT NULL,first_route_id INTEGER NOT NULL,first_hop_id INTEGER NOT NULL,donor_ids_0 INTEGER NOT NULL,donor_ids_1 INTEGER NOT NULL,patron_ids_0 INTEGER NOT NULL,patron_ids_1 INTEGER NOT NULL,donor_shares_0 INTEGER NOT NULL,donor_shares_1 INTEGER NOT NULL,purse INTEGER NOT NULL,wheat INTEGER NOT NULL,paper INTEGER NOT NULL,tools INTEGER NOT NULL,travel_wheat INTEGER NOT NULL,start_day INTEGER NOT NULL,training_days INTEGER NOT NULL,trainer_days INTEGER NOT NULL,arrival_estimate INTEGER NOT NULL,ready_estimate INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS grain_supply (slot INTEGER PRIMARY KEY,organiser_id INTEGER NOT NULL,supplier_id INTEGER NOT NULL,route_id INTEGER NOT NULL,shipment_id INTEGER NOT NULL,purse INTEGER NOT NULL,spent INTEGER NOT NULL,ordered INTEGER NOT NULL,delivered INTEGER NOT NULL,lost INTEGER NOT NULL,redirected INTEGER NOT NULL,last_dispatch_day INTEGER NOT NULL,last_arrival_day INTEGER NOT NULL,enabled INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, goblin_schema, error, error_capacity) &&
         Execute(database, mine_schema, error, error_capacity) &&
@@ -3345,7 +3346,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
             "DELETE FROM gossip_version;"
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
-            "DELETE FROM town_recovery; DELETE FROM grain_supply; DELETE FROM archive_recruitment;"
+            "DELETE FROM town_recovery; DELETE FROM grain_supply; DELETE FROM archive_recruitment; DELETE FROM archive_recruitment_journey;"
             "DELETE FROM horse_team; DELETE FROM stable_horse;"
             "DELETE FROM pony_company; DELETE FROM rainbow_pony;"
             "DELETE FROM route; DELETE FROM road_site; DELETE FROM road_site_stock;"

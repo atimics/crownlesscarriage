@@ -862,6 +862,14 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(sim->archive_recruitment.trainer_days);
             HASH_VALUE(sim->archive_recruitment.arrival_estimate);
             HASH_VALUE(sim->archive_recruitment.ready_estimate);
+            if (sim->schema_version >= 83U) {
+                HASH_VALUE(sim->archive_recruitment.current_id);
+                HASH_VALUE(sim->archive_recruitment.leg_route_id);
+                HASH_VALUE(sim->archive_recruitment.leg_hop_id);
+                HASH_VALUE(sim->archive_recruitment.leg_arrival_day);
+                HASH_VALUE(sim->archive_recruitment.provisioned_days);
+                HASH_VALUE(sim->archive_recruitment.arrived_day);
+            }
         }
         HASH_VALUE(sim->archives.scribes);
         HASH_VALUE(sim->archives.lore_stored);
