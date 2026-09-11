@@ -69,4 +69,6 @@ typedef struct CcArchiveAppointmentPlan {
 } CcArchiveAppointmentPlan;
 CcArchiveAppointmentPlan CcSimArchiveAppointmentPlan(const CcSim *sim);
 bool CcSimAppointArchiveRecruit(CcSim *sim);
+/* Weekly institutional hiring and patron recovery. True means a refund or new order. */
+bool CcSimAutoArchiveRecruitment(CcSim *sim);
 #endif
