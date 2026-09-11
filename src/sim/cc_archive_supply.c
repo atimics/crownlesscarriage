@@ -33,7 +33,7 @@ CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
     const CcGood goods[] = {CC_GOOD_WHEAT, CC_GOOD_TOOLS, CC_GOOD_PAPER,
         CC_GOOD_GOLD, CC_GOOD_GEMS};
     int32_t good_count = 3;
-    if (sim->schema_version >= 87U) {
+    if (sim->schema_version == 87U) {
         CcArchiveAppointmentPlan appointment = CcSimArchiveAppointmentPlan(sim);
         /* Local book work uses the same binding recipe as the archive. An
            appointment that can index a surviving volume needs only its kit. */
