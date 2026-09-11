@@ -14940,7 +14940,7 @@ static void AdvanceTravellerNeeds(CcSim *sim)
 {
     for (int32_t i = 0; i < sim->character_count; ++i) {
         CcCharacter *person = &sim->characters[i];
-        if (sim->schema_version >= 79U && sim->archive_recruitment.status == 2 &&
+        if (sim->schema_version >= 83U && sim->archive_recruitment.status == 2 &&
             sim->archive_recruitment.person_id == person->id) continue;
         if ((person->role != CC_CHARACTER_TRAVELLER &&
              person->role != CC_CHARACTER_REFUGEE) ||
@@ -15050,7 +15050,7 @@ void CcSimAdvanceDaysWithAccounting(CcSim *sim, int32_t days,
 
 static void AdvanceArchiveRecruitJourney(CcSim *sim)
 {
-    if (sim->schema_version < 79U) return;
+    if (sim->schema_version < 83U) return;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
     uint32_t roll = o->status == 2 && sim->current_day >= o->leg_arrival_day ? NextRandom(sim) : 99U;
     CcArchiveJourneyStep step = CcSimAdvanceArchiveRecruitmentJourney(sim, roll);

@@ -2864,14 +2864,14 @@ static void CheckSchema79RecruitmentJournal(void)
     RemoveDatabase(path);
 }
 
-static void CheckSchema78RecruitmentJournal(void)
+static void CheckSchema82RecruitmentJourneyJournal(void)
 {
     static CcSim legacy, after, restored;
     char error[256];
-    const char *path = "persistence-schema78-recruitment.ccsave";
+    const char *path = "persistence-schema82-recruitment-journey.ccsave";
     RemoveDatabase(path);
     CcSimInit(&legacy, 42U);
-    legacy.schema_version = 78U;
+    legacy.schema_version = 82U;
     CC_CHECK(CcSimBeginArchiveRecruitment(&legacy));
     CcSimAdvanceDays(&legacy, 6);
     after = legacy;
@@ -2881,10 +2881,10 @@ static void CheckSchema78RecruitmentJournal(void)
     CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
     ExecuteFixtureSql(database, "DROP TABLE archive_recruitment_journey;", "drop recruitment fixture");
     sqlite3_close(database);
-    AddLegacyDayJournalSuffix(path, &legacy, &after, 78U, 25U);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 82U, 25U);
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
-    restored.schema_version = 78U;
+    restored.schema_version = 82U;
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
@@ -3160,7 +3160,7 @@ int main(void)
     CheckSchema77ArchiveJournal();
     CheckSchema78OccupationJournal();
     CheckSchema79RecruitmentJournal();
-    CheckSchema78RecruitmentJournal();
+    CheckSchema82RecruitmentJourneyJournal();
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
     CheckSchema41Upgrade();
