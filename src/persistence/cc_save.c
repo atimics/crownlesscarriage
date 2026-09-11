@@ -3267,23 +3267,27 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
     sqlite3_finalize(statement);
     if (!Prepare(database, "SELECT slot,id,stories,told_player FROM gossip_carrier ORDER BY slot;",
                   &statement, error, error_capacity)) return false;
-    for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
-        if (sqlite3_step(statement) != SQLITE_ROW ||
-            sqlite3_column_int64(statement, 0) != i) goto invalid;
+    int result;
+    int32_t carrier_capacity = CcSimGossipCarrierCapacity(sim);
+    /* The carrier table is as long as the character cap the save was written
+       under. Tolerate a shorter table so a save made before the cast grew
+       still loads; any missing carriers stay zero from the initial clear. */
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        sqlite3_int64 slot = sqlite3_column_int64(statement, 0);
+        if (slot < 0 || slot >= carrier_capacity) goto invalid;
         sqlite3_int64 stories = sqlite3_column_int64(statement, 2);
         sqlite3_int64 told = sqlite3_column_int64(statement, 3);
         if (stories < 0 || stories > UINT32_MAX ||
             told < 0 || told > UINT32_MAX) goto invalid;
-        sim->gossip_carriers[i].id = (CcId)sqlite3_column_int64(statement, 1);
-        sim->gossip_carriers[i].stories = (uint32_t)stories;
-        sim->gossip_carriers[i].told_player = (uint32_t)told;
+        sim->gossip_carriers[slot].id = (CcId)sqlite3_column_int64(statement, 1);
+        sim->gossip_carriers[slot].stories = (uint32_t)stories;
+        sim->gossip_carriers[slot].told_player = (uint32_t)told;
     }
-    if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
+    if (result != SQLITE_DONE) goto invalid;
     sqlite3_finalize(statement);
     if (!Prepare(database, "SELECT holder_kind,holder_slot,gossip_slot,source_character_id,"
                   "retellings,court_bias,alarm,confidence FROM gossip_version;",
                   &statement, error, error_capacity)) return false;
-    int result;
     while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
         sqlite3_int64 kind = sqlite3_column_int64(statement, 0);
         sqlite3_int64 holder = sqlite3_column_int64(statement, 1);

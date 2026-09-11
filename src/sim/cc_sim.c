@@ -17786,6 +17786,15 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
           (version->source_character_id & CC_ID_SERIAL_MASK) < sim->next_entity_serial));
 }
 
+static int32_t InhabitedSettlements(const CcSim *sim)
+{
+    int32_t count = 0;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        if (!CcSettlementIsAbandoned(&sim->settlements[i])) count += 1;
+    }
+    return count;
+}
+
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim == NULL) {
@@ -17864,7 +17873,11 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         sim->character_count < 0 ||
         sim->character_count > CC_MAX_CHARACTERS ||
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
-         (sim->character_count != CC_MAX_CHARACTERS ||
+         /* #653: the cap is an upper bound, not the population target. Before
+            the cast could vary the seeder filled every slot, so the tightest
+            true statement was "exactly full". Keep a floor of three named
+            residents per inhabited settlement instead. */
+         (sim->character_count < InhabitedSettlements(sim) * 3 ||
           sim->character_births < 0 ||
           sim->character_births > CC_SIM_MAX_DAY ||
           sim->character_deaths < 0 ||
