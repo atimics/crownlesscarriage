@@ -856,7 +856,9 @@ static void CompactEventLedger(CcSim *sim, CcId incoming_parent)
     }
 
     int32_t removed = -1;
-    CcEventPinSet pinned_events;
+    /* Static: 32 KB does not belong on the stack, especially under ASan. The
+       ledger is single-threaded and compaction is not reentrant. */
+    static CcEventPinSet pinned_events;
     memset(&pinned_events, 0, sizeof(pinned_events));
     GatherPinnedEvents(sim, incoming_parent, &pinned_events);
     for (int32_t i = 0; i < sim->event_count; ++i) {

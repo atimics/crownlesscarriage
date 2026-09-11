@@ -141,13 +141,13 @@ static void PrepareArchiveWeek(CcSim *sim, CcMoney reserve,
 
 static void CheckArchiveRecording(void)
 {
-    CcSim unfunded;
+    static CcSim unfunded;
     PrepareArchiveWeek(&unfunded, 0, 0);
     CcSimAdvanceDays(&unfunded, 1);
     CC_CHECK(unfunded.archives.scribes == 0);
     CC_CHECK(unfunded.archives.lore_stored == 0);
 
-    CcSim funded;
+    static CcSim funded;
     PrepareArchiveWeek(&funded, 50, 1);
     int32_t funded_gold = CcSimTrackedGood(&funded, CC_GOOD_GOLD);
     int32_t funded_gems = CcSimTrackedGood(&funded, CC_GOOD_GEMS);
@@ -184,7 +184,7 @@ static void CheckArchiveRecording(void)
     CcSimAdvanceDays(&funded, 7);
     CC_CHECK(CountLoreRecordsForParent(&funded, recorded_parent) == 1);
 
-    CcSim missing_materials;
+    static CcSim missing_materials;
     PrepareArchiveWeek(&missing_materials, 50, 1);
     for (int32_t i = 0; i < missing_materials.settlement_count; ++i) {
         CcSettlement *settlement = &missing_materials.settlements[i];
@@ -214,7 +214,7 @@ static void CheckArchiveRecording(void)
 
 static void CheckArchiveDecayChangesVolume(void)
 {
-    CcSim sim;
+    static CcSim sim;
     PrepareArchiveWeek(&sim, 50, 1);
     CcSimAdvanceDays(&sim, 1);
     CC_CHECK(sim.archives.lore_stored == 1);
@@ -262,7 +262,7 @@ static void CheckArchiveDecayChangesVolume(void)
 
 static void CheckArchiveBindingConservation(void)
 {
-    CcSim sim;
+    static CcSim sim;
     PrepareArchiveWeek(&sim, 0, 0);
     sim.treasure_count = CC_MAX_TREASURES - 4;
     CcSettlement *vault = &sim.settlements[0];
@@ -339,7 +339,7 @@ static void CheckArchiveBindingConservation(void)
 
 static void CheckLongArchiveConservation(void)
 {
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, UINT32_C(42));
     sim.iron_ledger_reserve = 300;
     sim.dragon_campaign.cooldown_days = 10000;
@@ -366,7 +366,7 @@ static void CheckLongArchiveConservation(void)
     char error[160];
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 
-    CcSim century;
+    static CcSim century;
     CcSimInit(&century, UINT32_C(42));
     for (int32_t week = 0; week < 100 * 52; ++week) {
         CcSimAdvanceDays(&century, 7);
@@ -405,8 +405,8 @@ static void CheckCharacterLifecycles(void)
     CC_CHECK(strchr(first_name, ' ') != NULL);
     CC_CHECK(strcmp(first_name, second_name) != 0);
 
-    CcSim first;
-    CcSim second;
+    static CcSim first;
+    static CcSim second;
     CcSimInit(&first, UINT32_C(0x11fe71fe));
     CcSimInit(&second, UINT32_C(0x11fe71fe));
     CC_CHECK(first.character_count > 0 &&
@@ -447,7 +447,8 @@ static void CheckCharacterLifecycles(void)
     char error[160];
     CC_CHECK(CcSimValidate(&first, error, sizeof(error)));
 
-    CcSim forged = first;
+    static CcSim forged;
+    forged = first;
     bool found_death = false;
     for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
         if (forged.events[i].id != 0U &&
@@ -469,7 +470,7 @@ static void CheckCharacterLifecycles(void)
 
 static void CheckRoadDistrictSites(void)
 {
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, UINT32_C(0xd15771c7));
     CC_CHECK(sim.road_site_count == CC_MAX_ROAD_SITES);
     bool found_farm = false;
@@ -536,8 +537,8 @@ static void CheckBorderOfficeSuccession(void)
 int main(void)
 {
     CheckBorderOfficeSuccession();
-    CcSim first;
-    CcSim second;
+    static CcSim first;
+    static CcSim second;
     char error[160];
     CcSimInit(&first, UINT32_C(0x12345678));
     CheckRoadDistrictSites();
@@ -554,7 +555,7 @@ int main(void)
     CC_CHECK(first.characters[0].appearance_seed ==
              second.characters[0].appearance_seed);
 
-    CcSim character_sim;
+    static CcSim character_sim;
     CcSimInit(&character_sim, UINT32_C(0xc4a4ac7e));
     CcSituation *personal_situation = NULL;
     for (int32_t i = 0; i < character_sim.situation_count; ++i) {
@@ -616,7 +617,7 @@ int main(void)
         personal_situation->id));
     CC_CHECK(CcSimValidate(&character_sim, error, sizeof(error)));
 
-    CcSim realtime;
+    static CcSim realtime;
     CcSimInit(&realtime, UINT32_C(0x71ae71e));
     CcId realtime_origin = realtime.player.location_id;
     CcId realtime_destination = realtime.settlements[1].id;
@@ -745,9 +746,9 @@ int main(void)
     CC_CHECK(CcSimValidate(&camped, error, sizeof(error)));
     CC_CHECK(CcSimValidate(&lodged, error, sizeof(error)));
 
-    CcSim careful_pace;
-    CcSim steady_pace;
-    CcSim push_pace;
+    static CcSim careful_pace;
+    static CcSim steady_pace;
+    static CcSim push_pace;
     CcSimInit(&careful_pace, UINT32_C(0xca9e));
     CcSimInit(&steady_pace, UINT32_C(0xca9e));
     CcSimInit(&push_pace, UINT32_C(0xca9e));
@@ -803,7 +804,7 @@ int main(void)
     CC_CHECK(careful_pace.horse_team[0].fatigue - careful_fatigue <
              push_pace.horse_team[0].fatigue - push_fatigue);
 
-    CcSim warned_road;
+    static CcSim warned_road;
     CcSimInit(&warned_road, UINT32_C(0x5ca17));
     CcCommand warned_travel = {
         .kind = CC_COMMAND_TRAVEL,
@@ -850,8 +851,8 @@ int main(void)
     CC_CHECK(CcSimValidate(&careful_escape, error, sizeof(error)));
     CC_CHECK(CcSimValidate(&warned_block, error, sizeof(error)));
 
-    CcSim fine_ticks;
-    CcSim batched_ticks;
+    static CcSim fine_ticks;
+    static CcSim batched_ticks;
     CcSimInit(&fine_ticks, UINT32_C(0xf17ed));
     CcSimInit(&batched_ticks, UINT32_C(0xf17ed));
     CcCommand batching_travel = {
@@ -946,7 +947,7 @@ int main(void)
     CC_CHECK(!CcSimMapIsArchived(&first, illustrated));
     CC_CHECK(CcPlayerMapCount(&first) == 2);
 
-    CcSim collector;
+    static CcSim collector;
     CcSimInit(&collector, UINT32_C(0xc011ec7));
     collector.player.coins = 10000;
     collector.player.location_id = collector.settlements[1].id;
@@ -988,7 +989,7 @@ int main(void)
     collector.carriage.location_id = collector.player.location_id;
     CC_CHECK(CcSimValidate(&collector, error, sizeof(error)));
 
-    CcSim uncharted;
+    static CcSim uncharted;
     CcSimInit(&uncharted, UINT32_C(0x12345678));
     uncharted.player.location_id = uncharted.settlements[1].id;
     uncharted.carriage.location_id = uncharted.player.location_id;
@@ -1013,7 +1014,7 @@ int main(void)
              uncharted_preview.travel_watches *
                  CC_WORLD_WATCH_SUBTICKS);
 
-    CcSim hidden_fork;
+    static CcSim hidden_fork;
     CcSimInit(&hidden_fork, UINT32_C(0xf04c));
     hidden_fork.player.location_id = hidden_fork.settlements[1].id;
     hidden_fork.carriage.location_id = hidden_fork.player.location_id;
@@ -1038,7 +1039,7 @@ int main(void)
                         error, sizeof(error)));
     CC_CHECK(hidden_fork.journey.route_id == night_road->id);
 
-    CcSim commitment;
+    static CcSim commitment;
     CcSimInit(&commitment, UINT32_C(0xc011ab1e));
     CcSituation *first_charter = FirstActiveSituation(&commitment, -1);
     CC_CHECK(first_charter != NULL);
@@ -1064,7 +1065,7 @@ int main(void)
     CC_CHECK(CcSimAcceptedSituation(&commitment) == NULL &&
              first_charter->status == CC_SITUATION_ACTIVE);
 
-    CcSim blocked_loading;
+    static CcSim blocked_loading;
     CcSimInit(&blocked_loading, UINT32_C(0xb0ced));
     CcSituation *blocked_relief = NULL;
     for (int32_t i = 0; i < blocked_loading.situation_count; ++i) {
@@ -1095,7 +1096,7 @@ int main(void)
     CC_CHECK(blocked_loading.player.cargo[CC_GOOD_FOOD] == 0);
     CC_CHECK(blocked_origin->stock[CC_GOOD_FOOD] == blocked_origin_food);
 
-    CcSim empty_granary;
+    static CcSim empty_granary;
     CcSimInit(&empty_granary, UINT32_C(0x6a6a));
     CcSituation *unfunded_relief = NULL;
     for (int32_t i = 0; i < empty_granary.situation_count; ++i) {
@@ -1121,7 +1122,7 @@ int main(void)
     CC_CHECK(empty_granary.player.accepted_situation_id == 0U);
     CC_CHECK(empty_granary.player.cargo[CC_GOOD_FOOD] == 0);
 
-    CcSim remote_relief;
+    static CcSim remote_relief;
     CcSimInit(&remote_relief, UINT32_C(0x4e6f7465));
     CcSituation *remote_offer = NULL;
     for (int32_t i = 0; i < remote_relief.situation_count; ++i) {
@@ -1168,7 +1169,7 @@ int main(void)
     CC_CHECK(remote_relief.settlements[remote_origin_slot]
                  .stock[CC_GOOD_FOOD] == remote_origin_food);
 
-    CcSim laundering;
+    static CcSim laundering;
     CcSimInit(&laundering, UINT32_C(0x1a0d3e));
     CcSituation *delivery = NULL;
     for (int32_t i = 0; i < laundering.situation_count; ++i) {
@@ -1206,7 +1207,7 @@ int main(void)
     CC_CHECK(delivery->progress == 0 &&
              delivery->status == CC_SITUATION_ACTIVE);
 
-    CcSim washed_load;
+    static CcSim washed_load;
     CcSimInit(&washed_load, UINT32_C(0x1a0d3e));
     CcSituation *washed_delivery = NULL;
     for (int32_t i = 0; i < washed_load.situation_count; ++i) {
@@ -1281,7 +1282,7 @@ int main(void)
     CC_CHECK(washed_delivery->status == CC_SITUATION_ACTIVE &&
              washed_delivery->progress == 0);
 
-    CcSim unanswered;
+    static CcSim unanswered;
     CcSimInit(&unanswered, UINT32_C(0xc011ab1e));
     CcSituation *unanswered_charter = FirstActiveSituation(&unanswered, -1);
     CC_CHECK(unanswered_charter != NULL);
@@ -1291,7 +1292,7 @@ int main(void)
     CcSimAdvanceDays(&unanswered, 1);
     CC_CHECK(unanswered.player.reputation == reputation_before);
 
-    CcSim promised;
+    static CcSim promised;
     CcSimInit(&promised, UINT32_C(0xc011ab1e));
     CcSituation *promised_charter = FirstActiveSituation(&promised, -1);
     CC_CHECK(promised_charter != NULL);
@@ -1307,7 +1308,7 @@ int main(void)
     CC_CHECK(promised.player.reputation == reputation_before - 1 &&
              CcSimAcceptedSituation(&promised) == NULL);
 
-    CcSim defended_road;
+    static CcSim defended_road;
     CcSimInit(&defended_road, UINT32_C(0x50adca11));
     defended_road.bandits[0].route_id = defended_road.routes[0].id;
     CcSituation *journey_charter = PreparePromisedJourney(
@@ -1368,7 +1369,7 @@ int main(void)
              CC_EVENT_DELAYED_ECHO);
     CC_CHECK(CcSimRecentEvent(&defended_road, 0)->parent_id != 0U);
 
-    CcSim bargained_road;
+    static CcSim bargained_road;
     CcSimInit(&bargained_road, UINT32_C(0x50adca11));
     bargained_road.bandits[0].route_id = bargained_road.routes[0].id;
     (void)PreparePromisedJourney(&bargained_road, error, sizeof(error));
@@ -1393,7 +1394,7 @@ int main(void)
     CC_CHECK(CcSimTrackedGood(&bargained_road, CC_GOOD_FOOD) ==
              food_before_bargain);
 
-    CcSim provisioned_road;
+    static CcSim provisioned_road;
     CcSimInit(&provisioned_road, UINT32_C(0x50adca11));
     provisioned_road.bandits[0].route_id = provisioned_road.routes[0].id;
     (void)PreparePromisedJourney(&provisioned_road, error, sizeof(error));
@@ -1436,7 +1437,7 @@ int main(void)
     CC_CHECK(strstr(provision_event->text,
                     provisioned_road.bandits[0].name) != NULL);
 
-    CcSim empty_carriage;
+    static CcSim empty_carriage;
     CcSimInit(&empty_carriage, UINT32_C(0x50adca11));
     empty_carriage.bandits[0].route_id = empty_carriage.routes[0].id;
     (void)PreparePromisedJourney(&empty_carriage, error, sizeof(error));
@@ -1447,7 +1448,7 @@ int main(void)
                          error, sizeof(error)));
     CC_CHECK(empty_carriage.journey.phase == CC_JOURNEY_PHASE_BLOCKED);
 
-    CcSim withdrawn_road;
+    static CcSim withdrawn_road;
     CcSimInit(&withdrawn_road, UINT32_C(0x50adca11));
     withdrawn_road.bandits[0].route_id = withdrawn_road.routes[0].id;
     (void)PreparePromisedJourney(&withdrawn_road, error, sizeof(error));
@@ -1474,7 +1475,7 @@ int main(void)
     CC_CHECK(CcSimRecentEvent(&withdrawn_road, 0)->kind ==
              CC_EVENT_ENCOUNTER_WITHDRAWN);
 
-    CcSim invalid_state;
+    static CcSim invalid_state;
     CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
     invalid_state.player.cargo[CC_GOOD_FOOD] = -1;
     CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
@@ -1530,7 +1531,7 @@ int main(void)
            sizeof(invalid_state.delayed_echo.character_name));
     CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
 
-    CcSim trade_edge;
+    static CcSim trade_edge;
     CcSimInit(&trade_edge, UINT32_C(0x7adee9e));
     uint64_t trade_edge_hash = CcSimHash(&trade_edge);
     CcCommand impossible_sale = {
@@ -1568,7 +1569,7 @@ int main(void)
     invalid_state.shipments[0].arrival_day += 1;
     CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
 
-    CcSim conserved;
+    static CcSim conserved;
     CcSimInit(&conserved, UINT32_C(0xc01d1ed6));
     CcMoney initial_gold = CcSimTrackedGold(&conserved);
     CcSimAdvanceDays(&conserved, 3650);
@@ -1576,7 +1577,7 @@ int main(void)
     CC_CHECK(CcSimValidate(&conserved, error, sizeof(error)));
 
     CC_CHECK(CcSimValidate(&first, error, sizeof(error)));
-    CcSim different;
+    static CcSim different;
     CcSimInit(&different, UINT32_C(0x87654321));
     CC_CHECK(CcSimHash(&first) != CcSimHash(&different));
     puts("deterministic simulation tests passed");
