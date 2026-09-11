@@ -57,9 +57,10 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-/* Schema 75 (goblin/dragon faction split) and 76 (rot diet) shipped from
-   other branches; this branch's archive supply dispatch is schema 77. */
-#define CC_SIM_SCHEMA_VERSION 77
+/* Schema 75 (goblin/dragon faction split), 76 (rot diet) and 77 (archive
+   supply dispatch) shipped ahead of this branch; hostile-border archive
+   contracts are schema 78. */
+#define CC_SIM_SCHEMA_VERSION 78
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -931,6 +932,7 @@ typedef struct CcRoyalCarriage {
     int32_t condition;
     int32_t trips_completed;
     int32_t cargo_losses;
+    bool archive_contract;
 } CcRoyalCarriage;
 
 typedef enum CcCourierKind {
@@ -1945,7 +1947,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 184552,
+_Static_assert(sizeof(CcSim) == 184576,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

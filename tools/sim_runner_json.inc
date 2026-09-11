@@ -391,7 +391,8 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         printf(",\"semantics\":\"snapshot\",\"counter_semantics\":\"stored_cumulative\",\"kingdom_id\":\"%" PRIu64
                "\",\"target_id\":\"%" PRIu64 "\",\"blocked_since_day\":%d,\"next_dispatch_day\":%d,\"mode_name\":",
             cart->kingdom_id, cart->target_id, cart->blocked_since_day, cart->next_dispatch_day);
-        JsonString(CcRoyalCarriageModeName(cart->mode)); putchar('}');
+        JsonString(CcRoyalCarriageModeName(cart->mode));
+        printf(",\"archive_contract\":%s}", cart->archive_contract ? "true" : "false");
     }
     printf("],\"shipments\":[");
     for (int32_t i = 0; i < sim->shipment_count; ++i) {

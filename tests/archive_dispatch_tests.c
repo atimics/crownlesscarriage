@@ -62,6 +62,7 @@ static void RoundTrip(void)
     CC_CHECK(CcSaveDecode(bytes, length, &restored, error, sizeof(error)));
     CcSaveFreeBuffer(bytes);
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+    CC_CHECK(memcmp(sim.royal_carriages, restored.royal_carriages, sizeof(sim.royal_carriages)) == 0);
 }
 static const CcShipment *Load(void)
 {
@@ -114,8 +115,53 @@ static void CheckDisruption(void)
     CC_CHECK(saw_loss);
 }
 
+static void CheckHostileContract(void)
+{
+    Fixture();
+    CcId home = CcSimSettlement(&sim, seat_id)->kingdom_id;
+    CcSimSettlementMutable(&sim, source_id)->stock[CC_GOOD_PAPER] = 0;
+    for (int i = 0; i < sim.settlement_count; ++i) {
+        if (sim.settlements[i].kingdom_id == home) continue;
+        source_id = sim.settlements[i].id;
+        sim.settlements[i].stock[CC_GOOD_PAPER] = 1;
+        break;
+    }
+    Carriage()->location_id = source_id;
+    for (int i = 0; i < sim.kingdom_count; ++i)
+        for (int j = 0; j < sim.kingdom_count; ++j)
+            if (i != j) sim.diplomacy[i][j] = CC_DIPLOMACY_WAR;
+    CcArchiveSupplyPlan plan = CcSimArchiveSupplyPlan(&sim, carriage_id);
+    CC_CHECK(plan.gate == CC_ARCHIVE_SUPPLY_READY);
+    CC_CHECK(!CcSimRoyalCarriageCanUseRoute(&sim, home, plan.first_route_id));
+    CC_CHECK(plan.path_cost > 0);
+    CC_CHECK(CcArchiveDispatchSupply(&sim, carriage_id));
+    CC_CHECK(Carriage()->archive_contract && Load() != NULL);
+    uint64_t contract_hash = CcSimHash(&sim);
+    Carriage()->archive_contract = false;
+    CC_CHECK(CcSimHash(&sim) != contract_hash);
+    Carriage()->archive_contract = true;
+    CcId id = Load()->id;
+    Valid(); RoundTrip();
+    for (int day = 0; day < 60 && Carriage()->active_shipment_id == id; ++day) {
+        CcSimAdvanceDays(&sim, 1);
+        CcSimAdvanceDays(&restored, 1);
+    }
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+    bool completed = false;
+    for (int i = 0; i < sim.shipment_count; ++i) {
+        const CcShipment *shipment = &sim.shipments[i];
+        if (shipment->id == id) completed = shipment->status == CC_SHIPMENT_ARRIVED || shipment->status == CC_SHIPMENT_LOST;
+    }
+    CC_CHECK(completed && !Carriage()->archive_contract);
+    Valid(); RoundTrip();
+    /* Resting and site-service carriages have their ordinary permission. */
+    Fixture(); Carriage()->archive_contract = true;
+    CC_CHECK(!CcSimValidate(&sim, error, sizeof(error)));
+}
+
 int main(void)
 {
+    CheckHostileContract();
     CheckDisruption();
     Fixture();
     CcArchiveSupplyPlan plan = CcSimArchiveSupplyPlan(&sim, carriage_id);
@@ -153,20 +199,29 @@ int main(void)
     Fixture();
     CcSimAdvanceDays(&sim, 27);
     /* Reset the booking stock after the calendar advances to pickup day. */
+    CcId host = CcSimSettlement(&sim, seat_id)->kingdom_id;
+    for (int i = 0; i < sim.settlement_count; ++i) {
+        sim.settlements[i].stock[CC_GOOD_PAPER] = 0;
+        if (sim.settlements[i].kingdom_id != host) source_id = sim.settlements[i].id;
+    }
+    for (int i = 0; i < sim.kingdom_count; ++i)
+        for (int j = 0; j < sim.kingdom_count; ++j)
+            if (i != j) sim.diplomacy[i][j] = CC_DIPLOMACY_WAR;
     CcSimSettlementMutable(&sim, seat_id)->stock[CC_GOOD_PAPER] = 0;
     CcSimSettlementMutable(&sim, source_id)->stock[CC_GOOD_PAPER] = 1;
     Carriage()->location_id = seat_id; Carriage()->mode = CC_ROYAL_CARRIAGE_IDLE;
     Carriage()->route_id = 0; Carriage()->destination_id = 0; Carriage()->target_id = 0;
     Carriage()->active_shipment_id = 0; Carriage()->departure_day = 0; Carriage()->arrival_day = 0;
-    Carriage()->next_dispatch_day = 0; Carriage()->blocked_since_day = 0;
+    Carriage()->next_dispatch_day = 0; Carriage()->blocked_since_day = 0; Carriage()->archive_contract = false;
     reserve = sim.iron_ledger_reserve;
     CC_CHECK(CcArchiveDispatchSupply(&sim, carriage_id));
     CC_CHECK(Carriage()->mode == CC_ROYAL_CARRIAGE_REPOSITIONING && Carriage()->active_shipment_id == 0);
+    CC_CHECK(Carriage()->archive_contract);
     CC_CHECK(sim.iron_ledger_reserve == reserve && CcSimSettlement(&sim, source_id)->stock[CC_GOOD_PAPER] == 1);
     Valid(); RoundTrip();
     CcJournal *journal = CcJournalStart("archive-dispatch-test.ccsave", &sim, error, sizeof(error));
     CC_CHECK(journal != NULL);
-    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 6, error, sizeof(error)));
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 28, error, sizeof(error)));
     CC_CHECK(CcJournalFlush(journal, &sim, error, sizeof(error)));
     CcJournalAbandon(&journal);
     CC_CHECK(CcSaveRead("archive-dispatch-test.ccsave", &restored, error, sizeof(error)));

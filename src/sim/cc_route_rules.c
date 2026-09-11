@@ -1,4 +1,5 @@
 #include "sim/cc_route_rules_internal.h"
+#include "sim/cc_trade_path_internal.h"
 
 static int32_t MaximumI32(int32_t a, int32_t b) { return a > b ? a : b; }
 
@@ -73,3 +74,13 @@ CcMoney CcRouteRoyalTradeToll(const CcSim *sim, const CcRoute *route,
     return toll;
 }
 
+
+bool CcRouteCarriageCanUse(const CcSim *sim, const CcRoyalCarriage *carriage, CcId route_id)
+{
+    if (sim == NULL || carriage == NULL) return false;
+    if (sim->schema_version >= 78U && carriage->archive_contract) {
+        const CcRoute *route = CcSimRoute(sim, route_id);
+        return CcRouteRoyalCanReopen(sim, route) && CcTradeRouteCapacity(sim, route) > 0;
+    }
+    return CcSimRoyalCarriageCanUseRoute(sim, carriage->kingdom_id, route_id);
+}

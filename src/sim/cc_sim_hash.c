@@ -256,6 +256,7 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->next_dispatch_day);
             HASH_VALUE(item->condition);
             HASH_VALUE(item->trips_completed); HASH_VALUE(item->cargo_losses);
+            if (sim->schema_version >= 78U) HASH_VALUE(item->archive_contract);
         }
     }
     if (sim->schema_version >= 11U) {

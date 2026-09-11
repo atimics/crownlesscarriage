@@ -1407,6 +1407,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            Execute(database, pony_schema, error, error_capacity) &&
            Execute(database, schema, error, error_capacity) &&
            Execute(database, royal_carriage_schema, error, error_capacity) &&
+           EnsureColumn(database, "royal_carriage", "archive_contract",
+               "ALTER TABLE royal_carriage ADD COLUMN archive_contract INTEGER NOT NULL DEFAULT 0;",
+               error, error_capacity) &&
            Execute(database, royal_route_usage_schema,
                    error, error_capacity) &&
            Execute(database, kingdom_schema, error, error_capacity) &&
@@ -2192,7 +2195,7 @@ static bool SaveRoyalCarriages(sqlite3 *database, const CcSim *sim,
     if (sim->schema_version < 38U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
-                 "INSERT INTO royal_carriage VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "INSERT INTO royal_carriage VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
         const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
@@ -2212,6 +2215,7 @@ static bool SaveRoyalCarriages(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 14, carriage->condition);
         BindInt(statement, 15, carriage->trips_completed);
         BindInt(statement, 16, carriage->cargo_losses);
+        BindInt(statement, 17, carriage->archive_contract ? 1 : 0);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement);
@@ -4427,7 +4431,7 @@ static bool ReadRoyalCarriages(sqlite3 *database, CcSim *sim,
                  "SELECT slot,id,kingdom_id,location_id,route_id,destination_id,"
                  "target_id,active_shipment_id,mode,departure_day,arrival_day,"
                  "blocked_since_day,next_dispatch_day,condition,trips_completed,"
-                 "cargo_losses "
+                 "cargo_losses,archive_contract "
                  "FROM royal_carriage ORDER BY slot;",
                  &statement, error, error_capacity)) return false;
     int32_t rows = 0;
@@ -4457,6 +4461,13 @@ static bool ReadRoyalCarriages(sqlite3 *database, CcSim *sim,
         carriage->condition = sqlite3_column_int(statement, 13);
         carriage->trips_completed = sqlite3_column_int(statement, 14);
         carriage->cargo_losses = sqlite3_column_int(statement, 15);
+        int archive_contract = sqlite3_column_int(statement, 16);
+        if (archive_contract < 0 || archive_contract > 1) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity, "Archive carriage contract is invalid.");
+            return false;
+        }
+        carriage->archive_contract = sim->schema_version >= 78U && archive_contract != 0;
         rows += 1;
     }
     sqlite3_finalize(statement);
