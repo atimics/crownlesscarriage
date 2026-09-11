@@ -27,6 +27,9 @@ with tempfile.TemporaryDirectory() as directory:
             order = row['archive_recruitment_order']
             assert order['status'] == 0
             assert order['journey_gate'] == 'unavailable'
+            assert order['training_gate'] == 'unavailable'
+            for field in ['labor_days', 'trainer_labor_days', 'last_work_day', 'wages_paid', 'archive_training_week']:
+                assert order[field] == 0
             for field in ['current_id', 'leg_route_id', 'leg_hop_id']:
                 assert order[field] == '0'
             for field in ['leg_arrival_day', 'provisioned_days', 'arrived_day']:
