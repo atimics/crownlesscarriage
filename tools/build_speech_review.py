@@ -62,6 +62,16 @@ def pairs(observations, seed):
     return result
 
 
+def meeting_cases(meetings):
+    unique = {}
+    for meeting in meetings:
+        people = meeting['people']
+        key = (meeting['seed'], meeting['event_id'], *(band(p) for p in people),
+               people[0]['account'] != people[1]['account'])
+        unique.setdefault(key, meeting)
+    return list(unique.values())
+
+
 def collect(binary, seed, days, path):
     result = subprocess.run([str(binary), '--seed', str(seed), '--days', str(days)],
                             capture_output=True, check=True)
@@ -182,16 +192,17 @@ def build(args):
         singles.append(dict(id=f'A{i+1:03}', source=source, packet=parsed, model_text=text, flags=flags,
             speaker=names.get((provenance['world_seed'], provenance['speaker_id']), provenance['speaker_id']),
             event=events[provenance['world_seed'], provenance['event_id']]))
-    # Cap repeated events across days before balancing the meeting sample by event kind.
-    unique_meetings = {}
-    for meeting in meetings:
-        unique_meetings.setdefault((meeting['seed'], meeting['event_id']), meeting)
+    # Preserve changes in personal knowledge as stories circulate across days.
     chats = []
-    chosen = balanced(unique_meetings.values(), args.conversations, lambda r: r['kind'])
+    chosen = balanced(meeting_cases(meetings), args.conversations, lambda r: r['kind'])
     for i, meeting in enumerate(chosen):
         history, turns, flags = [], [], []
+        packets = [packet(account_probe, meeting['kind'], p) for p in meeting['people']]
         for turn in range(args.turns):
             person = meeting['people'][turn % 2]
+            if packets[turn % 2] is None:
+                flags.append(f'Account outside the model parser at turn {turn+1}')
+                break
             text = speak(model_probe, args.model, meeting['kind'], person, history)
             if text is None:
                 flags.append(f'Model could not complete turn {turn+1}')
@@ -202,7 +213,7 @@ def build(args):
         duplicate_count = len(history) - len(set(history))
         if duplicate_count:
             flags.append(f'{duplicate_count} repeated lines')
-        chats.append(dict(meeting, id=f'C{i+1:03}', turns=turns, flags=flags,
+        chats.append(dict(meeting, id=f'C{i+1:03}', turns=turns, flags=flags, packets=packets,
             event=events[meeting['seed'], meeting['event_id']],
             place=places.get((meeting['seed'], meeting['place_id']), meeting['place_id'])))
         print(f'Conversation {i+1}: {len(turns)} turns', flush=True)
@@ -219,6 +230,8 @@ def build(args):
         account_kinds=dict(Counter(r['source']['input']['kind'] for r in singles)),
         bands=dict(Counter(band(r['source']['input']) for r in singles)),
         conversations=len(chats), complete_conversations=sum(len(r['turns']) == args.turns for r in chats),
+        conversation_bands=dict(Counter('/'.join(band(p) for p in r['people']) for r in chats)),
+        different_held_accounts=sum(r['people'][0]['account'] != r['people'][1]['account'] for r in chats),
         conversation_lines=len(utterances), distinct_conversation_lines=len(set(utterances)),
         frequent_lines=Counter(utterances).most_common(12))
     (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')

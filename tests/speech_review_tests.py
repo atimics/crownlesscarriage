@@ -4,12 +4,12 @@ from pathlib import Path
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from build_speech_review import balanced, pairs, prefix
+from build_speech_review import balanced, meeting_cases, pairs, prefix
 
 
 def held(person, day=3, place='7', event='8', confidence=80):
     return dict(type='held', person_id=str(person), day=day, place_id=place,
-                event_id=event, kind=4, confidence=confidence, account='A held account.')
+                event_id=event, kind=4, confidence=confidence, retellings=1, account='A held account.')
 
 
 class SpeechReviewTests(unittest.TestCase):
@@ -29,6 +29,12 @@ class SpeechReviewTests(unittest.TestCase):
         self.assertEqual(selected, balanced(reversed(rows), 4, lambda r: r['kind']))
         self.assertEqual(len(selected), 4)
         self.assertIn('raid', [r['kind'] for r in selected])
+
+    def test_later_uncertainty_survives_event_deduplication(self):
+        early = pairs([held(1), held(2)], 901)[0]
+        later = pairs([held(1, day=7, confidence=20), held(2, day=7)], 901)[0]
+        same_band = dict(early, day=4)
+        self.assertEqual(meeting_cases([early, same_band, later]), [early, later])
 
     def test_plain_pairs_keep_both_evidence_cues(self):
         account = dict(account='Someone posted a notice.', confidence=20, retellings=4)
