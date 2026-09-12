@@ -53,8 +53,66 @@ static CcArchiveRelocationPlan Fixture(void)
     CC_CHECK(plan.gate==CC_ARCHIVE_MOVE_READY && plan.first_leg_toll>0);
     return plan;
 }
+static void CheckFirstLeg(void)
+{
+    CcArchiveRelocationPlan plan=Fixture();sim.schema_version=CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSimReserveArchiveConvoy(&sim));
+    CcMoney gold=CcSimTrackedGold(&sim);int32_t wheat=CcSimTrackedGood(&sim,CC_GOOD_WHEAT);
+    CC_CHECK(CcSimAdvanceArchiveConvoy(&sim,99)==CC_ARCHIVE_CONVOY_DEPARTED);Valid();
+    CC_CHECK(CcSimTrackedGold(&sim)==gold && CcSimTrackedGood(&sim,CC_GOOD_WHEAT)==wheat-plan.first_leg_wheat);
+    CcId book_id=sim.archive_convoy.book_ids[0];
+    CC_CHECK(CcSimTreasure(&sim,book_id)->location_id==plan.carriage_id);
+    before=sim;CC_CHECK(!CcSimCancelArchiveConvoy(&sim));CC_CHECK(memcmp(&sim,&before,sizeof(sim))==0);
+    CC_CHECK(CcSimAdvanceArchiveConvoy(&sim,99)==CC_ARCHIVE_CONVOY_WAIT);
+    sim.current_day=sim.archive_convoy.arrival_day;sim.royal_trade_week=sim.current_day/7;
+    CcRoute *route=NULL;
+    for(int i=0;i<sim.route_count;i++)if(sim.routes[i].id==plan.first_route_id)route=&sim.routes[i];
+    CC_CHECK(route!=NULL);route->condition=0;
+    CC_CHECK(CcSimAdvanceArchiveConvoy(&sim,99)==CC_ARCHIVE_CONVOY_BLOCKED);Valid();
+    CC_CHECK(sim.archive_convoy.status==5 && CcSimTreasure(&sim,book_id)->location_id==plan.carriage_id);
+    unsigned char *bytes=NULL;size_t size=0;
+    CC_CHECK(CcSaveEncode(&sim,&bytes,&size,error,sizeof(error)));
+    CC_CHECK(CcSaveDecode(bytes,size,&restored,error,sizeof(error)));CcSaveFreeBuffer(bytes);
+    CC_CHECK(CcSimHash(&sim)==CcSimHash(&restored));
+    route->condition=100;
+    CC_CHECK(CcSimAdvanceArchiveConvoy(&sim,99)==CC_ARCHIVE_CONVOY_ARRIVED);Valid();
+    CC_CHECK(CcSimTreasure(&sim,book_id)->location_id==plan.first_hop_id && !CcSimTreasure(&sim,book_id)->destroyed);
+    CC_CHECK(CcSimCancelArchiveConvoy(&sim));Valid();
+
+    plan=Fixture();sim.schema_version=CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSimReserveArchiveConvoy(&sim));
+    CC_CHECK(CcSimAdvanceArchiveConvoy(&sim,99)==CC_ARCHIVE_CONVOY_DEPARTED);
+    book_id=sim.archive_convoy.book_ids[0];int32_t lore=sim.archives.lore_lost_total;
+    int32_t cargo_lore=CcSimTreasure(&sim,book_id)->craft_work;
+    sim.current_day=sim.archive_convoy.arrival_day;sim.royal_trade_week=sim.current_day/7;
+    for(int i=0;i<sim.route_count;i++)if(sim.routes[i].id==plan.first_route_id){sim.routes[i].security=0;sim.routes[i].condition=1;}
+    CC_CHECK(CcSimAdvanceArchiveConvoy(&sim,0)==CC_ARCHIVE_CONVOY_LOST);Valid();
+    CC_CHECK(CcSimTreasure(&sim,book_id)==NULL && sim.archives.lore_lost_total==lore+cargo_lore);
+    bool wreck=false;
+    for(int i=0;i<sim.treasure_count;i++)if(sim.treasures[i].id==book_id)wreck=sim.treasures[i].destroyed;
+    CC_CHECK(wreck);
+    CC_CHECK(CcSimCancelArchiveConvoy(&sim));
+
+    plan=Fixture();sim.schema_version=CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSimReserveArchiveConvoy(&sim));
+    const char *path="archive-convoy-road-test.ccsave";
+    CcJournal *journal=CcJournalStart(path,&sim,error,sizeof(error));
+    if (journal == NULL) fprintf(stderr, "%s\n", error);
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalAdvanceDays(journal,&sim,1,error,sizeof(error)));Valid();
+    CC_CHECK(sim.archive_convoy.status==2);
+    CcJournalAbandon(&journal);
+    CC_CHECK(CcSaveRead(path,&restored,error,sizeof(error)));
+    CC_CHECK(CcSimHash(&sim)==CcSimHash(&restored));
+    CcSimAdvanceDays(&sim,7);CcSimAdvanceDays(&restored,7);Valid();
+    CC_CHECK(CcSimHash(&sim)==CcSimHash(&restored));
+    CC_CHECK(sim.archive_convoy.status==3 || sim.archive_convoy.status==4);
+    (void)remove(path);(void)remove("archive-convoy-road-test.ccsave-wal");(void)remove("archive-convoy-road-test.ccsave-shm");
+}
+
 int main(void)
 {
+    CheckFirstLeg();
     CcArchiveRelocationPlan plan=Fixture();before=sim;
     CcMoney gold=CcSimTrackedGold(&sim);int32_t wheat=CcSimTrackedGood(&sim,CC_GOOD_WHEAT);
     CC_CHECK(CcSimReserveArchiveConvoy(&sim));Valid();
@@ -66,11 +124,16 @@ int main(void)
     restored=sim;CC_CHECK(!CcSimReserveArchiveConvoy(&sim));CC_CHECK(memcmp(&sim,&restored,sizeof(sim))==0);
     CC_CHECK(CcSimCancelArchiveConvoy(&sim));Valid();CC_CHECK(CcSimHash(&sim)==CcSimHash(&before));
     CC_CHECK(CcSimReserveArchiveConvoy(&sim));
+    for(int i=0;i<sim.character_count;i++)if(sim.characters[i].id==sim.archive_convoy.sponsor_id)
+        sim.characters[i].death_day=sim.current_day;
     const char *path="archive-convoy-test.ccsave";
-    CcJournal *journal=CcJournalStart(path,&sim,error,sizeof(error));CC_CHECK(journal!=NULL);
+    CcJournal *journal=CcJournalStart(path,&sim,error,sizeof(error));
+    if (journal == NULL) fprintf(stderr, "%s\n", error);
+    CC_CHECK(journal != NULL);
     CC_CHECK(CcJournalAdvanceDays(journal,&sim,7,error,sizeof(error)));
     CcJournalAbandon(&journal);
     CC_CHECK(CcSaveRead(path,&restored,error,sizeof(error)));
+    restored.schema_version=sim.schema_version;
     CC_CHECK(CcSimHash(&sim)==CcSimHash(&restored));Valid();
     CC_CHECK(sim.archive_convoy.status==1 && sim.archive_convoy.carriage_id==plan.carriage_id);
     CcSettlement *origin=CcSimSettlementMutable(&sim,plan.origin_id);
