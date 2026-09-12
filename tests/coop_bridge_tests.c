@@ -321,8 +321,31 @@ static void CheckJourneyQuestRetirement(void)
     }
 }
 
+static void CheckTravelHoldClock(void)
+{
+    char error[256];
+    CcSim *normal = CcCoopCreate(117U), *fast = CcCoopCreate(117U);
+    CC_CHECK(normal != NULL && fast != NULL);
+    CC_CHECK(CcCoopApply(normal, "travel", normal->settlements[1].id, 0, 0, error, sizeof(error)));
+    normal->journey.ambush_pending = false;
+    normal->journey.encounter_triggered = true;
+    for (int scenario = 0; scenario < 3; ++scenario) {
+        int target = scenario == 0 ? 0 : scenario == 1 ? 250 : 910;
+        while (normal->journey.active && normal->carriage.progress_milli < target)
+            CC_CHECK(CcCoopAdvance(normal, 1, error, sizeof(error)));
+        CC_CHECK(normal->journey.active);
+        *fast = *normal;
+        CC_CHECK(CcCoopAdvanceTravel(fast, 1, 8, error, sizeof(error)));
+        CC_CHECK(CcCoopAdvance(normal, scenario == 1 ? 8 : 1, error, sizeof(error)));
+        CC_CHECK(CcSimHash(normal) == CcSimHash(fast));
+    }
+    CC_CHECK(!CcCoopAdvanceTravel(fast, 1, 9, error, sizeof(error)));
+    CcCoopDestroy(normal); CcCoopDestroy(fast);
+}
+
 int main(void)
 {
+    CheckTravelHoldClock();
     CheckCommandRoundTrips();
     CheckArchiveRecruitment();
     CheckJourneyQuestRetirement();

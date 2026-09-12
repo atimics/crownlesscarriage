@@ -566,6 +566,29 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(self.request('/api/worlds/' + other + '/state')[0], 200)
         self.assertTrue(self.worlds.view(self.id, self.a)['recovery_required'])
 
+    def test_travel_hold_expires_and_releases(self):
+        target = self.worlds.view(self.id, self.a)['state']['travel'][0]['id']
+        self.worlds.command(self.id, self.a, self.command(self.a, 'travel', target=target))
+        pose = self.enter(self.a)
+        from engine import Campaign
+        scales = []
+        with patch.object(Campaign, 'advance', lambda sim, ticks, scale=1: scales.append(scale)):
+            now = time.monotonic()
+            with patch('server.time.monotonic', return_value=now):
+                self.worlds.pose(self.id, self.a, dict(pose, travel_scale=8))
+            self.worlds.last_tick[self.id] = now - 0.1
+            self.worlds.tick(now=now)
+            self.assertEqual(scales[-1], 8)
+            self.worlds.tick(now=now + 0.5)
+            self.assertEqual(scales[-1], 1)
+            with patch('server.time.monotonic', return_value=now + 0.6):
+                self.worlds.pose(self.id, self.a, dict(pose, travel_scale=1))
+            self.worlds.tick(now=now + 0.6)
+            self.assertEqual(scales[-1], 1)
+        for scale in (0, 9, True, 1.5):
+            with self.assertRaises(ApiError):
+                self.worlds.pose(self.id, self.a, dict(pose, travel_scale=scale))
+
     def test_travel_resume_and_tick_batch_equivalence(self):
         with self.engine.open(0xc0a71a9e) as a:
             target = a.snapshot()['travel'][0]['id']

@@ -3,6 +3,14 @@
   const canvas = document.querySelector('#canvas');
   if (!canvas) return;
   let gesture = null;
+  function hold(event, active) {
+    if (!Module._CrownlessTouchHold) return;
+    const bounds = canvas.getBoundingClientRect();
+    Module._CrownlessTouchHold(
+      event ? (event.clientX - bounds.left) * canvas.width / bounds.width : 0,
+      event ? (event.clientY - bounds.top) * canvas.height / bounds.height : 0,
+      active ? 1 : 0);
+  }
   Module.crownlessTouchEnabled = true;
   Module.renderCrownlessTouch = frame => {
     canvas.setAttribute('aria-label', frame.title || 'Crownless Carriage game');
@@ -54,16 +62,19 @@
   canvas.addEventListener('pointerdown', event => {
     if (event.pointerType === 'mouse') return;
     event.preventDefault();
-    if (!event.isPrimary || gesture) { gesture = null; return; }
+    if (!event.isPrimary || gesture) { cancelGesture(); return; }
     gesture = {id: event.pointerId, x: event.clientX, y: event.clientY, moved: false};
     canvas.setPointerCapture(event.pointerId);
+    hold(event, true);
   });
   canvas.addEventListener('pointermove', event => {
+    if (gesture && gesture.id === event.pointerId) hold(event, true);
     if (gesture && gesture.id === event.pointerId &&
         Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 12) gesture.moved = true;
   });
   canvas.addEventListener('pointerup', event => {
     if (!gesture || gesture.id !== event.pointerId) return;
+    hold(null, false);
     const tap = gesture;
     gesture = null;
     event.preventDefault();
@@ -73,7 +84,7 @@
       (event.clientX - bounds.left) * canvas.width / bounds.width,
       (event.clientY - bounds.top) * canvas.height / bounds.height);
   });
-  function cancelGesture() { gesture = null; }
+  function cancelGesture() { gesture = null; hold(null, false); }
   canvas.addEventListener('pointercancel', cancelGesture);
   canvas.addEventListener('lostpointercapture', cancelGesture);
   window.addEventListener('blur', cancelGesture);

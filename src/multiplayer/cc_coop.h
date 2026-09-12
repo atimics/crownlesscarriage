@@ -20,6 +20,8 @@ CC_COOP_API bool CcCoopApply(CcSim *sim, const char *action, CcId target,
                             char *error, size_t capacity);
 CC_COOP_API bool CcCoopAdvance(CcSim *sim, int32_t ticks,
                               char *error, size_t capacity);
+CC_COOP_API bool CcCoopAdvanceTravel(CcSim *sim, int32_t ticks, int32_t scale,
+                                    char *error, size_t capacity);
 CC_COOP_API bool CcCoopAdvanceAway(CcSim *sim, int32_t days,
                                   char *error, size_t capacity);
 CC_COOP_API bool CcCoopSnapshot(const CcSim *sim, char *json, size_t capacity);

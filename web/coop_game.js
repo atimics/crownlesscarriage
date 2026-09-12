@@ -117,7 +117,7 @@
     if (!poseFlight && now - lastPose >= 100) {
       const context = state.session_context, activeVisit = visit;
       lastPose = now; poseFlight = true;
-      request('pose', {visit:activeVisit, context, scene, pose:readPose(), dead:travellerDead}).then(next => {
+      request('pose', {visit:activeVisit, context, scene, pose:readPose(), dead:travellerDead, travel_scale:Module.ccTravelScale || 1}).then(next => {
         if (next.world) accept(next.world);
         if (!leaving && activeVisit === visit && next.context === state.session_context && next.scene === poseScene) {
           peers = next.peers.slice(0, 7).map(peer => ({...peer, appearance:CcAvatar.pack(CcAvatar.normalize(peer.appearance))})); peersAt = performance.now();

@@ -243,8 +243,8 @@ static int RunPresentedRoadRegression(void)
         "Clear rocks", "", "Tools needed", false, false);
     AddDetailedContextAction(&shown, CONTEXT_ACTION_CAMP_ROAD_SITE,
         "Camp at Low Silver Pit", "", "Rest team", true, false);
-    AddDetailedContextAction(&shown, CONTEXT_ACTION_TOGGLE_DRIVE,
-        "Stop carriage", "", "Hold the team here", true, false);
+    AddDetailedContextAction(&shown, CONTEXT_ACTION_HOLD_TRAVEL,
+        "Travel", "", "Hold to speed up time", true, false);
     RememberRoadActions(&sim, &local, VIEW_LOCAL, &shown);
     Rectangle bounds = local.presented_road_bounds[1];
     Vector2 mouse = {bounds.x + bounds.width / 2, bounds.y + bounds.height / 2};

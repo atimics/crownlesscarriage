@@ -78,7 +78,7 @@ static void BuildWorldActionTargets(const CcSim *sim, LocalState *local, ClientV
                 width = 4.5f; depth = 4.5f;
                 break;
             }
-            case CONTEXT_ACTION_TOGGLE_DRIVE: break;
+            case CONTEXT_ACTION_HOLD_TRAVEL: break;
             case CONTEXT_ACTION_CLOSE_VIEW:
                 if (view != VIEW_ROADS) project = false;
                 if (!local->open_world) position = (Vector3){29, 0, 41};

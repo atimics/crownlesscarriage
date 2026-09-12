@@ -12,6 +12,7 @@ if(CC_BUILD_CLIENT)
              COMMAND crownless_carriage --test-capture-frames)
     add_test(NAME capture_request_contract
              COMMAND crownless_carriage --test-capture-request)
+    add_test(NAME travel_hold_input COMMAND crownless_carriage --test-travel-hold)
     add_test(NAME storybook_travel_boundaries
              COMMAND crownless_carriage --test-storybook-travel)
     add_test(NAME travel_audio_presentation
