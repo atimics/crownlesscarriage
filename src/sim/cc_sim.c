@@ -5676,7 +5676,7 @@ static void PostPendingSituationNotices(CcSim *sim)
     if (sim->schema_version < 48U) return;
     for (int32_t s = 0; s < sim->situation_count; ++s) {
         CcSituation *situation = &sim->situations[s];
-        uint64_t bit = UINT64_C(1) << (uint32_t)s;
+        uint32_t bit = UINT32_C(1) << (uint32_t)s;
         if ((sim->posted_situation_mask & bit) != 0U) continue;
         if (situation->status != CC_SITUATION_ACTIVE ||
             situation->kind == CC_SITUATION_MONSTER_EXPEDITION ||
