@@ -123,6 +123,18 @@ later packing allocates a fresh ID. Both operations commit stock and custody
 together after all checks pass. These internal adapters act for the town;
 player commands will supply their own access and ownership rules.
 
+World container capacity now uses `CcGoodsFreightCargoSlots`, the same goods
+conversion as ordinary freight. Each physical stack rounds to whole slots.
+Splitting a stack can add one occupied slot even when both pieces stay with
+the same root holder; planning checks that extra load. Purses and containers
+each occupy one slot. The core accepts a read-only load callback, while its
+default test model counts goods units directly.
+
+Carrier integration must reserve this load alongside existing shipments,
+site supply, grain supply, and archive cargo. Player cargo uses its existing
+player slot conversion at the player boundary. These paths remain part of
+the carrier and player work below.
+
 Moving holders, named treasure migration, document work identity, object creation,
 common economy costs, transfer commands, and the player journey remain open.
 The draft is complete when the implementation and evidence satisfy the whole

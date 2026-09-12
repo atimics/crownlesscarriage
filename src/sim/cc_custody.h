@@ -46,6 +46,8 @@ typedef struct {
 typedef struct {
     const void *context;
     int32_t good_count;
+    /* Optional physical load rule. Positive quantities require positive load. */
+    int64_t (*load)(const void *, const CcCustodyEntry *, int64_t quantity);
     bool (*reference_valid)(const void *, CcCustodyKind, uint64_t reference_id);
     bool (*resolve)(const void *, CcCustodyHolder, CcCustodyLocation *, int64_t *capacity);
     bool (*permit)(const void *, uint64_t actor_id, const CcCustodyEntry *, CcCustodyHolder);

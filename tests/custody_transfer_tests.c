@@ -5,6 +5,7 @@
 static CcCustodyState state, before;
 static int carrier_place = 1;
 static int64_t carrier_capacity = 12;
+static int64_t store_capacity = 10000;
 
 static bool Resolve(const void *context, CcCustodyHolder holder,
                     CcCustodyLocation *location, int64_t *capacity)
@@ -13,7 +14,7 @@ static bool Resolve(const void *context, CcCustodyHolder holder,
     if (holder.id == 0 || holder.id > 40) return false;
     *location = (CcCustodyLocation){.place_id = holder.id == 20 ?
         (uint64_t)carrier_place : holder.id >= 30 ? 2U : 1U};
-    *capacity = holder.id == 20 ? carrier_capacity : 10000;
+    *capacity = holder.id == 20 ? carrier_capacity : store_capacity;
     return true;
 }
 
@@ -39,6 +40,7 @@ static void Prepare(void)
     CcCustodyInit(&state);
     carrier_place = 1;
     carrier_capacity = 12;
+    store_capacity = 10000;
     state.entries[0] = (CcCustodyEntry){.id = 1, .revision = 1, .owner_id = 7,
         .holder = {CC_CUSTODY_STORE, 10}, .kind = CC_CUSTODY_GOODS,
         .quantity = 14, .good = 3, .condition = 90, .active = true};
@@ -262,11 +264,36 @@ static void ValidationAndHash(void)
     CC_CHECK(CcCustodyValidate(&state, &rules));
 }
 
+static int64_t RoundedLoad(const void *context, const CcCustodyEntry *entry, int64_t quantity)
+{
+    (void)context;
+    return entry->kind == CC_CUSTODY_GOODS ? quantity / 10 + (quantity % 10 != 0) : 1;
+}
+
+static void FreightRounding(void)
+{
+    Prepare();
+    CcCustodyRules freight = rules;
+    freight.load = RoundedLoad;
+    store_capacity = 3; /* Two slots of bulk goods and one empty container. */
+    CC_CHECK(CcCustodyValidate(&state, &freight));
+    CcCustodyTransfer pack = Request(1, 1, (CcCustodyHolder){CC_CUSTODY_CONTAINER_HOLDER, 2});
+    before = state;
+    CC_CHECK(CcCustodyApplyTransfer(&state, &freight, &pack, NULL) == CC_CUSTODY_FULL);
+    CC_CHECK(memcmp(&state, &before, sizeof(state)) == 0);
+    store_capacity = 4;
+    CC_CHECK(CcCustodyApplyTransfer(&state, &freight, &pack, NULL) == CC_CUSTODY_READY);
+    CC_CHECK(CcCustodyValidate(&state, &freight));
+    CC_CHECK(CcCustodyFind(&state, 1)->quantity == 13);
+    CC_CHECK(CcCustodyFind(&state, 3)->quantity == 1);
+}
+
 int main(void)
 {
     Journey();
     Gates();
     PursesAndCopies();
     ValidationAndHash();
+    FreightRounding();
     return 0;
 }

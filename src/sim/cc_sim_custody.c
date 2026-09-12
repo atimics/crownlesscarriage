@@ -1,5 +1,16 @@
 #include "sim/cc_sim_custody.h"
 #include <limits.h>
+#include "sim/cc_goods_internal.h"
+
+static int64_t StoredCustodyLoad(const void *context, const CcCustodyEntry *entry,
+                                 int64_t quantity)
+{
+    (void)context;
+    if (quantity <= 0) return -1;
+    if (entry->kind != CC_CUSTODY_GOODS) return 1;
+    if (quantity > INT32_MAX || entry->good < 0 || entry->good >= CC_GOOD_COUNT) return -1;
+    return CcGoodsFreightCargoSlots((CcGood)entry->good, (int32_t)quantity);
+}
 
 static bool ResolveStoredCustody(const void *context, CcCustodyHolder holder,
                                 CcCustodyLocation *location, int64_t *capacity)
@@ -16,7 +27,7 @@ bool CcSimStoredCustodyValid(const CcSim *sim)
 {
     if (sim == NULL) return false;
     const CcCustodyRules rules = {.context = sim,
-        .good_count = CC_GOOD_COUNT, .resolve = ResolveStoredCustody};
+        .good_count = CC_GOOD_COUNT, .load = StoredCustodyLoad, .resolve = ResolveStoredCustody};
     if (!CcCustodyValidate(&sim->custody, &rules)) return false;
     for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
         const CcCustodyEntry *entry = &sim->custody.entries[i];
@@ -67,7 +78,7 @@ CcCustodyResult CcSimPackStoreGoods(CcSim *sim, CcId town_id,
         .kind = CC_CUSTODY_GOODS, .quantity = quantity, .good = (int32_t)good,
         .condition = 100, .active = true};
     candidate.next_id++;
-    const CcCustodyRules rules = {.context = sim, .good_count = CC_GOOD_COUNT,
+    const CcCustodyRules rules = {.context = sim, .good_count = CC_GOOD_COUNT, .load = StoredCustodyLoad,
         .resolve = ResolveStoredCustody, .permit = PermitStoreTransfer};
     const CcCustodyTransfer move = {.entry_id = next_id, .revision = 1,
         .actor_id = town_id, .event_id = event_id,
@@ -95,7 +106,7 @@ CcCustodyResult CcSimUnpackStoreGoods(CcSim *sim, CcId town_id,
     int32_t good = entry->good;
     if (town->stock[good] > CC_SIM_MAX_UNITS - quantity) return CC_CUSTODY_FULL;
     CcCustodyState candidate = sim->custody;
-    const CcCustodyRules rules = {.context = sim, .good_count = CC_GOOD_COUNT,
+    const CcCustodyRules rules = {.context = sim, .good_count = CC_GOOD_COUNT, .load = StoredCustodyLoad,
         .resolve = ResolveStoredCustody, .permit = PermitStoreTransfer};
     const CcCustodyTransfer move = {.entry_id = entry_id, .revision = revision,
         .actor_id = town_id, .event_id = event_id,

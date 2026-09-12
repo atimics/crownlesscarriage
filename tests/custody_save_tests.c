@@ -70,7 +70,7 @@ int main(void)
         "UPDATE custody_entry SET holder_id=999 WHERE slot=0;",
         "UPDATE custody_entry SET owner_id=999 WHERE slot=0;",
         "UPDATE custody_entry SET id=1 WHERE slot=1;",
-        "UPDATE custody_entry SET capacity=2 WHERE slot=0;",
+        "UPDATE custody_entry SET capacity=1 WHERE slot=0;",
         "UPDATE custody_entry SET last_event_id=1 WHERE slot=94;"
     };
     for (size_t i = 0; i < sizeof(corruptions) / sizeof(corruptions[0]); ++i) Corrupt(corruptions[i]);

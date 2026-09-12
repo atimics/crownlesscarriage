@@ -71,10 +71,24 @@ static void Journey(void)
     CC_CHECK(id == 4 && CcCustodyFind(&sim.custody, 2) == NULL);
 }
 
+static void FreightSlots(void)
+{
+    Prepare();
+    int32_t total = CcSimTrackedGood(&sim, CC_GOOD_WHEAT);
+    uint64_t id = 0;
+    /* Royal freight fits ten wheat per slot, so the ten-slot crate fits 100. */
+    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 100, 1, 1, 2, event, &id) == CC_CUSTODY_READY);
+    RejectPack(1, CC_CUSTODY_FULL);
+    CC_CHECK(CcSimUnpackStoreGoods(&sim, town, id, 2, 50, event) == CC_CUSTODY_READY);
+    CC_CHECK(CcCustodyFind(&sim.custody, id)->quantity == 50);
+    CC_CHECK(CcSimTrackedGood(&sim, CC_GOOD_WHEAT) == total);
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+}
+
 static void Gates(void)
 {
     Prepare(); RejectPack(0, CC_CUSTODY_INVALID); RejectPack(1001, CC_CUSTODY_INVALID);
-    RejectPack(11, CC_CUSTODY_FULL);
+    RejectPack(101, CC_CUSTODY_FULL);
     sim.custody.entries[0].holder.id = sim.settlements[1].id;
     RejectPack(1, CC_CUSTODY_REMOTE);
     sim.custody.entries[0].holder.id = town;
@@ -101,5 +115,5 @@ static void Gates(void)
 
 int main(void)
 {
-    Journey(); Gates(); return 0;
+    Journey(); Gates(); FreightSlots(); return 0;
 }

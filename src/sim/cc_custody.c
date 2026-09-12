@@ -52,12 +52,14 @@ static bool AddLoad(int64_t *total, int64_t amount)
     return true;
 }
 
-static int64_t EntryLoad(const CcCustodyEntry *entry, int64_t quantity)
+static int64_t EntryLoad(const CcCustodyRules *rules, const CcCustodyEntry *entry, int64_t quantity)
 {
+    if (quantity == 0) return 0;
+    if (rules->load != NULL) return rules->load(rules->context, entry, quantity);
     return entry->kind == CC_CUSTODY_GOODS ? quantity : 1;
 }
 
-static bool Load(const CcCustodyState *state, CcCustodyHolder holder,
+static bool Load(const CcCustodyState *state, const CcCustodyRules *rules, CcCustodyHolder holder,
                  bool root_load, int64_t *load, int *count)
 {
     *load = 0;
@@ -69,7 +71,8 @@ static bool Load(const CcCustodyState *state, CcCustodyHolder holder,
         if (entry->quantity <= 0 || (root_load && !RootHolder(state, actual, &actual)))
             return false;
         if (!SameHolder(actual, holder)) continue;
-        if (!AddLoad(load, EntryLoad(entry, entry->quantity))) return false;
+        int64_t weight = EntryLoad(rules, entry, entry->quantity);
+        if (weight <= 0 || !AddLoad(load, weight)) return false;
         ++*count;
     }
     return true;
@@ -133,10 +136,10 @@ bool CcCustodyValidate(const CcCustodyState *state, const CcCustodyRules *rules)
         int count = 0;
         if (!rules->resolve(rules->context, root, &location, &capacity) ||
             !ValidLocation(location) || capacity < 0 ||
-            !Load(state, root, true, &used, &count) || used > capacity) return false;
+            !Load(state, rules, root, true, &used, &count) || used > capacity) return false;
         if (entry->kind == CC_CUSTODY_CONTAINER) {
             CcCustodyHolder contents = {CC_CUSTODY_CONTAINER_HOLDER, entry->id};
-            if (!Load(state, contents, false, &used, &count) ||
+            if (!Load(state, rules, contents, false, &used, &count) ||
                 used > entry->capacity || count > CC_CUSTODY_MANIFEST_CAPACITY) return false;
         }
     }
@@ -225,24 +228,35 @@ CcCustodyResult CcCustodyPlanTransfer(const CcCustodyState *state,
         source_capacity < 0 || destination_capacity < 0) return CC_CUSTODY_INVALID;
     if (from.place_id != to.place_id || from.route_id != to.route_id ||
         from.progress_milli != to.progress_milli) return CC_CUSTODY_REMOTE;
-    int64_t moved = EntryLoad(entry, transfer->quantity), used = 0;
+    int64_t moved = EntryLoad(rules, entry, transfer->quantity), used = 0;
     int count = 0;
+    if (moved <= 0) return CC_CUSTODY_INVALID;
     if (entry->kind == CC_CUSTODY_CONTAINER) {
         CcCustodyHolder contents = {CC_CUSTODY_CONTAINER_HOLDER, entry->id};
-        if (!Load(state, contents, false, &used, &count) || !AddLoad(&moved, used))
+        if (!Load(state, rules, contents, false, &used, &count) || !AddLoad(&moved, used))
             return CC_CUSTODY_INVALID;
     }
     if (transfer->destination.kind == CC_CUSTODY_CONTAINER_HOLDER) {
         const CcCustodyEntry *box = CcCustodyFind(state, transfer->destination.id);
-        if (!Load(state, transfer->destination, false, &used, &count) ||
+        if (!Load(state, rules, transfer->destination, false, &used, &count) ||
             box == NULL || box->capacity < 0) return CC_CUSTODY_INVALID;
         if (count >= CC_CUSTODY_MANIFEST_CAPACITY || used > box->capacity ||
             moved > box->capacity - used) return CC_CUSTODY_FULL;
     }
-    if (!Load(state, destination, true, &used, &count)) return CC_CUSTODY_INVALID;
-    /* Splitting a purse creates another physical purse; goods keep the same load. */
-    int64_t extra = SameHolder(source, destination) ?
-        (split && entry->kind == CC_CUSTODY_PURSE ? 1 : 0) : moved;
+    if (!Load(state, rules, destination, true, &used, &count)) return CC_CUSTODY_INVALID;
+    if (moved <= 0) return CC_CUSTODY_INVALID;
+    int64_t extra = moved;
+    if (SameHolder(source, destination)) {
+        extra = 0;
+        if (split) {
+            int64_t original = EntryLoad(rules, entry, entry->quantity);
+            int64_t remaining = EntryLoad(rules, entry, entry->quantity - transfer->quantity);
+            int64_t combined = moved;
+            if (original <= 0 || remaining <= 0 || !AddLoad(&combined, remaining) ||
+                combined < original) return CC_CUSTODY_INVALID;
+            extra = combined - original;
+        }
+    }
     if (used > destination_capacity || extra > destination_capacity - used)
         return CC_CUSTODY_FULL;
     if (split && (FreeSlot(state) < 0 || state->next_id == 0 || state->next_id == UINT64_MAX))
