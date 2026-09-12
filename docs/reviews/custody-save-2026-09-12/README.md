@@ -21,3 +21,23 @@ warnings. The quick benchmark passed its 90,000 ns/day limit at 32,366.3 ns/day.
 This stage persists goods, purses, and containers rooted in settlement stores.
 Carrier adapters, named item migration, document work identity, creation costs,
 and the player packing journey remain part of the open draft.
+
+## Town transfer follow-up
+
+Source `66a7eb4957b8da6cf8de04bdccfb152f288544b9` adds atomic packing and unpacking
+of town stock through the shared transfer core. All 141 headless tests pass.
+The store journey packs seven wheat, saves and reloads, unpacks three, then
+unpacks the remaining four. Goods and coin totals match the starting values.
+Duplicate requests leave the full simulation unchanged. Further checks cover
+capacity, distant stores, ownership, exhausted pools, bounded town stock, and
+reuse of retired slots with fresh IDs.
+
+The new adapter passes Cppcheck. The adapter and transfer core compile under
+WebAssembly with strict warnings. The focused store test passes with AddressSanitizer
+and UndefinedBehaviorSanitizer applied to the test, transfer core, and adapter;
+the remaining simulation and persistence libraries use the strict release build.
+
+Commands: `cmake --preset release -DCC_BUILD_CLIENT=OFF`,
+`cmake --build out/build/release -j 6`, and
+`ctest --test-dir out/build/release --output-on-failure -j 6`.
+The focused test selector is `-R '^custody_'`.
