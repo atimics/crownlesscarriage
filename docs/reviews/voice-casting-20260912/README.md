@@ -4,6 +4,10 @@ The trial contains thirteen existing cast references, three new synthetic voice
 auditions, and twenty-four performances across Chatterbox Nano and Pocket TTS.
 The listening page offers clean and game-textured versions of every performance.
 Both models completed the same twelve prompts using the same cast references.
+The repository carries 48 kbit/s MP3 listening copies to fit its research-file
+budget. The local trial folder and ZIP keep the full-quality WAV recordings.
+`review_audio.json` binds every MP3 to its source WAV hash. Model timings were
+measured before audio encoding.
 
 ## Listen
 
@@ -104,12 +108,16 @@ The trial runner writes exact text, reference and output hashes, package
 versions, seed, per-clip timings, and errors. A rerun replaces that engine's
 report and named takes; copy an earlier trial first when retaining comparisons.
 The voice-design helper reuses auditions already present in the output folder.
+To make compact copies, install `lameenc==1.8.4` in the trial environment and run
+the page builder with `--compress-review`. It writes MP3 files beside the WAV
+masters. The page prefers WAV when available and uses MP3 in the compact folder.
 
 ## Validation
 
 - Both new scripts compile and `git diff --check` passes.
 - Both models completed twelve calls; all sixty-four WAV links passed format and
   nonempty-frame checks. The three new audition hashes matched their receipts.
+- All fifty-one compact MP3 copies decoded and matched their recorded hashes.
 - The listening page was inspected in the in-app browser.
 - Existing speech-pack checks passed for 13 references and 84 campaign clips.
 - All eight existing speech-worker tests passed using the local play exporter.

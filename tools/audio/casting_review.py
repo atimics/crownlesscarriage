@@ -2,10 +2,12 @@
 """Build a portable listening page from local cast references and trial reports."""
 
 import argparse
+import hashlib
 import html
 import json
 from pathlib import Path
 import shutil
+import wave
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -18,10 +20,43 @@ def audio(path, label):
     return f'<label>{esc(label)}<audio controls preload="metadata" src="{esc(path)}"></audio></label>'
 
 
+def recording(root, path):
+    """Prefer a full WAV take; compact review folders carry MP3 copies."""
+    if (root / path).is_file():
+        return path
+    return str(Path(path).with_suffix('.mp3'))
+
+
+def compress_review(root):
+    """Write compact listening copies and keep each source WAV intact."""
+    import lameenc
+    files = []
+    for folder in ('trial', 'proposed'):
+        for source in sorted((root / folder).glob('*.wav')):
+            with wave.open(str(source)) as wav:
+                if wav.getsampwidth() != 2 or wav.getnchannels() != 1:
+                    raise ValueError('Review encoding requires mono 16-bit PCM.')
+                encoder = lameenc.Encoder()
+                encoder.set_bit_rate(48)
+                encoder.set_in_sample_rate(wav.getframerate())
+                encoder.set_channels(1)
+                encoder.set_quality(2)
+                encoded = encoder.encode(wav.readframes(wav.getnframes())) + encoder.flush()
+            destination = source.with_suffix('.mp3')
+            destination.write_bytes(encoded)
+            files.append(dict(file=str(destination.relative_to(root)),
+                              sha256=hashlib.sha256(encoded).hexdigest(),
+                              source_wav_sha256=hashlib.sha256(source.read_bytes()).hexdigest()))
+    if files:
+        (root / 'review_audio.json').write_text(json.dumps(
+            dict(codec='MP3', bitrate_kbps=48, files=files), indent=2) + '\n')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--design-additions', action='store_true')
+    parser.add_argument('--compress-review', action='store_true')
     parser.add_argument('--allow-download', action='store_true')
     parser.add_argument('--device', choices=('cpu', 'mps', 'cuda'), default='cpu')
     args = parser.parse_args()
@@ -34,6 +69,8 @@ def main():
         from speech_engine import design_cast
         design_cast({v['id']: v for v in brief['proposed']}, args.output / 'proposed',
                     device=args.device, allow_download=args.allow_download)
+    if args.compress_review:
+        compress_review(args.output)
     cards = []
     for voice in cast:
         filename = voice['id'] + '.wav'
@@ -45,7 +82,8 @@ def main():
     additions = []
     for voice in brief['proposed']:
         path = args.output / 'proposed' / (voice['id'] + '.wav')
-        player = audio('proposed/' + path.name, 'Listen to audition') if path.is_file() else '<p class="pending">Audio audition pending</p>'
+        available = path.is_file() or path.with_suffix('.mp3').is_file()
+        player = audio(recording(args.output, 'proposed/' + path.name), 'Listen to audition') if available else '<p class="pending">Audio audition pending</p>'
         additions.append(f'<article><span class="tag">Proposed addition · casting direction</span>'
                          f'<h3>{esc(voice["name"])}</h3><p>{esc(voice["description"])}</p>'
                          f'<p class="direction">{esc(voice["purpose"])}</p>{player}</article>')
@@ -77,8 +115,8 @@ def main():
             row = next((r for r in report['samples'] if (r['voice'], r['line']) == (voice, line)), None)
             if row:
                 words = row['text']
-                cells.append(f'<div><h4>{esc(engine.title())}</h4>' + audio('trial/' + row['file'], 'Clean')
-                             + audio('trial/' + row['styled_file'], 'Game texture')
+                cells.append(f'<div><h4>{esc(engine.title())}</h4>' + audio(recording(args.output, 'trial/' + row['file']), 'Clean')
+                             + audio(recording(args.output, 'trial/' + row['styled_file']), 'Game texture')
                              + f'<small>{row["generation_seconds"]:.2f}s generation · {row["seconds"]:.2f}s audio</small></div>')
         name = next(v['name'] for v in cast if v['id'] == voice)
         trials.append(f'<article class="comparison"><h3>{esc(name)} · {esc(line)}</h3>'

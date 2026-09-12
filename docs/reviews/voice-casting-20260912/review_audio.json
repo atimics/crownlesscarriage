@@ -1,0 +1,261 @@
+{
+  "codec": "MP3",
+  "bitrate_kbps": 48,
+  "files": [
+    {
+      "file": "trial/nano-flint-v1-trade-game.mp3",
+      "sha256": "6cdbb704654c1a73d81195f09a12992fc0238bfa62506ee0caacf8715f8eb800",
+      "source_wav_sha256": "29343fc0f6d66132f3b92fc6e36f5c116a6c01a5aabf97b9c163d37737dac97e"
+    },
+    {
+      "file": "trial/nano-flint-v1-trade.mp3",
+      "sha256": "d7a53e26f29e8e8d99ced268d2b2fbd49672dd09217b6e7b41548b0253a0fc20",
+      "source_wav_sha256": "1345740d7736df48df4e9e8a735f970a4ee61d39f4982f2c1876a6d0b7ab8d62"
+    },
+    {
+      "file": "trial/nano-flint-v1-warning-game.mp3",
+      "sha256": "c1a04f766dfcb8946bd65b579d1e84d96399c38e4b62400333945e366b6eede0",
+      "source_wav_sha256": "5eb597daebe550080ed656743b11ae21a91762e0bf83bebc90ad8b1dc15239fc"
+    },
+    {
+      "file": "trial/nano-flint-v1-warning.mp3",
+      "sha256": "3c1e45b48dc7ba3777ea644e2762e58170b4a07d1ca64d0b64ee687e230afc67",
+      "source_wav_sha256": "75e5c36078204d61d161ae0f459fd851fad19790bd6d1b374c8705c849013968"
+    },
+    {
+      "file": "trial/nano-flint-v1-welcome-game.mp3",
+      "sha256": "bbd47714597ea8d73370789b0c14fabe5714c9a6718cbada498a772cca16ae21",
+      "source_wav_sha256": "3ebaaf906e40e36153aa6005dd0fb6a2e77c615b41406d5da0c892a6419f5513"
+    },
+    {
+      "file": "trial/nano-flint-v1-welcome.mp3",
+      "sha256": "951c2c3a13c48f7011af3eb67b1ac662cd246bec1458aff12c418826999ec2a8",
+      "source_wav_sha256": "e33e70accfbd5adb51005e8b175025ad9d1647c8f523c181468e315f81f5ddbb"
+    },
+    {
+      "file": "trial/nano-mara-v1-trade-game.mp3",
+      "sha256": "35a8070d9c548c447dc2272f4917af842b4eab861454327be64d797067aa8c85",
+      "source_wav_sha256": "31d772578324c8d7c285c6dacb03f43eb1d0cc32347b0e4dddc959a5f7cda8bd"
+    },
+    {
+      "file": "trial/nano-mara-v1-trade.mp3",
+      "sha256": "b0faed934418561f4c420a0ee89703e4a629ce8b4a99f5bea75f73b1542a040c",
+      "source_wav_sha256": "102db3cf2164b5cbd891d2e5df8b9767bf8bc489c11cbf276296b2359c5a4386"
+    },
+    {
+      "file": "trial/nano-mara-v1-warning-game.mp3",
+      "sha256": "ace47f6103661b84fa373dfb07bc9a01f3e566049d5f02efbc2f98f9b5a55d95",
+      "source_wav_sha256": "9ac992ea3957290ddbb93734cce9be19e72f251ab2a518364d3ecfd073ed2cbe"
+    },
+    {
+      "file": "trial/nano-mara-v1-warning.mp3",
+      "sha256": "36e4f42e934cd1ab98108079f0dc1731573d07ae87613be446d26101b3a90320",
+      "source_wav_sha256": "93f83370e86aa8701ae03cf980f5f1d92af94e3fdfedf15749ac2f3012a6603c"
+    },
+    {
+      "file": "trial/nano-mara-v1-welcome-game.mp3",
+      "sha256": "b11dfbd6840cf46ab3b18641716ffb17a3c0cb3318f3cd28728370aab7ee33be",
+      "source_wav_sha256": "d4b241c9260c48a120166cc04752ae6237eacd026f6121ea62a24b0e7457f58c"
+    },
+    {
+      "file": "trial/nano-mara-v1-welcome.mp3",
+      "sha256": "276f4d3e2a681164bb822665e9230b107c54e16591c1ab424a6b9ec201237474",
+      "source_wav_sha256": "c91faaf0661b57dddf9662f6966b6656e22079ef571e6830f68137bf861a6862"
+    },
+    {
+      "file": "trial/nano-oak-v1-trade-game.mp3",
+      "sha256": "c7c62a7845ee8fe54c53144b2792e30039192b212c2e9b4c598c8b7a68a64f37",
+      "source_wav_sha256": "0f6c657ed48ce4d30439725979d0fe6b123e63acc331d778f175c2c83b91d673"
+    },
+    {
+      "file": "trial/nano-oak-v1-trade.mp3",
+      "sha256": "263f53ad8894c90817a9f2870e7255c49f0007747362fe8a123ee6ea583cb1d8",
+      "source_wav_sha256": "c5e5e36be9ae10aef6b3d272f76570b7a73017d27b84521fd9f63e9373c44da0"
+    },
+    {
+      "file": "trial/nano-oak-v1-warning-game.mp3",
+      "sha256": "dd73c08e38ebdb40f6d0cf0d9f88e6fc4514853281e24a1432c87f2c0b0948a1",
+      "source_wav_sha256": "75bb2d18b0f59f1272cbc91c674ff1303cc695d4c58efe05755571e80c215992"
+    },
+    {
+      "file": "trial/nano-oak-v1-warning.mp3",
+      "sha256": "528eec973d84cc3a1cd57d74a9f66f8c05b55580abb29fd326267a046124bb42",
+      "source_wav_sha256": "957d1e634251f5ed8feb2d34138f6e184db306f549073d5a6e1a3c4db849dc68"
+    },
+    {
+      "file": "trial/nano-oak-v1-welcome-game.mp3",
+      "sha256": "e2201447ce0a2ee575394110d5c320570298da3e5517b61b08cd023edfdcf500",
+      "source_wav_sha256": "56b3c12603767cb2fc8e4660697049e7134a30b1d4912c5c921732d1bd989116"
+    },
+    {
+      "file": "trial/nano-oak-v1-welcome.mp3",
+      "sha256": "d2ea5a9327c064b41b317a1528e3bd2e77656328bc3b6a8543cf772da4c73520",
+      "source_wav_sha256": "86760492b05467c1c617b511d40f10259759e2887c58fb0e5a381ce53fc890d6"
+    },
+    {
+      "file": "trial/nano-reed-v1-trade-game.mp3",
+      "sha256": "52e6d53bd72b2ec97c07be40ec86eeeec102b53d3f45fd9734c85e7880e289aa",
+      "source_wav_sha256": "a8eba97c3e72cd4f55ca9e25e564189672b23f205436685550592c8877505ebd"
+    },
+    {
+      "file": "trial/nano-reed-v1-trade.mp3",
+      "sha256": "7c676c4efd5431a3ecfcff5d247c5a90f2c896ca482fc0f2dfaece530bb14de8",
+      "source_wav_sha256": "e0f193a222cbb92c205c2a7e8d6b0007897dfaaa326a43db7992b3d35af1becb"
+    },
+    {
+      "file": "trial/nano-reed-v1-warning-game.mp3",
+      "sha256": "a32f53d629dc223ad6a59f305184501d297632c4cd1a85b3c3caea32fc28e375",
+      "source_wav_sha256": "0f2ff811920b69790b6366123f589df2cd809bd663bf0552851ea960eebdb215"
+    },
+    {
+      "file": "trial/nano-reed-v1-warning.mp3",
+      "sha256": "8ad3bcbdbfcb6c97d7fc75293a7bd48d5f85e88e674789846df5661b6578c0b5",
+      "source_wav_sha256": "4398a502cbbf2526ec75deb6c0450b0d51fcb791f3ce3cd7db98eae59c2591a5"
+    },
+    {
+      "file": "trial/nano-reed-v1-welcome-game.mp3",
+      "sha256": "5e99f77a0f6eb6383b8c6f243409b4cca3d0137e0bfd55e5fa7ec7d9f6cede1b",
+      "source_wav_sha256": "d5fd1c29292dfc0de0f53c367cf20f7eaf020f5e75de9a4509edbee2030c50ae"
+    },
+    {
+      "file": "trial/nano-reed-v1-welcome.mp3",
+      "sha256": "a21d32cd5fd0f0249dbfeee518852c18dae9e24a378af741ec1c51db75a801d7",
+      "source_wav_sha256": "98406700a01a4a5d2f0d4c0d0679fa04f31c891f2dee53943490a9a4f1735232"
+    },
+    {
+      "file": "trial/pocket-flint-v1-trade-game.mp3",
+      "sha256": "a018037a5d281c45fd009038d4a3ce5ad63e19ad45cad73ebbfe8850e05f38d6",
+      "source_wav_sha256": "9715dc34ffcd8dfbe44c9a3c01ac426557424ca7dee72ff17399e0ae84c51e96"
+    },
+    {
+      "file": "trial/pocket-flint-v1-trade.mp3",
+      "sha256": "bc55cf18ed0755dd6a2ea9e5536263f311d63f08ae99410c135a383f7bc0d507",
+      "source_wav_sha256": "608b985cf06bc8ed510545d0115914ee6fd88a5ec3b17a8972962ed7ab767121"
+    },
+    {
+      "file": "trial/pocket-flint-v1-warning-game.mp3",
+      "sha256": "6db837e1456e220ce88c4678906bf8d9979e05ba50214a1c2163c660d8775f7a",
+      "source_wav_sha256": "e8bca6dd872fc5d2b3d1b75f29a16fa12cdfd1b35261d73a01c7731928022cc3"
+    },
+    {
+      "file": "trial/pocket-flint-v1-warning.mp3",
+      "sha256": "58f0474229ff7f78f1975759b274a9a0062e245ed1f47615ad6a7324c8c7460b",
+      "source_wav_sha256": "2ffd6218340005ebbbfa358e85159f45f5f3e682c8de7785c9c3a65d89f9ee2f"
+    },
+    {
+      "file": "trial/pocket-flint-v1-welcome-game.mp3",
+      "sha256": "9e0192ebad665edd966a2ef468bbf2ac8aad1167d97adeb3a72e372f75a26ca4",
+      "source_wav_sha256": "15dc7ac4c81112ec851a196ab82ff0ce31b97dba094b3adac4030aec07ef3b77"
+    },
+    {
+      "file": "trial/pocket-flint-v1-welcome.mp3",
+      "sha256": "a37d6bf786c2071a200295ad900eaea9c14b8d26210c2c2d88153b1f2bb41375",
+      "source_wav_sha256": "ec74ba6090129b86f1268104d49d13f2a53e49d192ccc99ad689d8d2e7602327"
+    },
+    {
+      "file": "trial/pocket-mara-v1-trade-game.mp3",
+      "sha256": "373afe5a6c8ad180189f3ace1f91c2e594160795e7c28b9027f9f6ab4f4e7a04",
+      "source_wav_sha256": "75a2910a97606eb4beac37d9177e8e7e16e67b2d3e6e95a8f71f4c11712a7428"
+    },
+    {
+      "file": "trial/pocket-mara-v1-trade.mp3",
+      "sha256": "5baa076dab18f7d4af1ee53d905a2a64572f7c8490d78d4b98ef8fa1140cb273",
+      "source_wav_sha256": "aa8e1c605c33c1843148c88fdbe6a3babeb4bc6bfeb8a989946974cb6bd50e45"
+    },
+    {
+      "file": "trial/pocket-mara-v1-warning-game.mp3",
+      "sha256": "4268112fa88d13211c2473f43bfa349a7417c854f4932fa40eaa9a988eda7c28",
+      "source_wav_sha256": "8c9d56b5bef14aa65d07838a34f65249f72fea5453dd7b445b2635980ae0f452"
+    },
+    {
+      "file": "trial/pocket-mara-v1-warning.mp3",
+      "sha256": "fd4bb8ce92bf8e4b2b7e0c4500499620ec17225c051c69028456996bcd9f9d42",
+      "source_wav_sha256": "65fd10f60d0f93e835397960a9273b15d1d4149c7f8419cc0fcfbf2d3a417201"
+    },
+    {
+      "file": "trial/pocket-mara-v1-welcome-game.mp3",
+      "sha256": "3f2871559286ef5d8bffb0188ae00973ce2b4a0d5c256b3fa1c323a0e5d5455a",
+      "source_wav_sha256": "b2ee4444ad983321ef3ebe96c76d615f8744c880fb879152915dd1cd7eca6993"
+    },
+    {
+      "file": "trial/pocket-mara-v1-welcome.mp3",
+      "sha256": "62955d1330bda4a8740b4102eff49d9b2ff912b6069ff425567857a2c5ed8578",
+      "source_wav_sha256": "82b5987aa10c405bfe3f33db2361ad4c4f572fb9bf7caedae2d5c15f088569c7"
+    },
+    {
+      "file": "trial/pocket-oak-v1-trade-game.mp3",
+      "sha256": "ae08cf0228a67ba2b6879bbcefb34e63b4c995ae37afe438c040f34fd1784170",
+      "source_wav_sha256": "3a72c5119e5cf21f4cc2a9194e9c027329e8b3b0035dd416299fe66ea276a854"
+    },
+    {
+      "file": "trial/pocket-oak-v1-trade.mp3",
+      "sha256": "107a85aef65b248d228ce419aa427f568283f3662beaf570f6efcd099e0ef935",
+      "source_wav_sha256": "82fd92de2cc6ed8d4c3a7dcf2ef0441a07b59e37f0609c56c5332b2daa9dace4"
+    },
+    {
+      "file": "trial/pocket-oak-v1-warning-game.mp3",
+      "sha256": "4be562dc6205036d6250b553bba4eba7755deea81036d6eb6b49cd56a335a9d1",
+      "source_wav_sha256": "f6dd92b060156b7ae7274d32577fce3de56b657edefda7dfc0018a753a76e396"
+    },
+    {
+      "file": "trial/pocket-oak-v1-warning.mp3",
+      "sha256": "d19f052233a797fd3a7ff768af7344786fe1a5ffd081d5ed576ceab6d83e026a",
+      "source_wav_sha256": "c42ba9dc2446fbdad0c6e70579930aa4f042092d6a3a161ea50da585082e75b6"
+    },
+    {
+      "file": "trial/pocket-oak-v1-welcome-game.mp3",
+      "sha256": "5d07b4be229f3420e911a40a22d5ef0294f63c628654be6842add588be8c5d76",
+      "source_wav_sha256": "1f29ef47abe9541b7f73e71f582af7a852231830a4402f03dbd36631e88e3e11"
+    },
+    {
+      "file": "trial/pocket-oak-v1-welcome.mp3",
+      "sha256": "191c31db296d1b103678d0960a70a4aa52cb0010b0fb2ca54da51c28dd7ec7da",
+      "source_wav_sha256": "1079b05886a40741eec191d53306f85393cacc91025213b47dda516302df7b8b"
+    },
+    {
+      "file": "trial/pocket-reed-v1-trade-game.mp3",
+      "sha256": "5ca1a99afd0b812ee157e83340dda2968b76c0a5a7c91615a5a2f69c98bcdf87",
+      "source_wav_sha256": "60be926adf4a90d3f27b69339f0096fc47ad1e12438ad244ec5691509502d8e6"
+    },
+    {
+      "file": "trial/pocket-reed-v1-trade.mp3",
+      "sha256": "759da8aea81251e8293e83e955c85c9957b524265f8cba42755f5d983d70dcd7",
+      "source_wav_sha256": "b777dd161ee48e7a862130a57bc4ee0b9f15c0c6bda732fb3be7baab427c4c20"
+    },
+    {
+      "file": "trial/pocket-reed-v1-warning-game.mp3",
+      "sha256": "dbd9fa7dcfab860e8b5429d25bb8f0ce1d3d95ffc508fe5371a10e82b518ab6b",
+      "source_wav_sha256": "784f00ff1f241067ab648914242d1ec19f50d7d266423d0cafe0bb6f68070ddf"
+    },
+    {
+      "file": "trial/pocket-reed-v1-warning.mp3",
+      "sha256": "c7d5e22d9c08cd10c356f6aa81a0d65076361a767323f79b3cf97c8c1c497da6",
+      "source_wav_sha256": "fd121db1f96ff2bf2bd39a59a64c4a5771869e5150ef277401a31e00a52b5fe4"
+    },
+    {
+      "file": "trial/pocket-reed-v1-welcome-game.mp3",
+      "sha256": "07b22bdef00dc7f46b1182fdc44f4cb2d182b85eb16c7e3c8262a43cf4dfa6c9",
+      "source_wav_sha256": "71b73dff49d8ddfaa85f91143982e07ec32c8829f3773e5bb86308ffc3d2bc24"
+    },
+    {
+      "file": "trial/pocket-reed-v1-welcome.mp3",
+      "sha256": "6a961e633f6f9aa8f37ea3cb0a708f3866f5da2fe8fcf2a65880df9193a4cd16",
+      "source_wav_sha256": "8b4ee5571e9b8cb08c5a7c81e35ddca18ddbfa5ad3c355f19d602018c8d92251"
+    },
+    {
+      "file": "proposed/cedar-trial.mp3",
+      "sha256": "def2cad58fe22b9bfb7ad28731ee06197e9b2f2d82ca3c9546d459c9200b1766",
+      "source_wav_sha256": "fba3c2014f9fd2e92298f751c9878b1d2e92bb6f7da1d836eceb802668c65f20"
+    },
+    {
+      "file": "proposed/copper-trial.mp3",
+      "sha256": "421c1146dfa87d4fc92b872607e6d2ab88b659d56fb0f66317c2c82043b7b563",
+      "source_wav_sha256": "fe7d349d0ac1a11fe1b46231f9e735adb18d8009b2f9033ffadbd0865e98bdd5"
+    },
+    {
+      "file": "proposed/wren-trial.mp3",
+      "sha256": "5302f02db600eb94699a569a242f3bd8242d1705bb9cfecd8ac4e075dd49d526",
+      "source_wav_sha256": "eb510fc960f2b7157a8e0d5dcafd69e81bf8441f0e760aaae2df5ee2f3f229f5"
+    }
+  ]
+}
