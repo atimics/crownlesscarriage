@@ -31,7 +31,7 @@ static int32_t Slot(CcId event)
 static bool Holds(CcId person, int32_t slot)
 {
     const CcGossipCarrier *carrier = CcSimGossipCarrier(&sim, person);
-    return carrier != NULL && (carrier->stories & (UINT32_C(1) << (uint32_t)slot)) != 0;
+    return carrier != NULL && (carrier->stories & (UINT64_C(1) << (uint32_t)slot)) != 0;
 }
 
 static void RoundTrip(void)

@@ -153,7 +153,7 @@ int main(void)
     CC_CHECK(p.gate == CC_ARCHIVE_RECRUIT_READY && p.volume_id == 0);
     CcId source = p.source_event_id;
     const CcGossipCarrier *held = CcSimGossipCarrier(&sim, recruit);
-    CC_CHECK(held != NULL && (held->stories & (UINT32_C(1) << (uint32_t)p.account_slot)) != 0);
+    CC_CHECK(held != NULL && (held->stories & (UINT64_C(1) << (uint32_t)p.account_slot)) != 0);
     CcMoney coins = CcSimTrackedGold(&sim);
     int raw_gold = CcSimTrackedGood(&sim, CC_GOOD_GOLD), raw_gems = CcSimTrackedGood(&sim, CC_GOOD_GEMS);
     int raw_paper = CcSimTrackedGood(&sim, CC_GOOD_PAPER), raw_wheat = CcSimTrackedGood(&sim, CC_GOOD_WHEAT);
@@ -215,7 +215,7 @@ int main(void)
     bool gave_account = false;
     for (int i = 0; i < CcSimGossipCarrierCapacity(&sim); ++i)
         if (sim.gossip_carriers[i].id == recruit) {
-            sim.gossip_carriers[i].stories |= UINT32_C(1) << (uint32_t)account_slot;
+            sim.gossip_carriers[i].stories |= UINT64_C(1) << (uint32_t)account_slot;
             sim.gossip_carriers[i].versions[account_slot] = sim.gossip[account_slot].heard;
             gave_account = true;
         }
