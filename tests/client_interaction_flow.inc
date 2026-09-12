@@ -231,6 +231,62 @@ static int RunPresentedTargetRegression(void)
     return 0;
 }
 
+static int RunPresentedRoadRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.journey_travel_active = true;
+    ContextActionSet shown = {0};
+    AddDetailedContextAction(&shown, CONTEXT_ACTION_CLEAR_ROAD_SITE,
+        "Clear rocks", "", "Tools needed", false, false);
+    AddDetailedContextAction(&shown, CONTEXT_ACTION_CAMP_ROAD_SITE,
+        "Camp at Low Silver Pit", "", "Rest team", true, false);
+    AddDetailedContextAction(&shown, CONTEXT_ACTION_TOGGLE_DRIVE,
+        "Stop carriage", "", "Hold the team here", true, false);
+    RememberRoadActions(&sim, &local, VIEW_LOCAL, &shown);
+    Rectangle bounds = local.presented_road_bounds[1];
+    Vector2 mouse = {bounds.x + bounds.width / 2, bounds.y + bounds.height / 2};
+    sim.journey.active = true;
+    client_test_pointer_active = true;
+    client_test_pointer = mouse;
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+    ContextAction through_input = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
+    client_test_pointer_active = false;
+    ClientInputClearPressed();
+    if (through_input.kind != CONTEXT_ACTION_NONE)
+        return ClientRegressionFailure("Road input consumes the old camp bounds when only Drive remains.");
+    ContextActionSet branch = shown;
+    branch.items[1].kind = CONTEXT_ACTION_VISIT_MINE;
+    (void)snprintf(branch.items[1].label, sizeof(branch.items[1].label), "Turn to the mine");
+    ContextAction pressed = {0};
+    if (!PresentedRoadActionAt(&sim, &local, VIEW_LOCAL, &branch, mouse, &pressed) ||
+        pressed.kind != CONTEXT_ACTION_NONE)
+        return ClientRegressionFailure("A drawn camp card consumes its click when the mine branch replaces it.");
+    branch.items[2] = shown.items[1];
+    branch.items[2].enabled = false;
+    if (!PresentedRoadActionAt(&sim, &local, VIEW_LOCAL, &branch, mouse, &pressed) ||
+        pressed.kind != CONTEXT_ACTION_CAMP_ROAD_SITE || pressed.enabled)
+        return ClientRegressionFailure("A moved road choice retains its identity and current availability.");
+    RememberRoadActions(&sim, &local, VIEW_LOCAL, &branch);
+    if (!PresentedRoadActionAt(&sim, &local, VIEW_LOCAL, &branch, mouse, &pressed) ||
+        pressed.kind != CONTEXT_ACTION_VISIT_MINE)
+        return ClientRegressionFailure("Drawing the branch makes its mine choice clickable.");
+    sim.journey.route_id++;
+    if (!PresentedRoadActionAt(&sim, &local, VIEW_LOCAL, &branch, mouse, &pressed) ||
+        pressed.kind != CONTEXT_ACTION_NONE)
+        return ClientRegressionFailure("A road card belongs to its drawn route.");
+    RememberRoadActions(&sim, &local, VIEW_CHARACTER, &branch);
+    if (local.presented_road_count != 0)
+        return ClientRegressionFailure("Another view clears the road cards.");
+    RememberRoadActions(&sim, &local, VIEW_LOCAL, &branch);
+    ResetLocalState(&local);
+    if (local.presented_road_count != 0)
+        return ClientRegressionFailure("Reset clears the road cards.");
+    return 0;
+}
+
 static int RunConversationFocusRegression(void)
 {
     static CcSim sim;
@@ -269,6 +325,8 @@ static int RunConversationFocusRegression(void)
 
 static int RunAdventureInputRegression(void)
 {
+    int road_result = RunPresentedRoadRegression();
+    if (road_result != 0) return road_result;
     int focus_result = RunConversationFocusRegression();
     if (focus_result != 0) return focus_result;
     int handoff_result = RunDeliveryHandoffRegression();

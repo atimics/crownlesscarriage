@@ -104,11 +104,113 @@ static void ToggleCommandOverlay(ClientView requested,
     *view = requested;
 }
 
+typedef enum ContextActionKind {
+    CONTEXT_ACTION_NONE = 0,
+    CONTEXT_ACTION_WORLD_TARGET,
+    CONTEXT_ACTION_STOP_APPROACH,
+    CONTEXT_ACTION_TOGGLE_DRIVE,
+    CONTEXT_ACTION_SET_PACE,
+    CONTEXT_ACTION_APPROACH_ENTRANCE,
+    CONTEXT_ACTION_PONY_MEET,
+    CONTEXT_ACTION_PONY_HELP,
+    CONTEXT_ACTION_PONY_SWAP,
+    CONTEXT_ACTION_PONY_LEAVE,
+    CONTEXT_ACTION_ENTER_MARKET,
+    CONTEXT_ACTION_OPEN_TRADE,
+    CONTEXT_ACTION_LEAVE_MARKET,
+    CONTEXT_ACTION_CHOOSE_ROAD,
+    CONTEXT_ACTION_OPEN_MAP,
+    CONTEXT_ACTION_OPEN_PROMISES,
+    CONTEXT_ACTION_REST_TEAM,
+    CONTEXT_ACTION_EXPEDITION,
+    CONTEXT_ACTION_BUY_CARGO,
+    CONTEXT_ACTION_SELL_CARGO,
+    CONTEXT_ACTION_DELIVER_CARGO,
+    CONTEXT_ACTION_ABANDON_PROMISE,
+    CONTEXT_ACTION_NEXT_PROMISE,
+    CONTEXT_ACTION_CLOSE_VIEW,
+    CONTEXT_ACTION_GOSSIP_CHAT,
+    CONTEXT_ACTION_GOSSIP_SHARE,
+    CONTEXT_ACTION_FIGHT,
+    CONTEXT_ACTION_PAY,
+    CONTEXT_ACTION_TRAVEL,
+    CONTEXT_ACTION_NEXT_BRANCH,
+    CONTEXT_ACTION_BUY_MAP,
+    CONTEXT_ACTION_SELL_MAP,
+    CONTEXT_ACTION_CONFIRM_MAP_SALE,
+    CONTEXT_ACTION_REPAIR_ROUTE,
+    CONTEXT_ACTION_PAY_COLLECTOR,
+    CONTEXT_ACTION_APPROACH_COLLECTOR,
+    CONTEXT_ACTION_OFFER_PROVISIONS,
+    CONTEXT_ACTION_RETURN_TO_CHOICE,
+    CONTEXT_ACTION_SKIP_TRAVEL,
+    CONTEXT_ACTION_TAKE_BREAK,
+    CONTEXT_ACTION_PRESS_ON,
+    CONTEXT_ACTION_MAKE_CAMP,
+    CONTEXT_ACTION_LODGE_ROAD_HOUSE,
+    CONTEXT_ACTION_CAMP_ROAD_SITE,
+    CONTEXT_ACTION_PASS_ROAD_SITE,
+    CONTEXT_ACTION_CLEAR_ROAD_SITE,
+    CONTEXT_ACTION_TRANSFER_ROAD_SITE,
+    CONTEXT_ACTION_REPAIR_ROAD_SITE,
+    CONTEXT_ACTION_JUMP,
+    CONTEXT_ACTION_RAISE_ALARM,
+    CONTEXT_ACTION_SELECT_TARGET,
+    CONTEXT_ACTION_BASIC_STRIKE,
+    CONTEXT_ACTION_TOGGLE_GUARD,
+    CONTEXT_ACTION_WITHDRAW,
+    CONTEXT_ACTION_SKILL_CRUSHING,
+    CONTEXT_ACTION_SKILL_SUNDER,
+    CONTEXT_ACTION_SKILL_SECOND_WIND,
+    CONTEXT_ACTION_STEAL_DRAGON_CROWNS,
+    CONTEXT_ACTION_RETURN_DRAGON_CROWNS,
+    CONTEXT_ACTION_STEAL_DRAGON_RELIC,
+    CONTEXT_ACTION_RETURN_DRAGON_RELIC,
+    CONTEXT_ACTION_INTERCEPT_DRAGON_TRIBUTE,
+    CONTEXT_ACTION_TRAVEL_DUNGEON_SITE,
+    CONTEXT_ACTION_TRAVEL_GOBLIN_SITE,
+    CONTEXT_ACTION_TRAVEL_DRAGON_SITE,
+    CONTEXT_ACTION_RETURN_FROM_SITE,
+    CONTEXT_ACTION_GOBLIN_TRADE,
+    CONTEXT_ACTION_TALK_CHARACTER,
+    CONTEXT_ACTION_LISTEN_CHARACTER,
+    CONTEXT_ACTION_PLEDGE_CHARACTER,
+    CONTEXT_ACTION_REPORT_EVIDENCE,
+    CONTEXT_ACTION_KEEP_CONFIDENCE,
+    CONTEXT_ACTION_DUNGEON_MOVE,
+    CONTEXT_ACTION_DUNGEON_SEARCH,
+    CONTEXT_ACTION_DUNGEON_OPEN_SHORTCUT,
+    CONTEXT_ACTION_DUNGEON_PARLEY,
+    CONTEXT_ACTION_DUNGEON_EVADE,
+    CONTEXT_ACTION_DUNGEON_FORCE,
+    CONTEXT_ACTION_DUNGEON_RETREAT,
+    CONTEXT_ACTION_DUNGEON_PUBLIC_ROUTE,
+    CONTEXT_ACTION_DUNGEON_SMUGGLER_ROUTE,
+    CONTEXT_ACTION_DUNGEON_RESEAL,
+    CONTEXT_ACTION_VISIT_MINE
+} ContextActionKind;
+
+typedef struct ContextAction {
+    ContextActionKind kind;
+    CcGood good;
+    int32_t amount;
+    CcInteractionKey target;
+    char label[64];
+    char key_hint[16];
+    char detail[48];
+    bool enabled;
+    bool active;
+} ContextAction;
+
 typedef struct LocalState {
     bool adventure_ui;
     CcInteractionPlan interactions;
     CcInteractionState interaction;
     int32_t card_page;
+    ContextAction presented_road_actions[4];
+    Rectangle presented_road_bounds[4];
+    int32_t presented_road_count;
+    CcId presented_road_route;
     bool world_cards_presented;
     int32_t presented_target_count;
     CcInteractionKey presented_targets[4];
@@ -227,104 +329,6 @@ typedef struct GameplayReelState {
     bool stage_started;
     bool complete;
 } GameplayReelState;
-
-typedef enum ContextActionKind {
-    CONTEXT_ACTION_NONE = 0,
-    CONTEXT_ACTION_WORLD_TARGET,
-    CONTEXT_ACTION_STOP_APPROACH,
-    CONTEXT_ACTION_TOGGLE_DRIVE,
-    CONTEXT_ACTION_SET_PACE,
-    CONTEXT_ACTION_APPROACH_ENTRANCE,
-    CONTEXT_ACTION_PONY_MEET,
-    CONTEXT_ACTION_PONY_HELP,
-    CONTEXT_ACTION_PONY_SWAP,
-    CONTEXT_ACTION_PONY_LEAVE,
-    CONTEXT_ACTION_ENTER_MARKET,
-    CONTEXT_ACTION_OPEN_TRADE,
-    CONTEXT_ACTION_LEAVE_MARKET,
-    CONTEXT_ACTION_CHOOSE_ROAD,
-    CONTEXT_ACTION_OPEN_MAP,
-    CONTEXT_ACTION_OPEN_PROMISES,
-    CONTEXT_ACTION_REST_TEAM,
-    CONTEXT_ACTION_EXPEDITION,
-    CONTEXT_ACTION_BUY_CARGO,
-    CONTEXT_ACTION_SELL_CARGO,
-    CONTEXT_ACTION_DELIVER_CARGO,
-    CONTEXT_ACTION_ABANDON_PROMISE,
-    CONTEXT_ACTION_NEXT_PROMISE,
-    CONTEXT_ACTION_CLOSE_VIEW,
-    CONTEXT_ACTION_GOSSIP_CHAT,
-    CONTEXT_ACTION_GOSSIP_SHARE,
-    CONTEXT_ACTION_FIGHT,
-    CONTEXT_ACTION_PAY,
-    CONTEXT_ACTION_TRAVEL,
-    CONTEXT_ACTION_NEXT_BRANCH,
-    CONTEXT_ACTION_BUY_MAP,
-    CONTEXT_ACTION_SELL_MAP,
-    CONTEXT_ACTION_CONFIRM_MAP_SALE,
-    CONTEXT_ACTION_REPAIR_ROUTE,
-    CONTEXT_ACTION_PAY_COLLECTOR,
-    CONTEXT_ACTION_APPROACH_COLLECTOR,
-    CONTEXT_ACTION_OFFER_PROVISIONS,
-    CONTEXT_ACTION_RETURN_TO_CHOICE,
-    CONTEXT_ACTION_SKIP_TRAVEL,
-    CONTEXT_ACTION_TAKE_BREAK,
-    CONTEXT_ACTION_PRESS_ON,
-    CONTEXT_ACTION_MAKE_CAMP,
-    CONTEXT_ACTION_LODGE_ROAD_HOUSE,
-    CONTEXT_ACTION_CAMP_ROAD_SITE,
-    CONTEXT_ACTION_PASS_ROAD_SITE,
-    CONTEXT_ACTION_CLEAR_ROAD_SITE,
-    CONTEXT_ACTION_TRANSFER_ROAD_SITE,
-    CONTEXT_ACTION_REPAIR_ROAD_SITE,
-    CONTEXT_ACTION_JUMP,
-    CONTEXT_ACTION_RAISE_ALARM,
-    CONTEXT_ACTION_SELECT_TARGET,
-    CONTEXT_ACTION_BASIC_STRIKE,
-    CONTEXT_ACTION_TOGGLE_GUARD,
-    CONTEXT_ACTION_WITHDRAW,
-    CONTEXT_ACTION_SKILL_CRUSHING,
-    CONTEXT_ACTION_SKILL_SUNDER,
-    CONTEXT_ACTION_SKILL_SECOND_WIND,
-    CONTEXT_ACTION_STEAL_DRAGON_CROWNS,
-    CONTEXT_ACTION_RETURN_DRAGON_CROWNS,
-    CONTEXT_ACTION_STEAL_DRAGON_RELIC,
-    CONTEXT_ACTION_RETURN_DRAGON_RELIC,
-    CONTEXT_ACTION_INTERCEPT_DRAGON_TRIBUTE,
-    CONTEXT_ACTION_TRAVEL_DUNGEON_SITE,
-    CONTEXT_ACTION_TRAVEL_GOBLIN_SITE,
-    CONTEXT_ACTION_TRAVEL_DRAGON_SITE,
-    CONTEXT_ACTION_RETURN_FROM_SITE,
-    CONTEXT_ACTION_GOBLIN_TRADE,
-    CONTEXT_ACTION_TALK_CHARACTER,
-    CONTEXT_ACTION_LISTEN_CHARACTER,
-    CONTEXT_ACTION_PLEDGE_CHARACTER,
-    CONTEXT_ACTION_REPORT_EVIDENCE,
-    CONTEXT_ACTION_KEEP_CONFIDENCE,
-    CONTEXT_ACTION_DUNGEON_MOVE,
-    CONTEXT_ACTION_DUNGEON_SEARCH,
-    CONTEXT_ACTION_DUNGEON_OPEN_SHORTCUT,
-    CONTEXT_ACTION_DUNGEON_PARLEY,
-    CONTEXT_ACTION_DUNGEON_EVADE,
-    CONTEXT_ACTION_DUNGEON_FORCE,
-    CONTEXT_ACTION_DUNGEON_RETREAT,
-    CONTEXT_ACTION_DUNGEON_PUBLIC_ROUTE,
-    CONTEXT_ACTION_DUNGEON_SMUGGLER_ROUTE,
-    CONTEXT_ACTION_DUNGEON_RESEAL,
-    CONTEXT_ACTION_VISIT_MINE
-} ContextActionKind;
-
-typedef struct ContextAction {
-    ContextActionKind kind;
-    CcGood good;
-    int32_t amount;
-    CcInteractionKey target;
-    char label[64];
-    char key_hint[16];
-    char detail[48];
-    bool enabled;
-    bool active;
-} ContextAction;
 
 typedef struct ContextActionSet {
     ContextAction items[CC_INTERACTION_CAPACITY + CC_GOOD_COUNT + 8];
@@ -1162,6 +1166,7 @@ static void ResetLocalState(LocalState *local)
     local->interactions = (CcInteractionPlan){0};
     local->interaction = (CcInteractionState){0};
     local->card_page = 0;
+    local->presented_road_count = 0;
     local->world_cards_presented = false;
     local->presented_target_count = 0;
     local->carriage_stopped = false;
@@ -4858,6 +4863,47 @@ static int32_t PresentedTargetAt(const LocalState *local, ClientView view, Vecto
     return -1;
 }
 
+static void RememberRoadActions(const CcSim *sim, LocalState *local,
+                                ClientView view, const ContextActionSet *actions)
+{
+    local->presented_road_count = 0;
+    if (view != VIEW_LOCAL || !local->journey_travel_active) return;
+    local->presented_road_route = sim->journey.route_id;
+    int32_t first = ContextCardFirst(local, actions);
+    int32_t shown = ContextCardCount(actions, first);
+    for (int32_t i = 0; i < shown && i < 4; ++i) {
+        local->presented_road_actions[i] = actions->items[first + i];
+        local->presented_road_bounds[i] = ContextActionBounds(i, shown, actions->combat);
+        local->presented_road_count++;
+    }
+}
+
+static bool PresentedRoadActionAt(const CcSim *sim, const LocalState *local,
+    ClientView view, const ContextActionSet *actions, Vector2 mouse,
+    ContextAction *pressed)
+{
+    if (view != VIEW_LOCAL) return false;
+    for (int32_t i = 0; i < local->presented_road_count; ++i) {
+        if (!CheckCollisionPointRec(mouse, local->presented_road_bounds[i])) continue;
+        *pressed = (ContextAction){.kind = CONTEXT_ACTION_NONE};
+        if (!local->journey_travel_active ||
+            local->presented_road_route != sim->journey.route_id) return true;
+        const ContextAction *shown = &local->presented_road_actions[i];
+        for (int32_t j = 0; j < actions->count; ++j) {
+            const ContextAction *current = &actions->items[j];
+            if (shown->kind == current->kind && shown->good == current->good &&
+                shown->amount == current->amount && shown->active == current->active &&
+                CcInteractionKeyEqual(shown->target, current->target) &&
+                strcmp(shown->label, current->label) == 0) {
+                *pressed = *current;
+                break;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 static void DrawContextActionTray(const CcSim *sim, LocalState *local,
                                   ClientView view, int32_t selected,
                                   int32_t selected_situation)
@@ -4865,6 +4911,7 @@ static void DrawContextActionTray(const CcSim *sim, LocalState *local,
     ContextActionSet actions = BuildContextActions(
         sim, local, view, selected, selected_situation);
     RememberPresentedTargets(local, view, &actions);
+    RememberRoadActions(sim, local, view, &actions);
     Vector2 mouse = ClientPointerPosition();
     bool cargo_controls = false;
     for (int32_t i = 0; i < actions.count; ++i) {
@@ -5008,6 +5055,9 @@ static ContextAction PressedContextAction(
     ContextActionSet actions = BuildContextActions(
         sim, local, view, selected, selected_situation);
     Vector2 mouse = ClientPointerPosition();
+    ContextAction road = {.kind = CONTEXT_ACTION_NONE};
+    if (PresentedRoadActionAt(sim, local, view, &actions, mouse, &road))
+        return right ? none : road;
     int32_t presented = PresentedTargetAt(local, view, mouse);
     if (presented >= 0) {
         if (right) return none;
