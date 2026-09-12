@@ -91,6 +91,7 @@ cc_strict_warnings(crownless_locomotion)
 add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
+    src/sim/cc_custody.c
     src/sim/cc_sim_hash.c
     src/sim/cc_occupations.c
     src/sim/cc_gossip_topics.c
@@ -1079,6 +1080,10 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(custody_transfer_tests tests/custody_transfer_tests.c)
+    target_link_libraries(custody_transfer_tests PRIVATE crownless_sim)
+    cc_strict_warnings(custody_transfer_tests)
+    add_test(NAME custody_transfer_contract COMMAND custody_transfer_tests)
     add_executable(site_wear_tests tests/site_wear_tests.c)
     target_link_libraries(site_wear_tests PRIVATE crownless_persistence)
     cc_strict_warnings(site_wear_tests)

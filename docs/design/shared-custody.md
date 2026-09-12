@@ -94,5 +94,15 @@ worlds against the parent and compare their hashes before accepting migration.
 - Verify every new field in save/load, hashing, validation, and legacy replay.
 - Capture a player journey that packs, loads, travels, and unloads the same items.
 
-All acceptance work remains open in this initial contract commit. The draft is
-complete only when the implementation and evidence satisfy the whole list.
+The transfer core now has `CcCustodyState`, a read-only planner, and a revalidating
+apply function in `src/sim/cc_custody.c`. Its tests use explicit physical-holder
+and permission callbacks. They cover goods packing, container carriage,
+interception, recovery, unloading, purse splits, separate copies of one work,
+full pools, retired slots, stale requests, and movement between plan and apply.
+Packing and unpacking also advance the container revision.
+
+The strict native target, AddressSanitizer/UndefinedBehaviorSanitizer run,
+Cppcheck, and WebAssembly compile check passed. This is isolated core evidence.
+The world adapters, object creation, common economy costs, persistence, hashing,
+validation, and player journey remain open. The draft is complete only when
+the implementation and evidence satisfy the whole acceptance list.
