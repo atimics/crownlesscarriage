@@ -17127,7 +17127,7 @@ static bool ApplyRepair(CcSim *sim, const CcCommand *command,
             beneficiary->support = ClampI32(beneficiary->support + 5, 0, 100);
         }
         const CcCharacter *worker = CcSimCharacter(sim, wainwright);
-        char text[CC_EVENT_TEXT_CAPACITY];
+        char text[256];
         (void)snprintf(text, sizeof(text),
                        "%.20s works the %.20s-%.20s road for a day; two Tools, two Wood and two Stone become a way through.",
                        worker != NULL ? worker->name : "A wainwright",

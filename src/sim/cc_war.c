@@ -255,7 +255,7 @@ static void ResolveBattles(CcSim *sim)
                     sim, attacker->commander_character_id);
                 const CcCharacter *defender_commander = CcSimCharacter(
                     sim, defender->commander_character_id);
-                char text[CC_EVENT_TEXT_CAPACITY];
+                char text[256];
                 (void)snprintf(
                     text, sizeof(text),
                     "Steel meets in %.24s: %.20s's company under %.20s and "
@@ -278,7 +278,6 @@ static void ResolveBattles(CcSim *sim)
                 }
                 if (defender->members <= 0) {
                     RemoveWarParty(sim, b);
-                    b -= 1;
                 }
                 break;
             }
