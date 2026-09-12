@@ -13131,6 +13131,7 @@ static void AdvanceDragonCampaign(CcSim *sim)
     int32_t slain_age_years = sim->dragon.age_days / 365;
     CcDragonLifeStage slain_stage = sim->dragon.life_stage;
     sim->dragon.slain = true;
+    sim->dragon.dragons_slain += 1;
     sim->dragon.slain_day = sim->current_day;
     sim->dragon.life_stage = CC_DRAGON_STAGE_AFTERDRAGON;
     sim->dragon.activity = CC_DRAGON_ACTIVITY_AFTERMATH;
@@ -18686,7 +18687,7 @@ static bool ValidGossipVersion(const CcSim *sim, const CcGossipVersion *version,
 
    Adding a version means editing one row, or adding one. Keep it that way. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 51U
+#define CC_NEWEST_LEGACY_SCHEMA 52U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -18704,7 +18705,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 51U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, 52U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -19887,6 +19888,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             dragon->stolen_outstanding > CC_SIM_MAX_MONEY ||
             dragon->retaliations < 0 ||
             dragon->retaliations > CC_SIM_MAX_UNITS ||
+            dragon->dragons_slain < 0 ||
             !dragon_anger_valid ||
             !named_theft_valid ||
             (dragon->slain &&
@@ -21066,6 +21068,9 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(dragon->whelps_dispersed);
             HASH_VALUE(dragon->afterdeath_days);
             HASH_VALUE(dragon->lifecycle_event_id);
+            if (sim->schema_version >= 53U) {
+                HASH_VALUE(dragon->dragons_slain);
+            }
         }
         if (sim->schema_version >= 9U) {
             HASH_VALUE(dragon->stolen_treasure_id);

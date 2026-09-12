@@ -291,7 +291,7 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
         "%d,%d,%d,%d,%d,%d,%d,%d",
         wars, alliances, active_couriers, lost_couriers,
-        distorted_couriers, sim->dragon.slain ? 1 : 0,
+        distorted_couriers, sim->dragon.dragons_slain,
         sim->dragon_campaign.attempts,
         sim->dragon_campaign.victories,
         sim->dragon_campaign.defeats,
@@ -398,7 +398,7 @@ int main(int argc, char **argv)
         "tracked_iron,tracked_tools,tracked_weapons,iron_ledger_reserve,"
         "iron_ledger_debt,smuggler_routes,goblin_hoard_defenses,wars,"
         "alliances,active_couriers,lost_couriers,distorted_couriers,"
-        "dragon_slain,dragon_campaign_attempts,dragon_campaign_victories,"
+        "dragons_slain,dragon_campaign_attempts,dragon_campaign_victories,"
         "dragon_campaign_defeats,dragon_stage,dragon_age_years,"
         "dragon_crown_strength,dragon_body_condition,dragon_memory_integrity,"
         "dragon_territory_stability,dragon_regional_influence,dragon_eggs,"

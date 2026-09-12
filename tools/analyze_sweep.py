@@ -8,16 +8,16 @@ from collections import Counter
 GROUPS = {
     "all": lambda r: True,
     "rich-strong-dragon": lambda r: (
-        r["dragon_slain"] == "0"
+        r["dragon_stage"] != "6"
         and int(r["dragon_crown_strength"]) >= 70
         and int(r["average_prosperity"]) >= 35),
     "poor-no-dragon": lambda r: (
-        r["dragon_slain"] == "1"
+        r["dragon_stage"] == "6"
         and int(r["average_prosperity"]) < 30
         and int(r["average_hunger"]) > 50
         and int(r["average_legitimacy"]) < 30),
-    "dragon-survived": lambda r: r["dragon_slain"] == "0",
-    "dragon-slain": lambda r: r["dragon_slain"] == "1",
+    "no-dragon-slain": lambda r: r["dragons_slain"] == "0",
+    "dragons-slain": lambda r: int(r["dragons_slain"]) > 0,
 }
 
 METRICS = [
@@ -28,6 +28,7 @@ METRICS = [
     "closed_routes", "years_all_routes_closed",
     # politics
     "days_at_war", "days_allied", "wars", "alliances",
+    "dragons_slain",
     "dragon_campaign_attempts", "dragon_campaign_victories",
     "dragon_campaign_defeats", "years_hunger_40_plus",
     "years_hunger_60_plus",

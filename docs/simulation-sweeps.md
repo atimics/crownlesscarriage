@@ -78,6 +78,9 @@ The metrics also include political and faction exposure:
 
 - annual hunger thresholds and exact daily war/alliance exposure;
 - exact daily dragon-campaign, goblin-raid, and bandit-raid exposure;
+- cumulative dragons slain over the run, in the `dragons_slain` column: the
+  end-state slain flag resets when a brood-hoard successor hatches, but this
+  count keeps accumulating;
 - daily bandit high-influence exposure;
 - days spent in each dragon life stage;
 - end-state goblin membership, devotion, cohesion, defenses, and interceptions;

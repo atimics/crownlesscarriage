@@ -405,6 +405,9 @@ static bool EnsureLegendColumns(sqlite3 *database,
         EnsureColumn(database, "dragon_state", "slain_day",
             "ALTER TABLE dragon_state ADD COLUMN slain_day INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "dragons_slain",
+            "ALTER TABLE dragon_state ADD COLUMN dragons_slain INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
         EnsureColumn(database, "dragon_state", "life_stage",
             "ALTER TABLE dragon_state ADD COLUMN life_stage INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
@@ -2486,13 +2489,13 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                  "INSERT INTO dragon_state (slot,id,name,lair_settlement_id,hoard,"
                  "stolen_outstanding,theft_actor_id,retaliation_target_id,"
                  "hoard_event_id,omen_event_id,omen_days_remaining,retaliations,"
-                 "slain,slain_day,life_stage,activity,age_days,body_condition,"
+                 "slain,slain_day,dragons_slain,life_stage,activity,age_days,body_condition,"
                  "crown_strength,memory_integrity,territory_stability,"
                  "regional_influence,crown_continuity_days,hunt_cooldown_days,"
                  "hunts,egg_count,brood_days_remaining,brood_cooldown_days,"
                  "broods_laid,whelps_dispersed,afterdeath_days,lifecycle_event_id,"
                  "territoryless_days,hair_color) "
-                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     const CcDragon *dragon = &sim->dragon;
     column = 1;
@@ -2509,6 +2512,7 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
     BindInt(statement, column++, dragon->retaliations);
     BindInt(statement, column++, dragon->slain ? 1 : 0);
     BindInt(statement, column++, dragon->slain_day);
+    BindInt(statement, column++, dragon->dragons_slain);
     BindInt(statement, column++, (int32_t)dragon->life_stage);
     BindInt(statement, column++, (int32_t)dragon->activity);
     BindInt(statement, column++, dragon->age_days);
@@ -4740,7 +4744,8 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     if (!Prepare(database,
                  "SELECT id,name,lair_settlement_id,hoard,stolen_outstanding,"
                  "theft_actor_id,retaliation_target_id,hoard_event_id,omen_event_id,"
-                 "omen_days_remaining,retaliations,slain,slain_day,life_stage,"
+                 "omen_days_remaining,retaliations,slain,slain_day,dragons_slain,"
+                 "life_stage,"
                  "activity,age_days,body_condition,crown_strength,memory_integrity,"
                  "territory_stability,regional_influence,crown_continuity_days,"
                  "hunt_cooldown_days,hunts,egg_count,brood_days_remaining,"
@@ -4780,6 +4785,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     dragon->retaliations = sqlite3_column_int(statement, column++);
     dragon->slain = sqlite3_column_int(statement, column++) != 0;
     dragon->slain_day = sqlite3_column_int(statement, column++);
+    dragon->dragons_slain = sqlite3_column_int(statement, column++);
     dragon->life_stage =
         (CcDragonLifeStage)sqlite3_column_int(statement, column++);
     dragon->activity =
@@ -5959,7 +5965,8 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 44U || legacy_version == 45U ||
          legacy_version == 46U || legacy_version == 47U ||
          legacy_version == 48U || legacy_version == 49U ||
-         legacy_version == 50U || legacy_version == 51U) &&
+         legacy_version == 50U || legacy_version == 51U ||
+         legacy_version == 52U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
@@ -5968,7 +5975,9 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          * fires; both changes are derived from events, so older saves need
          * no data migration. Schema 51 adds common pony herds, which are
          * seeded by the caller below rather than here, because every branch
-         * of this function lands on the current schema. */
+         * of this function lands on the current schema. Schema 52 narrows to
+         * one draft animal. Schema 53 adds the cumulative dragons_slain
+         * counter, backfilled by the caller below. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }
@@ -6428,6 +6437,14 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     if (!UpgradeLegacyRuntimeSchema(sim, error, error_capacity)) return false;
     if (legacy_version < 51U) CcSimSeedCommonPonyHerds(sim);
     if (legacy_version < 52U) CcSimUnharnessSecondDraftAnimal(sim);
+    if (legacy_version < 53U) {
+        /* Every campaign victory slays exactly one dragon, so the historical
+           count is reconstructible; the current dragon's slaying covers
+           saves whose campaign counters were lost. */
+        int32_t slain_count = sim->dragon_campaign.victories;
+        if (sim->dragon.slain && slain_count < 1) slain_count = 1;
+        sim->dragon.dragons_slain = slain_count;
+    }
     return true;
 }
 
