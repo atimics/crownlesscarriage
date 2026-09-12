@@ -454,7 +454,7 @@ int main(void)
     CC_CHECK(strstr(output, "market clock is still waiting for breakfast") !=
              NULL);
     ExecuteNumber(&lawful, "talk", relief_number, output, sizeof(output));
-    CC_CHECK(strstr(output, "We are running out of food") != NULL);
+    CC_CHECK(strstr(output, "Take the food to the market hall") != NULL);
     CC_CHECK(strstr(output, "Flour has never answered") == NULL);
     CC_CHECK(CcMetagameExecute(&lawful, "sell food 8", output,
                                sizeof(output)));
