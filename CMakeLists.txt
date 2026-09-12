@@ -561,6 +561,9 @@ if(CC_BUILD_CLIENT)
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/collectible_map_atlas.png"
         )
         list(APPEND CC_WEB_STARTUP_ASSET_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/assets/campaigns/deep-wyrm.ccsave")
+        list(APPEND CC_WEB_STARTUP_ASSET_SOURCES
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/language/core.ccv2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/language/LICENSE")
         set(CC_WEB_STARTUP_ASSET_OUTPUTS)
         foreach(asset IN LISTS CC_WEB_STARTUP_ASSET_SOURCES)
             file(RELATIVE_PATH relative_asset

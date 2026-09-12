@@ -39,6 +39,8 @@ if(prepare_startup)
 
     file(COPY "${asset_source}/campaigns/deep-wyrm.ccsave"
          DESTINATION "${asset_output}/campaigns")
+    file(COPY "${asset_source}/language/core.ccv2" "${asset_source}/language/LICENSE"
+         DESTINATION "${asset_output}/language")
 
     file(GLOB voice_assets "${asset_source}/audio/voice/*.wav")
     if(voice_assets)

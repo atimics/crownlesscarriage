@@ -16,11 +16,11 @@ int main(int argc, char **argv)
     if (model == NULL) return 3;
     char *end = NULL;
     long kind = strtol(argv[2], &end, 10);
-    if (*end != '\0' || kind < 0 || kind >= CC_EVENT_KIND_COUNT) { CcCoreModelFree(model); return 2; }
+    if (end == argv[2] || *end != '\0' || kind < 0 || kind >= CC_EVENT_KIND_COUNT) { CcCoreModelFree(model); return 2; }
     long confidence = strtol(argv[3], &end, 10);
-    if (*end != '\0' || confidence < 0 || confidence > 100) { CcCoreModelFree(model); return 2; }
+    if (end == argv[3] || *end != '\0' || confidence < 0 || confidence > 100) { CcCoreModelFree(model); return 2; }
     long retellings = strtol(argv[4], &end, 10);
-    if (*end != '\0' || retellings < 0 || retellings > 100) { CcCoreModelFree(model); return 2; }
+    if (end == argv[4] || *end != '\0' || retellings < 0 || retellings > 100) { CcCoreModelFree(model); return 2; }
     CcCoreAccount account;
     bool okay = CcCoreAccountPrepare((CcEventKind)kind, argv[5], (int32_t)confidence, (int32_t)retellings, &account);
     CcCoreSpoken history[CC_CORE_HISTORY] = {0};
