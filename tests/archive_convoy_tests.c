@@ -132,14 +132,19 @@ static void Arrive(void)
 static void CheckLaterLeg(void)
 {
     CcArchiveRelocationPlan first=Fixture();
-    CcSettlement *stop=CcSimSettlementMutable(&sim,first.first_hop_id), *destination=NULL;
+    CcSettlement *stop=NULL, *destination=NULL;
     CcRoute *next=NULL;
-    for(int i=0;i<sim.route_count;i++) {
+    for(int i=0;i<sim.route_count && next==NULL;i++) {
         CcRoute *road=&sim.routes[i];
-        if(!road->smuggler_route && road->id!=first.first_route_id &&
-           (road->from_id==stop->id || road->to_id==stop->id)) {
-            destination=CcSimSettlementMutable(&sim,road->from_id==stop->id?road->to_id:road->from_id);
-            if(destination->id!=first.origin_id && destination->population>0){next=road;break;}
+        if(road->smuggler_route || (road->from_id!=first.origin_id && road->to_id!=first.origin_id))continue;
+        stop=CcSimSettlementMutable(&sim,road->from_id==first.origin_id?road->to_id:road->from_id);
+        for(int j=0;j<sim.route_count;j++) {
+            CcRoute *second=&sim.routes[j];
+            if(second==road || second->smuggler_route || (second->from_id!=stop->id && second->to_id!=stop->id))continue;
+            destination=CcSimSettlementMutable(&sim,second->from_id==stop->id?second->to_id:second->from_id);
+            if(destination->id!=first.origin_id && destination->population>0) {
+                first.first_route_id=road->id;next=second;break;
+            }
         }
     }
     CC_CHECK(next!=NULL && destination!=NULL);
@@ -148,7 +153,8 @@ static void CheckLaterLeg(void)
         road->condition=(road->id==first.first_route_id || road==next)?100:0;
         if(road->condition>0){road->closed=true;road->travel_days=2;}
     }
-    stop->stock[CC_GOOD_PAPER]=0;
+    for(int i=0;i<sim.settlement_count;i++)sim.settlements[i].stock[CC_GOOD_PAPER]=0;
+    stop->stock[CC_GOOD_FOOD]=10000;
     destination->stock[CC_GOOD_FOOD]=10000;destination->stock[CC_GOOD_WHEAT]=100;
     destination->stock[CC_GOOD_PAPER]=1;destination->stock[CC_GOOD_TOOLS]=1;
     destination->service_mask=UINT32_C(1)<<CC_SERVICE_MILL;
@@ -178,6 +184,18 @@ static void CheckLaterLeg(void)
     CC_CHECK(CcSaveEncode(&sim,&bytes,&size,error,sizeof(error)));
     CC_CHECK(CcSaveDecode(bytes,size,&restored,error,sizeof(error)));CcSaveFreeBuffer(bytes);
     CC_CHECK(CcSimHash(&sim)==CcSimHash(&restored));
+    const char *path="archive-convoy-stop-test.ccsave";
+    CcJournal *journal=CcJournalStart(path,&restored,error,sizeof(error));
+    CC_CHECK(journal!=NULL);
+    CC_CHECK(CcJournalAdvanceDays(journal,&restored,1,error,sizeof(error)));
+    CcJournalAbandon(&journal);
+    CC_CHECK(CcSaveRead(path,&before,error,sizeof(error)));
+    CC_CHECK(CcSimHash(&before)==CcSimHash(&restored));
+    CcSimAdvanceDays(&before,7);CcSimAdvanceDays(&restored,7);
+    CC_CHECK(CcSimHash(&before)==CcSimHash(&restored));
+    CC_CHECK(CcSimValidate(&restored,error,sizeof(error)));
+    (void)remove(path);(void)remove("archive-convoy-stop-test.ccsave-wal");(void)remove("archive-convoy-stop-test.ccsave-shm");
+    restored=sim;
     int32_t wheat=CcSimTrackedGood(&sim,CC_GOOD_WHEAT);
     CC_CHECK(CcSimAdvanceArchiveConvoy(&sim,99)==CC_ARCHIVE_CONVOY_DEPARTED);Valid();
     CC_CHECK(CcSimAdvanceArchiveConvoy(&restored,99)==CC_ARCHIVE_CONVOY_DEPARTED);
@@ -193,9 +211,13 @@ static void CheckLaterLeg(void)
     before=sim;
     CC_CHECK(CcSimAdvanceArchiveConvoy(&sim,99)==CC_ARCHIVE_CONVOY_COMPLETED);Valid();
     CC_CHECK(sim.archives.seat_id==destination->id && sim.archives.seat_failed_since_day==0);
-    CC_CHECK(sim.archives.scribes==0 && sim.archives.abbot_character_id==0 && !sim.archive_staff.active);
+    CC_CHECK(sim.archives.scribes==0 && sim.archives.abbot_character_id==before.archives.abbot_character_id && !sim.archive_staff.active);
     CC_CHECK(memcmp(sim.characters,before.characters,sizeof(sim.characters))==0);
     CC_CHECK(CcSimTreasure(&sim,book_id)->owner_id==destination->id && CcSimTreasure(&sim,book_id)->location_id==destination->id);
+    bytes=NULL;size=0;
+    CC_CHECK(CcSaveEncode(&sim,&bytes,&size,error,sizeof(error)));
+    CC_CHECK(CcSaveDecode(bytes,size,&restored,error,sizeof(error)));CcSaveFreeBuffer(bytes);
+    CC_CHECK(CcSimHash(&sim)==CcSimHash(&restored) && restored.archives.seat_id==destination->id);
     CC_CHECK(CcSimCancelArchiveConvoy(&sim));Valid();CC_CHECK(CcSimTrackedGold(&sim)==coins);
 }
 

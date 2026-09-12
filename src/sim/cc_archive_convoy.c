@@ -172,7 +172,7 @@ static bool CompleteSeat(CcSim *sim, CcRoyalCarriage *carriage)
     sim->archives.seat_id = destination->id;
     sim->archives.seat_failed_since_day = 0;
     sim->archives.scribes = 0; sim->archives.dead_since_day = sim->current_day;
-    sim->archive_staff = (CcArchiveStaff){0}; sim->archives.abbot_character_id = 0;
+    sim->archive_staff = (CcArchiveStaff){0};
     o->status = 6;
     if (carriage->mode == CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED && carriage->location_id == destination->id) {
         carriage->mode = CC_ROYAL_CARRIAGE_IDLE; carriage->next_dispatch_day = sim->current_day + 7;
