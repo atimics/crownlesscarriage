@@ -118,3 +118,15 @@ The voice-design helper reuses auditions already present in the output folder.
 Upstream references: [Chatterbox](https://github.com/resemble-ai/chatterbox),
 [Pocket TTS](https://github.com/kyutai-labs/pocket-tts),
 [Qwen VoiceDesign](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign).
+
+## Saved listening copies
+
+The checked-in clips use Opus at 48 kbit/s. Their combined size keeps this review within the repository's 2 MiB artifact budget. `listening-copies.json` records each original WAV hash, each listening-copy hash, duration, and file size. The original trial reports continue to describe the WAV masters. Use the masters for a final recording comparison.
+
+The compression tool preserves the original files in a separate directory and verifies every listening copy before replacing a WAV in the review:
+
+```sh
+python3 tools/audio/compact_casting_audio.py --review docs/reviews/voice-casting-20260912 --masters /tmp/crownless-cast-masters
+```
+
+It needs FFmpeg with libopus and ffprobe. The listening-page builder supports both the generated WAV masters and the saved Opus copies. The merge check decoded all 51 copies and checked their durations against the originals. The existing thirteen cast reference files remain the page's source references.

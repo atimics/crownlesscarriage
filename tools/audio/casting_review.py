@@ -42,10 +42,16 @@ def main():
                      f'<p>{esc(voice["description"])}</p>'
                      f'<p class="direction">{esc(brief["review_directions"][voice["id"]])}</p>'
                      + audio('references/' + filename, 'Listen to reference') + '</article>')
+    def listening(relative):
+        path = args.output / relative
+        compressed = path.with_suffix('.ogg')
+        return str(compressed.relative_to(args.output)) if compressed.is_file() else relative
+
     additions = []
     for voice in brief['proposed']:
-        path = args.output / 'proposed' / (voice['id'] + '.wav')
-        player = audio('proposed/' + path.name, 'Listen to audition') if path.is_file() else '<p class="pending">Audio audition pending</p>'
+        relative = listening('proposed/' + voice['id'] + '.wav')
+        path = args.output / relative
+        player = audio(relative, 'Listen to audition') if path.is_file() else '<p class="pending">Audio audition pending</p>'
         additions.append(f'<article><span class="tag">Proposed addition · casting direction</span>'
                          f'<h3>{esc(voice["name"])}</h3><p>{esc(voice["description"])}</p>'
                          f'<p class="direction">{esc(voice["purpose"])}</p>{player}</article>')
@@ -77,8 +83,8 @@ def main():
             row = next((r for r in report['samples'] if (r['voice'], r['line']) == (voice, line)), None)
             if row:
                 words = row['text']
-                cells.append(f'<div><h4>{esc(engine.title())}</h4>' + audio('trial/' + row['file'], 'Clean')
-                             + audio('trial/' + row['styled_file'], 'Game texture')
+                cells.append(f'<div><h4>{esc(engine.title())}</h4>' + audio(listening('trial/' + row['file']), 'Clean')
+                             + audio(listening('trial/' + row['styled_file']), 'Game texture')
                              + f'<small>{row["generation_seconds"]:.2f}s generation · {row["seconds"]:.2f}s audio</small></div>')
         name = next(v['name'] for v in cast if v['id'] == voice)
         trials.append(f'<article class="comparison"><h3>{esc(name)} · {esc(line)}</h3>'
@@ -101,7 +107,7 @@ p{line-height:1.65}header p{max-width:780px;font-size:18px}.eyebrow,.tag{color:#
 <section id="additions"><h2>Room for three more</h2><p>A proposed cast of sixteen: five named people and eleven reusable voices. These additions broaden age, rhythm, gender presentation, and accent. The accents are audition directions. Each voice can belong to a neighbour, leader, traveller, or opponent.</p>
 <div class="grid">ADDITION_CARDS</div></section>
 <section id="trial"><h2>Same people, same words</h2><p>Four contrasting voices each read a welcome, an exact trade quote, and an urgent warning. Compare the clean clip with the game texture. The text and references are identical across engines.</p>
-<div class="grid">METRICS</div><p class="note">Measured local CPU trial with two Torch threads per engine. Generation times include each model’s first speech call. Voice setup and model loading are separate. First chunk measures the model output; game playback timing and frame rate need a game integration test. Samples still need listening review.</p>TRIAL_CARDS</section>
+<div class="grid">METRICS</div><p class="note">Saved trial clips are compact Opus listening copies. The reports retain the original WAV hashes. Use the WAV masters for a final recording comparison.</p><p class="note">Measured local CPU trial with two Torch threads per engine. Generation times include each model’s first speech call. Voice setup and model loading are separate. First chunk measures the model output; game playback timing and frame rate need a game integration test. Samples still need listening review.</p>TRIAL_CARDS</section>
 <section id="review"><h2>Choose people you want to hear again</h2><ol><li>Can you recognise the person across all three lines?</li><li>Are names, quantities, and prices easy to understand?</li><li>Does the warning carry urgency while keeping the same voice?</li><li>Can this voice carry humour, care, authority, and doubt?</li><li>Which voices sound too similar after the game texture?</li></ol>
 <p>Keep a voice, request another take, or change its casting direction. Casting descriptions and age targets remain proposals until listening review. Human and creature performance auditions can follow this core cast decision.</p></section></main>
 <script>document.addEventListener('play',event=>{if(event.target.tagName==='AUDIO')document.querySelectorAll('audio').forEach(a=>{if(a!==event.target)a.pause()})},true)</script></html>'''

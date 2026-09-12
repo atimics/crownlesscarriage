@@ -1,0 +1,466 @@
+{
+  "codec": "Opus",
+  "bitrate": 48000,
+  "note": "Compressed listening copies. Original trial hashes describe the WAV masters.",
+  "files": [
+    {
+      "master": "proposed/cedar-trial.wav",
+      "master_sha256": "fba3c2014f9fd2e92298f751c9878b1d2e92bb6f7da1d836eceb802668c65f20",
+      "master_bytes": 330284,
+      "listening": "proposed/cedar-trial.ogg",
+      "listening_sha256": "3c8c8e08dc6b1b71cd5790746c9961b812677a2371c3896aa6234d5a9348448f",
+      "listening_bytes": 39418,
+      "seconds": 6.88
+    },
+    {
+      "master": "proposed/copper-trial.wav",
+      "master_sha256": "fe7d349d0ac1a11fe1b46231f9e735adb18d8009b2f9033ffadbd0865e98bdd5",
+      "master_bytes": 265004,
+      "listening": "proposed/copper-trial.ogg",
+      "listening_sha256": "e5d93ea1504e63c1e6cee7b27ed86abb32fa9342e20ead63313f7b45dd298d4f",
+      "listening_bytes": 32969,
+      "seconds": 5.52
+    },
+    {
+      "master": "proposed/wren-trial.wav",
+      "master_sha256": "eb510fc960f2b7157a8e0d5dcafd69e81bf8441f0e760aaae2df5ee2f3f229f5",
+      "master_bytes": 349484,
+      "listening": "proposed/wren-trial.ogg",
+      "listening_sha256": "35fb063e4a99a3c2cdb99321cb120c493ef24e9b31633c967486a2b77a3a6a43",
+      "listening_bytes": 42062,
+      "seconds": 7.28
+    },
+    {
+      "master": "trial/nano-flint-v1-trade-game.wav",
+      "master_sha256": "29343fc0f6d66132f3b92fc6e36f5c116a6c01a5aabf97b9c163d37737dac97e",
+      "master_bytes": 261164,
+      "listening": "trial/nano-flint-v1-trade-game.ogg",
+      "listening_sha256": "96e6a018c57c3b644d02f9fb7def87674958b7640ed2e2d8c1a0aac1d344a5cf",
+      "listening_bytes": 30822,
+      "seconds": 5.44
+    },
+    {
+      "master": "trial/nano-flint-v1-trade.wav",
+      "master_sha256": "1345740d7736df48df4e9e8a735f970a4ee61d39f4982f2c1876a6d0b7ab8d62",
+      "master_bytes": 261164,
+      "listening": "trial/nano-flint-v1-trade.ogg",
+      "listening_sha256": "ecdd26ac56b81f0cc779f75721aa255b0d7f2b58289392c914dee57a778e9b34",
+      "listening_bytes": 30397,
+      "seconds": 5.44
+    },
+    {
+      "master": "trial/nano-flint-v1-warning-game.wav",
+      "master_sha256": "5eb597daebe550080ed656743b11ae21a91762e0bf83bebc90ad8b1dc15239fc",
+      "master_bytes": 94124,
+      "listening": "trial/nano-flint-v1-warning-game.ogg",
+      "listening_sha256": "3289cd4bd79967217c6f450d10e2f77258e4076bdbd9381c703e5bb3736c9b27",
+      "listening_bytes": 11394,
+      "seconds": 1.96
+    },
+    {
+      "master": "trial/nano-flint-v1-warning.wav",
+      "master_sha256": "75e5c36078204d61d161ae0f459fd851fad19790bd6d1b374c8705c849013968",
+      "master_bytes": 94124,
+      "listening": "trial/nano-flint-v1-warning.ogg",
+      "listening_sha256": "7ce9883269be4d7c6545de1ded5835663a6ecdea8041a9b64f276e24e417bca7",
+      "listening_bytes": 11180,
+      "seconds": 1.96
+    },
+    {
+      "master": "trial/nano-flint-v1-welcome-game.wav",
+      "master_sha256": "3ebaaf906e40e36153aa6005dd0fb6a2e77c615b41406d5da0c892a6419f5513",
+      "master_bytes": 213164,
+      "listening": "trial/nano-flint-v1-welcome-game.ogg",
+      "listening_sha256": "8eb0163bd8374ff3bd5d1e41795dc9887bb3d52f6707c739fe0fd125018a14d5",
+      "listening_bytes": 25620,
+      "seconds": 4.44
+    },
+    {
+      "master": "trial/nano-flint-v1-welcome.wav",
+      "master_sha256": "e33e70accfbd5adb51005e8b175025ad9d1647c8f523c181468e315f81f5ddbb",
+      "master_bytes": 213164,
+      "listening": "trial/nano-flint-v1-welcome.ogg",
+      "listening_sha256": "7b038d82e57d193ba537e316501d1bde392b1316fb679fde087b8fe619e3fad0",
+      "listening_bytes": 25086,
+      "seconds": 4.44
+    },
+    {
+      "master": "trial/nano-mara-v1-trade-game.wav",
+      "master_sha256": "31d772578324c8d7c285c6dacb03f43eb1d0cc32347b0e4dddc959a5f7cda8bd",
+      "master_bytes": 266924,
+      "listening": "trial/nano-mara-v1-trade-game.ogg",
+      "listening_sha256": "057bb0e1ac53e1f42215008258cf008abef8aee31a143cb77f8a88d2553618fe",
+      "listening_bytes": 31461,
+      "seconds": 5.56
+    },
+    {
+      "master": "trial/nano-mara-v1-trade.wav",
+      "master_sha256": "102db3cf2164b5cbd891d2e5df8b9767bf8bc489c11cbf276296b2359c5a4386",
+      "master_bytes": 266924,
+      "listening": "trial/nano-mara-v1-trade.ogg",
+      "listening_sha256": "a2c1532d7b52fe9665d28b45624ee74e48f423c466c3ada551d7884ff41068d4",
+      "listening_bytes": 31610,
+      "seconds": 5.56
+    },
+    {
+      "master": "trial/nano-mara-v1-warning-game.wav",
+      "master_sha256": "9ac992ea3957290ddbb93734cce9be19e72f251ab2a518364d3ecfd073ed2cbe",
+      "master_bytes": 151724,
+      "listening": "trial/nano-mara-v1-warning-game.ogg",
+      "listening_sha256": "5f5cd77a0337a25c22468fe920184a842762eb4cbd4416b62b63ea25d9feb49d",
+      "listening_bytes": 17888,
+      "seconds": 3.16
+    },
+    {
+      "master": "trial/nano-mara-v1-warning.wav",
+      "master_sha256": "93f83370e86aa8701ae03cf980f5f1d92af94e3fdfedf15749ac2f3012a6603c",
+      "master_bytes": 151724,
+      "listening": "trial/nano-mara-v1-warning.ogg",
+      "listening_sha256": "19d39314da861aef287d9a19b62c93e1678b526a5be9f6596e18ad326358c2ee",
+      "listening_bytes": 17830,
+      "seconds": 3.16
+    },
+    {
+      "master": "trial/nano-mara-v1-welcome-game.wav",
+      "master_sha256": "d4b241c9260c48a120166cc04752ae6237eacd026f6121ea62a24b0e7457f58c",
+      "master_bytes": 222764,
+      "listening": "trial/nano-mara-v1-welcome-game.ogg",
+      "listening_sha256": "c05de2c5f15e6743c4a8a7228675bc41d7a1b0902b4977b9b25f2b86091c159c",
+      "listening_bytes": 26938,
+      "seconds": 4.64
+    },
+    {
+      "master": "trial/nano-mara-v1-welcome.wav",
+      "master_sha256": "c91faaf0661b57dddf9662f6966b6656e22079ef571e6830f68137bf861a6862",
+      "master_bytes": 222764,
+      "listening": "trial/nano-mara-v1-welcome.ogg",
+      "listening_sha256": "d126e2da230ca879d8e7e692911286bb91a3e9430fce968c38962a2866269e25",
+      "listening_bytes": 26949,
+      "seconds": 4.64
+    },
+    {
+      "master": "trial/nano-oak-v1-trade-game.wav",
+      "master_sha256": "0f6c657ed48ce4d30439725979d0fe6b123e63acc331d778f175c2c83b91d673",
+      "master_bytes": 276524,
+      "listening": "trial/nano-oak-v1-trade-game.ogg",
+      "listening_sha256": "16a3edcc5d718086018274dcf126893443105779409e47ed762e8c2f559954c8",
+      "listening_bytes": 33153,
+      "seconds": 5.76
+    },
+    {
+      "master": "trial/nano-oak-v1-trade.wav",
+      "master_sha256": "c5e5e36be9ae10aef6b3d272f76570b7a73017d27b84521fd9f63e9373c44da0",
+      "master_bytes": 276524,
+      "listening": "trial/nano-oak-v1-trade.ogg",
+      "listening_sha256": "c45449ba0123c0dd1764dab68bdfade1b11fff889d6010d36d6c0f96140f5d3d",
+      "listening_bytes": 36415,
+      "seconds": 5.76
+    },
+    {
+      "master": "trial/nano-oak-v1-warning-game.wav",
+      "master_sha256": "75bb2d18b0f59f1272cbc91c674ff1303cc695d4c58efe05755571e80c215992",
+      "master_bytes": 161324,
+      "listening": "trial/nano-oak-v1-warning-game.ogg",
+      "listening_sha256": "ea15fcf939c40f13e89bf9189f70f3b95b6babc63d8a5083ab2fdab29a6eb58c",
+      "listening_bytes": 19277,
+      "seconds": 3.36
+    },
+    {
+      "master": "trial/nano-oak-v1-warning.wav",
+      "master_sha256": "957d1e634251f5ed8feb2d34138f6e184db306f549073d5a6e1a3c4db849dc68",
+      "master_bytes": 161324,
+      "listening": "trial/nano-oak-v1-warning.ogg",
+      "listening_sha256": "c5fde3ce3877adda36fa2448613ab274a2b41acd15eae659af424fe874e69f96",
+      "listening_bytes": 19525,
+      "seconds": 3.36
+    },
+    {
+      "master": "trial/nano-oak-v1-welcome-game.wav",
+      "master_sha256": "56b3c12603767cb2fc8e4660697049e7134a30b1d4912c5c921732d1bd989116",
+      "master_bytes": 207404,
+      "listening": "trial/nano-oak-v1-welcome-game.ogg",
+      "listening_sha256": "57267df50aba340ceca2ea5cb3e363529f1785e627f9574c844b8ffce12c460c",
+      "listening_bytes": 26924,
+      "seconds": 4.32
+    },
+    {
+      "master": "trial/nano-oak-v1-welcome.wav",
+      "master_sha256": "86760492b05467c1c617b511d40f10259759e2887c58fb0e5a381ce53fc890d6",
+      "master_bytes": 207404,
+      "listening": "trial/nano-oak-v1-welcome.ogg",
+      "listening_sha256": "9977b09325dc904eeb54f3f6b6e7335c04cefb7e5d3e62cc32a55dcc90ef1c6e",
+      "listening_bytes": 27253,
+      "seconds": 4.32
+    },
+    {
+      "master": "trial/nano-reed-v1-trade-game.wav",
+      "master_sha256": "a8eba97c3e72cd4f55ca9e25e564189672b23f205436685550592c8877505ebd",
+      "master_bytes": 261164,
+      "listening": "trial/nano-reed-v1-trade-game.ogg",
+      "listening_sha256": "fedc548bd608deaead694f73585b754fef1f48952f77e2e109fa8fe28a5bae06",
+      "listening_bytes": 31744,
+      "seconds": 5.44
+    },
+    {
+      "master": "trial/nano-reed-v1-trade.wav",
+      "master_sha256": "e0f193a222cbb92c205c2a7e8d6b0007897dfaaa326a43db7992b3d35af1becb",
+      "master_bytes": 261164,
+      "listening": "trial/nano-reed-v1-trade.ogg",
+      "listening_sha256": "e4786ddab473234558bd14a01fa4167cbe19c07569d18a2a96b319295d795973",
+      "listening_bytes": 31950,
+      "seconds": 5.44
+    },
+    {
+      "master": "trial/nano-reed-v1-warning-game.wav",
+      "master_sha256": "0f2ff811920b69790b6366123f589df2cd809bd663bf0552851ea960eebdb215",
+      "master_bytes": 149804,
+      "listening": "trial/nano-reed-v1-warning-game.ogg",
+      "listening_sha256": "65f274c7edb53dd7ae3b024eaf6c351087ad47e1195072a2c8405aa22185415b",
+      "listening_bytes": 18113,
+      "seconds": 3.12
+    },
+    {
+      "master": "trial/nano-reed-v1-warning.wav",
+      "master_sha256": "4398a502cbbf2526ec75deb6c0450b0d51fcb791f3ce3cd7db98eae59c2591a5",
+      "master_bytes": 149804,
+      "listening": "trial/nano-reed-v1-warning.ogg",
+      "listening_sha256": "d51cffa7fbb9eacaf2bcf4802776f188172e96d305037fc07a77481f0f21e72c",
+      "listening_bytes": 18164,
+      "seconds": 3.12
+    },
+    {
+      "master": "trial/nano-reed-v1-welcome-game.wav",
+      "master_sha256": "d5fd1c29292dfc0de0f53c367cf20f7eaf020f5e75de9a4509edbee2030c50ae",
+      "master_bytes": 215084,
+      "listening": "trial/nano-reed-v1-welcome-game.ogg",
+      "listening_sha256": "77db6879cb1f6f5f302b667f7d1fe2b434b1c88ff239bf82191ede1570bb6fc9",
+      "listening_bytes": 26607,
+      "seconds": 4.48
+    },
+    {
+      "master": "trial/nano-reed-v1-welcome.wav",
+      "master_sha256": "98406700a01a4a5d2f0d4c0d0679fa04f31c891f2dee53943490a9a4f1735232",
+      "master_bytes": 215084,
+      "listening": "trial/nano-reed-v1-welcome.ogg",
+      "listening_sha256": "bf653b5e295411052d93fce24c223698a7913e1afea12c5c09be61a885adc769",
+      "listening_bytes": 27196,
+      "seconds": 4.48
+    },
+    {
+      "master": "trial/pocket-flint-v1-trade-game.wav",
+      "master_sha256": "9715dc34ffcd8dfbe44c9a3c01ac426557424ca7dee72ff17399e0ae84c51e96",
+      "master_bytes": 245804,
+      "listening": "trial/pocket-flint-v1-trade-game.ogg",
+      "listening_sha256": "edc3bcc4f364cbb4e75aabba80b6115adb5fa9caa7b0f4d84256b9213b7b9681",
+      "listening_bytes": 27582,
+      "seconds": 5.12
+    },
+    {
+      "master": "trial/pocket-flint-v1-trade.wav",
+      "master_sha256": "608b985cf06bc8ed510545d0115914ee6fd88a5ec3b17a8972962ed7ab767121",
+      "master_bytes": 245804,
+      "listening": "trial/pocket-flint-v1-trade.ogg",
+      "listening_sha256": "eb349b1b9da68420ad3ea6e042df610d022b6755dce115f0bf934c62b2dc476e",
+      "listening_bytes": 27550,
+      "seconds": 5.12
+    },
+    {
+      "master": "trial/pocket-flint-v1-warning-game.wav",
+      "master_sha256": "e8bca6dd872fc5d2b3d1b75f29a16fa12cdfd1b35261d73a01c7731928022cc3",
+      "master_bytes": 180524,
+      "listening": "trial/pocket-flint-v1-warning-game.ogg",
+      "listening_sha256": "936d3532818f201e9957d61ecef2a51f1ae543125d6a18f656a2191db3bf3b19",
+      "listening_bytes": 18708,
+      "seconds": 3.76
+    },
+    {
+      "master": "trial/pocket-flint-v1-warning.wav",
+      "master_sha256": "2ffd6218340005ebbbfa358e85159f45f5f3e682c8de7785c9c3a65d89f9ee2f",
+      "master_bytes": 180524,
+      "listening": "trial/pocket-flint-v1-warning.ogg",
+      "listening_sha256": "51732710afd761c83dafb25325d5c1ab26f0722e530d19ff5480a578c2c1b25c",
+      "listening_bytes": 18717,
+      "seconds": 3.76
+    },
+    {
+      "master": "trial/pocket-flint-v1-welcome-game.wav",
+      "master_sha256": "15dc7ac4c81112ec851a196ab82ff0ce31b97dba094b3adac4030aec07ef3b77",
+      "master_bytes": 230444,
+      "listening": "trial/pocket-flint-v1-welcome-game.ogg",
+      "listening_sha256": "23838636c5ec08ea3de9a6c7a09779d6f999528d11e6cec9f5e0f36ca0c185f0",
+      "listening_bytes": 24999,
+      "seconds": 4.8
+    },
+    {
+      "master": "trial/pocket-flint-v1-welcome.wav",
+      "master_sha256": "ec74ba6090129b86f1268104d49d13f2a53e49d192ccc99ad689d8d2e7602327",
+      "master_bytes": 230444,
+      "listening": "trial/pocket-flint-v1-welcome.ogg",
+      "listening_sha256": "d5c8a120ff95073ad9649549c43a2926e1a04e0e94578d872a051ae2b3a19227",
+      "listening_bytes": 24853,
+      "seconds": 4.8
+    },
+    {
+      "master": "trial/pocket-mara-v1-trade-game.wav",
+      "master_sha256": "75a2910a97606eb4beac37d9177e8e7e16e67b2d3e6e95a8f71f4c11712a7428",
+      "master_bytes": 295724,
+      "listening": "trial/pocket-mara-v1-trade-game.ogg",
+      "listening_sha256": "0e6f49e23eccbc996dd6aa2a54d5192f4b729f3ff1fa9a99de9e91587eea4532",
+      "listening_bytes": 31461,
+      "seconds": 6.16
+    },
+    {
+      "master": "trial/pocket-mara-v1-trade.wav",
+      "master_sha256": "aa8e1c605c33c1843148c88fdbe6a3babeb4bc6bfeb8a989946974cb6bd50e45",
+      "master_bytes": 295724,
+      "listening": "trial/pocket-mara-v1-trade.ogg",
+      "listening_sha256": "34b7d7bd6e525933beb7a6b62ea62235f2922789e886f483200009659dff5120",
+      "listening_bytes": 31432,
+      "seconds": 6.16
+    },
+    {
+      "master": "trial/pocket-mara-v1-warning-game.wav",
+      "master_sha256": "8c9d56b5bef14aa65d07838a34f65249f72fea5453dd7b445b2635980ae0f452",
+      "master_bytes": 218924,
+      "listening": "trial/pocket-mara-v1-warning-game.ogg",
+      "listening_sha256": "0e579a20153d9082cfbcb4d167e359e16ba12648cb6285ee8b0d5b9c87617fca",
+      "listening_bytes": 21825,
+      "seconds": 4.56
+    },
+    {
+      "master": "trial/pocket-mara-v1-warning.wav",
+      "master_sha256": "65fd10f60d0f93e835397960a9273b15d1d4149c7f8419cc0fcfbf2d3a417201",
+      "master_bytes": 218924,
+      "listening": "trial/pocket-mara-v1-warning.ogg",
+      "listening_sha256": "362f44a761f8c7310b8c69ba5b86e626cfc41199424375f4610f7efac70c0afb",
+      "listening_bytes": 21905,
+      "seconds": 4.56
+    },
+    {
+      "master": "trial/pocket-mara-v1-welcome-game.wav",
+      "master_sha256": "b2ee4444ad983321ef3ebe96c76d615f8744c880fb879152915dd1cd7eca6993",
+      "master_bytes": 276524,
+      "listening": "trial/pocket-mara-v1-welcome-game.ogg",
+      "listening_sha256": "ddb7e1e5d062ba89da02b1a6bf69c385032a301d9376a82b824f310cf3b4875e",
+      "listening_bytes": 28812,
+      "seconds": 5.76
+    },
+    {
+      "master": "trial/pocket-mara-v1-welcome.wav",
+      "master_sha256": "82b5987aa10c405bfe3f33db2361ad4c4f572fb9bf7caedae2d5c15f088569c7",
+      "master_bytes": 276524,
+      "listening": "trial/pocket-mara-v1-welcome.ogg",
+      "listening_sha256": "d4c6221389b2d71aa77fc6bb8f59f743a057cd43e383eabd125ec5baaed6a99a",
+      "listening_bytes": 28819,
+      "seconds": 5.76
+    },
+    {
+      "master": "trial/pocket-oak-v1-trade-game.wav",
+      "master_sha256": "3a72c5119e5cf21f4cc2a9194e9c027329e8b3b0035dd416299fe66ea276a854",
+      "master_bytes": 265004,
+      "listening": "trial/pocket-oak-v1-trade-game.ogg",
+      "listening_sha256": "9e09d9e026a4ab864b889f9a46cdb1335e280939e9cff3aa11d7fb49e2b3d89e",
+      "listening_bytes": 30394,
+      "seconds": 5.52
+    },
+    {
+      "master": "trial/pocket-oak-v1-trade.wav",
+      "master_sha256": "82fd92de2cc6ed8d4c3a7dcf2ef0441a07b59e37f0609c56c5332b2daa9dace4",
+      "master_bytes": 265004,
+      "listening": "trial/pocket-oak-v1-trade.ogg",
+      "listening_sha256": "90ce3818e9d573f62b919c789e4feed0b427fc612e98fb5ebdbe5d1530e3ab31",
+      "listening_bytes": 30643,
+      "seconds": 5.52
+    },
+    {
+      "master": "trial/pocket-oak-v1-warning-game.wav",
+      "master_sha256": "f6dd92b060156b7ae7274d32577fce3de56b657edefda7dfc0018a753a76e396",
+      "master_bytes": 184364,
+      "listening": "trial/pocket-oak-v1-warning-game.ogg",
+      "listening_sha256": "961fca11e2b30e8616ae305f0ba069e81891c9087beb1714cff0fb0e5388532d",
+      "listening_bytes": 19760,
+      "seconds": 3.84
+    },
+    {
+      "master": "trial/pocket-oak-v1-warning.wav",
+      "master_sha256": "c42ba9dc2446fbdad0c6e70579930aa4f042092d6a3a161ea50da585082e75b6",
+      "master_bytes": 184364,
+      "listening": "trial/pocket-oak-v1-warning.ogg",
+      "listening_sha256": "65d0bad289fe35e8dcee0b82567c54b397b54f159a5cfbdfe1357fe2cc9e059e",
+      "listening_bytes": 19976,
+      "seconds": 3.84
+    },
+    {
+      "master": "trial/pocket-oak-v1-welcome-game.wav",
+      "master_sha256": "1f29ef47abe9541b7f73e71f582af7a852231830a4402f03dbd36631e88e3e11",
+      "master_bytes": 245804,
+      "listening": "trial/pocket-oak-v1-welcome-game.ogg",
+      "listening_sha256": "3277f25ac17ae53ed03b15aa2fc80023c017e3dfe5bff5fa86ea95760141c784",
+      "listening_bytes": 26995,
+      "seconds": 5.12
+    },
+    {
+      "master": "trial/pocket-oak-v1-welcome.wav",
+      "master_sha256": "1079b05886a40741eec191d53306f85393cacc91025213b47dda516302df7b8b",
+      "master_bytes": 245804,
+      "listening": "trial/pocket-oak-v1-welcome.ogg",
+      "listening_sha256": "33f22b58fa4fb40e7541dbde0cc45602f9161a0c63f1c5e04f095956096c0086",
+      "listening_bytes": 27387,
+      "seconds": 5.12
+    },
+    {
+      "master": "trial/pocket-reed-v1-trade-game.wav",
+      "master_sha256": "60be926adf4a90d3f27b69339f0096fc47ad1e12438ad244ec5691509502d8e6",
+      "master_bytes": 245804,
+      "listening": "trial/pocket-reed-v1-trade-game.ogg",
+      "listening_sha256": "63d05c1dba2cb4a6f8fcd143e8cd7e77fdae32ae0a7648d05c470e55a56958ed",
+      "listening_bytes": 29738,
+      "seconds": 5.12
+    },
+    {
+      "master": "trial/pocket-reed-v1-trade.wav",
+      "master_sha256": "b777dd161ee48e7a862130a57bc4ee0b9f15c0c6bda732fb3be7baab427c4c20",
+      "master_bytes": 245804,
+      "listening": "trial/pocket-reed-v1-trade.ogg",
+      "listening_sha256": "5083b99b4bcd1df821f4c1b31d5e4b2b614e022b159ca6aec9ca7459df723012",
+      "listening_bytes": 30170,
+      "seconds": 5.12
+    },
+    {
+      "master": "trial/pocket-reed-v1-warning-game.wav",
+      "master_sha256": "784f00ff1f241067ab648914242d1ec19f50d7d266423d0cafe0bb6f68070ddf",
+      "master_bytes": 161324,
+      "listening": "trial/pocket-reed-v1-warning-game.ogg",
+      "listening_sha256": "a9eda8d615ff4734cf48129018738453e433171294c0342f5dc4fff5b344de8f",
+      "listening_bytes": 19138,
+      "seconds": 3.36
+    },
+    {
+      "master": "trial/pocket-reed-v1-warning.wav",
+      "master_sha256": "fd121db1f96ff2bf2bd39a59a64c4a5771869e5150ef277401a31e00a52b5fe4",
+      "master_bytes": 161324,
+      "listening": "trial/pocket-reed-v1-warning.ogg",
+      "listening_sha256": "f3a5f32d291f45c9fbdda96ba40644efdd4f8150a4ba7e02daa5c1df76fd3d6f",
+      "listening_bytes": 19413,
+      "seconds": 3.36
+    },
+    {
+      "master": "trial/pocket-reed-v1-welcome-game.wav",
+      "master_sha256": "71b73dff49d8ddfaa85f91143982e07ec32c8829f3773e5bb86308ffc3d2bc24",
+      "master_bytes": 222764,
+      "listening": "trial/pocket-reed-v1-welcome-game.ogg",
+      "listening_sha256": "1614107d834b6a51c67599ea00c17dd1f25e402fe700e2fb3258930a44c9ce91",
+      "listening_bytes": 27084,
+      "seconds": 4.64
+    },
+    {
+      "master": "trial/pocket-reed-v1-welcome.wav",
+      "master_sha256": "8b4ee5571e9b8cb08c5a7c81e35ddca18ddbfa5ad3c355f19d602018c8d92251",
+      "master_bytes": 222764,
+      "listening": "trial/pocket-reed-v1-welcome.ogg",
+      "listening_sha256": "225af981a0e9d33a071ec17c5cb8472ad4f1cbaaab703d672dfa9ff6dc949b17",
+      "listening_bytes": 27412,
+      "seconds": 4.64
+    }
+  ]
+}
