@@ -32,7 +32,10 @@
 #define CC_LEGACY_CHARACTER_CAP 24
 #define CC_MAX_HISTORIC_CHARACTERS 32
 #define CC_MAX_SCRIBES 4
-#define CC_MAX_GOSSIP 32
+#define CC_MAX_GOSSIP 64
+/* The board width before CC_NOTICE_BOARD_SCHEMA; saves at or below that schema
+   persist this many slots and replay against a board of this size. */
+#define CC_LEGACY_GOSSIP_SLOTS 32
 #define CC_LEGACY_GOSSIP_CARRIERS (1 + CC_MAX_KINGDOMS + CC_MAX_SHIPMENTS + CC_MAX_COURIERS)
 #define CC_MAX_GOSSIP_CARRIERS (CC_LEGACY_GOSSIP_CARRIERS + CC_MAX_CHARACTERS)
 #define CC_CHARACTER_MEMORY_CAPACITY 4
@@ -63,7 +66,13 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-84 shipped ahead of this branch; the named archive staff
    appointment is schema 85. */
-#define CC_SIM_SCHEMA_VERSION 85
+/* Schema at which a posted notice stops displacing word of mouth. Kept as a
+   named constant so the merge-time renumber touches one line. */
+#define CC_NOTICE_BOARD_SCHEMA 86U
+/* Slots [0, CC_NOTICE_BOARD_SLOTS) hold posted notices; the rest are word of
+   mouth. Notices previously took 59-77% of the shared board by eviction. */
+#define CC_NOTICE_BOARD_SLOTS 16
+#define CC_SIM_SCHEMA_VERSION 86
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -383,8 +392,10 @@ typedef struct CcGossip {
 
 typedef struct CcGossipCarrier {
     CcId id;
-    uint32_t stories;
-    uint32_t told_player;
+    /* One bit per gossip slot, so these must be at least CC_MAX_GOSSIP wide.
+       They were uint32_t, which silently capped the board at 32 slots. */
+    uint64_t stories;
+    uint64_t told_player;
     CcGossipVersion versions[CC_MAX_GOSSIP];
 } CcGossipCarrier;
 
@@ -1994,7 +2005,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 364944,
+_Static_assert(sizeof(CcSim) == 507856,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

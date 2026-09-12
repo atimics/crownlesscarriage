@@ -355,7 +355,7 @@ static void CheckStorySlotReuse(void)
         if (sim.gossip_carriers[i].id != sim.player.id) continue;
         /* The flood never reaches the player; their own town's notices may. */
         for (int32_t slot = 0; slot < CC_MAX_GOSSIP; ++slot) {
-            if ((sim.gossip_carriers[i].stories & (UINT32_C(1) << (uint32_t)slot)) == 0U) continue;
+            if ((sim.gossip_carriers[i].stories & (UINT64_C(1) << (uint32_t)slot)) == 0U) continue;
             CC_CHECK(strcmp(sim.gossip[slot].text, "A fresh eastern account.") != 0);
         }
     }

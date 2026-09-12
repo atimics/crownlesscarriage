@@ -27,7 +27,7 @@ static void GossipSpread(const CcSim *world, int32_t *held,
             CcSimGossipCarrier(world, world->characters[c].id);
         if (carrier == NULL) continue;
         for (int32_t slot = 0; slot < CC_MAX_GOSSIP; ++slot) {
-            if ((carrier->stories & (UINT32_C(1) << (uint32_t)slot)) == 0U) continue;
+            if ((carrier->stories & (UINT64_C(1) << (uint32_t)slot)) == 0U) continue;
             *held += 1;
             *retellings += carrier->versions[slot].retellings;
             if (carrier->versions[slot].confidence < 40) *faded += 1;

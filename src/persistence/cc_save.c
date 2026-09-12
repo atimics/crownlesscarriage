@@ -3252,9 +3252,16 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
             "SELECT slot,event_id,origin_id,heard_event_id,day,heard_day,"
             "settlement_mask,recorded,text,heard_from,kind FROM gossip_account ORDER BY slot;",
             &statement, error, error_capacity)) return false;
+    /* The board was 32 slots before CC_NOTICE_BOARD_SCHEMA, so a shipped
+       fixture carries fewer rows than the array now holds. Read what the file
+       has and leave the rest of the board zeroed. */
+    int32_t gossip_rows = 0;
+    bool gossip_exhausted = false;
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
-        if (sqlite3_step(statement) != SQLITE_ROW ||
-            sqlite3_column_int64(statement, 0) != i) goto invalid;
+        int step = sqlite3_step(statement);
+        if (step == SQLITE_DONE) { gossip_exhausted = true; break; }
+        if (step != SQLITE_ROW || sqlite3_column_int64(statement, 0) != i) goto invalid;
+        gossip_rows = i + 1;
         CcGossip *story = &sim->gossip[i];
         sqlite3_int64 mask = sqlite3_column_int64(statement, 6);
         sqlite3_int64 recorded = sqlite3_column_int64(statement, 7);
@@ -3275,7 +3282,12 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
             return false;
         }
     }
-    if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
+    /* A file must still cover every slot its own board used. */
+    if (gossip_rows != CC_MAX_GOSSIP && gossip_rows != CC_LEGACY_GOSSIP_SLOTS) goto invalid;
+    if (sim->schema_version >= CC_NOTICE_BOARD_SCHEMA && gossip_rows != CC_MAX_GOSSIP)
+        goto invalid;
+    /* A short board already stepped to DONE inside the loop. */
+    if (!gossip_exhausted && sqlite3_step(statement) != SQLITE_DONE) goto invalid;
     sqlite3_finalize(statement);
     if (!Prepare(database, "SELECT slot,id,stories,told_player FROM gossip_carrier ORDER BY slot;",
                   &statement, error, error_capacity)) return false;
@@ -3289,11 +3301,12 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
         if (slot < 0 || slot >= carrier_capacity) goto invalid;
         sqlite3_int64 stories = sqlite3_column_int64(statement, 2);
         sqlite3_int64 told = sqlite3_column_int64(statement, 3);
-        if (stories < 0 || stories > UINT32_MAX ||
-            told < 0 || told > UINT32_MAX) goto invalid;
+        /* Every bit pattern is a legal 64-slot mask, and a story in slot 63
+           reads back negative, so these round-trip as raw bits the way ids do
+           rather than being range-checked. */
         sim->gossip_carriers[slot].id = (CcId)sqlite3_column_int64(statement, 1);
-        sim->gossip_carriers[slot].stories = (uint32_t)stories;
-        sim->gossip_carriers[slot].told_player = (uint32_t)told;
+        sim->gossip_carriers[slot].stories = (uint64_t)stories;
+        sim->gossip_carriers[slot].told_player = (uint64_t)told;
     }
     if (result != SQLITE_DONE) goto invalid;
     sqlite3_finalize(statement);

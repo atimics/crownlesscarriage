@@ -5629,6 +5629,15 @@ static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
 /* A notice posted on a board is a fact like any other: it enters the ledger
    at the town whose board carries it, so residents can speak of it and
    travellers carry it between towns. Mine threads stay mouth-to-ear. */
+/* The board grew from 32 to 64 slots at CC_NOTICE_BOARD_SCHEMA. Replaying an
+   older save must still evict against the board it was recorded with, or the
+   slot a story lands in changes and the run stops reproducing. */
+static int32_t GossipBoardSlots(const CcSim *sim)
+{
+    return sim->schema_version >= CC_NOTICE_BOARD_SCHEMA ?
+        CC_MAX_GOSSIP : CC_LEGACY_GOSSIP_SLOTS;
+}
+
 static void PostSituationNotice(CcSim *sim, const CcSituation *situation)
 {
     if (sim == NULL || situation == NULL ||
@@ -5644,14 +5653,33 @@ static void PostSituationNotice(CcSim *sim, const CcSituation *situation)
         town->name, CcSituationKindName(situation->kind));
     CcEvent *posted = PushEvent(sim, CC_EVENT_NOTICE_POSTED, situation->id,
                                 town->id, situation->cause_event_id, 20, text);
-    int32_t slot = 0;
-    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
-        if (sim->gossip[i].event_id == 0U) { slot = i; break; }
-        if ((sim->gossip[i].recorded && !sim->gossip[slot].recorded) ||
-            (sim->gossip[i].recorded == sim->gossip[slot].recorded &&
-             sim->gossip[i].event_id < sim->gossip[slot].event_id)) slot = i;
+    /* The board is shared between posted notices and word of mouth, and notices
+       held 59-77% of its slot-days, so every posting evicted a rumour before it
+       could be retold. A notice now displaces another notice where it can, and
+       only falls back to the shared choice when the board is all word of mouth. */
+    int32_t slot = -1;
+    if (sim->schema_version >= CC_NOTICE_BOARD_SCHEMA) {
+        /* Notices keep their own region of the board. Letting them merely
+           prefer each other collapsed them onto a single slot, which starves
+           the order board; a fixed region keeps both populations stable. */
+        for (int32_t i = 0; i < CC_NOTICE_BOARD_SLOTS; ++i) {
+            if (sim->gossip[i].event_id == 0U) { slot = i; break; }
+            if (slot < 0 ||
+                (sim->gossip[i].recorded && !sim->gossip[slot].recorded) ||
+                (sim->gossip[i].recorded == sim->gossip[slot].recorded &&
+                 sim->gossip[i].event_id < sim->gossip[slot].event_id)) slot = i;
+        }
     }
-    uint32_t bit = UINT32_C(1) << (uint32_t)slot;
+    if (slot < 0) {
+        slot = 0;
+        for (int32_t i = 0; i < GossipBoardSlots(sim); ++i) {
+            if (sim->gossip[i].event_id == 0U) { slot = i; break; }
+            if ((sim->gossip[i].recorded && !sim->gossip[slot].recorded) ||
+                (sim->gossip[i].recorded == sim->gossip[slot].recorded &&
+                 sim->gossip[i].event_id < sim->gossip[slot].event_id)) slot = i;
+        }
+    }
+    uint64_t bit = UINT64_C(1) << (uint32_t)slot;
     for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
         sim->gossip_carriers[i].stories &= ~bit;
         sim->gossip_carriers[i].told_player &= ~bit;
@@ -5678,7 +5706,7 @@ static void PostPendingSituationNotices(CcSim *sim)
     if (sim->schema_version < 48U) return;
     for (int32_t s = 0; s < sim->situation_count; ++s) {
         CcSituation *situation = &sim->situations[s];
-        uint32_t bit = UINT32_C(1) << (uint32_t)s;
+        uint64_t bit = UINT64_C(1) << (uint32_t)s;
         if ((sim->posted_situation_mask & bit) != 0U) continue;
         if (situation->status != CC_SITUATION_ACTIVE ||
             situation->kind == CC_SITUATION_MONSTER_EXPEDITION ||
@@ -5710,14 +5738,18 @@ static void GatherGossipEvents(CcSim *sim)
             CcSettlementIsAbandoned(&sim->settlements[origin]))) {
             continue;
         }
-        int32_t slot = 0;
-        for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        /* Word of mouth lives above the notice region, so a posting and a
+           rumour no longer evict one another. */
+        int32_t first = sim->schema_version >= CC_NOTICE_BOARD_SCHEMA ?
+                        CC_NOTICE_BOARD_SLOTS : 0;
+        int32_t slot = first;
+        for (int32_t i = first; i < GossipBoardSlots(sim); ++i) {
             if (sim->gossip[i].event_id == 0U) { slot = i; break; }
             if ((sim->gossip[i].recorded && !sim->gossip[slot].recorded) ||
                 (sim->gossip[i].recorded == sim->gossip[slot].recorded &&
                  sim->gossip[i].event_id < sim->gossip[slot].event_id)) slot = i;
         }
-        uint32_t bit = UINT32_C(1) << (uint32_t)slot;
+        uint64_t bit = UINT64_C(1) << (uint32_t)slot;
         for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
             sim->gossip_carriers[i].stories &= ~bit;
             sim->gossip_carriers[i].told_player &= ~bit;
@@ -5775,7 +5807,7 @@ const CcGossip *CcSimPersonalGossip(const CcSim *sim, CcId id, int32_t offset,
     for (int32_t n = 0; n <= offset && n < CC_MAX_GOSSIP; ++n) {
         int32_t best = -1;
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
-            if ((carrier->stories & (UINT32_C(1) << (uint32_t)i)) == 0U ||
+            if ((carrier->stories & (UINT64_C(1) << (uint32_t)i)) == 0U ||
                 sim->gossip[i].event_id >= before) continue;
             if (best < 0 || sim->gossip[i].event_id > sim->gossip[best].event_id) best = i;
         }
@@ -5806,8 +5838,8 @@ int32_t CcSimNextUntoldStory(const CcSim *sim, CcId id,
     CcId best_id = 0U;
     int32_t best = -1;
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
-        if ((carrier->stories & (UINT32_C(1) << (uint32_t)i)) == 0U ||
-            (carrier->told_player & (UINT32_C(1) << (uint32_t)i)) != 0U ||
+        if ((carrier->stories & (UINT64_C(1) << (uint32_t)i)) == 0U ||
+            (carrier->told_player & (UINT64_C(1) << (uint32_t)i)) != 0U ||
             sim->gossip[i].event_id <= best_id) continue;
         best = i;
         best_id = sim->gossip[i].event_id;
@@ -5820,7 +5852,7 @@ bool CcSimStoryTold(const CcSim *sim, CcId id, int32_t slot)
 {
     const CcGossipCarrier *carrier = CcSimGossipCarrier(sim, id);
     return carrier != NULL && slot >= 0 && slot < CC_MAX_GOSSIP &&
-        (carrier->told_player & (UINT32_C(1) << (uint32_t)slot)) != 0U;
+        (carrier->told_player & (UINT64_C(1) << (uint32_t)slot)) != 0U;
 }
 
 static bool GossipCarrierExists(const CcSim *sim, CcId id)
@@ -5879,7 +5911,7 @@ static void ObserveCraftStory(CcSim *sim, int32_t slot)
             !CcOccupationObserves(person->occupation, story->kind)) continue;
         CcGossipCarrier *carrier = GossipCarrierFor(sim, person->id);
         if (carrier == NULL) continue;
-        carrier->stories |= UINT32_C(1) << (uint32_t)slot;
+        carrier->stories |= UINT64_C(1) << (uint32_t)slot;
         carrier->versions[slot] = (CcGossipVersion){
             .source_character_id = person->id, .confidence = 100};
     }
@@ -5901,7 +5933,7 @@ static const CcCharacter *GossipTellerAt(const CcSim *sim, CcId place_id,
         if (craft_slot >= 0) {
             const CcGossipCarrier *held = CcSimGossipCarrier(sim, person->id);
             bool knows = held != NULL &&
-                (held->stories & (UINT32_C(1) << (uint32_t)craft_slot)) != 0U;
+                (held->stories & (UINT64_C(1) << (uint32_t)craft_slot)) != 0U;
             if (!knows) continue;
         }
         if (person->current_settlement_id == place_id &&
@@ -6092,7 +6124,7 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
         CcGossip *story = &sim->gossip[i];
         if (story->event_id == 0U) continue;
-        uint32_t bit = UINT32_C(1) << (uint32_t)i;
+        uint64_t bit = UINT64_C(1) << (uint32_t)i;
         if ((carrier->stories & bit) != 0U &&
             (story->settlement_mask & town) == 0U) {
             story->settlement_mask |= town;
@@ -6150,7 +6182,7 @@ static bool ApplyHeardStory(CcSim *sim, const CcCommand *command,
             break;
         }
     }
-    uint32_t bit = UINT32_C(1) << (uint32_t)command->amount;
+    uint64_t bit = UINT64_C(1) << (uint32_t)command->amount;
     if (carrier == NULL || (carrier->stories & bit) == 0U) {
         SetError(error, error_capacity,
                  "That person has not told you that story.");
@@ -6173,7 +6205,7 @@ static bool ApplyExchangeGossip(CcSim *sim, const CcCommand *command,
         return false;
     }
     const CcGossipCarrier *previous = CcSimGossipCarrier(sim, sim->player.id);
-    uint32_t known = previous != NULL ? previous->stories : 0U;
+    uint64_t known = previous != NULL ? previous->stories : 0U;
     ExchangeGossip(sim, person->id, person->current_settlement_id, person->name);
     ExchangeGossip(sim, sim->player.id, sim->player.location_id, "Your company");
     const CcGossipCarrier *teller = CcSimGossipCarrier(sim, person->id);
@@ -6182,7 +6214,7 @@ static bool ApplyExchangeGossip(CcSim *sim, const CcCommand *command,
             CcGossipCarrier *listener = &sim->gossip_carriers[i];
             if (listener->id != sim->player.id) continue;
             for (int32_t j = 0; j < CC_MAX_GOSSIP; ++j) {
-                uint32_t bit = UINT32_C(1) << (uint32_t)j;
+                uint64_t bit = UINT64_C(1) << (uint32_t)j;
                 if ((known & bit) == 0U && (teller->stories & bit) != 0U)
                     listener->versions[j] = RetellGossip(sim, &sim->gossip[j], teller->versions[j], person, 0U);
             }
@@ -6306,7 +6338,7 @@ CcArchiveAppointmentPlan CcSimArchiveAppointmentPlan(const CcSim *sim)
     if (plan.volume_id != 0) { plan.gate = CC_ARCHIVE_RECRUIT_READY; return plan; }
     const CcGossipCarrier *held = CcSimGossipCarrier(sim, person->id);
     for (int32_t i = 0; held != NULL && i < CC_MAX_GOSSIP; ++i)
-        if ((held->stories & (UINT32_C(1) << (uint32_t)i)) != 0 && sim->gossip[i].event_id != 0 &&
+        if ((held->stories & (UINT64_C(1) << (uint32_t)i)) != 0 && sim->gossip[i].event_id != 0 &&
             (plan.source_event_id == 0 || sim->gossip[i].event_id < plan.source_event_id)) {
             plan.source_event_id = sim->gossip[i].event_id; plan.account_slot = i;
         }
@@ -6681,7 +6713,7 @@ static void AdvanceArchives(CcSim *sim)
             int32_t oldest = -1;
             for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
                 const CcGossip *story = &sim->gossip[i];
-                if (story->event_id == 0 || story->recorded || (held->stories & (UINT32_C(1) << (uint32_t)i)) == 0) continue;
+                if (story->event_id == 0 || story->recorded || (held->stories & (UINT64_C(1) << (uint32_t)i)) == 0) continue;
                 bool selected = false;
                 for (int32_t j = 0; j < noted_count; ++j) if (noted_gossip[j] == i) selected = true;
                 if (selected) continue;
@@ -18348,7 +18380,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     }
     if (!CcIdentityValidate(sim, error, error_capacity)) return false;
     if (sim->schema_version >= 44U) {
-        uint32_t stories = 0U;
+        uint64_t stories = 0U;
         uint32_t towns = (UINT32_C(1) << (uint32_t)sim->settlement_count) - 1U;
         if (sim->gossip_last_event_id != 0U &&
             (CcIdKind(sim->gossip_last_event_id) != CC_ENTITY_EVENT ||
@@ -18379,7 +18411,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 }
                 continue;
             }
-            stories |= UINT32_C(1) << (uint32_t)i;
+            stories |= UINT64_C(1) << (uint32_t)i;
             CcEvent source = {.kind = story->kind, .magnitude = 20};
             bool story_kind_valid = IsNotableGossip(sim, &source) ||
                 story->kind == CC_EVENT_NOTICE_POSTED;
@@ -18411,7 +18443,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
             const CcGossipCarrier *carrier = &sim->gossip_carriers[i];
             for (int32_t slot = 0; slot < CC_MAX_GOSSIP; ++slot) {
-                bool known = (carrier->stories & (UINT32_C(1) << (uint32_t)slot)) != 0U;
+                bool known = (carrier->stories & (UINT64_C(1) << (uint32_t)slot)) != 0U;
                 if (!ValidGossipVersion(sim, &carrier->versions[slot], known)) {
                     SetError(error, error_capacity, "A traveler's gossip version is invalid.");
                     return false;

@@ -907,7 +907,11 @@ uint64_t CcSimHash(const CcSim *sim)
         if (sim->schema_version >= 48U) {
             HASH_VALUE(sim->posted_situation_mask);
         }
-        for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        /* Saves below CC_NOTICE_BOARD_SCHEMA stored a 32-slot board and must
+           keep hashing exactly the slots they stored. */
+        const int32_t board = sim->schema_version >= CC_NOTICE_BOARD_SCHEMA ?
+            CC_MAX_GOSSIP : CC_LEGACY_GOSSIP_SLOTS;
+        for (int32_t i = 0; i < board; ++i) {
             const CcGossip *story = &sim->gossip[i];
             HASH_VALUE(story->event_id); HASH_VALUE(story->origin_id);
             HASH_VALUE(story->heard_event_id); HASH_VALUE(story->day);
@@ -925,12 +929,24 @@ uint64_t CcSimHash(const CcSim *sim)
         }
         for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
             HASH_VALUE(sim->gossip_carriers[i].id);
-            HASH_VALUE(sim->gossip_carriers[i].stories);
-            if (sim->schema_version >= 48U) {
-                HASH_VALUE(sim->gossip_carriers[i].told_player);
+            if (sim->schema_version >= CC_NOTICE_BOARD_SCHEMA) {
+                HASH_VALUE(sim->gossip_carriers[i].stories);
+            } else {
+                /* Narrowed on purpose: these were uint32_t when the save was
+                   written, and HASH_VALUE digests the field's whole width. */
+                uint32_t stories = (uint32_t)sim->gossip_carriers[i].stories;
+                HASH_VALUE(stories);
             }
-            for (int32_t slot = 0; slot < CC_MAX_GOSSIP; ++slot) {
-                if ((sim->gossip_carriers[i].stories & (UINT32_C(1) << (uint32_t)slot)) != 0U) {
+            if (sim->schema_version >= 48U) {
+                if (sim->schema_version >= CC_NOTICE_BOARD_SCHEMA) {
+                    HASH_VALUE(sim->gossip_carriers[i].told_player);
+                } else {
+                    uint32_t told = (uint32_t)sim->gossip_carriers[i].told_player;
+                    HASH_VALUE(told);
+                }
+            }
+            for (int32_t slot = 0; slot < board; ++slot) {
+                if ((sim->gossip_carriers[i].stories & (UINT64_C(1) << (uint32_t)slot)) != 0U) {
                     hash = HashGossipVersion(hash, &sim->gossip_carriers[i].versions[slot]);
                 }
             }
