@@ -1,0 +1,63 @@
+add_executable(sim_tests tests/sim_tests.c)
+target_link_libraries(sim_tests PRIVATE crownless_sim)
+cc_strict_warnings(sim_tests)
+cc_large_sim_stack(sim_tests)
+add_test(NAME deterministic_simulation COMMAND sim_tests)
+
+add_executable(story_tests tests/story_tests.c)
+target_link_libraries(story_tests PRIVATE crownless_story)
+cc_strict_warnings(story_tests)
+add_test(NAME authored_story_beats COMMAND story_tests)
+
+add_executable(gossip_language_tests tests/gossip_language_tests.c)
+add_executable(core_account_probe tools/core_account_probe.c)
+target_link_libraries(core_account_probe PRIVATE crownless_story)
+cc_strict_warnings(core_account_probe)
+target_link_libraries(gossip_language_tests PRIVATE crownless_story)
+cc_strict_warnings(gossip_language_tests)
+add_test(NAME grounded_gossip_language COMMAND gossip_language_tests)
+
+add_executable(speech_tests tests/speech_tests.c)
+target_link_libraries(speech_tests PRIVATE crownless_story)
+cc_strict_warnings(speech_tests)
+add_test(NAME speech_identity_and_words COMMAND speech_tests)
+
+add_executable(quest_system_tests tests/quest_system_tests.c)
+target_link_libraries(quest_system_tests PRIVATE crownless_persistence)
+cc_strict_warnings(quest_system_tests)
+add_test(NAME quest_fronts_and_clocks COMMAND quest_system_tests)
+
+add_executable(loot_tests tests/loot_tests.c)
+target_link_libraries(loot_tests PRIVATE crownless_sim)
+cc_strict_warnings(loot_tests)
+add_test(NAME encounter_loot_tables COMMAND loot_tests)
+
+add_executable(client_session_tests tests/client_session_tests.c)
+target_link_libraries(client_session_tests PRIVATE crownless_client_session)
+cc_strict_warnings(client_session_tests)
+add_test(NAME local_session_round_trip COMMAND client_session_tests)
+
+add_executable(road_stop_tests tests/road_stop_tests.c)
+add_executable(road_council_tests tests/road_council_tests.c)
+target_link_libraries(road_council_tests PRIVATE crownless_metagame)
+cc_strict_warnings(road_council_tests)
+add_test(NAME road_council_and_quests COMMAND road_council_tests)
+
+add_executable(grain_supply_tests tests/grain_supply_tests.c)
+target_link_libraries(grain_supply_tests PRIVATE crownless_persistence)
+cc_strict_warnings(grain_supply_tests)
+add_test(NAME grain_supply_and_disruption COMMAND grain_supply_tests)
+
+add_executable(bakery_support_tests tests/bakery_support_tests.c)
+target_link_libraries(bakery_support_tests PRIVATE crownless_persistence)
+cc_strict_warnings(bakery_support_tests)
+add_test(NAME bakery_support_and_memory COMMAND bakery_support_tests)
+target_link_libraries(road_stop_tests PRIVATE crownless_persistence crownless_metagame)
+cc_strict_warnings(road_stop_tests)
+add_test(NAME roadside_camp_choices COMMAND road_stop_tests)
+
+add_executable(travel_departure_tests tests/travel_departure_tests.c)
+target_link_libraries(travel_departure_tests PRIVATE crownless_persistence)
+cc_strict_warnings(travel_departure_tests)
+add_test(NAME free_road_departures COMMAND travel_departure_tests)
+

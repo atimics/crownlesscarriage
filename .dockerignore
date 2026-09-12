@@ -11,6 +11,8 @@ assets/**
 !src/**
 !tests/
 !tests/**
+!cmake/
+!cmake/**
 !tools/
 tools/**
 !tools/*.c
