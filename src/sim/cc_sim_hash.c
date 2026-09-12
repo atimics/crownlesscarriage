@@ -375,6 +375,9 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(dragon->slain);
             HASH_VALUE(dragon->slain_day);
         }
+        if (sim->schema_version >= 95U) {
+            HASH_VALUE(dragon->dragons_slain);
+        }
         if (sim->schema_version >= 12U) {
             HASH_VALUE(dragon->life_stage);
             HASH_VALUE(dragon->activity);

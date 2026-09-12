@@ -131,7 +131,7 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  " hoard_raids=%d goblin_guards=%d goblin_members=%d"
                  " goblin_covenant=%d goblin_cohesion=%d goblin_tithes=%d"
                  " wars=%d alliances=%d couriers=%d"
-                 " dragon_slain=%d dragon_campaign=%d/%d/%d"
+                 " dragons_slain=%d dragon_campaign=%d/%d/%d"
                  " dragon_stage=%s activity=%s age=%d crown=%d body=%d"
                  " memory=%d territory=%d shadow=%d eggs=%d hunts=%d"
                  " broods=%d whelps=%d afterdeath=%d ruins=%d climate=%d"
@@ -163,7 +163,7 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  sim->dragon_cult.devotion, sim->goblins.cohesion,
                  sim->goblins.tributes_delivered,
                  wars, alliances,
-                 active_couriers, sim->dragon.slain ? 1 : 0,
+                 active_couriers, sim->dragon.dragons_slain,
                  sim->dragon_campaign.attempts,
                  sim->dragon_campaign.victories,
                  sim->dragon_campaign.defeats,

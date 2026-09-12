@@ -48,6 +48,7 @@ METRICS = [
     "closed_routes", "years_all_routes_closed",
     # politics
     "days_at_war", "days_allied", "wars", "alliances",
+    "dragons_slain",
     "dragon_campaign_attempts", "dragon_campaign_victories",
     "dragon_campaign_defeats", "years_hunger_40_plus",
     "years_hunger_60_plus",

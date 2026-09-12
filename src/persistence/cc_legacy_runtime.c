@@ -216,7 +216,7 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 68U || legacy_version == 69U ||
          legacy_version == 70U || legacy_version == 71U || legacy_version == 72U || legacy_version == 73U ||
          legacy_version == 74U || legacy_version == 75U || legacy_version == 76U ||
-         legacy_version == 77U || legacy_version == 78U || legacy_version == 79U || legacy_version == 80U || legacy_version == 81U || legacy_version == 82U || legacy_version == 83U || legacy_version == 84U || legacy_version == 85U || legacy_version == 86U || legacy_version == 87U || legacy_version == 88U || legacy_version == 89U || legacy_version == 90U || legacy_version == 91U || legacy_version == 92U || legacy_version == 93U) &&        sim->generator_version == 25U) {        /* Schema 47 adds bandit war camps (camp_settlement_id, default         * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
+         legacy_version == 77U || legacy_version == 78U || legacy_version == 79U || legacy_version == 80U || legacy_version == 81U || legacy_version == 82U || legacy_version == 83U || legacy_version == 84U || legacy_version == 85U || legacy_version == 86U || legacy_version == 87U || legacy_version == 88U || legacy_version == 89U || legacy_version == 90U || legacy_version == 91U || legacy_version == 92U || legacy_version == 93U || legacy_version == 94U) &&        sim->generator_version == 25U) {        /* Schema 47 adds bandit war camps (camp_settlement_id, default         * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
          * default 0). Schema 49 makes notable famine accounts gossip and
          * schema 50 adds goblin raids, cult rallies, dragon omens and dragon
          * fires; both changes are derived from events, so older saves need
@@ -710,6 +710,14 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
     if (legacy_version < 62U) CcSimUpgradeKnowledgeSourceNames(sim);
     if (legacy_version < 51U) CcSimSeedCommonPonyHerds(sim);
     if (legacy_version < 52U) CcSimUnharnessSecondDraftAnimal(sim);
+    if (legacy_version < 95U) {
+        /* Every campaign victory slays exactly one dragon, so the historical
+           count is reconstructible; the current dragon's slaying covers
+           saves whose campaign counters were lost. */
+        int32_t slain_count = sim->dragon_campaign.victories;
+        if (sim->dragon.slain && slain_count < 1) slain_count = 1;
+        sim->dragon.dragons_slain = slain_count;
+    }
     /* Legacy upgrades can seed residents and situation casts through
        separate paths; make the final living cast unique before validation. */
     MakeLegacyCharacterNamesUnique(sim);

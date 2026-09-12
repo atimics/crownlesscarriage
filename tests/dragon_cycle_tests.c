@@ -582,6 +582,55 @@ int main(void)
                          CC_EVENT_DRAGON_HOARD_RECOVERED) == 1);
     CC_CHECK(CcSimTrackedGold(&dragon_host) == campaign_gold);
     CC_CHECK(CcSimValidate(&dragon_host, error, sizeof(error)));
+    CC_CHECK(dragon_host.dragon.dragons_slain == 1);
+
+    /* A brood-hoard egg hatches a successor: the end-state slain flag
+       resets, but the cumulative count keeps the first kill. */
+    dragon_host.dragon.egg_count = 1;
+    dragon_host.dragon.brood_days_remaining = 2;
+    for (int32_t day = 0;
+         day < 60 && dragon_host.dragon.slain; ++day) {
+        CcSimAdvanceDays(&dragon_host, 1);
+    }
+    CC_CHECK(!dragon_host.dragon.slain);
+    CC_CHECK(dragon_host.dragon.dragons_slain == 1);
+    CC_CHECK(dragon_host.dragon.life_stage == CC_DRAGON_STAGE_WHELP);
+    CC_CHECK(dragon_host.dragon.egg_count == 0);
+    CC_CHECK(CcSimValidate(&dragon_host, error, sizeof(error)));
+
+    /* The realm slays the successor too: the count reaches two while
+       the end-state flag flips back to slain. */
+    dragon_host.dragon.age_days = 500 * 365;
+    dragon_host.dragon_campaign.pledged_kingdom_mask = UINT32_C(7);
+    dragon_host.dragon_campaign.cooldown_days = 0;
+    dragon_host.goblins.members = 12;
+    dragon_host.dragon_cult.devotion = 0;
+    dragon_host.goblins.hoard_defenses = 0;
+    dragon_host.dragon.body_condition = 10;
+    dragon_host.dragon.crown_strength = 0;
+    dragon_host.dragon.territory_stability = 0;
+    dragon_host.dragon.memory_integrity = 0;
+    for (int32_t i = 0; i < dragon_host.settlement_count; ++i) {
+        dragon_host.settlements[i].stock[CC_GOOD_FOOD] += 32;
+        dragon_host.settlements[i].stock[CC_GOOD_TOOLS] += 8;
+        dragon_host.settlements[i].stock[CC_GOOD_WEAPONS] += 12;
+    }
+    CcSimAdvanceDays(&dragon_host, 55);
+    CC_CHECK(dragon_host.dragon.slain);
+    CC_CHECK(dragon_host.dragon.dragons_slain == 2);
+    CC_CHECK(dragon_host.dragon_campaign.attempts == 2);
+    CC_CHECK(dragon_host.dragon_campaign.victories == 2);
+    CC_CHECK(CcSimValidate(&dragon_host, error, sizeof(error)));
+
+    /* The cumulative count survives a save round-trip. */
+    const char *slain_path = "/tmp/crownless-dragons-slain-tests.ccsave";
+    (void)remove(slain_path);
+    CC_CHECK(CcSaveWrite(slain_path, &dragon_host, error, sizeof(error)));
+    CcSim slain_restored;
+    CC_CHECK(CcSaveRead(slain_path, &slain_restored, error, sizeof(error)));
+    CC_CHECK(slain_restored.dragon.dragons_slain == 2);
+    CC_CHECK(CcSimHash(&slain_restored) == CcSimHash(&dragon_host));
+    CC_CHECK(remove(slain_path) == 0);
 
     CcSim learning_host;
     CcSimInit(&learning_host, UINT32_C(0xd2a61ea7));
