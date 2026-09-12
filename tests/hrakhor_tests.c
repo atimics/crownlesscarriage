@@ -11,7 +11,7 @@ int main(void)
     const char *english = "Stone took food to Fire. I do not trust the court, if the rumour is true. Food costs 7; mushrooms help.";
     char text[512], again[512];
     CC_CHECK(CcHrakhorCorrupt(&account, english, 100U, text, sizeof(text)));
-    CC_CHECK(strcmp(text, "Stone rakh'ed food to Fire. Sha do not trust the drok'khor, if the rumour is true. Food costs 7; mukuk help.") == 0);
+    CC_CHECK(strcmp(text, "Stone rakh'ed food to Fire. Sha do not trust tak drok'khor, if tak rumour is true. Food costs 7; mukuk help.") == 0);
     /* The object called Food also protects the same word in lower case. */
     CC_CHECK(CcHrakhorCorrupt(&account, english, 0U, text, sizeof(text)));
     CC_CHECK(strcmp(text, english) == 0);
@@ -29,10 +29,10 @@ int main(void)
     CC_CHECK(CcCoreAccountPrepare(CC_EVENT_NOTICE_POSTED,
         "Mara posts a notice at Thornford: Relief charter.", 80, 0, &account));
     CC_CHECK(CcHrakhorCorrupt(&account,
-        "I gathered food. You built shelter. Friends traded mushrooms. Firewood isn't fire. Éva's dragon, perhaps.",
+        "I gathered food for the clan. You built shelter. Friends traded mushrooms. Firewood isn't fire. Éva's dragon, perhaps.",
         100U, text, sizeof(text)));
     CC_CHECK(strcmp(text,
-        "Sha rakh'ed zhek. Thu grosh'ed nukh. Veshuk vesh'rakh'ed mukuk. Firewood isn't vrik. Éva's vrik'drok, perhaps.") == 0);
+        "Sha rakh'ed zhek fo tak khor. Thu grosh'ed nukh. Veshuk vesh'rakh'ed mukuk. Firewood isn't vrik. Éva's vrik'drok, perhaps.") == 0);
     char exact[5];
     CC_CHECK(CcHrakhorCorrupt(&account, "food", 100U, exact, sizeof(exact)));
     CC_CHECK(strcmp(exact, "zhek") == 0);

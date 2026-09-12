@@ -5,6 +5,7 @@
 
 /* Whole roots retain English tense and clause order in this contact dialect. */
 static const struct { const char *english, *goblin; } Words[] = {
+    {"for", "fo"}, {"the", "tak"},
     {"voice", "hra"}, {"breath", "hra"}, {"clan", "khor"},
     {"stone", "grak"}, {"fire", "vrik"}, {"food", "zhek"},
     {"small", "skrit"}, {"clever", "skrit"}, {"large", "drok"},

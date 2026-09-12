@@ -20,6 +20,7 @@ repeated encounters.
 
 | English | Hra'khor | Clan meaning |
 |---|---|---|
+| for / the | fo / tak | purpose / a specific thing |
 | voice, breath | hra | living voice |
 | clan | khor | chosen family |
 | stone | grak | lasting matter |
@@ -47,7 +48,7 @@ repeated encounters.
 “Sha rakh'ed zhek. Thu grosh'ed nukh.”
 
 “I do not trust the court, if the rumour is true.” becomes
-“Sha do not trust the drok'khor, if the rumour is true.”
+“Sha do not trust tak drok'khor, if tak rumour is true.”
 
 Each root has a stable hash. Strength 0 keeps the English line. Strength 50
 changes a stable subset of known roots. Strength 100 changes every eligible
