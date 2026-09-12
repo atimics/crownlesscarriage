@@ -97,7 +97,8 @@ static void CheckFirstLeg(void)
     CC_CHECK(CcSimReserveArchiveConvoy(&sim));
     const char *path="archive-convoy-road-test.ccsave";
     CcJournal *journal=CcJournalStart(path,&sim,error,sizeof(error));
-    if(journal==NULL)fprintf(stderr,"%s\n",error);CC_CHECK(journal!=NULL);
+    if (journal == NULL) { fprintf(stderr, "%s\n", error); }
+    CC_CHECK(journal != NULL);
     CC_CHECK(CcJournalAdvanceDays(journal,&sim,1,error,sizeof(error)));Valid();
     CC_CHECK(sim.archive_convoy.status==2);
     CcJournalAbandon(&journal);
@@ -307,7 +308,8 @@ int main(void)
         sim.treasures[i].location_id=plan.first_hop_id;
     const char *path="archive-convoy-test.ccsave";
     CcJournal *journal=CcJournalStart(path,&sim,error,sizeof(error));
-    if(journal==NULL)fprintf(stderr,"%s\n",error);CC_CHECK(journal!=NULL);
+    if (journal == NULL) { fprintf(stderr, "%s\n", error); }
+    CC_CHECK(journal != NULL);
     CC_CHECK(CcJournalAdvanceDays(journal,&sim,7,error,sizeof(error)));
     CcJournalAbandon(&journal);
     CC_CHECK(CcSaveRead(path,&restored,error,sizeof(error)));
