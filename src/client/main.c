@@ -134,8 +134,6 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_NEXT_PROMISE,
     CONTEXT_ACTION_CLOSE_VIEW,
     CONTEXT_ACTION_GOSSIP_CHAT,
-    CONTEXT_ACTION_GOSSIP_SHARE,
-    CONTEXT_ACTION_GOSSIP_CERTAINTY,
     CONTEXT_ACTION_FIGHT,
     CONTEXT_ACTION_PAY,
     CONTEXT_ACTION_TRAVEL,
@@ -4133,20 +4131,9 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (local->adventure_ui && view == VIEW_CHARACTER && local->conversation_situation_id == 0U) {
-        const CcGossip *story = CcSimPersonalGossip(sim, local->conversation_character_id,
-            0, NULL);
-        if (story != NULL) {
-            /* Chat advances through the account, its source, and the next account. */
-            AddDetailedContextAction(&set, CONTEXT_ACTION_GOSSIP_CHAT,
-                "Chat", "1", "HEAR THEIR NEWS", true, false);
-            if (core_conversation.model != NULL && core_conversation.cached && !core_conversation.pending &&
-                !local->conversation_gossip_source && core_conversation_speaker == local->conversation_character_id)
-                AddDetailedContextAction(&set, CONTEXT_ACTION_GOSSIP_CERTAINTY,
-                    "How sure are you?", "", "ASK ABOUT THE ACCOUNT", true, false);
-        }
-        if (CcSimCharacter(sim, local->conversation_character_id) != NULL)
-            AddDetailedContextAction(&set, CONTEXT_ACTION_GOSSIP_SHARE,
-                "Exchange road news", "", "", true, false);
+        AddDetailedContextAction(&set, CONTEXT_ACTION_GOSSIP_CHAT,
+            "Chat", "1", "", !core_conversation.pending && core_conversation.round_phase == 0U,
+            false);
         AddDetailedContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Farewell", "ESC", "", true, false);
         return set;
     }
@@ -6082,6 +6069,11 @@ static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
     const CcSituation *situation = CcSimSituation(sim, local->conversation_situation_id);
     const CcCharacter *person = CcSimCharacter(sim, local->conversation_character_id);
     if (CcSpeechCharacter(sim, situation, person, speech)) return true;
+    if (core_conversation_speaker != local->conversation_character_id) {
+        CcCoreConversationReset(&core_conversation);
+        core_conversation_speaker = local->conversation_character_id;
+    }
+    if (CcCoreConversationShown(&core_conversation, speech)) return true;
     const CcGossipCarrier *carrier = CcSimGossipCarrier(
         sim, local->conversation_character_id);
     int32_t slot = local->conversation_gossip_slot;
@@ -6126,6 +6118,42 @@ static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
     }
     *speech = greeting;
     return true;
+}
+
+/* Each participant supplies their own held version of the same event. */
+static bool ClientStartChat(const CcSim *sim, LocalState *local, uint32_t voice)
+{
+    const CcGossipCarrier *player = CcSimGossipCarrier(sim, sim->player.id);
+    const CcGossipCarrier *listener = CcSimGossipCarrier(sim, local->conversation_character_id);
+    if (player == NULL || listener == NULL || core_conversation.model == NULL) return false;
+    for (int32_t attempt = -1; attempt < CC_MAX_GOSSIP; ++attempt) {
+        int32_t slot = attempt < 0 ? local->conversation_gossip_slot : attempt;
+        if (slot < 0 || slot >= CC_MAX_GOSSIP) continue;
+        uint32_t bit = UINT32_C(1) << (uint32_t)slot;
+        if ((player->stories & listener->stories & bit) == 0U) continue;
+        const CcGossip *story = CcSimGossipStory(sim, slot);
+        CcGossipLanguage language[2]; CcCoreAccount account[2]; CcSpeech speech[2];
+        if (story == NULL ||
+            !CcSpeechPrepareGossip(sim, story, &player->versions[slot], 0U, &language[0]) ||
+            !CcSpeechPrepareGossip(sim, story, &listener->versions[slot], 0U, &language[1])) continue;
+        if (!CcCoreAccountPrepare(story->kind, language[0].account, language[0].confidence,
+                language[0].retellings, &account[0]) ||
+            !CcCoreAccountPrepare(story->kind, language[1].account, language[1].confidence,
+                language[1].retellings, &account[1])) continue;
+        char words[CC_SPEECH_TEXT_CAPACITY];
+        if (!CcSpeechCoreGossip(&language[0], words, sizeof(words))) continue;
+        if (!CcSpeechCompose(&speech[0], "gossip.account", sim->player.id, "You", voice,
+                words, CC_SPEECH_PLAIN, CC_SPEECH_CONVERSATION, story->event_id) ||
+            !CcSpeechStory(sim, local->conversation_character_id, story, &listener->versions[slot],
+                false, &speech[1])) continue;
+        if (CcCoreConversationStartRound(&core_conversation, &account[0], &speech[0],
+                &account[1], &speech[1])) {
+            local->conversation_gossip_slot = slot;
+            return true;
+        }
+        return false;
+    }
+    return false;
 }
 
 static void DrawCharacterConversation(const CcSim *sim,
@@ -8321,6 +8349,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if ((local->adventure_ui && ClientKeyPressed(KEY_ESCAPE)) || ClientKeyPressed(KEY_BACKSPACE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
             CcAudioClearSpeech();
+            CcCoreConversationReset(&core_conversation); core_conversation_speaker = 0U;
             CcSpeech goodbye;
             const CcSituation *leaving = CcSimSituation(sim, local->conversation_situation_id);
             if (adventure_preferences != NULL && adventure_preferences->player_voice >= 5 &&
@@ -8332,62 +8361,34 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (local->adventure_ui && local->conversation_situation_id == 0U) {
             ContextActionSet replies = BuildContextActions(sim, local, VIEW_CHARACTER, *selected, *selected_situation);
             for (int32_t i = 0; i < replies.count; ++i)
-                if (ClientKeyPressed(KEY_ONE + i)) context_action = replies.items[i].kind;
-            if (context_action == CONTEXT_ACTION_CLOSE_VIEW) { *view = VIEW_LOCAL; return; }
-            if (context_action == CONTEXT_ACTION_GOSSIP_CHAT) {
-                if (local->conversation_gossip_slot >= 0 &&
-                    local->conversation_gossip_source) {
-                    /* The source was drawn; move to the next untold account. */
-                    const CcGossipVersion *version = NULL;
-                    int32_t next = CcSimNextUntoldStory(
-                        sim, local->conversation_character_id, &version);
-                    local->conversation_gossip_slot = next;
-                    local->conversation_gossip_source = false;
-                    if (next < 0) {
-                        (void)snprintf(message, message_capacity,
-                            "That is all I have that would interest you.");
-                    }
-                } else {
-                    /* Draw who told them, and mark the story told. */
-                    const CcGossipVersion *version = NULL;
-                    int32_t slot = local->conversation_gossip_slot >= 0 ?
-                        local->conversation_gossip_slot :
-                        CcSimNextUntoldStory(
-                            sim, local->conversation_character_id, &version);
-                    if (slot < 0) {
-                        (void)snprintf(message, message_capacity,
-                            "That is all I have that would interest you.");
-                    } else {
-                        local->conversation_gossip_slot = slot;
-                        local->conversation_gossip_source = true;
-                        CcCommand heard = {
-                            .kind = CC_COMMAND_HEARD_STORY,
-                            .target_id = local->conversation_character_id,
-                            .amount = slot
-                        };
-                        (void)ApplyCommand(*journal, sim, heard,
-                                          message, message_capacity);
-                    }
-                }
-            }
-            if (context_action == CONTEXT_ACTION_GOSSIP_CERTAINTY &&
-                core_conversation.cached && !core_conversation.pending) {
-                CcCoreConversationHear(&core_conversation, sim->player.id, "How sure are you?");
-                local->conversation_gossip_source = false;
+                if (replies.items[i].enabled && ClientKeyPressed(KEY_ONE + i)) context_action = replies.items[i].kind;
+            if (context_action == CONTEXT_ACTION_CLOSE_VIEW) {
                 CcAudioClearSpeech();
+                CcCoreConversationReset(&core_conversation); core_conversation_speaker = 0U;
+                *view = VIEW_LOCAL; return;
             }
-            if (context_action == CONTEXT_ACTION_GOSSIP_SHARE) {
+            if (context_action == CONTEXT_ACTION_GOSSIP_CHAT &&
+                !core_conversation.pending && core_conversation.round_phase == 0U) {
                 (void)ApplyCommand(*journal, sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
                     .target_id = local->conversation_character_id}, message, message_capacity);
-                local->conversation_gossip_slot = -1;
+                if (local->conversation_gossip_slot < 0)
+                    local->conversation_gossip_slot = CcSimNextUntoldStory(
+                        sim, local->conversation_character_id, NULL);
                 local->conversation_gossip_source = false;
-            }
-            if (context_action == CONTEXT_ACTION_GOSSIP_CHAT ||
-                context_action == CONTEXT_ACTION_GOSSIP_SHARE ||
-                context_action == CONTEXT_ACTION_GOSSIP_CERTAINTY) {
                 CcAudioClearSpeech();
-                CcSpeech answer;
-                if (ClientConversationSpeech(sim, local, &answer)) ClientSaySpeech(&answer);
+                uint32_t voice = adventure_preferences != NULL && adventure_preferences->player_voice >= 5 ?
+                    (uint32_t)adventure_preferences->player_voice : 5U;
+                bool started = ClientStartChat(sim, local, voice);
+                if (local->conversation_gossip_slot >= 0)
+                    (void)ApplyCommand(*journal, sim, (CcCommand){.kind = CC_COMMAND_HEARD_STORY,
+                        .target_id = local->conversation_character_id,
+                        .amount = local->conversation_gossip_slot}, message, message_capacity);
+                if (!started) {
+                    local->conversation_gossip_slot = CcSimNextUntoldStory(
+                        sim, local->conversation_character_id, NULL);
+                    CcSpeech answer;
+                    if (ClientConversationSpeech(sim, local, &answer)) ClientSaySpeech(&answer);
+                }
             }
             return;
         }
@@ -10280,9 +10281,17 @@ int main(int argc, char **argv)
     }
     if (opening_width != window.width || opening_height != window.height)
         SetWindowSize(window.width, window.height);
+#if defined(PLATFORM_WEB)
+    /* Keep the model as a separately cached download. */
+    if (emscripten_wget("assets/language/core.ccv2", "/tmp/crownless-core.ccv2") == 0) {
+        core_conversation.model = CcCoreModelLoad("/tmp/crownless-core.ccv2");
+        (void)remove("/tmp/crownless-core.ccv2");
+    }
+#else
     char core_model_path[768];
     if (ResolveClientAssetPath("assets/language/core.ccv2", core_model_path, sizeof(core_model_path)))
         core_conversation.model = CcCoreModelLoad(core_model_path);
+#endif
     SetExitKey(KEY_NULL);
     ClientInputInstall();
 #if defined(PLATFORM_WEB)

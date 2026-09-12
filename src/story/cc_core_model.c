@@ -14,6 +14,7 @@ typedef struct CoreToken { const char *bytes; int length; } CoreToken;
 typedef struct CoreMerge { int a, b, result; } CoreMerge;
 typedef struct CoreClass { uint32_t first, last; int flags; } CoreClass;
 #include "story/cc_core_model_tables.inc"
+_Static_assert(sizeof(CORE_LAYOUT) / sizeof(CORE_LAYOUT[0]) == TENSORS, "Review the native tensor layout");
 
 struct CcCoreModel {
     float *weights[TENSORS];
@@ -292,7 +293,7 @@ static bool HistoryText(const CcCoreAccount *account, const CcCoreSpoken *messag
         size_t best = 0U; int field = -1;
         for (size_t i = 0U; i < account->field_count; ++i) {
             CcCoreField f = account->fields[i];
-            if (f.spoken && f.knowledge != CC_CORE_UNKNOWN && f.length > best && f.length <= size - at &&
+            if (f.spoken && f.knowledge != CC_CORE_UNKNOWN && f.length > 0U && f.length >= best && f.length <= size - at &&
                 memcmp(message->text + at, account->text + f.start, f.length) == 0 &&
                 !WordBefore(message->text, at) && !WordAt(message->text + at + f.length, size - at - f.length)) {
                 best = f.length; field = (int)i;

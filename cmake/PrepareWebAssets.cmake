@@ -39,8 +39,6 @@ if(prepare_startup)
 
     file(COPY "${asset_source}/campaigns/deep-wyrm.ccsave"
          DESTINATION "${asset_output}/campaigns")
-    file(COPY "${asset_source}/language/core.ccv2" "${asset_source}/language/LICENSE"
-         DESTINATION "${asset_output}/language")
 
     file(GLOB voice_assets "${asset_source}/audio/voice/*.wav")
     if(voice_assets)
@@ -140,6 +138,8 @@ if(prepare_lazy)
         "${lazy_asset_output}/maps"
     )
 
+    file(COPY "${asset_source}/language/core.ccv2" "${asset_source}/language/LICENSE"
+         DESTINATION "${lazy_asset_output}/language")
     foreach(asset IN ITEMS
             environment_bridge_checkpoint_v01.glb
             environment_market_granary_v01.glb

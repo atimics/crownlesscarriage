@@ -61,4 +61,43 @@ void CcCoreConversationStep(CcCoreConversation *c, unsigned int budget)
                 c->original.delivery, c->original.priority, c->original.source_event_id)) c->reply = generated;
     }
     Remember(c, c->reply.speaker_id, c->reply.text);
+    if (c->round_phase == 1U) {
+        c->player_line = c->reply;
+        c->cached = false;
+        c->round_phase = 2U;
+        CcSpeech listener = c->listener_line;
+        (void)CcCoreConversationPrepare(c, &c->listener_account, &listener);
+        if (!c->pending) {
+            Remember(c, c->reply.speaker_id, c->reply.text);
+            c->round_phase = 0U;
+        }
+    } else if (c->round_phase == 2U) c->round_phase = 0U;
+}
+
+bool CcCoreConversationStartRound(CcCoreConversation *c,
+    const CcCoreAccount *player_account, const CcSpeech *player,
+    const CcCoreAccount *listener_account, const CcSpeech *listener)
+{
+    if (c == NULL || c->model == NULL || c->pending || c->round_phase != 0U ||
+        player_account == NULL || player == NULL || listener_account == NULL || listener == NULL ||
+        player->speaker_id == listener->speaker_id) return false;
+    c->listener_account = *listener_account;
+    c->listener_line = *listener;
+    c->player_line = *player;
+    c->cached = false;
+    CcSpeech first = *player;
+    if (!CcCoreConversationPrepare(c, player_account, &first) || !c->pending) return false;
+    c->round_phase = 1U;
+    c->round_shown = true;
+    return true;
+}
+
+bool CcCoreConversationShown(const CcCoreConversation *c, CcSpeech *speech)
+{
+    if (c == NULL || speech == NULL || !c->round_shown) return false;
+    if (c->round_phase == 1U) return CcSpeechCompose(speech, "gossip.thinking",
+        c->player_line.speaker_id, c->player_line.speaker, c->player_line.voice_index,
+        "...", c->player_line.delivery, c->player_line.priority, c->player_line.source_event_id);
+    *speech = c->round_phase == 2U ? c->player_line : c->reply;
+    return true;
 }

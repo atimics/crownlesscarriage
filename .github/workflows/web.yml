@@ -40,6 +40,8 @@ jobs:
           test -f out/build/web/site/index.wasm &&
           test -f out/build/web/site/index.data &&
           test -f out/build/web/site/assets.js &&
+          cmp assets/language/core.ccv2 out/build/web/site/assets/language/core.ccv2 &&
+          test -f out/build/web/site/assets/language/LICENSE &&
           test -f out/build/web/site/licenses.html &&
           test -f out/build/web/site/LICENSE.txt &&
           test -f out/build/web/site/THIRD_PARTY_NOTICES.txt &&

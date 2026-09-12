@@ -56,12 +56,26 @@ int main(int argc, char **argv)
         }
         (void)printf("%s: %s\n", speech.speaker, speech.text);
     }
-    CcCoreConversationHear(&conversation, sim.player.id, "How sure are you?");
-    CcSpeech answer = original[1];
-    CC_CHECK(CcCoreConversationPrepare(&conversation, &accounts[1], &answer));
-    CC_CHECK(conversation.pending);
+    CcCoreConversationReset(&conversation);
+    CC_CHECK(CcCoreConversationStartRound(&conversation, &accounts[0], &original[0],
+        &accounts[1], &original[1]));
+    CC_CHECK(!CcCoreConversationStartRound(&conversation, &accounts[0], &original[0],
+        &accounts[1], &original[1]));
     CcCoreConversationStep(&conversation, 1000U);
-    CC_CHECK(!conversation.pending && strcmp(conversation.reply.line_id, "gossip.core") == 0);
+    CC_CHECK(conversation.round_phase == 2U && conversation.count == 1U);
+    CC_CHECK(strcmp(conversation.history[0].text, conversation.player_line.text) == 0);
+    CcSpeech shown;
+    CC_CHECK(CcCoreConversationShown(&conversation, &shown));
+    CC_CHECK(shown.speaker_id == original[0].speaker_id);
+    CcCoreConversationStep(&conversation, 1000U);
+    CC_CHECK(conversation.round_phase == 0U && conversation.count == 2U);
+    CC_CHECK(CcCoreConversationShown(&conversation, &shown));
+    CC_CHECK(shown.speaker_id == original[1].speaker_id);
+    /* Independent generation proves the listener receives the generated player text. */
+    char expected[CC_CORE_UTTERANCE];
+    CC_CHECK(CcCoreModelGenerate(conversation.model, &accounts[1], original[1].speaker_id,
+        conversation.history, 1U, expected, sizeof(expected)));
+    CC_CHECK(strcmp(expected, shown.text) == 0);
     CC_CHECK(CcSimHash(&sim) == before);
     (void)printf("World hash retained: %016" PRIx64 "\n", before);
     CcCoreConversationReset(&conversation);
