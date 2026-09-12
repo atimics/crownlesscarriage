@@ -560,8 +560,50 @@ static int StableDistinctTerrain(void)
     return 0;
 }
 
+static int TownPresence(void)
+{
+    static CcSim sim;
+    CcSimInit(&sim, 42U);
+    CcSettlement *town = &sim.settlements[5];
+    town->population = 0;
+    town->prosperity = 0;
+    sim.bandit_count = 1;
+    sim.bandits[0].camp_settlement_id = town->id;
+    sim.bandits[0].members = 4;
+    uint64_t hash = CcSimHash(&sim);
+    char status[128];
+    CcLocalTownStatus(&sim, town->id, status, sizeof(status));
+    CHECK(strstr(status, "Occupied ruins") != NULL);
+    CHECK(strstr(status, "4 bandits") != NULL);
+    CHECK(CcLocalTownOccupier(&sim, town->id) == &sim.bandits[0]);
+    CHECK(CcSimHash(&sim) == hash);
+    sim.bandits[0].members = 0;
+    CHECK(CcLocalTownOccupier(&sim, town->id) == NULL);
+    CcLocalTownStatus(&sim, town->id, status, sizeof(status));
+    CHECK(strstr(status, "Abandoned") != NULL);
+    town->population = 180;
+    CcLocalTownStatus(&sim, town->id, status, sizeof(status));
+    CHECK(strcmp(status, "180 residents") == 0);
+    sim.character_count = 1;
+    CcCharacter *person = &sim.characters[0];
+    person->current_settlement_id = town->id;
+    person->birth_day = sim.current_day - 20 * 365;
+    person->death_day = 0;
+    person->activity = CC_CHARACTER_ACTIVITY_RECOVERING;
+    CHECK(CcLocalTownPerson(&sim, town->id, 0) == person);
+    CHECK(CcLocalTownPerson(&sim, town->id, 1) == NULL);
+    person->activity = CC_CHARACTER_ACTIVITY_TRAVELLING;
+    CHECK(CcLocalTownPerson(&sim, town->id, 0) == NULL);
+    person->activity = CC_CHARACTER_ACTIVITY_RECOVERING;
+    person->death_day = sim.current_day;
+    CHECK(CcLocalTownPerson(&sim, town->id, 0) == NULL);
+    CHECK(CcLocalTownPerson(NULL, town->id, 0) == NULL);
+    return 0;
+}
+
 int main(void)
 {
+    if (TownPresence() != 0) return 1;
     if (ProfileContract() != 0) return 1;
     if (AuthoredLandmarkLayouts() != 0) return 1;
     if (AuthoredTownMaps() != 0) return 1;

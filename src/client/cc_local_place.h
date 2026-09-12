@@ -178,6 +178,11 @@ typedef struct CcLocalPlaceProfile {
 
 CcLocalLanePoint CcLocalLaneSample(const CcLocalLane *lane, float progress);
 
+/* Read-only town presence shared by scene rendering and interaction. */
+const CcBanditGroup *CcLocalTownOccupier(const CcSim *sim, CcId town);
+const CcCharacter *CcLocalTownPerson(const CcSim *sim, CcId town, int32_t index);
+void CcLocalTownStatus(const CcSim *sim, CcId town, char *text, size_t capacity);
+
 void CcLocalTownConditionText(uint32_t conditions, char *text, size_t capacity);
 const CcLocalPlaceProfile *CcLocalPlaceProfileForFunction(
     CcSettlementFunction function);
