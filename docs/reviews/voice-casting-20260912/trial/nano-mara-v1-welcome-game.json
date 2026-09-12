@@ -1,0 +1,23 @@
+{
+  "voice": "mara-v1",
+  "line": "welcome",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going.",
+  "file": "nano-mara-v1-welcome.wav",
+  "styled_file": "nano-mara-v1-welcome-game.wav",
+  "seconds": 4.64,
+  "generation_seconds": 2.0066742920316756,
+  "first_chunk_seconds": null,
+  "real_time_factor": 0.43247290776544733,
+  "sample_rate": 24000,
+  "seed": 20260912,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sha256": "c91faaf0661b57dddf9662f6966b6656e22079ef571e6830f68137bf861a6862",
+  "master_sha256": "c91faaf0661b57dddf9662f6966b6656e22079ef571e6830f68137bf861a6862",
+  "wav_sha256": "d4b241c9260c48a120166cc04752ae6237eacd026f6121ea62a24b0e7457f58c",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

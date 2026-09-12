@@ -15,18 +15,25 @@ def esc(value):
 
 
 def audio(path, label):
-    return f'<label>{esc(label)}<audio controls preload="none" src="{esc(path)}"></audio></label>'
+    return f'<label>{esc(label)}<audio controls preload="metadata" src="{esc(path)}"></audio></label>'
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--design-additions', action='store_true')
+    parser.add_argument('--allow-download', action='store_true')
+    parser.add_argument('--device', choices=('cpu', 'mps', 'cuda'), default='cpu')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     refs = args.output / 'references'
     refs.mkdir(exist_ok=True)
     cast = json.loads((ROOT / 'assets/audio/cast.json').read_text())
     brief = json.loads(Path(__file__).with_name('casting_trial.json').read_text())
+    if args.design_additions:
+        from speech_engine import design_cast
+        design_cast({v['id']: v for v in brief['proposed']}, args.output / 'proposed',
+                    device=args.device, allow_download=args.allow_download)
     cards = []
     for voice in cast:
         filename = voice['id'] + '.wav'
@@ -53,14 +60,15 @@ def main():
         rows = report['samples']
         total_audio = sum(r['seconds'] for r in rows)
         total_time = sum(r['generation_seconds'] for r in rows)
-        speed = f'{total_time / total_audio:.2f}s compute / 1s audio' if total_audio else 'Pending'
+        speed = f'{total_audio / total_time:.2f}× real-time generation' if total_time else 'Pending'
         chunks = [r['first_chunk_seconds'] for r in rows if r['first_chunk_seconds'] is not None]
         start = f'{min(chunks):.2f}–{max(chunks):.2f}s first chunk' if chunks else 'Complete clips'
         error = '<p>Generation needs attention. Details are in the trial report.</p>' if report.get('error') else ''
         if 'VOICE_CLONING' in report.get('error', '') or 'accept the terms' in report.get('error', ''):
             error = '<p>Voice cloning awaits Hugging Face model access.</p>'
+        memory = f'{report["peak_process_memory_mib"] / 1024:.2f} GiB peak process memory' if 'peak_process_memory_mib' in report else ''
         metrics.append(f'<article><h3>{esc(engine.title())}</h3><p>{esc(report["status"])} · {len(rows)} clips</p>'
-                       f'<p><strong>{esc(speed)}</strong><br>{esc(start)}</p>{error}</article>')
+                       f'<p><strong>{esc(speed)}</strong><br>{esc(start)}<br>{esc(memory)}</p>{error}</article>')
     keys = sorted({(r['voice'], r['line']) for report in reports.values() for r in report['samples']})
     for voice, line in keys:
         cells = []
@@ -72,7 +80,8 @@ def main():
                 cells.append(f'<div><h4>{esc(engine.title())}</h4>' + audio('trial/' + row['file'], 'Clean')
                              + audio('trial/' + row['styled_file'], 'Game texture')
                              + f'<small>{row["generation_seconds"]:.2f}s generation · {row["seconds"]:.2f}s audio</small></div>')
-        trials.append(f'<article class="comparison"><h3>{esc(voice)} · {esc(line)}</h3>'
+        name = next(v['name'] for v in cast if v['id'] == voice)
+        trials.append(f'<article class="comparison"><h3>{esc(name)} · {esc(line)}</h3>'
                       f'<p class="quote">{esc(words)}</p><div class="grid">{"".join(cells)}</div></article>')
     page = '''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Crownless · The casting room</title><style>

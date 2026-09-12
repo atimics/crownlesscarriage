@@ -1,0 +1,18 @@
+{
+  "engine": "pocket",
+  "platform": "macOS-26.3.1-arm64-arm-64bit",
+  "machine": "arm64",
+  "threads": 2,
+  "seed": 20260912,
+  "status": "failed",
+  "samples": [],
+  "timing_note": "Model load includes first-use downloads. Voice setup is separate. Generation includes the first call; audio styling and file writes are outside the timer. This is a small idle-machine trial; game frame time remains to be measured.",
+  "packages": {
+    "torch": "2.14.0",
+    "pocket-tts": "3.1.0"
+  },
+  "load_seconds": 19.847818290814757,
+  "voice_setup_seconds": {},
+  "error": "ValueError: We could not download the weights for the model with voice cloning, but you're trying to use voice cloning. Without voice cloning, you can use our catalog of voices ['cosette', 'marius', 'javert', 'alba', 'jean', 'anna', 'vera', 'fantine', 'charles', 'paul', 'eponine', 'azelma', 'george', 'mary', 'jane', 'michael', 'eve', 'bill_boerst', 'peter_yearsley', 'stuart_bell', 'caro_davy', 'giovanni', 'lola', 'juergen', 'rafael', 'estelle']. If you want access to the model with voice cloning, go to https://huggingface.co/kyutai/pocket-tts and accept the terms, then make sure you're logged in locally with `uvx hf auth login`.",
+  "peak_process_memory_mib": 1264.0625
+}

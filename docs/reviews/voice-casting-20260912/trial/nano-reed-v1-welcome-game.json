@@ -1,0 +1,23 @@
+{
+  "voice": "reed-v1",
+  "line": "welcome",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going.",
+  "file": "nano-reed-v1-welcome.wav",
+  "styled_file": "nano-reed-v1-welcome-game.wav",
+  "seconds": 4.48,
+  "generation_seconds": 1.8436788748949766,
+  "first_chunk_seconds": null,
+  "real_time_factor": 0.4115354631462001,
+  "sample_rate": 24000,
+  "seed": 20260912,
+  "reference_sha256": "6dc743cfa294c2f910e306f7c909c05bd8fcb38b123049dc25a5c72a235f43ab",
+  "sha256": "98406700a01a4a5d2f0d4c0d0679fa04f31c891f2dee53943490a9a4f1735232",
+  "master_sha256": "98406700a01a4a5d2f0d4c0d0679fa04f31c891f2dee53943490a9a4f1735232",
+  "wav_sha256": "d5fd1c29292dfc0de0f53c367cf20f7eaf020f5e75de9a4509edbee2030c50ae",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}
