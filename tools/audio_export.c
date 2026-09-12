@@ -118,6 +118,13 @@ static bool ExportSpeech(FILE *file)
             first = false;
         }
     }
+    CcSpeech goblin;
+    char goblin_json[CC_SPEECH_JSON_CAPACITY];
+    if (!CcSpeechGoblinTrade(&sim, 17, &goblin) ||
+        !CcSpeechJson(&goblin, goblin_json, sizeof(goblin_json))) return false;
+    if (!first) (void)fputs(",\n", file);
+    (void)fputs(goblin_json, file);
+    first = false;
     (void)fputs("\n]\n", file);
     return !ferror(file) && !first;
 }

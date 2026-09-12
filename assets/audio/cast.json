@@ -11,5 +11,6 @@
   {"id":"lark-v1","name":"Lark","description":"A woman with a clear, bright voice, a light west-country English accent, and lively, gentle speech."},
   {"id":"ash-v1","name":"Ash","description":"A man with a grainy baritone, a light Welsh accent, and deliberate, unhurried speech."},
   {"id":"brook-v1","name":"Brook","description":"A woman with a soft middle register, a light Irish accent, and calm, direct speech."},
-  {"id":"stone-v1","name":"Stone","description":"A man with a dry middle register, a northern English accent, and clipped, watchful speech."}
+  {"id":"stone-v1","name":"Stone","description":"A man with a dry middle register, a northern English accent, and clipped, watchful speech."},
+  {"id":"goblin-v1","name":"Nara Soot-Tongue","description":"Flint reference with the Hra'khor bass vocoder at double speech speed."}
 ]

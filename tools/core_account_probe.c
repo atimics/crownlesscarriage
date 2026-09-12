@@ -1,5 +1,6 @@
 /* Small process boundary for checking the game's grammar from Python. */
 #include "story/cc_core_account.h"
+#include "story/cc_hrakhor.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,7 +21,7 @@ static void JsonSpan(const char *text, size_t length)
 
 int main(int argc, char **argv)
 {
-    if (argc < 5 || argc > 6) return 2;
+    if (argc < 5 || argc > 9) return 2;
     char *end = NULL;
     long kind = strtol(argv[1], &end, 10);
     if (*end != '\0' || kind < 0 || kind > CC_EVENT_PROPHECY_DELIVERED) return 2;
@@ -31,6 +32,14 @@ int main(int argc, char **argv)
     CcCoreAccount account;
     if (!CcCoreAccountPrepare((CcEventKind)kind, argv[4], (int32_t)confidence, 0, &account)) return 1;
     bool packet = argc == 6 && strcmp(argv[5], "--packet") == 0;
+    bool hrakhor = argc >= 7 && strcmp(argv[5], "--hrakhor") == 0;
+    unsigned int strength = 0U;
+    if (hrakhor) {
+        long parsed = strtol(argv[6], &end, 10);
+        if (end == argv[6] || *end != '\0' || parsed < 0 || parsed > 100) return 2;
+        strength = (unsigned int)parsed;
+        if (argc != 7 && !(argc == 9 && strcmp(argv[7], "--english") == 0)) return 2;
+    } else if (argc > 6) return 2;
     if (argc == 6 && !packet) {
         long field = strtol(argv[5], &end, 10);
         if (*end != '\0' || field < 0 || (size_t)field >= account.field_count) return 2;
@@ -38,7 +47,12 @@ int main(int argc, char **argv)
     }
     char text[512];
     if (!CcCoreAccountRender(&account, (uint32_t)variant, text, sizeof(text))) return 1;
-    if (!packet) (void)puts(text);
+    if (hrakhor) {
+        char dialect[1024];
+        if (!CcHrakhorCorrupt(&account, argc == 9 ? argv[8] : text,
+                              strength, dialect, sizeof(dialect))) return 1;
+        (void)puts(dialect);
+    } else if (!packet) (void)puts(text);
     else {
         (void)printf("{\"kind\":%ld,\"confidence\":%ld,\"rule\":", kind, confidence);
         JsonSpan(CcCoreAccountRule(&account), strlen(CcCoreAccountRule(&account)));

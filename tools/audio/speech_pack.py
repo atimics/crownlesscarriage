@@ -15,7 +15,7 @@ def main():
     parser.add_argument('--references', type=Path, default=ROOT / 'assets/audio/cast')
     parser.add_argument('--output', type=Path, default=ROOT / 'assets/audio/speech')
     parser.add_argument('--device', choices=('cpu', 'mps', 'cuda'), default='cpu')
-    parser.add_argument('--engine', choices=('chatterbox', 'qwen'), default='chatterbox')
+    parser.add_argument('--engine', choices=('pocket',), default='pocket')
     parser.add_argument('--limit', type=int, default=32)
     parser.add_argument('--voice', default='')
     parser.add_argument('--cfg-weight', type=float, default=0.5)

@@ -11,7 +11,7 @@ from voice_style import render_voice
 
 
 class SpeechEngine:
-    def __init__(self, device='cpu', references=ROOT / 'assets/audio/cast', engine='chatterbox', allow_download=False, take=0, cfg_weight=0.5):
+    def __init__(self, device='cpu', references=ROOT / 'assets/audio/cast', engine='pocket', allow_download=False, take=0, cfg_weight=0.5):
         if not allow_download:
             os.environ['HF_HUB_OFFLINE'] = '1'
             os.environ['TRANSFORMERS_OFFLINE'] = '1'
@@ -22,14 +22,11 @@ class SpeechEngine:
         self.prompts = {}
         self.take = take
         self.cfg_weight = cfg_weight
-        if engine == 'qwen':
-            from qwen_tts import Qwen3TTSModel
-            self.model = Qwen3TTSModel.from_pretrained('Qwen/Qwen3-TTS-12Hz-1.7B-Base',
-                device_map=device, dtype=torch.float32 if device != 'cuda' else torch.bfloat16,
-                attn_implementation='sdpa')
-        else:
-            from chatterbox.tts import ChatterboxTTS
-            self.model = ChatterboxTTS.from_pretrained(device=device)
+        if engine != 'pocket':
+            raise ValueError('Crownless speech uses Pocket TTS')
+        from pocket_tts import TTSModel
+        torch.set_num_threads(2)
+        self.model = TTSModel.load_model(language='english')
 
     def __call__(self, record, destination):
         import json
@@ -40,20 +37,14 @@ class SpeechEngine:
             raise ValueError(f"Prepare the reference for {record['voice']}")
         seed = (int(record['key'][:8], 16) + self.take) & 0xffffffff
         self.torch.manual_seed(seed)
-        with self.torch.inference_mode():
-            if self.engine == 'qwen':
-                if record['voice'] not in self.prompts:
-                    metadata = json.loads(reference.with_suffix('.json').read_text())
-                    self.prompts[record['voice']] = self.model.create_voice_clone_prompt(
-                        ref_audio=str(reference), ref_text=metadata['text'])
-                wavs, rate = self.model.generate_voice_clone(text=record['text'], language='English',
-                    voice_clone_prompt=self.prompts[record['voice']], max_new_tokens=400)
-                samples = np.asarray(wavs[0]).reshape(-1)
-            else:
-                intensity = {'plain': 0.45, 'warm': 0.55, 'worried': 0.65, 'urgent': 0.75, 'quiet': 0.3, 'firm': 0.55}
-                samples = self.model.generate(record['text'], audio_prompt_path=str(reference),
-                    exaggeration=intensity[record['delivery']], cfg_weight=self.cfg_weight).detach().float().cpu().numpy().reshape(-1)
-                rate = self.model.sr
+        with self.torch.no_grad():
+            if record['voice'] not in self.prompts:
+                self.prompts[record['voice']] = self.model.get_state_for_audio_prompt(str(reference))
+            chunks = list(self.model.generate_audio_stream(self.prompts[record['voice']], record['text']))
+            if not chunks:
+                raise ValueError('Pocket returned an empty speech stream')
+            samples = self.torch.cat(chunks).detach().float().cpu().numpy().reshape(-1)
+            rate = self.model.sample_rate
         if rate != 24000 or not np.isfinite(samples).all() or not 0.15 <= len(samples) / rate <= 25:
             raise ValueError('The model returned invalid speech samples')
         peak = float(np.max(np.abs(samples)))
@@ -68,7 +59,12 @@ class SpeechEngine:
             sf.write(master, samples, rate, subtype='PCM_16')
             receipt = dict(record, model=self.engine, seed=seed, take=self.take, cfg_weight=self.cfg_weight,
                 reference_sha256=hashlib.sha256(reference.read_bytes()).hexdigest())
-            render_voice(master, rendered, receipt)
+            if record['voice'] == 'goblin-v1':
+                from goblin_voice import render as render_goblin
+                effect = render_goblin(master, rendered, 'bass')
+                rendered.with_suffix('.json').write_text(json.dumps(dict(receipt, **effect), indent=2) + '\n')
+            else:
+                render_voice(master, rendered, receipt)
             check_wav(rendered)
             rendered.replace(destination)
             rendered.with_suffix('.json').replace(destination.with_suffix('.json'))
