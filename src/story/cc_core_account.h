@@ -16,6 +16,7 @@ typedef struct CcCoreField {
     size_t start, length; /* UTF-8 byte offsets into the held text. */
     CcCoreRole role;
     CcCoreKnowledge knowledge;
+    bool spoken;
 } CcCoreField;
 typedef struct CcCoreAccount {
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -31,5 +32,6 @@ bool CcCoreAccountPrepare(CcEventKind kind, const char *held_text,
 bool CcCoreAccountRender(const CcCoreAccount *account, uint32_t variant,
                          char *text, size_t capacity);
 const char *CcCoreAccountRule(const CcCoreAccount *account);
+const char *CcCoreAccountGrammar(void);
 
 #endif

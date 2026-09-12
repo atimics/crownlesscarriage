@@ -69,13 +69,14 @@ def make_row(rule, values, confidence, retold, variant, pair, member, challenge=
     for span in spans:
         slot = span['field']
         fields.append({**span, 'start': span['start'] + offset, 'end': span['end'] + offset,
+                       'spoken': any('{' + str(slot) + '}' in t for t in rule['outputs']),
                        'knowledge': 3 if slot == unknown else (2 if confidence < 40 else 0),
                        'provenance': 3, 'event': 2 if distractor else 1})
     # A span can be copied only when its complete source field is available.
     copies = []
     for span in output_spans:
-        if span['field'] != unknown and span['role'] not in (0, 7, 8):
-            copies.append(span)
+        if span['field'] != unknown and span['role'] not in (0, 8):
+            copies.append({**span, 'spoken': True})
     return {'schema': 'crownless.core_pair.v2', 'id': f'{pair}:{member}', 'pair': pair,
             'rule': rule['id'], 'kind': rule['kind'], 'prefix': prefix, 'output': target,
             'fields': fields, 'copies': copies, 'variant': variant,

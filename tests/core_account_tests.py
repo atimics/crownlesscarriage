@@ -22,6 +22,11 @@ for rule in data['rules']:
         args = [sys.argv[1], str(kinds[rule['kind']]), '80', str(variant), source]
         output = subprocess.check_output(args, text=True).rstrip('\n')
         assert output == template.format(*fields), (rule['id'], output)
+        packet = json.loads(subprocess.check_output([*args, '--packet'], text=True))
+        assert packet['rule'] == rule['id']
+        for field in packet['fields']:
+            assert source.encode()[field['start']:field['end']].decode() == field['text']
+            assert field['spoken'] == any('{' + str(field['field']) + '}' in t for t in rule['outputs'])
         # Extra claims and malformed numeric fields require their own rules.
         assert subprocess.run([*args[:4], source + ' A different event happened.'],
                               capture_output=True).returncode == 1

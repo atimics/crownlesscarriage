@@ -15,6 +15,8 @@ static const CoreRule Rules[] = {
 #include "cc_core_account_rules.inc"
 };
 
+const char *CcCoreAccountGrammar(void) { return CC_CORE_GRAMMAR_SHA256; }
+
 static bool Quantity(const char *at, size_t length)
 {
     static const char *const words[] = {"zero", "one", "two", "three", "four", "five", "six",
@@ -53,6 +55,8 @@ static bool Match(const CoreRule *rule, CcCoreAccount *account)
         field->start = (size_t)(at - account->text);
         field->length = (size_t)(end - at);
         field->role = rule->roles[slot];
+        char marker[] = {'{', (char)('0' + slot), '}', '\0'};
+        field->spoken = strstr(rule->outputs[0], marker) != NULL || strstr(rule->outputs[1], marker) != NULL;
         field->knowledge = account->confidence < 40 ? CC_CORE_UNCERTAIN : CC_CORE_KNOWN;
         if (rule->allowed[slot] != NULL) {
             char option[CC_EVENT_TEXT_CAPACITY + 3];
