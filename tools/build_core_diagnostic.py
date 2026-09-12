@@ -104,6 +104,12 @@ def build(output, pairs=12500, seed=20260912):
             if rule['kind'] == 'SHEEP_BRED': values[2], values[4] = 'lambs', 'yearlings'
             if rule['kind'] == 'SHEEP_SLAUGHTERED': values[2] = 'after winter fodder runs short'
             if rule['id'] == 'horse_bred_1': values[2] = 'foals'
+            if rule['kind'] == 'DRAGON_SLAIN': values[2] = 'the dragon falls'
+            if rule['kind'] in ('GOBLIN_RAIDED', 'SETTLEMENT_RAIDED') and len(values) == 3:
+                values[2] = 'food from the stores'
+            if 'less_than' in rule:
+                left, right = rule['less_than']
+                values[right] = str(int(values[left]) + rng.randrange(1, 30))
             confidence = 20 if rng.randrange(4) == 0 else 80
             retold, variant = rng.randrange(3) == 0, rng.randrange(2)
             partial = rule['kind'] in ('NOTICE_POSTED', 'CHARACTER_DIED', 'CHARACTER_BORN',

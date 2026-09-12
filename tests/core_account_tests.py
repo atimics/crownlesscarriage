@@ -17,6 +17,7 @@ for rule in data['rules']:
     fields = [values[x] for x in rule['roles']]
     for slot, allowed in rule.get('allowed', {}).items():
         fields[int(slot)] = allowed[0]
+    if 'less_than' in rule: fields[rule['less_than'][1]] = '8'
     source = rule['source'].format(*fields)
     for variant, template in enumerate(rule['outputs']):
         args = [sys.argv[1], str(kinds[rule['kind']]), '80', str(variant), source]
@@ -30,6 +31,13 @@ for rule in data['rules']:
         # Extra claims and malformed numeric fields require their own rules.
         assert subprocess.run([*args[:4], source + ' A different event happened.'],
                               capture_output=True).returncode == 1
+        if 'less_than' in rule:
+            left, right = rule['less_than']
+            for amount in ('8', '9', 'eight', 'nine'):
+                altered = list(fields)
+                altered[left] = amount
+                assert subprocess.run([*args[:4], rule['source'].format(*altered)],
+                                      capture_output=True).returncode == 1
         for slot, role in enumerate(rule['roles']):
             if slot in rule.get('positive', []):
                 altered = list(fields)
@@ -43,7 +51,7 @@ for rule in data['rules']:
                                       capture_output=True).returncode == 1
             if role == 'quantity':
                 altered = list(fields)
-                altered[slot] = 'two'
+                altered[slot] = 'eight' if fields[slot] == '8' else 'seven'
                 spoken = subprocess.check_output([*args[:4], rule['source'].format(*altered)], text=True).strip()
                 assert spoken == output
                 altered = list(fields)

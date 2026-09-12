@@ -769,6 +769,219 @@
         1,
         3
       ]
+    },
+    {
+      "id": "harvest_failed_0",
+      "kind": "HARVEST_FAILED",
+      "roles": [
+        "place",
+        "place"
+      ],
+      "source": "{0}'s drought harvest cannot supply the {1}.",
+      "outputs": [
+        "{0}'s drought harvest fell short of what the {1} needed.",
+        "The drought harvest in {0} fell short of supplies for the {1}."
+      ],
+      "challenge": "The {1} needed more supplies than the drought harvest in {0} could provide."
+    },
+    {
+      "id": "route_closed_0",
+      "kind": "ROUTE_CLOSED",
+      "roles": [
+        "place"
+      ],
+      "source": "{0} closes the treaty bridge and delays the relief convoy.",
+      "outputs": [
+        "{0} closed the treaty bridge, delaying the relief convoy.",
+        "The relief convoy was delayed when {0} closed the treaty bridge."
+      ],
+      "challenge": "The treaty bridge was shut by {0}, holding up the relief convoy."
+    },
+    {
+      "id": "shortage_0",
+      "kind": "SHORTAGE",
+      "roles": [
+        "place",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} has {1} weeks of food; hunger reaches pressure level {2}.",
+      "outputs": [
+        "Hunger was reported in {0}.",
+        "There was hunger in {0}."
+      ],
+      "challenge": "Hunger pressure reached {2} in {0}, with {1} weeks of food left.",
+      "positive": [
+        2
+      ]
+    },
+    {
+      "id": "shortage_1",
+      "kind": "SHORTAGE",
+      "roles": [
+        "place",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} has {1} food in store. Its reserve target is {2}.",
+      "outputs": [
+        "{0} was short of its food reserve target.",
+        "Food stores in {0} fell short of the reserve target."
+      ],
+      "challenge": "With food stores of {1}, {0} was aiming for a reserve of {2}.",
+      "less_than": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "goblin_raided_0",
+      "kind": "GOBLIN_RAIDED",
+      "roles": [
+        "actor",
+        "place",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} raids {1}: {2} Wheat, {3} crowns.",
+      "outputs": [
+        "{0} raided {1}.",
+        "{1} was raided by {0}."
+      ],
+      "challenge": "The raid on {1} was carried out by {0}."
+    },
+    {
+      "id": "goblin_raided_1",
+      "kind": "GOBLIN_RAIDED",
+      "roles": [
+        "actor",
+        "place",
+        "detail"
+      ],
+      "source": "{0} raids {1} and takes {2}.",
+      "outputs": [
+        "{0} raided {1}.",
+        "{1} was raided by {0}."
+      ],
+      "challenge": "A raid was carried out against {1} by {0}."
+    },
+    {
+      "id": "settlement_raided_0",
+      "kind": "SETTLEMENT_RAIDED",
+      "roles": [
+        "actor",
+        "place",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} raids {1}: {2} Wheat, {3} crowns.",
+      "outputs": [
+        "{0} raided {1}.",
+        "{1} was raided by {0}."
+      ],
+      "challenge": "The raid on {1} was carried out by {0}."
+    },
+    {
+      "id": "settlement_raided_1",
+      "kind": "SETTLEMENT_RAIDED",
+      "roles": [
+        "actor",
+        "place",
+        "detail"
+      ],
+      "source": "{0} raids {1} and takes {2}.",
+      "outputs": [
+        "{0} raided {1}.",
+        "{1} was raided by {0}."
+      ],
+      "challenge": "A raid was carried out against {1} by {0}."
+    },
+    {
+      "id": "dragon_omen_0",
+      "kind": "DRAGON_OMEN",
+      "roles": [
+        "place",
+        "quantity",
+        "actor"
+      ],
+      "source": "Smoke falls into {0}'s chimneys; old readers count {1} nights until {2} comes.",
+      "outputs": [
+        "The old readers in {0} took the smoke as a warning of {2}.",
+        "Smoke in {0} made the old readers fear that {2} was coming."
+      ],
+      "challenge": "The old readers thought the smoke in {0} warned of the coming of {2}."
+    },
+    {
+      "id": "dragon_retaliation_0",
+      "kind": "DRAGON_RETALIATION",
+      "roles": [
+        "actor",
+        "place",
+        "quantity"
+      ],
+      "source": "{0} burns {1} because {2} stolen crowns remain missing.",
+      "outputs": [
+        "{0} burned {1} over money missing from the hoard.",
+        "Missing hoard money was blamed for {0} burning {1}."
+      ],
+      "challenge": "The burning of {1} by {0} was blamed on stolen hoard money.",
+      "positive": [
+        2
+      ]
+    },
+    {
+      "id": "goblin_cult_rallied_1",
+      "kind": "GOBLIN_CULT_RALLIED",
+      "roles": [
+        "actor",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} feeds and binds {1} new ash-sworn; the dead dragon's court reaches {2}.",
+      "outputs": [
+        "{0} fed and bound new ash-sworn to the dead dragon's court.",
+        "New ash-sworn were fed and bound by {0} to the dead dragon's court."
+      ],
+      "challenge": "The dead dragon's court gained new ash-sworn, fed and bound by {0}.",
+      "positive": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "goblin_cult_rallied_2",
+      "kind": "GOBLIN_CULT_RALLIED",
+      "roles": [
+        "actor",
+        "quantity",
+        "recipient",
+        "quantity"
+      ],
+      "source": "{0} gathers {1} new tithe-bearers; {2}'s court returns to {3}.",
+      "outputs": [
+        "{0} gathered new tithe-bearers for the court of {2}.",
+        "The court of {2} gained new tithe-bearers gathered by {0}."
+      ],
+      "challenge": "New tithe-bearers for the court of {2} were gathered by {0}.",
+      "positive": [
+        1,
+        3
+      ]
+    },
+    {
+      "id": "dragon_slain_0",
+      "kind": "DRAGON_SLAIN",
+      "roles": [
+        "actor",
+        "recipient",
+        "detail"
+      ],
+      "source": "{0} slays {1}: {2}.",
+      "outputs": [
+        "{0} slew {1}.",
+        "{1} was slain by {0}."
+      ],
+      "challenge": "The slaying of {1} was carried out by {0}."
     }
   ]
 }

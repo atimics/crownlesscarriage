@@ -10,6 +10,7 @@ typedef struct CoreRule {
     CcCoreRole roles[CC_CORE_FIELDS];
     const char *allowed[CC_CORE_FIELDS];
     unsigned int positive;
+    int less_left, less_right;
 } CoreRule;
 static const CoreRule Rules[] = {
 #include "cc_core_account_rules.inc"
@@ -17,17 +18,26 @@ static const CoreRule Rules[] = {
 
 const char *CcCoreAccountGrammar(void) { return CC_CORE_GRAMMAR_SHA256; }
 
-static bool Quantity(const char *at, size_t length)
+static bool Quantity(const char *at, size_t length, uint64_t *value)
 {
     static const char *const words[] = {"zero", "one", "two", "three", "four", "five", "six",
         "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
         "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
         "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety", "hundred"};
     bool digits = length > 0U;
-    for (size_t i = 0U; i < length; ++i) digits = digits && isdigit((unsigned char)at[i]);
-    if (digits) return true;
+    uint64_t number = 0U;
+    for (size_t i = 0U; i < length; ++i) {
+        if (!isdigit((unsigned char)at[i])) { digits = false; break; }
+        uint64_t digit = (uint64_t)(at[i] - '0');
+        if (number > (UINT64_MAX - digit) / 10U) return false;
+        number = number * 10U + digit;
+    }
+    if (digits) { *value = number; return true; }
     for (size_t i = 0U; i < sizeof(words) / sizeof(words[0]); ++i) {
-        if (strlen(words[i]) == length && strncmp(at, words[i], length) == 0) return true;
+        if (strlen(words[i]) == length && strncmp(at, words[i], length) == 0) {
+            *value = i <= 20U ? (uint64_t)i : (uint64_t)(i - 18U) * 10U;
+            return true;
+        }
     }
     return false;
 }
@@ -68,14 +78,23 @@ static bool Match(const CoreRule *rule, CcCoreAccount *account)
         }
         if (field->length == 0U && field->role != CC_CORE_DETAIL) return false;
         if (field->role == CC_CORE_QUANTITY) {
-            if (!Quantity(at, field->length)) return false;
+            uint64_t value = 0U;
+            if (!Quantity(at, field->length, &value)) return false;
             if ((rule->positive & (1U << slot)) != 0U &&
                 (strspn(at, "0") == field->length ||
                  (field->length == 4U && strncmp(at, "zero", 4U) == 0))) return false;
         }
         at = end;
     }
-    return *at == '\0';
+    if (*at != '\0') return false;
+    if (rule->less_left >= 0) {
+        const CcCoreField *left = &account->fields[rule->less_left];
+        const CcCoreField *right = &account->fields[rule->less_right];
+        uint64_t a = 0U, b = 0U;
+        if (!Quantity(account->text + left->start, left->length, &a) ||
+            !Quantity(account->text + right->start, right->length, &b) || a >= b) return false;
+    }
+    return true;
 }
 
 bool CcCoreAccountPrepare(CcEventKind kind, const char *held_text,

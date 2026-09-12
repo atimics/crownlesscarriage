@@ -1,26 +1,33 @@
 {
   "version": 1,
-  "grammar_sha256": "da5c6ac11f2f90fbf08881f7c57c7a8358fd086d59d233882ce60f0abeb0635b",
+  "grammar_sha256": "ad017639e911c482e86e25f063207504769353dcd05e263d31dd9a6ef9409fb6",
   "event_count": 136,
-  "rule_count": 48,
+  "rule_count": 61,
   "events": [
     {
       "kind": "HARVEST_FAILED",
       "value": 0,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "harvest_failed_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "ROUTE_CLOSED",
       "value": 1,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "route_closed_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "SHORTAGE",
       "value": 2,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "shortage_0",
+        "shortage_1"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "SHIPMENT_DEPARTED",
@@ -198,8 +205,11 @@
     {
       "kind": "SETTLEMENT_RAIDED",
       "value": 31,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "settlement_raided_0",
+        "settlement_raided_1"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "BANDIT_RAID_RETURNED",
@@ -234,8 +244,10 @@
     {
       "kind": "DRAGON_OMEN",
       "value": 37,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_omen_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DRAGON_TREASURE_RETURNED",
@@ -246,8 +258,10 @@
     {
       "kind": "DRAGON_RETALIATION",
       "value": 39,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_retaliation_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "INEQUALITY_PRESSURE",
@@ -320,8 +334,11 @@
     {
       "kind": "GOBLIN_RAIDED",
       "value": 51,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_raided_0",
+        "goblin_raided_1"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_RAID_RETURNED",
@@ -416,8 +433,10 @@
     {
       "kind": "DRAGON_SLAIN",
       "value": 66,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_slain_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DRAGON_HOARD_RECOVERED",
@@ -473,7 +492,9 @@
       "kind": "GOBLIN_CULT_RALLIED",
       "value": 75,
       "rules": [
-        "goblin_cult_rallied_0"
+        "goblin_cult_rallied_0",
+        "goblin_cult_rallied_1",
+        "goblin_cult_rallied_2"
       ],
       "status": "field_rules"
     },
