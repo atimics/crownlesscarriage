@@ -68,7 +68,11 @@ int main(int argc, char **argv)
     CC_CHECK(CcCoreConversationShown(&conversation, &shown));
     CC_CHECK(shown.speaker_id == original[0].speaker_id);
     CcCoreConversationStep(&conversation, 1000U);
-    CC_CHECK(conversation.round_phase == 0U && conversation.count == 2U);
+    CC_CHECK(conversation.round_phase == 3U && conversation.count == 2U);
+    CC_CHECK(CcCoreConversationShown(&conversation, &shown));
+    CC_CHECK(shown.speaker_id == original[0].speaker_id);
+    CcCoreConversationAdvance(&conversation, 0U, 40.0f);
+    CC_CHECK(conversation.round_phase == 0U);
     CC_CHECK(CcCoreConversationShown(&conversation, &shown));
     CC_CHECK(shown.speaker_id == original[1].speaker_id);
     /* Independent generation proves the listener receives the generated player text. */

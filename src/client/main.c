@@ -5005,7 +5005,8 @@ static void DrawContextActionTray(const CcSim *sim, LocalState *local,
         if (local->adventure_ui) {
             while (label_size > 12 && AdventureText(action_label, 0, 0,
                 (int)bounds.width - 24, label_size, label_color, false) > 44) --label_size;
-            (void)AdventureWrap(action_label, (int)bounds.x + 12, (int)bounds.y + 12,
+            int label_y = (int)bounds.y + (view == VIEW_CHARACTER ? 26 : 12);
+            (void)AdventureWrap(action_label, (int)bounds.x + 12, label_y,
                 (int)bounds.width - 24, label_size, label_color);
         } else {
             int width = CcOverlayMeasureText(action_label, label_size);
@@ -10737,7 +10738,8 @@ int main(int argc, char **argv)
         if (!menu_frame && presentation.update_convoy) {
             UpdateOpenWorldCamera(&sim, &local, frame_delta_time);
         }
-        if (view == VIEW_CHARACTER && !menu_frame) CcCoreConversationStep(&core_conversation, 2U);
+        if (view == VIEW_CHARACTER && !menu_frame)
+            CcCoreConversationAdvance(&core_conversation, 2U, frame_delta_time);
         else {
             CcCoreConversationReset(&core_conversation);
             core_conversation_speaker = 0U;

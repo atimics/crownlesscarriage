@@ -12,6 +12,7 @@ typedef struct CcCoreConversation {
     bool cached, pending;
     /* A Chat round generates the player first, then the listener. */
     unsigned int round_phase;
+    float player_seconds;
     bool round_shown;
     CcSpeech player_line, listener_line;
     CcCoreAccount listener_account;
@@ -27,4 +28,5 @@ bool CcCoreConversationStartRound(CcCoreConversation *conversation,
     const CcCoreAccount *listener_account, const CcSpeech *listener);
 bool CcCoreConversationShown(const CcCoreConversation *conversation, CcSpeech *speech);
 void CcCoreConversationStep(CcCoreConversation *conversation, unsigned int budget);
+void CcCoreConversationAdvance(CcCoreConversation *conversation, unsigned int budget, float seconds);
 #endif

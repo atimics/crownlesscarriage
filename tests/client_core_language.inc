@@ -78,6 +78,8 @@ static int RunCoreLanguageRegression(const char *model_path)
     MODEL_CHECK(actions.count == 2 && !actions.items[0].enabled && actions.items[1].enabled,
                 "A running turn keeps Farewell available.");
     CcCoreConversationStep(&core_conversation, 1000U);
+    MODEL_CHECK(core_conversation.round_phase == 3U, "The player line stays visible for reading.");
+    CcCoreConversationAdvance(&core_conversation, 0U, 40.0f);
     MODEL_CHECK(ClientConversationSpeech(&sim, &local, &speech), "Show the NPC response.");
     MODEL_CHECK(core_conversation.round_phase == 0U && !core_conversation.pending &&
                 strcmp(speech.line_id, "gossip.core") == 0 &&

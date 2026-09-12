@@ -1106,7 +1106,7 @@ static void DrawAdventureConversation(const CcSim *sim, const LocalState *local)
     CcOverlayDrawText(name, (int)bubble.x + 22, (int)bubble.y + 16, AdventureTextSize(20), CC_GOLD);
     (void)AdventureWrap(line, (int)bubble.x + 22, (int)bubble.y + 50,
         (int)bubble.width - 44, AdventureTextSize(17), INK);
-    if (core_conversation.round_shown && core_conversation.round_phase == 0U &&
+    if (local->conversation_situation_id == 0U && core_conversation.round_shown && core_conversation.round_phase == 0U &&
         core_conversation_speaker == local->conversation_character_id &&
         speech.speaker_id != sim->player.id) {
         const CcSpeech *player = &core_conversation.player_line;

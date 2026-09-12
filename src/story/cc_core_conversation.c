@@ -63,15 +63,16 @@ void CcCoreConversationStep(CcCoreConversation *c, unsigned int budget)
     Remember(c, c->reply.speaker_id, c->reply.text);
     if (c->round_phase == 1U) {
         c->player_line = c->reply;
+        c->player_seconds = 2.0f + (float)strlen(c->player_line.text) / 16.0f;
         c->cached = false;
         c->round_phase = 2U;
         CcSpeech listener = c->listener_line;
         (void)CcCoreConversationPrepare(c, &c->listener_account, &listener);
         if (!c->pending) {
             Remember(c, c->reply.speaker_id, c->reply.text);
-            c->round_phase = 0U;
+            c->round_phase = 3U;
         }
-    } else if (c->round_phase == 2U) c->round_phase = 0U;
+    } else if (c->round_phase == 2U) c->round_phase = 3U;
 }
 
 bool CcCoreConversationStartRound(CcCoreConversation *c,
@@ -98,6 +99,16 @@ bool CcCoreConversationShown(const CcCoreConversation *c, CcSpeech *speech)
     if (c->round_phase == 1U) return CcSpeechCompose(speech, "gossip.thinking",
         c->player_line.speaker_id, c->player_line.speaker, c->player_line.voice_index,
         "...", c->player_line.delivery, c->player_line.priority, c->player_line.source_event_id);
-    *speech = c->round_phase == 2U ? c->player_line : c->reply;
+    *speech = c->round_phase >= 2U ? c->player_line : c->reply;
     return true;
+}
+
+void CcCoreConversationAdvance(CcCoreConversation *c, unsigned int budget, float seconds)
+{
+    if (c == NULL) return;
+    CcCoreConversationStep(c, budget);
+    if (c->round_phase >= 2U && seconds > 0.0f) {
+        c->player_seconds -= seconds;
+        if (c->round_phase == 3U && c->player_seconds <= 0.0f) c->round_phase = 0U;
+    }
 }
