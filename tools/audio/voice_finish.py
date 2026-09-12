@@ -67,7 +67,8 @@ def finish(samples, rate):
         return x.copy(), dict(preset=PRESET, before=before, after=before, makeup_db=0)
     y = signal.sosfilt(signal.butter(2, PRESET['highpass_hz'], 'highpass', fs=rate, output='sos'), x)
     # Smoothly turn down the bright band only when it dominates the voice.
-    bright = signal.sosfilt(signal.butter(2, PRESET['deess_hz'], 'highpass', fs=rate, output='sos'), y)
+    bright_filter = signal.butter(2, PRESET['deess_hz'], 'highpass', fs=rate, output='sos')
+    bright = signal.sosfiltfilt(bright_filter, y, padlen=min(9, len(y) - 1))
     bright_level = np.sqrt(envelope(bright ** 2, rate, 3, 65))
     voice_level = np.sqrt(envelope(y ** 2, rate, 3, 65))
     reduction = np.clip((db(bright_level / np.maximum(voice_level, 1e-9)) + 12) * .5, 0, 4)
