@@ -37,6 +37,8 @@ typedef struct CcArchiveRelocationPlan {
 CcArchiveRelocationPlan CcSimArchiveRelocationPlan(const CcSim *sim);
 const char *CcArchiveRelocationGateName(CcArchiveRelocationGate gate);
 bool CcSimReserveArchiveConvoy(CcSim *sim);
+/* Weekly funded relocation and ended-order refunds, with named world events. */
+bool CcSimAutoArchiveConvoy(CcSim *sim);
 bool CcSimCancelArchiveConvoy(CcSim *sim);
 bool CcSimArchiveConvoyValid(const CcSim *sim);
 typedef enum CcArchiveConvoyStep {

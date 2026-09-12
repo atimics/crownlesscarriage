@@ -14920,6 +14920,32 @@ void CcSimAdvanceDaysWithAccounting(CcSim *sim, int32_t days,
     CcSimAdvanceDaysWithProductionAccounting(sim, days, accounting, smithy, NULL);
 }
 
+bool CcSimAutoArchiveConvoy(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 92U || sim->current_day % 7 != 0) return false;
+    const CcArchiveConvoyOrder *o = &sim->archive_convoy;
+    const CcCharacter *sponsor = CcSimCharacter(sim, o->sponsor_id);
+    bool ended = o->status == 4 || o->status == 6 || (o->status == 1 &&
+        (sponsor == NULL || sponsor->death_day <= sim->current_day));
+    if (ended) {
+        CcId carriage = o->carriage_id, location = o->status == 1 ? o->origin_id : o->first_hop_id;
+        CcId actor = sponsor != NULL ? sponsor->id : 0;
+        if (!CcSimCancelArchiveConvoy(sim)) return false;
+        (void)PushSocialEvent(sim, CC_EVENT_ROYAL_CARRIAGE_REROUTED, carriage, location, 0,
+            actor, 0, 0, 0, 0, "The sponsoring court recovers the unused archive convoy funds and supplies.");
+        return true;
+    }
+    if (o->status != 0 || !CcSimReserveArchiveConvoy(sim)) return false;
+    sponsor = CcSimCharacter(sim, o->sponsor_id);
+    const CcSettlement *destination = CcSimSettlement(sim, o->destination_id);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "%.32s funds a convoy of %d archive books to %.32s after the old seat's long failure.",
+        sponsor->name, o->book_count, destination->name);
+    (void)PushSocialEvent(sim, CC_EVENT_ROYAL_CARRIAGE_REROUTED, o->carriage_id, o->origin_id, 0,
+        sponsor->id, 0, 0, 0, o->book_count, text);
+    return true;
+}
+
 static void AdvanceArchiveBookJourney(CcSim *sim)
 {
     if (sim->schema_version < 90U) return;
@@ -15021,6 +15047,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
             next_situation_expiry = NextSituationExpiryDay(sim);
         }
         AdvanceSiteCarriages(sim, sites);
+        (void)CcSimAutoArchiveConvoy(sim);
         AdvanceArchiveBookJourney(sim);
         AdvanceRoyalCarriages(sim, sites);
         UpdateShipments(sim, sites);
