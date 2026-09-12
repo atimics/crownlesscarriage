@@ -1,0 +1,98 @@
+# Shared custody transfers
+
+Implementation draft for #434. The starting branch is #695 at `0edd7347`,
+with schema 98 and generator 25. This contract keeps the full issue scope open
+until the integration and acceptance checks below pass.
+
+## Existing state to use
+
+`CcTreasure` already provides stable IDs and physical material content. Its
+`owner_id` and `location_id` currently serve several treasure and archive flows.
+`CcSimTrackedGold` and material accounting already count those contents.
+`CcFreightLeg` provides route geometry, while ordinary carrier state supplies
+movement and capacity. The new transfer code will use those sources directly.
+
+## One physical holder
+
+A custody entry has a stable ID, a revision, a holder kind and ID, an owner ID,
+a condition, and the ID of its last transfer event. Holders are town stores,
+road-site stores, ordinary carriers, the player company, captors, and containers.
+Character references use the full lifetime ID. A replaced character slot is a
+different holder.
+
+A treasure entry refers to an existing treasure ID. Its material content stays
+in `CcTreasure`. A document copy has its own physical ID and a separate work ID;
+several copies can refer to one work. A goods entry holds a positive quantity
+of one good. A purse holds one scalar balance.
+
+A container has its own ID and bounded manifest capacity. Its holder determines
+its physical position. Its owner may differ from the carrier that holds it.
+The first implementation permits one container level: containers hold goods,
+purses, treasure references, and document copies. Container placement inside
+another container is rejected before any state changes.
+
+## Transfer contract
+
+One planner validates the source holder, destination holder, expected entry
+revision, quantity, co-location, capacity, and permission for the requested
+operation. Player commands, ordinary carrier dispatch, and recovery use that
+same planner and apply function. A plan is a read-only result.
+
+Apply revalidates the plan against current state. It advances the entry revision
+and records provenance only after all checks pass. Repeating an old revision
+returns a stale-request result and leaves quantities and balances unchanged.
+A split creates a fresh stack ID and reduces the source quantity exactly once.
+An exact transfer retains the entry ID. Full pools reject the complete operation.
+Only resolved, empty entries may be reclaimed.
+
+Packing moves existing stock into the manifest. Unpacking moves it back into
+an existing stock balance. Crate creation and repair consume the shared economy's
+materials and work. Packing and sealing are separate recorded operations.
+The recipe interface leaves room for wax as the economy gains that good.
+
+## Placement and accounting
+
+Actual placement resolves through the current holder. A travelling carrier has
+a route and progress; arrival moves its manifest with it. Interception transfers
+the manifest to the captor at the interception place. Recovery uses the same
+transfer path. An owner change alone preserves physical placement.
+
+Last-reported placement is separate knowledge with its own observation time.
+Catalogues and previews use available reports. They leave physical custody
+unchanged. Player-facing manifest reads require local access or an available
+record of those contents.
+
+Each scalar stock is counted once. Packing subtracts from the source balance;
+unpacking adds to the destination. Material accounting counts manifest goods
+and purse balances, and counts referenced treasure through the existing treasure
+account only. Container and carrier capacity use the manifest's total load once.
+
+## Persistence and rollout
+
+Introduce the new saved fields at the next schema after the actual implementation
+base. Keep earlier schema simulations on their existing paths. Migration creates
+custody references for live named objects using their current owner and placement;
+it preserves anonymous bulk stock balances. Preserve active archive book journeys
+when deriving the holder. Validation rejects unresolved live references, cycles,
+invalid quantities, excess capacity, duplicate physical references, and stale
+character lifetimes.
+
+Every saved field needs binary and SQLite round trips and a field-sensitive hash
+check. Extend the shared legacy boundary when the schema advances. Replay old
+worlds against the parent and compare their hashes before accepting migration.
+
+## Acceptance work
+
+- Exercise store → container → ordinary carrier → destination store.
+- Exercise interception → captor → recovery on the same manifest.
+- Check item identity, stock and coin totals after success, rejection, and retries.
+- Check partial stacks, full pools, stale revisions, character replacement,
+  container capacity, and rejected nested placement.
+- Check physical progress, arrival, owner changes, and last-reported placement.
+- Use the shared transfer API from player commands and ordinary carriers.
+- Verify crate material/work costs through common economy accounting.
+- Verify every new field in save/load, hashing, validation, and legacy replay.
+- Capture a player journey that packs, loads, travels, and unloads the same items.
+
+All acceptance work remains open in this initial contract commit. The draft is
+complete only when the implementation and evidence satisfy the whole list.
