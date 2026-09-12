@@ -128,11 +128,16 @@ add_library(crownless_story
     src/story/cc_speech_interactions.c
     src/story/cc_speech_lexicon.c
     src/story/cc_core_account.c
+    src/story/cc_core_model.c
+    src/story/cc_core_conversation.c
     src/story/cc_speech_json.c
 )
 target_include_directories(crownless_story PUBLIC src)
 target_link_libraries(crownless_story PUBLIC crownless_sim)
 cc_strict_warnings(crownless_story)
+if(NOT MSVC)
+    target_link_libraries(crownless_story PUBLIC m)
+endif()
 
 add_library(crownless_music src/client/cc_music.c src/client/cc_music_library.c)
 target_include_directories(crownless_music PUBLIC src)
@@ -243,6 +248,10 @@ target_include_directories(crownless_metagame PUBLIC src)
 target_link_libraries(crownless_metagame PUBLIC
     crownless_persistence crownless_story)
 cc_strict_warnings(crownless_metagame)
+
+add_executable(core_model_probe tools/core_model_probe.c)
+target_link_libraries(core_model_probe PRIVATE crownless_story)
+cc_strict_warnings(core_model_probe)
 
 add_executable(crownless_gossip_corpus tools/gossip_corpus.c)
 target_link_libraries(crownless_gossip_corpus PRIVATE crownless_story)
@@ -439,6 +448,20 @@ if(CC_BUILD_CLIENT)
         find_package(Threads REQUIRED)
         target_link_libraries(crownless_carriage PRIVATE glfw CURL::libcurl Threads::Threads)
     endif()
+    if(NOT EMSCRIPTEN)
+        if(APPLE)
+            set(CC_LANGUAGE_DIR "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/language")
+        else()
+            set(CC_LANGUAGE_DIR "$<TARGET_FILE_DIR:crownless_carriage>/assets/language")
+        endif()
+        add_custom_command(TARGET crownless_carriage POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CC_LANGUAGE_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/language/core.ccv2"
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/language/LICENSE"
+                "${CC_LANGUAGE_DIR}")
+    endif()
+
     file(GLOB CC_SPEECH_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/speech/*")
     if(EMSCRIPTEN)
         set(CC_SPEECH_BUNDLE_DIR "${CMAKE_CURRENT_BINARY_DIR}/site/speech")
