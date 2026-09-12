@@ -142,3 +142,17 @@ bool CcSpeechTrade(const CcSim *sim, const char *keeper, CcGood good,
         CcSpeechLocalVoice(sim->world_seed, sim->player.location_id, UINT64_C(0x400000000)),
         text, CC_SPEECH_PLAIN, CC_SPEECH_CONVERSATION, 0);
 }
+
+bool CcSpeechGoblinTrade(const CcSim *sim, CcMoney payment, CcSpeech *speech)
+{
+    if (speech == NULL) return false;
+    *speech = (CcSpeech){0};
+    if (sim == NULL || payment <= 0) return false;
+    char text[CC_SPEECH_TEXT_CAPACITY];
+    int written = snprintf(text, sizeof(text),
+        "Vesh. %" PRId64 " crowns fo thu. Tak khor thanks thu.", payment);
+    if (written < 0 || (size_t)written >= sizeof(text)) return false;
+    return CcSpeechCompose(speech, "goblin.trade.paid", sim->goblins.id,
+        "Nara Soot-Tongue", CC_SPEECH_GOBLIN_VOICE, text,
+        CC_SPEECH_FIRM, CC_SPEECH_FEEDBACK, 0U);
+}

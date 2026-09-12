@@ -77,6 +77,21 @@ class SpeechWorkerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'collision'):
             cached_record(self.folder, dict(self.record, text='Different words.'))
 
+    def test_goblin_cache_requires_pocket_vocoder(self):
+        record = dict(self.record, voice='goblin-v1', key=audio_key('goblin-v1', self.record['text']))
+        record = validate_record(record, self.cast)
+        path = self.folder / (record['key'] + '.wav')
+        tone(record, path)
+        self.assertIsNone(cached_record(self.folder, record))
+        receipt_path = path.with_suffix('.json')
+        receipt = json.loads(receipt_path.read_text())
+        receipt.update(model='pocket', style='hrakhor-bass-v2', speech_speed=2.0)
+        receipt_path.write_text(json.dumps(receipt))
+        self.assertEqual(cached_record(self.folder, record), path)
+        receipt['speech_speed'] = 1.0
+        receipt_path.write_text(json.dumps(receipt))
+        self.assertIsNone(cached_record(self.folder, record))
+
     def test_duplicate_request_and_queue_limit(self):
         started, finish = threading.Event(), threading.Event()
         calls = []

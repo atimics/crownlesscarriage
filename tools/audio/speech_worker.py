@@ -202,7 +202,7 @@ def main():
     parser.add_argument('--references', type=Path, default=ROOT / 'assets/audio/cast')
     parser.add_argument('--cache', type=Path, default=Path.home() / '.cache/crownless/speech-v1')
     parser.add_argument('--device', choices=('cpu', 'mps', 'cuda'), default='cpu')
-    parser.add_argument('--engine', choices=('chatterbox', 'qwen'), default='chatterbox')
+    parser.add_argument('--engine', choices=('pocket',), default='pocket')
     parser.add_argument('--allow-download', action='store_true')
     parser.add_argument('--allow-origin', action='append', default=[])
     parser.add_argument('--queue-limit', type=int, default=16)

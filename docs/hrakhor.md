@@ -98,10 +98,9 @@ Keep each existing world split when collecting pairs. These records support
 adapter evaluation and future training-data conversion. Source copy offsets
 remain attached to the English source record; each language has its own text.
 
-The game currently uses the shared native English grammar for ordinary NPC
-speech. The Hra'khor option is exposed at the model bridge. A caller selects it
-for a goblin speaker; the subject of a rumour can be any species. Live goblin
-conversation routing and learned goblin weights are later work.
+Native micro-model turns select Hra'khor for the goblin voice and keep English
+history for the model. Pocket renders goblin records through the bass vocoder
+at 2x speed. Nara's successful cave trades use this path with the actual payment.
 
 ## Checks
 

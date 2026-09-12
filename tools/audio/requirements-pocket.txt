@@ -1,0 +1,2 @@
+pocket-tts[audio]==3.1.0
+-r requirements-effects.txt

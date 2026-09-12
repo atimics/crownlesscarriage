@@ -1,3 +1,4 @@
+#include "story/cc_hrakhor.h"
 #include "story/cc_core_conversation.h"
 #include <stdio.h>
 #include <string.h>
@@ -54,13 +55,21 @@ void CcCoreConversationStep(CcCoreConversation *c, unsigned int budget)
     int status = CcCoreModelStep(c->model, budget);
     if (status == 0) return;
     c->pending = false;
+    const char *memory_text = NULL;
     if (status == 1) {
         CcSpeech generated;
+        const char *words = CcCoreModelText(c->model);
+        char dialect[CC_SPEECH_TEXT_CAPACITY];
+        if (c->original.voice_index == CC_SPEECH_GOBLIN_VOICE &&
+            CcHrakhorCorrupt(&c->account, words, 100U, dialect, sizeof(dialect))) {
+            memory_text = words;
+            words = dialect;
+        }
         if (CcSpeechCompose(&generated, "gossip.core", c->original.speaker_id,
-                c->original.speaker, c->original.voice_index, CcCoreModelText(c->model),
+                c->original.speaker, c->original.voice_index, words,
                 c->original.delivery, c->original.priority, c->original.source_event_id)) c->reply = generated;
     }
-    Remember(c, c->reply.speaker_id, c->reply.text);
+    Remember(c, c->reply.speaker_id, memory_text != NULL ? memory_text : c->reply.text);
     if (c->round_phase == 1U) {
         c->player_line = c->reply;
         c->player_seconds = 2.0f + (float)strlen(c->player_line.text) / 16.0f;

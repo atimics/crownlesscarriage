@@ -80,6 +80,9 @@ def cached_record(folder, record):
             raise SpeechCollision('Speech cache key collision')
         if path.stat().st_size > 1200100 or data.get('wav_sha256') != hashlib.sha256(path.read_bytes()).hexdigest():
             return None
+        if record['voice'] == 'goblin-v1' and (data.get('model') != 'pocket' or
+                data.get('style') != 'hrakhor-bass-v2' or data.get('speech_speed') != 2.0):
+            return None
         check_wav(path)
     except SpeechCollision:
         raise

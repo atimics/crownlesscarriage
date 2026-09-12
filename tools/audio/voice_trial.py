@@ -20,7 +20,7 @@ LINES = {
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--engine', choices=('pocket', 'nano'), required=True)
+    parser.add_argument('--engine', choices=('pocket',), default='pocket')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--voices', nargs='+', default=['mara-v1', 'oak-v1', 'reed-v1', 'flint-v1'])
     parser.add_argument('--threads', type=int, default=2)
@@ -46,20 +46,11 @@ def main():
         from scipy.io.wavfile import write
         from voice_style import render_voice
         torch.set_num_threads(args.threads)
-        report['packages'] = {name: importlib.metadata.version(name) for name in
-                              ('torch', 'pocket-tts' if args.engine == 'pocket' else 'chatterbox-tts')}
-        if args.engine == 'nano':
-            distribution = importlib.metadata.distribution('chatterbox-tts')
-            report['source'] = json.loads(distribution.read_text('direct_url.json') or '{}')
+        report['packages'] = {name: importlib.metadata.version(name) for name in ('torch', 'pocket-tts')}
         started = time.perf_counter()
-        if args.engine == 'pocket':
-            from pocket_tts import TTSModel
-            model = TTSModel.load_model(language='english')
-            rate = model.sample_rate
-        else:
-            from chatterbox.tts_turbo import ChatterboxTurboTTS
-            model = ChatterboxTurboTTS.from_pretrained(device='cpu', nano=True)
-            rate = model.sr
+        from pocket_tts import TTSModel
+        model = TTSModel.load_model(language='english')
+        rate = model.sample_rate
         report['load_seconds'] = time.perf_counter() - started
         report['status'] = 'generating'
         report['voice_setup_seconds'] = {}
@@ -67,10 +58,7 @@ def main():
         for voice in args.voices:
             reference = ROOT / 'assets/audio/cast' / f'{voice}.wav'
             started = time.perf_counter()
-            if args.engine == 'pocket':
-                state = model.get_state_for_audio_prompt(str(reference))
-            else:
-                model.prepare_conditionals(str(reference))
+            state = model.get_state_for_audio_prompt(str(reference))
             report['voice_setup_seconds'][voice] = time.perf_counter() - started
             for line, words in LINES.items():
                 torch.manual_seed(report['seed'])
@@ -79,17 +67,13 @@ def main():
                 first_chunk = None
                 # Pocket's stream updates its cache on a background thread.
                 # no_grad keeps that cache writable across thread boundaries.
-                context = torch.no_grad if args.engine == 'pocket' else torch.inference_mode
-                with context():
-                    if args.engine == 'pocket':
-                        chunks = []
-                        for chunk in model.generate_audio_stream(state, words):
-                            if first_chunk is None:
-                                first_chunk = time.perf_counter() - started
-                            chunks.append(chunk)
-                        samples = torch.cat(chunks).detach().cpu().numpy().reshape(-1)
-                    else:
-                        samples = model.generate(words).detach().cpu().numpy().reshape(-1)
+                with torch.no_grad():
+                    chunks = []
+                    for chunk in model.generate_audio_stream(state, words):
+                        if first_chunk is None:
+                            first_chunk = time.perf_counter() - started
+                        chunks.append(chunk)
+                    samples = torch.cat(chunks).detach().cpu().numpy().reshape(-1)
                 elapsed = time.perf_counter() - started
                 duration = len(samples) / rate
                 if not np.isfinite(samples).all() or not 0.15 <= duration <= 30:

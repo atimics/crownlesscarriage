@@ -7,6 +7,7 @@
 #define CC_SPEECH_LINE_CAPACITY 96
 #define CC_SPEECH_LANGUAGE "en"
 #define CC_SPEECH_VERSION 1
+#define CC_SPEECH_GOBLIN_VOICE 13U
 #define CC_SPEECH_JSON_CAPACITY 4096
 
 typedef enum CcSpeechDelivery {
@@ -45,6 +46,8 @@ typedef struct CcSpeech {
     uint64_t audio_key;
 } CcSpeech;
 
+/* Reply after a successful goblin trade, with the exact received payment. */
+bool CcSpeechGoblinTrade(const CcSim *sim, CcMoney payment, CcSpeech *speech);
 size_t CcSpeechVoiceCount(void);
 const CcVoiceProfile *CcSpeechVoiceAt(size_t index);
 uint32_t CcSpeechCharacterVoice(const CcSim *sim, const CcCharacter *character);

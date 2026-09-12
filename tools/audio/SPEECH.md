@@ -74,21 +74,45 @@ This writes a reference WAV and a receipt for each profile under
 and recording fingerprint. Use `--voice mara-v1` to prepare a single voice.
 Choose `cpu`, `mps`, or `cuda` to match the local machine.
 
-Use the existing Chatterbox environment to prepare dialogue from those voices:
+Use Pocket TTS for generated dialogue:
 
 ```sh
-python tools/audio/speech_pack.py out/speech.json --device mps --limit 32
+python -m pip install -r tools/audio/requirements-pocket.txt
+python tools/audio/speech_pack.py out/speech.json --engine pocket --limit 32
 ```
 
-Chatterbox and Qwen use separate dependency sets. `--engine qwen` uses the
-Qwen Base model in the Qwen environment. Downloads are enabled explicitly with
-`--allow-download`. Existing checked recordings are reused. Keep reference
-recordings fixed within a voice version.
+Pocket uses the saved synthetic cast references and runs on CPU. Downloads are
+enabled with `--allow-download`. Voice design remains a separate preparation
+step. Existing checked recordings are reused.
+
+### Goblin speech
+
+`goblin-v1` is Nara Soot-Tongue's voice. It uses a versioned copy of Flint's
+synthetic reference. Pocket generates the exact Hra'khor caption, then the
+bass vocoder processes it at 2x speed. Its 49 Hz foundation and slow pulse keep
+the low throat sound. This voice ID also selects a separate audio cache key.
+The cache checks Pocket, vocoder version, and speed before accepting a goblin
+recording. The worker and pack builder use the same path.
+
+Successful trades at the goblin cave trigger Nara's reply with the actual coin
+payment. The speech exporter includes a sample reply. Native core-model turns
+with the goblin voice apply Hra'khor after English generation. The model retains
+English conversation history, and the caption and audio share the final goblin
+words. Existing human cast assignments stay stable.
+
+```sh
+python tools/audio/speech_pack.py out/speech.json --voice goblin-v1
+python tests/pocket_goblin_tests.py --output out/pocket-goblin-check
+```
+
+The live check generates a human baseline and goblin line through Pocket,
+then checks the finished files and cache receipts. Routine auditions use
+`voice_trial.py --engine pocket`.
 
 ## Local worker
 
 ```sh
-python tools/audio/speech_worker.py --device mps --cache out/voice-cache
+python tools/audio/speech_worker.py --engine pocket --cache out/voice-cache
 ```
 
 The worker binds to `127.0.0.1:8766`. Submit an exported speech record to

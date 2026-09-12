@@ -6308,6 +6308,11 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
         (void)snprintf(message, message_capacity, "%s", error);
         return false;
     }
+    if (command.kind == CC_COMMAND_GOBLIN_TRADE) {
+        CcSpeech goblin;
+        if (CcSpeechGoblinTrade(sim, sim->player.coins - coins_before, &goblin))
+            ClientSaySpeech(&goblin);
+    }
     if (road_reply) {
         CcSpeech answer;
         if (CcSpeechCompose(&answer, "road.paid", road_answer.speaker_id, road_answer.speaker,

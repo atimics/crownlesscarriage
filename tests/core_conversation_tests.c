@@ -1,5 +1,6 @@
 #include "story/cc_core_conversation.h"
 #include "test_support.h"
+#include "story/cc_hrakhor.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -84,6 +85,22 @@ int main(int argc, char **argv)
     (void)printf("World hash retained: %016" PRIx64 "\n", before);
     CcCoreConversationReset(&conversation);
     CC_CHECK(conversation.count == 0U && !conversation.cached && !conversation.pending);
+    CcSpeech goblin = original[0];
+    CC_CHECK(CcSpeechCompose(&goblin, original[0].line_id, original[0].speaker_id,
+        original[0].speaker, CC_SPEECH_GOBLIN_VOICE, original[0].text,
+        original[0].delivery, original[0].priority, original[0].source_event_id));
+    CC_CHECK(CcCoreConversationPrepare(&conversation, &accounts[0], &goblin));
+    for (int step = 0; conversation.pending && step < 400; ++step)
+        CcCoreConversationStep(&conversation, 2U);
+    CC_CHECK(!conversation.pending);
+    CC_CHECK(strcmp(conversation.reply.line_id, "gossip.core") == 0);
+    char dialect[CC_SPEECH_TEXT_CAPACITY];
+    CC_CHECK(CcHrakhorCorrupt(&accounts[0], CcCoreModelText(conversation.model),
+        100U, dialect, sizeof(dialect)));
+    CC_CHECK(strcmp(conversation.reply.text, dialect) == 0);
+    CC_CHECK(conversation.reply.voice_index == CC_SPEECH_GOBLIN_VOICE);
+    CC_CHECK(strcmp(conversation.history[0].text, CcCoreModelText(conversation.model)) == 0);
+    CcCoreConversationReset(&conversation);
     CcCoreAccount bad = accounts[0]; bad.fields[0].start = SIZE_MAX;
     CC_CHECK(!CcCoreModelBegin(conversation.model, &bad, original[0].speaker_id, NULL, 0U));
     CC_CHECK(CcCoreModelText(conversation.model) == NULL);

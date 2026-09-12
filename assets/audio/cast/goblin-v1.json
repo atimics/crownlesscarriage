@@ -1,0 +1,11 @@
+{
+  "id": "goblin-v1",
+  "name": "Nara Soot-Tongue",
+  "description": "Flint reference with the Hra'khor bass vocoder at double speech speed.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 3786698755,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "98454193d1e240932634c3e81ea4f241337bef7643832dde811e183906f7af80",
+  "reference_source": "flint-v1"
+}
