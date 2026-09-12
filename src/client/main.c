@@ -1145,6 +1145,12 @@ static ConvoyUpdateResult UpdateDrivenConvoy(LocalState *local,
 static void RepositionHero(LocalState *local, Vector2 position,
                            bool market_interior);
 
+static const Vector3 *LocalConversationFocus(const LocalState *local, ClientView view)
+{
+    return local->adventure_ui && view == VIEW_CHARACTER ?
+        &local->conversation_position : NULL;
+}
+
 static void ResetLocalState(LocalState *local)
 {
     local->interactions = (CcInteractionPlan){0};
@@ -1153,6 +1159,8 @@ static void ResetLocalState(LocalState *local)
     local->carriage_stopped = false;
     local->conversation_gossip_slot = -1;
     local->conversation_gossip_source = false;
+    local->conversation_object = 0;
+    local->conversation_position = (Vector3){0};
     local->conversation_name[0] = '\0';
     local->conversation_line[0] = '\0';
     local->trade_quantity = 1;
@@ -9134,6 +9142,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                             local->course.situation_witness.position.x,
                             local->course.situation_witness.position.z}),
                     1.85f)) {
+                local->conversation_object = local->course.situation_witness_character_id;
+                local->conversation_position = local->course.situation_witness.position;
                 local->conversation_character_id =
                     local->course.situation_witness_character_id;
                 local->conversation_situation_id =
@@ -10543,8 +10553,7 @@ int main(int argc, char **argv)
 #endif
 
         CcLocalRendererSetConversationFocus(
-            local.adventure_ui && view == VIEW_CHARACTER && local.conversation_character_id == 0U ?
-                &local.conversation_position : NULL,
+            LocalConversationFocus(&local, view),
             local.conversation_object >= UINT64_C(0x100000000) && local.conversation_object < UINT64_C(0x200000000) ? (uint32_t)local.conversation_object : 0U,
             local.agent.facing_yaw + PI);
         CcLocalRendererSetPonyConversation(view == VIEW_LOCAL && sim.pony_company.encounter >= 0);
