@@ -18,6 +18,7 @@ class Engine:
         signatures = {
             "CcCoopStartDeepWyrm": [pointer, text, text, size],
             "CcCoopApply": [pointer, text, c.c_uint64, c.c_int32, c.c_int32, text, size],
+            "CcCoopAdvanceTravel": [pointer, c.c_int32, c.c_int32, text, size],
             "CcCoopAdvance": [pointer, c.c_int32, text, size],
             "CcCoopAdvanceAway": [pointer, c.c_int32, text, size],
             "CcCoopSnapshot": [pointer, text, size],
@@ -82,8 +83,8 @@ class Campaign:
                                  self.error, len(self.error))
         return bool(ok), self.error.value.decode("utf-8")
 
-    def advance(self, ticks):
-        if not self.lib.CcCoopAdvance(self.handle, ticks, self.error, len(self.error)):
+    def advance(self, ticks, scale=1):
+        if not self.lib.CcCoopAdvanceTravel(self.handle, ticks, scale, self.error, len(self.error)):
             raise RuntimeError("Campaign clock failed: " + self.error.value.decode("utf-8"))
 
     def advance_away(self, days):

@@ -19,6 +19,7 @@
 #pragma clang diagnostic ignored "-Wextra-semi"
 #endif
 
+EM_JS(void, CcCoopClientTravelScale, (int32_t scale), { Module.ccTravelScale = scale; });
 EM_JS(int, CoopEnabled, (), { return Module.ccCoop && Module.ccCoop.enabled ? 1 : 0; });
 EM_JS(void, CoopWorldId, (char *world, int capacity), {
     stringToUTF8(new URLSearchParams(location.search).get('world') || "", world, capacity);

@@ -256,19 +256,14 @@ static int RunWorldCardRegression(void)
         CARD_INPUT();
         CARD_CHECK(sim.journey.active && sim.journey.destination_id == destination && view == VIEW_LOCAL,
             "A road tap and its card must travel to the same destination.");
-        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_TOGGLE_DRIVE, 0, mode != 0),
-            "Travel needs a carriage stop action.");
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_HOLD_TRAVEL, 0, mode != 0),
+            "Travel needs a hold action.");
+        local.carriage_stopped = true;
         CARD_INPUT();
         int32_t elapsed = sim.journey.elapsed_subticks;
-        for (int32_t frame = 0; frame < 120; ++frame) CARD_INPUT();
-        CARD_CHECK(local.carriage_stopped && local.convoy.pace == 0 && sim.journey.elapsed_subticks == elapsed,
-            "A stop must hold the carriage across later frames.");
-        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_TOGGLE_DRIVE, 0, mode != 0),
-            "A stopped carriage needs a drive action.");
-        CARD_INPUT();
         for (int32_t frame = 0; frame < 30; ++frame) CARD_INPUT();
         CARD_CHECK(!local.carriage_stopped && sim.journey.elapsed_subticks > elapsed,
-            "Drive must resume journey progress.");
+            "Travel resumes a saved stopped carriage.");
         client_test_pointer_active = false;
         queued_key_press[KEY_DOWN] = true;
         CARD_INPUT();

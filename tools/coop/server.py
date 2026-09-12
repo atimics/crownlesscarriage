@@ -235,10 +235,11 @@ class Worlds:
             return result
 
     def pose(self, world, token, body):
-        require(set(body) in ({"visit", "context", "scene", "pose"},
+        require(set(body) - {"travel_scale"} in ({"visit", "context", "scene", "pose"},
                               {"visit", "context", "scene", "pose", "dead"}),
                 "Send your current traveller pose.")
         require(type(body.get("dead", False)) is bool, "Send your traveller life state.")
+        travel_scale = number(body.get("travel_scale", 1), 1, 8, "travel scale")
         scene = number(body["scene"], 0, 7, "scene")
         pose = body["pose"]
         if pose is not None:
@@ -265,7 +266,7 @@ class Worlds:
             now = time.monotonic()
             self.pose_sequence += 1
             self.poses[key] = dict(context=context, scene=scene, pose=pose,
-                                   sequence=self.pose_sequence, seen=now)
+                                   sequence=self.pose_sequence, seen=now, travel_scale=travel_scale)
             self.seen[key] = now
             dead = self.member_dead(world, member["id"])
             if body.get("dead", False) and not dead:
@@ -507,7 +508,12 @@ class Worlds:
                             with self.engine.open(saved=saved["state"]) as sim:
                                 if before["journey"].get("road_site"):
                                     ticks = max(1, ticks // 2)
-                                sim.advance(ticks)
+                                scale = max((pose.get("travel_scale", 1)
+                                    for (w, member), pose in self.poses.items()
+                                    if w == world and now - pose["seen"] < 0.4
+                                    and pose["context"] == self.session_context(world, saved)
+                                    and not self.member_dead(world, member)), default=1)
+                                sim.advance(ticks, scale)
                                 self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1 WHERE id=?",
                                                 (sim.save(), json.dumps(sim.snapshot()), world))
                     self.last_tick[world] = now

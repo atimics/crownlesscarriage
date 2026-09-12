@@ -93,15 +93,20 @@ bool CcCoopAdvanceAway(CcSim *sim, int32_t days, char *error, size_t capacity)
     return ok;
 }
 
-bool CcCoopAdvance(CcSim *sim, int32_t ticks, char *error, size_t capacity)
+bool CcCoopAdvanceTravel(CcSim *sim, int32_t ticks, int32_t scale, char *error, size_t capacity)
 {
-    if (sim == NULL || ticks < 0 || ticks > 3600 ||
-        sim->clock.tick > UINT64_MAX - (uint64_t)ticks) return false;
+    if (sim == NULL || ticks < 0 || ticks > 3600 || scale < 1 || scale > 8 ||
+        sim->clock.tick > UINT64_MAX - (uint64_t)ticks * (uint64_t)scale) return false;
     CcSim *candidate = malloc(sizeof(*candidate));
     if (candidate == NULL) return false;
     *candidate = *sim;
     /* Watches flow into a short break or overnight camp automatically. */
-    for (int32_t tick = 0; tick < ticks; ++tick) {
+    for (int32_t tick = 0; tick < ticks * scale; ++tick) {
+        if (tick % scale != 0 && (candidate->carriage.progress_milli <= 100 ||
+            candidate->carriage.progress_milli >= 900 ||
+            candidate->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
+            candidate->pony_company.encounter >= 0 ||
+            CcSimJourneyRoadSiteStop(candidate) != NULL)) continue;
         if (candidate->journey.active && candidate->journey.phase == CC_JOURNEY_PHASE_RESTING) {
             CcCommand rest = {.kind = CcSimJourneyStop(candidate) == CC_JOURNEY_STOP_MIDDAY ?
                 CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP};
@@ -115,6 +120,11 @@ bool CcCoopAdvance(CcSim *sim, int32_t ticks, char *error, size_t capacity)
     if (ok) *sim = *candidate;
     free(candidate);
     return ok;
+}
+
+bool CcCoopAdvance(CcSim *sim, int32_t ticks, char *error, size_t capacity)
+{
+    return CcCoopAdvanceTravel(sim, ticks, 1, error, capacity);
 }
 
 typedef struct Json {
