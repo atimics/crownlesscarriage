@@ -101,6 +101,22 @@ static int RunAdventureInputRegression(void)
     const char *path = "interaction-input.ccsave";
     (void)remove(path);
     CcSimInit(&sim, 42U);
+    /* The chat flow needs several ordinary accounts to advance through. */
+    for (int i = 0; i < 2; ++i) {
+        CcEvent *account = &sim.events[sim.event_write_index];
+        *account = (CcEvent){
+            .id = CcMakeId(CC_ENTITY_EVENT, sim.next_entity_serial++),
+            .day = sim.current_day, .kind = CC_EVENT_KINGDOM_ACTION,
+            .subject_id = sim.kingdoms[0].id,
+            .location_id = sim.player.location_id, .magnitude = 40
+        };
+        (void)snprintf(account->text, sizeof(account->text),
+            "A traveller brings account %d from the town granary.", i + 1);
+        sim.event_write_index = (sim.event_write_index + 1) % CC_MAX_EVENTS;
+        if (sim.event_count < CC_MAX_EVENTS) sim.event_count += 1;
+    }
+    CcSimRefreshCharacterGossip(&sim);
+
     CcLocalBindPlace(&sim);
     ResetLocalState(&local);
     local.adventure_ui = true;
