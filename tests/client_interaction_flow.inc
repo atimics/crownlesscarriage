@@ -797,3 +797,69 @@ static int RunAdventureTradeTermsRegression(void)
     puts("adventure trade terms passed");
     return 0;
 }
+
+static int RunAbandonedTownRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    local.opening_step = CC_LOCAL_OPENING_COMPLETE;
+    CcSettlement *town = &sim.settlements[5];
+    sim.player.location_id = town->id;
+    town->population = 0;
+    town->service_mask = 0;
+    town->prosperity = 0;
+    town->hunger = 100;
+    for (int32_t i = 0; i < sim.character_count; ++i)
+        sim.characters[i].current_settlement_id = sim.settlements[0].id;
+    CcCharacter *visitor = &sim.characters[0];
+    visitor->current_settlement_id = town->id;
+    visitor->activity = CC_CHARACTER_ACTIVITY_RECOVERING;
+    visitor->death_day = 0;
+    visitor->birth_day = sim.current_day - 30 * 365;
+    local.course.travellers[0].active = true;
+    local.course.situation_witness_active = true;
+    uint64_t hash = CcSimHash(&sim);
+    RenderTexture2D texture = {.texture = {.width = 960, .height = 540}};
+    Rectangle destination = {0, 0, 960, 540};
+    BuildAdventureTargets(&sim, &local, texture, destination);
+    int32_t people = 0;
+    bool closed_hall = false;
+    for (int32_t i = 0; i < local.interactions.count; ++i) {
+        const CcInteractionTarget *target = &local.interactions.targets[i];
+        if (target->key.kind == CC_INTERACTION_PERSON) {
+            ++people;
+            if (target->character_id != visitor->id)
+                return ClientRegressionFailure("Ruin people must use a present living character.");
+        }
+        if (target->key.kind == CC_INTERACTION_BOARD)
+            return ClientRegressionFailure("An abandoned town has a retired notice board.");
+        if (target->key.kind == CC_INTERACTION_DOOR) closed_hall = !target->available;
+    }
+    if (people != 1 || !closed_hall)
+        return ClientRegressionFailure("Show the visitor and the closed hall in the ruin.");
+    local.market_interior = true;
+    BuildAdventureTargets(&sim, &local, texture, destination);
+    if (local.interactions.count != 1 || local.interactions.targets[0].key.kind != CC_INTERACTION_EXIT)
+        return ClientRegressionFailure("A saved interior in a ruin offers the street exit.");
+    local.market_interior = false;
+    visitor->current_settlement_id = sim.settlements[0].id;
+    BuildAdventureTargets(&sim, &local, texture, destination);
+    for (int32_t i = 0; i < local.interactions.count; ++i)
+        if (local.interactions.targets[i].key.kind == CC_INTERACTION_PERSON)
+            return ClientRegressionFailure("A departed visitor leaves the scene.");
+    visitor->current_settlement_id = town->id;
+    if (CcSimHash(&sim) != hash)
+        return ClientRegressionFailure("Scene inspection preserves the simulation.");
+    town->population = 180;
+    BuildAdventureTargets(&sim, &local, texture, destination);
+    bool open_hall = false;
+    for (int32_t i = 0; i < local.interactions.count; ++i)
+        if (local.interactions.targets[i].key.kind == CC_INTERACTION_DOOR)
+            open_hall = local.interactions.targets[i].available;
+    if (!open_hall) return ClientRegressionFailure("Resettlement refreshes the scene immediately.");
+    puts("Abandoned town targets follow living presence and resettlement.");
+    return 0;
+}
