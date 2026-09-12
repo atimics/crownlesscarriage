@@ -344,7 +344,8 @@ typedef enum CcEventKind {
     CC_EVENT_PARTY_WIPED = 132,
     CC_EVENT_NOTICE_POSTED = 133,
     CC_EVENT_ROAD_SITE_PRODUCTION = 134,
-    CC_EVENT_PROPHECY_DELIVERED = 135
+    CC_EVENT_PROPHECY_DELIVERED = 135,
+    CC_EVENT_KIND_COUNT
 } CcEventKind;
 
 typedef struct CcArchiveConvoyOrder {

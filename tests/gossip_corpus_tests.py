@@ -28,7 +28,14 @@ class CorpusTests(unittest.TestCase):
         self.assertEqual(first.stderr, second.stderr)
         rows = [corpus.prepare_row(json.loads(line), 2654435769) for line in first.stdout.splitlines()]
         self.assertGreater(len(rows), 0)
-        self.assertEqual(json.loads(first.stderr)["rows"], len(rows))
+        report = json.loads(first.stderr)
+        self.assertEqual(report["rows"], len(rows))
+        coverage = report["unsupported_kinds"]
+        self.assertEqual([row["kind_id"] for row in coverage], list(range(len(coverage))))
+        self.assertIn("PROPHECY DELIVERED", {row["kind"] for row in coverage})
+        self.assertTrue(any(row["observations"] == 0 for row in coverage))
+        self.assertEqual(sum(row["observations"] for row in coverage),
+                         report["unsupported_observations"])
         for row in rows:
             self.assertIn("account", row["input"])
             self.assertNotIn("speaker_id", corpus.event_prefix(row))

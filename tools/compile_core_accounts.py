@@ -47,7 +47,9 @@ def compile_rules(check=False):
                                   'status': 'field_rules' if rules else 'legacy_or_uncovered'})
     # Keep the exporter's bounded counters in step with the actual enum.
     last = max(kinds, key=kinds.get)
-    assert f'#define KIND_COUNT ((int)CC_EVENT_{last} + 1)' in (ROOT / 'tools/gossip_corpus.c').read_text()
+    assert re.search(r'CC_EVENT_' + last + r'\s*=\s*' + str(kinds[last]) +
+                     r'\s*,\s*CC_EVENT_KIND_COUNT\s*$', enum)
+    assert '#define KIND_COUNT ((int)CC_EVENT_KIND_COUNT)' in (ROOT / 'tools/gossip_corpus.c').read_text()
     files = {ROOT / 'src/story/cc_core_account_rules.inc': '\n'.join(lines) + '\n',
              ROOT / 'docs/core-account-coverage.json': json.dumps(coverage, indent=2) + '\n'}
     for target, content in files.items():

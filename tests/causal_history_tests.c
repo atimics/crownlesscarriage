@@ -1,4 +1,5 @@
 #include "sim/cc_sim.h"
+#include "sim/cc_event_pin_set_internal.h"
 
 #include "persistence/cc_save.h"
 #include "test_support.h"
@@ -150,8 +151,23 @@ static void CheckRotatedLedger(void)
     }
 }
 
+static void CheckFullPinSet(void)
+{
+    static CcEventPinSet pins;
+    for (CcId id = 1; id <= CC_EVENT_PIN_SET_SIZE; ++id) PinEvent(&pins, id);
+    CC_CHECK(!pins.overflow);
+    for (CcId id = 1; id <= CC_EVENT_PIN_SET_SIZE; ++id) CC_CHECK(EventIsPinned(&pins, id));
+    CC_CHECK(!EventIsPinned(&pins, CC_EVENT_PIN_SET_SIZE + 1U));
+    PinEvent(&pins, 1U); CC_CHECK(!pins.overflow);
+    PinEvent(&pins, CC_EVENT_PIN_SET_SIZE + 1U); CC_CHECK(pins.overflow);
+    pins.query_id = CC_EVENT_PIN_SET_SIZE + 1U;
+    PinEvent(&pins, 1U); CC_CHECK(!pins.query_found);
+    PinEvent(&pins, pins.query_id); CC_CHECK(pins.query_found);
+}
+
 int main(void)
 {
+    CheckFullPinSet();
     CheckRotatedLedger();
     char error[192];
     CheckPopulationTurnover();

@@ -363,6 +363,21 @@ static CcStoryBeat CharacterBeat(const CcSim *sim,
             character, CC_CHARACTER_MEMORY_PLAYER_PROMISED, situation->id)) {
         return CC_STORY_BEAT_PROMISED;
     }
+    /* A recipient can see the accepted delivery when the company arrives.
+       This observation supplies the handoff reply before a second pledge. */
+    if (sim != NULL && character != NULL &&
+        situation->kind == CC_SITUATION_RELIEF_DELIVERY &&
+        situation->affected_character_id == character->id &&
+        sim->player.accepted_situation_id == situation->id &&
+        character->current_settlement_id == situation->target_id &&
+        character->activity != CC_CHARACTER_ACTIVITY_TRAVELLING &&
+        sim->player.location_id == situation->target_id &&
+        sim->carriage.location_id == situation->target_id &&
+        situation->quantity > 0 &&
+        sim->player.cargo[CC_GOOD_FOOD] >= situation->quantity &&
+        CcCharacterKnows(character, CC_KNOWLEDGE_IMMEDIATE_STAKE, situation->id)) {
+        return CC_STORY_BEAT_PROMISED;
+    }
     const CcFront *front = CcSimSituationFront(sim, situation);
     CcFrontStage stage = CcSimFrontStage(front);
     if (stage == CC_FRONT_STAGE_BREAKING) {
