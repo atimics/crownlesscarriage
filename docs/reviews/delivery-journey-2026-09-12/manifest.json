@@ -5,8 +5,8 @@
   "native_tests": 173,
   "files": {
     "README.md": {
-      "bytes": 2849,
-      "sha256": "f1e44936c7fd9fd28cede663e7527ef9627d701aff6d5e6ea2322dff49186f71"
+      "bytes": 3954,
+      "sha256": "d9ef067f9403346b5f2d75a4fbe020faa5cce51cb1d1beac23885b34f54d2eda"
     },
     "accepted-cargo.png": {
       "bytes": 91654,
@@ -54,6 +54,18 @@
     "road-saved.png": {
       "bytes": 50221,
       "sha256": "0c0b0b0448e755cb29d1a9f2359540ad5b2fe214c356feaac9d9d660bb847014"
+    },
+    "delivery-complete.png": {
+      "bytes": 21026,
+      "sha256": "3c437f42a95f8ac717315e2eb71465bfc330d1128bfed91bf6e89fd8af2a3a1e"
+    },
+    "delivery-quote.png": {
+      "bytes": 20433,
+      "sha256": "1ba817210af4723801977230fce9070509eecf64bed0d1eb0250249c37b6312f"
+    },
+    "low-silver-pit-result.png": {
+      "bytes": 58664,
+      "sha256": "26ed64111fc1133c72331e7f82412bebb23df4aab121839c27c31144a79f261e"
     }
   }
 }
