@@ -1,0 +1,30 @@
+{
+  "source_commit": "e7d1e63164b06419af53d206ee253805a71e5faf",
+  "web_wasm_sha256": "956aa7a543db00df16b11beb03678cc42ed80b13c713df3ea805ee2c866d9646",
+  "files": {
+    "README.md": {
+      "bytes": 917,
+      "sha256": "480c11f712bd31be5582908d699f4af78530c2825303dab96eb5076c2d4eae8a"
+    },
+    "camp-road-meeting.png": {
+      "bytes": 33483,
+      "sha256": "8c51c9f9f6d4712a1124f1fa0d64f266fe5ee51944ff591492750ba24451bb88"
+    },
+    "mine-branch.png": {
+      "bytes": 71572,
+      "sha256": "d8f0e20e85473765fe3e68eb587c2391c54b27582b8c560bc2aa75c8614a2268"
+    },
+    "restored-store.png": {
+      "bytes": 60664,
+      "sha256": "24aa4d5d52e8dafb4e356a254d262299b6979c8e3577446ce692d54ac5074f14"
+    },
+    "road-meeting-journal.png": {
+      "bytes": 57106,
+      "sha256": "7ff3cca64bb7a5a041c86db5afc51070461682bb32c65229af6009245a3ee5fb"
+    },
+    "silverwick-departure.png": {
+      "bytes": 71367,
+      "sha256": "e73043c57ffc9f17eb825a9300c93a4ccf6542b6cfdea16f3b663a0cab111f3b"
+    }
+  }
+}

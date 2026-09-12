@@ -2181,7 +2181,9 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
 
     char witness_label[96];
-    WorldLabel labels[24];
+    /* Keep four places for journey, witness and lair labels below. */
+    enum { LOCAL_LABEL_CAPACITY = 24, LOCAL_LABEL_DETAIL_LIMIT = LOCAL_LABEL_CAPACITY - 4 };
+    WorldLabel labels[LOCAL_LABEL_CAPACITY];
     int32_t count = 0;
     if (convoy_visible && agent != NULL) {
         labels[count++] = (WorldLabel){
@@ -2269,7 +2271,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                        profile->compound, kingdom};
     }
     for (int32_t i = 0;
-         i < CC_LOCAL_PLACE_LANDMARK_COUNT && count < 20; ++i) {
+         i < CC_LOCAL_PLACE_LANDMARK_COUNT && count < LOCAL_LABEL_DETAIL_LIMIT; ++i) {
         const CcLocalPlaceLandmark *landmark =
             ActivePlaceLandmarkAt(i);
         if (landmark == NULL) continue;
@@ -2285,7 +2287,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                 WORLD_VIOLET : kingdom};
     }
     for (int32_t i = 0;
-         i < CC_LOCAL_PLACE_ROAD_COUNT && count < 20; ++i) {
+         i < CC_LOCAL_PLACE_ROAD_COUNT && count < LOCAL_LABEL_DETAIL_LIMIT; ++i) {
         const CcLocalPlaceRoad *road = ActivePlaceRoadAt(i);
         if (road == NULL) continue;
         float center_x = road->x + road->width * 0.5f;
@@ -2296,7 +2298,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
              center_z},
             road->name, WORLD_MUTED};
     }
-    if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
+    if (count < LOCAL_LABEL_CAPACITY && sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
         sim->journey.destination_id == place->id &&
         AgentNearLabel(agent, 47.35f, 31.05f, 7.0f)) {
         labels[count++] = (WorldLabel){
@@ -2307,7 +2309,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT ?
                 WORLD_TEAL : WORLD_VIOLET};
     }
-    if (course != NULL && course->situation_witness_active) {
+    if (count < LOCAL_LABEL_CAPACITY && course != NULL && course->situation_witness_active) {
         const CcSituation *situation = CcSimSituation(
             sim, course->situation_witness_id);
         const CcCharacter *character = CcSimCharacter(
@@ -2328,7 +2330,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                     WORLD_GOLD : WORLD_DANGER};
         }
     }
-    if (dungeon != NULL &&
+    if (count < LOCAL_LABEL_CAPACITY && dungeon != NULL &&
         AgentNearLabel(agent, CC_LOCAL_DUNGEON_X,
                        CC_LOCAL_DUNGEON_Z, 8.0f)) {
         labels[count++] = (WorldLabel){{CC_LOCAL_DUNGEON_X,
@@ -2339,7 +2341,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                                   dungeon->name),
                                        WORLD_VIOLET};
     }
-    if (place->id == sim->dragon.lair_settlement_id &&
+    if (count < LOCAL_LABEL_CAPACITY && place->id == sim->dragon.lair_settlement_id &&
         AgentNearLabel(agent, CC_LOCAL_DRAGON_CAVE_X,
                        CC_LOCAL_DRAGON_CAVE_Z, 9.0f)) {
         labels[count++] = (WorldLabel){
@@ -2351,7 +2353,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                 "Dragon roost / sheer cliff / no road",
             sim->dragon.slain ? WORLD_VIOLET : WORLD_DANGER};
     }
-    if (place->id == sim->goblins.lair_settlement_id &&
+    if (count < LOCAL_LABEL_CAPACITY && place->id == sim->goblins.lair_settlement_id &&
         AgentNearLabel(agent, CC_LOCAL_DRAGON_CAVE_X,
                        CC_LOCAL_DRAGON_CAVE_Z, 9.0f)) {
         labels[count++] = (WorldLabel){
