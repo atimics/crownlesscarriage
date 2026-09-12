@@ -19417,8 +19417,6 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             const CcDispatch *letter = &sim->dispatches[i];
             if (letter->kind < CC_DISPATCH_ROAD_REPORT ||
                 letter->kind > CC_DISPATCH_CROSSING_PERMIT ||
-                (letter->kind != CC_DISPATCH_ROAD_REPORT &&
-                 CcSimWarParty(sim, letter->war_party_id) == NULL) ||
                 CcSimSettlement(sim, letter->origin_settlement_id) == NULL ||
                 CcSimSettlement(sim, letter->recipient_settlement_id) == NULL) {
                 SetError(error, error_capacity,
