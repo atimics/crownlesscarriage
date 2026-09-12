@@ -387,7 +387,7 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         history->years_bandit_raid,
         history->years_bandit_influence_70_plus,
         sim->goblins.members,
-        sim->goblins.devotion,
+        sim->dragon_cult.devotion,
         sim->goblins.cohesion,
         sim->goblins.expeditions_intercepted,
         sim->bandit_count > 0 ? sim->bandits[0].members : 0,
@@ -429,6 +429,16 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         sim->bandit_count > 0 ? sim->bandits[0].id : 0U,
         history->bandit_raid_group_days, history->bandit_influence_70_plus_group_days,
         history->bandit_raid_group_year_samples, history->bandit_influence_70_plus_group_year_samples);
+    (void)printf(",%d,%d,%d,%d", sim->goblin_politics.crown_faction,
+        CcSimCultMembers(sim, CC_CULT_HUMAN), CcSimCultMembers(sim, CC_CULT_GOBLIN), sim->dragon_cult.devotion);
+    for (int32_t color = 0; color < CC_GOBLIN_FACTION_COUNT; ++color) {
+        const CcGoblinFaction *f = &sim->goblin_politics.factions[color];
+        (void)printf(",%d,%" PRId64 ",%" PRId64 ",%d", f->members,
+            f->coins + (CcMoney)f->gold * 40 + (CcMoney)f->gems * 70, f->tribute, f->hunted);
+    }
+    for (int32_t species = 0; species < CC_CULT_SPECIES_COUNT; ++species)
+        for (int32_t rank = 0; rank < CC_CULT_RANK_COUNT; ++rank)
+            (void)printf(",%d", sim->dragon_cult.ranks[species][rank]);
     if (campaign_metrics) PrintCampaignMetrics(sim);
     (void)putchar('\n');
 }
@@ -624,6 +634,14 @@ int main(int argc, char **argv)
         "weighted_security,years_population_weighted_hunger_40_plus,years_without_population,first_bandit_id,"
         "bandit_raid_group_days,bandit_influence_70_plus_group_days,"
         "bandit_raid_group_year_samples,bandit_influence_70_plus_group_year_samples");
+    (void)printf(",goblin_crown_color,cult_human_members,cult_goblin_members,cult_devotion");
+    static const char *colors[] = {"red", "purple", "blue"};
+    for (int32_t color = 0; color < CC_GOBLIN_FACTION_COUNT; ++color)
+        (void)printf(",goblin_%s_members,goblin_%s_lair_value,goblin_%s_tribute,goblin_%s_hunted",
+            colors[color], colors[color], colors[color], colors[color]);
+    for (int32_t species = 0; species < CC_CULT_SPECIES_COUNT; ++species)
+        for (int32_t rank = 0; rank < CC_CULT_RANK_COUNT; ++rank)
+            (void)printf(",cult_%s_rank_%d", species == CC_CULT_HUMAN ? "human" : "goblin", rank);
     if (campaign_metrics) {
         (void)printf(",live_treasures,live_treasure_value,newest_treasure_day,"
                      "oldest_treasure_day,treasures_from_ruins,treasures_in_ruins,"

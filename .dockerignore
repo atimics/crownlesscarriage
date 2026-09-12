@@ -3,6 +3,10 @@
 !CMakePresets.json
 !LICENSE
 !THIRD_PARTY_NOTICES.txt
+!assets/
+assets/**
+!assets/campaigns/
+!assets/campaigns/**
 !src/
 !src/**
 !tests/

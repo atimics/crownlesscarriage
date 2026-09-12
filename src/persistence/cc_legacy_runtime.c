@@ -199,7 +199,8 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 64U || legacy_version == 65U ||
          legacy_version == 66U || legacy_version == 67U ||
          legacy_version == 68U || legacy_version == 69U ||
-         legacy_version == 70U || legacy_version == 71U || legacy_version == 72U || legacy_version == 73U || legacy_version == 74U || legacy_version == 75U) &&
+         legacy_version == 70U || legacy_version == 71U || legacy_version == 72U || legacy_version == 73U ||
+         legacy_version == 74U || legacy_version == 75U || legacy_version == 76U || legacy_version == 77U) &&
         sim->generator_version == 25U) {
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
@@ -411,8 +412,8 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
     sim->goblins.cohesion = 60;
     sim->goblins.target_warned = false;
     sim->goblins.expeditions_intercepted = 0;
-    sim->goblins.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
-    sim->goblins.dragon_seed_days_remaining = 0;
+    sim->dragon_cult.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
+    sim->dragon_cult.dragon_seed_days_remaining = 0;
     CcSimUpgradeMapCollection(sim);
     if (legacy_version == 16U) {
         CcSimInitializeCharacters(sim);
@@ -692,6 +693,7 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
             sim->dragon.wyrmheart_id = CcMakeId(CC_ENTITY_TREASURE, sim->next_entity_serial++);
         }
     }
+    if (legacy_version < 75U) CcSimInitializeGoblinPolitics(sim);
     if (legacy_version < 62U) CcSimUpgradeKnowledgeSourceNames(sim);
     if (legacy_version < 51U) CcSimSeedCommonPonyHerds(sim);
     if (legacy_version < 52U) CcSimUnharnessSecondDraftAnimal(sim);

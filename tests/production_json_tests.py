@@ -31,6 +31,13 @@ with tempfile.TemporaryDirectory() as directory:
                 assert quote['first_dispatch_day'] >= 0
                 assert quote['total_charge'] == quote['goods_cost'] + quote['first_leg_toll']
                 assert (quote['quantity'] > 0) == (quote['gate'] == 'ready')
+            placement = row['archive_seat_plan']
+            assert placement['semantics'] == 'held_placement_advice_snapshot'
+            candidates = {c['id']: c for c in placement['candidates']}
+            if placement['selected_id'] != '0':
+                assert candidates[placement['selected_id']]['viable']
+            if placement['keep_current']:
+                assert placement['selected_id'] == placement['current_id']
             funding = row['archive_funding']
             assert funding['semantics'] == 'treasury_top_up_plan_snapshot'
             assert funding['total'] == sum(donor['amount'] for donor in funding['donors'])
@@ -53,6 +60,7 @@ with tempfile.TemporaryDirectory() as directory:
             assert loaded['archive_work'] == rows[-1]['archive_work']
             assert loaded['archive_funding'] == rows[-1]['archive_funding']
             assert loaded['archive_supply'] == rows[-1]['archive_supply']
+            assert loaded['archive_seat_plan'] == rows[-1]['archive_seat_plan']
             assert loaded['carriages'] == rows[-1]['carriages']
             assert loaded['shipments'] == rows[-1]['shipments']
             assert [route['context'] for route in loaded['routes']] == [route['context'] for route in rows[-1]['routes']]

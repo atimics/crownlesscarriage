@@ -57,7 +57,10 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 76
+/* Schema 75 (goblin/dragon faction split), 76 (rot diet) and 77 (archive
+   supply dispatch) shipped first; this branch's archive border contracts
+   are schema 78. */
+#define CC_SIM_SCHEMA_VERSION 78
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -135,7 +138,8 @@ typedef struct CcGoodDefinition {
 typedef enum CcNutritionPurpose {
     CC_NUTRITION_CIVILIAN,
     CC_NUTRITION_TRAVEL,
-    CC_NUTRITION_ANIMAL
+    CC_NUTRITION_ANIMAL,
+    CC_NUTRITION_SCAVENGER
 } CcNutritionPurpose;
 
 typedef enum CcSettlementFunction {
@@ -465,6 +469,18 @@ typedef struct CcWelfareSnapshot {
     double population_weighted_prosperity;
     double population_weighted_security;
 } CcWelfareSnapshot;
+
+typedef struct CcArchiveSeatCandidate {
+    CcId settlement_id, patron_id;
+    int32_t paper, spare_wheat, tools, usable_connections, security, score;
+    bool inhabited, mill, viable;
+} CcArchiveSeatCandidate;
+
+typedef struct CcArchiveSeatPlan {
+    CcId current_id, selected_id;
+    int32_t score;
+    bool keep_current;
+} CcArchiveSeatPlan;
 
 typedef enum CcArchiveRecoveryGate {
     CC_ARCHIVE_RECOVERY_DUE = 0,
@@ -1006,12 +1022,11 @@ typedef enum CcGoblinDragonSeedPhase {
     CC_GOBLIN_DRAGON_SEED_PREPARING
 } CcGoblinDragonSeedPhase;
 
-typedef struct CcGoblinCult {
+typedef struct CcGoblinSociety {
     CcId id;
     char name[CC_NAME_CAPACITY];
     int32_t members;
 
-    int32_t devotion;
     int32_t cohesion;
     CcId lair_settlement_id;
     CcGoblinTributePhase tribute_phase;
@@ -1030,9 +1045,59 @@ typedef struct CcGoblinCult {
     int32_t hoard_defenses;
     bool target_warned;
     int32_t expeditions_intercepted;
+} CcGoblinSociety;
+
+
+#define CC_GOBLIN_FACTION_COUNT 3
+#define CC_CULT_SPECIES_COUNT 2
+#define CC_CULT_RANK_COUNT 4
+/* Colour order is independent of the dragon's inherited appearance. */
+typedef enum CcGoblinColor {
+    CC_GOBLIN_RED, CC_GOBLIN_PURPLE, CC_GOBLIN_BLUE
+} CcGoblinColor;
+typedef enum CcCultSpecies { CC_CULT_HUMAN, CC_CULT_GOBLIN } CcCultSpecies;
+typedef enum CcCultRank {
+    CC_CULT_INITIATE, CC_CULT_BEARER, CC_CULT_KEEPER, CC_CULT_VOICE
+} CcCultRank;
+
+typedef struct CcGoblinFaction {
+    int32_t members;
+    CcId dungeon_id;
+    int32_t lair_room;
+    int32_t porter_room;
+    int32_t target_room;
+    CcMoney coins;
+    int32_t gold;
+    int32_t gems;
+    CcMoney carried_coins;
+    int32_t carried_gold;
+    int32_t carried_gems;
+    CcMoney tribute;
+    int32_t deliveries;
+    int32_t hunted;
+    CcId journey_event_id;
+} CcGoblinFaction;
+
+typedef struct CcDragonCult {
+    int32_t devotion;
+    CcMoney offering_coins;
+    int32_t offering_stock[CC_GOOD_COUNT];
     CcGoblinDragonSeedPhase dragon_seed_phase;
     int32_t dragon_seed_days_remaining;
-} CcGoblinCult;
+    /* Cohorts are subsets of the world population. Service promotes one
+       member at a time through the same ranks for either species. */
+    int32_t ranks[CC_CULT_SPECIES_COUNT][CC_CULT_RANK_COUNT];
+    CcMoney service[CC_CULT_SPECIES_COUNT];
+} CcDragonCult;
+
+typedef struct CcGoblinPolitics {
+    CcGoblinFaction factions[CC_GOBLIN_FACTION_COUNT];
+    CcId dragon_id;
+    int32_t contest_started_day;
+    int32_t crown_faction; /* -1 while tribute is being counted. */
+    int32_t raid_faction;
+    int32_t next_hunt_faction;
+} CcGoblinPolitics;
 
 typedef enum CcDragonLifeStage {
     CC_DRAGON_STAGE_EGG,
@@ -1801,7 +1866,9 @@ typedef struct CcSim {
     int32_t royal_route_slots_used[CC_MAX_ROUTES];
     CcCourier couriers[CC_MAX_COURIERS];
     CcBanditGroup bandits[CC_MAX_BANDITS];
-    CcGoblinCult goblins;
+    CcGoblinSociety goblins;
+    CcDragonCult dragon_cult;
+    CcGoblinPolitics goblin_politics;
     CcDragon dragon;
     CcDragonCampaign dragon_campaign;
     CcHoardRaiders hoard_raiders;
@@ -1878,7 +1945,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 184176,
+_Static_assert(sizeof(CcSim) == 184576,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -1911,6 +1978,10 @@ void CcSimUpgradeHistoryOffices(CcSim *sim);
 void CcSimUpgradeArchivePhysicalLore(CcSim *sim);
 void CcSimUpgradeQuestArchitecture(CcSim *sim);
 void CcSimInitializeUnderroad(CcSim *sim);
+void CcSimInitializeGoblinPolitics(CcSim *sim);
+int32_t CcSimCultMembers(const CcSim *sim, CcCultSpecies species);
+const char *CcGoblinColorName(int32_t color);
+const char *CcCultRankName(int32_t rank);
 void CcSimUpgradeGrainEconomy(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
@@ -2196,6 +2267,9 @@ CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
    Dispatch must recheck the quote when the carriage reaches its supplier. */
 CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id);
 const char *CcArchiveSupplyGateName(CcArchiveSupplyGate gate);
+/* Placement advice from held local supplies. A healthy seat has priority. */
+CcArchiveSeatCandidate CcSimArchiveSeatCandidate(const CcSim *sim, CcId settlement_id);
+CcArchiveSeatPlan CcSimArchiveSeatPlan(const CcSim *sim, CcId current_seat_id);
 CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim);
 /* Treasury top-up under current funds and routes; recovery timing is separate. */
 CcArchiveFundingPlan CcSimArchiveFundingPlan(const CcSim *sim);

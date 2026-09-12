@@ -82,7 +82,7 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
 #if defined(CC_CLIENT_SELF_TESTS)
     request->capture_ux = argc >= 4 && strcmp(argv[1], "--capture-ux") == 0;
     request->capture_ux_view = request->capture_ux ? atoi(argv[2]) : 0;
-    if (request->capture_ux && (request->capture_ux_view < 0 || request->capture_ux_view > 20)) return false;
+    if (request->capture_ux && (request->capture_ux_view < 0 || request->capture_ux_view > 22)) return false;
     request->capture_board = argc >= 2 && strcmp(argv[1], "--capture-board") == 0;
     request->capture_world = argc >= 2 && strcmp(argv[1], "--capture-world") == 0;
     request->capture_opening = argc >= 2 &&
@@ -208,9 +208,10 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
     if (request->capture_town_state) {
         if (argc != 7 || (strcmp(argv[6], "burnt") != 0 &&
             strcmp(argv[6], "rebuilding") != 0 && strcmp(argv[6], "lawless") != 0 &&
-            strcmp(argv[6], "peaceful") != 0 && strcmp(argv[6], "thriving") != 0)) {
+            strcmp(argv[6], "peaceful") != 0 && strcmp(argv[6], "thriving") != 0 &&
+            strcmp(argv[6], "hungry") != 0)) {
             (void)fprintf(stderr,
-                "capture town state: INDEX X Z FRAME burnt|rebuilding|lawless|peaceful|thriving\n");
+                "capture town state: INDEX X Z FRAME burnt|rebuilding|lawless|peaceful|thriving|hungry\n");
             return false;
         }
     }
