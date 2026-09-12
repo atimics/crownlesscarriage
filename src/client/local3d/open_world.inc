@@ -525,7 +525,7 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
     rlTranslatef(-48.0f, 0.0f, -36.0f);
 
     if (profile->lane_count > 0) {
-        Color road_color = TerrainBrightRoadColor((CcLocalRoadSurface)profile->function,
+        Color road_color = TerrainBrightRoadColor(profile->road[0].surface,
             (float)settlement->prosperity / 100.0f);
         for (int32_t lane = 0; lane < profile->lane_count; ++lane) {
             const CcLocalLane *path = &profile->lane[lane];
