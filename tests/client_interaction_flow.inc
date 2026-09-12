@@ -90,8 +90,69 @@ static int RunRoadJourneySaveRegression(void)
     return 0;
 }
 
+static int RunPresentedTargetRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    Vector2 origin = LocalPosition(&local);
+    for (int i = 0; i < 6; ++i) {
+        CcInteractionTarget *target = AdventureTarget(&local, &sim,
+            CC_INTERACTION_PERSON, (uint64_t)i + 1U, "Neighbour", "Talk",
+            (Vector3){0}, 1, 2, 1, (Vector2){origin.x + (float)i + 1, origin.y}, 1);
+        if (target == NULL) return ClientRegressionFailure("Create the card targets.");
+        target->character_id = sim.characters[i].id;
+    }
+    ContextActionSet shown = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    RememberPresentedTargets(&local, VIEW_LOCAL, &shown);
+    if (local.presented_target_count != 4)
+        return ClientRegressionFailure("Show four nearby target cards.");
+    CcInteractionKey chosen = local.presented_targets[0];
+    Rectangle bounds = local.presented_target_bounds[0];
+    client_test_pointer_active = true;
+    client_test_pointer = (Vector2){bounds.x + bounds.width / 2, bounds.y + bounds.height / 2};
+    /* Walking moves the shown target outside the newly nearest four. */
+    local.interactions.targets[0].approach_x = origin.x + 100;
+    ContextActionSet moved = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (CcInteractionKeyEqual(moved.items[0].target, chosen))
+        return ClientRegressionFailure("The fixture must change the distance ordering.");
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+    ContextAction pressed = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (pressed.kind != CONTEXT_ACTION_WORLD_TARGET || !CcInteractionKeyEqual(pressed.target, chosen))
+        return ClientRegressionFailure("Click the target shown before walking reordered the tray.");
+    local.interactions.targets[0].available = false;
+    (void)snprintf(local.interactions.targets[0].reason, sizeof(local.interactions.targets[0].reason), "The shop is closed.");
+    pressed = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (pressed.enabled || strcmp(pressed.detail, "The shop is closed.") != 0)
+        return ClientRegressionFailure("Use the shown target's current availability.");
+    local.interactions.targets[0].character_id = sim.characters[6].id;
+    pressed = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (pressed.kind != CONTEXT_ACTION_NONE)
+        return ClientRegressionFailure("A new resident must receive a freshly drawn card.");
+    local.interactions.targets[0].key.object = 99;
+    pressed = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (pressed.kind != CONTEXT_ACTION_NONE || !PointerOverContextAction(
+        &sim, &local, VIEW_LOCAL, 0, 0, client_test_pointer))
+        return ClientRegressionFailure("Consume a removed card's click at its shown bounds.");
+    RememberPresentedTargets(&local, VIEW_LOCAL, &moved);
+    pressed = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (!CcInteractionKeyEqual(pressed.target, moved.items[0].target))
+        return ClientRegressionFailure("A new drawing must replace the presented target.");
+    RememberPresentedTargets(&local, VIEW_CHARACTER, &moved);
+    if (local.presented_target_count != 0)
+        return ClientRegressionFailure("Clear world cards when drawing another view.");
+    ResetLocalState(&local);
+    client_test_pointer_active = false;
+    ClientInputClearPressed();
+    return 0;
+}
+
 static int RunAdventureInputRegression(void)
 {
+    int presented_result = RunPresentedTargetRegression();
+    if (presented_result != 0) return presented_result;
     static CcSim sim;
     static LocalState local;
     char message[256] = "", feedback[256] = "", error[192] = "";

@@ -109,6 +109,11 @@ typedef struct LocalState {
     CcInteractionPlan interactions;
     CcInteractionState interaction;
     int32_t card_page;
+    bool world_cards_presented;
+    int32_t presented_target_count;
+    CcInteractionKey presented_targets[4];
+    CcId presented_target_characters[4];
+    Rectangle presented_target_bounds[4];
     ClientView interaction_view;
     bool carriage_stopped;
     uint64_t conversation_object;
@@ -1150,6 +1155,8 @@ static void ResetLocalState(LocalState *local)
     local->interactions = (CcInteractionPlan){0};
     local->interaction = (CcInteractionState){0};
     local->card_page = 0;
+    local->world_cards_presented = false;
+    local->presented_target_count = 0;
     local->carriage_stopped = false;
     local->conversation_gossip_slot = -1;
     local->conversation_gossip_source = false;
@@ -4749,12 +4756,44 @@ static Color ContextActionColor(ContextActionKind kind)
     return CC_GOLD;
 }
 
-static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
+/* Remember the target and bounds the player actually saw on each card. */
+static void RememberPresentedTargets(LocalState *local, ClientView view,
+                                      const ContextActionSet *actions)
+{
+    local->world_cards_presented = false;
+    local->presented_target_count = 0;
+    if (view != VIEW_LOCAL || !AdventureScene(local) || actions->combat) return;
+    local->world_cards_presented = true;
+    int32_t first = ContextCardFirst(local, actions);
+    int32_t shown = ContextCardCount(actions, first);
+    for (int32_t i = first; i < first + shown; ++i) {
+        if (actions->items[i].kind != CONTEXT_ACTION_WORLD_TARGET) continue;
+        int32_t slot = local->presented_target_count;
+        if (slot >= 4) break;
+        local->presented_targets[slot] = actions->items[i].target;
+        const CcInteractionTarget *target = CcInteractionFind(
+            &local->interactions, actions->items[i].target);
+        local->presented_target_characters[slot] = target != NULL ? target->character_id : 0;
+        local->presented_target_bounds[slot] = ContextActionBounds(i - first, shown, false);
+        local->presented_target_count += 1;
+    }
+}
+
+static int32_t PresentedTargetAt(const LocalState *local, ClientView view, Vector2 mouse)
+{
+    if (view != VIEW_LOCAL || !AdventureScene(local) || LocalCombatActive(local)) return -1;
+    for (int32_t i = 0; i < local->presented_target_count; ++i)
+        if (CheckCollisionPointRec(mouse, local->presented_target_bounds[i])) return i;
+    return -1;
+}
+
+static void DrawContextActionTray(const CcSim *sim, LocalState *local,
                                   ClientView view, int32_t selected,
                                   int32_t selected_situation)
 {
     ContextActionSet actions = BuildContextActions(
         sim, local, view, selected, selected_situation);
+    RememberPresentedTargets(local, view, &actions);
     Vector2 mouse = ClientPointerPosition();
     bool cargo_controls = false;
     for (int32_t i = 0; i < actions.count; ++i) {
@@ -4898,11 +4937,26 @@ static ContextAction PressedContextAction(
     ContextActionSet actions = BuildContextActions(
         sim, local, view, selected, selected_situation);
     Vector2 mouse = ClientPointerPosition();
+    int32_t presented = PresentedTargetAt(local, view, mouse);
+    if (presented >= 0) {
+        if (right) return none;
+        const CcInteractionTarget *target = CcInteractionFind(
+            &local->interactions, local->presented_targets[presented]);
+        if (target == NULL || target->character_id !=
+            local->presented_target_characters[presented]) return none;
+        ContextAction pressed = {.kind = CONTEXT_ACTION_WORLD_TARGET,
+            .target = target->key, .enabled = target->available};
+        (void)snprintf(pressed.label, sizeof(pressed.label), "%s", target->name);
+        (void)snprintf(pressed.detail, sizeof(pressed.detail), "%s",
+            target->available ? target->verb : target->reason);
+        return pressed;
+    }
     int32_t first = ContextCardFirst(local, &actions);
     int32_t shown = ContextCardCount(&actions, first);
     for (int32_t i = first; i < first + shown; ++i) {
         if (CheckCollisionPointRec(mouse, ContextActionBounds(i - first, shown, actions.combat))) {
             ContextAction pressed = actions.items[i];
+            if (pressed.kind == CONTEXT_ACTION_WORLD_TARGET && local->world_cards_presented) return none;
             if (right && pressed.kind != CONTEXT_ACTION_BUY_CARGO) return none;
             if (right) pressed.amount = -1;
             return pressed;
@@ -4921,6 +4975,7 @@ static bool PointerOverContextAction(
     const CcSim *sim, const LocalState *local, ClientView view,
     int32_t selected, int32_t selected_situation, Vector2 mouse)
 {
+    if (PresentedTargetAt(local, view, mouse) >= 0) return true;
     ContextActionSet actions = BuildContextActions(
         sim, local, view, selected, selected_situation);
     int32_t first = ContextCardFirst(local, &actions);
