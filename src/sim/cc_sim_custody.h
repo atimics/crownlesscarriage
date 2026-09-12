@@ -2,6 +2,10 @@
 #define CC_SIM_CUSTODY_H
 #include "sim/cc_sim.h"
 
+int32_t CcSimCustodyCarrierLoad(const CcSim *sim, CcId carrier_id);
+bool CcSimDispatchCustodyCarrier(CcSim *sim, CcId carrier_id, CcId destination_id);
+CcCustodyResult CcSimTransferCustody(CcSim *sim, const CcCustodyTransfer *transfer,
+                                    uint64_t *result_id);
 bool CcSimStoredCustodyValid(const CcSim *sim);
 /* The town is the authority for its bulk store and its owned containers.
    Allocation and container revisions bind packing to the observed state. */

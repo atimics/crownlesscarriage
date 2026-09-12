@@ -9384,12 +9384,17 @@ static bool StartRoyalRepositioningLeg(CcSim *sim,
         ParkRoyalCarriage(carriage, target_id);
         return true;
     }
+    int32_t custody_load = CcSimCustodyCarrierLoad(sim, carriage->id);
+    const int32_t *used = custody_load > 0 && sim->royal_trade_week == sim->current_day / 7 ?
+        sim->royal_route_slots_used : NULL;
+    int32_t required_slots = MaximumI32(1, custody_load);
     int32_t route_slot = -1;
     CcId next_hop_id = 0U;
     if (!CcTradeFindPath(sim, carriage->location_id, target_id,
                        CC_GOOD_FOOD, &route_slot, &next_hop_id,
-                       NULL, NULL, NULL, true, carriage->kingdom_id,
-                       ArchivePassage(sim, carriage), 1)) {
+                       NULL, NULL, used, true, carriage->kingdom_id,
+                       ArchivePassage(sim, carriage), required_slots)) {
+        if (custody_load > 0) return false;
         if (!CcTradeFindPath(sim, carriage->location_id, target_id,
                            CC_GOOD_FOOD, &route_slot, &next_hop_id,
                            NULL, NULL, NULL, true,
@@ -9404,6 +9409,7 @@ static bool StartRoyalRepositioningLeg(CcSim *sim,
         }
     }
     CcRoute *route = &sim->routes[route_slot];
+    if (custody_load > 0) UseRoyalRoute(sim, route_slot, custody_load);
     carriage->route_id = route->id;
     carriage->destination_id = next_hop_id;
     carriage->target_id = target_id;
@@ -9416,12 +9422,27 @@ static bool StartRoyalRepositioningLeg(CcSim *sim,
     const CcSettlement *destination = CcSimSettlement(sim, next_hop_id);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
+                   custody_load > 0 ? "A royal carriage carries booked cargo toward %.32s." :
                    "A royal carriage rides empty toward %.32s to collect a needed load.",
                    destination != NULL ? destination->name : "the next market");
     (void)PushEvent(sim, CC_EVENT_ROYAL_CARRIAGE_REROUTED,
                     carriage->id, route->id,
                     0U, route->travel_days, text);
     return true;
+}
+
+bool CcSimDispatchCustodyCarrier(CcSim *sim, CcId carrier_id, CcId destination_id)
+{
+    if (sim == NULL || sim->schema_version < 99U || !CcSimStoredCustodyValid(sim)) return false;
+    for (int i = 0; i < sim->royal_carriage_count; ++i) {
+        CcRoyalCarriage *carrier = &sim->royal_carriages[i];
+        if (carrier->id != carrier_id) continue;
+        if (carrier->mode != CC_ROYAL_CARRIAGE_IDLE || carrier->active_shipment_id != 0 ||
+            carrier->condition < 20 || carrier->location_id == destination_id ||
+            CcSimCustodyCarrierLoad(sim, carrier_id) <= 0) return false;
+        return StartRoyalRepositioningLeg(sim, carrier, destination_id);
+    }
+    return false;
 }
 
 static void AdvanceRoyalCarriages(CcSim *sim, CcRoadProductionAccounting *site_accounting)
@@ -10388,7 +10409,8 @@ static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting)
     for (int32_t carriage_slot = 0;
          carriage_slot < sim->royal_carriage_count; ++carriage_slot) {
         CcRoyalCarriage *carriage = &sim->royal_carriages[carriage_slot];
-        if (carriage->mode != CC_ROYAL_CARRIAGE_IDLE ||
+        if (CcSimCustodyCarrierLoad(sim, carriage->id) > 0 ||
+            carriage->mode != CC_ROYAL_CARRIAGE_IDLE ||
             carriage->active_shipment_id != 0U ||
             CcSimSettlement(sim, carriage->location_id) == NULL ||
             sim->current_day < carriage->next_dispatch_day) continue;

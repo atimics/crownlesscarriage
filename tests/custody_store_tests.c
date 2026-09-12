@@ -85,6 +85,73 @@ static void FreightSlots(void)
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
+static void CarrierJourney(void)
+{
+    Prepare();
+    CcRoyalCarriage *carrier = &sim.royal_carriages[0];
+    CC_CHECK(carrier->location_id == town && carrier->mode == CC_ROYAL_CARRIAGE_IDLE);
+    CcId destination = sim.settlements[1].id;
+    uint64_t id = 0;
+    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 7, 1, 1, 2, event, &id) == CC_CUSTODY_READY);
+    CcCustodyTransfer load = {.entry_id = 1, .revision = 2, .actor_id = town,
+        .event_id = event, .destination = {CC_CUSTODY_CARRIER, carrier->id}, .quantity = 1};
+    CC_CHECK(CcSimTransferCustody(&sim, &load, NULL) == CC_CUSTODY_READY);
+    CC_CHECK(CcSimCustodyCarrierLoad(&sim, carrier->id) == 2);
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+    before = sim;
+    CC_CHECK(CcSimTransferCustody(&sim, &load, NULL) == CC_CUSTODY_STALE);
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    loaded = sim;
+    sim.royal_trade_week = sim.current_day / 7;
+    for (int i = 0; i < sim.route_count; ++i) sim.royal_route_slots_used[i] = CC_SIM_MAX_UNITS;
+    before = sim;
+    CC_CHECK(!CcSimDispatchCustodyCarrier(&sim, carrier->id, destination));
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    sim = loaded;
+    CC_CHECK(CcSimDispatchCustodyCarrier(&sim, carrier->id, destination));
+    CC_CHECK(carrier->mode == CC_ROYAL_CARRIAGE_REPOSITIONING);
+    before = sim;
+    CC_CHECK(!CcSimDispatchCustodyCarrier(&sim, carrier->id, destination));
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    CC_CHECK(carrier->active_shipment_id == 0);
+    CcCustodyTransfer unload = {.entry_id = 1, .revision = 3, .actor_id = town,
+        .event_id = event, .destination = {CC_CUSTODY_STORE, destination}, .quantity = 1};
+    before = sim;
+    CC_CHECK(CcSimTransferCustody(&sim, &unload, NULL) == CC_CUSTODY_REMOTE);
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    loaded = sim;
+    carrier->mode = CC_ROYAL_CARRIAGE_BLOCKED;
+    carrier->arrival_day = 0;
+    carrier->blocked_since_day = sim.current_day;
+    CcCustodyTransfer return_to_origin = unload;
+    return_to_origin.destination.id = town;
+    before = sim;
+    CC_CHECK(CcSimTransferCustody(&sim, &return_to_origin, NULL) == CC_CUSTODY_REMOTE);
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    sim = loaded;
+    unsigned char *bytes = NULL; size_t length = 0;
+    CC_CHECK(CcSaveEncode(&sim, &bytes, &length, error, sizeof(error)));
+    CC_CHECK(CcSaveDecode(bytes, length, &loaded, error, sizeof(error)));
+    CcSaveFreeBuffer(bytes);
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&loaded));
+    sim = loaded;
+    for (int day = 0; day < 20 && carrier->location_id != destination; ++day)
+        CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(carrier->location_id == destination && carrier->mode == CC_ROYAL_CARRIAGE_IDLE);
+    CC_CHECK(carrier->active_shipment_id == 0);
+    CC_CHECK(CcSimCustodyCarrierLoad(&sim, carrier->id) == 2);
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+    int32_t total = CcSimTrackedGood(&sim, CC_GOOD_WHEAT);
+    CC_CHECK(CcSimTransferCustody(&sim, &unload, NULL) == CC_CUSTODY_READY);
+    CC_CHECK(CcCustodyFind(&sim.custody, 1)->holder.id == destination);
+    CC_CHECK(CcCustodyFind(&sim.custody, id)->holder.id == 1);
+    CC_CHECK(CcCustodyFind(&sim.custody, id)->quantity == 7);
+    CC_CHECK(CcCustodyFind(&sim.custody, id)->owner_id == town);
+    CC_CHECK(CcSimCustodyCarrierLoad(&sim, carrier->id) == 0);
+    CC_CHECK(CcSimTrackedGood(&sim, CC_GOOD_WHEAT) == total);
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+}
+
 static void Gates(void)
 {
     Prepare(); RejectPack(0, CC_CUSTODY_INVALID); RejectPack(1001, CC_CUSTODY_INVALID);
@@ -115,5 +182,5 @@ static void Gates(void)
 
 int main(void)
 {
-    Journey(); Gates(); FreightSlots(); return 0;
+    Journey(); Gates(); FreightSlots(); CarrierJourney(); return 0;
 }

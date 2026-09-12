@@ -12,14 +12,72 @@ static int64_t StoredCustodyLoad(const void *context, const CcCustodyEntry *entr
     return CcGoodsFreightCargoSlots((CcGood)entry->good, (int32_t)quantity);
 }
 
+static const CcRoyalCarriage *CustodyCarrier(const CcSim *sim, CcId id)
+{
+    for (int i = 0; i < sim->royal_carriage_count; ++i)
+        if (sim->royal_carriages[i].id == id) return &sim->royal_carriages[i];
+    return NULL;
+}
+
+int32_t CcSimCustodyCarrierLoad(const CcSim *sim, CcId carrier_id)
+{
+    if (sim == NULL || sim->schema_version < 99U) return 0;
+    int64_t total = 0;
+    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+        const CcCustodyEntry *entry = &sim->custody.entries[i];
+        if (!entry->active) continue;
+        CcCustodyHolder root = entry->holder;
+        if (root.kind == CC_CUSTODY_CONTAINER_HOLDER) {
+            const CcCustodyEntry *box = CcCustodyFind(&sim->custody, root.id);
+            if (box == NULL) continue;
+            root = box->holder;
+        }
+        if (root.kind != CC_CUSTODY_CARRIER || root.id != carrier_id) continue;
+        int64_t weight = StoredCustodyLoad(sim, entry, entry->quantity);
+        if (weight <= 0 || weight > CC_ROYAL_CARRIAGE_CARGO_SLOTS - total)
+            return CC_ROYAL_CARRIAGE_CARGO_SLOTS + 1;
+        total += weight;
+    }
+    return (int32_t)total;
+}
+
 static bool ResolveStoredCustody(const void *context, CcCustodyHolder holder,
                                 CcCustodyLocation *location, int64_t *capacity)
 {
     const CcSim *sim = context;
-    if (holder.kind != CC_CUSTODY_STORE || CcSimSettlement(sim, holder.id) == NULL)
-        return false;
-    *location = (CcCustodyLocation){.place_id = holder.id};
-    *capacity = INT64_MAX;
+    if (holder.kind == CC_CUSTODY_STORE) {
+        if (CcSimSettlement(sim, holder.id) == NULL) return false;
+        *location = (CcCustodyLocation){.place_id = holder.id};
+        *capacity = INT64_MAX;
+        return true;
+    }
+    const CcRoyalCarriage *carrier = CustodyCarrier(sim, holder.id);
+    if (holder.kind != CC_CUSTODY_CARRIER || carrier == NULL ||
+        carrier->active_shipment_id != 0 || carrier->archive_contract ||
+        (carrier->mode != CC_ROYAL_CARRIAGE_IDLE &&
+         carrier->mode != CC_ROYAL_CARRIAGE_REPOSITIONING &&
+         carrier->mode != CC_ROYAL_CARRIAGE_BLOCKED)) return false;
+    *capacity = CC_ROYAL_CARRIAGE_CARGO_SLOTS;
+    *location = (CcCustodyLocation){.place_id = carrier->location_id};
+    if (carrier->mode == CC_ROYAL_CARRIAGE_REPOSITIONING ||
+        carrier->mode == CC_ROYAL_CARRIAGE_BLOCKED) {
+        CcFreightLeg leg;
+        if (!CcSimFreightLeg(sim, carrier->route_id, carrier->location_id,
+                            carrier->destination_id, &leg)) return false;
+        if (carrier->mode == CC_ROYAL_CARRIAGE_BLOCKED) {
+            *location = (CcCustodyLocation){.route_id = leg.route_id,
+                .progress_milli = leg.origin_milli};
+            return true;
+        }
+        if (carrier->arrival_day <= carrier->departure_day) return false;
+        int64_t elapsed = sim->current_day - carrier->departure_day;
+        int64_t duration = carrier->arrival_day - carrier->departure_day;
+        if (elapsed < 0) elapsed = 0;
+        if (elapsed > duration) elapsed = duration;
+        *location = (CcCustodyLocation){.route_id = leg.route_id,
+            .progress_milli = leg.origin_milli + (int32_t)(
+                (leg.destination_milli - leg.origin_milli) * elapsed / duration)};
+    }
     return true;
 }
 
@@ -45,7 +103,11 @@ static bool PermitStoreTransfer(const void *context, uint64_t actor,
 {
     const CcSim *sim = context;
     if (actor != entry->owner_id || CcSimSettlement(sim, actor) == NULL) return false;
-    if (to.kind == CC_CUSTODY_STORE) return to.id == actor;
+    if (to.kind == CC_CUSTODY_STORE) return CcSimSettlement(sim, to.id) != NULL;
+    if (to.kind == CC_CUSTODY_CARRIER) {
+        const CcRoyalCarriage *carrier = CustodyCarrier(sim, to.id);
+        return carrier != NULL && carrier->kingdom_id == CcSimSettlement(sim, actor)->kingdom_id;
+    }
     const CcCustodyEntry *box = CcCustodyFind(&sim->custody, to.id);
     return to.kind == CC_CUSTODY_CONTAINER_HOLDER && box != NULL && box->owner_id == actor;
 }
@@ -126,4 +188,14 @@ CcCustodyResult CcSimUnpackStoreGoods(CcSim *sim, CcId town_id,
     town->stock[good] += quantity;
     sim->custody = candidate;
     return CC_CUSTODY_READY;
+}
+
+CcCustodyResult CcSimTransferCustody(CcSim *sim, const CcCustodyTransfer *transfer,
+                                    uint64_t *result_id)
+{
+    if (sim == NULL || sim->schema_version < 99U || !CcSimStoredCustodyValid(sim))
+        return CC_CUSTODY_INVALID;
+    const CcCustodyRules rules = {.context = sim, .good_count = CC_GOOD_COUNT,
+        .load = StoredCustodyLoad, .resolve = ResolveStoredCustody, .permit = PermitStoreTransfer};
+    return CcCustodyApplyTransfer(&sim->custody, &rules, transfer, result_id);
 }

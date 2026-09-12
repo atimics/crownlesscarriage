@@ -130,12 +130,22 @@ the same root holder; planning checks that extra load. Purses and containers
 each occupy one slot. The core accepts a read-only load callback, while its
 default test model counts goods units directly.
 
-Carrier integration must reserve this load alongside existing shipments,
-site supply, grain supply, and archive cargo. Player cargo uses its existing
-player slot conversion at the player boundary. These paths remain part of
-the carrier and player work below.
+Town-owned custody can now load onto an ordinary royal carriage through the
+shared transfer function. A loaded carriage has a dedicated booking. Trade,
+site/grain supply, archive supply, and archive relocation yield that carriage
+until its custody cargo is unloaded. Dispatch uses the existing royal path and
+movement code, reserves the actual freight slots in the weekly route budget,
+and records a cargo journey event. Arrival updates the holder's settlement;
+unloading checks that physical placement. Blocked carriage placement follows
+the existing route-origin waiting model and keeps transfers on the route.
 
-Moving holders, named treasure migration, document work identity, object creation,
+A real-world test packs town stock, loads a carriage, saves during travel,
+advances the simulation to arrival, and unloads the same container and contents
+at the destination store. It also checks exhausted route capacity, duplicate
+requests, and blocked-road unloading. Player cargo still needs its existing
+player slot conversion and access rules at the player boundary.
+
+Player, character and captor holders, named treasure migration, document work identity, object creation,
 common economy costs, transfer commands, and the player journey remain open.
 The draft is complete when the implementation and evidence satisfy the whole
 acceptance list.
