@@ -1,0 +1,11 @@
+{
+  "id": "wren-trial",
+  "name": "Wren",
+  "description": "A young adult with an androgynous light middle voice, a light Indian English accent, nimble precise consonants, and a thoughtful rhythm with small pauses. Warm, curious, and quietly confident. Natural conversational English. Clean studio recording.",
+  "purpose": "A youthful voice with a distinct rhythm and gender presentation. Try a courier, a careful scholar, and a company leader.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 2103637695,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "eb510fc960f2b7157a8e0d5dcafd69e81bf8441f0e760aaae2df5ee2f3f229f5"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "copper-trial",
+  "name": "Copper",
+  "description": "A middle-aged man with a clear high baritone, a light Turkish accent in fluent English, forward resonance, rounded vowels, and brisk conversational pacing. Expressive, sociable, and capable of gentle seriousness. Natural conversational English. Clean studio recording.",
+  "purpose": "A clear, animated baritone to contrast with the grainy and quiet men. Try a host, a farmer, and a worried parent.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 3470293091,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "fe7d349d0ac1a11fe1b46231f9e735adb18d8009b2f9033ffadbd0865e98bdd5"
+}
