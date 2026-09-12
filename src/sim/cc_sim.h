@@ -65,7 +65,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 96
+#define CC_SIM_SCHEMA_VERSION 98
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -1962,6 +1962,17 @@ typedef struct CcGrainDeliveryPlan {
     char reason[192];
 } CcGrainDeliveryPlan;
 
+typedef struct CcNotice {
+    CcId situation_id, event_id, settlement_id, sponsor_id;
+    int32_t day;
+    char text[CC_EVENT_TEXT_CAPACITY];
+} CcNotice;
+
+typedef struct CcNoticeBoard {
+    bool ready;
+    CcNotice notices[CC_MAX_SITUATIONS];
+} CcNoticeBoard;
+
 typedef struct CcSim {
     uint32_t schema_version;
     uint32_t generator_version;
@@ -2015,6 +2026,7 @@ typedef struct CcSim {
     int32_t archive_training_week;
     CcArchiveStaff archive_staff;
     CcArchiveConvoyOrder archive_convoy;
+    CcNoticeBoard notice_board;
     CcGossip gossip[CC_MAX_GOSSIP];
     CcGossipCarrier gossip_carriers[CC_MAX_GOSSIP_CARRIERS];
     CcId gossip_last_event_id;
@@ -2071,7 +2083,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 366840,
+_Static_assert(sizeof(CcSim) == 369056,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -2123,6 +2135,7 @@ const CcGossip *CcSimGossipStory(const CcSim *sim, int32_t slot);
 int32_t CcSimNextUntoldStory(const CcSim *sim, CcId id,
                              const CcGossipVersion **version);
 bool CcSimStoryTold(const CcSim *sim, CcId id, int32_t slot);
+const CcNotice *CcSimSituationNotice(const CcSim *sim, CcId situation_id);
 void CcSimRefreshCharacterGossip(CcSim *sim);
 void CcGossipText(const CcSim *sim, const CcGossip *story,
                   const CcGossipVersion *version, char *text, size_t capacity);

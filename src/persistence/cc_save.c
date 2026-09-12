@@ -1430,7 +1430,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " revision INTEGER NOT NULL,return_speed INTEGER NOT NULL,light INTEGER NOT NULL,"
         " steps INTEGER NOT NULL,seen INTEGER NOT NULL,bar_open INTEGER NOT NULL,surveyed INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS mine_pack (good INTEGER PRIMARY KEY,quantity INTEGER NOT NULL);";
-    return Execute(database, "CREATE TABLE IF NOT EXISTS archive_convoy_home (id INTEGER PRIMARY KEY CHECK(id=1),home_id INTEGER NOT NULL);", error, error_capacity) &&
+    return Execute(database, "CREATE TABLE IF NOT EXISTS notice_state (id INTEGER PRIMARY KEY CHECK(id=1),ready INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS notice_board (slot INTEGER PRIMARY KEY,situation_id INTEGER NOT NULL,event_id INTEGER NOT NULL,settlement_id INTEGER NOT NULL,sponsor_id INTEGER NOT NULL,day INTEGER NOT NULL,text TEXT NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS archive_convoy_home (id INTEGER PRIMARY KEY CHECK(id=1),home_id INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS archive_convoy_journey (id INTEGER PRIMARY KEY CHECK(id=1),departure_day INTEGER NOT NULL,arrival_day INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS archive_convoy (id INTEGER PRIMARY KEY CHECK(id=1),origin_id INTEGER NOT NULL,destination_id INTEGER NOT NULL,sponsor_id INTEGER NOT NULL,funding_kingdom_id INTEGER NOT NULL,carriage_id INTEGER NOT NULL,first_route_id INTEGER NOT NULL,first_hop_id INTEGER NOT NULL,book_ids_0 INTEGER NOT NULL,book_ids_1 INTEGER NOT NULL,book_ids_2 INTEGER NOT NULL,book_ids_3 INTEGER NOT NULL,purse INTEGER NOT NULL,wheat INTEGER NOT NULL,book_count INTEGER NOT NULL,reserved_day INTEGER NOT NULL,status INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS archive_seat (id INTEGER PRIMARY KEY CHECK(id=1),seat_id INTEGER NOT NULL,failed_since INTEGER NOT NULL);", error, error_capacity) &&
@@ -3355,6 +3357,7 @@ invalid:
     return false;
 }
 
+#include "persistence/cc_save_notices.inc"
 #include "persistence/cc_save_mine.inc"
 #include "persistence/cc_save_goblin_politics.inc"
 
@@ -3373,7 +3376,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
     return Execute(database,
             "DELETE FROM goblin_faction; DELETE FROM goblin_politics; DELETE FROM dragon_cult; DELETE FROM dragon_cult_store;"
             "DELETE FROM mine_visit; DELETE FROM mine_pack;"
-            "DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
+            "DELETE FROM notice_state; DELETE FROM notice_board; DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
             "DELETE FROM gossip_version;"
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
             "DELETE FROM town_recovery; DELETE FROM grain_supply; DELETE FROM archive_recruitment; DELETE FROM archive_recruitment_journey; DELETE FROM archive_recruitment_training; DELETE FROM archive_staff; DELETE FROM archive_seat; DELETE FROM archive_convoy; DELETE FROM archive_convoy_journey; DELETE FROM archive_convoy_home; DELETE FROM war_party; DELETE FROM dispatch;"
@@ -3415,6 +3418,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveMeta(database, sim, journal_generation, journal_cursor,
                  error, error_capacity) &&
         SaveGossip(database, sim, error, error_capacity) &&
+        SaveNotices(database, sim, error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
         SaveTownRecovery(database, sim, error, error_capacity) &&
@@ -5882,6 +5886,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadJourneyState(database, sim, error, error_capacity) &&
               ReadPonies(database, sim, error, error_capacity) &&
               ReadGossip(database, sim, error, error_capacity) &&
+              ReadNotices(database, sim, error, error_capacity) &&
               ReadGoblinPolitics(database, sim, error, error_capacity) &&
               ReadMine(database, sim, error, error_capacity);
     if (!ok) {

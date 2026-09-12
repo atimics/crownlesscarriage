@@ -875,6 +875,15 @@ uint64_t CcSimHash(const CcSim *sim)
         }
         HASH_VALUE(item->magnitude); hash = HashString(hash, item->text);
     }
+    if (sim->schema_version >= 97U) {
+        HASH_VALUE(sim->notice_board.ready);
+        for (int i = 0; i < CC_MAX_SITUATIONS; ++i) {
+            const CcNotice *notice = &sim->notice_board.notices[i];
+            HASH_VALUE(notice->situation_id); HASH_VALUE(notice->event_id);
+            HASH_VALUE(notice->settlement_id); HASH_VALUE(notice->sponsor_id);
+            HASH_VALUE(notice->day); hash = HashString(hash, notice->text);
+        }
+    }
     if (sim->schema_version >= 96U) HASH_VALUE(sim->archive_convoy.home_id);
     if (sim->schema_version >= 93U) {
         HASH_VALUE(sim->archive_convoy.departure_day);
