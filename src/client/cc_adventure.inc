@@ -344,8 +344,8 @@ static int AdventureText(const char *text, int x, int y, int width, int size, Co
         if (length > 180U) length = 180U;
         char next[256];
         (void)snprintf(next, sizeof(next), "%s%s%.*s", line, used > 0 ? " " : "", (int)length, cursor);
-        if (used > 0 && CcOverlayMeasureText(next, size) > width) {
-            if (draw) CcOverlayDrawText(line, x, y, size, color);
+        if (used > 0 && CcOverlayMeasureBodyText(next, size) > width) {
+            if (draw) CcOverlayDrawBodyText(line, x, y, size, color);
             y += size + 7;
             used = 0;
             line[0] = '\0';
@@ -355,14 +355,14 @@ static int AdventureText(const char *text, int x, int y, int width, int size, Co
         memcpy(line + used, cursor, copy); used += copy; line[used] = '\0';
         cursor = end;
         if (*cursor == '\n') {
-            if (draw) CcOverlayDrawText(line, x, y, size, color);
+            if (draw) CcOverlayDrawBodyText(line, x, y, size, color);
             y += size + 7;
             used = 0; line[0] = '\0';
         }
         if (*cursor != '\0') ++cursor;
     }
     if (used > 0) {
-        if (draw) CcOverlayDrawText(line, x, y, size, color);
+        if (draw) CcOverlayDrawBodyText(line, x, y, size, color);
         y += size + 7;
     }
     return y - start;
@@ -1117,13 +1117,13 @@ static void DrawAdventureConversation(const CcSim *sim, const LocalState *local)
     ClientTouchHeading(name, line);
     float width = fminf(720.0f, (float)GetScreenWidth() - 80.0f);
     float height = 68.0f + (float)AdventureText(line, 0, 0, (int)width - 44,
-        AdventureTextSize(17), INK, false);
+        AdventureTextSize(20), INK, false);
     Rectangle bubble = {((float)GetScreenWidth() - width) * 0.5f,
         (float)GetScreenHeight() - 108.0f - height, width, height};
     DrawPanel(bubble, Fade(PANEL_DEEP, 0.95f));
     CcOverlayDrawText(name, (int)bubble.x + 22, (int)bubble.y + 16, AdventureTextSize(20), CC_GOLD);
     (void)AdventureWrap(line, (int)bubble.x + 22, (int)bubble.y + 50,
-        (int)bubble.width - 44, AdventureTextSize(17), INK);
+        (int)bubble.width - 44, AdventureTextSize(20), INK);
     if (local->conversation_situation_id == 0U && core_conversation.round_shown && core_conversation.round_phase == 0U &&
         core_conversation_speaker == local->conversation_character_id &&
         speech.speaker_id != sim->player.id) {

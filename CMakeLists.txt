@@ -433,10 +433,15 @@ if(CC_BUILD_CLIENT)
     if(NOT EMSCRIPTEN)
         if(APPLE)
             set(CC_CAMPAIGN_DEST "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/campaigns")
+            set(CC_FONT_DEST "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/fonts")
         else()
             set(CC_CAMPAIGN_DEST "$<TARGET_FILE_DIR:crownless_carriage>/assets/campaigns")
+            set(CC_FONT_DEST "$<TARGET_FILE_DIR:crownless_carriage>/assets/fonts")
         endif()
         add_custom_command(TARGET crownless_carriage POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts"
+                "${CC_FONT_DEST}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CC_CAMPAIGN_DEST}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CMAKE_CURRENT_SOURCE_DIR}/assets/campaigns/deep-wyrm.ccsave" "${CC_CAMPAIGN_DEST}/deep-wyrm.ccsave")
@@ -529,6 +534,8 @@ if(CC_BUILD_CLIENT)
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/economy_cargo_*.glb"
         )
         set(CC_WEB_STARTUP_ASSET_SOURCES
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/AtkinsonHyperlegible-Regular.ttf"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/OFL-AtkinsonHyperlegible.txt"
             ${CC_VOICE_ASSETS}
             ${CC_WEB_NPC_ASSET_SOURCES}
             ${CC_WEB_WORLD_KIT_ASSET_SOURCES}

@@ -552,7 +552,7 @@ static bool DrawNpcArchetypePose3D(
     const float contact_grid = 0.125f;
     Vector3 contact_shadow = {
         roundf(position.x / contact_grid) * contact_grid,
-        0.006f,
+        position.y + 0.006f,
         roundf(position.z / contact_grid) * contact_grid,
     };
     DrawContactShadow(

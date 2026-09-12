@@ -37,6 +37,7 @@ if(prepare_startup)
         "${asset_output}/audio/voice"
     )
 
+    file(COPY "${asset_source}/fonts" DESTINATION "${asset_output}")
     file(COPY "${asset_source}/campaigns/deep-wyrm.ccsave"
          DESTINATION "${asset_output}/campaigns")
 

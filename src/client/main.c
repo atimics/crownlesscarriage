@@ -5041,7 +5041,7 @@ static void DrawContextActionTray(const CcSim *sim, LocalState *local,
             if (action_label[0] >= '1' && action_label[0] <= '9' && action_label[1] == ' ') action_label += 2;
             else if (strncmp(action_label, "Esc ", 4) == 0) action_label += 4;
         }
-        int label_size = local->adventure_ui ? AdventureTextSize(14) : detailed ? 10 : 11;
+        int label_size = local->adventure_ui ? AdventureTextSize(18) : detailed ? 10 : 11;
         if (local->adventure_ui) {
             while (label_size > 12 && AdventureText(action_label, 0, 0,
                 (int)bounds.width - 24, label_size, label_color, false) > 44) --label_size;
@@ -5064,17 +5064,21 @@ static void DrawContextActionTray(const CcSim *sim, LocalState *local,
                                                 Fade(MUTED, 0.48f));
         }
         if (action->detail[0] != '\0') {
-            int detail_size = local->adventure_ui ? AdventureTextSize(11) : 7;
-            while (detail_size > 11 && CcOverlayMeasureText(action->detail, detail_size) > (int)bounds.width - 20)
+            int (*measure_detail)(const char *, int) = local->adventure_ui ?
+                CcOverlayMeasureBodyText : CcOverlayMeasureText;
+            int detail_size = local->adventure_ui ? AdventureTextSize(14) : 7;
+            while (detail_size > 11 && measure_detail(action->detail, detail_size) > (int)bounds.width - 20)
                 --detail_size;
             char detail[48];
             (void)snprintf(detail, sizeof(detail), "%s", action->detail);
-            while (strlen(detail) > 3 && CcOverlayMeasureText(detail, detail_size) > (int)bounds.width - 20) {
+            while (strlen(detail) > 3 && measure_detail(detail, detail_size) > (int)bounds.width - 20) {
                 size_t length = strlen(detail);
                 detail[length - 1] = '\0';
                 detail[length - 2] = '.'; detail[length - 3] = '.'; detail[length - 4] = '.';
             }
-            CcOverlayDrawText(detail, (int)bounds.x + 10, (int)bounds.y + 56,
+            void (*draw_detail)(const char *, int, int, int, Color) = local->adventure_ui ?
+                CcOverlayDrawBodyText : CcOverlayDrawText;
+            draw_detail(detail, (int)bounds.x + 10, (int)bounds.y + 56,
                 detail_size, action->enabled ? MUTED : Fade(MUTED, 0.46f));
         }
     }
@@ -10364,6 +10368,12 @@ int main(int argc, char **argv)
         CcClientInstanceLockRelease(&instance_lock);
         return 1;
     }
+    char body_font_path[1024];
+    if (ResolveClientAssetPath("assets/fonts/AtkinsonHyperlegible-Regular.ttf",
+                               body_font_path, sizeof(body_font_path))) {
+        CcOverlayLoadBodyFont(body_font_path);
+    }
+
     if (opening_width != window.width || opening_height != window.height)
         SetWindowSize(window.width, window.height);
 #if defined(PLATFORM_WEB)
@@ -10572,6 +10582,7 @@ int main(int argc, char **argv)
         CcCoopClientShutdown();
         CcCoreModelFree(core_conversation.model);
         core_conversation.model = NULL;
+        CcOverlayUnloadBodyFont();
         CloseWindow();
         CcClientInstanceLockRelease(&instance_lock);
         return 1;
@@ -11157,6 +11168,7 @@ int main(int argc, char **argv)
     CcCoopClientShutdown();
     CcCoreModelFree(core_conversation.model);
     core_conversation.model = NULL;
+    CcOverlayUnloadBodyFont();
     CloseWindow();
     CcClientInstanceLockRelease(&instance_lock);
     if (benchmark.active) {

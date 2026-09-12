@@ -220,6 +220,7 @@ typedef enum ArtLightProfileId {
     ART_LIGHT_ROAD_DUSK,
     ART_LIGHT_INTERIOR_EMBER,
     ART_LIGHT_STORYBOOK,
+    ART_LIGHT_FARM_DAY,
     ART_LIGHT_PROFILE_COUNT
 } ArtLightProfileId;
 
@@ -283,6 +284,11 @@ static const ArtLightProfileDefinition ART_LIGHT_PROFILES[] = {
         {0.72f, 0.78f, 0.80f}, {0.72f, 0.86f, 1.06f},
         {142, 161, 153, 255}, 68.0f, 150.0f, 0.38f, 0.16f,
     },
+    [ART_LIGHT_FARM_DAY] = {
+        {-0.60f, 0.72f, 0.35f}, {1.24f, 1.08f, 0.83f},
+        {0.70f, 0.77f, 0.83f}, {0.77f, 0.88f, 1.03f},
+        {42, 62, 70, 255}, 30.0f, 65.0f, 0.46f, 0.16f,
+    },
     [ART_LIGHT_CLEAR_MARKET] = {
         {-0.48f, 0.78f, 0.40f}, {1.18f, 1.06f, 0.88f},
         {0.78f, 0.82f, 0.87f}, {0.82f, 0.92f, 1.06f},
@@ -305,7 +311,7 @@ static const ArtLightProfileDefinition ART_LIGHT_PROFILES[] = {
     },
     [ART_LIGHT_INTERIOR_EMBER] = {
         {-0.38f, 0.52f, 0.76f}, {1.24f, 0.74f, 0.44f},
-        {0.55f, 0.46f, 0.48f}, {0.88f, 0.75f, 0.82f},
+        {0.60f, 0.54f, 0.56f}, {0.82f, 0.82f, 0.94f},
         {31, 23, 25, 255}, 10.0f, 21.0f, 0.52f, 0.17f,
     },
 };
