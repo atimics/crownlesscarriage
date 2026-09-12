@@ -598,6 +598,7 @@ static void CheckPersonalAccounts(void)
 static void CheckNoticePosting(void)
 {
     Prepare();
+    sim.schema_version = 96U;
     int32_t offer = -1;
     for (int32_t i = 0; i < sim.situation_count; ++i) {
         if (sim.situations[i].status == CC_SITUATION_ACTIVE &&
@@ -655,6 +656,136 @@ static void CheckNoticePosting(void)
     CC_CHECK(carried);
 }
 
+/* Saved boards retain a posting independently of carried accounts. */
+static void CheckSavedNoticeBoard(void)
+{
+    Prepare();
+    CcId account = AddAccount(sim.settlements[0].id, "A traveller remembers the harvest.");
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(sim.notice_board.ready);
+    const CcNotice *notice = NULL;
+    bool carried_account = false;
+    for (int i = 0; i < sim.situation_count; ++i) {
+        const CcNotice *candidate = CcSimSituationNotice(&sim, sim.situations[i].id);
+        if (candidate != NULL) notice = candidate;
+    }
+    CC_CHECK(notice != NULL);
+    CcNotice saved = *notice;
+    CC_CHECK(CcSimSituationNotice(NULL, saved.situation_id) == NULL);
+    CC_CHECK(CcSimSituationNotice(&sim, 0) == NULL);
+    CC_CHECK(saved.day == sim.current_day);
+    CC_CHECK(CcSimEvent(&sim, saved.event_id)->subject_id == saved.situation_id);
+    for (int i = 0; i < CC_MAX_GOSSIP; ++i) {
+        CC_CHECK(sim.gossip[i].event_id == 0 || sim.gossip[i].kind != CC_EVENT_NOTICE_POSTED);
+        carried_account |= sim.gossip[i].event_id == account;
+    }
+    CC_CHECK(carried_account);
+    CheckValid();
+    uint64_t hash = CcSimHash(&sim);
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(CcSimHash(&sim) == hash);
+    const char *path = "notice-board.ccsave";
+    (void)remove(path);
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&restored) == hash);
+    CC_CHECK(strcmp(CcSimSituationNotice(&restored, saved.situation_id)->text, saved.text) == 0);
+    (void)remove(path);
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 1, error, sizeof(error)));
+    hash = CcSimHash(&sim);
+    CcJournalAbandon(&journal);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&restored) == hash);
+    CheckValid();
+    /* Strict rows and field validation protect saved board records. */
+    const char *mutations[] = {
+        "DELETE FROM notice_state;",
+        "UPDATE notice_state SET ready=2;",
+        "DELETE FROM notice_board WHERE slot=0;",
+        "UPDATE notice_board SET day='bad' WHERE slot=0;",
+        "UPDATE notice_board SET text=zeroblob(144) WHERE slot=0;",
+        "UPDATE notice_board SET event_id=1 WHERE situation_id!=0;",
+        "UPDATE notice_board SET situation_id=1 WHERE situation_id!=0;"
+    };
+    for (size_t i = 0; i < sizeof(mutations)/sizeof(mutations[0]); ++i) {
+        CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+        sqlite3 *db = NULL;
+        CC_CHECK(sqlite3_open(path, &db) == SQLITE_OK);
+        CC_CHECK(sqlite3_exec(db, mutations[i], NULL, NULL, NULL) == SQLITE_OK);
+        sqlite3_close(db);
+        CC_CHECK(!CcSaveRead(path, &restored, error, sizeof(error)));
+    }
+    (void)remove(path);
+}
+
+static void CheckNoticePoolPreservation(void)
+{
+    Prepare();
+    sim.notice_board.ready = true;
+    sim.posted_situation_mask = (UINT32_C(1) << (uint32_t)sim.situation_count) - 1U;
+    for (int i = 0; i < CC_MAX_GOSSIP; ++i)
+        (void)AddAccount(sim.settlements[0].id, "A traveller brings an ordinary account.");
+    CcSimRefreshCharacterGossip(&sim);
+    for (int i = 0; i < CC_MAX_GOSSIP; ++i) CC_CHECK(sim.gossip[i].event_id != 0);
+    restored = sim;
+    sim.posted_situation_mask = 0;
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(memcmp(sim.gossip, restored.gossip, sizeof(sim.gossip)) == 0);
+    CC_CHECK(memcmp(sim.gossip_carriers, restored.gossip_carriers, sizeof(sim.gossip_carriers)) == 0);
+    bool posted = false;
+    for (int i = 0; i < sim.situation_count; ++i)
+        posted |= CcSimSituationNotice(&sim, sim.situations[i].id) != NULL;
+    CC_CHECK(posted);
+    CheckValid();
+}
+
+static void CheckLegacyNoticeMigration(void)
+{
+    Prepare();
+    sim.schema_version = 96U;
+    CcSimRefreshCharacterGossip(&sim);
+    int slot = -1;
+    for (int i = 0; i < CC_MAX_GOSSIP; ++i)
+        if (sim.gossip[i].event_id != 0 && sim.gossip[i].kind == CC_EVENT_NOTICE_POSTED) { slot = i; break; }
+    CC_CHECK(slot >= 0);
+    CcGossip old = sim.gossip[slot];
+    CcId situation = CcSimEvent(&sim, old.event_id)->subject_id;
+    uint32_t bit = UINT32_C(1) << (uint32_t)slot;
+    for (int i = 0; i < CcSimGossipCarrierCapacity(&sim); ++i)
+        if ((sim.gossip_carriers[i].stories & bit) != 0) sim.gossip_carriers[i].told_player |= bit;
+    const char *path = "notice-migration.ccsave";
+    (void)remove(path);
+    uint64_t legacy_hash = CcSimHash(&sim);
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION && !restored.notice_board.ready);
+    restored.schema_version = 96U;
+    CC_CHECK(CcSimHash(&restored) == legacy_hash);
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    /* A save between upgrade and first refresh preserves the transition. */
+    uint64_t transition_hash = CcSimHash(&restored);
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &sim, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == transition_hash);
+    CcSimRefreshCharacterGossip(&sim);
+    const CcNotice *notice = CcSimSituationNotice(&sim, situation);
+    CC_CHECK(notice != NULL && notice->event_id == old.event_id && notice->day == old.day);
+    CC_CHECK(strcmp(notice->text, old.text) == 0);
+    CC_CHECK(sim.gossip[slot].event_id == 0);
+    for (int i = 0; i < CcSimGossipCarrierCapacity(&sim); ++i) {
+        CC_CHECK((sim.gossip_carriers[i].stories & bit) == 0);
+        CC_CHECK((sim.gossip_carriers[i].told_player & bit) == 0);
+        CC_CHECK(sim.gossip_carriers[i].versions[slot].confidence == 0);
+    }
+    CheckValid();
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+    (void)remove(path);
+}
+
 /* Telling a story is a command: the told bits persist, the next untold story
    is offered first, and a ledger cannot claim a story nobody carries. */
 static void CheckToldStories(void)
@@ -668,21 +799,15 @@ static void CheckToldStories(void)
     CcSimRefreshCharacterGossip(&sim);
     const CcGossipVersion *version = NULL;
     int32_t slot = CcSimNextUntoldStory(&sim, speaker->id, &version);
-    /* The offer-town posting is the freshest fact and is offered first. */
-    CC_CHECK(slot >= 0 && sim.gossip[slot].kind == CC_EVENT_NOTICE_POSTED);
+    CC_CHECK(slot >= 0 && sim.gossip[slot].event_id == second);
     CC_CHECK(!CcSimStoryTold(&sim, speaker->id, slot));
     CcCommand heard = {.kind = CC_COMMAND_HEARD_STORY,
         .target_id = speaker->id, .amount = slot};
     CC_CHECK(CcSimApply(&sim, &heard, error, sizeof(error)));
     CC_CHECK(CcSimStoryTold(&sim, speaker->id, slot));
-    /* With the posting told, the newer account comes before the older one. */
     int32_t next = CcSimNextUntoldStory(&sim, speaker->id, &version);
-    CC_CHECK(next >= 0 && sim.gossip[next].event_id == second);
+    CC_CHECK(next >= 0 && sim.gossip[next].event_id == first);
     CC_CHECK(!CcSimStoryTold(&sim, speaker->id, next));
-    CC_CHECK(CcSimApply(&sim, &((CcCommand){.kind = CC_COMMAND_HEARD_STORY,
-        .target_id = speaker->id, .amount = next}), error, sizeof(error)));
-    CC_CHECK(CcSimNextUntoldStory(&sim, speaker->id, &version) >= 0 &&
-        sim.gossip[CcSimNextUntoldStory(&sim, speaker->id, NULL)].event_id == first);
     /* The telling is journalled; the save round trip keeps the bits. */
     const char *path = "told-stories.ccsave";
     (void)remove(path);
@@ -694,7 +819,7 @@ static void CheckToldStories(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&restored) == told_hash);
     CC_CHECK(CcSimStoryTold(&restored, speaker->id, slot));
-    CC_CHECK(CcSimStoryTold(&restored, speaker->id, next));
+    CC_CHECK(!CcSimStoryTold(&restored, speaker->id, next));
     CC_CHECK(!CcSimStoryTold(&restored, speaker->id, CcSimNextUntoldStory(
         &restored, speaker->id, NULL)));
     /* A told bit without a carried story is rejected. */
@@ -1202,6 +1327,9 @@ int main(void)
 {
     CheckPersonalAccounts();
     CheckNoticePosting();
+    CheckSavedNoticeBoard();
+    CheckLegacyNoticeMigration();
+    CheckNoticePoolPreservation();
     CheckToldStories();
     CheckLocalAndRemoteAccounts();
     CheckArrivalAndLateRecording();
