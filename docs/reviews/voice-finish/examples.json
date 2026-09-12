@@ -1,0 +1,62 @@
+[
+  {
+    "file": "brook-second-revised-bargain-finished.mp3",
+    "sha256": "878597526d4fe8d553912742f53000cc6d04d54f16d15aeac30deeba3ce79674",
+    "source_sha256": "30749fc719df580cb6f420afed2eb5e4c193c68032a28aff307fff72135005e3"
+  },
+  {
+    "file": "brook-second-revised-bargain-matched.mp3",
+    "sha256": "337160a713204b2bbf68a4220b12ae21657feafe9dbac0183be6dbf7ef168bfb",
+    "source_sha256": "ce8ac0e265e4b8077a57712145c7840c2fe376f36c14ccb6daa8e3226d70a47b"
+  },
+  {
+    "file": "flint-second-revised-bargain-finished.mp3",
+    "sha256": "6c931a36f4c2390c3f85b8aa90408dcb097d8f5c9c0a41965fd5fee2890c6316",
+    "source_sha256": "43c271f4832cca7f6891b3292106a1ae0f42ea66e6578b6a4bd74b81ffdbccdb"
+  },
+  {
+    "file": "flint-second-revised-bargain-matched.mp3",
+    "sha256": "d7ad28e19bc92e862a04229e74bf8d82d1ff9084f9ae79cb08f6265532c4dfcb",
+    "source_sha256": "e6bcc190e707e69910469e80c99cb352d3cb1606b787847c1504d4dd445d36b2"
+  },
+  {
+    "file": "hearth-second-revised-bargain-finished.mp3",
+    "sha256": "c3cb74f40ce7c22ecbb125c6c8fe85cca257ddf448e846122f9e3f7c40cbea44",
+    "source_sha256": "ddca62b469bae9f3d409401fe3d8f736dc3e7bb7ee664b4d1b19a3cf6f5b4035"
+  },
+  {
+    "file": "hearth-second-revised-bargain-matched.mp3",
+    "sha256": "f1fd9a0d0ae3d1e15297b0e20caebd2e0cfaf9b2e0729c903e36db06e1e0c845",
+    "source_sha256": "dfefb4be3782df02973bf6cf1bd628ca397b26da4a5be82b7dab32f6ec86c51a"
+  },
+  {
+    "file": "lark-second-revised-bargain-finished.mp3",
+    "sha256": "6cc48c161a32579cd7d00146a00ef7b86df1c22276c161875fea835aa36651c8",
+    "source_sha256": "0fb185b015e52b2d394d9352904afb57e0c9d92c50df8a995edb9eec875d2fd7"
+  },
+  {
+    "file": "lark-second-revised-bargain-matched.mp3",
+    "sha256": "7cdfe1d365454ab7c726faa58e360ac0d2c00d17aab3e3d2722763bb76b8044b",
+    "source_sha256": "49918f3463b512b54be3695bacfce039ab4550098b731b4dd62c996826974d8c"
+  },
+  {
+    "file": "oak-second-revised-bargain-finished.mp3",
+    "sha256": "a08439c9120d628c548b6b7f6089790ccafed32f7bbf873d5695ad18d0afaf23",
+    "source_sha256": "54780d51c408893ce5b23c11c3235ff2576e94dc02ccb3570dbab762452a40e8"
+  },
+  {
+    "file": "oak-second-revised-bargain-matched.mp3",
+    "sha256": "b3005b393a6d7a490812f271ba4fd48099c60e9c34f68884c77d68c7ac2f9b3e",
+    "source_sha256": "90ae4594b163df9262e62f3c7d9209e9c3e00a4d35d4d2dc3307ae8ebc6eb015"
+  },
+  {
+    "file": "reed-second-revised-bargain-finished.mp3",
+    "sha256": "f869c5fe8032bb05ae767925d74a24b7934e103526d0ed593243297c8017605d",
+    "source_sha256": "98578906b4055237ef529b8816dcc4aca4c4b5085bf2725e769f2aea6015373d"
+  },
+  {
+    "file": "reed-second-revised-bargain-matched.mp3",
+    "sha256": "618033c9f62c30395ca4dfe9f219d200ae27ca7011b1d83fdef5af55583f017f",
+    "source_sha256": "7d20727e738e7280b672ae02fd59c9e4ad44972c2c93e175a62e4bd161dc298b"
+  }
+]
