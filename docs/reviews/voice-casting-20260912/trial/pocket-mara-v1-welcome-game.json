@@ -1,0 +1,23 @@
+{
+  "voice": "mara-v1",
+  "line": "welcome",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going.",
+  "file": "pocket-mara-v1-welcome.wav",
+  "styled_file": "pocket-mara-v1-welcome-game.wav",
+  "seconds": 5.76,
+  "generation_seconds": 0.6810804163105786,
+  "first_chunk_seconds": 0.03512562531977892,
+  "real_time_factor": 0.11824312783169767,
+  "sample_rate": 24000,
+  "seed": 20260912,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sha256": "82b5987aa10c405bfe3f33db2361ad4c4f572fb9bf7caedae2d5c15f088569c7",
+  "master_sha256": "82b5987aa10c405bfe3f33db2361ad4c4f572fb9bf7caedae2d5c15f088569c7",
+  "wav_sha256": "b2ee4444ad983321ef3ebe96c76d615f8744c880fb879152915dd1cd7eca6993",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

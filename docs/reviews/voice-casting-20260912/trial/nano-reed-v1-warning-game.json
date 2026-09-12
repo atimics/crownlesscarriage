@@ -1,0 +1,23 @@
+{
+  "voice": "reed-v1",
+  "line": "warning",
+  "text": "Get the horses across the bridge! I will stay with you.",
+  "file": "nano-reed-v1-warning.wav",
+  "styled_file": "nano-reed-v1-warning-game.wav",
+  "seconds": 3.12,
+  "generation_seconds": 1.2547311251983047,
+  "first_chunk_seconds": null,
+  "real_time_factor": 0.4021574119225335,
+  "sample_rate": 24000,
+  "seed": 20260912,
+  "reference_sha256": "6dc743cfa294c2f910e306f7c909c05bd8fcb38b123049dc25a5c72a235f43ab",
+  "sha256": "4398a502cbbf2526ec75deb6c0450b0d51fcb791f3ce3cd7db98eae59c2591a5",
+  "master_sha256": "4398a502cbbf2526ec75deb6c0450b0d51fcb791f3ce3cd7db98eae59c2591a5",
+  "wav_sha256": "0f2ff811920b69790b6366123f589df2cd809bd663bf0552851ea960eebdb215",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

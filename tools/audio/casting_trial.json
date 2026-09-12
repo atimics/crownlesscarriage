@@ -1,0 +1,38 @@
+{
+  "reference_text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "review_directions": {
+    "mara-v1": "Practical warmth. Test a smile, a fair price, and a calm command.",
+    "jory-v1": "Rough but thoughtful. Keep the softer moments clear.",
+    "tomas-v1": "Light, quick, dry wit. Let a serious promise carry weight.",
+    "ilyra-v1": "Measured authority with a worn edge. Give her room for delight.",
+    "bren-v1": "Intimate tenor with hesitant starts. Test a confident warning too.",
+    "hearth-v1": "Rounded, welcoming middle voice. Casting target: mature adult with an easy laugh.",
+    "reed-v1": "Bright, precise tenor. Casting target: young adult with quick changes of pace.",
+    "flint-v1": "Dry, low voice. Casting target: older adult with a sharp sense of humour.",
+    "oak-v1": "Deep, patient bass. Casting target: older adult who can sound playful.",
+    "lark-v1": "Bright, light voice. Casting target: young adult with clear resolve under pressure.",
+    "ash-v1": "Grainy, unhurried baritone. Casting target: mature adult with lively storytelling rhythm.",
+    "brook-v1": "Soft, direct middle voice. Casting target: mature adult with a firm, ringing warning.",
+    "stone-v1": "Dry, clipped middle voice. Casting target: mature adult with precise comic timing."
+  },
+  "proposed": [
+    {
+      "id": "cedar-trial",
+      "name": "Cedar",
+      "description": "An older adult woman with a resonant low alto, a light Ghanaian English accent, unhurried musical phrasing, and warm, clear consonants. She sounds amused, capable, and attentive. Natural conversational English. Clean studio recording.",
+      "purpose": "An elder with warmth and musical rhythm. Try her as a healer, a stern creditor, and a travelling storyteller."
+    },
+    {
+      "id": "wren-trial",
+      "name": "Wren",
+      "description": "A young adult with an androgynous light middle voice, a light Indian English accent, nimble precise consonants, and a thoughtful rhythm with small pauses. Warm, curious, and quietly confident. Natural conversational English. Clean studio recording.",
+      "purpose": "A youthful voice with a distinct rhythm and gender presentation. Try a courier, a careful scholar, and a company leader."
+    },
+    {
+      "id": "copper-trial",
+      "name": "Copper",
+      "description": "A middle-aged man with a clear high baritone, a light Turkish accent in fluent English, forward resonance, rounded vowels, and brisk conversational pacing. Expressive, sociable, and capable of gentle seriousness. Natural conversational English. Clean studio recording.",
+      "purpose": "A clear, animated baritone to contrast with the grainy and quiet men. Try a host, a farmer, and a worried parent."
+    }
+  ]
+}

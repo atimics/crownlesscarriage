@@ -1,0 +1,23 @@
+{
+  "voice": "oak-v1",
+  "line": "warning",
+  "text": "Get the horses across the bridge! I will stay with you.",
+  "file": "nano-oak-v1-warning.wav",
+  "styled_file": "nano-oak-v1-warning-game.wav",
+  "seconds": 3.36,
+  "generation_seconds": 1.3120614998042583,
+  "first_chunk_seconds": null,
+  "real_time_factor": 0.3904944939893626,
+  "sample_rate": 24000,
+  "seed": 20260912,
+  "reference_sha256": "995b33486a4822e20f666e91ecc52074d8b0331d11e549e055e9b0c3317a5656",
+  "sha256": "957d1e634251f5ed8feb2d34138f6e184db306f549073d5a6e1a3c4db849dc68",
+  "master_sha256": "957d1e634251f5ed8feb2d34138f6e184db306f549073d5a6e1a3c4db849dc68",
+  "wav_sha256": "75bb2d18b0f59f1272cbc91c674ff1303cc695d4c58efe05755571e80c215992",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}
