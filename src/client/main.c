@@ -10027,7 +10027,7 @@ static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
             }
         }
     }
-    CcSpeech speech;
+    CcSpeech speech = {0};
     bool has_speech = false;
     if (view == VIEW_CHARACTER) {
         has_speech = ClientConversationSpeech(sim, local, &speech);
