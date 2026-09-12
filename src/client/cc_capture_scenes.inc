@@ -687,11 +687,26 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
                     person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING || CcCharacterAgeYears(scene->sim, person) < 16) continue;
                 scene->local->conversation_character_id = person->id;
                 scene->local->conversation_situation_id = 0U;
-                scene->local->conversation_gossip_source = request->capture_ux_view == 14;
+                scene->local->conversation_gossip_source = false;
+                if (person->id == scene->local->course.situation_witness_character_id) {
+                    scene->local->conversation_object = person->id;
+                    scene->local->conversation_position = scene->local->course.situation_witness.position;
+                    RepositionHero(scene->local, (Vector2){scene->local->conversation_position.x + 1.15f,
+                        scene->local->conversation_position.z + 0.88f}, false);
+                    scene->local->agent.facing_yaw = atan2f(-1.15f, -0.88f);
+                }
                 char capture_error[192];
                 if (!ApplyCommand(NULL, scene->sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
                     .target_id = person->id}, capture_error, sizeof(capture_error))) return false;
                 (*scene->view) = VIEW_CHARACTER;
+                if (request->capture_ux_view == 14 && core_conversation.model != NULL) {
+                    CcSpeech opening;
+                    if (!ClientConversationSpeech(scene->sim, scene->local, &opening)) return false;
+                    CcCoreConversationStep(&core_conversation, 1000U);
+                    if (!ClientStartChat(scene->sim, scene->local, 5U)) return false;
+                    CcCoreConversationStep(&core_conversation, 1000U);
+                    CcCoreConversationAdvance(&core_conversation, 1000U, 40.0f);
+                }
                 break;
             }
         }
