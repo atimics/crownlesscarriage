@@ -656,8 +656,15 @@ Camera3D CcLocalCameraClearSightlinesInternal(Camera3D camera,
         float course_clutter = CameraStreetCourseClutterScore(
             option, first_subject, second_subject);
 
+        // Keep two people readable when a clear angle turns along their line.
+        Vector2 first_screen = GetWorldToScreenEx(first_subject, option,
+            CC_LOCAL_ART_WIDTH, CC_LOCAL_ART_HEIGHT);
+        Vector2 second_screen = GetWorldToScreenEx(second_subject, option,
+            CC_LOCAL_ART_WIDTH, CC_LOCAL_ART_HEIGHT);
+        float pair_overlap = Vector3Distance(first_subject, second_subject) > 0.65f ?
+            1.0f - SmoothStep01(fabsf(first_screen.x - second_screen.x) / 52.0f) : 0.0f;
         float cost = tree_occlusion * 12.0f + course_clutter * 1.80f +
-                     fabsf(angle) * 0.20f +
+                     pair_overlap * 12.0f + fabsf(angle) * 0.20f +
                      fabsf(WrapAngle(angle - preferred_angle)) * 0.50f;
         if (cost >= best_cost) continue;
         best = option;
@@ -768,6 +775,7 @@ static const StreetCameraShot *StreetCameraShotAt(int32_t shot)
                 active_place_function == CC_SETTLEMENT_CAPITAL)) {
         light = ART_LIGHT_RECOVERY_WARM;
     }
+    if (active_place_function == CC_SETTLEMENT_FARMING) light = ART_LIGHT_FARM_DAY;
     composition = (StreetCameraShot){
         .trigger = {scene->trigger_x, scene->trigger_z},
         .target = {scene->target_x, scene->target_y, scene->target_z},
@@ -1668,12 +1676,12 @@ Camera3D CcLocalConversationCameraInternal(
             }
 
             close_target = Vector3Lerp(first, second, 0.56f);
-            close_target.y = (first.y + second.y) * 0.5f - 0.18f;
+            close_target.y = (first.y + second.y) * 0.5f - 0.42f;
             close_offset = Vector3Add(
                 Vector3Scale(shoulder,
                              5.05f + fminf(span, 3.0f) * 0.18f),
-                Vector3Add(Vector3Scale(talk_line, -0.55f),
-                           (Vector3){0.0f, 1.88f, 0.0f}));
+                Vector3Add(Vector3Scale(talk_line, -0.12f),
+                           (Vector3){0.0f, 2.45f, 0.0f}));
             close_fovy = CombatClamp(38.0f + span * 0.8f, 39.0f, 43.0f);
             Camera3D close = PerspectiveCameraComposed(
                 close_target, close_offset, close_fovy);

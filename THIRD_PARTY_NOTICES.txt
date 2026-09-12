@@ -242,3 +242,8 @@ SQLite's authors have dedicated the deliverable code and documentation to the
 public domain. The official
 [SQLite copyright page](https://www.sqlite.org/copyright.html) records that
 dedication.
+
+Atkinson Hyperlegible Regular
+Copyright 2020 Braille Institute of America, Inc.
+SIL Open Font License 1.1; see assets/fonts/OFL-AtkinsonHyperlegible.txt.
+Source: https://github.com/google/fonts/tree/main/ofl/atkinsonhyperlegible

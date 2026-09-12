@@ -40,7 +40,7 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
              -28.0f, 0.64f, 34.0f, 37.0f},
             {CC_LOCAL_TOWN_SCENE_HEART, "THRESHING GREEN",
              44.0f, 29.0f, 46.0f, 0.14f, 29.0f,
-             -20.0f, 0.64f, 26.0f, 26.0f},
+             -20.0f, 0.64f, 26.0f, 14.0f},
             {CC_LOCAL_TOWN_SCENE_LANDMARK, "HILL GRANARIES",
              78.0f, 19.0f, 78.0f, 0.16f, 19.0f,
              -16.0f, 0.64f, 22.0f, 13.0f},

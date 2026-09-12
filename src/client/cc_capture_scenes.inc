@@ -116,6 +116,7 @@ static void CcCaptureSceneAbort(RenderTexture2D target, ClientMapTextures *maps,
     UnloadRenderTexture(target);
     ReleaseMapTextures(maps);
     CcCoopClientShutdown();
+    CcOverlayUnloadBodyFont();
     CloseWindow();
     CcClientInstanceLockRelease(lock);
 }
@@ -676,6 +677,8 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
         if (request->capture_ux_view == 2) {
             scene->local->conversation_character_id = scene->local->course.situation_witness_character_id;
             scene->local->conversation_situation_id = scene->local->course.situation_witness_id;
+            scene->local->conversation_object = scene->local->course.situation_witness_character_id;
+            scene->local->conversation_position = scene->local->course.situation_witness.position;
             RepositionHero(scene->local, (Vector2){scene->local->course.situation_witness.position.x + 1.4f,
                 scene->local->course.situation_witness.position.z + 0.4f}, false);
             (*scene->view) = VIEW_CHARACTER;
