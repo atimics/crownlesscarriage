@@ -1430,7 +1430,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " revision INTEGER NOT NULL,return_speed INTEGER NOT NULL,light INTEGER NOT NULL,"
         " steps INTEGER NOT NULL,seen INTEGER NOT NULL,bar_open INTEGER NOT NULL,surveyed INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS mine_pack (good INTEGER PRIMARY KEY,quantity INTEGER NOT NULL);";
-    return Execute(database, "CREATE TABLE IF NOT EXISTS notice_state (id INTEGER PRIMARY KEY CHECK(id=1),ready INTEGER NOT NULL);", error, error_capacity) &&
+    return Execute(database, "CREATE TABLE IF NOT EXISTS custody_state (slot INTEGER PRIMARY KEY,next_id INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS custody_entry (slot INTEGER PRIMARY KEY,id INTEGER NOT NULL,revision INTEGER NOT NULL,owner_id INTEGER NOT NULL,source_id INTEGER NOT NULL,last_event_id INTEGER NOT NULL,holder_kind INTEGER NOT NULL,holder_id INTEGER NOT NULL,kind INTEGER NOT NULL,reference_id INTEGER NOT NULL,quantity INTEGER NOT NULL,good INTEGER NOT NULL,condition INTEGER NOT NULL,capacity INTEGER NOT NULL,active INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS notice_state (id INTEGER PRIMARY KEY CHECK(id=1),ready INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS notice_board (slot INTEGER PRIMARY KEY,situation_id INTEGER NOT NULL,event_id INTEGER NOT NULL,settlement_id INTEGER NOT NULL,sponsor_id INTEGER NOT NULL,day INTEGER NOT NULL,text TEXT NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS archive_convoy_home (id INTEGER PRIMARY KEY CHECK(id=1),home_id INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS archive_convoy_journey (id INTEGER PRIMARY KEY CHECK(id=1),departure_day INTEGER NOT NULL,arrival_day INTEGER NOT NULL);", error, error_capacity) &&
@@ -3357,6 +3359,7 @@ invalid:
     return false;
 }
 
+#include "persistence/cc_save_custody.inc"
 #include "persistence/cc_save_notices.inc"
 #include "persistence/cc_save_mine.inc"
 #include "persistence/cc_save_goblin_politics.inc"
@@ -3375,7 +3378,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
     }
     return Execute(database,
             "DELETE FROM goblin_faction; DELETE FROM goblin_politics; DELETE FROM dragon_cult; DELETE FROM dragon_cult_store;"
-            "DELETE FROM mine_visit; DELETE FROM mine_pack;"
+            "DELETE FROM custody_state; DELETE FROM custody_entry; DELETE FROM mine_visit; DELETE FROM mine_pack;"
             "DELETE FROM notice_state; DELETE FROM notice_board; DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
             "DELETE FROM gossip_version;"
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
@@ -3418,6 +3421,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveMeta(database, sim, journal_generation, journal_cursor,
                  error, error_capacity) &&
         SaveGossip(database, sim, error, error_capacity) &&
+        SaveCustody(database, sim, error, error_capacity) &&
         SaveNotices(database, sim, error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
@@ -5886,6 +5890,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadJourneyState(database, sim, error, error_capacity) &&
               ReadPonies(database, sim, error, error_capacity) &&
               ReadGossip(database, sim, error, error_capacity) &&
+              ReadCustody(database, sim, error, error_capacity) &&
               ReadNotices(database, sim, error, error_capacity) &&
               ReadGoblinPolitics(database, sim, error, error_capacity) &&
               ReadMine(database, sim, error, error_capacity);

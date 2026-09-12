@@ -674,6 +674,7 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
 {
     uint32_t legacy_version = sim->schema_version;
     if (!UpgradeLegacyRuntimeSchema(sim, error, error_capacity)) return false;
+    if (legacy_version < 99U) CcCustodyInit(&sim->custody);
     if (legacy_version < 57U) {
         /* Older saves identify hearts by their original generated name. */
         char name[CC_MAP_NAME_CAPACITY];
