@@ -281,7 +281,7 @@ static void CheckCurrentMainOrderUpgrade(void)
     unsigned char *bytes=NULL;size_t size=0;
     CC_CHECK(CcSaveEncode(&sim,&bytes,&size,error,sizeof(error)));
     CC_CHECK(CcSaveDecode(bytes,size,&restored,error,sizeof(error)));CcSaveFreeBuffer(bytes);
-    CC_CHECK(restored.schema_version==96 && restored.archive_convoy.home_id==0);
+    CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION && restored.archive_convoy.home_id==0);
     sim=restored;Arrive();
     CC_CHECK(CcSimAdvanceArchiveConvoy(&sim,99)==CC_ARCHIVE_CONVOY_COMPLETED);Valid();
     CC_CHECK(CcSimCancelArchiveConvoy(&sim));Valid();

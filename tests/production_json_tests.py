@@ -87,6 +87,7 @@ with tempfile.TemporaryDirectory() as directory:
             assert loaded['archive_recruitment'] == rows[-1]['archive_recruitment']
             assert loaded['archive_supply'] == rows[-1]['archive_supply']
             assert loaded['archive_seat_plan'] == rows[-1]['archive_seat_plan']
+            assert [town['grain_supply'] for town in loaded['towns']] == [town['grain_supply'] for town in rows[-1]['towns']]
             assert loaded['carriages'] == rows[-1]['carriages']
             assert loaded['shipments'] == rows[-1]['shipments']
             assert [route['context'] for route in loaded['routes']] == [route['context'] for route in rows[-1]['routes']]
@@ -103,6 +104,28 @@ with tempfile.TemporaryDirectory() as directory:
             saved = database.execute('SELECT id, kingdom_id, target_id, blocked_since_day, next_dispatch_day FROM royal_carriage ORDER BY slot').fetchall()
         assert [(cart['id'], cart['kingdom_id'], cart['target_id'], cart['blocked_since_day'], cart['next_dispatch_day'])
                 for cart in rows[-1]['carriages']] == [(str(a), str(b), str(c), d, e) for a, b, c, d, e in saved]
+        with sqlite3.connect(root / 'json.ccsave') as database:
+            database.row_factory = sqlite3.Row
+            accounts = database.execute('SELECT * FROM grain_supply ORDER BY slot').fetchall()
+        assert len(accounts) == len(rows[-1]['towns'])
+        for town, account in zip(rows[-1]['towns'], accounts):
+            supply = town['grain_supply']
+            for key in account.keys():
+                if key != 'slot':
+                    expected = str(account[key]) if key.endswith('_id') else account[key]
+                    assert supply[key] == expected, (town['name'], key)
+        for row in rows:
+            for town in row['towns']:
+                supply = town['grain_supply']
+                assert supply['semantics'] == 'stored_cumulative'
+                plan = supply['plan']
+                assert plan['semantics'] == 'evaluated_plan_snapshot'
+                assert 0 <= plan['status'] <= 10 and plan['reason']
+                assert all(isinstance(plan[key], str) for key in
+                           ['organiser_id', 'supplier_id', 'route_id', 'carriage_id', 'next_hop_id'])
+                if plan['status'] == 0:
+                    assert plan['supplier_id'] != '0' and plan['carriage_id'] != '0'
+                    assert plan['route_id'] != '0' and plan['path_capacity'] > 0
         for row in rows:
             assert all(cart['semantics'] == 'snapshot' and cart['counter_semantics'] == 'stored_cumulative'
                        and cart['mode_name'] for cart in row['carriages'])

@@ -1,0 +1,18 @@
+Release strict build: pass
+Headless suite: 135/135 pass
+WebAssembly compile: changed simulation sources pass
+Legacy replay: 2560 matching annual rows
+World validity: 7680 annual checks pass
+
+simulation: seeds=8 years=2 days=5840 cpu=0.192990s ns/day=33046.2
+locomotion: agents=6 frames=600 steps=3600 cpu=0.002657s ns/step=738.1
+terrain: seeds=8 points=32768 cpu=0.009761s ns/point=297.9
+checksum=cd53d2a23b2bea03
+
+Parent regression result (expected failure):
+tests/royal_carriage_trade_tests.c:257: check failed: loads == (funded ? 1 : 0)
+nutrition credit case=0 loads=0 quantity=0 debt=0 reserve=500
+nutrition credit case=1 loads=0 quantity=0 debt=0 reserve=500
+
+Travel guard mutation result (expected failure):
+tests/character_travel_tests.c:67: check failed: keeper->travel_destination_id == 0U

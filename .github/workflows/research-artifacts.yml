@@ -1,0 +1,33 @@
+name: Research artifact budget
+
+on:
+  pull_request:
+    paths:
+      - 'docs/experiments/**'
+      - 'docs/reviews/**'
+      - 'tools/check_research_artifacts.py'
+      - 'tests/research_artifact_tests.py'
+      - '.github/workflows/research-artifacts.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  research-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+      - name: Fetch comparison base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git fetch --no-tags --depth=1 origin "$BASE_SHA"
+      - name: Test the checker
+        run: python3 tests/research_artifact_tests.py
+      - name: Check new research data
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 tools/check_research_artifacts.py --base "$BASE_SHA" --head "$HEAD_SHA"
