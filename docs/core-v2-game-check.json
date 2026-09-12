@@ -1,0 +1,21 @@
+{
+  "world_seed": 17,
+  "days": 120,
+  "scope": "One development world; row counts include two variants and changed account observations.",
+  "runs": {
+    "baseline": {
+      "source_commit": "e27996ae",
+      "rows": 3630,
+      "unsupported_observations": 3409,
+      "observed_spoken_kinds": 7,
+      "corpus_sha256": "7b1d253274a2161656b35370421e671b269411b1f262668eee6641ac83bcdf83"
+    },
+    "expanded": {
+      "source_commit": "aa6f216c",
+      "rows": 10448,
+      "unsupported_observations": 0,
+      "observed_spoken_kinds": 19,
+      "corpus_sha256": "ec5d4f6c8c2503ad734ca022041fca12c8da6a2466d3a51dda7f62634f858097"
+    }
+  }
+}
