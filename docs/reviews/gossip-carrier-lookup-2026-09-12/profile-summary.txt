@@ -1,0 +1,25 @@
+Sort by top of stack, same collapsed (when >= 5):
+        ExchangeGossip  (in crownless_benchmark)        622
+        PushEventRecord  (in crownless_benchmark)        340
+        _dyld_start  (in dyld)        199
+        _platform_memmove  (in libsystem_platform.dylib)        154
+        CcSimRouteCrossesWarBorder  (in crownless_benchmark)        148
+        __bzero  (in libsystem_platform.dylib)        111
+        GossipCarrierFor  (in crownless_benchmark)        108
+        CcSimAdvanceDaysWithProductionAccounting  (in crownless_benchmark)        97
+        CcTradeFindPath  (in crownless_benchmark)        69
+        RoyalCarriageMayEnter  (in crownless_benchmark)        59
+        GossipTellerAt  (in crownless_benchmark)        55
+        GatherGossipEvents  (in crownless_benchmark)        54
+        CcSimRoyalCarriageCanUseRoute  (in crownless_benchmark)        37
+        CcGossipText  (in crownless_benchmark)        30
+        GatherGossip  (in crownless_benchmark)        27
+        CcGossipTopicMatches  (in crownless_benchmark)        20
+        PlanTrade  (in crownless_benchmark)        19
+        mach_msg2_trap  (in dyld)        18
+        __vfprintf  (in libsystem_c.dylib)        17
+        CcSimHash  (in crownless_benchmark)        14
+        CcRouteSettlementMonsterPressure  (in crownless_benchmark)        13
+        CcRouteRoyalIsOfficial  (in crownless_benchmark)        12
+        CcSimRoute  (in crownless_benchmark)        12
+        __sfvwrite  (in libsystem_c.dylib)        12

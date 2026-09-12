@@ -6058,6 +6058,9 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
     GatherGossip(sim);
     CcGossipCarrier *carrier = GossipCarrierFor(sim, carrier_id);
     if (carrier == NULL) return;
+    /* Event sharing keeps the cast stable throughout this exchange. */
+    const CcCharacter *carrier_character = sim->schema_version >= 46U ?
+        CcSimCharacter(sim, carrier_id) : NULL;
     uint32_t town = UINT32_C(1) << (uint32_t)place;
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
         CcGossip *story = &sim->gossip[i];
@@ -6067,7 +6070,7 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
             (story->settlement_mask & town) == 0U) {
             story->settlement_mask |= town;
             story->local[place] = RetellGossip(sim, story, carrier->versions[i],
-                sim->schema_version >= 46U ? CcSimCharacter(sim, carrier_id) : NULL, carrier_id);
+                carrier_character, carrier_id);
             if (sim->schema_version < 46U || CcIdKind(carrier_id) != CC_ENTITY_CHARACTER)
                 carrier->versions[i] = story->local[place];
             char account[CC_EVENT_TEXT_CAPACITY];
@@ -6082,7 +6085,7 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
         if ((story->settlement_mask & town) != 0U &&
             (carrier->stories & bit) == 0U) {
             /* Direct craft accounts were captured when the event entered the ledger. */
-            if (sim->schema_version >= 79U && CcSimCharacter(sim, carrier_id) != NULL &&
+            if (sim->schema_version >= 79U && carrier_character != NULL &&
                 story->origin_id == place_id && story->local[place].retellings == 0 &&
                 CcGossipCraftEvent(story->kind)) continue;
             carrier->stories |= bit;
