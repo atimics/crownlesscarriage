@@ -90,6 +90,78 @@ static int RunRoadJourneySaveRegression(void)
     return 0;
 }
 
+static int RunDeliveryHandoffRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    char error[192];
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    const CcSituation *promise = NULL;
+    for (int i = 0; i < sim.situation_count; ++i)
+        if (sim.situations[i].kind == CC_SITUATION_RELIEF_DELIVERY) promise = &sim.situations[i];
+    if (promise == NULL || !CcSimApply(&sim, &((CcCommand){
+        .kind = CC_COMMAND_ACCEPT_SITUATION, .target_id = promise->id}), error, sizeof(error)))
+        return ClientRegressionFailure("Accept the delivery fixture.");
+    if (AdventureDeliveryAtHand(&sim) != NULL)
+        return ClientRegressionFailure("Departure still needs the road journey.");
+    sim.player.location_id = promise->target_id;
+    sim.carriage.location_id = promise->target_id;
+    sim.resolved_journey_situation_id = promise->id;
+    Vector2 position = LocalPosition(&local);
+    CcInteractionTarget *door = AdventureTarget(&local, &sim, CC_INTERACTION_DOOR, 1,
+        "Market hall", "Deliver promise", (Vector3){0}, 1, 2, 1,
+        (Vector2){position.x + 30, position.y}, 1);
+    CcInteractionTarget *person = AdventureTarget(&local, &sim, CC_INTERACTION_PERSON, 2,
+        "Neighbour", "Talk", (Vector3){0}, 1, 2, 1, position, 1);
+    if (door == NULL || person == NULL) return ClientRegressionFailure("Create the handoff targets.");
+    ContextActionSet actions = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (actions.count != 2 || actions.items[0].target.kind != CC_INTERACTION_DOOR)
+        return ClientRegressionFailure("The market handoff must lead the arrival tray.");
+    int32_t cargo = sim.player.cargo[promise->good];
+    sim.player.cargo[promise->good] = promise->quantity - 1;
+    actions = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (AdventureDeliveryAtHand(&sim) != NULL || actions.items[0].target.kind != CC_INTERACTION_PERSON)
+        return ClientRegressionFailure("A partial load keeps the ordinary nearby actions.");
+    sim.player.cargo[promise->good] = cargo;
+    sim.carriage.location_id = sim.settlements[0].id;
+    if (AdventureDeliveryAtHand(&sim) != NULL)
+        return ClientRegressionFailure("The handoff requires the loaded carriage here.");
+    sim.carriage.location_id = promise->target_id;
+    ClientView view = VIEW_LOCAL, back = VIEW_LOCAL;
+    int32_t selected = 0;
+    uint64_t before = CcSimHash(&sim);
+    AdventureActivate(&sim, &local, door, &view, &back, &selected);
+    if (!local.market_interior) return ClientRegressionFailure("The handoff door enters the hall.");
+    CcInteractionTarget *counter = AdventureTarget(&local, &sim, CC_INTERACTION_COUNTER, 1,
+        "Keeper", "Deliver promise", (Vector3){0}, 1, 2, 1, position, 1);
+    AdventureActivate(&sim, &local, counter, &view, &back, &selected);
+    if (view != VIEW_TRADE || local.trade_mode != 2 || local.trade_good != promise->good ||
+        local.trade_quantity != promise->quantity - promise->progress || local.trade_quote_presented)
+        return ClientRegressionFailure("The counter must open the delivery quote for the promised load.");
+    AdventureQuote quote = AdventureTradeQuote(&sim, &local);
+    if (quote.promise_id != promise->id || quote.command.amount != -promise->quantity ||
+        CcSimHash(&sim) != before)
+        return ClientRegressionFailure("Opening the handoff preserves cargo and coins until confirmation.");
+    sim.player.accepted_situation_id = 0;
+    AdventureActivate(&sim, &local, counter, &view, &back, &selected);
+    if (local.trade_mode != 0)
+        return ClientRegressionFailure("An ordinary counter visit opens the usual trade mode.");
+    sim.player.accepted_situation_id = promise->id;
+    CcLocalBindPlace(&sim);
+    for (int interior = 0; interior < 2; ++interior) {
+        local.market_interior = interior != 0;
+        BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
+        actions = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+        CcInteractionKind kind = interior ? CC_INTERACTION_COUNTER : CC_INTERACTION_DOOR;
+        if (actions.count == 0 || actions.items[0].target.kind != kind ||
+            strcmp(actions.items[0].detail, "Deliver promise") != 0)
+            return ClientRegressionFailure("The real town and hall trays must show the handoff first.");
+    }
+    return 0;
+}
+
 static int RunPresentedTargetRegression(void)
 {
     static CcSim sim;
@@ -151,6 +223,8 @@ static int RunPresentedTargetRegression(void)
 
 static int RunAdventureInputRegression(void)
 {
+    int handoff_result = RunDeliveryHandoffRegression();
+    if (handoff_result != 0) return handoff_result;
     int presented_result = RunPresentedTargetRegression();
     if (presented_result != 0) return presented_result;
     static CcSim sim;
