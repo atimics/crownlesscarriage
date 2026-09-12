@@ -12,6 +12,8 @@
 #define CC_MAX_FACTIONS 9
 #define CC_MAX_SHIPMENTS 24
 #define CC_MAX_COURIERS 12
+#define CC_MAX_WAR_PARTIES 8
+#define CC_MAX_DISPATCHES 16
 #define CC_MAX_BANDITS 3
 #define CC_MAX_MONSTERS 3
 #define CC_MAX_DUNGEONS 3
@@ -63,7 +65,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-89 shipped ahead of this branch; archive lifetime integration
    is schema 90. */
-#define CC_SIM_SCHEMA_VERSION 90
+#define CC_SIM_SCHEMA_VERSION 91
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -623,7 +625,9 @@ typedef enum CcCommandKind {
     CC_COMMAND_FUND_GRAIN_SUPPLY = 58,
     CC_COMMAND_DELIVER_PROPHECY = 59,
     CC_COMMAND_RESERVE_ARCHIVE_RECRUITMENT = 60,
-    CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT = 61
+    CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT = 61,
+    CC_COMMAND_PICKUP_DISPATCH = 62,
+    CC_COMMAND_DELIVER_DISPATCH = 63
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -972,6 +976,56 @@ typedef struct CcCourier {
     int32_t arrival_day;
     int32_t reliability;
 } CcCourier;
+
+/* Bounded armed companies. Soldiers are a group under a named commander, not
+   individuals; the commander is a real character with a home, an occupation
+   and a place in the cast. Orders travel as dispatches (#646), so a
+   checkpoint stands until a withdrawal order physically reaches it. */
+typedef enum CcWarOrderKind {
+    CC_WAR_ORDER_HOLD = 0,
+    CC_WAR_ORDER_MARCH,
+    CC_WAR_ORDER_CONTROL_ROUTE,
+    CC_WAR_ORDER_WITHDRAW,
+    CC_WAR_ORDER_CEASE
+} CcWarOrderKind;
+
+typedef struct CcWarParty {
+    CcId id;
+    CcId kingdom_id;
+    CcId commander_character_id;
+    CcId home_settlement_id;
+    CcId current_settlement_id;
+    CcId travel_route_id;
+    CcId travel_destination_id;
+    int32_t travel_arrival_day;
+    int32_t members;
+    CcWarOrderKind order;
+    CcId order_route_id;
+    CcId order_target_id;
+    bool permits_player;
+    int32_t battles_fought;
+    int32_t casualties;
+} CcWarParty;
+
+/* A sealed letter. Reports carry dated, sourced claims about a road;
+   orders instruct one named party. Neither does anything until delivered. */
+typedef enum CcDispatchKind {
+    CC_DISPATCH_ROAD_REPORT = 0,
+    CC_DISPATCH_WITHDRAW_ORDER,
+    CC_DISPATCH_CROSSING_PERMIT
+} CcDispatchKind;
+
+typedef struct CcDispatch {
+    CcId id;
+    CcDispatchKind kind;
+    CcId route_id;
+    CcId war_party_id;
+    CcId origin_settlement_id;
+    CcId recipient_settlement_id;
+    int32_t issued_day;
+    bool in_player_cargo;
+    bool delivered;
+} CcDispatch;
 
 typedef enum CcBanditCampSize {
     CC_BANDIT_HIDEOUT,
@@ -1911,6 +1965,10 @@ typedef struct CcSim {
     int32_t royal_trade_week;
     int32_t royal_route_slots_used[CC_MAX_ROUTES];
     CcCourier couriers[CC_MAX_COURIERS];
+    CcWarParty war_parties[CC_MAX_WAR_PARTIES];
+    int32_t war_party_count;
+    CcDispatch dispatches[CC_MAX_DISPATCHES];
+    int32_t dispatch_count;
     CcBanditGroup bandits[CC_MAX_BANDITS];
     CcGoblinSociety goblins;
     CcDragonCult dragon_cult;
@@ -1994,7 +2052,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 364944,
+_Static_assert(sizeof(CcSim) == 366688,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -2379,6 +2437,22 @@ int32_t CcSimKingdomPressure(const CcSim *sim, CcId kingdom_id);
 const char *CcDiplomaticStateName(CcDiplomaticState state);
 bool CcSimRouteCrossesKingdomBorder(const CcSim *sim, CcId route_id);
 bool CcSimRouteCrossesWarBorder(const CcSim *sim, CcId route_id);
+/* Bounded armed companies under named commanders (#646). */
+const CcWarParty *CcSimWarParty(const CcSim *sim, CcId id);
+const CcWarParty *CcSimRouteCheckpoint(const CcSim *sim, CcId route_id);
+bool CcSimPlayerMayCrossCheckpoint(const CcSim *sim, CcId route_id);
+void CcSimMusterWarPartyForDeclaration(CcSim *sim, int32_t issuer,
+                                        int32_t recipient);
+void CcSimAdvanceWarParties(CcSim *sim);
+void CcSimRetireWarPartiesAtPeace(CcSim *sim, CcId first, CcId second);
+const CcDispatch *CcSimDispatch(const CcSim *sim, CcId id);
+CcEvent *CcSimPushEvent(CcSim *sim, CcEventKind kind, CcId subject,
+                        CcId location, CcId parent, int32_t magnitude,
+                        const char *text);
+CcId CcSimCreateDispatch(CcSim *sim, CcDispatchKind kind, CcId route_id,
+                         CcId war_party_id, CcId origin_settlement_id,
+                         CcId recipient_settlement_id);
+void CcSimDeliverDispatch(CcSim *sim, CcId dispatch_id);
 int32_t CcBanditCampServiceCapacity(CcBanditCampSize size);
 bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
                            char *error, size_t error_capacity);
