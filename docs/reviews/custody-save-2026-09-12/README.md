@@ -79,3 +79,17 @@ Remaining libraries use the strict release build.
 
 Player commands, captor/character holders, named-item migration, physical document
 work identity, and crate creation/repair remain open acceptance work.
+
+## Booking limits
+
+Source `357bf1c20a92fca334c5b13cf879f6c9fb19fc68` adds regressions for carriage availability
+and transfer changes during travel. Both regressions reproduced failures before
+their fixes. Dispatch now respects the next available day. Transfers into a
+carriage or a carried container require the carriage to be idle.
+
+The test carries 14 wheat in one of two containers. Splitting one wheat into
+the second container would raise the load from four to five slots. That request
+leaves the complete world unchanged during travel, then succeeds after arrival.
+All 144 headless tests pass. Focused Cppcheck and strict WebAssembly checks pass.
+The booking test passes sanitizers with the custody core, adapter and simulation
+source instrumented; remaining libraries use the strict release build.
