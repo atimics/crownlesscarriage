@@ -58,3 +58,24 @@ libraries. The quick benchmark passes at 42,268.2 ns/day against a 90,000 limit.
 Main integration preserves all three custody registrations in
 `cmake/tests/94-custody.cmake`. The draft remains schema 99 / generator 25;
 its base is now main, whose integrated schema is 98.
+
+## Ordinary carrier journey
+
+Source `5cabed0ac8d06cf87f3efd649d5ecf18322f9d6b` carries seven wheat in a container on an
+ordinary royal carriage. The test uses real packing, the shared transfer call,
+royal route planning, saved world state, daily movement, and arrival. Unloading
+at the destination preserves container ID, goods ID, owner, and quantity.
+The dedicated booking reserves two freight slots and yields the carriage back
+to other work after unloading. Full routes and repeated departure requests
+leave the simulation unchanged. Blocked-road cargo stays on the route under
+the existing carriage waiting model.
+
+All 144 headless tests pass. The final repeated-dispatch assertion also passes
+in the focused store test. The changed adapter and archive planners pass
+Cppcheck; all changed C sources pass strict WebAssembly compilation. The
+journey passes AddressSanitizer and UndefinedBehaviorSanitizer with the custody
+core, adapter, simulation source, and changed archive planners instrumented.
+Remaining libraries use the strict release build.
+
+Player commands, captor/character holders, named-item migration, physical document
+work identity, and crate creation/repair remain open acceptance work.
