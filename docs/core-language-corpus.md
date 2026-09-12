@@ -1,5 +1,8 @@
 # Crownless core language corpus
 
+The [v2 held-account grammar and paired diagnostic](core-v2-accounts.md) extend
+this game-world corpus with explicit field labels and broader event coverage.
+
 The dataset shares its claim rules with NPC gossip. Improving a rule improves
 both the game's spoken accounts and the training examples. Generation runs
 locally with zero provider cost. Voice adapters are a later step.
