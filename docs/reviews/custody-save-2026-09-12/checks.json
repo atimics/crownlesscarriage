@@ -1,0 +1,21 @@
+{
+  "source_commit": "27d34458b917099cdfc740a2416a88f6c5d0d9ef",
+  "base_commit": "0edd7347dc954ff3b5e0e0bc01b85888fdd3bab0",
+  "schema": 99,
+  "generator": 25,
+  "headless_tests_passed": 140,
+  "legacy_save_hash_pairs_matched": 61,
+  "version_pairs_compared": 3193,
+  "version_pair_changes": [
+    {
+      "schema": 99,
+      "generator": 25,
+      "before": false,
+      "after": true
+    }
+  ],
+  "benchmark_ns_per_day": 32366.3,
+  "benchmark_limit_ns_per_day": 90000,
+  "webassembly_sim_and_hash_compile": "passed",
+  "repository_static_analysis": "passed"
+}
