@@ -135,7 +135,9 @@ shared transfer function. A loaded carriage has a dedicated booking. Trade,
 site/grain supply, archive supply, and archive relocation yield that carriage
 until its custody cargo is unloaded. Dispatch uses the existing royal path and
 movement code, reserves the actual freight slots in the weekly route budget,
-and records a cargo journey event. Arrival updates the holder's settlement;
+and records a cargo journey event. Dispatch respects the carriage's next
+available day. Transfers into the carriage or its containers require an idle
+carriage, so the booked route load stays fixed during travel. Arrival updates the holder's settlement;
 unloading checks that physical placement. Blocked carriage placement follows
 the existing route-origin waiting model and keeps transfers on the route.
 

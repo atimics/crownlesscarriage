@@ -152,6 +152,42 @@ static void CarrierJourney(void)
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
+static void BookingGates(void)
+{
+    Prepare();
+    CcRoyalCarriage *carrier = &sim.royal_carriages[0];
+    CcId destination = sim.settlements[1].id;
+    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 14, 1, 1, 2, event, NULL) == CC_CUSTODY_READY);
+    sim.custody.entries[2] = sim.custody.entries[0];
+    sim.custody.entries[2].id = 3;
+    sim.custody.entries[2].revision = 1;
+    sim.custody.next_id = 4;
+    CcCustodyTransfer load = {.entry_id = 1, .revision = 2, .actor_id = town,
+        .event_id = event, .destination = {CC_CUSTODY_CARRIER, carrier->id}, .quantity = 1};
+    CC_CHECK(CcSimTransferCustody(&sim, &load, NULL) == CC_CUSTODY_READY);
+    load.entry_id = 3; load.revision = 1;
+    CC_CHECK(CcSimTransferCustody(&sim, &load, NULL) == CC_CUSTODY_READY);
+    CC_CHECK(CcSimCustodyCarrierLoad(&sim, carrier->id) == 4);
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+    carrier->next_dispatch_day = sim.current_day + 2;
+    before = sim;
+    CC_CHECK(!CcSimDispatchCustodyCarrier(&sim, carrier->id, destination));
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    carrier->next_dispatch_day = sim.current_day;
+    CC_CHECK(CcSimDispatchCustodyCarrier(&sim, carrier->id, destination));
+    CcCustodyTransfer repack = {.entry_id = 2, .revision = 2, .actor_id = town,
+        .event_id = event, .destination = {CC_CUSTODY_CONTAINER_HOLDER, 3}, .quantity = 1};
+    before = sim;
+    CC_CHECK(CcSimTransferCustody(&sim, &repack, NULL) == CC_CUSTODY_FORBIDDEN);
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    for (int day = 0; day < 20 && carrier->location_id != destination; ++day)
+        CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(carrier->mode == CC_ROYAL_CARRIAGE_IDLE && carrier->location_id == destination);
+    CC_CHECK(CcSimTransferCustody(&sim, &repack, NULL) == CC_CUSTODY_READY);
+    CC_CHECK(CcSimCustodyCarrierLoad(&sim, carrier->id) == 5);
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+}
+
 static void Gates(void)
 {
     Prepare(); RejectPack(0, CC_CUSTODY_INVALID); RejectPack(1001, CC_CUSTODY_INVALID);
@@ -182,5 +218,5 @@ static void Gates(void)
 
 int main(void)
 {
-    Journey(); Gates(); FreightSlots(); CarrierJourney(); return 0;
+    Journey(); Gates(); FreightSlots(); CarrierJourney(); BookingGates(); return 0;
 }

@@ -103,6 +103,16 @@ static bool PermitStoreTransfer(const void *context, uint64_t actor,
 {
     const CcSim *sim = context;
     if (actor != entry->owner_id || CcSimSettlement(sim, actor) == NULL) return false;
+    CcCustodyHolder root = to;
+    if (root.kind == CC_CUSTODY_CONTAINER_HOLDER) {
+        const CcCustodyEntry *container = CcCustodyFind(&sim->custody, root.id);
+        if (container == NULL) return false;
+        root = container->holder;
+    }
+    if (root.kind == CC_CUSTODY_CARRIER) {
+        const CcRoyalCarriage *carrier = CustodyCarrier(sim, root.id);
+        if (carrier == NULL || carrier->mode != CC_ROYAL_CARRIAGE_IDLE) return false;
+    }
     if (to.kind == CC_CUSTODY_STORE) return CcSimSettlement(sim, to.id) != NULL;
     if (to.kind == CC_CUSTODY_CARRIER) {
         const CcRoyalCarriage *carrier = CustodyCarrier(sim, to.id);

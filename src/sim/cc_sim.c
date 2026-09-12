@@ -9438,7 +9438,8 @@ bool CcSimDispatchCustodyCarrier(CcSim *sim, CcId carrier_id, CcId destination_i
         CcRoyalCarriage *carrier = &sim->royal_carriages[i];
         if (carrier->id != carrier_id) continue;
         if (carrier->mode != CC_ROYAL_CARRIAGE_IDLE || carrier->active_shipment_id != 0 ||
-            carrier->condition < 20 || carrier->location_id == destination_id ||
+            carrier->condition < 20 || sim->current_day < carrier->next_dispatch_day ||
+            carrier->location_id == destination_id ||
             CcSimCustodyCarrierLoad(sim, carrier_id) <= 0) return false;
         return StartRoyalRepositioningLeg(sim, carrier, destination_id);
     }
