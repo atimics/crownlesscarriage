@@ -1904,7 +1904,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
 
     uint32_t town_conditions = CcSimTownConditions(sim, place->id);
     DrawExteriorTerrain(place, town_conditions, scenery_focus, clock);
-    DrawTownRaidStaging(course, scenery_focus);
+    if (!CcSettlementIsAbandoned(place)) DrawTownRaidStaging(course, scenery_focus);
     const CcLocalAgent *sightline_opponent = conversation_partner != NULL ?
         conversation_partner : course != NULL && course->alarm_active ?
         CombatCameraOpponent(course, agent) : NULL;
@@ -2055,88 +2055,115 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     DrawSettlementCreatures(sim, place, clock, scenery_focus);
 
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(STREET_PEOPLE[0].x, STREET_PEOPLE[0].y),
-        0.96f, -0.55f, UINT32_C(0x73747201), CC_NPC_ROLE_MERCHANT,
-        (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE,
-        scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(STREET_PEOPLE[1].x, STREET_PEOPLE[1].y),
-        1.02f, 1.70f, UINT32_C(0x73747202), CC_NPC_ROLE_GUARD,
-        kingdom, clock + 1.0f, CC_TRAVERSAL_IDLE, scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(STREET_PEOPLE[2].x, STREET_PEOPLE[2].y),
-        0.92f, 0.35f, UINT32_C(0x73747203), CC_NPC_ROLE_LABORER,
-        (Color){97, 154, 137, 255}, clock + 2.0f, CC_TRAVERSAL_IDLE,
-        scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(STREET_PEOPLE[3].x, STREET_PEOPLE[3].y),
-        0.88f, 2.40f, UINT32_C(0x73747204), CC_NPC_ROLE_HEALER,
-        (Color){168, 112, 128, 255}, clock * 0.8f + 3.0f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
-    bool hungry_crowd = place->hunger >= 30;
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(STREET_PEOPLE[4].x, STREET_PEOPLE[4].y),
-        0.82f, -0.40f, UINT32_C(0x73747205),
-        hungry_crowd ? CC_NPC_ROLE_REFUGEE : CC_NPC_ROLE_TRAVELLER,
-        hungry_crowd ? WORLD_DANGER : kingdom, clock * 0.6f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
-    bool underworld_present = HasSmugglerRoad(sim, place->id) ||
-                              place->security < 50;
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(STREET_PEOPLE[5].x, STREET_PEOPLE[5].y),
-        0.88f, 2.75f, UINT32_C(0x73747206),
-        underworld_present ? CC_NPC_ROLE_SCOUT : CC_NPC_ROLE_TRAVELLER,
-        underworld_present ? WORLD_VIOLET : kingdom, clock * 0.7f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
-    float settlement_pressure = fmaxf(
-        Clamp((float)place->hunger / 100.0f, 0.0f, 1.0f),
-        Clamp((50.0f - (float)place->security) / 50.0f, 0.0f, 1.0f));
-    if (course != NULL && course->alarm_active) settlement_pressure = 1.0f;
-
-    DrawAmbientNpcRoute3D(
-        (Vector2){13.60f, 25.80f}, (Vector2){14.80f, 26.60f}, 0.88f,
-        UINT32_C(0x64697301), CC_NPC_ROLE_LABORER,
-        (Color){143, 118, 65, 255}, clock, 0.08f, settlement_pressure,
-        scenery_focus);
-    DrawAmbientNpcRoute3D(
-        (Vector2){24.10f, 53.20f}, (Vector2){25.70f, 53.20f}, 0.90f,
-        UINT32_C(0x64697302), CC_NPC_ROLE_SCOUT,
-        (Color){103, 103, 112, 255}, clock, 0.29f, settlement_pressure,
-        scenery_focus);
-    DrawAmbientNpcRoute3D(
-        (Vector2){35.20f, 26.65f}, (Vector2){36.75f, 27.25f}, 0.94f,
-        UINT32_C(0x64697303), CC_NPC_ROLE_LABORER,
-        (Color){174, 94, 53, 255}, clock, 0.47f, settlement_pressure,
-        scenery_focus);
-    DrawAmbientNpcRoute3D(
-        (Vector2){49.25f, 51.05f}, (Vector2){50.15f, 52.35f}, 0.92f,
-        UINT32_C(0x64697304), CC_NPC_ROLE_TRAVELLER,
-        (Color){117, 145, 116, 255}, clock, 0.72f, settlement_pressure,
-        scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(74.65f, 31.95f), 1.02f, 1.50f,
-        UINT32_C(0x64697305), CC_NPC_ROLE_GUARD, kingdom,
-        clock * 0.40f + 2.9f, CC_TRAVERSAL_IDLE, scenery_focus);
-    DrawAmbientNpcRoute3D(
-        (Vector2){84.80f, 51.80f}, (Vector2){86.30f, 51.00f}, 0.94f,
-        UINT32_C(0x64697306), CC_NPC_ROLE_LABORER,
-        (Color){161, 128, 68, 255}, clock, 0.88f, settlement_pressure,
-        scenery_focus);
-    if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
-        sim->journey.destination_id == place->id) {
-        DrawVisibleNpcFigure3D(
-            TerrainWorldPoint(46.80f, 31.15f), 0.86f, -1.10f,
-            UINT32_C(0x61667401), CC_NPC_ROLE_GUARD, WORLD_TEAL,
-            clock * 0.64f + 1.4f, CC_TRAVERSAL_IDLE, scenery_focus);
-        if (sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT) {
-            DrawVisibleNpcFigure3D(
-                TerrainWorldPoint(47.65f, 30.55f), 0.82f, -0.85f,
-                UINT32_C(0x61667402), CC_NPC_ROLE_HEALER, WORLD_GOLD,
-                clock * 0.58f + 2.1f, CC_TRAVERSAL_IDLE, scenery_focus);
+    if (CcSettlementIsAbandoned(place)) {
+        const CcBanditGroup *band = CcLocalTownOccupier(sim, place->id);
+        int32_t guards = band != NULL ? band->members : 0;
+        if (guards > 6) guards = 6;
+        for (int32_t i = 0; i < guards; ++i) {
+            DrawVisibleNpcFigure3D(TerrainWorldPoint(38.0f + (float)i * 1.4f, 48.0f),
+                0.96f, 0.7f, (uint32_t)band->id + (uint32_t)i, CC_NPC_ROLE_RAIDER,
+                WORLD_DANGER, clock, CC_TRAVERSAL_IDLE, scenery_focus);
         }
+        for (int32_t i = 0; i < 8; ++i) {
+            const CcCharacter *person = CcLocalTownPerson(sim, place->id, i);
+            if (person == NULL) break;
+            DrawVisibleNpcFigure3D(TerrainWorldPoint(45.0f + (float)i * 1.3f, 52.0f),
+                0.92f, -0.4f, person->appearance_seed, CC_NPC_ROLE_WAYFARER,
+                WORLD_TEAL, clock, CC_TRAVERSAL_IDLE, scenery_focus);
+        }
+        for (int32_t i = 0; i < profile->building_count; ++i) {
+            const CcLocalPlaceBuilding *building = &profile->building[i];
+            float x = building->x + building->width * 0.5f;
+            float z = building->z + building->depth + 0.20f;
+            if (!SceneryPointVisible(x, z, scenery_focus)) continue;
+            for (int32_t board = 0; board < 3; ++board)
+                DrawBox((Vector3){x, CcLocalTerrainHeightAt(x, z) + 0.55f + (float)board * 0.5f, z},
+                        (Vector3){1.6f, 0.20f, 0.16f}, (Color){83, 65, 54, 255});
+        }
+    } else {
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(STREET_PEOPLE[0].x, STREET_PEOPLE[0].y),
+            0.96f, -0.55f, UINT32_C(0x73747201), CC_NPC_ROLE_MERCHANT,
+            (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE,
+            scenery_focus);
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(STREET_PEOPLE[1].x, STREET_PEOPLE[1].y),
+            1.02f, 1.70f, UINT32_C(0x73747202), CC_NPC_ROLE_GUARD,
+            kingdom, clock + 1.0f, CC_TRAVERSAL_IDLE, scenery_focus);
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(STREET_PEOPLE[2].x, STREET_PEOPLE[2].y),
+            0.92f, 0.35f, UINT32_C(0x73747203), CC_NPC_ROLE_LABORER,
+            (Color){97, 154, 137, 255}, clock + 2.0f, CC_TRAVERSAL_IDLE,
+            scenery_focus);
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(STREET_PEOPLE[3].x, STREET_PEOPLE[3].y),
+            0.88f, 2.40f, UINT32_C(0x73747204), CC_NPC_ROLE_HEALER,
+            (Color){168, 112, 128, 255}, clock * 0.8f + 3.0f,
+            CC_TRAVERSAL_IDLE, scenery_focus);
+        bool hungry_crowd = place->hunger >= 30;
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(STREET_PEOPLE[4].x, STREET_PEOPLE[4].y),
+            0.82f, -0.40f, UINT32_C(0x73747205),
+            hungry_crowd ? CC_NPC_ROLE_REFUGEE : CC_NPC_ROLE_TRAVELLER,
+            hungry_crowd ? WORLD_DANGER : kingdom, clock * 0.6f,
+            CC_TRAVERSAL_IDLE, scenery_focus);
+        bool underworld_present = HasSmugglerRoad(sim, place->id) ||
+                                  place->security < 50;
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(STREET_PEOPLE[5].x, STREET_PEOPLE[5].y),
+            0.88f, 2.75f, UINT32_C(0x73747206),
+            underworld_present ? CC_NPC_ROLE_SCOUT : CC_NPC_ROLE_TRAVELLER,
+            underworld_present ? WORLD_VIOLET : kingdom, clock * 0.7f,
+            CC_TRAVERSAL_IDLE, scenery_focus);
+        float settlement_pressure = fmaxf(
+            Clamp((float)place->hunger / 100.0f, 0.0f, 1.0f),
+            Clamp((50.0f - (float)place->security) / 50.0f, 0.0f, 1.0f));
+        if (course != NULL && course->alarm_active) settlement_pressure = 1.0f;
+
+        DrawAmbientNpcRoute3D(
+            (Vector2){13.60f, 25.80f}, (Vector2){14.80f, 26.60f}, 0.88f,
+            UINT32_C(0x64697301), CC_NPC_ROLE_LABORER,
+            (Color){143, 118, 65, 255}, clock, 0.08f, settlement_pressure,
+            scenery_focus);
+        DrawAmbientNpcRoute3D(
+            (Vector2){24.10f, 53.20f}, (Vector2){25.70f, 53.20f}, 0.90f,
+            UINT32_C(0x64697302), CC_NPC_ROLE_SCOUT,
+            (Color){103, 103, 112, 255}, clock, 0.29f, settlement_pressure,
+            scenery_focus);
+        DrawAmbientNpcRoute3D(
+            (Vector2){35.20f, 26.65f}, (Vector2){36.75f, 27.25f}, 0.94f,
+            UINT32_C(0x64697303), CC_NPC_ROLE_LABORER,
+            (Color){174, 94, 53, 255}, clock, 0.47f, settlement_pressure,
+            scenery_focus);
+        DrawAmbientNpcRoute3D(
+            (Vector2){49.25f, 51.05f}, (Vector2){50.15f, 52.35f}, 0.92f,
+            UINT32_C(0x64697304), CC_NPC_ROLE_TRAVELLER,
+            (Color){117, 145, 116, 255}, clock, 0.72f, settlement_pressure,
+            scenery_focus);
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(74.65f, 31.95f), 1.02f, 1.50f,
+            UINT32_C(0x64697305), CC_NPC_ROLE_GUARD, kingdom,
+            clock * 0.40f + 2.9f, CC_TRAVERSAL_IDLE, scenery_focus);
+        DrawAmbientNpcRoute3D(
+            (Vector2){84.80f, 51.80f}, (Vector2){86.30f, 51.00f}, 0.94f,
+            UINT32_C(0x64697306), CC_NPC_ROLE_LABORER,
+            (Color){161, 128, 68, 255}, clock, 0.88f, settlement_pressure,
+            scenery_focus);
+        if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
+            sim->journey.destination_id == place->id) {
+            DrawVisibleNpcFigure3D(
+                TerrainWorldPoint(46.80f, 31.15f), 0.86f, -1.10f,
+                UINT32_C(0x61667401), CC_NPC_ROLE_GUARD, WORLD_TEAL,
+                clock * 0.64f + 1.4f, CC_TRAVERSAL_IDLE, scenery_focus);
+            if (sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT) {
+                DrawVisibleNpcFigure3D(
+                    TerrainWorldPoint(47.65f, 30.55f), 0.82f, -0.85f,
+                    UINT32_C(0x61667402), CC_NPC_ROLE_HEALER, WORLD_GOLD,
+                    clock * 0.58f + 2.1f, CC_TRAVERSAL_IDLE, scenery_focus);
+            }
+        }
+        DrawCourseRunners(course, scenery_focus);
     }
-    DrawCourseRunners(course, scenery_focus);
     if (course != NULL && agent->combat.target_index >= 0 &&
         agent->combat.target_index < CC_LOCAL_RAIDER_COUNT) {
         DrawSelectedTarget(
@@ -2677,7 +2704,7 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
         CcNpcAppearanceGenerate(profile->keeper_seed,
                                 InteriorKeeperRole(profile->function),
                                 identity);
-    DrawNpcAppearanceFigure3D(
+    if (!CcSettlementIsAbandoned(place)) DrawNpcAppearanceFigure3D(
         (Vector3){MARKET_PEOPLE[0].x, 0.0f, MARKET_PEOPLE[0].y},
         1.02f, 2.75f, &keeper, clock, CC_TRAVERSAL_IDLE);
     DrawRobotShell(agent);
