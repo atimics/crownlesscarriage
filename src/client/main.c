@@ -114,6 +114,7 @@ typedef struct LocalState {
     CcInteractionKey presented_targets[4];
     CcId presented_target_characters[4];
     Rectangle presented_target_bounds[4];
+    Vector2 presented_card_origin;
     ClientView interaction_view;
     bool carriage_stopped;
     uint64_t conversation_object;
@@ -4085,6 +4086,37 @@ static ContextActionSet BuildContextActions(
                 --at;
             }
         }
+        if (local->world_cards_presented && (local->interaction.approaching ||
+            GridDistance(LocalPosition(local), local->presented_card_origin) <= 3.0f)) {
+            ContextActionSet steady = {0};
+            /* Delivery first, then the cards already being read, then vacancies. */
+            for (int pass = 0; pass < 3; ++pass) {
+                int count = pass == 1 ? local->presented_target_count : set.count;
+                for (int i = 0; i < count && steady.count < 4; ++i) {
+                    int candidate = i;
+                    if (pass == 1) {
+                        candidate = -1;
+                        for (int j = 0; j < set.count; ++j)
+                            if (CcInteractionKeyEqual(set.items[j].target, local->presented_targets[i])) {
+                                const CcInteractionTarget *target = CcInteractionFind(
+                                    &local->interactions, set.items[j].target);
+                                if (target != NULL && target->character_id == local->presented_target_characters[i])
+                                    candidate = j;
+                                break;
+                            }
+                    }
+                    if (candidate < 0) continue;
+                    const ContextAction *action = &set.items[candidate];
+                    if (pass == 0 && !AdventureHandoffTarget(sim, local,
+                        CcInteractionFind(&local->interactions, action->target))) continue;
+                    bool included = false;
+                    for (int j = 0; j < steady.count; ++j)
+                        if (CcInteractionKeyEqual(steady.items[j].target, action->target)) included = true;
+                    if (!included) steady.items[steady.count++] = *action;
+                }
+            }
+            set = steady;
+        }
         if (set.count > 4) set.count = 4;
         return set;
     }
@@ -4791,6 +4823,8 @@ static Color ContextActionColor(ContextActionKind kind)
 static void RememberPresentedTargets(LocalState *local, ClientView view,
                                       const ContextActionSet *actions)
 {
+    bool changed = !local->world_cards_presented;
+    int old_count = local->presented_target_count;
     local->world_cards_presented = false;
     local->presented_target_count = 0;
     if (view != VIEW_LOCAL || !AdventureScene(local) || actions->combat) return;
@@ -4801,6 +4835,8 @@ static void RememberPresentedTargets(LocalState *local, ClientView view,
         if (actions->items[i].kind != CONTEXT_ACTION_WORLD_TARGET) continue;
         int32_t slot = local->presented_target_count;
         if (slot >= 4) break;
+        if (slot >= old_count || !CcInteractionKeyEqual(local->presented_targets[slot], actions->items[i].target))
+            changed = true;
         local->presented_targets[slot] = actions->items[i].target;
         const CcInteractionTarget *target = CcInteractionFind(
             &local->interactions, actions->items[i].target);
@@ -4808,6 +4844,10 @@ static void RememberPresentedTargets(LocalState *local, ClientView view,
         local->presented_target_bounds[slot] = ContextActionBounds(i - first, shown, false);
         local->presented_target_count += 1;
     }
+    if (changed || old_count != local->presented_target_count ||
+        (!local->interaction.approaching &&
+         GridDistance(LocalPosition(local), local->presented_card_origin) > 3.0f))
+        local->presented_card_origin = LocalPosition(local);
 }
 
 static int32_t PresentedTargetAt(const LocalState *local, ClientView view, Vector2 mouse)

@@ -188,8 +188,18 @@ static int RunPresentedTargetRegression(void)
     /* Walking moves the shown target outside the newly nearest four. */
     local.interactions.targets[0].approach_x = origin.x + 100;
     ContextActionSet moved = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    for (int i = 0; i < 4; ++i)
+        if (!CcInteractionKeyEqual(moved.items[i].target, shown.items[i].target))
+            return ClientRegressionFailure("Resident movement keeps the visible card order.");
+    local.presented_card_origin.x -= 4.0f;
+    local.interaction.approaching = true;
+    moved = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (!CcInteractionKeyEqual(moved.items[0].target, chosen))
+        return ClientRegressionFailure("An approach keeps the row steady across distance changes.");
+    local.interaction.approaching = false;
+    moved = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
     if (CcInteractionKeyEqual(moved.items[0].target, chosen))
-        return ClientRegressionFailure("The fixture must change the distance ordering.");
+        return ClientRegressionFailure("A new nearby area refreshes the distance ordering.");
     queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
     ContextAction pressed = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
     if (pressed.kind != CONTEXT_ACTION_WORLD_TARGET || !CcInteractionKeyEqual(pressed.target, chosen))
