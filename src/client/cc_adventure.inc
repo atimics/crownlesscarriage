@@ -78,7 +78,7 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
         CcSimSettlement(sim, sim->player.location_id));
     if (local->market_interior) {
         (void)AdventureTarget(local, sim, CC_INTERACTION_COUNTER, 1U,
-            place->keeper_name, "Trade", (Vector3){6.55f, 0, 1.9f}, 2.1f, 2.0f, 1.0f,
+            place->keeper_name, AdventureDeliveryAtHand(sim) != NULL ? "Deliver promise" : "Trade", (Vector3){6.55f, 0, 1.9f}, 2.1f, 2.0f, 1.0f,
             (Vector2){6.55f, 3.15f}, 1.0f);
         const CcSettlement *warehouse = CcSimSettlement(sim, sim->player.location_id);
         for (int32_t good = 0; warehouse != NULL && good < CC_GOOD_COUNT; ++good) {
@@ -98,7 +98,7 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
         float door_x = hall->x + hall->width * 0.5f;
         float door_z = hall->z + hall->depth + 0.15f;
         (void)AdventureTarget(local, sim, CC_INTERACTION_DOOR, 1U,
-            place->primary_hall, "Enter", (Vector3){door_x, 0, door_z}, 1.8f, 2.8f, 0.5f,
+            place->primary_hall, AdventureDeliveryAtHand(sim) != NULL ? "Deliver promise" : "Enter", (Vector3){door_x, 0, door_z}, 1.8f, 2.8f, 0.5f,
             (Vector2){door_x, door_z + 1.0f}, 1.1f);
         (void)AdventureTarget(local, sim, CC_INTERACTION_BOARD, 1U,
             place->notice_board, "Read promises", (Vector3){LOCAL_NOTICE.x, 0, LOCAL_NOTICE.y},
@@ -211,6 +211,13 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
             local->trade_good = target->key.kind == CC_INTERACTION_STOCK ?
                 (CcGood)target->amount : ContextCargoGood(sim);
             local->trade_mode = 0;
+            const CcSituation *delivery = target->key.kind == CC_INTERACTION_COUNTER ?
+                AdventureDeliveryAtHand(sim) : NULL;
+            if (delivery != NULL) {
+                local->trade_mode = 2;
+                local->trade_good = delivery->good;
+                local->trade_quantity = delivery->quantity - delivery->progress;
+            }
             local->trade_confirmed = false;
             local->trade_quote_presented = false;
             *view = VIEW_TRADE;

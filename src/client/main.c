@@ -4000,6 +4000,26 @@ static void AddRestTeamAction(ContextActionSet *set, const CcSim *sim)
         true, CcSimHorseTeamReadiness(sim) < 30);
 }
 
+static const CcSituation *AdventureDeliveryAtHand(const CcSim *sim)
+{
+    const CcSituation *promise = CcSimAcceptedSituation(sim);
+    if (promise == NULL ||
+        (promise->kind != CC_SITUATION_RELIEF_DELIVERY &&
+         promise->kind != CC_SITUATION_BLACK_MARKET_DELIVERY) ||
+        promise->target_id != sim->player.location_id ||
+        sim->carriage.location_id != sim->player.location_id ||
+        promise->good < 0 || promise->good >= CC_GOOD_COUNT) return NULL;
+    int32_t remaining = promise->quantity - promise->progress;
+    return remaining > 0 && sim->player.cargo[promise->good] >= remaining ? promise : NULL;
+}
+
+static bool AdventureHandoffTarget(const CcSim *sim, const LocalState *local,
+                                   const CcInteractionTarget *target)
+{
+    return target != NULL && AdventureDeliveryAtHand(sim) != NULL &&
+        target->key.kind == (local->market_interior ? CC_INTERACTION_COUNTER : CC_INTERACTION_DOOR);
+}
+
 static ContextActionSet BuildContextActions(
     const CcSim *sim, const LocalState *local, ClientView view,
     int32_t selected, int32_t selected_situation)
@@ -4047,8 +4067,11 @@ static ContextActionSet BuildContextActions(
             while (at > 0) {
                 const CcInteractionTarget *previous = CcInteractionFind(&local->interactions,
                     set.items[at - 1].target);
-                if (previous == NULL || GridDistance(LocalPosition(local),
-                    (Vector2){previous->approach_x, previous->approach_z}) <= distance) break;
+                bool handoff = AdventureHandoffTarget(sim, local, target);
+                bool previous_handoff = AdventureHandoffTarget(sim, local, previous);
+                if (previous == NULL || previous_handoff || (!handoff &&
+                    GridDistance(LocalPosition(local),
+                        (Vector2){previous->approach_x, previous->approach_z}) <= distance)) break;
                 ContextAction swap = set.items[at - 1];
                 set.items[at - 1] = set.items[at]; set.items[at] = swap;
                 --at;
