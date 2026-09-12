@@ -109,3 +109,23 @@ once to a clean master, then use the pixel texture if desired. Each output has
 a receipt with settings, source and output hashes, renderer hash, and library
 versions. The local DSP checks cover pitch layers, duration, headroom, silence,
 repeatability, and master preservation.
+
+### Synthetic bass experiment
+
+`goblin_bass.py` creates an original eight-second bass reference and a speaking
+version. Its 65.4 Hz base has slow pitch drift, a 6.4 Hz pulse, metallic partials,
+and seeded noise. A 20-band vocoder lets the speech envelopes shape the bass.
+A small amount of the original speech retains consonant detail. This is sound
+design inspired by vortex motion in the Navier–Stokes article, with an artistic
+synthesizer supplying the waveform.
+
+```sh
+python tools/audio/goblin_bass.py --speech dry-hrakhor.wav --output out/goblin-bass
+```
+
+The output includes `bass-reference.wav`, `bass-speaking.wav`, and a hash receipt.
+For an experimental direct clone, use `bass-reference.wav` as the local Nano
+`prepare_conditionals` audio prompt, then call `generate` with the Hra'khor line.
+The vocoder offers direct control over the bass texture; the clone experiment
+shows how the speech model interprets a reference made entirely from a synth.
+Compare their generated audio when choosing the goblin sound.

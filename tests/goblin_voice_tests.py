@@ -9,6 +9,7 @@ import wave
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools/audio'))
 from goblin_voice import process, render
+from goblin_bass import carrier, vocode
 
 
 class GoblinVoiceTests(unittest.TestCase):
@@ -26,6 +27,18 @@ class GoblinVoiceTests(unittest.TestCase):
         self.assertGreater(np.max(spectrum[177:183]), np.max(spectrum) * 0.03)
         np.testing.assert_array_equal(wet, process(dry, rate))
         self.assertGreater(np.max(np.abs(process(dry, rate, 'priest') - wet)), 0.01)
+
+    def test_bass_vocoder(self):
+        rate = 24000
+        dry = np.zeros(rate)
+        self.assertFalse(np.any(vocode(dry, rate)))
+        dry[6000:18000] = 0.4 * np.sin(2 * np.pi * 240 * np.arange(12000) / rate)
+        wet = vocode(dry, rate)
+        self.assertEqual(len(wet), len(dry))
+        self.assertTrue(np.isfinite(wet).all())
+        self.assertGreater(np.max(np.abs(wet)), 0.01)
+        self.assertFalse(np.any(wet[:6000]))
+        np.testing.assert_array_equal(carrier(rate, rate), carrier(rate, rate))
 
     def test_silence_and_invalid_input(self):
         self.assertFalse(np.any(process(np.zeros(2400), 24000)))
