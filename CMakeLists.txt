@@ -1081,6 +1081,9 @@ if(BUILD_TESTING)
     # Separate registration files let new test areas land independently.
     file(GLOB CC_TEST_REGISTRATIONS CONFIGURE_DEPENDS
          "${CMAKE_CURRENT_SOURCE_DIR}/cmake/tests/*.cmake")
+    if(NOT CC_TEST_REGISTRATIONS)
+        message(FATAL_ERROR "Test registrations are missing. Include cmake/tests in the source package, or set BUILD_TESTING=OFF.")
+    endif()
     list(SORT CC_TEST_REGISTRATIONS)
     foreach(CC_TEST_REGISTRATION IN LISTS CC_TEST_REGISTRATIONS)
         include("${CC_TEST_REGISTRATION}")

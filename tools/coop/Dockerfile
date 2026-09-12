@@ -6,6 +6,7 @@ COPY CMakeLists.txt CMakePresets.json LICENSE THIRD_PARTY_NOTICES.txt ./
 COPY assets/campaigns ./assets/campaigns
 COPY src ./src
 COPY tests ./tests
+COPY cmake ./cmake
 COPY tools/*.c ./tools/
 COPY tools/coop ./tools/coop
 RUN cmake -S . -B build -DCC_BUILD_CLIENT=OFF -DCC_BUILD_BENCHMARKS=OFF -DCMAKE_BUILD_TYPE=Release \
