@@ -61,3 +61,8 @@ target_link_libraries(travel_departure_tests PRIVATE crownless_persistence)
 cc_strict_warnings(travel_departure_tests)
 add_test(NAME free_road_departures COMMAND travel_departure_tests)
 
+
+add_executable(hrakhor_tests tests/hrakhor_tests.c)
+target_link_libraries(hrakhor_tests PRIVATE crownless_story)
+cc_strict_warnings(hrakhor_tests)
+add_test(NAME hrakhor_corruption COMMAND hrakhor_tests)

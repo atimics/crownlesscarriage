@@ -82,3 +82,10 @@ file freshness, diagnostic pairs, and the existing gossip export invariants.
 The shared grammar ships in normal NPC gossip. The learned model runs through
 the separate ZERO reference runner for evaluation. Native neural inference and
 voice-specific training are later integration steps.
+
+## Goblin output corruption
+
+[Hra'khor](hrakhor.md) adds an optional native corruption layer for completed
+English core-model lines. The process bridge accepts `--hrakhor 0..100` and
+`--english` for model output. Paired records retain the original English and
+held account for evaluation.

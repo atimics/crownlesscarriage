@@ -13,6 +13,8 @@ endif()
 
 find_program(CC_PYTHON3_EXECUTABLE python3)
 if(CC_PYTHON3_EXECUTABLE)
+    add_test(NAME hrakhor_model_pairs
+        COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/hrakhor_pairs_tests.py $<TARGET_FILE:core_account_probe>)
     add_test(NAME core_account_rules_current
         COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/compile_core_accounts.py --check)
     add_test(NAME core_account_native_parity
