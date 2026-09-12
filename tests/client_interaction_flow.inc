@@ -90,6 +90,78 @@ static int RunRoadJourneySaveRegression(void)
     return 0;
 }
 
+static int RunDeliveryHandoffRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    char error[192];
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    const CcSituation *promise = NULL;
+    for (int i = 0; i < sim.situation_count; ++i)
+        if (sim.situations[i].kind == CC_SITUATION_RELIEF_DELIVERY) promise = &sim.situations[i];
+    if (promise == NULL || !CcSimApply(&sim, &((CcCommand){
+        .kind = CC_COMMAND_ACCEPT_SITUATION, .target_id = promise->id}), error, sizeof(error)))
+        return ClientRegressionFailure("Accept the delivery fixture.");
+    if (AdventureDeliveryAtHand(&sim) != NULL)
+        return ClientRegressionFailure("Departure still needs the road journey.");
+    sim.player.location_id = promise->target_id;
+    sim.carriage.location_id = promise->target_id;
+    sim.resolved_journey_situation_id = promise->id;
+    Vector2 position = LocalPosition(&local);
+    CcInteractionTarget *door = AdventureTarget(&local, &sim, CC_INTERACTION_DOOR, 1,
+        "Market hall", "Deliver promise", (Vector3){0}, 1, 2, 1,
+        (Vector2){position.x + 30, position.y}, 1);
+    CcInteractionTarget *person = AdventureTarget(&local, &sim, CC_INTERACTION_PERSON, 2,
+        "Neighbour", "Talk", (Vector3){0}, 1, 2, 1, position, 1);
+    if (door == NULL || person == NULL) return ClientRegressionFailure("Create the handoff targets.");
+    ContextActionSet actions = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (actions.count != 2 || actions.items[0].target.kind != CC_INTERACTION_DOOR)
+        return ClientRegressionFailure("The market handoff must lead the arrival tray.");
+    int32_t cargo = sim.player.cargo[promise->good];
+    sim.player.cargo[promise->good] = promise->quantity - 1;
+    actions = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (AdventureDeliveryAtHand(&sim) != NULL || actions.items[0].target.kind != CC_INTERACTION_PERSON)
+        return ClientRegressionFailure("A partial load keeps the ordinary nearby actions.");
+    sim.player.cargo[promise->good] = cargo;
+    sim.carriage.location_id = sim.settlements[0].id;
+    if (AdventureDeliveryAtHand(&sim) != NULL)
+        return ClientRegressionFailure("The handoff requires the loaded carriage here.");
+    sim.carriage.location_id = promise->target_id;
+    ClientView view = VIEW_LOCAL, back = VIEW_LOCAL;
+    int32_t selected = 0;
+    uint64_t before = CcSimHash(&sim);
+    AdventureActivate(&sim, &local, door, &view, &back, &selected);
+    if (!local.market_interior) return ClientRegressionFailure("The handoff door enters the hall.");
+    CcInteractionTarget *counter = AdventureTarget(&local, &sim, CC_INTERACTION_COUNTER, 1,
+        "Keeper", "Deliver promise", (Vector3){0}, 1, 2, 1, position, 1);
+    AdventureActivate(&sim, &local, counter, &view, &back, &selected);
+    if (view != VIEW_TRADE || local.trade_mode != 2 || local.trade_good != promise->good ||
+        local.trade_quantity != promise->quantity - promise->progress || local.trade_quote_presented)
+        return ClientRegressionFailure("The counter must open the delivery quote for the promised load.");
+    AdventureQuote quote = AdventureTradeQuote(&sim, &local);
+    if (quote.promise_id != promise->id || quote.command.amount != -promise->quantity ||
+        CcSimHash(&sim) != before)
+        return ClientRegressionFailure("Opening the handoff preserves cargo and coins until confirmation.");
+    sim.player.accepted_situation_id = 0;
+    AdventureActivate(&sim, &local, counter, &view, &back, &selected);
+    if (local.trade_mode != 0)
+        return ClientRegressionFailure("An ordinary counter visit opens the usual trade mode.");
+    sim.player.accepted_situation_id = promise->id;
+    CcLocalBindPlace(&sim);
+    for (int interior = 0; interior < 2; ++interior) {
+        local.market_interior = interior != 0;
+        BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
+        actions = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+        CcInteractionKind kind = interior ? CC_INTERACTION_COUNTER : CC_INTERACTION_DOOR;
+        if (actions.count == 0 || actions.items[0].target.kind != kind ||
+            strcmp(actions.items[0].detail, "Deliver promise") != 0)
+            return ClientRegressionFailure("The real town and hall trays must show the handoff first.");
+    }
+    return 0;
+}
+
 static int RunPresentedTargetRegression(void)
 {
     static CcSim sim;
@@ -116,8 +188,18 @@ static int RunPresentedTargetRegression(void)
     /* Walking moves the shown target outside the newly nearest four. */
     local.interactions.targets[0].approach_x = origin.x + 100;
     ContextActionSet moved = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    for (int i = 0; i < 4; ++i)
+        if (!CcInteractionKeyEqual(moved.items[i].target, shown.items[i].target))
+            return ClientRegressionFailure("Resident movement keeps the visible card order.");
+    local.presented_card_origin.x -= 4.0f;
+    local.interaction.approaching = true;
+    moved = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (!CcInteractionKeyEqual(moved.items[0].target, chosen))
+        return ClientRegressionFailure("An approach keeps the row steady across distance changes.");
+    local.interaction.approaching = false;
+    moved = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
     if (CcInteractionKeyEqual(moved.items[0].target, chosen))
-        return ClientRegressionFailure("The fixture must change the distance ordering.");
+        return ClientRegressionFailure("A new nearby area refreshes the distance ordering.");
     queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
     ContextAction pressed = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
     if (pressed.kind != CONTEXT_ACTION_WORLD_TARGET || !CcInteractionKeyEqual(pressed.target, chosen))
@@ -149,8 +231,110 @@ static int RunPresentedTargetRegression(void)
     return 0;
 }
 
+static int RunPresentedRoadRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.journey_travel_active = true;
+    ContextActionSet shown = {0};
+    AddDetailedContextAction(&shown, CONTEXT_ACTION_CLEAR_ROAD_SITE,
+        "Clear rocks", "", "Tools needed", false, false);
+    AddDetailedContextAction(&shown, CONTEXT_ACTION_CAMP_ROAD_SITE,
+        "Camp at Low Silver Pit", "", "Rest team", true, false);
+    AddDetailedContextAction(&shown, CONTEXT_ACTION_TOGGLE_DRIVE,
+        "Stop carriage", "", "Hold the team here", true, false);
+    RememberRoadActions(&sim, &local, VIEW_LOCAL, &shown);
+    Rectangle bounds = local.presented_road_bounds[1];
+    Vector2 mouse = {bounds.x + bounds.width / 2, bounds.y + bounds.height / 2};
+    sim.journey.active = true;
+    client_test_pointer_active = true;
+    client_test_pointer = mouse;
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+    ContextAction through_input = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
+    client_test_pointer_active = false;
+    ClientInputClearPressed();
+    if (through_input.kind != CONTEXT_ACTION_NONE)
+        return ClientRegressionFailure("Road input consumes the old camp bounds when only Drive remains.");
+    Rectangle removed_bounds = local.presented_road_bounds[0];
+    Vector2 removed_pointer = {removed_bounds.x + 2, removed_bounds.y + 2};
+    if (!PointerOverContextAction(&sim, &local, VIEW_LOCAL, 0, 0, removed_pointer))
+        return ClientRegressionFailure("A removed road card keeps its drawn bounds inside the UI.");
+    ContextActionSet branch = shown;
+    branch.items[1].kind = CONTEXT_ACTION_VISIT_MINE;
+    (void)snprintf(branch.items[1].label, sizeof(branch.items[1].label), "Turn to the mine");
+    ContextAction pressed = {0};
+    if (!PresentedRoadActionAt(&sim, &local, VIEW_LOCAL, &branch, mouse, &pressed) ||
+        pressed.kind != CONTEXT_ACTION_NONE)
+        return ClientRegressionFailure("A drawn camp card consumes its click when the mine branch replaces it.");
+    branch.items[2] = shown.items[1];
+    branch.items[2].enabled = false;
+    if (!PresentedRoadActionAt(&sim, &local, VIEW_LOCAL, &branch, mouse, &pressed) ||
+        pressed.kind != CONTEXT_ACTION_CAMP_ROAD_SITE || pressed.enabled)
+        return ClientRegressionFailure("A moved road choice retains its identity and current availability.");
+    RememberRoadActions(&sim, &local, VIEW_LOCAL, &branch);
+    if (!PresentedRoadActionAt(&sim, &local, VIEW_LOCAL, &branch, mouse, &pressed) ||
+        pressed.kind != CONTEXT_ACTION_VISIT_MINE)
+        return ClientRegressionFailure("Drawing the branch makes its mine choice clickable.");
+    sim.journey.route_id++;
+    if (!PresentedRoadActionAt(&sim, &local, VIEW_LOCAL, &branch, mouse, &pressed) ||
+        pressed.kind != CONTEXT_ACTION_NONE)
+        return ClientRegressionFailure("A road card belongs to its drawn route.");
+    RememberRoadActions(&sim, &local, VIEW_CHARACTER, &branch);
+    if (local.presented_road_count != 0)
+        return ClientRegressionFailure("Another view clears the road cards.");
+    RememberRoadActions(&sim, &local, VIEW_LOCAL, &branch);
+    ResetLocalState(&local);
+    if (local.presented_road_count != 0)
+        return ClientRegressionFailure("Reset clears the road cards.");
+    return 0;
+}
+
+static int RunConversationFocusRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    local.course.situation_witness_active = true;
+    local.course.situation_witness.position = (Vector3){-12, 0, -8};
+    CcInteractionTarget target = {.key = {sim.player.location_id, 1, CC_INTERACTION_PERSON},
+        .character_id = sim.characters[0].id, .x = 9, .y = 0, .z = 13, .available = true};
+    ClientView view = VIEW_LOCAL, back = VIEW_LOCAL;
+    int32_t selected = 0;
+    AdventureActivate(&sim, &local, &target, &view, &back, &selected);
+    const Vector3 *focus = LocalConversationFocus(&local, view);
+    if (focus == NULL || focus->x != target.x || focus->z != target.z ||
+        local.conversation_character_id != target.character_id)
+        return ClientRegressionFailure("Frame the named speaker selected in the scene.");
+    target.character_id = 0;
+    target.x = 4;
+    AdventureActivate(&sim, &local, &target, &view, &back, &selected);
+    focus = LocalConversationFocus(&local, view);
+    if (focus == NULL || focus->x != target.x)
+        return ClientRegressionFailure("Unnamed speakers keep their selected position.");
+    if (LocalConversationFocus(&local, back) != NULL)
+        return ClientRegressionFailure("Return to the street camera after conversation.");
+    local.adventure_ui = false;
+    if (LocalConversationFocus(&local, VIEW_CHARACTER) != NULL)
+        return ClientRegressionFailure("The classic conversation keeps its witness camera.");
+    ResetLocalState(&local);
+    if (local.conversation_object != 0 || local.conversation_position.x != 0 ||
+        local.conversation_position.y != 0 || local.conversation_position.z != 0)
+        return ClientRegressionFailure("A reset clears the previous speaker position.");
+    return 0;
+}
+
 static int RunAdventureInputRegression(void)
 {
+    int road_result = RunPresentedRoadRegression();
+    if (road_result != 0) return road_result;
+    int focus_result = RunConversationFocusRegression();
+    if (focus_result != 0) return focus_result;
+    int handoff_result = RunDeliveryHandoffRegression();
+    if (handoff_result != 0) return handoff_result;
     int presented_result = RunPresentedTargetRegression();
     if (presented_result != 0) return presented_result;
     static CcSim sim;
