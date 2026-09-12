@@ -5100,6 +5100,8 @@ static bool PointerOverContextAction(
     if (PresentedTargetAt(local, view, mouse) >= 0) return true;
     ContextActionSet actions = BuildContextActions(
         sim, local, view, selected, selected_situation);
+    ContextAction road = {.kind = CONTEXT_ACTION_NONE};
+    if (PresentedRoadActionAt(sim, local, view, &actions, mouse, &road)) return true;
     int32_t first = ContextCardFirst(local, &actions);
     int32_t shown = ContextCardCount(&actions, first);
     if (actions.count > shown && (CheckCollisionPointRec(mouse, ContextPageBounds(false)) ||

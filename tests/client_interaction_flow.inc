@@ -257,6 +257,10 @@ static int RunPresentedRoadRegression(void)
     ClientInputClearPressed();
     if (through_input.kind != CONTEXT_ACTION_NONE)
         return ClientRegressionFailure("Road input consumes the old camp bounds when only Drive remains.");
+    Rectangle removed_bounds = local.presented_road_bounds[0];
+    Vector2 removed_pointer = {removed_bounds.x + 2, removed_bounds.y + 2};
+    if (!PointerOverContextAction(&sim, &local, VIEW_LOCAL, 0, 0, removed_pointer))
+        return ClientRegressionFailure("A removed road card keeps its drawn bounds inside the UI.");
     ContextActionSet branch = shown;
     branch.items[1].kind = CONTEXT_ACTION_VISIT_MINE;
     (void)snprintf(branch.items[1].label, sizeof(branch.items[1].label), "Turn to the mine");
