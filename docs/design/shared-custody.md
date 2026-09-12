@@ -108,6 +108,14 @@ references, bounded manifests, and monotonically allocated IDs. Its portable
 field hash includes active and retired entries. Mutation tests cover every
 field, including fields with the same storage size.
 
-The world adapters, object creation, common economy costs, persistence, world
-hash integration, world validation integration, and player journey remain open. The draft is complete only when
-the implementation and evidence satisfy the whole acceptance list.
+Schema 99 adds custody state to the world hash and both save formats. The first
+world adapter accepts goods, purses, and containers rooted in settlement stores,
+with a player or settlement owner. World totals count stored goods and coins once.
+The reader checks every slot and integer column, including retired records.
+Earlier saves gain an empty custody pool during upgrade; existing item records
+keep their current storage while the migration adapters are built.
+
+Moving holders, named treasure migration, document work identity, object creation,
+common economy costs, transfer commands, and the player journey remain open.
+The draft is complete when the implementation and evidence satisfy the whole
+acceptance list.

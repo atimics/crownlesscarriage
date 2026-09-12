@@ -2361,6 +2361,12 @@ CcMoney CcSimTrackedGold(const CcSim *sim)
                     sim->goblins.lair_coins +
                     sim->hoard_raiders.carried_treasure +
                     sim->dragon_campaign.recovered_coins;
+    if (sim->schema_version >= 99U) {
+        for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+            const CcCustodyEntry *entry = &sim->custody.entries[i];
+            if (entry->active && entry->kind == CC_CUSTODY_PURSE) total += entry->quantity;
+        }
+    }
     if (sim->schema_version >= 75U) {
         total += sim->dragon_cult.offering_coins;
         for (int32_t i = 0; i < CC_GOBLIN_FACTION_COUNT; ++i) {
@@ -2394,6 +2400,13 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
                     sim->goblins.lair_stock[good] +
                     sim->dragon.hoard_goods[good] +
                     sim->dragon_campaign.supplies[good];
+    if (sim->schema_version >= 99U) {
+        for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+            const CcCustodyEntry *entry = &sim->custody.entries[i];
+            if (entry->active && entry->kind == CC_CUSTODY_GOODS && entry->good == (int32_t)good)
+                total += entry->quantity;
+        }
+    }
     if (sim->schema_version >= 92U && good == CC_GOOD_WHEAT) total += sim->archive_convoy.wheat;
     if (sim->schema_version >= 86U) {
         if (good == CC_GOOD_WHEAT) total += sim->archive_recruitment.wheat + sim->archive_recruitment.travel_wheat;
@@ -4286,6 +4299,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
 {
     if (sim == NULL) return;
     *sim = (CcSim){0};
+    CcCustodyInit(&sim->custody);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
     sim->world_seed = seed == 0U ? UINT32_C(0xc0a71a9e) : seed;
@@ -18559,6 +18573,33 @@ static int32_t InhabitedSettlements(const CcSim *sim)
     return count;
 }
 
+static bool ResolveStoredCustody(void *context, CcCustodyHolder holder,
+                                CcCustodyLocation *location, int64_t *capacity)
+{
+    const CcSim *sim = context;
+    if (holder.kind != CC_CUSTODY_STORE || CcSimSettlement(sim, holder.id) == NULL)
+        return false;
+    *location = (CcCustodyLocation){.place_id = holder.id};
+    *capacity = INT64_MAX;
+    return true;
+}
+
+static bool StoredCustodyValid(const CcSim *sim)
+{
+    const CcCustodyRules rules = {.context = (void *)sim,
+        .good_count = CC_GOOD_COUNT, .resolve = ResolveStoredCustody};
+    if (!CcCustodyValidate(&sim->custody, &rules)) return false;
+    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+        const CcCustodyEntry *entry = &sim->custody.entries[i];
+        if (!entry->active) continue;
+        if (entry->quantity > (entry->kind == CC_CUSTODY_PURSE ?
+            CC_SIM_MAX_MONEY : CC_SIM_MAX_UNITS)) return false;
+        if (entry->owner_id != sim->player.id &&
+            CcSimSettlement(sim, entry->owner_id) == NULL) return false;
+    }
+    return true;
+}
+
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim == NULL) {
@@ -20781,6 +20822,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     }
     if (!CcSimArchiveRecruitmentOrderValid(sim)) {
         SetError(error, error_capacity, "Archive recruitment reservation is invalid.");
+        return false;
+    }
+    if (sim->schema_version >= 99U && !StoredCustodyValid(sim)) {
+        SetError(error, error_capacity, "Stored custody is invalid.");
         return false;
     }
     return true;
