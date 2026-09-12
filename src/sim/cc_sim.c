@@ -950,6 +950,15 @@ static CcEvent *PushEvent(CcSim *sim, CcEventKind kind, CcId subject,
     return event;
 }
 
+/* Public wrapper so the war module can push causal events with the same
+   ledger and knowledge handling as the rest of the simulation. */
+CcEvent *CcSimPushEvent(CcSim *sim, CcEventKind kind, CcId subject,
+                        CcId location, CcId parent, int32_t magnitude,
+                        const char *text)
+{
+    return PushEvent(sim, kind, subject, location, parent, magnitude, text);
+}
+
 static CcEvent *PushSocialEvent(CcSim *sim, CcEventKind kind, CcId subject,
                                 CcId location, CcId parent,
                                 CcId actor, CcId target,
@@ -2053,6 +2062,11 @@ bool CcSimRoyalCarriageCanUseRoute(const CcSim *sim,
         CcSimSettlement(sim, route->to_id) : NULL;
     if (route == NULL || from == NULL || to == NULL) return false;
     if (!CcRouteRoyalIsOfficial(sim, route)) return false;
+    /* A company holding the road under CC_WAR_ORDER_CONTROL_ROUTE blocks
+       crown traffic. The Crownless is a private carriage and is never
+       checked here (#646). */
+    if (sim->schema_version >= 94U &&
+        CcSimRouteCheckpoint(sim, route_id) != NULL) return false;
     return RoyalCarriageMayEnter(sim, carriage_kingdom_id,
                                  from->kingdom_id) &&
            RoyalCarriageMayEnter(sim, carriage_kingdom_id,
@@ -12639,6 +12653,13 @@ static void ApplyCourierMessage(CcSim *sim, CcCourier *courier,
             ResolveWarSettlement(sim, issuer, recipient, arrival_event_id);
         }
         SetDiplomacy(sim, issuer, recipient, state);
+        /* The courier physically travelled, so the order it carries reaches
+           the companies with it: a peace treaty stands both sides down. */
+        if (ending_war) {
+            CcSimRetireWarPartiesAtPeace(
+                sim, sim->kingdoms[issuer].id,
+                sim->kingdoms[recipient].id);
+        }
     }
     char text[CC_EVENT_TEXT_CAPACITY];
     if (changed) {
@@ -13708,6 +13729,48 @@ static void UpdateRoyalDiplomacy(CcSim *sim)
                     (void)LaunchCourier(
                         sim, CC_COURIER_WAR_DECLARATION,
                         issuer, recipient, 0U);
+                    if (sim->schema_version >= 94U) {
+                        CcSimMusterWarPartyForDeclaration(sim, issuer, recipient);
+                        /* Sealed letters for the Crownless wait at the
+                           issuer's seat: a report of the contested road, and
+                           a withdrawal order addressed to the company
+                           holding it. Neither does anything until delivered. */
+                        int32_t issuer_seat = -1;
+                        int32_t recipient_seat = -1;
+                        for (int32_t i = 0; i < sim->settlement_count; ++i) {
+                            if (sim->settlements[i].kingdom_id ==
+                                sim->kingdoms[issuer].id) issuer_seat = i;
+                            if (sim->settlements[i].kingdom_id ==
+                                sim->kingdoms[recipient].id) recipient_seat = i;
+                        }
+                        CcId recipient_party = 0U;
+                        CcId contested_route = 0U;
+                        for (int32_t p = 0;
+                             p < sim->war_party_count; ++p) {
+                            if (sim->war_parties[p].kingdom_id !=
+                                sim->kingdoms[recipient].id) continue;
+                            if (sim->war_parties[p].order ==
+                                CC_WAR_ORDER_CONTROL_ROUTE) {
+                                recipient_party = sim->war_parties[p].id;
+                                contested_route =
+                                    sim->war_parties[p].order_route_id;
+                            }
+                        }
+                        if (issuer_seat >= 0 && recipient_seat >= 0) {
+                            (void)CcSimCreateDispatch(
+                                sim, CC_DISPATCH_ROAD_REPORT,
+                                contested_route, 0U,
+                                sim->settlements[recipient_seat].id,
+                                sim->settlements[issuer_seat].id);
+                            if (recipient_party != 0U) {
+                                (void)CcSimCreateDispatch(
+                                    sim, CC_DISPATCH_WITHDRAW_ORDER,
+                                    contested_route, recipient_party,
+                                    sim->settlements[recipient_seat].id,
+                                    sim->settlements[recipient_seat].id);
+                            }
+                        }
+                    }
                     return;
                 }
             }
@@ -15331,6 +15394,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         AdvanceCharacterTravel(sim);
         AdvanceArchiveRecruitJourney(sim);
         AdvanceArchiveRecruitTraining(sim);
+        if (sim->schema_version >= 94U) CcSimAdvanceWarParties(sim);
         if (sim->schema_version >= 85U) (void)CcSimAppointArchiveRecruit(sim);
         HearLocalGossip(sim);
         CcSimRefreshCharacterGossip(sim);
@@ -17018,6 +17082,65 @@ static bool ApplyRepair(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "The carriage must reach an end of the route first.");
         return false;
     }
+    /* Repair is physical (#646): the Crownless carries the materials and a
+       named wainwright works the road. Money cannot become road condition. */
+    if (sim->schema_version >= 94U) {
+        CcId crew[2] = {route->from_id, route->to_id};
+        CcId wainwright = 0U;
+        for (int32_t i = 0; i < 2 && wainwright == 0U; ++i) {
+            for (int32_t person = 0;
+                 person < sim->character_count; ++person) {
+                CcCharacter *candidate = &sim->characters[person];
+                if (candidate->home_settlement_id != crew[i] ||
+                    candidate->occupation != CC_OCCUPATION_CARTWRIGHT ||
+                    (candidate->death_day > 0 &&
+                     candidate->death_day <= sim->current_day)) continue;
+                wainwright = candidate->id;
+                break;
+            }
+        }
+        if (wainwright == 0U) {
+            SetError(error, error_capacity,
+                     "No wainwright lives along this road; the materials alone will not mend it.");
+            return false;
+        }
+        if (sim->player.cargo[CC_GOOD_TOOLS] < 2 ||
+            sim->player.cargo[CC_GOOD_WOOD] < 2 ||
+            sim->player.cargo[CC_GOOD_STONE] < 2) {
+            SetError(error, error_capacity,
+                     "The repair needs 2 Tools, 2 Wood and 2 Stone, and a wainwright to work them.");
+            return false;
+        }
+        sim->player.cargo[CC_GOOD_TOOLS] -= 2;
+        sim->player.cargo[CC_GOOD_WOOD] -= 2;
+        sim->player.cargo[CC_GOOD_STONE] -= 2;
+        CcSimAdvanceDays(sim, 1);
+        route = RouteMutable(sim, command->target_id);
+        if (route == NULL) return false;
+        route->closed = false;
+        route->condition = 92;
+        route->security = ClampI32(route->security + 10, 0, 100);
+        CcSettlement *nearby = CcSimSettlementMutable(sim, route->from_id);
+        CcFaction *beneficiary = nearby != NULL ? FactionFor(
+            sim, nearby->kingdom_id, CC_FACTION_GUILD) : NULL;
+        if (beneficiary != NULL) {
+            beneficiary->support = ClampI32(beneficiary->support + 5, 0, 100);
+        }
+        const CcCharacter *worker = CcSimCharacter(sim, wainwright);
+        char text[256];
+        (void)snprintf(text, sizeof(text),
+                       "%.20s works the %.20s-%.20s road for a day; two Tools, two Wood and two Stone become a way through.",
+                       worker != NULL ? worker->name : "A wainwright",
+                       CcSimSettlement(sim, route->from_id) != NULL ?
+                           CcSimSettlement(sim, route->from_id)->name : "western",
+                       CcSimSettlement(sim, route->to_id) != NULL ?
+                           CcSimSettlement(sim, route->to_id)->name : "eastern");
+        (void)PushEvent(sim, CC_EVENT_ROUTE_REPAIRED, route->id,
+                        route->from_id, 0U, 92, text);
+        ResolveTargetSituations(sim, CC_SITUATION_ROUTE_REPAIR, route->id);
+        SetError(error, error_capacity, "");
+        return true;
+    }
     bool use_tools = command->amount == 1 ||
         (command->amount == 0 &&
          sim->player.cargo[CC_GOOD_TOOLS] >= 2 &&
@@ -17070,6 +17193,58 @@ static bool ApplyRepair(CcSim *sim, const CcCommand *command,
     ResolveTargetSituations(sim, CC_SITUATION_ROUTE_REPAIR, route->id);
     SetError(error, error_capacity, "");
     return true;
+}
+
+/* Sealed letters (#646). Pick up only at the letter's origin; deliver only
+   at its recipient, and only from the player's own cargo. The effects live
+   in CcSimDeliverDispatch, so nothing happens between the two. */
+static bool ApplyPickupDispatch(CcSim *sim, const CcCommand *command,
+                               char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 94U) {
+        SetError(error, error_capacity, "No sealed letters wait here.");
+        return false;
+    }
+    for (int32_t i = 0; i < sim->dispatch_count; ++i) {
+        CcDispatch *dispatch = &sim->dispatches[i];
+        if (dispatch->id != command->target_id || dispatch->delivered ||
+            dispatch->in_player_cargo) continue;
+        if (sim->player.location_id != dispatch->origin_settlement_id) {
+            SetError(error, error_capacity,
+                     "That letter waits elsewhere for a carriage.");
+            return false;
+        }
+        dispatch->in_player_cargo = true;
+        SetError(error, error_capacity, "");
+        return true;
+    }
+    SetError(error, error_capacity, "No such letter waits here.");
+    return false;
+}
+
+static bool ApplyDeliverDispatch(CcSim *sim, const CcCommand *command,
+                                char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 94U) {
+        SetError(error, error_capacity, "No sealed letters wait here.");
+        return false;
+    }
+    for (int32_t i = 0; i < sim->dispatch_count; ++i) {
+        CcDispatch *dispatch = &sim->dispatches[i];
+        if (dispatch->id != command->target_id || dispatch->delivered ||
+            !dispatch->in_player_cargo) continue;
+        if (sim->player.location_id != dispatch->recipient_settlement_id) {
+            SetError(error, error_capacity,
+                     "This letter is addressed elsewhere.");
+            return false;
+        }
+        CcSimDeliverDispatch(sim, dispatch->id);
+        sim->player.reputation = ClampI32(sim->player.reputation + 1, -100, 100);
+        SetError(error, error_capacity, "");
+        return true;
+    }
+    SetError(error, error_capacity, "No carried letter matches that seal.");
+    return false;
 }
 
 static bool DungeonObjectiveReached(const CcDungeon *dungeon)
@@ -18048,6 +18223,10 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
                                    &journey_departure_services);
         case CC_COMMAND_REPAIR_ROUTE:
             return ApplyRepair(sim, command, error, error_capacity);
+        case CC_COMMAND_PICKUP_DISPATCH:
+            return ApplyPickupDispatch(sim, command, error, error_capacity);
+        case CC_COMMAND_DELIVER_DISPATCH:
+            return ApplyDeliverDispatch(sim, command, error, error_capacity);
         case CC_COMMAND_CHANGE_DUNGEON:
             return ApplyDungeonChange(sim, command, error, error_capacity);
         case CC_COMMAND_BEGIN_DUNGEON_EXPEDITION:
@@ -18350,6 +18529,11 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
          sim->royal_carriage_count != sim->kingdom_count) ||
         sim->courier_count < 0 || sim->courier_count > CC_MAX_COURIERS ||
         sim->bandit_count < 0 || sim->bandit_count > CC_MAX_BANDITS ||
+        (sim->schema_version >= 94U &&
+         (sim->war_party_count < 0 ||
+          sim->war_party_count > CC_MAX_WAR_PARTIES ||
+          sim->dispatch_count < 0 ||
+          sim->dispatch_count > CC_MAX_DISPATCHES)) ||
         sim->monster_count < 0 || sim->monster_count > CC_MAX_MONSTERS ||
         sim->dungeon_count < 0 || sim->dungeon_count > CC_MAX_DUNGEONS ||
         sim->situation_count < 0 || sim->situation_count > CC_MAX_SITUATIONS ||
@@ -19192,6 +19376,51 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 CcSimEvent(sim, courier->cause_event_id) == NULL) {
                 SetError(error, error_capacity,
                          "Courier cause is missing from history.");
+                return false;
+            }
+        }
+    }
+    if (sim->schema_version >= 94U) {
+        for (int32_t i = 0; i < sim->war_party_count; ++i) {
+            const CcWarParty *party = &sim->war_parties[i];
+            if (KingdomSlotById(sim, party->kingdom_id) < 0 ||
+                party->members <= 0 ||
+                CcSimSettlement(sim, party->home_settlement_id) == NULL ||
+                CcSimSettlement(sim, party->current_settlement_id) == NULL ||
+                party->order < CC_WAR_ORDER_HOLD ||
+                party->order > CC_WAR_ORDER_CEASE) {
+                SetError(error, error_capacity,
+                         "War party state is invalid.");
+                return false;
+            }
+            if (party->travel_route_id != 0U &&
+                (CcSimRoute(sim, party->travel_route_id) == NULL ||
+                 party->travel_arrival_day <= sim->current_day)) {
+                SetError(error, error_capacity,
+                         "War party travel state is invalid.");
+                return false;
+            }
+            if (party->order == CC_WAR_ORDER_CONTROL_ROUTE &&
+                party->travel_route_id == 0U &&
+                (CcSimRoute(sim, party->order_route_id) == NULL ||
+                 CcSimSettlement(sim, party->current_settlement_id) == NULL ||
+                 (CcSimRoute(sim, party->order_route_id)->from_id !=
+                      party->current_settlement_id &&
+                  CcSimRoute(sim, party->order_route_id)->to_id !=
+                      party->current_settlement_id))) {
+                SetError(error, error_capacity,
+                         "War party holds no end of its road.");
+                return false;
+            }
+        }
+        for (int32_t i = 0; i < sim->dispatch_count; ++i) {
+            const CcDispatch *letter = &sim->dispatches[i];
+            if (letter->kind < CC_DISPATCH_ROAD_REPORT ||
+                letter->kind > CC_DISPATCH_CROSSING_PERMIT ||
+                CcSimSettlement(sim, letter->origin_settlement_id) == NULL ||
+                CcSimSettlement(sim, letter->recipient_settlement_id) == NULL) {
+                SetError(error, error_capacity,
+                         "Dispatch state is invalid.");
                 return false;
             }
         }

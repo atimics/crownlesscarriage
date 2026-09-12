@@ -91,6 +91,10 @@ uint64_t CcSimHash(const CcSim *sim)
     HASH_VALUE(sim->event_write_index);
     if (sim->schema_version >= 11U) {
         HASH_VALUE(sim->courier_count);
+    if (sim->schema_version >= 94U) {
+        HASH_VALUE(sim->war_party_count);
+        HASH_VALUE(sim->dispatch_count);
+    }
         for (int32_t first = 0; first < sim->kingdom_count; ++first) {
             for (int32_t second = 0;
                  second < sim->kingdom_count; ++second) {
@@ -271,6 +275,37 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->route_id); HASH_VALUE(item->cause_event_id);
             HASH_VALUE(item->situation_id); HASH_VALUE(item->departure_day);
             HASH_VALUE(item->arrival_day); HASH_VALUE(item->reliability);
+        }
+    }
+    if (sim->schema_version >= 94U) {
+        HASH_VALUE(sim->war_party_count);
+        for (int32_t i = 0; i < sim->war_party_count; ++i) {
+            const CcWarParty *party = &sim->war_parties[i];
+            HASH_VALUE(party->id); HASH_VALUE(party->kingdom_id);
+            HASH_VALUE(party->commander_character_id);
+            HASH_VALUE(party->home_settlement_id);
+            HASH_VALUE(party->current_settlement_id);
+            HASH_VALUE(party->travel_route_id);
+            HASH_VALUE(party->travel_destination_id);
+            HASH_VALUE(party->travel_arrival_day);
+            HASH_VALUE(party->members); HASH_VALUE(party->order);
+            HASH_VALUE(party->order_route_id);
+            HASH_VALUE(party->order_target_id);
+            HASH_VALUE(party->permits_player);
+            HASH_VALUE(party->battles_fought);
+            HASH_VALUE(party->casualties);
+        }
+        HASH_VALUE(sim->dispatch_count);
+        for (int32_t i = 0; i < sim->dispatch_count; ++i) {
+            const CcDispatch *letter = &sim->dispatches[i];
+            HASH_VALUE(letter->id); HASH_VALUE(letter->kind);
+            HASH_VALUE(letter->route_id);
+            HASH_VALUE(letter->war_party_id);
+            HASH_VALUE(letter->origin_settlement_id);
+            HASH_VALUE(letter->recipient_settlement_id);
+            HASH_VALUE(letter->issued_day);
+            HASH_VALUE(letter->in_player_cargo);
+            HASH_VALUE(letter->delivered);
         }
     }
     for (int32_t i = 0; i < sim->bandit_count; ++i) {

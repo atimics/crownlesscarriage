@@ -270,10 +270,21 @@ int main(void)
         .amount = 2
     };
     repair.player.cargo[CC_GOOD_TOOLS] = 2;
-    CC_CHECK(CcSimApply(&repair, &paid_repair, error, sizeof(error)));
+    /* Money cannot become road condition (#646): the cash path is gone. */
+    CC_CHECK(!CcSimApply(&repair, &paid_repair, error, sizeof(error)));
+    CC_CHECK(repair.player.coins == 100);
     CC_CHECK(repair.player.cargo[CC_GOOD_TOOLS] == 2);
+    CC_CHECK(repair.routes[1].closed);
+    repair.player.cargo[CC_GOOD_WOOD] = 2;
+    repair.player.cargo[CC_GOOD_STONE] = 2;
+    CcCommand crew_repair = {
+        .kind = CC_COMMAND_REPAIR_ROUTE,
+        .target_id = repair.routes[1].id,
+        .amount = 1
+    };
+    CC_CHECK(CcSimApply(&repair, &crew_repair, error, sizeof(error)));
     CC_CHECK(!repair.routes[1].closed);
-    CC_CHECK(repair.routes[1].condition == 76);
+    CC_CHECK(repair.routes[1].condition == 92);
     CC_CHECK(bridge->status == CC_SITUATION_RESOLVED);
     CC_CHECK(SituationStatus(&repair, CC_SITUATION_RELIEF_DELIVERY) ==
              CC_SITUATION_FAILED);
@@ -299,23 +310,23 @@ int main(void)
     tool_repair.player.cargo[CC_GOOD_WOOD] = 0;
     tool_repair.player.cargo[CC_GOOD_STONE] = 0;
     int32_t tool_start_day = tool_repair.current_day;
-    CcCommand crew_repair = {
+    CcCommand tool_crew_repair = {
         .kind = CC_COMMAND_REPAIR_ROUTE,
         .target_id = tool_repair.routes[1].id,
         .amount = 1
     };
-    CC_CHECK(!CcSimApply(&tool_repair, &crew_repair,
+    CC_CHECK(!CcSimApply(&tool_repair, &tool_crew_repair,
                          error, sizeof(error)));
     CC_CHECK(tool_repair.player.cargo[CC_GOOD_TOOLS] == 2);
     CC_CHECK(tool_repair.routes[1].closed);
     tool_repair.player.cargo[CC_GOOD_WOOD] = 2;
-    CC_CHECK(!CcSimApply(&tool_repair, &crew_repair,
+    CC_CHECK(!CcSimApply(&tool_repair, &tool_crew_repair,
                          error, sizeof(error)));
     CC_CHECK(tool_repair.player.cargo[CC_GOOD_TOOLS] == 2);
     CC_CHECK(tool_repair.player.cargo[CC_GOOD_WOOD] == 2);
     CC_CHECK(tool_repair.routes[1].closed);
     tool_repair.player.cargo[CC_GOOD_STONE] = 2;
-    CC_CHECK(CcSimApply(&tool_repair, &crew_repair, error, sizeof(error)));
+    CC_CHECK(CcSimApply(&tool_repair, &tool_crew_repair, error, sizeof(error)));
     CC_CHECK(tool_repair.current_day == tool_start_day + 1);
     CC_CHECK(tool_repair.routes[1].condition == 92);
     CC_CHECK(tool_repair.player.cargo[CC_GOOD_TOOLS] == 0);
