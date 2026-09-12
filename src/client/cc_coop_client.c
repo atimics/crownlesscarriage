@@ -13,7 +13,7 @@
 
 #if defined(PLATFORM_WEB)
 #include <emscripten.h>
-EM_JS(void, CcCoopClientTravelScale, (int32_t scale), { Module.ccTravelScale = scale; });
+EM_JS(void, CcCoopClientTravelScale, (int32_t scale), { Module.ccTravelScale = scale; })
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wstrict-prototypes"
