@@ -93,3 +93,20 @@ leaves the complete world unchanged during travel, then succeeds after arrival.
 All 144 headless tests pass. Focused Cppcheck and strict WebAssembly checks pass.
 The booking test passes sanitizers with the custody core, adapter and simulation
 source instrumented; remaining libraries use the strict release build.
+
+## Crate manufacture and repair
+
+Source `74377c514411686f6e498c6254e028f08276f6fd` uses the common production runner for
+container work. Manufacture spends four wood, one iron, and two work units;
+repair spends one wood and one work unit for up to 25 condition points. Both
+require a tool. Successful acts debit work, batch capacity, and named-output
+capacity from the supplied production context and return its material/work
+receipt. Full pools, missing inputs, spent work, remote contexts, and duplicate
+requests preserve resources. Repair preserves the container and its contents.
+
+All 144 headless tests pass. Carrier journeys now start with a manufactured
+crate. Focused static and WebAssembly checks pass. The store test passes
+AddressSanitizer and UndefinedBehaviorSanitizer with the core, adapter,
+simulation source, and common production runner instrumented. Remaining
+libraries use the strict release build. Producer scheduling and player craft
+commands remain open; the functions execute a supplied production budget.
