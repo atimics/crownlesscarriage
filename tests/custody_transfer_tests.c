@@ -6,7 +6,7 @@ static CcCustodyState state, before;
 static int carrier_place = 1;
 static int64_t carrier_capacity = 12;
 
-static bool Resolve(void *context, CcCustodyHolder holder,
+static bool Resolve(const void *context, CcCustodyHolder holder,
                     CcCustodyLocation *location, int64_t *capacity)
 {
     (void)context;
@@ -17,14 +17,14 @@ static bool Resolve(void *context, CcCustodyHolder holder,
     return true;
 }
 
-static bool Permit(void *context, uint64_t actor, const CcCustodyEntry *entry,
+static bool Permit(const void *context, uint64_t actor, const CcCustodyEntry *entry,
                    CcCustodyHolder destination)
 {
     (void)context; (void)entry; (void)destination;
     return actor == 7;
 }
 
-static bool ReferenceValid(void *context, CcCustodyKind kind, uint64_t id)
+static bool ReferenceValid(const void *context, CcCustodyKind kind, uint64_t id)
 {
     (void)context;
     return (kind == CC_CUSTODY_DOCUMENT && id == 77) ||

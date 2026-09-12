@@ -92,6 +92,7 @@ add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
     src/sim/cc_custody.c
+    src/sim/cc_sim_custody.c
     src/sim/cc_sim_hash.c
     src/sim/cc_occupations.c
     src/sim/cc_gossip_topics.c
@@ -1080,6 +1081,10 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(custody_store_tests tests/custody_store_tests.c)
+    target_link_libraries(custody_store_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(custody_store_tests)
+    add_test(NAME custody_store_transfers COMMAND custody_store_tests)
     add_executable(custody_save_tests tests/custody_save_tests.c)
     target_link_libraries(custody_save_tests PRIVATE crownless_persistence)
     cc_strict_warnings(custody_save_tests)

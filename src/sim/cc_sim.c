@@ -1,3 +1,4 @@
+#include "sim/cc_sim_custody.h"
 #include "sim/cc_archive_staff.h"
 #include "sim/cc_prophecy.h"
 #include "sim/cc_archive_relocation.h"
@@ -18573,33 +18574,6 @@ static int32_t InhabitedSettlements(const CcSim *sim)
     return count;
 }
 
-static bool ResolveStoredCustody(void *context, CcCustodyHolder holder,
-                                CcCustodyLocation *location, int64_t *capacity)
-{
-    const CcSim *sim = context;
-    if (holder.kind != CC_CUSTODY_STORE || CcSimSettlement(sim, holder.id) == NULL)
-        return false;
-    *location = (CcCustodyLocation){.place_id = holder.id};
-    *capacity = INT64_MAX;
-    return true;
-}
-
-static bool StoredCustodyValid(const CcSim *sim)
-{
-    const CcCustodyRules rules = {.context = (void *)sim,
-        .good_count = CC_GOOD_COUNT, .resolve = ResolveStoredCustody};
-    if (!CcCustodyValidate(&sim->custody, &rules)) return false;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
-        const CcCustodyEntry *entry = &sim->custody.entries[i];
-        if (!entry->active) continue;
-        if (entry->quantity > (entry->kind == CC_CUSTODY_PURSE ?
-            CC_SIM_MAX_MONEY : CC_SIM_MAX_UNITS)) return false;
-        if (entry->owner_id != sim->player.id &&
-            CcSimSettlement(sim, entry->owner_id) == NULL) return false;
-    }
-    return true;
-}
-
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim == NULL) {
@@ -20824,7 +20798,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Archive recruitment reservation is invalid.");
         return false;
     }
-    if (sim->schema_version >= 99U && !StoredCustodyValid(sim)) {
+    if (sim->schema_version >= 99U && !CcSimStoredCustodyValid(sim)) {
         SetError(error, error_capacity, "Stored custody is invalid.");
         return false;
     }

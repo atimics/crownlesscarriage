@@ -115,6 +115,14 @@ The reader checks every slot and integer column, including retired records.
 Earlier saves gain an empty custody pool during upgrade; existing item records
 keep their current storage while the migration adapters are built.
 
+Town store adapters now pack real bulk goods into an owned container and unpack
+all or part of a stack through the shared transfer core. Packing binds the
+request to the allocation counter and container revision. Unpacking binds it
+to the stack revision. Successful unpacking retires the resolved record, and
+later packing allocates a fresh ID. Both operations commit stock and custody
+together after all checks pass. These internal adapters act for the town;
+player commands will supply their own access and ownership rules.
+
 Moving holders, named treasure migration, document work identity, object creation,
 common economy costs, transfer commands, and the player journey remain open.
 The draft is complete when the implementation and evidence satisfy the whole

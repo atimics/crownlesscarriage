@@ -44,11 +44,11 @@ typedef struct {
 } CcCustodyLocation;
 
 typedef struct {
-    void *context;
+    const void *context;
     int32_t good_count;
-    bool (*reference_valid)(void *, CcCustodyKind, uint64_t reference_id);
-    bool (*resolve)(void *, CcCustodyHolder, CcCustodyLocation *, int64_t *capacity);
-    bool (*permit)(void *, uint64_t actor_id, const CcCustodyEntry *, CcCustodyHolder);
+    bool (*reference_valid)(const void *, CcCustodyKind, uint64_t reference_id);
+    bool (*resolve)(const void *, CcCustodyHolder, CcCustodyLocation *, int64_t *capacity);
+    bool (*permit)(const void *, uint64_t actor_id, const CcCustodyEntry *, CcCustodyHolder);
 } CcCustodyRules;
 
 typedef struct {
