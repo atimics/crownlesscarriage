@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import html
+import importlib.metadata
 import json
 from pathlib import Path
 import shutil
@@ -21,6 +22,9 @@ def pocket(brief, output):
     torch.set_num_threads(2)
     model = TTSModel.load_model(language='english')
     rows = []
+    report = dict(model='Pocket TTS', package_version=importlib.metadata.version('pocket-tts'),
+                  torch_version=torch.__version__, sample_rate=model.sample_rate,
+                  brief_sha256=hashlib.sha256(BRIEF.read_bytes()).hexdigest(), samples=rows)
     folder = output / 'pocket'
     folder.mkdir(exist_ok=True)
     for voice in brief['voices']:
@@ -52,7 +56,7 @@ def pocket(brief, output):
                 render_voice(path, styled, row)
                 row['game_file'] = styled.name
                 rows.append(row)
-                (output / 'pocket.json').write_text(json.dumps(rows, indent=2) + '\n')
+                (output / 'pocket.json').write_text(json.dumps(report, indent=2) + '\n')
                 print(f'{voice["name"]} {take} {line}: {duration:.2f}s audio', flush=True)
 
 
@@ -102,16 +106,22 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--design', action='store_true')
+    parser.add_argument('--allow-download', action='store_true')
     parser.add_argument('--pocket', action='store_true')
+    parser.add_argument('--compact', action='store_true')
     parser.add_argument('--device', choices=('cpu', 'mps'), default='cpu')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     brief = json.loads(BRIEF.read_text())
     if args.design:
         from speech_engine import design_cast
-        design_cast({v['id']: v for v in brief['voices']}, args.output / 'revised', device=args.device)
+        design_cast({v['id']: v for v in brief['voices']}, args.output / 'revised',
+                    device=args.device, allow_download=args.allow_download)
     if args.pocket:
         pocket(brief, args.output)
+    if args.compact:
+        from casting_review import compress_review
+        compress_review(args.output, ('revised', 'pocket'))
     build_page(brief, args.output)
     print(args.output / 'index.html')
 
