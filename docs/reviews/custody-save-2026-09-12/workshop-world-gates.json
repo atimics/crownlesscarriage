@@ -1,0 +1,21 @@
+{
+  "base_commit": "8df8a34604473d05e42a9816f898220e2dcf298f",
+  "source_sha256": {
+    "src/sim/cc_sim_custody.c": "991b3bd580e1abed6d68e636c8c76084a1f3bd2f11276daa2920fdc8f18b93e3",
+    "tests/custody_store_tests.c": "55059f820da0b6ae8f4637218c72d0b636c2cdb98ed0340f17d223972ef0d5bc"
+  },
+  "headless_tests_passed": 144,
+  "regression": "reproduced crafting at an abandoned town before the fix",
+  "gates": [
+    "population above zero",
+    "fire damage below 100"
+  ],
+  "checks": [
+    "creation and repair reject closed towns",
+    "simulation, work budget, output ID and receipt unchanged on rejection",
+    "creation and repair resume after town recovery"
+  ],
+  "cppcheck": "passed",
+  "webassembly": "passed",
+  "sanitizers": "passed; custody core, adapter, simulation and common production instrumented; remaining libraries use strict release build"
+}

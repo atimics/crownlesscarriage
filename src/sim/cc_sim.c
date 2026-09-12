@@ -1,3 +1,4 @@
+#include "sim/cc_sim_custody.h"
 #include "sim/cc_archive_staff.h"
 #include "sim/cc_prophecy.h"
 #include "sim/cc_archive_relocation.h"
@@ -2335,6 +2336,12 @@ CcMoney CcSimTrackedGold(const CcSim *sim)
                     sim->goblins.lair_coins +
                     sim->hoard_raiders.carried_treasure +
                     sim->dragon_campaign.recovered_coins;
+    if (sim->schema_version >= 99U) {
+        for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+            const CcCustodyEntry *entry = &sim->custody.entries[i];
+            if (entry->active && entry->kind == CC_CUSTODY_PURSE) total += entry->quantity;
+        }
+    }
     if (sim->schema_version >= 75U) {
         total += sim->dragon_cult.offering_coins;
         for (int32_t i = 0; i < CC_GOBLIN_FACTION_COUNT; ++i) {
@@ -2368,6 +2375,13 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
                     sim->goblins.lair_stock[good] +
                     sim->dragon.hoard_goods[good] +
                     sim->dragon_campaign.supplies[good];
+    if (sim->schema_version >= 99U) {
+        for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+            const CcCustodyEntry *entry = &sim->custody.entries[i];
+            if (entry->active && entry->kind == CC_CUSTODY_GOODS && entry->good == (int32_t)good)
+                total += entry->quantity;
+        }
+    }
     if (sim->schema_version >= 92U && good == CC_GOOD_WHEAT) total += sim->archive_convoy.wheat;
     if (sim->schema_version >= 86U) {
         if (good == CC_GOOD_WHEAT) total += sim->archive_recruitment.wheat + sim->archive_recruitment.travel_wheat;
@@ -4260,6 +4274,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
 {
     if (sim == NULL) return;
     *sim = (CcSim){0};
+    CcCustodyInit(&sim->custody);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
     sim->world_seed = seed == 0U ? UINT32_C(0xc0a71a9e) : seed;
@@ -9369,12 +9384,17 @@ static bool StartRoyalRepositioningLeg(CcSim *sim,
         ParkRoyalCarriage(carriage, target_id);
         return true;
     }
+    int32_t custody_load = CcSimCustodyCarrierLoad(sim, carriage->id);
+    const int32_t *used = custody_load > 0 && sim->royal_trade_week == sim->current_day / 7 ?
+        sim->royal_route_slots_used : NULL;
+    int32_t required_slots = MaximumI32(1, custody_load);
     int32_t route_slot = -1;
     CcId next_hop_id = 0U;
     if (!CcTradeFindPath(sim, carriage->location_id, target_id,
                        CC_GOOD_FOOD, &route_slot, &next_hop_id,
-                       NULL, NULL, NULL, true, carriage->kingdom_id,
-                       ArchivePassage(sim, carriage), 1)) {
+                       NULL, NULL, used, true, carriage->kingdom_id,
+                       ArchivePassage(sim, carriage), required_slots)) {
+        if (custody_load > 0) return false;
         if (!CcTradeFindPath(sim, carriage->location_id, target_id,
                            CC_GOOD_FOOD, &route_slot, &next_hop_id,
                            NULL, NULL, NULL, true,
@@ -9389,6 +9409,7 @@ static bool StartRoyalRepositioningLeg(CcSim *sim,
         }
     }
     CcRoute *route = &sim->routes[route_slot];
+    if (custody_load > 0) UseRoyalRoute(sim, route_slot, custody_load);
     carriage->route_id = route->id;
     carriage->destination_id = next_hop_id;
     carriage->target_id = target_id;
@@ -9401,12 +9422,28 @@ static bool StartRoyalRepositioningLeg(CcSim *sim,
     const CcSettlement *destination = CcSimSettlement(sim, next_hop_id);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
+                   custody_load > 0 ? "A royal carriage carries booked cargo toward %.32s." :
                    "A royal carriage rides empty toward %.32s to collect a needed load.",
                    destination != NULL ? destination->name : "the next market");
     (void)PushEvent(sim, CC_EVENT_ROYAL_CARRIAGE_REROUTED,
                     carriage->id, route->id,
                     0U, route->travel_days, text);
     return true;
+}
+
+bool CcSimDispatchCustodyCarrier(CcSim *sim, CcId carrier_id, CcId destination_id)
+{
+    if (sim == NULL || sim->schema_version < 99U || !CcSimStoredCustodyValid(sim)) return false;
+    for (int i = 0; i < sim->royal_carriage_count; ++i) {
+        CcRoyalCarriage *carrier = &sim->royal_carriages[i];
+        if (carrier->id != carrier_id) continue;
+        if (carrier->mode != CC_ROYAL_CARRIAGE_IDLE || carrier->active_shipment_id != 0 ||
+            carrier->condition < 20 || sim->current_day < carrier->next_dispatch_day ||
+            carrier->location_id == destination_id ||
+            CcSimCustodyCarrierLoad(sim, carrier_id) <= 0) return false;
+        return StartRoyalRepositioningLeg(sim, carrier, destination_id);
+    }
+    return false;
 }
 
 static void AdvanceRoyalCarriages(CcSim *sim, CcRoadProductionAccounting *site_accounting)
@@ -10373,7 +10410,8 @@ static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting)
     for (int32_t carriage_slot = 0;
          carriage_slot < sim->royal_carriage_count; ++carriage_slot) {
         CcRoyalCarriage *carriage = &sim->royal_carriages[carriage_slot];
-        if (carriage->mode != CC_ROYAL_CARRIAGE_IDLE ||
+        if (CcSimCustodyCarrierLoad(sim, carriage->id) > 0 ||
+            carriage->mode != CC_ROYAL_CARRIAGE_IDLE ||
             carriage->active_shipment_id != 0U ||
             CcSimSettlement(sim, carriage->location_id) == NULL ||
             sim->current_day < carriage->next_dispatch_day) continue;
@@ -20755,6 +20793,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     }
     if (!CcSimArchiveRecruitmentOrderValid(sim)) {
         SetError(error, error_capacity, "Archive recruitment reservation is invalid.");
+        return false;
+    }
+    if (sim->schema_version >= 99U && !CcSimStoredCustodyValid(sim)) {
+        SetError(error, error_capacity, "Stored custody is invalid.");
         return false;
     }
     return true;

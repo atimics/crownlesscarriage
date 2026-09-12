@@ -1,0 +1,13 @@
+{
+  "source_commit": "a72b4301a05cdb0c1fe0fe05af4c2ca72be2bdc4",
+  "main_integration_commit": "e3a0691b",
+  "schema": 99,
+  "generator": 25,
+  "headless_tests_passed": 144,
+  "benchmark_ns_per_day": 42268.2,
+  "benchmark_limit_ns_per_day": 90000,
+  "custody_cppcheck": "passed",
+  "custody_webassembly_compile": "passed",
+  "core_sanitizers": "passed",
+  "store_adapter_sanitizers": "passed; remaining simulation and persistence libraries use the strict release build"
+}

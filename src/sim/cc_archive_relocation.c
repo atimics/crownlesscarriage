@@ -1,3 +1,4 @@
+#include "sim/cc_sim_custody.h"
 #include "sim/cc_archive_relocation.h"
 #include "sim/cc_archive_internal.h"
 #include "sim/cc_archive_volumes_internal.h"
@@ -40,7 +41,7 @@ static CcArchiveRelocationPlan QuoteDestination(const CcSim *sim,
     const CcRoyalCarriage *carriage = NULL;
     for (int i = 0; i < sim->royal_carriage_count; ++i) {
         const CcRoyalCarriage *item = &sim->royal_carriages[i];
-        if (item->kingdom_id != kingdom->id || item->location_id != origin->id ||
+        if (CcSimCustodyCarrierLoad(sim, item->id) > 0 || item->kingdom_id != kingdom->id || item->location_id != origin->id ||
             item->mode != CC_ROYAL_CARRIAGE_IDLE || item->active_shipment_id != 0 ||
             item->condition < 20 || item->next_dispatch_day > sim->current_day) continue;
         if (carriage == NULL || item->id < carriage->id) carriage = item;
