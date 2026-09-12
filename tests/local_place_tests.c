@@ -73,7 +73,8 @@ static int ProfileContract(void)
             if (camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
                 CHECK(camera->fovy >= 9.0f);
             } else if (camera->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST) {
-                bool pony_yard = profile->function == CC_SETTLEMENT_MARKET &&
+                bool pony_yard = (profile->function == CC_SETTLEMENT_MARKET ||
+                                 profile->function == CC_SETTLEMENT_FARMING) &&
                     camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD;
                 CHECK(camera->fovy <= (pony_yard ? 9.0f : 6.6f));
             }
