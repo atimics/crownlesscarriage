@@ -1,0 +1,12 @@
+{
+  "id": "hearth-second",
+  "original": "hearth-v1",
+  "name": "Hearth",
+  "direction": "Mature chesty mezzo; light Jamaican English; broad, rolling warmth with an easy chuckle.",
+  "description": "A mature adult woman with a rich chesty mezzo voice and a light Jamaican English accent. Broad rounded vowels, a relaxed rolling rhythm, and a smile that feels close and personal. A little husky warmth in the lower notes, clear consonants, and confident sentence endings. She can shift from easy amusement to calm authority. Natural conversational English. Clean studio recording.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 2549547050,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "297930487bd9520ccffedf0678c725c2057d57f7867c7ef0dc7d78a86ff47825"
+}

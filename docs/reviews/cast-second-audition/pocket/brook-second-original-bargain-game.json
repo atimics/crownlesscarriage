@@ -1,0 +1,21 @@
+{
+  "voice": "Brook",
+  "take": "original",
+  "line": "bargain",
+  "text": "Thirty-eight crowns? You drive a hard bargain. All right, take the cart. I'll walk with you.",
+  "seed": 20260912,
+  "file": "brook-second-original-bargain.wav",
+  "seconds": 6.48,
+  "generation_seconds": 3.670470125041902,
+  "reference_sha256": "e9ff04762f3cbb959c4f5bbc7e337a6c074b12b127c15b4f9958545fd826d0dc",
+  "sha256": "4ea6c536191fa4ac7175115f72593efc2de8063d21d90f2d9cf6b2b1e8a8c0d8",
+  "sample_rate": 24000,
+  "master_sha256": "4ea6c536191fa4ac7175115f72593efc2de8063d21d90f2d9cf6b2b1e8a8c0d8",
+  "wav_sha256": "9241e6fe5374acbb123ce3c42de9f392dfd3324cf42b4269703c177a44fab754",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

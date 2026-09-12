@@ -1,0 +1,21 @@
+{
+  "voice": "Flint",
+  "take": "revised",
+  "line": "bargain",
+  "text": "Thirty-eight crowns? You drive a hard bargain. All right, take the cart. I'll walk with you.",
+  "seed": 20260912,
+  "file": "flint-second-revised-bargain.wav",
+  "seconds": 8.24,
+  "generation_seconds": 3.8147088340483606,
+  "reference_sha256": "b74d823ed7b5682d32ce3699f8240a1070c4d96690561b8c5d491947bbc2f685",
+  "sha256": "10d058312cb12a2e9cf866d610d2ee4e805e566131972aff37f21e2f48b2188c",
+  "sample_rate": 24000,
+  "master_sha256": "10d058312cb12a2e9cf866d610d2ee4e805e566131972aff37f21e2f48b2188c",
+  "wav_sha256": "a7ba47dcd3e751a4a782d7d7fdb90e990c2e1f7578929bfca422d6f4100b4092",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

@@ -27,6 +27,28 @@ Pitch, age, rhythm, texture, and accent all contribute to these directions.
 The accents and perceived ages remain casting intentions for listening review.
 Each voice can carry warmth, humour, and authority across different game roles.
 
+## Second-pass check
+
+The first revised Flint/Brook pair scored 0.904, and revised Reed/Jory scored
+0.870. Three further Qwen takes were generated for each of Flint and Reed in a
+six-item batch. Screening selected Flint alternate 2 and Reed alternate 1.
+The batch seed, order, prompts, and fingerprints are in `alternate-receipts`.
+Candidate scores and selections are in `similarity-revised.json`.
+
+| Voice | Original nearest score | Final revised nearest score |
+| --- | --- | --- |
+| Hearth | 0.827 | 0.840 |
+| Flint | 0.859 | 0.843 |
+| Lark | 0.846 | 0.825 |
+| Brook | 0.859 | 0.843 |
+| Reed | 0.797 | 0.680 |
+| Oak | 0.790 | 0.754 |
+
+Five of the six revised references have lower nearest-voice scores. Hearth
+remains close to Ilyra in this check and deserves a direct listening comparison.
+These scores describe reference recordings; listening should establish how
+Pocket carries the differences into the final performances.
+
 ## Listen and reproduce
 
 From the repository root:
@@ -60,8 +82,16 @@ seeds, and recording fingerprints. `review_audio.json` binds the compact files
 to their masters. The page prefers a WAV when present.
 
 The design helper reuses existing WAVs in the chosen output folder. Choose a
-fresh output folder for a changed casting brief. Pocket generation replaces
-its named output takes and report. Keep earlier results in separate folders.
+fresh output folder for a changed casting brief. Pocket generation reuses takes
+with matching package versions, brief, text, seed, reference hash, and verified
+audio hashes. A changed reference regenerates its takes. Keep earlier results
+in separate folders when comparing iterations.
+
+To reproduce the alternate batch, run `cast_alternates.py --output <folder>` in
+the Qwen environment. Then run the similarity tool with both `--revised` and
+`--select-alternates <folder>` in the Chatterbox environment. That explicit
+selection flag copies the chosen references and receipts into the revised folder.
+Rerun Pocket generation to refresh their spoken takes.
 
 The comparison uses Chatterbox's voice-encoder weights from Nano snapshot
 `71ccd1d0081b430592cea481f4307e764e07bc64`. Run `cast_similarity.py --weights
@@ -71,3 +101,12 @@ Each report records the weights and input hashes.
 
 These are audition assets. A later game cast update should give revised voices
 new versioned profiles and preserve stable assignments across saved games.
+
+## Validation
+
+- Six revised references and 24 Pocket performances generated successfully.
+- Performance hashes and reference links matched; twenty existing performances
+  were reused and four changed-reference performances were regenerated.
+- The browser showed sixty audio players and zero pending auditions.
+- Local WAVs and compact MP3 copies passed decoding and fingerprint checks.
+- Python compilation, whitespace checks, and the research-file budget passed.

@@ -25,14 +25,34 @@ def pocket(brief, output):
     report = dict(model='Pocket TTS', package_version=importlib.metadata.version('pocket-tts'),
                   torch_version=torch.__version__, sample_rate=model.sample_rate,
                   brief_sha256=hashlib.sha256(BRIEF.read_bytes()).hexdigest(), samples=rows)
+    report_path = output / 'pocket.json'
+    previous = json.loads(report_path.read_text()) if report_path.is_file() else {}
+    cache = previous.get('samples', []) if all(previous.get(k) == report[k] for k in
+            ('package_version', 'torch_version', 'sample_rate', 'brief_sha256')) else []
     folder = output / 'pocket'
     folder.mkdir(exist_ok=True)
     for voice in brief['voices']:
         for take in ('original', 'revised'):
             reference = (ROOT / 'assets/audio/cast' / (voice['original'] + '.wav') if take == 'original'
                          else output / 'revised' / (voice['id'] + '.wav'))
+            reference_hash = hashlib.sha256(reference.read_bytes()).hexdigest()
             state = model.get_state_for_audio_prompt(str(reference))
             for line, words in brief['lines'].items():
+                saved = next((r for r in cache if r['voice'] == voice['name'] and r['take'] == take
+                              and r['line'] == line and r['text'] == words and r['seed'] == 20260912
+                              and r['reference_sha256'] == reference_hash), None)
+                if saved:
+                    master = folder / saved['file']
+                    styled = folder / saved['game_file']
+                    receipt = styled.with_suffix('.json')
+                    if master.is_file() and styled.is_file() and receipt.is_file():
+                        metadata = json.loads(receipt.read_text())
+                        if (hashlib.sha256(master.read_bytes()).hexdigest() == saved['sha256']
+                                and metadata['master_sha256'] == saved['sha256']
+                                and hashlib.sha256(styled.read_bytes()).hexdigest() == metadata['wav_sha256']):
+                            rows.append(saved)
+                            report_path.write_text(json.dumps(report, indent=2) + '\n')
+                            continue
                 torch.manual_seed(20260912)
                 np.random.seed(20260912)
                 start = time.perf_counter()
@@ -50,7 +70,7 @@ def pocket(brief, output):
                 write(path, model.sample_rate, (samples * 32767).astype(np.int16))
                 row = dict(voice=voice['name'], take=take, line=line, text=words, seed=20260912,
                            file=path.name, seconds=duration, generation_seconds=seconds,
-                           reference_sha256=hashlib.sha256(reference.read_bytes()).hexdigest(),
+                           reference_sha256=reference_hash,
                            sha256=hashlib.sha256(path.read_bytes()).hexdigest())
                 styled = path.with_name(path.stem + '-game.wav')
                 render_voice(path, styled, row)

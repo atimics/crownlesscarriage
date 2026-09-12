@@ -1,0 +1,15 @@
+{
+  "id": "flint-second",
+  "original": "flint-v1",
+  "name": "Flint",
+  "direction": "Elder reedy contralto; light Polish accent; short phrases, dry wit, and precise endings.",
+  "description": "An elderly woman in her seventies with a narrow, reedy contralto and a light Polish accent in fluent English. Papery texture, lightly rolled consonants, and very clear words. Short deliberate phrases with a tiny pause before the final word. Wry and alert, with warm amusement underneath her brisk certainty. Natural conversational English. Clean studio recording.",
+  "variant": 1,
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "seed": 20260913,
+  "batch_index": 0,
+  "batch_size": 6,
+  "sample_rate": 24000,
+  "sha256": "d00122aeece44be56444b2697e0fd891a7d90254da84d2fbd66a0f401e81c222"
+}

@@ -1,0 +1,21 @@
+{
+  "voice": "Flint",
+  "take": "revised",
+  "line": "welcome",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going.",
+  "seed": 20260912,
+  "file": "flint-second-revised-welcome.wav",
+  "seconds": 6.24,
+  "generation_seconds": 2.235551416873932,
+  "reference_sha256": "b74d823ed7b5682d32ce3699f8240a1070c4d96690561b8c5d491947bbc2f685",
+  "sha256": "247e53ac68ad6c2178b878d1f6fe54b09dda27bcd79fc2591629be53bfe0d876",
+  "sample_rate": 24000,
+  "master_sha256": "247e53ac68ad6c2178b878d1f6fe54b09dda27bcd79fc2591629be53bfe0d876",
+  "wav_sha256": "c769ee075c839f59935c9effc75d3e0b1bfbc170f7e7cb1ecc2615e7f84e7cc6",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}
