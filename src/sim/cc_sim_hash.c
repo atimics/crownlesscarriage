@@ -884,6 +884,10 @@ uint64_t CcSimHash(const CcSim *sim)
                 HASH_VALUE(sim->archive_recruitment.arrived_day);
             }
         }
+        if (sim->schema_version >= 91U) {
+            HASH_VALUE(sim->archives.seat_id);
+            HASH_VALUE(sim->archives.seat_failed_since_day);
+        }
         HASH_VALUE(sim->archives.scribes);
         HASH_VALUE(sim->archives.lore_stored);
         HASH_VALUE(sim->archives.lore_lost_total);

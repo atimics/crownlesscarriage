@@ -216,7 +216,7 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          legacy_version == 68U || legacy_version == 69U ||
          legacy_version == 70U || legacy_version == 71U || legacy_version == 72U || legacy_version == 73U ||
          legacy_version == 74U || legacy_version == 75U || legacy_version == 76U ||
-         legacy_version == 77U || legacy_version == 78U || legacy_version == 79U || legacy_version == 80U || legacy_version == 81U || legacy_version == 82U || legacy_version == 83U || legacy_version == 84U || legacy_version == 85U || legacy_version == 86U || legacy_version == 87U || legacy_version == 88U || legacy_version == 89U) &&        sim->generator_version == 25U) {        /* Schema 47 adds bandit war camps (camp_settlement_id, default         * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
+         legacy_version == 77U || legacy_version == 78U || legacy_version == 79U || legacy_version == 80U || legacy_version == 81U || legacy_version == 82U || legacy_version == 83U || legacy_version == 84U || legacy_version == 85U || legacy_version == 86U || legacy_version == 87U || legacy_version == 88U || legacy_version == 89U || legacy_version == 90U) &&        sim->generator_version == 25U) {        /* Schema 47 adds bandit war camps (camp_settlement_id, default         * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
          * default 0). Schema 49 makes notable famine accounts gossip and
          * schema 50 adds goblin raids, cult rallies, dragon omens and dragon
          * fires; both changes are derived from events, so older saves need

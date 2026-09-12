@@ -63,3 +63,17 @@ CcArchiveSeatPlan CcSimArchiveSeatPlan(const CcSim *sim, CcId current_seat_id)
     }
     return plan;
 }
+
+void CcArchiveRememberSeat(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 91U) return;
+    if (sim->archives.seat_id == 0) {
+        const CcSettlement *seat = CcArchiveSeat(sim);
+        if (seat == NULL) return;
+        sim->archives.seat_id = seat->id;
+    }
+    CcArchiveSeatCandidate current = CcSimArchiveSeatCandidate(sim, sim->archives.seat_id);
+    if (current.viable) sim->archives.seat_failed_since_day = 0;
+    else if (sim->archives.seat_failed_since_day == 0)
+        sim->archives.seat_failed_since_day = sim->current_day;
+}

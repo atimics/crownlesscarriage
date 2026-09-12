@@ -1,6 +1,9 @@
 #include "sim/cc_sim.h"
+#include "sim/cc_archive_internal.h"
+#include "persistence/cc_save.h"
 #include "test_support.h"
 #include <string.h>
+#include <sqlite3.h>
 static CcSim sim, before;
 static void Fixture(void)
 {
@@ -34,8 +37,66 @@ static CcArchiveSeatCandidate Candidate(int slot)
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
     return candidate;
 }
+static void CheckSavedSeat(void)
+{
+    CcSimInit(&sim, 42U);
+    char error[256];
+    CcId original = CcArchiveSeat(&sim)->id;
+    CcArchiveRememberSeat(&sim);
+    CC_CHECK(sim.archives.seat_id == original);
+    CcSettlement *seat = CcSimSettlementMutable(&sim, original);
+    seat->stock[CC_GOOD_PAPER] = 0;
+    CcArchiveRememberSeat(&sim);
+    int64_t failed = sim.archives.seat_failed_since_day;
+    CC_CHECK(failed == sim.current_day);
+    sim.current_day += 2;
+    CcArchiveRememberSeat(&sim);
+    CC_CHECK(sim.archives.seat_failed_since_day == failed);
+    seat->stock[CC_GOOD_FOOD] = 10000; seat->stock[CC_GOOD_WHEAT] = 10;
+    seat->stock[CC_GOOD_TOOLS] = 1; seat->stock[CC_GOOD_PAPER] = 1;
+    seat->service_mask |= UINT32_C(1) << CC_SERVICE_MILL;
+    CcArchiveRememberSeat(&sim);
+    CC_CHECK(sim.archives.seat_failed_since_day == 0);
+    seat->stock[CC_GOOD_PAPER] = 0;
+    CcArchiveRememberSeat(&sim);
+    CC_CHECK(sim.archives.seat_failed_since_day == sim.current_day);
+    const char *path = "archive-seat-test.ccsave";
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 7, error, sizeof(error)));
+    CcJournalAbandon(&journal);
+    CC_CHECK(CcSaveRead(path, &before, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&before) == CcSimHash(&sim));
+    CC_CHECK(before.archives.seat_id == original);
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    CC_CHECK(sqlite3_exec(database, "UPDATE archive_seat SET failed_since=0.5;", NULL, NULL, NULL) == SQLITE_OK);
+    CC_CHECK(sqlite3_close(database) == SQLITE_OK);
+    CC_CHECK(!CcSaveRead(path, &before, error, sizeof(error)));
+
+    (void)remove(path); (void)remove("archive-seat-test.ccsave-wal"); (void)remove("archive-seat-test.ccsave-shm");
+    before = sim;
+    sim.archives.seat_id = sim.player.id;
+    CC_CHECK(!CcSimValidate(&sim, error, sizeof(error)));
+    sim = before; sim.archives.seat_failed_since_day = (int64_t)sim.current_day + 1;
+    CC_CHECK(!CcSimValidate(&sim, error, sizeof(error)));
+    sim = before; sim.archives.seat_id = 0; sim.archives.seat_failed_since_day = 1;
+    CC_CHECK(!CcSimValidate(&sim, error, sizeof(error)));
+    sim = before;
+    CcTreasure treasures[CC_MAX_TREASURES];
+    memcpy(treasures, sim.treasures, sizeof(treasures));
+    CcSimSettlementMutable(&sim, original)->population = 0;
+    CC_CHECK(CcArchiveSeat(&sim) == NULL);
+    CcArchiveRememberSeat(&sim);
+    CC_CHECK(sim.archives.seat_id == original);
+    CC_CHECK(memcmp(treasures, sim.treasures, sizeof(treasures)) == 0);
+    sim.schema_version = 87U;
+    CC_CHECK(CcArchiveSeat(&sim) != NULL && CcArchiveSeat(&sim)->id != original);
+}
+
 int main(void)
 {
+    CheckSavedSeat();
     Fixture(); CcId current = sim.settlements[1].id;
     CcArchiveSeatCandidate c = Candidate(0);
     CC_CHECK(c.viable && c.usable_connections == 2 && c.score == 36);
