@@ -5803,8 +5803,9 @@ static void DrawSituationBoard(const CcSim *sim, int32_t selected)
         } else if (offer) {
             const CcSettlement *posted_at = CcSimSettlement(
                 sim, CcSimSituationOfferSettlementId(sim, detail));
+            const CcNotice *notice = CcSimSituationNotice(sim, detail->id);
             CcOverlayDrawText(TextFormat(
-                "Posted day %d%s  /  due day %d", detail->created_day,
+                "Posted day %d%s  /  due day %d", notice != NULL ? notice->day : detail->created_day,
                 posted_at != NULL && posted_at->id != sim->player.location_id ?
                     TextFormat(" at %s", posted_at->name) : "",
                 detail->deadline_day), 360, y, 10, MUTED);

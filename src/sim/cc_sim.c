@@ -2462,10 +2462,12 @@ static int32_t IronLedgerDebtPressure(const CcSim *sim, CcId kingdom_id)
     return 0;
 }
 
-static bool IronLedgerWillFund(const CcSettlement *place, CcGood good)
+static bool IronLedgerWillFund(const CcSim *sim, const CcSettlement *place, CcGood good)
 {
     if (place == NULL) return false;
-    if (good == CC_GOOD_FOOD) return place->hunger >= 65;
+    if (good == CC_GOOD_FOOD || (sim->schema_version >= 98U &&
+        CcGoodNutritionValue(good, CC_NUTRITION_CIVILIAN) > 0))
+        return place->hunger >= 65;
     if (good != CC_GOOD_TOOLS || place->stock[CC_GOOD_TOOLS] > 0) {
         return false;
     }
@@ -5570,9 +5572,57 @@ static bool IsNotableGossip(const CcSim *sim, const CcEvent *event)
            event->kind == CC_EVENT_DRAGON_RETALIATION)));
 }
 
-/* A notice posted on a board is a fact like any other: it enters the ledger
-   at the town whose board carries it, so residents can speak of it and
-   travellers carry it between towns. Mine threads stay mouth-to-ear. */
+const CcNotice *CcSimSituationNotice(const CcSim *sim, CcId situation_id)
+{
+    if (sim == NULL || sim->schema_version < 97U || situation_id == 0) return NULL;
+    for (int i = 0; i < sim->situation_count; ++i)
+        if (sim->situations[i].id == situation_id && sim->notice_board.notices[i].situation_id == situation_id)
+            return &sim->notice_board.notices[i];
+    return NULL;
+}
+
+static void StoreSituationNotice(CcSim *sim, const CcSituation *situation,
+                                 CcId event_id, CcId town, CcId sponsor,
+                                 int32_t day, const char *text)
+{
+    for (int i = 0; i < sim->situation_count; ++i) {
+        if (sim->situations[i].id != situation->id) continue;
+        sim->notice_board.notices[i] = (CcNotice){.situation_id=situation->id,
+            .event_id=event_id,.settlement_id=town,.sponsor_id=sponsor,.day=day};
+        (void)snprintf(sim->notice_board.notices[i].text, CC_EVENT_TEXT_CAPACITY, "%s", text);
+        return;
+    }
+}
+
+/* Old snapshots retain their replay state until the first new-era refresh. */
+static void MigrateNoticeBoard(CcSim *sim)
+{
+    if (sim->schema_version < 97U || sim->notice_board.ready) return;
+    for (int i = 0; i < CC_MAX_GOSSIP; ++i) {
+        CcGossip *story = &sim->gossip[i];
+        if (story->event_id == 0 || story->kind != CC_EVENT_NOTICE_POSTED) continue;
+        const CcEvent *event = CcSimEvent(sim, story->event_id);
+        const CcSituation *situation = event != NULL ? CcSimSituation(sim, event->subject_id) : NULL;
+        if (situation != NULL) {
+            int town = SettlementSlotById(sim, story->origin_id);
+            StoreSituationNotice(sim, situation, story->event_id, story->origin_id,
+                town >= 0 ? story->local[town].source_character_id : 0, story->day, story->text);
+        }
+        uint32_t bit = UINT32_C(1) << (uint32_t)i;
+        for (int j = 0; j < CcSimGossipCarrierCapacity(sim); ++j) {
+            sim->gossip_carriers[j].stories &= ~bit;
+            sim->gossip_carriers[j].told_player &= ~bit;
+            sim->gossip_carriers[j].versions[i] = (CcGossipVersion){0};
+        }
+        *story = (CcGossip){0};
+    }
+    for (int i = 0; i < sim->situation_count; ++i)
+        if (sim->notice_board.notices[i].situation_id == 0)
+            sim->posted_situation_mask &= ~(UINT32_C(1) << (uint32_t)i);
+    sim->notice_board.ready = true;
+}
+
+/* Boards keep the posting; carried accounts use the gossip pool. */
 static void PostSituationNotice(CcSim *sim, const CcSituation *situation)
 {
     if (sim == NULL || situation == NULL ||
@@ -5588,6 +5638,11 @@ static void PostSituationNotice(CcSim *sim, const CcSituation *situation)
         town->name, CcSituationKindName(situation->kind));
     CcEvent *posted = PushEvent(sim, CC_EVENT_NOTICE_POSTED, situation->id,
                                 town->id, situation->cause_event_id, 20, text);
+    if (sim->schema_version >= 97U) {
+        StoreSituationNotice(sim, situation, posted->id, town->id,
+                             sponsor != NULL ? sponsor->id : 0, sim->current_day, text);
+        return;
+    }
     int32_t slot = 0;
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
         if (sim->gossip[i].event_id == 0U) { slot = i; break; }
@@ -5685,6 +5740,7 @@ static void GatherGossipEvents(CcSim *sim)
 static void GatherGossip(CcSim *sim)
 {
     if (sim->schema_version < 44U) return;
+    MigrateNoticeBoard(sim);
     PostPendingSituationNotices(sim);
     GatherGossipEvents(sim);
 }
@@ -9795,7 +9851,7 @@ static CcMoney BuyerPurchasingPower(CcSim *sim, const CcSettlement *buyer,
     if (buyer == NULL) return 0;
     CcMoney coins = WarWeeklyNeed(sim, buyer, good) > 0 ?
         buyer->war_chest : buyer->market_coins;
-    if (!IronLedgerWillFund(buyer, good)) return coins;
+    if (!IronLedgerWillFund(sim, buyer, good)) return coins;
     return coins + IronLedgerCreditAvailable(
         sim, KingdomMutable(sim, buyer->kingdom_id));
 }
@@ -9907,7 +9963,7 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
                            &final_destination->market_coins;
     CcKingdom *buyer_kingdom = KingdomMutable(
         sim, final_destination->kingdom_id);
-    bool essential_credit = archive == NULL && supply == NULL && IronLedgerWillFund(final_destination, good);
+    bool essential_credit = archive == NULL && supply == NULL && IronLedgerWillFund(sim, final_destination, good);
     int32_t unit_price = MaximumI32(1, origin->price[good]);
     CcMoney toll = royal ? CcRouteRoyalTradeToll(
         sim, route, carriage->kingdom_id) : CcRouteToll(sim, route);
@@ -11867,6 +11923,7 @@ static CcSituation *AllocateSituation(CcSim *sim)
     if (oldest < 0) return NULL;
     ForgetRetiredSituation(sim, sim->situations[oldest].id);
     sim->posted_situation_mask &= ~(UINT32_C(1) << (uint32_t)oldest);
+    if (sim->schema_version >= 97U) sim->notice_board.notices[oldest] = (CcNotice){0};
     sim->situations[oldest] = (CcSituation){0};
     return &sim->situations[oldest];
 }
@@ -18580,6 +18637,22 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         return false;
     }
     if (!CcIdentityValidate(sim, error, error_capacity)) return false;
+    if (sim->schema_version >= 97U) {
+        for (int i = 0; i < CC_MAX_SITUATIONS; ++i) {
+            const CcNotice *notice = &sim->notice_board.notices[i];
+            bool empty = notice->situation_id == 0;
+            bool valid = empty ? notice->event_id == 0 && notice->settlement_id == 0 &&
+                notice->sponsor_id == 0 && notice->day == 0 && notice->text[0] == '\0' :
+                sim->notice_board.ready && i < sim->situation_count && sim->situations[i].id == notice->situation_id &&
+                CcIdKind(notice->event_id) == CC_ENTITY_EVENT &&
+                (notice->event_id & CC_ID_SERIAL_MASK) > 0 && (notice->event_id & CC_ID_SERIAL_MASK) < sim->next_entity_serial &&
+                CcSimSettlement(sim, notice->settlement_id) != NULL &&
+                (notice->sponsor_id == 0 || IsIssuedCharacterId(sim, notice->sponsor_id)) &&
+                notice->day > 0 && notice->day <= sim->current_day && notice->text[0] != '\0' &&
+                memchr(notice->text, '\0', sizeof(notice->text)) != NULL;
+            if (!valid) { SetError(error, error_capacity, "Notice board record is invalid."); return false; }
+        }
+    }
     if (sim->schema_version >= 44U) {
         uint32_t stories = 0U;
         uint32_t towns = (UINT32_C(1) << (uint32_t)sim->settlement_count) - 1U;
@@ -18615,7 +18688,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             stories |= UINT32_C(1) << (uint32_t)i;
             CcEvent source = {.kind = story->kind, .magnitude = 20};
             bool story_kind_valid = IsNotableGossip(sim, &source) ||
-                story->kind == CC_EVENT_NOTICE_POSTED;
+                (story->kind == CC_EVENT_NOTICE_POSTED &&
+                 (sim->schema_version < 97U || !sim->notice_board.ready));
             if (!story_kind_valid || CcIdKind(story->event_id) != CC_ENTITY_EVENT ||
                 (story->kind != CC_EVENT_NOTICE_POSTED &&
                  story->event_id > sim->gossip_last_event_id) ||

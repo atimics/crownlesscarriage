@@ -1,4 +1,5 @@
 #include "persistence/cc_legacy_runtime_internal.h"
+#include "sim/cc_sim_versions_internal.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -198,25 +199,11 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
                                        char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
-    if ((legacy_version == 38U || legacy_version == 39U ||
-         legacy_version == 40U || legacy_version == 41U ||
-         legacy_version == 42U || legacy_version == 43U ||
-         legacy_version == 44U || legacy_version == 45U ||
-         legacy_version == 46U || legacy_version == 47U ||
-         legacy_version == 48U || legacy_version == 49U ||
-         legacy_version == 50U || legacy_version == 51U ||
-         legacy_version == 52U || legacy_version == 53U ||
-         legacy_version == 54U || legacy_version == 55U ||
-         legacy_version == 56U || legacy_version == 57U ||
-         legacy_version == 58U || legacy_version == 59U ||
-         legacy_version == 60U || legacy_version == 61U ||
-         legacy_version == 62U || legacy_version == 63U ||
-         legacy_version == 64U || legacy_version == 65U ||
-         legacy_version == 66U || legacy_version == 67U ||
-         legacy_version == 68U || legacy_version == 69U ||
-         legacy_version == 70U || legacy_version == 71U || legacy_version == 72U || legacy_version == 73U ||
-         legacy_version == 74U || legacy_version == 75U || legacy_version == 76U ||
-         legacy_version == 77U || legacy_version == 78U || legacy_version == 79U || legacy_version == 80U || legacy_version == 81U || legacy_version == 82U || legacy_version == 83U || legacy_version == 84U || legacy_version == 85U || legacy_version == 86U || legacy_version == 87U || legacy_version == 88U || legacy_version == 89U || legacy_version == 90U || legacy_version == 91U || legacy_version == 92U || legacy_version == 93U || legacy_version == 94U || legacy_version == 95U) &&        sim->generator_version == 25U) {        /* Schema 47 adds bandit war camps (camp_settlement_id, default         * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
+    if (legacy_version >= 38U &&
+        legacy_version <= CC_SIM_NEWEST_LEGACY_SCHEMA &&
+        sim->generator_version == 25U) {
+        /* Schema 47 adds bandit war camps (camp_settlement_id, default
+         * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
          * default 0). Schema 49 makes notable famine accounts gossip and
          * schema 50 adds goblin raids, cult rallies, dragon omens and dragon
          * fires; both changes are derived from events, so older saves need
