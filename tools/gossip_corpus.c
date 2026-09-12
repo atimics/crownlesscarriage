@@ -8,7 +8,7 @@
 #include <string.h>
 
 static CcSim sim;
-#define KIND_COUNT ((int)CC_EVENT_NOTICE_POSTED + 1)
+#define KIND_COUNT ((int)CC_EVENT_PROPHECY_DELIVERED + 1)
 static uint64_t unsupported_kinds[KIND_COUNT];
 static char unsupported_sample[KIND_COUNT][CC_EVENT_TEXT_CAPACITY];
 typedef struct SeenAccount {
@@ -174,7 +174,6 @@ int main(int argc, char **argv)
         seed, rows, unsupported);
     bool comma = false;
     for (int kind = 0; kind < KIND_COUNT; ++kind) {
-        if (unsupported_kinds[kind] == 0U) continue;
         (void)fprintf(stderr, "%s{\"kind\":", comma ? "," : "");
         JsonString(stderr, CcEventKindName((CcEventKind)kind));
         (void)fprintf(stderr, ",\"observations\":%" PRIu64 ",\"sample\":", unsupported_kinds[kind]);
