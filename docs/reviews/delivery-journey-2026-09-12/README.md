@@ -65,3 +65,18 @@ The later captures use a narrower browser viewport than the initial review.
 
 The recipient reply still needs a separate browser check. The lasting food
 recovery and chosen camp time, fatigue, and risk checks also remain open.
+
+## Road input follow-up
+
+Commit `1f333a7d` remembers the drawn road cards and their screen bounds. A click
+resolves the same action on the same route using current availability. A card
+that changes from camp to mine requires a fresh drawing before the mine choice
+can receive that click. The checks include the action kind, target, goods,
+quantity, drive state, and label. Drawing another view or resetting clears the
+road cards.
+
+All 173 native tests passed after the implementation. The final added regression
+also passed through the real click handler. The web build passed, and static
+analysis passed with one reviewed baseline item. The existing browser captures
+remain evidence for the earlier `f087ec48` build. A browser replay of this road
+input change remains a follow-up check.
