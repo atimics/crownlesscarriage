@@ -7,7 +7,7 @@ static CcCharacter *PresentQuestActor(CcSim *sim, CcId town,
     int best_score = INT32_MIN;
     for (int i = 0; i < sim->character_count; ++i) {
         CcCharacter *person = &sim->characters[i];
-        if ((sim->schema_version >= 79U && sim->archive_recruitment.status > 0 &&
+        if ((sim->schema_version >= 81U && sim->archive_recruitment.status > 0 &&
              sim->archive_recruitment.status < 4 && sim->archive_recruitment.person_id == person->id) ||
             person->id == first || person->id == second ||
             person->current_settlement_id != town ||

@@ -286,18 +286,23 @@ static bool CompanySubmit(CcCompany *company, const char *path, const char *body
     return ok;
 }
 
-bool CcCompanyCreate(CcCompany *company, const char *player, const char *name, const char *pass, char *error, size_t capacity)
+bool CcCompanyCreateCampaign(CcCompany *company, const char *player, const char *name, const char *pass, bool deep_wyrm, char *error, size_t capacity)
 {
     if (!Hex(pass, 64)) { (void)snprintf(error, capacity, "Enter the world pass from this host."); return false; }
     if (pending_create[0] == '\0' && !CompanyRandom(pending_create, 16)) return false;
     char *person = CcCompanyJsonQuote(player), *title = CcCompanyJsonQuote(name);
     if (person == NULL || title == NULL) { free(person); free(title); return false; }
     char body[768];
-    (void)snprintf(body, sizeof(body), "{\"id\":\"%s\",\"player\":%s,\"name\":%s,\"world_pass\":\"%s\"}", pending_create, person, title, pass);
+    (void)snprintf(body, sizeof(body), "{\"id\":\"%s\",\"player\":%s,\"name\":%s,\"world_pass\":\"%s\",\"campaign\":\"%s\"}", pending_create, person, title, pass, deep_wyrm ? "deep-wyrm" : "new-world");
     free(person); free(title);
     bool ok = CompanySubmit(company, "/api/worlds", body, error, capacity);
     if (ok) pending_create[0] = '\0';
     return ok;
+}
+
+bool CcCompanyCreate(CcCompany *company, const char *player, const char *name, const char *pass, char *error, size_t capacity)
+{
+    return CcCompanyCreateCampaign(company, player, name, pass, false, error, capacity);
 }
 
 bool CcCompanyJoin(CcCompany *company, const char *player, const char *invitation, char *error, size_t capacity)

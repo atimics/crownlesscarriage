@@ -233,22 +233,34 @@ static bool RagdollTouchesStreet(const CcBiomechRagdoll *ragdoll)
 }
 
 static void RequireSolidStreetHouse(const char *name, float wall_x,
-                                    float center_x, float center_z)
+                                    float center_x, float center_z, float yaw)
 {
     const float radius = 0.16f;
+    float c = cosf(yaw * DEG2RAD), s = sinf(yaw * DEG2RAD);
     float body_y = CcLocalTerrainHeightAt(center_x, center_z) + 1.0f;
-    Vector3 previous = {wall_x - 0.80f, body_y, center_z};
-    Vector3 proposed = {wall_x + 0.80f, body_y, center_z};
+    Vector3 previous = {center_x + c * (wall_x - 0.80f - center_x),
+                        body_y, center_z - s * (wall_x - 0.80f - center_x)};
+    Vector3 proposed = {center_x + c * (wall_x + 0.80f - center_x),
+                        body_y, center_z - s * (wall_x + 0.80f - center_x)};
     Vector3 corrected = proposed;
     Vector3 normal = {0};
     if (!CcLocalProbePhysicsSphereInternal(
             CC_LOCAL_SCENE_STREET, previous, proposed, radius,
             &corrected, &normal) ||
-        corrected.x > wall_x - radius + 0.006f || normal.x > -0.90f) {
+        center_x + c * (corrected.x - center_x) - s * (corrected.z - center_z) >
+            wall_x - radius + 0.006f ||
+        c * normal.x - s * normal.z > -0.90f) {
         (void)fprintf(stderr,
                       "%s was not solid: %.3f %.3f %.3f normal %.3f %.3f %.3f\n",
                       name, corrected.x, corrected.y, corrected.z,
                       normal.x, normal.y, normal.z);
+        exit(1);
+    }
+    Vector2 legacy = CcLocalMove((Vector2){previous.x, previous.z},
+        (Vector2){proposed.x - previous.x, proposed.z - previous.z}, false);
+    if (center_x + c * (legacy.x - center_x) - s * (legacy.y - center_z) >
+        wall_x - 0.15f) {
+        (void)fprintf(stderr, "%s allowed walking through its angled wall\n", name);
         exit(1);
     }
 }
@@ -302,10 +314,14 @@ static void TestTownPlanCollisionAndGate(void)
         sim.player.location_id = sim.settlements[settlement].id;
         CcLocalBindPlace(&sim);
 
-        Vector2 hall_approach = {50.0f, 27.0f};
+        const CcLocalPlaceProfile *town = CcLocalPlaceProfileForSettlement(
+            &sim.settlements[settlement]);
+        const CcLocalPlaceBuilding *hall = &town->building[town->primary_building];
+        float front = hall->z + hall->depth;
+        Vector2 hall_approach = {hall->x + hall->width * 0.5f, front + 1.0f};
         Vector2 hall_blocked = CcLocalMove(
             hall_approach, (Vector2){0.0f, -2.0f}, false);
-        if (hall_blocked.y < 26.27f) {
+        if (hall_blocked.y < front + 0.27f) {
             (void)fprintf(
                 stderr,
                 "town plan %d did not keep its civic hall solid: %.3f\n",
@@ -429,10 +445,15 @@ static void TestSharedCharacterCollisionWorld(void)
     }
 
 
-    RequireSolidStreetHouse("west crofts house", 20.0f, 25.0f, 37.0f);
-    RequireSolidStreetHouse("artisan row house", 31.0f, 33.25f, 39.0f);
-    RequireSolidStreetHouse("market road house", 57.0f, 60.25f, 27.75f);
-    RequireSolidStreetHouse("coach yard house", 50.0f, 55.0f, 61.5f);
+    const CcLocalPlaceProfile *market = CcLocalPlaceProfileForFunction(CC_SETTLEMENT_MARKET);
+    const int32_t houses[] = {3, 4, 6, 9};
+    for (int32_t i = 0; i < 4; ++i) {
+        const CcLocalPlaceBuilding *house = &market->building[houses[i]];
+        RequireSolidStreetHouse(house->name, house->x,
+                                 house->x + house->width * 0.5f,
+                                 house->z + house->depth * 0.5f,
+                                 market->building_yaw_degrees[houses[i]]);
+    }
 
 
     const Rectangle ore_station = {25.725f, 53.825f, 1.45f, 1.05f};
@@ -2734,6 +2755,7 @@ static void TestTownSquareGroundSightlines(void)
 
 int main(void)
 {
+    /* Large campaign fixtures use static storage to keep room for nested checks. */
     TestTownSquareGroundSightlines();
     CcLocalTerrainMeshStatsInternal terrain_mesh =
         CcLocalTerrainMeshStatsInternalGet();
@@ -3454,7 +3476,7 @@ int main(void)
     CcLocalAgentUpdate(&edge_walker, 1.0f / 60.0f, false);
     const char *edge_destination = CcLocalAgentNavigationName(&edge_walker);
     if (edge_destination == NULL ||
-        strcmp(edge_destination, "CROWN GATE") != 0) {
+        strcmp(edge_destination, "CUSTOMS ROAD") != 0) {
         (void)fprintf(stderr,
                       "road-edge proximity did not start Crown Gate traversal\n");
         return 1;
@@ -3652,7 +3674,7 @@ int main(void)
     CcLocalAgent room_traveller;
     CcLocalAgentInit(&room_traveller, (Vector2){44.0f, 29.0f}, false);
     int32_t market_portal = StreetPortalIndex(&room_traveller,
-                                               "MARKET STEPS");
+                                               "MARKET HALL");
     if (market_portal < 0 ||
         !CcLocalAgentFollowStreetPortal(&room_traveller, market_portal) ||
         CcLocalAgentNavigationName(&room_traveller) == NULL) {
@@ -3679,7 +3701,7 @@ int main(void)
     CcLocalAgentInit(&cancelled_traversal,
                      (Vector2){50.0f, 27.25f}, false);
     int32_t cancelled_portal = StreetPortalIndex(
-        &cancelled_traversal, "CROWN GATE");
+        &cancelled_traversal, "CUSTOMS ROAD");
     if (cancelled_portal < 0 ||
         !CcLocalAgentFollowStreetPortal(
             &cancelled_traversal, cancelled_portal)) {
@@ -3967,13 +3989,13 @@ int main(void)
     TestMultiLegDamageCollapse();
     TestTravellerIngress();
     RequirePosition("market wall blocks entry",
-                    CcLocalMove((Vector2){50.00f, 26.65f},
+                    CcLocalMove((Vector2){50.00f, 22.65f},
                                 (Vector2){0.00f, -1.00f}, false),
-                    (Vector2){50.00f, 26.65f});
+                    (Vector2){50.00f, 22.65f});
     RequirePosition("collision slides along facade",
-                    CcLocalMove((Vector2){42.50f, 26.65f},
+                    CcLocalMove((Vector2){42.50f, 22.65f},
                                 (Vector2){2.00f, -1.00f}, false),
-                    (Vector2){44.50f, 26.65f});
+                    (Vector2){44.50f, 22.65f});
     RequirePosition("carriage blocks movement",
                     CcLocalMove((Vector2){39.70f, 51.20f},
                                 (Vector2){-1.00f, 0.00f}, false),
@@ -4330,7 +4352,7 @@ int main(void)
         return 1;
     }
 
-    CcSim cadence_sim;
+    static CcSim cadence_sim;
     CcSimInit(&cadence_sim, UINT32_C(0xcade60));
     CcLocalAgent cadence_player;
     CcLocalCourse cadence_course;
@@ -4988,7 +5010,7 @@ int main(void)
         return 1;
     }
 
-    CcSim witness_sim;
+    static CcSim witness_sim;
     CcSimInit(&witness_sim, UINT32_C(0x717e55));
     const CcSituation *visible_situation = NULL;
     CcId witness_settlement = 0U;
@@ -5058,7 +5080,7 @@ int main(void)
         return 1;
     }
 
-    CcSim sponsor_sim;
+    static CcSim sponsor_sim;
     CcSimInit(&sponsor_sim, UINT32_C(0x5a0e50));
     const CcSituation *sponsor_situation = NULL;
     const CcCharacter *expected_sponsor = NULL;
@@ -5277,7 +5299,7 @@ int main(void)
         return 1;
     }
 
-    CcSim defense_sim;
+    static CcSim defense_sim;
     CcSimInit(&defense_sim, 42U);
     CcLocalCourse defense;
     CcLocalCourseInit(&defense);

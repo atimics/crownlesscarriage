@@ -146,7 +146,7 @@ CcArchiveRecruitmentPlan CcSimArchiveRecruitmentPlan(const CcSim *sim)
 {
     CcArchiveRecruitmentPlan result = {.gate = CC_ARCHIVE_RECRUIT_UNAVAILABLE};
     if (sim == NULL || sim->schema_version < 77U) return result;
-    if (sim->schema_version >= 78U && sim->archive_recruitment.status != 0) {
+    if (sim->schema_version >= 80U && sim->archive_recruitment.status != 0) {
         result.gate = CC_ARCHIVE_RECRUIT_BUSY; return result;
     }
     if (sim->archives.scribes >= CC_MAX_SCRIBES) { result.gate = CC_ARCHIVE_RECRUIT_FULL; return result; }
@@ -183,7 +183,7 @@ const char *CcArchiveRecruitmentGateName(CcArchiveRecruitmentGate gate)
 
 bool CcSimBeginArchiveRecruitment(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 78U) return false;
+    if (sim == NULL || sim->schema_version < 80U) return false;
     CcArchiveRecruitmentPlan plan = CcSimArchiveRecruitmentPlan(sim);
     if (plan.gate != CC_ARCHIVE_RECRUIT_READY) return false;
     CcArchiveRecruitmentOrder order = {.status = 1, .person_id = plan.person_id,
@@ -218,7 +218,7 @@ bool CcSimBeginArchiveRecruitment(CcSim *sim)
 
 static bool JourneyValid(const CcSim *sim)
 {
-    if (sim->schema_version < 79U) return true;
+    if (sim->schema_version < 81U) return true;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
     if (o->status == 0) return o->current_id == 0 && o->leg_route_id == 0 &&
         o->leg_hop_id == 0 && o->leg_arrival_day == 0 && o->provisioned_days == 0 && o->arrived_day == 0;
@@ -240,7 +240,7 @@ static bool JourneyValid(const CcSim *sim)
 bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
 {
     if (sim == NULL) return false;
-    if (sim->schema_version < 78U) return true;
+    if (sim->schema_version < 80U) return true;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
     if (!JourneyValid(sim)) return false;
     if (o->status == 0) {
@@ -267,7 +267,7 @@ bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
             o->arrival_estimate == 0 &&
             o->ready_estimate == 0;
     }
-    if ((o->status < 1 || o->status > (sim->schema_version >= 79U ? 4 : 1)) || CcIdKind(o->person_id) != CC_ENTITY_CHARACTER ||
+    if ((o->status < 1 || o->status > (sim->schema_version >= 81U ? 4 : 1)) || CcIdKind(o->person_id) != CC_ENTITY_CHARACTER ||
         (o->person_id & CC_ID_SERIAL_MASK) == 0 ||
         (o->person_id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial ||
         (o->trainer_id != 0 && (CcIdKind(o->trainer_id) != CC_ENTITY_CHARACTER ||
@@ -307,14 +307,14 @@ bool CcSimArchiveRecruitmentOrderValid(const CcSim *sim)
 
 bool CcSimCancelArchiveRecruitment(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 78U || (sim->archive_recruitment.status != 1 &&
-         !(sim->schema_version >= 79U && (sim->archive_recruitment.status == 3 ||
+    if (sim == NULL || sim->schema_version < 80U || (sim->archive_recruitment.status != 1 &&
+         !(sim->schema_version >= 81U && (sim->archive_recruitment.status == 3 ||
            sim->archive_recruitment.status == 4))) ||
         !CcSimArchiveRecruitmentOrderValid(sim)) return false;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
     CcSettlement *seat = CcSimSettlementMutable(sim, o->seat_id);
     CcSettlement *origin = CcSimSettlementMutable(sim,
-        sim->schema_version >= 79U && o->current_id != 0 ? o->current_id : o->origin_id);
+        sim->schema_version >= 81U && o->current_id != 0 ? o->current_id : o->origin_id);
     CcMoney donors = o->donor_shares[0] + o->donor_shares[1];
     if (donors > o->purse || sim->iron_ledger_reserve > CC_SIM_MAX_MONEY - (o->purse - donors)) return false;
     int32_t seat_wheat = o->wheat + (origin == seat ? o->travel_wheat : 0);
@@ -351,7 +351,7 @@ static CcCharacter *Recruit(CcSim *sim)
 
 CcArchiveRecruitmentGate CcSimArchiveRecruitmentJourneyGate(const CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 79U || sim->archive_recruitment.status == 0)
+    if (sim == NULL || sim->schema_version < 81U || sim->archive_recruitment.status == 0)
         return CC_ARCHIVE_RECRUIT_UNAVAILABLE;
     const CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
     const CcCharacter *person = CcSimCharacter(sim, o->person_id);
@@ -378,7 +378,7 @@ CcArchiveRecruitmentGate CcSimArchiveRecruitmentJourneyGate(const CcSim *sim)
 
 CcArchiveJourneyStep CcSimAdvanceArchiveRecruitmentJourney(CcSim *sim, uint32_t road_roll)
 {
-    if (sim == NULL || sim->schema_version < 79U) return CC_ARCHIVE_JOURNEY_WAIT;
+    if (sim == NULL || sim->schema_version < 81U) return CC_ARCHIVE_JOURNEY_WAIT;
     CcArchiveRecruitmentOrder *o = &sim->archive_recruitment;
     if (o->status != 1 && o->status != 2) return CC_ARCHIVE_JOURNEY_WAIT;
     CcCharacter *person = Recruit(sim);

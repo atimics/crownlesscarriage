@@ -1,6 +1,6 @@
 static bool SaveRecruitmentJourney(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 79U) return true;
+    if (sim->schema_version < 81U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "INSERT INTO archive_recruitment_journey VALUES(1,?,?,?,?,?,?);", &statement, error, error_capacity)) return false;
     sqlite3_bind_int64(statement, 1, (sqlite3_int64)sim->archive_recruitment.current_id);
@@ -14,7 +14,7 @@ static bool SaveRecruitmentJourney(sqlite3 *database, const CcSim *sim, char *er
 }
 static bool ReadRecruitmentJourney(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 79U) return true;
+    if (sim->schema_version < 81U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "SELECT * FROM archive_recruitment_journey ORDER BY id;", &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW || sqlite3_column_int64(statement, 0) != 1) {
@@ -46,7 +46,7 @@ static bool ReadRecruitmentJourney(sqlite3 *database, CcSim *sim, char *error, s
 
 static bool SaveArchiveRecruitment(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 78U) return true;
+    if (sim->schema_version < 80U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "INSERT INTO archive_recruitment VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", &statement, error, error_capacity)) return false;
     const CcArchiveRecruitmentOrder *order = &sim->archive_recruitment;
@@ -80,7 +80,7 @@ static bool SaveArchiveRecruitment(sqlite3 *database, const CcSim *sim, char *er
 
 static bool ReadArchiveRecruitment(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 78U) return true;
+    if (sim->schema_version < 80U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "SELECT * FROM archive_recruitment ORDER BY id;", &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW || sqlite3_column_int64(statement, 0) != 1) {

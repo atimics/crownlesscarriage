@@ -793,6 +793,7 @@ static int32_t AdventureBookPageSize(const LocalState *local)
 
 static int32_t AdventureBookLastPage(const CcSim *sim, const LocalState *local)
 {
+    if (local->book_page == 4) return 0;
     int32_t count = 0;
     if (local->book_page == 0) count = sim->quest_outcome_count;
     else if (local->book_page == 1) {
@@ -800,6 +801,8 @@ static int32_t AdventureBookLastPage(const CcSim *sim, const LocalState *local)
             if (AdventureKnownPerson(sim, &sim->characters[i])) count += 1;
     } else if (local->book_page == 2) {
         for (int32_t i = 0; i < CC_GOOD_COUNT; ++i) if (sim->player.cargo[i] > 0) count += 1;
+        const CcTreasure *book = CcSimDeepWyrmProphecy(sim);
+        if (book != NULL && !book->destroyed && book->owner_id == sim->player.id) count += 1;
     } else count = sim->event_count;
     int32_t page = AdventureBookPageSize(local);
     return count > 0 ? (count - 1) / page * page : 0;
@@ -809,12 +812,17 @@ static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
 {
     Rectangle panel = AdventurePanel();
     AdventurePanelTitle(panel, "Company Book");
-    const char *pages[] = {"Promises", "People", "Cargo", "Journal"};
-    for (int i = 0; i < 4; ++i) AdventureButton(AdventureTab(panel, i, 4), pages[i], true, local->book_page == i);
+    const CcTreasure *book = CcSimDeepWyrmProphecy(sim);
+    int page_count = book != NULL ? 5 : 4;
+    const char *pages[] = {"Promises", "People", "Cargo", "Journal", "Prophecy"};
+    for (int i = 0; i < page_count; ++i) AdventureButton(AdventureTab(panel, i, page_count), pages[i], true, local->book_page == i);
     int x = (int)panel.x + 28, y = (int)panel.y + 132;
     int width = (int)panel.width - 56;
     int size = AdventureTextSize(15);
     if (local->book_page == 0) {
+        if (book != NULL && !book->destroyed && book->owner_id == sim->player.id) {
+            y += AdventureWrap("Carry the prophecy book to Gloamgate. Read it on the Prophecy page.", x, y, width, size, CC_GOLD) + 18;
+        }
         const CcSituation *promise = CcSimAcceptedSituation(sim);
         if (promise != NULL) {
             CcOverlayDrawText(TextFormat("Accepted  /  Due day %d", promise->deadline_day), x, y, size, TEAL);
@@ -858,12 +866,32 @@ static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
             CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity), x, y, size + 2, CC_GOLD);
         y += 46;
         int32_t skipped = 0;
+        if (book != NULL && !book->destroyed && book->owner_id == sim->player.id) {
+            if (skipped++ >= local->book_offset) {
+                CcOverlayDrawText("1  Prophecy of the Deep Wyrm  /  Read on the Prophecy page", x, y, size, CC_GOLD);
+                y += 34;
+            }
+        }
         for (int32_t i = 0; i < CC_GOOD_COUNT && y < (int)(panel.y + panel.height) - 74; ++i) {
             if (sim->player.cargo[i] <= 0) continue;
             if (skipped++ < local->book_offset) continue;
             CcOverlayDrawText(TextFormat("%d  %s", sim->player.cargo[i], CcGoodName((CcGood)i)), x, y, size, INK);
             y += 34;
         }
+    } else if (local->book_page == 4 && book != NULL) {
+        CcOverlayDrawText(CC_PROPHECY_TITLE, x, y, size + 3, CC_GOLD);
+        y += 44;
+        y += AdventureWrap(CC_PROPHECY_WORDS, x, y, width, size + 2, INK) + 24;
+        y += AdventureWrap(CC_PROPHECY_CHARGE, x, y, width, size, TEAL) + 20;
+        const CcSettlement *destination = CcSimProphecyDestination(sim);
+        const char *state = book->destroyed ? "The book was lost. Its words remain in your journal." :
+            book->owner_id == sim->player.id ? "A gilt-bound book in your carriage. One cargo space." :
+            destination != NULL && book->owner_id == destination->id ? "Delivered to the town council in Gloamgate." :
+            "The book has passed into other hands.";
+        (void)AdventureWrap(state, x, y, width, size, MUTED);
+        if (!book->destroyed && book->owner_id == sim->player.id)
+            AdventureButton((Rectangle){panel.x + 28, panel.y + panel.height - 112, panel.width - 56, 42},
+                "Deliver to Gloamgate council  /  E", CcSimCanDeliverProphecy(sim), false);
     } else {
         int32_t limit = AdventureBookPageSize(local);
         for (int32_t i = local->book_offset; i < sim->event_count && i < local->book_offset + limit; ++i) {
@@ -876,20 +904,27 @@ static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
     }
     AdventureButton((Rectangle){panel.x + 24, panel.y + panel.height - 52, 132, 38}, "Previous Up", local->book_offset > 0, false);
     AdventureButton((Rectangle){panel.x + 166, panel.y + panel.height - 52, 142, 38}, "Next Down", local->book_offset < AdventureBookLastPage(sim, local), false);
-    CcOverlayDrawText("1-4 pages  /  B or Tab closes", (int)(panel.x + panel.width) - 350,
+    CcOverlayDrawText(page_count == 5 ? "1-5 pages  /  B or Tab closes" : "1-4 pages  /  B or Tab closes", (int)(panel.x + panel.width) - 350,
         (int)(panel.y + panel.height) - 38, AdventureTextSize(12), MUTED);
 }
 
-static bool HandleAdventureBook(const CcSim *sim, LocalState *local, ClientView *view, ClientView *return_view)
+static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *local, ClientView *view, ClientView *return_view, char *message, size_t message_capacity)
 {
     if (*view != VIEW_LEDGER || ClientKeyPressed(KEY_F5)) return false;
     Rectangle panel = AdventurePanel();
     if (ClientKeyPressed(KEY_ESCAPE) || ClientKeyPressed(KEY_B) || ClientKeyPressed(KEY_TAB) ||
         AdventureHit(AdventureClose(panel))) { *view = SafeOverlayReturnView(*return_view); return true; }
-    for (int i = 0; i < 4; ++i) {
-        if (ClientKeyPressed(KEY_ONE + i) || AdventureHit(AdventureTab(panel, i, 4))) {
+    const CcTreasure *book = CcSimDeepWyrmProphecy(sim);
+    int page_count = book != NULL ? 5 : 4;
+    for (int i = 0; i < page_count; ++i) {
+        if (ClientKeyPressed(KEY_ONE + i) || AdventureHit(AdventureTab(panel, i, page_count))) {
             local->book_page = i; local->book_offset = 0;
         }
+    }
+    if (local->book_page == 4 && book != NULL && CcSimCanDeliverProphecy(sim) &&
+        (ClientKeyPressed(KEY_E) || AdventureHit((Rectangle){panel.x + 28, panel.y + panel.height - 112, panel.width - 56, 42}))) {
+        CcCommand deliver = {.kind = CC_COMMAND_DELIVER_PROPHECY, .target_id = book->id};
+        (void)ApplyCommand(journal, sim, deliver, message, message_capacity);
     }
     if (ClientKeyPressed(KEY_UP) || AdventureHit((Rectangle){panel.x + 24, panel.y + panel.height - 52, 132, 38}))
         local->book_offset = local->book_offset >= AdventureBookPageSize(local) ? local->book_offset - AdventureBookPageSize(local) : 0;
