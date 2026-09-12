@@ -4136,8 +4136,7 @@ static ContextActionSet BuildContextActions(
         const CcGossip *story = CcSimPersonalGossip(sim, local->conversation_character_id,
             0, NULL);
         if (story != NULL) {
-            /* One chat verb draws the fragments in turn: the account, who told
-               them, then the next account. No interrogation buttons. */
+            /* Chat advances through the account, its source, and the next account. */
             AddDetailedContextAction(&set, CONTEXT_ACTION_GOSSIP_CHAT,
                 "Chat", "1", "HEAR THEIR NEWS", true, false);
             if (core_conversation.model != NULL && core_conversation.cached && !core_conversation.pending &&
@@ -10026,11 +10025,6 @@ static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
             }
         }
     }
-    if (view == VIEW_CHARACTER) CcCoreConversationStep(&core_conversation, 2U);
-    else {
-        CcCoreConversationReset(&core_conversation);
-        core_conversation_speaker = 0U;
-    }
     CcSpeech speech;
     bool has_speech = false;
     if (view == VIEW_CHARACTER) {
@@ -10095,6 +10089,10 @@ static int RunTravelAudioRegression(void)
 }
 #endif
 
+#if defined(CC_CLIENT_SELF_TESTS)
+#include "../../tests/client_core_language.inc"
+#endif
+
 #include "cc_review_journey.inc"
 #include "cc_capture_request.inc"
 #if defined(CC_CLIENT_SELF_TESTS)
@@ -10111,6 +10109,10 @@ static int RunTravelAudioRegression(void)
 
 int main(int argc, char **argv)
 {
+#if defined(CC_CLIENT_SELF_TESTS)
+    if (argc == 3 && strcmp(argv[1], "--test-core-language") == 0)
+        return RunCoreLanguageRegression(argv[2]);
+#endif
 #if defined(CC_CLIENT_SELF_TESTS)
     if (argc == 2 && strcmp(argv[1], "--test-render-benchmark") == 0) return RunRenderBenchmarkRegression();
     if (argc == 2 && strcmp(argv[1], "--test-capture-presentation") == 0) return RunCapturePresentationRegression();
@@ -10474,9 +10476,9 @@ int main(int argc, char **argv)
         UnloadRenderTexture(local_target);
         ReleaseMapTextures(&map_textures);
         CcCoopClientShutdown();
-    CcCoreModelFree(core_conversation.model);
-    core_conversation.model = NULL;
-    CloseWindow();
+        CcCoreModelFree(core_conversation.model);
+        core_conversation.model = NULL;
+        CloseWindow();
         CcClientInstanceLockRelease(&instance_lock);
         return 1;
     }
@@ -10725,6 +10727,11 @@ int main(int argc, char **argv)
         }
         if (!menu_frame && presentation.update_convoy) {
             UpdateOpenWorldCamera(&sim, &local, frame_delta_time);
+        }
+        if (view == VIEW_CHARACTER && !menu_frame) CcCoreConversationStep(&core_conversation, 2U);
+        else {
+            CcCoreConversationReset(&core_conversation);
+            core_conversation_speaker = 0U;
         }
         if (normal_play) {
             if (view != audio_previous_view) CcAudioPlay(CC_SOUND_PAGE);

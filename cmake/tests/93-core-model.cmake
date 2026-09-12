@@ -9,3 +9,7 @@ if(CC_PYTHON3_EXECUTABLE)
     add_test(NAME core_model_native_parity COMMAND ${CC_PYTHON3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/core_model_tests.py $<TARGET_FILE:core_model_probe>)
 endif()
+if(CC_BUILD_CLIENT AND NOT EMSCRIPTEN)
+    add_test(NAME core_model_game_conversation COMMAND crownless_carriage
+        --test-core-language ${CMAKE_CURRENT_SOURCE_DIR}/assets/language/core.ccv2)
+endif()
