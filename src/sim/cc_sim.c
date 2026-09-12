@@ -13362,6 +13362,7 @@ static void AdvanceDragonCampaign(CcSim *sim)
     int32_t slain_age_years = sim->dragon.age_days / 365;
     CcDragonLifeStage slain_stage = sim->dragon.life_stage;
     sim->dragon.slain = true;
+    sim->dragon.dragons_slain += 1;
     sim->dragon.slain_day = sim->current_day;
     sim->dragon.life_stage = CC_DRAGON_STAGE_AFTERDRAGON;
     sim->dragon.activity = CC_DRAGON_ACTIVITY_AFTERMATH;
@@ -19721,6 +19722,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             dragon->stolen_outstanding > CC_SIM_MAX_MONEY ||
             dragon->retaliations < 0 ||
             dragon->retaliations > CC_SIM_MAX_UNITS ||
+            dragon->dragons_slain < 0 ||
             !dragon_anger_valid ||
             !named_theft_valid ||
             (dragon->slain &&

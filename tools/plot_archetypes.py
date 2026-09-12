@@ -10,16 +10,16 @@ import matplotlib.pyplot as plt
 
 GROUPS = {
     "Rich + strong dragon": lambda r: (
-        r["dragon_slain"] == "0"
+        r["dragon_stage"] != "6"
         and int(r["dragon_crown_strength"]) >= 70
         and int(r["average_prosperity"]) >= 35),
     "Poor + no dragon": lambda r: (
-        r["dragon_slain"] == "1"
+        r["dragon_stage"] == "6"
         and int(r["average_prosperity"]) < 30
         and int(r["average_hunger"]) > 50
         and int(r["average_legitimacy"]) < 30),
-    "Dragon survived": lambda r: r["dragon_slain"] == "0",
-    "Dragon slain": lambda r: r["dragon_slain"] == "1",
+    "No dragon slain": lambda r: r["dragons_slain"] == "0",
+    "Dragons slain": lambda r: int(r["dragons_slain"]) > 0,
 }
 COLORS = ["#3aa76d", "#e05252", "#4c8bf5", "#d97742"]
 

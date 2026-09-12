@@ -31,8 +31,9 @@ def main():
     rows = load(args.csv)
     os.makedirs(args.out, exist_ok=True)
 
-    slain = ints(rows, "dragon_slain")
+    slain = ints(rows, "dragons_slain")
     stages = ints(rows, "dragon_stage")
+    dragon_alive = [s != 6 for s in stages]
     active = ints(rows, "active_settlements")
     abandoned = ints(rows, "abandoned_settlements")
     pop = ints(rows, "total_population")
@@ -52,12 +53,13 @@ def main():
 
     # 1. Dragon outcomes and life stage
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.6))
-    n_slain = sum(slain)
-    n_alive = len(rows) - n_slain
-    axes[0].pie([n_alive, n_slain], labels=["Survived", "Slain"],
+    n_ever_slain = sum(1 for s in slain if s > 0)
+    n_never_slain = len(rows) - n_ever_slain
+    axes[0].pie([n_never_slain, n_ever_slain],
+                labels=["Never slain", "Dragons slain"],
                 autopct="%.1f%%", startangle=90,
                 colors=["#4c8bf5", "#e05252"], explode=(0, 0.05))
-    axes[0].set_title("Dragon at year 1000")
+    axes[0].set_title("Dragons slain over the run")
     from collections import Counter
     counts = Counter(stages)
     names = [STAGE[s] for s in sorted(counts)]
@@ -137,11 +139,11 @@ def main():
 
     # 6. Scatter: population vs legitimacy, colored by dragon fate
     fig, ax = plt.subplots(figsize=(7.5, 5.4))
-    colors = ["#4c8bf5" if s == 0 else "#e05252" for s in slain]
+    colors = ["#4c8bf5" if alive else "#e05252" for alive in dragon_alive]
     ax.scatter(pop, legit, c=colors, s=18, alpha=0.55, edgecolors="none")
     ax.set_xlabel("population")
     ax.set_ylabel("legitimacy")
-    ax.set_title("Population vs legitimacy (blue = dragon survived, red = slain)")
+    ax.set_title("Population vs legitimacy (blue = dragon alive, red = dead)")
     fig.tight_layout()
     fig.savefig(os.path.join(args.out, "pop_legit.png"), dpi=120)
     plt.close(fig)

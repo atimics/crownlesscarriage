@@ -70,7 +70,7 @@ def main():
         for name in [
             "total_population", "active_settlements", "average_prosperity",
             "average_security", "average_hunger", "average_legitimacy",
-            "closed_routes", "wars", "alliances", "dragon_slain",
+            "closed_routes", "wars", "alliances", "dragons_slain",
         ]:
             print(describe(results, name))
     if failures:
