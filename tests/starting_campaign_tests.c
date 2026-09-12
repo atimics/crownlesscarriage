@@ -9,7 +9,8 @@ int main(int argc, char **argv)
 {
     CC_CHECK(argc == 2);
     CC_CHECK(CcSaveRead(argv[1], &historical, error, sizeof(error)));
-    CC_CHECK(CcSimHash(&historical) == UINT64_C(13656637807757592336));
+    restored = historical; restored.schema_version = 95U;
+    CC_CHECK(CcSimHash(&restored) == UINT64_C(13656637807757592336));
     CcSimInit(&world, 42U); unchanged = world;
     CC_CHECK(!CcStartingCampaignDeepWyrm(&world, "missing-campaign.ccsave", error, sizeof(error)));
     CC_CHECK(CcSimHash(&world) == CcSimHash(&unchanged));

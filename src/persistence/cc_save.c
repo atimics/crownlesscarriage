@@ -1430,7 +1430,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " revision INTEGER NOT NULL,return_speed INTEGER NOT NULL,light INTEGER NOT NULL,"
         " steps INTEGER NOT NULL,seen INTEGER NOT NULL,bar_open INTEGER NOT NULL,surveyed INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS mine_pack (good INTEGER PRIMARY KEY,quantity INTEGER NOT NULL);";
-    return Execute(database, "CREATE TABLE IF NOT EXISTS archive_convoy_journey (id INTEGER PRIMARY KEY CHECK(id=1),departure_day INTEGER NOT NULL,arrival_day INTEGER NOT NULL);", error, error_capacity) &&
+    return Execute(database, "CREATE TABLE IF NOT EXISTS archive_convoy_home (id INTEGER PRIMARY KEY CHECK(id=1),home_id INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS archive_convoy_journey (id INTEGER PRIMARY KEY CHECK(id=1),departure_day INTEGER NOT NULL,arrival_day INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS archive_convoy (id INTEGER PRIMARY KEY CHECK(id=1),origin_id INTEGER NOT NULL,destination_id INTEGER NOT NULL,sponsor_id INTEGER NOT NULL,funding_kingdom_id INTEGER NOT NULL,carriage_id INTEGER NOT NULL,first_route_id INTEGER NOT NULL,first_hop_id INTEGER NOT NULL,book_ids_0 INTEGER NOT NULL,book_ids_1 INTEGER NOT NULL,book_ids_2 INTEGER NOT NULL,book_ids_3 INTEGER NOT NULL,purse INTEGER NOT NULL,wheat INTEGER NOT NULL,book_count INTEGER NOT NULL,reserved_day INTEGER NOT NULL,status INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS archive_seat (id INTEGER PRIMARY KEY CHECK(id=1),seat_id INTEGER NOT NULL,failed_since INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS archive_staff (id INTEGER PRIMARY KEY CHECK(id=1),person_0 INTEGER NOT NULL,person_1 INTEGER NOT NULL,person_2 INTEGER NOT NULL,person_3 INTEGER NOT NULL,seat_id INTEGER NOT NULL,legacy_scribes INTEGER NOT NULL,active INTEGER NOT NULL);", error, error_capacity) &&
@@ -3375,7 +3376,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
             "DELETE FROM gossip_version;"
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
-            "DELETE FROM town_recovery; DELETE FROM grain_supply; DELETE FROM archive_recruitment; DELETE FROM archive_recruitment_journey; DELETE FROM archive_recruitment_training; DELETE FROM archive_staff; DELETE FROM archive_seat; DELETE FROM archive_convoy; DELETE FROM archive_convoy_journey; DELETE FROM war_party; DELETE FROM dispatch;"
+            "DELETE FROM town_recovery; DELETE FROM grain_supply; DELETE FROM archive_recruitment; DELETE FROM archive_recruitment_journey; DELETE FROM archive_recruitment_training; DELETE FROM archive_staff; DELETE FROM archive_seat; DELETE FROM archive_convoy; DELETE FROM archive_convoy_journey; DELETE FROM archive_convoy_home; DELETE FROM war_party; DELETE FROM dispatch;"
             "DELETE FROM horse_team; DELETE FROM stable_horse;"
             "DELETE FROM pony_company; DELETE FROM rainbow_pony;"
             "DELETE FROM route; DELETE FROM road_site; DELETE FROM road_site_stock;"
