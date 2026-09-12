@@ -1,0 +1,929 @@
+{
+  "version": 1,
+  "grammar_sha256": "ad017639e911c482e86e25f063207504769353dcd05e263d31dd9a6ef9409fb6",
+  "event_count": 136,
+  "rule_count": 61,
+  "events": [
+    {
+      "kind": "HARVEST_FAILED",
+      "value": 0,
+      "rules": [
+        "harvest_failed_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "ROUTE_CLOSED",
+      "value": 1,
+      "rules": [
+        "route_closed_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "SHORTAGE",
+      "value": 2,
+      "rules": [
+        "shortage_0",
+        "shortage_1"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "SHIPMENT_DEPARTED",
+      "value": 3,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "SHIPMENT_ARRIVED",
+      "value": 4,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "BANDIT_PRESSURE",
+      "value": 5,
+      "rules": [
+        "bandit_pressure_0",
+        "bandit_pressure_1"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "MONSTER_PRESSURE",
+      "value": 6,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "PLAYER_TRADE",
+      "value": 7,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "PLAYER_TRAVEL",
+      "value": 8,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "ROUTE_REPAIRED",
+      "value": 9,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DUNGEON_CHANGED",
+      "value": 10,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "RELIEF",
+      "value": 11,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "SHIPMENT_LOST",
+      "value": 12,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "KINGDOM_ACTION",
+      "value": 13,
+      "rules": [
+        "kingdom_action_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "ROUTE_DECAY",
+      "value": 14,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "FACTION_SHIFT",
+      "value": 15,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "SITUATION_CREATED",
+      "value": 16,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "SITUATION_RESOLVED",
+      "value": 17,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "SITUATION_FAILED",
+      "value": 18,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "PLAYER_AMBUSH",
+      "value": 19,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "MAP_BOUGHT",
+      "value": 20,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "MAP_SOLD",
+      "value": 21,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "CHARTER_ACCEPTED",
+      "value": 22,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "CHARTER_ABANDONED",
+      "value": 23,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "JOURNEY_ENCOUNTER",
+      "value": 24,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "ENCOUNTER_COMBAT",
+      "value": 25,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "ENCOUNTER_NEGOTIATED",
+      "value": 26,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DELAYED_ECHO",
+      "value": 27,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "JOURNEY_DEPARTED",
+      "value": 28,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "SERVICE_OPENED",
+      "value": 29,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "BANDIT_RAID_DEPARTED",
+      "value": 30,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "SETTLEMENT_RAIDED",
+      "value": 31,
+      "rules": [
+        "settlement_raided_0",
+        "settlement_raided_1"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "BANDIT_RAID_RETURNED",
+      "value": 32,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "GOBLIN_TRIBUTE_DEPARTED",
+      "value": 33,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "GOBLIN_TRIBUTE_TAKEN",
+      "value": 34,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "GOBLIN_TRIBUTE_DELIVERED",
+      "value": 35,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DRAGON_HOARD_STOLEN",
+      "value": 36,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DRAGON_OMEN",
+      "value": 37,
+      "rules": [
+        "dragon_omen_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "DRAGON_TREASURE_RETURNED",
+      "value": 38,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DRAGON_RETALIATION",
+      "value": 39,
+      "rules": [
+        "dragon_retaliation_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "INEQUALITY_PRESSURE",
+      "value": 40,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "HOARD_HEIST_DEPARTED",
+      "value": 41,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "HOARD_HEIST_RETURNED",
+      "value": 42,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "WAR_PRESSURE",
+      "value": 43,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "WAR_CHEST_FUNDED",
+      "value": 44,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "WAR_SUPPLY_BOUGHT",
+      "value": 45,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "WAR_SUPPLY_SHORTAGE",
+      "value": 46,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "RESOURCE_EXTRACTED",
+      "value": 47,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "SMITH_PRODUCTION",
+      "value": 48,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "TREASURE_CRAFTED",
+      "value": 49,
+      "rules": [
+        "treasure_crafted_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "GOBLIN_RAID_DEPARTED",
+      "value": 50,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "GOBLIN_RAIDED",
+      "value": 51,
+      "rules": [
+        "goblin_raided_0",
+        "goblin_raided_1"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "GOBLIN_RAID_RETURNED",
+      "value": 52,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "WAR_MATERIEL_LOST",
+      "value": 53,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "IRON_LEDGER_LOAN",
+      "value": 54,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "IRON_LEDGER_REPAID",
+      "value": 55,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "GOBLIN_HOARD_DEFENDED",
+      "value": 56,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "COURIER_DEPARTED",
+      "value": 57,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "COURIER_ARRIVED",
+      "value": 58,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "COURIER_LOST",
+      "value": 59,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "COURIER_DISTORTED",
+      "value": 60,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "WAR_DECLARED",
+      "value": 61,
+      "rules": [
+        "war_declared_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "PEACE_DECLARED",
+      "value": 62,
+      "rules": [
+        "peace_declared_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "ALLIANCE_DECLARED",
+      "value": 63,
+      "rules": [
+        "alliance_declared_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "DRAGON_MUSTERED",
+      "value": 64,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DRAGON_BATTLE",
+      "value": 65,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DRAGON_SLAIN",
+      "value": 66,
+      "rules": [
+        "dragon_slain_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "DRAGON_HOARD_RECOVERED",
+      "value": 67,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DRAGON_HUNT",
+      "value": 68,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DRAGON_CROWNED",
+      "value": 69,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DRAGON_UNCROWNED",
+      "value": 70,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DRAGON_BROOD",
+      "value": 71,
+      "rules": [
+        "dragon_brood_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "DRAGON_WHELP_DISPERSED",
+      "value": 72,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DRAGON_AFTERSHOCK",
+      "value": 73,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DRAGON_SUCCESSOR",
+      "value": 74,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "GOBLIN_CULT_RALLIED",
+      "value": 75,
+      "rules": [
+        "goblin_cult_rallied_0",
+        "goblin_cult_rallied_1",
+        "goblin_cult_rallied_2"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "GOBLIN_DRAGON_SEED",
+      "value": 76,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "ENCOUNTER_WITHDRAWN",
+      "value": 77,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "COW_CALVING",
+      "value": 78,
+      "rules": [
+        "cow_calving_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "COW_SLAUGHTERED",
+      "value": 79,
+      "rules": [
+        "cow_slaughtered_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "HORSE_BRED",
+      "value": 80,
+      "rules": [
+        "horse_bred_0",
+        "horse_bred_1"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "FOAL_BORN",
+      "value": 81,
+      "rules": [
+        "foal_born_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "HORSE_TEAM_CHANGED",
+      "value": 82,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "GOBLIN_RAID_PREPARED",
+      "value": 83,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "GOBLIN_TARGET_WARNED",
+      "value": 84,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "GOBLIN_EXPEDITION_INTERCEPTED",
+      "value": 85,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "GOBLIN_TRADE",
+      "value": 86,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "GOBLIN_DRAGON_SEED_RUMORED",
+      "value": 87,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "GOBLIN_DRAGON_SEED_PREPARED",
+      "value": 88,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "CHARACTER_INTERACTION",
+      "value": 89,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "JOURNEY_WARNING",
+      "value": 90,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "AMBUSH_EVADED",
+      "value": 91,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "ENCOUNTER_LOOT",
+      "value": 92,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "GOBLIN_TUNNEL_TRAVERSED",
+      "value": 93,
+      "rules": [
+        "goblin_tunnel_traversed_0",
+        "goblin_tunnel_traversed_1"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "DUNGEON_EXPEDITION_BEGAN",
+      "value": 94,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DUNGEON_ROOM_ENTERED",
+      "value": 95,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DUNGEON_ENCOUNTER",
+      "value": 96,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DUNGEON_SHORTCUT_OPENED",
+      "value": 97,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DUNGEON_LOOT",
+      "value": 98,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DUNGEON_THRESHOLD_REACHED",
+      "value": 99,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "DUNGEON_EXPEDITION_ENDED",
+      "value": 100,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "RELATIONSHIP_HISTORY",
+      "value": 101,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "RUMOR_SHARED",
+      "value": 102,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "FACT_REVEALED",
+      "value": 103,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "RELATIONSHIP_CHANGED",
+      "value": 104,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "FRONT_CREATED",
+      "value": 105,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "FRONT_RESOLVED",
+      "value": 106,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "FRONT_FAILED",
+      "value": 107,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "QUEST_PROGRESS",
+      "value": 108,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "LORE_RECORDED",
+      "value": 109,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "LORE_LOST",
+      "value": 110,
+      "rules": [
+        "lore_lost_0",
+        "lore_lost_1"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "JOURNEY_BREAK",
+      "value": 111,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "JOURNEY_CAMP",
+      "value": 112,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "ROAD_HOUSE_LODGING",
+      "value": 113,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "CHARACTER_BORN",
+      "value": 114,
+      "rules": [
+        "character_born_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "CHARACTER_DIED",
+      "value": 115,
+      "rules": [
+        "character_died_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "WOODLOT_HARVEST",
+      "value": 116,
+      "rules": [
+        "woodlot_harvest_0",
+        "woodlot_harvest_1"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "BAKERY_PRODUCTION",
+      "value": 117,
+      "rules": [
+        "bakery_production_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "QUARRY_OUTPUT",
+      "value": 118,
+      "rules": [
+        "quarry_output_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "MASONRY_REPAIR",
+      "value": 119,
+      "rules": [
+        "masonry_repair_0",
+        "masonry_repair_1",
+        "masonry_repair_2"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "SHEEP_BRED",
+      "value": 120,
+      "rules": [
+        "sheep_bred_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "SHEEP_SHEARED",
+      "value": 121,
+      "rules": [
+        "sheep_sheared_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "SHEEP_SLAUGHTERED",
+      "value": 122,
+      "rules": [
+        "sheep_slaughtered_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "PAPER_MILLED",
+      "value": 123,
+      "rules": [
+        "paper_milled_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "KING_ANOINTED",
+      "value": 124,
+      "rules": [
+        "king_anointed_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "PRETENDER_CRISIS",
+      "value": 125,
+      "rules": [
+        "pretender_crisis_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "MONASTIC_SUCCESSION",
+      "value": 126,
+      "rules": [
+        "monastic_succession_0",
+        "monastic_succession_1"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "ROYAL_SUCCESSION",
+      "value": 127,
+      "rules": [
+        "royal_succession_0",
+        "royal_succession_1"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "DRAGON_PATRON_NAMED",
+      "value": 128,
+      "rules": [
+        "dragon_patron_named_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "DRAGON_TERRITORY_LOST",
+      "value": 129,
+      "rules": [
+        "dragon_territory_lost_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "ROYAL_CARRIAGE_BLOCKED",
+      "value": 130,
+      "rules": [
+        "royal_carriage_blocked_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "ROYAL_CARRIAGE_REROUTED",
+      "value": 131,
+      "rules": [
+        "royal_carriage_rerouted_0",
+        "royal_carriage_rerouted_1",
+        "royal_carriage_rerouted_2"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "PARTY_WIPED",
+      "value": 132,
+      "rules": [
+        "party_wiped_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "NOTICE_POSTED",
+      "value": 133,
+      "rules": [
+        "notice_posted_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "ROAD_SITE_PRODUCTION",
+      "value": 134,
+      "rules": [
+        "road_site_production_0",
+        "road_site_production_1"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "PROPHECY_DELIVERED",
+      "value": 135,
+      "rules": [
+        "prophecy_delivered_0"
+      ],
+      "status": "field_rules"
+    }
+  ]
+}
