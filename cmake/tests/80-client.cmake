@@ -12,6 +12,7 @@ if(CC_BUILD_CLIENT)
              COMMAND crownless_carriage --test-capture-frames)
     add_test(NAME capture_request_contract
              COMMAND crownless_carriage --test-capture-request)
+    add_test(NAME travel_hold_input COMMAND crownless_carriage --test-travel-hold)
     add_test(NAME storybook_travel_boundaries
              COMMAND crownless_carriage --test-storybook-travel)
     add_test(NAME travel_audio_presentation
@@ -28,6 +29,7 @@ if(CC_BUILD_CLIENT)
              COMMAND crownless_carriage --test-mine-input)
     add_test(NAME road_journey_save
              COMMAND crownless_carriage --test-road-journey-save)
+    add_test(NAME abandoned_town_presence COMMAND crownless_carriage --test-abandoned-town)
     add_test(NAME adventure_input_flow
              COMMAND crownless_carriage --test-adventure-input)
     add_test(NAME title_and_pause_menu

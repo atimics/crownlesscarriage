@@ -1,3 +1,6 @@
+static int32_t coop_travel_scale = 1;
+void CcCoopClientTravelScale(int32_t scale) { coop_travel_scale = scale; }
+
 /* Native transport shares the host protocol and the in-game company menus. */
 #include <math.h>
 #include <pthread.h>
@@ -397,8 +400,8 @@ int32_t CcCoopClientExchange(int32_t scene, const float *pose, CcCrewMember *cre
     if (coop_native.connected && coop_native.visit[0] && coop_native.kind == NATIVE_IDLE &&
         !coop_native.closed && now - coop_native.last_pose >= 0.1) {
         char body[4096];
-        size_t used = (size_t)snprintf(body, sizeof(body), "{\"visit\":\"%s\",\"context\":\"%s\",\"scene\":%d,\"dead\":%s,\"pose\":[",
-            coop_native.visit, coop_native.context, scene, coop_native.dead ? "true" : "false");
+        size_t used = (size_t)snprintf(body, sizeof(body), "{\"visit\":\"%s\",\"context\":\"%s\",\"scene\":%d,\"dead\":%s,\"travel_scale\":%d,\"pose\":[",
+            coop_native.visit, coop_native.context, scene, coop_native.dead ? "true" : "false", coop_travel_scale);
         for (int i = 0; i < CC_CREW_POSE_FLOATS; ++i) {
             if (!isfinite(pose[i]) || fabsf(pose[i]) > 1000000.0f) return 0;
             int added = snprintf(body + used, sizeof(body) - used, "%s%.3f", i ? "," : "", (double)pose[i]);

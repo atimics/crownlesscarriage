@@ -1,5 +1,6 @@
 find_program(CC_NODE_EXECUTABLE node)
 if(CC_NODE_EXECUTABLE)
+    add_test(NAME travel_touch_hold COMMAND ${CC_NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/travel_touch_tests.cjs)
     add_test(NAME web_speech_delivery COMMAND ${CC_NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_voice_tests.cjs)
     add_test(NAME browser_persistence_contract
              COMMAND ${CC_NODE_EXECUTABLE}

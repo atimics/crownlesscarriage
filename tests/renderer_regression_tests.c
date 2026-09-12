@@ -179,6 +179,8 @@ static void TestBodyText(void)
                     "unloading the body font must restore fallback measurement");
 }
 
+#include "abandoned_town_captures.inc"
+
 int main(int argc, char **argv)
 {
     if (argc == 2 && strcmp(argv[1], "--physical-goods") == 0) {
@@ -191,6 +193,7 @@ int main(int argc, char **argv)
     TestSkinTurns();
     TestPonyHarnessAttachment();
     if (argc == 3 && (strcmp(argv[1], "--graphics") == 0 ||
+                      strcmp(argv[1], "--abandoned-town") == 0 ||
                       strcmp(argv[1], "--travel-graphics") == 0 ||
                       strcmp(argv[1], "--creature-captures") == 0 ||
                       strcmp(argv[1], "--pony-captures") == 0 ||
@@ -220,6 +223,8 @@ int main(int argc, char **argv)
             TestCreatureTurns();
             TestDragonCourtColors();
             WriteViewportFixture(argv[2]);
+        } else if (strcmp(argv[1], "--abandoned-town") == 0) {
+            TestAbandonedTownGraphics(argv[2]);
         } else if (strcmp(argv[1], "--travel-graphics") == 0) {
             TestTravelForestCameraTurn();
             TestTravelLeafShimmer();

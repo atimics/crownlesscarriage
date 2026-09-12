@@ -76,12 +76,14 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
     if (!AdventureScene(local)) return;
     const CcLocalPlaceProfile *place = CcLocalPlaceProfileForSettlement(
         CcSimSettlement(sim, sim->player.location_id));
+    const CcSettlement *town = CcSimSettlement(sim, sim->player.location_id);
+    bool abandoned = town != NULL && CcSettlementIsAbandoned(town);
     if (local->market_interior) {
-        (void)AdventureTarget(local, sim, CC_INTERACTION_COUNTER, 1U,
+        if (!abandoned) (void)AdventureTarget(local, sim, CC_INTERACTION_COUNTER, 1U,
             place->keeper_name, AdventureDeliveryAtHand(sim) != NULL ? "Deliver promise" : "Trade", (Vector3){6.55f, 0, 1.9f}, 2.1f, 2.0f, 1.0f,
             (Vector2){6.55f, 3.15f}, 1.0f);
         const CcSettlement *warehouse = CcSimSettlement(sim, sim->player.location_id);
-        for (int32_t good = 0; warehouse != NULL && good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = 0; !abandoned && warehouse != NULL && good < CC_GOOD_COUNT; ++good) {
             if (warehouse->stock[good] <= 0 && sim->player.cargo[good] <= 0) continue;
             Vector3 bay = CcLocalWarehouseGoodPosition((CcGood)good);
             CcInteractionTarget *stock = AdventureTarget(local, sim, CC_INTERACTION_STOCK,
@@ -97,16 +99,21 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
         const CcLocalPlaceBuilding *hall = &place->building[place->primary_building];
         float door_x = hall->x + hall->width * 0.5f;
         float door_z = hall->z + hall->depth + 0.15f;
-        (void)AdventureTarget(local, sim, CC_INTERACTION_DOOR, 1U,
+        CcInteractionTarget *door = AdventureTarget(local, sim, CC_INTERACTION_DOOR, 1U,
             place->primary_hall, AdventureDeliveryAtHand(sim) != NULL ? "Deliver promise" : "Enter", (Vector3){door_x, 0, door_z}, 1.8f, 2.8f, 0.5f,
             (Vector2){door_x, door_z + 1.0f}, 1.1f);
-        (void)AdventureTarget(local, sim, CC_INTERACTION_BOARD, 1U,
+        if (abandoned && door != NULL) {
+            door->available = false;
+            (void)snprintf(door->verb, sizeof(door->verb), "Closed");
+            (void)snprintf(door->reason, sizeof(door->reason), "The town is abandoned. Its services are closed.");
+        }
+        if (!abandoned) (void)AdventureTarget(local, sim, CC_INTERACTION_BOARD, 1U,
             place->notice_board, "Read promises", (Vector3){LOCAL_NOTICE.x, 0, LOCAL_NOTICE.y},
             1.6f, 2.5f, 0.7f, LOCAL_NOTICE, 1.05f);
         if (local->opening_step == CC_LOCAL_OPENING_COMPLETE) (void)AdventureTarget(local, sim, CC_INTERACTION_CARRIAGE, 1U,
             "Crownless carriage", "Board", (Vector3){LOCAL_CARRIAGE.x, 0, LOCAL_CARRIAGE.y},
             3.2f, 3.2f, 5.4f, LOCAL_CARRIAGE_BAY, 1.5f);
-        if (local->course.situation_witness_active) {
+        if (!abandoned && local->course.situation_witness_active) {
             const CcCharacter *person = CcSimCharacter(sim, local->course.situation_witness_character_id);
             Vector3 position = local->course.situation_witness.position;
             CcInteractionTarget *target = AdventureTarget(local, sim, CC_INTERACTION_PERSON,
@@ -119,13 +126,13 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
                 target->situation_id = local->course.situation_witness_id;
             }
         }
-        for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+        for (int32_t i = 0; !abandoned && i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
             Vector3 position = local->course.runners[i].agent.position;
             (void)AdventureTarget(local, sim, CC_INTERACTION_PERSON, UINT64_C(0x200000000) + (uint64_t)i,
                 "Town guard", "Talk", (Vector3){position.x, 0, position.z}, 0.9f, 2.0f, 0.7f,
                 (Vector2){position.x, position.z}, 1.8f);
         }
-        for (int32_t i = 0; i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
+        for (int32_t i = 0; !abandoned && i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
             if (!local->course.travellers[i].active) continue;
             Vector3 position = local->course.travellers[i].agent.position;
             CcInteractionTarget *traveller = AdventureTarget(local, sim, CC_INTERACTION_PERSON,
@@ -140,7 +147,18 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
                 2.2f, 3.1f, 1.6f, LOCAL_DUNGEON, 1.3f);
         }
         CcLocalPresentedPerson people[64];
-        int32_t count = CcLocalPresentedPeople(people, 64);
+        if (abandoned) {
+            for (int32_t i = 0; i < 8; ++i) {
+                const CcCharacter *person = CcLocalTownPerson(sim, town->id, i);
+                if (person == NULL) break;
+                Vector2 position = {45.0f + (float)i * 1.3f, 52.0f};
+                CcInteractionTarget *visitor = AdventureTarget(local, sim, CC_INTERACTION_PERSON,
+                    person->id, person->name, "Talk", (Vector3){position.x, 0, position.y},
+                    0.9f, 2.0f, 0.7f, position, 1.8f);
+                if (visitor != NULL) visitor->character_id = person->id;
+            }
+        }
+        int32_t count = abandoned ? 0 : CcLocalPresentedPeople(people, 64);
         for (int32_t i = 0; i < count; ++i) {
             bool duplicate = false;
             for (int32_t j = 0; j < local->interactions.count; ++j) {
@@ -1157,6 +1175,13 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
         local->road_choice_active ? "Choose a road card or tap its sign" :
         local->site_travel_active ? "Tap the carriage to stop or drive" :
         local->market_interior ? profile->interior_service : profile->identity;
+    char town_status[128];
+    if (place != NULL && CcSettlementIsAbandoned(place) &&
+        local->site_kind == CC_LOCAL_SITE_NONE && !local->journey_travel_active &&
+        !local->site_travel_active) {
+        CcLocalTownStatus(sim, place->id, town_status, sizeof(town_status));
+        detail = town_status;
+    }
     ClientTouchHeading(title, detail);
     CcOverlayDrawText(detail, 24, 67, AdventureTextSize(12), MUTED);
 }

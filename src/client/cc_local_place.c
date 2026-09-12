@@ -855,3 +855,41 @@ CcLocalLanePoint CcLocalLaneSample(const CcLocalLane *lane, float progress)
             (3.0f * b.z - a.z - 3.0f * c.z + d.z) * t3),
     };
 }
+
+const CcBanditGroup *CcLocalTownOccupier(const CcSim *sim, CcId town)
+{
+    if (sim == NULL || town == 0U) return NULL;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        if (sim->bandits[i].camp_settlement_id == town && sim->bandits[i].members > 0)
+            return &sim->bandits[i];
+    }
+    return NULL;
+}
+
+const CcCharacter *CcLocalTownPerson(const CcSim *sim, CcId town, int32_t index)
+{
+    if (sim == NULL || town == 0U || index < 0) return NULL;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *person = &sim->characters[i];
+        if (person->current_settlement_id != town ||
+            person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
+            person->birth_day > sim->current_day ||
+            (person->death_day > 0 && person->death_day <= sim->current_day)) continue;
+        if (index-- == 0) return person;
+    }
+    return NULL;
+}
+
+void CcLocalTownStatus(const CcSim *sim, CcId town, char *text, size_t capacity)
+{
+    if (text == NULL || capacity == 0U) return;
+    const CcSettlement *place = sim != NULL ? CcSimSettlement(sim, town) : NULL;
+    const CcBanditGroup *band = CcLocalTownOccupier(sim, town);
+    if (place == NULL) (void)snprintf(text, capacity, "Roadside");
+    else if (!CcSettlementIsAbandoned(place))
+        (void)snprintf(text, capacity, "%d residents", place->population);
+    else if (band != NULL)
+        (void)snprintf(text, capacity, "Occupied ruins / %.40s / %d bandits / Town services closed",
+                       band->name, band->members);
+    else (void)snprintf(text, capacity, "Abandoned / 0 residents / Town services closed");
+}
