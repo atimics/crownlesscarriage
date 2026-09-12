@@ -31,7 +31,7 @@ class CorpusTests(unittest.TestCase):
         report = json.loads(first.stderr)
         self.assertEqual(report["rows"], len(rows))
         coverage = report["unsupported_kinds"]
-        self.assertEqual(len({row["kind"] for row in coverage}), len(coverage))
+        self.assertEqual([row["kind_id"] for row in coverage], list(range(len(coverage))))
         self.assertIn("PROPHECY DELIVERED", {row["kind"] for row in coverage})
         self.assertTrue(any(row["observations"] == 0 for row in coverage))
         self.assertEqual(sum(row["observations"] for row in coverage),
