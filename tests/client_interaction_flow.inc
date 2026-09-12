@@ -221,8 +221,46 @@ static int RunPresentedTargetRegression(void)
     return 0;
 }
 
+static int RunConversationFocusRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    local.course.situation_witness_active = true;
+    local.course.situation_witness.position = (Vector3){-12, 0, -8};
+    CcInteractionTarget target = {.key = {sim.player.location_id, 1, CC_INTERACTION_PERSON},
+        .character_id = sim.characters[0].id, .x = 9, .y = 0, .z = 13, .available = true};
+    ClientView view = VIEW_LOCAL, back = VIEW_LOCAL;
+    int32_t selected = 0;
+    AdventureActivate(&sim, &local, &target, &view, &back, &selected);
+    const Vector3 *focus = LocalConversationFocus(&local, view);
+    if (focus == NULL || focus->x != target.x || focus->z != target.z ||
+        local.conversation_character_id != target.character_id)
+        return ClientRegressionFailure("Frame the named speaker selected in the scene.");
+    target.character_id = 0;
+    target.x = 4;
+    AdventureActivate(&sim, &local, &target, &view, &back, &selected);
+    focus = LocalConversationFocus(&local, view);
+    if (focus == NULL || focus->x != target.x)
+        return ClientRegressionFailure("Unnamed speakers keep their selected position.");
+    if (LocalConversationFocus(&local, back) != NULL)
+        return ClientRegressionFailure("Return to the street camera after conversation.");
+    local.adventure_ui = false;
+    if (LocalConversationFocus(&local, VIEW_CHARACTER) != NULL)
+        return ClientRegressionFailure("The classic conversation keeps its witness camera.");
+    ResetLocalState(&local);
+    if (local.conversation_object != 0 || local.conversation_position.x != 0 ||
+        local.conversation_position.y != 0 || local.conversation_position.z != 0)
+        return ClientRegressionFailure("A reset clears the previous speaker position.");
+    return 0;
+}
+
 static int RunAdventureInputRegression(void)
 {
+    int focus_result = RunConversationFocusRegression();
+    if (focus_result != 0) return focus_result;
     int handoff_result = RunDeliveryHandoffRegression();
     if (handoff_result != 0) return handoff_result;
     int presented_result = RunPresentedTargetRegression();
