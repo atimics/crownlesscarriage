@@ -4,6 +4,7 @@
  * Exact quantities stay in quest instructions and trade, outside this layer.
  */
 #include "story/cc_speech.h"
+#include "story/cc_core_account.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -314,8 +315,15 @@ bool CcSpeechPrepareGossip(const CcSim *sim, const CcGossip *story,
     unstanced.court_bias = 0;
     unstanced.alarm = 0;
     CcGossipText(sim, story, &unstanced, language->account, sizeof(language->account));
-    if (!ComposeCore(story->kind, language->account, variant, language->detail,
-                     language->claim, sizeof(language->claim)) ||
+    bool composed = ComposeCore(story->kind, language->account, variant, language->detail,
+                                language->claim, sizeof(language->claim));
+    if (!composed) {
+        CcCoreAccount core_account;
+        composed = CcCoreAccountPrepare(story->kind, language->account,
+                                       version->confidence, version->retellings, &core_account) &&
+                   CcCoreAccountRender(&core_account, variant, language->claim, sizeof(language->claim));
+    }
+    if (!composed ||
         language->claim[0] == '\0' || HasQuantity(language->claim)) {
         language->claim[0] = '\0';
         return false;
