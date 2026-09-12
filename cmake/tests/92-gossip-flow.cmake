@@ -1,4 +1,7 @@
 if(Python3_Interpreter_FOUND)
+    add_test(NAME speech_review_sampling
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/speech_review_tests.py)
     add_test(NAME gossip_flow_integrity
         COMMAND ${Python3_EXECUTABLE}
                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/gossip_flow_tests.py

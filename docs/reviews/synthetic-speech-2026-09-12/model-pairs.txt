@@ -1,0 +1,279 @@
+- Gloamgate's bakery mills 25 Wheat into 25 Bread.
+Gloamgate made bread from wheat.
+
+- ~ Gloamgate's bakery mills 35 Wheat into 35 Bread.
+Gloamgate made bread from wheat, so people say.
+
+- ? ~ Rosespire's bakery mills 35 Wheat into 35 Bread.
+Rosespire made bread from wheat, if the story is right.
+
+- Lamma Stonehewer joins The Broken Pennants after 3 days seeking food at Silverwick.
+Lamma Stonehewer joined The Broken Pennants after seeking food at Silverwick.
+
+- ~ Ferwen Roadward joins The Broken Pennants after 5 days seeking food at Silverwick.
+Ferwen Roadward joined The Broken Pennants after seeking food at Silverwick, so people say.
+
+- Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Rosespire raised calves and added older calves to the working herd.
+
+- ~ Silverwick's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Silverwick raised calves and added older calves to the working herd, so people say.
+
+- ? ~ Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Rosespire raised calves and added older calves to the working herd, if the story is right.
+
+- Rosespire slaughters one cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Rosespire slaughtered cattle for beef when fodder ran short.
+
+- ~ Silverwick slaughters two cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Silverwick slaughtered cattle for beef when fodder ran short, so people say.
+
+- ? ~ Alderwatch slaughters two cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Alderwatch slaughtered cattle for beef when fodder ran short, if the story is right.
+
+- A goblin rises to Bearer in the dragon cult through service.
+A goblin rose to Bearer in the dragon cult through service.
+
+- ~ A goblin rises to Voice in the dragon cult through service.
+A goblin rose to Voice in the dragon cult through service, so people say.
+
+- ? ~ A goblin rises to Voice in the dragon cult through service.
+A goblin rose to Voice in the dragon cult through service, if the story is right.
+
+- Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+Silver Covenant put money into Hollowbarrow's market to buy grain shipments.
+
+- ~ Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+Indigo March put money into Hollowbarrow's market to buy grain shipments, so people say.
+
+- ? ~ Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+Silver Covenant put money into Hollowbarrow's market to buy grain shipments, if the story is right.
+
+- Thornford slaughters 4 sheep in the autumn cull; 8 Meat enters the local store as mutton.
+Thornford slaughtered sheep for mutton in the autumn cull.
+
+- ~ Silverwick slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton.
+Silverwick slaughtered sheep for mutton after winter fodder runs short, so people say.
+
+- ? ~ Thornford slaughters 4 sheep in the autumn cull; 8 Meat enters the local store as mutton.
+Thornford slaughtered sheep for mutton in the autumn cull, if the story is right.
+
+- The Cinder Tithe raids Thornford: 9 Wheat, 16 crowns.
+The Cinder Tithe raided Thornford.
+
+- ? ~ The Cinder Tithe raids Gloamgate: 20 Wheat, 16 crowns.
+The Cinder Tithe raided Gloamgate, if the story is right.
+
+- Thornford's drought harvest cannot supply the eastern settlements.
+Thornford's drought harvest fell short of what the eastern settlements needed.
+
+- ~ Thornford's drought harvest cannot supply the southern settlements.
+Thornford's drought harvest fell short of what the southern settlements needed, so people say.
+
+- ? ~ Thornford's drought harvest cannot supply the southern settlements.
+Thornford's drought harvest fell short of what the southern settlements needed, if the story is right.
+
+- Thornford raises 1 common pony foal; 1 joins the working herd.
+Thornford raised pony foals and added ponies to the working herd.
+
+- ~ Gloamgate raises 1 common pony foal; 1 joins the working herd.
+Gloamgate raised pony foals and added ponies to the working herd, so people say.
+
+- ? ~ Alderwatch raises 1 common pony foal; 1 joins the working herd.
+Alderwatch raised pony foals and added ponies to the working herd, if the story is right.
+
+- Thornford's flock raises 10 new lambs; 10 yearlings join the adult flock.
+Thornford raised lambs and added yearlings to the adult flock.
+
+- ~ Thornford's flock raises 10 new lambs; 10 yearlings join the adult flock.
+Thornford raised lambs and added yearlings to the adult flock, so people say.
+
+- ? ~ Silverwick's flock raises 3 new lambs; 3 yearlings join the adult flock.
+Silverwick raised lambs and added yearlings to the adult flock, if the story is right.
+
+- Gloamgate's masons use 2 Stone to repair public buildings.
+Gloamgate repaired public buildings with stone.
+
+- ~ Gloamgate defers public masonry repairs for want of 2 Stone.
+Gloamgate delayed public repairs for lack of stone, so people say.
+
+- ? ~ Alderwatch's masons use 2 Stone to repair public buildings.
+Alderwatch repaired public buildings with stone, if the story is right.
+
+- Rosespire's mill uses 1 Wood to make 4 Paper.
+Rosespire made paper from Wood.
+
+- ~ Rosespire's mill uses 1 Wood to make 4 Paper.
+Rosespire made paper from Wood, so people say.
+
+- ? ~ Rosespire's mill uses 1 Wood to make 4 Paper.
+Rosespire made paper from Wood, if the story is right.
+
+- Silverwick's quarry cuts 12 Stone for roads and public works.
+Silverwick quarried stone for roads and public works.
+
+- ~ Silverwick's quarry cuts 12 Stone for roads and public works.
+Silverwick quarried stone for roads and public works, so people say.
+
+- ? ~ Silverwick's quarry cuts 12 Stone for roads and public works.
+Silverwick quarried stone for roads and public works, if the story is right.
+
+- Alderwatch closes the treaty bridge and delays the relief convoy.
+Alderwatch closed the treaty bridge, delaying the relief convoy.
+
+- ~ Alderwatch closes the treaty bridge and delays the relief convoy.
+Alderwatch closed the treaty bridge, delaying the relief convoy, so people say.
+
+- ? ~ Alderwatch closes the treaty bridge and delays the relief convoy.
+Alderwatch closed the treaty bridge, delaying the relief convoy, if the story is right.
+
+- Alderwatch shears the spring flock and stores 6 Wool.
+Alderwatch sheared the spring flock and stored wool.
+
+- ~ Silverwick shears the spring flock and stores 3 Wool.
+Silverwick sheared the spring flock and stored wool, so people say.
+
+- ? ~ Rosespire shears the spring flock and stores 7 Wool.
+Rosespire sheared the spring flock and stored wool, if the story is right.
+
+- Silverwick has 0 weeks of food; hunger reaches pressure level 1.
+There was hunger in Silverwick.
+
+- ~ Silverwick has 33 food in store. Its reserve target is 78.
+Silverwick was short of its food reserve target, so people say.
+
+- ? ~ Hollowbarrow has 0 weeks of food; hunger reaches pressure level 3.
+There was hunger in Hollowbarrow, if the rumour is true.
+
+- Rosespire finishes Rosespire Moon Cup from 1 Raw Gold, 1 Gems, and 3 weeks of work.
+Rosespire Moon Cup was completed in Rosespire.
+
+- ~ Rosespire finishes Rosespire Ash Crown from 1 Raw Gold, 1 Gems, and 3 weeks of work.
+Rosespire Ash Crown was completed in Rosespire, according to the word going round.
+
+- ? ~ Rosespire finishes Rosespire Ash Crown from 1 Raw Gold, 1 Gems, and 3 weeks of work.
+Rosespire Ash Crown was completed in Rosespire, if the rumour is true.
+
+- Silverwick's woodlot cuts 1 Wood and wears two Tools bundle.
+Silverwick cut wood and wore out tools.
+
+- ~ Hollowbarrow's woodlot cuts 12 Wood and wears two Tools bundle.
+Hollowbarrow cut wood and wore out tools, so people say.
+
+- ? ~ Thornford's woodlot cuts 12 Wood and wears two Tools bundle.
+Thornford cut wood and wore out tools, if the story is right.
+
+- Gloamgate's bakery mills 34 Wheat into 34 Bread.
+Gloamgate made bread from wheat.
+
+- ~ Gloamgate's bakery mills 25 Wheat into 25 Bread.
+Gloamgate made bread from wheat, so people say.
+
+- ? ~ Gloamgate's bakery mills 25 Wheat into 25 Bread.
+Gloamgate made bread from wheat, if the story is right.
+
+- Displaced workers reinforce The Broken Pennants on the old road.
+Displaced workers reinforced The Broken Pennants on the old road.
+
+- ~ Alda Coffer joins The Ditch Parliament after 5 days seeking food at Silverwick.
+Alda Coffer joined The Ditch Parliament after seeking food at Silverwick, so people say.
+
+- ? ~ Ingel Rosewell joins The Broken Pennants after 7 days seeking food at Silverwick.
+Ingel Rosewell joined The Broken Pennants after seeking food at Silverwick, if the story is right.
+
+- Silverwick's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Silverwick raised calves and added older calves to the working herd.
+
+- ~ Alderwatch's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Alderwatch raised calves and added older calves to the working herd, so people say.
+
+- ? ~ Alderwatch's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Alderwatch raised calves and added older calves to the working herd, if the story is right.
+
+- Silverwick slaughters one cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Silverwick slaughtered cattle for beef when fodder ran short.
+
+- ~ Rosespire slaughters two cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Rosespire slaughtered cattle for beef when fodder ran short, so people say.
+
+- ? ~ Silverwick slaughters two cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Silverwick slaughtered cattle for beef when fodder ran short, if the story is right.
+
+- A goblin rises to Keeper in the dragon cult through service.
+A goblin rose to Keeper in the dragon cult through service.
+
+- ~ A goblin rises to Bearer in the dragon cult through service.
+A goblin rose to Bearer in the dragon cult through service, so people say.
+
+- ? ~ A goblin rises to Bearer in the dragon cult through service.
+A goblin rose to Bearer in the dragon cult through service, if the story is right.
+
+- Moss Compact moves 28 crowns into Gloamgate's market to buy real grain shipments.
+Moss Compact put money into Gloamgate's market to buy grain shipments.
+
+- ~ Moss Compact moves 28 crowns into Gloamgate's market to buy real grain shipments.
+Moss Compact put money into Gloamgate's market to buy grain shipments, so people say.
+
+- ? ~ Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+Indigo March put money into Hollowbarrow's market to buy grain shipments, if the story is right.
+
+- Silverwick slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton.
+Silverwick slaughtered sheep for mutton after winter fodder runs short.
+
+- ~ Rosespire slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton.
+Rosespire slaughtered sheep for mutton after winter fodder runs short, so people say.
+
+- ? ~ Rosespire slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton.
+Rosespire slaughtered sheep for mutton after winter fodder runs short, if the story is right.
+
+- The Cinder Tithe raids Gloamgate: 20 Wheat, 16 crowns.
+The Cinder Tithe raided Gloamgate.
+
+- ~ The Cinder Tithe raids Gloamgate: 20 Wheat, 16 crowns.
+The Cinder Tithe raided Gloamgate, so people say.
+
+- Alderwatch raises 1 common pony foal; 1 joins the working herd.
+Alderwatch raised pony foals and added ponies to the working herd.
+
+- ~ Alderwatch raises 1 common pony foal; 1 joins the working herd.
+Alderwatch raised pony foals and added ponies to the working herd, so people say.
+
+- ? ~ Gloamgate raises 1 common pony foal; 1 joins the working herd.
+Gloamgate raised pony foals and added ponies to the working herd, if the story is right.
+
+- Rosespire's flock raises 7 new lambs; 7 yearlings join the adult flock.
+Rosespire raised lambs and added yearlings to the adult flock.
+
+- ~ Silverwick's flock raises 3 new lambs; 3 yearlings join the adult flock.
+Silverwick raised lambs and added yearlings to the adult flock, so people say.
+
+- ? ~ Alderwatch's flock raises 6 new lambs; 6 yearlings join the adult flock.
+Alderwatch raised lambs and added yearlings to the adult flock, if the story is right.
+
+- Silverwick's masons use 2 Stone to repair public buildings.
+Silverwick repaired public buildings with stone.
+
+- ~ Gloamgate's masons use 2 Stone to repair public buildings.
+Gloamgate repaired public buildings with stone, so people say.
+
+- ? ~ Thornford's masons use 1 Stone to repair public buildings.
+Thornford repaired public buildings with stone, if the story is right.
+
+- Gloamgate's mill uses 1 Wood to make 3 Paper.
+Gloamgate made paper from Wood.
+
+- Rosespire shears the spring flock and stores 7 Wool.
+Rosespire sheared the spring flock and stored wool.
+
+- ~ Thornford shears the spring flock and stores 10 Wool.
+Thornford sheared the spring flock and stored wool, so people say.
+
+- ? ~ Silverwick shears the spring flock and stores 3 Wool.
+Silverwick sheared the spring flock and stored wool, if the story is right.
+
+- Gloamgate has 0 weeks of food; hunger reaches pressure level 2.
+There was hunger in Gloamgate.
+
+- ~ Gloamgate has 24 food in store. Its reserve target is 75.
+Gloamgate was short of its food reserve target, so people say.
+
