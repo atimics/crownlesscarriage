@@ -15,9 +15,14 @@ bool CcStartingCampaignDeepWyrm(CcSim *sim, const char *path,
         goto done;
     }
     if (!CcSaveRead(path, world, error, capacity)) goto done;
+    /* The shipped campaign identity was recorded at schema 95. */
+    uint32_t loaded_schema = world->schema_version;
+    world->schema_version = 95U;
+    uint64_t recorded_hash = CcSimHash(world);
+    world->schema_version = loaded_schema;
     if (world->world_seed != CC_DEEP_WYRM_SEED || world->current_day != CC_DEEP_WYRM_DAY ||
         world->schema_version != CC_SIM_SCHEMA_VERSION || world->generator_version != 25U ||
-        CcSimHash(world) != UINT64_C(13656637807757592336)) {
+        recorded_hash != UINT64_C(13656637807757592336)) {
         (void)snprintf(error, capacity, "The starting world differs from the recorded campaign. Restore its campaign file.");
         goto done;
     }
