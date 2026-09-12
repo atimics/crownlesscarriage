@@ -32,3 +32,9 @@ python3 docs/reviews/test-registration-2026-09-12/snapshot.py <build-directory> 
 Compare the normalized target descriptions and generated tests. Keep the toolchain, configuration options, source path, and build path the same across the two snapshots. Build and run the tests after moving the registrations.
 
 The contributor guide is `cmake/tests/README.md`. The experiment-artifact size convention from #640 remains separate work.
+
+## Container follow-through
+
+Remote CI found that the shared-world Docker build copied `tests/` while omitting the newly required `cmake/` files. The Docker recipe now copies that directory, and `.dockerignore` includes it. CMake reports a clear error when testing is enabled and registration files are missing.
+
+The native inputs declared by the Docker recipe were staged in a temporary source tree. Configuration, the `coop_bridge_tests` build, and both shared-carriage tests passed. A staged package with the registration directory removed produced the expected diagnostic. The local Docker daemon was unavailable, so the complete image build remains a remote CI check.
