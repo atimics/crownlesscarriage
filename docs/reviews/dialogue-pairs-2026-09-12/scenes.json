@@ -1,0 +1,466 @@
+{
+  "version": 1,
+  "title": "Crownless: small conversations",
+  "authorship": "Assistant-written dialogue drafts based on recorded simulation accounts.",
+  "scope": "The account is recorded. The meeting, listener, questions, hopes, and reactions are authored for this review. Each first speaker holds the account; the listener learns it through the exchange.",
+  "scenes": [
+    {
+      "id": "S01",
+      "title": "Bread at Gloamgate",
+      "source_id": "A001",
+      "source_sha256": "b0b36f9c16e30e52de84c8073a3d71c4cecb22f7ea84479aaca5761917cb3057",
+      "account": "Gloamgate's bakery mills 25 Wheat into 25 Bread.",
+      "confidence": 100,
+      "retellings": 0,
+      "band": "clear",
+      "provenance": {
+        "day": 140,
+        "event_id": "648518346341352581",
+        "schema": 99,
+        "source_character_id": "1369094286720630854",
+        "speaker_id": "1369094286720630854",
+        "world_seed": 901
+      },
+      "intent": "The listener takes an interest in the bread.",
+      "variants": [
+        {
+          "id": "v1",
+          "lines": [
+            "Gloamgate has made bread from its wheat.",
+            "I wonder what the loaves are like.",
+            "You could ask at the bakery."
+          ]
+        },
+        {
+          "id": "v2",
+          "lines": [
+            "They’ve baked bread at Gloamgate.",
+            "Wheat bread?",
+            "Yes.",
+            "That sounds good."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S02",
+      "title": "Waiting for stone",
+      "source_id": "A035",
+      "source_sha256": "5db3cfcf731cdb5e323e3a4977e61b8a561dcdabdf7871cf015582ccd1e55ac5",
+      "account": "Gloamgate defers public masonry repairs for want of 2 Stone.",
+      "confidence": 67,
+      "retellings": 4,
+      "band": "retold",
+      "provenance": {
+        "day": 347,
+        "event_id": "648518346341353662",
+        "schema": 99,
+        "source_character_id": "1369094286720630896",
+        "speaker_id": "1369094286720630892",
+        "world_seed": 902
+      },
+      "intent": "The listener wants to understand a delay.",
+      "variants": [
+        {
+          "id": "v1",
+          "lines": [
+            "I hear Gloamgate’s public repairs are waiting for stone.",
+            "Are the masons short of it?",
+            "That’s the word going round."
+          ]
+        },
+        {
+          "id": "v2",
+          "lines": [
+            "People say the repairs at Gloamgate have had to wait.",
+            "What’s holding them up?",
+            "Stone. They’re short of stone.",
+            "A hard thing to mend with empty hands."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S03",
+      "title": "A poor harvest",
+      "source_id": "A027",
+      "source_sha256": "5680ca9affd73a3395c1784400a7a2700b9d24c91dc26efd3e3aba1693808209",
+      "account": "Thornford's drought harvest cannot supply the southern settlements.",
+      "confidence": 39,
+      "retellings": 7,
+      "band": "uncertain",
+      "provenance": {
+        "day": 20,
+        "event_id": "648518346341351471",
+        "schema": 99,
+        "source_character_id": "1369094286720630888",
+        "speaker_id": "1369094286720630890",
+        "world_seed": 901
+      },
+      "intent": "The listener asks what the harvest means for seed supplies.",
+      "variants": [
+        {
+          "id": "v1",
+          "lines": [
+            "Thornford’s harvest may have fallen short of what the southern settlements need.",
+            "What about seed for next year?",
+            "I only heard about the harvest."
+          ]
+        },
+        {
+          "id": "v2",
+          "lines": [
+            "There’s talk of a poor harvest at Thornford. Too little for the settlements to the south.",
+            "Seed grain too?",
+            "I’d have to ask.",
+            "I hope they’ve kept some back."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S04",
+      "title": "Lamma joins the Pennants",
+      "source_id": "A004",
+      "source_sha256": "58d721ae815c8f77fa60108dc1e61f3d7c1032bee73457246b3ad29fec334ece",
+      "account": "Lamma Stonehewer joins The Broken Pennants after 3 days seeking food at Silverwick.",
+      "confidence": 93,
+      "retellings": 1,
+      "band": "clear",
+      "provenance": {
+        "day": 45,
+        "event_id": "648518346341351820",
+        "schema": 99,
+        "source_character_id": "0",
+        "speaker_id": "1369094286720630838",
+        "world_seed": 901
+      },
+      "intent": "The listener responds to the hardship behind the news.",
+      "variants": [
+        {
+          "id": "v1",
+          "lines": [
+            "Lamma Stonehewer joined the Broken Pennants after looking for food at Silverwick.",
+            "For how long?",
+            "Days.",
+            "That’s a long time to be hungry."
+          ]
+        },
+        {
+          "id": "v2",
+          "lines": [
+            "Lamma Stonehewer has joined the Broken Pennants.",
+            "What happened?",
+            "Lamma had spent days looking for food at Silverwick.",
+            "I wish someone had found a meal for Lamma."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S05",
+      "title": "A goblin becomes Voice",
+      "source_id": "A014",
+      "source_sha256": "e187e68b61d0c20cfeff0c38e1b6afe765bf6f34e36d2ff5605bcb49a7535dea",
+      "account": "A goblin rises to Voice in the dragon cult through service.",
+      "confidence": 57,
+      "retellings": 5,
+      "band": "retold",
+      "provenance": {
+        "day": 34,
+        "event_id": "648518346341351705",
+        "schema": 99,
+        "source_character_id": "1369094286720630924",
+        "speaker_id": "1369094286720630937",
+        "world_seed": 901
+      },
+      "intent": "The listener is curious about a promotion. Both speakers are unnamed; their species is unspecified.",
+      "variants": [
+        {
+          "id": "v1",
+          "lines": [
+            "I hear a goblin has risen to Voice in the dragon cult.",
+            "Through service?",
+            "So people say.",
+            "I wonder what the work was."
+          ]
+        },
+        {
+          "id": "v2",
+          "lines": [
+            "There’s talk of a goblin being made Voice in the dragon cult.",
+            "Someone earned a place, then?",
+            "Through service, I hear.",
+            "I’d like to hear their story."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S06",
+      "title": "A treasure taken",
+      "source_id": "A081",
+      "source_sha256": "4dbd95a38eb71c690cf0985c698802fe0951e8db68be764d1e12fc1fd6267d7d",
+      "account": "The Cinder Tithe raids Rosespire: 16 Bread, 16 crowns, and a named treasure.",
+      "confidence": 29,
+      "retellings": 7,
+      "band": "uncertain",
+      "provenance": {
+        "day": 115,
+        "event_id": "648518346341352141",
+        "schema": 99,
+        "source_character_id": "1369094286720630857",
+        "speaker_id": "1369094286720630837",
+        "world_seed": 901
+      },
+      "intent": "The listener asks about an uncertain report of a raid.",
+      "variants": [
+        {
+          "id": "v1",
+          "lines": [
+            "The Cinder Tithe may have raided Rosespire. I heard they took bread, crowns, and a treasure.",
+            "Which treasure?",
+            "I only heard that there was one."
+          ]
+        },
+        {
+          "id": "v2",
+          "lines": [
+            "Have you heard the story about the Cinder Tithe at Rosespire?",
+            "What story?",
+            "A raid. Bread and crowns taken, and a treasure too, perhaps.",
+            "Do you know what it was?",
+            "I’d have to ask."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S07",
+      "title": "Calves at Rosespire",
+      "source_id": "A007",
+      "source_sha256": "a476329ce744558819c3be738df7c8d12260812134bdd532c09b980b508788ff",
+      "account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.",
+      "confidence": 100,
+      "retellings": 0,
+      "band": "clear",
+      "provenance": {
+        "day": 336,
+        "event_id": "648518346341353609",
+        "schema": 99,
+        "source_character_id": "1369094286720630914",
+        "speaker_id": "1369094286720630914",
+        "world_seed": 901
+      },
+      "intent": "The listener distinguishes a new calf from an older animal joining the herd.",
+      "variants": [
+        {
+          "id": "v1",
+          "lines": [
+            "Rosespire has raised a new calf. An older calf has joined the working herd too.",
+            "The little one has some growing to do.",
+            "Yes. The older one is ready."
+          ]
+        },
+        {
+          "id": "v2",
+          "lines": [
+            "There’s a new calf at Rosespire.",
+            "And more cattle for the working herd?",
+            "An older calf has joined it.",
+            "Good to hear the older one is ready."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S08",
+      "title": "Stone from Silverwick",
+      "source_id": "A041",
+      "source_sha256": "af882994cae3d9de0b56b95d607408b12100d4fd93fb054de9c45179c1e55d10",
+      "account": "Silverwick's quarry cuts 12 Stone for roads and public works.",
+      "confidence": 64,
+      "retellings": 4,
+      "band": "retold",
+      "provenance": {
+        "day": 42,
+        "event_id": "648518346341351740",
+        "schema": 99,
+        "source_character_id": "1369094286720630916",
+        "speaker_id": "1369094286720630924",
+        "world_seed": 901
+      },
+      "intent": "The listener asks what quarried stone is intended for.",
+      "variants": [
+        {
+          "id": "v1",
+          "lines": [
+            "I hear Silverwick has cut stone for roads and public works.",
+            "For the roads as well?",
+            "That’s what I heard."
+          ]
+        },
+        {
+          "id": "v2",
+          "lines": [
+            "Word is there’s stone coming out of Silverwick’s quarry.",
+            "Where is it meant to go?",
+            "Roads and public works, I hear.",
+            "I’ll be glad to see it put to use."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S09",
+      "title": "The treaty bridge",
+      "source_id": "A045",
+      "source_sha256": "141e3d779d25d680dd4859f596b98d3ac2330baa0fe47d39731f95a85a7e7eca",
+      "account": "Alderwatch closes the treaty bridge and delays the relief convoy.",
+      "confidence": 37,
+      "retellings": 7,
+      "band": "uncertain",
+      "provenance": {
+        "day": 22,
+        "event_id": "648518346341351472",
+        "schema": 99,
+        "source_character_id": "1369094286720630896",
+        "speaker_id": "1369094286720630843",
+        "world_seed": 902
+      },
+      "intent": "The listener worries about the relief convoy after hearing an uncertain report.",
+      "variants": [
+        {
+          "id": "v1",
+          "lines": [
+            "Alderwatch may have closed the treaty bridge. The relief convoy could be held up.",
+            "Is that why it’s delayed?",
+            "That’s the story I heard."
+          ]
+        },
+        {
+          "id": "v2",
+          "lines": [
+            "There’s a story going round that Alderwatch shut the treaty bridge.",
+            "What about the relief convoy?",
+            "Held up, if the story is right.",
+            "I hope they can get through soon."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S10",
+      "title": "Paper from the mill",
+      "source_id": "A037",
+      "source_sha256": "700fd54233677a62a96e546e0dc2c9fdcf45dd83bd65bdd5476b7b9acca86df6",
+      "account": "Rosespire's mill uses 1 Wood to make 4 Paper.",
+      "confidence": 100,
+      "retellings": 0,
+      "band": "clear",
+      "provenance": {
+        "day": 42,
+        "event_id": "648518346341351807",
+        "schema": 99,
+        "source_character_id": "1369094286720630915",
+        "speaker_id": "1369094286720630915",
+        "world_seed": 901
+      },
+      "intent": "The listener takes an interest in how paper was made.",
+      "variants": [
+        {
+          "id": "v1",
+          "lines": [
+            "Rosespire’s mill has made paper from wood.",
+            "Wood into paper. That’s clever work."
+          ]
+        },
+        {
+          "id": "v2",
+          "lines": [
+            "They’ve made paper at Rosespire’s mill.",
+            "What did they use?",
+            "Wood.",
+            "I’d like to watch that being done."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S11",
+      "title": "The food store",
+      "source_id": "A096",
+      "source_sha256": "643ae3c91f7972a425291473b1d11566f3e70909555e4cbc38f1afb6df601f9f",
+      "account": "Gloamgate has 24 food in store. Its reserve target is 75.",
+      "confidence": 51,
+      "retellings": 5,
+      "band": "retold",
+      "provenance": {
+        "day": 23,
+        "event_id": "648518346341351620",
+        "schema": 99,
+        "source_character_id": "1369094286720630838",
+        "speaker_id": "1369094286720630844",
+        "world_seed": 901
+      },
+      "intent": "The listener distinguishes low reserves from an empty store.",
+      "variants": [
+        {
+          "id": "v1",
+          "lines": [
+            "People say Gloamgate has less food stored than it aims to keep.",
+            "Is there some left?",
+            "Yes, from what I hear."
+          ]
+        },
+        {
+          "id": "v2",
+          "lines": [
+            "Gloamgate’s food stores sound low.",
+            "How low?",
+            "There’s food left, I hear, but less than they mean to keep.",
+            "I hope more comes in soon."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S12",
+      "title": "The Ash Crown",
+      "source_id": "A054",
+      "source_sha256": "79d9fda1e36d7383703bf8251cf57275f3f6a5445915c65d28dde8180480e250",
+      "account": "Rosespire finishes Rosespire Ash Crown from 1 Raw Gold, 1 Gems, and 3 weeks of work.",
+      "confidence": 27,
+      "retellings": 7,
+      "band": "uncertain",
+      "provenance": {
+        "day": 51,
+        "event_id": "648518346341351702",
+        "schema": 99,
+        "source_character_id": "1369094286720630857",
+        "speaker_id": "1369094286720630858",
+        "world_seed": 901
+      },
+      "intent": "The listener is curious about a reported piece of craftwork.",
+      "variants": [
+        {
+          "id": "v1",
+          "lines": [
+            "Rosespire may have finished the Ash Crown. I heard it took gold, gems, and weeks of work.",
+            "I’d like to see it.",
+            "So would I."
+          ]
+        },
+        {
+          "id": "v2",
+          "lines": [
+            "There’s talk that the Rosespire Ash Crown is finished.",
+            "What’s it made of?",
+            "Gold and gems, I think. They spent weeks on it, from what I heard.",
+            "I hope we get to see it."
+          ]
+        }
+      ]
+    }
+  ]
+}

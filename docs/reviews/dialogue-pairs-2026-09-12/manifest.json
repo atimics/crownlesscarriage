@@ -1,0 +1,16 @@
+{
+  "study_sha256": "51b622002506c85985f6d5c91054c4fc138732390b445169495790c947d578ee",
+  "source_review": "../synthetic-speech-2026-09-12",
+  "source_commit": "d7663e14588159beb4ad5166a016915bfd94c414",
+  "authorship": "Assistant-written dialogue drafts based on recorded simulation accounts.",
+  "pairs": 12,
+  "drafts": 24,
+  "files": {
+    "scenes.json": "51b622002506c85985f6d5c91054c4fc138732390b445169495790c947d578ee",
+    "sources.jsonl": "bbcd0ab8f18a50cdd1574dc58a7afa375487202c9ff78ebbfcf9ed7ba73d9342",
+    "review.html": "4057734d9677cb7183f91da8df7092da41b1b20307ff781602427a76be4ab6ae",
+    "build.py": "44c1d88806c67b049f9712e93a73c1dcd29d587f610d0431eb79901e289209d7",
+    "index.html": "2a6a868bfc58b4c4cf56d8e145f980d393ea5bc34a8d07eb37032f137c206276",
+    "dialogues.txt": "3cac8f9b57f8200f59f6fdf074125152f71e3e8e67138c64037ea37e45df03e4"
+  }
+}
