@@ -8029,8 +8029,10 @@ static void AdvanceHoardRaid(CcSim *sim)
         raiders->war_raids_completed += 1;
     } else {
         origin->market_coins += relief;
-        origin->hunger = ClampI32(origin->hunger - MaximumI32(3, relief / 2),
-                                  0, 100);
+        if (sim->schema_version < 53U) {
+            origin->hunger = ClampI32(origin->hunger - MaximumI32(3, relief / 2),
+                                      0, 100);
+        }
         origin->prosperity = ClampI32(origin->prosperity + 2, 0, 100);
         for (int32_t i = 0; i < sim->faction_count; ++i) {
             CcFaction *faction = &sim->factions[i];
@@ -8040,6 +8042,8 @@ static void AdvanceHoardRaid(CcSim *sim)
             }
         }
         (void)snprintf(text, sizeof(text),
+                       sim->schema_version >= 53U ?
+                       "%s returns to %s with %d stolen crowns for market purchases." :
                        "%s returns to %s and spends %d stolen crowns on bread and old debts.",
                        raiders->name, origin->name, relief);
     }
@@ -18751,9 +18755,8 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
     { 28U, 28U, 22U, 22U },
     { 29U, 29U, 23U, 23U },
     { 30U, 30U, 23U, 23U },
-    /* Every legacy schema remains readable by the generators that predate the
-       versioning split. */
-    { CC_OLDEST_SUPPORTED_SCHEMA, CC_NEWEST_LEGACY_SCHEMA, 2U, 21U },
+    /* Preserve the historical generator pairings. Schema 52 shipped with 25. */
+    { CC_OLDEST_SUPPORTED_SCHEMA, 51U, 2U, 21U },
 };
 
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)

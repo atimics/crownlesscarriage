@@ -1226,6 +1226,11 @@ if(BUILD_TESTING)
                          $<TARGET_FILE:crownless_sim_metrics>)
     endif()
 
+    add_executable(raid_food_tests tests/raid_food_tests.c)
+    target_link_libraries(raid_food_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(raid_food_tests)
+    add_test(NAME hoard_raid_food_accounting COMMAND raid_food_tests)
+
     add_executable(balance_tests tests/balance_tests.c)
     target_link_libraries(balance_tests PRIVATE crownless_sim)
     cc_strict_warnings(balance_tests)

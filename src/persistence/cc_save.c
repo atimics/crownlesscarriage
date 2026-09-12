@@ -5979,7 +5979,9 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
          * fires; both changes are derived from events, so older saves need
          * no data migration. Schema 51 adds common pony herds, which are
          * seeded by the caller below rather than here, because every branch
-         * of this function lands on the current schema. */
+         * of this function lands on the current schema. Schema 53 changes
+         * hoard-return food rules after historical replay; its stored fields
+         * have the same representation as schema 52. */
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }
