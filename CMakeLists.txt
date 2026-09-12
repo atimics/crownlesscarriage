@@ -1234,10 +1234,6 @@ if(BUILD_TESTING)
     add_executable(core_account_probe tools/core_account_probe.c)
     target_link_libraries(core_account_probe PRIVATE crownless_story)
     cc_strict_warnings(core_account_probe)
-    add_test(NAME core_account_rules_current
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/compile_core_accounts.py --check)
-    add_test(NAME core_account_native_parity
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/core_account_tests.py $<TARGET_FILE:core_account_probe>)
     target_link_libraries(gossip_language_tests PRIVATE crownless_story)
     cc_strict_warnings(gossip_language_tests)
     add_test(NAME grounded_gossip_language COMMAND gossip_language_tests)
@@ -1301,6 +1297,12 @@ if(BUILD_TESTING)
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
     if(CC_PYTHON3_EXECUTABLE)
+        add_test(NAME core_account_rules_current
+            COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/compile_core_accounts.py --check)
+        add_test(NAME core_account_native_parity
+            COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/core_account_tests.py $<TARGET_FILE:core_account_probe>)
+        add_test(NAME core_diagnostic_contract
+            COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/core_diagnostic_tests.py $<TARGET_FILE:core_account_probe>)
         if(CC_BUILD_BENCHMARKS)
             add_test(NAME species_sweep_integrity COMMAND ${CC_PYTHON3_EXECUTABLE}
                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/species_sweep_tests.py

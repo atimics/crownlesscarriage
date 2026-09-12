@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "grammar_sha256": "bd810463e9d5f9a36caf8ec6df89abe7ad4285e4763c192a2ab6c0da75a0934a",
+  "grammar_sha256": "da5c6ac11f2f90fbf08881f7c57c7a8358fd086d59d233882ce60f0abeb0635b",
   "event_count": 136,
-  "rule_count": 42,
+  "rule_count": 48,
   "events": [
     {
       "kind": "HARVEST_FAILED",
@@ -38,7 +38,8 @@
       "kind": "BANDIT_PRESSURE",
       "value": 5,
       "rules": [
-        "bandit_pressure_0"
+        "bandit_pressure_0",
+        "bandit_pressure_1"
       ],
       "status": "field_rules"
     },
@@ -87,8 +88,10 @@
     {
       "kind": "KINGDOM_ACTION",
       "value": 13,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "kingdom_action_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "ROUTE_DECAY",
@@ -469,8 +472,10 @@
     {
       "kind": "GOBLIN_CULT_RALLIED",
       "value": 75,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_cult_rallied_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_DRAGON_SEED",
@@ -504,7 +509,8 @@
       "kind": "HORSE_BRED",
       "value": 80,
       "rules": [
-        "horse_bred_0"
+        "horse_bred_0",
+        "horse_bred_1"
       ],
       "status": "field_rules"
     },
@@ -768,8 +774,10 @@
     {
       "kind": "SHEEP_BRED",
       "value": 120,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "sheep_bred_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "SHEEP_SHEARED",
@@ -782,8 +790,10 @@
     {
       "kind": "SHEEP_SLAUGHTERED",
       "value": 122,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "sheep_slaughtered_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "PAPER_MILLED",

@@ -8,10 +8,27 @@ typedef struct CoreRule {
     const char *id, *pattern, *outputs[2];
     size_t field_count;
     CcCoreRole roles[CC_CORE_FIELDS];
+    const char *allowed[CC_CORE_FIELDS];
+    unsigned int positive;
 } CoreRule;
 static const CoreRule Rules[] = {
 #include "cc_core_account_rules.inc"
 };
+
+static bool Quantity(const char *at, size_t length)
+{
+    static const char *const words[] = {"zero", "one", "two", "three", "four", "five", "six",
+        "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
+        "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
+        "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety", "hundred"};
+    bool digits = length > 0U;
+    for (size_t i = 0U; i < length; ++i) digits = digits && isdigit((unsigned char)at[i]);
+    if (digits) return true;
+    for (size_t i = 0U; i < sizeof(words) / sizeof(words[0]); ++i) {
+        if (strlen(words[i]) == length && strncmp(at, words[i], length) == 0) return true;
+    }
+    return false;
+}
 
 static bool Match(const CoreRule *rule, CcCoreAccount *account)
 {
@@ -37,11 +54,20 @@ static bool Match(const CoreRule *rule, CcCoreAccount *account)
         field->length = (size_t)(end - at);
         field->role = rule->roles[slot];
         field->knowledge = account->confidence < 40 ? CC_CORE_UNCERTAIN : CC_CORE_KNOWN;
+        if (rule->allowed[slot] != NULL) {
+            char option[CC_EVENT_TEXT_CAPACITY + 3];
+            option[0] = '|';
+            memcpy(option + 1, at, field->length);
+            option[field->length + 1U] = '|';
+            option[field->length + 2U] = '\0';
+            if (strstr(rule->allowed[slot], option) == NULL) return false;
+        }
         if (field->length == 0U && field->role != CC_CORE_DETAIL) return false;
         if (field->role == CC_CORE_QUANTITY) {
-            for (const char *p = at; p < end; ++p) {
-                if (!isdigit((unsigned char)*p)) return false;
-            }
+            if (!Quantity(at, field->length)) return false;
+            if ((rule->positive & (1U << slot)) != 0U &&
+                (strspn(at, "0") == field->length ||
+                 (field->length == 4U && strncmp(at, "zero", 4U) == 0))) return false;
         }
         at = end;
     }

@@ -28,9 +28,12 @@ def compile_rules(check=False):
         roles = [data['roles'].index(x) for x in r['roles']]
         roles += [0] * (8 - len(roles))
         q = lambda x: json.dumps(x, ensure_ascii=True)
-        lines.append('{CC_EVENT_%s, %s, %s, {%s, %s}, %d, {%s}},' % (
+        allowed = [q('|' + '|'.join(r.get('allowed', {}).get(str(i), [])) + '|')
+                   if str(i) in r.get('allowed', {}) else 'NULL' for i in range(8)]
+        positive = sum(1 << i for i in r.get('positive', []))
+        lines.append('{CC_EVENT_%s, %s, %s, {%s, %s}, %d, {%s}, {%s}, %d},' % (
             r['kind'], q(r['id']), q(r['source']), q(r['outputs'][0]), q(r['outputs'][1]),
-            len(r['roles']), ', '.join(map(str, roles))))
+            len(r['roles']), ', '.join(map(str, roles)), ', '.join(allowed), positive))
     coverage = {'version': 1, 'grammar_sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
                 'event_count': len(kinds), 'rule_count': len(ids), 'events': []}
     for name, value in kinds.items():

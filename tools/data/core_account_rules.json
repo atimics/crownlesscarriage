@@ -112,7 +112,11 @@
         "{0} made bread from wheat.",
         "Bread was made from wheat in {0}."
       ],
-      "challenge": "Wheat was turned into bread at the bakery in {0}."
+      "challenge": "Wheat was turned into bread at the bakery in {0}.",
+      "positive": [
+        1,
+        2
+      ]
     },
     {
       "id": "paper_milled_0",
@@ -128,21 +132,30 @@
         "{0} made paper from {2}.",
         "Paper was made from {2} in {0}."
       ],
-      "challenge": "At the mill in {0}, {2} was used to produce paper."
+      "challenge": "At the mill in {0}, {2} was used to produce paper.",
+      "positive": [
+        1,
+        3
+      ]
     },
     {
       "id": "woodlot_harvest_0",
       "kind": "WOODLOT_HARVEST",
       "roles": [
         "place",
+        "quantity",
         "quantity"
       ],
-      "source": "{0}'s woodlot cuts {1} Wood and wears one Tools bundle.",
+      "source": "{0}'s woodlot cuts {1} Wood and wears {2} Tools bundle.",
       "outputs": [
         "{0} cut wood and wore out tools.",
         "Woodcutting in {0} wore out tools."
       ],
-      "challenge": "Tools wore out as the woodlot in {0} produced wood."
+      "challenge": "Tools wore out as the woodlot in {0} produced wood.",
+      "positive": [
+        1,
+        2
+      ]
     },
     {
       "id": "woodlot_harvest_1",
@@ -156,7 +169,10 @@
         "{0} cut wood by hand without working tools.",
         "Hand crews in {0} cut wood without working tools."
       ],
-      "challenge": "Lacking working tools, the crews in {0} cut wood by hand."
+      "challenge": "Lacking working tools, the crews in {0} cut wood by hand.",
+      "positive": [
+        1
+      ]
     },
     {
       "id": "quarry_output_0",
@@ -170,7 +186,10 @@
         "{0} quarried stone for roads and public works.",
         "Stone for roads and public works came from {0}."
       ],
-      "challenge": "The quarry in {0} supplied road building and public works with stone."
+      "challenge": "The quarry in {0} supplied road building and public works with stone.",
+      "positive": [
+        1
+      ]
     },
     {
       "id": "masonry_repair_0",
@@ -226,21 +245,29 @@
         "{0} sheared the spring flock and stored wool.",
         "Wool was stored after the spring shearing in {0}."
       ],
-      "challenge": "The spring flock in {0} was shorn and its wool put into storage."
+      "challenge": "The spring flock in {0} was shorn and its wool put into storage.",
+      "positive": [
+        1
+      ]
     },
     {
       "id": "cow_slaughtered_0",
       "kind": "COW_SLAUGHTERED",
       "roles": [
         "place",
+        "quantity",
         "quantity"
       ],
-      "source": "{0} slaughters one cow after the herd's fodder runs short; {1} Meat enters the local store as beef.",
+      "source": "{0} slaughters {2} cow after the herd's fodder runs short; {1} Meat enters the local store as beef.",
       "outputs": [
         "{0} slaughtered cattle for beef when fodder ran short.",
         "A fodder shortage led {0} to slaughter cattle for beef."
       ],
-      "challenge": "With fodder scarce, cattle in {0} were slaughtered and beef went into storage."
+      "challenge": "With fodder scarce, cattle in {0} were slaughtered and beef went into storage.",
+      "positive": [
+        1,
+        2
+      ]
     },
     {
       "id": "cow_calving_0",
@@ -257,7 +284,21 @@
         "{0} raised calves and added older calves to the working herd.",
         "Calves were raised in {0}, where older calves joined the working herd."
       ],
-      "challenge": "New calves grew in {0}, and older calves became part of the working herd."
+      "challenge": "New calves grew in {0}, and older calves became part of the working herd.",
+      "allowed": {
+        "2": [
+          "calf",
+          "calves"
+        ],
+        "4": [
+          "calf",
+          "calves"
+        ]
+      },
+      "positive": [
+        1,
+        3
+      ]
     },
     {
       "id": "king_anointed_0",
@@ -476,7 +517,12 @@
         "Roadside works stored goods locally and repaired roads.",
         "Goods were stored locally and roads repaired by roadside works."
       ],
-      "challenge": "The roadside works put goods into local stores and improved the roads."
+      "challenge": "The roadside works put goods into local stores and improved the roads.",
+      "positive": [
+        0,
+        1,
+        2
+      ]
     },
     {
       "id": "prophecy_delivered_0",
@@ -601,6 +647,128 @@
         "Goblin Ashkeepers sealed the brood hoard after {0} laid a clutch."
       ],
       "challenge": "A clutch was laid by {0}, whose brood hoard was sealed by goblin Ashkeepers."
+    },
+    {
+      "id": "bandit_pressure_1",
+      "kind": "BANDIT_PRESSURE",
+      "roles": [
+        "actor",
+        "recipient",
+        "quantity",
+        "place"
+      ],
+      "source": "{0} joins {1} after {2} days seeking food at {3}.",
+      "outputs": [
+        "{0} joined {1} after seeking food at {3}.",
+        "After seeking food at {3}, {0} joined {1}."
+      ],
+      "challenge": "Having looked for food in {3}, {0} became part of {1}."
+    },
+    {
+      "id": "kingdom_action_0",
+      "kind": "KINGDOM_ACTION",
+      "roles": [
+        "actor",
+        "quantity",
+        "place"
+      ],
+      "source": "{0} moves {1} crowns into {2}'s market to buy real grain shipments.",
+      "outputs": [
+        "{0} put money into {2}'s market to buy grain shipments.",
+        "Money from {0} went into the market at {2} to buy grain shipments."
+      ],
+      "challenge": "To purchase shipments of grain, {0} put crowns into the market in {2}."
+    },
+    {
+      "id": "goblin_cult_rallied_0",
+      "kind": "GOBLIN_CULT_RALLIED",
+      "roles": [
+        "actor",
+        "object"
+      ],
+      "source": "{0} rises to {1} in the dragon cult through service.",
+      "outputs": [
+        "{0} rose to {1} in the dragon cult through service.",
+        "Service brought {0} to the rank of {1} in the dragon cult."
+      ],
+      "challenge": "The dragon cult raised {0} to {1} for service."
+    },
+    {
+      "id": "horse_bred_1",
+      "kind": "HORSE_BRED",
+      "roles": [
+        "place",
+        "quantity",
+        "detail",
+        "quantity"
+      ],
+      "source": "{0} raises {1} common pony {2}; {3} joins the working herd.",
+      "outputs": [
+        "{0} raised pony foals and added ponies to the working herd.",
+        "Pony foals were raised in {0}, where ponies joined the working herd."
+      ],
+      "challenge": "New pony foals grew in {0}, and ponies became part of the working herd.",
+      "allowed": {
+        "2": [
+          "foal",
+          "foals"
+        ]
+      },
+      "positive": [
+        1,
+        3
+      ]
+    },
+    {
+      "id": "sheep_bred_0",
+      "kind": "SHEEP_BRED",
+      "roles": [
+        "place",
+        "quantity",
+        "detail",
+        "quantity",
+        "detail"
+      ],
+      "source": "{0}'s flock raises {1} new {2}; {3} {4} join the adult flock.",
+      "outputs": [
+        "{0} raised lambs and added yearlings to the adult flock.",
+        "Lambs were raised in {0}, where yearlings joined the adult flock."
+      ],
+      "challenge": "New lambs grew in {0}, and yearlings became part of the adult flock.",
+      "allowed": {
+        "2": [
+          "lamb",
+          "lambs"
+        ],
+        "4": [
+          "yearling",
+          "yearlings"
+        ]
+      },
+      "positive": [
+        1,
+        3
+      ]
+    },
+    {
+      "id": "sheep_slaughtered_0",
+      "kind": "SHEEP_SLAUGHTERED",
+      "roles": [
+        "place",
+        "quantity",
+        "detail",
+        "quantity"
+      ],
+      "source": "{0} slaughters {1} sheep {2}; {3} Meat enters the local store as mutton.",
+      "outputs": [
+        "{0} slaughtered sheep for mutton {2}.",
+        "Sheep were slaughtered for mutton in {0} {2}."
+      ],
+      "challenge": "Mutton went into storage in {0} after sheep were slaughtered {2}.",
+      "positive": [
+        1,
+        3
+      ]
     }
   ]
 }

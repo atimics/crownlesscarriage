@@ -15,6 +15,8 @@ values = {'actor': 'Mara Venn', 'recipient': 'Tomas Rill', 'place': 'Thornford',
 count = 0
 for rule in data['rules']:
     fields = [values[x] for x in rule['roles']]
+    for slot, allowed in rule.get('allowed', {}).items():
+        fields[int(slot)] = allowed[0]
     source = rule['source'].format(*fields)
     for variant, template in enumerate(rule['outputs']):
         args = [sys.argv[1], str(kinds[rule['kind']]), '80', str(variant), source]
@@ -24,7 +26,21 @@ for rule in data['rules']:
         assert subprocess.run([*args[:4], source + ' A different event happened.'],
                               capture_output=True).returncode == 1
         for slot, role in enumerate(rule['roles']):
+            if slot in rule.get('positive', []):
+                altered = list(fields)
+                altered[slot] = '0'
+                assert subprocess.run([*args[:4], rule['source'].format(*altered)],
+                                      capture_output=True).returncode == 1
+            if str(slot) in rule.get('allowed', {}):
+                altered = list(fields)
+                altered[slot] = 'wolves'
+                assert subprocess.run([*args[:4], rule['source'].format(*altered)],
+                                      capture_output=True).returncode == 1
             if role == 'quantity':
+                altered = list(fields)
+                altered[slot] = 'two'
+                spoken = subprocess.check_output([*args[:4], rule['source'].format(*altered)], text=True).strip()
+                assert spoken == output
                 altered = list(fields)
                 altered[slot] = 'many'
                 assert subprocess.run([*args[:4], rule['source'].format(*altered)],
