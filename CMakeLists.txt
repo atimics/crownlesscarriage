@@ -247,6 +247,9 @@ cc_strict_warnings(crownless_metagame)
 add_executable(crownless_gossip_corpus tools/gossip_corpus.c)
 target_link_libraries(crownless_gossip_corpus PRIVATE crownless_story)
 cc_strict_warnings(crownless_gossip_corpus)
+add_executable(crownless_gossip_flow tools/gossip_flow.c)
+target_link_libraries(crownless_gossip_flow PRIVATE crownless_story)
+cc_strict_warnings(crownless_gossip_flow)
 
 add_executable(crownless_sim_runner tools/sim_runner.c)
 target_link_libraries(crownless_sim_runner PRIVATE crownless_persistence)
@@ -1312,6 +1315,10 @@ if(BUILD_TESTING)
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/gossip_corpus_tests.py
                          $<TARGET_FILE:crownless_gossip_corpus>)
+        add_test(NAME gossip_flow_integrity
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/gossip_flow_tests.py
+                         $<TARGET_FILE:crownless_gossip_flow>)
         add_test(NAME age_of_dragons_sweep_integrity
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/age_of_dragons_sweep_tests.py)
