@@ -17,7 +17,7 @@ static void TestAbandonedTownGraphics(const char *prefix)
     sim.bandits[0].members = 4;
     (void)snprintf(sim.bandits[0].name, sizeof(sim.bandits[0].name), "The Tallow Knives");
     CcLocalCourseInit(&course);
-    CcLocalAgentInit(&hero, (Vector2){42.0f, 50.0f}, false);
+    CcLocalAgentInit(&hero, (Vector2){42.0f, 53.0f}, false);
     CcLocalRendererSetOpeningStep(CC_LOCAL_OPENING_COMPLETE);
     RenderTexture2D target = LoadRenderTexture(960, 540);
     const char *names[] = {"occupied", "abandoned", "resettled"};

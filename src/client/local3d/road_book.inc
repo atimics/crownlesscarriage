@@ -2060,7 +2060,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         int32_t guards = band != NULL ? band->members : 0;
         if (guards > 6) guards = 6;
         for (int32_t i = 0; i < guards; ++i) {
-            DrawVisibleNpcFigure3D(TerrainWorldPoint(38.0f + (float)i * 1.4f, 48.0f),
+            DrawVisibleNpcFigure3D(TerrainWorldPoint(38.0f + (float)i * 1.4f, 54.0f),
                 0.96f, 0.7f, (uint32_t)band->id + (uint32_t)i, CC_NPC_ROLE_RAIDER,
                 WORLD_DANGER, clock, CC_TRAVERSAL_IDLE, scenery_focus);
         }
