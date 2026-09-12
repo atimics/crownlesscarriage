@@ -150,7 +150,8 @@ CcArchiveRecruitmentPlan CcSimArchiveRecruitmentPlan(const CcSim *sim)
 {
     CcArchiveRecruitmentPlan result = {.gate = CC_ARCHIVE_RECRUIT_UNAVAILABLE};
     if (sim == NULL || sim->schema_version < 77U) return result;
-    if (sim->schema_version >= 80U && sim->archive_recruitment.status != 0) {
+    if ((sim->schema_version >= 92U && sim->archive_convoy.status != 0) ||
+        (sim->schema_version >= 80U && sim->archive_recruitment.status != 0)) {
         result.gate = CC_ARCHIVE_RECRUIT_BUSY; return result;
     }
     if (CcSimArchiveStaffSlots(sim) >= CC_MAX_SCRIBES) { result.gate = CC_ARCHIVE_RECRUIT_FULL; return result; }

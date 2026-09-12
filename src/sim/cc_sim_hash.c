@@ -837,6 +837,24 @@ uint64_t CcSimHash(const CcSim *sim)
         }
         HASH_VALUE(item->magnitude); hash = HashString(hash, item->text);
     }
+    if (sim->schema_version >= 92U) {
+        HASH_VALUE(sim->archive_convoy.origin_id);
+        HASH_VALUE(sim->archive_convoy.destination_id);
+        HASH_VALUE(sim->archive_convoy.sponsor_id);
+        HASH_VALUE(sim->archive_convoy.funding_kingdom_id);
+        HASH_VALUE(sim->archive_convoy.carriage_id);
+        HASH_VALUE(sim->archive_convoy.first_route_id);
+        HASH_VALUE(sim->archive_convoy.first_hop_id);
+        HASH_VALUE(sim->archive_convoy.book_ids[0]);
+        HASH_VALUE(sim->archive_convoy.book_ids[1]);
+        HASH_VALUE(sim->archive_convoy.book_ids[2]);
+        HASH_VALUE(sim->archive_convoy.book_ids[3]);
+        HASH_VALUE(sim->archive_convoy.purse);
+        HASH_VALUE(sim->archive_convoy.wheat);
+        HASH_VALUE(sim->archive_convoy.book_count);
+        HASH_VALUE(sim->archive_convoy.reserved_day);
+        HASH_VALUE(sim->archive_convoy.status);
+    }
     if (hash_archives) {
         if (sim->schema_version >= 80U) {
             HASH_VALUE(sim->archive_recruitment.status);
