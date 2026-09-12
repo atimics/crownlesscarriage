@@ -8,7 +8,7 @@
 #include <string.h>
 
 static CcSim sim;
-#define KIND_COUNT ((int)CC_EVENT_NOTICE_POSTED + 1)
+#define KIND_COUNT ((int)CC_EVENT_KIND_COUNT)
 static uint64_t unsupported_kinds[KIND_COUNT];
 static char unsupported_sample[KIND_COUNT][CC_EVENT_TEXT_CAPACITY];
 typedef struct SeenAccount {

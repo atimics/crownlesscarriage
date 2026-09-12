@@ -5,6 +5,7 @@
 #include "sim/cc_occupations.h"
 #include "sim/cc_archive_recruitment.h"
 #include "sim/cc_identity_internal.h"
+#include "sim/cc_event_pin_set_internal.h"
 #include "sim/cc_archive_internal.h"
 #include "sim/cc_archive_volumes_internal.h"
 #include "sim/cc_production_internal.h"
@@ -621,43 +622,6 @@ static int32_t Jitter(CcSim *sim, int32_t center, int32_t radius)
    small open-addressed set.  The old EventIsPinned rescanned every reference
    for every event the compaction examined, so a full ledger became quadratic
    once the archive stack kept it full (#655). */
-#define CC_EVENT_PIN_SET_SIZE 4096U
-
-typedef struct CcEventPinSet {
-    CcId slots[CC_EVENT_PIN_SET_SIZE];
-} CcEventPinSet;
-
-static uint32_t EventPinHash(CcId id)
-{
-    uint64_t value = (uint64_t)id;
-    value ^= value >> 33;
-    value *= UINT64_C(0xff51afd7ed558ccd);
-    value ^= value >> 33;
-    return (uint32_t)value;
-}
-
-static void PinEvent(CcEventPinSet *set, CcId id)
-{
-    if (id == 0U) return;
-    uint32_t index = EventPinHash(id) & (CC_EVENT_PIN_SET_SIZE - 1U);
-    while (set->slots[index] != 0U) {
-        if (set->slots[index] == id) return;
-        index = (index + 1U) & (CC_EVENT_PIN_SET_SIZE - 1U);
-    }
-    set->slots[index] = id;
-}
-
-static bool EventIsPinned(const CcEventPinSet *set, CcId id)
-{
-    if (id == 0U) return false;
-    uint32_t index = EventPinHash(id) & (CC_EVENT_PIN_SET_SIZE - 1U);
-    while (set->slots[index] != 0U) {
-        if (set->slots[index] == id) return true;
-        index = (index + 1U) & (CC_EVENT_PIN_SET_SIZE - 1U);
-    }
-    return false;
-}
-
 static void GatherPinnedEvents(const CcSim *sim, CcId incoming_parent,
                                const CcId *hoard_chain,
                                int32_t hoard_chain_count, CcEventPinSet *set)
@@ -884,7 +848,16 @@ static void CompactEventLedger(CcSim *sim, CcId incoming_parent)
     GatherPinnedEvents(sim, incoming_parent, hoard_chain, hoard_chain_count,
                        &pinned_events);
     for (int32_t i = 0; i < sim->event_count; ++i) {
-        if (!EventIsPinned(&pinned_events, ordered[i].id)) {
+        bool pinned;
+        if (pinned_events.overflow) {
+            /* Query every reference directly when the bounded set is full. */
+            pinned_events.query_id = ordered[i].id;
+            pinned_events.query_found = false;
+            GatherPinnedEvents(sim, incoming_parent, hoard_chain, hoard_chain_count,
+                               &pinned_events);
+            pinned = pinned_events.query_found;
+        } else pinned = EventIsPinned(&pinned_events, ordered[i].id);
+        if (!pinned) {
             removed = i;
             break;
         }
@@ -1287,6 +1260,7 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_PROPHECY_DELIVERED: return "PROPHECY DELIVERED";
         case CC_EVENT_ROAD_SITE_PRODUCTION: return "ROAD WORKS";
         case CC_EVENT_NOTICE_POSTED: return "NOTICE";
+        case CC_EVENT_KIND_COUNT: break;
     }
     return "EVENT";
 }
