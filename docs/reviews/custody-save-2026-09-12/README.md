@@ -41,3 +41,20 @@ Commands: `cmake --preset release -DCC_BUILD_CLIENT=OFF`,
 `cmake --build out/build/release -j 6`, and
 `ctest --test-dir out/build/release --output-on-failure -j 6`.
 The focused test selector is `-R '^custody_'`.
+
+## Shared freight slots
+
+Source `a72b4301a05cdb0c1fe0fe05af4c2ca72be2bdc4` combines the remote main
+integration with shared freight conversion. All 144 headless tests pass.
+A ten-slot container holds 100 wheat using `CcGoodsFreightCargoSlots`; one
+more wheat is rejected. A core regression proves that splitting a stack can
+consume an extra rounded slot at the same root holder. Full-capacity rejection
+preserves the entire state.
+
+The custody core and adapter pass Cppcheck and strict WebAssembly compilation.
+The core passes AddressSanitizer and UndefinedBehaviorSanitizer. The store test
+also passes with the core and adapter instrumented against merged release
+libraries. The quick benchmark passes at 42,268.2 ns/day against a 90,000 limit.
+Main integration preserves all three custody registrations in
+`cmake/tests/94-custody.cmake`. The draft remains schema 99 / generator 25;
+its base is now main, whose integrated schema is 98.
