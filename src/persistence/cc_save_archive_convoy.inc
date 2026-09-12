@@ -1,3 +1,27 @@
+static bool SaveArchiveConvoyHome(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 91U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "INSERT INTO archive_convoy_home VALUES(1,?);", &statement, error, error_capacity)) return false;
+    sqlite3_bind_int64(statement, 1, (sqlite3_int64)sim->archive_convoy.home_id);
+    bool ok = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement); return ok;
+}
+static bool ReadArchiveConvoyHome(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 91U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "SELECT id,home_id FROM archive_convoy_home ORDER BY id;", &statement, error, error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW || sqlite3_column_int64(statement, 0) != 1 || sqlite3_column_type(statement, 1) != SQLITE_INTEGER) {
+        SetError(error, error_capacity, "Archive convoy home row is invalid.");
+        sqlite3_finalize(statement); return false;
+    }
+    sim->archive_convoy.home_id = (CcId)sqlite3_column_int64(statement, 1);
+    bool ok = sqlite3_step(statement) == SQLITE_DONE;
+    if (!ok) SetError(error, error_capacity, "Archive convoy home has extra rows.");
+    sqlite3_finalize(statement); return ok;
+}
+
 static bool SaveArchiveConvoyJourney(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim->schema_version < 90U) return true;
@@ -52,7 +76,7 @@ static bool SaveArchiveConvoy(sqlite3 *database, const CcSim *sim, char *error, 
     sqlite3_bind_int64(statement, 15, (sqlite3_int64)sim->archive_convoy.reserved_day);
     sqlite3_bind_int64(statement, 16, (sqlite3_int64)sim->archive_convoy.status);
     bool ok = StepDone(database, statement, error, error_capacity);
-    sqlite3_finalize(statement); return ok && SaveArchiveConvoyJourney(database, sim, error, error_capacity);
+    sqlite3_finalize(statement); return ok && SaveArchiveConvoyJourney(database, sim, error, error_capacity) && SaveArchiveConvoyHome(database, sim, error, error_capacity);
 }
 static bool ReadArchiveConvoy(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
 {
@@ -145,5 +169,5 @@ static bool ReadArchiveConvoy(sqlite3 *database, CcSim *sim, char *error, size_t
     sim->archive_convoy.status = (int32_t)sqlite3_column_int64(statement, 16);
     bool ok = sqlite3_step(statement) == SQLITE_DONE;
     if (!ok) SetError(error, error_capacity, "Archive convoy has extra rows.");
-    sqlite3_finalize(statement); return ok && ReadArchiveConvoyJourney(database, sim, error, error_capacity);
+    sqlite3_finalize(statement); return ok && ReadArchiveConvoyJourney(database, sim, error, error_capacity) && ReadArchiveConvoyHome(database, sim, error, error_capacity);
 }

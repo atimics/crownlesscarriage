@@ -44,8 +44,10 @@ typedef enum CcArchiveConvoyStep {
     CC_ARCHIVE_CONVOY_DEPARTED,
     CC_ARCHIVE_CONVOY_BLOCKED,
     CC_ARCHIVE_CONVOY_ARRIVED,
-    CC_ARCHIVE_CONVOY_LOST
+    CC_ARCHIVE_CONVOY_LOST,
+    CC_ARCHIVE_CONVOY_COMPLETED
 } CcArchiveConvoyStep;
+bool CcSimArchiveConvoyHoldsBook(const CcSim *sim, CcId book_id);
 bool CcSimArchiveConvoyCarriesBook(const CcSim *sim, CcId book_id);
 CcArchiveConvoyStep CcSimAdvanceArchiveConvoy(CcSim *sim, uint32_t road_roll);
 #endif

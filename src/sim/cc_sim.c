@@ -4528,7 +4528,7 @@ bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
 static CcTreasure *AllocateTreasure(CcSim *sim)
 {
     for (int32_t i = 0; i < sim->treasure_count; ++i) {
-        if (sim->treasures[i].destroyed && !CcSimArchiveConvoyCarriesBook(sim, sim->treasures[i].id)) {
+        if (sim->treasures[i].destroyed && !CcSimArchiveConvoyHoldsBook(sim, sim->treasures[i].id)) {
             CcTreasure *treasure = &sim->treasures[i];
             *treasure = (CcTreasure){0};
             treasure->id = NextId(sim, CC_ENTITY_TREASURE);
@@ -6788,7 +6788,7 @@ static void AdvanceArchives(CcSim *sim)
         int32_t oldest = -1;
         for (int32_t i = 0; i < sim->treasure_count; ++i) {
             if (CcArchiveVolumeIsLive(&sim->treasures[i]) &&
-                !CcSimArchiveConvoyCarriesBook(sim, sim->treasures[i].id) &&
+                !CcSimArchiveConvoyHoldsBook(sim, sim->treasures[i].id) &&
                 CcArchiveVolumeEarlier(sim, i, oldest)) {
                 oldest = i;
             }
@@ -14118,7 +14118,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 int32_t lore_burned = 0;
                 for (int32_t i = 0; i < sim->treasure_count; ++i) {
                     CcTreasure *t = &sim->treasures[i];
-                    if (!CcArchiveVolumeIsLive(t) || CcSimArchiveConvoyCarriesBook(sim, t->id)) continue;
+                    if (!CcArchiveVolumeIsLive(t) || CcSimArchiveConvoyHoldsBook(sim, t->id)) continue;
                     CcSettlement *vault = CcSimSettlementMutable(
                         sim, t->owner_id);
                     if (vault == NULL ||
@@ -14129,7 +14129,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 for (int32_t i = 0;
                      i < sim->treasure_count && burned < burn_target; ++i) {
                     CcTreasure *t = &sim->treasures[i];
-                    if (!CcArchiveVolumeIsLive(t) || CcSimArchiveConvoyCarriesBook(sim, t->id)) continue;
+                    if (!CcArchiveVolumeIsLive(t) || CcSimArchiveConvoyHoldsBook(sim, t->id)) continue;
                     CcSettlement *vault = CcSimSettlementMutable(
                         sim, t->owner_id);
                     if (vault == NULL ||
@@ -14931,10 +14931,16 @@ static void AdvanceArchiveBookJourney(CcSim *sim)
         step == CC_ARCHIVE_CONVOY_BLOCKED ? "wait with the carriage at a blocked road" :
         step == CC_ARCHIVE_CONVOY_ARRIVED ? "reach the next town in the royal carriage" : "are lost on the archive road";
     char text[CC_EVENT_TEXT_CAPACITY];
-    (void)snprintf(text, sizeof(text), "%d archive books %s.", o->book_count, action);
+    if (step == CC_ARCHIVE_CONVOY_COMPLETED) {
+        const CcCharacter *sponsor = CcSimCharacter(sim, o->sponsor_id);
+        const CcSettlement *seat = CcSimSettlement(sim, o->destination_id);
+        (void)snprintf(text, sizeof(text), "%.32s establishes the archive seat at %.32s with %d delivered books.",
+            sponsor != NULL ? sponsor->name : "The sponsoring court", seat != NULL ? seat->name : "the destination", o->book_count);
+    } else (void)snprintf(text, sizeof(text), "%d archive books %s.", o->book_count, action);
     (void)PushSocialEvent(sim, CC_EVENT_ROYAL_CARRIAGE_REROUTED, o->carriage_id,
         step == CC_ARCHIVE_CONVOY_DEPARTED ? o->origin_id : o->first_hop_id, 0,
         CcSimCharacter(sim, o->sponsor_id) != NULL ? o->sponsor_id : 0, 0, 0, 0, o->book_count, text);
+    if (step == CC_ARCHIVE_CONVOY_COMPLETED) (void)CcSimCancelArchiveConvoy(sim);
 }
 
 static void AdvanceArchiveRecruitJourney(CcSim *sim)
@@ -18651,8 +18657,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 }
             }
             bool reserved = sim->schema_version >= 89U && carriage->mode == CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED &&
-                sim->archive_convoy.status == 1 && sim->archive_convoy.carriage_id == carriage->id &&
-                sim->archive_convoy.origin_id == carriage->location_id;
+                (sim->archive_convoy.status == 1 || (sim->schema_version >= 91U && sim->archive_convoy.status == 3)) &&
+                sim->archive_convoy.carriage_id == carriage->id &&
+                (sim->archive_convoy.status == 1 ? sim->archive_convoy.origin_id : sim->archive_convoy.first_hop_id) == carriage->location_id;
             bool book_journey = sim->schema_version >= 90U &&
                 (carriage->mode == CC_ROYAL_CARRIAGE_ARCHIVE_TRAVELLING || carriage->mode == CC_ROYAL_CARRIAGE_ARCHIVE_WAITING) &&
                 carriage->id == sim->archive_convoy.carriage_id && CcSimArchiveConvoyValid(sim);
