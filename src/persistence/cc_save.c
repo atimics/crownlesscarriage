@@ -905,6 +905,23 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
     const char *pony_schema =
         "CREATE TABLE IF NOT EXISTS pony_company (id INTEGER PRIMARY KEY CHECK(id=1), team0 INTEGER, team1 INTEGER, encounter INTEGER);"
         "CREATE TABLE IF NOT EXISTS rainbow_pony (id INTEGER PRIMARY KEY, route_id INTEGER NOT NULL, last_seen_route INTEGER NOT NULL, bond INTEGER NOT NULL, quests_completed INTEGER NOT NULL, releases INTEGER NOT NULL, last_met_day INTEGER NOT NULL, quest_kind INTEGER NOT NULL, quest_amount INTEGER NOT NULL, health INTEGER NOT NULL, fatigue INTEGER NOT NULL, hunger INTEGER NOT NULL, seen INTEGER NOT NULL, ready INTEGER NOT NULL);";
+    const char *war_schema =
+        "CREATE TABLE IF NOT EXISTS war_party ("
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE,"
+        " kingdom_id INTEGER NOT NULL, commander_character_id INTEGER NOT NULL,"
+        " home_settlement_id INTEGER NOT NULL, current_settlement_id INTEGER NOT NULL,"
+        " travel_route_id INTEGER NOT NULL, travel_destination_id INTEGER NOT NULL,"
+        " travel_arrival_day INTEGER NOT NULL, members INTEGER NOT NULL,"
+        " order_kind INTEGER NOT NULL, order_route_id INTEGER NOT NULL,"
+        " order_target_id INTEGER NOT NULL, permits_player INTEGER NOT NULL,"
+        " battles_fought INTEGER NOT NULL, casualties INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS dispatch ("
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE,"
+        " kind INTEGER NOT NULL, route_id INTEGER NOT NULL,"
+        " war_party_id INTEGER NOT NULL, origin_settlement_id INTEGER NOT NULL,"
+        " recipient_settlement_id INTEGER NOT NULL, issued_day INTEGER NOT NULL,"
+        " carried INTEGER NOT NULL);";
+
     const char *schema =
         "CREATE TABLE IF NOT EXISTS meta ("
         " id INTEGER PRIMARY KEY CHECK(id=1), schema_version INTEGER NOT NULL,"
@@ -1422,6 +1439,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         Execute(database, mine_schema, error, error_capacity) &&
            Execute(database, gossip_schema, error, error_capacity) &&
            Execute(database, pony_schema, error, error_capacity) &&
+           Execute(database, war_schema, error, error_capacity) &&
            Execute(database, schema, error, error_capacity) &&
            Execute(database, royal_carriage_schema, error, error_capacity) &&
            EnsureColumn(database, "royal_carriage", "archive_contract",
@@ -1545,6 +1563,7 @@ static bool SaveKingdoms(sqlite3 *database, const CcSim *sim,
 #include "cc_save_grain.inc"
 #include "cc_save_archive_recruitment.inc"
 #include "cc_save_archive_convoy.inc"
+#include "cc_save_war.inc"
 
 static bool SaveTownRecovery(sqlite3 *database, const CcSim *sim,
                              char *error, size_t error_capacity)
@@ -3352,7 +3371,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
             "DELETE FROM gossip_version;"
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
-            "DELETE FROM town_recovery; DELETE FROM grain_supply; DELETE FROM archive_recruitment; DELETE FROM archive_recruitment_journey; DELETE FROM archive_recruitment_training; DELETE FROM archive_staff; DELETE FROM archive_seat; DELETE FROM archive_convoy; DELETE FROM archive_convoy_journey;"
+            "DELETE FROM town_recovery; DELETE FROM grain_supply; DELETE FROM archive_recruitment; DELETE FROM archive_recruitment_journey; DELETE FROM archive_recruitment_training; DELETE FROM archive_staff; DELETE FROM archive_seat; DELETE FROM archive_convoy; DELETE FROM archive_convoy_journey; DELETE FROM war_party; DELETE FROM dispatch;"
             "DELETE FROM horse_team; DELETE FROM stable_horse;"
             "DELETE FROM pony_company; DELETE FROM rainbow_pony;"
             "DELETE FROM route; DELETE FROM road_site; DELETE FROM road_site_stock;"
@@ -3397,6 +3416,8 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
               SaveGrainSupplies(database, sim, error, error_capacity) &&
               SaveArchiveRecruitment(database, sim, error, error_capacity) &&
               SaveArchiveConvoy(database, sim, error, error_capacity) &&
+              SaveWarParties(database, sim, error, error_capacity) &&
+              SaveDispatches(database, sim, error, error_capacity) &&
         SavePonies(database, sim, error, error_capacity) &&
         SaveHorseTeam(database, sim, error, error_capacity) &&
         SaveStableHorses(database, sim, error, error_capacity) &&
@@ -5821,6 +5842,8 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadGrainSupplies(database, sim, error, error_capacity) &&
               ReadArchiveRecruitment(database, sim, error, error_capacity) &&
               ReadArchiveConvoy(database, sim, error, error_capacity) &&
+              ReadWarParties(database, sim, error, error_capacity) &&
+              ReadDispatches(database, sim, error, error_capacity) &&
               ReadHorseTeam(database, sim, error, error_capacity) &&
               ReadStableHorses(database, sim, error, error_capacity) &&
               ReadRoutes(database, sim, error, error_capacity) &&

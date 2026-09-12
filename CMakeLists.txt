@@ -104,6 +104,7 @@ add_library(crownless_sim
     src/sim/cc_archive_seat_plan.c
     src/sim/cc_trade_path.c
     src/sim/cc_sim_versions.c
+    src/sim/cc_war.c
     src/sim/cc_identity.c
     src/sim/cc_road_council.c
     src/sim/cc_route_rules.c
