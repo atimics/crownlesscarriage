@@ -4947,7 +4947,8 @@ static ContextAction PressedContextAction(
         ContextAction pressed = {.kind = CONTEXT_ACTION_WORLD_TARGET,
             .target = target->key, .enabled = target->available};
         (void)snprintf(pressed.label, sizeof(pressed.label), "%s", target->name);
-        (void)snprintf(pressed.detail, sizeof(pressed.detail), "%s",
+        (void)snprintf(pressed.detail, sizeof(pressed.detail), "%.*s",
+            (int)sizeof(pressed.detail) - 1,
             target->available ? target->verb : target->reason);
         return pressed;
     }
