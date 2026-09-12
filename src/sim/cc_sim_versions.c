@@ -1,4 +1,4 @@
-#include "sim/cc_sim.h"
+#include "sim/cc_sim_versions_internal.h"
 
 #include <stddef.h>
 
@@ -8,9 +8,9 @@
    row. This replaced ninety lines of chained equality tests that grew by two
    every time either version was bumped.
 
-   Adding a version means editing one row, or adding one. Keep it that way. */
+   The shared legacy boundary requires review when the current schema changes.
+   Generator changes may also require a new pairing. */
 #define CC_OLDEST_SUPPORTED_SCHEMA 2U
-#define CC_NEWEST_LEGACY_SCHEMA 97U
 
 typedef struct CcVersionPairing {
     uint32_t schema_low;
@@ -28,7 +28,7 @@ static const CcVersionPairing CC_SUPPORTED_VERSIONS[] = {
        through 31 are deliberately absent, because those schemas only ever
        shipped alongside their own generators, listed below. */
     { 2U, 27U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
-    { 32U, 97U, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
+    { 32U, CC_SIM_NEWEST_LEGACY_SCHEMA, CC_GENERATOR_VERSION, CC_GENERATOR_VERSION },
     /* Schemas pinned to the generator they shipped with. */
     { 31U, 31U, 24U, 24U },
     { 27U, 27U, 21U, 23U },
@@ -43,7 +43,7 @@ bool CcSimSupportsVersions(uint32_t schema_version, uint32_t generator_version)
 {
     bool legacy_schema =
         schema_version >= CC_OLDEST_SUPPORTED_SCHEMA &&
-        schema_version <= CC_NEWEST_LEGACY_SCHEMA;
+        schema_version <= CC_SIM_NEWEST_LEGACY_SCHEMA;
     bool supported_generator = false;
     for (size_t pairing = 0;
          pairing < sizeof(CC_SUPPORTED_VERSIONS) /
