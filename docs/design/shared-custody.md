@@ -148,7 +148,9 @@ requests, and blocked-road unloading. Player cargo still needs its existing
 player slot conversion and access rules at the player boundary.
 
 Container manufacture and repair now execute through `CcProductionRun` using a
-supplied common production budget at the owning town store. Manufacture consumes
+supplied common production budget at the owning town store. Each act checks
+current population and fire damage. Work requires an inhabited town with fire
+damage below 100. Manufacture consumes
 four wood, one iron, and two work units. It requires a tool and produces a
 condition-100, ten-slot container. Repair consumes one wood and one work unit,
 requires a tool, and restores up to 25 condition points. Each act spends one

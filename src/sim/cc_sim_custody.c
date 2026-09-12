@@ -216,7 +216,8 @@ CcCustodyResult CcSimMakeCustodyContainer(CcSim *sim, CcProductionContext *work,
     if (sim == NULL || work == NULL || sim->schema_version < 99U || event_id == 0 ||
         !CcSimStoredCustodyValid(sim)) return CC_CUSTODY_INVALID;
     const CcSettlement *town = CcSimSettlement(sim, work->producer_id);
-    if (town == NULL || work->storage_id != town->id || work->location_id != town->id ||
+    if (town == NULL || CcSettlementIsAbandoned(town) || town->fire_damage >= 100 ||
+        work->storage_id != town->id || work->location_id != town->id ||
         work->stock != town->stock) return CC_CUSTODY_INVALID;
     if (next_id != sim->custody.next_id) return CC_CUSTODY_STALE;
     if (next_id == UINT64_MAX) return CC_CUSTODY_FULL;
@@ -260,7 +261,8 @@ CcCustodyResult CcSimRepairCustodyContainer(CcSim *sim, CcProductionContext *wor
     if (sim == NULL || work == NULL || sim->schema_version < 99U || event_id == 0 ||
         !CcSimStoredCustodyValid(sim)) return CC_CUSTODY_INVALID;
     const CcSettlement *town = CcSimSettlement(sim, work->producer_id);
-    if (town == NULL || work->storage_id != town->id || work->location_id != town->id ||
+    if (town == NULL || CcSettlementIsAbandoned(town) || town->fire_damage >= 100 ||
+        work->storage_id != town->id || work->location_id != town->id ||
         work->stock != town->stock) return CC_CUSTODY_INVALID;
     const CcCustodyEntry *found = CcCustodyFind(&sim->custody, container_id);
     if (found == NULL || found->revision != revision || revision == UINT64_MAX) return CC_CUSTODY_STALE;

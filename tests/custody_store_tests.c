@@ -257,6 +257,37 @@ static void Repairs(void)
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
+static void WorkshopWorldGates(void)
+{
+    for (int scenario = 0; scenario < 2; ++scenario) {
+        Prepare();
+        sim.custody.entries[0].condition = 50;
+        CcProductionContext work = {.producer_id = town, .storage_id = town,
+            .location_id = town, .stock = sim.settlements[0].stock, .capacity = 2,
+            .output_limit = 2, .work_available = 3, .condition = 100, .enabled = true};
+        int32_t population = sim.settlements[0].population;
+        int32_t fire = sim.settlements[0].fire_damage;
+        if (scenario == 0) sim.settlements[0].population = 0;
+        else sim.settlements[0].fire_damage = 100;
+        before = sim;
+        CcProductionContext old_work = work;
+        CcProductionReceipt receipt = {.work = 999};
+        CcProductionReceipt old_receipt = receipt;
+        uint64_t id = 999;
+        CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 2, event, &id, &receipt) == CC_CUSTODY_INVALID);
+        CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, 1, 1, event, &receipt) == CC_CUSTODY_INVALID);
+        CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+        CC_CHECK(memcmp(&work, &old_work, sizeof(work)) == 0);
+        CC_CHECK(memcmp(&receipt, &old_receipt, sizeof(receipt)) == 0 && id == 999);
+        sim.settlements[0].population = population;
+        sim.settlements[0].fire_damage = fire;
+        CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, 1, 1, event, &receipt) == CC_CUSTODY_READY);
+        CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 2, event, &id, &receipt) == CC_CUSTODY_READY);
+        CC_CHECK(work.work_available == 0 && id == 2);
+        CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+    }
+}
+
 static void Gates(void)
 {
     Prepare(); RejectPack(0, CC_CUSTODY_INVALID); RejectPack(1001, CC_CUSTODY_INVALID);
@@ -293,5 +324,5 @@ static void Gates(void)
 
 int main(void)
 {
-    Journey(); Gates(); FreightSlots(); CarrierJourney(); BookingGates(); Manufacturing(); Repairs(); return 0;
+    Journey(); Gates(); FreightSlots(); CarrierJourney(); BookingGates(); Manufacturing(); Repairs(); WorkshopWorldGates(); return 0;
 }

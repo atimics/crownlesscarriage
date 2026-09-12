@@ -110,3 +110,16 @@ AddressSanitizer and UndefinedBehaviorSanitizer with the core, adapter,
 simulation source, and common production runner instrumented. Remaining
 libraries use the strict release build. Producer scheduling and player craft
 commands remain open; the functions execute a supplied production budget.
+
+## Workshop town-state gates
+
+Workshop acts now check current town population and fire damage before spending
+the supplied work budget. The regression reproduced crafting in an abandoned
+town before the fix. Tests cover abandonment and complete fire damage for both
+creation and repair. Rejection preserves the simulation, work budget, output ID,
+and receipt. Both acts succeed after the town recovers.
+
+All 144 headless tests pass, plus focused Cppcheck and WebAssembly checks. The
+store test passes sanitizers with the custody core, adapter, simulation and
+common production runner instrumented. Remaining libraries use strict release.
+`workshop-world-gates.json` records the base and tested source hashes.
