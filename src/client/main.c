@@ -10043,8 +10043,10 @@ static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
             quantity, quote.total, local->trade_mode, quote.reason, &speech);
     }
     char voice_path[768];
+    bool player_muted = has_speech && speech.speaker_id == sim->player.id &&
+        adventure_preferences != NULL && adventure_preferences->player_voice < 5;
     ClientSpeechPath(has_speech ? &speech : NULL, voice_path, sizeof(voice_path));
-    CcAudioSpeech(has_speech && strcmp(speech.line_id, "gossip.thinking") != 0 ? &speech : NULL, voice_path);
+    CcAudioSpeech(has_speech && !player_muted && strcmp(speech.line_id, "gossip.thinking") != 0 ? &speech : NULL, voice_path);
     UpdateFieldVoices(sim, local, view);
     CcAudioUpdate();
 }
