@@ -1,0 +1,12 @@
+{
+  "id": "brook-second",
+  "original": "brook-v1",
+  "name": "Brook",
+  "direction": "Clear forward alto; light Mexican Spanish accent; smooth vowels and measured certainty.",
+  "description": "An adult woman with a clear, forward-resonant alto and a light Mexican Spanish accent in fluent English. Smooth sustained vowels, crisp consonants, and a measured even rhythm. Bright focused resonance, a composed friendly manner, and firm sentence endings. Her warmth comes through careful attention and understated humour. Natural conversational English. Clean studio recording.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 2562782200,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "f3da030a1a862380fcbec177e64a381cb8b4b318d559179f02ea8d41fcb1e78d"
+}

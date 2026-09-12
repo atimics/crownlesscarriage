@@ -1,0 +1,15 @@
+{
+  "id": "reed-second",
+  "original": "reed-v1",
+  "name": "Reed",
+  "direction": "Adult wiry tenor; light French accent; quick patter, nasal brightness, and sudden thoughtful pauses.",
+  "description": "An adult man with a wiry, high tenor speaking voice and a light French accent in fluent English. Forward nasal brightness, precise consonants, and slightly breathy phrase endings. Quick conversational patter gives way to small thoughtful pauses. Charming dry humour and an earnest, direct manner. Natural conversational English. Clean studio recording.",
+  "variant": 2,
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "seed": 20260913,
+  "batch_index": 4,
+  "batch_size": 6,
+  "sample_rate": 24000,
+  "sha256": "926eefc4f58d26ecb6ab705c71b205348a8a4f4b362a3b5733ee87301e6e11b1"
+}

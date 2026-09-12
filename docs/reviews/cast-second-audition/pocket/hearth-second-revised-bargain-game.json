@@ -1,0 +1,21 @@
+{
+  "voice": "Hearth",
+  "take": "revised",
+  "line": "bargain",
+  "text": "Thirty-eight crowns? You drive a hard bargain. All right, take the cart. I'll walk with you.",
+  "seed": 20260912,
+  "file": "hearth-second-revised-bargain.wav",
+  "seconds": 6.88,
+  "generation_seconds": 4.096549625042826,
+  "reference_sha256": "297930487bd9520ccffedf0678c725c2057d57f7867c7ef0dc7d78a86ff47825",
+  "sha256": "0c62fef331c4e1d71d5976149932cfeb6ae0b07fbccc2963cd60f644b229635f",
+  "sample_rate": 24000,
+  "master_sha256": "0c62fef331c4e1d71d5976149932cfeb6ae0b07fbccc2963cd60f644b229635f",
+  "wav_sha256": "4816c2201c0006dd99711d23c30da28b6106be920658febb5b48341f74c87296",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

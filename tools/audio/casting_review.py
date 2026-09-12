@@ -27,11 +27,11 @@ def recording(root, path):
     return str(Path(path).with_suffix('.mp3'))
 
 
-def compress_review(root):
+def compress_review(root, folders=('trial', 'proposed')):
     """Write compact listening copies and keep each source WAV intact."""
     import lameenc
     files = []
-    for folder in ('trial', 'proposed'):
+    for folder in folders:
         for source in sorted((root / folder).glob('*.wav')):
             with wave.open(str(source)) as wav:
                 if wav.getsampwidth() != 2 or wav.getnchannels() != 1:
