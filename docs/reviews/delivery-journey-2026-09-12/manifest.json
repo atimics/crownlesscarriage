@@ -5,8 +5,8 @@
   "native_tests": 173,
   "files": {
     "README.md": {
-      "bytes": 1943,
-      "sha256": "6603cf7dbe0c7d7c3607880d66cdb80eabf38ca93920fc76e2fad53234c2c4d9"
+      "bytes": 2849,
+      "sha256": "f1e44936c7fd9fd28cede663e7527ef9627d701aff6d5e6ea2322dff49186f71"
     },
     "accepted-cargo.png": {
       "bytes": 91654,
@@ -30,6 +30,30 @@
     },
     "web/index.wasm": {
       "sha256": "0498a9d8351d96580e6c004e4319dd9e6ea96c35b2745f48d23d05482dc472c6"
+    },
+    "alderwatch-arrival.png": {
+      "bytes": 83048,
+      "sha256": "179d1361bdebfebfde2ecf7e91427b50906ba1e07f6ec4dd4d8e258282024af1"
+    },
+    "camp-after.png": {
+      "bytes": 51714,
+      "sha256": "15a169405cfafae3827684e64e35c9aa8127fc348bc31ab5c9f2e01f92699060"
+    },
+    "camp-before.png": {
+      "bytes": 51805,
+      "sha256": "ef4a789d70d6b536b131dfc0be57fd612dda07d44856c99908284fbf70f20f88"
+    },
+    "camp-journal.png": {
+      "bytes": 57371,
+      "sha256": "0b4e9effef9535afef82dcf331861732b91dbd629278735939c8e03b3c0a2a84"
+    },
+    "road-reloaded.png": {
+      "bytes": 51820,
+      "sha256": "9b61a6f92929ef122c623a965c108b44087265b946de1ab29f5962ea023e0365"
+    },
+    "road-saved.png": {
+      "bytes": 50221,
+      "sha256": "0c0b0b0448e755cb29d1a9f2359540ad5b2fe214c356feaac9d9d660bb847014"
     }
   }
 }
