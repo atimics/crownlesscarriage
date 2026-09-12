@@ -77,7 +77,10 @@ def main():
                 np.random.seed(report['seed'])
                 started = time.perf_counter()
                 first_chunk = None
-                with torch.inference_mode():
+                # Pocket's stream updates its cache on a background thread.
+                # no_grad keeps that cache writable across thread boundaries.
+                context = torch.no_grad if args.engine == 'pocket' else torch.inference_mode
+                with context():
                     if args.engine == 'pocket':
                         chunks = []
                         for chunk in model.generate_audio_stream(state, words):

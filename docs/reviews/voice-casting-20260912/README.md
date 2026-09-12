@@ -1,11 +1,9 @@
 # Cast listening trial
 
 The trial contains thirteen existing cast references, three new synthetic voice
-auditions, and twelve Chatterbox Nano performances. The listening page offers
-clean and game-textured versions of each Nano performance. Pocket TTS voice
-cloning is awaiting Hugging Face model access; its initial attempt is recorded
-in `trial/pocket.json`. A later check confirmed the local login works; the exact
-checkpoint still returned HTTP 403 with an account authorization requirement.
+auditions, and twenty-four performances across Chatterbox Nano and Pocket TTS.
+The listening page offers clean and game-textured versions of every performance.
+Both models completed the same twelve prompts using the same cast references.
 
 ## Listen
 
@@ -51,29 +49,35 @@ child voices can receive separate auditions when their spoken roles are defined.
 This proposal fits sixteen core references. Adding voices to the live assignment
 pool needs a separate save-compatible mapping change and casting decision.
 
-## Nano measurements
+## CPU measurements
 
 Four references (Mara, Oak, Reed, Flint), three lines each, one seeded take per
-line. macOS 26.3.1, ARM64, CPU, two Torch threads. Models ran sequentially.
+line per model. macOS 26.3.1, ARM64, CPU, two Torch threads. Models ran sequentially.
 The app and ordinary desktop activity remained present during this small trial.
 
-| Measure | Observed |
-| --- | --- |
-| Audio generated | 51.68 seconds |
-| Total generation time | 20.50 seconds |
-| Time per complete clip | 0.88–2.26 seconds |
-| Compute seconds per audio second | 0.397 |
-| Peak process memory | 4558.5 MiB |
-| Model load, including initial download | 72.15 seconds |
-| First voice preparation | 12.43 seconds |
-| Later voice preparation | 0.20–0.26 seconds |
+| Measure | Nano | Pocket |
+| --- | --- | --- |
+| Audio generated | 51.68 seconds | 57.76 seconds |
+| Total generation time | 20.50 seconds | 5.78 seconds |
+| Time per complete clip | 0.88–2.26 seconds | 0.30–0.68 seconds |
+| Compute seconds per audio second | 0.397 | 0.100 |
+| First model audio chunk | Complete clips | 25–37 ms |
+| Peak process memory | 4558.5 MiB | 1466.75 MiB |
+| Model load | 72.15 seconds, with download | 1.18 seconds, cached weights |
+| First voice preparation | 12.43 seconds | 0.42 seconds |
+| Later voice preparation | 0.20–0.26 seconds | 0.24–0.27 seconds |
 
 Generation timing excludes voice preparation, file writes, and the game texture
 pass. The first generated clip is included. Peak memory covers the full process,
-including model loading. Nano's current API returns complete clips. This trial
-leaves in-game frame time, perceived playback delay, repeat-run variation, and
+including model loading. Loading used different cache conditions; measure those
+under matched conditions before comparing startup costs. Pocket's first chunk
+measures model output; audible onset also depends on silence and playback buffers.
+Nano's current API returns complete clips. This trial leaves in-game frame time,
+perceived playback delay, repeat-run variation, and
 listening quality for further measurement. The short warning takes deserve a
-specific check for complete words and natural pacing.
+specific check for complete words and natural pacing. Pocket is the stronger
+runtime speed candidate in this small sample. Listening review should decide
+voice identity, clarity, and performance quality.
 
 ## Reproduce generation
 
@@ -81,7 +85,8 @@ Use separate Python 3.11 environments. The original trial used:
 
 - Chatterbox source `5de7a54aa4e5e2baadb0182dde554908b48b85c2`, Torch 2.6.0.
 - Nano weights `71ccd1d0081b430592cea481f4307e764e07bc64`.
-- Pocket TTS 3.1.0, Torch 2.14.0 for the access attempt.
+- Pocket TTS 3.1.0, Torch 2.14.0, English checkpoint
+  `39592ff23c9ef80098bb74895d104c26275fe2c9`.
 - Qwen TTS 0.1.1, Torch and torchaudio 2.11.0, Transformers 4.57.3.
 - Qwen VoiceDesign weights `5ecdb67327fd37bb2e042aab12ff7391903235d3`.
 
@@ -103,7 +108,7 @@ The voice-design helper reuses auditions already present in the output folder.
 ## Validation
 
 - Both new scripts compile and `git diff --check` passes.
-- Nano completed twelve calls; all forty WAV links passed format and
+- Both models completed twelve calls; all sixty-four WAV links passed format and
   nonempty-frame checks. The three new audition hashes matched their receipts.
 - The listening page was inspected in the in-app browser.
 - Existing speech-pack checks passed for 13 references and 84 campaign clips.
