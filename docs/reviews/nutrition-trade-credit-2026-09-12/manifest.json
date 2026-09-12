@@ -1,0 +1,36 @@
+{
+  "source_commit": "a664c8c7e390315935e6da5db6d79a99cff91467",
+  "parent_commit": "7e022e706b56e0297835c1a18abbce72938edae0",
+  "schema": 98,
+  "generator": 25,
+  "annual_validations": 7680,
+  "legacy_matching_rows": 2560,
+  "files": {
+    "README.md": {
+      "bytes": 3957,
+      "sha256": "14bcb6d5597c5084f298dae602fad5c67e05800e87aded280a4511071b1dab66"
+    },
+    "fixtures.txt": {
+      "bytes": 596,
+      "sha256": "38abc31a5968f07e9c27995cc40e1c5f33e42e4e243f9fc1d26fbc642f02a41e"
+    },
+    "probe.c": {
+      "bytes": 1694,
+      "sha256": "36b4cfe19234ed49d90b4a4851de3756f1adeb73cd4a5ad3125e12b5afa6dda1"
+    },
+    "results.json.gz": {
+      "bytes": 116553,
+      "sha256": "109f024b8e371fb6d896c99d664ad8a6e0b0632007ff2043a9322b150f33a6b2"
+    },
+    "run-study.py": {
+      "bytes": 1263,
+      "sha256": "f44cdf4f99fbb67bb78c7df8e6a0592b2f57744f75ee00fff412e3ad7d47e45f"
+    },
+    "summary.json": {
+      "bytes": 794,
+      "sha256": "e7921972c3d59f1ad30b8d3eb087ac93e95edbc62b65979681619667f441f567"
+    }
+  },
+  "parent_probe_sha256": "33215af5001e880200dbfe9dd1e2614ab4529708a1c2861e857e4530322995a3",
+  "changed_probe_sha256": "343097952466849091d761c420c2285e67f0ec66533c4a7c99d22b41643b3cad"
+}

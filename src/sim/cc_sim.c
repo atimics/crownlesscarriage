@@ -2488,10 +2488,12 @@ static int32_t IronLedgerDebtPressure(const CcSim *sim, CcId kingdom_id)
     return 0;
 }
 
-static bool IronLedgerWillFund(const CcSettlement *place, CcGood good)
+static bool IronLedgerWillFund(const CcSim *sim, const CcSettlement *place, CcGood good)
 {
     if (place == NULL) return false;
-    if (good == CC_GOOD_FOOD) return place->hunger >= 65;
+    if (good == CC_GOOD_FOOD || (sim->schema_version >= 98U &&
+        CcGoodNutritionValue(good, CC_NUTRITION_CIVILIAN) > 0))
+        return place->hunger >= 65;
     if (good != CC_GOOD_TOOLS || place->stock[CC_GOOD_TOOLS] > 0) {
         return false;
     }
@@ -6112,6 +6114,9 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
     GatherGossip(sim);
     CcGossipCarrier *carrier = GossipCarrierFor(sim, carrier_id);
     if (carrier == NULL) return;
+    /* Event sharing keeps the cast stable throughout this exchange. */
+    const CcCharacter *carrier_character = sim->schema_version >= 46U ?
+        CcSimCharacter(sim, carrier_id) : NULL;
     uint32_t town = UINT32_C(1) << (uint32_t)place;
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
         CcGossip *story = &sim->gossip[i];
@@ -6121,7 +6126,7 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
             (story->settlement_mask & town) == 0U) {
             story->settlement_mask |= town;
             story->local[place] = RetellGossip(sim, story, carrier->versions[i],
-                sim->schema_version >= 46U ? CcSimCharacter(sim, carrier_id) : NULL, carrier_id);
+                carrier_character, carrier_id);
             if (sim->schema_version < 46U || CcIdKind(carrier_id) != CC_ENTITY_CHARACTER)
                 carrier->versions[i] = story->local[place];
             char account[CC_EVENT_TEXT_CAPACITY];
@@ -6136,7 +6141,7 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
         if ((story->settlement_mask & town) != 0U &&
             (carrier->stories & bit) == 0U) {
             /* Direct craft accounts were captured when the event entered the ledger. */
-            if (sim->schema_version >= 79U && CcSimCharacter(sim, carrier_id) != NULL &&
+            if (sim->schema_version >= 79U && carrier_character != NULL &&
                 story->origin_id == place_id && story->local[place].retellings == 0 &&
                 CcGossipCraftEvent(story->kind)) continue;
             carrier->stories |= bit;
@@ -9872,7 +9877,7 @@ static CcMoney BuyerPurchasingPower(CcSim *sim, const CcSettlement *buyer,
     if (buyer == NULL) return 0;
     CcMoney coins = WarWeeklyNeed(sim, buyer, good) > 0 ?
         buyer->war_chest : buyer->market_coins;
-    if (!IronLedgerWillFund(buyer, good)) return coins;
+    if (!IronLedgerWillFund(sim, buyer, good)) return coins;
     return coins + IronLedgerCreditAvailable(
         sim, KingdomMutable(sim, buyer->kingdom_id));
 }
@@ -9984,7 +9989,7 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
                            &final_destination->market_coins;
     CcKingdom *buyer_kingdom = KingdomMutable(
         sim, final_destination->kingdom_id);
-    bool essential_credit = archive == NULL && supply == NULL && IronLedgerWillFund(final_destination, good);
+    bool essential_credit = archive == NULL && supply == NULL && IronLedgerWillFund(sim, final_destination, good);
     int32_t unit_price = MaximumI32(1, origin->price[good]);
     CcMoney toll = royal ? CcRouteRoyalTradeToll(
         sim, route, carriage->kingdom_id) : CcRouteToll(sim, route);

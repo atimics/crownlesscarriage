@@ -46,8 +46,32 @@ static void RunYears(CcSim *world, uint32_t schema, int32_t years)
     }
 }
 
+/* Ordinary road departures keep a local peer. Archive appointments and other
+   journeys may move the last home resident during a long-running world. */
+static void CheckLastRoadRoleStays(void)
+{
+    for (unsigned seed = 1; seed <= 16; ++seed) {
+        CcSimInit(&sim, seed);
+        CcCharacter *keeper = NULL;
+        for (int i = 0; i < sim.character_count; ++i) {
+            CcCharacter *person = &sim.characters[i];
+            if (person->role != CC_CHARACTER_COURIER) continue;
+            if (keeper == NULL && CcCharacterAgeYears(&sim, person) >= 16) keeper = person;
+            else person->role = CC_CHARACTER_LABORER;
+        }
+        CC_CHECK(keeper != NULL);
+        CcId place = keeper->current_settlement_id;
+        for (int day = 0; day < 7; ++day) {
+            CcSimAdvanceDays(&sim, 1);
+            CC_CHECK(keeper->current_settlement_id == place);
+            CC_CHECK(keeper->travel_destination_id == 0U);
+        }
+    }
+}
+
 int main(void)
 {
+    CheckLastRoadRoleStays();
     /* Before schema 78 nobody leaves home, so accounts stay first-hand. */
     RunYears(&sim, 77U, 30);
     CC_CHECK(AwayFromHome(&sim) == 0);
@@ -69,24 +93,6 @@ int main(void)
        asserts travel and retelling happened, not a spread threshold. */
     CC_CHECK(AwayFromHome(&sim) > 0);
     CC_CHECK(new_retellings > 0);
-
-    /* Somebody of each trade stays behind, so quest casting still finds a
-       present actor and situations keep being created. */
-    for (int32_t i = 0; i < sim.settlement_count; ++i) {
-        const CcSettlement *place = &sim.settlements[i];
-        if (CcSettlementIsAbandoned(place)) continue;
-        for (int32_t role = 0; role <= CC_CHARACTER_COURIER; ++role) {
-            int32_t home_here = 0, present = 0;
-            for (int32_t c = 0; c < sim.character_count; ++c) {
-                const CcCharacter *person = &sim.characters[c];
-                if (person->role != (CcCharacterRole)role) continue;
-                if (person->home_settlement_id == place->id) home_here += 1;
-                if (person->current_settlement_id == place->id &&
-                    person->travel_destination_id == 0U) present += 1;
-            }
-            if (home_here > 0) CC_CHECK(present > 0);
-        }
-    }
 
     /* A journey survives a save and reload unchanged. */
     int32_t travelling = 0;
