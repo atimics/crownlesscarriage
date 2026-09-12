@@ -75,6 +75,107 @@ static bool Load(const CcCustodyState *state, CcCustodyHolder holder,
     return true;
 }
 
+static bool EmptyEntry(const CcCustodyEntry *entry)
+{
+    return entry->revision == 0 && entry->owner_id == 0 && entry->source_id == 0 &&
+        entry->last_event_id == 0 && entry->holder.kind == CC_CUSTODY_STORE &&
+        entry->holder.id == 0 && entry->kind == CC_CUSTODY_GOODS &&
+        entry->reference_id == 0 && entry->quantity == 0 && entry->good == 0 &&
+        entry->condition == 0 && entry->capacity == 0 && !entry->active;
+}
+
+bool CcCustodyValidate(const CcCustodyState *state, const CcCustodyRules *rules)
+{
+    if (state == NULL || state->next_id == 0 || rules == NULL ||
+        rules->resolve == NULL || rules->good_count <= 0) return false;
+    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+        const CcCustodyEntry *entry = &state->entries[i];
+        if (entry->id == 0) {
+            if (!EmptyEntry(entry)) return false;
+            continue;
+        }
+        if (entry->id >= state->next_id || entry->revision == 0 || entry->owner_id == 0 ||
+            entry->source_id >= entry->id || entry->holder.id == 0 ||
+            entry->holder.kind < CC_CUSTODY_STORE || entry->holder.kind > CC_CUSTODY_CONTAINER_HOLDER ||
+            entry->kind < CC_CUSTODY_GOODS ||
+            entry->kind > CC_CUSTODY_CONTAINER || entry->condition < 0 ||
+            entry->condition > 100 || entry->capacity < 0 ||
+            (entry->kind != CC_CUSTODY_CONTAINER && entry->capacity != 0)) return false;
+        for (int j = 0; j < i; ++j)
+            if (state->entries[j].id == entry->id) return false;
+        if (entry->kind == CC_CUSTODY_GOODS) {
+            if (entry->good < 0 || entry->good >= rules->good_count || entry->reference_id != 0)
+                return false;
+        } else if (entry->good != 0) return false;
+        bool named = entry->kind == CC_CUSTODY_TREASURE || entry->kind == CC_CUSTODY_DOCUMENT;
+        if (named != (entry->reference_id != 0)) return false;
+        if (!entry->active) {
+            if (entry->quantity != 0) return false;
+            continue;
+        }
+        if (entry->quantity <= 0 ||
+            (entry->kind >= CC_CUSTODY_TREASURE && entry->quantity != 1)) return false;
+        if (named && (rules->reference_valid == NULL ||
+            !rules->reference_valid(rules->context, entry->kind, entry->reference_id))) return false;
+        if (entry->kind == CC_CUSTODY_TREASURE) {
+            for (int j = 0; j < i; ++j) {
+                const CcCustodyEntry *other = &state->entries[j];
+                if (other->active && other->kind == CC_CUSTODY_TREASURE &&
+                    other->reference_id == entry->reference_id) return false;
+            }
+        }
+        CcCustodyHolder root;
+        if (!RootHolder(state, entry->holder, &root) ||
+            (entry->kind == CC_CUSTODY_CONTAINER &&
+             entry->holder.kind == CC_CUSTODY_CONTAINER_HOLDER)) return false;
+        CcCustodyLocation location = {0};
+        int64_t capacity = 0, used = 0;
+        int count = 0;
+        if (!rules->resolve(rules->context, root, &location, &capacity) ||
+            !ValidLocation(location) || capacity < 0 ||
+            !Load(state, root, true, &used, &count) || used > capacity) return false;
+        if (entry->kind == CC_CUSTODY_CONTAINER) {
+            CcCustodyHolder contents = {CC_CUSTODY_CONTAINER_HOLDER, entry->id};
+            if (!Load(state, contents, false, &used, &count) ||
+                used > entry->capacity || count > CC_CUSTODY_MANIFEST_CAPACITY) return false;
+        }
+    }
+    return true;
+}
+
+static uint64_t HashWord(uint64_t hash, uint64_t word)
+{
+    for (int byte = 0; byte < 8; ++byte) {
+        hash ^= word & UINT64_C(255);
+        hash *= UINT64_C(1099511628211);
+        word >>= 8;
+    }
+    return hash;
+}
+
+uint64_t CcCustodyHash(const CcCustodyState *state)
+{
+    uint64_t hash = HashWord(UINT64_C(14695981039346656037), state->next_id);
+    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+        const CcCustodyEntry *entry = &state->entries[i];
+        hash = HashWord(hash, entry->id);
+        hash = HashWord(hash, entry->revision);
+        hash = HashWord(hash, entry->owner_id);
+        hash = HashWord(hash, entry->source_id);
+        hash = HashWord(hash, entry->last_event_id);
+        hash = HashWord(hash, (uint32_t)entry->holder.kind);
+        hash = HashWord(hash, entry->holder.id);
+        hash = HashWord(hash, (uint32_t)entry->kind);
+        hash = HashWord(hash, entry->reference_id);
+        hash = HashWord(hash, (uint64_t)entry->quantity);
+        hash = HashWord(hash, (uint32_t)entry->good);
+        hash = HashWord(hash, (uint32_t)entry->condition);
+        hash = HashWord(hash, (uint32_t)entry->capacity);
+        hash = HashWord(hash, entry->active ? 1U : 0U);
+    }
+    return hash;
+}
+
 static int FreeSlot(const CcCustodyState *state)
 {
     for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i)

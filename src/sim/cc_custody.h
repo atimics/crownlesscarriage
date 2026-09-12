@@ -45,6 +45,8 @@ typedef struct {
 
 typedef struct {
     void *context;
+    int32_t good_count;
+    bool (*reference_valid)(void *, CcCustodyKind, uint64_t reference_id);
     bool (*resolve)(void *, CcCustodyHolder, CcCustodyLocation *, int64_t *capacity);
     bool (*permit)(void *, uint64_t actor_id, const CcCustodyEntry *, CcCustodyHolder);
 } CcCustodyRules;
@@ -62,6 +64,8 @@ typedef enum {
 
 /* Game adapters supply physical placement and permission from current state. */
 void CcCustodyInit(CcCustodyState *state);
+bool CcCustodyValidate(const CcCustodyState *state, const CcCustodyRules *rules);
+uint64_t CcCustodyHash(const CcCustodyState *state);
 const CcCustodyEntry *CcCustodyFind(const CcCustodyState *state, uint64_t id);
 CcCustodyResult CcCustodyPlanTransfer(const CcCustodyState *state,
     const CcCustodyRules *rules, const CcCustodyTransfer *transfer);

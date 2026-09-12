@@ -24,7 +24,15 @@ static bool Permit(void *context, uint64_t actor, const CcCustodyEntry *entry,
     return actor == 7;
 }
 
-static const CcCustodyRules rules = {.resolve = Resolve, .permit = Permit};
+static bool ReferenceValid(void *context, CcCustodyKind kind, uint64_t id)
+{
+    (void)context;
+    return (kind == CC_CUSTODY_DOCUMENT && id == 77) ||
+        (kind == CC_CUSTODY_TREASURE && id == 88);
+}
+
+static const CcCustodyRules rules = {.good_count = 14,
+    .reference_valid = ReferenceValid, .resolve = Resolve, .permit = Permit};
 
 static void Prepare(void)
 {
@@ -93,6 +101,7 @@ static void Journey(void)
     CC_CHECK(CcCustodyFind(&state, 3)->holder.id == 30);
     CC_CHECK(CcCustodyFind(&state, 1)->quantity + CcCustodyFind(&state, 3)->quantity == 14);
     CC_CHECK(CcCustodyFind(&state, 3)->last_event_id == unload.event_id);
+    CC_CHECK(CcCustodyValidate(&state, &rules));
 }
 
 static void Gates(void)
@@ -135,6 +144,7 @@ static void PursesAndCopies(void)
 {
     Prepare();
     state.entries[0].kind = CC_CUSTODY_PURSE;
+    state.entries[0].good = 0;
     state.entries[0].quantity = INT64_MAX;
     CcCustodyTransfer split = Request(1, 8, (CcCustodyHolder){CC_CUSTODY_CONTAINER_HOLDER, 2});
     uint64_t purse = 0;
@@ -144,6 +154,7 @@ static void PursesAndCopies(void)
     Reject(split, CC_CUSTODY_STALE);
     Prepare();
     state.entries[0].kind = CC_CUSTODY_DOCUMENT;
+    state.entries[0].good = 0;
     state.entries[0].reference_id = 77;
     state.entries[0].quantity = 1;
     state.entries[2] = state.entries[0];
@@ -162,10 +173,100 @@ static void PursesAndCopies(void)
     Reject(plan, CC_CUSTODY_REMOTE);
 }
 
+static void ValidationAndHash(void)
+{
+    Prepare();
+    CC_CHECK(CcCustodyValidate(&state, &rules));
+    uint64_t original = CcCustodyHash(&state);
+#define HASH_FIELD(field, value) do { \
+    before = state; before.entries[0].field = (value); \
+    CC_CHECK(CcCustodyHash(&before) != original); \
+} while (0)
+    HASH_FIELD(id, 9);
+    HASH_FIELD(revision, 2);
+    HASH_FIELD(owner_id, 9);
+    HASH_FIELD(source_id, 9);
+    HASH_FIELD(last_event_id, 9);
+    HASH_FIELD(holder.kind, CC_CUSTODY_SITE);
+    HASH_FIELD(holder.id, 20);
+    HASH_FIELD(kind, CC_CUSTODY_PURSE);
+    HASH_FIELD(reference_id, 88);
+    HASH_FIELD(quantity, 13);
+    HASH_FIELD(good, 4);
+    HASH_FIELD(condition, 89);
+    HASH_FIELD(capacity, 1);
+    HASH_FIELD(active, false);
+#undef HASH_FIELD
+    before = state; before.next_id++;
+    CC_CHECK(CcCustodyHash(&before) != original);
+    before = state; before.entries[CC_CUSTODY_CAPACITY - 1].last_event_id = 1;
+    CC_CHECK(CcCustodyHash(&before) != original);
+    CC_CHECK(!CcCustodyValidate(&before, &rules));
+#define INVALID_FIELD(field, value) do { \
+    before = state; before.entries[0].field = (value); \
+    CC_CHECK(!CcCustodyValidate(&before, &rules)); \
+} while (0)
+    INVALID_FIELD(id, 2);
+    INVALID_FIELD(revision, 0);
+    INVALID_FIELD(owner_id, 0);
+    INVALID_FIELD(source_id, 1);
+    INVALID_FIELD(holder.kind, (CcCustodyHolderKind)99);
+    INVALID_FIELD(holder.id, 999);
+    INVALID_FIELD(kind, (CcCustodyKind)99);
+    INVALID_FIELD(reference_id, 88);
+    INVALID_FIELD(quantity, 0);
+    INVALID_FIELD(good, 14);
+    INVALID_FIELD(condition, 101);
+    INVALID_FIELD(capacity, 1);
+    INVALID_FIELD(active, false);
+#undef INVALID_FIELD
+    before = state; before.next_id = 2;
+    CC_CHECK(!CcCustodyValidate(&before, &rules));
+    state.entries[0].holder = (CcCustodyHolder){CC_CUSTODY_CONTAINER_HOLDER, 2};
+    CC_CHECK(!CcCustodyValidate(&state, &rules)); /* Fourteen units exceed ten. */
+    state.entries[0].quantity = 10;
+    CC_CHECK(CcCustodyValidate(&state, &rules));
+    state.entries[1].holder = (CcCustodyHolder){CC_CUSTODY_CONTAINER_HOLDER, 2};
+    CC_CHECK(!CcCustodyValidate(&state, &rules));
+    Prepare();
+    state.entries[1].capacity = 100;
+    for (int i = 2; i <= 18; ++i) {
+        state.entries[i] = state.entries[0];
+        state.entries[i].id = (uint64_t)i + 1;
+        state.entries[i].quantity = 1;
+        state.entries[i].holder = (CcCustodyHolder){CC_CUSTODY_CONTAINER_HOLDER, 2};
+    }
+    state.next_id = 20;
+    CC_CHECK(!CcCustodyValidate(&state, &rules));
+    state.entries[18].active = false;
+    state.entries[18].quantity = 0;
+    CC_CHECK(CcCustodyValidate(&state, &rules));
+    Prepare();
+    state.entries[0].kind = CC_CUSTODY_TREASURE;
+    state.entries[0].good = 0;
+    state.entries[0].quantity = 1;
+    state.entries[0].reference_id = 88;
+    CC_CHECK(CcCustodyValidate(&state, &rules));
+    state.entries[2] = state.entries[0];
+    state.entries[2].id = 3;
+    state.next_id = 4;
+    CC_CHECK(!CcCustodyValidate(&state, &rules));
+    state.entries[0].kind = state.entries[2].kind = CC_CUSTODY_DOCUMENT;
+    state.entries[0].reference_id = state.entries[2].reference_id = 77;
+    CC_CHECK(CcCustodyValidate(&state, &rules));
+    state.entries[2].reference_id = 78;
+    CC_CHECK(!CcCustodyValidate(&state, &rules));
+    state.entries[2].active = false;
+    state.entries[2].quantity = 0;
+    state.entries[2].holder.id = 999; /* Historical lifetime may have ended. */
+    CC_CHECK(CcCustodyValidate(&state, &rules));
+}
+
 int main(void)
 {
     Journey();
     Gates();
     PursesAndCopies();
+    ValidationAndHash();
     return 0;
 }

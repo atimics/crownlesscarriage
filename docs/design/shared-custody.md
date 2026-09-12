@@ -103,6 +103,11 @@ Packing and unpacking also advance the container revision.
 
 The strict native target, AddressSanitizer/UndefinedBehaviorSanitizer run,
 Cppcheck, and WebAssembly compile check passed. This is isolated core evidence.
-The world adapters, object creation, common economy costs, persistence, hashing,
-validation, and player journey remain open. The draft is complete only when
+The core now validates every entry field, holder resolution, unique treasure
+references, bounded manifests, and monotonically allocated IDs. Its portable
+field hash includes active and retired entries. Mutation tests cover every
+field, including fields with the same storage size.
+
+The world adapters, object creation, common economy costs, persistence, world
+hash integration, world validation integration, and player journey remain open. The draft is complete only when
 the implementation and evidence satisfy the whole acceptance list.
