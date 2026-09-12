@@ -150,21 +150,21 @@ void main()
     vec2 crossedTerrainPoint = vec2(
         terrainPoint.x + terrainPoint.y * 0.46,
         terrainPoint.y - terrainPoint.x * 0.29);
+    // Broad pigment washes follow the ground; fine chips fade below a pixel.
     float broadTerrain = mix(
-        cellNoise(terrainPoint * 0.18 + vec2(11.0, 5.0)),
-        cellNoise(crossedTerrainPoint * 0.13 + vec2(3.0, 19.0)),
+        meadowNoise(terrainPoint * 0.18 + vec2(11.0, 5.0)),
+        meadowNoise(crossedTerrainPoint * 0.13 + vec2(3.0, 19.0)),
         0.38);
-    float middleTerrain = mix(
-        cellNoise(terrainPoint * 0.55 + vec2(23.0, 7.0)),
-        cellNoise(crossedTerrainPoint * 0.39 + vec2(5.0, 31.0)),
-        0.34);
-    float fineTerrain = cellNoise(
-        crossedTerrainPoint * 2.35 + vec2(41.0, 13.0));
-    float terrainShadowLayer = 1.0 - step(0.29, broadTerrain);
-    float terrainLightLayer = step(0.70, broadTerrain);
-    float terrainCoolLayer = step(0.76, middleTerrain);
-    float terrainDarkChip = 1.0 - step(0.10, fineTerrain);
-    float terrainLightChip = step(0.88, fineTerrain);
+    float middleTerrain = meadowNoise(
+        crossedTerrainPoint * 0.55 + vec2(5.0, 31.0));
+    vec2 fineTerrainPoint = crossedTerrainPoint * 2.35 + vec2(41.0, 13.0);
+    float fineTerrain = cellNoise(fineTerrainPoint);
+    float finePresence = paintResolution(fineTerrainPoint);
+    float terrainShadowLayer = 1.0 - smoothstep(0.24, 0.48, broadTerrain);
+    float terrainLightLayer = smoothstep(0.52, 0.76, broadTerrain);
+    float terrainCoolLayer = smoothstep(0.54, 0.78, middleTerrain);
+    float terrainDarkChip = (1.0 - paintEdge(0.10, fineTerrain)) * finePresence;
+    float terrainLightChip = paintEdge(0.88, fineTerrain) * finePresence;
 
     float terrainHemisphere = hemisphere < 0.72 ? 0.64 :
                               hemisphere < 0.91 ? 0.82 : 1.0;
@@ -208,19 +208,19 @@ void main()
     vec3 color = albedo.rgb * light * paintTemperature * (1.0 + variation);
 
     vec3 terrainTint = vec3(1.0);
-    terrainTint += vec3(-0.060, -0.042, -0.018) * terrainShadowLayer;
-    terrainTint += vec3(0.058, 0.036, -0.026) * terrainLightLayer;
-    terrainTint += vec3(-0.032, 0.016, 0.014) * terrainCoolLayer;
+    terrainTint += vec3(-0.14, -0.085, -0.035) * terrainShadowLayer;
+    terrainTint += vec3(0.16, 0.10, -0.045) * terrainLightLayer;
+    terrainTint += vec3(-0.055, 0.028, 0.035) * terrainCoolLayer;
     terrainTint += vec3(-0.035, -0.026, -0.012) * terrainDarkChip;
     terrainTint += vec3(0.034, 0.026, -0.010) * terrainLightChip;
     color *= mix(vec3(1.0), terrainTint,
                  isTerrain * detailPresence);
 
     float foregroundTerrain = foreground * isTerrain * detailPresence;
-    float foregroundScumble = cellNoise(
+    float foregroundScumble = meadowNoise(
         crossedTerrainPoint * 0.17 + vec2(73.0, 29.0));
-    float foregroundShade = 1.0 - step(0.34, foregroundScumble);
-    float foregroundLift = step(0.72, foregroundScumble);
+    float foregroundShade = 1.0 - smoothstep(0.22, 0.44, foregroundScumble);
+    float foregroundLift = smoothstep(0.60, 0.80, foregroundScumble);
     color *= 1.0 - foregroundTerrain * foregroundShade * 0.065;
     color += albedo.rgb * vec3(0.12, 0.14, 0.12) *
              foregroundTerrain * foregroundLift * 0.16;
