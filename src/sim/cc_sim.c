@@ -2488,10 +2488,12 @@ static int32_t IronLedgerDebtPressure(const CcSim *sim, CcId kingdom_id)
     return 0;
 }
 
-static bool IronLedgerWillFund(const CcSettlement *place, CcGood good)
+static bool IronLedgerWillFund(const CcSim *sim, const CcSettlement *place, CcGood good)
 {
     if (place == NULL) return false;
-    if (good == CC_GOOD_FOOD) return place->hunger >= 65;
+    if (good == CC_GOOD_FOOD || (sim->schema_version >= 98U &&
+        CcGoodNutritionValue(good, CC_NUTRITION_CIVILIAN) > 0))
+        return place->hunger >= 65;
     if (good != CC_GOOD_TOOLS || place->stock[CC_GOOD_TOOLS] > 0) {
         return false;
     }
@@ -9875,7 +9877,7 @@ static CcMoney BuyerPurchasingPower(CcSim *sim, const CcSettlement *buyer,
     if (buyer == NULL) return 0;
     CcMoney coins = WarWeeklyNeed(sim, buyer, good) > 0 ?
         buyer->war_chest : buyer->market_coins;
-    if (!IronLedgerWillFund(buyer, good)) return coins;
+    if (!IronLedgerWillFund(sim, buyer, good)) return coins;
     return coins + IronLedgerCreditAvailable(
         sim, KingdomMutable(sim, buyer->kingdom_id));
 }
@@ -9987,7 +9989,7 @@ static bool CreateTradeShipment(CcSim *sim, CcRoyalCarriage *carriage,
                            &final_destination->market_coins;
     CcKingdom *buyer_kingdom = KingdomMutable(
         sim, final_destination->kingdom_id);
-    bool essential_credit = archive == NULL && supply == NULL && IronLedgerWillFund(final_destination, good);
+    bool essential_credit = archive == NULL && supply == NULL && IronLedgerWillFund(sim, final_destination, good);
     int32_t unit_price = MaximumI32(1, origin->price[good]);
     CcMoney toll = royal ? CcRouteRoyalTradeToll(
         sim, route, carriage->kingdom_id) : CcRouteToll(sim, route);

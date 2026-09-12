@@ -196,8 +196,102 @@ static void CheckAbandonedDelivery(void)
     (void)remove("abandoned-delivery.ccsave-shm");
 }
 
+static void CheckNutritionCredit(void)
+{
+    static CcSim sim, restored;
+    const char *path = "nutrition-credit.ccsave";
+    char error[256];
+    for (int scenario = 0; scenario < 9; ++scenario) {
+        CcSimInit(&sim, UINT32_C(0xc4111a9e));
+        ClearTradeNeeds(&sim);
+        sim.schema_version = scenario == 0 ? 97U : 98U;
+        sim.current_day = 6;
+        /* Put archive demand in another kingdom to isolate market credit. */
+        sim.archives.seat_id = sim.settlements[4].id;
+        sim.iron_ledger_reserve = scenario == 3 ? 0 : 500;
+        for (int i = 0; i < sim.kingdom_count; ++i) {
+            sim.kingdoms[i].treasury = 0;
+            sim.kingdoms[i].iron_ledger_debt = scenario == 4 ? 880 : 0;
+        }
+        for (int i = 0; i < sim.route_count; ++i) {
+            sim.routes[i].closed = true;
+            sim.routes[i].condition = 0;
+        }
+        sim.routes[0].closed = scenario == 5;
+        sim.routes[0].condition = scenario == 5 ? 0 : 100;
+        sim.routes[0].security = 100;
+        CcSettlement *from = &sim.settlements[0], *to = &sim.settlements[1];
+        CcGood good = scenario == 8 ? CC_GOOD_MEAT : CC_GOOD_WHEAT;
+        int reserve = good == CC_GOOD_MEAT ? 5 : 60;
+        from->stock[good] = scenario == 7 ? reserve : good == CC_GOOD_MEAT ? 30 : 100;
+        from->reserve_target[good] = reserve;
+        from->consumption[CC_GOOD_BREAD] = 5;
+        to->reserve_target[good] = 40;
+        to->hunger = scenario == 2 ? 0 : 90;
+        to->market_coins = 0;
+        for (int i = 0; i < sim.royal_carriage_count; ++i) {
+            sim.royal_carriages[i].next_dispatch_day = 13;
+            if (sim.royal_carriages[i].kingdom_id == to->kingdom_id && scenario != 6) {
+                sim.royal_carriages[i].next_dispatch_day = 0;
+                sim.royal_carriages[i].location_id = from->id;
+            }
+        }
+        CcMoney gold = CcSimTrackedGold(&sim);
+        CcSimAdvanceDays(&sim, 1);
+        int loads = 0, quantity = 0;
+        CcId shipment_id = 0;
+        for (int i = 0; i < sim.shipment_count; ++i) {
+            const CcShipment *cargo = &sim.shipments[i];
+            if (cargo->good == good && cargo->final_destination_id == to->id) {
+                ++loads;
+                quantity += cargo->quantity;
+                shipment_id = cargo->id;
+                CC_CHECK(cargo->origin_id == from->id);
+                CC_CHECK(cargo->status == CC_SHIPMENT_TRAVELLING);
+                CC_CHECK(cargo->quantity > 0 && cargo->quantity <= 40);
+                CC_CHECK(cargo->arrival_day > sim.current_day);
+            }
+        }
+        bool funded = scenario == 1 || scenario == 8;
+        printf("nutrition credit case=%d loads=%d quantity=%d debt=%lld reserve=%lld\n",
+            scenario, loads, quantity, (long long)sim.kingdoms[0].iron_ledger_debt,
+            (long long)sim.iron_ledger_reserve);
+        CC_CHECK(loads == (funded ? 1 : 0));
+        CC_CHECK(CcSimTrackedGold(&sim) == gold);
+        if (funded) {
+            CC_CHECK(from->stock[good] >= reserve);
+            CC_CHECK(to->stock[good] == 0);
+            CC_CHECK(sim.kingdoms[0].iron_ledger_debt > 0);
+            CC_CHECK(sim.kingdoms[0].iron_ledger_debt + sim.iron_ledger_reserve == 500);
+            if (!CcSimValidate(&sim, error, sizeof(error))) fprintf(stderr, "%s\n", error);
+            CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+            CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+            CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+            CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+            bool arrived = false;
+            for (int day = 0; day < 14; ++day) {
+                CcSimAdvanceDays(&sim, 1);
+                for (int i = 0; i < sim.shipment_count; ++i) {
+                    const CcShipment *cargo = &sim.shipments[i];
+                    if (cargo->id == shipment_id && cargo->status == CC_SHIPMENT_ARRIVED)
+                        arrived = true;
+                }
+            }
+            CC_CHECK(arrived);
+            CcSimAdvanceDays(&restored, 14);
+            CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+            if (!CcSimValidate(&sim, error, sizeof(error))) fprintf(stderr, "%s\n", error);
+            CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+        }
+    }
+    (void)remove(path);
+    (void)remove("nutrition-credit.ccsave-wal");
+    (void)remove("nutrition-credit.ccsave-shm");
+}
+
 int main(void)
 {
+    CheckNutritionCredit();
     CheckAbandonedDelivery();
     CheckSeedTenLongRun();
     CheckChangedDestination();
