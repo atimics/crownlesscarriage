@@ -70,7 +70,7 @@ static CcArchiveRelocationPlan QuoteDestination(const CcSim *sim,
 CcArchiveRelocationPlan CcSimArchiveRelocationPlan(const CcSim *sim)
 {
     CcArchiveRelocationPlan plan = {.gate = CC_ARCHIVE_MOVE_SEAT};
-    if (sim == NULL || sim->schema_version < 88U || sim->archives.seat_id == 0) return plan;
+    if (sim == NULL || sim->schema_version < 91U || sim->archives.seat_id == 0) return plan;
     plan.origin_id = sim->archives.seat_id;
     if (CcSimSettlement(sim, plan.origin_id) == NULL) return plan;
     plan.gate = CC_ARCHIVE_MOVE_HEALTHY;
