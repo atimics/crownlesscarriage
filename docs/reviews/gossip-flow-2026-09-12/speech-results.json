@@ -1,0 +1,1476 @@
+{
+  "model_sha256": "fdc469199c10ed24795b8f66248738c24b9f3bf4d12c52342d7f588ae95f2c02",
+  "tokenizer_sha256": "c572de53eb4e739a8ce941ac03d1d5fb6173623af786787cf786b41fd34e9af4",
+  "rows": [
+    {
+      "event_id": "648518346341351471",
+      "day": 2,
+      "stage": "Thornford",
+      "kind": 0,
+      "place_id": "144115188075855876",
+      "name": "Thornford",
+      "source_id": "0",
+      "retellings": 0,
+      "confidence": 100,
+      "bias": 0,
+      "alarm": 0,
+      "account": "Thornford's drought harvest cannot supply the eastern settlements.",
+      "core_supported": true,
+      "core_account": "Thornford's drought harvest cannot supply the eastern settlements.",
+      "reference_speech": "The drought harvest in Thornford fell short of supplies for the eastern settlements, I hear.",
+      "model_supported": true,
+      "rule": "harvest_failed_0",
+      "model_text": "Thornford's drought harvest fell short of what the eastern settlements needed.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 347
+        },
+        {
+          "token": 836
+        },
+        {
+          "token": 872
+        },
+        {
+          "token": 533
+        },
+        {
+          "token": 476
+        },
+        {
+          "token": 320
+        },
+        {
+          "token": 1132
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 786
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341351471",
+      "day": 5,
+      "stage": "Gloamgate",
+      "kind": 0,
+      "place_id": "144115188075855877",
+      "name": "Gloamgate",
+      "source_id": "1369094286720630861",
+      "retellings": 2,
+      "confidence": 84,
+      "bias": 0,
+      "alarm": 11,
+      "account": "Thornford's drought harvest cannot supply the eastern settlements.",
+      "core_supported": true,
+      "core_account": "Thornford's drought harvest cannot supply the eastern settlements.",
+      "reference_speech": "The drought harvest in Thornford fell short of supplies for the eastern settlements, I hear.",
+      "model_supported": true,
+      "rule": "harvest_failed_0",
+      "model_text": "Thornford's drought harvest fell short of what the eastern settlements needed.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 347
+        },
+        {
+          "token": 836
+        },
+        {
+          "token": 872
+        },
+        {
+          "token": 533
+        },
+        {
+          "token": 476
+        },
+        {
+          "token": 320
+        },
+        {
+          "token": 1132
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 786
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341351471",
+      "day": 5,
+      "stage": "scriptorium intake",
+      "kind": 0,
+      "present": true,
+      "source_id": "1369094286720630861",
+      "retellings": 2,
+      "confidence": 84,
+      "bias": 0,
+      "alarm": 11,
+      "account": "Thornford's drought harvest cannot supply the eastern settlements.",
+      "core_supported": true,
+      "core_account": "Thornford's drought harvest cannot supply the eastern settlements.",
+      "reference_speech": "The drought harvest in Thornford fell short of supplies for the eastern settlements, I hear.",
+      "model_supported": true,
+      "rule": "harvest_failed_0",
+      "model_text": "Thornford's drought harvest fell short of what the eastern settlements needed.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 347
+        },
+        {
+          "token": 836
+        },
+        {
+          "token": 872
+        },
+        {
+          "token": 533
+        },
+        {
+          "token": 476
+        },
+        {
+          "token": 320
+        },
+        {
+          "token": 1132
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 786
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341351471",
+      "day": 20,
+      "stage": "Silverwick",
+      "kind": 0,
+      "place_id": "144115188075855879",
+      "name": "Silverwick",
+      "source_id": "1369094286720630904",
+      "retellings": 4,
+      "confidence": 65,
+      "bias": 0,
+      "alarm": 23,
+      "account": "Thornford's drought harvest cannot supply the southern settlements.",
+      "core_supported": true,
+      "core_account": "Thornford's drought harvest cannot supply the southern settlements.",
+      "reference_speech": "Have you heard? The drought harvest in Thornford fell short of supplies for the southern settlements. That's the word going round.",
+      "model_supported": true,
+      "rule": "harvest_failed_0",
+      "model_text": "Thornford's drought harvest fell short of what the southern settlements needed, so people say.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 347
+        },
+        {
+          "token": 836
+        },
+        {
+          "token": 872
+        },
+        {
+          "token": 533
+        },
+        {
+          "token": 476
+        },
+        {
+          "token": 320
+        },
+        {
+          "token": 1132
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 786
+        },
+        {
+          "token": 20
+        },
+        {
+          "token": 519
+        },
+        {
+          "token": 522
+        },
+        {
+          "token": 520
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341351471",
+      "day": 24,
+      "stage": "Rosespire",
+      "kind": 0,
+      "place_id": "144115188075855880",
+      "name": "Rosespire",
+      "source_id": "1369094286720630868",
+      "retellings": 6,
+      "confidence": 44,
+      "bias": 12,
+      "alarm": 33,
+      "account": "Thornford's drought harvest cannot supply the southern settlements. They fear worse is coming.",
+      "core_supported": true,
+      "core_account": "Thornford's drought harvest cannot supply the southern settlements.",
+      "reference_speech": "Have you heard? The drought harvest in Thornford fell short of supplies for the southern settlements. That's the word going round.",
+      "model_supported": true,
+      "rule": "harvest_failed_0",
+      "model_text": "Thornford's drought harvest fell short of what the southern settlements needed, so people say.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 347
+        },
+        {
+          "token": 836
+        },
+        {
+          "token": 872
+        },
+        {
+          "token": 533
+        },
+        {
+          "token": 476
+        },
+        {
+          "token": 320
+        },
+        {
+          "token": 1132
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 786
+        },
+        {
+          "token": 20
+        },
+        {
+          "token": 519
+        },
+        {
+          "token": 522
+        },
+        {
+          "token": 520
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341351471",
+      "day": 25,
+      "stage": "Alderwatch",
+      "kind": 0,
+      "place_id": "144115188075855878",
+      "name": "Alderwatch",
+      "source_id": "1369094286720630904",
+      "retellings": 4,
+      "confidence": 64,
+      "bias": 0,
+      "alarm": 23,
+      "account": "Thornford's drought harvest cannot supply the southern settlements.",
+      "core_supported": true,
+      "core_account": "Thornford's drought harvest cannot supply the southern settlements.",
+      "reference_speech": "Have you heard? The drought harvest in Thornford fell short of supplies for the southern settlements. That's the word going round.",
+      "model_supported": true,
+      "rule": "harvest_failed_0",
+      "model_text": "Thornford's drought harvest fell short of what the southern settlements needed, so people say.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 347
+        },
+        {
+          "token": 836
+        },
+        {
+          "token": 872
+        },
+        {
+          "token": 533
+        },
+        {
+          "token": 476
+        },
+        {
+          "token": 320
+        },
+        {
+          "token": 1132
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 786
+        },
+        {
+          "token": 20
+        },
+        {
+          "token": 519
+        },
+        {
+          "token": 522
+        },
+        {
+          "token": 520
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341351471",
+      "day": 25,
+      "stage": "Hollowbarrow",
+      "kind": 0,
+      "place_id": "144115188075855881",
+      "name": "Hollowbarrow",
+      "source_id": "1369094286720630877",
+      "retellings": 4,
+      "confidence": 65,
+      "bias": 20,
+      "alarm": 21,
+      "account": "Thornford's drought harvest cannot supply the southern settlements. Loyal voices credit the crown.",
+      "core_supported": true,
+      "core_account": "Thornford's drought harvest cannot supply the southern settlements.",
+      "reference_speech": "Have you heard? The drought harvest in Thornford fell short of supplies for the southern settlements. That's the word going round.",
+      "model_supported": true,
+      "rule": "harvest_failed_0",
+      "model_text": "Thornford's drought harvest fell short of what the southern settlements needed, so people say.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 347
+        },
+        {
+          "token": 836
+        },
+        {
+          "token": 872
+        },
+        {
+          "token": 533
+        },
+        {
+          "token": 476
+        },
+        {
+          "token": 320
+        },
+        {
+          "token": 1132
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 786
+        },
+        {
+          "token": 20
+        },
+        {
+          "token": 519
+        },
+        {
+          "token": 522
+        },
+        {
+          "token": 520
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "type": "held",
+      "day": 10,
+      "event_id": "648518346341351471",
+      "kind": 0,
+      "person_id": "1369094286720630860",
+      "place_id": "144115188075855877",
+      "occupation": 10,
+      "name": "Grenwin Longmead",
+      "source_id": "0",
+      "retellings": 1,
+      "confidence": 93,
+      "bias": 0,
+      "alarm": 2,
+      "account": "Thornford's drought harvest cannot supply the eastern settlements.",
+      "core_supported": true,
+      "core_account": "Thornford's drought harvest cannot supply the eastern settlements.",
+      "reference_speech": "The drought harvest in Thornford fell short of supplies for the eastern settlements, I hear.",
+      "stage": "scribe Grenwin Longmead",
+      "model_supported": true,
+      "rule": "harvest_failed_0",
+      "model_text": "Thornford's drought harvest fell short of what the eastern settlements needed.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 347
+        },
+        {
+          "token": 836
+        },
+        {
+          "token": 872
+        },
+        {
+          "token": 533
+        },
+        {
+          "token": 476
+        },
+        {
+          "token": 320
+        },
+        {
+          "token": 1132
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 786
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341353064",
+      "day": 224,
+      "stage": "Rosespire",
+      "kind": 78,
+      "place_id": "144115188075855880",
+      "name": "Rosespire",
+      "source_id": "0",
+      "retellings": 0,
+      "confidence": 100,
+      "bias": 0,
+      "alarm": 0,
+      "account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.",
+      "core_supported": true,
+      "core_account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.",
+      "reference_speech": "Rosespire raised calves and added older calves to the working herd, I hear.",
+      "model_supported": true,
+      "rule": "cow_calving_0",
+      "model_text": "Rosespire raised calves and added older calves to the working herd.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 601
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 306
+        },
+        {
+          "token": 744
+        },
+        {
+          "token": 913
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 304
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 492
+        },
+        {
+          "token": 514
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341353064",
+      "day": 234,
+      "stage": "Hollowbarrow",
+      "kind": 78,
+      "place_id": "144115188075855881",
+      "name": "Hollowbarrow",
+      "source_id": "1369094286720630912",
+      "retellings": 2,
+      "confidence": 82,
+      "bias": 32,
+      "alarm": 11,
+      "account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd. Loyal voices credit the crown.",
+      "core_supported": true,
+      "core_account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.",
+      "reference_speech": "Rosespire raised calves and added older calves to the working herd, I hear.",
+      "model_supported": true,
+      "rule": "cow_calving_0",
+      "model_text": "Rosespire raised calves and added older calves to the working herd.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 601
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 306
+        },
+        {
+          "token": 744
+        },
+        {
+          "token": 913
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 304
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 492
+        },
+        {
+          "token": 514
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341353064",
+      "day": 237,
+      "stage": "Alderwatch",
+      "kind": 78,
+      "place_id": "144115188075855878",
+      "name": "Alderwatch",
+      "source_id": "1369094286720630912",
+      "retellings": 2,
+      "confidence": 82,
+      "bias": 32,
+      "alarm": 11,
+      "account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd. Loyal voices credit the crown.",
+      "core_supported": true,
+      "core_account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.",
+      "reference_speech": "Rosespire raised calves and added older calves to the working herd, I hear.",
+      "model_supported": true,
+      "rule": "cow_calving_0",
+      "model_text": "Rosespire raised calves and added older calves to the working herd.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 601
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 306
+        },
+        {
+          "token": 744
+        },
+        {
+          "token": 913
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 304
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 492
+        },
+        {
+          "token": 514
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341353064",
+      "day": 248,
+      "stage": "Silverwick",
+      "kind": 78,
+      "place_id": "144115188075855879",
+      "name": "Silverwick",
+      "source_id": "1369094286720630905",
+      "retellings": 4,
+      "confidence": 61,
+      "bias": 32,
+      "alarm": 23,
+      "account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd. Loyal voices credit the crown.",
+      "core_supported": true,
+      "core_account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.",
+      "reference_speech": "Have you heard? Rosespire raised calves and added older calves to the working herd. That's the word going round.",
+      "model_supported": true,
+      "rule": "cow_calving_0",
+      "model_text": "Rosespire raised calves and added older calves to the working herd, so people say.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 601
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 306
+        },
+        {
+          "token": 744
+        },
+        {
+          "token": 913
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 304
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 492
+        },
+        {
+          "token": 514
+        },
+        {
+          "token": 20
+        },
+        {
+          "token": 519
+        },
+        {
+          "token": 522
+        },
+        {
+          "token": 520
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341353064",
+      "day": 254,
+      "stage": "Gloamgate",
+      "kind": 78,
+      "place_id": "144115188075855877",
+      "name": "Gloamgate",
+      "source_id": "1369094286720630880",
+      "retellings": 6,
+      "confidence": 37,
+      "bias": 32,
+      "alarm": 35,
+      "account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd. Loyal voices credit the crown. They fear worse is coming.",
+      "core_supported": true,
+      "core_account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.",
+      "reference_speech": "Rosespire raised calves and added older calves to the working herd, if the story is right.",
+      "model_supported": true,
+      "rule": "cow_calving_0",
+      "model_text": "Rosespire raised calves and added older calves to the working herd, if the story is right.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 601
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 306
+        },
+        {
+          "token": 744
+        },
+        {
+          "token": 913
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 304
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 492
+        },
+        {
+          "token": 514
+        },
+        {
+          "token": 20
+        },
+        {
+          "token": 381
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 506
+        },
+        {
+          "token": 358
+        },
+        {
+          "token": 507
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341353064",
+      "day": 254,
+      "stage": "scriptorium intake",
+      "kind": 78,
+      "present": true,
+      "source_id": "1369094286720630880",
+      "retellings": 6,
+      "confidence": 37,
+      "bias": 32,
+      "alarm": 35,
+      "account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd. Loyal voices credit the crown. They fear worse is coming.",
+      "core_supported": true,
+      "core_account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.",
+      "reference_speech": "Rosespire raised calves and added older calves to the working herd, if the story is right.",
+      "model_supported": true,
+      "rule": "cow_calving_0",
+      "model_text": "Rosespire raised calves and added older calves to the working herd, if the story is right.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 601
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 306
+        },
+        {
+          "token": 744
+        },
+        {
+          "token": 913
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 304
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 492
+        },
+        {
+          "token": 514
+        },
+        {
+          "token": 20
+        },
+        {
+          "token": 381
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 506
+        },
+        {
+          "token": 358
+        },
+        {
+          "token": 507
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341353064",
+      "day": 261,
+      "stage": "Thornford",
+      "kind": 78,
+      "place_id": "144115188075855876",
+      "name": "Thornford",
+      "source_id": "1369094286720630896",
+      "retellings": 8,
+      "confidence": 10,
+      "bias": 44,
+      "alarm": 48,
+      "account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd. Loyal voices credit the crown. They fear worse is coming.",
+      "core_supported": true,
+      "core_account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.",
+      "reference_speech": "Rosespire raised calves and added older calves to the working herd, if the story is right.",
+      "model_supported": true,
+      "rule": "cow_calving_0",
+      "model_text": "Rosespire raised calves and added older calves to the working herd, if the story is right.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 601
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 306
+        },
+        {
+          "token": 744
+        },
+        {
+          "token": 913
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 304
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 492
+        },
+        {
+          "token": 514
+        },
+        {
+          "token": 20
+        },
+        {
+          "token": 381
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 506
+        },
+        {
+          "token": 358
+        },
+        {
+          "token": 507
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "type": "held",
+      "day": 255,
+      "event_id": "648518346341353064",
+      "kind": 78,
+      "person_id": "1369094286720630860",
+      "place_id": "144115188075855877",
+      "occupation": 10,
+      "name": "Grenwin Longmead",
+      "source_id": "1369094286720630880",
+      "retellings": 7,
+      "confidence": 26,
+      "bias": 32,
+      "alarm": 37,
+      "account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd. Loyal voices credit the crown. They fear worse is coming.",
+      "core_supported": true,
+      "core_account": "Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.",
+      "reference_speech": "Rosespire raised calves and added older calves to the working herd, if the story is right.",
+      "stage": "scribe Grenwin Longmead",
+      "model_supported": true,
+      "rule": "cow_calving_0",
+      "model_text": "Rosespire raised calves and added older calves to the working herd, if the story is right.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 601
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 306
+        },
+        {
+          "token": 744
+        },
+        {
+          "token": 913
+        },
+        {
+          "token": 570
+        },
+        {
+          "token": 304
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 492
+        },
+        {
+          "token": 514
+        },
+        {
+          "token": 20
+        },
+        {
+          "token": 381
+        },
+        {
+          "token": 276
+        },
+        {
+          "token": 506
+        },
+        {
+          "token": 358
+        },
+        {
+          "token": 507
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341352151",
+      "day": 89,
+      "stage": "Thornford",
+      "kind": 51,
+      "place_id": "144115188075855876",
+      "name": "Thornford",
+      "source_id": "0",
+      "retellings": 0,
+      "confidence": 100,
+      "bias": 0,
+      "alarm": 0,
+      "account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.",
+      "core_supported": true,
+      "core_account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.",
+      "reference_speech": "The Cinder Tithe raided Thornford, I hear.",
+      "model_supported": true,
+      "rule": "goblin_raided_0",
+      "model_text": "The Cinder Tithe raided Thornford.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 530
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341352151",
+      "day": 92,
+      "stage": "Gloamgate",
+      "kind": 51,
+      "place_id": "144115188075855877",
+      "name": "Gloamgate",
+      "source_id": "1369094286720630857",
+      "retellings": 2,
+      "confidence": 84,
+      "bias": 12,
+      "alarm": 11,
+      "account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.",
+      "core_supported": true,
+      "core_account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.",
+      "reference_speech": "The Cinder Tithe raided Thornford, I hear.",
+      "model_supported": true,
+      "rule": "goblin_raided_0",
+      "model_text": "The Cinder Tithe raided Thornford.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 530
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341352151",
+      "day": 92,
+      "stage": "scriptorium intake",
+      "kind": 51,
+      "present": true,
+      "source_id": "1369094286720630857",
+      "retellings": 2,
+      "confidence": 84,
+      "bias": 12,
+      "alarm": 11,
+      "account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.",
+      "core_supported": true,
+      "core_account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.",
+      "reference_speech": "The Cinder Tithe raided Thornford, I hear.",
+      "model_supported": true,
+      "rule": "goblin_raided_0",
+      "model_text": "The Cinder Tithe raided Thornford.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 530
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341352151",
+      "day": 95,
+      "stage": "Hollowbarrow",
+      "kind": 51,
+      "place_id": "144115188075855881",
+      "name": "Hollowbarrow",
+      "source_id": "1369094286720630857",
+      "retellings": 3,
+      "confidence": 76,
+      "bias": 24,
+      "alarm": 13,
+      "account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns. Loyal voices credit the crown.",
+      "core_supported": true,
+      "core_account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.",
+      "reference_speech": "The Cinder Tithe raided Thornford, I hear.",
+      "model_supported": true,
+      "rule": "goblin_raided_0",
+      "model_text": "The Cinder Tithe raided Thornford.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 530
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341352151",
+      "day": 98,
+      "stage": "Silverwick",
+      "kind": 51,
+      "place_id": "144115188075855879",
+      "name": "Silverwick",
+      "source_id": "1369094286720630910",
+      "retellings": 4,
+      "confidence": 67,
+      "bias": 12,
+      "alarm": 22,
+      "account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.",
+      "core_supported": true,
+      "core_account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.",
+      "reference_speech": "Have you heard? The Cinder Tithe raided Thornford. That's the word going round.",
+      "model_supported": true,
+      "rule": "goblin_raided_0",
+      "model_text": "The Cinder Tithe raided Thornford, so people say.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 530
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 20
+        },
+        {
+          "token": 519
+        },
+        {
+          "token": 522
+        },
+        {
+          "token": 520
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341352151",
+      "day": 98,
+      "stage": "Rosespire",
+      "kind": 51,
+      "place_id": "144115188075855880",
+      "name": "Rosespire",
+      "source_id": "1369094286720630857",
+      "retellings": 4,
+      "confidence": 68,
+      "bias": 36,
+      "alarm": 15,
+      "account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns. Loyal voices credit the crown.",
+      "core_supported": true,
+      "core_account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.",
+      "reference_speech": "Have you heard? The Cinder Tithe raided Thornford. That's the word going round.",
+      "model_supported": true,
+      "rule": "goblin_raided_0",
+      "model_text": "The Cinder Tithe raided Thornford, so people say.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 530
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 20
+        },
+        {
+          "token": 519
+        },
+        {
+          "token": 522
+        },
+        {
+          "token": 520
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "event_id": "648518346341352151",
+      "day": 105,
+      "stage": "Alderwatch",
+      "kind": 51,
+      "place_id": "144115188075855878",
+      "name": "Alderwatch",
+      "source_id": "1369094286720630887",
+      "retellings": 6,
+      "confidence": 48,
+      "bias": 32,
+      "alarm": 33,
+      "account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns. Loyal voices credit the crown. They fear worse is coming.",
+      "core_supported": true,
+      "core_account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.",
+      "reference_speech": "Have you heard? The Cinder Tithe raided Thornford. That's the word going round.",
+      "model_supported": true,
+      "rule": "goblin_raided_0",
+      "model_text": "The Cinder Tithe raided Thornford, so people say.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 530
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 20
+        },
+        {
+          "token": 519
+        },
+        {
+          "token": 522
+        },
+        {
+          "token": 520
+        },
+        {
+          "token": 22
+        }
+      ]
+    },
+    {
+      "type": "held",
+      "day": 93,
+      "event_id": "648518346341352151",
+      "kind": 51,
+      "person_id": "1369094286720630860",
+      "place_id": "144115188075855877",
+      "occupation": 10,
+      "name": "Grenwin Longmead",
+      "source_id": "1369094286720630857",
+      "retellings": 3,
+      "confidence": 77,
+      "bias": 12,
+      "alarm": 13,
+      "account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.",
+      "core_supported": true,
+      "core_account": "The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.",
+      "reference_speech": "The Cinder Tithe raided Thornford, I hear.",
+      "stage": "scribe Grenwin Longmead",
+      "model_supported": true,
+      "rule": "goblin_raided_0",
+      "model_text": "The Cinder Tithe raided Thornford.",
+      "stopped": true,
+      "approved": true,
+      "actions": [
+        {
+          "copy": 0
+        },
+        {
+          "token": 530
+        },
+        {
+          "token": 229
+        },
+        {
+          "copy": 1
+        },
+        {
+          "token": 22
+        }
+      ]
+    }
+  ]
+}

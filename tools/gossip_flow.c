@@ -93,7 +93,7 @@ static bool Observe(void)
     CcMaterialChainSnapshot chain = CcSimMaterialChainSnapshot(&sim);
     CcArchiveWorkPlan work = CcSimArchiveWorkPlan(&sim);
     printf("{\"type\":\"archive\",\"day\":%d,\"seat_id\":\"%" PRIu64
-           "\",\"scribes\":%d,\"eligible_scribes\":%d,\"ready\":%s,\"wheat\":%d,"
+           "\",\"scribes\":%d,\"eligible_scribes\":%d,\"work_ready\":%s,\"wheat\":%d,"
            "\"paper\":%d,\"tools\":%d,\"lore\":%d,\"lost\":%d,\"blocker\":",
            sim.current_day, chain.scriptorium_id, sim.archives.scribes, work.eligible_scribes,
            work.recording_ready ? "true" : "false", chain.wheat, chain.paper, chain.tools,
