@@ -82,3 +82,30 @@ opening clips are the initial scope.
 
 The effects are original code in this repository. The speech generator uses
 [Resemble AI's Chatterbox](https://github.com/resemble-ai/chatterbox).
+
+## Hra'khor voice effect
+
+`goblin_voice.py` styles a completed mono 16-bit PCM voice master. It works with
+Pocket TTS and Chatterbox output. Use Python 3.11 with the effect dependencies:
+
+```sh
+python -m pip install -r tools/audio/requirements-effects.txt
+python tools/audio/goblin_voice.py dry.wav goblin.wav --preset goblin
+python tools/audio/goblin_voice.py dry.wav priest.wav --preset priest
+python tests/goblin_voice_tests.py
+```
+
+The goblin preset raises the lead by one semitone and shifts its smoothed
+spectral envelope down by 1.5 semitones for a deeper throat sound. A quiet
+five-semitone-lower double adds the growl. Light saturation and a dark 70 ms
+reflection add rasp and a sense of stone nearby. The priest preset strengthens
+the double and uses a lower throat sound with a 90 ms reflection.
+
+The envelope shift approximates vocal formants. It is an artistic effect.
+Words and timing come from the original performance. Both presets match the
+source loudness before a headroom limit and fade the clip edges. Output keeps
+the source duration; reflections end at the clip boundary. Apply this effect
+once to a clean master, then use the pixel texture if desired. Each output has
+a receipt with settings, source and output hashes, renderer hash, and library
+versions. The local DSP checks cover pitch layers, duration, headroom, silence,
+repeatability, and master preservation.
