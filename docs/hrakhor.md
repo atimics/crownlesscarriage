@@ -118,3 +118,8 @@ The [goblin voice effect](../tools/audio/README.md#hrakhor-voice-effect) gives
 Hra'khor a higher lead, deeper throat, quiet growl, light rasp, and short stone
 echo. The `goblin` preset is subtle; `priest` uses a stronger lower double.
 It processes completed voice masters from either local speech engine.
+
+The `bass` vocoder preset is the throbbing option for goblins. It has a 49 Hz
+foundation and a slow, drifting pulse. Goblin speech defaults to 2x speed; the
+carrier keeps its low pitch and slower pulse. Use `--preset bass --speed 1` for
+a normal-speed comparison.

@@ -103,29 +103,45 @@ the double and uses a lower throat sound with a 90 ms reflection.
 
 The envelope shift approximates vocal formants. It is an artistic effect.
 Words and timing come from the original performance. Both presets match the
-source loudness before a headroom limit and fade the clip edges. Output keeps
+source loudness before a headroom limit and fade the clip edges. The goblin and priest presets keep
 the source duration; reflections end at the clip boundary. Apply this effect
 once to a clean master, then use the pixel texture if desired. Each output has
 a receipt with settings, source and output hashes, renderer hash, and library
 versions. The local DSP checks cover pitch layers, duration, headroom, silence,
 repeatability, and master preservation.
 
-### Synthetic bass experiment
+### Goblin bass vocoder
 
-`goblin_bass.py` creates an original eight-second bass reference and a speaking
-version. Its 65.4 Hz base has slow pitch drift, a 6.4 Hz pulse, metallic partials,
-and seeded noise. A 20-band vocoder lets the speech envelopes shape the bass.
-A small amount of the original speech retains consonant detail. This is sound
-design inspired by vortex motion in the Navier–Stokes article, with an artistic
-synthesizer supplying the waveform.
+Use the `bass` preset for the throbbing goblin voice. It defaults to double-speed
+speech. Time stretching happens before the vocoder, so the words speed up while
+the low pitch and slower bass pulse keep their character.
+
+```sh
+python tools/audio/goblin_voice.py dry-hrakhor.wav goblin.wav --preset bass
+python tools/audio/goblin_voice.py dry-hrakhor.wav normal-speed.wav --preset bass --speed 1
+```
+
+The v2 carrier has a 49 Hz foundation, detuned harmonics, a rounded 3.1 Hz pulse
+with slow drift, and metallic partials. High-frequency breath carries consonants
+between pulses. Twenty-eight balanced bands carry the speech, while a low layer
+follows each syllable. A little original consonant detail supports clear words.
+The vocoder follows pauses and retains headroom. The default output lasts half
+as long as its source; `--speed 1` keeps the source duration. Speed accepts
+0.5–3.0, with at least 1024 samples remaining after the speed change.
+
+`goblin_voice.render(master, destination, 'bass')` applies the same effect from
+Python. It accepts clean mono 16-bit PCM voice masters from either speech engine.
+Each receipt records speed, preset settings, source and output hashes, both DSP
+source hashes, and library versions. Keep this step before the optional pixel
+texture. Clean masters provide a repeatable source for each render.
+
+For a separate carrier audition and normal-speed vocoder experiment:
 
 ```sh
 python tools/audio/goblin_bass.py --speech dry-hrakhor.wav --output out/goblin-bass
 ```
 
-The output includes `bass-reference.wav`, `bass-speaking.wav`, and a hash receipt.
-For an experimental direct clone, use `bass-reference.wav` as the local Nano
-`prepare_conditionals` audio prompt, then call `generate` with the Hra'khor line.
-The vocoder offers direct control over the bass texture; the clone experiment
-shows how the speech model interprets a reference made entirely from a synth.
-Compare their generated audio when choosing the goblin sound.
+This writes `bass-reference.wav`, `bass-speaking.wav`, and a hash receipt.
+The bass is an original artistic synthesizer inspired by vortex motion.
+The local checks cover speed, duration, pitch layers, peak headroom, silence,
+repeatability, input validation, receipts, and source preservation.
