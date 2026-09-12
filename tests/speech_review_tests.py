@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from build_speech_review import balanced, meeting_cases, pairs, prefix
+from build_speech_review import balanced, meeting_cases, model_account, pairs, prefix
 
 
 def held(person, day=3, place='7', event='8', confidence=80):
@@ -41,6 +41,13 @@ class SpeechReviewTests(unittest.TestCase):
         self.assertEqual(prefix(account), '- ? ~ Someone posted a notice.\n')
         self.assertEqual(prefix(dict(account, confidence=80, retellings=0)),
                          '- Someone posted a notice.\n')
+
+    def test_model_uses_the_same_prepared_account_as_the_game(self):
+        row = dict(account='The mill made paper. Loyal voices credit the crown.',
+                   core_account='The mill made paper.')
+        self.assertEqual(model_account(row), 'The mill made paper.')
+        self.assertEqual(row['account'], 'The mill made paper. Loyal voices credit the crown.')
+        self.assertEqual(model_account(dict(account='A corpus account.')), 'A corpus account.')
 
 
 if __name__ == '__main__':

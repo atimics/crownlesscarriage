@@ -79,9 +79,14 @@ def collect(binary, seed, days, path):
     return [json.loads(line) for line in result.stdout.splitlines()], result.stderr.decode()
 
 
+def model_account(account):
+    # Flow records retain social commentary beside the game's prepared speech account.
+    return account.get('core_account', account['account'])
+
+
 def packet(probe, kind, account):
     result = subprocess.run([str(probe), str(kind), str(account['confidence']), '0',
-                             account['account'], '--packet'], capture_output=True, text=True)
+                             model_account(account), '--packet'], capture_output=True, text=True)
     if result.returncode == 1:
         return None
     result.check_returncode()
@@ -90,7 +95,7 @@ def packet(probe, kind, account):
 
 def speak(probe, model, kind, account, history):
     result = subprocess.run([str(probe), str(model), str(kind), str(account['confidence']),
-                             str(account['retellings']), account['account'], *history[-4:]],
+                             str(account['retellings']), model_account(account), *history[-4:]],
                             capture_output=True, text=True)
     if result.returncode == 1:
         return None
@@ -119,7 +124,7 @@ def render_page(directory, singles, chats, summary):
             f'<pre>{esc(encode(row["event"]))}</pre><pre>{esc(encode(source["provenance"]))}</pre></details></article>')
     for row in chats:
         people = row['people']
-        accounts = ''.join(f'<p><b>{esc(p["name"])}</b> · confidence {p["confidence"]} · {p["retellings"]} retellings<br>{esc(p["account"])}</p>' for p in people)
+        accounts = ''.join(f'<p><b>{esc(p["name"])}</b> · confidence {p["confidence"]} · {p["retellings"]} retellings<br>{esc(p["account"])}</p><p class="label">Prepared speech account</p><p>{esc(model_account(p))}</p>' for p in people)
         lines = ''.join(f'<p class="turn"><b>{esc(t["speaker"])}</b><span>{esc(t["text"])}</span></p>' for t in row['turns'])
         cards.append(f'<article data-type="conversation" data-search="{esc(encode(row), quote=True)}">'
             f'<small>{row["id"]} · world {row["seed"]} · day {row["day"]} · {esc(row["place"])}</small>'
@@ -232,6 +237,7 @@ def build(args):
         conversations=len(chats), complete_conversations=sum(len(r['turns']) == args.turns for r in chats),
         conversation_bands=dict(Counter('/'.join(band(p) for p in r['people']) for r in chats)),
         different_held_accounts=sum(r['people'][0]['account'] != r['people'][1]['account'] for r in chats),
+        different_model_accounts=sum(model_account(r['people'][0]) != model_account(r['people'][1]) for r in chats),
         conversation_lines=len(utterances), distinct_conversation_lines=len(set(utterances)),
         frequent_lines=Counter(utterances).most_common(12))
     (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
