@@ -204,7 +204,7 @@ static void CheckNutritionCredit(void)
     for (int scenario = 0; scenario < 9; ++scenario) {
         CcSimInit(&sim, UINT32_C(0xc4111a9e));
         ClearTradeNeeds(&sim);
-        sim.schema_version = scenario == 0 ? 97U : 98U;
+        sim.schema_version = scenario == 0 ? 97U : CC_SIM_SCHEMA_VERSION;
         sim.current_day = 6;
         /* Put archive demand in another kingdom to isolate market credit. */
         sim.archives.seat_id = sim.settlements[4].id;

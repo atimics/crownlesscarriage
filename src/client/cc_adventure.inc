@@ -1106,6 +1106,19 @@ static void DrawAdventureConversation(const CcSim *sim, const LocalState *local)
     CcOverlayDrawText(name, (int)bubble.x + 22, (int)bubble.y + 16, AdventureTextSize(20), CC_GOLD);
     (void)AdventureWrap(line, (int)bubble.x + 22, (int)bubble.y + 50,
         (int)bubble.width - 44, AdventureTextSize(17), INK);
+    if (local->conversation_situation_id == 0U && core_conversation.round_shown && core_conversation.round_phase == 0U &&
+        core_conversation_speaker == local->conversation_character_id &&
+        speech.speaker_id != sim->player.id) {
+        const CcSpeech *player = &core_conversation.player_line;
+        float player_height = 54.0f + (float)AdventureText(player->text, 0, 0,
+            (int)width - 44, AdventureTextSize(16), INK, false);
+        Rectangle prior = {bubble.x, bubble.y - player_height - 10.0f, width, player_height};
+        DrawPanel(prior, Fade(PANEL_DEEP, 0.95f));
+        CcOverlayDrawText(player->speaker, (int)prior.x + 22, (int)prior.y + 12,
+            AdventureTextSize(17), CC_GOLD);
+        (void)AdventureWrap(player->text, (int)prior.x + 22, (int)prior.y + 38,
+            (int)prior.width - 44, AdventureTextSize(16), INK);
+    }
 }
 
 static Rectangle AdventureNavBounds(int index)

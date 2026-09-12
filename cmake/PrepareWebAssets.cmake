@@ -138,6 +138,8 @@ if(prepare_lazy)
         "${lazy_asset_output}/maps"
     )
 
+    file(COPY "${asset_source}/language/core.ccv2" "${asset_source}/language/LICENSE"
+         DESTINATION "${lazy_asset_output}/language")
     foreach(asset IN ITEMS
             environment_bridge_checkpoint_v01.glb
             environment_market_granary_v01.glb

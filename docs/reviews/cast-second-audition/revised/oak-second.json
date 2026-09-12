@@ -1,0 +1,12 @@
+{
+  "id": "oak-second",
+  "original": "oak-v1",
+  "name": "Oak",
+  "direction": "Elder resonant bass; light Norwegian accent; spacious pacing and gentle deadpan humour.",
+  "description": "An elderly man in his late sixties with a very deep, resonant bass voice and a light Norwegian accent in fluent English. Rounded dark vowels, a soft breath at phrase openings, and slow spacious pacing. Slight weathered grain, clear consonants, and gentle deadpan humour. Quietly reassuring, with an occasional lift of playful curiosity. Natural conversational English. Clean studio recording.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 3442884621,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "32eaa039404ac1cda2e4f201264a17581a827a23c71e44c85b9837a808a41eb9"
+}

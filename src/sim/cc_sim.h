@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "sim/cc_custody.h"
 
 #define CC_MAX_KINGDOMS 3
 #define CC_MAX_SETTLEMENTS 6
@@ -65,7 +66,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 98
+#define CC_SIM_SCHEMA_VERSION 99
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -1987,6 +1988,7 @@ typedef struct CcSim {
     CcRoadSite road_sites[CC_MAX_ROAD_SITES];
     CcMap maps[CC_MAX_MAPS];
     CcTreasure treasures[CC_MAX_TREASURES];
+    CcCustodyState custody;
     CcFaction factions[CC_MAX_FACTIONS];
     CcShipment shipments[CC_MAX_SHIPMENTS];
     CcGrainSupply grain_supplies[CC_MAX_SETTLEMENTS];
@@ -2083,7 +2085,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 369056,
+_Static_assert(sizeof(CcSim) == 378280,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

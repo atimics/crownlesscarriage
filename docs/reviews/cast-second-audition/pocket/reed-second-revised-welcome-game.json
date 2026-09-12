@@ -1,0 +1,21 @@
+{
+  "voice": "Reed",
+  "take": "revised",
+  "line": "welcome",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going.",
+  "seed": 20260912,
+  "file": "reed-second-revised-welcome.wav",
+  "seconds": 4.4,
+  "generation_seconds": 1.95999591704458,
+  "reference_sha256": "60d7a8dc4acef35aa0c8169d9658ec67e7ad624bb7613855a6bd0ae1a45d4360",
+  "sha256": "1b0b97880c194bfadf9d8913c37914bb196f70a05c1eefe5d17601e0d523874f",
+  "sample_rate": 24000,
+  "master_sha256": "1b0b97880c194bfadf9d8913c37914bb196f70a05c1eefe5d17601e0d523874f",
+  "wav_sha256": "d3cc101f6294a612eb046a93f07d892d93fcff8165ae34fbc081bf5e09f63bcf",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

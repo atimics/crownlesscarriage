@@ -415,42 +415,31 @@ static int RunAdventureInputRegression(void)
     CcSpeech report, source;
     UX_CHECK(ClientConversationSpeech(&sim, &local, &report) && report.source_event_id != 0U,
         "A resident must speak a local report with its event source.");
-    uint64_t heard = CcSimHash(&sim);
     ContextActionSet replies = BuildContextActions(&sim, &local, view, selected, selected_situation);
-    UX_CHECK(replies.count >= 3 && replies.items[0].kind == CONTEXT_ACTION_GOSSIP_CHAT,
-        "The conversation must offer chat, an exchange, and farewell.");
+    UX_CHECK(replies.count == 2 && replies.items[0].kind == CONTEXT_ACTION_GOSSIP_CHAT &&
+        replies.items[1].kind == CONTEXT_ACTION_CLOSE_VIEW,
+        "The conversation offers Chat and Farewell.");
+    int32_t first_slot = CcSimNextUntoldStory(&sim, local.conversation_character_id, NULL);
     UX_KEY(KEY_ONE);
-    UX_CHECK(ClientConversationSpeech(&sim, &local, &source) && source.source_event_id == report.source_event_id &&
-        strcmp(report.text, source.text) != 0,
-        "Chat must draw who told them next.");
-    UX_CHECK(local.conversation_gossip_slot >= 0 &&
-        CcSimStoryTold(&sim, local.conversation_character_id, local.conversation_gossip_slot),
-        "Hearing the source must mark the story told.");
-    UX_KEY(KEY_ONE);
-    UX_CHECK(!local.conversation_gossip_source,
-        "A further chat must draw the next account.");
-    heard = CcSimHash(&sim);
-    int32_t share_key = KEY_ONE;
-    for (int32_t i = 0; i < replies.count; ++i)
-        if (replies.items[i].kind == CONTEXT_ACTION_GOSSIP_SHARE) share_key = KEY_ONE + i;
-    UX_KEY(share_key);
-    UX_CHECK(!local.conversation_gossip_source && CcSimHash(&sim) == heard,
-        "A repeated exchange must keep the same remembered account.");
-    local.conversation_gossip_source = false;
+    UX_CHECK(CcSimStoryTold(&sim, local.conversation_character_id, first_slot),
+        "Chat marks the shared account heard.");
+    UX_CHECK(CcSimGossipCarrier(&sim, sim.player.id) != NULL,
+        "Chat exchanges news with the player's company.");
+    UX_CHECK(ClientConversationSpeech(&sim, &local, &source), "Chat presents the next account.");
     replies = BuildContextActions(&sim, &local, view, selected, selected_situation);
     Rectangle source_card = ContextActionBounds(0, ContextCardCount(&replies, 0), replies.combat);
     client_test_pointer_active = true;
     client_test_pointer = (Vector2){source_card.x + source_card.width * 0.5f,
         source_card.y + source_card.height * 0.5f};
+    int32_t next_slot = local.conversation_gossip_slot;
     queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
     HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view, &local,
         (RenderTexture2D){0}, (Rectangle){0}, 1.0f / 60.0f, path, "", message, sizeof(message),
         feedback, sizeof(feedback), &feedback_age);
     client_test_pointer_active = false;
     ClientInputClearPressed();
-    UX_CHECK(local.conversation_gossip_source &&
-        CcSimStoryTold(&sim, local.conversation_character_id, local.conversation_gossip_slot),
-        "The chat card must match the keyboard reply.");
+    UX_CHECK(next_slot < 0 || CcSimStoryTold(&sim, local.conversation_character_id, next_slot),
+        "The Chat card shares news through the same action as its key.");
     UX_KEY(KEY_ESCAPE);
     local.course.alarm_active = false;
     local.course.automatic_alarm = false;

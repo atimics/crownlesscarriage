@@ -1,0 +1,50 @@
+{
+  "lines": {
+    "welcome": "The road is quiet this morning. Come inside, and tell me where you are going.",
+    "bargain": "Thirty-eight crowns? You drive a hard bargain. All right, take the cart. I'll walk with you."
+  },
+  "voices": [
+    {
+      "id": "hearth-second",
+      "original": "hearth-v1",
+      "name": "Hearth",
+      "direction": "Mature chesty mezzo; light Jamaican English; broad, rolling warmth with an easy chuckle.",
+      "description": "A mature adult woman with a rich chesty mezzo voice and a light Jamaican English accent. Broad rounded vowels, a relaxed rolling rhythm, and a smile that feels close and personal. A little husky warmth in the lower notes, clear consonants, and confident sentence endings. She can shift from easy amusement to calm authority. Natural conversational English. Clean studio recording."
+    },
+    {
+      "id": "flint-second",
+      "original": "flint-v1",
+      "name": "Flint",
+      "direction": "Elder reedy contralto; light Polish accent; short phrases, dry wit, and precise endings.",
+      "description": "An elderly woman in her seventies with a narrow, reedy contralto and a light Polish accent in fluent English. Papery texture, lightly rolled consonants, and very clear words. Short deliberate phrases with a tiny pause before the final word. Wry and alert, with warm amusement underneath her brisk certainty. Natural conversational English. Clean studio recording."
+    },
+    {
+      "id": "lark-second",
+      "original": "lark-v1",
+      "name": "Lark",
+      "direction": "Young bright soprano; light New Zealand accent; springy rhythm and a clear ringing edge.",
+      "description": "A young adult woman with a bright, high soprano speaking voice and a light New Zealand accent. A small breathy onset opens into clear ringing vowels. Springy energetic rhythm, playful rises, and decisive final words. Curious, quick-witted, and self-assured. Natural conversational English. Clean studio recording."
+    },
+    {
+      "id": "brook-second",
+      "original": "brook-v1",
+      "name": "Brook",
+      "direction": "Clear forward alto; light Mexican Spanish accent; smooth vowels and measured certainty.",
+      "description": "An adult woman with a clear, forward-resonant alto and a light Mexican Spanish accent in fluent English. Smooth sustained vowels, crisp consonants, and a measured even rhythm. Bright focused resonance, a composed friendly manner, and firm sentence endings. Her warmth comes through careful attention and understated humour. Natural conversational English. Clean studio recording."
+    },
+    {
+      "id": "reed-second",
+      "original": "reed-v1",
+      "name": "Reed",
+      "direction": "Adult wiry tenor; light French accent; quick patter, nasal brightness, and sudden thoughtful pauses.",
+      "description": "An adult man with a wiry, high tenor speaking voice and a light French accent in fluent English. Forward nasal brightness, precise consonants, and slightly breathy phrase endings. Quick conversational patter gives way to small thoughtful pauses. Charming dry humour and an earnest, direct manner. Natural conversational English. Clean studio recording."
+    },
+    {
+      "id": "oak-second",
+      "original": "oak-v1",
+      "name": "Oak",
+      "direction": "Elder resonant bass; light Norwegian accent; spacious pacing and gentle deadpan humour.",
+      "description": "An elderly man in his late sixties with a very deep, resonant bass voice and a light Norwegian accent in fluent English. Rounded dark vowels, a soft breath at phrase openings, and slow spacious pacing. Slight weathered grain, clear consonants, and gentle deadpan humour. Quietly reassuring, with an occasional lift of playful curiosity. Natural conversational English. Clean studio recording."
+    }
+  ]
+}

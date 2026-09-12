@@ -1,0 +1,21 @@
+{
+  "voice": "Brook",
+  "take": "revised",
+  "line": "welcome",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going.",
+  "seed": 20260912,
+  "file": "brook-second-revised-welcome.wav",
+  "seconds": 5.12,
+  "generation_seconds": 4.3642287091352046,
+  "reference_sha256": "f3da030a1a862380fcbec177e64a381cb8b4b318d559179f02ea8d41fcb1e78d",
+  "sha256": "c458af14100e4b8aed1b1ace01780f4a4e718c33347b8b75ba75caec563ae083",
+  "sample_rate": 24000,
+  "master_sha256": "c458af14100e4b8aed1b1ace01780f4a4e718c33347b8b75ba75caec563ae083",
+  "wav_sha256": "d048e4c6528a13ae6da12142085d7db81c2c31f1f78969a1a5b943ea5d2bb932",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

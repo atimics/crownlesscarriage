@@ -1,3 +1,4 @@
+#include "sim/cc_sim_custody.h"
 #include "sim/cc_archive_internal.h"
 #include "sim/cc_archive_recruitment.h"
 #include "sim/cc_food_economy_internal.h"
@@ -72,6 +73,7 @@ CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id)
     plan.gate = CC_ARCHIVE_SUPPLY_CARRIAGE;
     if (carriage == NULL || carriage->kingdom_id != seat->kingdom_id ||
         carriage->mode != CC_ROYAL_CARRIAGE_IDLE || carriage->active_shipment_id != 0U ||
+        CcSimCustodyCarrierLoad(sim, carriage->id) > 0 ||
         carriage->condition < 20 || sim->current_day < carriage->next_dispatch_day) return plan;
     plan.carriage_id = carriage_id;
     const int32_t *used = sim->royal_trade_week == sim->current_day / 7 ? sim->royal_route_slots_used : NULL;
