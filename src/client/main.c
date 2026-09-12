@@ -6127,8 +6127,10 @@ static bool ClientStartChat(const CcSim *sim, LocalState *local, uint32_t voice)
     const CcGossipCarrier *player = CcSimGossipCarrier(sim, sim->player.id);
     const CcGossipCarrier *listener = CcSimGossipCarrier(sim, local->conversation_character_id);
     if (player == NULL || listener == NULL || core_conversation.model == NULL) return false;
+    int32_t preferred = local->conversation_gossip_slot >= 0 ? local->conversation_gossip_slot :
+        CcSimNextUntoldStory(sim, local->conversation_character_id, NULL);
     for (int32_t attempt = -1; attempt < CC_MAX_GOSSIP; ++attempt) {
-        int32_t slot = attempt < 0 ? local->conversation_gossip_slot : attempt;
+        int32_t slot = attempt < 0 ? preferred : attempt;
         if (slot < 0 || slot >= CC_MAX_GOSSIP) continue;
         uint32_t bit = UINT32_C(1) << (uint32_t)slot;
         if ((player->stories & listener->stories & bit) == 0U) continue;
