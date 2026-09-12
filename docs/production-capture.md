@@ -33,3 +33,14 @@ python3 tests/production_json_tests.py out/build/capture/crownless_sim_runner
 ```
 
 The controlled runner tests cover checkpoint visibility at launch, later process failure, malformed reports, wrong checkpoint days, missing saves, repeat mismatch, file hashes, and successful completion. The production JSON tests exercise the real runner and its saved-state/report parity.
+
+Each town includes a `grain_supply` account with its stored purse, spending, orders,
+deliveries, losses, redirections, shipment IDs, and dispatch/arrival dates. These
+counters cover the saved account history, including activity before a loaded run.
+Its `plan` comes from `CcSimGrainDeliveryPlan` at the report day. The planner reports
+the first applicable gate and the IDs selected so far. Status values follow
+`CcGrainSupplyStatus`: ready (0), inactive (1), contact (2), bakery (3), stocked (4),
+transit (5), blocked shipment (6), carriage (7), supplier (8), route (9), funds (10).
+Use the snapshot beside stocks, hunger, waste, and road recovery reports when
+assessing grain policy. Stored supplier and route IDs describe the account;
+IDs inside `plan` describe the current decision.

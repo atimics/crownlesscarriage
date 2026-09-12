@@ -358,6 +358,25 @@ static void JsonRetainedHistory(const CcSim *sim)
     putchar('}');
 }
 
+static void JsonGrainSupply(const CcSim *sim, CcId town_id)
+{
+    const CcGrainSupply *supply = CcSimGrainSupply(sim, town_id);
+    CcGrainDeliveryPlan plan = CcSimGrainDeliveryPlan(sim, town_id);
+    printf("{\"semantics\":\"stored_cumulative\",\"enabled\":%s,\"organiser_id\":\"%" PRIu64
+           "\",\"supplier_id\":\"%" PRIu64 "\",\"route_id\":\"%" PRIu64 "\",\"shipment_id\":\"%" PRIu64
+           "\",\"purse\":%" PRId64 ",\"spent\":%" PRId64 ",\"ordered\":%d,\"delivered\":%d,\"lost\":%d,\"redirected\":%d"
+           ",\"last_dispatch_day\":%d,\"last_arrival_day\":%d,\"plan\":{\"semantics\":\"evaluated_plan_snapshot\",\"status\":%d,\"reason\":",
+        supply->enabled ? "true" : "false", supply->organiser_id, supply->supplier_id,
+        supply->route_id, supply->shipment_id, supply->purse, supply->spent, supply->ordered,
+        supply->delivered, supply->lost, supply->redirected, supply->last_dispatch_day,
+        supply->last_arrival_day, (int)plan.status);
+    JsonString(plan.reason);
+    printf(",\"organiser_id\":\"%" PRIu64 "\",\"supplier_id\":\"%" PRIu64 "\",\"route_id\":\"%" PRIu64
+           "\",\"carriage_id\":\"%" PRIu64 "\",\"next_hop_id\":\"%" PRIu64 "\",\"path_capacity\":%d}}",
+        plan.organiser_id, plan.supplier_id, plan.route_id, plan.carriage_id,
+        plan.next_hop_id, plan.path_capacity);
+}
+
 static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t year,
     const char *fixture, const char *dragon_policy, const CcNutritionAccounting *nutrition,
     const CcSmithyAccounting *smithy, const CcRoadProductionAccounting *sites,
@@ -400,9 +419,10 @@ static void PrintProductionJson(const CcSim *sim, int32_t start_day, int32_t yea
         const CcTownProductionAccounting *production = &sites->towns[i];
         printf("%s{\"id\":\"%" PRIu64 "\",\"name\":", i ? "," : "", town->id); JsonString(town->name);
         printf(",\"population\":%d,\"hunger\":%d,\"market_coins\":%" PRId64
-               ",\"war_chest\":%" PRId64 ",\"fire_damage\":%d,\"stock\":",
+               ",\"war_chest\":%" PRId64 ",\"fire_damage\":%d",
             town->population, town->hunger, town->market_coins, town->war_chest, town->fire_damage);
-        JsonStock(town->stock); printf(",\"reserves\":"); JsonStock(town->reserve_target);
+        printf(",\"grain_supply\":"); JsonGrainSupply(sim, town->id);
+        printf(",\"stock\":"); JsonStock(town->stock); printf(",\"reserves\":"); JsonStock(town->reserve_target);
         printf(",\"civilian_use\":"); JsonTotals(nutrition->towns[i].civilian_units, CC_GOOD_COUNT);
         printf(",\"aged_loss\":"); JsonTotals(nutrition->towns[i].aged_units, CC_GOOD_COUNT);
         printf(",\"overflow_loss\":"); JsonTotals(nutrition->towns[i].overflow_units, CC_GOOD_COUNT);
