@@ -50,13 +50,13 @@ bool CcArchiveFindVolumesToBind(const CcSim *sim, int32_t slots[4])
     int32_t best[4] = {-1, -1, -1, -1};
     for (int32_t anchor = 0; anchor < sim->treasure_count; ++anchor) {
         const CcTreasure *volume = &sim->treasures[anchor];
-        if (!CcArchiveVolumeIsLive(volume) || CcSimArchiveConvoyCarriesBook(sim, volume->id) ||
+        if (!CcArchiveVolumeIsLive(volume) || CcSimArchiveConvoyHoldsBook(sim, volume->id) ||
             volume->owner_id == sim->player.id) continue;
 
         int32_t candidate[4] = {-1, -1, -1, -1};
         for (int32_t i = 0; i < sim->treasure_count; ++i) {
             const CcTreasure *other = &sim->treasures[i];
-            if (!CcArchiveVolumeIsLive(other) || CcSimArchiveConvoyCarriesBook(sim, other->id) ||
+            if (!CcArchiveVolumeIsLive(other) || CcSimArchiveConvoyHoldsBook(sim, other->id) ||
                 other->owner_id == sim->player.id ||
                 other->owner_id != volume->owner_id ||
                 other->location_id != volume->location_id) continue;
