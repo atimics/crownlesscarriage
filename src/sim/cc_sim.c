@@ -20393,7 +20393,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Mine visit state is invalid.");
         return false;
     }
-    if (sim->schema_version >= 88U &&
+    if (sim->schema_version >= 91U &&
         ((sim->archives.seat_id != 0 && CcSimSettlement(sim, sim->archives.seat_id) == NULL) ||
          sim->archives.seat_failed_since_day < 0 || sim->archives.seat_failed_since_day > sim->current_day ||
          (sim->archives.seat_id == 0 && sim->archives.seat_failed_since_day != 0))) {

@@ -66,7 +66,7 @@ CcArchiveSeatPlan CcSimArchiveSeatPlan(const CcSim *sim, CcId current_seat_id)
 
 void CcArchiveRememberSeat(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 88U) return;
+    if (sim == NULL || sim->schema_version < 91U) return;
     if (sim->archives.seat_id == 0) {
         const CcSettlement *seat = CcArchiveSeat(sim);
         if (seat == NULL) return;

@@ -1,6 +1,6 @@
 static bool SaveArchiveSeat(sqlite3 *database, const CcSim *sim, char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 88U) return true;
+    if (sim->schema_version < 91U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "INSERT INTO archive_seat VALUES(1,?,?);", &statement, error, error_capacity)) return false;
     sqlite3_bind_int64(statement, 1, (sqlite3_int64)sim->archives.seat_id);
@@ -10,7 +10,7 @@ static bool SaveArchiveSeat(sqlite3 *database, const CcSim *sim, char *error, si
 }
 static bool ReadArchiveSeat(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 88U) return true;
+    if (sim->schema_version < 91U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "SELECT id,seat_id,failed_since FROM archive_seat ORDER BY id;", &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW || sqlite3_column_int64(statement, 0) != 1 ||
