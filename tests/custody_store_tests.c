@@ -14,11 +14,12 @@ static void Prepare(void)
     event = sim.events[0].id;
     CC_CHECK(event != 0);
     sim.settlements[0].stock[CC_GOOD_WHEAT] = 1000;
-    sim.custody.entries[0] = (CcCustodyEntry){.id = 1, .revision = 1,
-        .owner_id = town, .holder = {CC_CUSTODY_STORE, town},
-        .kind = CC_CUSTODY_CONTAINER, .quantity = 1, .condition = 100,
-        .capacity = 10, .active = true};
-    sim.custody.next_id = 2;
+    CcProductionContext work = {.producer_id = town, .storage_id = town,
+        .location_id = town, .stock = sim.settlements[0].stock, .capacity = 1,
+        .output_limit = 1, .work_available = 2, .condition = 100, .enabled = true};
+    uint64_t crate = 0;
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 1, event, &crate, NULL) == CC_CUSTODY_READY);
+    CC_CHECK(crate == 1 && work.work_available == 0);
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
@@ -188,6 +189,74 @@ static void BookingGates(void)
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
+static void Manufacturing(void)
+{
+    Prepare();
+    CcProductionContext work = {.producer_id = town, .storage_id = town,
+        .location_id = town, .stock = sim.settlements[0].stock, .capacity = 3,
+        .output_limit = 3, .work_available = 2, .condition = 100, .enabled = true};
+    int32_t wood = CcSimTrackedGood(&sim, CC_GOOD_WOOD);
+    int32_t iron = CcSimTrackedGood(&sim, CC_GOOD_IRON);
+    CcMoney coins = CcSimTrackedGold(&sim);
+    CcProductionReceipt receipt = {0};
+    uint64_t id = 999;
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 2, event, &id, &receipt) == CC_CUSTODY_READY);
+    CC_CHECK(id == 2 && receipt.gate == CC_PRODUCTION_READY);
+    CC_CHECK(receipt.producer_id == town && receipt.storage_id == town && receipt.location_id == town);
+    CC_CHECK(receipt.inputs[0] == 4 && receipt.inputs[1] == 1 && receipt.work == 2 && receipt.batches == 1 && receipt.output == 0);
+    CC_CHECK(work.work_available == 0 && work.capacity == 2 && work.output_limit == 2);
+    CC_CHECK(CcSimTrackedGood(&sim, CC_GOOD_WOOD) == wood - receipt.inputs[0]);
+    CC_CHECK(CcSimTrackedGood(&sim, CC_GOOD_IRON) == iron - receipt.inputs[1]);
+    CC_CHECK(CcSimTrackedGold(&sim) == coins);
+    before = sim;
+    CcProductionContext old_work = work;
+    CcProductionReceipt old_receipt = receipt;
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 2, event, &id, &receipt) == CC_CUSTODY_STALE);
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 3, event, &id, &receipt) == CC_CUSTODY_INVALID);
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    CC_CHECK(memcmp(&work, &old_work, sizeof(work)) == 0);
+    CC_CHECK(memcmp(&receipt, &old_receipt, sizeof(receipt)) == 0 && id == 2);
+    work.work_available = 2;
+    work.location_id = sim.settlements[1].id;
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 3, event, NULL, NULL) == CC_CUSTODY_INVALID);
+    work.location_id = town;
+    sim.settlements[0].stock[CC_GOOD_WOOD] = 3;
+    before = sim;
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 3, event, NULL, NULL) == CC_CUSTODY_INVALID);
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0 && work.work_available == 2);
+    sim.settlements[0].stock[CC_GOOD_WOOD] = 4;
+    sim.settlements[0].stock[CC_GOOD_TOOLS] = 0;
+    before = sim;
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 3, event, NULL, NULL) == CC_CUSTODY_INVALID);
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0 && work.work_available == 2);
+}
+
+static void Repairs(void)
+{
+    Prepare();
+    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 7, 1, 1, 2, event, NULL) == CC_CUSTODY_READY);
+    sim.custody.entries[0].condition = 60;
+    CcProductionContext work = {.producer_id = town, .storage_id = town,
+        .location_id = town, .stock = sim.settlements[0].stock, .capacity = 2,
+        .output_limit = 2, .work_available = 2, .condition = 100, .enabled = true};
+    int32_t wood = CcSimTrackedGood(&sim, CC_GOOD_WOOD);
+    CcProductionReceipt receipt = {0};
+    CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, 1, 2, event, &receipt) == CC_CUSTODY_READY);
+    CC_CHECK(sim.custody.entries[0].condition == 85 && sim.custody.entries[0].revision == 3);
+    CC_CHECK(receipt.inputs[0] == 1 && receipt.work == 1 && work.work_available == 1);
+    before = sim;
+    CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, 1, 2, event, &receipt) == CC_CUSTODY_STALE);
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0 && work.work_available == 1);
+    CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, 1, 3, event, &receipt) == CC_CUSTODY_READY);
+    CC_CHECK(sim.custody.entries[0].condition == 100 && sim.custody.entries[0].revision == 4);
+    CC_CHECK(work.work_available == 0 && CcSimTrackedGood(&sim, CC_GOOD_WOOD) == wood - 2);
+    CC_CHECK(CcCustodyFind(&sim.custody, 2)->quantity == 7 && CcCustodyFind(&sim.custody, 2)->holder.id == 1);
+    before = sim;
+    CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, 1, 4, event, NULL) == CC_CUSTODY_INVALID);
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+}
+
 static void Gates(void)
 {
     Prepare(); RejectPack(0, CC_CUSTODY_INVALID); RejectPack(1001, CC_CUSTODY_INVALID);
@@ -207,6 +276,12 @@ static void Gates(void)
     }
     sim.custody.next_id = CC_CUSTODY_CAPACITY + 1;
     RejectPack(1, CC_CUSTODY_FULL);
+    CcProductionContext work = {.producer_id = town, .storage_id = town,
+        .location_id = town, .stock = sim.settlements[0].stock, .capacity = 1,
+        .output_limit = 1, .work_available = 2, .condition = 100, .enabled = true};
+    before = sim;
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, sim.custody.next_id, event, NULL, NULL) == CC_CUSTODY_FULL);
+    CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0 && work.work_available == 2);
     Prepare();
     uint64_t id = 0;
     CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 2, 1, 1, 2, event, &id) == CC_CUSTODY_READY);
@@ -218,5 +293,5 @@ static void Gates(void)
 
 int main(void)
 {
-    Journey(); Gates(); FreightSlots(); CarrierJourney(); BookingGates(); return 0;
+    Journey(); Gates(); FreightSlots(); CarrierJourney(); BookingGates(); Manufacturing(); Repairs(); return 0;
 }

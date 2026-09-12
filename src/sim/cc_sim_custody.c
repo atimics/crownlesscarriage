@@ -209,3 +209,80 @@ CcCustodyResult CcSimTransferCustody(CcSim *sim, const CcCustodyTransfer *transf
         .load = StoredCustodyLoad, .resolve = ResolveStoredCustody, .permit = PermitStoreTransfer};
     return CcCustodyApplyTransfer(&sim->custody, &rules, transfer, result_id);
 }
+
+CcCustodyResult CcSimMakeCustodyContainer(CcSim *sim, CcProductionContext *work,
+    uint64_t next_id, CcId event_id, uint64_t *entry_id, CcProductionReceipt *receipt)
+{
+    if (sim == NULL || work == NULL || sim->schema_version < 99U || event_id == 0 ||
+        !CcSimStoredCustodyValid(sim)) return CC_CUSTODY_INVALID;
+    const CcSettlement *town = CcSimSettlement(sim, work->producer_id);
+    if (town == NULL || work->storage_id != town->id || work->location_id != town->id ||
+        work->stock != town->stock) return CC_CUSTODY_INVALID;
+    if (next_id != sim->custody.next_id) return CC_CUSTODY_STALE;
+    if (next_id == UINT64_MAX) return CC_CUSTODY_FULL;
+    int slot = -1;
+    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+        if (!sim->custody.entries[i].active && sim->custody.entries[i].quantity == 0) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < 0) return CC_CUSTODY_FULL;
+    const CcProductionRecipe recipe = {.output = CC_GOOD_COUNT, .output_units = 1,
+        .work_only = true, .input_count = 2,
+        .inputs = {{CC_GOOD_WOOD, 4, 0}, {CC_GOOD_IRON, 1, 0}},
+        .work_per_batch = 2, .tools_required = 1, .minimum_condition = 20,
+        .hunger_soft_limit = 100, .hunger_hard_limit = 100};
+    CcProductionContext one = *work;
+    if (one.capacity > 1) one.capacity = 1;
+    if (one.output_limit > 1) one.output_limit = 1;
+    CcProductionReceipt plan = CcProductionPlan(&recipe, &one);
+    if (plan.gate != CC_PRODUCTION_READY) return CC_CUSTODY_INVALID;
+    /* Allocation and recipe checks finish before either stock or work changes. */
+    CcProductionReceipt done = CcProductionRun(&recipe, &one);
+    if (done.gate != CC_PRODUCTION_READY) return CC_CUSTODY_INVALID;
+    sim->custody.entries[slot] = (CcCustodyEntry){.id = next_id, .revision = 1,
+        .owner_id = town->id, .last_event_id = event_id,
+        .holder = {CC_CUSTODY_STORE, town->id}, .kind = CC_CUSTODY_CONTAINER,
+        .quantity = 1, .condition = 100, .capacity = 10, .active = true};
+    sim->custody.next_id++;
+    work->work_available -= done.work;
+    work->capacity -= done.batches;
+    work->output_limit -= done.batches;
+    if (entry_id != NULL) *entry_id = next_id;
+    if (receipt != NULL) *receipt = done;
+    return CC_CUSTODY_READY;
+}
+
+CcCustodyResult CcSimRepairCustodyContainer(CcSim *sim, CcProductionContext *work,
+    uint64_t container_id, uint64_t revision, CcId event_id, CcProductionReceipt *receipt)
+{
+    if (sim == NULL || work == NULL || sim->schema_version < 99U || event_id == 0 ||
+        !CcSimStoredCustodyValid(sim)) return CC_CUSTODY_INVALID;
+    const CcSettlement *town = CcSimSettlement(sim, work->producer_id);
+    if (town == NULL || work->storage_id != town->id || work->location_id != town->id ||
+        work->stock != town->stock) return CC_CUSTODY_INVALID;
+    const CcCustodyEntry *found = CcCustodyFind(&sim->custody, container_id);
+    if (found == NULL || found->revision != revision || revision == UINT64_MAX) return CC_CUSTODY_STALE;
+    if (found->kind != CC_CUSTODY_CONTAINER || found->condition >= 100) return CC_CUSTODY_INVALID;
+    if (found->owner_id != town->id) return CC_CUSTODY_FORBIDDEN;
+    if (found->holder.kind != CC_CUSTODY_STORE || found->holder.id != town->id) return CC_CUSTODY_REMOTE;
+    const CcProductionRecipe recipe = {.output = CC_GOOD_COUNT, .output_units = 1,
+        .work_only = true, .input_count = 1, .inputs = {{CC_GOOD_WOOD, 1, 0}},
+        .work_per_batch = 1, .tools_required = 1, .minimum_condition = 20,
+        .hunger_soft_limit = 100, .hunger_hard_limit = 100};
+    CcProductionContext one = *work;
+    if (one.capacity > 1) one.capacity = 1;
+    if (one.output_limit > 1) one.output_limit = 1;
+    CcProductionReceipt done = CcProductionRun(&recipe, &one);
+    if (done.gate != CC_PRODUCTION_READY) return CC_CUSTODY_INVALID;
+    CcCustodyEntry *box = &sim->custody.entries[found - sim->custody.entries];
+    box->condition = box->condition > 75 ? 100 : box->condition + 25;
+    box->revision++;
+    box->last_event_id = event_id;
+    work->work_available -= done.work;
+    work->capacity -= done.batches;
+    work->output_limit -= done.batches;
+    if (receipt != NULL) *receipt = done;
+    return CC_CUSTODY_READY;
+}

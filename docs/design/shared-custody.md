@@ -147,7 +147,21 @@ at the destination store. It also checks exhausted route capacity, duplicate
 requests, and blocked-road unloading. Player cargo still needs its existing
 player slot conversion and access rules at the player boundary.
 
-Player, character and captor holders, named treasure migration, document work identity, object creation,
-common economy costs, transfer commands, and the player journey remain open.
+Container manufacture and repair now execute through `CcProductionRun` using a
+supplied common production budget at the owning town store. Manufacture consumes
+four wood, one iron, and two work units. It requires a tool and produces a
+condition-100, ten-slot container. Repair consumes one wood and one work unit,
+requires a tool, and restores up to 25 condition points. Each act spends one
+batch and one named-output place from the supplied budget. Work receipts report
+materials and labor; the named container is recorded in custody.
+
+Allocation/revision checks bind these acts to the observed state. Full pools,
+insufficient inputs, exhausted budgets, and duplicate requests preserve stock,
+work, and result outputs. Repairs advance the container revision and preserve
+its contents. The carrier tests now begin with a manufactured container.
+Producer scheduling and player craft commands remain open integration work.
+
+Player, character and captor holders, named treasure migration, document work identity,
+producer scheduling, transfer commands, and the player journey remain open.
 The draft is complete when the implementation and evidence satisfy the whole
 acceptance list.

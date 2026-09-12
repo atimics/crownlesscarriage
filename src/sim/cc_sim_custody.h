@@ -1,7 +1,14 @@
 #ifndef CC_SIM_CUSTODY_H
 #define CC_SIM_CUSTODY_H
 #include "sim/cc_sim.h"
+#include "sim/cc_production.h"
 
+/* A producer supplies its remaining common production budget. Success spends
+   one batch and returns the material/work receipt; failure preserves outputs. */
+CcCustodyResult CcSimMakeCustodyContainer(CcSim *sim, CcProductionContext *work,
+    uint64_t next_id, CcId event_id, uint64_t *entry_id, CcProductionReceipt *receipt);
+CcCustodyResult CcSimRepairCustodyContainer(CcSim *sim, CcProductionContext *work,
+    uint64_t container_id, uint64_t revision, CcId event_id, CcProductionReceipt *receipt);
 int32_t CcSimCustodyCarrierLoad(const CcSim *sim, CcId carrier_id);
 bool CcSimDispatchCustodyCarrier(CcSim *sim, CcId carrier_id, CcId destination_id);
 CcCustodyResult CcSimTransferCustody(CcSim *sim, const CcCustodyTransfer *transfer,
