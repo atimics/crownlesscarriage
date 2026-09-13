@@ -8468,7 +8468,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     (void)ApplyCommand(*journal, sim, (CcCommand){.kind = CC_COMMAND_HEARD_STORY,
                         .target_id = local->conversation_character_id,
                         .amount = local->conversation_gossip_slot}, message, message_capacity);
-                if (!started) {
+                if (started) {
+                    /* One story per pair: the next Chat opens the next untold account. */
+                    local->conversation_gossip_slot = CcSimNextUntoldStory(
+                        sim, local->conversation_character_id, NULL);
+                    if (local->conversation_gossip_slot < 0) {
+                        (void)snprintf(message, message_capacity, "%s",
+                            "That is all I would share across this road.");
+                    }
+                } else {
                     local->conversation_gossip_slot = CcSimNextUntoldStory(
                         sim, local->conversation_character_id, NULL);
                     CcSpeech answer;

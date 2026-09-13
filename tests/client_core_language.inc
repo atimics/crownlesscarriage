@@ -58,6 +58,9 @@ static int RunCoreLanguageRegression(const char *model_path)
     ClientInputClearPressed();
     MODEL_CHECK(core_conversation.pending && core_conversation.round_phase == 1U,
                 "Chat starts the player's model turn.");
+    MODEL_CHECK(local.conversation_gossip_slot == CcSimNextUntoldStory(
+                    &sim, local.conversation_character_id, NULL),
+                "A share advances the stored slot to the next untold story.");
     uint64_t after_exchange = CcSimHash(&sim);
     queued_key_press[KEY_ONE] = true;
     HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view, &local,
