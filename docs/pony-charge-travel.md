@@ -16,16 +16,33 @@ The two departure refusals are gone:
   label: it is the existing pace system's lowest rate, so a hungry journey
   simply takes longer on the road, and the already slower road-watch count
   for a low team (the +1 day steps below readiness 70 and 45) still applies.
-- **A market without fodder** used to refuse the departure. It now feeds
-  what it has: the team eats up to its required rations from the origin
-  market's stock, and short-fed horses travel hungry, which means slow.
-  The departure event says how much fodder was actually loaded, and adds
-  "hungry and careful" when the team is below 30.
+- **The market is not the horses' trough.** The carriage carries a feed
+  tray holding one crate of wheat (`CC_FEED_TRAY_CAPACITY`, the wheat trade
+  unit). Wheat the company buys in town pours from cargo into the tray
+  while parked; the team eats from the tray in town, one wheat a head a
+  day, and a hungry team at departure is a team whose tray ran dry days
+  ago — it leaves careful and slow. The departure event reports the tray
+  and adds "hungry and careful" when the team is below 30. A market's own
+  stock is never eaten from at departure.
 
-Feeding at town is a boost, not a toll: a stocked market still provisions
-the team exactly as before (the full reduction to horse hunger), and the
-weekly stable care at settlements is unchanged. A mare near foaling still
-stays home; that gate is about the foal, not the food.
+Feeding at town is a boost, not a toll: a full tray is several days of
+strong recovery while parked, and the weekly stable care at settlements is
+unchanged. A mare near foaling still stays home; that gate is about the
+foal, not the food.
+
+## The tray
+
+- **Capacity:** one crate of wheat — ten units, the trade unit of the
+  wheat good.
+- **Filling:** while the company is parked, wheat from cargo pours into the
+  tray up to capacity. Buying a crate in town and sleeping on it fills the
+  tray; cargo and tray are separate stores, so a full tray frees cargo
+  space.
+- **Eating:** each horse eats one wheat a day from the tray while parked,
+  recovering 6 hunger a head. On the road the tray is not eaten from —
+  camps graze the team instead.
+- **Old saves** load with an empty tray; horses fed under the old market
+  rules are unaffected until the next feed.
 
 ## Grazing on the road
 

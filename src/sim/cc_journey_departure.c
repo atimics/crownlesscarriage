@@ -110,17 +110,12 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
                  "The departure market lacks enough fodder for the horse team.");
         return false;
     }
-    /* Schema 101: feed what the market has. A short-fed team travels
-       hungry, and hungry travel is slow travel, not no travel. */
-    int32_t fed_rations = 0;
-    if (sim->schema_version >= 101U && origin != NULL) {
-        int32_t available_rations = CcNutritionAvailable(
-            origin->stock, CC_NUTRITION_ANIMAL) / CC_NUTRITION_PER_RATION;
-        fed_rations = available_rations < preview.horse_feed_required ?
-            available_rations : preview.horse_feed_required;
-    } else {
-        fed_rations = preview.horse_feed_required;
-    }
+    /* Schema 101: the team does not eat from the market at departure. The
+       carriage's feed tray is the trough: wheat bought in town pours into
+       it while the company is parked, the team eats from it in town, and
+       camps graze it on the road. A hungry team still departs — slowly. */
+    int32_t fed_rations = sim->schema_version >= 101U ? 0 :
+        preview.horse_feed_required;
     if (sim->player.coins < fare) {
         SetError(error, error_capacity, "The company cannot provision that journey.");
         return false;
@@ -233,13 +228,13 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
     if (sim->schema_version >= 101U) {
         (void)snprintf(
             text, sizeof(text),
-            "%.16s and %.16s pull from %.16s toward %.16s %swith %d fodder%s.",
-            sim->schema_version >= 40U ? CcPonyName(sim->pony_company.team[0]) : sim->horse_team[0].name,
-            sim->schema_version >= 40U ? CcPonyName(sim->pony_company.team[1]) : sim->horse_team[1].name,
+            "%.16s and %.16s pull from %.16s toward %.16s %swith %d wheat in the feed tray%s.",
+            CcPonyName(sim->pony_company.team[0]),
+            CcPonyName(sim->pony_company.team[1]),
             origin != NULL ? origin->name : "the waystation",
             destination->name,
             waited_for_morning ? "at first light " : "",
-            fed_rations,
+            sim->player.feed_tray_wheat,
             hungry_team ? ", hungry and careful" : "");
     } else if (sim->schema_version >= 14U) {
         (void)snprintf(

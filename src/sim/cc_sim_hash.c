@@ -691,6 +691,7 @@ uint64_t CcSimHash(const CcSim *sim)
     HASH_VALUE(sim->player.passenger_capacity);
     if (sim->schema_version >= 3U) HASH_VALUE(sim->player.map_capacity);
     HASH_VALUE(sim->player.reputation);
+    if (sim->schema_version >= 101U) HASH_VALUE(sim->player.feed_tray_wheat);
     if (sim->schema_version >= 9U) HASH_VALUE(sim->player.treasure_cargo_slots);
     if (sim->schema_version >= 13U) {
         HASH_VALUE(sim->player.map_catalogue_mask);
