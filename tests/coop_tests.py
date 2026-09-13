@@ -589,6 +589,25 @@ class CoopTests(unittest.TestCase):
             with self.assertRaises(ApiError):
                 self.worlds.pose(self.id, self.a, dict(pose, travel_scale=scale))
 
+    def test_travel_tick_rebuilds_scene_context(self):
+        target = self.worlds.view(self.id, self.a)['state']['travel'][0]['id']
+        result = self.worlds.command(self.id, self.a, self.command(self.a, 'travel', target=target))
+        self.assertTrue(result['accepted'])
+        pose = self.enter(self.a)
+        now = time.monotonic()
+        with patch('server.time.monotonic', return_value=now):
+            self.worlds.pose(self.id, self.a, dict(pose, travel_scale=8))
+        # Rebuild the cache on a tick, as happens when a new watch changes the scene.
+        self.worlds.db.execute('DELETE FROM scene_contexts WHERE world=?', (self.id,))
+        before = self.worlds.db.execute('SELECT revision FROM worlds WHERE id=?', (self.id,)).fetchone()[0]
+        self.worlds.last_tick[self.id] = now - 0.1
+        self.worlds.tick(now=now)
+        self.assertNotIn(self.id, self.worlds.failed)
+        after = self.worlds.view(self.id, self.a)
+        self.assertGreater(after['state']['tick'], result['world']['state']['tick'])
+        self.assertGreater(after['revision'], before)
+        self.assertIsNotNone(self.worlds.db.execute('SELECT context FROM scene_contexts WHERE world=?', (self.id,)).fetchone())
+
     def test_travel_resume_and_tick_batch_equivalence(self):
         with self.engine.open(0xc0a71a9e) as a:
             target = a.snapshot()['travel'][0]['id']
