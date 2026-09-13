@@ -491,7 +491,7 @@ class Worlds:
                         if row["paused"] or world in self.failed:
                             self.last_tick[world] = now
                             continue
-                        saved = self.db.execute("SELECT state,view FROM worlds WHERE id=?", (world,)).fetchone()
+                        saved = self.db.execute("SELECT state,view,revision FROM worlds WHERE id=?", (world,)).fetchone()
                         before = json.loads(saved["view"])
                         days = min(int(owed), 8 * 365, 2147000000 - before["day"])
                         if days > 0:
@@ -508,10 +508,11 @@ class Worlds:
                             with self.engine.open(saved=saved["state"]) as sim:
                                 if before["journey"].get("road_site"):
                                     ticks = max(1, ticks // 2)
+                                context = self.session_context(world, saved)
                                 scale = max((pose.get("travel_scale", 1)
                                     for (w, member), pose in self.poses.items()
                                     if w == world and now - pose["seen"] < 0.4
-                                    and pose["context"] == self.session_context(world, saved)
+                                    and pose["context"] == context
                                     and not self.member_dead(world, member)), default=1)
                                 sim.advance(ticks, scale)
                                 self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1 WHERE id=?",
