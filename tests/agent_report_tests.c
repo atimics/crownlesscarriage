@@ -42,8 +42,8 @@ int main(void)
     AgentStats stats = {0};
     FILE *file = tmpfile();
     CC_CHECK(file != NULL);
-    WriteReportHeader(file);
-    WriteReportRow(file, 7, 366, &control, &agent, &stats);
+    WriteReportHeader(file, false);
+    WriteReportRow(file, 7, 366, &control, &agent, &stats, NULL, NULL, false);
     rewind(file);
     char header[2048], row[2048];
     CC_CHECK(fgets(header, sizeof(header), file) != NULL);
@@ -71,5 +71,22 @@ int main(void)
     CC_CHECK(memcmp(&control, &control_before, sizeof(control)) == 0);
     CC_CHECK(memcmp(&agent, &agent_before, sizeof(agent)) == 0);
     CC_CHECK(fclose(file) == 0);
+
+    /* Oracle columns: third world from the control state; gap columns are
+       oriented so positive always means the oracle ended better. */
+    FILE *oracle_file = tmpfile();
+    CC_CHECK(oracle_file != NULL);
+    WriteReportHeader(oracle_file, true);
+    WriteReportRow(oracle_file, 7, 366, &control, &agent, &stats, &control,
+                   &stats, true);
+    rewind(oracle_file);
+    CC_CHECK(fgets(header, sizeof(header), oracle_file) != NULL);
+    CC_CHECK(fgets(row, sizeof(row), oracle_file) != NULL);
+    CC_CHECK(fgetc(oracle_file) == EOF);
+    CheckField(header, row, "oracle_population", "400");
+    CheckField(header, row, "oracle_hunger", "15");
+    CheckField(header, row, "gap_population", "400");
+    CheckField(header, row, "gap_hunger", "-16");
+    CC_CHECK(fclose(oracle_file) == 0);
     return 0;
 }
