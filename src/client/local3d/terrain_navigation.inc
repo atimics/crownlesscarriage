@@ -93,7 +93,9 @@ static WorldTreePlacement ActiveWorldTreeAt(int32_t index)
     return active_place_function == CC_SETTLEMENT_FARMING ?
         THORNFORD_TREES[index] :
         active_place_function == CC_SETTLEMENT_MARKET ?
-        GLOAMGATE_TREES[index] : WORLD_TREES[index];
+        GLOAMGATE_TREES[index] :
+        active_place_function == CC_SETTLEMENT_MINING ?
+        SILVERWICK_TREES[index] : WORLD_TREES[index];
 }
 
 static const CcLocalPlaceLandmark *ActivePlaceLandmarkAt(int32_t index)
@@ -446,6 +448,14 @@ static TerrainLanePath terrain_lanes[CC_LOCAL_LANE_CAPACITY];
 
 static float TerrainRectangleAverage(Rectangle footprint);
 
+static float SilverwickRoadHeight(float x, float z)
+{
+    float base = TerrainNaturalHeight(96.0f, 36.0f);
+    return base + (96.0f - fmaxf(x, 42.0f)) * 0.04f +
+        TerrainSmooth01((48.0f - z) / 12.0f) * 1.0f +
+        TerrainSmooth01((35.0f - z) / 21.0f) * 2.1f;
+}
+
 static void TerrainBuildLanePaths(void)
 {
     const CcLocalPlaceProfile *profile = ActivePlaceProfile();
@@ -459,7 +469,9 @@ static void TerrainBuildLanePaths(void)
             CcLocalLanePoint point = CcLocalLaneSample(source,
                 (float)i / (float)(path->count - 1));
             path->point[i] = (Vector2){point.x, point.z};
-            path->height[i] = TerrainNaturalHeight(point.x, point.z);
+            path->height[i] = profile->function == CC_SETTLEMENT_MINING ?
+                SilverwickRoadHeight(point.x, point.z) :
+                TerrainNaturalHeight(point.x, point.z);
             low.x = fminf(low.x, point.x); low.y = fminf(low.y, point.z);
             high.x = fmaxf(high.x, point.x); high.y = fmaxf(high.y, point.z);
         }
@@ -859,6 +871,56 @@ static void TerrainGradeLaneVillage(void)
     TerrainGradeEastWestRamp((Rectangle){83.5f, 31.75f, 12.5f, 4.5f}, bridge, bridge);
 }
 
+static void TerrainGradeSilverwick(void)
+{
+    TerrainBuildLanePaths();
+    /* Three working shelves share one height field with every road junction. */
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            float z = (float)row * CC_TERRAIN_CELL_SIZE;
+            float edge = fminf(fminf(x - 8.0f, 98.0f - x),
+                               fminf(z - 5.0f, 69.0f - z));
+            float blend = TerrainSmooth01(edge / 5.0f);
+            int32_t slot = TerrainIndex(column, row);
+            street_terrain_height[slot] +=
+                (SilverwickRoadHeight(x, z) - street_terrain_height[slot]) * blend;
+        }
+    }
+    TerrainGradeBuildingPlots();
+    Rectangle keep = ActiveCompoundBounds();
+    TerrainGradePad(keep, SilverwickRoadHeight(78.5f, 27.0f), 1.8f);
+    for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
+        Rectangle pad = PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i));
+        TerrainGradePad(pad, TerrainRectangleAverage(pad), 1.3f);
+    }
+    TerrainGradePad(CARRIAGE_FOOTPRINT, SilverwickRoadHeight(37.4f, 51.2f), 1.2f);
+    TerrainGradePad(DUNGEON_FOOTPRINT, TerrainRectangleAverage(DUNGEON_FOOTPRINT), 1.3f);
+    TerrainGradePad((Rectangle){1, 0, 14.6f, 11.1f}, 0.0f, 2.2f);
+    TerrainGradeNorthSouthRamp((Rectangle){7.45f, 10.5f, 1.8f, 16.25f}, 0.0f,
+        SilverwickRoadHeight(8.35f, 26.5f));
+    TerrainGradeNorthSouthRamp((Rectangle){14.65f, 10.5f, 3.5f, 16.6f}, 0.0f,
+        SilverwickRoadHeight(16.4f, 26.85f));
+    /* Lay the roads last so plot shoulders meet a continuous walking surface. */
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            float z = (float)row * CC_TERRAIN_CELL_SIZE;
+            if (TerrainPointInsideMajorFoundation(x, z)) continue;
+            float elevation = 0.0f;
+            float inset = TerrainLaneInset(x, z, NULL);
+            elevation = SilverwickRoadHeight(x, z);
+            if (inset < -1.2f) continue;
+            float weight = TerrainSmooth01((inset + 1.2f) / 1.2f);
+            int32_t slot = TerrainIndex(column, row);
+            street_terrain_height[slot] +=
+                (elevation - street_terrain_height[slot]) * weight;
+        }
+    }
+    TerrainGradeNorthSouthGentleRamp((Rectangle){75.8f, 30.5f, 5.4f, 6.5f},
+        SilverwickRoadHeight(78.5f, 27.0f), SilverwickRoadHeight(78.5f, 37.0f));
+}
+
 static void TerrainGenerate(void)
 {
     for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
@@ -869,6 +931,11 @@ static void TerrainGenerate(void)
             street_terrain_natural[index] = TerrainNaturalHeight(x, z);
             street_terrain_height[index] = street_terrain_natural[index];
         }
+    }
+    if (active_place_function == CC_SETTLEMENT_MINING) {
+        TerrainGradeSilverwick();
+        street_terrain_ready = true;
+        return;
     }
     if (active_place_function == CC_SETTLEMENT_FARMING) {
         TerrainGradeLaneVillage();

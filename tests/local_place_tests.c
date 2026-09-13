@@ -62,7 +62,8 @@ static int ProfileContract(void)
                 camera->camera_offset_z * camera->camera_offset_z;
             CHECK(camera_distance_squared >= 5.0f * 5.0f);
             bool valley_view = (profile->function == CC_SETTLEMENT_FARMING ||
-                                profile->function == CC_SETTLEMENT_MARKET) &&
+                                profile->function == CC_SETTLEMENT_MARKET ||
+                                profile->function == CC_SETTLEMENT_MINING) &&
                 (camera->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ||
                  camera->kind == CC_LOCAL_TOWN_SCENE_HEART ||
                  camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK);
@@ -144,6 +145,7 @@ static int ProfileContract(void)
             CHECK(structure->width >= 4.5f);
             CHECK(structure->depth >= 4.5f);
             float minimum_height = function == CC_SETTLEMENT_FARMING ? 3.0f :
+                function == CC_SETTLEMENT_MINING ? 3.8f :
                 function == CC_SETTLEMENT_MARKET ? 4.0f : 4.5f;
             CHECK(structure->height >= minimum_height);
             CHECK(structure->style >= CC_LOCAL_BUILDING_DOMESTIC);
