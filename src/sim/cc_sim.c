@@ -9589,7 +9589,7 @@ static void CompleteRoyalRepair(CcSim *sim, CcRoyalCarriage *carriage)
     const CcSettlement *to = CcSimSettlement(sim, broken->to_id);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "The crown of %.24s reopens the %.24s-%.24s road; its carriage spent %d days on the work.",
+                   "The crown of %.16s reopens the %.16s-%.16s road after %d days of work.",
                    CrownName(sim, carriage->kingdom_id),
                    from != NULL ? from->name : "western",
                    to != NULL ? to->name : "eastern",
@@ -9655,7 +9655,7 @@ static void BeginRoyalRepairWork(CcSim *sim, CcRoyalCarriage *carriage)
             char text[CC_EVENT_TEXT_CAPACITY];
             if (here == there) {
                 (void)snprintf(text, sizeof(text),
-                    "Escorts of the crowns of %.24s and %.24s face each other on the broken %.24s-%.24s road, and both withdraw without a battle.",
+                    "Escorts of %.16s and %.16s face off on the broken %.16s-%.16s road; both withdraw.",
                     CrownName(sim, carriage->kingdom_id),
                     CrownName(sim, other->kingdom_id),
                     from != NULL ? from->name : "western",
@@ -9670,7 +9670,7 @@ static void BeginRoyalRepairWork(CcSim *sim, CcRoyalCarriage *carriage)
             CcRoyalCarriage *winner = here_wins ? carriage : other;
             CcRoyalCarriage *loser = here_wins ? other : carriage;
             (void)snprintf(text, sizeof(text),
-                "Escorted carriages of the crowns of %.24s and %.24s clash on the broken %.24s-%.24s road; the crown of %.24s holds the work.",
+                "Escorts of %.16s and %.16s clash on the %.16s-%.16s road; %.16s holds the work.",
                 CrownName(sim, carriage->kingdom_id),
                 CrownName(sim, other->kingdom_id),
                 from != NULL ? from->name : "western",
@@ -9769,7 +9769,7 @@ static bool DispatchCrownRepair(CcSim *sim, CcRoyalCarriage *carriage,
     }
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "The crown of %.24s sends its carriage to mend the broken %.24s-%.24s road.",
+                   "The crown of %.16s sends its carriage to mend the broken %.16s-%.16s road.",
                    CrownName(sim, carriage->kingdom_id),
                    from != NULL ? from->name : "western",
                    to != NULL ? to->name : "eastern");
