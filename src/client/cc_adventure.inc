@@ -132,15 +132,6 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
                 "Town guard", "Talk", (Vector3){position.x, 0, position.z}, 0.9f, 2.0f, 0.7f,
                 (Vector2){position.x, position.z}, 1.8f);
         }
-        for (int32_t i = 0; !abandoned && i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
-            if (!local->course.travellers[i].active) continue;
-            Vector3 position = local->course.travellers[i].agent.position;
-            CcInteractionTarget *traveller = AdventureTarget(local, sim, CC_INTERACTION_PERSON,
-                UINT64_C(0x300000000) + (uint64_t)i, "Traveller", "Talk",
-                (Vector3){position.x, 0, position.z}, 0.9f, 2.0f, 0.7f,
-                (Vector2){position.x, position.z}, 1.8f);
-            AdventureBindPerson(sim, local, traveller, CC_NPC_ROLE_TRAVELLER);
-        }
         if (DungeonAtSettlement(sim, sim->player.location_id) != NULL) {
             (void)AdventureTarget(local, sim, CC_INTERACTION_SITE, CC_LOCAL_SITE_DUNGEON,
                 "Mine road", "Drive to the mine", (Vector3){LOCAL_DUNGEON.x, 0, LOCAL_DUNGEON.y},
