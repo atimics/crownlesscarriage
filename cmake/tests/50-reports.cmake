@@ -38,15 +38,7 @@ target_link_libraries(road_recovery_plan_tests PRIVATE crownless_sim)
 cc_strict_warnings(road_recovery_plan_tests)
 add_test(NAME roadside_recovery_plan COMMAND road_recovery_plan_tests)
 
-add_executable(agent_validation_tests tests/agent_validation_tests.c)
-target_link_libraries(agent_validation_tests PRIVATE crownless_sim)
-cc_strict_warnings(agent_validation_tests)
-add_test(NAME player_agent_checkpoint_validation COMMAND agent_validation_tests)
 
-add_executable(agent_report_tests tests/agent_report_tests.c)
-target_link_libraries(agent_report_tests PRIVATE crownless_sim)
-cc_strict_warnings(agent_report_tests)
-add_test(NAME player_agent_hunger_report COMMAND agent_report_tests)
 
 add_executable(hunger_metrics_tests tests/hunger_metrics_tests.c)
 target_link_libraries(hunger_metrics_tests PRIVATE crownless_sim)

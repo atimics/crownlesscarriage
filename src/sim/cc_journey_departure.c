@@ -82,11 +82,16 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
     CcMoney fare = preview.provision_cost;
     const CcSettlement *origin = CcSimSettlement(
         sim, sim->player.location_id);
-    if (sim->schema_version >= 14U && preview.horse_readiness < 30) {
+    if (sim->schema_version >= 14U && sim->schema_version < 101U &&
+        preview.horse_readiness < 30) {
         SetError(error, error_capacity,
                  "The horse team needs food and rest before another journey.");
         return false;
     }
+    /* Schema 101: hunger never strands the carriage. An exhausted team
+       simply sets out at a careful pace. */
+    bool hungry_team = sim->schema_version >= 101U &&
+        preview.horse_readiness < 30;
     if (sim->schema_version >= 15U) {
         for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
             int32_t due = sim->horse_team[i].pregnancy_days_remaining;
@@ -97,13 +102,20 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
             }
         }
     }
-    if (sim->schema_version >= 14U && (origin == NULL ||
+    if (sim->schema_version >= 14U && sim->schema_version < 101U &&
+        (origin == NULL ||
         CcNutritionAvailable(origin->stock, CC_NUTRITION_ANIMAL) <
             preview.horse_feed_required * CC_NUTRITION_PER_RATION)) {
         SetError(error, error_capacity,
                  "The departure market lacks enough fodder for the horse team.");
         return false;
     }
+    /* Schema 101: the team does not eat from the market at departure. The
+       carriage's feed tray is the trough: wheat bought in town pours into
+       it while the company is parked, the team eats from it in town, and
+       camps graze it on the road. A hungry team still departs — slowly. */
+    int32_t fed_rations = sim->schema_version >= 101U ? 0 :
+        preview.horse_feed_required;
     if (sim->player.coins < fare) {
         SetError(error, error_capacity, "The company cannot provision that journey.");
         return false;
@@ -154,14 +166,14 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
         if (sim->schema_version >= 14U) {
             (void)CcNutritionConsume(
                 origin_market->stock, CC_NUTRITION_ANIMAL,
-                preview.horse_feed_required * CC_NUTRITION_PER_RATION);
+                fed_rations * CC_NUTRITION_PER_RATION);
         }
     }
     if (sim->schema_version >= 14U) {
         for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
             sim->horse_team[i].hunger = ClampI32(
                 sim->horse_team[i].hunger -
-                    preview.horse_feed_required * 12, 0, 100);
+                    fed_rations * 12, 0, 100);
         }
     }
     CcKingdom *toll_kingdom = services->kingdom(sim, destination->kingdom_id);
@@ -191,7 +203,7 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
         .encounter_subticks = encounter_planned ?
             total_subticks * 35 / 100 : 0,
         .fare_reserved = (int32_t)fare,
-        .pace = CC_JOURNEY_PACE_STEADY,
+        .pace = hungry_team ? CC_JOURNEY_PACE_CAREFUL : CC_JOURNEY_PACE_STEADY,
         .ambush_pending = ambush_pending,
         .encounter_triggered = contract_journey && !encounter_planned,
         .parent_event_id = parent_event_id
@@ -205,13 +217,26 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
         .destination_id = destination->id,
         .speed_milli_per_second =
             CcJourneyCarriageSpeedForPace(
-                total_subticks, CC_JOURNEY_PACE_STEADY),
+                total_subticks,
+                hungry_team ? CC_JOURNEY_PACE_CAREFUL :
+                    CC_JOURNEY_PACE_STEADY),
         .condition = sim->carriage.condition
     };
     services->reveal_settlement_roads(sim, sim->journey.origin_id);
     services->reveal_journey_road(sim);
     char text[CC_EVENT_TEXT_CAPACITY];
-    if (sim->schema_version >= 14U) {
+    if (sim->schema_version >= 101U) {
+        (void)snprintf(
+            text, sizeof(text),
+            "%.12s and %.12s pull from %.12s toward %.12s %swith %d wheat in the tray%s.",
+            CcPonyName(sim->pony_company.team[0]),
+            CcPonyName(sim->pony_company.team[1]),
+            origin != NULL ? origin->name : "the waystation",
+            destination->name,
+            waited_for_morning ? "at first light " : "",
+            sim->player.feed_tray_wheat,
+            hungry_team ? ", hungry and careful" : "");
+    } else if (sim->schema_version >= 14U) {
         (void)snprintf(
             text, sizeof(text),
             "%.16s and %.16s pull from %.16s toward %.16s %sfor %d watches with %d fodder.",

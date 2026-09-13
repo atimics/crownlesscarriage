@@ -5,9 +5,10 @@
 #include <stdio.h>
 #include <string.h>
 
-static CcSettlement *ReturningRaid(CcSim *sim)
+static CcSettlement *ReturningRaid(CcSim *sim, uint32_t schema)
 {
     CcSimInit(sim, UINT32_C(0x460f00d));
+    sim->schema_version = schema;
     CcSettlement *town = CcSimSettlementMutable(sim, sim->player.location_id);
     CC_CHECK(town != NULL);
     town->hunger = 80;
@@ -49,7 +50,7 @@ int main(void)
     CC_CHECK(legacy.settlements[0].hunger == 80 - (int32_t)legacy_coins / 2);
     CC_CHECK(CcSimHash(&legacy) == UINT64_C(0x26bed631bd4afed2));
 
-    CcSettlement *town = ReturningRaid(&current);
+    CcSettlement *town = ReturningRaid(&current, CC_SIM_SCHEMA_VERSION);
     CcId town_id = town->id;
     CC_CHECK(CcSimValidate(&current, error, sizeof(error)));
     CcMoney gold = CcSimTrackedGold(&current);
@@ -108,8 +109,7 @@ int main(void)
     CC_CHECK(CcSimValidate(&supplied, error, sizeof(error)));
 
     /* An old returning save upgrades before adopting the new return rule. */
-    ReturningRaid(&legacy);
-    legacy.schema_version = 52U;
+    ReturningRaid(&legacy, 52U);
     unsigned char *bytes = NULL;
     size_t length = 0;
     CC_CHECK(CcSaveEncode(&legacy, &bytes, &length, error, sizeof(error)));
