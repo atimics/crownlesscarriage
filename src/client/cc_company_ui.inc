@@ -139,7 +139,12 @@ static void FrontendCompanyShare(FrontendState *state)
 static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
 {
     if (action == FRONTEND_ACTION_CAMPAIGN_CHOICE && state->screen == FRONTEND_CREATE_WORLD) {
-        state->deep_wyrm_start = !state->deep_wyrm_start;
+        FrontendSelectCampaign(state, state->campaign_index + 1);
+        return true;
+    }
+    if (action == FRONTEND_ACTION_CAMPAIGN_ROLL && state->screen == FRONTEND_CREATE_WORLD) {
+        int32_t step = 1 + (int32_t)(GetTime() * 1000.0f) % 3;
+        FrontendSelectCampaign(state, state->campaign_index + step);
         return true;
     }
     if (state->screen == FRONTEND_INVITATION) {
@@ -184,8 +189,14 @@ static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
     }
     if (action == FRONTEND_ACTION_CREATE_WORLD || action == FRONTEND_ACTION_JOIN_WORLD) {
         FrontendOpen(state, action == FRONTEND_ACTION_CREATE_WORLD ? FRONTEND_CREATE_WORLD : FRONTEND_JOIN_WORLD);
-        if (action == FRONTEND_ACTION_JOIN_WORLD && state->invitation[0] == '\0')
+        if (action == FRONTEND_ACTION_CREATE_WORLD) {
+            if (state->world_name[0] == '\0') {
+                (void)snprintf(state->world_name, sizeof(state->world_name), "%s",
+                               frontend_campaigns[state->campaign_index].title);
+            }
+        } else if (state->invitation[0] == '\0') {
             CompanyInvitation(state->invitation, sizeof(state->invitation));
+        }
         return true;
     }
     if (action == FRONTEND_ACTION_WORLD_PREVIOUS || action == FRONTEND_ACTION_WORLD_NEXT) {
@@ -196,7 +207,8 @@ static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
     }
     if (action == FRONTEND_ACTION_CREATE_SUBMIT || action == FRONTEND_ACTION_JOIN_SUBMIT) {
         bool ok = action == FRONTEND_ACTION_CREATE_SUBMIT ?
-            CcCompanyCreateCampaign(&state->company, state->player_name, state->world_name, state->world_pass, state->deep_wyrm_start,
+            CcCompanyCreateCampaign(&state->company, state->player_name, state->world_name, state->world_pass,
+                FrontendCampaignId(state->campaign_index),
                 state->feedback, sizeof(state->feedback)) :
             CcCompanyJoin(&state->company, state->player_name, state->invitation, state->feedback, sizeof(state->feedback));
         if (ok) {
