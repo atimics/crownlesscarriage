@@ -1265,6 +1265,7 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_ROYAL_CARRIAGE_REPAIR_DISPATCHED:
             return "CROWN ROAD WORKS";
         case CC_EVENT_ROYAL_ROAD_SKIRMISH: return "ROAD SKIRMISH";
+        case CC_EVENT_BODY_LOOTED: return "PURSE LIFTED";
         case CC_EVENT_ROAD_SITE_PRODUCTION: return "ROAD WORKS";
         case CC_EVENT_NOTICE_POSTED: return "NOTICE";
         case CC_EVENT_KIND_COUNT: break;
@@ -7215,6 +7216,50 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
     return true;
 }
 
+/* Schema 102 (#406): bandits camping at a place lift the unclaimed purses of
+   the fallen there, spending the coin in the local market. Unclaimed purses
+   never vanish; the coin stays inside the tracked economy. */
+static void ClaimFallenPursesByBandits(CcSim *sim)
+{
+    if (sim->schema_version < 102U) return;
+    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+        CcCustodyEntry *entry = &sim->custody.entries[i];
+        if (!CcSimIsBodyPurse(sim, entry)) continue;
+        CcBanditGroup *camp = NULL;
+        for (int bandit = 0; bandit < sim->bandit_count; ++bandit) {
+            CcBanditGroup *group = &sim->bandits[bandit];
+            const CcRoute *road = CcSimRoute(sim, group->route_id);
+            if (group->camp_settlement_id == entry->holder.id ||
+                (road != NULL && (road->from_id == entry->holder.id ||
+                                  road->to_id == entry->holder.id))) {
+                camp = group;
+                break;
+            }
+        }
+        if (camp == NULL) continue;
+        /* The purse lies at least a week before bandits dare it: mourners,
+           travellers and the company all get there first. */
+        const CcEvent *death = CcSimEvent(sim, entry->last_event_id);
+        if (death != NULL && sim->current_day - death->day < 7) continue;
+        CcMoney coins = entry->quantity;
+        CcSettlement *place = CcSimSettlementMutable(sim, entry->holder.id);
+        entry->quantity = 0;
+        entry->active = false;
+        entry->revision++;
+        if (place != NULL) place->market_coins += coins;
+        const CcHistoricCharacter *fallen =
+            CcSimHistoricCharacter(sim, entry->owner_id);
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text),
+            "Bandits of %.24s lift the unclaimed purse of %.24s.",
+            camp->name,
+            fallen != NULL ? fallen->name : "the fallen traveller");
+        (void)PushEvent(sim, CC_EVENT_BODY_LOOTED, entry->owner_id,
+                        entry->holder.id, 0U,
+                        coins > 2000000000 ? 2000000000 : (int32_t)coins, text);
+    }
+}
+
 static void AdvanceBanditRaids(CcSim *sim)
 {
     ReleaseAbandonedCamps(sim);
@@ -11142,6 +11187,22 @@ static void RecordCharacterLifetime(CcSim *sim, const CcCharacter *person)
     } else {
         sim->historic_character_count++;
     }
+    if (sim->schema_version >= 102U && slot < sim->historic_character_count) {
+        /* The historic ring is small; a record leaving it takes its unclaimed
+           purse to the place's market as found money, so the entry never
+           outlives its owner's name. */
+        CcId leaving = sim->historic_characters[slot].id;
+        for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+            CcCustodyEntry *entry = &sim->custody.entries[i];
+            if (!CcSimIsBodyPurse(sim, entry) || entry->owner_id != leaving) continue;
+            CcMoney coins = entry->quantity;
+            CcSettlement *place = CcSimSettlementMutable(sim, entry->holder.id);
+            entry->quantity = 0;
+            entry->active = false;
+            entry->revision++;
+            if (place != NULL) place->market_coins += coins;
+        }
+    }
     CcHistoricCharacter *record = &sim->historic_characters[slot];
     *record = (CcHistoricCharacter){
         .id = person->id, .ancestor_id = person->ancestor_id,
@@ -11823,8 +11884,9 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
                    "%s died at age %d after a life in %s.",
                    dead.name, age,
                    home != NULL ? home->name : "a forgotten place");
-    (void)PushEvent(sim, CC_EVENT_CHARACTER_DIED, dead.id,
+    CcEvent *death_event = PushEvent(sim, CC_EVENT_CHARACTER_DIED, dead.id,
                     dead.home_settlement_id, 0U, 30, death_text);
+    CcId death_event_id = death_event->id;
     sim->character_deaths += 1;
 
     RemoveCharacterRelationships(sim, dead.id);
@@ -11833,7 +11895,25 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
 
     CcCharacter successor = {0};
     if (sim->schema_version >= 60U) {
-        successor.travel_coins = dead.travel_coins;
+        if (sim->schema_version >= 102U) {
+            /* Schema 102 (#406): the carried purse falls with the dead, at the
+               place they fell; it is lootable there and never a ghost refund
+               into the successor's hands. Custody full resolves to the place's
+               market as found money. */
+            CcId fell_at = dead.current_settlement_id != 0U ?
+                dead.current_settlement_id : dead.home_settlement_id;
+            CcSettlement *place = CcSimSettlementMutable(sim, fell_at);
+            if (dead.travel_coins > 0) {
+                if (!CcSimLeaveBodyPurse(sim, dead.id, fell_at,
+                                          dead.travel_coins, death_event_id) &&
+                    place != NULL) {
+                    place->market_coins += dead.travel_coins;
+                }
+                dead.travel_coins = 0;
+            }
+        } else {
+            successor.travel_coins = dead.travel_coins;
+        }
         CcBanditGroup *camp = BanditMutable(sim, dead.bandit_group_id);
         if (camp != NULL && camp->members > 4) camp->members -= 1;
     }
@@ -15950,6 +16030,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         AdvanceCouriers(sim);
         AdvanceServiceProjects(sim);
         AdvanceBanditRaids(sim);
+        ClaimFallenPursesByBandits(sim);
         AdvanceGoblinTribute(sim);
         AdvanceDragonEcology(sim);
         AdvanceDragonRetaliation(sim);
@@ -17749,6 +17830,36 @@ static bool ApplyRepair(CcSim *sim, const CcCommand *command,
 /* Sealed letters (#646). Pick up only at the letter's origin; deliver only
    at its recipient, and only from the player's own cargo. The effects live
    in CcSimDeliverDispatch, so nothing happens between the two. */
+static bool ApplyTakeBodyPurse(CcSim *sim, const CcCommand *command,
+                               char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 102U) {
+        SetError(error, error_capacity, "No purse lies here.");
+        return false;
+    }
+    /* The claim deactivates the row, so read who fell before lifting. */
+    const CcCustodyEntry *purse = CcCustodyFind(&sim->custody, command->target_id);
+    CcId fallen_id = CcSimIsBodyPurse(sim, purse) ? purse->owner_id : 0U;
+    CcMoney before = sim->player.coins;
+    if (!CcSimClaimBodyPurse(sim, command->target_id, error, error_capacity)) {
+        return false;
+    }
+    CcMoney coins = sim->player.coins - before;
+    const CcHistoricCharacter *fallen = CcSimHistoricCharacter(sim, fallen_id);
+    const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+        "The company lifts the unclaimed purse of %.24s at %.24s (%" PRId64 " crowns).",
+        fallen != NULL ? fallen->name : "the fallen traveller",
+        place != NULL ? place->name : "the road",
+        coins);
+    (void)PushEvent(sim, CC_EVENT_BODY_LOOTED, fallen_id,
+                    sim->player.location_id, 0U,
+                    coins > 2000000000 ? 2000000000 : (int32_t)coins, text);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool ApplyPickupDispatch(CcSim *sim, const CcCommand *command,
                                char *error, size_t error_capacity)
 {
@@ -18743,7 +18854,8 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_DELIVER_PROPHECY ||
         command->kind == CC_COMMAND_RESERVE_ARCHIVE_RECRUITMENT ||
         command->kind == CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT ||
-        command->kind == CC_COMMAND_SUPPORT_BAKERY;
+        command->kind == CC_COMMAND_SUPPORT_BAKERY ||
+        command->kind == CC_COMMAND_TAKE_BODY_PURSE;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
                  "Settlement business must wait until the carriage arrives.");
@@ -18776,6 +18888,8 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
                                    &journey_departure_services);
         case CC_COMMAND_REPAIR_ROUTE:
             return ApplyRepair(sim, command, error, error_capacity);
+        case CC_COMMAND_TAKE_BODY_PURSE:
+            return ApplyTakeBodyPurse(sim, command, error, error_capacity);
         case CC_COMMAND_PICKUP_DISPATCH:
             return ApplyPickupDispatch(sim, command, error, error_capacity);
         case CC_COMMAND_DELIVER_DISPATCH:
@@ -19303,7 +19417,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > (sim->schema_version >= 100U ?
+                event->kind > (sim->schema_version >= 102U ?
+                    CC_EVENT_BODY_LOOTED :
+                    sim->schema_version >= 100U ?
                     CC_EVENT_ROYAL_ROAD_SKIRMISH :
                     CC_EVENT_PROPHECY_DELIVERED) ||
                 event->parent_id == event->id ||
