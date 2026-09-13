@@ -29,6 +29,7 @@
 #define CC_MAX_QUEST_EVIDENCE 8
 #define CC_MAX_PENDING_ECHOES 3
 #define CC_MAX_CHARACTERS 128
+#define CC_MAX_CHARACTER_RECORDS 256
 /* The character cap was 24 through schema 79. Saves written then carry that
    many gossip carrier slots and hash exactly those, so the carrier capacity
    must come from the schema rather than the current cap. */
@@ -37,7 +38,7 @@
 #define CC_MAX_SCRIBES 4
 #define CC_MAX_GOSSIP 32
 #define CC_LEGACY_GOSSIP_CARRIERS (1 + CC_MAX_KINGDOMS + CC_MAX_SHIPMENTS + CC_MAX_COURIERS)
-#define CC_MAX_GOSSIP_CARRIERS (CC_LEGACY_GOSSIP_CARRIERS + CC_MAX_CHARACTERS)
+#define CC_MAX_GOSSIP_CARRIERS (CC_LEGACY_GOSSIP_CARRIERS + CC_MAX_CHARACTER_RECORDS)
 #define CC_CHARACTER_MEMORY_CAPACITY 4
 #define CC_CHARACTER_KNOWLEDGE_CAPACITY 8
 #define CC_MAX_RELATIONSHIPS 48
@@ -66,7 +67,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 99
+#define CC_SIM_SCHEMA_VERSION 101
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -1654,6 +1655,9 @@ typedef struct CcCharacter {
        carrier's stories into the new town, which is what makes retelling happen. */
     CcId travel_destination_id;
     int32_t travel_arrival_day;
+    bool detail_active;
+    int32_t last_active_day;
+    int32_t introduced_day;
     CcCharacterMemory memories[CC_CHARACTER_MEMORY_CAPACITY];
     int32_t memory_count;
     int32_t memory_write_index;
@@ -2013,7 +2017,7 @@ typedef struct CcSim {
     CcSituation situations[CC_MAX_SITUATIONS];
     CcFront fronts[CC_MAX_FRONTS];
     CcQuestOutcomeRecord quest_outcomes[CC_MAX_QUEST_OUTCOMES];
-    CcCharacter characters[CC_MAX_CHARACTERS];
+    CcCharacter characters[CC_MAX_CHARACTER_RECORDS];
     CcRelationship relationships[CC_MAX_RELATIONSHIPS];
     int32_t relationship_count;
     CcEvent events[CC_MAX_EVENTS];
@@ -2085,7 +2089,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 378280,
+_Static_assert(sizeof(CcSim) == 601512,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -2165,6 +2169,13 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
 bool CcSimSupportsVersions(uint32_t schema_version, uint32_t generator_version);
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity);
 /* Engine/debug lookup; actor-facing code reads held account snapshots. */
+int32_t CcSimCharacterRecordCapacity(const CcSim *sim);
+bool CcSimCharacterIsActive(const CcSim *sim, const CcCharacter *person);
+int32_t CcSimActiveCharacterCount(const CcSim *sim);
+void CcSimRefreshActiveCast(CcSim *sim);
+bool CcSimActivateCharacter(CcSim *sim, CcId person_id);
+void CcSimPeopleEnterSettlement(CcSim *sim);
+
 const CcHistoricCharacter *CcSimHistoricCharacter(const CcSim *sim, CcId id);
 void CcSimUpgradeKnowledgeSourceNames(CcSim *sim);
 uint64_t CcSimHash(const CcSim *sim);

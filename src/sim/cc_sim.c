@@ -5766,8 +5766,8 @@ int32_t CcSimGossipCarrierCapacity(const CcSim *sim)
         return CC_LEGACY_GOSSIP_CARRIERS;
     }
     return CC_LEGACY_GOSSIP_CARRIERS +
-        (sim->schema_version >= 82U ? CC_MAX_CHARACTERS
-                                    : CC_LEGACY_CHARACTER_CAP);
+        (sim->schema_version >= 101U ? CC_MAX_CHARACTER_RECORDS :
+         sim->schema_version >= 82U ? CC_MAX_CHARACTERS : CC_LEGACY_CHARACTER_CAP);
 }
 
 const CcGossipCarrier *CcSimGossipCarrier(const CcSim *sim, CcId id)
@@ -5888,6 +5888,7 @@ static void ObserveCraftStory(CcSim *sim, int32_t slot)
     if (story->day != sim->current_day) return;
     for (int32_t i = 0; i < sim->character_count; ++i) {
         const CcCharacter *person = &sim->characters[i];
+        if (!CcSimCharacterIsActive(sim, person)) continue;
         if (person->current_settlement_id != story->origin_id ||
             person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
             person->death_day <= sim->current_day || CcCharacterAgeYears(sim, person) < 16 ||
@@ -6147,6 +6148,7 @@ void CcSimRefreshCharacterGossip(CcSim *sim)
     if (sim == NULL || sim->schema_version < 46U) return;
     for (int32_t i = 0; i < sim->character_count; ++i) {
         const CcCharacter *person = &sim->characters[i];
+        if (!CcSimCharacterIsActive(sim, person)) continue;
         if (person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
             CcCharacterAgeYears(sim, person) < 16) continue;
         ExchangeGossip(sim, person->id, person->current_settlement_id, person->name);
@@ -6189,6 +6191,14 @@ static bool ApplyExchangeGossip(CcSim *sim, const CcCommand *command,
         CcCharacterAgeYears(sim, person) < 16) {
         SetError(error, error_capacity, "Find that person in town to exchange news.");
         return false;
+    }
+    if (sim->schema_version >= 101U) {
+        if (!CcSimActivateCharacter(sim, person->id)) {
+            SetError(error, error_capacity, "The company is busy with its present commitments. Try again after they settle.");
+            return false;
+        }
+        CcCharacter *introduced = CharacterMutable(sim, person->id);
+        if (introduced->introduced_day == 0) introduced->introduced_day = sim->current_day;
     }
     const CcGossipCarrier *previous = CcSimGossipCarrier(sim, sim->player.id);
     uint32_t known = previous != NULL ? previous->stories : 0U;
@@ -10662,11 +10672,14 @@ static CcCharacter *PromoteCharacter(CcSim *sim, const char *name,
 {
     CcCharacter *character = CharacterForNameAt(sim, name, settlement_id);
     if (character != NULL) return character;
-    if (sim == NULL || sim->character_count >= CC_MAX_CHARACTERS ||
+    if (sim == NULL || sim->character_count >= CcSimCharacterRecordCapacity(sim) ||
         CcSimSettlement(sim, settlement_id) == NULL) return NULL;
     character = &sim->characters[sim->character_count++];
     *character = (CcCharacter){0};
     character->id = NextId(sim, CC_ENTITY_CHARACTER);
+    character->detail_active = sim->schema_version >= 101U &&
+        CcSimActiveCharacterCount(sim) < CC_MAX_CHARACTERS;
+    character->last_active_day = character->detail_active ? sim->current_day : 0;
     CopyName(character->name, name);
     character->home_settlement_id = settlement_id;
     character->current_settlement_id = settlement_id;
@@ -11154,7 +11167,7 @@ static void FillSettlementResidents(CcSim *sim)
         }
         int32_t target = ResidentTarget(sim, &sim->settlements[settlement]);
         uint32_t ordinal = 0U;
-        while (residents < target && sim->character_count < CC_MAX_CHARACTERS) {
+        while (residents < target && sim->character_count < CcSimCharacterRecordCapacity(sim)) {
             char name[CC_NAME_CAPACITY];
             do {
                 GenerateResidentName(sim, settlement_id, 0, ordinal++, name);
@@ -11175,6 +11188,29 @@ static void FillSettlementResidents(CcSim *sim)
             residents += 1;
         }
     }
+}
+
+void CcSimPeopleEnterSettlement(CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 101U || sim->journey.active) return;
+    const CcSettlement *town = CcSimSettlement(sim, sim->player.location_id);
+    if (town == NULL || CcSettlementIsAbandoned(town)) return;
+    int32_t residents = 0;
+    for (int32_t i = 0; i < sim->character_count; ++i)
+        if (sim->characters[i].home_settlement_id == town->id) ++residents;
+    int32_t target = MinimumI32(32, town->population);
+    uint32_t ordinal = 2048U;
+    while (residents < target && sim->character_count < CC_MAX_CHARACTER_RECORDS) {
+        char name[CC_NAME_CAPACITY];
+        do { GenerateResidentName(sim, town->id, 0, ordinal++, name); }
+        while (CharacterForName(sim, name) != NULL && ordinal < 4096U);
+        if (CharacterForName(sim, name) != NULL) break;
+        CcCharacterRole role = ResidentRole(town, residents);
+        if (PromoteCharacter(sim, name, town->id, 0, role,
+            CC_CHARACTER_GOAL_SECURE_LIVELIHOOD, CC_CHARACTER_ACTIVITY_WORKING) == NULL) break;
+        ++residents;
+    }
+    CcSimRefreshActiveCast(sim);
 }
 
 void CcSimUpgradeCharacterLifecycles(CcSim *sim)
@@ -11467,6 +11503,8 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
                   (uint32_t)sim->character_births, successor.name);
     InitializeCharacterLife(
         sim, &successor, dead.id, dead.generation + 1, 0);
+    successor.detail_active = dead.detail_active;
+    successor.last_active_day = successor.detail_active ? sim->current_day : 0;
     sim->characters[slot] = successor;
     sim->character_births += 1;
     TransferHistoricalTitles(sim, &dead, &sim->characters[slot]);
@@ -15179,6 +15217,7 @@ static void AdvanceCharacterTravel(CcSim *sim)
     if (sim == NULL || sim->schema_version < 82U) return;
     for (int32_t i = 0; i < sim->character_count; ++i) {
         CcCharacter *person = &sim->characters[i];
+        if (!CcSimCharacterIsActive(sim, person)) continue;
         if (person->death_day > 0 && person->death_day <= sim->current_day) continue;
 
         if (person->travel_destination_id != 0U) {
@@ -15274,6 +15313,7 @@ static void AdvanceTravellerNeeds(CcSim *sim)
 {
     for (int32_t i = 0; i < sim->character_count; ++i) {
         CcCharacter *person = &sim->characters[i];
+        /* Meals and shelter are coarse life costs for every retained visitor. */
         if (sim->schema_version >= 84U &&
             (sim->archive_recruitment.person_id == person->id || sim->archive_recruitment.trainer_id == person->id) &&
             CcSimArchiveRecruitmentTrainingGate(sim) == CC_ARCHIVE_RECRUIT_READY) continue;
@@ -15495,6 +15535,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
                         sim->archive_staff.seat_id, 0, previous[i], previous[i], 0, 0, 1,
                         "A named scribe's lifetime ends. Their archive place becomes vacant.");
         }
+        CcSimRefreshActiveCast(sim);
         if (sim->schema_version >= 60U) AdvanceTravellerNeeds(sim);
         AdvanceCharacterTravel(sim);
         AdvanceArchiveRecruitJourney(sim);
@@ -18536,6 +18577,7 @@ bool CcSimApply(CcSim *sim, const CcCommand *command, char *error, size_t error_
 {
     bool ok = ApplySimCommand(sim, command, error, error_capacity);
     if (ok && sim->schema_version >= 75U) ReconcileGoblinFactions(sim);
+    if (ok) CcSimPeopleEnterSettlement(sim);
     return ok;
 }
 
@@ -18652,7 +18694,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         sim->pending_echo_count < 0 ||
         sim->pending_echo_count > CC_MAX_PENDING_ECHOES ||
         sim->character_count < 0 ||
-        sim->character_count > CC_MAX_CHARACTERS ||
+        sim->character_count > CcSimCharacterRecordCapacity(sim) ||
+        CcSimActiveCharacterCount(sim) > CC_MAX_CHARACTERS ||
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          /* #653: the cap is an upper bound, not the population target. Before
             the cast could vary the seeder filled every slot, so the tightest
@@ -20032,6 +20075,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 character->goal > CC_CHARACTER_GOAL_CARRY_NEWS ||
                 character->activity < CC_CHARACTER_ACTIVITY_WORKING ||
                 character->activity > CC_CHARACTER_ACTIVITY_TRAVELLING ||
+                (sim->schema_version >= 101U &&
+                 (character->last_active_day < 0 || character->last_active_day > sim->current_day ||
+                  character->introduced_day < 0 || character->introduced_day > sim->current_day ||
+                  (character->detail_active && character->last_active_day == 0))) ||
                 character->player_disposition < -100 ||
                 character->player_disposition > 100 ||
                 character->stress < 0 || character->stress > 100 ||

@@ -1,0 +1,4 @@
+add_executable(active_cast_tests tests/active_cast_tests.c)
+target_link_libraries(active_cast_tests PRIVATE crownless_persistence)
+cc_strict_warnings(active_cast_tests)
+add_test(NAME persistent_active_cast COMMAND active_cast_tests)

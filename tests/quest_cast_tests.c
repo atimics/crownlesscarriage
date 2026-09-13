@@ -221,7 +221,15 @@ int main(int argc, char **argv)
     CC_CHECK(CcSaveDecode(bytes, length, &restored, error, sizeof(error)));
     CcSaveFreeBuffer(bytes);
     sim.schema_version = CC_SIM_SCHEMA_VERSION;
-        CcSimInitializeGoblinPolitics(&sim);
+    CcSimInitializeGoblinPolitics(&sim);
+    for (int32_t i = 0; i < sim.character_count; ++i) {
+        CC_CHECK(restored.characters[i].detail_active);
+        CC_CHECK(restored.characters[i].last_active_day == sim.current_day);
+        CC_CHECK(restored.characters[i].introduced_day == 0);
+        sim.characters[i].detail_active = true;
+        sim.characters[i].last_active_day = sim.current_day;
+        sim.characters[i].introduced_day = 0;
+    }
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
     FILE *source = fopen(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-73-generator-25-cast-journal.ccsave", "rb");
     FILE *copy = fopen(path, "wb");

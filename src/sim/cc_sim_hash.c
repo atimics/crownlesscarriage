@@ -618,6 +618,11 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(character->goal);
             HASH_VALUE(character->activity);
             HASH_VALUE(character->appearance_seed);
+            if (sim->schema_version >= 101U) {
+                HASH_VALUE(character->detail_active);
+                HASH_VALUE(character->last_active_day);
+                HASH_VALUE(character->introduced_day);
+            }
             HASH_VALUE(character->player_disposition);
             HASH_VALUE(character->stress);
             HASH_VALUE(character->courage);

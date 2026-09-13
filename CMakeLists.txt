@@ -108,6 +108,7 @@ add_library(crownless_sim
     src/sim/cc_sim_versions.c
     src/sim/cc_war.c
     src/sim/cc_identity.c
+    src/sim/cc_active_cast.c
     src/sim/cc_road_council.c
     src/sim/cc_route_rules.c
     src/sim/cc_journey_departure.c
