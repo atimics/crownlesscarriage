@@ -1,0 +1,15 @@
+{
+  "digest": "8f7cff401aacf6ba8914209a5fd710a6e92d1e68cce174878e12d43e65e78a02",
+  "files": {
+    "accounts.jsonl": "bc83a5d50cbe722b8a32663cba46848a20fea5e284254e874292c37e8318debd",
+    "drafts.json": "db75a268d5f5fbd22443c3ec34d168f1300fa02d4247129d8bde4e4010f9218a",
+    "generation.json": "05abc36ea9942cbc9b798a467aefae82f0b6f32ff9b42dde909be9b061a9a3af",
+    "reference-selection.json": "75ca787845cb38494a4ebbb2ade0acd7b718ed5fbd5e8f38bd96b905bbcf4444",
+    "build.py": "971ae469531aa1827243303d6fddc2f87c59950fe2773f88560ab629b7e4c7f6",
+    "review.html": "dcc4849bfc4f7c92225602a5523fa47fb010770d8441e068bf2e7e9bacde479c",
+    "index.html": "f00bf37e3a23657de4ae37e0cc70dc244a3bc6a860f72a9b69b2d16bbdb10986",
+    "dialogues.txt": "ae53ca00c601f39923ed6ce1c6942370985befe5867f6dce36e4141d2272cd27",
+    "summary.json": "4cf7c0a0f399f83043c8e27ced7044503beecabb997fd964b0b18d904df32d10",
+    "records.jsonl": "6e18f7f210762115089365698351e32094c033542d165c2425cf1cb97c8f7db8"
+  }
+}

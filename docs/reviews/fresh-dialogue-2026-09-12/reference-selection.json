@@ -1,0 +1,25 @@
+{
+  "study_digest": "51b622002506c85985f6d5c91054c4fc138732390b445169495790c947d578ee",
+  "selected": {
+    "S01": "v2",
+    "S02": "v2",
+    "S03": "v2",
+    "S04": "v1",
+    "S05": "v2",
+    "S06": "v2",
+    "S07": "v1",
+    "S08": "v2",
+    "S09": "v2",
+    "S10": "v2",
+    "S11": "v2",
+    "S12": "v2"
+  },
+  "writing_brief": [
+    "Clear facts and short responsive turns.",
+    "Specific curiosity and restrained warmth.",
+    "Facts may unfold through questions.",
+    "Vary conversation length and endings.",
+    "Preserve uncertainty within the spoken claim."
+  ],
+  "basis": "User choices supplied in this task; applied as editorial examples."
+}
