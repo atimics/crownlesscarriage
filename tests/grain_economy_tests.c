@@ -131,7 +131,8 @@ int main(void)
     farmstead->production[CC_GOOD_WHEAT] = 0;
     market->service_mask &= ~Service(CC_SERVICE_BAKERY);
     CcSimUpgradeGrainEconomy(&migration);
-    CC_CHECK(farmstead->production[CC_GOOD_BREAD] == 0);
+    CC_CHECK(CcSettlementHasService(farmstead, CC_SERVICE_BAKERY));
+    CC_CHECK(farmstead->production[CC_GOOD_BREAD] == 35);
     CC_CHECK(farmstead->production[CC_GOOD_WHEAT] == 28);
     CC_CHECK(market->stock[CC_GOOD_BREAD] == old_bread);
     CC_CHECK(CcSettlementHasService(market, CC_SERVICE_BAKERY));
