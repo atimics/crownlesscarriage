@@ -13,7 +13,7 @@
 set -eu
 
 ITCH_USER="${ITCH_USER:-ratimics}"
-ITCH_GAME="${ITCH_GAME:-crownless-carriage}"
+ITCH_GAME="${ITCH_GAME:-crownless}"
 ITCH_CHANNEL="${ITCH_CHANNEL:-html}"
 VERSION="${VERSION:-0.1.0}"
 SITE_DIR="out/build/web/site"

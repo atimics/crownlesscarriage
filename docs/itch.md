@@ -21,8 +21,7 @@ scripts/itch-release.sh                 # build only (dry run)
    ```
 
 2. Create the project on itch.io: dashboard -> "Create new project", and set
-   the URL to `crownless-carriage` so it lives at
-   `ratimics.itch.io/crownless-carriage`.
+   the URL to `crownless` so it lives at `ratimics.itch.io/crownless`.
 
 3. Project settings for the browser build:
 
