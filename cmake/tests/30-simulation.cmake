@@ -61,6 +61,11 @@ target_link_libraries(travel_departure_tests PRIVATE crownless_persistence)
 cc_strict_warnings(travel_departure_tests)
 add_test(NAME free_road_departures COMMAND travel_departure_tests)
 
+add_executable(feed_tray_tests tests/feed_tray_tests.c)
+target_link_libraries(feed_tray_tests PRIVATE crownless_persistence)
+cc_strict_warnings(feed_tray_tests)
+add_test(NAME feed_tray_travel COMMAND feed_tray_tests)
+
 add_executable(royal_road_repair_tests tests/royal_road_repair_tests.c)
 target_link_libraries(royal_road_repair_tests PRIVATE crownless_sim)
 cc_strict_warnings(royal_road_repair_tests)

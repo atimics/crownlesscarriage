@@ -52,10 +52,14 @@ static int32_t CountEvents(const CcSim *sim, CcEventKind kind)
     return count;
 }
 
+static CcSim travel;
+static CcSim with_cows;
+static CcSim without_cows;
+static CcSim famine;
+
 int main(void)
 {
     char error[192];
-    CcSim travel;
     CcSimInit(&travel, UINT32_C(0xa11a1));
     CC_CHECK(strcmp(travel.horse_team[0].name, "Bracken") == 0);
     CC_CHECK(strcmp(travel.horse_team[1].name, "Morrow") == 0);
@@ -77,12 +81,18 @@ int main(void)
         .kind = CC_COMMAND_TRAVEL,
         .target_id = travel.settlements[1].id
     };
-    CC_CHECK(!CcSimApply(&travel, &depart, error, sizeof(error)));
-    CC_CHECK(strstr(error, "fodder") != NULL);
+    /* Schema 101: the team eats from the carriage's feed tray, not from the
+       market. A crate of wheat bought in town pours into the tray while the
+       company is parked, the market's stock is never touched at departure,
+       and an empty tray still departs - slowly. */
     travel.settlements[0].stock[CC_GOOD_WHEAT] = original_wheat;
+    travel.player.cargo[CC_GOOD_WHEAT] = 10;
+    CcSimAdvanceDays(&travel, 1);
+    CC_CHECK(travel.player.feed_tray_wheat == CC_FEED_TRAY_CAPACITY);
+    int32_t wheat_at_departure = travel.settlements[0].stock[CC_GOOD_WHEAT];
     CC_CHECK(CcSimApply(&travel, &depart, error, sizeof(error)));
-    CC_CHECK(travel.settlements[0].stock[CC_GOOD_WHEAT] ==
-             original_wheat - preview.horse_feed_required);
+    CC_CHECK(travel.settlements[0].stock[CC_GOOD_WHEAT] == wheat_at_departure);
+    CC_CHECK(CcSimValidate(&travel, error, sizeof(error)));
     travel.journey.ambush_pending = false;
     AdvanceJourney(&travel);
     CC_CHECK(!travel.journey.active);
@@ -91,9 +101,34 @@ int main(void)
     int32_t tired = travel.horse_team[0].fatigue;
     CcSimAdvanceDays(&travel, 7);
     CC_CHECK(travel.horse_team[0].fatigue < tired);
+    /* A hungry team with no fodder behind it still departs: hungry travel
+       is careful travel, and only that. */
+    travel.settlements[1].stock[CC_GOOD_WHEAT] = 0;
+    travel.player.feed_tray_wheat = 0;
+    travel.player.cargo[CC_GOOD_WHEAT] = 0;
+    for (int32_t i = 0; i < CcSimHorseTeamCount(&travel); ++i) {
+        travel.horse_team[i].hunger = 90;
+        travel.horse_team[i].fatigue = 60;
+    }
+    CC_CHECK(CcSimHorseTeamReadiness(&travel) < 30);
+    CcCommand hungry_depart = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = travel.settlements[0].id
+    };
+    CC_CHECK(CcSimApply(&travel, &hungry_depart, error, sizeof(error)));
+    CC_CHECK(travel.journey.active);
+    CC_CHECK(travel.journey.pace == CC_JOURNEY_PACE_CAREFUL);
+    CcCommand push = {.kind = CC_COMMAND_SET_JOURNEY_PACE,
+                       .amount = CC_JOURNEY_PACE_PUSH};
+    CC_CHECK(!CcSimApply(&travel, &push, error, sizeof(error)));
+    CcCommand steady = {.kind = CC_COMMAND_SET_JOURNEY_PACE,
+                          .amount = CC_JOURNEY_PACE_STEADY};
+    CC_CHECK(!CcSimApply(&travel, &steady, error, sizeof(error)));
+    CcCommand careful = {.kind = CC_COMMAND_SET_JOURNEY_PACE,
+                           .amount = CC_JOURNEY_PACE_CAREFUL};
+    CC_CHECK(CcSimApply(&travel, &careful, error, sizeof(error)));
+    CC_CHECK(CcSimValidate(&travel, error, sizeof(error)));
 
-    CcSim with_cows;
-    CcSim without_cows;
     CcSimInit(&with_cows, UINT32_C(0xca771e));
     CcSimInit(&without_cows, UINT32_C(0xca771e));
     with_cows.current_day = 6;
@@ -114,7 +149,6 @@ int main(void)
     CC_CHECK(with_cows.settlements[0].stock[CC_GOOD_FOOD] >
              without_cows.settlements[0].stock[CC_GOOD_FOOD]);
 
-    CcSim famine;
     CcSimInit(&famine, UINT32_C(0xf4a11e));
     famine.current_day = 6;
     famine.dragon.hunt_cooldown_days = 1000;

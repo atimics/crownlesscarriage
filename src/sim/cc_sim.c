@@ -15506,6 +15506,27 @@ static void AdvanceHorseTeam(CcSim *sim)
         ConsumeHorseFeed(sim, mutable_place);
     }
 
+    /* Schema 101: the feed tray. Wheat from the company's cargo pours into
+       the tray while parked (one crate fills it), and the team eats from
+       the tray in town. Hunger no longer strands the carriage: an unfed
+       team simply departs slow (see the journey departure). */
+    if (sim->schema_version >= 101U && !on_journey) {
+        int32_t room = CC_FEED_TRAY_CAPACITY - sim->player.feed_tray_wheat;
+        int32_t poured = room < sim->player.cargo[CC_GOOD_WHEAT] ?
+            room : sim->player.cargo[CC_GOOD_WHEAT];
+        if (poured > 0) {
+            sim->player.feed_tray_wheat += poured;
+            sim->player.cargo[CC_GOOD_WHEAT] -= poured;
+        }
+        for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
+            CcHorse *horse = &sim->horse_team[i];
+            if (horse->hunger > 0 && sim->player.feed_tray_wheat > 0) {
+                sim->player.feed_tray_wheat -= 1;
+                horse->hunger = ClampI32(horse->hunger - 6, 0, 100);
+            }
+        }
+    }
+
     int32_t boarded_at_start = sim->stable_horse_count;
     /* Both horses live here, harnessed or not: this loop ages them, feeds
        them and carries pregnancies to term. An idle horse still rests, eats
@@ -20998,6 +21019,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         CcPlayerMapCount(sim) > sim->player.map_capacity ||
         sim->player.coins < 0 || sim->player.coins > CC_SIM_MAX_MONEY ||
         sim->player.reputation < -100 || sim->player.reputation > 100 ||
+        (sim->schema_version >= 101U &&
+         (sim->player.feed_tray_wheat < 0 ||
+          sim->player.feed_tray_wheat > CC_FEED_TRAY_CAPACITY)) ||
         (sim->player.accepted_situation_id != 0U && accepted == NULL)) {
         SetError(error, error_capacity, "Player company state is invalid.");
         return false;

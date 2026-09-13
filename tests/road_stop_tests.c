@@ -67,7 +67,7 @@ static void CheckChoices(void)
                 sim.clock.minute_subticks;
             CC_CHECK(CcSimApply(&sim, &choice, error, sizeof(error)));
             CC_CHECK(sim.horse_team[0].fatigue == 32);
-            CC_CHECK(sim.horse_team[0].hunger == 25);
+            CC_CHECK(sim.horse_team[0].hunger == 22);
             CC_CHECK(sim.journey.danger == 8);
             CC_CHECK(sim.carriage.progress_milli == progress);
             CC_CHECK(sim.journey.elapsed_subticks == elapsed);

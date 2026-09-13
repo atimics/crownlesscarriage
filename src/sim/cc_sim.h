@@ -66,7 +66,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 100
+#define CC_SIM_SCHEMA_VERSION 101
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -1862,6 +1862,8 @@ typedef struct CcEvent {
     char text[CC_EVENT_TEXT_CAPACITY];
 } CcEvent;
 
+#define CC_FEED_TRAY_CAPACITY 10
+
 typedef struct CcPlayerCompany {
     CcId id;
     CcId location_id;
@@ -1872,6 +1874,9 @@ typedef struct CcPlayerCompany {
     int32_t passenger_capacity;
     int32_t map_capacity;
     int32_t reputation;
+    /* Schema 101: the carriage's feed tray, in wheat units. One crate of
+       wheat (the trade unit) fills it; the team eats from it in town. */
+    int32_t feed_tray_wheat;
     uint32_t map_catalogue_mask;
     uint32_t map_archive_mask;
     uint32_t road_book_site_discovery_mask;
@@ -2092,7 +2097,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 378280,
+_Static_assert(sizeof(CcSim) == 378288,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
