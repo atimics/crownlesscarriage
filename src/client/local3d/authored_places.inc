@@ -3345,24 +3345,25 @@ static void DrawFarmTerrainStage(const CcSettlement *place,
 
 static void DrawMiningTerrainStage(Vector3 focus)
 {
-    Color iron = WORLD_METAL_SHADOW;
-    Color timber = WORLD_WOOD_SHADOW;
-    for (float x = 65.0f; x < 96.0f; x += 3.5f) {
-        if (!SceneryPointVisible(x, 34.0f, focus)) continue;
-        float ground = CcLocalTerrainHeightAt(x, 34.0f) + 0.055f;
-        for (int32_t rail = -1; rail <= 1; rail += 2) {
-            DrawBox((Vector3){x + 1.75f, ground, 34.0f + (float)rail * 0.62f},
-                    (Vector3){3.65f, 0.10f, 0.10f}, iron);
+    TerrainDetailBegin();
+    for (int32_t lane = 0; lane < ActivePlaceProfile()->lane_count; ++lane) {
+        const TerrainLanePath *path = &terrain_lanes[lane];
+        for (int32_t i = 1; i < path->count; ++i) {
+            Vector2 a = path->point[i - 1], b = path->point[i];
+            if (!SceneryPointVisible(b.x, b.y, focus)) continue;
+            Vector2 tangent = Vector2Normalize(Vector2Subtract(b, a));
+            for (int32_t side = -1; side <= 1; side += 2) {
+                Vector2 offset = {tangent.y * (float)side * path->half_width,
+                                   -tangent.x * (float)side * path->half_width};
+                Vector2 left = Vector2Add(a, offset), right = Vector2Add(b, offset);
+                /* Break the slate edging at joining roads. */
+                Vector2 middle = Vector2Scale(Vector2Add(left, right), 0.5f);
+                if (TerrainLaneInset(middle.x, middle.y, NULL) > 0.3f) continue;
+                TerrainRibbonSegment(left, right, 0.20f, 0.04f, WORLD_STONE_SHADOW);
+            }
         }
-        DrawBox((Vector3){x + 1.75f, ground - 0.035f, 34.0f},
-                (Vector3){0.18f, 0.10f, 2.10f}, timber);
     }
-    if (SceneryPointVisible(75.0f, 42.0f, focus)) {
-        DrawTerrainStageBox(69.0f, 40.8f, 18.0f, 0.65f, 2.25f,
-                            WORLD_STONE_SHADOW);
-        DrawTerrainStageBox(73.0f, 44.0f, 14.0f, 0.65f, 3.30f,
-                            ShadeColor(WORLD_STONE_SHADOW, 0.84f));
-    }
+    TerrainDetailEnd();
 }
 
 static void DrawGloamgateFountain(float ground)

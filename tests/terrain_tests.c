@@ -295,6 +295,70 @@ static void TestGloamgateMarketRoutes(void)
     CcLocalBindPlace(NULL);
 }
 
+static void TestSilverwickRoadPlan(void)
+{
+    static CcSim sim;
+    const uint32_t seeds[] = {UINT32_C(0xc0a71a9e), UINT32_C(0x12345678)};
+    for (int32_t seed = 0; seed < 2; ++seed) {
+        CcSimInit(&sim, seeds[seed]);
+        sim.player.location_id = sim.settlements[3].id;
+        CcLocalBindPlace(&sim);
+        const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(&sim.settlements[3]);
+        for (int32_t lane = 0; lane < profile->lane_count; ++lane) {
+            /* The final bay is occupied by the parked carriage. */
+            if (lane == 8) continue;
+            const CcLocalLane *path = &profile->lane[lane];
+            CcLocalLanePoint previous = CcLocalLaneSample(path, 0.0f);
+            for (int32_t sample = 1; sample <= 160; ++sample) {
+                CcLocalLanePoint point = CcLocalLaneSample(path, (float)sample / 160.0f);
+                Vector3 start = {previous.x, CcLocalTerrainHeightAt(previous.x, previous.z), previous.z};
+                Vector3 end = {point.x, CcLocalTerrainHeightAt(point.x, point.z), point.z};
+                Vector3 corrected, normal;
+                if (CcLocalMoveCapsuleInternal(CC_LOCAL_SCENE_STREET,
+                    start, end, 0.24f, &corrected, &normal)) {
+                    fprintf(stderr, "Silverwick lane %d blocked at %.2f %.2f\n", lane, point.x, point.z);
+                    CC_CHECK(false);
+                }
+                CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET,
+                    point.x, point.z) == CC_SOUND_STEP_STONE);
+                previous = point;
+            }
+        }
+        Vector2 arrival[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+        Vector2 departure[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+        int32_t count = CcLocalTownCarriagePath(true, arrival, CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY);
+        CC_CHECK(count > 2);
+        CC_CHECK(CcLocalTownCarriagePath(false, departure, CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY) == count);
+        CC_CHECK(hypotf(arrival[0].x - CC_LOCAL_TOWN_GATE_X,
+                        arrival[0].y - CC_LOCAL_TOWN_GATE_Z) < 0.001f);
+        CC_CHECK(hypotf(arrival[count - 1].x - CC_LOCAL_CARRIAGE_X,
+                        arrival[count - 1].y - CC_LOCAL_CARRIAGE_Z) < 0.001f);
+        for (int32_t i = 0; i < count; ++i) {
+            CC_CHECK(hypotf(arrival[i].x - departure[count - 1 - i].x,
+                            arrival[i].y - departure[count - 1 - i].y) < 0.001f);
+            if (i == 0) continue;
+            if (i < count - 16) {
+                Vector3 start = {arrival[i - 1].x,
+                    CcLocalTerrainHeightAt(arrival[i - 1].x, arrival[i - 1].y), arrival[i - 1].y};
+                Vector3 end = {arrival[i].x,
+                    CcLocalTerrainHeightAt(arrival[i].x, arrival[i].y), arrival[i].y};
+                Vector3 corrected, normal;
+                CC_CHECK(!CcLocalMoveCapsuleInternal(CC_LOCAL_SCENE_STREET,
+                    start, end, 1.25f, &corrected, &normal));
+            }
+            float run = hypotf(arrival[i].x - arrival[i - 1].x, arrival[i].y - arrival[i - 1].y);
+            float rise = fabsf(CcLocalTerrainHeightAt(arrival[i].x, arrival[i].y) -
+                               CcLocalTerrainHeightAt(arrival[i - 1].x, arrival[i - 1].y));
+            CC_CHECK(run > 0.0f && run < 2.0f);
+            if (rise / run > 0.16f) {
+                fprintf(stderr, "Silverwick cart grade %.3f at %.2f %.2f\n", rise / run, arrival[i].x, arrival[i].y);
+                CC_CHECK(false);
+            }
+        }
+    }
+    CcLocalBindPlace(NULL);
+}
+
 int main(void)
 {
     if (TestSeededTerrain() != 0) return 1;
@@ -304,5 +368,6 @@ int main(void)
     TestFootstepSurfaces();
     TestCurvedVillageRoads();
     TestGloamgateMarketRoutes();
+    TestSilverwickRoadPlan();
     return 0;
 }

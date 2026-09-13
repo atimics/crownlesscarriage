@@ -1,77 +1,60 @@
-# Silverwick: clock and ovens
+# Silverwick: roads first
 
-This first redesign pass gives Silverwick a clear town centre. The company
-store carries a clock stopped at eight. Two public ovens stand beside the
-shift kitchen. Narrow homes share walls and carry separate chimneys. Lower
-workshops have covered bays. Cool stone and rust roofs tie the town together.
+Silverwick's roads now set the town plan. A six-metre quarry approach bends
+from the east gate toward the clock square. The haulage bend leads to a level
+carriage court. The upper terrace serves the worker rows. The lower terrace
+passes the ore warehouse. Short walks reach the ovens, company store, and
+foundry district. The company rise enters the works through its south gate.
 
-Thornford's river, granaries, and working yards make its purpose visible.
-Gloamgate's round market gathers its lanes and trade courts. Silverwick builds
-on that approach with a clock hall and kitchen for the workers below the mine.
+![Road plan](roads.png)
 
-## Game views
+The plan is drawn from the game's road curves, widths, building footprints,
+and compound walls. [Open the full vector plan](roads.svg).
 
-The square view includes the clock, kitchen, shift board, and worker homes.
-The arrival view shows the hall below the company works.
+## Ground and movement
 
-![Clock and ovens](square.png)
+The streets use the same curves for their surface, slate edging, and carriage
+path. The ground forms three working shelves, with gentle slopes between them.
+The carriage court is level. A graded ramp joins the company gate to the
+approach road. Trees stand back from the east approach.
 
-![Arrival](arrival.png)
+The primary carriage route is gold on the plan. It starts at the east gate,
+passes the square, and turns into the haulage yard. Departure reverses that
+same path. The narrow pale paths serve people on foot.
 
-![Carriage approaching the square](carriage.png)
+![The approach in the game](arrival.png)
 
-## Town life
+![Carriage following the road](carriage.png)
 
-Bread on the kitchen shelf follows bread stock. Iron bars and tool crates
-follow their town stocks. Each item represents four units, up to six items.
-The ovens show warmth when wheat and wood are available and the kitchen is
-intact. This is a supply cue. Production remains governed by the simulation.
+## Buildings
 
-Saved fire damage darkens buildings in a stable order. Repair scaffolds appear
-on damaged buildings while the town is rebuilding. The clock keeps its time
-through fire and repairs.
+The clock hall, worker homes, covered workshops, and public ovens establish
+the first building shapes. Bread, iron, and tool props follow stored goods.
+Fire damage and repair scaffolds follow town state.
 
-![Fire damage](burnt.png)
-
-![Repair work](rebuilding.png)
-
-![Food shortage](hungry.png)
-
-## Before
-
-Main at `ccde4377`, with the same square capture position:
-
-![Previous square](before.png)
+The next layout pass can arrange more front doors along the terrace streets,
+shape the retaining walls, and give the upper mine its timber headframe.
 
 ## Checks
 
-- Strict native build passed.
-- The full local run passed 188 of 192 checks. Three server checks passed with
-  local server access. The place profile check passed after its height range
-  was adjusted for Silverwick's lower workshops.
-- All eight focused checks passed after the final camera and scaffold changes:
-  place profiles, adventure input, arrival parking, departure, skin rotation,
-  walking collision, character collision, and terrain.
-- Native graphics checks passed before the final framing and scaffold changes.
-- Final native captures cover the square, arrival, carriage, fire damage,
-  repair work, and food shortage.
+The road test walks all nine public lanes in two terrain seeds. It checks
+stone footstep surfaces, carriage endpoints, reverse departure, carriage
+clearance, and a maximum arrival grade of 16 percent. The occupied parking
+bay is covered by the existing arrival and departure tests. The existing
+gate approach check requires a maximum grade of 14 percent.
 
-## Next design pass
-
-Shape three slate terraces around a climbing carriage road. Add foot stairs
-between them. Give the mine company a timber headframe and exposed rock seams.
-Use the same town plan for ground shape, walking, carriage travel, and camera
-views. Review a full arrival, store visit, kitchen walk, and departure.
+Strict native build passed. The full suite passed 191 of 192 checks. The
+remaining collision check passed after the gate ramp was extended. The final
+road test also passed. Native graphics checks passed before the final ramp
+refinements. The game captures show the tested road layout.
 
 ## Capture recipe
 
 Build with the `play` preset. Run the native client from the worktree root:
 
 ```sh
---capture-town-state 3 44.25 28.85 square.png peaceful
 --capture-town-state 3 82 34 arrival.png peaceful
 --capture-town-arrival 3 0.58 carriage.png
---capture-town-state 3 44.25 28.85 burnt.png burnt
---capture-town-state 3 44.25 28.85 rebuilding.png rebuilding
---capture-town-state 3 44.25 28.85 hungry.png hungry
 ```
+
+The selected captures and road plan fit the project's review artifact budget.
