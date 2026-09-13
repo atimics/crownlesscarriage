@@ -228,7 +228,7 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
     if (sim->schema_version >= 101U) {
         (void)snprintf(
             text, sizeof(text),
-            "%.16s and %.16s pull from %.16s toward %.16s %swith %d wheat in the feed tray%s.",
+            "%.12s and %.12s pull from %.12s toward %.12s %swith %d wheat in the tray%s.",
             CcPonyName(sim->pony_company.team[0]),
             CcPonyName(sim->pony_company.team[1]),
             origin != NULL ? origin->name : "the waystation",
