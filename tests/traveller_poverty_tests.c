@@ -1,4 +1,6 @@
 #include "persistence/cc_save.h"
+#include "sim/cc_sim.h"
+#include "sim/cc_sim_custody.h"
 #include "test_support.h"
 #include <stdio.h>
 static CcSim sim, restored;
@@ -58,9 +60,20 @@ int main(void) {
     CC_CHECK(sim.bandits[0].members==members+1);
     CC_CHECK(person()->bandit_group_id==sim.bandits[0].id);
     CcMoney inheritance=person()->travel_coins;
+    CcMoney tracked=CcSimTrackedGold(&sim);
     person()->death_day=sim.current_day+1;advance();
     CC_CHECK(person()->id!=recruit && person()->bandit_group_id==0U);
-    CC_CHECK(person()->travel_coins==inheritance);
+    /* Schema 102 (#406): the carried purse fell with the traveller at their
+       place; the successor inherits nothing carried. */
+    CC_CHECK(person()->travel_coins<inheritance);
+    bool purse_found=false;
+    for(int i=0;i<CC_CUSTODY_CAPACITY;++i){
+        const CcCustodyEntry *entry=&sim.custody.entries[i];
+        if(CcSimIsBodyPurse(&sim,entry) && entry->owner_id==recruit &&
+           entry->quantity==inheritance) purse_found=true;
+    }
+    CC_CHECK(purse_found);
+    CC_CHECK(CcSimTrackedGold(&sim)==tracked);
     CC_CHECK(remove(path)==0);
 
     /* A traveller who can buy food but cannot pay for lodging seeks a camp. */

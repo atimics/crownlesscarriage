@@ -66,7 +66,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 101
+#define CC_SIM_SCHEMA_VERSION 102
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -348,6 +348,8 @@ typedef enum CcEventKind {
     /* Schema 100: crown carriage road repair. */
     CC_EVENT_ROYAL_CARRIAGE_REPAIR_DISPATCHED = 136,
     CC_EVENT_ROYAL_ROAD_SKIRMISH = 137,
+    /* Schema 102: a fallen person's purse is lifted (#406). */
+    CC_EVENT_BODY_LOOTED = 138,
     CC_EVENT_KIND_COUNT
 } CcEventKind;
 
@@ -643,7 +645,9 @@ typedef enum CcCommandKind {
     CC_COMMAND_RESERVE_ARCHIVE_RECRUITMENT = 60,
     CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT = 61,
     CC_COMMAND_PICKUP_DISPATCH = 62,
-    CC_COMMAND_DELIVER_DISPATCH = 63
+    CC_COMMAND_DELIVER_DISPATCH = 63,
+    /* Schema 102: claim a fallen person's purse where it lies (#288/#406). */
+    CC_COMMAND_TAKE_BODY_PURSE = 64
 } CcCommandKind;
 
 typedef enum CcHorseSex {
