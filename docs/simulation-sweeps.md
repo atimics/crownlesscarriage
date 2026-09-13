@@ -112,6 +112,51 @@ The metrics also include political and faction exposure:
 Use `tools/analyze_sweep.py` for group comparisons and
 `tools/plot_archetypes.py` for report charts.
 
+## Oracle lookahead mode
+
+`--oracle` adds a third world per seed, run from the same world seed with the
+same command vocabulary as the road steward (travel, rest, encounter
+resolution, withdrawal, cash route repair; no direct state mutation). The
+oracle differs from the greedy steward in two decisions only:
+
+1. which adjacent closed route to repair (or whether to repair at all), and
+2. where to travel next (or whether to stay).
+
+Each candidate action is scored by forking the world (`CcSim` is a plain
+fixed-width struct), applying the candidate command, rolling the greedy
+steward forward `--oracle-horizon` days (default 60), and reading
+`CcSimWelfareSnapshot` plus closed-route and abandoned-settlement counts.
+Population dominates the ranking; welfare means and connectivity break ties.
+This is one-step lookahead with a greedy continuation, not a full planner.
+
+```sh
+out/build/release/crownless_agent_sweep --seed 1 --seeds 100 --years 10 \
+  --oracle --oracle-horizon 60 --exchange-probes 25
+```
+
+Without `--oracle` the output is byte-identical to the two-world tool. With it,
+the row gains `oracle_*` endpoint columns, the policy's action counters, and
+gap columns oriented so positive always means the oracle ended better:
+`gap_population` and `gap_prosperity` are oracle minus agent;
+`gap_hunger` and `gap_closed_routes` are agent minus oracle.
+
+`--exchange-probes COUNT` measures repair-order commutativity: at a repair
+decision point with at least two candidates it scores repair-A-then-B against
+repair-B-then-A on rolled-out forks. A score difference means order matters —
+the practical failure mode of exchange-convex value. Pairs where the second
+repair fails do not count as completed pairs; the columns are
+`oracle_exchange_probes`, `oracle_exchange_pairs`, and
+`oracle_exchange_order_matters`.
+
+Both policies share a mine-branch pass handler: journeys pause permanently at
+an unpassed mine site, so the handler issues `CC_COMMAND_PASS_ROAD_SITE` there.
+Ordinary roadside sites do not block travel and still pass without a command.
+
+The first 100-seed run lives in
+`docs/experiments/agent-oracle-gap-2026-09-13/`, with the finding that greedy
+churn (389 journeys per decade) is beaten by mostly staying home (40), and
+that route repairs never succeed under schema 99 / generator 25.
+
 ## Welfare and cluster review
 
 Metrics version 2 appends precise welfare columns to every row. Existing
