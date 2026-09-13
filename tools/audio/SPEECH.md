@@ -111,17 +111,50 @@ then checks the finished files and cache receipts. Routine auditions use
 
 ## Local worker
 
+The native game treats speech as an optional local service. The worker keeps one
+PocketTTS model in memory, deduplicates identical requests, and writes a WAV
+and receipt atomically into a persistent content-addressed cache.
+
+Recommended setup:
+
 ```sh
-python tools/audio/speech_worker.py --engine pocket --cache out/voice-cache
+scripts/setup-voice.sh
+scripts/run-native.sh
+```
+
+`run-native.sh` checks `GET /health` on `127.0.0.1:8766`, starts the worker
+when the local PocketTTS environment is available, and launches the game even
+when it is not. Set `CROWNLESS_VOICE_ALLOW_DOWNLOAD=0` to prevent a model
+download. Captions and packaged audio remain available when the worker is
+absent.
+
+The direct worker command remains useful:
+
+```sh
+python tools/audio/speech_worker.py --engine pocket --cache out/voice-cache --allow-download
 ```
 
 The worker binds to `127.0.0.1:8766`. Submit an exported speech record to
 `POST /v1/speech`. The response contains its key and queue state. Fetch
 `GET /v1/speech/<key>` for a completed WAV. Pending work returns HTTP 202;
-failed generation returns 503. The default queue holds 16 jobs and the cache
-holds 256 MiB. Duplicate requests share a job. Old recordings leave the cache
-as it fills. Exact words, cast profile, delivery, and WAV fingerprints are
-checked before reuse.
+failed generation returns 503. `/health` reports the cast and queue
+configuration. The default queue holds 16 jobs and the cache holds 256 MiB.
+Duplicate requests share a job. Cache receipts include the speech-cache
+format, Pocket version, voice-reference hash, post-processing version and WAV
+hash. A model, reference, effect or format change invalidates old audio
+instead of silently reusing it. Old recordings leave the cache as it fills.
+
+Promote approved generated records into the native runtime pack with:
+
+```sh
+python tools/audio/speech_pack.py out/speech.json \
+  --engine pocket --cache out/voice-cache \
+  --promote assets/audio/voice --limit 100000 --allow-download
+```
+
+Promotion validates every WAV, copies WAV/receipt pairs atomically, and writes
+`speech-pack-manifest.json`. The CMake full build copies that directory into
+the macOS bundle. Review/audition files are not runtime files until promoted.
 
 For a browser on another local port, pass its exact origin with
 `--allow-origin http://localhost:8000`. The worker uses a single model instance
