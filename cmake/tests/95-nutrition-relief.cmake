@@ -1,0 +1,4 @@
+add_executable(nutrition_relief_tests tests/nutrition_relief_tests.c)
+target_link_libraries(nutrition_relief_tests PRIVATE crownless_persistence)
+cc_strict_warnings(nutrition_relief_tests)
+add_test(NAME nutrition_relief_reserves COMMAND nutrition_relief_tests)

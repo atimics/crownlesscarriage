@@ -10318,13 +10318,8 @@ static int32_t TradeSurplus(const CcSim *sim,
                            CC_GOOD_GEMS : CC_GOOD_GOLD] > 0) {
         protected_stock = 0;
     }
-    if (good == CC_GOOD_FOOD && destination->hunger >= 65 &&
-        origin->hunger < 35) {
-        int32_t survival_stock = MaximumI32(
-            CcEconomyWeeklyFoodUse(sim, origin) * 6,
-            origin->reserve_target[CC_GOOD_FOOD] / 2);
-        protected_stock = MinimumI32(protected_stock, survival_stock);
-    }
+    if (CcGoodNutritionValue(good, CC_NUTRITION_CIVILIAN) > 0)
+        protected_stock = CcEconomyReliefReserve(sim, origin, destination, good);
     return origin->stock[good] - protected_stock;
 }
 
