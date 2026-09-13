@@ -3580,7 +3580,9 @@ static void SeedSettlementServices(CcSettlement *settlement)
         case CC_SETTLEMENT_FARMING:
             mask |= ServiceBit(CC_SERVICE_FARM) |
                     ServiceBit(CC_SERVICE_GRANARY) |
-                    ServiceBit(CC_SERVICE_STABLE);
+                    ServiceBit(CC_SERVICE_STABLE) |
+                    ServiceBit(CC_SERVICE_BAKERY) |
+                    ServiceBit(CC_SERVICE_MILL);
             break;
         case CC_SETTLEMENT_MARKET:
             mask |= ServiceBit(CC_SERVICE_MARKET) |
@@ -3755,6 +3757,7 @@ static void ConfigureSettlementEconomies(CcSim *sim)
     farm->reserve_target[CC_GOOD_MATERIAL] = 2;
     farm->reserve_target[CC_GOOD_TOOLS] = 6;
     farm->production[CC_GOOD_WHEAT] = 43;
+    farm->production[CC_GOOD_BREAD] = 35;
     farm->consumption[CC_GOOD_FOOD] = 5;
     farm->field_yield = 100;
 
@@ -4049,7 +4052,8 @@ void CcSimUpgradeGrainEconomy(CcSim *sim)
         }
         place->production[CC_GOOD_BREAD] = 0;
 
-        bool bakery_town = place->function == CC_SETTLEMENT_MARKET ||
+        bool bakery_town = place->function == CC_SETTLEMENT_FARMING ||
+                           place->function == CC_SETTLEMENT_MARKET ||
                            place->function == CC_SETTLEMENT_CAPITAL;
         if (bakery_town &&
             !CcSettlementHasService(place, CC_SERVICE_BAKERY) &&
