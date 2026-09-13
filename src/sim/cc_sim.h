@@ -66,7 +66,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 99
+#define CC_SIM_SCHEMA_VERSION 100
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -345,6 +345,9 @@ typedef enum CcEventKind {
     CC_EVENT_NOTICE_POSTED = 133,
     CC_EVENT_ROAD_SITE_PRODUCTION = 134,
     CC_EVENT_PROPHECY_DELIVERED = 135,
+    /* Schema 100: crown carriage road repair. */
+    CC_EVENT_ROYAL_CARRIAGE_REPAIR_DISPATCHED = 136,
+    CC_EVENT_ROYAL_ROAD_SKIRMISH = 137,
     CC_EVENT_KIND_COUNT
 } CcEventKind;
 
@@ -938,7 +941,11 @@ typedef enum CcRoyalCarriageMode {
     CC_ROYAL_CARRIAGE_SITE_UNLOADING,
     CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED,
     CC_ROYAL_CARRIAGE_ARCHIVE_TRAVELLING,
-    CC_ROYAL_CARRIAGE_ARCHIVE_WAITING
+    CC_ROYAL_CARRIAGE_ARCHIVE_WAITING,
+    /* Schema 100: crown carriage road repair (docs/crown-carriage-roads.md).
+       Modes are appended so saved values keep their meaning. */
+    CC_ROYAL_CARRIAGE_REPAIR_TRAVELLING,
+    CC_ROYAL_CARRIAGE_REPAIR_WORKING
 } CcRoyalCarriageMode;
 
 typedef struct CcRoyalCarriage {

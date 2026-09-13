@@ -81,7 +81,7 @@ int main(void)
     CC_CHECK(CcSimHash(&sim) == legacy_hash);
     CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
     CC_CHECK(CcSaveRead(path, &loaded, error, sizeof(error)));
-    CC_CHECK(loaded.schema_version == 99 && loaded.custody.next_id == 1);
+    CC_CHECK(loaded.schema_version == CC_SIM_SCHEMA_VERSION && loaded.custody.next_id == 1);
     CC_CHECK(CcSimValidate(&loaded, error, sizeof(error)));
     (void)remove(path);
     return 0;

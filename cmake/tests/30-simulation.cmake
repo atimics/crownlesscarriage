@@ -61,6 +61,11 @@ target_link_libraries(travel_departure_tests PRIVATE crownless_persistence)
 cc_strict_warnings(travel_departure_tests)
 add_test(NAME free_road_departures COMMAND travel_departure_tests)
 
+add_executable(royal_road_repair_tests tests/royal_road_repair_tests.c)
+target_link_libraries(royal_road_repair_tests PRIVATE crownless_sim)
+cc_strict_warnings(royal_road_repair_tests)
+add_test(NAME crown_carriage_road_repair COMMAND royal_road_repair_tests)
+
 
 add_executable(hrakhor_tests tests/hrakhor_tests.c)
 target_link_libraries(hrakhor_tests PRIVATE crownless_story)

@@ -59,6 +59,7 @@ static int32_t TakeAllianceGood(CcSim *sim, uint32_t mask, CcGood good,
 static CcId LatestLocalCause(const CcSim *sim, CcId location);
 static void AssignHistoryOffices(CcSim *sim, bool announce);
 static void GrowBanditCamp(CcBanditGroup *bandits);
+static void ResolveTargetSituations(CcSim *sim, CcSituationKind kind, CcId target);
 
 static int32_t ClampI32(int32_t value, int32_t minimum, int32_t maximum)
 {
@@ -1029,6 +1030,8 @@ const char *CcRoyalCarriageModeName(CcRoyalCarriageMode mode)
         case CC_ROYAL_CARRIAGE_SITE_UNLOADING: return "Unloading at stop";
         case CC_ROYAL_CARRIAGE_WAITING_CAPACITY:
             return "Waiting for road space";
+        case CC_ROYAL_CARRIAGE_REPAIR_TRAVELLING: return "Riding to a broken road";
+        case CC_ROYAL_CARRIAGE_REPAIR_WORKING: return "Working a broken road";
     }
     return "Unknown";
 }
@@ -1259,6 +1262,9 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_ROYAL_CARRIAGE_BLOCKED: return "BORDER BLOCK";
         case CC_EVENT_ROYAL_CARRIAGE_REROUTED: return "CARRIAGE ROUTE";
         case CC_EVENT_PROPHECY_DELIVERED: return "PROPHECY DELIVERED";
+        case CC_EVENT_ROYAL_CARRIAGE_REPAIR_DISPATCHED:
+            return "CROWN ROAD WORKS";
+        case CC_EVENT_ROYAL_ROAD_SKIRMISH: return "ROAD SKIRMISH";
         case CC_EVENT_ROAD_SITE_PRODUCTION: return "ROAD WORKS";
         case CC_EVENT_NOTICE_POSTED: return "NOTICE";
         case CC_EVENT_KIND_COUNT: break;
@@ -9446,6 +9452,406 @@ bool CcSimDispatchCustodyCarrier(CcSim *sim, CcId carrier_id, CcId destination_i
     return false;
 }
 
+/* ------------------------------------------------------------------ */
+/* Crown carriage road repair (schema 100). Design:                    */
+/* docs/crown-carriage-roads.md. A closed route belongs to the crowns  */
+/* of its endpoint settlements; each crown's idle carriage rides to its  */
+/* own end of the road and works the repair with real materials. Two    */
+/* crowns at peace mend a shared road from both ends; two crowns at war */
+/* send escorted carriages and the stronger escort holds the work.     */
+/* ------------------------------------------------------------------ */
+
+static bool KingdomHoldsRouteEnd(const CcSim *sim, CcId kingdom_id,
+                                  const CcRoute *route)
+{
+    const CcSettlement *from = CcSimSettlement(sim, route->from_id);
+    const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+    return (from != NULL && from->kingdom_id == kingdom_id) ||
+           (to != NULL && to->kingdom_id == kingdom_id);
+}
+
+static bool CrownHasLivingCartwright(const CcSim *sim, CcId kingdom_id)
+{
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *candidate = &sim->characters[i];
+        if (candidate->occupation != CC_OCCUPATION_CARTWRIGHT) continue;
+        if (candidate->death_day > 0 && candidate->death_day <= sim->current_day) continue;
+        const CcSettlement *home = CcSimSettlement(
+            sim, candidate->home_settlement_id);
+        if (home != NULL && home->kingdom_id == kingdom_id) return true;
+    }
+    return false;
+}
+
+static int64_t CrownEscortStrength(const CcSim *sim, CcId kingdom_id,
+                                   CcId location_id)
+{
+    int32_t slot = KingdomSlotById(sim, kingdom_id);
+    if (slot < 0) return 0;
+    const CcKingdom *kingdom = &sim->kingdoms[slot];
+    const CcSettlement *camp = CcSimSettlement(sim, location_id);
+    CcMoney war_chest = camp != NULL ? camp->war_chest : 0;
+    return kingdom->treasury / 40 + war_chest / 25 +
+           kingdom->legitimacy / 4;
+}
+
+/* Soldiers are hired in the field, so their pay lands in the local market
+   and stays inside the tracked gold economy. */
+static void PayCrownWarCost(CcSim *sim, CcId kingdom_id, CcId location_id,
+                           CcMoney amount)
+{
+    CcKingdom *kingdom = KingdomMutable(sim, kingdom_id);
+    if (kingdom == NULL) return;
+    if (kingdom->treasury < amount) amount = kingdom->treasury;
+    kingdom->treasury -= amount;
+    CcSettlement *camp = CcSimSettlementMutable(sim, location_id);
+    if (camp != NULL) camp->market_coins += amount;
+}
+
+/* The end of the road the crown works from: its own end when it holds
+   one, else the far end when its crown may still travel there. */
+static CcId CrownWorkEndpoint(const CcSim *sim, CcId kingdom_id,
+                               const CcRoute *route)
+{
+    const CcSettlement *from = CcSimSettlement(sim, route->from_id);
+    const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+    bool own_from = from != NULL && from->kingdom_id == kingdom_id &&
+        !CcSettlementIsAbandoned(from);
+    bool own_to = to != NULL && to->kingdom_id == kingdom_id &&
+        !CcSettlementIsAbandoned(to);
+    if (own_from) return route->from_id;
+    if (own_to) return route->to_id;
+    /* Neither end is a living settlement of this crown; the far end may
+       still serve when its crown is not an enemy. */
+    if (from != NULL && !CcSettlementIsAbandoned(from) &&
+        !CcSimKingdomsAtWar(sim, kingdom_id, from->kingdom_id) &&
+        CcSimRoyalCarriageCanUseRoute(sim, kingdom_id, route->id)) {
+        return route->from_id;
+    }
+    if (to != NULL && !CcSettlementIsAbandoned(to) &&
+        !CcSimKingdomsAtWar(sim, kingdom_id, to->kingdom_id) &&
+        CcSimRoyalCarriageCanUseRoute(sim, kingdom_id, route->id)) {
+        return route->to_id;
+    }
+    return 0U;
+}
+
+static const char *CrownName(const CcSim *sim, CcId kingdom_id)
+{
+    int32_t slot = KingdomSlotById(sim, kingdom_id);
+    return slot >= 0 ? sim->kingdoms[slot].name : "the realm";
+}
+
+/* Another hand reopened the road: crown carriages riding or working it
+   stand down. */
+static void CancelCrownRepairMissions(CcSim *sim, CcId route_id)
+{
+    if (sim == NULL || sim->schema_version < 100U) return;
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+        if ((carriage->mode == CC_ROYAL_CARRIAGE_REPAIR_TRAVELLING ||
+             carriage->mode == CC_ROYAL_CARRIAGE_REPAIR_WORKING) &&
+            carriage->target_id == route_id) {
+            CcId home = carriage->location_id;
+            if (CcSimSettlement(sim, home) == NULL) {
+                const CcSettlement *fallback =
+                    RoyalFallbackSettlement(sim, carriage);
+                home = fallback != NULL ? fallback->id : home;
+            }
+            ParkRoyalCarriage(carriage, home);
+            carriage->next_dispatch_day = sim->current_day + 3;
+        }
+    }
+}
+
+static void CompleteRoyalRepair(CcSim *sim, CcRoyalCarriage *carriage)
+{
+    CcSettlement *camp = CcSimSettlementMutable(sim, carriage->location_id);
+    CcRoute *broken = RouteMutable(sim, carriage->target_id);
+    if (broken == NULL || camp == NULL) {
+        ParkRoyalCarriage(carriage, carriage->location_id);
+        return;
+    }
+    camp->stock[CC_GOOD_WOOD] -= 2;
+    camp->stock[CC_GOOD_STONE] -= 2;
+    camp->stock[CC_GOOD_TOOLS] -= 2;
+    broken->closed = false;
+    broken->condition = 85;
+    broken->security = ClampI32(broken->security + 10, 0, 100);
+    /* Joint work stands down every other carriage on this road, so no
+       partner is caught working an open route between daily ticks. */
+    CancelCrownRepairMissions(sim, broken->id);
+    CcKingdom *kingdom = KingdomMutable(sim, carriage->kingdom_id);
+    if (kingdom != NULL) {
+        kingdom->legitimacy = ClampI32(kingdom->legitimacy + 2, 0, 100);
+    }
+    const CcSettlement *from = CcSimSettlement(sim, broken->from_id);
+    const CcSettlement *to = CcSimSettlement(sim, broken->to_id);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "The crown of %.16s reopens the %.16s-%.16s road after %d days of work.",
+                   CrownName(sim, carriage->kingdom_id),
+                   from != NULL ? from->name : "western",
+                   to != NULL ? to->name : "eastern",
+                   sim->current_day - carriage->blocked_since_day);
+    (void)PushEvent(sim, CC_EVENT_ROUTE_REPAIRED, broken->id, camp->id,
+                    0U, broken->condition, text);
+    ResolveTargetSituations(sim, CC_SITUATION_ROUTE_REPAIR, broken->id);
+    ExchangeGossip(sim, carriage->id, camp->id, "Carriage travelers");
+    ParkRoyalCarriage(carriage, camp->id);
+    carriage->next_dispatch_day = sim->current_day + 3;
+}
+
+static void RetreatRoyalRepairCarriage(CcSim *sim, CcRoyalCarriage *carriage,
+                                       int32_t damage)
+{
+    CcId home = carriage->location_id;
+    if (CcSimSettlement(sim, home) == NULL) {
+        const CcSettlement *fallback = RoyalFallbackSettlement(sim, carriage);
+        home = fallback != NULL ? fallback->id : home;
+    }
+    carriage->condition = ClampI32(carriage->condition - damage, 0, 100);
+    ParkRoyalCarriage(carriage, home);
+    carriage->next_dispatch_day = sim->current_day + 7;
+}
+
+static void BeginRoyalRepairWork(CcSim *sim, CcRoyalCarriage *carriage)
+{
+    const CcRoute *route = CcSimRoute(sim, carriage->target_id);
+    if (route == NULL || !route->closed) {
+        ParkRoyalCarriage(carriage, carriage->location_id);
+        return;
+    }
+    carriage->mode = CC_ROYAL_CARRIAGE_REPAIR_WORKING;
+    carriage->route_id = route->id;
+    carriage->destination_id = 0U;
+    carriage->blocked_since_day = sim->current_day;
+    const CcSettlement *from = CcSimSettlement(sim, route->from_id);
+    const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+    int32_t days = 21;
+    if (!CrownHasLivingCartwright(sim, from != NULL ? from->kingdom_id : 0U) &&
+        !CrownHasLivingCartwright(sim, to != NULL ? to->kingdom_id : 0U)) {
+        days += 7;
+    }
+    carriage->arrival_day = sim->current_day + days;
+    /* A second crown already on the same road settles the terms. */
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        CcRoyalCarriage *other = &sim->royal_carriages[i];
+        if (other == carriage || other->target_id != carriage->target_id ||
+            other->mode != CC_ROYAL_CARRIAGE_REPAIR_WORKING) continue;
+        if (CcSimKingdomsAtWar(sim, carriage->kingdom_id,
+                               other->kingdom_id)) {
+            /* Contested road: the stronger escort holds the work. */
+            CcRoute *broken = RouteMutable(sim, carriage->target_id);
+            if (broken != NULL) {
+                broken->security = ClampI32(broken->security - 10, 0, 100);
+            }
+            PayCrownWarCost(sim, carriage->kingdom_id, carriage->location_id, 20);
+            PayCrownWarCost(sim, other->kingdom_id, other->location_id, 20);
+            int64_t here = CrownEscortStrength(
+                sim, carriage->kingdom_id, carriage->location_id);
+            int64_t there = CrownEscortStrength(
+                sim, other->kingdom_id, other->location_id);
+            char text[CC_EVENT_TEXT_CAPACITY];
+            if (here == there) {
+                (void)snprintf(text, sizeof(text),
+                    "Escorts of %.16s and %.16s face off on the broken %.16s-%.16s road; both withdraw.",
+                    CrownName(sim, carriage->kingdom_id),
+                    CrownName(sim, other->kingdom_id),
+                    from != NULL ? from->name : "western",
+                    to != NULL ? to->name : "eastern");
+                (void)PushEvent(sim, CC_EVENT_ROYAL_ROAD_SKIRMISH,
+                               route->id, carriage->id, 0U, 0, text);
+                RetreatRoyalRepairCarriage(sim, carriage, 15);
+                RetreatRoyalRepairCarriage(sim, other, 15);
+                return;
+            }
+            bool here_wins = here > there;
+            CcRoyalCarriage *winner = here_wins ? carriage : other;
+            CcRoyalCarriage *loser = here_wins ? other : carriage;
+            (void)snprintf(text, sizeof(text),
+                "Escorts of %.16s and %.16s clash on the %.16s-%.16s road; %.16s holds the work.",
+                CrownName(sim, carriage->kingdom_id),
+                CrownName(sim, other->kingdom_id),
+                from != NULL ? from->name : "western",
+                to != NULL ? to->name : "eastern",
+                CrownName(sim, winner->kingdom_id));
+            (void)PushEvent(sim, CC_EVENT_ROYAL_ROAD_SKIRMISH,
+                           route->id, winner->id, 0U, 1, text);
+            winner->arrival_day = sim->current_day + 12;
+            RetreatRoyalRepairCarriage(sim, loser, 25);
+            return;
+        }
+        /* Shared road at peace: mended from both ends. */
+        int32_t remaining = other->arrival_day - sim->current_day;
+        int32_t joint = sim->current_day + MaximumI32(3, remaining / 2);
+        carriage->arrival_day = joint;
+        other->arrival_day = joint;
+        return;
+    }
+}
+
+static bool StartRoyalRepairLeg(CcSim *sim, CcRoyalCarriage *carriage)
+{
+    const CcRoute *route = CcSimRoute(sim, carriage->target_id);
+    if (route == NULL || CcSimSettlement(sim, carriage->location_id) == NULL) {
+        return false;
+    }
+    CcId work_endpoint = CrownWorkEndpoint(
+        sim, carriage->kingdom_id, route);
+    if (work_endpoint == 0U) return false;
+    if (carriage->location_id == work_endpoint) {
+        BeginRoyalRepairWork(sim, carriage);
+        return true;
+    }
+    int32_t route_slot = -1;
+    CcId next_hop_id = 0U;
+    if (!CcTradeFindPath(sim, carriage->location_id, work_endpoint,
+                        CC_GOOD_FOOD, &route_slot, &next_hop_id,
+                        NULL, NULL, NULL, true, carriage->kingdom_id,
+                        false, 1)) {
+        return false;
+    }
+    CcRoute *leg = &sim->routes[route_slot];
+    carriage->route_id = leg->id;
+    carriage->destination_id = next_hop_id;
+    carriage->mode = CC_ROYAL_CARRIAGE_REPAIR_TRAVELLING;
+    carriage->departure_day = sim->current_day;
+    carriage->arrival_day = sim->current_day + CcSimFreightLegDays(
+        sim, leg->id, carriage->location_id, next_hop_id);
+    carriage->blocked_since_day = 0;
+    return true;
+}
+
+static bool DispatchCrownRepair(CcSim *sim, CcRoyalCarriage *carriage,
+                                const CcRoute *route)
+{
+    if (route == NULL || !route->closed) return false;
+    /* A company holding the road under a control-route order blocks crown
+       traffic, escort or not. */
+    if (CcSimRouteCheckpoint(sim, route->id) != NULL) return false;
+    /* Local labor mends its own roads on its own calendar; the crown rides
+       only when the roadside recovery plan is blocked — no supplies, no
+       hands — so the carriage never races the council's public work or
+       starves the realm's trade to duplicate it. */
+    if (CcSimRoadRecoveryPlan(sim, route->id).blocked == 0U) return false;
+    /* And only when the work camp can feed the repair: two of each material
+       spent, two left for the settlement's own road maintenance. A camp
+       without stores cannot mend anything, and riding there just parks a
+       carriage at a closed road. */
+    CcId work_endpoint = CrownWorkEndpoint(sim, carriage->kingdom_id, route);
+    const CcSettlement *camp = CcSimSettlement(sim, work_endpoint);
+    if (work_endpoint == 0U || camp == NULL ||
+        camp->stock[CC_GOOD_WOOD] < 4 ||
+        camp->stock[CC_GOOD_STONE] < 4 ||
+        camp->stock[CC_GOOD_TOOLS] < 4) return false;
+    const CcSettlement *from = CcSimSettlement(sim, route->from_id);
+    const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+    CcId other_kingdom = 0U;
+    if (from != NULL && to != NULL && from->kingdom_id != to->kingdom_id) {
+        other_kingdom = from->kingdom_id == carriage->kingdom_id ?
+            to->kingdom_id : from->kingdom_id;
+    }
+    if (other_kingdom != 0U &&
+        CcSimKingdomsAtWar(sim, carriage->kingdom_id, other_kingdom)) {
+        int32_t slot = KingdomSlotById(sim, carriage->kingdom_id);
+        if (slot < 0 || sim->kingdoms[slot].treasury < 30) {
+            /* Cannot hire escorts for a contested road; leave it for now. */
+            return false;
+        }
+        PayCrownWarCost(sim, carriage->kingdom_id, carriage->location_id, 30);
+    }
+    carriage->target_id = route->id;
+    if (!StartRoyalRepairLeg(sim, carriage)) {
+        ParkRoyalCarriage(carriage, carriage->location_id);
+        carriage->next_dispatch_day = sim->current_day + 7;
+        return true;
+    }
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "The crown of %.16s sends its carriage to mend the broken %.16s-%.16s road.",
+                   CrownName(sim, carriage->kingdom_id),
+                   from != NULL ? from->name : "western",
+                   to != NULL ? to->name : "eastern");
+    (void)PushEvent(sim, CC_EVENT_ROYAL_CARRIAGE_REPAIR_DISPATCHED,
+                   route->id, carriage->id,
+                   0U, route->condition, text);
+    return true;
+}
+
+/* A crown carriage idle at home looks for broken roads in its claim.
+   Returns true when a mission was taken. */
+static bool ScanCrownRoadWork(CcSim *sim, CcRoyalCarriage *carriage)
+{
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        const CcRoute *route = &sim->routes[i];
+        if (!route->closed ||
+            !KingdomHoldsRouteEnd(sim, carriage->kingdom_id, route)) continue;
+        if (DispatchCrownRepair(sim, carriage, route)) return true;
+    }
+    return false;
+}
+
+/* Daily advance for a crown repair carriage. Returns true when the
+   carriage is on crown road duty this tick. */
+static bool AdvanceCrownRepairCarriage(CcSim *sim, CcRoyalCarriage *carriage)
+{
+    if (sim->schema_version < 100U) return false;
+    if (carriage->mode == CC_ROYAL_CARRIAGE_REPAIR_TRAVELLING) {
+        if (carriage->arrival_day > sim->current_day) return true;
+        carriage->location_id = carriage->destination_id;
+        carriage->condition = ClampI32(carriage->condition - 1, 0, 100);
+        ExchangeGossip(sim, carriage->id, carriage->location_id,
+                       "Carriage travelers");
+        const CcRoute *route = CcSimRoute(sim, carriage->target_id);
+        if (route == NULL || !route->closed) {
+            ParkRoyalCarriage(carriage, carriage->location_id);
+            return true;
+        }
+        if (!StartRoyalRepairLeg(sim, carriage)) {
+            ParkRoyalCarriage(carriage, carriage->location_id);
+            carriage->next_dispatch_day = sim->current_day + 7;
+        }
+        return true;
+    }
+    if (carriage->mode == CC_ROYAL_CARRIAGE_REPAIR_WORKING) {
+        const CcRoute *route = CcSimRoute(sim, carriage->target_id);
+        const CcSettlement *camp = CcSimSettlement(
+            sim, carriage->location_id);
+        if (route == NULL || !route->closed || camp == NULL ||
+            CcSettlementIsAbandoned(camp)) {
+            ParkRoyalCarriage(carriage, carriage->location_id);
+            carriage->next_dispatch_day = sim->current_day + 3;
+            return true;
+        }
+        if (carriage->arrival_day > sim->current_day) return true;
+        /* A camp that cannot supply its own work for a month is abandoned:
+       the carriage returns to the realm's service instead of rusting at
+       a closed road. */
+        if (sim->current_day - carriage->blocked_since_day > 60) {
+            RetreatRoyalRepairCarriage(sim, carriage, 5);
+            return true;
+        }
+        CcSettlement *store = CcSimSettlementMutable(
+            sim, carriage->location_id);
+        /* The repair spends two of each material but must leave two behind:
+         the same stores keep the settlement's own roads maintained
+         (locally maintained routes do not decay), and a crown repair that
+         starves local maintenance breaks more roads than it mends. */
+        if (store == NULL ||
+            store->stock[CC_GOOD_WOOD] < 4 ||
+            store->stock[CC_GOOD_STONE] < 4 ||
+            store->stock[CC_GOOD_TOOLS] < 4) {
+            /* The camp waits a week for the crown's stores. */
+            carriage->arrival_day = sim->current_day + 7;
+            return true;
+        }
+        CompleteRoyalRepair(sim, carriage);
+        return true;
+    }
+    return false;
+}
+
 static void AdvanceRoyalCarriages(CcSim *sim, CcRoadProductionAccounting *site_accounting)
 {
     if (sim == NULL || sim->schema_version < 38U) return;
@@ -9453,7 +9859,11 @@ static void AdvanceRoyalCarriages(CcSim *sim, CcRoadProductionAccounting *site_a
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
         CcRoyalCarriage *carriage = &sim->royal_carriages[i];
         if (IsSiteCarriage(carriage) ||
-            (sim->schema_version >= 92U && carriage->mode >= CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED)) continue;
+            (sim->schema_version >= 92U &&
+             carriage->mode >= CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED &&
+             carriage->mode <= CC_ROYAL_CARRIAGE_ARCHIVE_WAITING)) continue;
+        if (sim->schema_version >= 100U &&
+            AdvanceCrownRepairCarriage(sim, carriage)) continue;
         const CcSettlement *location = CcSimSettlement(
             sim, carriage->location_id);
         if ((location == NULL || CcSettlementIsAbandoned(location)) &&
@@ -14252,6 +14662,7 @@ static void AdvanceRoadsideRecovery(CcSim *sim, CcRoute *route)
 
     route->closed = false;
     route->security = ClampI32(route->security + 4, 0, 100);
+    CancelCrownRepairMissions(sim, route->id);
     SupersedeTargetSituations(sim, CC_SITUATION_ROUTE_REPAIR, route->id);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
@@ -14295,6 +14706,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
         if (new_night_road != NULL) {
             new_night_road->smuggler_route = true;
             new_night_road->closed = false;
+            CancelCrownRepairMissions(sim, new_night_road->id);
             new_night_road->condition = MaximumI32(
                 34, new_night_road->condition);
             for (int32_t map_index = 0;
@@ -14733,6 +15145,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                     best_route->closed = false;
                     best_route->security = ClampI32(
                         best_route->security + 6, 0, 100);
+                    CancelCrownRepairMissions(sim, best_route->id);
                     SupersedeTargetSituations(
                         sim, CC_SITUATION_ROUTE_REPAIR, best_route->id);
                 }
@@ -15544,6 +15957,20 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
             UpdateRoyalDiplomacy(sim);
             AdvanceWarSociety(sim);
             PlanTrade(sim, sites);
+            /* Markets first, roads in idle time (schema 100): after trade
+               planning has had its pick, a carriage still idle takes the
+               worst work there is — a broken road in its crown's claim. */
+            if (sim->schema_version >= 100U) {
+                for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+                    CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+                    if (IsSiteCarriage(carriage) ||
+                        carriage->mode != CC_ROYAL_CARRIAGE_IDLE ||
+                        carriage->active_shipment_id != 0U ||
+                        carriage->condition < 20 ||
+                        sim->current_day < carriage->next_dispatch_day) continue;
+                    (void)ScanCrownRoadWork(sim, carriage);
+                }
+            }
             GenerateSituations(sim);
             PlanGoblinTribute(sim);
             PlanHoardRaid(sim);
@@ -17226,6 +17653,7 @@ static bool ApplyRepair(CcSim *sim, const CcCommand *command,
         route->closed = false;
         route->condition = 92;
         route->security = ClampI32(route->security + 10, 0, 100);
+        CancelCrownRepairMissions(sim, route->id);
         CcSettlement *nearby = CcSimSettlementMutable(sim, route->from_id);
         CcFaction *beneficiary = nearby != NULL ? FactionFor(
             sim, nearby->kingdom_id, CC_FACTION_GUILD) : NULL;
@@ -17280,6 +17708,7 @@ static bool ApplyRepair(CcSim *sim, const CcCommand *command,
     route->condition = use_tools ? 92 : 76;
     route->security = ClampI32(route->security + (use_tools ? 10 : 4),
                                0, 100);
+    CancelCrownRepairMissions(sim, route->id);
     CcSettlement *nearby = CcSimSettlementMutable(sim, route->from_id);
     if (use_cash && nearby != NULL) nearby->market_coins += 18;
     CcFaction *beneficiary = nearby != NULL ? FactionFor(
@@ -17920,9 +18349,11 @@ static bool ApplyDungeonChange(CcSim *sim, const CcCommand *command,
         if (command->dungeon_state == CC_DUNGEON_PUBLIC_ROUTE) {
             mine_road->smuggler_route = false;
             mine_road->closed = false;
+            CancelCrownRepairMissions(sim, mine_road->id);
         } else if (command->dungeon_state == CC_DUNGEON_SMUGGLER_ROUTE) {
             mine_road->smuggler_route = true;
             mine_road->closed = false;
+            CancelCrownRepairMissions(sim, mine_road->id);
         } else if (command->dungeon_state == CC_DUNGEON_RESEALED) {
             mine_road->smuggler_route = false;
             mine_road->closed = true;
@@ -18856,7 +19287,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_PROPHECY_DELIVERED ||
+                event->kind > (sim->schema_version >= 100U ?
+                    CC_EVENT_ROYAL_ROAD_SKIRMISH :
+                    CC_EVENT_PROPHECY_DELIVERED) ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||
@@ -19327,6 +19760,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 (carriage->mode == CC_ROYAL_CARRIAGE_ARCHIVE_TRAVELLING || carriage->mode == CC_ROYAL_CARRIAGE_ARCHIVE_WAITING) &&
                 carriage->id == sim->archive_convoy.carriage_id && CcSimArchiveConvoyValid(sim);
             bool idle = carriage->mode == CC_ROYAL_CARRIAGE_IDLE;
+            bool repair_travelling = sim->schema_version >= 100U &&
+                carriage->mode == CC_ROYAL_CARRIAGE_REPAIR_TRAVELLING;
+            bool repair_working = sim->schema_version >= 100U &&
+                carriage->mode == CC_ROYAL_CARRIAGE_REPAIR_WORKING;
             bool repositioning =
                 carriage->mode == CC_ROYAL_CARRIAGE_REPOSITIONING;
             bool delivering =
@@ -19342,6 +19779,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 carriage->arrival_day > sim->current_day && route != NULL &&
                 (int64_t)carriage->arrival_day ==
                     (int64_t)carriage->departure_day + carriage_leg.travel_days;
+            const CcRoute *repair_target = CcSimRoute(
+                sim, carriage->target_id);
+            bool repair_route_closed = repair_target != NULL &&
+                repair_target->closed &&
+                (repair_target->from_id == carriage->location_id ||
+                 repair_target->to_id == carriage->location_id);
             bool mode_valid = book_journey ||
                 ((idle || reserved) && carriage->active_shipment_id == 0U &&
                  carriage->route_id == 0U &&
@@ -19374,12 +19817,25 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                  carriage->arrival_day == 0 &&
                  carriage->blocked_since_day == 0 && shipment != NULL &&
                  shipment->status == CC_SHIPMENT_BLOCKED &&
-                 shipment->final_destination_id == carriage->target_id);
+                 shipment->final_destination_id == carriage->target_id) ||
+                (repair_travelling && carriage->active_shipment_id == 0U &&
+                 route_connects &&
+                 carriage->blocked_since_day == 0 &&
+                 repair_target != NULL && repair_target->closed &&
+                 carriage->departure_day >= 1 &&
+                 carriage->departure_day <= sim->current_day &&
+                 carriage->arrival_day >= carriage->departure_day) ||
+                (repair_working && carriage->active_shipment_id == 0U &&
+                 carriage->destination_id == 0U &&
+                 repair_route_closed &&
+                 carriage->arrival_day >= carriage->blocked_since_day &&
+                 carriage->blocked_since_day >= 1 &&
+                 carriage->blocked_since_day <= sim->current_day);
             if (CcIdKind(carriage->id) != CC_ENTITY_ROYAL_CARRIAGE ||
                 carriage->kingdom_id != sim->kingdoms[i].id ||
                 location == NULL ||
                 carriage->mode < CC_ROYAL_CARRIAGE_IDLE ||
-                carriage->mode > (sim->schema_version >= 93U ? CC_ROYAL_CARRIAGE_ARCHIVE_WAITING : sim->schema_version >= 92U ? CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED : CC_ROYAL_CARRIAGE_WAITING_CAPACITY) ||
+                carriage->mode > (sim->schema_version >= 100U ? CC_ROYAL_CARRIAGE_REPAIR_WORKING : sim->schema_version >= 93U ? CC_ROYAL_CARRIAGE_ARCHIVE_WAITING : sim->schema_version >= 92U ? CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED : CC_ROYAL_CARRIAGE_WAITING_CAPACITY) ||
                 carriage->condition < 0 || carriage->condition > 100 ||
                 carriage->trips_completed < 0 ||
                 carriage->trips_completed > CC_SIM_MAX_UNITS ||
