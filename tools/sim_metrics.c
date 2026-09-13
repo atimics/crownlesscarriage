@@ -439,6 +439,33 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
     for (int32_t species = 0; species < CC_CULT_SPECIES_COUNT; ++species)
         for (int32_t rank = 0; rank < CC_CULT_RANK_COUNT; ++rank)
             (void)printf(",%d", sim->dragon_cult.ranks[species][rank]);
+    /* Coin concentration (#398/#399): who holds the tracked gold. Shares are
+       per mille of the coined total. Concentrated holders are the dragon
+       hoard, kingdom treasuries and war chests, goblin holdings, and coin
+       still in flight with the dragon campaign; what remains is circulating
+       — markets, companies, travellers and custody purses. */
+    {
+        CcMoney tracked = CcSimTrackedGold(sim);
+        CcMoney goblin_held = sim->goblins.lair_coins +
+            sim->goblins.carried_tribute +
+            sim->dragon_campaign.recovered_coins;
+        for (int32_t color = 0; color < CC_GOBLIN_FACTION_COUNT; ++color) {
+            goblin_held += sim->goblin_politics.factions[color].coins +
+                sim->goblin_politics.factions[color].carried_coins;
+        }
+        CcMoney concentrated = sim->dragon.hoard + treasury_total +
+            war_chests + goblin_held;
+        int32_t hoard_share = tracked > 0 ?
+            (int32_t)(sim->dragon.hoard * 1000 / tracked) : 0;
+        int32_t treasury_share = tracked > 0 ?
+            (int32_t)((treasury_total + war_chests) * 1000 / tracked) : 0;
+        int32_t goblin_share = tracked > 0 ?
+            (int32_t)(goblin_held * 1000 / tracked) : 0;
+        int32_t circulating_share = tracked > 0 ?
+            (int32_t)((tracked - concentrated) * 1000 / tracked) : 0;
+        (void)printf(",%d,%d,%d,%d", hoard_share, treasury_share,
+                     goblin_share, circulating_share);
+    }
     if (campaign_metrics) PrintCampaignMetrics(sim);
     (void)putchar('\n');
 }
@@ -642,6 +669,8 @@ int main(int argc, char **argv)
     for (int32_t species = 0; species < CC_CULT_SPECIES_COUNT; ++species)
         for (int32_t rank = 0; rank < CC_CULT_RANK_COUNT; ++rank)
             (void)printf(",cult_%s_rank_%d", species == CC_CULT_HUMAN ? "human" : "goblin", rank);
+    (void)printf(",hoard_share_permille,treasury_share_permille,"
+                 "goblin_share_permille,circulating_share_permille");
     if (campaign_metrics) {
         (void)printf(",live_treasures,live_treasure_value,newest_treasure_day,"
                      "oldest_treasure_day,treasures_from_ruins,treasures_in_ruins,"
