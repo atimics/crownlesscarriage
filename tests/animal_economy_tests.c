@@ -77,8 +77,8 @@ int main(void)
         .kind = CC_COMMAND_TRAVEL,
         .target_id = travel.settlements[1].id
     };
-    CC_CHECK(!CcSimApply(&travel, &depart, error, sizeof(error)));
-    CC_CHECK(strstr(error, "fodder") != NULL);
+    /* Schema 101: an empty fodder market no longer strands the carriage.
+       A fed market provisions the team as before. */
     travel.settlements[0].stock[CC_GOOD_WHEAT] = original_wheat;
     CC_CHECK(CcSimApply(&travel, &depart, error, sizeof(error)));
     CC_CHECK(travel.settlements[0].stock[CC_GOOD_WHEAT] ==
@@ -91,6 +91,31 @@ int main(void)
     int32_t tired = travel.horse_team[0].fatigue;
     CcSimAdvanceDays(&travel, 7);
     CC_CHECK(travel.horse_team[0].fatigue < tired);
+    /* A hungry team with no fodder behind it still departs: hungry travel
+       is careful travel, and only that. */
+    travel.settlements[1].stock[CC_GOOD_WHEAT] = 0;
+    for (int32_t i = 0; i < CcSimHorseTeamCount(&travel); ++i) {
+        travel.horse_team[i].hunger = 90;
+        travel.horse_team[i].fatigue = 60;
+    }
+    CC_CHECK(CcSimHorseTeamReadiness(&travel) < 30);
+    CcCommand hungry_depart = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = travel.settlements[0].id
+    };
+    CC_CHECK(CcSimApply(&travel, &hungry_depart, error, sizeof(error)));
+    CC_CHECK(travel.journey.active);
+    CC_CHECK(travel.journey.pace == CC_JOURNEY_PACE_CAREFUL);
+    CcCommand push = {.kind = CC_COMMAND_SET_JOURNEY_PACE,
+                       .amount = CC_JOURNEY_PACE_PUSH};
+    CC_CHECK(!CcSimApply(&travel, &push, error, sizeof(error)));
+    CcCommand steady = {.kind = CC_COMMAND_SET_JOURNEY_PACE,
+                          .amount = CC_JOURNEY_PACE_STEADY};
+    CC_CHECK(!CcSimApply(&travel, &steady, error, sizeof(error)));
+    CcCommand careful = {.kind = CC_COMMAND_SET_JOURNEY_PACE,
+                           .amount = CC_JOURNEY_PACE_CAREFUL};
+    CC_CHECK(CcSimApply(&travel, &careful, error, sizeof(error)));
+    CC_CHECK(CcSimValidate(&travel, error, sizeof(error)));
 
     CcSim with_cows;
     CcSim without_cows;

@@ -30,6 +30,15 @@ static bool ApplyJourneyPace(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Journey pace is invalid.");
         return false;
     }
+    /* Schema 101: a hungry team can only travel slow. Hunger slows the
+       pony; it no longer strands the carriage. */
+    if (sim->schema_version >= 101U &&
+        command->amount > CC_JOURNEY_PACE_CAREFUL &&
+        CcSimHorseTeamReadiness(sim) < 30) {
+        SetError(error, error_capacity,
+                 "The team is too hungry to push; feed them or camp first.");
+        return false;
+    }
     sim->journey.pace = (CcJourneyPace)command->amount;
     sim->carriage.speed_milli_per_second = CcJourneyCarriageSpeedForPace(
         sim->journey.total_subticks, sim->journey.pace);
@@ -116,12 +125,19 @@ static bool ApplyRoadSiteStop(CcSim *sim, const CcCommand *command,
     bool camping = command->kind == CC_COMMAND_CAMP_ROAD_SITE;
     char text[CC_EVENT_TEXT_CAPACITY];
     if (camping) {
-        RecoverJourneyTeam(sim, 8, 5);
+        int32_t hunger_recovery = sim->schema_version >= 101U ? 8 : 5;
+        RecoverJourneyTeam(sim, 8, hunger_recovery);
         sim->journey.danger = ClampI32(sim->journey.danger + 3, 0, 95);
         CcJourneyAdvanceRestWatch(sim);
-        (void)snprintf(text, sizeof(text),
-            "The company camps beside %.40s for one watch. The team rests while a guard keeps watch by the carriage.",
-            site->name);
+        if (sim->schema_version >= 101U) {
+            (void)snprintf(text, sizeof(text),
+                "The company camps beside %.40s for one watch; the team grazes while a guard keeps watch by the carriage.",
+                site->name);
+        } else {
+            (void)snprintf(text, sizeof(text),
+                "The company camps beside %.40s for one watch. The team rests while a guard keeps watch by the carriage.",
+                site->name);
+        }
     } else {
         (void)snprintf(text, sizeof(text),
             "The company passes the turn to %.40s and follows the main road.",
@@ -154,11 +170,18 @@ static bool ApplyJourneyStopAction(CcSim *sim, const CcCommand *command,
     int32_t magnitude = 0;
 
     if (command->kind == CC_COMMAND_TAKE_JOURNEY_BREAK && midday) {
-        RecoverJourneyTeam(sim, 2, 0);
+        int32_t hunger_recovery = sim->schema_version >= 101U ? 2 : 0;
+        RecoverJourneyTeam(sim, 2, hunger_recovery);
         sim->journey.danger = ClampI32(sim->journey.danger - 2, 0, 95);
-        (void)snprintf(
-            text, sizeof(text),
-            "The company waters the team, checks the wheels, and reads the road before the afternoon watch.");
+        if (sim->schema_version >= 101U) {
+            (void)snprintf(
+                text, sizeof(text),
+                "The company waters the team and lets them crop the roadside grass before the afternoon watch.");
+        } else {
+            (void)snprintf(
+                text, sizeof(text),
+                "The company waters the team, checks the wheels, and reads the road before the afternoon watch.");
+        }
     } else if (command->kind == CC_COMMAND_PRESS_ON && midday) {
         for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
             sim->horse_team[i].fatigue = ClampI32(
@@ -170,14 +193,21 @@ static bool ApplyJourneyStopAction(CcSim *sim, const CcCommand *command,
             text, sizeof(text),
             "The company presses through the midday stop. The team tires and the road grows harder to read.");
     } else if (command->kind == CC_COMMAND_MAKE_CAMP && overnight) {
-        RecoverJourneyTeam(sim, 8, 5);
+        int32_t hunger_recovery = sim->schema_version >= 101U ? 8 : 5;
+        RecoverJourneyTeam(sim, 8, hunger_recovery);
         sim->journey.danger = ClampI32(sim->journey.danger + 3, 0, 95);
         CcJourneyAdvanceRestWatch(sim);
         event_kind = CC_EVENT_JOURNEY_CAMP;
         magnitude = 3;
-        (void)snprintf(
-            text, sizeof(text),
-            "The company makes camp, feeds the team from its reserved fodder, and keeps a lantern watch until morning.");
+        if (sim->schema_version >= 101U) {
+            (void)snprintf(
+                text, sizeof(text),
+                "The company makes camp; the team grazes by lantern light and keeps watch until morning.");
+        } else {
+            (void)snprintf(
+                text, sizeof(text),
+                "The company makes camp, feeds the team from its reserved fodder, and keeps a lantern watch until morning.");
+        }
     } else if (command->kind == CC_COMMAND_LODGE_ROAD_HOUSE &&
                overnight && road_house) {
         CcMoney cost = CcSimRoadHouseCost(sim, sim->journey.route_id);
