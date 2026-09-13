@@ -1,0 +1,92 @@
+[
+  {
+    "seed": 2,
+    "annual_rows": 1000,
+    "endpoint_match": true,
+    "command": [
+      "out/build/welfare/crownless_sim_metrics",
+      "--seed",
+      "2",
+      "--years",
+      "1000",
+      "--settlements-csv",
+      "docs/experiments/welfare-clusters-2026-09-08/traces/seed-2-settlements.csv",
+      "--trace-start-day",
+      "361350",
+      "--trace-every-days",
+      "1"
+    ]
+  },
+  {
+    "seed": 12,
+    "annual_rows": 1000,
+    "endpoint_match": true,
+    "command": [
+      "out/build/welfare/crownless_sim_metrics",
+      "--seed",
+      "12",
+      "--years",
+      "1000",
+      "--settlements-csv",
+      "docs/experiments/welfare-clusters-2026-09-08/traces/seed-12-settlements.csv",
+      "--trace-start-day",
+      "361350",
+      "--trace-every-days",
+      "1"
+    ]
+  },
+  {
+    "seed": 198,
+    "annual_rows": 1000,
+    "endpoint_match": true,
+    "command": [
+      "out/build/welfare/crownless_sim_metrics",
+      "--seed",
+      "198",
+      "--years",
+      "1000",
+      "--settlements-csv",
+      "docs/experiments/welfare-clusters-2026-09-08/traces/seed-198-settlements.csv",
+      "--trace-start-day",
+      "361350",
+      "--trace-every-days",
+      "1"
+    ]
+  },
+  {
+    "seed": 392,
+    "annual_rows": 1000,
+    "endpoint_match": true,
+    "command": [
+      "out/build/welfare/crownless_sim_metrics",
+      "--seed",
+      "392",
+      "--years",
+      "1000",
+      "--settlements-csv",
+      "docs/experiments/welfare-clusters-2026-09-08/traces/seed-392-settlements.csv",
+      "--trace-start-day",
+      "361350",
+      "--trace-every-days",
+      "1"
+    ]
+  },
+  {
+    "seed": 425,
+    "annual_rows": 1000,
+    "endpoint_match": true,
+    "command": [
+      "out/build/welfare/crownless_sim_metrics",
+      "--seed",
+      "425",
+      "--years",
+      "1000",
+      "--settlements-csv",
+      "docs/experiments/welfare-clusters-2026-09-08/traces/seed-425-settlements.csv",
+      "--trace-start-day",
+      "361350",
+      "--trace-every-days",
+      "1"
+    ]
+  }
+]

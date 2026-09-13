@@ -1,0 +1,44 @@
+[
+  {
+    "arm": "parent",
+    "repeat": 1,
+    "exit_code": 1,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.535804s ns/day=91747.3\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.006889s ns/step=1913.6\nterrain: seeds=8 points=32768 cpu=0.023219s ns/point=708.6\nchecksum=3f22a1b9a55eab92\n",
+    "stderr": "performance budget exceeded: simulation 91747.3/90000 ns, locomotion 1913.6/8000 ns\n"
+  },
+  {
+    "arm": "current",
+    "repeat": 1,
+    "exit_code": 1,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.538917s ns/day=92280.3\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.006941s ns/step=1928.1\nterrain: seeds=8 points=32768 cpu=0.022992s ns/point=701.7\nchecksum=3f22a1b9a55eab92\n",
+    "stderr": "performance budget exceeded: simulation 92280.3/90000 ns, locomotion 1928.1/8000 ns\n"
+  },
+  {
+    "arm": "parent",
+    "repeat": 2,
+    "exit_code": 1,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.527631s ns/day=90347.8\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.006115s ns/step=1698.6\nterrain: seeds=8 points=32768 cpu=0.022536s ns/point=687.7\nchecksum=3f22a1b9a55eab92\n",
+    "stderr": "performance budget exceeded: simulation 90347.8/90000 ns, locomotion 1698.6/8000 ns\n"
+  },
+  {
+    "arm": "current",
+    "repeat": 2,
+    "exit_code": 1,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.539789s ns/day=92429.6\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.006828s ns/step=1896.7\nterrain: seeds=8 points=32768 cpu=0.022575s ns/point=688.9\nchecksum=3f22a1b9a55eab92\n",
+    "stderr": "performance budget exceeded: simulation 92429.6/90000 ns, locomotion 1896.7/8000 ns\n"
+  },
+  {
+    "arm": "parent",
+    "repeat": 3,
+    "exit_code": 1,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.544389s ns/day=93217.3\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.007014s ns/step=1948.3\nterrain: seeds=8 points=32768 cpu=0.023475s ns/point=716.4\nchecksum=3f22a1b9a55eab92\n",
+    "stderr": "performance budget exceeded: simulation 93217.3/90000 ns, locomotion 1948.3/8000 ns\n"
+  },
+  {
+    "arm": "current",
+    "repeat": 3,
+    "exit_code": 1,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.527122s ns/day=90260.6\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.006608s ns/step=1835.6\nterrain: seeds=8 points=32768 cpu=0.022337s ns/point=681.7\nchecksum=3f22a1b9a55eab92\n",
+    "stderr": "performance budget exceeded: simulation 90260.6/90000 ns, locomotion 1835.6/8000 ns\n"
+  }
+]

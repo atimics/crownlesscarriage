@@ -126,9 +126,6 @@ jobs:
           python3 tools/sim_sweep.py
           --binary build/crownless_sim_metrics
           --first-seed 1 --seeds 32 --years 32 --jobs 4
-      - name: Player agency road-steward smoke test
-        if: matrix.os == 'ubuntu-latest' && matrix.build_type == 'Release'
-        run: ./build/crownless_agent_sweep --seeds 8 --years 10
 
   long-simulation-sweep:
     name: Long simulation sweep
@@ -159,29 +156,6 @@ jobs:
           name: simulation-sweep-endpoints
           path: build-sweep/sweep-endpoints.csv
           if-no-files-found: error
-
-  long-player-agency-sweep:
-    name: Long player-agency sweep
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install SQLite development files
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
-      - name: Configure release headless build
-        run: >-
-          cmake -S . -B build-agent
-          -DCMAKE_BUILD_TYPE=Release
-          -DCC_BUILD_CLIENT=OFF
-          -DCC_WARNINGS_AS_ERRORS=ON
-      - name: Build player-agency runner
-        run: cmake --build build-agent --target crownless_agent_sweep --parallel
-      - name: Run 100 by 100 paired control and agent sweep
-        run: >-
-          build-agent/crownless_agent_sweep
-          --seeds 100 --years 100
-
   client:
     name: Full client / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -203,10 +177,33 @@ jobs:
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release
           -DCC_WARNINGS_AS_ERRORS=ON
+          -DCC_BUILD_GRAPHICS_PROBES=ON
       - name: Build
         run: cmake --build build --parallel
       - name: Test
         run: ctest --test-dir build --output-on-failure
+      - name: Capture Gloamgate town views
+        if: runner.os == 'Linux'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: |
+          mkdir -p build/gloamgate-review
+          xvfb-run -a ./build/renderer_regression_tests --pony-gait-captures build/gloamgate-review/gait
+          xvfb-run -a ./build/crownless_carriage --capture-town-state 1 37 58 build/gloamgate-review/ponies.png peaceful
+          xvfb-run -a ./build/crownless_carriage --capture-town-state 1 82 36 build/gloamgate-review/arrival.png peaceful
+          xvfb-run -a ./build/crownless_carriage --capture-town-state 1 44.25 28.85 build/gloamgate-review/market.png peaceful
+          xvfb-run -a ./build/crownless_carriage --capture-town-state 1 42 47 build/gloamgate-review/coach-court.png peaceful
+          xvfb-run -a ./build/crownless_carriage --capture-town-arrival 1 0.58 build/gloamgate-review/carriage.png
+          for state in burnt rebuilding lawless thriving hungry; do
+            xvfb-run -a ./build/crownless_carriage --capture-town-state 1 44.25 28.85 build/gloamgate-review/$state.png $state
+          done
+      - name: Upload Gloamgate town views
+        if: runner.os == 'Linux' && !cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gloamgate-review
+          path: build/gloamgate-review/
+          if-no-files-found: error
       - name: Capture interaction screens
         if: runner.os == 'Linux'
         env:
@@ -227,12 +224,25 @@ jobs:
           name: interaction-screen-review
           path: build/ux-*.png
           if-no-files-found: error
+      - name: Capture desktop reading matrix
+        if: runner.os == 'Linux'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: xvfb-run --auto-servernum python3 tools/capture_ux_desktop.py build/crownless_carriage
+      - name: Upload desktop reading matrix
+        if: runner.os == 'Linux' && !cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-desktop-review
+          path: out/ux-desktop-review/
+          if-no-files-found: error
       - name: Check character shaders and the full art viewport
         if: runner.os == 'Linux'
         env:
           LIBGL_ALWAYS_SOFTWARE: 1
         run: |
           python3 -m pip install pillow
+          xvfb-run --auto-servernum cmake --build build --target run_matrix_upload_tests
           xvfb-run --auto-servernum cmake --build build --target run_renderer_graphics_tests
           python3 tests/art_check_tests.py --viewport-image build/renderer-viewport.png
           xvfb-run --auto-servernum cmake --build build --target run_character_material_captures

@@ -1,0 +1,174 @@
+[
+  {
+    "seed": "42",
+    "day": 14601,
+    "routes": [
+      {
+        "id": "216172782113783818",
+        "closed_days": 6902,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 6902,
+          "longest_closed_days": 6902,
+          "closed_inhabited_days": 6902
+        }
+      },
+      {
+        "id": "216172782113783819",
+        "closed_days": 11380,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 10458,
+          "longest_closed_days": 10458,
+          "closed_inhabited_days": 11380
+        }
+      },
+      {
+        "id": "216172782113783820",
+        "closed_days": 8722,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 8722,
+          "longest_closed_days": 8722,
+          "closed_inhabited_days": 8722
+        }
+      },
+      {
+        "id": "216172782113783821",
+        "closed_days": 3388,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 0,
+          "longest_closed_days": 3388,
+          "closed_inhabited_days": 3388
+        }
+      },
+      {
+        "id": "216172782113783822",
+        "closed_days": 1246,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 1246,
+          "longest_closed_days": 1246,
+          "closed_inhabited_days": 1246
+        }
+      },
+      {
+        "id": "216172782113783823",
+        "closed_days": 8358,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 3626,
+          "longest_closed_days": 4732,
+          "closed_inhabited_days": 8358
+        }
+      },
+      {
+        "id": "216172782113783824",
+        "closed_days": 9366,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 9366,
+          "longest_closed_days": 9366,
+          "closed_inhabited_days": 9366
+        }
+      },
+      {
+        "id": "216172782113783825",
+        "closed_days": 4942,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 4550,
+          "longest_closed_days": 4550,
+          "closed_inhabited_days": 4942
+        }
+      }
+    ]
+  },
+  {
+    "seed": "0x5eed0001",
+    "day": 14601,
+    "routes": [
+      {
+        "id": "216172782113783818",
+        "closed_days": 8138,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 7910,
+          "longest_closed_days": 7910,
+          "closed_inhabited_days": 8138
+        }
+      },
+      {
+        "id": "216172782113783819",
+        "closed_days": 530,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 0,
+          "longest_closed_days": 308,
+          "closed_inhabited_days": 530
+        }
+      },
+      {
+        "id": "216172782113783820",
+        "closed_days": 0,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 0,
+          "longest_closed_days": 0,
+          "closed_inhabited_days": 0
+        }
+      },
+      {
+        "id": "216172782113783821",
+        "closed_days": 0,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 0,
+          "longest_closed_days": 0,
+          "closed_inhabited_days": 0
+        }
+      },
+      {
+        "id": "216172782113783822",
+        "closed_days": 2884,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 0,
+          "longest_closed_days": 2884,
+          "closed_inhabited_days": 2884
+        }
+      },
+      {
+        "id": "216172782113783823",
+        "closed_days": 8554,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 8050,
+          "longest_closed_days": 8050,
+          "closed_inhabited_days": 8554
+        }
+      },
+      {
+        "id": "216172782113783824",
+        "closed_days": 336,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 0,
+          "longest_closed_days": 336,
+          "closed_inhabited_days": 336
+        }
+      },
+      {
+        "id": "216172782113783825",
+        "closed_days": 0,
+        "outage": {
+          "semantics": "run_interval_daily_samples",
+          "current_closed_days": 0,
+          "longest_closed_days": 0,
+          "closed_inhabited_days": 0
+        }
+      }
+    ]
+  }
+]

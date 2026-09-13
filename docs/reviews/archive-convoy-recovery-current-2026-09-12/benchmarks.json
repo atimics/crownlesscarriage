@@ -1,0 +1,72 @@
+[
+  {
+    "arm": "parent",
+    "repeat": 1,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.226664s ns/day=38812.3\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002599s ns/step=721.9\nterrain: seeds=8 points=32768 cpu=0.010721s ns/point=327.2\nchecksum=3f22a1b9a55eab92\n",
+    "stderr": ""
+  },
+  {
+    "arm": "current",
+    "repeat": 1,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.225354s ns/day=38588.0\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002530s ns/step=702.8\nterrain: seeds=8 points=32768 cpu=0.010672s ns/point=325.7\nchecksum=4fc771c36223c76a\n",
+    "stderr": ""
+  },
+  {
+    "arm": "parent",
+    "repeat": 2,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.226623s ns/day=38805.3\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002522s ns/step=700.6\nterrain: seeds=8 points=32768 cpu=0.010484s ns/point=319.9\nchecksum=3f22a1b9a55eab92\n",
+    "stderr": ""
+  },
+  {
+    "arm": "current",
+    "repeat": 2,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.227205s ns/day=38905.0\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002533s ns/step=703.6\nterrain: seeds=8 points=32768 cpu=0.009757s ns/point=297.8\nchecksum=4fc771c36223c76a\n",
+    "stderr": ""
+  },
+  {
+    "arm": "parent",
+    "repeat": 3,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.231252s ns/day=39597.9\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002508s ns/step=696.7\nterrain: seeds=8 points=32768 cpu=0.010520s ns/point=321.0\nchecksum=3f22a1b9a55eab92\n",
+    "stderr": ""
+  },
+  {
+    "arm": "current",
+    "repeat": 3,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.227412s ns/day=38940.4\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002564s ns/step=712.2\nterrain: seeds=8 points=32768 cpu=0.009981s ns/point=304.6\nchecksum=4fc771c36223c76a\n",
+    "stderr": ""
+  },
+  {
+    "arm": "parent",
+    "repeat": 4,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.221695s ns/day=37961.5\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002543s ns/step=706.4\nterrain: seeds=8 points=32768 cpu=0.010438s ns/point=318.5\nchecksum=3f22a1b9a55eab92\n",
+    "stderr": ""
+  },
+  {
+    "arm": "current",
+    "repeat": 4,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.225324s ns/day=38582.9\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002463s ns/step=684.2\nterrain: seeds=8 points=32768 cpu=0.009981s ns/point=304.6\nchecksum=4fc771c36223c76a\n",
+    "stderr": ""
+  },
+  {
+    "arm": "parent",
+    "repeat": 5,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.224260s ns/day=38400.7\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002498s ns/step=693.9\nterrain: seeds=8 points=32768 cpu=0.010245s ns/point=312.7\nchecksum=3f22a1b9a55eab92\n",
+    "stderr": ""
+  },
+  {
+    "arm": "current",
+    "repeat": 5,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.222490s ns/day=38097.6\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002468s ns/step=685.6\nterrain: seeds=8 points=32768 cpu=0.009841s ns/point=300.3\nchecksum=4fc771c36223c76a\n",
+    "stderr": ""
+  }
+]

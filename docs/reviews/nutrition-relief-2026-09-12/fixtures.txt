@@ -1,0 +1,5 @@
+relief case=0 loads=0 wheat=0 supplier=110 recipient=0
+relief case=1 loads=1 wheat=40 supplier=70 recipient=0
+relief case=2 loads=0 wheat=0 supplier=110 recipient=0
+relief case=3 loads=0 wheat=0 supplier=110 recipient=0
+relief case=4 loads=0 wheat=0 supplier=110 recipient=0

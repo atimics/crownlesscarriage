@@ -1,0 +1,26 @@
+{
+  "paired_builds": [
+    {
+      "label": "before",
+      "revision": "610e16a",
+      "wasm_bytes": 5638751,
+      "sha256": "0d77775dbce4e16157b071bc311bd3cd481c2c872a24540815d2d4cde06268c5",
+      "main_lines": 2253,
+      "capture_flag_occurrences": 55,
+      "compiler": "/opt/homebrew/Cellar/emscripten/5.0.4/libexec/emcc"
+    },
+    {
+      "label": "after",
+      "revision": "629b639",
+      "wasm_bytes": 5584051,
+      "sha256": "5352b0879cfd7e0c5060df6f28c95c360725e23e43d6c9a57d1a48f352a8c8e5",
+      "main_lines": 1117,
+      "capture_flag_occurrences": 0,
+      "compiler": "/opt/homebrew/Cellar/emscripten/5.0.4/libexec/emcc"
+    }
+  ],
+  "bytes_saved": 54700,
+  "current_main_lines": 944,
+  "current_defined_symbols": 77,
+  "current_capture_symbols": 0
+}

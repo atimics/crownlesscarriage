@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+import json
+from pathlib import Path
+import re
+import subprocess
+import sqlite3
+import sys
+import tempfile
+
+runner = str(Path(sys.argv[1]).resolve())
+
+def run(*args):
+    return subprocess.check_output([runner, *args], text=True)
+
+with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    for fixture in [[], ['--opened-production-pilots'], ['--dragon-slain-day-one'],
+                    ['--opened-production-pilots', '--dragon-slain-day-one']]:
+        base = ['--seed', '0x5eed0001', '--years', '2', *fixture]
+        report = run(*base, '--json', '--save', str(root / 'json.ccsave'))
+        assert report == run(*base, '--json')
+        rows = [json.loads(line) for line in report.splitlines()]
+        assert [row['day'] for row in rows] == [1, 366, 731]
+        assert all(row['threats']['semantics'] == 'snapshot' for row in rows)
+        for row in rows:
+            assert row['archive_recruitment_order']['semantics'] == 'stored_reservation'
+            staff = row['archive_staff']
+            assert 0 <= staff['legacy_scribes'] <= 4
+            names = [person for person in staff['person_ids'] if person != '0']
+            assert len(names) == len(set(names)) and len(names) + staff['legacy_scribes'] <= 4
+            if not staff['active']:
+                assert names == [] and staff['legacy_scribes'] == 0
+            order = row['archive_recruitment_order']
+            assert 0 <= order['status'] <= 5
+            assert 0 <= order['labor_days'] <= order['training_days']
+            assert 0 <= order['trainer_labor_days'] <= order['labor_days']
+            if order['status'] == 0:
+                assert order['journey_gate'] == 'unavailable' and order['training_gate'] == 'unavailable'
+                assert order['person_id'] == '0' and order['wages_paid'] == 0
+            else:
+                assert order['person_id'] != '0'
+                assert order['purse'] + order['wages_paid'] == 50
+            recruit = row['archive_recruitment']
+            assert recruit['semantics'] == 'recruitment_quote_snapshot'
+            assert isinstance(recruit['person_id'], str)
+            if recruit['gate'] == 'ready':
+                assert recruit['person_id'] != '0'
+                assert recruit['ready_day'] == recruit['arrival_day'] + recruit['training_days']
+                assert recruit['wages'] == 50
+            supply = row['archive_supply']
+            assert supply['semantics'] == 'held_booking_quote_snapshot'
+            assert supply['cost_scope'] == 'goods_and_first_loaded_leg'
+            assert [q['carriage_id'] for q in supply['quotes']] == [c['id'] for c in row['carriages']]
+            for quote in supply['quotes']:
+                assert quote['first_dispatch_day'] >= 0
+                assert quote['total_charge'] == quote['goods_cost'] + quote['first_leg_toll']
+                assert (quote['quantity'] > 0) == (quote['gate'] == 'ready')
+            placement = row['archive_seat_plan']
+            assert placement['semantics'] == 'held_placement_advice_snapshot'
+            candidates = {c['id']: c for c in placement['candidates']}
+            if placement['selected_id'] != '0':
+                assert candidates[placement['selected_id']]['viable']
+            if placement['keep_current']:
+                assert placement['selected_id'] == placement['current_id']
+            funding = row['archive_funding']
+            assert funding['semantics'] == 'treasury_top_up_plan_snapshot'
+            assert funding['total'] == sum(donor['amount'] for donor in funding['donors'])
+            assert (funding['total'] > 0) == (funding['blocker'] == 'ready')
+            assert all(isinstance(donor['kingdom_id'], str) for donor in funding['donors'])
+
+        policy = 'slain-at-day-1' if '--dragon-slain-day-one' in fixture else 'natural-history'
+        assert all(row['dragon_policy'] == policy and row['comparison_scope'] == 'whole-policy' for row in rows)
+        text = run(*base, '--save', str(root / 'text.ccsave'))
+        hashes = re.findall(r'\bhash=([0-9a-f]+)', text)
+        assert hashes == [row['state_hash'] for row in rows[1:]]
+        for name in ['json', 'text']:
+            loaded = json.loads(run('--load', str(root / f'{name}.ccsave'), '--years', '0', '--json'))
+            assert loaded['state_hash'] == rows[-1]['state_hash']
+            assert loaded['threats'] == rows[-1]['threats']
+            assert loaded['campaign_launch'] == rows[-1]['campaign_launch']
+            assert loaded['ritual_offering'] == rows[-1]['ritual_offering']
+            assert loaded['retained_history'] == rows[-1]['retained_history']
+            assert loaded['road_network'] == rows[-1]['road_network']
+            assert loaded['archive_work'] == rows[-1]['archive_work']
+            assert loaded['archive_funding'] == rows[-1]['archive_funding']
+            assert loaded['archive_recruitment_order'] == rows[-1]['archive_recruitment_order']
+            assert loaded['archive_recruitment'] == rows[-1]['archive_recruitment']
+            assert loaded['archive_supply'] == rows[-1]['archive_supply']
+            assert loaded['archive_seat_plan'] == rows[-1]['archive_seat_plan']
+            assert [town['grain_supply'] for town in loaded['towns']] == [town['grain_supply'] for town in rows[-1]['towns']]
+            assert loaded['carriages'] == rows[-1]['carriages']
+            assert loaded['shipments'] == rows[-1]['shipments']
+            assert [route['context'] for route in loaded['routes']] == [route['context'] for route in rows[-1]['routes']]
+            for route in loaded['routes']:
+                assert route['observation']['start_day_exclusive'] == 731
+                assert route['observation']['end_day_inclusive'] == 731
+                assert route['open_days'] == route['closed_days'] == 0
+                assert route['outage'] == {'semantics': 'run_interval_daily_samples', 'current_closed_days': 0,
+                    'longest_closed_days': 0, 'closed_inhabited_days': 0}
+            assert loaded['accounting_start_day'] == 731
+            assert loaded['dragon_policy'] == 'loaded-save'
+            assert all(sum(site['input']) == 0 for site in loaded['sites'])
+        with sqlite3.connect(root / 'json.ccsave') as database:
+            saved = database.execute('SELECT id, kingdom_id, target_id, blocked_since_day, next_dispatch_day FROM royal_carriage ORDER BY slot').fetchall()
+        assert [(cart['id'], cart['kingdom_id'], cart['target_id'], cart['blocked_since_day'], cart['next_dispatch_day'])
+                for cart in rows[-1]['carriages']] == [(str(a), str(b), str(c), d, e) for a, b, c, d, e in saved]
+        with sqlite3.connect(root / 'json.ccsave') as database:
+            database.row_factory = sqlite3.Row
+            accounts = database.execute('SELECT * FROM grain_supply ORDER BY slot').fetchall()
+        assert len(accounts) == len(rows[-1]['towns'])
+        for town, account in zip(rows[-1]['towns'], accounts):
+            supply = town['grain_supply']
+            for key in account.keys():
+                if key != 'slot':
+                    expected = str(account[key]) if key.endswith('_id') else account[key]
+                    assert supply[key] == expected, (town['name'], key)
+        for row in rows:
+            for town in row['towns']:
+                supply = town['grain_supply']
+                assert supply['semantics'] == 'stored_cumulative'
+                plan = supply['plan']
+                assert plan['semantics'] == 'evaluated_plan_snapshot'
+                assert 0 <= plan['status'] <= 10 and plan['reason']
+                assert all(isinstance(plan[key], str) for key in
+                           ['organiser_id', 'supplier_id', 'route_id', 'carriage_id', 'next_hop_id'])
+                if plan['status'] == 0:
+                    assert plan['supplier_id'] != '0' and plan['carriage_id'] != '0'
+                    assert plan['route_id'] != '0' and plan['path_capacity'] > 0
+        for row in rows:
+            assert all(cart['semantics'] == 'snapshot' and cart['counter_semantics'] == 'stored_cumulative'
+                       and cart['mode_name'] for cart in row['carriages'])
+            assert all(cargo['semantics'] == 'retained_shipment_snapshot' for cargo in row['shipments'])
+        assert all(isinstance(town['id'], str) for town in rows[-1]['towns'])
+        assert rows[-1]['protocol'] == 6
+        for town in rows[-1]['towns']:
+            herds = town['herds']
+            assert herds['dairy_nutrition'] == herds['dairy_used'] + herds['dairy_unused']
+            for species in ['cows', 'sheep', 'ponies']:
+                for field in ['feed', 'output', 'cap_loss']:
+                    assert len(herds[species][field]) == len(rows[-1]['goods'])
+                    assert all(value >= 0 for value in herds[species][field])
+            assert sum(herds['ponies']['output']) == 0
+            production = town['production']
+            assert production['active_weeks'] + production['inactive_weeks'] == 104
+            assert production['bakery']['input'][7] == production['bakery']['output'][0]
+            assert production['paper']['output'][rows[-1]['goods'].index('Paper')] <= production['paper']['work'] * 4
+
+        assert sum(sum(town['herds']['cows']['feed']) for town in rows[-1]['towns']) > 0
+        assert sum(town['herds']['sheep']['output'][rows[-1]['goods'].index('Wool')] for town in rows[-1]['towns']) > 0
+        for row in rows:
+            for route in row['routes']:
+                assert route['observation'] == {'semantics': 'run_interval', 'start_day_exclusive': 1,
+                    'end_day_inclusive': row['day'], 'sampling': 'after_daily_advance'}
+                assert route['open_days'] + route['closed_days'] == row['day'] - 1
+                outage = route['outage']
+                assert 0 <= outage['current_closed_days'] <= outage['longest_closed_days'] <= route['closed_days']
+                assert 0 <= outage['closed_inhabited_days'] <= route['closed_days']
+                if not route['closed']:
+                    assert outage['current_closed_days'] == 0
+
+        assert all(route['open_days'] + route['closed_days'] == 730 for route in rows[-1]['routes'])
+        assert all(route['recovery']['semantics'] == 'evaluated_plan_snapshot' for row in rows for route in row['routes'])
+        for start, end in zip(rows[0]['sites'], rows[-1]['sites']):
+            assert end['condition'] == start['condition'] + end['site_repair'] - end['wear']
+            for good in range(len(rows[-1]['goods'])):
+                assert end['stock'][good] == start['stock'][good] + end['output'][good] - end['input'][good] - end['maintenance_input'][good] + end['received'][good] - end['shipped'][good]
+                aboard = sum(cargo['quantity'] for cargo in rows[-1]['shipments']
+                             if cargo['good'] == good and cargo['status'] in [1, 4]
+                             and end['id'] in [cargo['origin_id'], cargo['destination_id']])
+                assert end['sent'][good] + end['shipped'][good] == end['received'][good] + end['delivered'][good] + end['lost'][good] + aboard
+        if '--opened-production-pilots' in fixture:
+            assert rows[-1]['sites'][2]['output'][0] >= 4
+            assert rows[-1]['sites'][11]['output'][2] >= 4
+            assert rows[-1]['sites'][15]['output'][7] >= 16
+    natural = json.loads(run('--json', '--seed', '0x5eed0001', '--years', '0'))
+    controlled = json.loads(run('--json', '--seed', '0x5eed0001', '--years', '0', '--dragon-slain-day-one'))
+    assert natural['dragon']['slain'] is False
+    assert controlled['dragon']['slain'] is True and controlled['dragon']['slain_day'] == 1
+    assert controlled['dragon']['body_condition'] == 0 and controlled['dragon']['crown_strength'] == 0
+    assert controlled['dragon']['eggs'] == natural['dragon']['eggs']
+    assert controlled['state_hash'] != natural['state_hash']
+    # The deliberate slain policy adds exactly its evaluated campaign gate.
+    slain_gate = 1 << 3
+    natural_plan = natural['campaign_launch']
+    controlled_plan = controlled['campaign_launch']
+    assert controlled_plan['blocked_mask'] == natural_plan['blocked_mask'] | slain_gate
+    assert controlled_plan['blocked_reasons'] == ['dragon_slain', *natural_plan['blocked_reasons']]
+    controlled_plan['blocked_mask'] &= ~slain_gate
+    controlled_plan['blocked_reasons'].remove('dragon_slain')
+    for field in ['dragon', 'dragon_policy', 'state_hash']:
+        natural.pop(field)
+        controlled.pop(field)
+    assert natural == controlled
+    invalid = subprocess.run([runner, '--dragon-slain-day-one', '--load', str(root / 'json.ccsave')], capture_output=True)
+    assert invalid.returncode != 0 and not invalid.stdout
+    invalid = subprocess.run([runner, '--json', '--chronicle'], capture_output=True)
+    assert invalid.returncode != 0 and not invalid.stdout
+    invalid = subprocess.run([runner, '--opened-production-pilots', '--load', str(root / 'json.ccsave')], capture_output=True)
+    assert invalid.returncode != 0
+    script = Path(__file__).resolve().parents[1] / 'tools/capture_production.py'
+    subprocess.run([sys.executable, str(script), '--runner', runner, '--output', str(root / 'capture'), '--years', '0'], check=True, capture_output=True)
+    manifest = json.loads((root / 'capture/manifest.json').read_text())
+    assert len(manifest['commit']) == 40 and len(manifest['runner_sha256']) == 64
+    assert len(manifest['runs']) == 4
+    assert all(row['repeat_match'] for row in manifest['runs'])
+print('Production JSON: repeatability, save/text parity, custody accounting and capture manifest passed')
+
+# Report spacing preserves daily observations between emitted checkpoints.
+annual = [json.loads(line) for line in run('--seed', '42', '--years', '4', '--json').splitlines()]
+sparse = [json.loads(line) for line in run('--seed', '42', '--years', '4', '--json', '--report-every', '3').splitlines()]
+assert sparse == [annual[index] for index in [0, 1, 3, 4]]

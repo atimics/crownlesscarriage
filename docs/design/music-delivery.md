@@ -1,10 +1,11 @@
 # Music delivery
 
 The public soundtrack host is https://crownless-music.pages.dev.
-It currently contains 27 exported takes. The game catalog describes 185 finished
+The September batch brings it to 47 exported takes. The game catalog describes 185 finished
 Suno takes across 82 cues: the original 149 takes plus 36 town arrangements.
-The other 158 finished takes await export from Suno. The existing 27 MP3s are
-bundled, hosted and playable today. Registered takes become available when their
+The other 138 finished takes await export from Suno. The existing 27 MP3s are
+bundled and hosted. Twenty more MP3s are stored in `assets/audio/music/hosted`
+for online delivery. Registered takes become available when their
 audio files are installed or added to the host catalog.
 
 The game reads `catalog.txt` when music starts. It checks again every five minutes,
@@ -49,12 +50,12 @@ catalog and downloads in transit.
 
 ## Add later exports
 
-Keep the existing 27-file offline set. Put newly exported MP3 files in a separate
-staging folder using the stems in `assets/audio/music/catalog.json`. Include copies
-of the existing 27 files in that folder to retain them in the hosted catalog.
+Keep the existing 27-file offline set. Put newly exported MP3 files in
+`assets/audio/music/hosted` using the stems in `assets/audio/music/catalog.json`.
+The exporter combines both folders. It checks for duplicate stems.
 
 ```sh
-python3 tools/music_host.py --audio-dir /path/to/staged-music
+python3 tools/music_host.py
 wrangler pages deploy out/music-site --project-name crownless-music --branch main
 ```
 

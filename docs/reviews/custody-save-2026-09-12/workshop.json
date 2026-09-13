@@ -1,0 +1,35 @@
+{
+  "source_commit": "74377c514411686f6e498c6254e028f08276f6fd",
+  "headless_tests_passed": 144,
+  "manufacture": {
+    "wood": 4,
+    "iron": 1,
+    "work": 2,
+    "tools_required": 1,
+    "capacity_slots": 10
+  },
+  "repair": {
+    "wood": 1,
+    "work": 1,
+    "tools_required": 1,
+    "condition_restored_maximum": 25
+  },
+  "budget": "caller-supplied CcProductionContext; work, batch capacity, and named-output capacity debited on success",
+  "failure_tests": [
+    "stale allocation",
+    "stale repair revision",
+    "exhausted work",
+    "missing wood",
+    "missing tools",
+    "remote work context",
+    "full custody pool"
+  ],
+  "journey_uses_manufactured_container": true,
+  "cppcheck": "passed",
+  "webassembly_compile": "passed",
+  "sanitizers": "passed; custody core, adapter, simulation, and common production runner instrumented; remaining libraries use strict release build",
+  "remaining_integration": [
+    "producer scheduling",
+    "player craft commands"
+  ]
+}

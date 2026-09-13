@@ -1,0 +1,12 @@
+{
+  "main": "2a0111c977f11b5a17febeeb5485acafc835a3b9",
+  "source_commit": "f7e276c9",
+  "schema": 98,
+  "generator": 25,
+  "headless_tests_passed": 138,
+  "version_pairs_matched": 3193,
+  "save_hash_pairs_matched": 61,
+  "comparison_sha256": "a24828a2bd7eb5df34abd38605c6fbccc3565789a80e988a2919f2161e59cd10",
+  "benchmark_ns_per_day": 32697.6,
+  "benchmark_limit_ns_per_day": 90000
+}

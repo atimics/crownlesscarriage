@@ -1,0 +1,12 @@
+{
+  "shipped_saves": {
+    "rows": 42,
+    "parent_sha256": "c7d4f4f2d15511203db6ff660db874b95c4e41e99c33144a04bbe51c183d4fc8",
+    "current_sha256": "c7d4f4f2d15511203db6ff660db874b95c4e41e99c33144a04bbe51c183d4fc8"
+  },
+  "annual_states": {
+    "rows": 720,
+    "parent_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10",
+    "current_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10"
+  }
+}

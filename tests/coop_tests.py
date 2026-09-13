@@ -39,6 +39,61 @@ class CoopTests(unittest.TestCase):
         return self.worlds.create(self.a, {'id': world, 'name': 'Lantern Road',
             'player': 'Mara', 'seed': seed, 'world_pass': issue_world_pass(self.path)})
 
+    def test_deep_wyrm_shared_start_join_and_restart(self):
+        world = 'd' * 32
+        body = dict(id=world, name='Deep Wyrm', player='Mara', campaign='deep-wyrm',
+                    world_pass=issue_world_pass(self.path))
+        first = self.worlds.create(self.a, body)
+        self.assertEqual(first['state']['day'], 73366)
+        self.assertTrue(first['state']['prophecy']['carried'])
+        self.assertTrue(first['state']['prophecy']['can_deliver'])
+        self.assertEqual(first['state']['company']['cargo_used'], 1)
+        with self.engine.open(campaign='deep-wyrm') as sim:
+            self.assertEqual(first['state'], sim.snapshot())
+        invitation = self.worlds.invite(world, self.a)['invite']
+        joined = self.worlds.join(world, self.b, dict(player='Bren', invite=invitation))
+        self.assertEqual(joined['state'], first['state'])
+        self.assertEqual(self.worlds.create(self.a, body)['state'], first['state'])
+        with self.assertRaises(ApiError):
+            self.worlds.create(self.a, dict(body, campaign='new-world'))
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.assertEqual(self.worlds.view(world, self.b)['state'], first['state'])
+        view = self.worlds.view(world, self.a)
+        command = dict(protocol=1, sequence=view['next_sequence'],
+                       action_revision=view['action_revision'], action='deliver_prophecy',
+                       target=first['state']['prophecy']['id'])
+        result = self.worlds.command(world, self.a, command)
+        self.assertTrue(result['accepted'])
+        delivered = self.worlds.view(world, self.b)
+        self.assertTrue(delivered['state']['prophecy']['delivered'])
+        self.assertEqual(delivered['state']['company']['cargo_used'], 0)
+        retry = self.worlds.command(world, self.a, command)
+        self.assertTrue(retry['duplicate'])
+        self.assertEqual(retry['world']['state'], result['world']['state'])
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        view = self.worlds.view(world, self.a)
+        self.assertTrue(view['state']['prophecy']['delivered'])
+        again = dict(command, sequence=view['next_sequence'], action_revision=view['action_revision'])
+        self.assertFalse(self.worlds.command(world, self.a, again)['accepted'])
+        self.worlds.owner_action(world, self.a, 'delete')
+        self.assertIsNone(self.worlds.db.execute(
+            'SELECT campaign FROM world_starts WHERE world=?', (world,)).fetchone())
+
+    def test_starting_campaign_failure_preserves_world_pass(self):
+        body = dict(id='d' * 32, name='Deep Wyrm', player='Mara', campaign='unknown',
+                    world_pass=issue_world_pass(self.path))
+        with self.assertRaises(ApiError):
+            self.worlds.create(self.a, body)
+        body['campaign'] = 'deep-wyrm'
+        with patch.object(self.engine, 'open', side_effect=RuntimeError('Opening unavailable')):
+            with self.assertRaises(RuntimeError):
+                self.worlds.create(self.a, body)
+        self.assertIsNone(self.worlds.db.execute(
+            'SELECT id FROM worlds WHERE id=?', (body['id'],)).fetchone())
+        self.assertEqual(self.worlds.create(self.a, body)['state']['day'], 73366)
+
     def command(self, token, action='trade', **values):
         view = self.worlds.view(self.id, token)
         return {'protocol': 1, 'sequence': view['next_sequence'],
@@ -277,6 +332,18 @@ class CoopTests(unittest.TestCase):
         with self.assertRaises(ApiError):
             self.worlds.save_session(self.id, 'c'*64, dict(saved, sequence=4))
 
+    def test_player_session_versions(self):
+        context = self.worlds.view(self.id, self.a)['session_context']
+        for version in (7, 8):
+            saved = dict(sequence=version, context=context,
+                         session=f'CROWNLESS_SESSION {version}\nlaunch test\n')
+            self.worlds.save_session(self.id, self.a, saved)
+            self.assertEqual(self.worlds.view(self.id, self.a, campaign=True)['session'], saved)
+        for version in (6, 9):
+            with self.assertRaises(ApiError):
+                self.worlds.save_session(self.id, self.a, dict(sequence=10, context=context,
+                    session=f'CROWNLESS_SESSION {version}\nlaunch test\n'))
+
     def test_retry_survives_server_restart(self):
         body = self.command(self.a, amount=1, good=0)
         first = self.worlds.command(self.id, self.a, body)
@@ -303,7 +370,7 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(self.worlds.view(self.id, self.a)['state']['company']['cargo'][0], 1)
 
     def test_road_and_pony_actions_reach_the_simulation(self):
-        for action in ('camp_road_site', 'pass_road_site', 'meet_pony',
+        for action in ('repair_road_site', 'transfer_road_site', 'clear_road_site', 'camp_road_site', 'pass_road_site', 'meet_pony',
                        'help_pony', 'swap_pony', 'leave_pony'):
             with self.subTest(action=action):
                 before = self.worlds.view(self.id, self.a)['state']
@@ -312,6 +379,34 @@ class CoopTests(unittest.TestCase):
                 self.assertFalse(result['accepted'])
                 self.assertEqual(result['world']['state'], before)
                 self.assertTrue(self.worlds.command(self.id, self.a, body)['duplicate'])
+
+    def test_two_players_clear_and_reload_a_road_site(self):
+        def apply(token, action, **values):
+            body = self.command(token, action, **values)
+            result = self.worlds.command(self.id, token, body)
+            self.assertTrue(result['accepted'], result['message'])
+            return body, result['world']['state']
+        apply(self.a, 'trade', good=2, amount=2)
+        apply(self.a, 'trade', good=6, amount=2)
+        destination = next(t['id'] for t in self.worlds.view(self.id, self.a)['state']['travel'] if t['available'])
+        apply(self.a, 'travel', target=destination)
+        _, stopped = apply(self.b, 'skip_watch')
+        site = stopped['journey']['road_site']
+        self.assertFalse(site['accessible'])
+        body, opened = apply(self.b, 'clear_road_site', target=site['id'])
+        self.assertTrue(opened['journey']['road_site']['accessible'])
+        self.assertGreater(opened['journey']['road_site']['condition'], site['condition'])
+        condition = opened['journey']['road_site']['condition']
+        body, opened = apply(self.b, 'repair_road_site', target=site['id'])
+        self.assertEqual(opened['journey']['road_site']['condition'], min(100, condition + 10))
+        self.assertEqual(self.worlds.command(self.id, self.b, body)['world']['state'], opened)
+        body, opened = apply(self.b, 'transfer_road_site', target=site['id'], good=2, amount=1)
+        self.assertEqual(opened['journey']['road_site']['stock'][2], 1)
+        self.assertEqual(self.worlds.command(self.id, self.b, body)['world']['state'], opened)
+        self.assertEqual(self.worlds.view(self.id, self.a)['state'], opened)
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.assertEqual(self.worlds.view(self.id, self.b)['state'], opened)
 
     def test_two_players_camp_continue_and_resume_the_same_road(self):
         def apply(token, action, target='0'):
@@ -471,6 +566,48 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(self.request('/api/worlds/' + other + '/state')[0], 200)
         self.assertTrue(self.worlds.view(self.id, self.a)['recovery_required'])
 
+    def test_travel_hold_expires_and_releases(self):
+        target = self.worlds.view(self.id, self.a)['state']['travel'][0]['id']
+        self.worlds.command(self.id, self.a, self.command(self.a, 'travel', target=target))
+        pose = self.enter(self.a)
+        from engine import Campaign
+        scales = []
+        with patch.object(Campaign, 'advance', lambda sim, ticks, scale=1: scales.append(scale)):
+            now = time.monotonic()
+            with patch('server.time.monotonic', return_value=now):
+                self.worlds.pose(self.id, self.a, dict(pose, travel_scale=8))
+            self.worlds.last_tick[self.id] = now - 0.1
+            self.worlds.tick(now=now)
+            self.assertEqual(scales[-1], 8)
+            self.worlds.tick(now=now + 0.5)
+            self.assertEqual(scales[-1], 1)
+            with patch('server.time.monotonic', return_value=now + 0.6):
+                self.worlds.pose(self.id, self.a, dict(pose, travel_scale=1))
+            self.worlds.tick(now=now + 0.6)
+            self.assertEqual(scales[-1], 1)
+        for scale in (0, 9, True, 1.5):
+            with self.assertRaises(ApiError):
+                self.worlds.pose(self.id, self.a, dict(pose, travel_scale=scale))
+
+    def test_travel_tick_rebuilds_scene_context(self):
+        target = self.worlds.view(self.id, self.a)['state']['travel'][0]['id']
+        result = self.worlds.command(self.id, self.a, self.command(self.a, 'travel', target=target))
+        self.assertTrue(result['accepted'])
+        pose = self.enter(self.a)
+        now = time.monotonic()
+        with patch('server.time.monotonic', return_value=now):
+            self.worlds.pose(self.id, self.a, dict(pose, travel_scale=8))
+        # Rebuild the cache on a tick, as happens when a new watch changes the scene.
+        self.worlds.db.execute('DELETE FROM scene_contexts WHERE world=?', (self.id,))
+        before = self.worlds.db.execute('SELECT revision FROM worlds WHERE id=?', (self.id,)).fetchone()[0]
+        self.worlds.last_tick[self.id] = now - 0.1
+        self.worlds.tick(now=now)
+        self.assertNotIn(self.id, self.worlds.failed)
+        after = self.worlds.view(self.id, self.a)
+        self.assertGreater(after['state']['tick'], result['world']['state']['tick'])
+        self.assertGreater(after['revision'], before)
+        self.assertIsNotNone(self.worlds.db.execute('SELECT context FROM scene_contexts WHERE world=?', (self.id,)).fetchone())
+
     def test_travel_resume_and_tick_batch_equivalence(self):
         with self.engine.open(0xc0a71a9e) as a:
             target = a.snapshot()['travel'][0]['id']
@@ -617,7 +754,8 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(result, {'deleted': True})
         for table, column in [('worlds', 'id'), ('members', 'world'), ('receipts', 'world'),
                               ('sessions', 'world'), ('appearances', 'world'),
-                              ('scene_contexts', 'world'), ('away_clocks', 'world')]:
+                              ('scene_contexts', 'world'), ('away_clocks', 'world'),
+                              ('world_starts', 'world')]:
             self.assertEqual(self.worlds.db.execute(f'SELECT count(*) FROM {table} WHERE {column}=?', (self.id,)).fetchone()[0], 0)
         self.assertFalse(any(key[0] == self.id for key in self.worlds.seen))
         self.assertFalse(any(key[0] == self.id for key in self.worlds.visits))

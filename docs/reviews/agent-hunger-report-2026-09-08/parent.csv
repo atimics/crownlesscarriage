@@ -1,0 +1,10 @@
+seed,control_population,agent_population,control_prosperity,agent_prosperity,control_hunger,agent_hunger,control_active_settlements,agent_active_settlements,control_closed_routes,agent_closed_routes,repairs,repair_failures,travel_attempts,travel_successes,jobs_accepted,jobs_completed,combats_initiated,combats_won,combats_lost,route_jobs_accepted,relief_jobs_accepted,jobs_resolved,jobs_expired,jobs_abandoned,jobs_unresolved,objective_loss,objective_pass
+
+1,10746,10470,30,29,65,67,6,6,1,0,2,0,3636,50,10,2,0,0,0,10,0,0,2,0,8,180,0
+2,12600,12610,45,46,42,49,6,6,1,0,2,0,3292,329,4,2,0,0,0,4,0,0,1,0,3,70,0
+3,11905,11692,44,43,42,35,6,6,5,1,2,0,3834,218,4,2,0,0,0,4,0,0,1,0,3,70,0
+4,11224,10974,27,26,59,57,6,6,3,2,2,0,5319,174,3,2,0,0,0,3,0,0,1,0,2,50,0
+5,12631,13174,43,55,38,21,6,6,2,2,2,0,4968,417,9,2,0,0,0,9,0,0,2,0,7,160,0
+6,12626,12568,42,45,41,36,6,6,3,1,2,0,3571,420,4,2,0,0,0,4,0,0,1,0,3,70,0
+7,12232,13262,39,53,38,33,6,6,2,2,2,0,4613,654,4,2,0,0,0,4,0,0,1,0,3,70,0
+8,13598,13140,47,46,31,35,6,6,2,2,2,0,5199,373,3,2,0,0,0,3,0,0,1,0,2,50,0

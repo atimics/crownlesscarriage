@@ -15,6 +15,7 @@ static int touch_previous_count;
 static int touch_revision;
 static bool touch_enabled;
 static bool touch_pointer_pending;
+static bool touch_pointer_held;
 static Vector2 touch_pointer;
 static char touch_title[128];
 static char touch_detail[512];
@@ -23,6 +24,14 @@ static char touch_previous_detail[512];
 static char touch_reading[8192];
 static char touch_previous_reading[8192];
 static size_t touch_reading_length;
+
+EMSCRIPTEN_KEEPALIVE void CrownlessTouchHold(float x, float y, int held)
+{
+    touch_pointer_held = held && isfinite(x) && isfinite(y) &&
+        x >= 0 && y >= 0 && x < (float)GetScreenWidth() &&
+        y < (float)GetScreenHeight();
+    if (touch_pointer_held) touch_pointer = (Vector2){x, y};
+}
 
 EMSCRIPTEN_KEEPALIVE void CrownlessTouchTap(float x, float y)
 {
@@ -138,7 +147,15 @@ static Vector2 ClientPointerPosition(void)
     if (client_test_pointer_active) return client_test_pointer;
 #endif
 #if defined(PLATFORM_WEB)
-    if (touch_pointer_pending) return touch_pointer;
+    if (touch_pointer_pending || touch_pointer_held) return touch_pointer;
 #endif
     return GetMousePosition();
+}
+
+static bool ClientPointerHeld(void)
+{
+#if defined(PLATFORM_WEB)
+    if (touch_pointer_held) return true;
+#endif
+    return IsMouseButtonDown(MOUSE_BUTTON_LEFT);
 }

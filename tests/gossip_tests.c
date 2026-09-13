@@ -40,8 +40,13 @@ static void Prepare(void)
         sim.routes[i].condition = 100;
         sim.routes[i].security = 100;
     }
+    /* These delivery fixtures use settlement 1 as their supplied archive. */
+    for (int32_t i = 0; i < sim.settlement_count; ++i)
+        sim.settlements[i].service_mask &= ~(UINT32_C(1) << CC_SERVICE_MILL);
+    sim.settlements[1].service_mask |= UINT32_C(1) << CC_SERVICE_MILL;
     sim.iron_ledger_reserve = 50;
     sim.archives.scribes = 1;
+    CC_CHECK(CcSimMaterialChainSnapshot(&sim).scriptorium_id == sim.settlements[1].id);
 }
 
 static CcId AddAccount(CcId origin, const char *text)
@@ -168,8 +173,10 @@ static void CheckArrivalAndLateRecording(void)
     CC_CHECK(receipt->location_id == sim.settlements[1].id);
     sim.settlements[1].stock[CC_GOOD_PAPER] = 0;
     sim.settlements[1].production[CC_GOOD_PAPER] = 0;
-    sim.settlements[1].service_mask &= ~(UINT32_C(1) << CC_SERVICE_MILL);
+    /* Zero paper and production capacity isolate the supply gate at this seat. */
+    CC_CHECK(CcSettlementHasService(&sim.settlements[1], CC_SERVICE_MILL));
     CcSimAdvanceDays(&sim, 14);
+    CC_CHECK(CcSimMaterialChainSnapshot(&sim).scriptorium_id == sim.settlements[1].id);
     CC_CHECK(!Account(remote)->recorded);
     sim.settlements[1].stock[CC_GOOD_PAPER] = 20;
     sim.iron_ledger_reserve = 50;
@@ -263,6 +270,16 @@ static void CheckJournalAndLegacyReplay(void)
 static void CheckRelayAndBlockedRoad(void)
 {
     Prepare();
+    /* This test isolates the royal-carriage relay, so keep the standing cast
+       from carrying the report first. */
+    for (int32_t i = 0; i < sim.character_count; ++i) {
+        CcCharacter *person = &sim.characters[i];
+        if (person->role != CC_CHARACTER_OFFICIAL) {
+            person->role = CC_CHARACTER_LABORER;
+        }
+        person->travel_destination_id = 0U;
+        person->travel_arrival_day = 0;
+    }
     CcId report = AddAccount(sim.settlements[3].id, "The mine town opens a new market.");
     CcRoyalCarriage *carriage = &sim.royal_carriages[0];
     carriage->location_id = sim.settlements[2].id;
@@ -300,6 +317,23 @@ static void CheckRelayAndBlockedRoad(void)
     CC_CHECK(Account(report)->heard_day > 0);
     CC_CHECK(strcmp(Account(report)->heard_from, "Carriage travelers") == 0);
     CC_CHECK((Account(report)->settlement_mask & (UINT32_C(1) << 2U)) != 0U);
+}
+
+static void CheckUnfundedScriptoriumHearsNews(void)
+{
+    Prepare();
+    sim.archives.scribes = 0;
+    sim.iron_ledger_reserve = 0;
+    CcId local = AddEvent(CC_EVENT_DRAGON_OMEN, sim.dragon.id,
+        sim.settlements[1].id, 1, "Dragon tracks reach Gloamgate.");
+    CcId remote = AddEvent(CC_EVENT_DRAGON_OMEN, sim.dragon.id,
+        sim.settlements[2].id, 1, "Dragon tracks reach Alderwatch.");
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(Account(local)->heard_day == sim.current_day);
+    CC_CHECK(Account(remote)->heard_day == 0);
+    CC_CHECK(!Account(local)->recorded);
+    CC_CHECK(sim.archives.lore_stored == 0);
+    CheckValid();
 }
 
 static void CheckStorySlotReuse(void)
@@ -564,6 +598,7 @@ static void CheckPersonalAccounts(void)
 static void CheckNoticePosting(void)
 {
     Prepare();
+    sim.schema_version = 96U;
     int32_t offer = -1;
     for (int32_t i = 0; i < sim.situation_count; ++i) {
         if (sim.situations[i].status == CC_SITUATION_ACTIVE &&
@@ -621,6 +656,136 @@ static void CheckNoticePosting(void)
     CC_CHECK(carried);
 }
 
+/* Saved boards retain a posting independently of carried accounts. */
+static void CheckSavedNoticeBoard(void)
+{
+    Prepare();
+    CcId account = AddAccount(sim.settlements[0].id, "A traveller remembers the harvest.");
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(sim.notice_board.ready);
+    const CcNotice *notice = NULL;
+    bool carried_account = false;
+    for (int i = 0; i < sim.situation_count; ++i) {
+        const CcNotice *candidate = CcSimSituationNotice(&sim, sim.situations[i].id);
+        if (candidate != NULL) notice = candidate;
+    }
+    CC_CHECK(notice != NULL);
+    CcNotice saved = *notice;
+    CC_CHECK(CcSimSituationNotice(NULL, saved.situation_id) == NULL);
+    CC_CHECK(CcSimSituationNotice(&sim, 0) == NULL);
+    CC_CHECK(saved.day == sim.current_day);
+    CC_CHECK(CcSimEvent(&sim, saved.event_id)->subject_id == saved.situation_id);
+    for (int i = 0; i < CC_MAX_GOSSIP; ++i) {
+        CC_CHECK(sim.gossip[i].event_id == 0 || sim.gossip[i].kind != CC_EVENT_NOTICE_POSTED);
+        carried_account |= sim.gossip[i].event_id == account;
+    }
+    CC_CHECK(carried_account);
+    CheckValid();
+    uint64_t hash = CcSimHash(&sim);
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(CcSimHash(&sim) == hash);
+    const char *path = "notice-board.ccsave";
+    (void)remove(path);
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&restored) == hash);
+    CC_CHECK(strcmp(CcSimSituationNotice(&restored, saved.situation_id)->text, saved.text) == 0);
+    (void)remove(path);
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 1, error, sizeof(error)));
+    hash = CcSimHash(&sim);
+    CcJournalAbandon(&journal);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&restored) == hash);
+    CheckValid();
+    /* Strict rows and field validation protect saved board records. */
+    const char *mutations[] = {
+        "DELETE FROM notice_state;",
+        "UPDATE notice_state SET ready=2;",
+        "DELETE FROM notice_board WHERE slot=0;",
+        "UPDATE notice_board SET day='bad' WHERE slot=0;",
+        "UPDATE notice_board SET text=zeroblob(144) WHERE slot=0;",
+        "UPDATE notice_board SET event_id=1 WHERE situation_id!=0;",
+        "UPDATE notice_board SET situation_id=1 WHERE situation_id!=0;"
+    };
+    for (size_t i = 0; i < sizeof(mutations)/sizeof(mutations[0]); ++i) {
+        CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+        sqlite3 *db = NULL;
+        CC_CHECK(sqlite3_open(path, &db) == SQLITE_OK);
+        CC_CHECK(sqlite3_exec(db, mutations[i], NULL, NULL, NULL) == SQLITE_OK);
+        sqlite3_close(db);
+        CC_CHECK(!CcSaveRead(path, &restored, error, sizeof(error)));
+    }
+    (void)remove(path);
+}
+
+static void CheckNoticePoolPreservation(void)
+{
+    Prepare();
+    sim.notice_board.ready = true;
+    sim.posted_situation_mask = (UINT32_C(1) << (uint32_t)sim.situation_count) - 1U;
+    for (int i = 0; i < CC_MAX_GOSSIP; ++i)
+        (void)AddAccount(sim.settlements[0].id, "A traveller brings an ordinary account.");
+    CcSimRefreshCharacterGossip(&sim);
+    for (int i = 0; i < CC_MAX_GOSSIP; ++i) CC_CHECK(sim.gossip[i].event_id != 0);
+    restored = sim;
+    sim.posted_situation_mask = 0;
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(memcmp(sim.gossip, restored.gossip, sizeof(sim.gossip)) == 0);
+    CC_CHECK(memcmp(sim.gossip_carriers, restored.gossip_carriers, sizeof(sim.gossip_carriers)) == 0);
+    bool posted = false;
+    for (int i = 0; i < sim.situation_count; ++i)
+        posted |= CcSimSituationNotice(&sim, sim.situations[i].id) != NULL;
+    CC_CHECK(posted);
+    CheckValid();
+}
+
+static void CheckLegacyNoticeMigration(void)
+{
+    Prepare();
+    sim.schema_version = 96U;
+    CcSimRefreshCharacterGossip(&sim);
+    int slot = -1;
+    for (int i = 0; i < CC_MAX_GOSSIP; ++i)
+        if (sim.gossip[i].event_id != 0 && sim.gossip[i].kind == CC_EVENT_NOTICE_POSTED) { slot = i; break; }
+    CC_CHECK(slot >= 0);
+    CcGossip old = sim.gossip[slot];
+    CcId situation = CcSimEvent(&sim, old.event_id)->subject_id;
+    uint32_t bit = UINT32_C(1) << (uint32_t)slot;
+    for (int i = 0; i < CcSimGossipCarrierCapacity(&sim); ++i)
+        if ((sim.gossip_carriers[i].stories & bit) != 0) sim.gossip_carriers[i].told_player |= bit;
+    const char *path = "notice-migration.ccsave";
+    (void)remove(path);
+    uint64_t legacy_hash = CcSimHash(&sim);
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION && !restored.notice_board.ready);
+    restored.schema_version = 96U;
+    CC_CHECK(CcSimHash(&restored) == legacy_hash);
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    /* A save between upgrade and first refresh preserves the transition. */
+    uint64_t transition_hash = CcSimHash(&restored);
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &sim, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == transition_hash);
+    CcSimRefreshCharacterGossip(&sim);
+    const CcNotice *notice = CcSimSituationNotice(&sim, situation);
+    CC_CHECK(notice != NULL && notice->event_id == old.event_id && notice->day == old.day);
+    CC_CHECK(strcmp(notice->text, old.text) == 0);
+    CC_CHECK(sim.gossip[slot].event_id == 0);
+    for (int i = 0; i < CcSimGossipCarrierCapacity(&sim); ++i) {
+        CC_CHECK((sim.gossip_carriers[i].stories & bit) == 0);
+        CC_CHECK((sim.gossip_carriers[i].told_player & bit) == 0);
+        CC_CHECK(sim.gossip_carriers[i].versions[slot].confidence == 0);
+    }
+    CheckValid();
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+    (void)remove(path);
+}
+
 /* Telling a story is a command: the told bits persist, the next untold story
    is offered first, and a ledger cannot claim a story nobody carries. */
 static void CheckToldStories(void)
@@ -634,21 +799,15 @@ static void CheckToldStories(void)
     CcSimRefreshCharacterGossip(&sim);
     const CcGossipVersion *version = NULL;
     int32_t slot = CcSimNextUntoldStory(&sim, speaker->id, &version);
-    /* The offer-town posting is the freshest fact and is offered first. */
-    CC_CHECK(slot >= 0 && sim.gossip[slot].kind == CC_EVENT_NOTICE_POSTED);
+    CC_CHECK(slot >= 0 && sim.gossip[slot].event_id == second);
     CC_CHECK(!CcSimStoryTold(&sim, speaker->id, slot));
     CcCommand heard = {.kind = CC_COMMAND_HEARD_STORY,
         .target_id = speaker->id, .amount = slot};
     CC_CHECK(CcSimApply(&sim, &heard, error, sizeof(error)));
     CC_CHECK(CcSimStoryTold(&sim, speaker->id, slot));
-    /* With the posting told, the newer account comes before the older one. */
     int32_t next = CcSimNextUntoldStory(&sim, speaker->id, &version);
-    CC_CHECK(next >= 0 && sim.gossip[next].event_id == second);
+    CC_CHECK(next >= 0 && sim.gossip[next].event_id == first);
     CC_CHECK(!CcSimStoryTold(&sim, speaker->id, next));
-    CC_CHECK(CcSimApply(&sim, &((CcCommand){.kind = CC_COMMAND_HEARD_STORY,
-        .target_id = speaker->id, .amount = next}), error, sizeof(error)));
-    CC_CHECK(CcSimNextUntoldStory(&sim, speaker->id, &version) >= 0 &&
-        sim.gossip[CcSimNextUntoldStory(&sim, speaker->id, NULL)].event_id == first);
     /* The telling is journalled; the save round trip keeps the bits. */
     const char *path = "told-stories.ccsave";
     (void)remove(path);
@@ -660,7 +819,7 @@ static void CheckToldStories(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&restored) == told_hash);
     CC_CHECK(CcSimStoryTold(&restored, speaker->id, slot));
-    CC_CHECK(CcSimStoryTold(&restored, speaker->id, next));
+    CC_CHECK(!CcSimStoryTold(&restored, speaker->id, next));
     CC_CHECK(!CcSimStoryTold(&restored, speaker->id, CcSimNextUntoldStory(
         &restored, speaker->id, NULL)));
     /* A told bit without a carried story is rejected. */
@@ -744,6 +903,7 @@ static void CheckShortageRegisters(void)
              strstr(ledger.text, "telling") != NULL ||
              strstr(ledger.text, "report") != NULL);
     CC_CHECK(strstr(lookouts.text, "food") != NULL ||
+             strstr(lookouts.text, "Food") != NULL ||
              strstr(lookouts.text, "granary") != NULL);
     CC_CHECK(strcmp(road.text, ledger.text) != 0);
     CC_CHECK(strcmp(ledger.text, lookouts.text) != 0);
@@ -760,7 +920,8 @@ static void CheckShortageRegisters(void)
     CC_CHECK(strstr(deep.text, town) != NULL);
     CC_CHECK(strstr(deep.text, "weeks") == NULL);
     CC_CHECK(strstr(deep.text, "food") != NULL);
-    CC_CHECK(strstr(deep.text, "other mouths") != NULL);
+    CC_CHECK(strstr(deep.text, "word going round") != NULL ||
+             strstr(deep.text, "so people say") != NULL);
     printf("Deep hearsay: %s\n", deep.text);
     /* The telling is stable: same account, same speaker, same words. */
     CcSpeech again;
@@ -989,7 +1150,8 @@ static void CheckHeldAccountBoundary(void)
         int32_t slot = GossipSlotOf(id);
         CarrierOf(speaker->id)->versions[slot].confidence = 10;
         CC_CHECK(CcSpeechGossip(&sim, speaker->id, offset, false, &again));
-        CC_CHECK(strstr(again.text, "not sure") != NULL);
+        CC_CHECK(strstr(again.text, "if the story is right") != NULL ||
+                 strstr(again.text, "if there's truth in the rumour") != NULL);
         printf("Held account: %s\n", first.text);
     }
     Prepare();
@@ -1065,10 +1227,109 @@ static void CheckGossipTextBounds(void)
     }
 }
 
+/* The Scriptorium is the archive town the sim favors (Gloamgate by
+   convention in a fresh world). */
+static const CcSettlement *ScriptoriumOf(const CcSim *s)
+{
+    if (s == NULL) return NULL;
+    for (int32_t i = 0; i < s->settlement_count; ++i) {
+        if (strcmp(s->settlements[i].name, "Gloamgate") == 0) {
+            return &s->settlements[i];
+        }
+    }
+    return &s->settlements[0];
+}
+
+/* A whelp hatches in a hollow lair: the research-mission vertical slice.
+
+   The sim runs a dragon whose lair town can be abandoned (its own wrath
+   empties it). Before schema 55, a whelp hatching in that dead town was
+   silent forever: GatherGossip dropped facts whose origin settlement was
+   abandoned, and ExchangeGossip would not let anyone exchange gossip at an
+   abandoned place. So the world genuinely never learned its dragon was
+   alive again — the story existed, but no road carried it.
+
+   Schema 55 fixes both: the fact enters the pool from the dead origin, and
+   a scout who *visits the ruins* hears it and can carry it to the
+   Scriptorium. This test proves the whole contract:
+     1) a dragon event at an abandoned origin becomes gossip,
+     2) a scout present at the dead town picks it up,
+     3) the scout carrying it to the Scriptorium causes intake to hear it.
+*/
+static void CheckResearchMissionHearsAbandonedLair(void)
+{
+    Prepare();
+    CcId lair = sim.settlements[sim.settlement_count - 1].id;
+    for (int32_t i = 0; i < sim.settlement_count; ++i) {
+        if (sim.settlements[i].id == lair) {
+            /* A proper ruin: no services, no security, no prosperity. The
+               lair town is dead, which is precisely the case that used to
+               silence its dragon. */
+            sim.settlements[i].population = 0;
+            sim.settlements[i].service_mask = 0U;
+            sim.settlements[i].service_project = CC_SERVICE_NONE;
+            sim.settlements[i].service_project_days = 0;
+            sim.settlements[i].security = 0;
+            sim.settlements[i].prosperity = 0;
+        }
+    }
+    const CcSettlement *scriptorium_town = ScriptoriumOf(&sim);
+
+    /* The whelp hatches in the ruins (schema 55 makes succession gossip
+       regardless of magnitude). */
+    sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    sim.schema_version = 54U;
+    CcId whelp = AddEvent(CC_EVENT_DRAGON_SUCCESSOR, sim.dragon.id, lair,
+        1, "A whelp hatches in Varkesh's empty lair and takes the first hoard.");
+    static CcSim before_legacy;
+    before_legacy = sim;
+    CcSimRefreshCharacterGossip(&sim);
+
+    /* A scout rides to the ruins and hears it. Any adult character present
+       at the dead town now exchanges, so the story can leave. */
+    CcCharacter *scout = NULL;
+    for (int32_t i = 0; i < sim.character_count; ++i) {
+        const CcCharacter *person = &sim.characters[i];
+        if (CcCharacterAgeYears(&sim, person) >= 16 &&
+            person->activity != CC_CHARACTER_ACTIVITY_TRAVELLING) {
+            scout = &sim.characters[i];
+            break;
+        }
+    }
+    CC_CHECK(scout != NULL);
+    scout->current_settlement_id = lair;
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(StoryOffset(&sim, scout->id, whelp) < 0);
+    sim = before_legacy;
+    scout->current_settlement_id = lair;
+    sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimRefreshCharacterGossip(&sim);
+    CC_CHECK(StoryOffset(&sim, scout->id, whelp) >= 0);
+
+    /* The scout carries the fact to the Scriptorium; intake hears it. */
+    CC_CHECK(scriptorium_town != NULL);
+    scout->current_settlement_id = scriptorium_town->id;
+    CcSimRefreshCharacterGossip(&sim);
+    const CcGossip *story = NULL;
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        if (sim.gossip[i].event_id == whelp) { story = &sim.gossip[i]; break; }
+    }
+    CC_CHECK(story != NULL);
+    /* The delivered report reaches intake (heard) — the research-mission
+       contract. Writing it into a tome is the archive's weekly step, covered
+       by CheckLocalAndRemoteAccounts; the essential fix here is that a fact
+       born in a dead town can reach the Scriptorium at all. */
+    CC_CHECK(story->heard_day > 0);
+    CheckValid();
+}
+
 int main(void)
 {
     CheckPersonalAccounts();
     CheckNoticePosting();
+    CheckSavedNoticeBoard();
+    CheckLegacyNoticeMigration();
+    CheckNoticePoolPreservation();
     CheckToldStories();
     CheckLocalAndRemoteAccounts();
     CheckArrivalAndLateRecording();
@@ -1076,6 +1337,7 @@ int main(void)
     CheckLostCourier();
     CheckJournalAndLegacyReplay();
     CheckRelayAndBlockedRoad();
+    CheckUnfundedScriptoriumHearsNews();
     CheckStorySlotReuse();
     CheckHearingOrder();
     CheckLocalRumorText();
@@ -1085,6 +1347,7 @@ int main(void)
     CheckDramaticRegisters();
     CheckHeldAccountBoundary();
     CheckGossipTextBounds();
+    CheckResearchMissionHearsAbandonedLair();
     puts("Traveler gossip network passed.");
     return 0;
 }

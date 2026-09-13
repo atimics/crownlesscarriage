@@ -1,0 +1,4 @@
+seed,control_population,agent_population,control_prosperity,agent_prosperity,control_hunger,agent_hunger,control_active_settlements,agent_active_settlements,control_closed_routes,agent_closed_routes,repairs,repair_failures,travel_attempts,travel_successes,jobs_accepted,jobs_completed,combats_initiated,combats_won,combats_lost,route_jobs_accepted,relief_jobs_accepted,jobs_resolved,jobs_expired,jobs_abandoned,jobs_unresolved,objective_loss,objective_pass
+
+1,13370,13537,31,31,50,36,4,5,8,8,2,0,18717,50,10,2,0,0,0,10,0,0,2,0,8,180,0
+2,13354,13296,34,38,36,36,4,4,8,8,2,0,12157,329,4,2,0,0,0,4,0,0,1,0,3,70,0

@@ -1,0 +1,23 @@
+{
+  "voice": "mara-v1",
+  "line": "warning",
+  "text": "Get the horses across the bridge! I will stay with you.",
+  "file": "pocket-mara-v1-warning.wav",
+  "styled_file": "pocket-mara-v1-warning-game.wav",
+  "seconds": 4.56,
+  "generation_seconds": 0.4509911662898958,
+  "first_chunk_seconds": 0.03652120800688863,
+  "real_time_factor": 0.09890157155480171,
+  "sample_rate": 24000,
+  "seed": 20260912,
+  "reference_sha256": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+  "sha256": "65fd10f60d0f93e835397960a9273b15d1d4149c7f8419cc0fcfbf2d3a417201",
+  "master_sha256": "65fd10f60d0f93e835397960a9273b15d1d4149c7f8419cc0fcfbf2d3a417201",
+  "wav_sha256": "8c9d56b5bef14aa65d07838a34f65249f72fea5453dd7b445b2635980ae0f452",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

@@ -1,0 +1,276 @@
+{
+  "codec": "MP3",
+  "bitrate_kbps": 48,
+  "files": [
+    {
+      "file": "revised/brook-second.mp3",
+      "sha256": "e3e3ac0527331a39bb334f06fef14f25f583ef4c283a8c6387e45cbac92b77b0",
+      "source_wav_sha256": "f3da030a1a862380fcbec177e64a381cb8b4b318d559179f02ea8d41fcb1e78d"
+    },
+    {
+      "file": "revised/flint-second.mp3",
+      "sha256": "33cf824d65233211d5ad7b5e52dbf991e3688064ea49fb4eb0dc56d5abbb5fda",
+      "source_wav_sha256": "b74d823ed7b5682d32ce3699f8240a1070c4d96690561b8c5d491947bbc2f685"
+    },
+    {
+      "file": "revised/hearth-second.mp3",
+      "sha256": "ab745e14776f5286a0157317ed60fdbb82f568299eea00dbbb3c693b9779f53f",
+      "source_wav_sha256": "297930487bd9520ccffedf0678c725c2057d57f7867c7ef0dc7d78a86ff47825"
+    },
+    {
+      "file": "revised/lark-second.mp3",
+      "sha256": "eb2efca599997071eb274e59a461d9fd556bfdebf9a5ede2e8ff5c280d6ff10f",
+      "source_wav_sha256": "63f6bd6da5db2c3498cb8f52691f96991a66dd62839713569613732a5565c904"
+    },
+    {
+      "file": "revised/oak-second.mp3",
+      "sha256": "5d59f415b5b50aac7893c90af158bce0c0d4e53cd1195e01b3e89dbb6bd4724e",
+      "source_wav_sha256": "32eaa039404ac1cda2e4f201264a17581a827a23c71e44c85b9837a808a41eb9"
+    },
+    {
+      "file": "revised/reed-second.mp3",
+      "sha256": "26b64b4f83cfc049169d3b63c7ed644b6d45aef96c26d45dcc390862e7f0b281",
+      "source_wav_sha256": "60d7a8dc4acef35aa0c8169d9658ec67e7ad624bb7613855a6bd0ae1a45d4360"
+    },
+    {
+      "file": "pocket/brook-second-original-bargain-game.mp3",
+      "sha256": "fbee27d53150afe1fcbb6b95287158abc66cc076aad1169940699542850fedd3",
+      "source_wav_sha256": "9241e6fe5374acbb123ce3c42de9f392dfd3324cf42b4269703c177a44fab754"
+    },
+    {
+      "file": "pocket/brook-second-original-bargain.mp3",
+      "sha256": "606a4201626a109fb1cb18a57a43aeeb0a7900c614808ba0d13acfd9655dafad",
+      "source_wav_sha256": "4ea6c536191fa4ac7175115f72593efc2de8063d21d90f2d9cf6b2b1e8a8c0d8"
+    },
+    {
+      "file": "pocket/brook-second-original-welcome-game.mp3",
+      "sha256": "6206858a1a05324a340fb5a37ba1e7676d7dae145e3bee83b44753972b4bfae6",
+      "source_wav_sha256": "54754dc6b38bbc8cc5a64706491ce634f97cf78d8ba1ee6d62f3a94b7b64a595"
+    },
+    {
+      "file": "pocket/brook-second-original-welcome.mp3",
+      "sha256": "86590c093b61c2067d727d04093ae72017d8b164e23988e328a0ae59fe34c8b3",
+      "source_wav_sha256": "8ab29e5323497a2254615f49cc0683c74e5577e52ce389a45960856e79946081"
+    },
+    {
+      "file": "pocket/brook-second-revised-bargain-game.mp3",
+      "sha256": "770d0c1e1de945f73a0b3831f63b4926d7cbfafe63764b7298d7ddda4bac1fe5",
+      "source_wav_sha256": "b59ce3e6171c96e254432e73cc657a23f03e598ee52b3ef8e77fbccfad629ab2"
+    },
+    {
+      "file": "pocket/brook-second-revised-bargain.mp3",
+      "sha256": "676aefc46e9f2643d00d1318dd260f725f024527e1d514dd6dd591215c2a2629",
+      "source_wav_sha256": "c49a877578bef118b6a3c34b34bdbec2f279efd9aa6c9379a867a6744ee801ab"
+    },
+    {
+      "file": "pocket/brook-second-revised-welcome-game.mp3",
+      "sha256": "271f17fe7f846e5382b2cf1033979ce42472ebed0a7957d386d696955d92b3e2",
+      "source_wav_sha256": "d048e4c6528a13ae6da12142085d7db81c2c31f1f78969a1a5b943ea5d2bb932"
+    },
+    {
+      "file": "pocket/brook-second-revised-welcome.mp3",
+      "sha256": "d3e60e1ba9d570adf04223879d3047b5f23127a04d3e6b9f3496e8306d9c9483",
+      "source_wav_sha256": "c458af14100e4b8aed1b1ace01780f4a4e718c33347b8b75ba75caec563ae083"
+    },
+    {
+      "file": "pocket/flint-second-original-bargain-game.mp3",
+      "sha256": "1fbbd82002188a51289a0672f34a17be52e2b2bcaa6cc84dd723bdf52ec94f1d",
+      "source_wav_sha256": "cd62e291a2be68dd09742f9193f6a7ec0c45dd785e0fa6dd4a4c9f970af27625"
+    },
+    {
+      "file": "pocket/flint-second-original-bargain.mp3",
+      "sha256": "de2b7e0247cc810a683f83463ffa3a77582cd58d5e2d77cd2cf98177a3818649",
+      "source_wav_sha256": "52ce57c40fea5e90631fbb11119209500503fb42d7f603aa4d25fa7796009b15"
+    },
+    {
+      "file": "pocket/flint-second-original-welcome-game.mp3",
+      "sha256": "9e0192ebad665edd966a2ef468bbf2ac8aad1167d97adeb3a72e372f75a26ca4",
+      "source_wav_sha256": "15dc7ac4c81112ec851a196ab82ff0ce31b97dba094b3adac4030aec07ef3b77"
+    },
+    {
+      "file": "pocket/flint-second-original-welcome.mp3",
+      "sha256": "a37d6bf786c2071a200295ad900eaea9c14b8d26210c2c2d88153b1f2bb41375",
+      "source_wav_sha256": "ec74ba6090129b86f1268104d49d13f2a53e49d192ccc99ad689d8d2e7602327"
+    },
+    {
+      "file": "pocket/flint-second-revised-bargain-game.mp3",
+      "sha256": "9ddbfb11f060145c386b0a8d0d6852dc1489b326d67d6475ad94493507977747",
+      "source_wav_sha256": "a7ba47dcd3e751a4a782d7d7fdb90e990c2e1f7578929bfca422d6f4100b4092"
+    },
+    {
+      "file": "pocket/flint-second-revised-bargain.mp3",
+      "sha256": "16af21f4da503f2e4f68e25297ae7acdcc4e209103f8dc597ac984e9d107290a",
+      "source_wav_sha256": "10d058312cb12a2e9cf866d610d2ee4e805e566131972aff37f21e2f48b2188c"
+    },
+    {
+      "file": "pocket/flint-second-revised-welcome-game.mp3",
+      "sha256": "bf5f3ce7332e41f8a5aa087d6213433956d6a3187f56486064395b009167ecf2",
+      "source_wav_sha256": "c769ee075c839f59935c9effc75d3e0b1bfbc170f7e7cb1ecc2615e7f84e7cc6"
+    },
+    {
+      "file": "pocket/flint-second-revised-welcome.mp3",
+      "sha256": "3dcd364ccf1914664db8b87037624940551501ef77d5bf30c1a9b235943a65ef",
+      "source_wav_sha256": "247e53ac68ad6c2178b878d1f6fe54b09dda27bcd79fc2591629be53bfe0d876"
+    },
+    {
+      "file": "pocket/hearth-second-original-bargain-game.mp3",
+      "sha256": "d04c7159da1b601eb573018fdff77b2d8fab0f0d553e284b66d9a2654c2dbb9b",
+      "source_wav_sha256": "770dc6912fa6acbaea59ea37de421d7ccec288a591982f07a8a78cd2c2cb3da6"
+    },
+    {
+      "file": "pocket/hearth-second-original-bargain.mp3",
+      "sha256": "a7a5442a1cc2122796aee7e194a6084858f46532a0ee735ae7cf6774a321d960",
+      "source_wav_sha256": "d8fddd972b383dfc5818cc406b8672abf0474807faca84e61a3baf383677b4b6"
+    },
+    {
+      "file": "pocket/hearth-second-original-welcome-game.mp3",
+      "sha256": "61dc78e358b3aeeb35500bb7c91d49cc706f865cb2cf590893691d6ff5bb8ac4",
+      "source_wav_sha256": "581e5e815689c50dc166444798356d47c90e7a66da4e92a8aab712e34cdbabf5"
+    },
+    {
+      "file": "pocket/hearth-second-original-welcome.mp3",
+      "sha256": "a38437054d9e2d39cc0490554a29241d59e0ed0e67f1d96bb2f7d8015b9672b0",
+      "source_wav_sha256": "6cafd42f3567812b4adfb32b15955ba4793bfa8f6694b0736561ea08e1f4f322"
+    },
+    {
+      "file": "pocket/hearth-second-revised-bargain-game.mp3",
+      "sha256": "e27bdd7f8cf1869e734daa7169ba1212b78c337679b2207e27712a3c93f12b17",
+      "source_wav_sha256": "4816c2201c0006dd99711d23c30da28b6106be920658febb5b48341f74c87296"
+    },
+    {
+      "file": "pocket/hearth-second-revised-bargain.mp3",
+      "sha256": "908ace472ad7942ecf8f001ef1389a0deff2bee79bcef2ee1f08fea6a9b23961",
+      "source_wav_sha256": "0c62fef331c4e1d71d5976149932cfeb6ae0b07fbccc2963cd60f644b229635f"
+    },
+    {
+      "file": "pocket/hearth-second-revised-welcome-game.mp3",
+      "sha256": "e0249efa3090728457421101865f0b189fbeb61551de97be0ebf635b51222990",
+      "source_wav_sha256": "55e3041098d599334435218ad9d82c008ee4a11d05008433d65b03b16c769087"
+    },
+    {
+      "file": "pocket/hearth-second-revised-welcome.mp3",
+      "sha256": "71b51d8b6733360dfe0a452cf432b22a83e2f4227fedaa757facaa599c30bf11",
+      "source_wav_sha256": "4c34fc1a64412c4fe16a8d127667df527a48a377b7b6c82635770fa8e6d8883e"
+    },
+    {
+      "file": "pocket/lark-second-original-bargain-game.mp3",
+      "sha256": "a1319cf35672839186babe3aca528fae12002427845e63a83e5ba9a753164282",
+      "source_wav_sha256": "382578d9fe04884980cefd4fb0bf10e7ed4e4274635704c89c263d3e8e18f4f6"
+    },
+    {
+      "file": "pocket/lark-second-original-bargain.mp3",
+      "sha256": "f7c8d63ee4f3d7233f24e4e6a959af41bd43bf3a5de4a4d134908e39a4a83600",
+      "source_wav_sha256": "08d041e7f7c9068a1b571e2cf31f8c593c83b1c5dc13435774168545f4ca31a9"
+    },
+    {
+      "file": "pocket/lark-second-original-welcome-game.mp3",
+      "sha256": "217d5af58d7abe3b83f4a3317a9a93261950710bb9a82fbfdaff646d4a672c4c",
+      "source_wav_sha256": "e3d7df671a16c4cc62da2985995cf6969d5d75858fbebb32bf3db0224ff04a5a"
+    },
+    {
+      "file": "pocket/lark-second-original-welcome.mp3",
+      "sha256": "1abca936ce8ddc6f7c45b3f41aa2f8b71f7d18e8a2fd34a91d5d1e6a68a5bb66",
+      "source_wav_sha256": "bdf79d673c35d9a451b6b49028811af87d91a46a4c2505f3530a3dbc6e6025e0"
+    },
+    {
+      "file": "pocket/lark-second-revised-bargain-game.mp3",
+      "sha256": "2877fa642b8b4170a1bedd91b04751054fb9da8aa2615000814e9325e63ed5b3",
+      "source_wav_sha256": "133604163571c337813f907f40667d57d495e52289de772f4b497fc1d71743f6"
+    },
+    {
+      "file": "pocket/lark-second-revised-bargain.mp3",
+      "sha256": "4a2fc875e24443f9be9bd4072f8cc041ea6b5922b68e72071364fefdd1780d08",
+      "source_wav_sha256": "b14e483ddd671465234ee6d2579fce954e8476d99abec7e645a1b6de0b326990"
+    },
+    {
+      "file": "pocket/lark-second-revised-welcome-game.mp3",
+      "sha256": "5f6546ee8ea97bd887cefca283823156f4c34a7f55ca4bc579e246955fc33b40",
+      "source_wav_sha256": "45d23250720cd326329c19d23256fb1af8382a16649d17ba1c540f6123d8f0df"
+    },
+    {
+      "file": "pocket/lark-second-revised-welcome.mp3",
+      "sha256": "77d43aa6bdb32982231e91521acb003c7a9df517ca7f74798ffdee249abcb86c",
+      "source_wav_sha256": "841ad59acb4e83d7fd87ca1c99353fa230732d62f3bcf5df7fdf4140549a4521"
+    },
+    {
+      "file": "pocket/oak-second-original-bargain-game.mp3",
+      "sha256": "3a8af86dc864f317a7f3563d5d550d397fab527f0af3490e05e5a151084cca51",
+      "source_wav_sha256": "5b03f9f76b67c15cc031008d6321aefe69fc633881894dd8d6fb646aa67c43b5"
+    },
+    {
+      "file": "pocket/oak-second-original-bargain.mp3",
+      "sha256": "0061e3c9cd87d565be7f1010a4c2087461d28817d1985dadbf2303b1a81855b8",
+      "source_wav_sha256": "6ac8c87a19195cec491368acd807c6be97837b85bfa259a0e81fda2d3d901583"
+    },
+    {
+      "file": "pocket/oak-second-original-welcome-game.mp3",
+      "sha256": "5d07b4be229f3420e911a40a22d5ef0294f63c628654be6842add588be8c5d76",
+      "source_wav_sha256": "1f29ef47abe9541b7f73e71f582af7a852231830a4402f03dbd36631e88e3e11"
+    },
+    {
+      "file": "pocket/oak-second-original-welcome.mp3",
+      "sha256": "191c31db296d1b103678d0960a70a4aa52cb0010b0fb2ca54da51c28dd7ec7da",
+      "source_wav_sha256": "1079b05886a40741eec191d53306f85393cacc91025213b47dda516302df7b8b"
+    },
+    {
+      "file": "pocket/oak-second-revised-bargain-game.mp3",
+      "sha256": "95e4d6c6f2b10560942b13a0308636eeb4be35f64c3f0ef81fcbf9e01f18af99",
+      "source_wav_sha256": "eebf1d57af9dd402c10cf5ccf78c39a47792a114f56312b81db4cb94fa2af4f2"
+    },
+    {
+      "file": "pocket/oak-second-revised-bargain.mp3",
+      "sha256": "47f08347397df151b7450b7748f6ade1e15a0ad9df594fc237fd56fff9bbc6e6",
+      "source_wav_sha256": "a34b7765164d3d70179f06217d6fa98638212c3afcdacebd80cc5f829493fe8e"
+    },
+    {
+      "file": "pocket/oak-second-revised-welcome-game.mp3",
+      "sha256": "ac63fca2d5f718ff2e026fefa7e3fccae008e651d3a3ed96aad523db1ee5e219",
+      "source_wav_sha256": "ac4126a5d948fd2ddad5786c62b02e173858a27857b6cb2265a1bf486ad5d434"
+    },
+    {
+      "file": "pocket/oak-second-revised-welcome.mp3",
+      "sha256": "1398556717b5db0c395ed97bf7c70d089c178b46f13f00221db070c937487092",
+      "source_wav_sha256": "7e7230b0a45326e233c87de0990071af9a38a47e2d20c105c8dd5b51473654cb"
+    },
+    {
+      "file": "pocket/reed-second-original-bargain-game.mp3",
+      "sha256": "8accb9d4aa325fd46011c9920ad50c3e698f37c32dad3217f459ed3241b86ce5",
+      "source_wav_sha256": "39337dd506690d1a0842ee2c2c922f6479be75218f5efd3e2ea4c63ea5baa277"
+    },
+    {
+      "file": "pocket/reed-second-original-bargain.mp3",
+      "sha256": "ec9d90b6b51443389cbb4bc1a46e5d137069a296d4df7bc2af7c5109eb2436a8",
+      "source_wav_sha256": "7cdfc1ba11687983cb384a6d1cbe12d0bdfd9c1ca37877d9b4fa8c3f2003fa09"
+    },
+    {
+      "file": "pocket/reed-second-original-welcome-game.mp3",
+      "sha256": "07b22bdef00dc7f46b1182fdc44f4cb2d182b85eb16c7e3c8262a43cf4dfa6c9",
+      "source_wav_sha256": "71b73dff49d8ddfaa85f91143982e07ec32c8829f3773e5bb86308ffc3d2bc24"
+    },
+    {
+      "file": "pocket/reed-second-original-welcome.mp3",
+      "sha256": "6a961e633f6f9aa8f37ea3cb0a708f3866f5da2fe8fcf2a65880df9193a4cd16",
+      "source_wav_sha256": "8b4ee5571e9b8cb08c5a7c81e35ddca18ddbfa5ad3c355f19d602018c8d92251"
+    },
+    {
+      "file": "pocket/reed-second-revised-bargain-game.mp3",
+      "sha256": "e5861149f3a3bfd7b4d7fc29d2568ff6212b26c88ba3be078d2b72a6b06402d3",
+      "source_wav_sha256": "f48e8f62920054eb265b620708a55cba365e0817225146b0209cc2c89cfa141f"
+    },
+    {
+      "file": "pocket/reed-second-revised-bargain.mp3",
+      "sha256": "21757600bd16f39d10a5720169c1a80dbdf2c802e9db0841ccacfbf1a6f7f09c",
+      "source_wav_sha256": "f4b0b353cdd8aa639e80e840868e4284dad732de6a5f85ff185d70c8b91c43b9"
+    },
+    {
+      "file": "pocket/reed-second-revised-welcome-game.mp3",
+      "sha256": "b8067c77536214573cce38ade559fc990d20f457876aac7d96ce7a769ec5c350",
+      "source_wav_sha256": "d3cc101f6294a612eb046a93f07d892d93fcff8165ae34fbc081bf5e09f63bcf"
+    },
+    {
+      "file": "pocket/reed-second-revised-welcome.mp3",
+      "sha256": "3482af28a6d8026c14ca05b7dc923b3fe44ac03eb4e3847100289f823b80117f",
+      "source_wav_sha256": "1b0b97880c194bfadf9d8913c37914bb196f70a05c1eefe5d17601e0d523874f"
+    }
+  ]
+}

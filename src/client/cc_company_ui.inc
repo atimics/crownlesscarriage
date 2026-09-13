@@ -138,6 +138,10 @@ static void FrontendCompanyShare(FrontendState *state)
 
 static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
 {
+    if (action == FRONTEND_ACTION_CAMPAIGN_CHOICE && state->screen == FRONTEND_CREATE_WORLD) {
+        state->deep_wyrm_start = !state->deep_wyrm_start;
+        return true;
+    }
     if (state->screen == FRONTEND_INVITATION) {
         if (action == FRONTEND_ACTION_INVITE_COPY) {
             FrontendCompanyShare(state);
@@ -192,7 +196,7 @@ static bool FrontendCompanyAction(FrontendState *state, FrontendAction action)
     }
     if (action == FRONTEND_ACTION_CREATE_SUBMIT || action == FRONTEND_ACTION_JOIN_SUBMIT) {
         bool ok = action == FRONTEND_ACTION_CREATE_SUBMIT ?
-            CcCompanyCreate(&state->company, state->player_name, state->world_name, state->world_pass,
+            CcCompanyCreateCampaign(&state->company, state->player_name, state->world_name, state->world_pass, state->deep_wyrm_start,
                 state->feedback, sizeof(state->feedback)) :
             CcCompanyJoin(&state->company, state->player_name, state->invitation, state->feedback, sizeof(state->feedback));
         if (ok) {

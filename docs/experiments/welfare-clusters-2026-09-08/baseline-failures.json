@@ -1,0 +1,22 @@
+[
+  {
+    "seed": 357,
+    "exit_code": 1,
+    "error": "Seed 357 failed in year 280: Royal carriage 1 invalid (m=1 rc=1 tm=0 lk=0 slots=3/4/4 r=3->4 dep=102172 arr=102175)."
+  },
+  {
+    "seed": 423,
+    "exit_code": 1,
+    "error": "Seed 423 failed in year 70: Settlement service state is invalid."
+  },
+  {
+    "seed": 806,
+    "exit_code": 1,
+    "error": "Seed 806 failed in year 125: Settlement service state is invalid."
+  },
+  {
+    "seed": 996,
+    "exit_code": 1,
+    "error": "Seed 996 failed in year 94: Settlement service state is invalid."
+  }
+]

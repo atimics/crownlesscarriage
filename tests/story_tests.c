@@ -394,13 +394,14 @@ static void ValidateReliefArrivalDialogue(void)
     CcId offer = sim.player.location_id;
     sim.player.location_id = target->id;
     sim.carriage.location_id = target->id;
-    CC_CHECK(CcSimApply(&sim, &pledge, error, sizeof(error)));
+    CC_CHECK(!CcCharacterRemembers(affected,
+        CC_CHARACTER_MEMORY_PLAYER_PROMISED, relief->id));
     sim.player.location_id = offer;
     sim.carriage.location_id = offer;
     char spoken[192];
     CC_CHECK(CcStoryCharacterText(
         &sim, relief, affected, spoken, sizeof(spoken)));
-    CC_CHECK(strstr(spoken, target->name) != NULL);
+    CC_CHECK(strcmp(spoken, "We are running out of food.") == 0);
 
     sim.player.location_id = target->id;
     sim.carriage.location_id = target->id;
@@ -408,6 +409,37 @@ static void ValidateReliefArrivalDialogue(void)
     CC_CHECK(CcStoryCharacterText(
         &sim, relief, affected, spoken, sizeof(spoken)));
     CC_CHECK(strstr(spoken, "market hall") != NULL);
+    uint64_t arrival_hash = CcSimHash(&sim);
+    const CcStoryLine *arrival_line = CcStoryCharacterLine(&sim, relief, affected);
+    CC_CHECK(arrival_line != NULL && arrival_line->beat == CC_STORY_BEAT_PROMISED);
+    CC_CHECK(!CcCharacterRemembers(affected,
+        CC_CHARACTER_MEMORY_PLAYER_PROMISED, relief->id));
+    CC_CHECK(CcSimHash(&sim) == arrival_hash);
+    /* Cargo and co-location give the recipient direct evidence. */
+    sim.carriage.location_id = offer;
+    CC_CHECK(CcStoryCharacterText(&sim, relief, affected, spoken, sizeof(spoken)));
+    CC_CHECK(strstr(spoken, "market hall") == NULL);
+    sim.carriage.location_id = target->id;
+    int32_t food = sim.player.cargo[CC_GOOD_FOOD];
+    sim.player.cargo[CC_GOOD_FOOD] = relief->quantity - 1;
+    CC_CHECK(CcStoryCharacterText(&sim, relief, affected, spoken, sizeof(spoken)));
+    CC_CHECK(strstr(spoken, "market hall") == NULL);
+    sim.player.cargo[CC_GOOD_FOOD] = food;
+    sim.player.accepted_situation_id = 0;
+    CC_CHECK(CcStoryCharacterText(&sim, relief, affected, spoken, sizeof(spoken)));
+    CC_CHECK(strstr(spoken, "market hall") == NULL);
+    sim.player.accepted_situation_id = relief->id;
+    CcCharacter *recipient = NULL;
+    for (int32_t i = 0; i < sim.character_count; ++i)
+        if (sim.characters[i].id == affected->id) recipient = &sim.characters[i];
+    CC_CHECK(recipient != NULL);
+    CcCharacterActivity activity = recipient->activity;
+    recipient->activity = CC_CHARACTER_ACTIVITY_TRAVELLING;
+    CC_CHECK(CcStoryCharacterText(&sim, relief, affected, spoken, sizeof(spoken)));
+    CC_CHECK(strstr(spoken, "market hall") == NULL);
+    recipient->activity = activity;
+    CC_CHECK(CcSimHash(&sim) == arrival_hash);
+
 
     /* Supply the arrival record used by the market delivery command. */
     sim.resolved_journey_situation_id = relief->id;

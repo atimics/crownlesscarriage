@@ -1,0 +1,358 @@
+[
+  {
+    "args": [
+      "--seed",
+      "42",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--scan"
+    ],
+    "bytes": 12149,
+    "sha256": "fa7910d7d35b728255a50f93a8c79e484dbdbe3bce664b4b047056c8666bd734",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "42",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--compare"
+    ],
+    "bytes": 8677,
+    "sha256": "84ccc1c5ffbee6216f579f1711228641047f1099421c84c991a03996aaf71571",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "42",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "dragon"
+    ],
+    "bytes": 472,
+    "sha256": "60993757e79e28077445ebc9f278e1d2cd3a734628d2010f6dc3bce5ca28bd1b",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "42",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "goblin"
+    ],
+    "bytes": 2273,
+    "sha256": "07dca774a78962d2e477777641ed3984d8f9a5a560f2cb28b913f09c63415d43",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "42",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "war"
+    ],
+    "bytes": 466,
+    "sha256": "68abeef74da6799b8a82f00f27bc0dbb5122100bbfed937cbe5643ee6859a4f3",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "42",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "throne"
+    ],
+    "bytes": 2443,
+    "sha256": "3447425eda8f42db5070be4e08bb719484e243410b516641352a87869e8f6765",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "42",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "wheat"
+    ],
+    "bytes": 2424,
+    "sha256": "7a5eb63072832989c0545997818873b4c952a64c1a2a92b1785f8c298c80fd56",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "42",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "herds"
+    ],
+    "bytes": 470,
+    "sha256": "7a5d222c2fe040eb764effa59762fa190850153fc4039fbeacde51cb4f7b161c",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "42",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "ponies"
+    ],
+    "bytes": 472,
+    "sha256": "9349dd04f5602535e32144845c01b5f808488a21650a0df8859faa1ca5ab1e7e",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "42",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "road"
+    ],
+    "bytes": 468,
+    "sha256": "5f81030fecbc2aeac050ba4bbda81a94cf8609a8f74fbe63873feabeb7862aa9",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "42",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "bandit"
+    ],
+    "bytes": 472,
+    "sha256": "ee884ff39bb2bc71210fa6920d5c3e6e0f591454e35a11ad4e39f77911316194",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "42",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "treasure"
+    ],
+    "bytes": 476,
+    "sha256": "e6f825e311f5a8a01c969c5ecdcee86b98fd419ab7cc7426360e9362398f07f7",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "1592590337",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--scan"
+    ],
+    "bytes": 12217,
+    "sha256": "469547fd57c29fca628ba61ef9b2ddcd5d16c6ae76234504d656133091322275",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "1592590337",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--compare"
+    ],
+    "bytes": 9600,
+    "sha256": "6478c69bdf51ea83f3a75750adb8ab14df3e2d9d733323df22d0686dacacf072",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "1592590337",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "dragon"
+    ],
+    "bytes": 488,
+    "sha256": "aff0c6c64ce54f51b6db5b047565f116dae9e233f1a9f83e3b11dc84afcfcc43",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "1592590337",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "goblin"
+    ],
+    "bytes": 2232,
+    "sha256": "038571d8ebe0dd75b872ed9bdab75452ffdb599890288f03480aa4e64f31d008",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "1592590337",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "war"
+    ],
+    "bytes": 482,
+    "sha256": "37c7b65d24473bdfd45f840aea21a541379abdfe64483652914e6bff6dd9b03a",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "1592590337",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "throne"
+    ],
+    "bytes": 2531,
+    "sha256": "df5bca78a233e68f1dc077e318ce164d707087ea388f4b75c08deac89b79c49a",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "1592590337",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "wheat"
+    ],
+    "bytes": 2333,
+    "sha256": "f5d9fb2fcb47b070e209f16e176c9eb6a3566cf3c098891a12fca08c34eb8aa6",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "1592590337",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "herds"
+    ],
+    "bytes": 486,
+    "sha256": "cff181e8b7c2aa0e28b45d7f62ab2511ad527809d42f569782e9ccbf1632b483",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "1592590337",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "ponies"
+    ],
+    "bytes": 488,
+    "sha256": "b2512839d7906a78e3d55f5a24b5e090e57b8a8f47415bb18776be93e338cd0a",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "1592590337",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "road"
+    ],
+    "bytes": 484,
+    "sha256": "58b344d8fb0cb07236f8f9dd12825e795e02c88d3c7d97106c193ad73583fa0e",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "1592590337",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "bandit"
+    ],
+    "bytes": 488,
+    "sha256": "5a1a8b8a5d74189264ce1c55619d7cf6dfc10d791446a0d82d4b06a7d6808ef7",
+    "equal": true
+  },
+  {
+    "args": [
+      "--seed",
+      "1592590337",
+      "--seeds",
+      "1",
+      "--years",
+      "2",
+      "--mission",
+      "treasure"
+    ],
+    "bytes": 492,
+    "sha256": "372e1141d85e27a980989d4c85ce63219a6b149d1d47447ec562a51236b8cf83",
+    "equal": true
+  }
+]

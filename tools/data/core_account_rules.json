@@ -1,0 +1,987 @@
+{
+  "version": 1,
+  "roles": [
+    "none",
+    "actor",
+    "recipient",
+    "place",
+    "object",
+    "group",
+    "material",
+    "detail",
+    "quantity"
+  ],
+  "rules": [
+    {
+      "id": "notice_posted_0",
+      "kind": "NOTICE_POSTED",
+      "roles": [
+        "actor",
+        "place",
+        "object"
+      ],
+      "source": "{0} posts a notice at {1}: {2}.",
+      "outputs": [
+        "{0} posted a notice about {2} in {1}.",
+        "In {1}, {0} put up a notice about {2}."
+      ],
+      "challenge": "At {1}, a notice concerning {2} was put up by {0}."
+    },
+    {
+      "id": "war_declared_0",
+      "kind": "WAR_DECLARED",
+      "roles": [
+        "actor",
+        "recipient"
+      ],
+      "source": "{0}'s courier reaches {1}: war now binds the two courts.",
+      "outputs": [
+        "{0} and {1} went to war.",
+        "The courts of {0} and {1} went to war."
+      ],
+      "challenge": "The message brought to {1} from {0} announced war."
+    },
+    {
+      "id": "peace_declared_0",
+      "kind": "PEACE_DECLARED",
+      "roles": [
+        "actor",
+        "recipient"
+      ],
+      "source": "{0}'s courier reaches {1}: peace now binds the two courts.",
+      "outputs": [
+        "{0} and {1} made peace.",
+        "The courts of {0} and {1} made peace."
+      ],
+      "challenge": "The message brought to {1} from {0} announced peace."
+    },
+    {
+      "id": "alliance_declared_0",
+      "kind": "ALLIANCE_DECLARED",
+      "roles": [
+        "actor",
+        "recipient"
+      ],
+      "source": "{0}'s courier reaches {1}: alliance now binds the two courts.",
+      "outputs": [
+        "{0} and {1} formed an alliance.",
+        "The courts of {0} and {1} formed an alliance."
+      ],
+      "challenge": "The message brought to {1} from {0} announced alliance."
+    },
+    {
+      "id": "character_died_0",
+      "kind": "CHARACTER_DIED",
+      "roles": [
+        "actor",
+        "quantity",
+        "place"
+      ],
+      "source": "{0} died at age {1} after a life in {2}.",
+      "outputs": [
+        "{0} died after a life in {2}.",
+        "After living in {2}, {0} died."
+      ],
+      "challenge": "After a life spent in {2}, {0} passed away at age {1}."
+    },
+    {
+      "id": "character_born_0",
+      "kind": "CHARACTER_BORN",
+      "roles": [
+        "actor",
+        "recipient",
+        "place"
+      ],
+      "source": "{0} was born into the family of {1} in {2}.",
+      "outputs": [
+        "{0} was born to the family of {1} in {2}.",
+        "The family of {1} welcomed {0} in {2}."
+      ],
+      "challenge": "In {2}, the family of {1} welcomed the birth of {0}."
+    },
+    {
+      "id": "bakery_production_0",
+      "kind": "BAKERY_PRODUCTION",
+      "roles": [
+        "place",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0}'s bakery mills {1} Wheat into {2} Bread.",
+      "outputs": [
+        "{0} made bread from wheat.",
+        "Bread was made from wheat in {0}."
+      ],
+      "challenge": "Wheat was turned into bread at the bakery in {0}.",
+      "positive": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "paper_milled_0",
+      "kind": "PAPER_MILLED",
+      "roles": [
+        "place",
+        "quantity",
+        "material",
+        "quantity"
+      ],
+      "source": "{0}'s mill uses {1} {2} to make {3} Paper.",
+      "outputs": [
+        "{0} made paper from {2}.",
+        "Paper was made from {2} in {0}."
+      ],
+      "challenge": "At the mill in {0}, {2} was used to produce paper.",
+      "positive": [
+        1,
+        3
+      ]
+    },
+    {
+      "id": "woodlot_harvest_0",
+      "kind": "WOODLOT_HARVEST",
+      "roles": [
+        "place",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0}'s woodlot cuts {1} Wood and wears {2} Tools bundle.",
+      "outputs": [
+        "{0} cut wood and wore out tools.",
+        "Woodcutting in {0} wore out tools."
+      ],
+      "challenge": "Tools wore out as the woodlot in {0} produced wood.",
+      "positive": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "woodlot_harvest_1",
+      "kind": "WOODLOT_HARVEST",
+      "roles": [
+        "place",
+        "quantity"
+      ],
+      "source": "{0}'s hand crews cut {1} Wood without working tools.",
+      "outputs": [
+        "{0} cut wood by hand without working tools.",
+        "Hand crews in {0} cut wood without working tools."
+      ],
+      "challenge": "Lacking working tools, the crews in {0} cut wood by hand.",
+      "positive": [
+        1
+      ]
+    },
+    {
+      "id": "quarry_output_0",
+      "kind": "QUARRY_OUTPUT",
+      "roles": [
+        "place",
+        "quantity"
+      ],
+      "source": "{0}'s quarry cuts {1} Stone for roads and public works.",
+      "outputs": [
+        "{0} quarried stone for roads and public works.",
+        "Stone for roads and public works came from {0}."
+      ],
+      "challenge": "The quarry in {0} supplied road building and public works with stone.",
+      "positive": [
+        1
+      ]
+    },
+    {
+      "id": "masonry_repair_0",
+      "kind": "MASONRY_REPAIR",
+      "roles": [
+        "place",
+        "quantity"
+      ],
+      "source": "{0}'s masons use {1} Stone to repair public buildings.",
+      "outputs": [
+        "{0} repaired public buildings with stone.",
+        "Masons in {0} used stone to repair public buildings."
+      ],
+      "challenge": "Stone was used by the masons of {0} to mend public buildings."
+    },
+    {
+      "id": "masonry_repair_1",
+      "kind": "MASONRY_REPAIR",
+      "roles": [
+        "place",
+        "quantity"
+      ],
+      "source": "{0} defers public masonry repairs for want of {1} Stone.",
+      "outputs": [
+        "{0} delayed public repairs for lack of stone.",
+        "A stone shortage delayed public repairs in {0}."
+      ],
+      "challenge": "Public masonry work in {0} was postponed because stone was lacking."
+    },
+    {
+      "id": "masonry_repair_2",
+      "kind": "MASONRY_REPAIR",
+      "roles": [
+        "place",
+        "quantity"
+      ],
+      "source": "{0}'s builders use 2 Wood, 1 Stone, and 1 Tools to repair fire damage; {1}% remains.",
+      "outputs": [
+        "{0} used wood, stone, and tools to repair fire damage.",
+        "Builders in {0} repaired fire damage with wood, stone, and tools."
+      ],
+      "challenge": "Fire damage in {0} was repaired using wood, stone, and tools."
+    },
+    {
+      "id": "sheep_sheared_0",
+      "kind": "SHEEP_SHEARED",
+      "roles": [
+        "place",
+        "quantity"
+      ],
+      "source": "{0} shears the spring flock and stores {1} Wool.",
+      "outputs": [
+        "{0} sheared the spring flock and stored wool.",
+        "Wool was stored after the spring shearing in {0}."
+      ],
+      "challenge": "The spring flock in {0} was shorn and its wool put into storage.",
+      "positive": [
+        1
+      ]
+    },
+    {
+      "id": "cow_slaughtered_0",
+      "kind": "COW_SLAUGHTERED",
+      "roles": [
+        "place",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} slaughters {2} cow after the herd's fodder runs short; {1} Meat enters the local store as beef.",
+      "outputs": [
+        "{0} slaughtered cattle for beef when fodder ran short.",
+        "A fodder shortage led {0} to slaughter cattle for beef."
+      ],
+      "challenge": "With fodder scarce, cattle in {0} were slaughtered and beef went into storage.",
+      "positive": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "cow_calving_0",
+      "kind": "COW_CALVING",
+      "roles": [
+        "place",
+        "quantity",
+        "detail",
+        "quantity",
+        "detail"
+      ],
+      "source": "{0}'s cattle herd raises {1} new {2}; {3} older {4} join the working herd.",
+      "outputs": [
+        "{0} raised calves and added older calves to the working herd.",
+        "Calves were raised in {0}, where older calves joined the working herd."
+      ],
+      "challenge": "New calves grew in {0}, and older calves became part of the working herd.",
+      "allowed": {
+        "2": [
+          "calf",
+          "calves"
+        ],
+        "4": [
+          "calf",
+          "calves"
+        ]
+      },
+      "positive": [
+        1,
+        3
+      ]
+    },
+    {
+      "id": "king_anointed_0",
+      "kind": "KING_ANOINTED",
+      "roles": [
+        "actor",
+        "recipient",
+        "group"
+      ],
+      "source": "{0} anoints {1} of {2}; the crown becomes lawful.",
+      "outputs": [
+        "{0} anointed {1} of {2}, making the crown lawful.",
+        "The crown of {2} became lawful when {0} anointed {1}."
+      ],
+      "challenge": "The anointing of {1} by {0} made the crown of {2} lawful."
+    },
+    {
+      "id": "pretender_crisis_0",
+      "kind": "PRETENDER_CRISIS",
+      "roles": [
+        "group"
+      ],
+      "source": "A year of abbey silence breeds a pretender in {0}.",
+      "outputs": [
+        "Abbey silence brought a pretender forward in {0}.",
+        "A pretender arose in {0} after a long silence from the abbey."
+      ],
+      "challenge": "A challenger to the crown appeared in {0} amid prolonged abbey silence."
+    },
+    {
+      "id": "monastic_succession_0",
+      "kind": "MONASTIC_SUCCESSION",
+      "roles": [
+        "actor"
+      ],
+      "source": "{0} becomes Abbot of the Scriptorium and keeps the anointing roll.",
+      "outputs": [
+        "{0} became Abbot of the Scriptorium and keeper of the anointing roll.",
+        "The Scriptorium gained {0} as abbot and keeper of the anointing roll."
+      ],
+      "challenge": "The anointing roll passed into the keeping of the new Abbot of the Scriptorium, {0}."
+    },
+    {
+      "id": "monastic_succession_1",
+      "kind": "MONASTIC_SUCCESSION",
+      "roles": [
+        "actor",
+        "recipient"
+      ],
+      "source": "{0} succeeds {1} as Abbot of the Scriptorium.",
+      "outputs": [
+        "{0} succeeded {1} as Abbot of the Scriptorium.",
+        "The office of Abbot of the Scriptorium passed from {1} to {0}."
+      ],
+      "challenge": "At the Scriptorium, {0} took over the abbacy from {1}."
+    },
+    {
+      "id": "royal_succession_0",
+      "kind": "ROYAL_SUCCESSION",
+      "roles": [
+        "actor",
+        "group"
+      ],
+      "source": "{0} takes the rule of {1} and seeks the abbot's blessing.",
+      "outputs": [
+        "{0} took power in {1} and sought the abbot's blessing.",
+        "The new ruler of {1}, {0}, sought the abbot's blessing."
+      ],
+      "challenge": "After taking power in {1}, {0} asked the abbot for a blessing."
+    },
+    {
+      "id": "royal_succession_1",
+      "kind": "ROYAL_SUCCESSION",
+      "roles": [
+        "actor",
+        "recipient",
+        "group"
+      ],
+      "source": "{0} succeeds {1} as ruler of {2}.",
+      "outputs": [
+        "{0} succeeded {1} as ruler of {2}.",
+        "The rule of {2} passed from {1} to {0}."
+      ],
+      "challenge": "In {2}, {0} took over the throne from {1}."
+    },
+    {
+      "id": "dragon_patron_named_0",
+      "kind": "DRAGON_PATRON_NAMED",
+      "roles": [
+        "actor",
+        "recipient"
+      ],
+      "source": "{0} funds the dragon host and names {1} as its champion.",
+      "outputs": [
+        "{0} funded the dragon host and named {1} its champion.",
+        "The dragon host gained funding from {0}, who named {1} its champion."
+      ],
+      "challenge": "The dragon host was financed by {0}, with {1} chosen as its champion."
+    },
+    {
+      "id": "dragon_territory_lost_0",
+      "kind": "DRAGON_TERRITORY_LOST",
+      "roles": [
+        "actor"
+      ],
+      "source": "{0} loses the last ground that answers to the dragon crown.",
+      "outputs": [
+        "{0} lost the last land under the dragon crown.",
+        "The last land under the dragon crown was lost by {0}."
+      ],
+      "challenge": "The dragon crown held no land after {0} lost its last territory."
+    },
+    {
+      "id": "royal_carriage_blocked_0",
+      "kind": "ROYAL_CARRIAGE_BLOCKED",
+      "roles": [
+        "actor",
+        "place"
+      ],
+      "source": "{0} carriage waits at {1}; court relations close every legal road.",
+      "outputs": [
+        "{0} carriage waited at {1} because court relations closed the roads.",
+        "Court relations left {0} carriage waiting at {1}."
+      ],
+      "challenge": "With the roads closed by court relations, {0} carriage waited in {1}."
+    },
+    {
+      "id": "royal_carriage_rerouted_0",
+      "kind": "ROYAL_CARRIAGE_REROUTED",
+      "roles": [
+        "place"
+      ],
+      "source": "A royal carriage rides empty toward {0} to collect a needed load.",
+      "outputs": [
+        "An empty royal carriage headed to {0} to collect a load.",
+        "A royal carriage went to {0} empty to collect a needed load."
+      ],
+      "challenge": "To collect a needed load, an empty royal carriage set out for {0}."
+    },
+    {
+      "id": "royal_carriage_rerouted_1",
+      "kind": "ROYAL_CARRIAGE_REROUTED",
+      "roles": [
+        "place"
+      ],
+      "source": "Weekly road space clears; the carriage resumes toward {0}.",
+      "outputs": [
+        "The carriage resumed its trip toward {0} as road space cleared.",
+        "Road space cleared and the carriage continued toward {0}."
+      ],
+      "challenge": "Once space on the road became available, the carriage carried on toward {0}."
+    },
+    {
+      "id": "royal_carriage_rerouted_2",
+      "kind": "ROYAL_CARRIAGE_REROUTED",
+      "roles": [
+        "place"
+      ],
+      "source": "Court relations reopen the road; the carriage resumes toward {0}.",
+      "outputs": [
+        "The carriage resumed toward {0} after court relations reopened the road.",
+        "Court relations reopened the road and the carriage continued toward {0}."
+      ],
+      "challenge": "With the road open again through court relations, the carriage carried on toward {0}."
+    },
+    {
+      "id": "lore_lost_0",
+      "kind": "LORE_LOST",
+      "roles": [
+        "object"
+      ],
+      "source": "Unfunded and unwatched, {0} falls into ruin; its lore is lost.",
+      "outputs": [
+        "{0} fell into ruin through lack of funding and care, and its lore was lost.",
+        "Lore was lost when {0} fell into ruin through lack of funding and care."
+      ],
+      "challenge": "A lack of funding and care ruined {0}, taking its lore with it."
+    },
+    {
+      "id": "lore_lost_1",
+      "kind": "LORE_LOST",
+      "roles": [
+        "object"
+      ],
+      "source": "Unfunded and unwatched, a page of {0} crumbles; part of its lore is lost.",
+      "outputs": [
+        "A neglected page of {0} crumbled and some lore was lost.",
+        "Some lore was lost when a neglected page of {0} crumbled."
+      ],
+      "challenge": "Part of the lore in {0} vanished when an uncared-for page fell apart."
+    },
+    {
+      "id": "road_site_production_0",
+      "kind": "ROAD_SITE_PRODUCTION",
+      "roles": [
+        "place",
+        "quantity"
+      ],
+      "source": "{0} uses one Tool and one Wood for weekly repairs; condition is {1}.",
+      "outputs": [
+        "{0} used tools and wood for repairs.",
+        "Repairs at {0} used tools and wood."
+      ],
+      "challenge": "Tools and wood went into repair work at {0}."
+    },
+    {
+      "id": "road_site_production_1",
+      "kind": "ROAD_SITE_PRODUCTION",
+      "roles": [
+        "quantity",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} roadside works store {1} goods bundles locally and restore {2} road condition this week.",
+      "outputs": [
+        "Roadside works stored goods locally and repaired roads.",
+        "Goods were stored locally and roads repaired by roadside works."
+      ],
+      "challenge": "The roadside works put goods into local stores and improved the roads.",
+      "positive": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "id": "prophecy_delivered_0",
+      "kind": "PROPHECY_DELIVERED",
+      "roles": [
+        "object",
+        "place"
+      ],
+      "source": "The company delivers {0} to {1}. The council hears the warning of three courts and a champion.",
+      "outputs": [
+        "The company delivered {0} to {1}, where the council heard the warning.",
+        "The council in {1} heard the warning after the company delivered {0}."
+      ],
+      "challenge": "After {0} was brought to {1} by the company, the council heard the warning."
+    },
+    {
+      "id": "party_wiped_0",
+      "kind": "PARTY_WIPED",
+      "roles": [],
+      "source": "The whole company fell. Twenty years pass, and a new company takes up the carriage.",
+      "outputs": [
+        "The company fell, and years later a new company took up the carriage.",
+        "Years after the company fell, a new company took up the carriage."
+      ],
+      "challenge": "A new company took up the carriage long after the previous company fell."
+    },
+    {
+      "id": "goblin_tunnel_traversed_0",
+      "kind": "GOBLIN_TUNNEL_TRAVERSED",
+      "roles": [],
+      "source": "The company descends through the goblin dungeon and returns to the hidden trailhead.",
+      "outputs": [
+        "The company went down through the goblin dungeon and returned to the hidden trailhead.",
+        "After going through the goblin dungeon, the company returned to the hidden trailhead."
+      ],
+      "challenge": "The company came back to the hidden trailhead by way of the goblin dungeon."
+    },
+    {
+      "id": "goblin_tunnel_traversed_1",
+      "kind": "GOBLIN_TUNNEL_TRAVERSED",
+      "roles": [],
+      "source": "The company leaves the carriage behind and spends a day crossing the goblin network to a chimney inside the dragon roost.",
+      "outputs": [
+        "The company left its carriage and crossed the goblin network to a chimney in the dragon roost.",
+        "Leaving its carriage behind, the company crossed the goblin network into a chimney in the dragon roost."
+      ],
+      "challenge": "A chimney in the dragon roost was reached through the goblin network after the company left its carriage."
+    },
+    {
+      "id": "horse_bred_0",
+      "kind": "HORSE_BRED",
+      "roles": [
+        "place",
+        "actor",
+        "recipient"
+      ],
+      "source": "{0} stable breeds {1} with {2}; foal due in 330 days.",
+      "outputs": [
+        "The stable in {0} bred {1} with {2} and expected a foal.",
+        "{1} was bred with {2} at {0}, with a foal expected."
+      ],
+      "challenge": "A foal was expected after {1} and {2} were bred at the stable in {0}."
+    },
+    {
+      "id": "foal_born_0",
+      "kind": "FOAL_BORN",
+      "roles": [
+        "actor",
+        "recipient",
+        "detail",
+        "object",
+        "place"
+      ],
+      "source": "{0} gives birth to {1}, a {2} by {3}, at {4}.",
+      "outputs": [
+        "{0} gave birth to {1} by {3} at {4}.",
+        "At {4}, {0} gave birth to {1} by {3}."
+      ],
+      "challenge": "The birth of {1} to {0}, by {3}, took place at {4}."
+    },
+    {
+      "id": "treasure_crafted_0",
+      "kind": "TREASURE_CRAFTED",
+      "roles": [
+        "place",
+        "object",
+        "quantity",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} finishes {1} from {2} Raw Gold, {3} Gems, and {4} weeks of work.",
+      "outputs": [
+        "{0} finished making {1}.",
+        "{1} was completed in {0}."
+      ],
+      "challenge": "Work on {1} was finished in {0} after using raw gold and gems."
+    },
+    {
+      "id": "bandit_pressure_0",
+      "kind": "BANDIT_PRESSURE",
+      "roles": [
+        "actor",
+        "recipient"
+      ],
+      "source": "{0} reinforce {1} on the old road.",
+      "outputs": [
+        "{0} reinforced {1} on the old road.",
+        "On the old road, {0} gave support to {1}."
+      ],
+      "challenge": "Support on the old road came to {1} from {0}."
+    },
+    {
+      "id": "dragon_brood_0",
+      "kind": "DRAGON_BROOD",
+      "roles": [
+        "actor",
+        "quantity"
+      ],
+      "source": "{0} accepts a distant heart-scale and lays {1} eggs; goblin Ashkeepers seal the brood hoard.",
+      "outputs": [
+        "{0} laid a clutch, and goblin Ashkeepers sealed the brood hoard.",
+        "Goblin Ashkeepers sealed the brood hoard after {0} laid a clutch."
+      ],
+      "challenge": "A clutch was laid by {0}, whose brood hoard was sealed by goblin Ashkeepers."
+    },
+    {
+      "id": "bandit_pressure_1",
+      "kind": "BANDIT_PRESSURE",
+      "roles": [
+        "actor",
+        "recipient",
+        "quantity",
+        "place"
+      ],
+      "source": "{0} joins {1} after {2} days seeking food at {3}.",
+      "outputs": [
+        "{0} joined {1} after seeking food at {3}.",
+        "After seeking food at {3}, {0} joined {1}."
+      ],
+      "challenge": "Having looked for food in {3}, {0} became part of {1}."
+    },
+    {
+      "id": "kingdom_action_0",
+      "kind": "KINGDOM_ACTION",
+      "roles": [
+        "actor",
+        "quantity",
+        "place"
+      ],
+      "source": "{0} moves {1} crowns into {2}'s market to buy real grain shipments.",
+      "outputs": [
+        "{0} put money into {2}'s market to buy grain shipments.",
+        "Money from {0} went into the market at {2} to buy grain shipments."
+      ],
+      "challenge": "To purchase shipments of grain, {0} put crowns into the market in {2}."
+    },
+    {
+      "id": "goblin_cult_rallied_0",
+      "kind": "GOBLIN_CULT_RALLIED",
+      "roles": [
+        "actor",
+        "object"
+      ],
+      "source": "{0} rises to {1} in the dragon cult through service.",
+      "outputs": [
+        "{0} rose to {1} in the dragon cult through service.",
+        "Service brought {0} to the rank of {1} in the dragon cult."
+      ],
+      "challenge": "The dragon cult raised {0} to {1} for service."
+    },
+    {
+      "id": "horse_bred_1",
+      "kind": "HORSE_BRED",
+      "roles": [
+        "place",
+        "quantity",
+        "detail",
+        "quantity"
+      ],
+      "source": "{0} raises {1} common pony {2}; {3} joins the working herd.",
+      "outputs": [
+        "{0} raised pony foals and added ponies to the working herd.",
+        "Pony foals were raised in {0}, where ponies joined the working herd."
+      ],
+      "challenge": "New pony foals grew in {0}, and ponies became part of the working herd.",
+      "allowed": {
+        "2": [
+          "foal",
+          "foals"
+        ]
+      },
+      "positive": [
+        1,
+        3
+      ]
+    },
+    {
+      "id": "sheep_bred_0",
+      "kind": "SHEEP_BRED",
+      "roles": [
+        "place",
+        "quantity",
+        "detail",
+        "quantity",
+        "detail"
+      ],
+      "source": "{0}'s flock raises {1} new {2}; {3} {4} join the adult flock.",
+      "outputs": [
+        "{0} raised lambs and added yearlings to the adult flock.",
+        "Lambs were raised in {0}, where yearlings joined the adult flock."
+      ],
+      "challenge": "New lambs grew in {0}, and yearlings became part of the adult flock.",
+      "allowed": {
+        "2": [
+          "lamb",
+          "lambs"
+        ],
+        "4": [
+          "yearling",
+          "yearlings"
+        ]
+      },
+      "positive": [
+        1,
+        3
+      ]
+    },
+    {
+      "id": "sheep_slaughtered_0",
+      "kind": "SHEEP_SLAUGHTERED",
+      "roles": [
+        "place",
+        "quantity",
+        "detail",
+        "quantity"
+      ],
+      "source": "{0} slaughters {1} sheep {2}; {3} Meat enters the local store as mutton.",
+      "outputs": [
+        "{0} slaughtered sheep for mutton {2}.",
+        "Sheep were slaughtered for mutton in {0} {2}."
+      ],
+      "challenge": "Mutton went into storage in {0} after sheep were slaughtered {2}.",
+      "positive": [
+        1,
+        3
+      ]
+    },
+    {
+      "id": "harvest_failed_0",
+      "kind": "HARVEST_FAILED",
+      "roles": [
+        "place",
+        "place"
+      ],
+      "source": "{0}'s drought harvest cannot supply the {1}.",
+      "outputs": [
+        "{0}'s drought harvest fell short of what the {1} needed.",
+        "The drought harvest in {0} fell short of supplies for the {1}."
+      ],
+      "challenge": "The {1} needed more supplies than the drought harvest in {0} could provide."
+    },
+    {
+      "id": "route_closed_0",
+      "kind": "ROUTE_CLOSED",
+      "roles": [
+        "place"
+      ],
+      "source": "{0} closes the treaty bridge and delays the relief convoy.",
+      "outputs": [
+        "{0} closed the treaty bridge, delaying the relief convoy.",
+        "The relief convoy was delayed when {0} closed the treaty bridge."
+      ],
+      "challenge": "The treaty bridge was shut by {0}, holding up the relief convoy."
+    },
+    {
+      "id": "shortage_0",
+      "kind": "SHORTAGE",
+      "roles": [
+        "place",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} has {1} weeks of food; hunger reaches pressure level {2}.",
+      "outputs": [
+        "Hunger was reported in {0}.",
+        "There was hunger in {0}."
+      ],
+      "challenge": "Hunger pressure reached {2} in {0}, with {1} weeks of food left.",
+      "positive": [
+        2
+      ]
+    },
+    {
+      "id": "shortage_1",
+      "kind": "SHORTAGE",
+      "roles": [
+        "place",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} has {1} food in store. Its reserve target is {2}.",
+      "outputs": [
+        "{0} was short of its food reserve target.",
+        "Food stores in {0} fell short of the reserve target."
+      ],
+      "challenge": "With food stores of {1}, {0} was aiming for a reserve of {2}.",
+      "less_than": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "goblin_raided_0",
+      "kind": "GOBLIN_RAIDED",
+      "roles": [
+        "actor",
+        "place",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} raids {1}: {2} Wheat, {3} crowns.",
+      "outputs": [
+        "{0} raided {1}.",
+        "{1} was raided by {0}."
+      ],
+      "challenge": "The raid on {1} was carried out by {0}."
+    },
+    {
+      "id": "goblin_raided_1",
+      "kind": "GOBLIN_RAIDED",
+      "roles": [
+        "actor",
+        "place",
+        "detail"
+      ],
+      "source": "{0} raids {1} and takes {2}.",
+      "outputs": [
+        "{0} raided {1}.",
+        "{1} was raided by {0}."
+      ],
+      "challenge": "A raid was carried out against {1} by {0}."
+    },
+    {
+      "id": "settlement_raided_0",
+      "kind": "SETTLEMENT_RAIDED",
+      "roles": [
+        "actor",
+        "place",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} raids {1}: {2} Wheat, {3} crowns.",
+      "outputs": [
+        "{0} raided {1}.",
+        "{1} was raided by {0}."
+      ],
+      "challenge": "The raid on {1} was carried out by {0}."
+    },
+    {
+      "id": "settlement_raided_1",
+      "kind": "SETTLEMENT_RAIDED",
+      "roles": [
+        "actor",
+        "place",
+        "detail"
+      ],
+      "source": "{0} raids {1} and takes {2}.",
+      "outputs": [
+        "{0} raided {1}.",
+        "{1} was raided by {0}."
+      ],
+      "challenge": "A raid was carried out against {1} by {0}."
+    },
+    {
+      "id": "dragon_omen_0",
+      "kind": "DRAGON_OMEN",
+      "roles": [
+        "place",
+        "quantity",
+        "actor"
+      ],
+      "source": "Smoke falls into {0}'s chimneys; old readers count {1} nights until {2} comes.",
+      "outputs": [
+        "The old readers in {0} took the smoke as a warning of {2}.",
+        "Smoke in {0} made the old readers fear that {2} was coming."
+      ],
+      "challenge": "The old readers thought the smoke in {0} warned of the coming of {2}."
+    },
+    {
+      "id": "dragon_retaliation_0",
+      "kind": "DRAGON_RETALIATION",
+      "roles": [
+        "actor",
+        "place",
+        "quantity"
+      ],
+      "source": "{0} burns {1} because {2} stolen crowns remain missing.",
+      "outputs": [
+        "{0} burned {1} over money missing from the hoard.",
+        "Missing hoard money was blamed for {0} burning {1}."
+      ],
+      "challenge": "The burning of {1} by {0} was blamed on stolen hoard money.",
+      "positive": [
+        2
+      ]
+    },
+    {
+      "id": "goblin_cult_rallied_1",
+      "kind": "GOBLIN_CULT_RALLIED",
+      "roles": [
+        "actor",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} feeds and binds {1} new ash-sworn; the dead dragon's court reaches {2}.",
+      "outputs": [
+        "{0} fed and bound new ash-sworn to the dead dragon's court.",
+        "New ash-sworn were fed and bound by {0} to the dead dragon's court."
+      ],
+      "challenge": "The dead dragon's court gained new ash-sworn, fed and bound by {0}.",
+      "positive": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "goblin_cult_rallied_2",
+      "kind": "GOBLIN_CULT_RALLIED",
+      "roles": [
+        "actor",
+        "quantity",
+        "recipient",
+        "quantity"
+      ],
+      "source": "{0} gathers {1} new tithe-bearers; {2}'s court returns to {3}.",
+      "outputs": [
+        "{0} gathered new tithe-bearers for the court of {2}.",
+        "The court of {2} gained new tithe-bearers gathered by {0}."
+      ],
+      "challenge": "New tithe-bearers for the court of {2} were gathered by {0}.",
+      "positive": [
+        1,
+        3
+      ]
+    },
+    {
+      "id": "dragon_slain_0",
+      "kind": "DRAGON_SLAIN",
+      "roles": [
+        "actor",
+        "recipient",
+        "detail"
+      ],
+      "source": "{0} slays {1}: {2}.",
+      "outputs": [
+        "{0} slew {1}.",
+        "{1} was slain by {0}."
+      ],
+      "challenge": "The slaying of {1} was carried out by {0}."
+    }
+  ]
+}

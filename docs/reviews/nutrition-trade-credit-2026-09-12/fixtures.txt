@@ -1,0 +1,10 @@
+nutrition credit case=0 loads=0 quantity=0 debt=0 reserve=500
+nutrition credit case=1 loads=1 quantity=28 debt=28 reserve=472
+nutrition credit case=2 loads=0 quantity=0 debt=0 reserve=500
+nutrition credit case=3 loads=0 quantity=0 debt=0 reserve=0
+nutrition credit case=4 loads=0 quantity=0 debt=880 reserve=500
+nutrition credit case=5 loads=0 quantity=0 debt=0 reserve=500
+nutrition credit case=6 loads=0 quantity=0 debt=0 reserve=500
+nutrition credit case=7 loads=0 quantity=0 debt=0 reserve=500
+nutrition credit case=8 loads=1 quantity=20 debt=80 reserve=420
+Royal carriage trade tests passed

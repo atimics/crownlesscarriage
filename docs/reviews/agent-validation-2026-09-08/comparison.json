@@ -1,0 +1,16 @@
+[
+  {
+    "command": "out/build/release/crownless_agent_sweep --seeds 8 --years 10",
+    "pairs": 8,
+    "years": 10,
+    "all_csv_bytes_match_parent": true,
+    "sha256": "7f04b4f976dd844d177724fa97ff3f1dc95911c1b855028673dfb359461b7e11"
+  },
+  {
+    "command": "out/build/release/crownless_agent_sweep --seeds 2 --years 100",
+    "pairs": 2,
+    "years": 100,
+    "all_csv_bytes_match_parent": true,
+    "sha256": "a745a49fd44a2f44231c018fecad6c5eb0ded201f962572f91c5346976f2999a"
+  }
+]

@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "sim/cc_custody.h"
 
 #define CC_MAX_KINGDOMS 3
 #define CC_MAX_SETTLEMENTS 6
@@ -12,6 +13,8 @@
 #define CC_MAX_FACTIONS 9
 #define CC_MAX_SHIPMENTS 24
 #define CC_MAX_COURIERS 12
+#define CC_MAX_WAR_PARTIES 8
+#define CC_MAX_DISPATCHES 16
 #define CC_MAX_BANDITS 3
 #define CC_MAX_MONSTERS 3
 #define CC_MAX_DUNGEONS 3
@@ -25,7 +28,12 @@
 #define CC_MAX_QUEST_OUTCOMES 24
 #define CC_MAX_QUEST_EVIDENCE 8
 #define CC_MAX_PENDING_ECHOES 3
-#define CC_MAX_CHARACTERS 24
+#define CC_MAX_CHARACTERS 128
+/* The character cap was 24 through schema 79. Saves written then carry that
+   many gossip carrier slots and hash exactly those, so the carrier capacity
+   must come from the schema rather than the current cap. */
+#define CC_LEGACY_CHARACTER_CAP 24
+#define CC_MAX_HISTORIC_CHARACTERS 32
 #define CC_MAX_SCRIBES 4
 #define CC_MAX_GOSSIP 32
 #define CC_LEGACY_GOSSIP_CARRIERS (1 + CC_MAX_KINGDOMS + CC_MAX_SHIPMENTS + CC_MAX_COURIERS)
@@ -56,7 +64,10 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 53
+/* Schemas 75-92 shipped ahead of this branch; the first archive
+   convoy leg is schema 93. */
+#define CC_SIM_SCHEMA_VERSION 102
+#define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -133,7 +144,8 @@ typedef struct CcGoodDefinition {
 typedef enum CcNutritionPurpose {
     CC_NUTRITION_CIVILIAN,
     CC_NUTRITION_TRAVEL,
-    CC_NUTRITION_ANIMAL
+    CC_NUTRITION_ANIMAL,
+    CC_NUTRITION_SCAVENGER
 } CcNutritionPurpose;
 
 typedef enum CcSettlementFunction {
@@ -330,8 +342,25 @@ typedef enum CcEventKind {
     CC_EVENT_ROYAL_CARRIAGE_BLOCKED = 130,
     CC_EVENT_ROYAL_CARRIAGE_REROUTED = 131,
     CC_EVENT_PARTY_WIPED = 132,
-    CC_EVENT_NOTICE_POSTED = 133
+    CC_EVENT_NOTICE_POSTED = 133,
+    CC_EVENT_ROAD_SITE_PRODUCTION = 134,
+    CC_EVENT_PROPHECY_DELIVERED = 135,
+    /* Schema 100: crown carriage road repair. */
+    CC_EVENT_ROYAL_CARRIAGE_REPAIR_DISPATCHED = 136,
+    CC_EVENT_ROYAL_ROAD_SKIRMISH = 137,
+    /* Schema 102: a fallen person's purse is lifted (#406). */
+    CC_EVENT_BODY_LOOTED = 138,
+    CC_EVENT_KIND_COUNT
 } CcEventKind;
+
+typedef struct CcArchiveConvoyOrder {
+    CcId origin_id, destination_id, sponsor_id, funding_kingdom_id;
+    CcId carriage_id, first_route_id, first_hop_id, book_ids[4];
+    CcMoney purse;
+    int32_t wheat, book_count, reserved_day, status;
+    int32_t departure_day, arrival_day;
+    CcId home_id;
+} CcArchiveConvoyOrder;
 
 typedef struct CcArchives {
     int32_t scribes;
@@ -342,6 +371,10 @@ typedef struct CcArchives {
     int32_t kit_tool_wear;
     CcId abbot_character_id;
     int32_t stewardship_rank;
+    /* Day the last scribe was lost, or 0 while the archive is staffed. */
+    int32_t dead_since_day;
+    CcId seat_id;
+    int64_t seat_failed_since_day;
 } CcArchives;
 
 typedef struct CcGossipVersion {
@@ -384,6 +417,60 @@ typedef enum CcMaterialChainBlocker {
     CC_MATERIAL_CHAIN_BINDING
 } CcMaterialChainBlocker;
 
+/* Caller-owned totals for weekly town stock consumption and storage loss.
+ * Zero-initialize for each campaign. Units are goods bundles; multiply by
+ * CcGoodNutritionValue for civilian nutrition. Samples are differences between
+ * successive totals. The ledger is separate from saves and authoritative state. */
+typedef struct CcTownNutritionAccounting {
+    CcId settlement_id;
+    uint64_t civilian_units[CC_GOOD_COUNT];
+    uint64_t aged_units[CC_GOOD_COUNT];
+    uint64_t overflow_units[CC_GOOD_COUNT];
+} CcTownNutritionAccounting;
+
+typedef struct CcNutritionAccounting {
+    CcTownNutritionAccounting towns[CC_MAX_SETTLEMENTS];
+} CcNutritionAccounting;
+
+/* A read-only plan for the next smithy batch. Tools take materials first.
+   Quantities are gross output before the existing tool-wear rule. */
+typedef enum {
+    CC_SMITHY_READY = 0,
+    CC_SMITHY_SERVICE_UNAVAILABLE,
+    CC_SMITHY_ZERO_CAPACITY,
+    CC_SMITHY_RESERVE_MET,
+    CC_SMITHY_IRON_REQUIRED,
+    CC_SMITHY_WOOD_REQUIRED,
+    CC_SMITHY_ABANDONED,
+    CC_SMITHY_REPAIRS_REQUIRED,
+    CC_SMITHY_STATUS_COUNT
+} CcSmithyStatus;
+
+typedef struct {
+    int32_t tools_made;
+    int32_t weapons_made;
+    int32_t iron_used;
+    int32_t wood_used;
+    CcSmithyStatus tools_status;
+    CcSmithyStatus weapons_status;
+} CcSmithyPlan;
+
+/* Caller-owned cumulative production capture; reset for each run. */
+typedef struct {
+    CcId settlement_id;
+    uint64_t tools_made;
+    uint64_t weapons_made;
+    uint64_t iron_used;
+    uint64_t wood_used;
+    uint64_t tools_worn;
+    uint64_t tools_status[CC_SMITHY_STATUS_COUNT];
+    uint64_t weapons_status[CC_SMITHY_STATUS_COUNT];
+} CcTownSmithyAccounting;
+
+typedef struct {
+    CcTownSmithyAccounting towns[CC_MAX_SETTLEMENTS];
+} CcSmithyAccounting;
+
 /* Read-only hunger measurements. Values are -1 when no settlement is inhabited. */
 typedef struct CcHungerSnapshot {
     int32_t inhabited_settlements;
@@ -393,6 +480,92 @@ typedef struct CcHungerSnapshot {
     int32_t maximum;
     int32_t population_weighted;
 } CcHungerSnapshot;
+
+/* Inhabited-town welfare. Means are -1 when the population is empty. */
+typedef struct CcWelfareSnapshot {
+    int32_t inhabited_settlements;
+    int32_t abandoned_settlements;
+    int64_t population;
+    double hunger;
+    double prosperity;
+    double security;
+    double population_weighted_hunger;
+    double population_weighted_prosperity;
+    double population_weighted_security;
+} CcWelfareSnapshot;
+
+typedef struct CcArchiveSeatCandidate {
+    CcId settlement_id, patron_id;
+    int32_t paper, spare_wheat, tools, usable_connections, security, score;
+    bool inhabited, mill, viable;
+} CcArchiveSeatCandidate;
+
+typedef struct CcArchiveSeatPlan {
+    CcId current_id, selected_id;
+    int32_t score;
+    bool keep_current;
+} CcArchiveSeatPlan;
+
+typedef enum CcArchiveRecoveryGate {
+    CC_ARCHIVE_RECOVERY_DUE = 0,
+    CC_ARCHIVE_RECOVERY_UNAVAILABLE,
+    CC_ARCHIVE_RECOVERY_STAFFED,
+    CC_ARCHIVE_RECOVERY_LEDGER_FUNDED,
+    CC_ARCHIVE_RECOVERY_SILENCE_UNDATED,
+    CC_ARCHIVE_RECOVERY_WAITING,
+    CC_ARCHIVE_RECOVERY_CALENDAR
+} CcArchiveRecoveryGate;
+
+typedef struct CcArchiveRecoveryWindow {
+    CcArchiveRecoveryGate gate;
+    int64_t first_eligible_day;
+} CcArchiveRecoveryWindow;
+
+typedef enum CcArchiveFundingBlocker {
+    CC_ARCHIVE_FUNDING_READY = 0,
+    CC_ARCHIVE_FUNDING_UNAVAILABLE,
+    CC_ARCHIVE_FUNDING_NO_SEAT,
+    CC_ARCHIVE_FUNDING_LEDGER_FUNDED,
+    CC_ARCHIVE_FUNDING_TOP_UP_LIMIT,
+    CC_ARCHIVE_FUNDING_CONNECTED_DONORS
+} CcArchiveFundingBlocker;
+
+typedef struct CcArchiveFundingPlan {
+    CcArchiveFundingBlocker blocker;
+    CcId seat_id;
+    int32_t donor_count;
+    CcId donor_ids[2];
+    CcMoney shares[2];
+    CcMoney total;
+} CcArchiveFundingPlan;
+
+typedef enum CcArchiveSupplyGate {
+    CC_ARCHIVE_SUPPLY_READY = 0,
+    CC_ARCHIVE_SUPPLY_UNAVAILABLE,
+    CC_ARCHIVE_SUPPLY_SEAT,
+    CC_ARCHIVE_SUPPLY_STOCKED,
+    CC_ARCHIVE_SUPPLY_INCOMING,
+    CC_ARCHIVE_SUPPLY_CARRIAGE,
+    CC_ARCHIVE_SUPPLY_SOURCE,
+    CC_ARCHIVE_SUPPLY_ROUTE,
+    CC_ARCHIVE_SUPPLY_FUNDS
+} CcArchiveSupplyGate;
+
+typedef struct CcArchiveSupplyPlan {
+    CcArchiveSupplyGate gate;
+    CcId seat_id, carriage_id, source_id, first_route_id, first_hop_id;
+    CcGood good;
+    int32_t quantity, path_capacity, path_cost, reposition_cost;
+    CcMoney goods_cost, first_leg_toll, total_charge;
+    int64_t first_dispatch_day;
+} CcArchiveSupplyPlan;
+
+typedef struct CcArchiveWorkPlan {
+    CcId seat_id;
+    int32_t eligible_scribes;
+    int32_t wheat_required;
+    bool recording_ready;
+} CcArchiveWorkPlan;
 
 typedef struct CcMaterialChainSnapshot {
     CcId scriptorium_id;
@@ -458,7 +631,23 @@ typedef enum CcCommandKind {
     CC_COMMAND_LEAVE_PONY = 46,
     CC_COMMAND_PARTY_WIPE = 47,
     CC_COMMAND_EXCHANGE_GOSSIP = 48,
-    CC_COMMAND_HEARD_STORY = 49
+    CC_COMMAND_HEARD_STORY = 49,
+    CC_COMMAND_VISIT_MINE = 50,
+    CC_COMMAND_MINE_STEP = 51,
+    CC_COMMAND_MINE_USE = 52,
+    CC_COMMAND_MINE_PACK = 53,
+    CC_COMMAND_CLEAR_ROAD_SITE = 54,
+    CC_COMMAND_TRANSFER_ROAD_SITE = 55,
+    CC_COMMAND_REPAIR_ROAD_SITE = 56,
+    CC_COMMAND_SUPPORT_BAKERY = 57,
+    CC_COMMAND_FUND_GRAIN_SUPPLY = 58,
+    CC_COMMAND_DELIVER_PROPHECY = 59,
+    CC_COMMAND_RESERVE_ARCHIVE_RECRUITMENT = 60,
+    CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT = 61,
+    CC_COMMAND_PICKUP_DISPATCH = 62,
+    CC_COMMAND_DELIVER_DISPATCH = 63,
+    /* Schema 102: claim a fallen person's purse where it lies (#288/#406). */
+    CC_COMMAND_TAKE_BODY_PURSE = 64
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -628,6 +817,7 @@ typedef enum CcRoadSiteKind {
 typedef enum CcRoadSiteBlocker {
     CC_ROAD_SITE_BLOCKER_TREE = 0,
     CC_ROAD_SITE_BLOCKER_ROCKS,
+    CC_ROAD_SITE_BLOCKER_NONE,
     CC_ROAD_SITE_BLOCKER_COUNT
 } CcRoadSiteBlocker;
 
@@ -645,6 +835,7 @@ typedef struct CcRoadSite {
     int32_t condition;
     CcRoadSiteBlocker blocker;
     bool accessible;
+    int32_t stock[CC_GOOD_COUNT];
 } CcRoadSite;
 
 typedef enum CcPlayerKnowledgeSource {
@@ -710,6 +901,18 @@ typedef struct CcFaction {
     int32_t support;
 } CcFaction;
 
+/* Read-only route geometry. Dispatch applies access, capacity and custody rules. */
+typedef struct {
+    CcId route_id;
+    CcId origin_id;
+    CcId destination_id;
+    int32_t origin_milli;
+    int32_t destination_milli;
+    int32_t travel_days;
+} CcFreightLeg;
+
+
+
 typedef enum CcShipmentStatus {
     CC_SHIPMENT_UNUSED,
     CC_SHIPMENT_TRAVELLING,
@@ -736,7 +939,17 @@ typedef enum CcRoyalCarriageMode {
     CC_ROYAL_CARRIAGE_REPOSITIONING,
     CC_ROYAL_CARRIAGE_DELIVERING,
     CC_ROYAL_CARRIAGE_BLOCKED,
-    CC_ROYAL_CARRIAGE_WAITING_CAPACITY
+    CC_ROYAL_CARRIAGE_WAITING_CAPACITY,
+    CC_ROYAL_CARRIAGE_SITE_TRAVELLING,
+    CC_ROYAL_CARRIAGE_SITE_WAITING,
+    CC_ROYAL_CARRIAGE_SITE_UNLOADING,
+    CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED,
+    CC_ROYAL_CARRIAGE_ARCHIVE_TRAVELLING,
+    CC_ROYAL_CARRIAGE_ARCHIVE_WAITING,
+    /* Schema 100: crown carriage road repair (docs/crown-carriage-roads.md).
+       Modes are appended so saved values keep their meaning. */
+    CC_ROYAL_CARRIAGE_REPAIR_TRAVELLING,
+    CC_ROYAL_CARRIAGE_REPAIR_WORKING
 } CcRoyalCarriageMode;
 
 typedef struct CcRoyalCarriage {
@@ -755,6 +968,7 @@ typedef struct CcRoyalCarriage {
     int32_t condition;
     int32_t trips_completed;
     int32_t cargo_losses;
+    bool archive_contract;
 } CcRoyalCarriage;
 
 typedef enum CcCourierKind {
@@ -789,6 +1003,56 @@ typedef struct CcCourier {
     int32_t arrival_day;
     int32_t reliability;
 } CcCourier;
+
+/* Bounded armed companies. Soldiers are a group under a named commander, not
+   individuals; the commander is a real character with a home, an occupation
+   and a place in the cast. Orders travel as dispatches (#646), so a
+   checkpoint stands until a withdrawal order physically reaches it. */
+typedef enum CcWarOrderKind {
+    CC_WAR_ORDER_HOLD = 0,
+    CC_WAR_ORDER_MARCH,
+    CC_WAR_ORDER_CONTROL_ROUTE,
+    CC_WAR_ORDER_WITHDRAW,
+    CC_WAR_ORDER_CEASE
+} CcWarOrderKind;
+
+typedef struct CcWarParty {
+    CcId id;
+    CcId kingdom_id;
+    CcId commander_character_id;
+    CcId home_settlement_id;
+    CcId current_settlement_id;
+    CcId travel_route_id;
+    CcId travel_destination_id;
+    int32_t travel_arrival_day;
+    int32_t members;
+    CcWarOrderKind order;
+    CcId order_route_id;
+    CcId order_target_id;
+    bool permits_player;
+    int32_t battles_fought;
+    int32_t casualties;
+} CcWarParty;
+
+/* A sealed letter. Reports carry dated, sourced claims about a road;
+   orders instruct one named party. Neither does anything until delivered. */
+typedef enum CcDispatchKind {
+    CC_DISPATCH_ROAD_REPORT = 0,
+    CC_DISPATCH_WITHDRAW_ORDER,
+    CC_DISPATCH_CROSSING_PERMIT
+} CcDispatchKind;
+
+typedef struct CcDispatch {
+    CcId id;
+    CcDispatchKind kind;
+    CcId route_id;
+    CcId war_party_id;
+    CcId origin_settlement_id;
+    CcId recipient_settlement_id;
+    int32_t issued_day;
+    bool in_player_cargo;
+    bool delivered;
+} CcDispatch;
 
 typedef enum CcBanditCampSize {
     CC_BANDIT_HIDEOUT,
@@ -846,12 +1110,11 @@ typedef enum CcGoblinDragonSeedPhase {
     CC_GOBLIN_DRAGON_SEED_PREPARING
 } CcGoblinDragonSeedPhase;
 
-typedef struct CcGoblinCult {
+typedef struct CcGoblinSociety {
     CcId id;
     char name[CC_NAME_CAPACITY];
     int32_t members;
 
-    int32_t devotion;
     int32_t cohesion;
     CcId lair_settlement_id;
     CcGoblinTributePhase tribute_phase;
@@ -870,9 +1133,59 @@ typedef struct CcGoblinCult {
     int32_t hoard_defenses;
     bool target_warned;
     int32_t expeditions_intercepted;
+} CcGoblinSociety;
+
+
+#define CC_GOBLIN_FACTION_COUNT 3
+#define CC_CULT_SPECIES_COUNT 2
+#define CC_CULT_RANK_COUNT 4
+/* Colour order is independent of the dragon's inherited appearance. */
+typedef enum CcGoblinColor {
+    CC_GOBLIN_RED, CC_GOBLIN_PURPLE, CC_GOBLIN_BLUE
+} CcGoblinColor;
+typedef enum CcCultSpecies { CC_CULT_HUMAN, CC_CULT_GOBLIN } CcCultSpecies;
+typedef enum CcCultRank {
+    CC_CULT_INITIATE, CC_CULT_BEARER, CC_CULT_KEEPER, CC_CULT_VOICE
+} CcCultRank;
+
+typedef struct CcGoblinFaction {
+    int32_t members;
+    CcId dungeon_id;
+    int32_t lair_room;
+    int32_t porter_room;
+    int32_t target_room;
+    CcMoney coins;
+    int32_t gold;
+    int32_t gems;
+    CcMoney carried_coins;
+    int32_t carried_gold;
+    int32_t carried_gems;
+    CcMoney tribute;
+    int32_t deliveries;
+    int32_t hunted;
+    CcId journey_event_id;
+} CcGoblinFaction;
+
+typedef struct CcDragonCult {
+    int32_t devotion;
+    CcMoney offering_coins;
+    int32_t offering_stock[CC_GOOD_COUNT];
     CcGoblinDragonSeedPhase dragon_seed_phase;
     int32_t dragon_seed_days_remaining;
-} CcGoblinCult;
+    /* Cohorts are subsets of the world population. Service promotes one
+       member at a time through the same ranks for either species. */
+    int32_t ranks[CC_CULT_SPECIES_COUNT][CC_CULT_RANK_COUNT];
+    CcMoney service[CC_CULT_SPECIES_COUNT];
+} CcDragonCult;
+
+typedef struct CcGoblinPolitics {
+    CcGoblinFaction factions[CC_GOBLIN_FACTION_COUNT];
+    CcId dragon_id;
+    int32_t contest_started_day;
+    int32_t crown_faction; /* -1 while tribute is being counted. */
+    int32_t raid_faction;
+    int32_t next_hunt_faction;
+} CcGoblinPolitics;
 
 typedef enum CcDragonLifeStage {
     CC_DRAGON_STAGE_EGG,
@@ -906,6 +1219,8 @@ typedef struct CcDragon {
     CcMoney hoard;
     int32_t hoard_goods[CC_GOOD_COUNT];
     CcId stolen_treasure_id;
+    /* The first heart of this dragon; retained after loss or destruction. */
+    CcId wyrmheart_id;
     CcMoney stolen_outstanding;
     CcId theft_actor_id;
     CcId retaliation_target_id;
@@ -1210,6 +1525,21 @@ typedef enum CcCharacterRole {
     CC_CHARACTER_COURIER
 } CcCharacterRole;
 
+typedef enum CcCharacterOccupation {
+    CC_OCCUPATION_NONE,
+    CC_OCCUPATION_WOODCUTTER,
+    CC_OCCUPATION_SHEPHERD,
+    CC_OCCUPATION_MILLER,
+    CC_OCCUPATION_SMITH,
+    CC_OCCUPATION_QUARRYMAN,
+    CC_OCCUPATION_FARMER,
+    CC_OCCUPATION_BAKER,
+    CC_OCCUPATION_INNKEEPER,
+    CC_OCCUPATION_CARTWRIGHT,
+    CC_OCCUPATION_SCRIBE,
+    CC_OCCUPATION_COUNT
+} CcCharacterOccupation;
+
 typedef enum CcCharacterGoal {
     CC_CHARACTER_GOAL_KEEP_ORDER,
     CC_CHARACTER_GOAL_SECURE_LIVELIHOOD,
@@ -1284,6 +1614,20 @@ typedef struct CcCharacterMemory {
     int32_t day;
 } CcCharacterMemory;
 
+/* Detailed engine history has a bounded lifetime. Held accounts keep their
+   own source name; actor knowledge never comes from this store. */
+typedef struct CcHistoricCharacter {
+    CcId id;
+    CcId ancestor_id;
+    CcId home_settlement_id;
+    char name[CC_NAME_CAPACITY];
+    int32_t birth_day;
+    int32_t death_day;
+    int32_t generation;
+    CcCharacterRole role;
+    int32_t importance;
+} CcHistoricCharacter;
+
 typedef struct CcCharacterKnowledge {
     CcKnowledgeKind kind;
     CcId subject_id;
@@ -1292,6 +1636,7 @@ typedef struct CcCharacterKnowledge {
     CcKnowledgeCertainty certainty;
     bool private_knowledge;
     int32_t day;
+    char source_name[CC_NAME_CAPACITY];
 } CcCharacterKnowledge;
 
 typedef struct CcCharacter {
@@ -1305,12 +1650,21 @@ typedef struct CcCharacter {
     CcId current_settlement_id;
     CcId faction_id;
     CcCharacterRole role;
+    CcCharacterOccupation occupation;
     CcCharacterGoal goal;
     CcCharacterActivity activity;
     uint32_t appearance_seed;
     int32_t player_disposition;
     int32_t stress;
     int32_t courage;
+    CcMoney travel_coins;
+    CcId bandit_group_id;
+    int32_t hungry_days;
+    int32_t unsheltered_nights;
+    /* A journey in progress. News rides with the traveller: arriving syncs the
+       carrier's stories into the new town, which is what makes retelling happen. */
+    CcId travel_destination_id;
+    int32_t travel_arrival_day;
     CcCharacterMemory memories[CC_CHARACTER_MEMORY_CAPACITY];
     int32_t memory_count;
     int32_t memory_write_index;
@@ -1512,6 +1866,8 @@ typedef struct CcEvent {
     char text[CC_EVENT_TEXT_CAPACITY];
 } CcEvent;
 
+#define CC_FEED_TRAY_CAPACITY 10
+
 typedef struct CcPlayerCompany {
     CcId id;
     CcId location_id;
@@ -1522,6 +1878,9 @@ typedef struct CcPlayerCompany {
     int32_t passenger_capacity;
     int32_t map_capacity;
     int32_t reputation;
+    /* Schema 101: the carriage's feed tray, in wheat units. One crate of
+       wheat (the trade unit) fills it; the team eats from it in town. */
+    int32_t feed_tray_wheat;
     uint32_t map_catalogue_mask;
     uint32_t map_archive_mask;
     uint32_t road_book_site_discovery_mask;
@@ -1529,6 +1888,24 @@ typedef struct CcPlayerCompany {
     CcSettlementKnowledge settlement_knowledge[CC_MAX_SETTLEMENTS];
     CcId accepted_situation_id;
 } CcPlayerCompany;
+
+typedef enum CcMinePhase {
+    CC_MINE_NONE, CC_MINE_YARD, CC_MINE_LEVEL
+} CcMinePhase;
+
+typedef struct CcMineVisit {
+    CcMinePhase phase;
+    CcId site_id;
+    int32_t x, y;
+    int32_t revision;
+    int32_t return_speed;
+    int32_t light;
+    int32_t steps;
+    uint32_t seen;
+    bool bar_open;
+    bool surveyed;
+    int32_t pack[CC_GOOD_COUNT];
+} CcMineVisit;
 
 typedef struct CcCommand {
     CcCommandKind kind;
@@ -1562,6 +1939,57 @@ typedef struct CcPonyCompany {
     CcPony ponies[CC_PONY_COUNT];
 } CcPonyCompany;
 
+/* One committed recruitment reservation. Status 0 is empty; 1 waits, 2 travels, 3 arrived, 4 failed, 5 trained. */
+typedef struct CcArchiveRecruitmentOrder {
+    int32_t status;
+    CcId person_id, trainer_id, seat_id, origin_id, first_route_id, first_hop_id;
+    CcId donor_ids[2], patron_ids[2];
+    CcMoney donor_shares[2], purse;
+    int32_t wheat, paper, tools, travel_wheat, start_day, training_days, trainer_days;
+    int64_t arrival_estimate, ready_estimate;
+    CcId current_id, leg_route_id, leg_hop_id;
+    int32_t leg_arrival_day, provisioned_days, arrived_day;
+    int32_t labor_days, trainer_labor_days, last_work_day, wages_paid;
+} CcArchiveRecruitmentOrder;
+
+typedef struct CcArchiveStaff {
+    CcId person_ids[CC_MAX_SCRIBES], seat_id;
+    int32_t legacy_scribes;
+    bool active;
+} CcArchiveStaff;
+
+typedef struct CcGrainSupply {
+    CcId organiser_id, supplier_id, route_id, shipment_id;
+    CcMoney purse, spent;
+    int32_t ordered, delivered, lost, redirected;
+    int32_t last_dispatch_day, last_arrival_day;
+    bool enabled;
+} CcGrainSupply;
+
+typedef enum CcGrainSupplyStatus {
+    CC_GRAIN_READY, CC_GRAIN_INACTIVE, CC_GRAIN_CONTACT, CC_GRAIN_BAKERY,
+    CC_GRAIN_STOCKED, CC_GRAIN_TRANSIT, CC_GRAIN_BLOCKED, CC_GRAIN_CARRIAGE,
+    CC_GRAIN_SUPPLIER, CC_GRAIN_ROUTE, CC_GRAIN_FUNDS
+} CcGrainSupplyStatus;
+
+typedef struct CcGrainDeliveryPlan {
+    CcId organiser_id, supplier_id, route_id, carriage_id, next_hop_id;
+    int32_t path_capacity;
+    CcGrainSupplyStatus status;
+    char reason[192];
+} CcGrainDeliveryPlan;
+
+typedef struct CcNotice {
+    CcId situation_id, event_id, settlement_id, sponsor_id;
+    int32_t day;
+    char text[CC_EVENT_TEXT_CAPACITY];
+} CcNotice;
+
+typedef struct CcNoticeBoard {
+    bool ready;
+    CcNotice notices[CC_MAX_SITUATIONS];
+} CcNoticeBoard;
+
 typedef struct CcSim {
     uint32_t schema_version;
     uint32_t generator_version;
@@ -1576,14 +2004,22 @@ typedef struct CcSim {
     CcRoadSite road_sites[CC_MAX_ROAD_SITES];
     CcMap maps[CC_MAX_MAPS];
     CcTreasure treasures[CC_MAX_TREASURES];
+    CcCustodyState custody;
     CcFaction factions[CC_MAX_FACTIONS];
     CcShipment shipments[CC_MAX_SHIPMENTS];
+    CcGrainSupply grain_supplies[CC_MAX_SETTLEMENTS];
     CcRoyalCarriage royal_carriages[CC_MAX_KINGDOMS];
     int32_t royal_trade_week;
     int32_t royal_route_slots_used[CC_MAX_ROUTES];
     CcCourier couriers[CC_MAX_COURIERS];
+    CcWarParty war_parties[CC_MAX_WAR_PARTIES];
+    int32_t war_party_count;
+    CcDispatch dispatches[CC_MAX_DISPATCHES];
+    int32_t dispatch_count;
     CcBanditGroup bandits[CC_MAX_BANDITS];
-    CcGoblinCult goblins;
+    CcGoblinSociety goblins;
+    CcDragonCult dragon_cult;
+    CcGoblinPolitics goblin_politics;
     CcDragon dragon;
     CcDragonCampaign dragon_campaign;
     CcHoardRaiders hoard_raiders;
@@ -1604,12 +2040,18 @@ typedef struct CcSim {
     int32_t stable_horse_count;
     CcWorldClock clock;
     CcArchives archives;
+    CcArchiveRecruitmentOrder archive_recruitment;
+    int32_t archive_training_week;
+    CcArchiveStaff archive_staff;
+    CcArchiveConvoyOrder archive_convoy;
+    CcNoticeBoard notice_board;
     CcGossip gossip[CC_MAX_GOSSIP];
     CcGossipCarrier gossip_carriers[CC_MAX_GOSSIP_CARRIERS];
     CcId gossip_last_event_id;
     uint32_t posted_situation_mask;
     CcJourneyEncounter journey;
     CcCarriageState carriage;
+    CcMineVisit mine;
     CcDelayedEcho delayed_echo;
     CcDelayedEcho pending_echoes[CC_MAX_PENDING_ECHOES];
     int32_t pending_echo_count;
@@ -1641,6 +2083,8 @@ typedef struct CcSim {
     int32_t last_shortage_level[CC_MAX_SETTLEMENTS];
     int32_t last_bandit_level[CC_MAX_BANDITS];
     int32_t last_monster_level[CC_MAX_MONSTERS];
+    int32_t historic_character_count;
+    CcHistoricCharacter historic_characters[CC_MAX_HISTORIC_CHARACTERS];
 } CcSim;
 
 /* Every field of CcSim is spelled out by hand in four other places: CcSimHash,
@@ -1657,7 +2101,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 172928,
+_Static_assert(sizeof(CcSim) == 378288,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -1690,8 +2134,17 @@ void CcSimUpgradeHistoryOffices(CcSim *sim);
 void CcSimUpgradeArchivePhysicalLore(CcSim *sim);
 void CcSimUpgradeQuestArchitecture(CcSim *sim);
 void CcSimInitializeUnderroad(CcSim *sim);
+void CcSimInitializeGoblinPolitics(CcSim *sim);
+int32_t CcSimCultMembers(const CcSim *sim, CcCultSpecies species);
+const char *CcGoblinColorName(int32_t color);
+const char *CcCultRankName(int32_t rank);
 void CcSimUpgradeGrainEconomy(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
+void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
+                                             CcNutritionAccounting *accounting);
+void CcSimAdvanceDaysWithAccounting(CcSim *sim, int32_t days,
+                                     CcNutritionAccounting *nutrition,
+                                     CcSmithyAccounting *smithy);
 int32_t CcSimGossipCarrierCapacity(const CcSim *sim);
 const CcGossipCarrier *CcSimGossipCarrier(const CcSim *sim, CcId id);
 const CcGossip *CcSimPersonalGossip(const CcSim *sim, CcId id, int32_t offset,
@@ -1700,6 +2153,7 @@ const CcGossip *CcSimGossipStory(const CcSim *sim, int32_t slot);
 int32_t CcSimNextUntoldStory(const CcSim *sim, CcId id,
                              const CcGossipVersion **version);
 bool CcSimStoryTold(const CcSim *sim, CcId id, int32_t slot);
+const CcNotice *CcSimSituationNotice(const CcSim *sim, CcId situation_id);
 void CcSimRefreshCharacterGossip(CcSim *sim);
 void CcGossipText(const CcSim *sim, const CcGossip *story,
                   const CcGossipVersion *version, char *text, size_t capacity);
@@ -1715,10 +2169,20 @@ void CcGenerateCharacterName(uint32_t world_seed, CcId settlement_id,
                              int32_t generation, uint32_t ordinal,
                              char output[CC_NAME_CAPACITY]);
 
+/* Unrecognized settlement functions draw from the whole name pool. */
+void CcGenerateSettlementCharacterName(uint32_t world_seed, CcId settlement_id,
+                                       int32_t place_function, int32_t generation,
+                                       uint32_t ordinal, char output[CC_NAME_CAPACITY]);
+
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
 bool CcSimApply(CcSim *sim, const CcCommand *command,
                 char *error, size_t error_capacity);
+/* Version compatibility only; CcSimValidate also checks the saved state. */
+bool CcSimSupportsVersions(uint32_t schema_version, uint32_t generator_version);
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity);
+/* Engine/debug lookup; actor-facing code reads held account snapshots. */
+const CcHistoricCharacter *CcSimHistoricCharacter(const CcSim *sim, CcId id);
+void CcSimUpgradeKnowledgeSourceNames(CcSim *sim);
 uint64_t CcSimHash(const CcSim *sim);
 int32_t CcSimHorseTeamReadiness(const CcSim *sim);
 const char *CcJourneyPaceName(CcJourneyPace pace);
@@ -1774,6 +2238,10 @@ const char *CcFrontStageName(CcFrontStage stage);
 
 const CcSettlement *CcSimSettlement(const CcSim *sim, CcId id);
 CcSettlement *CcSimSettlementMutable(CcSim *sim, CcId id);
+bool CcSimFreightLeg(const CcSim *sim, CcId route_id,
+    CcId origin_id, CcId destination_id, CcFreightLeg *leg);
+int32_t CcSimFreightLegDays(const CcSim *sim, CcId route_id,
+    CcId origin_id, CcId destination_id);
 const CcRoute *CcSimRoute(const CcSim *sim, CcId id);
 const CcRoadSite *CcSimRoadSite(const CcSim *sim, CcId id);
 const CcRoadSite *CcSimRoadSiteAt(const CcSim *sim, int32_t index);
@@ -1858,7 +2326,113 @@ int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimActiveFrontCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
 CcHungerSnapshot CcSimHungerSnapshot(const CcSim *sim);
+CcWelfareSnapshot CcSimWelfareSnapshot(const CcSim *sim);
+
+
+/* Engine diagnostics and execution share these roadside recovery gates. */
+typedef enum CcRoadRecoveryBlock {
+    CC_ROAD_RECOVERY_INVALID = 1U << 0,
+    CC_ROAD_RECOVERY_OPEN = 1U << 1,
+    CC_ROAD_RECOVERY_WAR = 1U << 2,
+    CC_ROAD_RECOVERY_CALENDAR = 1U << 3,
+    CC_ROAD_RECOVERY_ABANDONED = 1U << 4,
+    CC_ROAD_RECOVERY_PEOPLE = 1U << 5,
+    CC_ROAD_RECOVERY_FOOD = 1U << 6,
+    CC_ROAD_RECOVERY_WOOD = 1U << 7,
+    CC_ROAD_RECOVERY_STONE = 1U << 8,
+    CC_ROAD_RECOVERY_TOOLS = 1U << 9
+} CcRoadRecoveryBlock;
+
+typedef struct CcRoadRecoveryPlan {
+    uint32_t blocked;
+    CcId route_id;
+    CcId labor_base_id;
+    CcId supplier_id;
+    int32_t population;
+    int32_t food_rations;
+    int32_t wood;
+    int32_t stone;
+    int32_t tools;
+    int32_t effort;
+    int32_t people_used;
+    int64_t next_work_day;
+} CcRoadRecoveryPlan;
+
+CcRoadRecoveryPlan CcSimRoadRecoveryPlan(const CcSim *sim, CcId route_id);
+
+typedef enum CcCampaignLaunchBlock {
+    CC_CAMPAIGN_INVALID = 1U << 0,
+    CC_CAMPAIGN_ACTIVE = 1U << 1,
+    CC_CAMPAIGN_COOLDOWN = 1U << 2,
+    CC_CAMPAIGN_DRAGON_SLAIN = 1U << 3,
+    CC_CAMPAIGN_PLEDGES = 1U << 4,
+    CC_CAMPAIGN_DRAGON_AGE = 1U << 5,
+    CC_CAMPAIGN_FOOD = 1U << 6,
+    CC_CAMPAIGN_TOOLS = 1U << 7,
+    CC_CAMPAIGN_WEAPONS = 1U << 8,
+    CC_CAMPAIGN_PATRON = 1U << 9,
+    CC_CAMPAIGN_HERO = 1U << 10,
+    CC_CAMPAIGN_SEAT = 1U << 11
+} CcCampaignLaunchBlock;
+#define CC_CAMPAIGN_PREPARATION_BLOCKS (CC_CAMPAIGN_INVALID | CC_CAMPAIGN_ACTIVE | \
+    CC_CAMPAIGN_COOLDOWN | CC_CAMPAIGN_DRAGON_SLAIN | CC_CAMPAIGN_PLEDGES | \
+    CC_CAMPAIGN_DRAGON_AGE)
+
+typedef struct CcCampaignLaunchPlan {
+    uint32_t blocked;
+    uint32_t pledged_mask;
+    int32_t pledged_count;
+    int32_t food_rations;
+    int32_t tools;
+    int32_t weapons;
+    int32_t leader_slot;
+    CcId origin_id;
+    CcId patron_id;
+    CcId hero_id;
+} CcCampaignLaunchPlan;
+
+/* A snapshot of held supplies; preparation can change these before departure. */
+CcCampaignLaunchPlan CcSimCampaignLaunchPlan(const CcSim *sim);
+
+typedef enum CcRitualBlock {
+    CC_RITUAL_INVALID = 1U << 0,
+    CC_RITUAL_MEMBERS = 1U << 1,
+    CC_RITUAL_DEVOTION = 1U << 2,
+    CC_RITUAL_COHESION = 1U << 3,
+    CC_RITUAL_COINS = 1U << 4,
+    CC_RITUAL_RELICS = 1U << 5,
+    CC_RITUAL_FOOD = 1U << 6,
+    CC_RITUAL_TOOLS = 1U << 7,
+    CC_RITUAL_WEAPONS = 1U << 8
+} CcRitualBlock;
+
+typedef struct CcRitualOfferingPlan {
+    uint32_t blocked;
+    int32_t food_rations;
+    int32_t relics;
+    int32_t eggs;
+} CcRitualOfferingPlan;
+
+/* Held offerings for the clutch reveal; phase, calendar, and timer are separate. */
+CcRitualOfferingPlan CcSimRitualOfferingPlan(const CcSim *sim);
+
+
+
 CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
+/* Evaluate the current staffing and held supplies without advancing archive work. */
+/* Held-state booking quote. Costs cover goods and the first loaded leg.
+   Dispatch must recheck the quote when the carriage reaches its supplier. */
+CcArchiveSupplyPlan CcSimArchiveSupplyPlan(const CcSim *sim, CcId carriage_id);
+const char *CcArchiveSupplyGateName(CcArchiveSupplyGate gate);
+/* Placement advice from held local supplies. A healthy seat has priority. */
+CcArchiveSeatCandidate CcSimArchiveSeatCandidate(const CcSim *sim, CcId settlement_id);
+CcArchiveSeatPlan CcSimArchiveSeatPlan(const CcSim *sim, CcId current_seat_id);
+CcArchiveWorkPlan CcSimArchiveWorkPlan(const CcSim *sim);
+/* Treasury top-up under current funds and routes; recovery timing is separate. */
+CcArchiveFundingPlan CcSimArchiveFundingPlan(const CcSim *sim);
+const char *CcArchiveFundingBlockerName(CcArchiveFundingBlocker blocker);
+CcArchiveRecoveryWindow CcSimArchiveRecoveryWindow(const CcSim *sim);
+const char *CcArchiveRecoveryGateName(CcArchiveRecoveryGate gate);
 const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker);
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
                                   CcFoodEconomy *economy);
@@ -1879,9 +2453,28 @@ void CcSimUnharnessSecondDraftAnimal(CcSim *sim);
 int32_t CcSimCommonPonyCount(const CcSim *sim);
 bool CcSettlementHasService(const CcSettlement *settlement,
                             CcServiceKind service);
+CcSmithyPlan CcSimPlanSmithy(const CcSim *sim,
+                            const CcSettlement *settlement);
+const char *CcSmithyStatusName(CcSmithyStatus status);
+
 bool CcSimStartServiceProject(CcSim *sim, CcId settlement_id,
                               CcServiceKind service,
                               char *error, size_t error_capacity);
+
+typedef struct CcBakerySupportPlan {
+    int32_t town_materials[CC_GOOD_COUNT];
+    CcId contact_id;
+    int32_t cargo[CC_GOOD_COUNT];
+    CcMoney coins;
+    int32_t building_days;
+    bool ready;
+    bool remembered;
+    char reason[192];
+} CcBakerySupportPlan;
+
+CcGrainDeliveryPlan CcSimGrainDeliveryPlan(const CcSim *sim, CcId settlement_id);
+const CcGrainSupply *CcSimGrainSupply(const CcSim *sim, CcId settlement_id);
+CcBakerySupportPlan CcSimBakerySupportPlan(const CcSim *sim, CcId settlement_id);
 bool CcSimKingdomsAtWar(const CcSim *sim, CcId first, CcId second);
 bool CcSimKingdomsAllied(const CcSim *sim, CcId first, CcId second);
 const CcRoyalCarriage *CcSimRoyalCarriage(const CcSim *sim,
@@ -1894,6 +2487,22 @@ int32_t CcSimKingdomPressure(const CcSim *sim, CcId kingdom_id);
 const char *CcDiplomaticStateName(CcDiplomaticState state);
 bool CcSimRouteCrossesKingdomBorder(const CcSim *sim, CcId route_id);
 bool CcSimRouteCrossesWarBorder(const CcSim *sim, CcId route_id);
+/* Bounded armed companies under named commanders (#646). */
+const CcWarParty *CcSimWarParty(const CcSim *sim, CcId id);
+const CcWarParty *CcSimRouteCheckpoint(const CcSim *sim, CcId route_id);
+bool CcSimPlayerMayCrossCheckpoint(const CcSim *sim, CcId route_id);
+void CcSimMusterWarPartyForDeclaration(CcSim *sim, int32_t issuer,
+                                        int32_t recipient);
+void CcSimAdvanceWarParties(CcSim *sim);
+void CcSimRetireWarPartiesAtPeace(CcSim *sim, CcId first, CcId second);
+const CcDispatch *CcSimDispatch(const CcSim *sim, CcId id);
+CcEvent *CcSimPushEvent(CcSim *sim, CcEventKind kind, CcId subject,
+                        CcId location, CcId parent, int32_t magnitude,
+                        const char *text);
+CcId CcSimCreateDispatch(CcSim *sim, CcDispatchKind kind, CcId route_id,
+                         CcId war_party_id, CcId origin_settlement_id,
+                         CcId recipient_settlement_id);
+void CcSimDeliverDispatch(CcSim *sim, CcId dispatch_id);
 int32_t CcBanditCampServiceCapacity(CcBanditCampSize size);
 bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
                            char *error, size_t error_capacity);

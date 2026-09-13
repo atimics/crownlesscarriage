@@ -1,0 +1,29 @@
+{
+  "pairs": 2,
+  "changed_fields": [
+    {
+      "seed": "1",
+      "field": "control_hunger",
+      "before": "50",
+      "after": "26"
+    },
+    {
+      "seed": "1",
+      "field": "agent_hunger",
+      "before": "36",
+      "after": "23"
+    },
+    {
+      "seed": "2",
+      "field": "control_hunger",
+      "before": "36",
+      "after": "5"
+    },
+    {
+      "seed": "2",
+      "field": "agent_hunger",
+      "before": "36",
+      "after": "5"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "source_commit": "5cabed0ac8d06cf87f3efd649d5ecf18322f9d6b",
+  "schema": 99,
+  "generator": 25,
+  "headless_tests_passed": 144,
+  "final_repeated_dispatch_regression": "passed",
+  "journey": "town stock -> container -> ordinary royal carriage -> save/reload -> simulated arrival -> destination store",
+  "quantity": 7,
+  "good": "wheat",
+  "custody_slots_reserved": 2,
+  "route_capacity_rejection": "passed with full state unchanged",
+  "blocked_route_unload_rejection": "passed with full state unchanged",
+  "sanitizers": "passed with custody core, adapter, cc_sim.c, archive supply, and archive relocation instrumented; remaining libraries use the strict release build",
+  "webassembly_compile": "passed",
+  "focused_cppcheck": "passed"
+}

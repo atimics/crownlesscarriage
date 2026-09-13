@@ -62,6 +62,17 @@ typedef struct CcInteractionState {
     char feedback[112];
 } CcInteractionState;
 
+typedef struct CcInteractionLabelRect {
+    float x, y, width, height;
+} CcInteractionLabelRect;
+
+/* Place a label near its anchor within the viewport, with four pixels of space.
+ * False means the action should use its existing card while the scene is full. */
+bool CcInteractionPlaceLabel(CcInteractionLabelRect desired,
+                              CcInteractionLabelRect viewport,
+                              const CcInteractionLabelRect *placed,
+                              int32_t count, CcInteractionLabelRect *result);
+
 bool CcInteractionKeyEqual(CcInteractionKey a, CcInteractionKey b);
 const CcInteractionTarget *CcInteractionFind(const CcInteractionPlan *plan,
                                            CcInteractionKey key);

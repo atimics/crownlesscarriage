@@ -19,7 +19,8 @@ static const CcVoiceProfile VOICES[] = {
     {"lark-v1", "Lark", "A woman with a clear, bright voice, a light west-country English accent, and lively, gentle speech."},
     {"ash-v1", "Ash", "A man with a grainy baritone, a light Welsh accent, and deliberate, unhurried speech."},
     {"brook-v1", "Brook", "A woman with a soft middle register, a light Irish accent, and calm, direct speech."},
-    {"stone-v1", "Stone", "A man with a dry middle register, a northern English accent, and clipped, watchful speech."}
+    {"stone-v1", "Stone", "A man with a dry middle register, a northern English accent, and clipped, watchful speech."},
+    {"goblin-v1", "Nara Soot-Tongue", "Flint reference with the Hra'khor bass vocoder at double speech speed."}
 };
 
 enum { GENERATED_VOICE_FIRST = 5, GENERATED_VOICE_COUNT = 8 };

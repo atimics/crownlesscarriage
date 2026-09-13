@@ -1,5 +1,7 @@
+#include "sim/cc_archive_recruitment.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_sim_versions_internal.h"
 
 #include "test_support.h"
 #include <inttypes.h>
@@ -526,7 +528,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 29);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 32);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -568,9 +570,9 @@ static void CheckSchema5Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
     CcSim legacy;
     CcSimInit(&legacy, UINT32_C(0x1e9ac6));
-    CcSimAdvanceDays(&legacy, 19);
     legacy.schema_version = 5U;
     legacy.generator_version = 5U;
+    CcSimAdvanceDays(&legacy, 19);
     CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
     CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
@@ -592,6 +594,8 @@ static void CheckSchema6Compatibility(char *error, size_t error_capacity)
     CcSimAdvanceDays(&legacy, 17);
     legacy.schema_version = 6U;
     legacy.generator_version = 6U;
+    /* Schema 6 predates treasures; this fixture only covers the older shape. */
+    legacy.treasure_count = 0;
     CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
     CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
@@ -650,6 +654,18 @@ static void CheckDiplomacyPersistence(char *error, size_t error_capacity)
     sim.dragon.age_days = 500 * 365;
     CcSimAdvanceDays(&sim, 27);
     sim.dragon.territoryless_days = 17;
+    /* The archive's silence has to outlive the save. Before schema 56 this
+       field existed only in memory, so the five-year wait restarted on every
+       load and the recovery it gates could never come due. */
+    uint64_t before_silence = CcSimHash(&sim);
+    sim.archives.dead_since_day = 1;
+    CC_CHECK(CcSimHash(&sim) != before_silence);
+    CC_CHECK(CcSimValidate(&sim, error, error_capacity));
+    sim.archives.dead_since_day = sim.current_day + 1;
+    CC_CHECK(!CcSimValidate(&sim, error, error_capacity));
+    sim.archives.dead_since_day = -1;
+    CC_CHECK(!CcSimValidate(&sim, error, error_capacity));
+    sim.archives.dead_since_day = 1;
     CC_CHECK(sim.courier_count > 0);
     CC_CHECK(sim.couriers[0].status == CC_COURIER_WAITING);
     CC_CHECK(CcSaveWrite(path, &sim, error, error_capacity));
@@ -668,6 +684,7 @@ static void CheckDiplomacyPersistence(char *error, size_t error_capacity)
              sim.archives.abbot_character_id);
     CC_CHECK(restored.archives.stewardship_rank ==
              sim.archives.stewardship_rank);
+    CC_CHECK(restored.archives.dead_since_day == 1);
     CC_CHECK(restored.kingdoms[0].ruler_character_id ==
              sim.kingdoms[0].ruler_character_id);
     CC_CHECK(restored.kingdoms[0].monastery_patron_id ==
@@ -871,7 +888,7 @@ static void CheckSchema13Compatibility(char *error, size_t error_capacity)
     CC_CHECK(CcIdKind(restored.horse_team[1].id) == CC_ENTITY_HORSE);
     CC_CHECK(restored.settlements[0].cow_adults > 0);
     CC_CHECK(restored.goblins.cohesion == 60);
-    CC_CHECK(restored.goblins.dragon_seed_phase ==
+    CC_CHECK(restored.dragon_cult.dragon_seed_phase ==
              CC_GOBLIN_DRAGON_SEED_NONE);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
@@ -896,7 +913,7 @@ static void CheckSchema14Compatibility(char *error, size_t error_capacity)
     CC_CHECK(restored.horse_team[0].training == 100);
     CC_CHECK(restored.horse_team[0].strength > 0);
     CC_CHECK(restored.goblins.cohesion == 60);
-    CC_CHECK(restored.goblins.dragon_seed_phase ==
+    CC_CHECK(restored.dragon_cult.dragon_seed_phase ==
              CC_GOBLIN_DRAGON_SEED_NONE);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
@@ -917,7 +934,7 @@ static void CheckSchema15Compatibility(char *error, size_t error_capacity)
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
     CC_CHECK(restored.goblins.cohesion == 60);
-    CC_CHECK(restored.goblins.dragon_seed_phase ==
+    CC_CHECK(restored.dragon_cult.dragon_seed_phase ==
              CC_GOBLIN_DRAGON_SEED_NONE);
     CC_CHECK(restored.stable_horse_count == legacy.stable_horse_count);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
@@ -1692,7 +1709,8 @@ static void CheckSchema24Compatibility(char *error, size_t error_capacity)
              (preview.travel_days * 2 < 3 ? 3 : preview.travel_days * 2) *
                  CC_WORLD_WATCH_SUBTICKS);
     CC_CHECK(restored.carriage.progress_milli == legacy_progress);
-    CC_CHECK(restored.character_count == CC_MAX_CHARACTERS);
+    CC_CHECK(restored.character_count > 0 &&
+             restored.character_count <= CC_MAX_CHARACTERS);
     CC_CHECK(restored.characters[0].id == first_character_id);
     CC_CHECK(strcmp(restored.characters[0].name,
                     first_character_name) == 0);
@@ -2669,6 +2687,7 @@ static void CheckDragonHairPersistence(void)
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.dragon.hair_color == CC_DRAGON_HAIR_PURPLE);
     court.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&court);
     CC_CHECK(CcSimHash(&court) == CcSimHash(&restored));
     RemoveDatabase(path);
 }
@@ -2687,6 +2706,7 @@ static void CheckSchema41Upgrade(void)
     CC_CHECK(CcSaveRead(path, restored, error, sizeof(error)));
     CC_CHECK(restored->schema_version == CC_SIM_SCHEMA_VERSION);
     legacy->schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(legacy);
     CC_CHECK(CcSimHash(restored) == CcSimHash(legacy));
     free(restored);
     free(legacy);
@@ -2699,7 +2719,7 @@ static void CheckSchema41Upgrade(void)
    future edit to that table cannot quietly widen or narrow what loads. */
 static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
 {
-    bool legacy = schema >= 2U && schema <= 51U;
+    bool legacy = schema >= 2U && schema <= CC_SIM_NEWEST_LEGACY_SCHEMA;
     if (!legacy && schema != CC_SIM_SCHEMA_VERSION) return false;
     if (schema == CC_SIM_SCHEMA_VERSION &&
         generator == CC_GENERATOR_VERSION) return true;
@@ -2707,15 +2727,15 @@ static bool ExpectedSupportedPairing(uint32_t schema, uint32_t generator)
         /* The current generator reads the oldest schemas and the recent run,
            but not 28 through 31, which shipped with generators of their own. */
         if (schema >= 2U && schema <= 27U) return true;
-        if (schema >= 32U && schema <= 51U) return true;
+        if (schema >= 32U && schema <= CC_SIM_NEWEST_LEGACY_SCHEMA) return true;
     }
     if (schema == 31U && generator == 24U) return true;
     if (schema == 27U && generator >= 21U && generator <= 23U) return true;
     if (schema == 28U && generator == 22U) return true;
     if (schema == 29U && generator == 23U) return true;
     if (schema == 30U && generator == 23U) return true;
-    /* Generators predating the versioning split read any legacy schema. */
-    if (legacy && generator >= 2U && generator <= 21U) return true;
+    /* Preserve older pairings; schema 52 only shipped with generator 25. */
+    if (schema >= 2U && schema <= 51U && generator >= 2U && generator <= 21U) return true;
     return false;
 }
 
@@ -2723,7 +2743,7 @@ static void CheckSupportedVersionPairings(void)
 {
     static const char *unsupported = "Simulation version is unsupported.";
     int32_t accepted = 0;
-    for (uint32_t schema = 0U; schema <= 60U; ++schema) {
+    for (uint32_t schema = 0U; schema <= CC_SIM_SCHEMA_VERSION + 2U; ++schema) {
         for (uint32_t generator = 0U; generator <= 30U; ++generator) {
             static CcSim sim;
             char error[256] = {0};
@@ -2747,8 +2767,669 @@ static void CheckSupportedVersionPairings(void)
     CC_CHECK(accepted > 0);
 }
 
+static void CheckSchema76ArchiveJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema76-archive.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 76U;
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 76U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 76U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema77ArchiveJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema77-archive.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 77U;
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    ExecuteFixtureSql(database, "ALTER TABLE royal_carriage DROP COLUMN archive_contract;", "drop archive contract fixture");
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 77U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 77U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema78OccupationJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema78-occupation.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 78U;
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    ExecuteFixtureSql(database, "ALTER TABLE npc_character DROP COLUMN occupation;", "drop occupation fixture");
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 78U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 78U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema79RecruitmentJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema79-recruitment.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 77U;
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    ExecuteFixtureSql(database, "DROP TABLE archive_recruitment;", "drop recruitment fixture");
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 77U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 77U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema82RecruitmentJourneyJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema82-recruitment-journey.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 82U;
+    CC_CHECK(CcSimBeginArchiveRecruitment(&legacy));
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    ExecuteFixtureSql(database, "DROP TABLE archive_recruitment_journey;", "drop recruitment fixture");
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 82U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 82U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema84RecruitmentTrainingJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema84-recruitment-training.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 83U;
+    CC_CHECK(CcSimBeginArchiveRecruitment(&legacy));
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    ExecuteFixtureSql(database, "DROP TABLE archive_recruitment_training;", "drop recruitment fixture");
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 83U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 83U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema85RecruitmentStaffJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema85-recruitment-staff.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 84U;
+    CC_CHECK(CcSimBeginArchiveRecruitment(&legacy));
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    ExecuteFixtureSql(database, "DROP TABLE archive_staff;", "drop recruitment fixture");
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 84U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 84U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema86RecruitmentAutomaticJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema86-recruitment-automatic.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 85U;
+    CC_CHECK(CcSimBeginArchiveRecruitment(&legacy));
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 85U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 85U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema87RecruitmentBindingJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema87-recruitment-binding.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 86U;
+    CC_CHECK(CcSimBeginArchiveRecruitment(&legacy));
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 86U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 86U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema88RecruitmentVolumeJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema88-recruitment-volume.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 87U;
+    CC_CHECK(CcSimBeginArchiveRecruitment(&legacy));
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 87U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 87U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema89RecruitmentReserveJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema89-recruitment-reserve.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 88U;
+    CC_CHECK(CcSimBeginArchiveRecruitment(&legacy));
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 88U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 88U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema89HistoricalCast(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema89-history.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x9e3779b9));
+    legacy.schema_version = 88U;
+    for (int day = 0; day < 36500; ++day) CcSimAdvanceDays(&legacy, 1);
+    CC_CHECK(CcSimValidate(&legacy, error, sizeof(error)));
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    after = legacy; CcSimAdvanceDays(&after, 1);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 88U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    restored.schema_version = 88U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema90RecruitmentLifetimeJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema90-recruitment-lifetime.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 89U;
+    CC_CHECK(CcSimBeginArchiveRecruitment(&legacy));
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 89U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 89U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema58SmithyCapacity(void)
+{
+    static CcSim legacy;
+    static CcSim restored;
+    char error[256];
+    const char *path = "persistence-schema58-smithy.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    CC_CHECK(legacy.settlements[3].production[CC_GOOD_TOOLS] == 2);
+    legacy.schema_version = 58U;
+    legacy.settlements[3].production[CC_GOOD_TOOLS] = 0;
+    legacy.settlements[1].production[CC_GOOD_TOOLS] = 7;
+    CcSim after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 58U, 25U);
+    legacy = after;
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.settlements[3].production[CC_GOOD_TOOLS] == 0);
+    CC_CHECK(restored.settlements[1].production[CC_GOOD_TOOLS] == 7);
+    restored.schema_version = 58U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&legacy));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&restored);
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSaveRead(path, &legacy, error, sizeof(error)));
+    CC_CHECK(legacy.settlements[3].production[CC_GOOD_TOOLS] == 0);
+    RemoveDatabase(path);
+}
+
+static void CheckShippedTravellerSave(void)
+{
+    static CcSim restored;
+    char path[512], error[256];
+    (void)snprintf(path, sizeof(path),
+        "%s/tests/fixtures/shipped/schema-60-traveller-day-1461.ccsave",
+        CC_TEST_SOURCE_DIR);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
+    restored.schema_version = 60U;
+    CC_CHECK(CcSimHash(&restored) == UINT64_C(0xaf82f2230153da41));
+    CcSimAdvanceDays(&restored, 9);
+    CC_CHECK(CcSimHash(&restored) == UINT64_C(0x3c8745b83278bea2));
+}
+
+static void CheckPre61KnowledgeJournal(void)
+{
+    static CcSim legacy;
+    static CcSim after;
+    static CcSim restored;
+    char error[256];
+    const char *path = "persistence-schema60-knowledge.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    legacy.schema_version = 60U;
+    CcId source_id = 0U;
+    for (int32_t i = 0; i < legacy.character_count && source_id == 0U; ++i) {
+        for (int32_t j = 0; j < legacy.characters[i].knowledge_count; ++j) {
+            if (legacy.characters[i].knowledge[j].kind == CC_KNOWLEDGE_PROBLEM_RUMOR) {
+                source_id = legacy.characters[i].knowledge[j].source_character_id;
+                break;
+            }
+        }
+    }
+    CC_CHECK(source_id != 0U);
+    for (int32_t i = 0; i < legacy.character_count; ++i) {
+        if (legacy.characters[i].id == source_id) legacy.characters[i].death_day = 2;
+    }
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 60U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.historic_character_count == 0);
+    restored.schema_version = 60U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&restored);
+    for (int32_t i = 0; i < restored.character_count; ++i) {
+        for (int32_t j = 0; j < restored.characters[i].knowledge_count; ++j) {
+            const CcCharacterKnowledge *item = &restored.characters[i].knowledge[j];
+            CC_CHECK(item->source_character_id != source_id);
+            const CcCharacter *source = CcSimCharacter(&restored, item->source_character_id);
+            CC_CHECK(source != NULL);
+            CC_CHECK(strcmp(item->source_name, source->name) == 0);
+        }
+    }
+    RemoveDatabase(path);
+}
+
+static void CheckPre64SiteJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema63-sites.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    legacy.schema_version = 64;
+    legacy.current_day = 6;
+    legacy.road_sites[2].accessible = true;
+    legacy.road_sites[2].blocker = CC_ROAD_SITE_BLOCKER_NONE;
+    legacy.road_sites[2].stock[CC_GOOD_WHEAT] = 6;
+    legacy.road_sites[2].stock[CC_GOOD_TOOLS] = 1;
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(after.road_sites[2].stock[CC_GOOD_BREAD] == 0);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 64U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    restored.schema_version = 64;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&restored);
+    CcSimAdvanceDays(&restored, 7);
+    CC_CHECK(restored.road_sites[2].stock[CC_GOOD_BREAD] == 2);
+    CC_CHECK(restored.road_sites[2].stock[CC_GOOD_WHEAT] == 4);
+    RemoveDatabase(path);
+}
+
+static void CheckPre65FreightJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema64-freight.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    legacy.schema_version = 65;
+    legacy.current_day = 6;
+    CcRoadSite *site = &legacy.road_sites[11];
+    site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE;
+    site->stock[CC_GOOD_TOOLS] = 5;
+    const CcSettlement *town = CcSimSettlement(&legacy, site->home_settlement_id);
+    for (int32_t i = 0; i < legacy.royal_carriage_count; ++i)
+        if (legacy.royal_carriages[i].kingdom_id == town->kingdom_id)
+            legacy.royal_carriages[i].location_id = town->id;
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(after.road_sites[11].stock[CC_GOOD_TOOLS] == 5);
+    for (int32_t i = 0; i < after.royal_carriage_count; ++i)
+        CC_CHECK(after.royal_carriages[i].mode <= CC_ROYAL_CARRIAGE_WAITING_CAPACITY);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 65U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    restored.schema_version = 65;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&restored);
+    CcSimAdvanceDays(&restored, 35);
+    CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckPre67MaintenanceJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema66-maintenance.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    legacy.schema_version = 67; legacy.current_day = 6;
+    CcRoadSite *site = &legacy.road_sites[2];
+    site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE; site->condition = 44;
+    site->stock[CC_GOOD_TOOLS] = 2; site->stock[CC_GOOD_WOOD] = 1;
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(after.road_sites[2].condition == 44);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 67U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    restored.schema_version = 67;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&restored);
+    CcSimAdvanceDays(&restored, 7);
+    CC_CHECK(restored.road_sites[2].condition == 54);
+    CC_CHECK(restored.road_sites[2].stock[CC_GOOD_TOOLS] == 1 && restored.road_sites[2].stock[CC_GOOD_WOOD] == 0);
+    CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+static void CheckPre68WearJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema67-wear.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x5eed0001));
+    legacy.schema_version = 68; legacy.current_day = 6;
+    CcRoadSite *site = &legacy.road_sites[2];
+    site->accessible = true; site->blocker = CC_ROAD_SITE_BLOCKER_NONE; site->condition = 60;
+    site->stock[CC_GOOD_TOOLS] = 1; site->stock[CC_GOOD_WHEAT] = 6;
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(after.road_sites[2].condition == 60 && after.road_sites[2].stock[CC_GOOD_WHEAT] == 4);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 68U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    restored.schema_version = 68;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSimInitializeGoblinPolitics(&restored);
+    CcSimAdvanceDays(&restored, 7);
+    CC_CHECK(restored.road_sites[2].condition == 59 && restored.road_sites[2].stock[CC_GOOD_WHEAT] == 3);
+    CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+/* #653: the character cap is an upper bound, not the population target. */
+static void CheckCastNotPinnedToCap(char *error, size_t error_capacity)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x653ca9));
+    CC_CHECK(sim.character_count > 0);
+    /* The seeded cast is deliberately not the full cap; the world still
+       validates, where the old exact-equality rule rejected it. */
+    CC_CHECK(sim.character_count <= CC_MAX_CHARACTERS);
+    CC_CHECK(sim.character_count != CC_MAX_CHARACTERS);
+    CC_CHECK(CcSimValidate(&sim, error, error_capacity));
+}
+
+/* #653: a save written when the cast cap was smaller has fewer
+   gossip_carrier rows. Loading must tolerate the shorter table rather than
+   fail with "Gossip rows are invalid or incomplete." */
+static void CheckGossipCarrierCapacityGrowth(char *error,
+                                             size_t error_capacity)
+{
+    const char *path = "persistence-gossip-carrier-growth.ccsave";
+    RemoveDatabase(path);
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x653ca9ca));
+    CC_CHECK(CcSaveWrite(path, &sim, error, error_capacity));
+
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database, SQLITE_OPEN_READWRITE, NULL),
+                  database, "could not open gossip carrier fixture");
+    ExecuteFixtureSql(database, "DELETE FROM gossip_carrier WHERE slot >= 1;",
+                      "could not shorten gossip carrier table");
+    sqlite3_close(database);
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.gossip_carriers[0].id == sim.gossip_carriers[0].id);
+    for (int32_t i = 1; i < CcSimGossipCarrierCapacity(&restored); ++i) {
+        CC_CHECK(restored.gossip_carriers[i].id == 0U);
+        CC_CHECK(restored.gossip_carriers[i].stories == 0U);
+    }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema95RecruitmentJournal(void)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-schema95-recruitment.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = 95U;
+    CC_CHECK(CcSimBeginArchiveRecruitment(&legacy));
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, 95U, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = 95U;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+static void CheckRecentRecruitmentJournal(uint32_t schema)
+{
+    static CcSim legacy, after, restored;
+    char error[256];
+    const char *path = "persistence-recent-recruitment.ccsave";
+    RemoveDatabase(path);
+    CcSimInit(&legacy, 42U);
+    legacy.schema_version = schema;
+    CC_CHECK(CcSimBeginArchiveRecruitment(&legacy));
+    CcSimAdvanceDays(&legacy, 6);
+    after = legacy;
+    CcSimAdvanceDays(&after, 1);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+    sqlite3_close(database);
+    AddLegacyDayJournalSuffix(path, &legacy, &after, schema, 25U);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    restored.schema_version = schema;
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
+
 int main(void)
 {
+    CheckSchema95RecruitmentJournal();
+    CheckRecentRecruitmentJournal(96U);
+    CheckRecentRecruitmentJournal(97U);
+    char error[256];
+    CheckShippedTravellerSave();
+    CheckCastNotPinnedToCap(error, sizeof(error));
+    CheckGossipCarrierCapacityGrowth(error, sizeof(error));
+    CheckPre61KnowledgeJournal();
+    CheckPre64SiteJournal();
+    CheckPre65FreightJournal();
+    CheckPre67MaintenanceJournal();
+    CheckPre68WearJournal();
+    CheckSchema58SmithyCapacity();
+    CheckSchema76ArchiveJournal();
+    CheckSchema77ArchiveJournal();
+    CheckSchema78OccupationJournal();
+    CheckSchema79RecruitmentJournal();
+    CheckSchema82RecruitmentJourneyJournal();
+    CheckSchema84RecruitmentTrainingJournal();
+    CheckSchema85RecruitmentStaffJournal();
+    CheckSchema86RecruitmentAutomaticJournal();
+    CheckSchema87RecruitmentBindingJournal();
+    CheckSchema88RecruitmentVolumeJournal();
+    CheckSchema89RecruitmentReserveJournal();
+    CheckSchema89HistoricalCast();
+    CheckSchema90RecruitmentLifetimeJournal();
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
     CheckSchema41Upgrade();
@@ -2764,7 +3445,6 @@ int main(void)
     original.hoard_raiders.social_raid_latched = true;
     original.hoard_raiders.war_raid_latched = true;
     CcSimAdvanceDays(&original, 23);
-    char error[256];
     CcSettlement *capital = &original.settlements[4];
     original.goblins.tribute_cooldown_days = 1000;
     original.hoard_raiders.cooldown_days = 1000;

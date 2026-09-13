@@ -1,0 +1,7 @@
+{
+  "current_schema": 98,
+  "trial_schema": 99,
+  "stale_exit": 1,
+  "stale_error": "In file included from src/sim/cc_sim_versions.c:1:\n/var/folders/60/rn89qhx94rb3bs15ngb4wx5r0000gn/T/schema-boundary-4069xxcx/sim/cc_sim_versions_internal.h:9:16: error: static assertion failed due to requirement '97U + 1U == 99': Review the legacy schema boundary when advancing CC_SIM_SCHEMA_VERSION\n    9 | _Static_assert(CC_SIM_NEWEST_LEGACY_SCHEMA + 1U == CC_SIM_SCHEMA_VERSION,\n      |                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n/var/folders/60/rn89qhx94rb3bs15ngb4wx5r0000gn/T/schema-boundary-4069xxcx/sim/cc_sim_versions_internal.h:8:37: note: expanded from macro 'CC_SIM_NEWEST_LEGACY_SCHEMA'\n    8 | #define CC_SIM_NEWEST_LEGACY_SCHEMA 97U\n      |                                     ^\n/var/folders/60/rn89qhx94rb3bs15ngb4wx5r0000gn/T/schema-boundary-4069xxcx/sim/cc_sim_versions_internal.h:9:49: note: expression evaluates to '98 == 99'\n    9 | _Static_assert(CC_SIM_NEWEST_LEGACY_SCHEMA + 1U == CC_SIM_SCHEMA_VERSION,\n      |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~\n1 error generated.\n",
+  "reviewed_exit": 0
+}

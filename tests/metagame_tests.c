@@ -47,8 +47,9 @@ static void ResolveRoadRhythm(CcMetagame *metagame,
                               char *output, size_t capacity)
 {
     while (metagame->sim.journey.active &&
-           metagame->sim.journey.phase == CC_JOURNEY_PHASE_RESTING) {
-        const char *command =
+           (metagame->sim.journey.phase == CC_JOURNEY_PHASE_RESTING ||
+            CcSimJourneyRoadSiteStop(&metagame->sim) != NULL)) {
+        const char *command = CcSimJourneyRoadSiteStop(&metagame->sim) != NULL ? "road pass" :
             CcSimJourneyStop(&metagame->sim) == CC_JOURNEY_STOP_MIDDAY ?
                 "road break" : "road camp";
         CC_CHECK(CcMetagameExecute(metagame, command, output, capacity));
@@ -453,7 +454,7 @@ int main(void)
     CC_CHECK(strstr(output, "market clock is still waiting for breakfast") !=
              NULL);
     ExecuteNumber(&lawful, "talk", relief_number, output, sizeof(output));
-    CC_CHECK(strstr(output, "We are running out of food") != NULL);
+    CC_CHECK(strstr(output, "Take the food to the market hall") != NULL);
     CC_CHECK(strstr(output, "Flour has never answered") == NULL);
     CC_CHECK(CcMetagameExecute(&lawful, "sell food 8", output,
                                sizeof(output)));

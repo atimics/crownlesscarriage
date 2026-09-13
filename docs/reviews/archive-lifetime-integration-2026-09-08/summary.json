@@ -1,0 +1,21 @@
+{
+  "parent_revision": "55af587749e576d5711394addd28136af849acbb",
+  "repair_code_revision": "1e5da03",
+  "arms": {
+    "parent": {
+      "reported_cases": 9,
+      "millennium_worlds": 32,
+      "completed": 41,
+      "failed": 0,
+      "annual_checks": 35758
+    },
+    "repair": {
+      "reported_cases": 9,
+      "millennium_worlds": 32,
+      "completed": 41,
+      "failed": 0,
+      "annual_checks": 35758
+    }
+  },
+  "legacy_annual_hashes_matched": 3200
+}

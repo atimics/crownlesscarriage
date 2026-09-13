@@ -1,0 +1,14 @@
+[
+  {
+    "arm": "parent",
+    "phase": "during builds",
+    "exit_code": 0,
+    "output": "simulation: seeds=8 years=2 days=5840 cpu=0.491309s ns/day=84128.3\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.006921s ns/step=1922.5\nterrain: seeds=8 points=32768 cpu=0.021946s ns/point=669.7\nchecksum=3f22a1b9a55eab92\n"
+  },
+  {
+    "arm": "current",
+    "phase": "during builds",
+    "exit_code": 1,
+    "output": "performance budget exceeded: simulation 94701.0/90000 ns, locomotion 1548.6/8000 ns\nsimulation: seeds=8 years=2 days=5840 cpu=0.553054s ns/day=94701.0\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.005575s ns/step=1548.6\nterrain: seeds=8 points=32768 cpu=0.022997s ns/point=701.8\nchecksum=4fc771c36223c76a\n"
+  }
+]

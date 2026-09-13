@@ -1,0 +1,85 @@
+{
+  "completed": 997,
+  "requested": 1000,
+  "years": 1000,
+  "species": {
+    "dragon": {
+      "start_median": 1.0,
+      "end_median": 0.0,
+      "end_mean": 0.38415245737211634,
+      "end_min": 0.0,
+      "end_max": 1.0,
+      "zero_worlds": 614
+    },
+    "human": {
+      "start_median": 12184.0,
+      "end_median": 13200.0,
+      "end_mean": 12784.196589769308,
+      "end_min": 3175.0,
+      "end_max": 18160.0,
+      "zero_worlds": 0
+    },
+    "goblin": {
+      "start_median": 48.0,
+      "end_median": 36.0,
+      "end_mean": 39.43731193580742,
+      "end_min": 12.0,
+      "end_max": 84.0,
+      "zero_worlds": 0
+    },
+    "pony": {
+      "start_median": 64.0,
+      "end_median": 42.0,
+      "end_mean": 40.92076228686058,
+      "end_min": 7.0,
+      "end_max": 44.0,
+      "zero_worlds": 0
+    },
+    "cow": {
+      "start_median": 82.0,
+      "end_median": 61.0,
+      "end_mean": 61.96088264794383,
+      "end_min": 58.0,
+      "end_max": 146.0,
+      "zero_worlds": 0
+    },
+    "sheep": {
+      "start_median": 136.0,
+      "end_median": 160.0,
+      "end_mean": 161.641925777332,
+      "end_min": 111.0,
+      "end_max": 339.0,
+      "zero_worlds": 0
+    }
+  },
+  "goblins": {
+    "raids": 8356654,
+    "empty_raids": 3889460,
+    "empty_raid_percent": 46.543269590915216,
+    "tribute_deliveries": 267425,
+    "rallies": 227815,
+    "recruits": 409839,
+    "offering_events": 132966,
+    "egg_rituals": 829,
+    "worlds_with_egg_ritual": 626,
+    "activity_day_percent": 15.148897651859688,
+    "floor_day_percent": 6.452248526401121,
+    "divided_day_percent": 5.617100067325263,
+    "afterdragon_days": 98386018,
+    "saturated_days": 0,
+    "hunger_days_percent_of_active": 52.764994504748586,
+    "equipment_days_percent_of_active": 25.44306666301937,
+    "tribute_days_percent_of_active": 21.791938832232045
+  },
+  "ritual_blocked_percent_afterdragon_days": {
+    "members": 46.72615472657914,
+    "devotion": 0.9356553082573176,
+    "cohesion": 20.55195485195874,
+    "food": 35.56208769420874,
+    "coins": 52.510899465409814,
+    "relics": 89.60509408969067,
+    "tools": 0.36341444370682835,
+    "weapons": 24.78279179872896
+  },
+  "common_pony_extinction_worlds": 30
+}

@@ -1,0 +1,27 @@
+{
+  "source": "85bfb702ba233585d4e3359273f048de1cae7b2f",
+  "original_source_sha256": "ad5a7c4c14863105b7c90562aa77c2e2274d10ce32497245e74c4ecddb79fd64",
+  "library_sha256": "03b3ca0a653d17288308e56d66e9305b41c6c6619f0c7018eff7b4d88b47b004",
+  "method": "The temporary build prints the true clauses of two validation checks. Simulation updates are unchanged.",
+  "runs": [
+    {
+      "seed": 353,
+      "reproduced": true,
+      "returncode": 1,
+      "diagnostic": "!valid_ruin\ntown=Hollowbarrow population=0 security=0 prosperity=1 services=0 project=-1 project_days=0\nSeed 353 failed in year 81: Settlement service state is invalid."
+    },
+    {
+      "seed": 426,
+      "reproduced": true,
+      "returncode": 1,
+      "diagnostic": "Seed 426 failed in year 209: Active courier has no matching situation."
+    },
+    {
+      "seed": 828,
+      "reproduced": true,
+      "returncode": 1,
+      "diagnostic": "!valid_ruin\ntown=Hollowbarrow population=0 security=0 prosperity=1 services=0 project=-1 project_days=0\nSeed 828 failed in year 73: Settlement service state is invalid."
+    }
+  ],
+  "diagnostic_binary_sha256": "d6c0ba416f43ba8c03f3c0f11046c84533ffbfdadcbc4ab9afb1fecca55a63d9"
+}

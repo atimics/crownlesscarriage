@@ -1,0 +1,100 @@
+[
+  {
+    "seed": "42",
+    "day": 14601,
+    "road_network": {
+      "semantics": "snapshot",
+      "edge_rule": "route_closed_false",
+      "direction": "undirected",
+      "ruins": "included_as_nodes",
+      "inhabited_settlements": 6,
+      "settlements": [
+        {
+          "id": "144115188075855876",
+          "inhabited": true,
+          "component_id": "144115188075855876",
+          "component_inhabited_settlements": 1
+        },
+        {
+          "id": "144115188075855877",
+          "inhabited": true,
+          "component_id": "144115188075855877",
+          "component_inhabited_settlements": 1
+        },
+        {
+          "id": "144115188075855878",
+          "inhabited": true,
+          "component_id": "144115188075855878",
+          "component_inhabited_settlements": 1
+        },
+        {
+          "id": "144115188075855879",
+          "inhabited": true,
+          "component_id": "144115188075855879",
+          "component_inhabited_settlements": 2
+        },
+        {
+          "id": "144115188075855880",
+          "inhabited": true,
+          "component_id": "144115188075855879",
+          "component_inhabited_settlements": 2
+        },
+        {
+          "id": "144115188075855881",
+          "inhabited": true,
+          "component_id": "144115188075855881",
+          "component_inhabited_settlements": 1
+        }
+      ]
+    }
+  },
+  {
+    "seed": "0x5eed0001",
+    "day": 14601,
+    "road_network": {
+      "semantics": "snapshot",
+      "edge_rule": "route_closed_false",
+      "direction": "undirected",
+      "ruins": "included_as_nodes",
+      "inhabited_settlements": 6,
+      "settlements": [
+        {
+          "id": "144115188075855876",
+          "inhabited": true,
+          "component_id": "144115188075855876",
+          "component_inhabited_settlements": 1
+        },
+        {
+          "id": "144115188075855877",
+          "inhabited": true,
+          "component_id": "144115188075855877",
+          "component_inhabited_settlements": 5
+        },
+        {
+          "id": "144115188075855878",
+          "inhabited": true,
+          "component_id": "144115188075855877",
+          "component_inhabited_settlements": 5
+        },
+        {
+          "id": "144115188075855879",
+          "inhabited": true,
+          "component_id": "144115188075855877",
+          "component_inhabited_settlements": 5
+        },
+        {
+          "id": "144115188075855880",
+          "inhabited": true,
+          "component_id": "144115188075855877",
+          "component_inhabited_settlements": 5
+        },
+        {
+          "id": "144115188075855881",
+          "inhabited": true,
+          "component_id": "144115188075855877",
+          "component_inhabited_settlements": 5
+        }
+      ]
+    }
+  }
+]

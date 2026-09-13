@@ -137,7 +137,7 @@ static void DrawRoadHorseHarness(Vector3 base, float yaw)
    walking on the spot at a halt, skating at a canter. */
 static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
                               float pace, float travelled,
-                              float yaw, bool bridge_checkpoint)
+                              float yaw, bool bridge_checkpoint, CcLocalSceneKind scene)
 {
     CcClientConvoyGait convoy_gait = CcClientConvoyGaitForPace(pace);
     CcCreatureRigGait rig_gait =
@@ -167,7 +167,7 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
                 CcLocalRoadCheckpointSurfaceYInternal(
                     horse_base.x, horse_base.z);
             horse_base.y += horse_support - carriage_support;
-        } else if (active_world_stream != NULL) {
+        } else if (active_world_stream != NULL || scene == CC_LOCAL_SCENE_STREET) {
             horse_base.y += CcLocalTerrainHeightAt(horse_base.x, horse_base.z) -
                              CcLocalTerrainHeightAt(base.x, base.z);
         }
@@ -179,7 +179,7 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
         bool controlled = CcLocalCreatureGaitPoseInternal(
             (int32_t)slot, CC_CREATURE_RIG_HORSE, rig_gait, clock,
             horse < 0 ? 0.0f : 0.5f,
-            horse_base, yaw, 0.96f, CC_LOCAL_SCENE_ROAD,
+            horse_base, yaw, 0.96f, scene,
             &controlled_pose);
         (void)DrawCreatureGait3D(
             CC_CREATURE_HORSE, pose, horse_base,
@@ -235,11 +235,12 @@ static Camera3D PonyConversationCamera(Camera3D road, Vector3 carriage, float ya
 static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
                              float clock, float pace, float travelled,
                              float yaw,
-                             bool horses_hitched, bool bridge_checkpoint)
+                             bool horses_hitched, bool bridge_checkpoint, CcLocalSceneKind scene)
 {
     const CcPlayerCompany *player = &sim->player;
     float asset_yaw_degrees = yaw * RAD2DEG - 90.0f;
-    bool follow_ground = active_world_stream != NULL && !bridge_checkpoint;
+    bool follow_ground = (active_world_stream != NULL ||
+                          scene == CC_LOCAL_SCENE_STREET) && !bridge_checkpoint;
     if (follow_ground) {
         Vector3 front = LocalPoint(base, 0.0f, 0.0f, 1.38f, yaw);
         Vector3 rear = LocalPoint(base, 0.0f, 0.0f, -1.38f, yaw);
@@ -308,20 +309,37 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
     if (follow_ground) rlPopMatrix();
     if (horses_hitched) {
         DrawRoadHorseTeam(sim, base, clock, pace, travelled, yaw,
-                          bridge_checkpoint);
+                          bridge_checkpoint, scene);
         int32_t pony = CcPonyOnRoad(sim);
         if (pony >= 0) {
             Vector3 position = LocalPoint(base, 2.7f, 0.0f, 3.3f, yaw);
             if (follow_ground) position.y = CcLocalTerrainHeightAt(position.x, position.z);
-            (void)DrawCreatureGait3D(CC_CREATURE_HORSE, CC_CREATURE_POSE_IDLE,
-                position, yaw - 0.6f, 0.96f, PONY_COLORS[pony][0], clock * 0.35f, false, NULL);
+            CcClientConvoyGait gait = CcClientConvoyGaitForPace(pace);
+            CcCreatureRigGait rig_gait = gait == CC_CLIENT_CONVOY_GAIT_CANTER ?
+                CC_CREATURE_RIG_GAIT_CANTER : gait == CC_CLIENT_CONVOY_GAIT_TROT ?
+                CC_CREATURE_RIG_GAIT_TROT : CC_CREATURE_RIG_GAIT_WALK;
+            bool moving = gait != CC_CLIENT_CONVOY_GAIT_HALT;
+            CcCreatureRigPose controlled_pose;
+            bool controlled = CcLocalCreatureGaitPoseInternal(
+                CREATURE_GAIT_ROAD_PONY, CC_CREATURE_RIG_HORSE, rig_gait,
+                clock, 0.25f, position, yaw, 0.96f, scene, &controlled_pose);
+            float phase = CcLocalRoadTeamGaitPhaseInternal(travelled) + 0.5f * PI;
+            (void)DrawCreatureGait3D(CC_CREATURE_HORSE,
+                CcCreatureSteppedPose(CC_CREATURE_HORSE, phase, moving),
+                position, yaw, 0.96f, PONY_COLORS[pony][0], phase, moving,
+                controlled ? &controlled_pose : NULL);
         }
     }
 }
 
+Vector3 CcLocalStablePonyPositionInternal(int32_t horse)
+{
+    return TerrainWorldPoint(CC_LOCAL_CARRIAGE_X - 2.0f + (float)horse * 2.8f,
+                             CC_LOCAL_CARRIAGE_Z + 5.3f);
+}
+
 static void DrawStableHorseTeam(const CcSim *sim, float clock)
 {
-    static const Vector2 stalls[] = {{40.55f, 30.25f}, {40.55f, 33.05f}};
     Color rail = WORLD_WOOD_SHADOW;
     Color rail_cap = WORLD_WOOD_LIGHT;
     switch (ActiveTownRoadSurface()) {
@@ -348,20 +366,39 @@ static void DrawStableHorseTeam(const CcSim *sim, float clock)
             break;
     }
     for (int32_t horse = 0; horse < CcSimHorseTeamCount(sim); ++horse) {
-        Vector3 base = TerrainWorldPoint(stalls[horse].x, stalls[horse].y);
+        Vector3 base = CcLocalStablePonyPositionInternal(horse);
         int32_t seat = CcSimTeamPony(sim, horse);
         Color coat = PONY_COLORS[seat >= 0 ? seat : 0][0];
         CcCreaturePose pose = CcCreatureSteppedPose(
             CC_CREATURE_HORSE, clock * 0.35f + (float)horse * PI, false);
+        CcCreatureRigPose controlled_pose;
+        bool controlled = CcLocalCreatureGaitPoseInternal(
+            horse == 0 ? CREATURE_GAIT_STABLE_LEFT : CREATURE_GAIT_STABLE_RIGHT,
+            CC_CREATURE_RIG_HORSE, CC_CREATURE_RIG_GAIT_WALK, clock,
+            (float)horse * 0.5f, base, 0.0f, 0.96f,
+            CC_LOCAL_SCENE_STREET, &controlled_pose);
         (void)DrawCreatureGait3D(
-            CC_CREATURE_HORSE, pose, base, 0.5f * PI, 0.96f, coat,
-            clock * 0.35f + (float)horse * PI, false, NULL);
+            CC_CREATURE_HORSE, pose, base, 0.0f, 0.96f, coat,
+            clock * 0.35f + (float)horse * PI, false,
+            controlled ? &controlled_pose : NULL);
     }
-    float rail_y = CcLocalTerrainHeightAt(39.45f, 31.65f);
-    DrawBox((Vector3){39.45f, rail_y + 0.72f, 31.65f},
-            (Vector3){0.12f, 1.44f, 4.15f}, rail);
-    DrawBox((Vector3){39.45f, rail_y + 1.12f, 31.65f},
-            (Vector3){0.18f, 0.12f, 4.25f}, rail_cap);
+    Vector3 first = CcLocalStablePonyPositionInternal(0);
+    float rail_z = first.z + 1.5f;
+    float start_x = first.x - 1.1f;
+    float end_x = first.x + (float)(CcSimHorseTeamCount(sim) - 1) * 2.8f + 1.1f;
+    float rail_y = CcLocalTerrainHeightAt((start_x + end_x) * 0.5f, rail_z);
+    for (int32_t post = 0; post < 2; ++post) {
+        float x = post == 0 ? start_x : end_x;
+        float ground = CcLocalTerrainHeightAt(x, rail_z);
+        DrawBox((Vector3){x, ground + 0.62f, rail_z},
+                (Vector3){0.14f, 1.24f, 0.14f}, rail);
+    }
+    for (int32_t bar = 0; bar < 2; ++bar) {
+        DrawBox((Vector3){(start_x + end_x) * 0.5f,
+                          rail_y + 0.55f + (float)bar * 0.50f, rail_z},
+                (Vector3){end_x - start_x, 0.10f, 0.10f},
+                bar == 0 ? rail : rail_cap);
+    }
 }
 
 static bool ForkRouteLeaves(const CcSim *sim, const CcRoute *route)
@@ -598,7 +635,7 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
     }
     DrawRoadCarriage(carriage, sim, clock,
                      turn < 1.0f ? 0.72f : 0.0f, carriage_travel,
-                     carriage_heading, true, false);
+                     carriage_heading, true, false, CC_LOCAL_SCENE_ROAD);
     DrawVisibleNpcFigure3D(
         (Vector3){33.0f, 0.0f, 35.6f}, 0.90f, 1.42f,
         UINT32_C(0x666f726b), CC_NPC_ROLE_SCOUT, kingdom,
@@ -752,6 +789,7 @@ static void DrawRoadTerrain(uint32_t world_seed, const CcRoute *route,
         float z = far_side ? 45.4f + verge : 34.6f - verge;
         x += far_side ? -regional_style.cluster_pull :
                         regional_style.cluster_pull;
+        if (bridge_checkpoint && x > 38.0f && x < 60.0f) continue;
         if (!SceneryPointVisible(x, z, focus)) continue;
         TreeFamily family = (seed % 7U) == 0U ? TREE_FAMILY_OAK :
                             (seed % 5U) == 0U ? TREE_FAMILY_POLLARD :
@@ -869,6 +907,12 @@ float CcLocalRoadCarriageTravelInternal(int32_t progress_milli)
     return (float)progress_milli * 0.052f;
 }
 
+/* Leave room for the team, the hero, and the west bridge approach. */
+float CcLocalRoadEncounterCarriageXInternal(void)
+{
+    return 38.35f;
+}
+
 float CcLocalRoadCarriageX(int32_t progress_milli)
 {
     return 20.15f + CcLocalRoadCarriageTravelInternal(progress_milli);
@@ -897,10 +941,13 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     bool authored_checkpoint = !travelling &&
         runtime_assets[RUNTIME_ASSET_BRIDGE].ready;
-    float carriage_x = CcLocalRoadCarriageX(sim->carriage.progress_milli);
+    float carriage_x = travelling ?
+        CcLocalRoadCarriageX(sim->carriage.progress_milli) :
+        CcLocalRoadEncounterCarriageXInternal();
     float carriage_travel = CcLocalRoadCarriageTravelInternal(
         sim->carriage.progress_milli);
-    float lateral_offset = convoy != NULL ? convoy->lateral_offset : 0.0f;
+    float lateral_offset = travelling && convoy != NULL ?
+        convoy->lateral_offset : 0.0f;
     float carriage_pace = travelling && convoy != NULL ?
         convoy->pace : travelling ? 0.72f : 0.0f;
     bool carriage_moving = carriage_pace > 0.02f;
@@ -924,10 +971,9 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                              &travelling_hero);
     }
     Vector3 camera_focus = travelling ? carriage_base : agent->position;
-    Camera3D base_camera = RoadCamera(camera_focus, travelling, clock, true,
-                                      target.texture.height);
-    Camera3D camera = CcLocalCombatCameraInternal(
-        base_camera, agent, course, clock, true, target.texture.height);
+    /* Keep the whole crossing visible as the player changes targets. */
+    Camera3D camera = RoadCamera(camera_focus, travelling, clock, true,
+                                  target.texture.height);
     if (travelling) camera = PonyConversationCamera(camera, carriage_base, 0.5f * PI, sim);
     if (!travelling) {
         camera = KeepHeroInsideStreetFrame(
@@ -939,8 +985,6 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     bool combat_presentation = !travelling && course->alarm_active &&
                                camera.projection == CAMERA_PERSPECTIVE;
-    const CcLocalAgent *duel_opponent = combat_presentation ?
-        CombatCameraOpponent(course, agent) : NULL;
     RememberPresentedCamera(CC_LOCAL_SCENE_ROAD, camera, agent,
                             target.texture.width, target.texture.height);
     ArtComposition road_art = ROAD_ART_COMPOSITION;
@@ -986,7 +1030,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     if (!travelling) DrawAgentPath(agent, false);
     DrawRoadCarriage(carriage_base, sim, clock, carriage_pace, carriage_travel,
-                     0.5f * PI, true, authored_checkpoint);
+                     0.5f * PI, true, authored_checkpoint, CC_LOCAL_SCENE_ROAD);
     int32_t roadside_cattle = 0;
     if (origin != NULL) {
         roadside_cattle += origin->cow_adults + origin->cow_calves;
@@ -1070,8 +1114,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
 
     if (!travelling) {
-        if (combat_presentation) DrawCourseRaider(duel_opponent);
-        else DrawCourseRunners(course, camera.target);
+        DrawCourseRunners(course, camera.target);
     }
     if (parley && !course->alarm_active) {
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
@@ -1597,7 +1640,7 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawRoadCarriage(carriage, sim, clock,
                          travelling ? 0.72f : 0.0f, carriage_travel,
                          returning ? -0.5f * PI : 0.5f * PI,
-                         true, false);
+                         true, false, CC_LOCAL_SCENE_ROAD);
     }
     if (!travelling) {
         DrawAgentPath(agent, false);
@@ -1722,7 +1765,7 @@ static void DrawSettlementCreatures(const CcSim *sim,
                                     float clock, Vector3 scenery_focus)
 {
     if (sim == NULL || place == NULL) return;
-    const CcGoblinCult *goblins = &sim->goblins;
+    const CcGoblinSociety *goblins = &sim->goblins;
 
     if (place->cow_adults + place->cow_calves > 0 &&
         SceneryPointVisible(63.0f, 38.3f, scenery_focus)) {
@@ -1861,7 +1904,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
 
     uint32_t town_conditions = CcSimTownConditions(sim, place->id);
     DrawExteriorTerrain(place, town_conditions, scenery_focus, clock);
-    DrawTownRaidStaging(course, scenery_focus);
+    if (!CcSettlementIsAbandoned(place)) DrawTownRaidStaging(course, scenery_focus);
     const CcLocalAgent *sightline_opponent = conversation_partner != NULL ?
         conversation_partner : course != NULL && course->alarm_active ?
         CombatCameraOpponent(course, agent) : NULL;
@@ -1933,15 +1976,6 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                        foreground_reveal_world,
                        target.texture.width, target.texture.height, clock);
     WorldBuilding primary_building = ActivePrimaryBuilding();
-    if (profile->function == CC_SETTLEMENT_MARKET &&
-        SceneryFootprintVisible(primary_building.footprint, scenery_focus)) {
-        float reveal_cut_height = foreground_reveal_world.y - 0.30f;
-        SetWorldForegroundReveal(
-            world_building_reveals[profile->primary_building].amount,
-            reveal_cut_height);
-        (void)DrawAuthoredMarket(place);
-        SetWorldForegroundReveal(0.0f, reveal_cut_height);
-    }
     DrawCastle(sim, place, kingdom, profile, scenery_focus, camera,
                foreground_reveal_world,
                target.texture.width, target.texture.height, clock);
@@ -1962,7 +1996,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     if (convoy_visible) {
         DrawRoadCarriage(convoy->town_position, sim, clock,
                          convoy->pace, convoy->travelled,
-                         convoy->town_heading_yaw, true, false);
+                         convoy->town_heading_yaw, true, false, CC_LOCAL_SCENE_STREET);
         if (agent != NULL) DrawRobotShell(&convoy_hero);
     }
     if (SceneryPointVisible(CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z,
@@ -2021,88 +2055,115 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     DrawSettlementCreatures(sim, place, clock, scenery_focus);
 
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(STREET_PEOPLE[0].x, STREET_PEOPLE[0].y),
-        0.96f, -0.55f, UINT32_C(0x73747201), CC_NPC_ROLE_MERCHANT,
-        (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE,
-        scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(STREET_PEOPLE[1].x, STREET_PEOPLE[1].y),
-        1.02f, 1.70f, UINT32_C(0x73747202), CC_NPC_ROLE_GUARD,
-        kingdom, clock + 1.0f, CC_TRAVERSAL_IDLE, scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(STREET_PEOPLE[2].x, STREET_PEOPLE[2].y),
-        0.92f, 0.35f, UINT32_C(0x73747203), CC_NPC_ROLE_LABORER,
-        (Color){97, 154, 137, 255}, clock + 2.0f, CC_TRAVERSAL_IDLE,
-        scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(STREET_PEOPLE[3].x, STREET_PEOPLE[3].y),
-        0.88f, 2.40f, UINT32_C(0x73747204), CC_NPC_ROLE_HEALER,
-        (Color){168, 112, 128, 255}, clock * 0.8f + 3.0f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
-    bool hungry_crowd = place->hunger >= 30;
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(STREET_PEOPLE[4].x, STREET_PEOPLE[4].y),
-        0.82f, -0.40f, UINT32_C(0x73747205),
-        hungry_crowd ? CC_NPC_ROLE_REFUGEE : CC_NPC_ROLE_TRAVELLER,
-        hungry_crowd ? WORLD_DANGER : kingdom, clock * 0.6f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
-    bool underworld_present = HasSmugglerRoad(sim, place->id) ||
-                              place->security < 50;
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(STREET_PEOPLE[5].x, STREET_PEOPLE[5].y),
-        0.88f, 2.75f, UINT32_C(0x73747206),
-        underworld_present ? CC_NPC_ROLE_SCOUT : CC_NPC_ROLE_TRAVELLER,
-        underworld_present ? WORLD_VIOLET : kingdom, clock * 0.7f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
-    float settlement_pressure = fmaxf(
-        Clamp((float)place->hunger / 100.0f, 0.0f, 1.0f),
-        Clamp((50.0f - (float)place->security) / 50.0f, 0.0f, 1.0f));
-    if (course != NULL && course->alarm_active) settlement_pressure = 1.0f;
-
-    DrawAmbientNpcRoute3D(
-        (Vector2){13.60f, 25.80f}, (Vector2){14.80f, 26.60f}, 0.88f,
-        UINT32_C(0x64697301), CC_NPC_ROLE_LABORER,
-        (Color){143, 118, 65, 255}, clock, 0.08f, settlement_pressure,
-        scenery_focus);
-    DrawAmbientNpcRoute3D(
-        (Vector2){24.10f, 53.20f}, (Vector2){25.70f, 53.20f}, 0.90f,
-        UINT32_C(0x64697302), CC_NPC_ROLE_SCOUT,
-        (Color){103, 103, 112, 255}, clock, 0.29f, settlement_pressure,
-        scenery_focus);
-    DrawAmbientNpcRoute3D(
-        (Vector2){35.20f, 26.65f}, (Vector2){36.75f, 27.25f}, 0.94f,
-        UINT32_C(0x64697303), CC_NPC_ROLE_LABORER,
-        (Color){174, 94, 53, 255}, clock, 0.47f, settlement_pressure,
-        scenery_focus);
-    DrawAmbientNpcRoute3D(
-        (Vector2){49.25f, 51.05f}, (Vector2){50.15f, 52.35f}, 0.92f,
-        UINT32_C(0x64697304), CC_NPC_ROLE_TRAVELLER,
-        (Color){117, 145, 116, 255}, clock, 0.72f, settlement_pressure,
-        scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(74.65f, 31.95f), 1.02f, 1.50f,
-        UINT32_C(0x64697305), CC_NPC_ROLE_GUARD, kingdom,
-        clock * 0.40f + 2.9f, CC_TRAVERSAL_IDLE, scenery_focus);
-    DrawAmbientNpcRoute3D(
-        (Vector2){84.80f, 51.80f}, (Vector2){86.30f, 51.00f}, 0.94f,
-        UINT32_C(0x64697306), CC_NPC_ROLE_LABORER,
-        (Color){161, 128, 68, 255}, clock, 0.88f, settlement_pressure,
-        scenery_focus);
-    if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
-        sim->journey.destination_id == place->id) {
-        DrawVisibleNpcFigure3D(
-            TerrainWorldPoint(46.80f, 31.15f), 0.86f, -1.10f,
-            UINT32_C(0x61667401), CC_NPC_ROLE_GUARD, WORLD_TEAL,
-            clock * 0.64f + 1.4f, CC_TRAVERSAL_IDLE, scenery_focus);
-        if (sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT) {
-            DrawVisibleNpcFigure3D(
-                TerrainWorldPoint(47.65f, 30.55f), 0.82f, -0.85f,
-                UINT32_C(0x61667402), CC_NPC_ROLE_HEALER, WORLD_GOLD,
-                clock * 0.58f + 2.1f, CC_TRAVERSAL_IDLE, scenery_focus);
+    if (CcSettlementIsAbandoned(place)) {
+        const CcBanditGroup *band = CcLocalTownOccupier(sim, place->id);
+        int32_t guards = band != NULL ? band->members : 0;
+        if (guards > 6) guards = 6;
+        for (int32_t i = 0; i < guards; ++i) {
+            DrawVisibleNpcFigure3D(TerrainWorldPoint(38.0f + (float)i * 1.4f, 54.0f),
+                0.96f, 0.7f, (uint32_t)band->id + (uint32_t)i, CC_NPC_ROLE_RAIDER,
+                WORLD_DANGER, clock, CC_TRAVERSAL_IDLE, scenery_focus);
         }
+        for (int32_t i = 0; i < 8; ++i) {
+            const CcCharacter *person = CcLocalTownPerson(sim, place->id, i);
+            if (person == NULL) break;
+            DrawVisibleNpcFigure3D(TerrainWorldPoint(45.0f + (float)i * 1.3f, 52.0f),
+                0.92f, -0.4f, person->appearance_seed, CC_NPC_ROLE_WAYFARER,
+                WORLD_TEAL, clock, CC_TRAVERSAL_IDLE, scenery_focus);
+        }
+        for (int32_t i = 0; i < profile->building_count; ++i) {
+            const CcLocalPlaceBuilding *building = &profile->building[i];
+            float x = building->x + building->width * 0.5f;
+            float z = building->z + building->depth + 0.20f;
+            if (!SceneryPointVisible(x, z, scenery_focus)) continue;
+            for (int32_t board = 0; board < 3; ++board)
+                DrawBox((Vector3){x, CcLocalTerrainHeightAt(x, z) + 0.55f + (float)board * 0.5f, z},
+                        (Vector3){1.6f, 0.20f, 0.16f}, (Color){83, 65, 54, 255});
+        }
+    } else {
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(STREET_PEOPLE[0].x, STREET_PEOPLE[0].y),
+            0.96f, -0.55f, UINT32_C(0x73747201), CC_NPC_ROLE_MERCHANT,
+            (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE,
+            scenery_focus);
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(STREET_PEOPLE[1].x, STREET_PEOPLE[1].y),
+            1.02f, 1.70f, UINT32_C(0x73747202), CC_NPC_ROLE_GUARD,
+            kingdom, clock + 1.0f, CC_TRAVERSAL_IDLE, scenery_focus);
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(STREET_PEOPLE[2].x, STREET_PEOPLE[2].y),
+            0.92f, 0.35f, UINT32_C(0x73747203), CC_NPC_ROLE_LABORER,
+            (Color){97, 154, 137, 255}, clock + 2.0f, CC_TRAVERSAL_IDLE,
+            scenery_focus);
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(STREET_PEOPLE[3].x, STREET_PEOPLE[3].y),
+            0.88f, 2.40f, UINT32_C(0x73747204), CC_NPC_ROLE_HEALER,
+            (Color){168, 112, 128, 255}, clock * 0.8f + 3.0f,
+            CC_TRAVERSAL_IDLE, scenery_focus);
+        bool hungry_crowd = place->hunger >= 30;
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(STREET_PEOPLE[4].x, STREET_PEOPLE[4].y),
+            0.82f, -0.40f, UINT32_C(0x73747205),
+            hungry_crowd ? CC_NPC_ROLE_REFUGEE : CC_NPC_ROLE_TRAVELLER,
+            hungry_crowd ? WORLD_DANGER : kingdom, clock * 0.6f,
+            CC_TRAVERSAL_IDLE, scenery_focus);
+        bool underworld_present = HasSmugglerRoad(sim, place->id) ||
+                                  place->security < 50;
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(STREET_PEOPLE[5].x, STREET_PEOPLE[5].y),
+            0.88f, 2.75f, UINT32_C(0x73747206),
+            underworld_present ? CC_NPC_ROLE_SCOUT : CC_NPC_ROLE_TRAVELLER,
+            underworld_present ? WORLD_VIOLET : kingdom, clock * 0.7f,
+            CC_TRAVERSAL_IDLE, scenery_focus);
+        float settlement_pressure = fmaxf(
+            Clamp((float)place->hunger / 100.0f, 0.0f, 1.0f),
+            Clamp((50.0f - (float)place->security) / 50.0f, 0.0f, 1.0f));
+        if (course != NULL && course->alarm_active) settlement_pressure = 1.0f;
+
+        DrawAmbientNpcRoute3D(
+            (Vector2){13.60f, 25.80f}, (Vector2){14.80f, 26.60f}, 0.88f,
+            UINT32_C(0x64697301), CC_NPC_ROLE_LABORER,
+            (Color){143, 118, 65, 255}, clock, 0.08f, settlement_pressure,
+            scenery_focus);
+        DrawAmbientNpcRoute3D(
+            (Vector2){24.10f, 53.20f}, (Vector2){25.70f, 53.20f}, 0.90f,
+            UINT32_C(0x64697302), CC_NPC_ROLE_SCOUT,
+            (Color){103, 103, 112, 255}, clock, 0.29f, settlement_pressure,
+            scenery_focus);
+        DrawAmbientNpcRoute3D(
+            (Vector2){35.20f, 26.65f}, (Vector2){36.75f, 27.25f}, 0.94f,
+            UINT32_C(0x64697303), CC_NPC_ROLE_LABORER,
+            (Color){174, 94, 53, 255}, clock, 0.47f, settlement_pressure,
+            scenery_focus);
+        DrawAmbientNpcRoute3D(
+            (Vector2){49.25f, 51.05f}, (Vector2){50.15f, 52.35f}, 0.92f,
+            UINT32_C(0x64697304), CC_NPC_ROLE_TRAVELLER,
+            (Color){117, 145, 116, 255}, clock, 0.72f, settlement_pressure,
+            scenery_focus);
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(74.65f, 31.95f), 1.02f, 1.50f,
+            UINT32_C(0x64697305), CC_NPC_ROLE_GUARD, kingdom,
+            clock * 0.40f + 2.9f, CC_TRAVERSAL_IDLE, scenery_focus);
+        DrawAmbientNpcRoute3D(
+            (Vector2){84.80f, 51.80f}, (Vector2){86.30f, 51.00f}, 0.94f,
+            UINT32_C(0x64697306), CC_NPC_ROLE_LABORER,
+            (Color){161, 128, 68, 255}, clock, 0.88f, settlement_pressure,
+            scenery_focus);
+        if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
+            sim->journey.destination_id == place->id) {
+            DrawVisibleNpcFigure3D(
+                TerrainWorldPoint(46.80f, 31.15f), 0.86f, -1.10f,
+                UINT32_C(0x61667401), CC_NPC_ROLE_GUARD, WORLD_TEAL,
+                clock * 0.64f + 1.4f, CC_TRAVERSAL_IDLE, scenery_focus);
+            if (sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT) {
+                DrawVisibleNpcFigure3D(
+                    TerrainWorldPoint(47.65f, 30.55f), 0.82f, -0.85f,
+                    UINT32_C(0x61667402), CC_NPC_ROLE_HEALER, WORLD_GOLD,
+                    clock * 0.58f + 2.1f, CC_TRAVERSAL_IDLE, scenery_focus);
+            }
+        }
+        DrawCourseRunners(course, scenery_focus);
     }
-    DrawCourseRunners(course, scenery_focus);
     if (course != NULL && agent->combat.target_index >= 0 &&
         agent->combat.target_index < CC_LOCAL_RAIDER_COUNT) {
         DrawSelectedTarget(
@@ -2147,12 +2208,29 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
 
     char witness_label[96];
-    WorldLabel labels[20];
+    /* Keep four places for journey, witness and lair labels below. */
+    enum { LOCAL_LABEL_CAPACITY = 24, LOCAL_LABEL_DETAIL_LIMIT = LOCAL_LABEL_CAPACITY - 4 };
+    WorldLabel labels[LOCAL_LABEL_CAPACITY];
     int32_t count = 0;
     if (convoy_visible && agent != NULL) {
         labels[count++] = (WorldLabel){
             {convoy_hero_position.x, convoy_hero_position.y + 2.50f,
              convoy_hero_position.z}, "YOU", WORLD_TEAL};
+    }
+    if (profile->function == CC_SETTLEMENT_MARKET) {
+        static const struct { float x, z; const char *name; } signs[] = {
+            {33.0f, 21.0f, "Archive and maps"},
+            {24.0f, 29.0f, "Cloth yard"},
+            {61.0f, 31.0f, "Food lane"},
+            {42.0f, 47.0f, "Coach court"},
+            {73.0f, 34.0f, "Customs road"},
+        };
+        for (int32_t sign = 0; sign < 5; ++sign) {
+            if (!AgentNearLabel(agent, signs[sign].x, signs[sign].z, 9.0f)) continue;
+            labels[count++] = (WorldLabel){
+                {signs[sign].x, CcLocalTerrainHeightAt(signs[sign].x, signs[sign].z) + 2.0f,
+                 signs[sign].z}, signs[sign].name, WORLD_TEAL};
+        }
     }
     char primary_hall_label[96];
     (void)snprintf(primary_hall_label, sizeof(primary_hall_label),
@@ -2220,7 +2298,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                        profile->compound, kingdom};
     }
     for (int32_t i = 0;
-         i < CC_LOCAL_PLACE_LANDMARK_COUNT && count < 20; ++i) {
+         i < CC_LOCAL_PLACE_LANDMARK_COUNT && count < LOCAL_LABEL_DETAIL_LIMIT; ++i) {
         const CcLocalPlaceLandmark *landmark =
             ActivePlaceLandmarkAt(i);
         if (landmark == NULL) continue;
@@ -2236,7 +2314,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                 WORLD_VIOLET : kingdom};
     }
     for (int32_t i = 0;
-         i < CC_LOCAL_PLACE_ROAD_COUNT && count < 20; ++i) {
+         i < CC_LOCAL_PLACE_ROAD_COUNT && count < LOCAL_LABEL_DETAIL_LIMIT; ++i) {
         const CcLocalPlaceRoad *road = ActivePlaceRoadAt(i);
         if (road == NULL) continue;
         float center_x = road->x + road->width * 0.5f;
@@ -2247,7 +2325,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
              center_z},
             road->name, WORLD_MUTED};
     }
-    if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
+    if (count < LOCAL_LABEL_CAPACITY && sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
         sim->journey.destination_id == place->id &&
         AgentNearLabel(agent, 47.35f, 31.05f, 7.0f)) {
         labels[count++] = (WorldLabel){
@@ -2258,7 +2336,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT ?
                 WORLD_TEAL : WORLD_VIOLET};
     }
-    if (course != NULL && course->situation_witness_active) {
+    if (count < LOCAL_LABEL_CAPACITY && course != NULL && course->situation_witness_active) {
         const CcSituation *situation = CcSimSituation(
             sim, course->situation_witness_id);
         const CcCharacter *character = CcSimCharacter(
@@ -2279,7 +2357,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                     WORLD_GOLD : WORLD_DANGER};
         }
     }
-    if (dungeon != NULL &&
+    if (count < LOCAL_LABEL_CAPACITY && dungeon != NULL &&
         AgentNearLabel(agent, CC_LOCAL_DUNGEON_X,
                        CC_LOCAL_DUNGEON_Z, 8.0f)) {
         labels[count++] = (WorldLabel){{CC_LOCAL_DUNGEON_X,
@@ -2290,7 +2368,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                                   dungeon->name),
                                        WORLD_VIOLET};
     }
-    if (place->id == sim->dragon.lair_settlement_id &&
+    if (count < LOCAL_LABEL_CAPACITY && place->id == sim->dragon.lair_settlement_id &&
         AgentNearLabel(agent, CC_LOCAL_DRAGON_CAVE_X,
                        CC_LOCAL_DRAGON_CAVE_Z, 9.0f)) {
         labels[count++] = (WorldLabel){
@@ -2302,7 +2380,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                 "Dragon roost / sheer cliff / no road",
             sim->dragon.slain ? WORLD_VIOLET : WORLD_DANGER};
     }
-    if (place->id == sim->goblins.lair_settlement_id &&
+    if (count < LOCAL_LABEL_CAPACITY && place->id == sim->goblins.lair_settlement_id &&
         AgentNearLabel(agent, CC_LOCAL_DRAGON_CAVE_X,
                        CC_LOCAL_DRAGON_CAVE_Z, 9.0f)) {
         labels[count++] = (WorldLabel){
@@ -2626,7 +2704,7 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
         CcNpcAppearanceGenerate(profile->keeper_seed,
                                 InteriorKeeperRole(profile->function),
                                 identity);
-    DrawNpcAppearanceFigure3D(
+    if (!CcSettlementIsAbandoned(place)) DrawNpcAppearanceFigure3D(
         (Vector3){MARKET_PEOPLE[0].x, 0.0f, MARKET_PEOPLE[0].y},
         1.02f, 2.75f, &keeper, clock, CC_TRAVERSAL_IDLE);
     DrawRobotShell(agent);
@@ -2708,7 +2786,8 @@ static bool StreetCanOccupy(Vector2 point)
         point.y > CC_LOCAL_WORLD_DEPTH - 0.28f - radius) return false;
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         WorldBuilding building = ActiveWorldBuildingAt(i);
-        if (InsideExpanded(point, building.footprint, radius)) {
+        if (InsideExpanded(BuildingUnrotatedPoint(i, point.x, point.y),
+                           building.footprint, radius)) {
             return false;
         }
     }
@@ -2723,6 +2802,10 @@ static bool StreetCanOccupy(Vector2 point)
             return false;
         }
     }
+    if (active_place_function == CC_SETTLEMENT_MARKET &&
+        (InsideExpanded(point, GLOAMGATE_FOUNTAIN, radius) ||
+         InsideExpanded(point, GLOAMGATE_GATE_POSTS[0], radius) ||
+         InsideExpanded(point, GLOAMGATE_GATE_POSTS[1], radius))) return false;
     if ((active_opening_step == CC_LOCAL_OPENING_COMPLETE &&
          InsideExpanded(point, CARRIAGE_FOOTPRINT, radius)) ||
         InsideExpanded(point, DUNGEON_FOOTPRINT, radius)) return false;

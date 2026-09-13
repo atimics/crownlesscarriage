@@ -1,0 +1,14 @@
+{
+  "parent": {
+    "closed": 62,
+    "cumulative_closed_days": 582748,
+    "cumulative_unavailable_inhabited_days": 586009,
+    "cumulative_unavailable_ruin_days": 0
+  },
+  "change": {
+    "closed": 59,
+    "cumulative_closed_days": 580074,
+    "cumulative_unavailable_inhabited_days": 583335,
+    "cumulative_unavailable_ruin_days": 0
+  }
+}

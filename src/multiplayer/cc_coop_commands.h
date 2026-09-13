@@ -54,7 +54,17 @@ static inline const char *CcCoopActionName(CcCommandKind kind)
         "leave_pony",
         "party_wipe",
         "exchange_gossip",
+        "heard_story",
+        "visit_mine",
+        "mine_step",
+        "mine_use",
+        "mine_pack",
+        "clear_road_site",
+        "transfer_road_site",
+        "repair_road_site",
+        "support_bakery", "fund_grain_supply", "deliver_prophecy",
+        "reserve_archive_recruitment", "cancel_archive_recruitment",
     };
-    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_EXCHANGE_GOSSIP ? names[(int)kind] : "";
+    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT ? names[(int)kind] : "";
 }
 #endif

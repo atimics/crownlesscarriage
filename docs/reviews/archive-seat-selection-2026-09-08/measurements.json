@@ -1,0 +1,24 @@
+[
+  {
+    "seed": "42",
+    "matching_existing_checkpoints": 41,
+    "advice_samples": {
+      "keep_current": 2,
+      "alternative": 0,
+      "no_viable_candidate": 39
+    },
+    "base_sha256": "caf4142000badcc9d7d736707205be2d10d93abb7655b840411b0ce7e5aed702",
+    "current_sha256": "0e2e7ab1a43bfe4d9dc30b52248a87f80e377e7d5d0f387badeb2647f011987c"
+  },
+  {
+    "seed": "0x5eed0001",
+    "matching_existing_checkpoints": 41,
+    "advice_samples": {
+      "keep_current": 3,
+      "alternative": 0,
+      "no_viable_candidate": 38
+    },
+    "base_sha256": "ee54b25160a362e4224ff5ef0260382690b7819da7ce30b6f00fb88838bd974b",
+    "current_sha256": "a669aefc97d0252779f499f92ff525104dd5382d2035ddcd98cbcb1fb8aac8b5"
+  }
+]

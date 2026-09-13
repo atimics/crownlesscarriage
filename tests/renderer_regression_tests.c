@@ -148,6 +148,39 @@ static void WriteViewportFixture(const char *path)
 #include "travel_graphics_tests.inc"
 #include "camera_continuity_tests.inc"
 
+static void TestBodyText(void)
+{
+    char path[1024];
+    RequireRenderer(ResolveAssetPath("assets/fonts/AtkinsonHyperlegible-Regular.ttf",
+        path, sizeof(path)), "body font must ship with the game");
+    int fallback_width = CcOverlayMeasureBodyText("Granary keeper", 20);
+    CcOverlayLoadBodyFont(path);
+    int body_width = CcOverlayMeasureBodyText("Granary keeper", 20);
+    RequireRenderer(body_width > 60 && body_width < 200 && body_width != fallback_width,
+                    "body text must use the loaded font for measurement");
+    RenderTexture2D target = LoadRenderTexture(320, 96);
+    BeginTextureMode(target);
+    ClearBackground(BLACK);
+    CcOverlayBegin(1.0f);
+    CcOverlayDrawBodyText("Granary keeper", 8, 8, 20, WHITE);
+    CcOverlayEnd();
+    EndTextureMode();
+    Image frame = LoadImageFromTexture(target.texture);
+    Color *pixels = LoadImageColors(frame);
+    int lit = 0;
+    for (int i = 0; i < frame.width * frame.height; ++i)
+        if (pixels[i].r > 100) ++lit;
+    RequireRenderer(lit > 200, "queued body text must produce visible glyphs");
+    UnloadImageColors(pixels);
+    UnloadImage(frame);
+    UnloadRenderTexture(target);
+    CcOverlayUnloadBodyFont();
+    RequireRenderer(CcOverlayMeasureBodyText("Granary keeper", 20) == fallback_width,
+                    "unloading the body font must restore fallback measurement");
+}
+
+#include "abandoned_town_captures.inc"
+
 int main(int argc, char **argv)
 {
     if (argc == 2 && strcmp(argv[1], "--physical-goods") == 0) {
@@ -160,9 +193,11 @@ int main(int argc, char **argv)
     TestSkinTurns();
     TestPonyHarnessAttachment();
     if (argc == 3 && (strcmp(argv[1], "--graphics") == 0 ||
+                      strcmp(argv[1], "--abandoned-town") == 0 ||
                       strcmp(argv[1], "--travel-graphics") == 0 ||
                       strcmp(argv[1], "--creature-captures") == 0 ||
                       strcmp(argv[1], "--pony-captures") == 0 ||
+                      strcmp(argv[1], "--pony-gait-captures") == 0 ||
                       strcmp(argv[1], "--material-captures") == 0 ||
                       strcmp(argv[1], "--hero-face-captures") == 0 ||
                       strcmp(argv[1], "--animation-captures") == 0)) {
@@ -171,6 +206,7 @@ int main(int argc, char **argv)
         SetTraceLogLevel(LOG_WARNING);
         CcLocalRendererInit();
         if (strcmp(argv[1], "--graphics") == 0) {
+            TestBodyText();
             TestTravelForestCameraTurn();
             TestTravelLeafShimmer();
             TestRaisedBuildingCutaway(argv[2]);
@@ -187,6 +223,8 @@ int main(int argc, char **argv)
             TestCreatureTurns();
             TestDragonCourtColors();
             WriteViewportFixture(argv[2]);
+        } else if (strcmp(argv[1], "--abandoned-town") == 0) {
+            TestAbandonedTownGraphics(argv[2]);
         } else if (strcmp(argv[1], "--travel-graphics") == 0) {
             TestTravelForestCameraTurn();
             TestTravelLeafShimmer();
@@ -194,6 +232,8 @@ int main(int argc, char **argv)
             CaptureHumanoidAnimation(argv[2]);
         } else if (strcmp(argv[1], "--creature-captures") == 0) {
             CaptureCreatures(argv[2]);
+        } else if (strcmp(argv[1], "--pony-gait-captures") == 0) {
+            CapturePonyGait(argv[2]);
         } else if (strcmp(argv[1], "--pony-captures") == 0) {
             CapturePonies(argv[2]);
         } else if (strcmp(argv[1], "--hero-face-captures") == 0) {

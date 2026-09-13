@@ -1,0 +1,13 @@
+{
+  "simulation_parent_revision": "e27996ae495a5020492db8972c3c920618512128",
+  "baseline_build_revision": "0fa86f0d780878d514800a8cbad9990de801887d",
+  "schema": 95,
+  "generator": 25,
+  "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)\nTarget: arm64-apple-darwin25.3.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+  "sha256": {
+    "/private/tmp/carrier-parent-probe": "307adc10f39631a9bbe14907bbabd801f9b345030c4cc828531b3fc7344d4ce8",
+    "/private/tmp/carrier-changed-probe": "8ec31bedeacf8b767d13624c9870a446b31d50d44ee587e0cf3619e2999de6d7",
+    "/private/tmp/crownless-research-artifact-budget/out/build/headless/crownless_benchmark": "a724b96dfe296599abc4ab8d5f75fc4eab6f32fbeff9e34c8fb656684819f9e4",
+    "/private/tmp/crownless-gossip-carrier-lookup/out/build/headless/crownless_benchmark": "36aacbbf65fbeb4e30a9f6163fec2aac25cdfdc63fc093e427b5ca914dc2ff2f"
+  }
+}

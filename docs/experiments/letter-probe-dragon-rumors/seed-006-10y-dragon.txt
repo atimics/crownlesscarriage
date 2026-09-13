@@ -1,0 +1,216 @@
+letter probe — world seeds 6..6, 10 years, purpose "report", topic "dragon"
+
+== world seed 3041712726 — year 2, day 366 ==
+   hunger mean 1.5 / max 9, abandoned settlements 0, closed routes 1, wars 1, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 158
+   writer: Mara Venn (official) at Thornford — 32 held accounts
+  --- purpose: report
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 366
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.
+       cited: Thornford, event 648518346341352640 (GOBLIN RAID), held day 354, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Tomas Rill posts a notice at Gloamgate: Quiet commission. Loyal voices credit the crown.
+       cited: Gloamgate, event 648518346341352767 (NOTICE), held day 358, retellings 3, court bias +32, alarm 21
+    3. Mara Venn posts a notice at Thornford: Relief charter.
+       cited: Thornford, event 648518346341352672 (NOTICE), held day 354, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    4. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 3. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341352396 (SHORTAGE), held day 341, retellings 4, court bias +44, alarm 15
+    5. Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341352435 (DECREE), held day 341, retellings 4, court bias +44, alarm 15
+  Recorded in truth as I hold it. — Mara Venn
+  ( 32 held accounts; 5 cited in this letter )
+
+== world seed 3041712726 — year 3, day 731 ==
+   hunger mean 11.2 / max 57, abandoned settlements 0, closed routes 1, wars 1, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 302
+   writer: Ilyra Senn (refugee) at Gloamgate — 21 held accounts
+  --- purpose: report
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 731
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Thornford, event 648518346341353875 (GOBLIN RAID), held day 727, retellings 3, court bias +12, alarm 12
+    2. Tomas Rill posts a notice at Gloamgate: Road compact.
+       cited: Gloamgate, event 648518346341353918 (NOTICE), held day 729, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Mara Venn posts a notice at Thornford: Relief charter.
+       cited: Thornford, event 648518346341353885 (NOTICE), held day 727, retellings 3, court bias -8, alarm 12
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 21 held accounts; 3 cited in this letter )
+
+== world seed 3041712726 — year 4, day 1096 ==
+   hunger mean 1.3 / max 8, abandoned settlements 0, closed routes 1, wars 1, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 430
+   writer: Ilyra Senn (refugee) at Gloamgate — 25 held accounts
+  --- purpose: report
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 1096
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Tomas Rill posts a notice at Gloamgate: Quiet commission.
+       cited: Gloamgate, event 648518346341355016 (NOTICE), held day 1093, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Mara Venn posts a notice at Thornford: Relief charter.
+       cited: Thornford, event 648518346341355017 (NOTICE), held day 1095, retellings 3, court bias -8, alarm 12
+    3. The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Thornford, event 648518346341354965 (GOBLIN RAID), held day 1085, retellings 3, court bias +32, alarm 12
+    4. Gloamgate has 2 food in store. Its reserve target is 75.
+       cited: Gloamgate, event 648518346341354925 (SHORTAGE), held day 1072, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 25 held accounts; 4 cited in this letter )
+
+== world seed 3041712726 — year 5, day 1461 ==
+   hunger mean 8.8 / max 32, abandoned settlements 0, closed routes 1, wars 1, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 536
+   writer: Ilyra Senn (refugee) at Gloamgate — 27 held accounts
+  --- purpose: report
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 1461
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Tomas Rill posts a notice at Gloamgate: Road compact.
+       cited: Gloamgate, event 648518346341356335 (NOTICE), held day 1457, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. The Cinder Tithe raids Thornford: 20 Wheat, 15 crowns.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Thornford, event 648518346341356270 (GOBLIN RAID), held day 1453, retellings 3, court bias -8, alarm 12
+    3. Mara Venn posts a notice at Thornford: Relief charter.
+       cited: Thornford, event 648518346341356244 (NOTICE), held day 1431, retellings 3, court bias -8, alarm 12
+    4. Gloamgate has 0 food in store. Its reserve target is 75.
+       cited: Gloamgate, event 648518346341355953 (SHORTAGE), held day 1352, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    5. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 3. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341355741 (SHORTAGE), held day 1346, retellings 4, court bias +4, alarm 33
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 27 held accounts; 5 cited in this letter )
+
+== world seed 3041712726 — year 6, day 1826 ==
+   hunger mean 7.5 / max 25, abandoned settlements 0, closed routes 1, wars 1, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 656
+   writer: Mara Venn (official) at Thornford — 23 held accounts
+  --- purpose: report
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1826
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Cinder Tithe raids Thornford: 20 Wheat, 15 crowns.
+       cited: Thornford, event 648518346341357297 (GOBLIN RAID), held day 1813, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Tomas Rill posts a notice at Gloamgate: Quiet commission. Loyal voices credit the crown. They fear worse is coming.
+       cited: Gloamgate, event 648518346341357276 (NOTICE), held day 1793, retellings 3, court bias +32, alarm 30
+    3. Mara Venn posts a notice at Thornford: Relief charter.
+       cited: Thornford, event 648518346341357241 (NOTICE), held day 1789, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Mara Venn
+  ( 23 held accounts; 3 cited in this letter )
+
+== world seed 3041712726 — year 7, day 2191 ==
+   hunger mean 28.8 / max 81, abandoned settlements 0, closed routes 0, wars 2, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 776
+   writer: Ilyra Senn (refugee) at Gloamgate — 19 held accounts
+  --- purpose: report
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2191
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Tomas Rill posts a notice at Gloamgate: Quiet commission.
+       cited: Gloamgate, event 648518346341358419 (NOTICE), held day 2178, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Gloamgate has 0 weeks of food; hunger reaches pressure level 3.
+       cited: Gloamgate, event 648518346341358384 (SHORTAGE), held day 2163, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. The Cinder Tithe raids Thornford: 20 Wheat, 15 crowns.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Thornford, event 648518346341358129 (GOBLIN RAID), held day 2104, retellings 3, court bias -8, alarm 12
+    4. Mara Venn posts a notice at Thornford: Relief charter.
+       cited: Thornford, event 648518346341358195 (NOTICE), held day 2104, retellings 3, court bias +12, alarm 12
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 19 held accounts; 4 cited in this letter )
+
+== world seed 3041712726 — year 8, day 2556 ==
+   hunger mean 11.7 / max 31, abandoned settlements 0, closed routes 0, wars 1, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 904
+   writer: Zorin Rook (courier) at Rosespire — 29 held accounts
+  --- purpose: report
+  From: Zorin Rook (courier), at Rosespire
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2556
+  Zorin Rook carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Silverwick has 0 weeks of food; hunger reaches pressure level 1. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Rosespire, not for distant quantities)
+       cited: Silverwick, event 648518346341359455 (SHORTAGE), held day 2541, retellings 3, court bias +32, alarm 31
+    2. Gloamgate has 0 weeks of food; hunger reaches pressure level 1. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Rosespire, not for distant quantities)
+       cited: Gloamgate, event 648518346341359446 (SHORTAGE), held day 2534, retellings 4, court bias +24, alarm 14
+    3. Tomas Rill posts a notice at Gloamgate: Quiet commission. Loyal voices credit the crown.
+       cited: Gloamgate, event 648518346341359444 (NOTICE), held day 2528, retellings 4, court bias +44, alarm 14
+    4. The Cinder Tithe raids Gloamgate: 8 Bread, 16 crowns. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Rosespire, not for distant quantities)
+       cited: Gloamgate, event 648518346341359409 (GOBLIN RAID), held day 2517, retellings 4, court bias +44, alarm 32
+    5. Mara Venn posts a notice at Thornford: Relief charter. Loyal voices credit the crown. They fear worse is coming.
+       cited: Thornford, event 648518346341359269 (NOTICE), held day 2489, retellings 6, court bias +36, alarm 42
+  Recorded in truth as I hold it. — Zorin Rook
+  ( 29 held accounts; 5 cited in this letter )
+
+== world seed 3041712726 — year 9, day 2921 ==
+   hunger mean 30.5 / max 93, abandoned settlements 0, closed routes 1, wars 2, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 1048
+   writer: Ilyra Senn (refugee) at Gloamgate — 22 held accounts
+  --- purpose: report
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2921
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Silverwick has 0 weeks of food; hunger reaches pressure level 3. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Silverwick, event 648518346341360543 (SHORTAGE), held day 2918, retellings 4, court bias +44, alarm 32
+    2. The Unpaid Company recruits from hungry debtors and unpaid households; road control reaches 70%.
+       cited: Gloamgate, event 648518346341360653 (BANDITS), held day 2913, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Ember Crown moves 28 crowns into Silverwick's market to buy real grain shipments. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Silverwick, event 648518346341360659 (DECREE), held day 2918, retellings 4, court bias +44, alarm 32
+    4. Tomas Rill posts a notice at Gloamgate: Quiet commission.
+       cited: Gloamgate, event 648518346341360671 (NOTICE), held day 2913, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    5. Gloamgate has 0 weeks of food; hunger reaches pressure level 3.
+       cited: Gloamgate, event 648518346341360579 (SHORTAGE), held day 2884, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 22 held accounts; 5 cited in this letter )
+
+== world seed 3041712726 — year 10, day 3286 ==
+   hunger mean 38.0 / max 100, abandoned settlements 0, closed routes 0, wars 1, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 1208
+   writer: Ulric Kest (official) at Hollowbarrow — 20 held accounts
+  --- purpose: report
+  From: Ulric Kest (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Ulric Kest's registered scribe seal  ·  Composed day 3286
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Unpaid Company raids Hollowbarrow and takes 20 Wood.
+       cited: Hollowbarrow, event 648518346341361697 (RAID), held day 3283, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 1.
+       cited: Hollowbarrow, event 648518346341361676 (SHORTAGE), held day 3276, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Ulric Kest posts a notice at Hollowbarrow: Quiet commission.
+       cited: Hollowbarrow, event 648518346341361446 (NOTICE), held day 3260, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    4. Elian Wick posts a notice at Rosespire: Sealed dispatch. Loyal voices credit the crown.
+       cited: Rosespire, event 648518346341361556 (NOTICE), held day 3260, retellings 3, court bias +32, alarm 19
+    5. Ember Crown moves 28 crowns into Gloamgate's market to buy real grain shipments. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Hollowbarrow, not for distant quantities)
+       cited: Gloamgate, event 648518346341361544 (DECREE), held day 3249, retellings 7, court bias +88, alarm 51
+  Recorded in truth as I hold it. — Ulric Kest
+  ( 20 held accounts; 5 cited in this letter )
+
+== world seed 3041712726 — year 11, day 3651 ==
+   hunger mean 36.5 / max 100, abandoned settlements 0, closed routes 0, wars 0, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 1258
+   writer: Mara Venn (official) at Thornford — 19 held accounts
+  --- purpose: report
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 3651
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Unpaid Company raids Thornford and takes 28 Wood.
+       cited: Thornford, event 648518346341362499 (RAID), held day 3646, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. The Unpaid Company follows the richest night road and takes its tolls with it.
+       cited: Thornford, event 648518346341362488 (BANDITS), held day 3640, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Mara Venn posts a notice at Thornford: Relief charter.
+       cited: Thornford, event 648518346341362478 (NOTICE), held day 3634, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Mara Venn
+  ( 19 held accounts; 3 cited in this letter )
+
+

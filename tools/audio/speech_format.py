@@ -1,6 +1,7 @@
 """Speech records shared by the exporter, voice worker, and pack builder."""
 
 import hashlib
+import importlib.metadata
 import json
 from pathlib import Path
 import re
@@ -8,6 +9,8 @@ import wave
 
 ROOT = Path(__file__).resolve().parents[2]
 DELIVERIES = ('plain', 'warm', 'worried', 'urgent', 'quiet', 'firm')
+CACHE_FORMAT = 'cc-speech-cache-v2'
+POSTPROCESS_VERSION = 'voice-style-v1'
 
 
 class SpeechCollision(ValueError):
@@ -20,6 +23,30 @@ def audio_key(voice, text, delivery='plain', language='en'):
         for byte in field.encode('utf-8') + b'\0':
             value = ((value ^ byte) * 1099511628211) & ((1 << 64) - 1)
     return f'{value:016x}'
+
+
+def package_version(name, fallback='uninstalled'):
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        return fallback
+
+
+def reference_sha256(record, references):
+    path = Path(references) / (record['voice'] + '.wav')
+    if not path.is_file():
+        return 'missing'
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def expected_cache_metadata(record, references, engine_version=None):
+    return {
+        'cache_format': CACHE_FORMAT,
+        'model': 'pocket',
+        'engine_version': engine_version or package_version('pocket-tts'),
+        'reference_sha256': reference_sha256(record, references),
+        'postprocess_version': POSTPROCESS_VERSION,
+    }
 
 
 def load_cast(path=ROOT / 'assets/audio/cast.json'):
@@ -69,7 +96,7 @@ def check_wav(path):
     return frames / 24000
 
 
-def cached_record(folder, record):
+def cached_record(folder, record, expected_metadata=None):
     path = Path(folder) / (record['key'] + '.wav')
     receipt = path.with_suffix('.json')
     if not path.is_file() or not receipt.is_file():
@@ -78,7 +105,14 @@ def cached_record(folder, record):
         data = json.loads(receipt.read_text())
         if signature(data) != signature(record):
             raise SpeechCollision('Speech cache key collision')
+        if expected_metadata is not None:
+            for field, expected in expected_metadata.items():
+                if data.get(field) != expected:
+                    return None
         if path.stat().st_size > 1200100 or data.get('wav_sha256') != hashlib.sha256(path.read_bytes()).hexdigest():
+            return None
+        if record['voice'] == 'goblin-v1' and (data.get('model') != 'pocket' or
+                data.get('style') != 'hrakhor-bass-v2' or data.get('speech_speed') != 2.0):
             return None
         check_wav(path)
     except SpeechCollision:

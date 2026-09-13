@@ -1,5 +1,342 @@
+static int RunRoadJourneySaveRegression(void)
+{
+    static CcSim sim, loaded;
+    static LocalState local, restored;
+    const char *path = "road-journey-save.ccsave";
+    const char *session_path = "road-journey-save.session";
+    char error[256] = "", feedback[256] = "";
+    (void)remove(path); (void)remove(session_path);
+    CcSimInit(&sim, 42U);
+    CcLocalBindPlace(&sim);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+#define ROAD_SAVE_CHECK(condition, text) do { if (!(condition)) { \
+    CcJournalAbandon(&journal); return ClientRegressionFailure(text); } } while (0)
+    ROAD_SAVE_CHECK(journal != NULL, "Start the road save journal.");
+    ROAD_SAVE_CHECK(SaveClientWorld(journal, &sim, &local, path, session_path,
+        feedback, sizeof(feedback)), "Save the initial town checkpoint.");
+    CcCommand travel = {.kind = CC_COMMAND_TRAVEL, .target_id = sim.settlements[1].id};
+    ROAD_SAVE_CHECK(CcJournalApply(journal, &sim, &travel, error, sizeof(error)), "Start a real journey.");
+    ROAD_SAVE_CHECK(CcJournalAdvanceRuntimeTicks(journal, &sim, 8, error, sizeof(error)), "Advance along the road.");
+    ROAD_SAVE_CHECK(sim.journey.active && sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING,
+        "The fixture must remain on the road.");
+    ResetLocalState(&restored);
+    ROAD_SAVE_CHECK(!RestoreLocalSession(session_path, &sim, &restored),
+        "A previous town scene must yield to the active journey.");
+    BeginRoadTravelState(&sim, &local);
+    local.adventure_ui = true;
+    local.agent.athletics.travel_training_distance = 5.5f;
+    local.agent.combat.health = 77.0f;
+    for (int scenario = 0; scenario < 5; ++scenario) {
+        if (scenario == 2) {
+            ROAD_SAVE_CHECK(InitializeOpenWorld(&sim, &local, false), "Build the world road scene.");
+            BeginRoadTravelState(&sim, &local);
+        }
+        if (scenario == 4) {
+            sim.journey.total_subticks = 2 * CC_WORLD_WATCH_SUBTICKS;
+            sim.journey.elapsed_subticks = CC_WORLD_WATCH_SUBTICKS;
+            sim.journey.phase = CC_JOURNEY_PHASE_RESTING;
+            sim.clock.game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND;
+            sim.carriage.mode = CC_CARRIAGE_STOPPED;
+            sim.carriage.speed_milli_per_second = 0;
+            sim.carriage.progress_milli = (int32_t)(
+                (int64_t)sim.journey.elapsed_subticks * 1000 / sim.journey.total_subticks);
+        }
+        local.agent.combat.health = 77.0f;
+        local.agent.athletics.travel_training_distance = 5.5f;
+        local.convoy.pace = scenario % 2 ? 0.0f : 0.72f;
+        uint64_t expected = CcSimHash(&sim);
+        ROAD_SAVE_CHECK(SaveClientWorld(journal, &sim, &local, path, session_path,
+            feedback, sizeof(feedback)), feedback);
+        ROAD_SAVE_CHECK(CcSimHash(&sim) == expected, "Saving must preserve the world.");
+        CcJournalAbandon(&journal);
+        journal = CcJournalResume(path, &loaded, error, sizeof(error));
+        ROAD_SAVE_CHECK(journal != NULL && CcSimHash(&loaded) == expected,
+            "Resume the exact saved cargo, clock, and journey progress.");
+        ResetLocalState(&restored);
+        ClientView view = VIEW_LOCAL;
+        int32_t selected = 0;
+        ROAD_SAVE_CHECK(RestoreClientStartupSession(session_path, &loaded, &restored, &view, &selected),
+            "Restore the road scene from its journey checkpoint.");
+        ROAD_SAVE_CHECK(view == VIEW_LOCAL && restored.journey_travel_active &&
+            restored.convoy.pace == 0.0f && restored.carriage_stopped && !restored.travel_fast_forward,
+            "Resume with the carriage held until the player drives.");
+        ROAD_SAVE_CHECK(SessionTestFloatMatches(restored.agent.athletics.travel_training_distance, 5.5f),
+            "Keep the traveller's athletic progress.");
+        ROAD_SAVE_CHECK(SessionTestFloatMatches(restored.agent.combat.health, 77.0f),
+            "Keep the traveller's health on the road.");
+        int32_t situation = 0;
+        ClientView return_view = VIEW_LOCAL;
+        float feedback_age = 0;
+        restored.adventure_ui = true;
+        HandleInput(&journal, &loaded, &selected, &situation, &view, &return_view,
+            &restored, (RenderTexture2D){0}, (Rectangle){0}, 1.0f / 60.0f,
+            path, session_path, error, sizeof(error), feedback, sizeof(feedback), &feedback_age);
+        ROAD_SAVE_CHECK(CcSimHash(&loaded) == expected && restored.carriage_stopped,
+            "An idle frame after loading must keep the saved world and stop state.");
+        sim = loaded;
+    }
+    CcClientSession session;
+    ROAD_SAVE_CHECK(CcClientSessionRead(session_path, &session, error, sizeof(error)), "Read the road checkpoint.");
+    session.route_id = sim.routes[1].id;
+    ROAD_SAVE_CHECK(CcClientSessionWrite(session_path, &session, error, sizeof(error)), "Write a different route fixture.");
+    ROAD_SAVE_CHECK(!RestoreLocalSession(session_path, &sim, &restored), "Reject a checkpoint for another road.");
+    ROAD_SAVE_CHECK(CcJournalClose(&journal, &sim, error, sizeof(error)), "Close the road journal.");
+    (void)remove(path); (void)remove(session_path);
+    LeaveOpenWorld(&local); LeaveOpenWorld(&restored);
+#undef ROAD_SAVE_CHECK
+    puts("Moving and stopped road saves resume exact progress with the team held.");
+    return 0;
+}
+
+static int RunDeliveryHandoffRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    char error[192];
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    const CcSituation *promise = NULL;
+    for (int i = 0; i < sim.situation_count; ++i)
+        if (sim.situations[i].kind == CC_SITUATION_RELIEF_DELIVERY) promise = &sim.situations[i];
+    if (promise == NULL || !CcSimApply(&sim, &((CcCommand){
+        .kind = CC_COMMAND_ACCEPT_SITUATION, .target_id = promise->id}), error, sizeof(error)))
+        return ClientRegressionFailure("Accept the delivery fixture.");
+    if (AdventureDeliveryAtHand(&sim) != NULL)
+        return ClientRegressionFailure("Departure still needs the road journey.");
+    sim.player.location_id = promise->target_id;
+    sim.carriage.location_id = promise->target_id;
+    sim.resolved_journey_situation_id = promise->id;
+    Vector2 position = LocalPosition(&local);
+    CcInteractionTarget *door = AdventureTarget(&local, &sim, CC_INTERACTION_DOOR, 1,
+        "Market hall", "Deliver promise", (Vector3){0}, 1, 2, 1,
+        (Vector2){position.x + 30, position.y}, 1);
+    CcInteractionTarget *person = AdventureTarget(&local, &sim, CC_INTERACTION_PERSON, 2,
+        "Neighbour", "Talk", (Vector3){0}, 1, 2, 1, position, 1);
+    if (door == NULL || person == NULL) return ClientRegressionFailure("Create the handoff targets.");
+    ContextActionSet actions = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (actions.count != 2 || actions.items[0].target.kind != CC_INTERACTION_DOOR)
+        return ClientRegressionFailure("The market handoff must lead the arrival tray.");
+    int32_t cargo = sim.player.cargo[promise->good];
+    sim.player.cargo[promise->good] = promise->quantity - 1;
+    actions = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (AdventureDeliveryAtHand(&sim) != NULL || actions.items[0].target.kind != CC_INTERACTION_PERSON)
+        return ClientRegressionFailure("A partial load keeps the ordinary nearby actions.");
+    sim.player.cargo[promise->good] = cargo;
+    sim.carriage.location_id = sim.settlements[0].id;
+    if (AdventureDeliveryAtHand(&sim) != NULL)
+        return ClientRegressionFailure("The handoff requires the loaded carriage here.");
+    sim.carriage.location_id = promise->target_id;
+    ClientView view = VIEW_LOCAL, back = VIEW_LOCAL;
+    int32_t selected = 0;
+    uint64_t before = CcSimHash(&sim);
+    AdventureActivate(&sim, &local, door, &view, &back, &selected);
+    if (!local.market_interior) return ClientRegressionFailure("The handoff door enters the hall.");
+    CcInteractionTarget *counter = AdventureTarget(&local, &sim, CC_INTERACTION_COUNTER, 1,
+        "Keeper", "Deliver promise", (Vector3){0}, 1, 2, 1, position, 1);
+    AdventureActivate(&sim, &local, counter, &view, &back, &selected);
+    if (view != VIEW_TRADE || local.trade_mode != 2 || local.trade_good != promise->good ||
+        local.trade_quantity != promise->quantity - promise->progress || local.trade_quote_presented)
+        return ClientRegressionFailure("The counter must open the delivery quote for the promised load.");
+    AdventureQuote quote = AdventureTradeQuote(&sim, &local);
+    if (quote.promise_id != promise->id || quote.command.amount != -promise->quantity ||
+        CcSimHash(&sim) != before)
+        return ClientRegressionFailure("Opening the handoff preserves cargo and coins until confirmation.");
+    sim.player.accepted_situation_id = 0;
+    AdventureActivate(&sim, &local, counter, &view, &back, &selected);
+    if (local.trade_mode != 0)
+        return ClientRegressionFailure("An ordinary counter visit opens the usual trade mode.");
+    sim.player.accepted_situation_id = promise->id;
+    CcLocalBindPlace(&sim);
+    for (int interior = 0; interior < 2; ++interior) {
+        local.market_interior = interior != 0;
+        BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
+        actions = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+        CcInteractionKind kind = interior ? CC_INTERACTION_COUNTER : CC_INTERACTION_DOOR;
+        if (actions.count == 0 || actions.items[0].target.kind != kind ||
+            strcmp(actions.items[0].detail, "Deliver promise") != 0)
+            return ClientRegressionFailure("The real town and hall trays must show the handoff first.");
+    }
+    return 0;
+}
+
+static int RunPresentedTargetRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    Vector2 origin = LocalPosition(&local);
+    for (int i = 0; i < 6; ++i) {
+        CcInteractionTarget *target = AdventureTarget(&local, &sim,
+            CC_INTERACTION_PERSON, (uint64_t)i + 1U, "Neighbour", "Talk",
+            (Vector3){0}, 1, 2, 1, (Vector2){origin.x + (float)i + 1, origin.y}, 1);
+        if (target == NULL) return ClientRegressionFailure("Create the card targets.");
+        target->character_id = sim.characters[i].id;
+    }
+    ContextActionSet shown = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    RememberPresentedTargets(&local, VIEW_LOCAL, &shown);
+    if (local.presented_target_count != 4)
+        return ClientRegressionFailure("Show four nearby target cards.");
+    CcInteractionKey chosen = local.presented_targets[0];
+    Rectangle bounds = local.presented_target_bounds[0];
+    client_test_pointer_active = true;
+    client_test_pointer = (Vector2){bounds.x + bounds.width / 2, bounds.y + bounds.height / 2};
+    /* Walking moves the shown target outside the newly nearest four. */
+    local.interactions.targets[0].approach_x = origin.x + 100;
+    ContextActionSet moved = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    for (int i = 0; i < 4; ++i)
+        if (!CcInteractionKeyEqual(moved.items[i].target, shown.items[i].target))
+            return ClientRegressionFailure("Resident movement keeps the visible card order.");
+    local.presented_card_origin.x -= 4.0f;
+    local.interaction.approaching = true;
+    moved = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (!CcInteractionKeyEqual(moved.items[0].target, chosen))
+        return ClientRegressionFailure("An approach keeps the row steady across distance changes.");
+    local.interaction.approaching = false;
+    moved = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (CcInteractionKeyEqual(moved.items[0].target, chosen))
+        return ClientRegressionFailure("A new nearby area refreshes the distance ordering.");
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+    ContextAction pressed = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (pressed.kind != CONTEXT_ACTION_WORLD_TARGET || !CcInteractionKeyEqual(pressed.target, chosen))
+        return ClientRegressionFailure("Click the target shown before walking reordered the tray.");
+    local.interactions.targets[0].available = false;
+    (void)snprintf(local.interactions.targets[0].reason, sizeof(local.interactions.targets[0].reason), "The shop is closed.");
+    pressed = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (pressed.enabled || strcmp(pressed.detail, "The shop is closed.") != 0)
+        return ClientRegressionFailure("Use the shown target's current availability.");
+    local.interactions.targets[0].character_id = sim.characters[6].id;
+    pressed = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (pressed.kind != CONTEXT_ACTION_NONE)
+        return ClientRegressionFailure("A new resident must receive a freshly drawn card.");
+    local.interactions.targets[0].key.object = 99;
+    pressed = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (pressed.kind != CONTEXT_ACTION_NONE || !PointerOverContextAction(
+        &sim, &local, VIEW_LOCAL, 0, 0, client_test_pointer))
+        return ClientRegressionFailure("Consume a removed card's click at its shown bounds.");
+    RememberPresentedTargets(&local, VIEW_LOCAL, &moved);
+    pressed = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
+    if (!CcInteractionKeyEqual(pressed.target, moved.items[0].target))
+        return ClientRegressionFailure("A new drawing must replace the presented target.");
+    RememberPresentedTargets(&local, VIEW_CHARACTER, &moved);
+    if (local.presented_target_count != 0)
+        return ClientRegressionFailure("Clear world cards when drawing another view.");
+    ResetLocalState(&local);
+    client_test_pointer_active = false;
+    ClientInputClearPressed();
+    return 0;
+}
+
+static int RunPresentedRoadRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.journey_travel_active = true;
+    ContextActionSet shown = {0};
+    AddDetailedContextAction(&shown, CONTEXT_ACTION_CLEAR_ROAD_SITE,
+        "Clear rocks", "", "Tools needed", false, false);
+    AddDetailedContextAction(&shown, CONTEXT_ACTION_CAMP_ROAD_SITE,
+        "Camp at Low Silver Pit", "", "Rest team", true, false);
+    AddDetailedContextAction(&shown, CONTEXT_ACTION_HOLD_TRAVEL,
+        "Travel", "", "Hold to speed up time", true, false);
+    RememberRoadActions(&sim, &local, VIEW_LOCAL, &shown);
+    Rectangle bounds = local.presented_road_bounds[1];
+    Vector2 mouse = {bounds.x + bounds.width / 2, bounds.y + bounds.height / 2};
+    sim.journey.active = true;
+    client_test_pointer_active = true;
+    client_test_pointer = mouse;
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+    ContextAction through_input = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
+    client_test_pointer_active = false;
+    ClientInputClearPressed();
+    if (through_input.kind != CONTEXT_ACTION_NONE)
+        return ClientRegressionFailure("Road input consumes the old camp bounds when only Drive remains.");
+    Rectangle removed_bounds = local.presented_road_bounds[0];
+    Vector2 removed_pointer = {removed_bounds.x + 2, removed_bounds.y + 2};
+    if (!PointerOverContextAction(&sim, &local, VIEW_LOCAL, 0, 0, removed_pointer))
+        return ClientRegressionFailure("A removed road card keeps its drawn bounds inside the UI.");
+    ContextActionSet branch = shown;
+    branch.items[1].kind = CONTEXT_ACTION_VISIT_MINE;
+    (void)snprintf(branch.items[1].label, sizeof(branch.items[1].label), "Turn to the mine");
+    ContextAction pressed = {0};
+    if (!PresentedRoadActionAt(&sim, &local, VIEW_LOCAL, &branch, mouse, &pressed) ||
+        pressed.kind != CONTEXT_ACTION_NONE)
+        return ClientRegressionFailure("A drawn camp card consumes its click when the mine branch replaces it.");
+    branch.items[2] = shown.items[1];
+    branch.items[2].enabled = false;
+    if (!PresentedRoadActionAt(&sim, &local, VIEW_LOCAL, &branch, mouse, &pressed) ||
+        pressed.kind != CONTEXT_ACTION_CAMP_ROAD_SITE || pressed.enabled)
+        return ClientRegressionFailure("A moved road choice retains its identity and current availability.");
+    RememberRoadActions(&sim, &local, VIEW_LOCAL, &branch);
+    if (!PresentedRoadActionAt(&sim, &local, VIEW_LOCAL, &branch, mouse, &pressed) ||
+        pressed.kind != CONTEXT_ACTION_VISIT_MINE)
+        return ClientRegressionFailure("Drawing the branch makes its mine choice clickable.");
+    sim.journey.route_id++;
+    if (!PresentedRoadActionAt(&sim, &local, VIEW_LOCAL, &branch, mouse, &pressed) ||
+        pressed.kind != CONTEXT_ACTION_NONE)
+        return ClientRegressionFailure("A road card belongs to its drawn route.");
+    RememberRoadActions(&sim, &local, VIEW_CHARACTER, &branch);
+    if (local.presented_road_count != 0)
+        return ClientRegressionFailure("Another view clears the road cards.");
+    RememberRoadActions(&sim, &local, VIEW_LOCAL, &branch);
+    ResetLocalState(&local);
+    if (local.presented_road_count != 0)
+        return ClientRegressionFailure("Reset clears the road cards.");
+    return 0;
+}
+
+static int RunConversationFocusRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    local.course.situation_witness_active = true;
+    local.course.situation_witness.position = (Vector3){-12, 0, -8};
+    CcInteractionTarget target = {.key = {sim.player.location_id, 1, CC_INTERACTION_PERSON},
+        .character_id = sim.characters[0].id, .x = 9, .y = 0, .z = 13, .available = true};
+    ClientView view = VIEW_LOCAL, back = VIEW_LOCAL;
+    int32_t selected = 0;
+    AdventureActivate(&sim, &local, &target, &view, &back, &selected);
+    const Vector3 *focus = LocalConversationFocus(&local, view);
+    if (focus == NULL || focus->x != target.x || focus->z != target.z ||
+        local.conversation_character_id != target.character_id)
+        return ClientRegressionFailure("Frame the named speaker selected in the scene.");
+    target.character_id = 0;
+    target.x = 4;
+    AdventureActivate(&sim, &local, &target, &view, &back, &selected);
+    focus = LocalConversationFocus(&local, view);
+    if (focus == NULL || focus->x != target.x)
+        return ClientRegressionFailure("Unnamed speakers keep their selected position.");
+    if (LocalConversationFocus(&local, back) != NULL)
+        return ClientRegressionFailure("Return to the street camera after conversation.");
+    local.adventure_ui = false;
+    if (LocalConversationFocus(&local, VIEW_CHARACTER) != NULL)
+        return ClientRegressionFailure("The classic conversation keeps its witness camera.");
+    ResetLocalState(&local);
+    if (local.conversation_object != 0 || local.conversation_position.x != 0 ||
+        local.conversation_position.y != 0 || local.conversation_position.z != 0)
+        return ClientRegressionFailure("A reset clears the previous speaker position.");
+    return 0;
+}
+
 static int RunAdventureInputRegression(void)
 {
+    int road_result = RunPresentedRoadRegression();
+    if (road_result != 0) return road_result;
+    int focus_result = RunConversationFocusRegression();
+    if (focus_result != 0) return focus_result;
+    int handoff_result = RunDeliveryHandoffRegression();
+    if (handoff_result != 0) return handoff_result;
+    int presented_result = RunPresentedTargetRegression();
+    if (presented_result != 0) return presented_result;
     static CcSim sim;
     static LocalState local;
     char message[256] = "", feedback[256] = "", error[192] = "";
@@ -9,6 +346,22 @@ static int RunAdventureInputRegression(void)
     const char *path = "interaction-input.ccsave";
     (void)remove(path);
     CcSimInit(&sim, 42U);
+    /* The chat flow needs several ordinary accounts to advance through. */
+    for (int i = 0; i < 2; ++i) {
+        CcEvent *account = &sim.events[sim.event_write_index];
+        *account = (CcEvent){
+            .id = CcMakeId(CC_ENTITY_EVENT, sim.next_entity_serial++),
+            .day = sim.current_day, .kind = CC_EVENT_KINGDOM_ACTION,
+            .subject_id = sim.kingdoms[0].id,
+            .location_id = sim.player.location_id, .magnitude = 40
+        };
+        (void)snprintf(account->text, sizeof(account->text),
+            "A traveller brings account %d from the town granary.", i + 1);
+        sim.event_write_index = (sim.event_write_index + 1) % CC_MAX_EVENTS;
+        if (sim.event_count < CC_MAX_EVENTS) sim.event_count += 1;
+    }
+    CcSimRefreshCharacterGossip(&sim);
+
     CcLocalBindPlace(&sim);
     ResetLocalState(&local);
     local.adventure_ui = true;
@@ -62,42 +415,31 @@ static int RunAdventureInputRegression(void)
     CcSpeech report, source;
     UX_CHECK(ClientConversationSpeech(&sim, &local, &report) && report.source_event_id != 0U,
         "A resident must speak a local report with its event source.");
-    uint64_t heard = CcSimHash(&sim);
     ContextActionSet replies = BuildContextActions(&sim, &local, view, selected, selected_situation);
-    UX_CHECK(replies.count >= 3 && replies.items[0].kind == CONTEXT_ACTION_GOSSIP_CHAT,
-        "The conversation must offer chat, an exchange, and farewell.");
+    UX_CHECK(replies.count == 2 && replies.items[0].kind == CONTEXT_ACTION_GOSSIP_CHAT &&
+        replies.items[1].kind == CONTEXT_ACTION_CLOSE_VIEW,
+        "The conversation offers Chat and Farewell.");
+    int32_t first_slot = CcSimNextUntoldStory(&sim, local.conversation_character_id, NULL);
     UX_KEY(KEY_ONE);
-    UX_CHECK(ClientConversationSpeech(&sim, &local, &source) && source.source_event_id == report.source_event_id &&
-        strcmp(report.text, source.text) != 0,
-        "Chat must draw who told them next.");
-    UX_CHECK(local.conversation_gossip_slot >= 0 &&
-        CcSimStoryTold(&sim, local.conversation_character_id, local.conversation_gossip_slot),
-        "Hearing the source must mark the story told.");
-    UX_KEY(KEY_ONE);
-    UX_CHECK(!local.conversation_gossip_source,
-        "A further chat must draw the next account.");
-    heard = CcSimHash(&sim);
-    int32_t share_key = KEY_ONE;
-    for (int32_t i = 0; i < replies.count; ++i)
-        if (replies.items[i].kind == CONTEXT_ACTION_GOSSIP_SHARE) share_key = KEY_ONE + i;
-    UX_KEY(share_key);
-    UX_CHECK(!local.conversation_gossip_source && CcSimHash(&sim) == heard,
-        "A repeated exchange must keep the same remembered account.");
-    local.conversation_gossip_source = false;
+    UX_CHECK(CcSimStoryTold(&sim, local.conversation_character_id, first_slot),
+        "Chat marks the shared account heard.");
+    UX_CHECK(CcSimGossipCarrier(&sim, sim.player.id) != NULL,
+        "Chat exchanges news with the player's company.");
+    UX_CHECK(ClientConversationSpeech(&sim, &local, &source), "Chat presents the next account.");
     replies = BuildContextActions(&sim, &local, view, selected, selected_situation);
-    Rectangle source_card = ContextActionBounds(0, ContextCardCount(replies.count, 0));
+    Rectangle source_card = ContextActionBounds(0, ContextCardCount(&replies, 0), replies.combat);
     client_test_pointer_active = true;
     client_test_pointer = (Vector2){source_card.x + source_card.width * 0.5f,
         source_card.y + source_card.height * 0.5f};
+    int32_t next_slot = local.conversation_gossip_slot;
     queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
     HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view, &local,
         (RenderTexture2D){0}, (Rectangle){0}, 1.0f / 60.0f, path, "", message, sizeof(message),
         feedback, sizeof(feedback), &feedback_age);
     client_test_pointer_active = false;
     ClientInputClearPressed();
-    UX_CHECK(local.conversation_gossip_source &&
-        CcSimStoryTold(&sim, local.conversation_character_id, local.conversation_gossip_slot),
-        "The chat card must match the keyboard reply.");
+    UX_CHECK(next_slot < 0 || CcSimStoryTold(&sim, local.conversation_character_id, next_slot),
+        "The Chat card shares news through the same action as its key.");
     UX_KEY(KEY_ESCAPE);
     local.course.alarm_active = false;
     local.course.automatic_alarm = false;
@@ -404,7 +746,120 @@ static int RunAdventureTradeTermsRegression(void)
     (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
     ClientInputClearPressed();
     TERMS_CHECK(CcSimHash(&sim) == delivered, "Repeated delivery confirmation must preserve its result.");
+    CcSimInit(&sim, 42U);
+    sim.player.location_id = sim.settlements[1].id;
+    sim.carriage.location_id = sim.player.location_id;
+    memset(sim.player.cargo, 0, sizeof(sim.player.cargo));
+    sim.player.cargo[CC_GOOD_WHEAT] = 12;
+    memset(&local, 0, sizeof(local));
+    local.trade_mode = 3;
+    CcBakerySupportPlan bakery = CcSimBakerySupportPlan(&sim, sim.player.location_id);
+    TERMS_CHECK(bakery.ready, "The bakery fixture must have a ready offer.");
+    coins = sim.player.coins;
+    queued_key_press[KEY_ENTER] = true;
+    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
+    ClientInputClearPressed();
+    TERMS_CHECK(sim.player.coins == coins, "Bakery support must require a displayed offer.");
+    local.trade_quote_presented = true;
+    local.trade_presented_total = bakery.coins;
+    local.trade_presented_command = (CcCommand){.kind = CC_COMMAND_SUPPORT_BAKERY,
+        .target_id = sim.player.location_id, .amount = bakery.building_days};
+    queued_key_press[KEY_ENTER] = true;
+    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
+    ClientInputClearPressed();
+    TERMS_CHECK(sim.player.coins == coins - bakery.coins && sim.player.cargo[CC_GOOD_WHEAT] == 0,
+        "Bakery confirmation must transfer the displayed cargo and wages.");
+    TERMS_CHECK(CcSimBakerySupportPlan(&sim, sim.player.location_id).remembered,
+        "The receiving contact must remember the confirmed support.");
+    local.trade_mode = 4;
+    sim.player.coins = 400;
+    local.trade_presented_command = (CcCommand){.kind = CC_COMMAND_FUND_GRAIN_SUPPLY,
+        .target_id = sim.player.location_id};
+    local.trade_presented_total = 200;
+    queued_key_press[KEY_ENTER] = true;
+    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
+    ClientInputClearPressed();
+    TERMS_CHECK(sim.grain_supplies[1].enabled && sim.grain_supplies[1].purse == 192,
+        "The grain fund button must start the displayed agreement.");
+    TERMS_CHECK(strstr(local.receipt, "grain fund") != NULL,
+        "Funding must show its receipt.");
+    uint64_t meeting_hash = CcSimHash(&sim);
+    queued_key_press[KEY_SIX] = true;
+    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
+    ClientInputClearPressed();
+    TERMS_CHECK(local.trade_mode == 5, "The sixth trade tab must open the road meeting.");
+    queued_key_press[KEY_ENTER] = true;
+    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
+    ClientInputClearPressed();
+    TERMS_CHECK(CcSimHash(&sim) == meeting_hash, "Reading the meeting must preserve funds and commitments.");
+
 #undef TERMS_CHECK
     puts("adventure trade terms passed");
+    return 0;
+}
+
+static int RunAbandonedTownRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    local.opening_step = CC_LOCAL_OPENING_COMPLETE;
+    CcSettlement *town = &sim.settlements[5];
+    sim.player.location_id = town->id;
+    town->population = 0;
+    town->service_mask = 0;
+    town->prosperity = 0;
+    town->hunger = 100;
+    for (int32_t i = 0; i < sim.character_count; ++i)
+        sim.characters[i].current_settlement_id = sim.settlements[0].id;
+    CcCharacter *visitor = &sim.characters[0];
+    visitor->current_settlement_id = town->id;
+    visitor->activity = CC_CHARACTER_ACTIVITY_RECOVERING;
+    visitor->death_day = 0;
+    visitor->birth_day = sim.current_day - 30 * 365;
+    local.course.travellers[0].active = true;
+    local.course.situation_witness_active = true;
+    uint64_t hash = CcSimHash(&sim);
+    RenderTexture2D texture = {.texture = {.width = 960, .height = 540}};
+    Rectangle destination = {0, 0, 960, 540};
+    BuildAdventureTargets(&sim, &local, texture, destination);
+    int32_t people = 0;
+    bool closed_hall = false;
+    for (int32_t i = 0; i < local.interactions.count; ++i) {
+        const CcInteractionTarget *target = &local.interactions.targets[i];
+        if (target->key.kind == CC_INTERACTION_PERSON) {
+            ++people;
+            if (target->character_id != visitor->id)
+                return ClientRegressionFailure("Ruin people must use a present living character.");
+        }
+        if (target->key.kind == CC_INTERACTION_BOARD)
+            return ClientRegressionFailure("An abandoned town has a retired notice board.");
+        if (target->key.kind == CC_INTERACTION_DOOR) closed_hall = !target->available;
+    }
+    if (people != 1 || !closed_hall)
+        return ClientRegressionFailure("Show the visitor and the closed hall in the ruin.");
+    local.market_interior = true;
+    BuildAdventureTargets(&sim, &local, texture, destination);
+    if (local.interactions.count != 1 || local.interactions.targets[0].key.kind != CC_INTERACTION_EXIT)
+        return ClientRegressionFailure("A saved interior in a ruin offers the street exit.");
+    local.market_interior = false;
+    visitor->current_settlement_id = sim.settlements[0].id;
+    BuildAdventureTargets(&sim, &local, texture, destination);
+    for (int32_t i = 0; i < local.interactions.count; ++i)
+        if (local.interactions.targets[i].key.kind == CC_INTERACTION_PERSON)
+            return ClientRegressionFailure("A departed visitor leaves the scene.");
+    visitor->current_settlement_id = town->id;
+    if (CcSimHash(&sim) != hash)
+        return ClientRegressionFailure("Scene inspection preserves the simulation.");
+    town->population = 180;
+    BuildAdventureTargets(&sim, &local, texture, destination);
+    bool open_hall = false;
+    for (int32_t i = 0; i < local.interactions.count; ++i)
+        if (local.interactions.targets[i].key.kind == CC_INTERACTION_DOOR)
+            open_hall = local.interactions.targets[i].available;
+    if (!open_hall) return ClientRegressionFailure("Resettlement refreshes the scene immediately.");
+    puts("Abandoned town targets follow living presence and resettlement.");
     return 0;
 }

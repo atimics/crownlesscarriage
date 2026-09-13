@@ -1,0 +1,65 @@
+[
+  {
+    "kind": "world",
+    "years": 1000,
+    "seed": 1,
+    "returncode": 0,
+    "exact_match": true
+  },
+  {
+    "kind": "world",
+    "years": 1000,
+    "seed": 47,
+    "returncode": 0,
+    "exact_match": true
+  },
+  {
+    "kind": "world",
+    "years": 1000,
+    "seed": 128,
+    "returncode": 0,
+    "exact_match": true
+  },
+  {
+    "kind": "agent",
+    "years": 10,
+    "seed": 1,
+    "returncode": 0,
+    "exact_match": true
+  },
+  {
+    "kind": "agent",
+    "years": 10,
+    "seed": 47,
+    "returncode": 0,
+    "exact_match": true
+  },
+  {
+    "kind": "agent",
+    "years": 10,
+    "seed": 128,
+    "returncode": 0,
+    "exact_match": true
+  },
+  {
+    "kind": "agent",
+    "years": 100,
+    "seed": 1,
+    "returncode": 0,
+    "exact_match": true
+  },
+  {
+    "kind": "agent",
+    "years": 100,
+    "seed": 47,
+    "returncode": 0,
+    "exact_match": true
+  },
+  {
+    "kind": "agent",
+    "years": 100,
+    "seed": 128,
+    "returncode": 0,
+    "exact_match": true
+  }
+]

@@ -61,7 +61,9 @@ static int ProfileContract(void)
                 camera->camera_offset_x * camera->camera_offset_x +
                 camera->camera_offset_z * camera->camera_offset_z;
             CHECK(camera_distance_squared >= 5.0f * 5.0f);
-            bool valley_view = profile->function == CC_SETTLEMENT_FARMING &&
+            bool valley_view = (profile->function == CC_SETTLEMENT_FARMING ||
+                                profile->function == CC_SETTLEMENT_MARKET ||
+                                profile->function == CC_SETTLEMENT_MINING) &&
                 (camera->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ||
                  camera->kind == CC_LOCAL_TOWN_SCENE_HEART ||
                  camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK);
@@ -72,13 +74,17 @@ static int ProfileContract(void)
             if (camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
                 CHECK(camera->fovy >= 9.0f);
             } else if (camera->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST) {
-                CHECK(camera->fovy <= 6.6f);
+                bool pony_yard = (profile->function == CC_SETTLEMENT_MARKET ||
+                                 profile->function == CC_SETTLEMENT_FARMING) &&
+                    camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD;
+                CHECK(camera->fovy <= (pony_yard ? 9.0f : 6.6f));
             }
             if (camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD) {
                 CHECK(camera->trigger_x >= 42.0f && camera->trigger_x <= 43.0f);
                 CHECK(camera->trigger_z >= 54.5f && camera->trigger_z <= 56.0f);
                 CHECK(camera->target_x >= 38.0f && camera->target_x <= 41.0f);
-                CHECK(camera->target_z >= 51.0f && camera->target_z <= 53.0f);
+                CHECK(camera->target_z >= 51.0f && camera->target_z <=
+                      (profile->function == CC_SETTLEMENT_MARKET ? 54.0f : 53.0f));
             }
             for (int32_t previous = 0; previous < scene; ++previous) {
                 CHECK(strcmp(camera->name,
@@ -138,7 +144,9 @@ static int ProfileContract(void)
             CHECK(structure->name != NULL && structure->name[0] != '\0');
             CHECK(structure->width >= 4.5f);
             CHECK(structure->depth >= 4.5f);
-            float minimum_height = function == CC_SETTLEMENT_FARMING ? 3.0f : 4.5f;
+            float minimum_height = function == CC_SETTLEMENT_FARMING ? 3.0f :
+                function == CC_SETTLEMENT_MINING ? 3.8f :
+                function == CC_SETTLEMENT_MARKET ? 4.0f : 4.5f;
             CHECK(structure->height >= minimum_height);
             CHECK(structure->style >= CC_LOCAL_BUILDING_DOMESTIC);
             CHECK(structure->style <= CC_LOCAL_BUILDING_WORKER_ROW);
@@ -405,7 +413,8 @@ static int AuthoredTownMaps(void)
         const CcLocalPlaceBuilding *primary = CcLocalPlaceBuildingAt(
             (CcSettlementFunction)function, profile->primary_building);
         CHECK(primary != NULL);
-        CHECK(primary->x == 44.0f && primary->z == 16.0f);
+        CHECK(primary->x == 44.0f);
+        CHECK(primary->z == (function == CC_SETTLEMENT_MARKET ? 12.0f : 16.0f));
         CHECK(primary->width == 12.0f && primary->depth == 10.0f);
         CHECK(primary->door);
 
@@ -554,8 +563,50 @@ static int StableDistinctTerrain(void)
     return 0;
 }
 
+static int TownPresence(void)
+{
+    static CcSim sim;
+    CcSimInit(&sim, 42U);
+    CcSettlement *town = &sim.settlements[5];
+    town->population = 0;
+    town->prosperity = 0;
+    sim.bandit_count = 1;
+    sim.bandits[0].camp_settlement_id = town->id;
+    sim.bandits[0].members = 4;
+    uint64_t hash = CcSimHash(&sim);
+    char status[128];
+    CcLocalTownStatus(&sim, town->id, status, sizeof(status));
+    CHECK(strstr(status, "Occupied ruins") != NULL);
+    CHECK(strstr(status, "4 bandits") != NULL);
+    CHECK(CcLocalTownOccupier(&sim, town->id) == &sim.bandits[0]);
+    CHECK(CcSimHash(&sim) == hash);
+    sim.bandits[0].members = 0;
+    CHECK(CcLocalTownOccupier(&sim, town->id) == NULL);
+    CcLocalTownStatus(&sim, town->id, status, sizeof(status));
+    CHECK(strstr(status, "Abandoned") != NULL);
+    town->population = 180;
+    CcLocalTownStatus(&sim, town->id, status, sizeof(status));
+    CHECK(strcmp(status, "180 residents") == 0);
+    sim.character_count = 1;
+    CcCharacter *person = &sim.characters[0];
+    person->current_settlement_id = town->id;
+    person->birth_day = sim.current_day - 20 * 365;
+    person->death_day = 0;
+    person->activity = CC_CHARACTER_ACTIVITY_RECOVERING;
+    CHECK(CcLocalTownPerson(&sim, town->id, 0) == person);
+    CHECK(CcLocalTownPerson(&sim, town->id, 1) == NULL);
+    person->activity = CC_CHARACTER_ACTIVITY_TRAVELLING;
+    CHECK(CcLocalTownPerson(&sim, town->id, 0) == NULL);
+    person->activity = CC_CHARACTER_ACTIVITY_RECOVERING;
+    person->death_day = sim.current_day;
+    CHECK(CcLocalTownPerson(&sim, town->id, 0) == NULL);
+    CHECK(CcLocalTownPerson(NULL, town->id, 0) == NULL);
+    return 0;
+}
+
 int main(void)
 {
+    if (TownPresence() != 0) return 1;
     if (ProfileContract() != 0) return 1;
     if (AuthoredLandmarkLayouts() != 0) return 1;
     if (AuthoredTownMaps() != 0) return 1;

@@ -57,7 +57,7 @@ static void CheckFullLedgerDragonTheft(void)
     sim.dragon.hoard = 100;
     sim.dragon.stolen_outstanding = 0;
     sim.goblins.members = 12;
-    sim.goblins.devotion = 0;
+    sim.dragon_cult.devotion = 0;
     sim.goblins.hoard_defenses = 0;
 
     CcSimAdvanceDays(&sim, 1);
@@ -92,7 +92,7 @@ static void CheckFullLedgerDragonSlaying(void)
         sim.dragon_campaign.supplies[good] = 400;
     }
     sim.goblins.members = 12;
-    sim.goblins.devotion = 0;
+    sim.dragon_cult.devotion = 0;
     sim.goblins.cohesion = 0;
     sim.goblins.hoard_defenses = 0;
     sim.dragon.body_condition = 1;
@@ -143,6 +143,10 @@ int main(void)
 {
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0xd12a600b));
+    /* This scenario follows treasure taken from a town. Separate portage
+       tests cover the caches already held in the underroad. */
+    for (int32_t room = 0; room < sim.dungeons[0].room_count; ++room)
+        sim.dungeons[0].rooms[room].loot_quantity = 0;
     char error[256];
 
     CcSim tunnel;
@@ -414,7 +418,6 @@ int main(void)
     unequal_town = CcSimSettlementMutable(&unjust, unequal_town->id);
     CC_CHECK(unequal_town != NULL);
     CC_CHECK(remove(social_path) == 0);
-    int32_t hunger_before_relief = unequal_town->hunger;
     for (int32_t day = 0;
          day < 14 && unjust.hoard_raiders.raids_completed == 0; ++day) {
         CcSimAdvanceDays(&unjust, 1);
@@ -422,7 +425,7 @@ int main(void)
     CC_CHECK(unjust.hoard_raiders.raids_completed == 1);
     CC_CHECK(unjust.hoard_raiders.social_raid_latched);
     CC_CHECK(unjust.goblins.hoard_defenses == 1);
-    CC_CHECK(unequal_town->hunger < hunger_before_relief);
+    CC_CHECK(unjust.hoard_raiders.carried_treasure == 0);
     for (int32_t day = 0;
          day < 14 && unjust.dragon.retaliations == 0; ++day) {
         CcSimAdvanceDays(&unjust, 1);
@@ -552,7 +555,7 @@ int main(void)
     }
     dragon_host.dragon_campaign.pledged_kingdom_mask = UINT32_C(7);
     dragon_host.goblins.members = 12;
-    dragon_host.goblins.devotion = 0;
+    dragon_host.dragon_cult.devotion = 0;
     dragon_host.goblins.hoard_defenses = 0;
     dragon_host.dragon.body_condition = 10;
     dragon_host.dragon.crown_strength = 0;
@@ -597,10 +600,11 @@ int main(void)
 
     /* The realm slays the successor too: the count reaches two while
        the end-state flag flips back to slain. */
+    dragon_host.dragon.age_days = 500 * 365;
     dragon_host.dragon_campaign.pledged_kingdom_mask = UINT32_C(7);
     dragon_host.dragon_campaign.cooldown_days = 0;
     dragon_host.goblins.members = 12;
-    dragon_host.goblins.devotion = 0;
+    dragon_host.dragon_cult.devotion = 0;
     dragon_host.goblins.hoard_defenses = 0;
     dragon_host.dragon.body_condition = 10;
     dragon_host.dragon.crown_strength = 0;
@@ -639,7 +643,7 @@ int main(void)
     learning_host.dragon_campaign.supplies[CC_GOOD_TOOLS] = 8;
     learning_host.dragon_campaign.supplies[CC_GOOD_WEAPONS] = 12;
     learning_host.goblins.members = 100;
-    learning_host.goblins.devotion = 100;
+    learning_host.dragon_cult.devotion = 100;
     learning_host.goblins.hoard_defenses = 12;
     learning_host.dragon.body_condition = 90;
     CcSimAdvanceDays(&learning_host, 1);

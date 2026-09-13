@@ -1,0 +1,106 @@
+{
+  "worlds": 4,
+  "days_per_world": 365,
+  "seeds": [
+    901,
+    902,
+    903,
+    904
+  ],
+  "observations": 132950,
+  "distinct_accounts": 391,
+  "accounts": 96,
+  "model_accounts": 93,
+  "exact_shared_wording": 25,
+  "account_kinds": {
+    "BAKERY": 6,
+    "BANDITS": 6,
+    "CALVING": 6,
+    "CATTLE LOSS": 6,
+    "CULT RALLIES": 6,
+    "DECREE": 6,
+    "FLOCK CULL": 6,
+    "GOBLIN RAID": 6,
+    "HARVEST": 3,
+    "HORSE BRED": 6,
+    "LAMBING": 6,
+    "MASONRY": 6,
+    "PAPER MILL": 4,
+    "QUARRY": 3,
+    "ROUTE": 3,
+    "SHEARING": 6,
+    "SHORTAGE": 5,
+    "TREASURE": 3,
+    "WOODLOT": 3
+  },
+  "bands": {
+    "clear": 33,
+    "retold": 32,
+    "uncertain": 31
+  },
+  "conversations": 24,
+  "complete_conversations": 22,
+  "conversation_bands": {
+    "clear/clear": 10,
+    "retold/retold": 4,
+    "retold/clear": 3,
+    "retold/uncertain": 1,
+    "uncertain/retold": 3,
+    "clear/retold": 2,
+    "uncertain/uncertain": 1
+  },
+  "different_held_accounts": 7,
+  "different_model_accounts": 0,
+  "conversation_lines": 132,
+  "distinct_conversation_lines": 28,
+  "frequent_lines": [
+    [
+      "That's what I heard too. How sure are you?",
+      22
+    ],
+    [
+      "Let's ask around before we pass it on.",
+      22
+    ],
+    [
+      "Agreed. Let's leave it there for now.",
+      22
+    ],
+    [
+      "Very well.",
+      22
+    ],
+    [
+      "That is the account I hold. We should ask someone who was there.",
+      12
+    ],
+    [
+      "The account has passed through several people. We should ask someone who was there.",
+      7
+    ],
+    [
+      "I am unsure. We should ask someone who was there.",
+      3
+    ],
+    [
+      "Alderwatch closed the treaty bridge, delaying the relief convoy.",
+      2
+    ],
+    [
+      "Thornford's drought harvest fell short of what the eastern settlements needed.",
+      1
+    ],
+    [
+      "There was hunger in Silverwick.",
+      1
+    ],
+    [
+      "Silver Covenant put money into Hollowbarrow's market to buy grain shipments, so people say.",
+      1
+    ],
+    [
+      "Gloamgate Moon Cup was completed in Gloamgate, according to the word going round.",
+      1
+    ]
+  ]
+}

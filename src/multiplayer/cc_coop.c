@@ -1,6 +1,7 @@
 #include "multiplayer/cc_coop.h"
 #include "multiplayer/cc_coop_commands.h"
 #include "persistence/cc_save.h"
+#include "persistence/cc_starting_campaign.h"
 
 #include <inttypes.h>
 #include <stdarg.h>
@@ -13,6 +14,11 @@ CcSim *CcCoopCreate(uint32_t seed)
     CcSim *sim = malloc(sizeof(*sim));
     if (sim != NULL) CcSimInit(sim, seed);
     return sim;
+}
+
+bool CcCoopStartDeepWyrm(CcSim *sim, const char *path, char *error, size_t capacity)
+{
+    return CcStartingCampaignDeepWyrm(sim, path, error, capacity);
 }
 
 void CcCoopDestroy(CcSim *sim) { free(sim); }
@@ -52,7 +58,7 @@ bool CcCoopApply(CcSim *sim, const char *action, CcId target,
     }
     CcCommand command = { .target_id = target, .good = (CcGood)good, .amount = amount };
     if (action != NULL) {
-        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_EXCHANGE_GOSSIP; ++i) {
+        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT; ++i) {
             if (strcmp(action, CcCoopActionName((CcCommandKind)i)) == 0) command.kind = (CcCommandKind)i;
         }
     }
@@ -87,15 +93,20 @@ bool CcCoopAdvanceAway(CcSim *sim, int32_t days, char *error, size_t capacity)
     return ok;
 }
 
-bool CcCoopAdvance(CcSim *sim, int32_t ticks, char *error, size_t capacity)
+bool CcCoopAdvanceTravel(CcSim *sim, int32_t ticks, int32_t scale, char *error, size_t capacity)
 {
-    if (sim == NULL || ticks < 0 || ticks > 3600 ||
-        sim->clock.tick > UINT64_MAX - (uint64_t)ticks) return false;
+    if (sim == NULL || ticks < 0 || ticks > 3600 || scale < 1 || scale > 8 ||
+        sim->clock.tick > UINT64_MAX - (uint64_t)ticks * (uint64_t)scale) return false;
     CcSim *candidate = malloc(sizeof(*candidate));
     if (candidate == NULL) return false;
     *candidate = *sim;
     /* Watches flow into a short break or overnight camp automatically. */
-    for (int32_t tick = 0; tick < ticks; ++tick) {
+    for (int32_t tick = 0; tick < ticks * scale; ++tick) {
+        if (tick % scale != 0 && (candidate->carriage.progress_milli <= 100 ||
+            candidate->carriage.progress_milli >= 900 ||
+            candidate->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
+            candidate->pony_company.encounter >= 0 ||
+            CcSimJourneyRoadSiteStop(candidate) != NULL)) continue;
         if (candidate->journey.active && candidate->journey.phase == CC_JOURNEY_PHASE_RESTING) {
             CcCommand rest = {.kind = CcSimJourneyStop(candidate) == CC_JOURNEY_STOP_MIDDAY ?
                 CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP};
@@ -109,6 +120,11 @@ bool CcCoopAdvance(CcSim *sim, int32_t ticks, char *error, size_t capacity)
     if (ok) *sim = *candidate;
     free(candidate);
     return ok;
+}
+
+bool CcCoopAdvance(CcSim *sim, int32_t ticks, char *error, size_t capacity)
+{
+    return CcCoopAdvanceTravel(sim, ticks, 1, error, capacity);
 }
 
 typedef struct Json {
@@ -172,6 +188,9 @@ bool CcCoopSnapshot(const CcSim *sim, char *text, size_t capacity)
     if (road_site != NULL) {
         Put(&json, "{\"id\":\"%" PRIu64 "\",\"name\":", road_site->id);
         Quote(&json, road_site->name);
+        Put(&json, ",\"accessible\":%s,\"blocker\":%d,\"condition\":%d,\"stock\":",
+            road_site->accessible ? "true" : "false", (int)road_site->blocker, road_site->condition);
+        Goods(&json, road_site->stock);
         Put(&json, "}");
     } else Put(&json, "null");
     Put(&json, "},");
@@ -236,7 +255,21 @@ bool CcCoopSnapshot(const CcSim *sim, char *text, size_t capacity)
         Put(&json, ",\"good\":%d,\"quantity\":%d,\"progress\":%d,\"reward\":%" PRId64 ",\"accepted\":%s}",
             (int)s->good, s->quantity, s->progress, (int64_t)s->reward, accepted ? "true" : "false");
     }
-    Put(&json, "],\"events\":[");
+    Put(&json, "],\"prophecy\":");
+    const CcTreasure *book = CcSimDeepWyrmProphecy(sim);
+    if (book == NULL) Put(&json, "null");
+    else {
+        const CcSettlement *destination = CcSimProphecyDestination(sim);
+        Put(&json, "{\"id\":\"%" PRIu64 "\",\"title\":", book->id);
+        Quote(&json, CC_PROPHECY_TITLE);
+        Put(&json, ",\"words\":"); Quote(&json, CC_PROPHECY_WORDS);
+        Put(&json, ",\"destination\":\"%" PRIu64 "\",\"carried\":%s,\"can_deliver\":%s,\"delivered\":%s}",
+            destination != NULL ? destination->id : 0U,
+            !book->destroyed && book->owner_id == sim->player.id ? "true" : "false",
+            CcSimCanDeliverProphecy(sim) ? "true" : "false",
+            !book->destroyed && destination != NULL && book->owner_id == destination->id ? "true" : "false");
+    }
+    Put(&json, ",\"events\":[");
     comma = false;
     for (int32_t i = 0; i < sim->event_count && i < 24; ++i) {
         const CcEvent *event = CcSimRecentEvent(sim, i);

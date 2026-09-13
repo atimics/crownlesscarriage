@@ -1,0 +1,102 @@
+[
+  {
+    "threats": {
+      "semantics": "snapshot",
+      "bandit_groups": [],
+      "monster_groups": []
+    },
+    "summary": "day=1 hash=7527f1754ac65bfa average_hunger=0 maximum_hunger=0 population_weighted_hunger=0 inhabited_settlements=6 hunger_population=11928 shipments=0 events=17 blocked_shipments=0 royal_carriages=3/0/0/0/0 royal_trips=0 royal_losses=0 open_routes=7/8 legitimacy=61 live_situations=4 bandit_groups=0 bandit_influence_max=unavailable monster_groups=0 monster_pressure_max=unavailable night_roads=1 monastery_reserve=480 monastery_debt=0 hoard_raids=0 goblin_guards=0 goblin_members=48 goblin_covenant=74 goblin_cohesion=68 goblin_tithes=0 wars=1 alliances=0 couriers=0 dragon_slain=0 dragon_campaign=0/0/0 dragon_stage=Crowned dragon activity=dormant age=262 crown=25 body=82 memory=100 territory=72 shadow=58 eggs=0 hunts=0 broods=0 whelps=0 afterdeath=0 ruins=0 climate=78 campaign_experience=0 lore=0 lore_lost=0 scribes=2 archive_chain=ready wheat=24 paper=14 tools=18 iron=36 gold=4 gems=2 inbound_tools=0 inbound_iron=0 sanction=61 anointed=0/3 unsanctioned_weeks=0 pretender_crises=0 people=24 births=0 deaths=0 generation=0 abbot=\"Flinta Sealkeeper\" stewardship=60 anointed=\"none\" dragon_patron=\"none\" dragon_hero=\"none\" landless_days=0"
+  },
+  {
+    "threats": {
+      "semantics": "snapshot",
+      "bandit_groups": [
+        {
+          "id": "432345564227567715",
+          "route_id": "216172782113783824",
+          "camp_settlement_id": "0",
+          "name": "Group \"0\"\n",
+          "members": 32,
+          "supplies": 31,
+          "influence": 10,
+          "raid_phase": 0
+        }
+      ],
+      "monster_groups": [
+        {
+          "id": "504403158265495652",
+          "dungeon_id": "576460752303423516",
+          "name": "Crownless Centipedes",
+          "population": 43,
+          "pressure": 20,
+          "hunting_pressure": 0
+        }
+      ]
+    },
+    "summary": "day=1 hash=cdb0ebfb2d618d33 average_hunger=0 maximum_hunger=0 population_weighted_hunger=0 inhabited_settlements=6 hunger_population=11928 shipments=0 events=17 blocked_shipments=0 royal_carriages=3/0/0/0/0 royal_trips=0 royal_losses=0 open_routes=7/8 legitimacy=61 live_situations=4 bandit_groups=1 bandit_influence_max=10 monster_groups=1 monster_pressure_max=20 night_roads=1 monastery_reserve=480 monastery_debt=0 hoard_raids=0 goblin_guards=0 goblin_members=48 goblin_covenant=74 goblin_cohesion=68 goblin_tithes=0 wars=1 alliances=0 couriers=0 dragon_slain=0 dragon_campaign=0/0/0 dragon_stage=Crowned dragon activity=dormant age=262 crown=25 body=82 memory=100 territory=72 shadow=58 eggs=0 hunts=0 broods=0 whelps=0 afterdeath=0 ruins=0 climate=78 campaign_experience=0 lore=0 lore_lost=0 scribes=2 archive_chain=ready wheat=24 paper=14 tools=18 iron=36 gold=4 gems=2 inbound_tools=0 inbound_iron=0 sanction=61 anointed=0/3 unsanctioned_weeks=0 pretender_crises=0 people=24 births=0 deaths=0 generation=0 abbot=\"Flinta Sealkeeper\" stewardship=60 anointed=\"none\" dragon_patron=\"none\" dragon_hero=\"none\" landless_days=0"
+  },
+  {
+    "threats": {
+      "semantics": "snapshot",
+      "bandit_groups": [
+        {
+          "id": "432345564227567715",
+          "route_id": "216172782113783824",
+          "camp_settlement_id": "0",
+          "name": "Group \"0\"\n",
+          "members": 32,
+          "supplies": 31,
+          "influence": 10,
+          "raid_phase": 0
+        },
+        {
+          "id": "432345564227567717",
+          "route_id": "216172782113783824",
+          "camp_settlement_id": "0",
+          "name": "Group \"1\"\n",
+          "members": 32,
+          "supplies": 31,
+          "influence": 90,
+          "raid_phase": 0
+        },
+        {
+          "id": "432345564227567719",
+          "route_id": "216172782113783824",
+          "camp_settlement_id": "0",
+          "name": "Group \"2\"\n",
+          "members": 32,
+          "supplies": 31,
+          "influence": 12,
+          "raid_phase": 0
+        }
+      ],
+      "monster_groups": [
+        {
+          "id": "504403158265495652",
+          "dungeon_id": "576460752303423516",
+          "name": "Crownless Centipedes",
+          "population": 43,
+          "pressure": 20,
+          "hunting_pressure": 0
+        },
+        {
+          "id": "504403158265495654",
+          "dungeon_id": "576460752303423516",
+          "name": "Crownless Centipedes",
+          "population": 43,
+          "pressure": 80,
+          "hunting_pressure": 0
+        },
+        {
+          "id": "504403158265495656",
+          "dungeon_id": "576460752303423516",
+          "name": "Crownless Centipedes",
+          "population": 43,
+          "pressure": 22,
+          "hunting_pressure": 0
+        }
+      ]
+    },
+    "summary": "day=1 hash=2e776ec64c0b5bb0 average_hunger=0 maximum_hunger=0 population_weighted_hunger=0 inhabited_settlements=6 hunger_population=11928 shipments=0 events=17 blocked_shipments=0 royal_carriages=3/0/0/0/0 royal_trips=0 royal_losses=0 open_routes=7/8 legitimacy=61 live_situations=4 bandit_groups=3 bandit_influence_max=90 monster_groups=3 monster_pressure_max=80 night_roads=1 monastery_reserve=480 monastery_debt=0 hoard_raids=0 goblin_guards=0 goblin_members=48 goblin_covenant=74 goblin_cohesion=68 goblin_tithes=0 wars=1 alliances=0 couriers=0 dragon_slain=0 dragon_campaign=0/0/0 dragon_stage=Crowned dragon activity=dormant age=262 crown=25 body=82 memory=100 territory=72 shadow=58 eggs=0 hunts=0 broods=0 whelps=0 afterdeath=0 ruins=0 climate=78 campaign_experience=0 lore=0 lore_lost=0 scribes=2 archive_chain=ready wheat=24 paper=14 tools=18 iron=36 gold=4 gems=2 inbound_tools=0 inbound_iron=0 sanction=61 anointed=0/3 unsanctioned_weeks=0 pretender_crises=0 people=24 births=0 deaths=0 generation=0 abbot=\"Flinta Sealkeeper\" stewardship=60 anointed=\"none\" dragon_patron=\"none\" dragon_hero=\"none\" landless_days=0"
+  }
+]

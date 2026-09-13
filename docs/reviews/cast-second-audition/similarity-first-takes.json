@@ -1,0 +1,412 @@
+{
+  "method": "Chatterbox speaker encoder, cosine similarity, common reference passage",
+  "note": "A screening signal for this recording set. Listening decides perceived identity and performance.",
+  "weights_sha256": "f0921cab452fa278bc25cd23ffd59d36f816d7dc5181dd1bef9751a7fb61f63c",
+  "sources": {
+    "mara-v1": "654e81ab675f0afd861c0c5032f0d5d6f6e0eb0971fb7b3b9f9f668d3337b31a",
+    "jory-v1": "0c643d85ed36d2ba2774d94d3fa31213cff97a0d2cb8ed1625956686ee61043c",
+    "tomas-v1": "09bbb99862b976d7355261eac3929cc3648ea40a04b8d0682e322bb4b31f9980",
+    "ilyra-v1": "4f872149b489921a727c3d7607ff6de790cac9ee4d7bb9af3c5e999d8752bd84",
+    "bren-v1": "a5ff8538b7bbda3767abf645b3eae480bc892bee973077a919361a7c05f43c59",
+    "hearth-v1": "297930487bd9520ccffedf0678c725c2057d57f7867c7ef0dc7d78a86ff47825",
+    "reed-v1": "85c014bd933a32d3adaa6fc1a3e217e3a52a81fd915803171366e7919ae4ea85",
+    "flint-v1": "e09144dd9da2f0cf8baa12e01035bba82560cc99733349c81a9884fc3e862eeb",
+    "oak-v1": "32eaa039404ac1cda2e4f201264a17581a827a23c71e44c85b9837a808a41eb9",
+    "lark-v1": "63f6bd6da5db2c3498cb8f52691f96991a66dd62839713569613732a5565c904",
+    "ash-v1": "a9dc5b0974a91d67767110d28192a3176cd6bbed9b62e1d9b223cfa69787ca82",
+    "brook-v1": "f3da030a1a862380fcbec177e64a381cb8b4b318d559179f02ea8d41fcb1e78d",
+    "stone-v1": "c87190602c0f0d193be9d4cd998a35925b37d0ed5df63cb2bd70922be7b5fb6e"
+  },
+  "pairs": [
+    {
+      "first": "flint-v1",
+      "second": "brook-v1",
+      "cosine": 0.9044033885002136
+    },
+    {
+      "first": "jory-v1",
+      "second": "reed-v1",
+      "cosine": 0.8697535991668701
+    },
+    {
+      "first": "ilyra-v1",
+      "second": "hearth-v1",
+      "cosine": 0.840415358543396
+    },
+    {
+      "first": "hearth-v1",
+      "second": "brook-v1",
+      "cosine": 0.8352710008621216
+    },
+    {
+      "first": "mara-v1",
+      "second": "hearth-v1",
+      "cosine": 0.8342771530151367
+    },
+    {
+      "first": "ilyra-v1",
+      "second": "lark-v1",
+      "cosine": 0.8247525691986084
+    },
+    {
+      "first": "mara-v1",
+      "second": "brook-v1",
+      "cosine": 0.8139169216156006
+    },
+    {
+      "first": "ilyra-v1",
+      "second": "brook-v1",
+      "cosine": 0.8052623867988586
+    },
+    {
+      "first": "hearth-v1",
+      "second": "flint-v1",
+      "cosine": 0.8045864105224609
+    },
+    {
+      "first": "mara-v1",
+      "second": "ilyra-v1",
+      "cosine": 0.8020799160003662
+    },
+    {
+      "first": "reed-v1",
+      "second": "ash-v1",
+      "cosine": 0.7953280210494995
+    },
+    {
+      "first": "bren-v1",
+      "second": "reed-v1",
+      "cosine": 0.7913471460342407
+    },
+    {
+      "first": "tomas-v1",
+      "second": "reed-v1",
+      "cosine": 0.777586042881012
+    },
+    {
+      "first": "mara-v1",
+      "second": "flint-v1",
+      "cosine": 0.7676403522491455
+    },
+    {
+      "first": "tomas-v1",
+      "second": "oak-v1",
+      "cosine": 0.7539541721343994
+    },
+    {
+      "first": "ash-v1",
+      "second": "stone-v1",
+      "cosine": 0.7525169849395752
+    },
+    {
+      "first": "tomas-v1",
+      "second": "bren-v1",
+      "cosine": 0.7510422468185425
+    },
+    {
+      "first": "hearth-v1",
+      "second": "lark-v1",
+      "cosine": 0.7446458339691162
+    },
+    {
+      "first": "ilyra-v1",
+      "second": "flint-v1",
+      "cosine": 0.7427287697792053
+    },
+    {
+      "first": "bren-v1",
+      "second": "ash-v1",
+      "cosine": 0.7316346168518066
+    },
+    {
+      "first": "bren-v1",
+      "second": "oak-v1",
+      "cosine": 0.7291521430015564
+    },
+    {
+      "first": "reed-v1",
+      "second": "oak-v1",
+      "cosine": 0.725426971912384
+    },
+    {
+      "first": "jory-v1",
+      "second": "oak-v1",
+      "cosine": 0.7252054214477539
+    },
+    {
+      "first": "tomas-v1",
+      "second": "ash-v1",
+      "cosine": 0.722210168838501
+    },
+    {
+      "first": "jory-v1",
+      "second": "tomas-v1",
+      "cosine": 0.712457537651062
+    },
+    {
+      "first": "jory-v1",
+      "second": "bren-v1",
+      "cosine": 0.7123903036117554
+    },
+    {
+      "first": "flint-v1",
+      "second": "stone-v1",
+      "cosine": 0.7093089818954468
+    },
+    {
+      "first": "tomas-v1",
+      "second": "brook-v1",
+      "cosine": 0.7061157822608948
+    },
+    {
+      "first": "jory-v1",
+      "second": "flint-v1",
+      "cosine": 0.6910732984542847
+    },
+    {
+      "first": "lark-v1",
+      "second": "brook-v1",
+      "cosine": 0.689659595489502
+    },
+    {
+      "first": "ilyra-v1",
+      "second": "reed-v1",
+      "cosine": 0.6851968765258789
+    },
+    {
+      "first": "flint-v1",
+      "second": "lark-v1",
+      "cosine": 0.682357132434845
+    },
+    {
+      "first": "tomas-v1",
+      "second": "stone-v1",
+      "cosine": 0.681780219078064
+    },
+    {
+      "first": "ilyra-v1",
+      "second": "stone-v1",
+      "cosine": 0.669503927230835
+    },
+    {
+      "first": "hearth-v1",
+      "second": "reed-v1",
+      "cosine": 0.6684397459030151
+    },
+    {
+      "first": "tomas-v1",
+      "second": "flint-v1",
+      "cosine": 0.6669545769691467
+    },
+    {
+      "first": "reed-v1",
+      "second": "flint-v1",
+      "cosine": 0.666031539440155
+    },
+    {
+      "first": "mara-v1",
+      "second": "jory-v1",
+      "cosine": 0.6612014770507812
+    },
+    {
+      "first": "reed-v1",
+      "second": "brook-v1",
+      "cosine": 0.6568430662155151
+    },
+    {
+      "first": "tomas-v1",
+      "second": "ilyra-v1",
+      "cosine": 0.654832661151886
+    },
+    {
+      "first": "lark-v1",
+      "second": "stone-v1",
+      "cosine": 0.6534032821655273
+    },
+    {
+      "first": "flint-v1",
+      "second": "ash-v1",
+      "cosine": 0.6532090902328491
+    },
+    {
+      "first": "jory-v1",
+      "second": "brook-v1",
+      "cosine": 0.6530448198318481
+    },
+    {
+      "first": "jory-v1",
+      "second": "ash-v1",
+      "cosine": 0.6511650085449219
+    },
+    {
+      "first": "bren-v1",
+      "second": "stone-v1",
+      "cosine": 0.6503804922103882
+    },
+    {
+      "first": "tomas-v1",
+      "second": "hearth-v1",
+      "cosine": 0.6399286985397339
+    },
+    {
+      "first": "brook-v1",
+      "second": "stone-v1",
+      "cosine": 0.6369931697845459
+    },
+    {
+      "first": "mara-v1",
+      "second": "reed-v1",
+      "cosine": 0.636806845664978
+    },
+    {
+      "first": "mara-v1",
+      "second": "lark-v1",
+      "cosine": 0.6367620229721069
+    },
+    {
+      "first": "jory-v1",
+      "second": "hearth-v1",
+      "cosine": 0.635218620300293
+    },
+    {
+      "first": "hearth-v1",
+      "second": "ash-v1",
+      "cosine": 0.629858136177063
+    },
+    {
+      "first": "reed-v1",
+      "second": "stone-v1",
+      "cosine": 0.6293475031852722
+    },
+    {
+      "first": "ilyra-v1",
+      "second": "ash-v1",
+      "cosine": 0.6236286163330078
+    },
+    {
+      "first": "hearth-v1",
+      "second": "stone-v1",
+      "cosine": 0.6212263703346252
+    },
+    {
+      "first": "ash-v1",
+      "second": "brook-v1",
+      "cosine": 0.6197186708450317
+    },
+    {
+      "first": "oak-v1",
+      "second": "ash-v1",
+      "cosine": 0.6130842566490173
+    },
+    {
+      "first": "oak-v1",
+      "second": "stone-v1",
+      "cosine": 0.6114686727523804
+    },
+    {
+      "first": "hearth-v1",
+      "second": "oak-v1",
+      "cosine": 0.6101992130279541
+    },
+    {
+      "first": "flint-v1",
+      "second": "oak-v1",
+      "cosine": 0.6087031960487366
+    },
+    {
+      "first": "mara-v1",
+      "second": "bren-v1",
+      "cosine": 0.6072191596031189
+    },
+    {
+      "first": "bren-v1",
+      "second": "brook-v1",
+      "cosine": 0.6010948419570923
+    },
+    {
+      "first": "bren-v1",
+      "second": "flint-v1",
+      "cosine": 0.6000657081604004
+    },
+    {
+      "first": "ilyra-v1",
+      "second": "oak-v1",
+      "cosine": 0.5986965894699097
+    },
+    {
+      "first": "mara-v1",
+      "second": "tomas-v1",
+      "cosine": 0.5970191955566406
+    },
+    {
+      "first": "jory-v1",
+      "second": "ilyra-v1",
+      "cosine": 0.5969948768615723
+    },
+    {
+      "first": "jory-v1",
+      "second": "stone-v1",
+      "cosine": 0.5934522747993469
+    },
+    {
+      "first": "bren-v1",
+      "second": "hearth-v1",
+      "cosine": 0.5878041982650757
+    },
+    {
+      "first": "oak-v1",
+      "second": "brook-v1",
+      "cosine": 0.5794563889503479
+    },
+    {
+      "first": "reed-v1",
+      "second": "lark-v1",
+      "cosine": 0.5755186080932617
+    },
+    {
+      "first": "mara-v1",
+      "second": "oak-v1",
+      "cosine": 0.5703465938568115
+    },
+    {
+      "first": "tomas-v1",
+      "second": "lark-v1",
+      "cosine": 0.5646871328353882
+    },
+    {
+      "first": "lark-v1",
+      "second": "ash-v1",
+      "cosine": 0.5634161829948425
+    },
+    {
+      "first": "oak-v1",
+      "second": "lark-v1",
+      "cosine": 0.5572255253791809
+    },
+    {
+      "first": "ilyra-v1",
+      "second": "bren-v1",
+      "cosine": 0.5554919242858887
+    },
+    {
+      "first": "mara-v1",
+      "second": "stone-v1",
+      "cosine": 0.5346938371658325
+    },
+    {
+      "first": "mara-v1",
+      "second": "ash-v1",
+      "cosine": 0.5316459536552429
+    },
+    {
+      "first": "jory-v1",
+      "second": "lark-v1",
+      "cosine": 0.5223078727722168
+    },
+    {
+      "first": "bren-v1",
+      "second": "lark-v1",
+      "cosine": 0.49106118083000183
+    }
+  ]
+}

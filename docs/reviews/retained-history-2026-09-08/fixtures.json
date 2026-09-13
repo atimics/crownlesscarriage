@@ -1,0 +1,26 @@
+[
+  {
+    "semantics": "retained_records_snapshot",
+    "retained_count": 0,
+    "capacity": 256,
+    "lifetime_event_count": null,
+    "earliest_retained_day": null,
+    "latest_retained_day": null
+  },
+  {
+    "semantics": "retained_records_snapshot",
+    "retained_count": 3,
+    "capacity": 256,
+    "lifetime_event_count": null,
+    "earliest_retained_day": 3,
+    "latest_retained_day": 10
+  },
+  {
+    "semantics": "retained_records_snapshot",
+    "retained_count": 256,
+    "capacity": 256,
+    "lifetime_event_count": null,
+    "earliest_retained_day": 1,
+    "latest_retained_day": 256
+  }
+]

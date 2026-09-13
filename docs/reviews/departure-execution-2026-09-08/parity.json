@@ -1,0 +1,12 @@
+{
+  "departures": {
+    "rows": 8470,
+    "parent_sha256": "d26c7ce8f27ec39240c2d24e3ce8483ae1b67531f8ef73d6dfa895716eb9426e",
+    "current_sha256": "d26c7ce8f27ec39240c2d24e3ce8483ae1b67531f8ef73d6dfa895716eb9426e"
+  },
+  "annual_states": {
+    "rows": 720,
+    "parent_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10",
+    "current_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10"
+  }
+}

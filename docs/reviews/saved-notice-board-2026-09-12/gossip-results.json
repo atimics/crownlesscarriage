@@ -1,0 +1,62 @@
+[
+  {
+    "seed": 4,
+    "days": 7300,
+    "schema": 96,
+    "notice_slot_days": 66871,
+    "account_slot_days": 165926,
+    "account_town_days": 384406,
+    "town_version_days": 384406,
+    "retelling_sum": 652858,
+    "max_retellings": 10,
+    "confidence_below_40": 12736,
+    "evicted_accounts": 2888,
+    "evicted_account_lifetime_sum": 165404,
+    "arm": "parent"
+  },
+  {
+    "seed": 15,
+    "days": 7300,
+    "schema": 96,
+    "notice_slot_days": 51389,
+    "account_slot_days": 181212,
+    "account_town_days": 578185,
+    "town_version_days": 578185,
+    "retelling_sum": 1230933,
+    "max_retellings": 10,
+    "confidence_below_40": 30707,
+    "evicted_accounts": 2759,
+    "evicted_account_lifetime_sum": 180485,
+    "arm": "parent"
+  },
+  {
+    "seed": 4,
+    "days": 7300,
+    "schema": 97,
+    "notice_slot_days": 0,
+    "account_slot_days": 232606,
+    "account_town_days": 536714,
+    "town_version_days": 536714,
+    "retelling_sum": 926910,
+    "max_retellings": 10,
+    "confidence_below_40": 23013,
+    "evicted_accounts": 2872,
+    "evicted_account_lifetime_sum": 230682,
+    "arm": "current"
+  },
+  {
+    "seed": 15,
+    "days": 7300,
+    "schema": 97,
+    "notice_slot_days": 0,
+    "account_slot_days": 232357,
+    "account_town_days": 800225,
+    "town_version_days": 800225,
+    "retelling_sum": 1799617,
+    "max_retellings": 10,
+    "confidence_below_40": 54976,
+    "evicted_accounts": 2746,
+    "evicted_account_lifetime_sum": 230488,
+    "arm": "current"
+  }
+]

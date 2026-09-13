@@ -1,0 +1,23 @@
+{
+  "voice": "oak-v1",
+  "line": "trade",
+  "text": "Jory Fen needs seventeen sacks in Silverwick. The price is thirty-eight crowns.",
+  "file": "nano-oak-v1-trade.wav",
+  "styled_file": "nano-oak-v1-trade-game.wav",
+  "seconds": 5.76,
+  "generation_seconds": 2.0794311249628663,
+  "first_chunk_seconds": null,
+  "real_time_factor": 0.361012348083831,
+  "sample_rate": 24000,
+  "seed": 20260912,
+  "reference_sha256": "995b33486a4822e20f666e91ecc52074d8b0331d11e549e055e9b0c3317a5656",
+  "sha256": "c5e5e36be9ae10aef6b3d272f76570b7a73017d27b84521fd9f63e9373c44da0",
+  "master_sha256": "c5e5e36be9ae10aef6b3d272f76570b7a73017d27b84521fd9f63e9373c44da0",
+  "wav_sha256": "0f6c657ed48ce4d30439725979d0fe6b123e63acc331d778f175c2c83b91d673",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

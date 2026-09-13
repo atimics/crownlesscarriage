@@ -1,0 +1,27 @@
+letter probe — world seeds 42..42, 2 years, purpose "report", topic "all"
+
+== RESEARCH MISSION: herds — seed 4112119898, day 731 ==
+   Book: Scriptorium research copy on "herds" — baseline day 1 (archive knew 0 facts before the scout left)
+
+   Scout route: Thornford → Gloamgate → Alderwatch → Silverwick → Rosespire → Hollowbarrow
+
+  --- page 1: told by Cera Mott (laborer, shepherd), at Alderwatch   [by craft] ---
+    1. Rosespire slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton. Loyal voices credit the crown.
+       cited: Rosespire, event 648518346341355052 (FLOCK CULL), held day 693, retellings 3, [NOVEL since baseline]
+
+  --- page 2: told by Jory Fen (traveller, shepherd), at Silverwick   [by craft] ---
+    1. Rosespire slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton. Loyal voices credit the crown.
+       cited: Rosespire, event 648518346341355052 (FLOCK CULL), held day 693, retellings 4, [repeat — one lineage, not copied]
+
+  --- page 3: told by Estel Sealkeeper (official, shepherd), at Rosespire   [by craft] ---
+    1. Rosespire slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton.
+       cited: Rosespire, event 648518346341355190 (FLOCK CULL), held day 728, retellings 0, [NOVEL since baseline]
+       [further account — a different telling on the same subject as page 1]
+
+  --- page 4: told by Wardis Longroad (official, innkeeper), at Hollowbarrow ---
+    1. Rosespire slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton. Loyal voices credit the crown.
+       cited: Rosespire, event 648518346341355098 (FLOCK CULL), held day 700, retellings 3, [NOVEL since baseline]
+       [further account — a different telling on the same subject as page 1]
+
+  Book summary: 4 pages / 4 facts — 4 novel since baseline, 1 repeat, 2 further accounts, 3 pages by a craft-witness
+

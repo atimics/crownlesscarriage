@@ -1,0 +1,78 @@
+[
+  {
+    "semantics": "held_supply_plan_snapshot",
+    "policy_intent": null,
+    "blocked_mask": 0,
+    "blocked_reasons": [],
+    "phase": 0,
+    "attempts_lifetime": 0,
+    "cooldown_days": 0,
+    "pledged_mask": 3,
+    "pledged_count": 2,
+    "prepare_eligible": true,
+    "food_rations": 32,
+    "tools": 8,
+    "weapons": 12,
+    "patron_id": "1369094286720630854",
+    "hero_id": "1369094286720630837",
+    "origin_id": "144115188075855877"
+  },
+  {
+    "semantics": "held_supply_plan_snapshot",
+    "policy_intent": null,
+    "blocked_mask": 64,
+    "blocked_reasons": [
+      "food"
+    ],
+    "phase": 0,
+    "attempts_lifetime": 0,
+    "cooldown_days": 0,
+    "pledged_mask": 3,
+    "pledged_count": 2,
+    "prepare_eligible": true,
+    "food_rations": 0,
+    "tools": 8,
+    "weapons": 12,
+    "patron_id": "1369094286720630854",
+    "hero_id": "1369094286720630837",
+    "origin_id": "144115188075855877"
+  },
+  {
+    "semantics": "held_supply_plan_snapshot",
+    "policy_intent": null,
+    "blocked_mask": 0,
+    "blocked_reasons": [],
+    "phase": 0,
+    "attempts_lifetime": 0,
+    "cooldown_days": 0,
+    "pledged_mask": 3,
+    "pledged_count": 2,
+    "prepare_eligible": true,
+    "food_rations": 32,
+    "tools": 8,
+    "weapons": 12,
+    "patron_id": "1369094286720630854",
+    "hero_id": "1369094286720630837",
+    "origin_id": "144115188075855877"
+  },
+  {
+    "semantics": "held_supply_plan_snapshot",
+    "policy_intent": null,
+    "blocked_mask": 4,
+    "blocked_reasons": [
+      "cooldown"
+    ],
+    "phase": 0,
+    "attempts_lifetime": 0,
+    "cooldown_days": 9,
+    "pledged_mask": 3,
+    "pledged_count": 2,
+    "prepare_eligible": false,
+    "food_rations": 32,
+    "tools": 8,
+    "weapons": 12,
+    "patron_id": "1369094286720630854",
+    "hero_id": "1369094286720630837",
+    "origin_id": "144115188075855877"
+  }
+]

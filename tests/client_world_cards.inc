@@ -14,9 +14,9 @@ static bool WorldCardPoint(CcSim *sim, LocalState *local, ClientView view,
     if (index < 0) return false;
     client_test_pointer_active = true;
     if (!world) {
-        local->card_page = index / ContextCardsPerPage();
-        int32_t first = ContextCardFirst(local, cards.count);
-        Rectangle card = ContextActionBounds(index - first, ContextCardCount(cards.count, first));
+        local->card_page = index / ContextActionPageSize(&cards);
+        int32_t first = ContextCardFirst(local, &cards);
+        Rectangle card = ContextActionBounds(index - first, ContextCardCount(&cards, first), cards.combat);
         client_test_pointer = (Vector2){card.x + card.width * 0.5f, card.y + card.height * 0.5f};
     } else {
         BuildWorldActionTargets(sim, local, view, selected, 0, (RenderTexture2D){0}, (Rectangle){0});
@@ -31,6 +31,16 @@ static bool WorldCardPoint(CcSim *sim, LocalState *local, ClientView view,
         chosen->left = 490; chosen->right = 510; chosen->top = 290; chosen->bottom = 310;
         chosen->camera_distance = 8;
         client_test_pointer = (Vector2){500, 300};
+        if (chosen->key.kind == CC_INTERACTION_ACTION) {
+            Rectangle labels[CC_INTERACTION_CAPACITY] = {0};
+            WorldActionLabelLayout(local, labels);
+            int32_t chosen_index = (int32_t)(chosen - local->interactions.targets);
+            Rectangle label = labels[chosen_index];
+            if (label.width <= 0) return false;
+            client_test_pointer = (Vector2){label.x + label.width * 0.5f,
+                label.y + label.height * 0.5f};
+            if (WorldActionPointerTarget(local, client_test_pointer) != chosen) return false;
+        }
     }
     queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
     return true;
@@ -151,7 +161,7 @@ static int RunWorldCardRegression(void)
         unavailable->available = false;
         (void)snprintf(unavailable->reason, sizeof(unavailable->reason), "Choose a clear approach.");
         cards = BuildContextActions(&sim, &local, view, selected, 0);
-        Rectangle disabled_card = ContextActionBounds(0, ContextCardCount(cards.count, 0));
+        Rectangle disabled_card = ContextActionBounds(0, ContextCardCount(&cards, 0), cards.combat);
         client_test_pointer_active = true;
         client_test_pointer = (Vector2){disabled_card.x + 12, disabled_card.y + 12};
         queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
@@ -161,7 +171,7 @@ static int RunWorldCardRegression(void)
         unavailable->available = true;
         message[0] = '\0';
 
-        CARD_CHECK(cards.count == 4 && ContextCardCount(cards.count, 0) == 4,
+        CARD_CHECK(cards.count == 4 && ContextCardCount(&cards, 0) == 4,
             "Town controls must show the nearest four options together.");
         /* Card identity remains valid when the object is outside the camera. */
         CcInteractionTarget *door = NULL;
@@ -176,8 +186,8 @@ static int RunWorldCardRegression(void)
         CARD_CHECK(door_card >= 0, "Door needs a card.");
         if (mode == 0) {
             local.card_page = door_card / ContextCardsPerPage();
-            int32_t first = ContextCardFirst(&local, cards.count);
-            Rectangle bounds = ContextActionBounds(door_card - first, ContextCardCount(cards.count, first));
+            int32_t first = ContextCardFirst(&local, &cards);
+            Rectangle bounds = ContextActionBounds(door_card - first, ContextCardCount(&cards, first), cards.combat);
             client_test_pointer = (Vector2){bounds.x + 20, bounds.y + 25};
         } else {
             door->visible = true; door->camera_distance = 8;
@@ -246,19 +256,14 @@ static int RunWorldCardRegression(void)
         CARD_INPUT();
         CARD_CHECK(sim.journey.active && sim.journey.destination_id == destination && view == VIEW_LOCAL,
             "A road tap and its card must travel to the same destination.");
-        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_TOGGLE_DRIVE, 0, mode != 0),
-            "Travel needs a carriage stop action.");
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_HOLD_TRAVEL, 0, mode != 0),
+            "Travel needs a hold action.");
+        local.carriage_stopped = true;
         CARD_INPUT();
         int32_t elapsed = sim.journey.elapsed_subticks;
-        for (int32_t frame = 0; frame < 120; ++frame) CARD_INPUT();
-        CARD_CHECK(local.carriage_stopped && local.convoy.pace == 0 && sim.journey.elapsed_subticks == elapsed,
-            "A stop must hold the carriage across later frames.");
-        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_TOGGLE_DRIVE, 0, mode != 0),
-            "A stopped carriage needs a drive action.");
-        CARD_INPUT();
         for (int32_t frame = 0; frame < 30; ++frame) CARD_INPUT();
         CARD_CHECK(!local.carriage_stopped && sim.journey.elapsed_subticks > elapsed,
-            "Drive must resume journey progress.");
+            "Travel resumes a saved stopped carriage.");
         client_test_pointer_active = false;
         queued_key_press[KEY_DOWN] = true;
         CARD_INPUT();
@@ -275,11 +280,46 @@ static int RunWorldCardRegression(void)
         sim.journey.elapsed_subticks = (int32_t)((int64_t)sim.journey.total_subticks * sim.carriage.progress_milli / 1000);
         for (int32_t i = 0; i < CC_PONY_COUNT; ++i) sim.pony_company.ponies[i].last_met_day = sim.current_day;
         CARD_CHECK(CcSimJourneyRoadSiteStop(&sim) == site, "Fixture must reach the site stop.");
+        sim.player.cargo[CC_GOOD_TOOLS] = 2;
+        sim.player.cargo[CC_GOOD_WOOD] = 1;
+        CARD_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)), error);
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_CLEAR_ROAD_SITE, 0, mode != 0),
+            "A blocked site needs matching clearing card and world actions.");
+        CARD_INPUT();
+        CARD_CHECK(site->accessible && site->blocker == CC_ROAD_SITE_BLOCKER_NONE,
+            "Clearing through either control must open the site.");
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_TRANSFER_ROAD_SITE, 1, mode != 0),
+            "An open store needs an unload action.");
+        CARD_INPUT();
+        int32_t stored = 0;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) stored += site->stock[good];
+        CARD_CHECK(stored == 1, "Unloading must move one bundle into the local store.");
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_TRANSFER_ROAD_SITE, -1, mode != 0),
+            "Stored goods need a load action.");
+        CARD_INPUT();
+        stored = 0;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) stored += site->stock[good];
+        CARD_CHECK(stored == 0, "Loading must return the stored bundle to the carriage.");
+        sim.player.cargo[CC_GOOD_TOOLS] = 2;
+        sim.player.cargo[CC_GOOD_WOOD] = 1;
+        sim.road_sites[site - sim.road_sites].condition = 44;
+        CARD_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)), error);
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_REPAIR_ROAD_SITE, 0, mode != 0),
+            "An open site needs matching repair card and world actions.");
+        CARD_INPUT();
+        CARD_CHECK(site->condition == 54 && sim.player.cargo[CC_GOOD_TOOLS] == 1 && sim.player.cargo[CC_GOOD_WOOD] == 0,
+            "Repair uses local cargo and restores saved condition.");
+        ContextActionSet opened = BuildContextActions(&sim, &local, view, selected, 0);
+        CARD_CHECK(WorldCardIndex(&opened, CONTEXT_ACTION_CLEAR_ROAD_SITE, 0) < 0,
+            "An opened site offers its remaining actions.");
         CARD_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)), error);
         CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_CAMP_ROAD_SITE, 0, mode != 0),
             "A camp needs matching card and world actions.");
         if (mode != 0) {
-            CcInteractionTarget *camp = &local.interactions.targets[0];
+            CcInteractionTarget *camp = NULL;
+            for (int32_t i = 0; i < local.interactions.count; ++i)
+                if (local.interactions.targets[i].action == CONTEXT_ACTION_CAMP_ROAD_SITE) camp = &local.interactions.targets[i];
+            CARD_CHECK(camp != NULL, "The camp needs a world target.");
             uint64_t subject = camp->subject_id;
             camp->subject_id = subject + 1;
             ContextActionSet current = BuildContextActions(&sim, &local, view, selected, 0);

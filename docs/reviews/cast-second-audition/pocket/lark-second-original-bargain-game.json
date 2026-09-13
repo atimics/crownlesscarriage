@@ -1,0 +1,21 @@
+{
+  "voice": "Lark",
+  "take": "original",
+  "line": "bargain",
+  "text": "Thirty-eight crowns? You drive a hard bargain. All right, take the cart. I'll walk with you.",
+  "seed": 20260912,
+  "file": "lark-second-original-bargain.wav",
+  "seconds": 5.92,
+  "generation_seconds": 2.3659623749554157,
+  "reference_sha256": "164f603900b336ca3ebc35b65327a75d0704201ae13766ad832e144da2b9a650",
+  "sha256": "08d041e7f7c9068a1b571e2cf31f8c593c83b1c5dc13435774168545f4ca31a9",
+  "sample_rate": 24000,
+  "master_sha256": "08d041e7f7c9068a1b571e2cf31f8c593c83b1c5dc13435774168545f4ca31a9",
+  "wav_sha256": "382578d9fe04884980cefd4fb0bf10e7ed4e4274635704c89c263d3e8e18f4f6",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

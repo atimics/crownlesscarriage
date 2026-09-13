@@ -17,6 +17,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 option(CC_BUILD_CLIENT "Build the raylib fixed-pixel three-quarter 3D client" ON)
+option(CC_BUILD_GRAPHICS_PROBES "Build standalone GPU regression probes" OFF)
 option(CC_BUILD_BENCHMARKS "Build repeatable headless benchmarks" ON)
 option(CC_ENABLE_STRICT_WARNINGS "Enable strict compiler warnings" ON)
 option(CC_WARNINGS_AS_ERRORS "Treat project warnings as build errors" OFF)
@@ -90,6 +91,34 @@ cc_strict_warnings(crownless_locomotion)
 add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
+    src/sim/cc_custody.c
+    src/sim/cc_sim_custody.c
+    src/sim/cc_sim_hash.c
+    src/sim/cc_occupations.c
+    src/sim/cc_gossip_topics.c
+    src/sim/cc_archive_volumes.c
+    src/sim/cc_archive_staff.c
+    src/sim/cc_archive_recruitment.c
+    src/sim/cc_archive_queries.c
+    src/sim/cc_archive_supply.c
+    src/sim/cc_archive_convoy.c
+    src/sim/cc_archive_relocation.c
+    src/sim/cc_archive_seat_plan.c
+    src/sim/cc_trade_path.c
+    src/sim/cc_sim_versions.c
+    src/sim/cc_war.c
+    src/sim/cc_identity.c
+    src/sim/cc_road_council.c
+    src/sim/cc_route_rules.c
+    src/sim/cc_journey_departure.c
+    src/sim/cc_journey_encounter.c
+    src/sim/cc_journey_runtime.c
+    src/sim/cc_production.c
+    src/sim/cc_food_economy.c
+    src/sim/cc_goods.c
+    src/sim/cc_journey.c
+    src/sim/cc_journey_commands.c
+    src/sim/cc_mine.c
     src/sim/cc_ponies.c
 )
 target_include_directories(crownless_sim PUBLIC src)
@@ -100,11 +129,18 @@ add_library(crownless_story
     src/story/cc_speech.c
     src/story/cc_speech_interactions.c
     src/story/cc_speech_lexicon.c
+    src/story/cc_hrakhor.c
+    src/story/cc_core_account.c
+    src/story/cc_core_model.c
+    src/story/cc_core_conversation.c
     src/story/cc_speech_json.c
 )
 target_include_directories(crownless_story PUBLIC src)
 target_link_libraries(crownless_story PUBLIC crownless_sim)
 cc_strict_warnings(crownless_story)
+if(NOT MSVC)
+    target_link_libraries(crownless_story PUBLIC m)
+endif()
 
 add_library(crownless_music src/client/cc_music.c src/client/cc_music_library.c)
 target_include_directories(crownless_music PUBLIC src)
@@ -189,7 +225,10 @@ else()
     set(CC_SQLITE_TARGET SQLite::SQLite3)
 endif()
 add_library(crownless_persistence
+    src/persistence/cc_starting_campaign.c
     src/persistence/cc_save.c
+    src/persistence/cc_journal_replay.c
+    src/persistence/cc_legacy_runtime.c
 )
 target_include_directories(crownless_persistence PUBLIC src)
 target_link_libraries(crownless_persistence PUBLIC
@@ -212,6 +251,17 @@ target_include_directories(crownless_metagame PUBLIC src)
 target_link_libraries(crownless_metagame PUBLIC
     crownless_persistence crownless_story)
 cc_strict_warnings(crownless_metagame)
+
+add_executable(core_model_probe tools/core_model_probe.c)
+target_link_libraries(core_model_probe PRIVATE crownless_story)
+cc_strict_warnings(core_model_probe)
+
+add_executable(crownless_gossip_corpus tools/gossip_corpus.c)
+target_link_libraries(crownless_gossip_corpus PRIVATE crownless_story)
+cc_strict_warnings(crownless_gossip_corpus)
+add_executable(crownless_gossip_flow tools/gossip_flow.c)
+target_link_libraries(crownless_gossip_flow PRIVATE crownless_story)
+cc_strict_warnings(crownless_gossip_flow)
 
 add_executable(crownless_sim_runner tools/sim_runner.c)
 target_link_libraries(crownless_sim_runner PRIVATE crownless_persistence)
@@ -242,13 +292,33 @@ if(CC_BUILD_BENCHMARKS)
         USES_TERMINAL
     )
 
+    add_executable(crownless_species_metrics tools/species_metrics.c)
+    target_link_libraries(crownless_species_metrics PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_species_metrics)
+
     add_executable(crownless_sim_metrics tools/sim_metrics.c)
     target_link_libraries(crownless_sim_metrics PRIVATE crownless_sim)
     cc_strict_warnings(crownless_sim_metrics)
 
-    add_executable(crownless_agent_sweep tools/agent_sweep.c)
-    target_link_libraries(crownless_agent_sweep PRIVATE crownless_sim)
-    cc_strict_warnings(crownless_agent_sweep)
+    add_executable(crownless_quest_cast_experiment tools/quest_cast_experiment.c)
+    target_link_libraries(crownless_quest_cast_experiment PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_quest_cast_experiment)
+    add_executable(crownless_contested_road_experiment tools/contested_road_experiment.c)
+    target_link_libraries(crownless_contested_road_experiment PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_contested_road_experiment)
+
+    add_executable(crownless_grain_experiment tools/grain_experiment.c)
+    target_link_libraries(crownless_grain_experiment PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_grain_experiment)
+
+    add_executable(crownless_bakery_experiment tools/bakery_experiment.c)
+    target_link_libraries(crownless_bakery_experiment PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_bakery_experiment)
+
+    add_executable(crownless_letter_probe tools/letter_probe.c)
+    target_link_libraries(crownless_letter_probe PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_letter_probe)
+
 endif()
 
 if(CC_BUILD_CLIENT)
@@ -267,6 +337,11 @@ if(CC_BUILD_CLIENT)
         GIT_SHALLOW TRUE
     )
     FetchContent_MakeAvailable(raylib)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" "-DRAYLIB_SOURCE_DIR=${raylib_SOURCE_DIR}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchRaylibMatrices.cmake"
+        COMMAND_ERROR_IS_FATAL ANY
+    )
     if(TARGET raylib)
         get_target_property(CC_RAYLIB_IMPORTED raylib IMPORTED)
         if(NOT CC_RAYLIB_IMPORTED)
@@ -274,6 +349,25 @@ if(CC_BUILD_CLIENT)
             if(EMSCRIPTEN)
                 set_property(TARGET raylib PROPERTY C_EXTENSIONS ON)
             endif()
+        endif()
+    endif()
+
+    if(CC_BUILD_GRAPHICS_PROBES)
+        add_executable(matrix_upload_tests tests/matrix_upload_tests.c)
+        target_link_libraries(matrix_upload_tests PRIVATE raylib)
+        cc_strict_warnings(matrix_upload_tests)
+        if(EMSCRIPTEN)
+            set_property(TARGET matrix_upload_tests PROPERTY C_EXTENSIONS ON)
+            set_target_properties(matrix_upload_tests PROPERTIES
+                OUTPUT_NAME matrix-upload SUFFIX ".html"
+                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/matrix-probe")
+            target_link_options(matrix_upload_tests PRIVATE
+                "-sMIN_WEBGL_VERSION=2" "-sMAX_WEBGL_VERSION=2")
+        else()
+            add_custom_target(run_matrix_upload_tests
+                COMMAND matrix_upload_tests DEPENDS matrix_upload_tests
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                USES_TERMINAL)
         endif()
     endif()
 
@@ -333,6 +427,22 @@ if(CC_BUILD_CLIENT)
             VERBATIM)
         add_dependencies(crownless_voice_assets crownless_carriage)
     endif()
+    if(NOT EMSCRIPTEN)
+        if(APPLE)
+            set(CC_CAMPAIGN_DEST "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/campaigns")
+            set(CC_FONT_DEST "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/fonts")
+        else()
+            set(CC_CAMPAIGN_DEST "$<TARGET_FILE_DIR:crownless_carriage>/assets/campaigns")
+            set(CC_FONT_DEST "$<TARGET_FILE_DIR:crownless_carriage>/assets/fonts")
+        endif()
+        add_custom_command(TARGET crownless_carriage POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts"
+                "${CC_FONT_DEST}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CC_CAMPAIGN_DEST}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/campaigns/deep-wyrm.ccsave" "${CC_CAMPAIGN_DEST}/deep-wyrm.ccsave")
+    endif()
     target_link_libraries(crownless_carriage PRIVATE
         crownless_local_renderer
         crownless_persistence crownless_locomotion
@@ -346,6 +456,20 @@ if(CC_BUILD_CLIENT)
         find_package(Threads REQUIRED)
         target_link_libraries(crownless_carriage PRIVATE glfw CURL::libcurl Threads::Threads)
     endif()
+    if(NOT EMSCRIPTEN)
+        if(APPLE)
+            set(CC_LANGUAGE_DIR "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/language")
+        else()
+            set(CC_LANGUAGE_DIR "$<TARGET_FILE_DIR:crownless_carriage>/assets/language")
+        endif()
+        add_custom_command(TARGET crownless_carriage POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CC_LANGUAGE_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/language/core.ccv2"
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/language/LICENSE"
+                "${CC_LANGUAGE_DIR}")
+    endif()
+
     file(GLOB CC_SPEECH_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/speech/*")
     if(EMSCRIPTEN)
         set(CC_SPEECH_BUNDLE_DIR "${CMAKE_CURRENT_BINARY_DIR}/site/speech")
@@ -407,6 +531,8 @@ if(CC_BUILD_CLIENT)
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/economy_cargo_*.glb"
         )
         set(CC_WEB_STARTUP_ASSET_SOURCES
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/AtkinsonHyperlegible-Regular.ttf"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/OFL-AtkinsonHyperlegible.txt"
             ${CC_VOICE_ASSETS}
             ${CC_WEB_NPC_ASSET_SOURCES}
             ${CC_WEB_WORLD_KIT_ASSET_SOURCES}
@@ -441,6 +567,10 @@ if(CC_BUILD_CLIENT)
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/gloamgate_to_alderwatch.png"
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/collectible_map_atlas.png"
         )
+        list(APPEND CC_WEB_STARTUP_ASSET_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/assets/campaigns/deep-wyrm.ccsave")
+        list(APPEND CC_WEB_LAZY_ASSET_SOURCES
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/language/core.ccv2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/language/LICENSE")
         set(CC_WEB_STARTUP_ASSET_OUTPUTS)
         foreach(asset IN LISTS CC_WEB_STARTUP_ASSET_SOURCES)
             file(RELATIVE_PATH relative_asset
@@ -985,534 +1115,16 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
-    add_executable(war_society_tests tests/war_society_tests.c)
-    target_link_libraries(war_society_tests PRIVATE crownless_persistence)
-    cc_strict_warnings(war_society_tests)
-    add_test(NAME war_society_from_ruins COMMAND war_society_tests)
-    add_executable(succession_tests tests/succession_tests.c)
-    target_link_libraries(succession_tests PRIVATE crownless_persistence)
-    cc_strict_warnings(succession_tests)
-    add_test(NAME crisis_contested_succession COMMAND succession_tests)
-    add_executable(music_tests tests/music_tests.c)
-    target_link_libraries(music_tests PRIVATE crownless_music)
-    cc_strict_warnings(music_tests)
-    add_test(NAME situation_music_and_fades COMMAND music_tests)
-    add_executable(music_player_tests tests/music_player_tests.c src/client/cc_music_player.c)
-    target_include_directories(music_player_tests PRIVATE tests/music_stub)
-    target_link_libraries(music_player_tests PRIVATE crownless_music)
-    cc_strict_warnings(music_player_tests)
-    add_test(NAME streamed_music_and_offline_fallback COMMAND music_player_tests)
-    add_executable(soundscape_tests tests/soundscape_tests.c)
-    target_link_libraries(soundscape_tests PRIVATE crownless_soundscape crownless_locomotion)
-    cc_strict_warnings(soundscape_tests)
-    add_test(NAME soundscape_timing_and_samples COMMAND soundscape_tests)
-    if(CC_BUILD_CLIENT)
-        add_executable(audio_playback_tests tests/audio_playback_tests.c src/client/cc_audio.c)
-        target_include_directories(audio_playback_tests PRIVATE $<TARGET_PROPERTY:raylib,INTERFACE_INCLUDE_DIRECTORIES>)
-        target_link_libraries(audio_playback_tests PRIVATE crownless_soundscape)
-        cc_strict_warnings(audio_playback_tests)
-        add_test(NAME audio_playback_lifetime COMMAND audio_playback_tests)
-        if(NOT EMSCRIPTEN)
-            add_executable(voice_net_tests tests/voice_net_tests.c src/client/cc_voice_net.c)
-            target_link_libraries(voice_net_tests PRIVATE crownless_story CURL::libcurl Threads::Threads)
-            cc_strict_warnings(voice_net_tests)
-        endif()
+    # Separate registration files let new test areas land independently.
+    file(GLOB CC_TEST_REGISTRATIONS CONFIGURE_DEPENDS
+         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/tests/*.cmake")
+    if(NOT CC_TEST_REGISTRATIONS)
+        message(FATAL_ERROR "Test registrations are missing. Include cmake/tests in the source package, or set BUILD_TESTING=OFF.")
     endif()
-    if(NOT EMSCRIPTEN)
-        find_package(Python3 COMPONENTS Interpreter)
-        if(Python3_Interpreter_FOUND)
-            if(CC_BUILD_CLIENT)
-                add_test(NAME native_speech_delivery
-                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/voice_net_tests.py
-                        $<TARGET_FILE:voice_net_tests>)
-            endif()
-            add_test(NAME audio_exports_and_voice_assets
-                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/audio_export_tests.py
-                    $<TARGET_FILE:crownless_audio_export>)
-            add_test(NAME campaign_speech_pack
-                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/speech_pack_tests.py
-                    $<TARGET_FILE:crownless_audio_export>)
-            add_test(NAME speech_worker_and_cache
-                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/speech_worker_tests.py
-                    $<TARGET_FILE:crownless_audio_export>)
-        endif()
-    endif()
-
-    add_test(
-        NAME license_page_contract
-        COMMAND ${CMAKE_COMMAND}
-            -DCC_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/license_page_tests.cmake
-    )
-
-    if(APPLE AND CC_BUILD_CLIENT)
-        add_test(
-            NAME macos_deployment_target
-            COMMAND ${CMAKE_COMMAND}
-                -DCC_BINARY=$<TARGET_FILE:crownless_carriage>
-                -DCC_EXPECTED_MINOS=14.0
-                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/macos_deployment_target_tests.cmake
-        )
-    endif()
-
-    if(CC_BUILD_BENCHMARKS)
-        add_test(NAME robotics_benchmark COMMAND crownless_robotics_benchmark)
-        set_tests_properties(robotics_benchmark PROPERTIES RUN_SERIAL TRUE)
-        set(CC_BENCHMARK_TEST_ARGUMENTS --quick)
-        # The simulation budget is calibrated on the Linux CI runner. Keep
-        # the benchmark smoke test on Apple hosts, but do not compare CPU-time
-        # thresholds across different architectures and host schedulers.
-        if(CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$" AND
-           NOT APPLE)
-            list(APPEND CC_BENCHMARK_TEST_ARGUMENTS --assert-budget)
-        endif()
-        add_test(NAME headless_performance_budget
-                 COMMAND crownless_benchmark ${CC_BENCHMARK_TEST_ARGUMENTS})
-        set_tests_properties(headless_performance_budget PROPERTIES RUN_SERIAL TRUE)
-        unset(CC_BENCHMARK_TEST_ARGUMENTS)
-        add_test(NAME benchmark_rejects_day_overflow
-                 COMMAND crownless_benchmark --sim-years 5883517)
-        set_tests_properties(benchmark_rejects_day_overflow
-                             PROPERTIES WILL_FAIL TRUE)
-    endif()
-    add_executable(sim_tests tests/sim_tests.c)
-    target_link_libraries(sim_tests PRIVATE crownless_sim)
-    cc_strict_warnings(sim_tests)
-    cc_large_sim_stack(sim_tests)
-    add_test(NAME deterministic_simulation COMMAND sim_tests)
-
-    add_executable(story_tests tests/story_tests.c)
-    target_link_libraries(story_tests PRIVATE crownless_story)
-    cc_strict_warnings(story_tests)
-    add_test(NAME authored_story_beats COMMAND story_tests)
-
-    add_executable(speech_tests tests/speech_tests.c)
-    target_link_libraries(speech_tests PRIVATE crownless_story)
-    cc_strict_warnings(speech_tests)
-    add_test(NAME speech_identity_and_words COMMAND speech_tests)
-
-    add_executable(quest_system_tests tests/quest_system_tests.c)
-    target_link_libraries(quest_system_tests PRIVATE crownless_persistence)
-    cc_strict_warnings(quest_system_tests)
-    add_test(NAME quest_fronts_and_clocks COMMAND quest_system_tests)
-
-    add_executable(loot_tests tests/loot_tests.c)
-    target_link_libraries(loot_tests PRIVATE crownless_sim)
-    cc_strict_warnings(loot_tests)
-    add_test(NAME encounter_loot_tables COMMAND loot_tests)
-
-    add_executable(client_session_tests tests/client_session_tests.c)
-    target_link_libraries(client_session_tests PRIVATE crownless_client_session)
-    cc_strict_warnings(client_session_tests)
-    add_test(NAME local_session_round_trip COMMAND client_session_tests)
-
-    add_executable(road_stop_tests tests/road_stop_tests.c)
-    target_link_libraries(road_stop_tests PRIVATE crownless_persistence)
-    cc_strict_warnings(road_stop_tests)
-    add_test(NAME roadside_camp_choices COMMAND road_stop_tests)
-
-    add_executable(travel_departure_tests tests/travel_departure_tests.c)
-    target_link_libraries(travel_departure_tests PRIVATE crownless_persistence)
-    cc_strict_warnings(travel_departure_tests)
-    add_test(NAME free_road_departures COMMAND travel_departure_tests)
-
-    find_program(CC_NODE_EXECUTABLE node)
-    if(CC_NODE_EXECUTABLE)
-        add_test(NAME web_speech_delivery COMMAND ${CC_NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_voice_tests.cjs)
-        add_test(NAME browser_persistence_contract
-                 COMMAND ${CC_NODE_EXECUTABLE}
-                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_persistence_tests.mjs)
-        add_test(NAME browser_shared_carriage_contract
-                 COMMAND ${CC_NODE_EXECUTABLE}
-                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_coop_tests.mjs)
-        add_test(NAME browser_music_download_and_cache
-                 COMMAND ${CC_NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_music_tests.mjs)
-    endif()
-
-    find_program(CC_PYTHON3_EXECUTABLE python3)
-    if(CC_PYTHON3_EXECUTABLE)
-        if(CC_BUILD_CLIENT AND NOT EMSCRIPTEN)
-            add_executable(native_coop_tests tests/native_coop_tests.c src/client/cc_coop_client.c src/client/cc_company.c)
-            target_link_libraries(native_coop_tests PRIVATE crownless_persistence crownless_client_session raylib CURL::libcurl Threads::Threads)
-            cc_strict_warnings(native_coop_tests)
-            # Python loads the host bridge with ctypes, as in shared_carriage_server.
-            if(NOT CMAKE_C_FLAGS MATCHES "sanitize")
-                add_test(NAME native_shared_company COMMAND ${CC_PYTHON3_EXECUTABLE}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/native_coop_tests.py $<TARGET_FILE:native_coop_tests> $<TARGET_FILE:crownless_coop>)
-                set_tests_properties(native_shared_company PROPERTIES TIMEOUT 60)
-            endif()
-        endif()
-        add_test(NAME music_catalog_metadata
-                 COMMAND ${CC_PYTHON3_EXECUTABLE}
-                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/music_catalog.py --check)
-        add_test(NAME bundled_music_and_host_catalog
-                 COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/music_host_tests.py)
-        add_test(NAME webgl2_skinning_uniform_budget
-                 COMMAND ${CC_PYTHON3_EXECUTABLE}
-                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_uniform_budget_tests.py)
-        add_test(NAME simulation_runner_resume
-                 COMMAND ${CC_PYTHON3_EXECUTABLE}
-                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/sim_runner_tests.py
-                         $<TARGET_FILE:crownless_sim_runner>)
-        set_tests_properties(simulation_runner_resume PROPERTIES TIMEOUT 60)
-    endif()
-
-    add_executable(interaction_tests tests/interaction_tests.c)
-    target_link_libraries(interaction_tests PRIVATE crownless_client_policy)
-    cc_strict_warnings(interaction_tests)
-    add_test(NAME interaction_planner COMMAND interaction_tests)
-    if(NOT EMSCRIPTEN)
-        add_executable(coop_bridge_tests tests/coop_bridge_tests.c)
-        target_link_libraries(coop_bridge_tests PRIVATE crownless_coop crownless_sim)
-        cc_strict_warnings(coop_bridge_tests)
-        add_test(NAME shared_carriage_bridge COMMAND coop_bridge_tests)
-        if(CC_PYTHON3_EXECUTABLE AND NOT CMAKE_C_FLAGS MATCHES "sanitize")
-            add_test(NAME shared_carriage_server
-                COMMAND ${CC_PYTHON3_EXECUTABLE}
-                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/coop_tests.py
-                        $<TARGET_FILE:crownless_coop>)
-        endif()
-    endif()
-
-    add_executable(client_policy_tests tests/client_policy_tests.c)
-    target_link_libraries(client_policy_tests PRIVATE crownless_client_policy)
-    cc_strict_warnings(client_policy_tests)
-    add_test(NAME daily_play_policy COMMAND client_policy_tests)
-
-    add_executable(animal_economy_tests tests/animal_economy_tests.c)
-    target_link_libraries(animal_economy_tests PRIVATE crownless_persistence)
-    cc_strict_warnings(animal_economy_tests)
-    add_test(NAME horse_cattle_and_flock_economy COMMAND animal_economy_tests)
-
-    add_executable(horse_stable_tests tests/horse_stable_tests.c)
-    target_link_libraries(horse_stable_tests PRIVATE crownless_persistence)
-    cc_strict_warnings(horse_stable_tests)
-    add_test(NAME horse_stable_breeding COMMAND horse_stable_tests)
-
-    add_executable(hunger_metrics_tests tests/hunger_metrics_tests.c)
-    target_link_libraries(hunger_metrics_tests PRIVATE crownless_sim)
-    cc_strict_warnings(hunger_metrics_tests)
-    add_test(NAME inhabited_hunger_metrics COMMAND hunger_metrics_tests)
-    if(CC_PYTHON3_EXECUTABLE AND CC_BUILD_BENCHMARKS)
-        add_test(NAME hunger_report_agreement
-                 COMMAND ${CC_PYTHON3_EXECUTABLE}
-                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/hunger_report_tests.py
-                         $<TARGET_FILE:crownless_sim_runner>
-                         $<TARGET_FILE:crownless_sim_metrics>)
-    endif()
-
-    add_executable(balance_tests tests/balance_tests.c)
-    target_link_libraries(balance_tests PRIVATE crownless_sim)
-    cc_strict_warnings(balance_tests)
-    add_test(NAME osr_long_run_balance COMMAND balance_tests)
-
-    add_executable(pony_tests tests/pony_tests.c)
-    target_link_libraries(pony_tests PRIVATE crownless_persistence)
-    cc_strict_warnings(pony_tests)
-    add_test(NAME rainbow_pony_companions COMMAND pony_tests)
-
-    add_executable(persistence_tests tests/persistence_tests.c)
-    target_link_libraries(persistence_tests PRIVATE crownless_persistence)
-    target_compile_definitions(persistence_tests PRIVATE
-        CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-    # Keep each migration fixture's large simulation states in its own frame.
-    if(MSVC)
-        target_compile_options(persistence_tests PRIVATE /Ob0)
-    else()
-        target_compile_options(persistence_tests PRIVATE -fno-inline)
-    endif()
-    cc_strict_warnings(persistence_tests)
-    add_test(NAME sqlite_round_trip COMMAND persistence_tests)
-
-    add_executable(royal_carriage_trade_tests
-        tests/royal_carriage_trade_tests.c)
-    target_link_libraries(royal_carriage_trade_tests PRIVATE
-        crownless_persistence)
-    cc_strict_warnings(royal_carriage_trade_tests)
-    cc_large_sim_stack(royal_carriage_trade_tests)
-    add_test(NAME royal_carriage_trade COMMAND royal_carriage_trade_tests)
-
-    add_executable(route_knowledge_tests tests/route_knowledge_tests.c)
-    target_link_libraries(route_knowledge_tests PRIVATE
-        crownless_persistence crownless_road_book crownless_world)
-    cc_strict_warnings(route_knowledge_tests)
-    add_test(NAME persistent_route_knowledge COMMAND route_knowledge_tests)
-
-    add_executable(underroad_tests tests/underroad_tests.c)
-    target_link_libraries(underroad_tests PRIVATE crownless_persistence)
-    cc_strict_warnings(underroad_tests)
-    add_test(NAME persistent_underroad_expeditions COMMAND underroad_tests)
-
-    add_executable(scenario_tests tests/scenario_tests.c)
-    target_link_libraries(scenario_tests PRIVATE crownless_sim)
-    cc_strict_warnings(scenario_tests)
-    add_test(NAME empty_granary_scenario COMMAND scenario_tests)
-
-    add_executable(world_spine_tests tests/world_spine_tests.c)
-    target_link_libraries(world_spine_tests PRIVATE crownless_sim)
-    cc_strict_warnings(world_spine_tests)
-    add_test(NAME living_world_feedback COMMAND world_spine_tests)
-
-    add_executable(causal_history_tests tests/causal_history_tests.c)
-    target_link_libraries(causal_history_tests PRIVATE crownless_persistence)
-    cc_strict_warnings(causal_history_tests)
-    add_test(NAME causal_history_retention COMMAND causal_history_tests)
-
-    add_executable(dragon_cycle_tests tests/dragon_cycle_tests.c)
-    target_link_libraries(dragon_cycle_tests PRIVATE crownless_persistence)
-    cc_strict_warnings(dragon_cycle_tests)
-    add_test(NAME goblin_dragon_causal_cycle COMMAND dragon_cycle_tests)
-
-    add_executable(goblin_society_tests tests/goblin_society_tests.c)
-    target_link_libraries(goblin_society_tests PRIVATE crownless_persistence)
-    cc_strict_warnings(goblin_society_tests)
-    add_test(NAME goblin_society_choices COMMAND goblin_society_tests)
-
-    add_executable(dragon_ecology_tests tests/dragon_ecology_tests.c)
-    target_link_libraries(dragon_ecology_tests PRIVATE crownless_persistence)
-    cc_strict_warnings(dragon_ecology_tests)
-    add_test(NAME dragon_crown_ecology COMMAND dragon_ecology_tests)
-
-    add_executable(material_economy_tests tests/material_economy_tests.c)
-    target_link_libraries(material_economy_tests PRIVATE crownless_sim)
-    cc_strict_warnings(material_economy_tests)
-    add_test(NAME physical_material_economy COMMAND material_economy_tests)
-
-    add_executable(material_chain_tests tests/material_chain_tests.c)
-    target_link_libraries(material_chain_tests PRIVATE crownless_sim)
-    cc_strict_warnings(material_chain_tests)
-    cc_large_sim_stack(material_chain_tests)
-    add_test(NAME material_chain_proofs COMMAND material_chain_tests)
-
-    add_executable(gossip_tests tests/gossip_tests.c)
-    target_link_libraries(gossip_tests PRIVATE crownless_persistence crownless_metagame)
-    cc_strict_warnings(gossip_tests)
-    cc_large_sim_stack(gossip_tests)
-    add_test(NAME traveler_gossip_network COMMAND gossip_tests)
-
-    add_executable(grain_economy_tests tests/grain_economy_tests.c)
-    target_link_libraries(grain_economy_tests PRIVATE crownless_sim)
-    cc_strict_warnings(grain_economy_tests)
-    add_test(NAME grain_food_economy COMMAND grain_economy_tests)
-
-    add_executable(metagame_tests tests/metagame_tests.c)
-    target_link_libraries(metagame_tests PRIVATE crownless_metagame)
-    cc_strict_warnings(metagame_tests)
-    add_test(NAME text_first_metagame COMMAND metagame_tests)
-
-    add_executable(local_place_tests tests/local_place_tests.c)
-    target_link_libraries(local_place_tests PRIVATE
-        crownless_local_place crownless_sim
-    )
-    cc_strict_warnings(local_place_tests)
-    add_test(NAME distinct_local_places COMMAND local_place_tests)
-
-    add_executable(town_evolution_tests tests/town_evolution_tests.c)
-    target_link_libraries(town_evolution_tests PRIVATE
-        crownless_local_place crownless_persistence)
-    cc_strict_warnings(town_evolution_tests)
-    add_test(NAME town_evolution COMMAND town_evolution_tests)
-
-    add_executable(world_stream_tests tests/world_stream_tests.c)
-    target_link_libraries(world_stream_tests PRIVATE crownless_world)
-    cc_strict_warnings(world_stream_tests)
-    add_test(NAME finite_world_streaming COMMAND world_stream_tests)
-
-    if(CC_BUILD_BENCHMARKS)
-        add_test(NAME simulation_shape_metrics
-                 COMMAND crownless_sim_metrics --seeds 8 --years 3)
-    endif()
-
-    add_executable(limb_system_tests tests/limb_system_tests.c)
-    target_link_libraries(limb_system_tests PRIVATE crownless_locomotion)
-    cc_strict_warnings(limb_system_tests)
-    add_test(NAME generalized_limb_system COMMAND limb_system_tests)
-
-    add_executable(collision_system_tests tests/collision_system_tests.c)
-    target_link_libraries(collision_system_tests PRIVATE crownless_locomotion)
-    cc_strict_warnings(collision_system_tests)
-    add_test(NAME continuous_character_collision COMMAND collision_system_tests)
-
-    add_executable(biomech_system_tests tests/biomech_system_tests.c)
-    target_link_libraries(biomech_system_tests PRIVATE crownless_locomotion)
-    cc_strict_warnings(biomech_system_tests)
-    add_test(NAME generalized_biomechanical_system COMMAND biomech_system_tests)
-
-    add_executable(footing_course_tests tests/footing_course_tests.c)
-    target_link_libraries(footing_course_tests PRIVATE crownless_locomotion)
-    cc_strict_warnings(footing_course_tests)
-    add_test(NAME verified_footing_course COMMAND footing_course_tests)
-
-    add_executable(creature_rig_tests tests/creature_rig_tests.c)
-    target_link_libraries(creature_rig_tests PRIVATE crownless_locomotion)
-    cc_strict_warnings(creature_rig_tests)
-    add_test(NAME creature_skeletal_muscular_system COMMAND creature_rig_tests)
-
-    add_executable(humanoid_skin_tests tests/humanoid_skin_tests.c)
-    target_link_libraries(humanoid_skin_tests PRIVATE crownless_locomotion)
-    cc_strict_warnings(humanoid_skin_tests)
-    add_test(NAME blender_humanoid_skin_contract COMMAND humanoid_skin_tests)
-
-    add_executable(quadruped_skin_tests tests/quadruped_skin_tests.c)
-    target_link_libraries(quadruped_skin_tests PRIVATE crownless_locomotion)
-    cc_strict_warnings(quadruped_skin_tests)
-    add_test(NAME blender_quadruped_skin_contract COMMAND quadruped_skin_tests)
-
-    add_executable(motion_system_tests tests/motion_system_tests.c)
-    target_link_libraries(motion_system_tests PRIVATE crownless_locomotion)
-    cc_strict_warnings(motion_system_tests)
-    add_test(NAME layered_motion_contract COMMAND motion_system_tests)
-
-    add_executable(creature_catalog_tests tests/creature_catalog_tests.c)
-    target_link_libraries(creature_catalog_tests PRIVATE
-        crownless_creature_catalog
-    )
-    cc_strict_warnings(creature_catalog_tests)
-    add_test(NAME generated_creature_catalog COMMAND creature_catalog_tests)
-
-    if(CC_BUILD_CLIENT)
-        target_compile_definitions(crownless_carriage PRIVATE
-            CC_CLIENT_SELF_TESTS=1
-        )
-        add_test(NAME storybook_travel_boundaries
-                 COMMAND crownless_carriage --test-storybook-travel)
-        add_test(NAME travel_audio_presentation
-                 COMMAND crownless_carriage --test-travel-audio)
-        add_test(NAME adventure_town_routes
-                 COMMAND crownless_carriage --test-adventure-town-routes)
-        add_test(NAME adventure_trade_terms
-                 COMMAND crownless_carriage --test-adventure-trade)
-        add_test(NAME world_card_input_parity
-                 COMMAND crownless_carriage --test-world-cards)
-        add_test(NAME adventure_input_flow
-                 COMMAND crownless_carriage --test-adventure-input)
-        add_test(NAME title_and_pause_menu
-                 COMMAND crownless_carriage --test-frontend)
-        add_test(NAME map_sale_input
-                 COMMAND crownless_carriage --test-map-sale-input)
-        add_test(NAME town_arrival_parking
-                 COMMAND crownless_carriage --test-town-arrival-parking)
-        add_test(NAME town_departure_to_road_book
-                 COMMAND crownless_carriage --test-town-departure)
-        add_test(NAME roadbook_arrival_transition
-                 COMMAND crownless_carriage --test-roadbook-arrival)
-        add_test(NAME world_session_startup_restore
-                 COMMAND crownless_carriage --test-world-session-startup)
-        add_test(NAME town_session_startup_restore
-                 COMMAND crownless_carriage --test-town-session-startup)
-        add_test(NAME solo_party_wipe
-                 COMMAND crownless_carriage --test-party-wipe)
-        add_test(NAME road_encounter_session_restore
-                 COMMAND crownless_carriage --test-road-encounter-session)
-
-        add_executable(renderer_regression_tests tests/renderer_regression_tests.c)
-        target_link_libraries(renderer_regression_tests PRIVATE crownless_local_renderer)
-        target_compile_definitions(renderer_regression_tests PRIVATE
-            CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
-        cc_strict_warnings(renderer_regression_tests)
-        add_test(NAME renderer_skin_rotation COMMAND renderer_regression_tests)
-        add_test(NAME physical_goods_displays COMMAND renderer_regression_tests --physical-goods)
-        add_custom_target(run_renderer_graphics_tests
-            COMMAND renderer_regression_tests --graphics
-                "${CMAKE_CURRENT_BINARY_DIR}/renderer-viewport.png"
-            COMMAND crownless_carriage --test-map-texture-lifetime
-            DEPENDS renderer_regression_tests crownless_carriage
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-            USES_TERMINAL
-        )
-        add_custom_target(run_character_material_captures
-            COMMAND renderer_regression_tests --material-captures
-                "${CMAKE_CURRENT_BINARY_DIR}/character-materials"
-            DEPENDS renderer_regression_tests
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-            USES_TERMINAL
-        )
-        add_custom_target(run_hero_face_captures
-            COMMAND renderer_regression_tests --hero-face-captures
-                "${CMAKE_CURRENT_BINARY_DIR}/hero-faces"
-            DEPENDS renderer_regression_tests
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-            USES_TERMINAL
-        )
-        add_custom_target(run_humanoid_animation_captures
-            COMMAND renderer_regression_tests --animation-captures
-                "${CMAKE_CURRENT_BINARY_DIR}/humanoid-animation"
-            DEPENDS renderer_regression_tests
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-            USES_TERMINAL
-        )
-
-        add_executable(creature_frame_tests tests/creature_frame_tests.c)
-        target_link_libraries(creature_frame_tests PRIVATE crownless_local_renderer raylib)
-        cc_strict_warnings(creature_frame_tests)
-        add_test(NAME fixed_creature_gait_timing COMMAND creature_frame_tests)
-
-        add_executable(creature_teleport_tests tests/creature_teleport_tests.c)
-        target_link_libraries(creature_teleport_tests PRIVATE crownless_local_renderer raylib)
-        cc_strict_warnings(creature_teleport_tests)
-        add_test(NAME creature_pose_after_a_jump COMMAND creature_teleport_tests)
-
-        add_executable(travel_animation_tests tests/travel_animation_tests.c)
-        target_link_libraries(travel_animation_tests PRIVATE
-            crownless_local_renderer crownless_client_policy raylib
-        )
-        cc_strict_warnings(travel_animation_tests)
-        add_test(NAME travel_animation_follows_the_road
-                 COMMAND travel_animation_tests)
-
-        add_executable(npc_appearance_tests
-            tests/npc_appearance_tests.c
-        )
-        target_link_libraries(npc_appearance_tests PRIVATE
-            crownless_local_renderer raylib
-        )
-        target_include_directories(npc_appearance_tests PRIVATE src)
-        cc_strict_warnings(npc_appearance_tests)
-        add_test(NAME deterministic_npc_population COMMAND npc_appearance_tests)
-
-        add_executable(visual_palette_tests tests/visual_palette_tests.c)
-        target_link_libraries(visual_palette_tests PRIVATE raylib)
-        target_include_directories(visual_palette_tests PRIVATE src)
-        cc_strict_warnings(visual_palette_tests)
-        add_test(NAME perceptual_visual_palette COMMAND visual_palette_tests)
-
-        add_executable(heraldry_tests tests/heraldry_tests.c)
-        target_link_libraries(heraldry_tests PRIVATE
-            crownless_local_renderer crownless_sim raylib
-        )
-        target_include_directories(heraldry_tests PRIVATE src)
-        cc_strict_warnings(heraldry_tests)
-        add_test(NAME dynamic_kingdom_heraldry COMMAND heraldry_tests)
-
-        add_executable(local_movement_tests tests/local_movement_tests.c)
-        target_link_libraries(local_movement_tests PRIVATE
-            crownless_local_renderer
-            crownless_sim crownless_locomotion
-            crownless_creature_catalog crownless_local_place
-            crownless_client_policy crownless_world raylib
-        )
-        cc_strict_warnings(local_movement_tests)
-        add_test(NAME local_collision_space COMMAND local_movement_tests)
-
-        add_executable(character_collision_course_tests tests/character_collision_course_tests.c)
-        target_link_libraries(character_collision_course_tests PRIVATE
-            crownless_local_renderer
-            crownless_sim crownless_locomotion
-            crownless_creature_catalog crownless_local_place
-            crownless_client_policy crownless_world raylib
-        )
-        cc_strict_warnings(character_collision_course_tests)
-        add_test(NAME character_collision_course COMMAND character_collision_course_tests)
-
-        add_executable(terrain_tests tests/terrain_tests.c)
-        target_link_libraries(terrain_tests PRIVATE
-            crownless_local_renderer
-            crownless_sim crownless_locomotion
-            crownless_creature_catalog crownless_local_place
-            crownless_client_policy crownless_world raylib
-        )
-        cc_strict_warnings(terrain_tests)
-        add_test(NAME seeded_hilly_terrain COMMAND terrain_tests)
-
-    endif()
+    list(SORT CC_TEST_REGISTRATIONS)
+    foreach(CC_TEST_REGISTRATION IN LISTS CC_TEST_REGISTRATIONS)
+        include("${CC_TEST_REGISTRATION}")
+    endforeach()
+    unset(CC_TEST_REGISTRATION)
+    unset(CC_TEST_REGISTRATIONS)
 endif()

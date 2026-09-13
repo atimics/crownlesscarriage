@@ -1,0 +1,30 @@
+[
+  {
+    "configuration": "headless",
+    "equal": true,
+    "targets": 164,
+    "tests": 135,
+    "normalized_sha256": "c1fdb0c0f7c158f63d52fdf67e1a986025dfde9eca875eddc774461b07e6feef"
+  },
+  {
+    "configuration": "native",
+    "equal": true,
+    "targets": 192,
+    "tests": 173,
+    "normalized_sha256": "d9d9e31e220e2e06a70a0b7d8a02f872298e3275f4ae7a57a8f3edeff8184864"
+  },
+  {
+    "configuration": "no-tests",
+    "equal": true,
+    "targets": 30,
+    "tests": 0,
+    "normalized_sha256": "f4eb01579dda19abbe2b0708d7158303e15f332e912188059b4b7764a087553d"
+  },
+  {
+    "configuration": "no-benchmarks",
+    "equal": true,
+    "targets": 144,
+    "tests": 114,
+    "normalized_sha256": "85e0b2c2f636226e8ab5e87264ecc3abc70ea9540fabc1c5b72fdbbfe3cc126e"
+  }
+]

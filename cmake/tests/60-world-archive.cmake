@@ -1,0 +1,245 @@
+add_executable(character_name_tests tests/character_name_tests.c)
+target_link_libraries(character_name_tests PRIVATE crownless_persistence)
+target_compile_definitions(character_name_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+cc_strict_warnings(character_name_tests)
+add_test(NAME settlement_character_names COMMAND character_name_tests)
+
+add_executable(nutrition_accounting_tests tests/nutrition_accounting_tests.c)
+target_link_libraries(nutrition_accounting_tests PRIVATE crownless_persistence)
+target_compile_definitions(nutrition_accounting_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+cc_strict_warnings(nutrition_accounting_tests)
+add_test(NAME nutrition_storage_accounting COMMAND nutrition_accounting_tests)
+if(CC_PYTHON3_EXECUTABLE AND CC_BUILD_BENCHMARKS)
+    add_test(NAME nutrition_accounting_csv
+             COMMAND ${CC_PYTHON3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/nutrition_accounting_tests.py
+                     $<TARGET_FILE:crownless_sim_metrics>)
+endif()
+
+add_executable(raid_food_tests tests/raid_food_tests.c)
+target_link_libraries(raid_food_tests PRIVATE crownless_persistence)
+target_compile_definitions(raid_food_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+cc_strict_warnings(raid_food_tests)
+add_test(NAME hoard_raid_food_accounting COMMAND raid_food_tests)
+
+add_executable(balance_tests tests/balance_tests.c)
+target_link_libraries(balance_tests PRIVATE crownless_sim)
+cc_strict_warnings(balance_tests)
+add_test(NAME osr_long_run_balance COMMAND balance_tests)
+
+add_executable(pony_tests tests/pony_tests.c)
+target_link_libraries(pony_tests PRIVATE crownless_persistence)
+cc_strict_warnings(pony_tests)
+add_test(NAME rainbow_pony_companions COMMAND pony_tests)
+
+add_executable(trade_path_tests tests/trade_path_tests.c)
+target_link_libraries(trade_path_tests PRIVATE crownless_sim)
+cc_strict_warnings(trade_path_tests)
+add_test(NAME trade_path_rules COMMAND trade_path_tests)
+add_executable(starting_campaign_tests tests/starting_campaign_tests.c)
+target_link_libraries(starting_campaign_tests PRIVATE crownless_persistence)
+cc_strict_warnings(starting_campaign_tests)
+add_test(NAME deep_wyrm_starting_campaign COMMAND starting_campaign_tests
+         "${CMAKE_CURRENT_SOURCE_DIR}/assets/campaigns/deep-wyrm.ccsave")
+add_executable(archive_dispatch_tests tests/archive_dispatch_tests.c)
+target_link_libraries(archive_dispatch_tests PRIVATE crownless_persistence)
+cc_strict_warnings(archive_dispatch_tests)
+add_test(NAME archive_supply_dispatch COMMAND archive_dispatch_tests)
+add_executable(archive_convoy_tests tests/archive_convoy_tests.c)
+target_link_libraries(archive_convoy_tests PRIVATE crownless_persistence)
+cc_strict_warnings(archive_convoy_tests)
+add_test(NAME archive_convoy_reservation COMMAND archive_convoy_tests)
+
+add_executable(archive_relocation_tests tests/archive_relocation_tests.c)
+target_link_libraries(archive_relocation_tests PRIVATE crownless_sim)
+cc_strict_warnings(archive_relocation_tests)
+add_test(NAME archive_relocation_plan COMMAND archive_relocation_tests)
+
+add_executable(archive_seat_tests tests/archive_seat_tests.c)
+target_link_libraries(archive_seat_tests PRIVATE crownless_persistence)
+cc_strict_warnings(archive_seat_tests)
+add_test(NAME archive_seat_selection COMMAND archive_seat_tests)
+add_executable(archive_supply_tests tests/archive_supply_tests.c)
+target_link_libraries(archive_supply_tests PRIVATE crownless_sim)
+cc_strict_warnings(archive_supply_tests)
+add_test(NAME archive_supply_booking COMMAND archive_supply_tests)
+add_executable(archive_funding_tests tests/archive_funding_tests.c)
+target_link_libraries(archive_funding_tests PRIVATE crownless_sim)
+cc_strict_warnings(archive_funding_tests)
+add_test(NAME archive_funding_plan COMMAND archive_funding_tests)
+add_executable(character_travel_tests tests/character_travel_tests.c)
+target_link_libraries(character_travel_tests PRIVATE crownless_persistence)
+cc_strict_warnings(character_travel_tests)
+add_test(NAME character_travel_gossip COMMAND character_travel_tests)
+
+add_executable(quest_cast_tests tests/quest_cast_tests.c)
+target_link_libraries(quest_cast_tests PRIVATE crownless_persistence)
+target_compile_definitions(quest_cast_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+cc_strict_warnings(quest_cast_tests)
+add_test(NAME quest_cast_continuity COMMAND quest_cast_tests)
+
+add_executable(character_lifetime_tests tests/character_lifetime_tests.c)
+target_link_libraries(character_lifetime_tests PRIVATE crownless_persistence)
+cc_strict_warnings(character_lifetime_tests)
+add_test(NAME received_account_lifetimes COMMAND character_lifetime_tests)
+
+add_executable(identity_ledger_tests tests/identity_ledger_tests.c)
+target_link_libraries(identity_ledger_tests PRIVATE crownless_sim)
+cc_strict_warnings(identity_ledger_tests)
+add_test(NAME identity_ledger_collisions COMMAND identity_ledger_tests)
+
+add_executable(persistence_fields_tests tests/persistence_fields_tests.c)
+target_link_libraries(persistence_fields_tests PRIVATE crownless_persistence)
+cc_strict_warnings(persistence_fields_tests)
+add_test(NAME persistence_field_contract COMMAND persistence_fields_tests)
+
+add_executable(persistence_tests tests/persistence_tests.c)
+target_link_libraries(persistence_tests PRIVATE crownless_persistence)
+target_compile_definitions(persistence_tests PRIVATE
+    CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+# Keep each migration fixture's large simulation states in its own frame.
+if(MSVC)
+    target_compile_options(persistence_tests PRIVATE /Ob0)
+else()
+    target_compile_options(persistence_tests PRIVATE -fno-inline)
+endif()
+cc_strict_warnings(persistence_tests)
+add_test(NAME sqlite_round_trip COMMAND persistence_tests)
+
+add_executable(royal_carriage_trade_tests
+    tests/royal_carriage_trade_tests.c)
+target_link_libraries(royal_carriage_trade_tests PRIVATE
+    crownless_persistence)
+cc_strict_warnings(royal_carriage_trade_tests)
+cc_large_sim_stack(royal_carriage_trade_tests)
+add_test(NAME royal_carriage_trade COMMAND royal_carriage_trade_tests)
+
+add_executable(route_knowledge_tests tests/route_knowledge_tests.c)
+target_link_libraries(route_knowledge_tests PRIVATE
+    crownless_persistence crownless_road_book crownless_world)
+cc_strict_warnings(route_knowledge_tests)
+add_test(NAME persistent_route_knowledge COMMAND route_knowledge_tests)
+
+add_executable(mine_tests tests/mine_tests.c)
+target_link_libraries(mine_tests PRIVATE crownless_coop crownless_metagame)
+target_compile_definitions(mine_tests PRIVATE CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+cc_strict_warnings(mine_tests)
+add_test(NAME silverwick_mine_roundtrip COMMAND mine_tests)
+
+add_executable(underroad_tests tests/underroad_tests.c)
+target_link_libraries(underroad_tests PRIVATE crownless_persistence)
+cc_strict_warnings(underroad_tests)
+add_test(NAME persistent_underroad_expeditions COMMAND underroad_tests)
+
+add_executable(scenario_tests tests/scenario_tests.c)
+target_link_libraries(scenario_tests PRIVATE crownless_sim)
+cc_strict_warnings(scenario_tests)
+add_test(NAME empty_granary_scenario COMMAND scenario_tests)
+
+add_executable(world_spine_tests tests/world_spine_tests.c)
+target_link_libraries(world_spine_tests PRIVATE crownless_sim)
+cc_strict_warnings(world_spine_tests)
+add_test(NAME living_world_feedback COMMAND world_spine_tests)
+
+add_executable(causal_history_tests tests/causal_history_tests.c)
+target_link_libraries(causal_history_tests PRIVATE crownless_persistence)
+cc_strict_warnings(causal_history_tests)
+add_test(NAME causal_history_retention COMMAND causal_history_tests)
+
+add_executable(dragon_cycle_tests tests/dragon_cycle_tests.c)
+target_link_libraries(dragon_cycle_tests PRIVATE crownless_persistence)
+cc_strict_warnings(dragon_cycle_tests)
+add_test(NAME goblin_dragon_causal_cycle COMMAND dragon_cycle_tests)
+
+add_executable(rot_diet_tests tests/rot_diet_tests.c)
+target_link_libraries(rot_diet_tests PRIVATE crownless_metagame)
+cc_strict_warnings(rot_diet_tests)
+add_test(NAME goblin_dragon_rot_diet COMMAND rot_diet_tests)
+
+add_executable(goblin_cult_split_tests tests/goblin_cult_split_tests.c)
+target_link_libraries(goblin_cult_split_tests PRIVATE crownless_persistence)
+cc_strict_warnings(goblin_cult_split_tests)
+add_test(NAME goblin_cult_split COMMAND goblin_cult_split_tests)
+
+add_executable(goblin_society_tests tests/goblin_society_tests.c)
+target_link_libraries(goblin_society_tests PRIVATE crownless_persistence)
+cc_strict_warnings(goblin_society_tests)
+add_test(NAME goblin_society_choices COMMAND goblin_society_tests)
+
+add_executable(traveller_poverty_tests tests/traveller_poverty_tests.c)
+target_link_libraries(traveller_poverty_tests PRIVATE crownless_persistence)
+cc_strict_warnings(traveller_poverty_tests)
+add_test(NAME traveller_poverty_recruitment COMMAND traveller_poverty_tests)
+
+add_executable(dragon_ecology_tests tests/dragon_ecology_tests.c)
+target_link_libraries(dragon_ecology_tests PRIVATE crownless_persistence)
+cc_strict_warnings(dragon_ecology_tests)
+add_test(NAME dragon_crown_ecology COMMAND dragon_ecology_tests)
+
+add_executable(material_economy_tests tests/material_economy_tests.c)
+target_link_libraries(material_economy_tests PRIVATE crownless_sim)
+cc_strict_warnings(material_economy_tests)
+add_test(NAME physical_material_economy COMMAND material_economy_tests)
+
+add_executable(material_chain_tests tests/material_chain_tests.c)
+target_link_libraries(material_chain_tests PRIVATE crownless_sim)
+cc_strict_warnings(material_chain_tests)
+cc_large_sim_stack(material_chain_tests)
+add_test(NAME material_chain_proofs COMMAND material_chain_tests)
+
+add_executable(archive_automatic_tests tests/archive_automatic_tests.c)
+target_link_libraries(archive_automatic_tests PRIVATE crownless_persistence)
+cc_strict_warnings(archive_automatic_tests)
+add_test(NAME archive_automatic_recruitment COMMAND archive_automatic_tests)
+
+add_executable(archive_staff_tests tests/archive_staff_tests.c)
+target_link_libraries(archive_staff_tests PRIVATE crownless_persistence)
+cc_strict_warnings(archive_staff_tests)
+add_test(NAME archive_named_staff COMMAND archive_staff_tests)
+
+add_executable(archive_training_tests tests/archive_training_tests.c)
+target_link_libraries(archive_training_tests PRIVATE crownless_persistence)
+cc_strict_warnings(archive_training_tests)
+add_test(NAME archive_recruitment_training COMMAND archive_training_tests)
+
+add_executable(archive_journey_tests tests/archive_journey_tests.c)
+target_link_libraries(archive_journey_tests PRIVATE crownless_persistence)
+cc_strict_warnings(archive_journey_tests)
+add_test(NAME archive_recruitment_journey COMMAND archive_journey_tests)
+
+add_executable(archive_order_tests tests/archive_order_tests.c)
+target_link_libraries(archive_order_tests PRIVATE crownless_persistence)
+cc_strict_warnings(archive_order_tests)
+add_test(NAME archive_recruitment_reservation COMMAND archive_order_tests)
+
+add_executable(archive_recruitment_tests tests/archive_recruitment_tests.c)
+target_link_libraries(archive_recruitment_tests PRIVATE crownless_sim)
+cc_strict_warnings(archive_recruitment_tests)
+add_test(NAME archive_recruitment_plan COMMAND archive_recruitment_tests)
+
+add_executable(occupation_tests tests/occupation_tests.c)
+target_link_libraries(occupation_tests PRIVATE crownless_persistence)
+cc_strict_warnings(occupation_tests)
+add_test(NAME occupation_identity_and_observation COMMAND occupation_tests)
+
+add_executable(gossip_topic_tests tests/gossip_topic_tests.c)
+target_link_libraries(gossip_topic_tests PRIVATE crownless_sim)
+cc_strict_warnings(gossip_topic_tests)
+add_test(NAME gossip_topic_contract COMMAND gossip_topic_tests)
+
+add_executable(gossip_tests tests/gossip_tests.c)
+target_link_libraries(gossip_tests PRIVATE crownless_persistence crownless_metagame)
+cc_strict_warnings(gossip_tests)
+cc_large_sim_stack(gossip_tests)
+add_test(NAME traveler_gossip_network COMMAND gossip_tests)
+
+add_executable(grain_economy_tests tests/grain_economy_tests.c)
+target_link_libraries(grain_economy_tests PRIVATE crownless_sim)
+cc_strict_warnings(grain_economy_tests)
+add_test(NAME grain_food_economy COMMAND grain_economy_tests)
+
+add_executable(metagame_tests tests/metagame_tests.c)
+target_link_libraries(metagame_tests PRIVATE crownless_metagame)
+cc_strict_warnings(metagame_tests)
+add_test(NAME text_first_metagame COMMAND metagame_tests)
+

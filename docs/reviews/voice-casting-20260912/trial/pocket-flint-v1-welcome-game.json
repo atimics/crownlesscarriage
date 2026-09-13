@@ -1,0 +1,23 @@
+{
+  "voice": "flint-v1",
+  "line": "welcome",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going.",
+  "file": "pocket-flint-v1-welcome.wav",
+  "styled_file": "pocket-flint-v1-welcome-game.wav",
+  "seconds": 4.8,
+  "generation_seconds": 0.45192533265799284,
+  "first_chunk_seconds": 0.0286979996599257,
+  "real_time_factor": 0.09415111097041517,
+  "sample_rate": 24000,
+  "seed": 20260912,
+  "reference_sha256": "98454193d1e240932634c3e81ea4f241337bef7643832dde811e183906f7af80",
+  "sha256": "ec74ba6090129b86f1268104d49d13f2a53e49d192ccc99ad689d8d2e7602327",
+  "master_sha256": "ec74ba6090129b86f1268104d49d13f2a53e49d192ccc99ad689d8d2e7602327",
+  "wav_sha256": "15dc7ac4c81112ec851a196ab82ff0ce31b97dba094b3adac4030aec07ef3b77",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

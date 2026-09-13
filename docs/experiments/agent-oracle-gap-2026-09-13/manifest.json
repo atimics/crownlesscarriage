@@ -1,0 +1,62 @@
+{
+  "source_revision": "0625d99f",
+  "date_utc": "2026-09-13",
+  "tool": "crownless_agent_sweep (Release)",
+  "parameters": {
+    "seeds": "1-100",
+    "years": 10,
+    "wip_limit": 1,
+    "oracle": true,
+    "oracle_horizon": 60,
+    "exchange_probes": 25
+  },
+  "runs": [
+    {
+      "command": "crownless_agent_sweep --seed 1 --seeds 10 --years 10 --oracle --oracle-horizon 60 --exchange-probes 25",
+      "exit": 0
+    },
+    {
+      "command": "crownless_agent_sweep --seed 11 --seeds 10 --years 10 --oracle --oracle-horizon 60 --exchange-probes 25",
+      "exit": 0
+    },
+    {
+      "command": "crownless_agent_sweep --seed 21 --seeds 10 --years 10 --oracle --oracle-horizon 60 --exchange-probes 25",
+      "exit": 0
+    },
+    {
+      "command": "crownless_agent_sweep --seed 31 --seeds 10 --years 10 --oracle --oracle-horizon 60 --exchange-probes 25",
+      "exit": 0
+    },
+    {
+      "command": "crownless_agent_sweep --seed 41 --seeds 10 --years 10 --oracle --oracle-horizon 60 --exchange-probes 25",
+      "exit": 0
+    },
+    {
+      "command": "crownless_agent_sweep --seed 51 --seeds 10 --years 10 --oracle --oracle-horizon 60 --exchange-probes 25",
+      "exit": 0
+    },
+    {
+      "command": "crownless_agent_sweep --seed 61 --seeds 10 --years 10 --oracle --oracle-horizon 60 --exchange-probes 25",
+      "exit": 0
+    },
+    {
+      "command": "crownless_agent_sweep --seed 71 --seeds 10 --years 10 --oracle --oracle-horizon 60 --exchange-probes 25",
+      "exit": 0
+    },
+    {
+      "command": "crownless_agent_sweep --seed 81 --seeds 10 --years 10 --oracle --oracle-horizon 60 --exchange-probes 25",
+      "exit": 0
+    },
+    {
+      "command": "crownless_agent_sweep --seed 91 --seeds 10 --years 10 --oracle --oracle-horizon 60 --exchange-probes 25",
+      "exit": 0
+    }
+  ],
+  "data": {
+    "agent_oracle_gap.csv": {
+      "sha256": "dba1dad3844b1efbd17ae4ce245870c2da53a620ebeecb1360bbf6d4b057bbf8",
+      "rows": 100
+    }
+  },
+  "hardware": "local Mac, 10 parallel processes"
+}

@@ -1,0 +1,21 @@
+{
+  "voice": "Hearth",
+  "take": "revised",
+  "line": "welcome",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going.",
+  "seed": 20260912,
+  "file": "hearth-second-revised-welcome.wav",
+  "seconds": 4.56,
+  "generation_seconds": 1.9778839158825576,
+  "reference_sha256": "297930487bd9520ccffedf0678c725c2057d57f7867c7ef0dc7d78a86ff47825",
+  "sha256": "4c34fc1a64412c4fe16a8d127667df527a48a377b7b6c82635770fa8e6d8883e",
+  "sample_rate": 24000,
+  "master_sha256": "4c34fc1a64412c4fe16a8d127667df527a48a377b7b6c82635770fa8e6d8883e",
+  "wav_sha256": "55e3041098d599334435218ad9d82c008ee4a11d05008433d65b03b16c769087",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

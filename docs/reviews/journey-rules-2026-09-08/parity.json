@@ -1,0 +1,16 @@
+[
+  {
+    "probe": "query",
+    "rows": 16320,
+    "parent_sha256": "d2d32c06402a1ff9140c785df0f37d43ab8f2fc3c254cd2cde6b3c0a2502287c",
+    "current_sha256": "d2d32c06402a1ff9140c785df0f37d43ab8f2fc3c254cd2cde6b3c0a2502287c",
+    "equal": true
+  },
+  {
+    "probe": "hash",
+    "rows": 720,
+    "parent_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10",
+    "current_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10",
+    "equal": true
+  }
+]

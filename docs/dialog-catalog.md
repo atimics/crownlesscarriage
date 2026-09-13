@@ -118,28 +118,29 @@ Greetings by speaker and town state:
 
 ### Rumor registers
 
-`src/story/cc_speech_lexicon.c` composes an opener, a claim clause and an
-optional personal stance. The input is the held telling, including its existing
-retelling mutations. It never looks up today's dragon, bandits or event ring.
-Names already lost or abbreviated in the account stay lost or abbreviated.
+`src/story/cc_speech_lexicon.c` turns a held telling into conversational speech.
+The speaker keeps the telling's existing mutations, including changed names and
+directions. Gossip uses general quantities; quests, trade, and archives retain
+exact amounts. A difficult account becomes: "Something happened, but I've only
+heard bits of it."
 
-**No exact quantities in rumor speech**, whether digits or number words.
-Dates, hunger levels and omen countdowns are not read aloud. Quest instructions,
-trade and the simulation's archival records retain their exact quantities.
-Unsupported numerical accounts receive a cautious fallback rather than a raw
-quote: "I have an account, but I cannot give you its particulars reliably."
+Uncertainty can change which details survive in speech:
+- A shaky notice: "Someone put up a relief charter in Thornford." or
+  "Forgen Miller posted something in Thornford."
+- A shaky diplomatic account: "Some courts made peace." or
+  "Something changed between Willow Republic and Ashen Throne."
+- Other shaky reports qualify the claim itself: "... if the story is right."
+- Circulating news: "Have you heard? Willow Republic and Ashen Throne made
+  peace. That's the word going round." or "... so people say."
+- Ordinary hearsay: "... I hear." or "Have you heard the news? ..."
 
-The register changes phrasing, not what evidence a person possesses:
-- Road (traveller, courier, refugee, laborer): "Word is going around: …" /
-  "This is the story I heard: …" / "People are passing this along: …"
-- Scout: "The report that reached me said: …" / "This is what I was told: …" /
-  "The account I heard went like this: …"
-- Official/record voice: "The account passed to me says: …" /
-  "This is the telling I have: …" /
-  "Let me separate the report from the reckoning: …"
-- Low confidence: "I am not sure of this telling: …"
-- Heavily retold: "It has travelled through other mouths: …" or
-  "This account has passed through other hands: …"
+The current simulation supplies overall confidence. For low-confidence notices
+and diplomatic reports, a stable choice generalises either the actor or the
+subject. The dataset records that omission as audit data and also removes that
+detail from the visible event line. The original held telling remains intact.
+Circulation describes the telling's journey; low confidence keeps priority over
+conversation openers. Official and scout speech can add their existing report
+stance through a short closing phrase.
 
 Claim clauses include:
 - Shortage, either stored format: "Food was running short in %s." /
@@ -163,7 +164,7 @@ The source reply names the immediate teller when available: "%s passed the
 account to me. I cannot claim I saw it happen." Otherwise: "I heard it passed
 around. I cannot give you a named source."
 
-Stable, independently mixed choices select the opener and clause variant.
+Stable choices select the amount of detail and conversational wording.
 Reading is state/RNG-neutral; identical inputs keep the same speech and audio
 key. Schema 50 adds goblin raids, cult rallies, omens and dragon retaliation to
 the gossip network. Small cult rallies and the actual omen magnitude are tested.
@@ -225,3 +226,13 @@ with you. Who will head out on a new adventure?"
 speaker has no authored line. The debrief sheet asks: "Tell the story of what
 happened. Which choice felt hardest, and why? What surprised you later? Who do
 you now trust or distrust? What would you do next?"
+## Shared core-language rules
+
+Gossip claim wording now also supports personal deaths, crafted treasure,
+courier war and peace reports, drought harvests, treaty bridge closures, bandit
+recruitment, and posted notices. Each receives two stable phrasings. These rules
+read the speaker's held account and preserve retelling changes.
+
+The game's claim composer also supplies the plain core-language dataset.
+See [Core language corpus](core-language-corpus.md) for collection, coverage,
+source records, and evaluation.

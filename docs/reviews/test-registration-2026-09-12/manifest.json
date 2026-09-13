@@ -1,0 +1,7 @@
+{
+  "parent_revision": "e27996ae495a5020492db8972c3c920618512128",
+  "implementation_revision": "487e0aea119a10b2704957cc5e0ec515a1546c66",
+  "registration_lines_preserved": 902,
+  "representative_tests_passed": 7,
+  "cmake": "cmake version 4.1.2"
+}

@@ -1,0 +1,317 @@
+[
+  {
+    "semantics": "snapshot",
+    "from": {
+      "id": "144115188075855876",
+      "kingdom_id": "72057594037927937",
+      "population": 300,
+      "inhabited": true
+    },
+    "to": {
+      "id": "144115188075855877",
+      "kingdom_id": "72057594037927938",
+      "population": 100,
+      "inhabited": true
+    },
+    "crosses_kingdom_border": true,
+    "crosses_war_border": false,
+    "smuggler_route": false,
+    "royal_carriage_rules": [
+      {
+        "kingdom_id": "72057594037927937",
+        "official_route_eligible": true
+      },
+      {
+        "kingdom_id": "72057594037927938",
+        "official_route_eligible": true
+      },
+      {
+        "kingdom_id": "72057594037927939",
+        "official_route_eligible": true
+      }
+    ]
+  },
+  {
+    "semantics": "snapshot",
+    "from": {
+      "id": "144115188075855876",
+      "kingdom_id": "72057594037927937",
+      "population": 300,
+      "inhabited": true
+    },
+    "to": {
+      "id": "144115188075855877",
+      "kingdom_id": "72057594037927938",
+      "population": 0,
+      "inhabited": false
+    },
+    "crosses_kingdom_border": true,
+    "crosses_war_border": false,
+    "smuggler_route": false,
+    "royal_carriage_rules": [
+      {
+        "kingdom_id": "72057594037927937",
+        "official_route_eligible": true
+      },
+      {
+        "kingdom_id": "72057594037927938",
+        "official_route_eligible": true
+      },
+      {
+        "kingdom_id": "72057594037927939",
+        "official_route_eligible": true
+      }
+    ]
+  },
+  {
+    "semantics": "snapshot",
+    "from": {
+      "id": "144115188075855876",
+      "kingdom_id": "72057594037927937",
+      "population": 0,
+      "inhabited": false
+    },
+    "to": {
+      "id": "144115188075855877",
+      "kingdom_id": "72057594037927938",
+      "population": 0,
+      "inhabited": false
+    },
+    "crosses_kingdom_border": true,
+    "crosses_war_border": false,
+    "smuggler_route": false,
+    "royal_carriage_rules": [
+      {
+        "kingdom_id": "72057594037927937",
+        "official_route_eligible": true
+      },
+      {
+        "kingdom_id": "72057594037927938",
+        "official_route_eligible": true
+      },
+      {
+        "kingdom_id": "72057594037927939",
+        "official_route_eligible": true
+      }
+    ]
+  },
+  {
+    "semantics": "snapshot",
+    "from": {
+      "id": "144115188075855876",
+      "kingdom_id": "72057594037927937",
+      "population": 300,
+      "inhabited": true
+    },
+    "to": {
+      "id": "144115188075855877",
+      "kingdom_id": "72057594037927938",
+      "population": 100,
+      "inhabited": true
+    },
+    "crosses_kingdom_border": true,
+    "crosses_war_border": false,
+    "smuggler_route": false,
+    "royal_carriage_rules": [
+      {
+        "kingdom_id": "72057594037927937",
+        "official_route_eligible": true
+      },
+      {
+        "kingdom_id": "72057594037927938",
+        "official_route_eligible": true
+      },
+      {
+        "kingdom_id": "72057594037927939",
+        "official_route_eligible": true
+      }
+    ]
+  },
+  {
+    "semantics": "snapshot",
+    "from": {
+      "id": "144115188075855876",
+      "kingdom_id": "72057594037927937",
+      "population": 300,
+      "inhabited": true
+    },
+    "to": {
+      "id": "144115188075855877",
+      "kingdom_id": "72057594037927938",
+      "population": 100,
+      "inhabited": true
+    },
+    "crosses_kingdom_border": true,
+    "crosses_war_border": true,
+    "smuggler_route": false,
+    "royal_carriage_rules": [
+      {
+        "kingdom_id": "72057594037927937",
+        "official_route_eligible": false
+      },
+      {
+        "kingdom_id": "72057594037927938",
+        "official_route_eligible": false
+      },
+      {
+        "kingdom_id": "72057594037927939",
+        "official_route_eligible": false
+      }
+    ]
+  },
+  {
+    "semantics": "snapshot",
+    "from": {
+      "id": "144115188075855876",
+      "kingdom_id": "72057594037927937",
+      "population": 300,
+      "inhabited": true
+    },
+    "to": {
+      "id": "144115188075855877",
+      "kingdom_id": "72057594037927938",
+      "population": 100,
+      "inhabited": true
+    },
+    "crosses_kingdom_border": true,
+    "crosses_war_border": false,
+    "smuggler_route": true,
+    "royal_carriage_rules": [
+      {
+        "kingdom_id": "72057594037927937",
+        "official_route_eligible": false
+      },
+      {
+        "kingdom_id": "72057594037927938",
+        "official_route_eligible": false
+      },
+      {
+        "kingdom_id": "72057594037927939",
+        "official_route_eligible": false
+      }
+    ]
+  },
+  {
+    "semantics": "snapshot",
+    "from": {
+      "id": "144115188075855876",
+      "kingdom_id": "72057594037927937",
+      "population": 300,
+      "inhabited": true
+    },
+    "to": {
+      "id": "144115188075855877",
+      "kingdom_id": "72057594037927938",
+      "population": 100,
+      "inhabited": true
+    },
+    "crosses_kingdom_border": true,
+    "crosses_war_border": false,
+    "smuggler_route": false,
+    "royal_carriage_rules": [
+      {
+        "kingdom_id": "72057594037927937",
+        "official_route_eligible": false
+      },
+      {
+        "kingdom_id": "72057594037927938",
+        "official_route_eligible": false
+      },
+      {
+        "kingdom_id": "72057594037927939",
+        "official_route_eligible": false
+      }
+    ]
+  },
+  {
+    "semantics": "snapshot",
+    "from": {
+      "id": "144115188075855876",
+      "kingdom_id": "72057594037927937",
+      "population": 300,
+      "inhabited": true
+    },
+    "to": {
+      "id": "144115188075855877",
+      "kingdom_id": "72057594037927937",
+      "population": 100,
+      "inhabited": true
+    },
+    "crosses_kingdom_border": false,
+    "crosses_war_border": false,
+    "smuggler_route": false,
+    "royal_carriage_rules": [
+      {
+        "kingdom_id": "72057594037927937",
+        "official_route_eligible": true
+      },
+      {
+        "kingdom_id": "72057594037927938",
+        "official_route_eligible": true
+      },
+      {
+        "kingdom_id": "72057594037927939",
+        "official_route_eligible": true
+      }
+    ]
+  },
+  {
+    "semantics": "snapshot",
+    "from": {
+      "id": "144115188075855876",
+      "kingdom_id": "72057594037927937",
+      "population": 300,
+      "inhabited": true
+    },
+    "to": {
+      "id": "144115188075855877",
+      "kingdom_id": "72057594037927937",
+      "population": 100,
+      "inhabited": true
+    },
+    "crosses_kingdom_border": false,
+    "crosses_war_border": false,
+    "smuggler_route": false,
+    "royal_carriage_rules": [
+      {
+        "kingdom_id": "72057594037927937",
+        "official_route_eligible": true
+      },
+      {
+        "kingdom_id": "72057594037927938",
+        "official_route_eligible": false
+      },
+      {
+        "kingdom_id": "72057594037927939",
+        "official_route_eligible": true
+      }
+    ]
+  },
+  {
+    "semantics": "snapshot",
+    "from": {
+      "id": "144115188075855876",
+      "kingdom_id": "72057594037927937",
+      "population": 300,
+      "inhabited": true
+    },
+    "to": null,
+    "crosses_kingdom_border": false,
+    "crosses_war_border": false,
+    "smuggler_route": false,
+    "royal_carriage_rules": [
+      {
+        "kingdom_id": "72057594037927937",
+        "official_route_eligible": false
+      },
+      {
+        "kingdom_id": "72057594037927938",
+        "official_route_eligible": false
+      },
+      {
+        "kingdom_id": "72057594037927939",
+        "official_route_eligible": false
+      }
+    ]
+  }
+]

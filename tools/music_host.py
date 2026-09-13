@@ -12,7 +12,13 @@ def build(audio_dir, output, catalog_path):
     takes = {row['stem']: row for row in catalog['takes']}
     tracks = []
     (output / 'audio').mkdir(parents=True, exist_ok=True)
-    for source in sorted(audio_dir.glob('*.mp3')):
+    sources = sorted([*audio_dir.glob('*.mp3'),
+                      *(audio_dir / 'hosted').glob('*.mp3')])
+    seen = set()
+    for source in sources:
+        if source.stem in seen:
+            raise ValueError(f'Duplicate soundtrack stem: {source.name}')
+        seen.add(source.stem)
         if source.stem not in takes:
             raise ValueError(f'Unknown soundtrack stem: {source.name}')
         data = source.read_bytes()

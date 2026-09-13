@@ -1,4 +1,7 @@
 #include "persistence/cc_save.h"
+#include "sim/cc_occupations.h"
+#include "persistence/cc_journal_internal.h"
+#include "persistence/cc_legacy_runtime_internal.h"
 
 #include <sqlite3.h>
 
@@ -9,24 +12,9 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 29
-#define CC_JOURNAL_RECORD_VERSION 1
+#define CC_SQLITE_USER_VERSION 32
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
-#define CC_JOURNAL_MAX_DAY_ADVANCE 3650
-#define CC_JOURNAL_MAX_RUNTIME_ADVANCE 3600
 #define CC_JOURNAL_COMPACT_RECORDS UINT64_C(4096)
-
-typedef enum CcJournalOperationKind {
-    CC_JOURNAL_OPERATION_COMMAND = 1,
-    CC_JOURNAL_OPERATION_ADVANCE_DAYS = 2,
-    CC_JOURNAL_OPERATION_ADVANCE_RUNTIME_TICKS = 3
-} CcJournalOperationKind;
-
-enum {
-    CC_SCHEMA12_COMMAND_STEAL_DRAGON_NAMED_TREASURE = 16,
-    CC_SCHEMA12_COMMAND_RETURN_DRAGON_NAMED_TREASURE = 17,
-    CC_SCHEMA17_EVENT_ENCOUNTER_LOOT = 90
-};
 
 struct CcJournal {
     sqlite3 *database;
@@ -39,22 +27,6 @@ struct CcJournal {
 static bool Prepare(sqlite3 *database, const char *sql,
                     sqlite3_stmt **statement,
                     char *error, size_t error_capacity);
-
-static CcCommandKind ReadCommandKind(uint32_t schema_version,
-                                     int32_t stored_kind)
-{
-    if (schema_version == 12U) {
-        if (stored_kind ==
-            CC_SCHEMA12_COMMAND_STEAL_DRAGON_NAMED_TREASURE) {
-            return CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE;
-        }
-        if (stored_kind ==
-            CC_SCHEMA12_COMMAND_RETURN_DRAGON_NAMED_TREASURE) {
-            return CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE;
-        }
-    }
-    return (CcCommandKind)stored_kind;
-}
 
 static void SetError(char *error, size_t capacity, const char *message)
 {
@@ -97,16 +69,6 @@ static bool ReadTextColumn(sqlite3_stmt *statement, int column,
     memcpy(destination, value, (size_t)length);
     destination[length] = '\0';
     return true;
-}
-
-static bool ParseStoredHash(const unsigned char *text, uint64_t *hash)
-{
-    if (text == NULL || hash == NULL) return false;
-    const char *value = (const char *)text;
-    int consumed = 0;
-    return strlen(value) == 16U &&
-           sscanf(value, "%16" SCNx64 "%n", hash, &consumed) == 1 &&
-           consumed == 16;
 }
 
 static bool Execute(sqlite3 *database, const char *sql,
@@ -157,7 +119,10 @@ static bool EnsurePlayerKnowledgeColumns(sqlite3 *database,
                                          char *error,
                                          size_t error_capacity)
 {
-    return EnsureColumn(database, "gossip_carrier", "told_player",
+    return EnsureColumn(database, "player_company", "feed_tray_wheat",
+            "ALTER TABLE player_company ADD COLUMN feed_tray_wheat INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "gossip_carrier", "told_player",
             "ALTER TABLE gossip_carrier ADD COLUMN told_player INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
         EnsureColumn(database, "gossip_state", "posted_situation_mask",
@@ -432,6 +397,9 @@ static bool EnsureLegendColumns(sqlite3 *database,
         EnsureColumn(database, "dragon_state", "regional_influence",
             "ALTER TABLE dragon_state ADD COLUMN regional_influence INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "wyrmheart_id",
+            "ALTER TABLE dragon_state ADD COLUMN wyrmheart_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
         EnsureColumn(database, "dragon_state", "crown_continuity_days",
             "ALTER TABLE dragon_state ADD COLUMN crown_continuity_days INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
@@ -470,7 +438,16 @@ static bool EnsureLegendColumns(sqlite3 *database,
 static bool EnsureSocialColumns(sqlite3 *database,
                                 char *error, size_t error_capacity)
 {
-    return EnsureColumn(database, "causal_event", "actor_id",
+    return Execute(database,
+        "CREATE TABLE IF NOT EXISTS historic_character ("
+        "slot INTEGER PRIMARY KEY,id INTEGER NOT NULL UNIQUE,ancestor_id INTEGER NOT NULL,"
+        "home_settlement_id INTEGER NOT NULL,name TEXT NOT NULL,birth_day INTEGER NOT NULL,"
+        "death_day INTEGER NOT NULL,generation INTEGER NOT NULL,role INTEGER NOT NULL,"
+        "importance INTEGER NOT NULL);", error, error_capacity) &&
+        EnsureColumn(database, "character_knowledge", "source_name",
+            "ALTER TABLE character_knowledge ADD COLUMN source_name TEXT NOT NULL DEFAULT '';",
+            error, error_capacity) &&
+        EnsureColumn(database, "causal_event", "actor_id",
             "ALTER TABLE causal_event ADD COLUMN actor_id INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
         EnsureColumn(database, "causal_event", "target_id",
@@ -517,6 +494,27 @@ static bool EnsureCharacterLifecycleColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "npc_character", "generation",
             "ALTER TABLE npc_character ADD COLUMN generation INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "travel_coins",
+            "ALTER TABLE npc_character ADD COLUMN travel_coins INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "bandit_group_id",
+            "ALTER TABLE npc_character ADD COLUMN bandit_group_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "hungry_days",
+            "ALTER TABLE npc_character ADD COLUMN hungry_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "unsheltered_nights",
+            "ALTER TABLE npc_character ADD COLUMN unsheltered_nights INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "occupation",
+            "ALTER TABLE npc_character ADD COLUMN occupation INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "travel_destination_id",
+            "ALTER TABLE npc_character ADD COLUMN travel_destination_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "travel_arrival_day",
+            "ALTER TABLE npc_character ADD COLUMN travel_arrival_day INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
         EnsureColumn(database, "meta", "character_births",
             "ALTER TABLE meta ADD COLUMN character_births INTEGER NOT NULL DEFAULT 0;",
@@ -878,6 +876,10 @@ static bool EnsureHistoryOfficeColumns(sqlite3 *database,
             "ALTER TABLE meta ADD COLUMN archive_stewardship_rank "
             "INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
+        EnsureColumn(database, "meta", "archive_dead_since_day",
+            "ALTER TABLE meta ADD COLUMN archive_dead_since_day "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
         EnsureColumn(database, "kingdom", "ruler_character_id",
             "ALTER TABLE kingdom ADD COLUMN ruler_character_id "
             "INTEGER NOT NULL DEFAULT 0;",
@@ -909,6 +911,23 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
     const char *pony_schema =
         "CREATE TABLE IF NOT EXISTS pony_company (id INTEGER PRIMARY KEY CHECK(id=1), team0 INTEGER, team1 INTEGER, encounter INTEGER);"
         "CREATE TABLE IF NOT EXISTS rainbow_pony (id INTEGER PRIMARY KEY, route_id INTEGER NOT NULL, last_seen_route INTEGER NOT NULL, bond INTEGER NOT NULL, quests_completed INTEGER NOT NULL, releases INTEGER NOT NULL, last_met_day INTEGER NOT NULL, quest_kind INTEGER NOT NULL, quest_amount INTEGER NOT NULL, health INTEGER NOT NULL, fatigue INTEGER NOT NULL, hunger INTEGER NOT NULL, seen INTEGER NOT NULL, ready INTEGER NOT NULL);";
+    const char *war_schema =
+        "CREATE TABLE IF NOT EXISTS war_party ("
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE,"
+        " kingdom_id INTEGER NOT NULL, commander_character_id INTEGER NOT NULL,"
+        " home_settlement_id INTEGER NOT NULL, current_settlement_id INTEGER NOT NULL,"
+        " travel_route_id INTEGER NOT NULL, travel_destination_id INTEGER NOT NULL,"
+        " travel_arrival_day INTEGER NOT NULL, members INTEGER NOT NULL,"
+        " order_kind INTEGER NOT NULL, order_route_id INTEGER NOT NULL,"
+        " order_target_id INTEGER NOT NULL, permits_player INTEGER NOT NULL,"
+        " battles_fought INTEGER NOT NULL, casualties INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS dispatch ("
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE,"
+        " kind INTEGER NOT NULL, route_id INTEGER NOT NULL,"
+        " war_party_id INTEGER NOT NULL, origin_settlement_id INTEGER NOT NULL,"
+        " recipient_settlement_id INTEGER NOT NULL, issued_day INTEGER NOT NULL,"
+        " carried INTEGER NOT NULL);";
+
     const char *schema =
         "CREATE TABLE IF NOT EXISTS meta ("
         " id INTEGER PRIMARY KEY CHECK(id=1), schema_version INTEGER NOT NULL,"
@@ -928,7 +947,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " archive_lore_lost_total INTEGER NOT NULL DEFAULT 0,"
         " archive_last_recorded_day INTEGER NOT NULL DEFAULT 0,"
         " archive_lore_ceiling INTEGER NOT NULL DEFAULT 40,"
-        " archive_kit_tool_wear INTEGER NOT NULL DEFAULT 0);"
+        " archive_kit_tool_wear INTEGER NOT NULL DEFAULT 0,"
+        " archive_dead_since_day INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS route ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, from_id INTEGER NOT NULL,"
         " to_id INTEGER NOT NULL, travel_days INTEGER NOT NULL, capacity INTEGER NOT NULL,"
@@ -973,7 +993,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " id INTEGER PRIMARY KEY, location_id INTEGER NOT NULL, coins INTEGER NOT NULL,"
         " food_cargo INTEGER NOT NULL, material_cargo INTEGER NOT NULL, tools_cargo INTEGER NOT NULL,"
         " cargo_capacity INTEGER NOT NULL, passenger_capacity INTEGER NOT NULL,"
-        " reputation INTEGER NOT NULL);";
+        " reputation INTEGER NOT NULL, feed_tray_wheat INTEGER NOT NULL DEFAULT 0);";
     const char *royal_carriage_schema =
         "CREATE TABLE IF NOT EXISTS royal_carriage ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE,"
@@ -1384,7 +1404,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " output_good INTEGER NOT NULL, progress_milli INTEGER NOT NULL,"
         " side INTEGER NOT NULL, spur_length INTEGER NOT NULL,"
         " condition INTEGER NOT NULL, blocker INTEGER NOT NULL,"
-        " accessible INTEGER NOT NULL);";
+        " accessible INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS road_site_stock (site_slot INTEGER NOT NULL,"
+        " good INTEGER NOT NULL, quantity INTEGER NOT NULL, PRIMARY KEY(site_slot,good));";
     const char *gossip_schema =
         "CREATE TABLE IF NOT EXISTS gossip_state ("
         " id INTEGER PRIMARY KEY CHECK(id=1), last_event_id INTEGER NOT NULL,"
@@ -1402,10 +1424,38 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " source_character_id INTEGER NOT NULL, retellings INTEGER NOT NULL,"
         " court_bias INTEGER NOT NULL, alarm INTEGER NOT NULL, confidence INTEGER NOT NULL,"
         " PRIMARY KEY(holder_kind,holder_slot,gossip_slot));";
-    return Execute(database, gossip_schema, error, error_capacity) &&
+    const char *goblin_schema =
+        "CREATE TABLE IF NOT EXISTS dragon_cult_store(good INTEGER PRIMARY KEY,quantity INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS goblin_faction (slot INTEGER PRIMARY KEY,members INTEGER NOT NULL,dungeon_id INTEGER NOT NULL,lair_room INTEGER NOT NULL,porter_room INTEGER NOT NULL,target_room INTEGER NOT NULL,coins INTEGER NOT NULL,gold INTEGER NOT NULL,gems INTEGER NOT NULL,carried_coins INTEGER NOT NULL,carried_gold INTEGER NOT NULL,carried_gems INTEGER NOT NULL,tribute INTEGER NOT NULL,deliveries INTEGER NOT NULL,hunted INTEGER NOT NULL,journey_event_id INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS goblin_politics (slot INTEGER PRIMARY KEY,dragon_id INTEGER NOT NULL,contest_started_day INTEGER NOT NULL,crown_faction INTEGER NOT NULL,raid_faction INTEGER NOT NULL,next_hunt_faction INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS dragon_cult (species INTEGER PRIMARY KEY,initiate INTEGER NOT NULL,bearer INTEGER NOT NULL,keeper INTEGER NOT NULL,voice INTEGER NOT NULL,service INTEGER NOT NULL);";
+    const char *mine_schema =
+        "CREATE TABLE IF NOT EXISTS mine_visit (slot INTEGER PRIMARY KEY CHECK(slot=1),"
+        " phase INTEGER NOT NULL,site_id INTEGER NOT NULL,x INTEGER NOT NULL,y INTEGER NOT NULL,"
+        " revision INTEGER NOT NULL,return_speed INTEGER NOT NULL,light INTEGER NOT NULL,"
+        " steps INTEGER NOT NULL,seen INTEGER NOT NULL,bar_open INTEGER NOT NULL,surveyed INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS mine_pack (good INTEGER PRIMARY KEY,quantity INTEGER NOT NULL);";
+    return Execute(database, "CREATE TABLE IF NOT EXISTS custody_state (slot INTEGER PRIMARY KEY,next_id INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS custody_entry (slot INTEGER PRIMARY KEY,id INTEGER NOT NULL,revision INTEGER NOT NULL,owner_id INTEGER NOT NULL,source_id INTEGER NOT NULL,last_event_id INTEGER NOT NULL,holder_kind INTEGER NOT NULL,holder_id INTEGER NOT NULL,kind INTEGER NOT NULL,reference_id INTEGER NOT NULL,quantity INTEGER NOT NULL,good INTEGER NOT NULL,condition INTEGER NOT NULL,capacity INTEGER NOT NULL,active INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS notice_state (id INTEGER PRIMARY KEY CHECK(id=1),ready INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS notice_board (slot INTEGER PRIMARY KEY,situation_id INTEGER NOT NULL,event_id INTEGER NOT NULL,settlement_id INTEGER NOT NULL,sponsor_id INTEGER NOT NULL,day INTEGER NOT NULL,text TEXT NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS archive_convoy_home (id INTEGER PRIMARY KEY CHECK(id=1),home_id INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS archive_convoy_journey (id INTEGER PRIMARY KEY CHECK(id=1),departure_day INTEGER NOT NULL,arrival_day INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS archive_convoy (id INTEGER PRIMARY KEY CHECK(id=1),origin_id INTEGER NOT NULL,destination_id INTEGER NOT NULL,sponsor_id INTEGER NOT NULL,funding_kingdom_id INTEGER NOT NULL,carriage_id INTEGER NOT NULL,first_route_id INTEGER NOT NULL,first_hop_id INTEGER NOT NULL,book_ids_0 INTEGER NOT NULL,book_ids_1 INTEGER NOT NULL,book_ids_2 INTEGER NOT NULL,book_ids_3 INTEGER NOT NULL,purse INTEGER NOT NULL,wheat INTEGER NOT NULL,book_count INTEGER NOT NULL,reserved_day INTEGER NOT NULL,status INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS archive_seat (id INTEGER PRIMARY KEY CHECK(id=1),seat_id INTEGER NOT NULL,failed_since INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS archive_staff (id INTEGER PRIMARY KEY CHECK(id=1),person_0 INTEGER NOT NULL,person_1 INTEGER NOT NULL,person_2 INTEGER NOT NULL,person_3 INTEGER NOT NULL,seat_id INTEGER NOT NULL,legacy_scribes INTEGER NOT NULL,active INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS archive_recruitment_training (id INTEGER PRIMARY KEY CHECK(id=1),labor_days INTEGER NOT NULL,trainer_labor_days INTEGER NOT NULL,last_work_day INTEGER NOT NULL,wages_paid INTEGER NOT NULL,archive_training_week INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS archive_recruitment_journey (id INTEGER PRIMARY KEY CHECK(id=1),current_id INTEGER NOT NULL,leg_route_id INTEGER NOT NULL,leg_hop_id INTEGER NOT NULL,leg_arrival_day INTEGER NOT NULL,provisioned_days INTEGER NOT NULL,arrived_day INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS archive_recruitment (id INTEGER PRIMARY KEY CHECK(id=1),status INTEGER NOT NULL,person_id INTEGER NOT NULL,trainer_id INTEGER NOT NULL,seat_id INTEGER NOT NULL,origin_id INTEGER NOT NULL,first_route_id INTEGER NOT NULL,first_hop_id INTEGER NOT NULL,donor_ids_0 INTEGER NOT NULL,donor_ids_1 INTEGER NOT NULL,patron_ids_0 INTEGER NOT NULL,patron_ids_1 INTEGER NOT NULL,donor_shares_0 INTEGER NOT NULL,donor_shares_1 INTEGER NOT NULL,purse INTEGER NOT NULL,wheat INTEGER NOT NULL,paper INTEGER NOT NULL,tools INTEGER NOT NULL,travel_wheat INTEGER NOT NULL,start_day INTEGER NOT NULL,training_days INTEGER NOT NULL,trainer_days INTEGER NOT NULL,arrival_estimate INTEGER NOT NULL,ready_estimate INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS grain_supply (slot INTEGER PRIMARY KEY,organiser_id INTEGER NOT NULL,supplier_id INTEGER NOT NULL,route_id INTEGER NOT NULL,shipment_id INTEGER NOT NULL,purse INTEGER NOT NULL,spent INTEGER NOT NULL,ordered INTEGER NOT NULL,delivered INTEGER NOT NULL,lost INTEGER NOT NULL,redirected INTEGER NOT NULL,last_dispatch_day INTEGER NOT NULL,last_arrival_day INTEGER NOT NULL,enabled INTEGER NOT NULL);", error, error_capacity) &&
+        Execute(database, goblin_schema, error, error_capacity) &&
+        Execute(database, mine_schema, error, error_capacity) &&
+           Execute(database, gossip_schema, error, error_capacity) &&
            Execute(database, pony_schema, error, error_capacity) &&
+           Execute(database, war_schema, error, error_capacity) &&
            Execute(database, schema, error, error_capacity) &&
            Execute(database, royal_carriage_schema, error, error_capacity) &&
+           EnsureColumn(database, "royal_carriage", "archive_contract",
+               "ALTER TABLE royal_carriage ADD COLUMN archive_contract INTEGER NOT NULL DEFAULT 0;",
+               error, error_capacity) &&
            Execute(database, royal_route_usage_schema,
                    error, error_capacity) &&
            Execute(database, kingdom_schema, error, error_capacity) &&
@@ -1444,8 +1494,9 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
         "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling,"
         "character_births,character_deaths,archive_kit_tool_wear,"
-        "archive_abbot_character_id,archive_stewardship_rank) "
-        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+        "archive_abbot_character_id,archive_stewardship_rank,"
+        "archive_dead_since_day) "
+        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
     char hash[24];
     (void)snprintf(hash, sizeof(hash), "%016" PRIx64, CcSimHash(sim));
@@ -1479,6 +1530,7 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
     BindInt(statement, 28, sim->archives.kit_tool_wear);
     BindId(statement, 29, sim->archives.abbot_character_id);
     BindInt(statement, 30, sim->archives.stewardship_rank);
+    BindInt(statement, 31, sim->archives.dead_since_day);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
@@ -1518,6 +1570,11 @@ static bool SaveKingdoms(sqlite3 *database, const CcSim *sim,
     sqlite3_finalize(statement);
     return true;
 }
+
+#include "cc_save_grain.inc"
+#include "cc_save_archive_recruitment.inc"
+#include "cc_save_archive_convoy.inc"
+#include "cc_save_war.inc"
 
 static bool SaveTownRecovery(sqlite3 *database, const CcSim *sim,
                              char *error, size_t error_capacity)
@@ -1978,6 +2035,8 @@ static bool SaveRoutes(sqlite3 *database, const CcSim *sim,
     return true;
 }
 
+#include "cc_save_road_stores.inc"
+
 static bool SaveRoadSites(sqlite3 *database, const CcSim *sim,
                           char *error, size_t error_capacity)
 {
@@ -2008,7 +2067,7 @@ static bool SaveRoadSites(sqlite3 *database, const CcSim *sim,
         }
     }
     sqlite3_finalize(statement);
-    return true;
+    return SaveRoadStores(database, sim, error, error_capacity);
 }
 
 static bool SaveMaps(sqlite3 *database, const CcSim *sim,
@@ -2185,7 +2244,7 @@ static bool SaveRoyalCarriages(sqlite3 *database, const CcSim *sim,
     if (sim->schema_version < 38U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
-                 "INSERT INTO royal_carriage VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "INSERT INTO royal_carriage VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
         const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
@@ -2205,6 +2264,7 @@ static bool SaveRoyalCarriages(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 14, carriage->condition);
         BindInt(statement, 15, carriage->trips_completed);
         BindInt(statement, 16, carriage->cargo_losses);
+        BindInt(statement, 17, carriage->archive_contract ? 1 : 0);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement);
@@ -2461,12 +2521,12 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                  "dragon_seed_phase,dragon_seed_days_remaining) "
                  "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
-    const CcGoblinCult *goblins = &sim->goblins;
+    const CcGoblinSociety *goblins = &sim->goblins;
     int column = 1;
     BindId(statement, column++, goblins->id);
     BindText(statement, column++, goblins->name);
     BindInt(statement, column++, goblins->members);
-    BindInt(statement, column++, goblins->devotion);
+    BindInt(statement, column++, sim->dragon_cult.devotion);
     BindInt(statement, column++, (int32_t)goblins->tribute_phase);
     BindId(statement, column++, goblins->tribute_target_id);
     BindId(statement, column++, goblins->last_tribute_origin_id);
@@ -2479,8 +2539,8 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
     BindInt(statement, column++, goblins->cohesion);
     BindInt(statement, column++, goblins->target_warned ? 1 : 0);
     BindInt(statement, column++, goblins->expeditions_intercepted);
-    BindInt(statement, column++, (int32_t)goblins->dragon_seed_phase);
-    BindInt(statement, column++, goblins->dragon_seed_days_remaining);
+    BindInt(statement, column++, (int32_t)sim->dragon_cult.dragon_seed_phase);
+    BindInt(statement, column++, sim->dragon_cult.dragon_seed_days_remaining);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!result) return false;
@@ -2494,8 +2554,8 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                  "regional_influence,crown_continuity_days,hunt_cooldown_days,"
                  "hunts,egg_count,brood_days_remaining,brood_cooldown_days,"
                  "broods_laid,whelps_dispersed,afterdeath_days,lifecycle_event_id,"
-                 "territoryless_days,hair_color) "
-                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "territoryless_days,hair_color,wyrmheart_id) "
+                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     const CcDragon *dragon = &sim->dragon;
     column = 1;
@@ -2533,6 +2593,7 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
     BindId(statement, column++, dragon->lifecycle_event_id);
     BindInt(statement, column++, dragon->territoryless_days);
     BindInt(statement, column++, (int32_t)dragon->hair_color);
+    BindId(statement, column++, sim->schema_version >= 57U ? dragon->wyrmheart_id : 0U);
     result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!result) return false;
@@ -2853,6 +2914,30 @@ static bool SaveQuestArchitecture(sqlite3 *database, const CcSim *sim,
     return true;
 }
 
+static bool SaveHistoricalCharacters(sqlite3 *database, const CcSim *sim,
+                                      char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 62U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "INSERT INTO historic_character VALUES(?,?,?,?,?,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->historic_character_count; ++i) {
+        const CcHistoricCharacter *item = &sim->historic_characters[i];
+        BindInt(statement, 1, i); BindId(statement, 2, item->id);
+        BindId(statement, 3, item->ancestor_id); BindId(statement, 4, item->home_settlement_id);
+        BindText(statement, 5, item->name); BindInt(statement, 6, item->birth_day);
+        BindInt(statement, 7, item->death_day); BindInt(statement, 8, item->generation);
+        BindInt(statement, 9, (int32_t)item->role); BindInt(statement, 10, item->importance);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
 static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
                            char *error, size_t error_capacity)
 {
@@ -2866,14 +2951,16 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
                  "(slot,id,name,home_settlement_id,current_settlement_id,faction_id,"
                  "role,goal,activity,appearance_seed,player_disposition,stress,courage,"
                  "memory_count,memory_write_index,knowledge_count,"
-                 "knowledge_write_index,ancestor_id,birth_day,death_day,generation) "
-                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "knowledge_write_index,ancestor_id,birth_day,death_day,generation,"
+                 "travel_coins,bandit_group_id,hungry_days,unsheltered_nights,occupation,"
+                 "travel_destination_id,travel_arrival_day) "
+                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &character_statement, error, error_capacity) ||
         !Prepare(database,
                  "INSERT INTO character_memory VALUES(?,?,?,?,?,?);",
                  &memory_statement, error, error_capacity) ||
         !Prepare(database,
-                 "INSERT INTO character_knowledge VALUES(?,?,?,?,?,?,?,?,?);",
+                 "INSERT INTO character_knowledge VALUES(?,?,?,?,?,?,?,?,?,?);",
                  &knowledge_statement, error, error_capacity) ||
         !Prepare(database,
                  "INSERT INTO situation_character "
@@ -2915,6 +3002,13 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
         BindInt(character_statement, column++, character->birth_day);
         BindInt(character_statement, column++, character->death_day);
         BindInt(character_statement, column++, character->generation);
+        BindMoney(character_statement, column++, sim->schema_version >= 60U ? character->travel_coins : 0);
+        BindId(character_statement, column++, sim->schema_version >= 60U ? character->bandit_group_id : 0U);
+        BindInt(character_statement, column++, sim->schema_version >= 60U ? character->hungry_days : 0);
+        BindInt(character_statement, column++, sim->schema_version >= 60U ? character->unsheltered_nights : 0);
+        BindInt(character_statement, column++, sim->schema_version >= 79U ? (int32_t)character->occupation : 0);
+        BindId(character_statement, column++, sim->schema_version >= 82U ? character->travel_destination_id : 0U);
+        BindInt(character_statement, column++, sim->schema_version >= 82U ? character->travel_arrival_day : 0);
         if (!StepDone(database, character_statement, error, error_capacity) ||
             !ResetStatement(database, character_statement,
                             error, error_capacity)) goto failed;
@@ -2946,6 +3040,7 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
             BindInt(knowledge_statement, 8,
                     item->private_knowledge ? 1 : 0);
             BindInt(knowledge_statement, 9, item->day);
+            BindText(knowledge_statement, 10, item->source_name);
             if (!StepDone(database, knowledge_statement,
                           error, error_capacity) ||
                 !ResetStatement(database, knowledge_statement,
@@ -2999,7 +3094,7 @@ static bool SavePlayer(sqlite3 *database, const CcSim *sim,
                        char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "INSERT INTO player_company VALUES(?,?,?,?,?,?,?,?,?);",
+    if (!Prepare(database, "INSERT INTO player_company VALUES(?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     const CcPlayerCompany *p = &sim->player;
     BindId(statement, 1, p->id); BindId(statement, 2, p->location_id);
@@ -3007,6 +3102,7 @@ static bool SavePlayer(sqlite3 *database, const CcSim *sim,
     BindInt(statement, 5, p->cargo[CC_GOOD_MATERIAL]); BindInt(statement, 6, p->cargo[CC_GOOD_TOOLS]);
     BindInt(statement, 7, p->cargo_capacity); BindInt(statement, 8, p->passenger_capacity);
     BindInt(statement, 9, p->reputation);
+    BindInt(statement, 10, p->feed_tray_wheat);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
@@ -3219,23 +3315,27 @@ static bool ReadGossip(sqlite3 *database, CcSim *sim,
     sqlite3_finalize(statement);
     if (!Prepare(database, "SELECT slot,id,stories,told_player FROM gossip_carrier ORDER BY slot;",
                   &statement, error, error_capacity)) return false;
-    for (int32_t i = 0; i < CcSimGossipCarrierCapacity(sim); ++i) {
-        if (sqlite3_step(statement) != SQLITE_ROW ||
-            sqlite3_column_int64(statement, 0) != i) goto invalid;
+    int result;
+    int32_t carrier_capacity = CcSimGossipCarrierCapacity(sim);
+    /* The carrier table is as long as the character cap the save was written
+       under. Tolerate a shorter table so a save made before the cast grew
+       still loads; any missing carriers stay zero from the initial clear. */
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        sqlite3_int64 slot = sqlite3_column_int64(statement, 0);
+        if (slot < 0 || slot >= carrier_capacity) goto invalid;
         sqlite3_int64 stories = sqlite3_column_int64(statement, 2);
         sqlite3_int64 told = sqlite3_column_int64(statement, 3);
         if (stories < 0 || stories > UINT32_MAX ||
             told < 0 || told > UINT32_MAX) goto invalid;
-        sim->gossip_carriers[i].id = (CcId)sqlite3_column_int64(statement, 1);
-        sim->gossip_carriers[i].stories = (uint32_t)stories;
-        sim->gossip_carriers[i].told_player = (uint32_t)told;
+        sim->gossip_carriers[slot].id = (CcId)sqlite3_column_int64(statement, 1);
+        sim->gossip_carriers[slot].stories = (uint32_t)stories;
+        sim->gossip_carriers[slot].told_player = (uint32_t)told;
     }
-    if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
+    if (result != SQLITE_DONE) goto invalid;
     sqlite3_finalize(statement);
     if (!Prepare(database, "SELECT holder_kind,holder_slot,gossip_slot,source_character_id,"
                   "retellings,court_bias,alarm,confidence FROM gossip_version;",
                   &statement, error, error_capacity)) return false;
-    int result;
     while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
         sqlite3_int64 kind = sqlite3_column_int64(statement, 0);
         sqlite3_int64 holder = sqlite3_column_int64(statement, 1);
@@ -3263,6 +3363,11 @@ invalid:
     return false;
 }
 
+#include "persistence/cc_save_custody.inc"
+#include "persistence/cc_save_notices.inc"
+#include "persistence/cc_save_mine.inc"
+#include "persistence/cc_save_goblin_politics.inc"
+
 static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
                                  uint64_t journal_generation,
                                  uint64_t journal_cursor,
@@ -3276,13 +3381,15 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         return false;
     }
     return Execute(database,
-            "DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
+            "DELETE FROM goblin_faction; DELETE FROM goblin_politics; DELETE FROM dragon_cult; DELETE FROM dragon_cult_store;"
+            "DELETE FROM custody_state; DELETE FROM custody_entry; DELETE FROM mine_visit; DELETE FROM mine_pack;"
+            "DELETE FROM notice_state; DELETE FROM notice_board; DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
             "DELETE FROM gossip_version;"
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
-            "DELETE FROM town_recovery;"
+            "DELETE FROM town_recovery; DELETE FROM grain_supply; DELETE FROM archive_recruitment; DELETE FROM archive_recruitment_journey; DELETE FROM archive_recruitment_training; DELETE FROM archive_staff; DELETE FROM archive_seat; DELETE FROM archive_convoy; DELETE FROM archive_convoy_journey; DELETE FROM archive_convoy_home; DELETE FROM war_party; DELETE FROM dispatch;"
             "DELETE FROM horse_team; DELETE FROM stable_horse;"
             "DELETE FROM pony_company; DELETE FROM rainbow_pony;"
-            "DELETE FROM route; DELETE FROM road_site;"
+            "DELETE FROM route; DELETE FROM road_site; DELETE FROM road_site_stock;"
             "DELETE FROM map_object; DELETE FROM map_collection;"
             "DELETE FROM player_route_knowledge;"
             "DELETE FROM player_settlement_knowledge;"
@@ -3303,7 +3410,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM quest_outcome; DELETE FROM delayed_echo_queue;"
             "DELETE FROM situation_character; DELETE FROM character_memory;"
             "DELETE FROM character_knowledge; DELETE FROM character_relationship;"
-            "DELETE FROM npc_character;"
+            "DELETE FROM npc_character; DELETE FROM historic_character;"
             "DELETE FROM causal_event;"
             "DELETE FROM player_company; DELETE FROM player_commitment;"
             "DELETE FROM player_journey; DELETE FROM runtime_state;"
@@ -3318,9 +3425,16 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveMeta(database, sim, journal_generation, journal_cursor,
                  error, error_capacity) &&
         SaveGossip(database, sim, error, error_capacity) &&
+        SaveCustody(database, sim, error, error_capacity) &&
+        SaveNotices(database, sim, error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
         SaveTownRecovery(database, sim, error, error_capacity) &&
+              SaveGrainSupplies(database, sim, error, error_capacity) &&
+              SaveArchiveRecruitment(database, sim, error, error_capacity) &&
+              SaveArchiveConvoy(database, sim, error, error_capacity) &&
+              SaveWarParties(database, sim, error, error_capacity) &&
+              SaveDispatches(database, sim, error, error_capacity) &&
         SavePonies(database, sim, error, error_capacity) &&
         SaveHorseTeam(database, sim, error, error_capacity) &&
         SaveStableHorses(database, sim, error, error_capacity) &&
@@ -3345,10 +3459,13 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveSituationCasts(database, sim, error, error_capacity) &&
         SaveQuestArchitecture(database, sim, error, error_capacity) &&
         SaveCharacters(database, sim, error, error_capacity) &&
+        SaveHistoricalCharacters(database, sim, error, error_capacity) &&
         SaveEvents(database, sim, error, error_capacity) &&
         SavePlayer(database, sim, error, error_capacity) &&
         SavePlayerCommitment(database, sim, error, error_capacity) &&
-        SaveJourneyState(database, sim, error, error_capacity);
+        SaveJourneyState(database, sim, error, error_capacity) &&
+        SaveGoblinPolitics(database, sim, error, error_capacity) &&
+        SaveMine(database, sim, error, error_capacity);
 }
 
 static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
@@ -3412,7 +3529,8 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
         "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling,"
         "character_births,character_deaths,archive_kit_tool_wear,"
-        "archive_abbot_character_id,archive_stewardship_rank "
+        "archive_abbot_character_id,archive_stewardship_rank,"
+        "archive_dead_since_day "
         "FROM meta WHERE id=1;", &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
         SetError(error, error_capacity, "Campaign metadata is missing.");
@@ -3435,7 +3553,7 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
     sim->event_count = sqlite3_column_int(statement, 14);
     sim->event_write_index = sqlite3_column_int(statement, 15);
     const unsigned char *hash_text = sqlite3_column_text(statement, 16);
-    if (!ParseStoredHash(hash_text, expected_hash)) {
+    if (!CcSaveParseStoredHash(hash_text, expected_hash)) {
         SetError(error, error_capacity, "Campaign hash is invalid.");
         sqlite3_finalize(statement); return false;
     }
@@ -3454,6 +3572,7 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
     sim->archives.abbot_character_id =
         (CcId)sqlite3_column_int64(statement, 28);
     sim->archives.stewardship_rank = sqlite3_column_int(statement, 29);
+    sim->archives.dead_since_day = sqlite3_column_int(statement, 30);
     sqlite3_finalize(statement);
     return true;
 }
@@ -4114,7 +4233,7 @@ static bool ReadRoadSites(sqlite3 *database, CcSim *sim,
                  "Road site rows are incomplete.");
         return false;
     }
-    return true;
+    return ReadRoadStores(database, sim, error, error_capacity);
 }
 
 static bool ReadMaps(sqlite3 *database, CcSim *sim,
@@ -4379,7 +4498,7 @@ static bool ReadRoyalCarriages(sqlite3 *database, CcSim *sim,
                  "SELECT slot,id,kingdom_id,location_id,route_id,destination_id,"
                  "target_id,active_shipment_id,mode,departure_day,arrival_day,"
                  "blocked_since_day,next_dispatch_day,condition,trips_completed,"
-                 "cargo_losses "
+                 "cargo_losses,archive_contract "
                  "FROM royal_carriage ORDER BY slot;",
                  &statement, error, error_capacity)) return false;
     int32_t rows = 0;
@@ -4409,6 +4528,13 @@ static bool ReadRoyalCarriages(sqlite3 *database, CcSim *sim,
         carriage->condition = sqlite3_column_int(statement, 13);
         carriage->trips_completed = sqlite3_column_int(statement, 14);
         carriage->cargo_losses = sqlite3_column_int(statement, 15);
+        int archive_contract = sqlite3_column_int(statement, 16);
+        if (archive_contract < 0 || archive_contract > 1) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity, "Archive carriage contract is invalid.");
+            return false;
+        }
+        carriage->archive_contract = sim->schema_version >= 78U && archive_contract != 0;
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -4704,7 +4830,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
         sqlite3_finalize(statement);
         return false;
     }
-    CcGoblinCult *goblins = &sim->goblins;
+    CcGoblinSociety *goblins = &sim->goblins;
     int column = 0;
     goblins->id = (CcId)sqlite3_column_int64(statement, column++);
     if (!ReadTextColumn(statement, column++, goblins->name,
@@ -4714,7 +4840,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
         return false;
     }
     goblins->members = sqlite3_column_int(statement, column++);
-    goblins->devotion = sqlite3_column_int(statement, column++);
+    sim->dragon_cult.devotion = sqlite3_column_int(statement, column++);
     goblins->tribute_phase =
         (CcGoblinTributePhase)sqlite3_column_int(statement, column++);
     goblins->tribute_target_id =
@@ -4735,9 +4861,9 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     goblins->target_warned = sqlite3_column_int(statement, column++) != 0;
     goblins->expeditions_intercepted =
         sqlite3_column_int(statement, column++);
-    goblins->dragon_seed_phase =
+    sim->dragon_cult.dragon_seed_phase =
         (CcGoblinDragonSeedPhase)sqlite3_column_int(statement, column++);
-    goblins->dragon_seed_days_remaining =
+    sim->dragon_cult.dragon_seed_days_remaining =
         sqlite3_column_int(statement, column++);
     sqlite3_finalize(statement);
 
@@ -4750,7 +4876,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
                  "territory_stability,regional_influence,crown_continuity_days,"
                  "hunt_cooldown_days,hunts,egg_count,brood_days_remaining,"
                  "brood_cooldown_days,broods_laid,whelps_dispersed,afterdeath_days,"
-                 "lifecycle_event_id,territoryless_days,hair_color "
+                 "lifecycle_event_id,territoryless_days,hair_color,wyrmheart_id "
                  "FROM dragon_state WHERE slot=1;",
                  &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
@@ -4810,6 +4936,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
         (CcId)sqlite3_column_int64(statement, column++);
     dragon->territoryless_days = sqlite3_column_int(statement, column++);
     dragon->hair_color = (CcDragonHairColor)sqlite3_column_int(statement, column++);
+    dragon->wyrmheart_id = (CcId)sqlite3_column_int64(statement, column++);
     sqlite3_finalize(statement);
 
     if (sim->schema_version >= 11U) {
@@ -5250,6 +5377,46 @@ static bool ReadQuestArchitecture(sqlite3 *database, CcSim *sim,
     return true;
 }
 
+static bool ReadHistoricalCharacters(sqlite3 *database, CcSim *sim,
+                                      char *error, size_t error_capacity)
+{
+    sim->historic_character_count = 0;
+    if (sim->schema_version < 62U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "SELECT * FROM historic_character ORDER BY slot;",
+                 &statement, error, error_capacity)) return false;
+    int result;
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        if (slot != sim->historic_character_count || slot >= CC_MAX_HISTORIC_CHARACTERS) {
+            SetError(error, error_capacity, "Historical character rows exceed save limits.");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        CcHistoricCharacter *item = &sim->historic_characters[slot];
+        item->id = (CcId)sqlite3_column_int64(statement, 1);
+        item->ancestor_id = (CcId)sqlite3_column_int64(statement, 2);
+        item->home_settlement_id = (CcId)sqlite3_column_int64(statement, 3);
+        if (!ReadTextColumn(statement, 4, item->name, sizeof(item->name),
+                            "historical name", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+        item->birth_day = sqlite3_column_int(statement, 5);
+        item->death_day = sqlite3_column_int(statement, 6);
+        item->generation = sqlite3_column_int(statement, 7);
+        item->role = (CcCharacterRole)sqlite3_column_int(statement, 8);
+        item->importance = sqlite3_column_int(statement, 9);
+        sim->historic_character_count++;
+    }
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE) {
+        SetSqlError(error, error_capacity, database, "Historical characters could not be read");
+        return false;
+    }
+    return true;
+}
+
 static bool ReadCharacters(sqlite3 *database, CcSim *sim,
                            char *error, size_t error_capacity)
 {
@@ -5280,6 +5447,16 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
         character->current_settlement_id =
             (CcId)sqlite3_column_int64(statement, 4);
         character->faction_id = (CcId)sqlite3_column_int64(statement, 5);
+        character->occupation = CC_OCCUPATION_NONE;
+        if (sim->schema_version >= 79U) {
+            int64_t occupation = sqlite3_column_int64(statement, 25);
+            if (occupation < CC_OCCUPATION_NONE || occupation >= CC_OCCUPATION_COUNT) {
+                SetError(error, error_capacity, "Character occupation is outside the trade list.");
+                sqlite3_finalize(statement);
+                return false;
+            }
+            character->occupation = (CcCharacterOccupation)occupation;
+        }
         character->role =
             (CcCharacterRole)sqlite3_column_int(statement, 6);
         character->goal =
@@ -5302,6 +5479,16 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
         character->birth_day = sqlite3_column_int(statement, 18);
         character->death_day = sqlite3_column_int(statement, 19);
         character->generation = sqlite3_column_int(statement, 20);
+        if (sim->schema_version >= 60U) {
+            character->travel_coins = sqlite3_column_int64(statement, 21);
+            character->bandit_group_id = (CcId)sqlite3_column_int64(statement, 22);
+            character->hungry_days = sqlite3_column_int(statement, 23);
+            character->unsheltered_nights = sqlite3_column_int(statement, 24);
+        }
+        if (sim->schema_version >= 82U) {
+            character->travel_destination_id = (CcId)sqlite3_column_int64(statement, 26);
+            character->travel_arrival_day = sqlite3_column_int(statement, 27);
+        }
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -5343,7 +5530,7 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
     if (sim->schema_version >= 19U) {
         if (!Prepare(database,
                      "SELECT character_slot,knowledge_slot,kind,subject_id,"
-                     "source_character_id,event_id,certainty,private_knowledge,day "
+                     "source_character_id,event_id,certainty,private_knowledge,day,source_name "
                      "FROM character_knowledge "
                      "ORDER BY character_slot,knowledge_slot;",
                      &statement, error, error_capacity)) return false;
@@ -5375,6 +5562,13 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
             knowledge->private_knowledge =
                 sqlite3_column_int(statement, 7) != 0;
             knowledge->day = sqlite3_column_int(statement, 8);
+            if (sim->schema_version >= 62U &&
+                !ReadTextColumn(statement, 9, knowledge->source_name,
+                                sizeof(knowledge->source_name), "knowledge source name",
+                                error, error_capacity)) {
+                sqlite3_finalize(statement);
+                return false;
+            }
             knowledge_rows += 1;
         }
         sqlite3_finalize(statement);
@@ -5478,6 +5672,7 @@ static bool ReadPlayer(sqlite3 *database, CcSim *sim,
     p->passenger_capacity = sqlite3_column_int(statement, 7);
     p->map_capacity = CC_MAP_CAPACITY;
     p->reputation = sqlite3_column_int(statement, 8);
+    p->feed_tray_wheat = sqlite3_column_int(statement, 9);
     sqlite3_finalize(statement);
     return true;
 }
@@ -5633,821 +5828,6 @@ static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
     return true;
 }
 
-static bool ValidateJournalCheckpoint(sqlite3 *database, const CcSim *sim,
-                                      uint64_t generation, uint64_t cursor,
-                                      char *error, size_t error_capacity)
-{
-    sqlite3_stmt *statement = NULL;
-    if (!Prepare(database,
-                 "SELECT record_version,world_seed,initial_state_hash "
-                 "FROM journal_epoch WHERE generation=?;",
-                 &statement, error, error_capacity)) return false;
-    (void)sqlite3_bind_int64(statement, 1, (sqlite3_int64)generation);
-    if (sqlite3_step(statement) != SQLITE_ROW) {
-        SetError(error, error_capacity,
-                 "Journal checkpoint references a missing epoch.");
-        sqlite3_finalize(statement);
-        return false;
-    }
-    int32_t record_version = sqlite3_column_int(statement, 0);
-    uint32_t world_seed = (uint32_t)sqlite3_column_int(statement, 1);
-    uint64_t checkpoint_hash = 0U;
-    bool parsed = ParseStoredHash(sqlite3_column_text(statement, 2),
-                                  &checkpoint_hash);
-    sqlite3_finalize(statement);
-    if (record_version != CC_JOURNAL_RECORD_VERSION ||
-        world_seed != sim->world_seed || !parsed) {
-        SetError(error, error_capacity,
-                 "Journal epoch does not match the campaign checkpoint.");
-        return false;
-    }
-    if (cursor > 0U) {
-        if (!Prepare(database,
-                     "SELECT post_state_hash FROM action_journal "
-                     "WHERE generation=? AND ordinal=?;",
-                     &statement, error, error_capacity)) return false;
-        (void)sqlite3_bind_int64(statement, 1, (sqlite3_int64)generation);
-        (void)sqlite3_bind_int64(statement, 2, (sqlite3_int64)cursor);
-        if (sqlite3_step(statement) != SQLITE_ROW ||
-            !ParseStoredHash(sqlite3_column_text(statement, 0),
-                             &checkpoint_hash)) {
-            SetError(error, error_capacity,
-                     "Journal checkpoint cursor is missing or corrupt.");
-            sqlite3_finalize(statement);
-            return false;
-        }
-        sqlite3_finalize(statement);
-    }
-    if (CcSimHash(sim) != checkpoint_hash) {
-        SetError(error, error_capacity,
-                 "Journal checkpoint hash does not match the snapshot.");
-        return false;
-    }
-    return true;
-}
-
-static bool ReplayJournal(sqlite3 *database, CcSim *sim,
-                          uint64_t generation, uint64_t cursor,
-                          uint64_t *replayed_through,
-                          char *error, size_t error_capacity)
-{
-    if (!ValidateJournalCheckpoint(database, sim, generation, cursor,
-                                   error, error_capacity)) return false;
-    sqlite3_stmt *statement = NULL;
-    const char *sql =
-        "SELECT ordinal,record_version,operation_kind,command_kind,target_id,"
-        "good,amount,dungeon_state,step_count,sim_schema_version,"
-        "generator_version,pre_state_hash,post_state_hash "
-        "FROM action_journal WHERE generation=? AND ordinal>? "
-        "ORDER BY ordinal ASC;";
-    if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
-    (void)sqlite3_bind_int64(statement, 1, (sqlite3_int64)generation);
-    (void)sqlite3_bind_int64(statement, 2, (sqlite3_int64)cursor);
-    uint64_t expected_ordinal = cursor + 1U;
-    uint32_t expected_schema_version = sim->schema_version;
-    uint32_t expected_generator_version = sim->generator_version;
-    int result = SQLITE_ROW;
-    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
-        uint64_t ordinal = (uint64_t)sqlite3_column_int64(statement, 0);
-        int32_t version = sqlite3_column_int(statement, 1);
-        CcJournalOperationKind operation =
-            (CcJournalOperationKind)sqlite3_column_int(statement, 2);
-        int32_t stored_command_kind = sqlite3_column_int(statement, 3);
-        int32_t step_count = sqlite3_column_int(statement, 8);
-        uint32_t schema_version =
-            (uint32_t)sqlite3_column_int(statement, 9);
-        uint32_t generator_version =
-            (uint32_t)sqlite3_column_int(statement, 10);
-        CcCommand command = {
-            .kind = ReadCommandKind(schema_version, stored_command_kind),
-            .target_id = (CcId)sqlite3_column_int64(statement, 4),
-            .good = (CcGood)sqlite3_column_int(statement, 5),
-            .amount = sqlite3_column_int(statement, 6),
-            .dungeon_state =
-                (CcDungeonState)sqlite3_column_int(statement, 7)
-        };
-        uint64_t pre_hash = 0U;
-        uint64_t post_hash = 0U;
-        bool hashes_valid =
-            ParseStoredHash(sqlite3_column_text(statement, 11), &pre_hash) &&
-            ParseStoredHash(sqlite3_column_text(statement, 12), &post_hash);
-        if (ordinal != expected_ordinal ||
-            version != CC_JOURNAL_RECORD_VERSION ||
-            schema_version != expected_schema_version ||
-            generator_version != expected_generator_version ||
-            !hashes_valid || CcSimHash(sim) != pre_hash) {
-            SetError(error, error_capacity,
-                     "Action journal continuity check failed.");
-            sqlite3_finalize(statement);
-            return false;
-        }
-        char replay_error[192];
-        bool applied = true;
-        switch (operation) {
-            case CC_JOURNAL_OPERATION_COMMAND:
-                applied = CcSimApply(sim, &command, replay_error,
-                                     sizeof(replay_error));
-                break;
-            case CC_JOURNAL_OPERATION_ADVANCE_DAYS:
-                if (step_count <= 0 ||
-                    step_count > CC_JOURNAL_MAX_DAY_ADVANCE ||
-                    sim->current_day > CC_SIM_MAX_DAY - step_count) {
-                    applied = false;
-                }
-                else CcSimAdvanceDays(sim, step_count);
-                break;
-            case CC_JOURNAL_OPERATION_ADVANCE_RUNTIME_TICKS:
-                if (step_count <= 0 ||
-                    step_count > CC_JOURNAL_MAX_RUNTIME_ADVANCE ||
-                    sim->clock.tick > UINT64_MAX - (uint64_t)step_count) {
-                    applied = false;
-                }
-                else CcSimAdvanceRuntimeTicks(sim, step_count);
-                break;
-            default:
-                applied = false;
-                break;
-        }
-        if (!applied || CcSimHash(sim) != post_hash) {
-            SetError(error, error_capacity,
-                     "Action journal replay diverged from its committed hash.");
-            sqlite3_finalize(statement);
-            return false;
-        }
-        expected_ordinal += 1U;
-    }
-    if (result != SQLITE_DONE) {
-        SetSqlError(error, error_capacity, database,
-                    "Could not replay action journal");
-        sqlite3_finalize(statement);
-        return false;
-    }
-    sqlite3_finalize(statement);
-    *replayed_through = expected_ordinal - 1U;
-    return true;
-}
-
-static void TunePhysicalReserveTargets(CcSim *sim)
-{
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        CcSettlement *place = &sim->settlements[i];
-        switch (place->function) {
-            case CC_SETTLEMENT_FARMING:
-                place->reserve_target[CC_GOOD_IRON] = 2;
-                place->reserve_target[CC_GOOD_TOOLS] = 6;
-                break;
-            case CC_SETTLEMENT_MARKET:
-                place->reserve_target[CC_GOOD_IRON] = 16;
-                place->reserve_target[CC_GOOD_TOOLS] = 12;
-                break;
-            case CC_SETTLEMENT_FORTRESS:
-                place->reserve_target[CC_GOOD_IRON] = 8;
-                place->reserve_target[CC_GOOD_TOOLS] = 8;
-                break;
-            case CC_SETTLEMENT_MINING:
-                place->reserve_target[CC_GOOD_IRON] = 12;
-                place->reserve_target[CC_GOOD_TOOLS] = 8;
-                break;
-            case CC_SETTLEMENT_CAPITAL:
-                place->reserve_target[CC_GOOD_IRON] = 16;
-                place->reserve_target[CC_GOOD_TOOLS] = 14;
-                break;
-            case CC_SETTLEMENT_DUNGEON_TOWN:
-                place->reserve_target[CC_GOOD_IRON] = 10;
-                place->reserve_target[CC_GOOD_TOOLS] = 6;
-                break;
-        }
-    }
-}
-
-static bool HasQuestArchitecture(const CcSim *sim)
-{
-    if (sim->front_count > 0 || sim->quest_outcome_count > 0 ||
-        sim->pending_echo_count > 0) return true;
-    for (int32_t i = 0; i < sim->situation_count; ++i) {
-        const CcSituation *situation = &sim->situations[i];
-        if (situation->front_id != 0U ||
-            situation->objective.progress.limit > 0) return true;
-    }
-    return false;
-}
-
-static void UpgradeLegacyJourneyRhythm(CcSim *sim)
-{
-    if (sim == NULL || !sim->journey.active ||
-        sim->journey.total_subticks <= 0) return;
-    int32_t old_total = sim->journey.total_subticks;
-    int32_t old_days = old_total / CC_WORLD_DAY_SUBTICKS;
-    if (old_days < 1) old_days = 1;
-    int32_t watches = old_days * 2;
-    if (watches < 3) watches = 3;
-    int32_t new_total = watches * CC_WORLD_WATCH_SUBTICKS;
-    sim->journey.elapsed_subticks = (int32_t)(
-        (int64_t)sim->journey.elapsed_subticks * new_total / old_total);
-    sim->journey.encounter_subticks = (int32_t)(
-        (int64_t)sim->journey.encounter_subticks * new_total / old_total);
-    sim->journey.total_subticks = new_total;
-    sim->carriage.progress_milli = (int32_t)(
-        (int64_t)sim->journey.elapsed_subticks * 1000 / new_total);
-    if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-        int32_t pace_rate = sim->journey.pace == CC_JOURNEY_PACE_CAREFUL ?
-            24 : sim->journey.pace == CC_JOURNEY_PACE_PUSH ? 38 :
-            CC_TRAVEL_GAME_MINUTES_PER_SECOND;
-        int32_t base_speed = (int32_t)(
-            (INT64_C(52000) * CC_TRAVEL_GAME_MINUTES_PER_SECOND *
-             CC_WORLD_TICKS_PER_SECOND) / new_total);
-        sim->carriage.speed_milli_per_second =
-            base_speed * pace_rate / CC_TRAVEL_GAME_MINUTES_PER_SECOND;
-    } else {
-        sim->carriage.speed_milli_per_second = 0;
-    }
-}
-
-static void ClearMissingLegacyEventReferences(CcSim *sim)
-{
-    for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
-        CcEvent *event = &sim->events[i];
-        if (event->id != 0U && event->parent_id != 0U &&
-            CcSimEvent(sim, event->parent_id) == NULL) {
-            event->parent_id = 0U;
-        }
-    }
-    for (int32_t i = 0; i < sim->situation_count; ++i) {
-        CcSituation *situation = &sim->situations[i];
-        if (situation->cause_event_id != 0U &&
-            CcSimEvent(sim, situation->cause_event_id) == NULL) {
-            situation->cause_event_id = 0U;
-        }
-    }
-}
-
-static bool LegacyCharacterNameExists(const CcSim *sim, int32_t except,
-                                      const char *name)
-{
-    for (int32_t i = 0; i < sim->character_count; ++i) {
-        if (i != except && strcmp(sim->characters[i].name, name) == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
-static void MakeLegacyCharacterNamesUnique(CcSim *sim)
-{
-    for (int32_t i = 0; i < sim->character_count; ++i) {
-        CcCharacter *character = &sim->characters[i];
-        bool duplicate = false;
-        for (int32_t earlier = 0; earlier < i; ++earlier) {
-            if (strcmp(sim->characters[earlier].name, character->name) == 0) {
-                duplicate = true;
-                break;
-            }
-        }
-        if (!duplicate) continue;
-
-        char name[CC_NAME_CAPACITY];
-        uint32_t ordinal = (uint32_t)i;
-        do {
-            CcGenerateCharacterName(
-                sim->world_seed, character->home_settlement_id,
-                character->generation, ordinal++, name);
-        } while (LegacyCharacterNameExists(sim, i, name) && ordinal < 2048U);
-        (void)snprintf(character->name, sizeof(character->name), "%s", name);
-    }
-}
-
-static void FinishMaterialChainUpgrade(CcSim *sim)
-{
-    CcSimInitializeMaterialChain(sim);
-    CcSimUpgradeHistoryOffices(sim);
-    CcSimUpgradeArchivePhysicalLore(sim);
-    CcSimInitializeRoyalCarriages(sim);
-    sim->schema_version = CC_SIM_SCHEMA_VERSION;
-    sim->generator_version = CC_GENERATOR_VERSION;
-}
-
-static void FinishLegacyRuntimeUpgrade(CcSim *sim)
-{
-    if (!HasQuestArchitecture(sim)) CcSimUpgradeQuestArchitecture(sim);
-    CcSimInitializePlayerRouteKnowledge(sim);
-    UpgradeLegacyJourneyRhythm(sim);
-    CcSimUpgradeCharacterLifecycles(sim);
-    CcSimUpgradeGrainEconomy(sim);
-    CcSimInitializeRoadSites(sim);
-    CcSimUpgradeFlockEconomy(sim);
-    ClearMissingLegacyEventReferences(sim);
-    FinishMaterialChainUpgrade(sim);
-}
-
-static void InitializeExtendedGoods(CcSim *sim)
-{
-    for (int32_t settlement = 0;
-         settlement < sim->settlement_count; ++settlement) {
-        CcSettlement *place = &sim->settlements[settlement];
-        for (int32_t good = CC_LEGACY_GOOD_COUNT;
-             good < CC_GOOD_COUNT; ++good) {
-            place->price[good] =
-                CcGoodDefinitionFor((CcGood)good)->base_price;
-        }
-    }
-    CcSimInitializeWoodEconomy(sim);
-    CcSimInitializeStoneEconomy(sim);
-    CcSimInitializePaperEconomy(sim);
-}
-
-static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
-                                       char *error, size_t error_capacity)
-{
-    uint32_t legacy_version = sim->schema_version;
-    if ((legacy_version == 38U || legacy_version == 39U ||
-         legacy_version == 40U || legacy_version == 41U ||
-         legacy_version == 42U || legacy_version == 43U ||
-         legacy_version == 44U || legacy_version == 45U ||
-         legacy_version == 46U || legacy_version == 47U ||
-         legacy_version == 48U || legacy_version == 49U ||
-         legacy_version == 50U || legacy_version == 51U ||
-         legacy_version == 52U) &&
-        sim->generator_version == 25U) {
-        /* Schema 47 adds bandit war camps (camp_settlement_id, default
-         * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,
-         * default 0). Schema 49 makes notable famine accounts gossip and
-         * schema 50 adds goblin raids, cult rallies, dragon omens and dragon
-         * fires; both changes are derived from events, so older saves need
-         * no data migration. Schema 51 adds common pony herds, which are
-         * seeded by the caller below rather than here, because every branch
-         * of this function lands on the current schema. Schema 52 narrows to
-         * one draft animal. Schema 53 adds the cumulative dragons_slain
-         * counter, backfilled by the caller below. */
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        return true;
-    }
-    if ((legacy_version == 36U || legacy_version == 37U) &&
-        sim->generator_version == 25U) {
-        CcSimInitializeRoyalCarriages(sim);
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        return true;
-    }
-    ClearMissingLegacyEventReferences(sim);
-    MakeLegacyCharacterNamesUnique(sim);
-    if (legacy_version == 35U && sim->generator_version == 25U) {
-        CcSimUpgradeHistoryOffices(sim);
-        CcSimUpgradeArchivePhysicalLore(sim);
-        CcSimInitializeRoyalCarriages(sim);
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        sim->generator_version = CC_GENERATOR_VERSION;
-        return true;
-    }
-    if (legacy_version == 34U && sim->generator_version == 25U) {
-        CcSimUpgradeHistoryOffices(sim);
-        CcSimUpgradeArchivePhysicalLore(sim);
-        CcSimInitializeRoyalCarriages(sim);
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        sim->generator_version = CC_GENERATOR_VERSION;
-        return true;
-    }
-    if (legacy_version == 33U && sim->generator_version == 25U) {
-        FinishMaterialChainUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 32U && sim->generator_version == 25U) {
-        CcSimInitializePaperEconomy(sim);
-        FinishMaterialChainUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 31U && sim->generator_version == 24U) {
-        CcSimUpgradeFlockEconomy(sim);
-        CcSimInitializePaperEconomy(sim);
-        FinishMaterialChainUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 30U && sim->generator_version == 23U) {
-        CcSimInitializeRoadSites(sim);
-        CcSimUpgradeFlockEconomy(sim);
-        CcSimInitializePaperEconomy(sim);
-        FinishMaterialChainUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 29U) {
-        CcSimInitializeStoneEconomy(sim);
-        CcSimInitializeRoadSites(sim);
-        CcSimUpgradeFlockEconomy(sim);
-        CcSimInitializePaperEconomy(sim);
-        FinishMaterialChainUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 28U) {
-        CcSimUpgradeGrainEconomy(sim);
-        CcSimInitializeStoneEconomy(sim);
-        CcSimInitializeRoadSites(sim);
-        CcSimUpgradeFlockEconomy(sim);
-        CcSimInitializePaperEconomy(sim);
-        FinishMaterialChainUpgrade(sim);
-        return true;
-    }
-    if (legacy_version != 2U && legacy_version != 3U &&
-        legacy_version != 4U &&
-        legacy_version != 5U && legacy_version != 6U &&
-        legacy_version != 7U && legacy_version != 8U &&
-        legacy_version != 9U && legacy_version != 10U &&
-        legacy_version != 11U && legacy_version != 12U &&
-        legacy_version != 13U && legacy_version != 14U &&
-        legacy_version != 15U && legacy_version != 16U &&
-        legacy_version != 17U && legacy_version != 18U &&
-        legacy_version != 19U && legacy_version != 20U &&
-        legacy_version != 21U && legacy_version != 22U &&
-        legacy_version != 23U && legacy_version != 24U &&
-        legacy_version != 25U && legacy_version != 26U &&
-        legacy_version != 27U && legacy_version != 28U &&
-        legacy_version != 29U && legacy_version != 30U &&
-        legacy_version != 31U && legacy_version != 32U &&
-        legacy_version != 33U && legacy_version != 34U &&
-        legacy_version != 35U) return true;
-    if (legacy_version == 27U) {
-        CcSimInitializeWoodEconomy(sim);
-        if (sim->generator_version != 23U) {
-            CcSimUpgradeGrainEconomy(sim);
-        }
-        CcSimInitializeStoneEconomy(sim);
-        CcSimInitializeRoadSites(sim);
-        CcSimUpgradeFlockEconomy(sim);
-        CcSimInitializePaperEconomy(sim);
-        FinishMaterialChainUpgrade(sim);
-        return true;
-    }
-    InitializeExtendedGoods(sim);
-    if (legacy_version == 26U) {
-        CcSimUpgradeGrainEconomy(sim);
-        CcSimInitializeRoadSites(sim);
-        CcSimUpgradeFlockEconomy(sim);
-        FinishMaterialChainUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 17U) {
-        for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
-            if ((int32_t)sim->events[i].kind ==
-                CC_SCHEMA17_EVENT_ENCOUNTER_LOOT) {
-                sim->events[i].kind = CC_EVENT_ENCOUNTER_LOOT;
-            }
-        }
-    }
-    bool social_schema_19 = legacy_version == 19U &&
-        sim->relationship_count > 0;
-    bool quest_schema_19 = legacy_version == 19U &&
-        HasQuestArchitecture(sim);
-    if (social_schema_19) {
-        int32_t old_first = (int32_t)CC_EVENT_GOBLIN_TUNNEL_TRAVERSED + 1;
-        int32_t old_last = old_first + 3;
-        for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
-            int32_t kind = (int32_t)sim->events[i].kind;
-            if (kind >= old_first && kind <= old_last) {
-                sim->events[i].kind = (CcEventKind)(
-                    (int32_t)CC_EVENT_RELATIONSHIP_HISTORY +
-                    kind - old_first);
-            }
-        }
-    }
-    if (quest_schema_19) {
-        int32_t old_first = (int32_t)CC_EVENT_GOBLIN_TUNNEL_TRAVERSED + 1;
-        int32_t old_last = old_first + 3;
-        for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
-            int32_t kind = (int32_t)sim->events[i].kind;
-            if (kind >= old_first && kind <= old_last) {
-                sim->events[i].kind = (CcEventKind)(
-                    (int32_t)CC_EVENT_FRONT_CREATED + kind - old_first);
-            }
-        }
-    }
-    if (legacy_version == 25U) {
-        CcSimUpgradeCharacterLifecycles(sim);
-        CcSimUpgradeGrainEconomy(sim);
-        CcSimInitializeRoadSites(sim);
-        CcSimUpgradeFlockEconomy(sim);
-        FinishMaterialChainUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 24U) {
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 23U) {
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 22U) {
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 21U) {
-        sim->archives = (CcArchives){
-            .lore_ceiling = 40
-        };
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    CcSimInitializeUnderroad(sim);
-    if (legacy_version == 20U) {
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 19U) {
-        CcSimInitializeCharacters(sim);
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 18U) {
-        if (sim->generator_version == 16U) {
-            CcSimUpgradeMapCollection(sim);
-        }
-        CcSimInitializeCharacters(sim);
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 17U) {
-        CcSimUpgradeMapCollection(sim);
-        sim->journey.pace = CC_JOURNEY_PACE_STEADY;
-        sim->journey.ambush_warned = false;
-        CcSimInitializeCharacters(sim);
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    sim->goblins.cohesion = 60;
-    sim->goblins.target_warned = false;
-    sim->goblins.expeditions_intercepted = 0;
-    sim->goblins.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
-    sim->goblins.dragon_seed_days_remaining = 0;
-    CcSimUpgradeMapCollection(sim);
-    if (legacy_version == 16U) {
-        CcSimInitializeCharacters(sim);
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 15U) {
-        CcSimInitializeCharacters(sim);
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 14U) {
-        CcSimInitializeHorseStableSystem(sim);
-        CcSimInitializeCharacters(sim);
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 13U) {
-        CcSimInitializeAnimalEconomy(sim);
-        CcSimInitializeCharacters(sim);
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    if (legacy_version <= 3U) {
-        sim->clock = (CcWorldClock){
-            .game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND
-        };
-        sim->carriage = (CcCarriageState){
-            .mode = CC_CARRIAGE_PARKED,
-            .location_id = sim->player.location_id,
-            .condition = 100
-        };
-        if (sim->journey.active) {
-            const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
-            if (route == NULL) {
-                SetError(error, error_capacity,
-                         "Legacy journey route is no longer valid.");
-                return false;
-            }
-            int32_t fare = route->travel_days +
-                (route->smuggler_route ? 3 : 0);
-            fare += route->closed ? 4 : 0;
-            fare += route->smuggler_route ? 2 :
-                CcSimRouteCrossesWarBorder(sim, route->id) ? 4 : 0;
-            if (sim->player.coins >= fare) sim->player.coins -= fare;
-            int32_t total_subticks = route->travel_days * CC_WORLD_DAY_SUBTICKS;
-            sim->journey.phase = CC_JOURNEY_PHASE_BLOCKED;
-            sim->journey.departure_day = sim->current_day;
-            sim->journey.total_subticks = total_subticks;
-            sim->journey.encounter_subticks = 0;
-            sim->journey.elapsed_subticks = 0;
-            sim->journey.fare_reserved = fare;
-            sim->journey.encounter_triggered = true;
-            const CcEvent *recent = CcSimRecentEvent(sim, 0);
-            sim->journey.parent_event_id = recent != NULL ? recent->id : 0U;
-            sim->clock.game_minutes_per_second = 0;
-            sim->carriage = (CcCarriageState){
-                .mode = CC_CARRIAGE_STOPPED,
-                .route_id = sim->journey.route_id,
-                .origin_id = sim->journey.origin_id,
-                .destination_id = sim->journey.destination_id,
-                .condition = 100
-            };
-        }
-    }
-
-    if (legacy_version <= 4U) {
-#define LEGACY_SERVICE(service) (UINT32_C(1) << (uint32_t)(service))
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        CcSettlement *settlement = &sim->settlements[i];
-        if (settlement->service_mask != 0U) continue;
-        settlement->service_project = CC_SERVICE_NONE;
-        settlement->service_project_days = 0;
-        settlement->size = settlement->function == CC_SETTLEMENT_CAPITAL ?
-            CC_SETTLEMENT_CAPITAL_SIZE :
-            (settlement->function == CC_SETTLEMENT_MARKET ||
-             settlement->function == CC_SETTLEMENT_FORTRESS ||
-             settlement->function == CC_SETTLEMENT_MINING) ?
-                CC_SETTLEMENT_TOWN : CC_SETTLEMENT_VILLAGE;
-        settlement->service_mask = LEGACY_SERVICE(CC_SERVICE_INN);
-        switch (settlement->function) {
-            case CC_SETTLEMENT_FARMING:
-                settlement->service_mask |= LEGACY_SERVICE(CC_SERVICE_FARM) |
-                    LEGACY_SERVICE(CC_SERVICE_GRANARY) |
-                    LEGACY_SERVICE(CC_SERVICE_STABLE);
-                break;
-            case CC_SETTLEMENT_MINING:
-                settlement->service_mask |= LEGACY_SERVICE(CC_SERVICE_MINE) |
-                    LEGACY_SERVICE(CC_SERVICE_SMITHY) |
-                    LEGACY_SERVICE(CC_SERVICE_MARKET) |
-                    LEGACY_SERVICE(CC_SERVICE_SHRINE);
-                break;
-            case CC_SETTLEMENT_MARKET:
-                settlement->service_mask |= LEGACY_SERVICE(CC_SERVICE_MARKET) |
-                    LEGACY_SERVICE(CC_SERVICE_SMITHY) |
-                    LEGACY_SERVICE(CC_SERVICE_STABLE) |
-                    LEGACY_SERVICE(CC_SERVICE_CARTOGRAPHER);
-                break;
-            case CC_SETTLEMENT_FORTRESS:
-                settlement->service_mask |= LEGACY_SERVICE(CC_SERVICE_BARRACKS) |
-                    LEGACY_SERVICE(CC_SERVICE_SMITHY) |
-                    LEGACY_SERVICE(CC_SERVICE_HEALER) |
-                    LEGACY_SERVICE(CC_SERVICE_GRANARY);
-                break;
-            case CC_SETTLEMENT_CAPITAL:
-                settlement->service_mask |= LEGACY_SERVICE(CC_SERVICE_MARKET) |
-                    LEGACY_SERVICE(CC_SERVICE_SMITHY) |
-                    LEGACY_SERVICE(CC_SERVICE_HEALER) |
-                    LEGACY_SERVICE(CC_SERVICE_STABLE) |
-                    LEGACY_SERVICE(CC_SERVICE_SHRINE) |
-                    LEGACY_SERVICE(CC_SERVICE_BARRACKS) |
-                    LEGACY_SERVICE(CC_SERVICE_CARTOGRAPHER) |
-                    LEGACY_SERVICE(CC_SERVICE_GUILDHALL);
-                break;
-            case CC_SETTLEMENT_DUNGEON_TOWN:
-                settlement->service_mask |= LEGACY_SERVICE(CC_SERVICE_HEALER) |
-                    LEGACY_SERVICE(CC_SERVICE_BLACK_MARKET) |
-                    LEGACY_SERVICE(CC_SERVICE_DUNGEON_WARD);
-                break;
-        }
-    }
-    for (int32_t i = 0; i < sim->bandit_count; ++i) {
-        CcBanditGroup *bandits = &sim->bandits[i];
-        if (bandits->service_mask == 0U) {
-            bandits->camp_size = bandits->influence >= 60 ?
-                CC_BANDIT_WAR_CAMP : bandits->influence >= 35 ?
-                CC_BANDIT_CAMP : CC_BANDIT_HIDEOUT;
-            bandits->service_mask = LEGACY_SERVICE(CC_SERVICE_BLACK_MARKET) |
-                                    LEGACY_SERVICE(CC_SERVICE_STABLE);
-        }
-        bandits->raid_phase = CC_BANDIT_RAID_IDLE;
-        bandits->raid_target_id = 0U;
-        bandits->raid_good = CC_GOOD_FOOD;
-        bandits->raid_quantity = 0;
-        bandits->raid_days_remaining = 0;
-    }
-#undef LEGACY_SERVICE
-    }
-    if (legacy_version >= 11U) {
-        CcSimInitializeDragonEcology(sim);
-        CcSimInitializeAnimalEconomy(sim);
-        CcSimInitializeCharacters(sim);
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 10U) {
-        CcSimInitializeDragonEcology(sim);
-        CcSimInitializeAnimalEconomy(sim);
-        CcSimInitializeCharacters(sim);
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    if (legacy_version == 9U) {
-        TunePhysicalReserveTargets(sim);
-        if (sim->iron_ledger_reserve == 0) {
-            for (int32_t i = 0; i < sim->kingdom_count; ++i) {
-                CcMoney deposit = sim->kingdoms[i].treasury < 160 ?
-                                  sim->kingdoms[i].treasury : 160;
-                sim->kingdoms[i].treasury -= deposit;
-                sim->iron_ledger_reserve += deposit;
-                sim->kingdoms[i].iron_ledger_debt = 0;
-            }
-        }
-        CcSimInitializeDragonEcology(sim);
-        CcSimInitializeAnimalEconomy(sim);
-        CcSimInitializeCharacters(sim);
-        FinishLegacyRuntimeUpgrade(sim);
-        return true;
-    }
-    CcSimInitializeDragonCycle(sim);
-    CcSimInitializeHoardRaiders(sim);
-    if (legacy_version == 6U && sim->dragon.stolen_outstanding > 0 &&
-        sim->dragon.theft_actor_id == 0U) {
-        const CcEvent *theft = CcSimEvent(sim, sim->dragon.hoard_event_id);
-        sim->dragon.theft_actor_id = theft != NULL ? theft->subject_id :
-                                      sim->player.id;
-    }
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        CcSettlement *place = &sim->settlements[i];
-        if (legacy_version < 8U) {
-            place->market_coins = 60 + place->population / 20 +
-                                  place->prosperity * 2;
-            place->war_chest = 0;
-        }
-        place->price[CC_GOOD_WEAPONS] = 24;
-        place->price[CC_GOOD_GOLD] = 40;
-        place->price[CC_GOOD_GEMS] = 70;
-        place->reserve_target[CC_GOOD_WEAPONS] =
-            place->function == CC_SETTLEMENT_FORTRESS ? 14 : 4;
-        place->reserve_target[CC_GOOD_GOLD] = 1;
-        place->reserve_target[CC_GOOD_GEMS] = 1;
-        bool needs_field = place->function == CC_SETTLEMENT_FARMING ||
-                           place->function == CC_SETTLEMENT_MINING ||
-                           place->function == CC_SETTLEMENT_FORTRESS ||
-                           place->function == CC_SETTLEMENT_CAPITAL;
-        if (needs_field &&
-            !CcSettlementHasService(place, CC_SERVICE_FARM) &&
-            CcSettlementServiceCount(place) <
-                CcSettlementServiceCapacity(place->size)) {
-            place->service_mask |=
-                UINT32_C(1) << (uint32_t)CC_SERVICE_FARM;
-        }
-        if (CcSettlementHasService(place, CC_SERVICE_FARM)) {
-            place->field_yield = place->function == CC_SETTLEMENT_FARMING ?
-                                 100 : place->function == CC_SETTLEMENT_CAPITAL ?
-                                 90 : place->function == CC_SETTLEMENT_FORTRESS ?
-                                 85 : 70;
-            if (place->production[CC_GOOD_FOOD] == 0) {
-                place->production[CC_GOOD_FOOD] = 16;
-            }
-        }
-        if (CcSettlementHasService(place, CC_SERVICE_MINE)) {
-            place->iron_deposit = 8000 + i * 800;
-            place->gold_seam = true;
-            place->gem_seam = place->function == CC_SETTLEMENT_MINING;
-        }
-        if (CcSettlementHasService(place, CC_SERVICE_SMITHY)) {
-            place->production[CC_GOOD_WEAPONS] =
-                place->function == CC_SETTLEMENT_FORTRESS ? 2 : 1;
-        }
-        if (CcSettlementHasService(place, CC_SERVICE_BARRACKS)) {
-            place->stock[CC_GOOD_WEAPONS] = 6;
-        }
-        place->consumption[CC_GOOD_IRON] = 0;
-        place->consumption[CC_GOOD_TOOLS] = 0;
-    }
-    sim->goblins.lair_settlement_id = sim->settlements[
-        sim->settlement_count > 3 ? 3 : 0].id;
-    sim->goblins.raid_motive = sim->goblins.tribute_phase ==
-        CC_GOBLIN_TRIBUTE_IDLE ? CC_GOBLIN_RAID_NONE :
-        CC_GOBLIN_RAID_DRAGON_TRIBUTE;
-    sim->goblins.lair_stock[CC_GOOD_FOOD] = 12;
-    sim->goblins.lair_stock[CC_GOOD_TOOLS] = 2;
-    sim->goblins.lair_stock[CC_GOOD_WEAPONS] = 3;
-    if (sim->goblins.tribute_phase == CC_GOBLIN_TRIBUTE_RETURNING) {
-        sim->goblins.tribute_phase = CC_GOBLIN_TRIBUTE_TO_DRAGON;
-        sim->goblins.tribute_target_id = sim->dragon.lair_settlement_id;
-    }
-    if (sim->iron_ledger_reserve == 0) {
-        for (int32_t i = 0; i < sim->kingdom_count; ++i) {
-            CcMoney deposit = sim->kingdoms[i].treasury < 160 ?
-                              sim->kingdoms[i].treasury : 160;
-            sim->kingdoms[i].treasury -= deposit;
-            sim->iron_ledger_reserve += deposit;
-            sim->kingdoms[i].iron_ledger_debt = 0;
-        }
-    }
-    TunePhysicalReserveTargets(sim);
-    CcSimInitializeDragonEcology(sim);
-    CcSimInitializeAnimalEconomy(sim);
-    CcSimInitializeCharacters(sim);
-    FinishLegacyRuntimeUpgrade(sim);
-    return true;
-}
-
-static bool UpgradeLegacyRuntime(CcSim *sim,
-                                 char *error, size_t error_capacity)
-{
-    uint32_t legacy_version = sim->schema_version;
-    if (!UpgradeLegacyRuntimeSchema(sim, error, error_capacity)) return false;
-    if (legacy_version < 51U) CcSimSeedCommonPonyHerds(sim);
-    if (legacy_version < 52U) CcSimUnharnessSecondDraftAnimal(sim);
-    if (legacy_version < 53U) {
-        /* Every campaign victory slays exactly one dragon, so the historical
-           count is reconstructible; the current dragon's slaying covers
-           saves whose campaign counters were lost. */
-        int32_t slain_count = sim->dragon_campaign.victories;
-        if (sim->dragon.slain && slain_count < 1) slain_count = 1;
-        sim->dragon.dragons_slain = slain_count;
-    }
-    return true;
-}
-
 static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
                          char *error, size_t error_capacity)
 {
@@ -6479,6 +5859,11 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
                                        error, error_capacity) &&
               ReadSettlements(database, sim, error, error_capacity) &&
               ReadTownRecovery(database, sim, error, error_capacity) &&
+              ReadGrainSupplies(database, sim, error, error_capacity) &&
+              ReadArchiveRecruitment(database, sim, error, error_capacity) &&
+              ReadArchiveConvoy(database, sim, error, error_capacity) &&
+              ReadWarParties(database, sim, error, error_capacity) &&
+              ReadDispatches(database, sim, error, error_capacity) &&
               ReadHorseTeam(database, sim, error, error_capacity) &&
               ReadStableHorses(database, sim, error, error_capacity) &&
               ReadRoutes(database, sim, error, error_capacity) &&
@@ -6494,6 +5879,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadSituations(database, sim, error, error_capacity) &&
               ReadSituationCasts(database, sim, error, error_capacity) &&
               ReadCharacters(database, sim, error, error_capacity) &&
+              ReadHistoricalCharacters(database, sim, error, error_capacity) &&
               ReadQuestArchitecture(database, sim, error, error_capacity) &&
               ReadEvents(database, sim, error, error_capacity) &&
               ReadLegends(database, sim, error, error_capacity) &&
@@ -6508,7 +5894,11 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadPlayerCommitment(database, sim, error, error_capacity) &&
               ReadJourneyState(database, sim, error, error_capacity) &&
               ReadPonies(database, sim, error, error_capacity) &&
-              ReadGossip(database, sim, error, error_capacity);
+              ReadGossip(database, sim, error, error_capacity) &&
+              ReadCustody(database, sim, error, error_capacity) &&
+              ReadNotices(database, sim, error, error_capacity) &&
+              ReadGoblinPolitics(database, sim, error, error_capacity) &&
+              ReadMine(database, sim, error, error_capacity);
     if (!ok) {
         return false;
     }
@@ -6523,13 +5913,14 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
     }
     uint64_t replayed_through = journal_cursor;
     if (journal_generation > 0U &&
-        !ReplayJournal(database, sim, journal_generation, journal_cursor,
+        !CcJournalReplay(database, sim, journal_generation, journal_cursor,
                        &replayed_through, error, error_capacity)) {
         return false;
     }
     uint32_t stored_schema_version = sim->schema_version;
     uint32_t stored_generator_version = sim->generator_version;
-    if (!UpgradeLegacyRuntime(sim, error, error_capacity)) return false;
+    if (!CcSaveUpgradeLegacyRuntime(sim, error, error_capacity)) return false;
+    if (stored_schema_version < 79U) CcSimInitializeOccupations(sim);
     if (stored_schema_version < 34U) CcSimUpgradePlayerKnowledge(sim);
     if (stored_schema_version < 40U) CcPoniesInit(sim);
     if (upgraded != NULL) {

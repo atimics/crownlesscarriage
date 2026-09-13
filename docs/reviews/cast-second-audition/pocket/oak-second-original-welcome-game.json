@@ -1,0 +1,21 @@
+{
+  "voice": "Oak",
+  "take": "original",
+  "line": "welcome",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going.",
+  "seed": 20260912,
+  "file": "oak-second-original-welcome.wav",
+  "seconds": 5.12,
+  "generation_seconds": 2.024505667388439,
+  "reference_sha256": "995b33486a4822e20f666e91ecc52074d8b0331d11e549e055e9b0c3317a5656",
+  "sha256": "1079b05886a40741eec191d53306f85393cacc91025213b47dda516302df7b8b",
+  "sample_rate": 24000,
+  "master_sha256": "1079b05886a40741eec191d53306f85393cacc91025213b47dda516302df7b8b",
+  "wav_sha256": "1f29ef47abe9541b7f73e71f582af7a852231830a4402f03dbd36631e88e3e11",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

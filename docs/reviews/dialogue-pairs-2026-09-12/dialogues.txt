@@ -1,0 +1,172 @@
+Crownless dialogue drafts — editorial review
+The account is recorded. The meeting, listener, questions, hopes, and reactions are authored for this review. Each first speaker holds the account; the listener learns it through the exchange.
+
+S01 — Bread at Gloamgate
+Held account: Gloamgate's bakery mills 25 Wheat into 25 Bread.
+Authored scene aim: The listener takes an interest in the bread.
+v1
+Speaker: Gloamgate has made bread from its wheat.
+Listener: I wonder what the loaves are like.
+Speaker: You could ask at the bakery.
+
+v2
+Speaker: They’ve baked bread at Gloamgate.
+Listener: Wheat bread?
+Speaker: Yes.
+Listener: That sounds good.
+
+S02 — Waiting for stone
+Held account: Gloamgate defers public masonry repairs for want of 2 Stone.
+Authored scene aim: The listener wants to understand a delay.
+v1
+Speaker: I hear Gloamgate’s public repairs are waiting for stone.
+Listener: Are the masons short of it?
+Speaker: That’s the word going round.
+
+v2
+Speaker: People say the repairs at Gloamgate have had to wait.
+Listener: What’s holding them up?
+Speaker: Stone. They’re short of stone.
+Listener: A hard thing to mend with empty hands.
+
+S03 — A poor harvest
+Held account: Thornford's drought harvest cannot supply the southern settlements.
+Authored scene aim: The listener asks what the harvest means for seed supplies.
+v1
+Speaker: Thornford’s harvest may have fallen short of what the southern settlements need.
+Listener: What about seed for next year?
+Speaker: I only heard about the harvest.
+
+v2
+Speaker: There’s talk of a poor harvest at Thornford. Too little for the settlements to the south.
+Listener: Seed grain too?
+Speaker: I’d have to ask.
+Listener: I hope they’ve kept some back.
+
+S04 — Lamma joins the Pennants
+Held account: Lamma Stonehewer joins The Broken Pennants after 3 days seeking food at Silverwick.
+Authored scene aim: The listener responds to the hardship behind the news.
+v1
+Speaker: Lamma Stonehewer joined the Broken Pennants after looking for food at Silverwick.
+Listener: For how long?
+Speaker: Days.
+Listener: That’s a long time to be hungry.
+
+v2
+Speaker: Lamma Stonehewer has joined the Broken Pennants.
+Listener: What happened?
+Speaker: Lamma had spent days looking for food at Silverwick.
+Listener: I wish someone had found a meal for Lamma.
+
+S05 — A goblin becomes Voice
+Held account: A goblin rises to Voice in the dragon cult through service.
+Authored scene aim: The listener is curious about a promotion. Both speakers are unnamed; their species is unspecified.
+v1
+Speaker: I hear a goblin has risen to Voice in the dragon cult.
+Listener: Through service?
+Speaker: So people say.
+Listener: I wonder what the work was.
+
+v2
+Speaker: There’s talk of a goblin being made Voice in the dragon cult.
+Listener: Someone earned a place, then?
+Speaker: Through service, I hear.
+Listener: I’d like to hear their story.
+
+S06 — A treasure taken
+Held account: The Cinder Tithe raids Rosespire: 16 Bread, 16 crowns, and a named treasure.
+Authored scene aim: The listener asks about an uncertain report of a raid.
+v1
+Speaker: The Cinder Tithe may have raided Rosespire. I heard they took bread, crowns, and a treasure.
+Listener: Which treasure?
+Speaker: I only heard that there was one.
+
+v2
+Speaker: Have you heard the story about the Cinder Tithe at Rosespire?
+Listener: What story?
+Speaker: A raid. Bread and crowns taken, and a treasure too, perhaps.
+Listener: Do you know what it was?
+Speaker: I’d have to ask.
+
+S07 — Calves at Rosespire
+Held account: Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Authored scene aim: The listener distinguishes a new calf from an older animal joining the herd.
+v1
+Speaker: Rosespire has raised a new calf. An older calf has joined the working herd too.
+Listener: The little one has some growing to do.
+Speaker: Yes. The older one is ready.
+
+v2
+Speaker: There’s a new calf at Rosespire.
+Listener: And more cattle for the working herd?
+Speaker: An older calf has joined it.
+Listener: Good to hear the older one is ready.
+
+S08 — Stone from Silverwick
+Held account: Silverwick's quarry cuts 12 Stone for roads and public works.
+Authored scene aim: The listener asks what quarried stone is intended for.
+v1
+Speaker: I hear Silverwick has cut stone for roads and public works.
+Listener: For the roads as well?
+Speaker: That’s what I heard.
+
+v2
+Speaker: Word is there’s stone coming out of Silverwick’s quarry.
+Listener: Where is it meant to go?
+Speaker: Roads and public works, I hear.
+Listener: I’ll be glad to see it put to use.
+
+S09 — The treaty bridge
+Held account: Alderwatch closes the treaty bridge and delays the relief convoy.
+Authored scene aim: The listener worries about the relief convoy after hearing an uncertain report.
+v1
+Speaker: Alderwatch may have closed the treaty bridge. The relief convoy could be held up.
+Listener: Is that why it’s delayed?
+Speaker: That’s the story I heard.
+
+v2
+Speaker: There’s a story going round that Alderwatch shut the treaty bridge.
+Listener: What about the relief convoy?
+Speaker: Held up, if the story is right.
+Listener: I hope they can get through soon.
+
+S10 — Paper from the mill
+Held account: Rosespire's mill uses 1 Wood to make 4 Paper.
+Authored scene aim: The listener takes an interest in how paper was made.
+v1
+Speaker: Rosespire’s mill has made paper from wood.
+Listener: Wood into paper. That’s clever work.
+
+v2
+Speaker: They’ve made paper at Rosespire’s mill.
+Listener: What did they use?
+Speaker: Wood.
+Listener: I’d like to watch that being done.
+
+S11 — The food store
+Held account: Gloamgate has 24 food in store. Its reserve target is 75.
+Authored scene aim: The listener distinguishes low reserves from an empty store.
+v1
+Speaker: People say Gloamgate has less food stored than it aims to keep.
+Listener: Is there some left?
+Speaker: Yes, from what I hear.
+
+v2
+Speaker: Gloamgate’s food stores sound low.
+Listener: How low?
+Speaker: There’s food left, I hear, but less than they mean to keep.
+Listener: I hope more comes in soon.
+
+S12 — The Ash Crown
+Held account: Rosespire finishes Rosespire Ash Crown from 1 Raw Gold, 1 Gems, and 3 weeks of work.
+Authored scene aim: The listener is curious about a reported piece of craftwork.
+v1
+Speaker: Rosespire may have finished the Ash Crown. I heard it took gold, gems, and weeks of work.
+Listener: I’d like to see it.
+Speaker: So would I.
+
+v2
+Speaker: There’s talk that the Rosespire Ash Crown is finished.
+Listener: What’s it made of?
+Speaker: Gold and gems, I think. They spent weeks on it, from what I heard.
+Listener: I hope we get to see it.

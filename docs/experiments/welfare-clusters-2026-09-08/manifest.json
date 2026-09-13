@@ -1,0 +1,33 @@
+{
+  "base_commit": "1dda2ad",
+  "sweep_code_commit": "6c8a1440b8fd7477f2cddc4884a04c95fff554b1",
+  "trace_code_commit": "3cfac4eb5a9ca771427783551a64f6927915ac4e",
+  "sweep_binary_sha256": "3bf4bb4a0b7d7d6a2ba8390f1b881437a9d2be2ea072c409b93d35b2aabe165d",
+  "trace_binary_sha256": "49089f95bca6efe3d3a3a3810f07260002916590eb17ca11bc9c73eb2165bbe4",
+  "baseline_binary_sha256": "f8d44293daeb9af031ac846bd173a1fc8a7e513e4b35f7b4962457b46246f91f",
+  "requested_seeds": 1000,
+  "years": 1000,
+  "days_per_year": 365,
+  "completed_worlds": 996,
+  "failed_worlds": 4,
+  "sweep_exit_code": 1,
+  "baseline_seed_1_matching_fields": 121,
+  "trace_endpoint_matches": 5,
+  "data_sha256": {
+    "baseline-failures.json": "eefab5e7138a41470bbf4053a87aa9110d57b81df2e786abf8a4774f8e749f77",
+    "endpoints.csv": "b71b24d41f405304831aff33aa7562a978fa800ec5eece15e626821a1c445808",
+    "selected-seeds.json": "8290275f47afa69e843d873c80ae329288c8b5096e01c1d71bb415bb740f1291",
+    "sweep.log": "d3754fef8f34f7321a9cead543550056b267e1350210f1d88eaf7ac639cefbe7",
+    "trace-runs.json": "c253776e50fec353f2853a444faba9bf4ea37d34636b7130756d26fa71c95559",
+    "traces/seed-12-settlements.csv.gz": "66eda77e14608d192698351300a70d805dc3a97211f7cd03297c806d7c03ca2a",
+    "traces/seed-12-years.csv.gz": "0e5caa8f5bcba0f412239d6e69fcbbcc87b39d081f3dd5c52176db68a1c71cd0",
+    "traces/seed-198-settlements.csv.gz": "0465260a7a10e89f32310381736c72fd9ef960d671ef845b542133e6c4d4ae7b",
+    "traces/seed-198-years.csv.gz": "d4ba7e3509a60f34ea7532266cb67016046ca29af8c40e0473f5cfa6ad3b42ad",
+    "traces/seed-2-settlements.csv.gz": "e4d1beb57828508119dad33b48e14dc313135f7395ed974c1e05eb96ad641307",
+    "traces/seed-2-years.csv.gz": "9fe42c8a5b869402f18cd90e187a379d6d7995bac2fa9871891f375eaeefd92e",
+    "traces/seed-392-settlements.csv.gz": "e75b8ca15e26e319ec431a057305708eb052655f24a565fbc77f89215bb92161",
+    "traces/seed-392-years.csv.gz": "f31e99bcf60711567187ac2494ca978ee7573180ea400faf4403b8a7084df42e",
+    "traces/seed-425-settlements.csv.gz": "b482a91f35ba4937c438bb61b6d0eecfa5c53e65a2f45d04a29057b9102c34cf",
+    "traces/seed-425-years.csv.gz": "51ad8e30a0e1f51622476c6cd85ad54b90043d644e3b60e1c9cdb1660e287465"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "voice": "Reed",
+  "take": "original",
+  "line": "bargain",
+  "text": "Thirty-eight crowns? You drive a hard bargain. All right, take the cart. I'll walk with you.",
+  "seed": 20260912,
+  "file": "reed-second-original-bargain.wav",
+  "seconds": 6.88,
+  "generation_seconds": 3.9340497497469187,
+  "reference_sha256": "6dc743cfa294c2f910e306f7c909c05bd8fcb38b123049dc25a5c72a235f43ab",
+  "sha256": "7cdfc1ba11687983cb384a6d1cbe12d0bdfd9c1ca37877d9b4fa8c3f2003fa09",
+  "sample_rate": 24000,
+  "master_sha256": "7cdfc1ba11687983cb384a6d1cbe12d0bdfd9c1ca37877d9b4fa8c3f2003fa09",
+  "wav_sha256": "39337dd506690d1a0842ee2c2c922f6479be75218f5efd3e2ea4c63ea5baa277",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

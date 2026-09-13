@@ -1,0 +1,23 @@
+{
+  "voice": "flint-v1",
+  "line": "warning",
+  "text": "Get the horses across the bridge! I will stay with you.",
+  "file": "nano-flint-v1-warning.wav",
+  "styled_file": "nano-flint-v1-warning-game.wav",
+  "seconds": 1.96,
+  "generation_seconds": 0.8805805407464504,
+  "first_chunk_seconds": null,
+  "real_time_factor": 0.44927578609512775,
+  "sample_rate": 24000,
+  "seed": 20260912,
+  "reference_sha256": "98454193d1e240932634c3e81ea4f241337bef7643832dde811e183906f7af80",
+  "sha256": "75e5c36078204d61d161ae0f459fd851fad19790bd6d1b374c8705c849013968",
+  "master_sha256": "75e5c36078204d61d161ae0f459fd851fad19790bd6d1b374c8705c849013968",
+  "wav_sha256": "5eb597daebe550080ed656743b11ae21a91762e0bf83bebc90ad8b1dc15239fc",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

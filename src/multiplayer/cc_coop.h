@@ -13,12 +13,15 @@
 #define CC_COOP_JSON_CAPACITY 131072
 
 CC_COOP_API CcSim *CcCoopCreate(uint32_t seed);
+CC_COOP_API bool CcCoopStartDeepWyrm(CcSim *sim, const char *path, char *error, size_t capacity);
 CC_COOP_API void CcCoopDestroy(CcSim *sim);
 CC_COOP_API bool CcCoopApply(CcSim *sim, const char *action, CcId target,
                             int32_t good, int32_t amount,
                             char *error, size_t capacity);
 CC_COOP_API bool CcCoopAdvance(CcSim *sim, int32_t ticks,
                               char *error, size_t capacity);
+CC_COOP_API bool CcCoopAdvanceTravel(CcSim *sim, int32_t ticks, int32_t scale,
+                                    char *error, size_t capacity);
 CC_COOP_API bool CcCoopAdvanceAway(CcSim *sim, int32_t days,
                                   char *error, size_t capacity);
 CC_COOP_API bool CcCoopSnapshot(const CcSim *sim, char *json, size_t capacity);

@@ -1,0 +1,12 @@
+{
+  "production": {
+    "rows": 12096,
+    "parent_sha256": "a024d17c959125c0a13dfc24580f9b518aca0747900f1ac5e12e7e03b648b81e",
+    "current_sha256": "a024d17c959125c0a13dfc24580f9b518aca0747900f1ac5e12e7e03b648b81e"
+  },
+  "annual_states": {
+    "rows": 720,
+    "parent_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10",
+    "current_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10"
+  }
+}

@@ -1,0 +1,181 @@
+C001 · Thornford
+Willa Thornbank: Thornford's drought harvest fell short of what the eastern settlements needed.
+Wilna Shallowford: That's what I heard too. How sure are you?
+Willa Thornbank: That is the account I hold. We should ask someone who was there.
+Wilna Shallowford: Let's ask around before we pass it on.
+Willa Thornbank: Agreed. Let's leave it there for now.
+Wilna Shallowford: Very well.
+
+C002 · Alderwatch
+Flinten Rollkeeper: Alderwatch closed the treaty bridge, delaying the relief convoy.
+Cera Mott: That's what I heard too. How sure are you?
+Flinten Rollkeeper: That is the account I hold. We should ask someone who was there.
+Cera Mott: Let's ask around before we pass it on.
+Flinten Rollkeeper: Agreed. Let's leave it there for now.
+Cera Mott: Very well.
+
+C003 · Rosespire
+Talla Lanternward: There was hunger in Silverwick.
+Emberis Shaftward: That's what I heard too. How sure are you?
+Talla Lanternward: That is the account I hold. We should ask someone who was there.
+Emberis Shaftward: Let's ask around before we pass it on.
+Talla Lanternward: Agreed. Let's leave it there for now.
+Emberis Shaftward: Very well.
+
+C004 · Alderwatch
+
+
+C005 · Alderwatch
+Othwen Oathkeeper: Silver Covenant put money into Hollowbarrow's market to buy grain shipments, so people say.
+Thorna Oathkeeper: That's what I heard too. How sure are you?
+Othwen Oathkeeper: The account has passed through several people. We should ask someone who was there.
+Thorna Oathkeeper: Let's ask around before we pass it on.
+Othwen Oathkeeper: Agreed. Let's leave it there for now.
+Thorna Oathkeeper: Very well.
+
+C006 · Alderwatch
+Foryn Highwall: Gloamgate Moon Cup was completed in Gloamgate, according to the word going round.
+Skella Fletcher: That's what I heard too. How sure are you?
+Foryn Highwall: The account has passed through several people. We should ask someone who was there.
+Skella Fletcher: Let's ask around before we pass it on.
+Foryn Highwall: Agreed. Let's leave it there for now.
+Skella Fletcher: Very well.
+
+C007 · Rosespire
+Harth Courtward: The Cinder Tithe raided Thornford, so people say.
+Foryn Silvervein: That's what I heard too. How sure are you?
+Harth Courtward: The account has passed through several people. We should ask someone who was there.
+Foryn Silvervein: Let's ask around before we pass it on.
+Harth Courtward: Agreed. Let's leave it there for now.
+Foryn Silvervein: Very well.
+
+C008 · Silverwick
+Reiden Slagfield: A goblin rose to Bearer in the dragon cult through service.
+Flinn Fordward: That's what I heard too. How sure are you?
+Reiden Slagfield: That is the account I hold. We should ask someone who was there.
+Flinn Fordward: Let's ask around before we pass it on.
+Reiden Slagfield: Agreed. Let's leave it there for now.
+Flinn Fordward: Very well.
+
+C009 · Hollowbarrow
+Sten Shieldwright: Silverwick raised calves and added older calves to the working herd, if the story is right.
+Bellen Rosebower: That's what I heard too. How sure are you?
+Sten Shieldwright: I am unsure. We should ask someone who was there.
+Bellen Rosebower: Let's ask around before we pass it on.
+Sten Shieldwright: Agreed. Let's leave it there for now.
+Bellen Rosebower: Very well.
+
+C010 · Alderwatch
+Skella Oldiron: Silverwick slaughtered cattle for beef when fodder ran short.
+Thoris Chainward: That's what I heard too. How sure are you?
+Skella Oldiron: That is the account I hold. We should ask someone who was there.
+Thoris Chainward: Let's ask around before we pass it on.
+Skella Oldiron: Agreed. Let's leave it there for now.
+Thoris Chainward: Very well.
+
+C011 · Gloamgate
+
+
+C012 · Silverwick
+Talla Emberwright: Silverwick cut wood and wore out tools.
+Chena Furnace: That's what I heard too. How sure are you?
+Talla Emberwright: That is the account I hold. We should ask someone who was there.
+Chena Furnace: Let's ask around before we pass it on.
+Talla Emberwright: Agreed. Let's leave it there for now.
+Chena Furnace: Very well.
+
+C013 · Alderwatch
+Skellen Highspire: Rosespire made bread from wheat, so people say.
+Chenna Muster: That's what I heard too. How sure are you?
+Skellen Highspire: The account has passed through several people. We should ask someone who was there.
+Chenna Muster: Let's ask around before we pass it on.
+Skellen Highspire: Agreed. Let's leave it there for now.
+Chenna Muster: Very well.
+
+C014 · Thornford
+Rowen Cartwright: Silverwick quarried stone for roads and public works, if the story is right.
+Grenwin Thornbank: That's what I heard too. How sure are you?
+Rowen Cartwright: I am unsure. We should ask someone who was there.
+Grenwin Thornbank: Let's ask around before we pass it on.
+Rowen Cartwright: Agreed. Let's leave it there for now.
+Grenwin Thornbank: Very well.
+
+C015 · Hollowbarrow
+Barin Surety: Alderwatch repaired public buildings with stone, so people say.
+Sten Sealwright: That's what I heard too. How sure are you?
+Barin Surety: The account has passed through several people. We should ask someone who was there.
+Sten Sealwright: Let's ask around before we pass it on.
+Barin Surety: Agreed. Let's leave it there for now.
+Sten Sealwright: Very well.
+
+C016 · Gloamgate
+Thoris Underwheel: Alderwatch raised lambs and added yearlings to the adult flock, so people say.
+Bellis Bondkeeper: That's what I heard too. How sure are you?
+Thoris Underwheel: The account has passed through several people. We should ask someone who was there.
+Bellis Bondkeeper: Let's ask around before we pass it on.
+Thoris Underwheel: Agreed. Let's leave it there for now.
+Bellis Bondkeeper: Very well.
+
+C017 · Rosespire
+Holla Highspire: Alderwatch sheared the spring flock and stored wool, so people say.
+Quill Starward: That's what I heard too. How sure are you?
+Holla Highspire: The account has passed through several people. We should ask someone who was there.
+Quill Starward: Let's ask around before we pass it on.
+Holla Highspire: Agreed. Let's leave it there for now.
+Quill Starward: Very well.
+
+C018 · Rosespire
+Rowena Shieldwright: Rosespire slaughtered sheep for mutton after winter fodder runs short.
+Talla Fordward: That's what I heard too. How sure are you?
+Rowena Shieldwright: That is the account I hold. We should ask someone who was there.
+Talla Fordward: Let's ask around before we pass it on.
+Rowena Shieldwright: Agreed. Let's leave it there for now.
+Talla Fordward: Very well.
+
+C019 · Rosespire
+Bellen Coffer: Rosespire made paper from Wood.
+Holla Highspire: That's what I heard too. How sure are you?
+Bellen Coffer: That is the account I hold. We should ask someone who was there.
+Holla Highspire: Let's ask around before we pass it on.
+Bellen Coffer: Agreed. Let's leave it there for now.
+Holla Highspire: Very well.
+
+C020 · Rosespire
+Talla Fordward: Thornford's drought harvest fell short of what the southern settlements needed, if the story is right.
+Alda Coffer: That's what I heard too. How sure are you?
+Talla Fordward: I am unsure. We should ask someone who was there.
+Alda Coffer: Let's ask around before we pass it on.
+Talla Fordward: Agreed. Let's leave it there for now.
+Alda Coffer: Very well.
+
+C021 · Silverwick
+Reiden Slagfield: Alderwatch closed the treaty bridge, delaying the relief convoy.
+Talwen Cinderhand: That's what I heard too. How sure are you?
+Reiden Slagfield: That is the account I hold. We should ask someone who was there.
+Talwen Cinderhand: Let's ask around before we pass it on.
+Reiden Slagfield: Agreed. Let's leave it there for now.
+Talwen Cinderhand: Very well.
+
+C022 · Hollowbarrow
+Quilla Bellward: There was hunger in Hollowbarrow.
+Inka Starward: That's what I heard too. How sure are you?
+Quilla Bellward: That is the account I hold. We should ask someone who was there.
+Inka Starward: Let's ask around before we pass it on.
+Quilla Bellward: Agreed. Let's leave it there for now.
+Inka Starward: Very well.
+
+C023 · Gloamgate
+Talwen Cinderhand: Barin Inkwell joined The Broken Pennants after seeking food at Gloamgate.
+Harthild Holloway: That's what I heard too. How sure are you?
+Talwen Cinderhand: That is the account I hold. We should ask someone who was there.
+Harthild Holloway: Let's ask around before we pass it on.
+Talwen Cinderhand: Agreed. Let's leave it there for now.
+Harthild Holloway: Very well.
+
+C024 · Gloamgate
+Talwen Cinderhand: Indigo March put money into Hollowbarrow's market to buy grain shipments.
+Inka Parchman: That's what I heard too. How sure are you?
+Talwen Cinderhand: That is the account I hold. We should ask someone who was there.
+Inka Parchman: Let's ask around before we pass it on.
+Talwen Cinderhand: Agreed. Let's leave it there for now.
+Inka Parchman: Very well.

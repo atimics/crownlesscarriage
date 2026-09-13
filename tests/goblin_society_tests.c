@@ -36,7 +36,7 @@ static void CheckCivicCohesionRecovery(void)
         sim.goblins.tribute_cooldown_days = 100;
         sim.goblins.members = 12;
         sim.goblins.cohesion = variant == 3 ? 100 : 49;
-        sim.goblins.devotion = 60;
+        sim.dragon_cult.devotion = 60;
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) sim.goblins.lair_stock[good] = 0;
         sim.goblins.lair_stock[CC_GOOD_FOOD] = variant == 1 ? 0 : 20;
         sim.goblins.lair_stock[CC_GOOD_TOOLS] = variant == 2 ? 0 : 1;
@@ -180,7 +180,7 @@ int main(void)
     CcMoney player_coins = trade.player.coins;
     CcMoney market_coins = lair->market_coins;
     int32_t lair_food = trade.goblins.lair_stock[CC_GOOD_FOOD];
-    int32_t covenant = trade.goblins.devotion;
+    int32_t covenant = trade.dragon_cult.devotion;
     int32_t cohesion = trade.goblins.cohesion;
     CcCommand sell_food = {
         .kind = CC_COMMAND_GOBLIN_TRADE,
@@ -193,7 +193,7 @@ int main(void)
     CC_CHECK(trade.player.coins > player_coins);
     CC_CHECK(lair->market_coins < market_coins);
     CC_CHECK(trade.goblins.cohesion > cohesion);
-    CC_CHECK(trade.goblins.devotion < covenant);
+    CC_CHECK(trade.dragon_cult.devotion < covenant);
     CC_CHECK(CountEvents(&trade, CC_EVENT_GOBLIN_TRADE) == 1);
     CC_CHECK(CcSimValidate(&trade, error, sizeof(error)));
 
@@ -235,14 +235,14 @@ int main(void)
     intercept.player.location_id = target->id;
     intercept.carriage.location_id = target->id;
     int32_t members = intercept.goblins.members;
-    covenant = intercept.goblins.devotion;
+    covenant = intercept.dragon_cult.devotion;
     cohesion = intercept.goblins.cohesion;
     int32_t condition = intercept.carriage.condition;
     CcCommand stop = {.kind = CC_COMMAND_GOBLIN_INTERCEPT};
     CC_CHECK(CcSimApply(&intercept, &stop, error, sizeof(error)));
     CC_CHECK(intercept.goblins.tribute_phase == CC_GOBLIN_TRIBUTE_IDLE);
     CC_CHECK(intercept.goblins.members < members);
-    CC_CHECK(intercept.goblins.devotion > covenant);
+    CC_CHECK(intercept.dragon_cult.devotion > covenant);
     CC_CHECK(intercept.goblins.cohesion < cohesion);
     CC_CHECK(intercept.carriage.condition < condition);
     CC_CHECK(intercept.goblins.expeditions_intercepted == 1);
@@ -263,17 +263,17 @@ int main(void)
     seed.dragon.body_condition = 0;
     seed.dragon.crown_strength = 0;
     seed.dragon.afterdeath_days = 100 * 365;
-    seed.goblins.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_RUMORED;
-    seed.goblins.dragon_seed_days_remaining = 20 * 365;
+    seed.dragon_cult.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_RUMORED;
+    seed.dragon_cult.dragon_seed_days_remaining = 20 * 365;
     CC_CHECK(CcSimValidate(&seed, error, sizeof(error)));
     uint64_t seed_hash = CcSimHash(&seed);
     CC_CHECK(CcSaveWrite(seed_path, &seed, error, sizeof(error)));
     CcSim seed_restored;
     CC_CHECK(CcSaveRead(seed_path, &seed_restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&seed_restored) == seed_hash);
-    CC_CHECK(seed_restored.goblins.dragon_seed_phase ==
+    CC_CHECK(seed_restored.dragon_cult.dragon_seed_phase ==
              CC_GOBLIN_DRAGON_SEED_RUMORED);
-    CC_CHECK(seed_restored.goblins.dragon_seed_days_remaining == 20 * 365);
+    CC_CHECK(seed_restored.dragon_cult.dragon_seed_days_remaining == 20 * 365);
     (void)remove(seed_path);
 
     const char *journal_path = "/tmp/crownless-goblin-society-journal.ccsave";

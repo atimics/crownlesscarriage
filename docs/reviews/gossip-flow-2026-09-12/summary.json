@@ -1,0 +1,37 @@
+{
+  "seed": 73,
+  "advance_days": 1092,
+  "start_day": 1,
+  "end_day": 1093,
+  "world_hash": "f76a9d8bf78580cf",
+  "unobserved_hash_matches": true,
+  "schema": 95,
+  "observation": "Daily snapshots and first observations of retained events; transient changes within a day may be absent. The simulation receives no player commands.",
+  "counts": {
+    "world": 1,
+    "event": 6415,
+    "archive": 1093,
+    "story": 3670,
+    "held": 83132,
+    "treasure": 2,
+    "finish": 1
+  },
+  "event_kinds": 57,
+  "gossip_stories": 689,
+  "reached_intake": 649,
+  "recorded_stories": 2,
+  "archive_blocker_days": {
+    "binding": 17,
+    "grain": 939,
+    "ready": 137
+  },
+  "speech_samples": 24,
+  "speech_approved": 24,
+  "hashes": {
+    "seed73.jsonl": "5049de5324b2685d4cac7a8959c67b164e499731568c2a8cb88da2c8c6b2015f",
+    "seed73-unobserved.jsonl": "f9b07753c16e21ff65b631149939e47cc06313f2b99d184b322a3e3c2f3dfd87",
+    "speech-results.json": "fba0c4e3c599ff75db6398c175c3311876295bc61f020df384e191534344da53"
+  },
+  "trace_source_sha256": "47e77a827944f0e94e205c0b6d441d71767bf453b9b33f76a7f47caa270b8815",
+  "simulation_source_commit": "2a0111c977f11b5a17febeeb5485acafc835a3b9"
+}

@@ -37,7 +37,10 @@ The raylib project also keeps a
 The 27 bundled soundtrack takes in `assets/audio/music` were generated for
 Crownless Carriage in Suno under the project owner's Pro subscription. The
 offline manifest records each file's size and SHA-256 fingerprint. The full
-theme catalog includes the additional finished takes awaiting export.
+theme catalog includes the additional finished takes awaiting export. The 20
+additional exports in `assets/audio/music/hosted` come from the same Suno
+library. `assets/audio/music/hosted.json` records their sizes and SHA-256
+fingerprints. These files supply the online music mix.
 
 The four opening voice clips in `assets/audio/voice` were generated locally
 with Resemble AI Chatterbox TTS 0.1.7 and its built-in voice. The scripts are
@@ -239,3 +242,8 @@ SQLite's authors have dedicated the deliverable code and documentation to the
 public domain. The official
 [SQLite copyright page](https://www.sqlite.org/copyright.html) records that
 dedication.
+
+Atkinson Hyperlegible Regular
+Copyright 2020 Braille Institute of America, Inc.
+SIL Open Font License 1.1; see assets/fonts/OFL-AtkinsonHyperlegible.txt.
+Source: https://github.com/google/fonts/tree/main/ofl/atkinsonhyperlegible

@@ -130,39 +130,3 @@ static void DrawCarriagePonies(const CcSim *sim)
             x + 73, row + 20, 8, MUTED);
     }
 }
-
-/* Review captures exercise the same keyboard actions as normal play. */
-static bool CheckPonyInterface(CcSim *sim, LocalState *local, int32_t pony)
-{
-    char message[256] = {0};
-    ClientInputClearPressed();
-    queued_key_press[KEY_ENTER] = true;
-    if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, (ContextAction){0}, message, sizeof(message)) ||
-        !sim->pony_company.ponies[pony].ready) return false;
-    CcPonyCompany ready = sim->pony_company;
-    CcHorse horses[2] = {sim->horse_team[0], sim->horse_team[1]};
-    for (int32_t slot = 0; slot < CcSimHorseTeamCount(sim); ++slot) {
-        ClientInputClearPressed();
-        queued_key_press[KEY_ONE + slot] = true;
-        if (!HandlePonyInput(NULL, sim, local, VIEW_LOCAL, (ContextAction){0}, message, sizeof(message)) ||
-            sim->pony_company.team[slot] != pony ||
-            sim->pony_company.team[1 - slot] != ready.team[1 - slot] ||
-            sim->pony_company.ponies[ready.team[slot]].route_id == 0U ||
-            sim->pony_company.ponies[ready.team[slot]].releases !=
-                ready.ponies[ready.team[slot]].releases + 1) return false;
-        sim->pony_company = ready;
-        sim->horse_team[0] = horses[0];
-        sim->horse_team[1] = horses[1];
-    }
-    ClientInputClearPressed();
-    queued_key_press[KEY_F7] = true;
-    if (!HandleCarriageTabs(local, VIEW_CARRIAGE) ||
-        local->carriage_tab != CARRIAGE_PONIES) return false;
-    ClientInputClearPressed();
-    queued_key_press[KEY_ONE] = true;
-    if (!HandleCarriageTabs(local, VIEW_CARRIAGE) ||
-        local->carriage_tab != CARRIAGE_OVERVIEW) return false;
-    ClientInputClearPressed();
-    (void)puts("PASS pony interface: quest, harnessed swap slots, carriage tabs");
-    return true;
-}

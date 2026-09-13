@@ -1,0 +1,8027 @@
+{
+  "source": "85bfb702ba233585d4e3359273f048de1cae7b2f",
+  "binary_sha256": "c6a6df890213497d4cc150132b3d0b94c0ac83c90cdbd4bea214ceeb6faa685c",
+  "seeds": 1000,
+  "years": 1000,
+  "binary": "/private/tmp/crownless-age-control-build/crownless_sim_metrics",
+  "jobs": 4,
+  "seed_mapping": "(ordinal * 0x9E3779B9) & 0xFFFFFFFF",
+  "command": [
+    "/private/tmp/crownless-age-control-build/crownless_sim_metrics",
+    "--seed",
+    "ORDINAL",
+    "--years",
+    "1000",
+    "--campaign-metrics"
+  ],
+  "sampling": "Years 1 through 10, every 25 years, and final year. Validation every year.",
+  "invocation_seconds": 1028.176,
+  "passed": 997,
+  "runs": [
+    {
+      "seed": 1,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.972,
+      "error": ""
+    },
+    {
+      "seed": 2,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.213,
+      "error": ""
+    },
+    {
+      "seed": 3,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.731,
+      "error": ""
+    },
+    {
+      "seed": 4,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.277,
+      "error": ""
+    },
+    {
+      "seed": 5,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.202,
+      "error": ""
+    },
+    {
+      "seed": 6,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.7,
+      "error": ""
+    },
+    {
+      "seed": 7,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.278,
+      "error": ""
+    },
+    {
+      "seed": 8,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.39,
+      "error": ""
+    },
+    {
+      "seed": 9,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.654,
+      "error": ""
+    },
+    {
+      "seed": 10,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.131,
+      "error": ""
+    },
+    {
+      "seed": 11,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.602,
+      "error": ""
+    },
+    {
+      "seed": 12,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.293,
+      "error": ""
+    },
+    {
+      "seed": 13,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.687,
+      "error": ""
+    },
+    {
+      "seed": 14,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.299,
+      "error": ""
+    },
+    {
+      "seed": 15,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.33,
+      "error": ""
+    },
+    {
+      "seed": 16,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.364,
+      "error": ""
+    },
+    {
+      "seed": 17,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.859,
+      "error": ""
+    },
+    {
+      "seed": 18,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.629,
+      "error": ""
+    },
+    {
+      "seed": 19,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.71,
+      "error": ""
+    },
+    {
+      "seed": 20,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.852,
+      "error": ""
+    },
+    {
+      "seed": 21,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.645,
+      "error": ""
+    },
+    {
+      "seed": 22,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.055,
+      "error": ""
+    },
+    {
+      "seed": 23,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.269,
+      "error": ""
+    },
+    {
+      "seed": 24,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.376,
+      "error": ""
+    },
+    {
+      "seed": 25,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.157,
+      "error": ""
+    },
+    {
+      "seed": 26,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.476,
+      "error": ""
+    },
+    {
+      "seed": 27,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.67,
+      "error": ""
+    },
+    {
+      "seed": 28,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.684,
+      "error": ""
+    },
+    {
+      "seed": 29,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.491,
+      "error": ""
+    },
+    {
+      "seed": 30,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.916,
+      "error": ""
+    },
+    {
+      "seed": 31,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.276,
+      "error": ""
+    },
+    {
+      "seed": 32,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.045,
+      "error": ""
+    },
+    {
+      "seed": 33,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.302,
+      "error": ""
+    },
+    {
+      "seed": 34,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.427,
+      "error": ""
+    },
+    {
+      "seed": 35,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.222,
+      "error": ""
+    },
+    {
+      "seed": 36,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.741,
+      "error": ""
+    },
+    {
+      "seed": 37,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.301,
+      "error": ""
+    },
+    {
+      "seed": 38,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.148,
+      "error": ""
+    },
+    {
+      "seed": 39,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.74,
+      "error": ""
+    },
+    {
+      "seed": 40,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.155,
+      "error": ""
+    },
+    {
+      "seed": 41,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.775,
+      "error": ""
+    },
+    {
+      "seed": 42,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.907,
+      "error": ""
+    },
+    {
+      "seed": 43,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.287,
+      "error": ""
+    },
+    {
+      "seed": 44,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.349,
+      "error": ""
+    },
+    {
+      "seed": 45,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.877,
+      "error": ""
+    },
+    {
+      "seed": 46,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.647,
+      "error": ""
+    },
+    {
+      "seed": 47,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.383,
+      "error": ""
+    },
+    {
+      "seed": 48,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.198,
+      "error": ""
+    },
+    {
+      "seed": 49,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.418,
+      "error": ""
+    },
+    {
+      "seed": 50,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.265,
+      "error": ""
+    },
+    {
+      "seed": 51,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.14,
+      "error": ""
+    },
+    {
+      "seed": 52,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.292,
+      "error": ""
+    },
+    {
+      "seed": 53,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.15,
+      "error": ""
+    },
+    {
+      "seed": 54,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.342,
+      "error": ""
+    },
+    {
+      "seed": 55,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.74,
+      "error": ""
+    },
+    {
+      "seed": 56,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.053,
+      "error": ""
+    },
+    {
+      "seed": 57,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.086,
+      "error": ""
+    },
+    {
+      "seed": 58,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.259,
+      "error": ""
+    },
+    {
+      "seed": 59,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.165,
+      "error": ""
+    },
+    {
+      "seed": 60,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.468,
+      "error": ""
+    },
+    {
+      "seed": 61,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.141,
+      "error": ""
+    },
+    {
+      "seed": 62,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.237,
+      "error": ""
+    },
+    {
+      "seed": 63,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.142,
+      "error": ""
+    },
+    {
+      "seed": 64,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.377,
+      "error": ""
+    },
+    {
+      "seed": 65,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.13,
+      "error": ""
+    },
+    {
+      "seed": 66,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.12,
+      "error": ""
+    },
+    {
+      "seed": 67,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.225,
+      "error": ""
+    },
+    {
+      "seed": 68,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.162,
+      "error": ""
+    },
+    {
+      "seed": 69,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.909,
+      "error": ""
+    },
+    {
+      "seed": 70,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.216,
+      "error": ""
+    },
+    {
+      "seed": 71,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.523,
+      "error": ""
+    },
+    {
+      "seed": 72,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.302,
+      "error": ""
+    },
+    {
+      "seed": 73,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.012,
+      "error": ""
+    },
+    {
+      "seed": 74,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.836,
+      "error": ""
+    },
+    {
+      "seed": 75,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.965,
+      "error": ""
+    },
+    {
+      "seed": 76,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.179,
+      "error": ""
+    },
+    {
+      "seed": 77,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.882,
+      "error": ""
+    },
+    {
+      "seed": 78,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.51,
+      "error": ""
+    },
+    {
+      "seed": 79,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.457,
+      "error": ""
+    },
+    {
+      "seed": 80,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.139,
+      "error": ""
+    },
+    {
+      "seed": 81,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.36,
+      "error": ""
+    },
+    {
+      "seed": 82,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.561,
+      "error": ""
+    },
+    {
+      "seed": 83,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.013,
+      "error": ""
+    },
+    {
+      "seed": 84,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.981,
+      "error": ""
+    },
+    {
+      "seed": 85,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.588,
+      "error": ""
+    },
+    {
+      "seed": 86,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.66,
+      "error": ""
+    },
+    {
+      "seed": 87,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.683,
+      "error": ""
+    },
+    {
+      "seed": 88,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.129,
+      "error": ""
+    },
+    {
+      "seed": 89,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.322,
+      "error": ""
+    },
+    {
+      "seed": 90,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.147,
+      "error": ""
+    },
+    {
+      "seed": 91,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.497,
+      "error": ""
+    },
+    {
+      "seed": 92,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.199,
+      "error": ""
+    },
+    {
+      "seed": 93,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.923,
+      "error": ""
+    },
+    {
+      "seed": 94,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.784,
+      "error": ""
+    },
+    {
+      "seed": 95,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.429,
+      "error": ""
+    },
+    {
+      "seed": 96,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.527,
+      "error": ""
+    },
+    {
+      "seed": 97,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.198,
+      "error": ""
+    },
+    {
+      "seed": 98,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.469,
+      "error": ""
+    },
+    {
+      "seed": 99,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.442,
+      "error": ""
+    },
+    {
+      "seed": 100,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.434,
+      "error": ""
+    },
+    {
+      "seed": 101,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.589,
+      "error": ""
+    },
+    {
+      "seed": 102,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.001,
+      "error": ""
+    },
+    {
+      "seed": 103,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.943,
+      "error": ""
+    },
+    {
+      "seed": 104,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.702,
+      "error": ""
+    },
+    {
+      "seed": 105,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.128,
+      "error": ""
+    },
+    {
+      "seed": 106,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.809,
+      "error": ""
+    },
+    {
+      "seed": 107,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.911,
+      "error": ""
+    },
+    {
+      "seed": 108,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.634,
+      "error": ""
+    },
+    {
+      "seed": 109,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.178,
+      "error": ""
+    },
+    {
+      "seed": 110,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.392,
+      "error": ""
+    },
+    {
+      "seed": 111,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.919,
+      "error": ""
+    },
+    {
+      "seed": 112,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.026,
+      "error": ""
+    },
+    {
+      "seed": 113,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.8,
+      "error": ""
+    },
+    {
+      "seed": 114,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.59,
+      "error": ""
+    },
+    {
+      "seed": 115,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.919,
+      "error": ""
+    },
+    {
+      "seed": 116,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.088,
+      "error": ""
+    },
+    {
+      "seed": 117,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.521,
+      "error": ""
+    },
+    {
+      "seed": 118,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.743,
+      "error": ""
+    },
+    {
+      "seed": 119,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.728,
+      "error": ""
+    },
+    {
+      "seed": 120,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.252,
+      "error": ""
+    },
+    {
+      "seed": 121,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.068,
+      "error": ""
+    },
+    {
+      "seed": 122,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.458,
+      "error": ""
+    },
+    {
+      "seed": 123,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.838,
+      "error": ""
+    },
+    {
+      "seed": 124,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.937,
+      "error": ""
+    },
+    {
+      "seed": 125,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.544,
+      "error": ""
+    },
+    {
+      "seed": 126,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.602,
+      "error": ""
+    },
+    {
+      "seed": 127,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.294,
+      "error": ""
+    },
+    {
+      "seed": 128,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.616,
+      "error": ""
+    },
+    {
+      "seed": 129,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.997,
+      "error": ""
+    },
+    {
+      "seed": 130,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.107,
+      "error": ""
+    },
+    {
+      "seed": 131,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.624,
+      "error": ""
+    },
+    {
+      "seed": 132,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.56,
+      "error": ""
+    },
+    {
+      "seed": 133,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.28,
+      "error": ""
+    },
+    {
+      "seed": 134,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.813,
+      "error": ""
+    },
+    {
+      "seed": 135,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.323,
+      "error": ""
+    },
+    {
+      "seed": 136,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.344,
+      "error": ""
+    },
+    {
+      "seed": 137,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.226,
+      "error": ""
+    },
+    {
+      "seed": 138,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.335,
+      "error": ""
+    },
+    {
+      "seed": 139,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.005,
+      "error": ""
+    },
+    {
+      "seed": 140,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.539,
+      "error": ""
+    },
+    {
+      "seed": 141,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.61,
+      "error": ""
+    },
+    {
+      "seed": 142,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.591,
+      "error": ""
+    },
+    {
+      "seed": 143,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.949,
+      "error": ""
+    },
+    {
+      "seed": 144,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.589,
+      "error": ""
+    },
+    {
+      "seed": 145,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.808,
+      "error": ""
+    },
+    {
+      "seed": 146,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.428,
+      "error": ""
+    },
+    {
+      "seed": 147,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.117,
+      "error": ""
+    },
+    {
+      "seed": 148,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.062,
+      "error": ""
+    },
+    {
+      "seed": 149,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.615,
+      "error": ""
+    },
+    {
+      "seed": 150,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.661,
+      "error": ""
+    },
+    {
+      "seed": 151,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.91,
+      "error": ""
+    },
+    {
+      "seed": 152,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.408,
+      "error": ""
+    },
+    {
+      "seed": 153,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.797,
+      "error": ""
+    },
+    {
+      "seed": 154,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.017,
+      "error": ""
+    },
+    {
+      "seed": 155,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.285,
+      "error": ""
+    },
+    {
+      "seed": 156,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.57,
+      "error": ""
+    },
+    {
+      "seed": 157,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.816,
+      "error": ""
+    },
+    {
+      "seed": 158,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.336,
+      "error": ""
+    },
+    {
+      "seed": 159,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.896,
+      "error": ""
+    },
+    {
+      "seed": 160,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.144,
+      "error": ""
+    },
+    {
+      "seed": 161,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.915,
+      "error": ""
+    },
+    {
+      "seed": 162,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.619,
+      "error": ""
+    },
+    {
+      "seed": 163,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.701,
+      "error": ""
+    },
+    {
+      "seed": 164,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.347,
+      "error": ""
+    },
+    {
+      "seed": 165,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.597,
+      "error": ""
+    },
+    {
+      "seed": 166,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.318,
+      "error": ""
+    },
+    {
+      "seed": 167,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.213,
+      "error": ""
+    },
+    {
+      "seed": 168,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.226,
+      "error": ""
+    },
+    {
+      "seed": 169,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.735,
+      "error": ""
+    },
+    {
+      "seed": 170,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.105,
+      "error": ""
+    },
+    {
+      "seed": 171,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.314,
+      "error": ""
+    },
+    {
+      "seed": 172,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.714,
+      "error": ""
+    },
+    {
+      "seed": 173,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.565,
+      "error": ""
+    },
+    {
+      "seed": 174,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.634,
+      "error": ""
+    },
+    {
+      "seed": 175,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.712,
+      "error": ""
+    },
+    {
+      "seed": 176,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.109,
+      "error": ""
+    },
+    {
+      "seed": 177,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.829,
+      "error": ""
+    },
+    {
+      "seed": 178,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.154,
+      "error": ""
+    },
+    {
+      "seed": 179,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.006,
+      "error": ""
+    },
+    {
+      "seed": 180,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.437,
+      "error": ""
+    },
+    {
+      "seed": 181,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.487,
+      "error": ""
+    },
+    {
+      "seed": 182,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.117,
+      "error": ""
+    },
+    {
+      "seed": 183,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.29,
+      "error": ""
+    },
+    {
+      "seed": 184,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.982,
+      "error": ""
+    },
+    {
+      "seed": 185,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.616,
+      "error": ""
+    },
+    {
+      "seed": 186,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.108,
+      "error": ""
+    },
+    {
+      "seed": 187,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.436,
+      "error": ""
+    },
+    {
+      "seed": 188,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.857,
+      "error": ""
+    },
+    {
+      "seed": 189,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.927,
+      "error": ""
+    },
+    {
+      "seed": 190,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.529,
+      "error": ""
+    },
+    {
+      "seed": 191,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.183,
+      "error": ""
+    },
+    {
+      "seed": 192,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.323,
+      "error": ""
+    },
+    {
+      "seed": 193,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.942,
+      "error": ""
+    },
+    {
+      "seed": 194,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.285,
+      "error": ""
+    },
+    {
+      "seed": 195,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.17,
+      "error": ""
+    },
+    {
+      "seed": 196,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.604,
+      "error": ""
+    },
+    {
+      "seed": 197,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.885,
+      "error": ""
+    },
+    {
+      "seed": 198,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.669,
+      "error": ""
+    },
+    {
+      "seed": 199,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.335,
+      "error": ""
+    },
+    {
+      "seed": 200,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.27,
+      "error": ""
+    },
+    {
+      "seed": 201,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.93,
+      "error": ""
+    },
+    {
+      "seed": 202,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.938,
+      "error": ""
+    },
+    {
+      "seed": 203,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.632,
+      "error": ""
+    },
+    {
+      "seed": 204,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.136,
+      "error": ""
+    },
+    {
+      "seed": 205,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.535,
+      "error": ""
+    },
+    {
+      "seed": 206,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.672,
+      "error": ""
+    },
+    {
+      "seed": 207,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.659,
+      "error": ""
+    },
+    {
+      "seed": 208,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.211,
+      "error": ""
+    },
+    {
+      "seed": 209,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.871,
+      "error": ""
+    },
+    {
+      "seed": 210,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.087,
+      "error": ""
+    },
+    {
+      "seed": 211,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.218,
+      "error": ""
+    },
+    {
+      "seed": 212,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.935,
+      "error": ""
+    },
+    {
+      "seed": 213,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.548,
+      "error": ""
+    },
+    {
+      "seed": 214,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.299,
+      "error": ""
+    },
+    {
+      "seed": 215,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.845,
+      "error": ""
+    },
+    {
+      "seed": 216,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.203,
+      "error": ""
+    },
+    {
+      "seed": 217,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.934,
+      "error": ""
+    },
+    {
+      "seed": 218,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.396,
+      "error": ""
+    },
+    {
+      "seed": 219,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.426,
+      "error": ""
+    },
+    {
+      "seed": 220,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.071,
+      "error": ""
+    },
+    {
+      "seed": 221,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.253,
+      "error": ""
+    },
+    {
+      "seed": 222,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.46,
+      "error": ""
+    },
+    {
+      "seed": 223,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.763,
+      "error": ""
+    },
+    {
+      "seed": 224,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.748,
+      "error": ""
+    },
+    {
+      "seed": 225,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.941,
+      "error": ""
+    },
+    {
+      "seed": 226,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.614,
+      "error": ""
+    },
+    {
+      "seed": 227,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.948,
+      "error": ""
+    },
+    {
+      "seed": 228,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.327,
+      "error": ""
+    },
+    {
+      "seed": 229,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.47,
+      "error": ""
+    },
+    {
+      "seed": 230,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.506,
+      "error": ""
+    },
+    {
+      "seed": 231,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.314,
+      "error": ""
+    },
+    {
+      "seed": 232,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.525,
+      "error": ""
+    },
+    {
+      "seed": 233,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.722,
+      "error": ""
+    },
+    {
+      "seed": 234,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.282,
+      "error": ""
+    },
+    {
+      "seed": 235,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.654,
+      "error": ""
+    },
+    {
+      "seed": 236,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.067,
+      "error": ""
+    },
+    {
+      "seed": 237,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.861,
+      "error": ""
+    },
+    {
+      "seed": 238,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.67,
+      "error": ""
+    },
+    {
+      "seed": 239,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.274,
+      "error": ""
+    },
+    {
+      "seed": 240,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.58,
+      "error": ""
+    },
+    {
+      "seed": 241,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.655,
+      "error": ""
+    },
+    {
+      "seed": 242,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.12,
+      "error": ""
+    },
+    {
+      "seed": 243,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.943,
+      "error": ""
+    },
+    {
+      "seed": 244,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.909,
+      "error": ""
+    },
+    {
+      "seed": 245,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.161,
+      "error": ""
+    },
+    {
+      "seed": 246,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.306,
+      "error": ""
+    },
+    {
+      "seed": 247,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.382,
+      "error": ""
+    },
+    {
+      "seed": 248,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.56,
+      "error": ""
+    },
+    {
+      "seed": 249,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.38,
+      "error": ""
+    },
+    {
+      "seed": 250,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.241,
+      "error": ""
+    },
+    {
+      "seed": 251,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.99,
+      "error": ""
+    },
+    {
+      "seed": 252,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.963,
+      "error": ""
+    },
+    {
+      "seed": 253,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.48,
+      "error": ""
+    },
+    {
+      "seed": 254,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.379,
+      "error": ""
+    },
+    {
+      "seed": 255,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.464,
+      "error": ""
+    },
+    {
+      "seed": 256,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.686,
+      "error": ""
+    },
+    {
+      "seed": 257,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.905,
+      "error": ""
+    },
+    {
+      "seed": 258,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.506,
+      "error": ""
+    },
+    {
+      "seed": 259,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.956,
+      "error": ""
+    },
+    {
+      "seed": 260,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.07,
+      "error": ""
+    },
+    {
+      "seed": 261,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.556,
+      "error": ""
+    },
+    {
+      "seed": 262,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.24,
+      "error": ""
+    },
+    {
+      "seed": 263,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.369,
+      "error": ""
+    },
+    {
+      "seed": 264,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.13,
+      "error": ""
+    },
+    {
+      "seed": 265,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 7.628,
+      "error": ""
+    },
+    {
+      "seed": 266,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.209,
+      "error": ""
+    },
+    {
+      "seed": 267,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.467,
+      "error": ""
+    },
+    {
+      "seed": 268,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 7.9,
+      "error": ""
+    },
+    {
+      "seed": 269,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.963,
+      "error": ""
+    },
+    {
+      "seed": 270,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.946,
+      "error": ""
+    },
+    {
+      "seed": 271,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.107,
+      "error": ""
+    },
+    {
+      "seed": 272,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.072,
+      "error": ""
+    },
+    {
+      "seed": 273,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.95,
+      "error": ""
+    },
+    {
+      "seed": 274,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.835,
+      "error": ""
+    },
+    {
+      "seed": 275,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.325,
+      "error": ""
+    },
+    {
+      "seed": 276,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.378,
+      "error": ""
+    },
+    {
+      "seed": 277,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.845,
+      "error": ""
+    },
+    {
+      "seed": 278,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.993,
+      "error": ""
+    },
+    {
+      "seed": 279,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.203,
+      "error": ""
+    },
+    {
+      "seed": 280,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.812,
+      "error": ""
+    },
+    {
+      "seed": 281,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.3,
+      "error": ""
+    },
+    {
+      "seed": 282,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.995,
+      "error": ""
+    },
+    {
+      "seed": 283,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.007,
+      "error": ""
+    },
+    {
+      "seed": 284,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.941,
+      "error": ""
+    },
+    {
+      "seed": 285,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.156,
+      "error": ""
+    },
+    {
+      "seed": 286,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.252,
+      "error": ""
+    },
+    {
+      "seed": 287,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.472,
+      "error": ""
+    },
+    {
+      "seed": 288,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.88,
+      "error": ""
+    },
+    {
+      "seed": 289,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.841,
+      "error": ""
+    },
+    {
+      "seed": 290,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.466,
+      "error": ""
+    },
+    {
+      "seed": 291,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.435,
+      "error": ""
+    },
+    {
+      "seed": 292,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.123,
+      "error": ""
+    },
+    {
+      "seed": 293,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.256,
+      "error": ""
+    },
+    {
+      "seed": 294,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.595,
+      "error": ""
+    },
+    {
+      "seed": 295,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.885,
+      "error": ""
+    },
+    {
+      "seed": 296,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.773,
+      "error": ""
+    },
+    {
+      "seed": 297,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.497,
+      "error": ""
+    },
+    {
+      "seed": 298,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.134,
+      "error": ""
+    },
+    {
+      "seed": 299,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.306,
+      "error": ""
+    },
+    {
+      "seed": 300,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.04,
+      "error": ""
+    },
+    {
+      "seed": 301,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.385,
+      "error": ""
+    },
+    {
+      "seed": 302,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.713,
+      "error": ""
+    },
+    {
+      "seed": 303,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.205,
+      "error": ""
+    },
+    {
+      "seed": 304,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.635,
+      "error": ""
+    },
+    {
+      "seed": 305,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.501,
+      "error": ""
+    },
+    {
+      "seed": 306,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.23,
+      "error": ""
+    },
+    {
+      "seed": 307,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.503,
+      "error": ""
+    },
+    {
+      "seed": 308,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.142,
+      "error": ""
+    },
+    {
+      "seed": 309,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.91,
+      "error": ""
+    },
+    {
+      "seed": 310,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.591,
+      "error": ""
+    },
+    {
+      "seed": 311,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.784,
+      "error": ""
+    },
+    {
+      "seed": 312,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.959,
+      "error": ""
+    },
+    {
+      "seed": 313,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.982,
+      "error": ""
+    },
+    {
+      "seed": 314,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.873,
+      "error": ""
+    },
+    {
+      "seed": 315,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.677,
+      "error": ""
+    },
+    {
+      "seed": 316,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.635,
+      "error": ""
+    },
+    {
+      "seed": 317,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.965,
+      "error": ""
+    },
+    {
+      "seed": 318,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.662,
+      "error": ""
+    },
+    {
+      "seed": 319,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.008,
+      "error": ""
+    },
+    {
+      "seed": 320,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.447,
+      "error": ""
+    },
+    {
+      "seed": 321,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.157,
+      "error": ""
+    },
+    {
+      "seed": 322,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.335,
+      "error": ""
+    },
+    {
+      "seed": 323,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.78,
+      "error": ""
+    },
+    {
+      "seed": 324,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.702,
+      "error": ""
+    },
+    {
+      "seed": 325,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.075,
+      "error": ""
+    },
+    {
+      "seed": 326,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.223,
+      "error": ""
+    },
+    {
+      "seed": 327,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.352,
+      "error": ""
+    },
+    {
+      "seed": 328,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.133,
+      "error": ""
+    },
+    {
+      "seed": 329,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.619,
+      "error": ""
+    },
+    {
+      "seed": 330,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.299,
+      "error": ""
+    },
+    {
+      "seed": 331,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.241,
+      "error": ""
+    },
+    {
+      "seed": 332,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.654,
+      "error": ""
+    },
+    {
+      "seed": 333,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.179,
+      "error": ""
+    },
+    {
+      "seed": 334,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.562,
+      "error": ""
+    },
+    {
+      "seed": 335,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.069,
+      "error": ""
+    },
+    {
+      "seed": 336,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.91,
+      "error": ""
+    },
+    {
+      "seed": 337,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.805,
+      "error": ""
+    },
+    {
+      "seed": 338,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.233,
+      "error": ""
+    },
+    {
+      "seed": 339,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.195,
+      "error": ""
+    },
+    {
+      "seed": 340,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.189,
+      "error": ""
+    },
+    {
+      "seed": 341,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.823,
+      "error": ""
+    },
+    {
+      "seed": 342,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.124,
+      "error": ""
+    },
+    {
+      "seed": 343,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.828,
+      "error": ""
+    },
+    {
+      "seed": 344,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.035,
+      "error": ""
+    },
+    {
+      "seed": 345,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.43,
+      "error": ""
+    },
+    {
+      "seed": 346,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.658,
+      "error": ""
+    },
+    {
+      "seed": 347,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.511,
+      "error": ""
+    },
+    {
+      "seed": 348,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.453,
+      "error": ""
+    },
+    {
+      "seed": 349,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.053,
+      "error": ""
+    },
+    {
+      "seed": 350,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.837,
+      "error": ""
+    },
+    {
+      "seed": 351,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.826,
+      "error": ""
+    },
+    {
+      "seed": 352,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.331,
+      "error": ""
+    },
+    {
+      "seed": 353,
+      "passed": false,
+      "returncode": 1,
+      "annual_rows": 80,
+      "seconds": 0.857,
+      "error": "Seed 353 failed in year 81: Settlement service state is invalid.\nexpected 1000 annual rows, received 80"
+    },
+    {
+      "seed": 354,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.147,
+      "error": ""
+    },
+    {
+      "seed": 355,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.895,
+      "error": ""
+    },
+    {
+      "seed": 356,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.018,
+      "error": ""
+    },
+    {
+      "seed": 357,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.934,
+      "error": ""
+    },
+    {
+      "seed": 358,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.056,
+      "error": ""
+    },
+    {
+      "seed": 359,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.14,
+      "error": ""
+    },
+    {
+      "seed": 360,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.998,
+      "error": ""
+    },
+    {
+      "seed": 361,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.811,
+      "error": ""
+    },
+    {
+      "seed": 362,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.23,
+      "error": ""
+    },
+    {
+      "seed": 363,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.259,
+      "error": ""
+    },
+    {
+      "seed": 364,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.044,
+      "error": ""
+    },
+    {
+      "seed": 365,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.79,
+      "error": ""
+    },
+    {
+      "seed": 366,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.693,
+      "error": ""
+    },
+    {
+      "seed": 367,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.558,
+      "error": ""
+    },
+    {
+      "seed": 368,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.529,
+      "error": ""
+    },
+    {
+      "seed": 369,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.426,
+      "error": ""
+    },
+    {
+      "seed": 370,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.59,
+      "error": ""
+    },
+    {
+      "seed": 371,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.529,
+      "error": ""
+    },
+    {
+      "seed": 372,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.205,
+      "error": ""
+    },
+    {
+      "seed": 373,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.007,
+      "error": ""
+    },
+    {
+      "seed": 374,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.399,
+      "error": ""
+    },
+    {
+      "seed": 375,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.473,
+      "error": ""
+    },
+    {
+      "seed": 376,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.356,
+      "error": ""
+    },
+    {
+      "seed": 377,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.424,
+      "error": ""
+    },
+    {
+      "seed": 378,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.636,
+      "error": ""
+    },
+    {
+      "seed": 379,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.575,
+      "error": ""
+    },
+    {
+      "seed": 380,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.247,
+      "error": ""
+    },
+    {
+      "seed": 381,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.208,
+      "error": ""
+    },
+    {
+      "seed": 382,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.396,
+      "error": ""
+    },
+    {
+      "seed": 383,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.651,
+      "error": ""
+    },
+    {
+      "seed": 384,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.735,
+      "error": ""
+    },
+    {
+      "seed": 385,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.762,
+      "error": ""
+    },
+    {
+      "seed": 386,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.311,
+      "error": ""
+    },
+    {
+      "seed": 387,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.215,
+      "error": ""
+    },
+    {
+      "seed": 388,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.581,
+      "error": ""
+    },
+    {
+      "seed": 389,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.446,
+      "error": ""
+    },
+    {
+      "seed": 390,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.835,
+      "error": ""
+    },
+    {
+      "seed": 391,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.442,
+      "error": ""
+    },
+    {
+      "seed": 392,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.246,
+      "error": ""
+    },
+    {
+      "seed": 393,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.526,
+      "error": ""
+    },
+    {
+      "seed": 394,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.98,
+      "error": ""
+    },
+    {
+      "seed": 395,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.212,
+      "error": ""
+    },
+    {
+      "seed": 396,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.299,
+      "error": ""
+    },
+    {
+      "seed": 397,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.681,
+      "error": ""
+    },
+    {
+      "seed": 398,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.256,
+      "error": ""
+    },
+    {
+      "seed": 399,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.953,
+      "error": ""
+    },
+    {
+      "seed": 400,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.881,
+      "error": ""
+    },
+    {
+      "seed": 401,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 7.1,
+      "error": ""
+    },
+    {
+      "seed": 402,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.165,
+      "error": ""
+    },
+    {
+      "seed": 403,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.416,
+      "error": ""
+    },
+    {
+      "seed": 404,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.608,
+      "error": ""
+    },
+    {
+      "seed": 405,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 10.572,
+      "error": ""
+    },
+    {
+      "seed": 406,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 7.984,
+      "error": ""
+    },
+    {
+      "seed": 407,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 9.818,
+      "error": ""
+    },
+    {
+      "seed": 408,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.587,
+      "error": ""
+    },
+    {
+      "seed": 409,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.595,
+      "error": ""
+    },
+    {
+      "seed": 410,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 7.791,
+      "error": ""
+    },
+    {
+      "seed": 411,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.378,
+      "error": ""
+    },
+    {
+      "seed": 412,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 8.093,
+      "error": ""
+    },
+    {
+      "seed": 413,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.73,
+      "error": ""
+    },
+    {
+      "seed": 414,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.954,
+      "error": ""
+    },
+    {
+      "seed": 415,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.72,
+      "error": ""
+    },
+    {
+      "seed": 416,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.276,
+      "error": ""
+    },
+    {
+      "seed": 417,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 7.585,
+      "error": ""
+    },
+    {
+      "seed": 418,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.971,
+      "error": ""
+    },
+    {
+      "seed": 419,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.545,
+      "error": ""
+    },
+    {
+      "seed": 420,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.983,
+      "error": ""
+    },
+    {
+      "seed": 421,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 7.926,
+      "error": ""
+    },
+    {
+      "seed": 422,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.39,
+      "error": ""
+    },
+    {
+      "seed": 423,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.821,
+      "error": ""
+    },
+    {
+      "seed": 424,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.965,
+      "error": ""
+    },
+    {
+      "seed": 425,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.488,
+      "error": ""
+    },
+    {
+      "seed": 426,
+      "passed": false,
+      "returncode": 1,
+      "annual_rows": 208,
+      "seconds": 2.456,
+      "error": "Seed 426 failed in year 209: Active courier has no matching situation.\nexpected 1000 annual rows, received 208"
+    },
+    {
+      "seed": 427,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.491,
+      "error": ""
+    },
+    {
+      "seed": 428,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 9.305,
+      "error": ""
+    },
+    {
+      "seed": 429,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.455,
+      "error": ""
+    },
+    {
+      "seed": 430,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.703,
+      "error": ""
+    },
+    {
+      "seed": 431,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.723,
+      "error": ""
+    },
+    {
+      "seed": 432,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.795,
+      "error": ""
+    },
+    {
+      "seed": 433,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 8.207,
+      "error": ""
+    },
+    {
+      "seed": 434,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.722,
+      "error": ""
+    },
+    {
+      "seed": 435,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.883,
+      "error": ""
+    },
+    {
+      "seed": 436,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.665,
+      "error": ""
+    },
+    {
+      "seed": 437,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.916,
+      "error": ""
+    },
+    {
+      "seed": 438,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.467,
+      "error": ""
+    },
+    {
+      "seed": 439,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.858,
+      "error": ""
+    },
+    {
+      "seed": 440,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.204,
+      "error": ""
+    },
+    {
+      "seed": 441,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.463,
+      "error": ""
+    },
+    {
+      "seed": 442,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.522,
+      "error": ""
+    },
+    {
+      "seed": 443,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.977,
+      "error": ""
+    },
+    {
+      "seed": 444,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.561,
+      "error": ""
+    },
+    {
+      "seed": 445,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.804,
+      "error": ""
+    },
+    {
+      "seed": 446,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.541,
+      "error": ""
+    },
+    {
+      "seed": 447,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.412,
+      "error": ""
+    },
+    {
+      "seed": 448,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.656,
+      "error": ""
+    },
+    {
+      "seed": 449,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.983,
+      "error": ""
+    },
+    {
+      "seed": 450,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.396,
+      "error": ""
+    },
+    {
+      "seed": 451,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.073,
+      "error": ""
+    },
+    {
+      "seed": 452,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.153,
+      "error": ""
+    },
+    {
+      "seed": 453,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.015,
+      "error": ""
+    },
+    {
+      "seed": 454,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.984,
+      "error": ""
+    },
+    {
+      "seed": 455,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.228,
+      "error": ""
+    },
+    {
+      "seed": 456,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.655,
+      "error": ""
+    },
+    {
+      "seed": 457,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.986,
+      "error": ""
+    },
+    {
+      "seed": 458,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.159,
+      "error": ""
+    },
+    {
+      "seed": 459,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.504,
+      "error": ""
+    },
+    {
+      "seed": 460,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.639,
+      "error": ""
+    },
+    {
+      "seed": 461,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.997,
+      "error": ""
+    },
+    {
+      "seed": 462,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.685,
+      "error": ""
+    },
+    {
+      "seed": 463,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.063,
+      "error": ""
+    },
+    {
+      "seed": 464,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.324,
+      "error": ""
+    },
+    {
+      "seed": 465,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.566,
+      "error": ""
+    },
+    {
+      "seed": 466,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.421,
+      "error": ""
+    },
+    {
+      "seed": 467,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.377,
+      "error": ""
+    },
+    {
+      "seed": 468,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.911,
+      "error": ""
+    },
+    {
+      "seed": 469,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.64,
+      "error": ""
+    },
+    {
+      "seed": 470,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.0,
+      "error": ""
+    },
+    {
+      "seed": 471,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.057,
+      "error": ""
+    },
+    {
+      "seed": 472,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.455,
+      "error": ""
+    },
+    {
+      "seed": 473,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.738,
+      "error": ""
+    },
+    {
+      "seed": 474,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.55,
+      "error": ""
+    },
+    {
+      "seed": 475,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.151,
+      "error": ""
+    },
+    {
+      "seed": 476,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.492,
+      "error": ""
+    },
+    {
+      "seed": 477,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.428,
+      "error": ""
+    },
+    {
+      "seed": 478,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.655,
+      "error": ""
+    },
+    {
+      "seed": 479,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.125,
+      "error": ""
+    },
+    {
+      "seed": 480,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.806,
+      "error": ""
+    },
+    {
+      "seed": 481,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.745,
+      "error": ""
+    },
+    {
+      "seed": 482,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.663,
+      "error": ""
+    },
+    {
+      "seed": 483,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.241,
+      "error": ""
+    },
+    {
+      "seed": 484,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.043,
+      "error": ""
+    },
+    {
+      "seed": 485,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.795,
+      "error": ""
+    },
+    {
+      "seed": 486,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.256,
+      "error": ""
+    },
+    {
+      "seed": 487,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.063,
+      "error": ""
+    },
+    {
+      "seed": 488,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.666,
+      "error": ""
+    },
+    {
+      "seed": 489,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.016,
+      "error": ""
+    },
+    {
+      "seed": 490,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.31,
+      "error": ""
+    },
+    {
+      "seed": 491,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.709,
+      "error": ""
+    },
+    {
+      "seed": 492,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.48,
+      "error": ""
+    },
+    {
+      "seed": 493,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.659,
+      "error": ""
+    },
+    {
+      "seed": 494,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.48,
+      "error": ""
+    },
+    {
+      "seed": 495,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.522,
+      "error": ""
+    },
+    {
+      "seed": 496,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.926,
+      "error": ""
+    },
+    {
+      "seed": 497,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.53,
+      "error": ""
+    },
+    {
+      "seed": 498,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.335,
+      "error": ""
+    },
+    {
+      "seed": 499,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.962,
+      "error": ""
+    },
+    {
+      "seed": 500,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.031,
+      "error": ""
+    },
+    {
+      "seed": 501,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.98,
+      "error": ""
+    },
+    {
+      "seed": 502,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.073,
+      "error": ""
+    },
+    {
+      "seed": 503,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.416,
+      "error": ""
+    },
+    {
+      "seed": 504,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.766,
+      "error": ""
+    },
+    {
+      "seed": 505,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.462,
+      "error": ""
+    },
+    {
+      "seed": 506,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.576,
+      "error": ""
+    },
+    {
+      "seed": 507,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.903,
+      "error": ""
+    },
+    {
+      "seed": 508,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.852,
+      "error": ""
+    },
+    {
+      "seed": 509,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.199,
+      "error": ""
+    },
+    {
+      "seed": 510,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.128,
+      "error": ""
+    },
+    {
+      "seed": 511,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.729,
+      "error": ""
+    },
+    {
+      "seed": 512,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.233,
+      "error": ""
+    },
+    {
+      "seed": 513,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.284,
+      "error": ""
+    },
+    {
+      "seed": 514,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.748,
+      "error": ""
+    },
+    {
+      "seed": 515,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.701,
+      "error": ""
+    },
+    {
+      "seed": 516,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.711,
+      "error": ""
+    },
+    {
+      "seed": 517,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.009,
+      "error": ""
+    },
+    {
+      "seed": 518,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.596,
+      "error": ""
+    },
+    {
+      "seed": 519,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.985,
+      "error": ""
+    },
+    {
+      "seed": 520,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.471,
+      "error": ""
+    },
+    {
+      "seed": 521,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.264,
+      "error": ""
+    },
+    {
+      "seed": 522,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.361,
+      "error": ""
+    },
+    {
+      "seed": 523,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.591,
+      "error": ""
+    },
+    {
+      "seed": 524,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.337,
+      "error": ""
+    },
+    {
+      "seed": 525,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.291,
+      "error": ""
+    },
+    {
+      "seed": 526,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.147,
+      "error": ""
+    },
+    {
+      "seed": 527,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.364,
+      "error": ""
+    },
+    {
+      "seed": 528,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.398,
+      "error": ""
+    },
+    {
+      "seed": 529,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.787,
+      "error": ""
+    },
+    {
+      "seed": 530,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.799,
+      "error": ""
+    },
+    {
+      "seed": 531,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.993,
+      "error": ""
+    },
+    {
+      "seed": 532,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.187,
+      "error": ""
+    },
+    {
+      "seed": 533,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.656,
+      "error": ""
+    },
+    {
+      "seed": 534,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.038,
+      "error": ""
+    },
+    {
+      "seed": 535,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.715,
+      "error": ""
+    },
+    {
+      "seed": 536,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.342,
+      "error": ""
+    },
+    {
+      "seed": 537,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.418,
+      "error": ""
+    },
+    {
+      "seed": 538,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.818,
+      "error": ""
+    },
+    {
+      "seed": 539,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.43,
+      "error": ""
+    },
+    {
+      "seed": 540,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.427,
+      "error": ""
+    },
+    {
+      "seed": 541,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.803,
+      "error": ""
+    },
+    {
+      "seed": 542,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.901,
+      "error": ""
+    },
+    {
+      "seed": 543,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.982,
+      "error": ""
+    },
+    {
+      "seed": 544,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.541,
+      "error": ""
+    },
+    {
+      "seed": 545,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.639,
+      "error": ""
+    },
+    {
+      "seed": 546,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.856,
+      "error": ""
+    },
+    {
+      "seed": 547,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.347,
+      "error": ""
+    },
+    {
+      "seed": 548,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.849,
+      "error": ""
+    },
+    {
+      "seed": 549,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.925,
+      "error": ""
+    },
+    {
+      "seed": 550,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.923,
+      "error": ""
+    },
+    {
+      "seed": 551,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.269,
+      "error": ""
+    },
+    {
+      "seed": 552,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.996,
+      "error": ""
+    },
+    {
+      "seed": 553,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.113,
+      "error": ""
+    },
+    {
+      "seed": 554,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.84,
+      "error": ""
+    },
+    {
+      "seed": 555,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.627,
+      "error": ""
+    },
+    {
+      "seed": 556,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.426,
+      "error": ""
+    },
+    {
+      "seed": 557,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.045,
+      "error": ""
+    },
+    {
+      "seed": 558,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.243,
+      "error": ""
+    },
+    {
+      "seed": 559,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.086,
+      "error": ""
+    },
+    {
+      "seed": 560,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.784,
+      "error": ""
+    },
+    {
+      "seed": 561,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.885,
+      "error": ""
+    },
+    {
+      "seed": 562,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.283,
+      "error": ""
+    },
+    {
+      "seed": 563,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.787,
+      "error": ""
+    },
+    {
+      "seed": 564,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.481,
+      "error": ""
+    },
+    {
+      "seed": 565,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.131,
+      "error": ""
+    },
+    {
+      "seed": 566,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.874,
+      "error": ""
+    },
+    {
+      "seed": 567,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.643,
+      "error": ""
+    },
+    {
+      "seed": 568,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.872,
+      "error": ""
+    },
+    {
+      "seed": 569,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.425,
+      "error": ""
+    },
+    {
+      "seed": 570,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.479,
+      "error": ""
+    },
+    {
+      "seed": 571,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.743,
+      "error": ""
+    },
+    {
+      "seed": 572,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.071,
+      "error": ""
+    },
+    {
+      "seed": 573,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.881,
+      "error": ""
+    },
+    {
+      "seed": 574,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.077,
+      "error": ""
+    },
+    {
+      "seed": 575,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.342,
+      "error": ""
+    },
+    {
+      "seed": 576,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.993,
+      "error": ""
+    },
+    {
+      "seed": 577,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.872,
+      "error": ""
+    },
+    {
+      "seed": 578,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.666,
+      "error": ""
+    },
+    {
+      "seed": 579,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.005,
+      "error": ""
+    },
+    {
+      "seed": 580,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.561,
+      "error": ""
+    },
+    {
+      "seed": 581,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.11,
+      "error": ""
+    },
+    {
+      "seed": 582,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.051,
+      "error": ""
+    },
+    {
+      "seed": 583,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.28,
+      "error": ""
+    },
+    {
+      "seed": 584,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.526,
+      "error": ""
+    },
+    {
+      "seed": 585,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.599,
+      "error": ""
+    },
+    {
+      "seed": 586,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.335,
+      "error": ""
+    },
+    {
+      "seed": 587,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.188,
+      "error": ""
+    },
+    {
+      "seed": 588,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.387,
+      "error": ""
+    },
+    {
+      "seed": 589,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.742,
+      "error": ""
+    },
+    {
+      "seed": 590,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.007,
+      "error": ""
+    },
+    {
+      "seed": 591,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.288,
+      "error": ""
+    },
+    {
+      "seed": 592,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.525,
+      "error": ""
+    },
+    {
+      "seed": 593,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.043,
+      "error": ""
+    },
+    {
+      "seed": 594,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.391,
+      "error": ""
+    },
+    {
+      "seed": 595,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.018,
+      "error": ""
+    },
+    {
+      "seed": 596,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.219,
+      "error": ""
+    },
+    {
+      "seed": 597,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.423,
+      "error": ""
+    },
+    {
+      "seed": 598,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.517,
+      "error": ""
+    },
+    {
+      "seed": 599,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.895,
+      "error": ""
+    },
+    {
+      "seed": 600,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.457,
+      "error": ""
+    },
+    {
+      "seed": 601,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.994,
+      "error": ""
+    },
+    {
+      "seed": 602,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.656,
+      "error": ""
+    },
+    {
+      "seed": 603,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.117,
+      "error": ""
+    },
+    {
+      "seed": 604,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.101,
+      "error": ""
+    },
+    {
+      "seed": 605,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.979,
+      "error": ""
+    },
+    {
+      "seed": 606,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.457,
+      "error": ""
+    },
+    {
+      "seed": 607,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.11,
+      "error": ""
+    },
+    {
+      "seed": 608,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.394,
+      "error": ""
+    },
+    {
+      "seed": 609,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.897,
+      "error": ""
+    },
+    {
+      "seed": 610,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.465,
+      "error": ""
+    },
+    {
+      "seed": 611,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.606,
+      "error": ""
+    },
+    {
+      "seed": 612,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.839,
+      "error": ""
+    },
+    {
+      "seed": 613,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.411,
+      "error": ""
+    },
+    {
+      "seed": 614,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.425,
+      "error": ""
+    },
+    {
+      "seed": 615,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.289,
+      "error": ""
+    },
+    {
+      "seed": 616,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.344,
+      "error": ""
+    },
+    {
+      "seed": 617,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.085,
+      "error": ""
+    },
+    {
+      "seed": 618,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.006,
+      "error": ""
+    },
+    {
+      "seed": 619,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.447,
+      "error": ""
+    },
+    {
+      "seed": 620,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.67,
+      "error": ""
+    },
+    {
+      "seed": 621,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.357,
+      "error": ""
+    },
+    {
+      "seed": 622,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.998,
+      "error": ""
+    },
+    {
+      "seed": 623,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.873,
+      "error": ""
+    },
+    {
+      "seed": 624,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.619,
+      "error": ""
+    },
+    {
+      "seed": 625,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.649,
+      "error": ""
+    },
+    {
+      "seed": 626,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.099,
+      "error": ""
+    },
+    {
+      "seed": 627,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.252,
+      "error": ""
+    },
+    {
+      "seed": 628,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.364,
+      "error": ""
+    },
+    {
+      "seed": 629,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.849,
+      "error": ""
+    },
+    {
+      "seed": 630,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.659,
+      "error": ""
+    },
+    {
+      "seed": 631,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.775,
+      "error": ""
+    },
+    {
+      "seed": 632,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.984,
+      "error": ""
+    },
+    {
+      "seed": 633,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.92,
+      "error": ""
+    },
+    {
+      "seed": 634,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.888,
+      "error": ""
+    },
+    {
+      "seed": 635,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.098,
+      "error": ""
+    },
+    {
+      "seed": 636,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.252,
+      "error": ""
+    },
+    {
+      "seed": 637,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.834,
+      "error": ""
+    },
+    {
+      "seed": 638,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.472,
+      "error": ""
+    },
+    {
+      "seed": 639,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.866,
+      "error": ""
+    },
+    {
+      "seed": 640,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.415,
+      "error": ""
+    },
+    {
+      "seed": 641,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.73,
+      "error": ""
+    },
+    {
+      "seed": 642,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.112,
+      "error": ""
+    },
+    {
+      "seed": 643,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.389,
+      "error": ""
+    },
+    {
+      "seed": 644,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.054,
+      "error": ""
+    },
+    {
+      "seed": 645,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.23,
+      "error": ""
+    },
+    {
+      "seed": 646,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.04,
+      "error": ""
+    },
+    {
+      "seed": 647,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.889,
+      "error": ""
+    },
+    {
+      "seed": 648,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.197,
+      "error": ""
+    },
+    {
+      "seed": 649,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.514,
+      "error": ""
+    },
+    {
+      "seed": 650,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.715,
+      "error": ""
+    },
+    {
+      "seed": 651,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.664,
+      "error": ""
+    },
+    {
+      "seed": 652,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.379,
+      "error": ""
+    },
+    {
+      "seed": 653,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.315,
+      "error": ""
+    },
+    {
+      "seed": 654,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.643,
+      "error": ""
+    },
+    {
+      "seed": 655,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.616,
+      "error": ""
+    },
+    {
+      "seed": 656,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.272,
+      "error": ""
+    },
+    {
+      "seed": 657,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.211,
+      "error": ""
+    },
+    {
+      "seed": 658,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.068,
+      "error": ""
+    },
+    {
+      "seed": 659,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.008,
+      "error": ""
+    },
+    {
+      "seed": 660,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.943,
+      "error": ""
+    },
+    {
+      "seed": 661,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.165,
+      "error": ""
+    },
+    {
+      "seed": 662,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.816,
+      "error": ""
+    },
+    {
+      "seed": 663,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.177,
+      "error": ""
+    },
+    {
+      "seed": 664,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.3,
+      "error": ""
+    },
+    {
+      "seed": 665,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.726,
+      "error": ""
+    },
+    {
+      "seed": 666,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.936,
+      "error": ""
+    },
+    {
+      "seed": 667,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.821,
+      "error": ""
+    },
+    {
+      "seed": 668,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.114,
+      "error": ""
+    },
+    {
+      "seed": 669,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.148,
+      "error": ""
+    },
+    {
+      "seed": 670,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.142,
+      "error": ""
+    },
+    {
+      "seed": 671,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.89,
+      "error": ""
+    },
+    {
+      "seed": 672,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.075,
+      "error": ""
+    },
+    {
+      "seed": 673,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.653,
+      "error": ""
+    },
+    {
+      "seed": 674,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.052,
+      "error": ""
+    },
+    {
+      "seed": 675,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.784,
+      "error": ""
+    },
+    {
+      "seed": 676,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.092,
+      "error": ""
+    },
+    {
+      "seed": 677,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.298,
+      "error": ""
+    },
+    {
+      "seed": 678,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.47,
+      "error": ""
+    },
+    {
+      "seed": 679,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.281,
+      "error": ""
+    },
+    {
+      "seed": 680,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.578,
+      "error": ""
+    },
+    {
+      "seed": 681,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.973,
+      "error": ""
+    },
+    {
+      "seed": 682,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.974,
+      "error": ""
+    },
+    {
+      "seed": 683,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.732,
+      "error": ""
+    },
+    {
+      "seed": 684,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.913,
+      "error": ""
+    },
+    {
+      "seed": 685,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.842,
+      "error": ""
+    },
+    {
+      "seed": 686,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.059,
+      "error": ""
+    },
+    {
+      "seed": 687,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.717,
+      "error": ""
+    },
+    {
+      "seed": 688,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.647,
+      "error": ""
+    },
+    {
+      "seed": 689,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.638,
+      "error": ""
+    },
+    {
+      "seed": 690,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.905,
+      "error": ""
+    },
+    {
+      "seed": 691,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.214,
+      "error": ""
+    },
+    {
+      "seed": 692,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.427,
+      "error": ""
+    },
+    {
+      "seed": 693,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.63,
+      "error": ""
+    },
+    {
+      "seed": 694,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.029,
+      "error": ""
+    },
+    {
+      "seed": 695,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.936,
+      "error": ""
+    },
+    {
+      "seed": 696,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.933,
+      "error": ""
+    },
+    {
+      "seed": 697,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.393,
+      "error": ""
+    },
+    {
+      "seed": 698,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.539,
+      "error": ""
+    },
+    {
+      "seed": 699,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.513,
+      "error": ""
+    },
+    {
+      "seed": 700,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.948,
+      "error": ""
+    },
+    {
+      "seed": 701,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.411,
+      "error": ""
+    },
+    {
+      "seed": 702,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.039,
+      "error": ""
+    },
+    {
+      "seed": 703,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.522,
+      "error": ""
+    },
+    {
+      "seed": 704,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.735,
+      "error": ""
+    },
+    {
+      "seed": 705,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.83,
+      "error": ""
+    },
+    {
+      "seed": 706,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.494,
+      "error": ""
+    },
+    {
+      "seed": 707,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.238,
+      "error": ""
+    },
+    {
+      "seed": 708,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.803,
+      "error": ""
+    },
+    {
+      "seed": 709,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.458,
+      "error": ""
+    },
+    {
+      "seed": 710,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.727,
+      "error": ""
+    },
+    {
+      "seed": 711,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.535,
+      "error": ""
+    },
+    {
+      "seed": 712,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.803,
+      "error": ""
+    },
+    {
+      "seed": 713,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.713,
+      "error": ""
+    },
+    {
+      "seed": 714,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.617,
+      "error": ""
+    },
+    {
+      "seed": 715,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.513,
+      "error": ""
+    },
+    {
+      "seed": 716,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.45,
+      "error": ""
+    },
+    {
+      "seed": 717,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.347,
+      "error": ""
+    },
+    {
+      "seed": 718,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.949,
+      "error": ""
+    },
+    {
+      "seed": 719,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.314,
+      "error": ""
+    },
+    {
+      "seed": 720,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.402,
+      "error": ""
+    },
+    {
+      "seed": 721,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.754,
+      "error": ""
+    },
+    {
+      "seed": 722,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.611,
+      "error": ""
+    },
+    {
+      "seed": 723,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.725,
+      "error": ""
+    },
+    {
+      "seed": 724,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.265,
+      "error": ""
+    },
+    {
+      "seed": 725,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.672,
+      "error": ""
+    },
+    {
+      "seed": 726,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.171,
+      "error": ""
+    },
+    {
+      "seed": 727,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.412,
+      "error": ""
+    },
+    {
+      "seed": 728,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.582,
+      "error": ""
+    },
+    {
+      "seed": 729,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.529,
+      "error": ""
+    },
+    {
+      "seed": 730,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.045,
+      "error": ""
+    },
+    {
+      "seed": 731,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.395,
+      "error": ""
+    },
+    {
+      "seed": 732,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.243,
+      "error": ""
+    },
+    {
+      "seed": 733,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.421,
+      "error": ""
+    },
+    {
+      "seed": 734,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.491,
+      "error": ""
+    },
+    {
+      "seed": 735,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.532,
+      "error": ""
+    },
+    {
+      "seed": 736,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.416,
+      "error": ""
+    },
+    {
+      "seed": 737,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.825,
+      "error": ""
+    },
+    {
+      "seed": 738,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.557,
+      "error": ""
+    },
+    {
+      "seed": 739,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.119,
+      "error": ""
+    },
+    {
+      "seed": 740,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.848,
+      "error": ""
+    },
+    {
+      "seed": 741,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.81,
+      "error": ""
+    },
+    {
+      "seed": 742,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.982,
+      "error": ""
+    },
+    {
+      "seed": 743,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.53,
+      "error": ""
+    },
+    {
+      "seed": 744,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.503,
+      "error": ""
+    },
+    {
+      "seed": 745,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.281,
+      "error": ""
+    },
+    {
+      "seed": 746,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.765,
+      "error": ""
+    },
+    {
+      "seed": 747,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.781,
+      "error": ""
+    },
+    {
+      "seed": 748,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.731,
+      "error": ""
+    },
+    {
+      "seed": 749,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.252,
+      "error": ""
+    },
+    {
+      "seed": 750,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.024,
+      "error": ""
+    },
+    {
+      "seed": 751,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.213,
+      "error": ""
+    },
+    {
+      "seed": 752,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.603,
+      "error": ""
+    },
+    {
+      "seed": 753,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.675,
+      "error": ""
+    },
+    {
+      "seed": 754,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.614,
+      "error": ""
+    },
+    {
+      "seed": 755,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.001,
+      "error": ""
+    },
+    {
+      "seed": 756,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.138,
+      "error": ""
+    },
+    {
+      "seed": 757,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.84,
+      "error": ""
+    },
+    {
+      "seed": 758,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.735,
+      "error": ""
+    },
+    {
+      "seed": 759,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.061,
+      "error": ""
+    },
+    {
+      "seed": 760,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.436,
+      "error": ""
+    },
+    {
+      "seed": 761,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.777,
+      "error": ""
+    },
+    {
+      "seed": 762,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.035,
+      "error": ""
+    },
+    {
+      "seed": 763,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.399,
+      "error": ""
+    },
+    {
+      "seed": 764,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.926,
+      "error": ""
+    },
+    {
+      "seed": 765,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.575,
+      "error": ""
+    },
+    {
+      "seed": 766,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.868,
+      "error": ""
+    },
+    {
+      "seed": 767,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.1,
+      "error": ""
+    },
+    {
+      "seed": 768,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.239,
+      "error": ""
+    },
+    {
+      "seed": 769,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.357,
+      "error": ""
+    },
+    {
+      "seed": 770,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.515,
+      "error": ""
+    },
+    {
+      "seed": 771,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.327,
+      "error": ""
+    },
+    {
+      "seed": 772,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.546,
+      "error": ""
+    },
+    {
+      "seed": 773,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.886,
+      "error": ""
+    },
+    {
+      "seed": 774,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.585,
+      "error": ""
+    },
+    {
+      "seed": 775,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.943,
+      "error": ""
+    },
+    {
+      "seed": 776,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.266,
+      "error": ""
+    },
+    {
+      "seed": 777,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.237,
+      "error": ""
+    },
+    {
+      "seed": 778,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.171,
+      "error": ""
+    },
+    {
+      "seed": 779,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.877,
+      "error": ""
+    },
+    {
+      "seed": 780,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.16,
+      "error": ""
+    },
+    {
+      "seed": 781,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.65,
+      "error": ""
+    },
+    {
+      "seed": 782,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.815,
+      "error": ""
+    },
+    {
+      "seed": 783,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.06,
+      "error": ""
+    },
+    {
+      "seed": 784,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.669,
+      "error": ""
+    },
+    {
+      "seed": 785,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.216,
+      "error": ""
+    },
+    {
+      "seed": 786,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.383,
+      "error": ""
+    },
+    {
+      "seed": 787,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.762,
+      "error": ""
+    },
+    {
+      "seed": 788,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.144,
+      "error": ""
+    },
+    {
+      "seed": 789,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.049,
+      "error": ""
+    },
+    {
+      "seed": 790,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.55,
+      "error": ""
+    },
+    {
+      "seed": 791,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.349,
+      "error": ""
+    },
+    {
+      "seed": 792,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.051,
+      "error": ""
+    },
+    {
+      "seed": 793,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.431,
+      "error": ""
+    },
+    {
+      "seed": 794,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.688,
+      "error": ""
+    },
+    {
+      "seed": 795,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.848,
+      "error": ""
+    },
+    {
+      "seed": 796,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.05,
+      "error": ""
+    },
+    {
+      "seed": 797,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.567,
+      "error": ""
+    },
+    {
+      "seed": 798,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.273,
+      "error": ""
+    },
+    {
+      "seed": 799,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.216,
+      "error": ""
+    },
+    {
+      "seed": 800,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.553,
+      "error": ""
+    },
+    {
+      "seed": 801,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.752,
+      "error": ""
+    },
+    {
+      "seed": 802,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.565,
+      "error": ""
+    },
+    {
+      "seed": 803,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.371,
+      "error": ""
+    },
+    {
+      "seed": 804,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.081,
+      "error": ""
+    },
+    {
+      "seed": 805,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.416,
+      "error": ""
+    },
+    {
+      "seed": 806,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.795,
+      "error": ""
+    },
+    {
+      "seed": 807,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.609,
+      "error": ""
+    },
+    {
+      "seed": 808,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.953,
+      "error": ""
+    },
+    {
+      "seed": 809,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.386,
+      "error": ""
+    },
+    {
+      "seed": 810,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.243,
+      "error": ""
+    },
+    {
+      "seed": 811,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.434,
+      "error": ""
+    },
+    {
+      "seed": 812,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.416,
+      "error": ""
+    },
+    {
+      "seed": 813,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.595,
+      "error": ""
+    },
+    {
+      "seed": 814,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.329,
+      "error": ""
+    },
+    {
+      "seed": 815,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.654,
+      "error": ""
+    },
+    {
+      "seed": 816,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.22,
+      "error": ""
+    },
+    {
+      "seed": 817,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.147,
+      "error": ""
+    },
+    {
+      "seed": 818,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.385,
+      "error": ""
+    },
+    {
+      "seed": 819,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.649,
+      "error": ""
+    },
+    {
+      "seed": 820,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.677,
+      "error": ""
+    },
+    {
+      "seed": 821,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.63,
+      "error": ""
+    },
+    {
+      "seed": 822,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.979,
+      "error": ""
+    },
+    {
+      "seed": 823,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.923,
+      "error": ""
+    },
+    {
+      "seed": 824,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.052,
+      "error": ""
+    },
+    {
+      "seed": 825,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.491,
+      "error": ""
+    },
+    {
+      "seed": 826,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.639,
+      "error": ""
+    },
+    {
+      "seed": 827,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.833,
+      "error": ""
+    },
+    {
+      "seed": 828,
+      "passed": false,
+      "returncode": 1,
+      "annual_rows": 72,
+      "seconds": 0.603,
+      "error": "Seed 828 failed in year 73: Settlement service state is invalid.\nexpected 1000 annual rows, received 72"
+    },
+    {
+      "seed": 829,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.772,
+      "error": ""
+    },
+    {
+      "seed": 830,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.637,
+      "error": ""
+    },
+    {
+      "seed": 831,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.356,
+      "error": ""
+    },
+    {
+      "seed": 832,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.951,
+      "error": ""
+    },
+    {
+      "seed": 833,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.848,
+      "error": ""
+    },
+    {
+      "seed": 834,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.69,
+      "error": ""
+    },
+    {
+      "seed": 835,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.622,
+      "error": ""
+    },
+    {
+      "seed": 836,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.6,
+      "error": ""
+    },
+    {
+      "seed": 837,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.803,
+      "error": ""
+    },
+    {
+      "seed": 838,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.858,
+      "error": ""
+    },
+    {
+      "seed": 839,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.239,
+      "error": ""
+    },
+    {
+      "seed": 840,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.963,
+      "error": ""
+    },
+    {
+      "seed": 841,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.369,
+      "error": ""
+    },
+    {
+      "seed": 842,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.423,
+      "error": ""
+    },
+    {
+      "seed": 843,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.673,
+      "error": ""
+    },
+    {
+      "seed": 844,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.048,
+      "error": ""
+    },
+    {
+      "seed": 845,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.825,
+      "error": ""
+    },
+    {
+      "seed": 846,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.063,
+      "error": ""
+    },
+    {
+      "seed": 847,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.164,
+      "error": ""
+    },
+    {
+      "seed": 848,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.171,
+      "error": ""
+    },
+    {
+      "seed": 849,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.348,
+      "error": ""
+    },
+    {
+      "seed": 850,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.482,
+      "error": ""
+    },
+    {
+      "seed": 851,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 7.349,
+      "error": ""
+    },
+    {
+      "seed": 852,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.978,
+      "error": ""
+    },
+    {
+      "seed": 853,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.914,
+      "error": ""
+    },
+    {
+      "seed": 854,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.643,
+      "error": ""
+    },
+    {
+      "seed": 855,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.177,
+      "error": ""
+    },
+    {
+      "seed": 856,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.811,
+      "error": ""
+    },
+    {
+      "seed": 857,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.333,
+      "error": ""
+    },
+    {
+      "seed": 858,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.72,
+      "error": ""
+    },
+    {
+      "seed": 859,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.971,
+      "error": ""
+    },
+    {
+      "seed": 860,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.457,
+      "error": ""
+    },
+    {
+      "seed": 861,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.711,
+      "error": ""
+    },
+    {
+      "seed": 862,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.234,
+      "error": ""
+    },
+    {
+      "seed": 863,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.981,
+      "error": ""
+    },
+    {
+      "seed": 864,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.129,
+      "error": ""
+    },
+    {
+      "seed": 865,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.831,
+      "error": ""
+    },
+    {
+      "seed": 866,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.155,
+      "error": ""
+    },
+    {
+      "seed": 867,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.244,
+      "error": ""
+    },
+    {
+      "seed": 868,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.58,
+      "error": ""
+    },
+    {
+      "seed": 869,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.58,
+      "error": ""
+    },
+    {
+      "seed": 870,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.925,
+      "error": ""
+    },
+    {
+      "seed": 871,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.608,
+      "error": ""
+    },
+    {
+      "seed": 872,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.806,
+      "error": ""
+    },
+    {
+      "seed": 873,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.548,
+      "error": ""
+    },
+    {
+      "seed": 874,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.976,
+      "error": ""
+    },
+    {
+      "seed": 875,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.972,
+      "error": ""
+    },
+    {
+      "seed": 876,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.122,
+      "error": ""
+    },
+    {
+      "seed": 877,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.009,
+      "error": ""
+    },
+    {
+      "seed": 878,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 6.83,
+      "error": ""
+    },
+    {
+      "seed": 879,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.265,
+      "error": ""
+    },
+    {
+      "seed": 880,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.073,
+      "error": ""
+    },
+    {
+      "seed": 881,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.177,
+      "error": ""
+    },
+    {
+      "seed": 882,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.816,
+      "error": ""
+    },
+    {
+      "seed": 883,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.148,
+      "error": ""
+    },
+    {
+      "seed": 884,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.132,
+      "error": ""
+    },
+    {
+      "seed": 885,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.604,
+      "error": ""
+    },
+    {
+      "seed": 886,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.14,
+      "error": ""
+    },
+    {
+      "seed": 887,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.468,
+      "error": ""
+    },
+    {
+      "seed": 888,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.853,
+      "error": ""
+    },
+    {
+      "seed": 889,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.839,
+      "error": ""
+    },
+    {
+      "seed": 890,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.453,
+      "error": ""
+    },
+    {
+      "seed": 891,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.519,
+      "error": ""
+    },
+    {
+      "seed": 892,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.194,
+      "error": ""
+    },
+    {
+      "seed": 893,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.813,
+      "error": ""
+    },
+    {
+      "seed": 894,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.269,
+      "error": ""
+    },
+    {
+      "seed": 895,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.133,
+      "error": ""
+    },
+    {
+      "seed": 896,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.572,
+      "error": ""
+    },
+    {
+      "seed": 897,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.924,
+      "error": ""
+    },
+    {
+      "seed": 898,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.12,
+      "error": ""
+    },
+    {
+      "seed": 899,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.882,
+      "error": ""
+    },
+    {
+      "seed": 900,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.063,
+      "error": ""
+    },
+    {
+      "seed": 901,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.465,
+      "error": ""
+    },
+    {
+      "seed": 902,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.905,
+      "error": ""
+    },
+    {
+      "seed": 903,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.356,
+      "error": ""
+    },
+    {
+      "seed": 904,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.697,
+      "error": ""
+    },
+    {
+      "seed": 905,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.778,
+      "error": ""
+    },
+    {
+      "seed": 906,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.393,
+      "error": ""
+    },
+    {
+      "seed": 907,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.369,
+      "error": ""
+    },
+    {
+      "seed": 908,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.992,
+      "error": ""
+    },
+    {
+      "seed": 909,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.834,
+      "error": ""
+    },
+    {
+      "seed": 910,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.663,
+      "error": ""
+    },
+    {
+      "seed": 911,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.983,
+      "error": ""
+    },
+    {
+      "seed": 912,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.781,
+      "error": ""
+    },
+    {
+      "seed": 913,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.83,
+      "error": ""
+    },
+    {
+      "seed": 914,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.965,
+      "error": ""
+    },
+    {
+      "seed": 915,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.768,
+      "error": ""
+    },
+    {
+      "seed": 916,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.621,
+      "error": ""
+    },
+    {
+      "seed": 917,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.693,
+      "error": ""
+    },
+    {
+      "seed": 918,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.969,
+      "error": ""
+    },
+    {
+      "seed": 919,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.5,
+      "error": ""
+    },
+    {
+      "seed": 920,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.836,
+      "error": ""
+    },
+    {
+      "seed": 921,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.278,
+      "error": ""
+    },
+    {
+      "seed": 922,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.908,
+      "error": ""
+    },
+    {
+      "seed": 923,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.996,
+      "error": ""
+    },
+    {
+      "seed": 924,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.087,
+      "error": ""
+    },
+    {
+      "seed": 925,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.453,
+      "error": ""
+    },
+    {
+      "seed": 926,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.252,
+      "error": ""
+    },
+    {
+      "seed": 927,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.502,
+      "error": ""
+    },
+    {
+      "seed": 928,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.234,
+      "error": ""
+    },
+    {
+      "seed": 929,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.108,
+      "error": ""
+    },
+    {
+      "seed": 930,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.692,
+      "error": ""
+    },
+    {
+      "seed": 931,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.284,
+      "error": ""
+    },
+    {
+      "seed": 932,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.461,
+      "error": ""
+    },
+    {
+      "seed": 933,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.147,
+      "error": ""
+    },
+    {
+      "seed": 934,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.308,
+      "error": ""
+    },
+    {
+      "seed": 935,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.649,
+      "error": ""
+    },
+    {
+      "seed": 936,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.819,
+      "error": ""
+    },
+    {
+      "seed": 937,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.571,
+      "error": ""
+    },
+    {
+      "seed": 938,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.849,
+      "error": ""
+    },
+    {
+      "seed": 939,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.087,
+      "error": ""
+    },
+    {
+      "seed": 940,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.597,
+      "error": ""
+    },
+    {
+      "seed": 941,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.411,
+      "error": ""
+    },
+    {
+      "seed": 942,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.059,
+      "error": ""
+    },
+    {
+      "seed": 943,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.906,
+      "error": ""
+    },
+    {
+      "seed": 944,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.279,
+      "error": ""
+    },
+    {
+      "seed": 945,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.763,
+      "error": ""
+    },
+    {
+      "seed": 946,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.46,
+      "error": ""
+    },
+    {
+      "seed": 947,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.044,
+      "error": ""
+    },
+    {
+      "seed": 948,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.911,
+      "error": ""
+    },
+    {
+      "seed": 949,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.058,
+      "error": ""
+    },
+    {
+      "seed": 950,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.386,
+      "error": ""
+    },
+    {
+      "seed": 951,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.437,
+      "error": ""
+    },
+    {
+      "seed": 952,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.133,
+      "error": ""
+    },
+    {
+      "seed": 953,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.186,
+      "error": ""
+    },
+    {
+      "seed": 954,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.665,
+      "error": ""
+    },
+    {
+      "seed": 955,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.053,
+      "error": ""
+    },
+    {
+      "seed": 956,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.176,
+      "error": ""
+    },
+    {
+      "seed": 957,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.807,
+      "error": ""
+    },
+    {
+      "seed": 958,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.243,
+      "error": ""
+    },
+    {
+      "seed": 959,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.742,
+      "error": ""
+    },
+    {
+      "seed": 960,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.247,
+      "error": ""
+    },
+    {
+      "seed": 961,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.987,
+      "error": ""
+    },
+    {
+      "seed": 962,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.848,
+      "error": ""
+    },
+    {
+      "seed": 963,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.147,
+      "error": ""
+    },
+    {
+      "seed": 964,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.947,
+      "error": ""
+    },
+    {
+      "seed": 965,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.542,
+      "error": ""
+    },
+    {
+      "seed": 966,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.121,
+      "error": ""
+    },
+    {
+      "seed": 967,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.392,
+      "error": ""
+    },
+    {
+      "seed": 968,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.097,
+      "error": ""
+    },
+    {
+      "seed": 969,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.319,
+      "error": ""
+    },
+    {
+      "seed": 970,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.243,
+      "error": ""
+    },
+    {
+      "seed": 971,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.218,
+      "error": ""
+    },
+    {
+      "seed": 972,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.931,
+      "error": ""
+    },
+    {
+      "seed": 973,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.279,
+      "error": ""
+    },
+    {
+      "seed": 974,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.579,
+      "error": ""
+    },
+    {
+      "seed": 975,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.002,
+      "error": ""
+    },
+    {
+      "seed": 976,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.573,
+      "error": ""
+    },
+    {
+      "seed": 977,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.272,
+      "error": ""
+    },
+    {
+      "seed": 978,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.442,
+      "error": ""
+    },
+    {
+      "seed": 979,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.158,
+      "error": ""
+    },
+    {
+      "seed": 980,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.657,
+      "error": ""
+    },
+    {
+      "seed": 981,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.674,
+      "error": ""
+    },
+    {
+      "seed": 982,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.771,
+      "error": ""
+    },
+    {
+      "seed": 983,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.297,
+      "error": ""
+    },
+    {
+      "seed": 984,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 5.292,
+      "error": ""
+    },
+    {
+      "seed": 985,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.275,
+      "error": ""
+    },
+    {
+      "seed": 986,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.371,
+      "error": ""
+    },
+    {
+      "seed": 987,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.413,
+      "error": ""
+    },
+    {
+      "seed": 988,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.996,
+      "error": ""
+    },
+    {
+      "seed": 989,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.38,
+      "error": ""
+    },
+    {
+      "seed": 990,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 4.305,
+      "error": ""
+    },
+    {
+      "seed": 991,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.126,
+      "error": ""
+    },
+    {
+      "seed": 992,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.32,
+      "error": ""
+    },
+    {
+      "seed": 993,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.785,
+      "error": ""
+    },
+    {
+      "seed": 994,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.512,
+      "error": ""
+    },
+    {
+      "seed": 995,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.206,
+      "error": ""
+    },
+    {
+      "seed": 996,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 2.924,
+      "error": ""
+    },
+    {
+      "seed": 997,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.481,
+      "error": ""
+    },
+    {
+      "seed": 998,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.299,
+      "error": ""
+    },
+    {
+      "seed": 999,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.755,
+      "error": ""
+    },
+    {
+      "seed": 1000,
+      "passed": true,
+      "returncode": 0,
+      "annual_rows": 1000,
+      "seconds": 3.172,
+      "error": ""
+    }
+  ],
+  "artifact_sha256": {
+    "partial-history.csv.gz": "d4702f875b95ba9566b4f0a97556430929c95f809d98bd091fa6b06378a2e6fe",
+    "endpoints.csv.gz": "6bb672d5594e71060309d9264c6fcb3064f687538caf8c982c6279a6ad71fea7",
+    "history.csv.gz": "ce22e584dddd1e3d4c282718dad86158cd8e1a6cbd7edbaa079d32d0bb55a3e0"
+  }
+}

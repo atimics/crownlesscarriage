@@ -1,4 +1,5 @@
 #include "sim/cc_sim.h"
+#include "sim/cc_event_pin_set_internal.h"
 
 #include "persistence/cc_save.h"
 #include "test_support.h"
@@ -56,7 +57,8 @@ static void CheckPopulationTurnover(void)
     }
     CC_CHECK(sim.character_deaths > 0);
     CC_CHECK(sim.character_births == sim.character_deaths);
-    CC_CHECK(sim.character_count == CC_MAX_CHARACTERS);
+    CC_CHECK(sim.character_count > 0 &&
+             sim.character_count <= CC_MAX_CHARACTERS);
     bool heir_exists = false;
     for (int32_t i = 0; i < sim.character_count; ++i) {
         if (sim.characters[i].generation > 0) heir_exists = true;
@@ -122,8 +124,51 @@ static void CheckAbbotSuccessionMovesAnointment(char *error, size_t capacity)
     CheckReferences(&sim);
 }
 
+static void CheckRotatedLedger(void)
+{
+    static CcSim original, canonical, rotated;
+    static CcEvent ordered[CC_MAX_EVENTS];
+    const uint32_t versions[] = {26U, 44U, CC_SIM_SCHEMA_VERSION};
+    const int32_t offsets[] = {1, 17, CC_MAX_EVENTS - 1};
+    for (size_t version = 0; version < sizeof(versions) / sizeof(versions[0]); ++version) {
+        CcSimInit(&original, UINT32_C(0xca05a1));
+        original.schema_version = versions[version];
+        CcSimAdvanceDays(&original, 365);
+        CC_CHECK(original.event_count == CC_MAX_EVENTS && original.event_write_index == 0);
+        for (int32_t i = 0; i < CC_MAX_EVENTS; ++i)
+            ordered[i] = *CcSimRecentEvent(&original, CC_MAX_EVENTS - 1 - i);
+        for (size_t offset = 0; offset < sizeof(offsets) / sizeof(offsets[0]); ++offset) {
+            canonical = original; rotated = original;
+            for (int32_t i = 0; i < CC_MAX_EVENTS; ++i)
+                rotated.events[(i + offsets[offset]) % CC_MAX_EVENTS] = ordered[i];
+            rotated.event_write_index = offsets[offset];
+            CcSimAdvanceDays(&canonical, 7);
+            CcSimAdvanceDays(&rotated, 7);
+            CC_CHECK(CcSimHash(&canonical) == CcSimHash(&rotated));
+            CC_CHECK(memcmp(canonical.events, rotated.events, sizeof(canonical.events)) == 0);
+            CheckReferences(&canonical); CheckReferences(&rotated);
+        }
+    }
+}
+
+static void CheckFullPinSet(void)
+{
+    static CcEventPinSet pins;
+    for (CcId id = 1; id <= CC_EVENT_PIN_SET_SIZE; ++id) PinEvent(&pins, id);
+    CC_CHECK(!pins.overflow);
+    for (CcId id = 1; id <= CC_EVENT_PIN_SET_SIZE; ++id) CC_CHECK(EventIsPinned(&pins, id));
+    CC_CHECK(!EventIsPinned(&pins, CC_EVENT_PIN_SET_SIZE + 1U));
+    PinEvent(&pins, 1U); CC_CHECK(!pins.overflow);
+    PinEvent(&pins, CC_EVENT_PIN_SET_SIZE + 1U); CC_CHECK(pins.overflow);
+    pins.query_id = CC_EVENT_PIN_SET_SIZE + 1U;
+    PinEvent(&pins, 1U); CC_CHECK(!pins.query_found);
+    PinEvent(&pins, pins.query_id); CC_CHECK(pins.query_found);
+}
+
 int main(void)
 {
+    CheckFullPinSet();
+    CheckRotatedLedger();
     char error[192];
     CheckPopulationTurnover();
     CheckRulerSuccessionClearsAnointment(error, sizeof(error));

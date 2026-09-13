@@ -1,0 +1,33 @@
+{
+  "day": 241,
+  "world_seed": 42,
+  "state_hash": "2f98f4ae0ffdfb5d",
+  "town": "Gloamgate",
+  "grain_supply": {
+    "semantics": "stored_cumulative",
+    "enabled": true,
+    "organiser_id": "1369094286720630843",
+    "supplier_id": "144115188075855876",
+    "route_id": "216172782113783818",
+    "shipment_id": "0",
+    "purse": 0,
+    "spent": 192,
+    "ordered": 168,
+    "delivered": 156,
+    "lost": 12,
+    "redirected": 0,
+    "last_dispatch_day": 170,
+    "last_arrival_day": 172,
+    "plan": {
+      "semantics": "evaluated_plan_snapshot",
+      "status": 7,
+      "reason": "The organiser is waiting for the kingdom's carriage.",
+      "organiser_id": "1369094286720630843",
+      "supplier_id": "0",
+      "route_id": "0",
+      "carriage_id": "0",
+      "next_hop_id": "0",
+      "path_capacity": 0
+    }
+  }
+}

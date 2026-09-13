@@ -1,0 +1,23 @@
+{
+  "voice": "flint-v1",
+  "line": "trade",
+  "text": "Jory Fen needs seventeen sacks in Silverwick. The price is thirty-eight crowns.",
+  "file": "pocket-flint-v1-trade.wav",
+  "styled_file": "pocket-flint-v1-trade-game.wav",
+  "seconds": 5.12,
+  "generation_seconds": 0.5275654159486294,
+  "first_chunk_seconds": 0.03291112510487437,
+  "real_time_factor": 0.10304012030246668,
+  "sample_rate": 24000,
+  "seed": 20260912,
+  "reference_sha256": "98454193d1e240932634c3e81ea4f241337bef7643832dde811e183906f7af80",
+  "sha256": "608b985cf06bc8ed510545d0115914ee6fd88a5ec3b17a8972962ed7ab767121",
+  "master_sha256": "608b985cf06bc8ed510545d0115914ee6fd88a5ec3b17a8972962ed7ab767121",
+  "wav_sha256": "9715dc34ffcd8dfbe44c9a3c01ac426557424ca7dee72ff17399e0ae84c51e96",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

@@ -20,7 +20,8 @@ from http.server import ThreadingHTTPServer
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools/audio'))
-from speech_format import audio_key, cached_record, load_cast, validate_record
+from speech_format import (audio_key, cached_record, expected_cache_metadata,
+                           load_cast, validate_record)
 from speech_worker import SpeechJobs, make_handler
 
 EXPORTER = sys.argv.pop(1)
@@ -76,6 +77,34 @@ class SpeechWorkerTests(unittest.TestCase):
         tone(self.record, path)
         with self.assertRaisesRegex(ValueError, 'collision'):
             cached_record(self.folder, dict(self.record, text='Different words.'))
+
+    def test_cache_rejects_a_stale_model_or_reference(self):
+        path = self.folder / (self.record['key'] + '.wav')
+        tone(self.record, path)
+        expected = expected_cache_metadata(self.record, ROOT / 'assets/audio/cast', 'test-pocket')
+        self.assertIsNone(cached_record(self.folder, self.record, expected))
+        receipt = json.loads(path.with_suffix('.json').read_text())
+        receipt.update(expected)
+        path.with_suffix('.json').write_text(json.dumps(receipt))
+        self.assertEqual(cached_record(self.folder, self.record, expected), path)
+        receipt['engine_version'] = 'new-pocket'
+        path.with_suffix('.json').write_text(json.dumps(receipt))
+        self.assertIsNone(cached_record(self.folder, self.record, expected))
+
+    def test_goblin_cache_requires_pocket_vocoder(self):
+        record = dict(self.record, voice='goblin-v1', key=audio_key('goblin-v1', self.record['text']))
+        record = validate_record(record, self.cast)
+        path = self.folder / (record['key'] + '.wav')
+        tone(record, path)
+        self.assertIsNone(cached_record(self.folder, record))
+        receipt_path = path.with_suffix('.json')
+        receipt = json.loads(receipt_path.read_text())
+        receipt.update(model='pocket', style='hrakhor-bass-v2', speech_speed=2.0)
+        receipt_path.write_text(json.dumps(receipt))
+        self.assertEqual(cached_record(self.folder, record), path)
+        receipt['speech_speed'] = 1.0
+        receipt_path.write_text(json.dumps(receipt))
+        self.assertIsNone(cached_record(self.folder, record))
 
     def test_duplicate_request_and_queue_limit(self):
         started, finish = threading.Event(), threading.Event()

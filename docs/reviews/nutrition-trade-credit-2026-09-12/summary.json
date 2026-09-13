@@ -1,0 +1,38 @@
+{
+  "0": {
+    "parent": {
+      "population": 16391.28125,
+      "hunger": 10.25,
+      "abandoned": 0.0,
+      "wheat_overflow": 27236.03125,
+      "debt": 0.0,
+      "ledger_reserve": 0.21875
+    },
+    "changed": {
+      "population": 16652.46875,
+      "hunger": 8.09375,
+      "abandoned": 0.0,
+      "wheat_overflow": 27252.5,
+      "debt": 0.0,
+      "ledger_reserve": 0.0
+    }
+  },
+  "1": {
+    "parent": {
+      "population": 17582.28125,
+      "hunger": 11.125,
+      "abandoned": 0.0,
+      "wheat_overflow": 20718.375,
+      "debt": 2.96875,
+      "ledger_reserve": 27.90625
+    },
+    "changed": {
+      "population": 17240.25,
+      "hunger": 12.21875,
+      "abandoned": 0.0,
+      "wheat_overflow": 19250.90625,
+      "debt": 1.09375,
+      "ledger_reserve": 17.5
+    }
+  }
+}

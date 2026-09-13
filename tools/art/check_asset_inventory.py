@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[2]
 MAX_TRACKED_ASSET_BYTES = 64 * 1024 * 1024
 MAX_BUNDLED_MUSIC_BYTES = 128 * 1024 * 1024
 MAX_BUNDLED_MUSIC_FILES = 27
+MAX_HOSTED_MUSIC_BYTES = 96 * 1024 * 1024
+MAX_HOSTED_MUSIC_FILES = 20
 MAX_BUNDLED_VOICE_BYTES = 20 * 1024 * 1024
 MAX_CAST_REFERENCES = 16
 MAX_CAMPAIGN_CLIPS = 128
@@ -70,6 +72,8 @@ def main() -> int:
     total = 0
     music_bytes = 0
     music_count = 0
+    hosted_music_bytes = 0
+    hosted_music_count = 0
     voice_bytes = 0
     cast_count = 0
     speech_count = 0
@@ -79,6 +83,9 @@ def main() -> int:
         if path.parent == ROOT / "assets/audio/music" and path.suffix == ".mp3":
             music_bytes += size
             music_count += 1
+        if path.parent == ROOT / "assets/audio/music/hosted" and path.suffix == ".mp3":
+            hosted_music_bytes += size
+            hosted_music_count += 1
         if path.is_relative_to(ROOT / "assets/audio/cast"):
             voice_bytes += size
             cast_count += path.suffix == ".wav"
@@ -111,7 +118,14 @@ def main() -> int:
             f"{size_text(voice_bytes)}; limits are {MAX_CAST_REFERENCES} references, "
             f"{MAX_CAMPAIGN_CLIPS} clips, and {size_text(MAX_BUNDLED_VOICE_BYTES)}"
         )
-    art_bytes = total - music_bytes - voice_bytes
+    if (hosted_music_bytes > MAX_HOSTED_MUSIC_BYTES or
+            hosted_music_count > MAX_HOSTED_MUSIC_FILES):
+        failures.append(
+            f"hosted music is {hosted_music_count} files, {size_text(hosted_music_bytes)}; "
+            f"limits are {MAX_HOSTED_MUSIC_FILES} files and "
+            f"{size_text(MAX_HOSTED_MUSIC_BYTES)}"
+        )
+    art_bytes = total - music_bytes - hosted_music_bytes - voice_bytes
     if art_bytes > MAX_TRACKED_ASSET_BYTES:
         failures.append(
             f"remaining tracked art is {size_text(art_bytes)}; the limit is "

@@ -1,0 +1,10 @@
+{
+  "source_commit": "357bf1c20a92fca334c5b13cf879f6c9fb19fc68",
+  "headless_tests_passed": 144,
+  "availability_regression": "reproduced before fix; passes after fix with full state unchanged",
+  "transit_repacking_regression": "reproduced before fix; passes after fix with full state unchanged",
+  "arrival_repacking": "14 wheat becomes stacks of 13 and 1; load rises from 4 to 5 slots after arrival",
+  "cppcheck_adapter": "passed",
+  "webassembly_changed_sources": "passed",
+  "sanitizers": "passed; custody core, adapter and simulation source instrumented; remaining libraries use the strict release build"
+}

@@ -1,0 +1,40 @@
+{
+  "seeds": 32,
+  "years": 100,
+  "sampling": "After daily update whenever current_day is divisible by seven. Annual state hashes checked against sweep snapshots.",
+  "probe_source_sha256": "f707f8a7b5291f777e898cce9c6921ec7d580209f0864eace812da9a9c32be0d",
+  "arms": {
+    "main": {
+      "source": "85bfb702ba233585d4e3359273f048de1cae7b2f",
+      "binary_sha256": "e4909bd6aa911a53ebfc3bbe9974214a2ee6137991551b448f503edca9cc76bf",
+      "csv_sha256": "3d207e53e38895fccab6930e834d469b2f0fcd81bc8afd934db4e8d4daab9908",
+      "matched_state_hashes": 448,
+      "weekly_samples": 166848,
+      "blocker_percent": {
+        "ready": 0.02816935174530111,
+        "scribes": 55.90177886459532,
+        "grain": 5.303629650939778,
+        "paper": 0.025172612197928657,
+        "tools": 27.43275316455696,
+        "binding": 11.30849635596471
+      },
+      "ledger_below_50_percent": 55.81787015726889
+    },
+    "candidate": {
+      "source": "d665eccedeb2f3795edd72dbe401ac2c5b471033",
+      "binary_sha256": "16c2e7fea70747fd40c4c03eff43c91fa9e40048b3a8184541a11ae158c9089c",
+      "csv_sha256": "e5a53e699dcb501f64d105cd09d5aaa4af43c7ee61cc43134479458ba4f68f03",
+      "matched_state_hashes": 448,
+      "weekly_samples": 166848,
+      "blocker_percent": {
+        "ready": 0.008390870732642884,
+        "scribes": 90.48355389336402,
+        "grain": 1.4654056386651324,
+        "paper": 0.008990218642117376,
+        "tools": 6.402833716915995,
+        "binding": 1.630825661680092
+      },
+      "ledger_below_50_percent": 90.29835538933641
+    }
+  }
+}

@@ -1,0 +1,288 @@
+- Gloamgate's bakery mills 25 Wheat into 25 Bread.
+Gloamgate made bread from wheat, I hear.
+
+- ~ Gloamgate's bakery mills 35 Wheat into 35 Bread.
+Have you heard? Gloamgate made bread from wheat. That's the word going round.
+
+- ? ~ Rosespire's bakery mills 35 Wheat into 35 Bread.
+Rosespire made bread from wheat, if the story is right.
+
+- Lamma Stonehewer joins The Broken Pennants after 3 days seeking food at Silverwick.
+Lamma Stonehewer joined The Broken Pennants after seeking food at Silverwick, I hear.
+
+- ~ Ferwen Roadward joins The Broken Pennants after 5 days seeking food at Silverwick.
+Have you heard? Ferwen Roadward joined The Broken Pennants after seeking food at Silverwick. That's the word going round.
+
+- ? ~ The Broken Pennants recruits from hungry debtors and unpaid households; road control reaches 53%.
+Hungry debtors and people from unpaid households were being recruited by The Broken Pennants, if the story is right.
+
+- Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Rosespire raised calves and added older calves to the working herd, I hear.
+
+- ~ Silverwick's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Have you heard? Silverwick raised calves and added older calves to the working herd. That's the word going round.
+
+- ? ~ Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Rosespire raised calves and added older calves to the working herd, if the story is right.
+
+- Rosespire slaughters one cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Rosespire slaughtered cattle for beef when fodder ran short, I hear.
+
+- ~ Silverwick slaughters two cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Have you heard? Silverwick slaughtered cattle for beef when fodder ran short. That's the word going round.
+
+- ? ~ Alderwatch slaughters two cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Alderwatch slaughtered cattle for beef when fodder ran short, if the story is right.
+
+- A goblin rises to Bearer in the dragon cult through service.
+A goblin rose to Bearer in the dragon cult through service, I hear.
+
+- ~ A goblin rises to Voice in the dragon cult through service.
+Have you heard? A goblin rose to Voice in the dragon cult through service. That's the word going round.
+
+- ? ~ A goblin rises to Voice in the dragon cult through service.
+A goblin rose to Voice in the dragon cult through service, if the story is right.
+
+- Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+Silver Covenant put money into Hollowbarrow's market to buy grain shipments, I hear.
+
+- ~ Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+Have you heard? Indigo March put money into Hollowbarrow's market to buy grain shipments. That's the word going round.
+
+- ? ~ Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+Silver Covenant put money into Hollowbarrow's market to buy grain shipments, if the story is right.
+
+- Thornford slaughters 4 sheep in the autumn cull; 8 Meat enters the local store as mutton.
+Thornford slaughtered sheep for mutton in the autumn cull, I hear.
+
+- ~ Silverwick slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton.
+Have you heard? Silverwick slaughtered sheep for mutton after winter fodder runs short. That's the word going round.
+
+- ? ~ Thornford slaughters 4 sheep in the autumn cull; 8 Meat enters the local store as mutton.
+Thornford slaughtered sheep for mutton in the autumn cull, if the story is right.
+
+- The Cinder Tithe raids Thornford: 9 Wheat, 16 crowns.
+The Cinder Tithe raided Thornford, I hear.
+
+- ~ The Cinder Tithe raids Gloamgate: 20 Wheat, 16 crowns, and a named treasure.
+Have you heard? The Cinder Tithe raided Gloamgate. That's the word going round.
+
+- ? ~ The Cinder Tithe raids Gloamgate: 20 Wheat, 16 crowns.
+The Cinder Tithe raided Gloamgate, if the story is right.
+
+- Thornford's drought harvest cannot supply the eastern settlements.
+The drought harvest in Thornford fell short of supplies for the eastern settlements, I hear.
+
+- ~ Thornford's drought harvest cannot supply the southern settlements.
+Have you heard? The drought harvest in Thornford fell short of supplies for the southern settlements. That's the word going round.
+
+- ? ~ Thornford's drought harvest cannot supply the southern settlements.
+The drought harvest in Thornford fell short of supplies for the southern settlements, if the story is right.
+
+- Thornford raises 1 common pony foal; 1 joins the working herd.
+Thornford raised pony foals and added ponies to the working herd, I hear.
+
+- ~ Gloamgate raises 1 common pony foal; 1 joins the working herd.
+Have you heard? Gloamgate raised pony foals and added ponies to the working herd. That's the word going round.
+
+- ? ~ Alderwatch raises 1 common pony foal; 1 joins the working herd.
+Alderwatch raised pony foals and added ponies to the working herd, if the story is right.
+
+- Thornford's flock raises 10 new lambs; 10 yearlings join the adult flock.
+Thornford raised lambs and added yearlings to the adult flock, I hear.
+
+- ~ Thornford's flock raises 10 new lambs; 10 yearlings join the adult flock.
+Have you heard? Thornford raised lambs and added yearlings to the adult flock. That's the word going round.
+
+- ? ~ Silverwick's flock raises 3 new lambs; 3 yearlings join the adult flock.
+Silverwick raised lambs and added yearlings to the adult flock, if the story is right.
+
+- Gloamgate's masons use 2 Stone to repair public buildings.
+Gloamgate repaired public buildings with stone, I hear.
+
+- ~ Gloamgate defers public masonry repairs for want of 2 Stone.
+Have you heard? Gloamgate delayed public repairs for lack of stone. That's the word going round.
+
+- ? ~ Alderwatch's masons use 2 Stone to repair public buildings.
+Alderwatch repaired public buildings with stone, if the story is right.
+
+- Rosespire's mill uses 1 Wood to make 4 Paper.
+Rosespire made paper from Wood, I hear.
+
+- ~ Rosespire's mill uses 1 Wood to make 4 Paper.
+Have you heard? Rosespire made paper from Wood. That's the word going round.
+
+- ? ~ Rosespire's mill uses 1 Wood to make 4 Paper.
+Rosespire made paper from Wood, if the story is right.
+
+- Silverwick's quarry cuts 12 Stone for roads and public works.
+Silverwick quarried stone for roads and public works, I hear.
+
+- ~ Silverwick's quarry cuts 12 Stone for roads and public works.
+Have you heard? Silverwick quarried stone for roads and public works. That's the word going round.
+
+- ? ~ Silverwick's quarry cuts 12 Stone for roads and public works.
+Silverwick quarried stone for roads and public works, if the story is right.
+
+- Alderwatch closes the treaty bridge and delays the relief convoy.
+The relief convoy was delayed when Alderwatch closed the treaty bridge, I hear.
+
+- ~ Alderwatch closes the treaty bridge and delays the relief convoy.
+Have you heard? The relief convoy was delayed when Alderwatch closed the treaty bridge. That's the word going round.
+
+- ? ~ Alderwatch closes the treaty bridge and delays the relief convoy.
+The relief convoy was delayed when Alderwatch closed the treaty bridge, if the story is right.
+
+- Alderwatch shears the spring flock and stores 6 Wool.
+Alderwatch sheared the spring flock and stored wool, I hear.
+
+- ~ Silverwick shears the spring flock and stores 3 Wool.
+Have you heard? Silverwick sheared the spring flock and stored wool. That's the word going round.
+
+- ? ~ Rosespire shears the spring flock and stores 7 Wool.
+Rosespire sheared the spring flock and stored wool, if the story is right.
+
+- Silverwick has 0 weeks of food; hunger reaches pressure level 1.
+Silverwick was short of food, I hear.
+
+- ~ Silverwick has 33 food in store. Its reserve target is 78.
+Have you heard? Silverwick was short of food. That's the word going round.
+
+- ? ~ Hollowbarrow has 0 weeks of food; hunger reaches pressure level 3.
+Hollowbarrow was short of food, if the story is right.
+
+- Rosespire finishes Rosespire Moon Cup from 1 Raw Gold, 1 Gems, and 3 weeks of work.
+Rosespire completed Rosespire Moon Cup, I hear.
+
+- ~ Rosespire finishes Rosespire Ash Crown from 1 Raw Gold, 1 Gems, and 3 weeks of work.
+Have you heard? Rosespire completed Rosespire Ash Crown. That's the word going round.
+
+- ? ~ Rosespire finishes Rosespire Ash Crown from 1 Raw Gold, 1 Gems, and 3 weeks of work.
+Rosespire completed Rosespire Ash Crown, if the story is right.
+
+- Silverwick's woodlot cuts 1 Wood and wears two Tools bundle.
+Silverwick cut wood and wore out tools, I hear.
+
+- ~ Hollowbarrow's woodlot cuts 12 Wood and wears two Tools bundle.
+Have you heard? Hollowbarrow cut wood and wore out tools. That's the word going round.
+
+- ? ~ Thornford's woodlot cuts 12 Wood and wears two Tools bundle.
+Thornford cut wood and wore out tools, if the story is right.
+
+- Gloamgate's bakery mills 34 Wheat into 34 Bread.
+Gloamgate made bread from wheat, I hear.
+
+- ~ Gloamgate's bakery mills 25 Wheat into 25 Bread.
+Have you heard? Gloamgate made bread from wheat. That's the word going round.
+
+- ? ~ Gloamgate's bakery mills 25 Wheat into 25 Bread.
+Gloamgate made bread from wheat, if the story is right.
+
+- Displaced workers reinforce The Broken Pennants on the old road.
+Displaced workers gave The Broken Pennants support on the old road, I hear.
+
+- ~ Alda Coffer joins The Ditch Parliament after 5 days seeking food at Silverwick.
+Have you heard? Alda Coffer joined The Ditch Parliament after seeking food at Silverwick. That's the word going round.
+
+- ? ~ Ingel Rosewell joins The Broken Pennants after 7 days seeking food at Silverwick.
+Ingel Rosewell joined The Broken Pennants after seeking food at Silverwick, if the story is right.
+
+- Silverwick's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Silverwick raised calves and added older calves to the working herd, I hear.
+
+- ~ Alderwatch's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Have you heard? Alderwatch raised calves and added older calves to the working herd. That's the word going round.
+
+- ? ~ Alderwatch's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Alderwatch raised calves and added older calves to the working herd, if the story is right.
+
+- Silverwick slaughters one cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Silverwick slaughtered cattle for beef when fodder ran short, I hear.
+
+- ~ Rosespire slaughters two cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Have you heard? Rosespire slaughtered cattle for beef when fodder ran short. That's the word going round.
+
+- ? ~ Silverwick slaughters two cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Silverwick slaughtered cattle for beef when fodder ran short, if the story is right.
+
+- A goblin rises to Keeper in the dragon cult through service.
+A goblin rose to Keeper in the dragon cult through service, I hear.
+
+- ~ A goblin rises to Bearer in the dragon cult through service.
+Have you heard? A goblin rose to Bearer in the dragon cult through service. That's the word going round.
+
+- ? ~ A goblin rises to Bearer in the dragon cult through service.
+A goblin rose to Bearer in the dragon cult through service, if the story is right.
+
+- Moss Compact moves 28 crowns into Gloamgate's market to buy real grain shipments.
+Moss Compact put money into Gloamgate's market to buy grain shipments, I hear.
+
+- ~ Moss Compact moves 28 crowns into Gloamgate's market to buy real grain shipments.
+Have you heard? Moss Compact put money into Gloamgate's market to buy grain shipments. That's the word going round.
+
+- ? ~ Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+Indigo March put money into Hollowbarrow's market to buy grain shipments, if the story is right.
+
+- Silverwick slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton.
+Silverwick slaughtered sheep for mutton after winter fodder runs short, I hear.
+
+- ~ Rosespire slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton.
+Have you heard? Rosespire slaughtered sheep for mutton after winter fodder runs short. That's the word going round.
+
+- ? ~ Rosespire slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton.
+Rosespire slaughtered sheep for mutton after winter fodder runs short, if the story is right.
+
+- The Cinder Tithe raids Gloamgate: 20 Wheat, 16 crowns.
+The Cinder Tithe raided Gloamgate, I hear.
+
+- ~ The Cinder Tithe raids Gloamgate: 20 Wheat, 16 crowns.
+Have you heard? The Cinder Tithe raided Gloamgate. That's the word going round.
+
+- ? ~ The Cinder Tithe raids Rosespire: 16 Bread, 16 crowns, and a named treasure.
+The Cinder Tithe raided Rosespire, if the story is right.
+
+- Alderwatch raises 1 common pony foal; 1 joins the working herd.
+Alderwatch raised pony foals and added ponies to the working herd, I hear.
+
+- ~ Alderwatch raises 1 common pony foal; 1 joins the working herd.
+Have you heard? Alderwatch raised pony foals and added ponies to the working herd. That's the word going round.
+
+- ? ~ Gloamgate raises 1 common pony foal; 1 joins the working herd.
+Gloamgate raised pony foals and added ponies to the working herd, if the story is right.
+
+- Rosespire's flock raises 7 new lambs; 7 yearlings join the adult flock.
+Rosespire raised lambs and added yearlings to the adult flock, I hear.
+
+- ~ Silverwick's flock raises 3 new lambs; 3 yearlings join the adult flock.
+Have you heard? Silverwick raised lambs and added yearlings to the adult flock. That's the word going round.
+
+- ? ~ Alderwatch's flock raises 6 new lambs; 6 yearlings join the adult flock.
+Alderwatch raised lambs and added yearlings to the adult flock, if the story is right.
+
+- Silverwick's masons use 2 Stone to repair public buildings.
+Silverwick repaired public buildings with stone, I hear.
+
+- ~ Gloamgate's masons use 2 Stone to repair public buildings.
+Have you heard? Gloamgate repaired public buildings with stone. That's the word going round.
+
+- ? ~ Thornford's masons use 1 Stone to repair public buildings.
+Thornford repaired public buildings with stone, if the story is right.
+
+- Gloamgate's mill uses 1 Wood to make 3 Paper.
+Gloamgate made paper from Wood, I hear.
+
+- Rosespire shears the spring flock and stores 7 Wool.
+Rosespire sheared the spring flock and stored wool, I hear.
+
+- ~ Thornford shears the spring flock and stores 10 Wool.
+Have you heard? Thornford sheared the spring flock and stored wool. That's the word going round.
+
+- ? ~ Silverwick shears the spring flock and stores 3 Wool.
+Silverwick sheared the spring flock and stored wool, if the story is right.
+
+- Gloamgate has 0 weeks of food; hunger reaches pressure level 2.
+Gloamgate was short of food, I hear.
+
+- ~ Gloamgate has 24 food in store. Its reserve target is 75.
+Have you heard? Gloamgate was short of food. That's the word going round.
+

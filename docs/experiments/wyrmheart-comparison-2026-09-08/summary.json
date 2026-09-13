@@ -1,0 +1,1053 @@
+{
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "years": 16000,
+  "validated_years": 256000,
+  "before": "5f13096",
+  "after": "7bccd65",
+  "cohort": {
+    "live_treasures": {
+      "before_mean": 14.375,
+      "after_mean": 14.375,
+      "difference_mean": 0.0,
+      "pairs_changed": 0,
+      "relative_mean_change_percent": 0.0
+    },
+    "live_treasure_value": {
+      "before_mean": 17034.75,
+      "after_mean": 17034.75,
+      "difference_mean": 0.0,
+      "pairs_changed": 0,
+      "relative_mean_change_percent": 0.0
+    },
+    "total_population": {
+      "before_mean": 12722.625,
+      "after_mean": 12672.5,
+      "difference_mean": -50.125,
+      "pairs_changed": 2,
+      "relative_mean_change_percent": -0.3939831599217958
+    },
+    "average_hunger": {
+      "before_mean": 9.25,
+      "after_mean": 7.875,
+      "difference_mean": -1.375,
+      "pairs_changed": 3,
+      "relative_mean_change_percent": -14.864864864864868
+    },
+    "average_prosperity": {
+      "before_mean": 28.5,
+      "after_mean": 28.125,
+      "difference_mean": -0.375,
+      "pairs_changed": 4,
+      "relative_mean_change_percent": -1.3157894736842146
+    },
+    "active_settlements": {
+      "before_mean": 3.5,
+      "after_mean": 3.5,
+      "difference_mean": 0.0,
+      "pairs_changed": 0,
+      "relative_mean_change_percent": 0.0
+    },
+    "closed_routes": {
+      "before_mean": 8.0,
+      "after_mean": 8.0,
+      "difference_mean": 0.0,
+      "pairs_changed": 0,
+      "relative_mean_change_percent": 0.0
+    },
+    "lore_stored": {
+      "before_mean": 0.0,
+      "after_mean": 0.0,
+      "difference_mean": 0.0,
+      "pairs_changed": 0,
+      "relative_mean_change_percent": null
+    },
+    "dragon_hoard": {
+      "before_mean": 783.125,
+      "after_mean": 833.75,
+      "difference_mean": 50.625,
+      "pairs_changed": 1,
+      "relative_mean_change_percent": 6.464485235434947
+    },
+    "dragon_hunts": {
+      "before_mean": 3825.875,
+      "after_mean": 5033.5,
+      "difference_mean": 1207.625,
+      "pairs_changed": 4,
+      "relative_mean_change_percent": 31.56467474760676
+    },
+    "dragon_broods": {
+      "before_mean": 31.625,
+      "after_mean": 29.875,
+      "difference_mean": -1.75,
+      "pairs_changed": 3,
+      "relative_mean_change_percent": -5.533596837944666
+    },
+    "dragon_campaign_victories": {
+      "before_mean": 13.0,
+      "after_mean": 12.875,
+      "difference_mean": -0.125,
+      "pairs_changed": 1,
+      "relative_mean_change_percent": -0.9615384615384581
+    },
+    "dragon_deep_wyrm_days": {
+      "before_mean": 1408101.625,
+      "after_mean": 1407294.25,
+      "difference_mean": -807.375,
+      "pairs_changed": 4,
+      "relative_mean_change_percent": -0.0573378359676302
+    },
+    "dragon_uncrowned_days": {
+      "before_mean": 73498.25,
+      "after_mean": 76340.875,
+      "difference_mean": 2842.625,
+      "pairs_changed": 2,
+      "relative_mean_change_percent": 3.8676090927334927
+    },
+    "dragon_slain": {
+      "before_mean": 0.375,
+      "after_mean": 0.25,
+      "difference_mean": -0.125,
+      "pairs_changed": 1,
+      "relative_mean_change_percent": -33.333333333333336
+    }
+  },
+  "paired": {
+    "1": {
+      "first_differing_annual_row": 7915,
+      "first_changed_columns": [
+        "maximum_hunger",
+        "dragon_hoard",
+        "average_inequality",
+        "market_coins",
+        "total_kingdom_treasury",
+        "dragon_raw_gold",
+        "dragon_gems",
+        "dragon_slain",
+        "dragon_campaign_attempts",
+        "dragon_campaign_victories",
+        "dragon_stage",
+        "dragon_crown_strength",
+        "dragon_body_condition",
+        "dragon_memory_integrity",
+        "dragon_territory_stability",
+        "dragon_regional_influence",
+        "dragon_afterdeath_days",
+        "goblin_members_end",
+        "goblin_cohesion_end",
+        "days_dragon_campaign",
+        "days_goblin_raid",
+        "dragon_crowned_days",
+        "dragon_deep_wyrm_days",
+        "dragon_afterdragon_days",
+        "treasures_in_ruins",
+        "next_entity_serial"
+      ],
+      "endpoint": {
+        "live_treasures": {
+          "before": 24,
+          "after": 24
+        },
+        "live_treasure_value": {
+          "before": 30970,
+          "after": 30970
+        },
+        "total_population": {
+          "before": 12680,
+          "after": 12680
+        },
+        "average_hunger": {
+          "before": 7,
+          "after": 6
+        },
+        "average_prosperity": {
+          "before": 26,
+          "after": 20
+        },
+        "active_settlements": {
+          "before": 3,
+          "after": 3
+        },
+        "closed_routes": {
+          "before": 8,
+          "after": 8
+        },
+        "lore_stored": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_hoard": {
+          "before": 240,
+          "after": 240
+        },
+        "dragon_hunts": {
+          "before": 7566,
+          "after": 7548
+        },
+        "dragon_broods": {
+          "before": 30,
+          "after": 27
+        },
+        "dragon_campaign_victories": {
+          "before": 25,
+          "after": 25
+        },
+        "dragon_deep_wyrm_days": {
+          "before": 5380,
+          "after": 2712
+        },
+        "dragon_uncrowned_days": {
+          "before": 22178,
+          "after": 22178
+        },
+        "dragon_slain": {
+          "before": 0,
+          "after": 0
+        }
+      }
+    },
+    "2": {
+      "first_differing_annual_row": null,
+      "first_changed_columns": [],
+      "endpoint": {
+        "live_treasures": {
+          "before": 3,
+          "after": 3
+        },
+        "live_treasure_value": {
+          "before": 1566,
+          "after": 1566
+        },
+        "total_population": {
+          "before": 12758,
+          "after": 12758
+        },
+        "average_hunger": {
+          "before": 7,
+          "after": 7
+        },
+        "average_prosperity": {
+          "before": 26,
+          "after": 26
+        },
+        "active_settlements": {
+          "before": 3,
+          "after": 3
+        },
+        "closed_routes": {
+          "before": 8,
+          "after": 8
+        },
+        "lore_stored": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_hoard": {
+          "before": 3329,
+          "after": 3329
+        },
+        "dragon_hunts": {
+          "before": 1224,
+          "after": 1224
+        },
+        "dragon_broods": {
+          "before": 65,
+          "after": 65
+        },
+        "dragon_campaign_victories": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_deep_wyrm_days": {
+          "before": 5747291,
+          "after": 5747291
+        },
+        "dragon_uncrowned_days": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_slain": {
+          "before": 0,
+          "after": 0
+        }
+      }
+    },
+    "3": {
+      "first_differing_annual_row": 9422,
+      "first_changed_columns": [
+        "total_food_stock",
+        "goblin_lair_food",
+        "lost_couriers",
+        "dragon_campaign_attempts",
+        "dragon_campaign_defeats",
+        "dragon_stage",
+        "dragon_crown_strength",
+        "dragon_body_condition",
+        "dragon_memory_integrity",
+        "dragon_territory_stability",
+        "dragon_regional_influence",
+        "total_population",
+        "dragon_campaign_experience",
+        "goblin_members_end",
+        "goblin_cohesion_end",
+        "days_dragon_campaign",
+        "dragon_crowned_days",
+        "dragon_deep_wyrm_days",
+        "next_entity_serial"
+      ],
+      "endpoint": {
+        "live_treasures": {
+          "before": 24,
+          "after": 24
+        },
+        "live_treasure_value": {
+          "before": 32020,
+          "after": 32020
+        },
+        "total_population": {
+          "before": 7444,
+          "after": 6951
+        },
+        "average_hunger": {
+          "before": 12,
+          "after": 4
+        },
+        "average_prosperity": {
+          "before": 26,
+          "after": 27
+        },
+        "active_settlements": {
+          "before": 4,
+          "after": 4
+        },
+        "closed_routes": {
+          "before": 8,
+          "after": 8
+        },
+        "lore_stored": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_hoard": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_hunts": {
+          "before": 6735,
+          "after": 7435
+        },
+        "dragon_broods": {
+          "before": 33,
+          "after": 33
+        },
+        "dragon_campaign_victories": {
+          "before": 25,
+          "after": 25
+        },
+        "dragon_deep_wyrm_days": {
+          "before": 2334,
+          "after": 1131
+        },
+        "dragon_uncrowned_days": {
+          "before": 373181,
+          "after": 365172
+        },
+        "dragon_slain": {
+          "before": 0,
+          "after": 0
+        }
+      }
+    },
+    "4": {
+      "first_differing_annual_row": 7890,
+      "first_changed_columns": [
+        "average_hunger",
+        "maximum_hunger",
+        "average_prosperity",
+        "dragon_hoard",
+        "market_coins",
+        "total_food_stock",
+        "total_kingdom_treasury",
+        "goblin_lair_food",
+        "dragon_raw_gold",
+        "dragon_gems",
+        "distorted_couriers",
+        "dragon_slain",
+        "dragon_campaign_attempts",
+        "dragon_campaign_victories",
+        "dragon_stage",
+        "dragon_crown_strength",
+        "dragon_body_condition",
+        "dragon_memory_integrity",
+        "dragon_territory_stability",
+        "dragon_regional_influence",
+        "dragon_afterdeath_days",
+        "goblin_members_end",
+        "goblin_cohesion_end",
+        "days_dragon_campaign",
+        "days_goblin_raid",
+        "dragon_crowned_days",
+        "dragon_deep_wyrm_days",
+        "dragon_afterdragon_days",
+        "treasures_in_ruins",
+        "next_entity_serial"
+      ],
+      "endpoint": {
+        "live_treasures": {
+          "before": 24,
+          "after": 24
+        },
+        "live_treasure_value": {
+          "before": 30506,
+          "after": 30506
+        },
+        "total_population": {
+          "before": 12600,
+          "after": 12692
+        },
+        "average_hunger": {
+          "before": 6,
+          "after": 6
+        },
+        "average_prosperity": {
+          "before": 25,
+          "after": 26
+        },
+        "active_settlements": {
+          "before": 3,
+          "after": 3
+        },
+        "closed_routes": {
+          "before": 8,
+          "after": 8
+        },
+        "lore_stored": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_hoard": {
+          "before": 0,
+          "after": 405
+        },
+        "dragon_hunts": {
+          "before": 6456,
+          "after": 15412
+        },
+        "dragon_broods": {
+          "before": 32,
+          "after": 16
+        },
+        "dragon_campaign_victories": {
+          "before": 26,
+          "after": 25
+        },
+        "dragon_deep_wyrm_days": {
+          "before": 2689,
+          "after": 1142
+        },
+        "dragon_uncrowned_days": {
+          "before": 180782,
+          "after": 211532
+        },
+        "dragon_slain": {
+          "before": 1,
+          "after": 0
+        }
+      }
+    },
+    "5": {
+      "first_differing_annual_row": null,
+      "first_changed_columns": [],
+      "endpoint": {
+        "live_treasures": {
+          "before": 7,
+          "after": 7
+        },
+        "live_treasure_value": {
+          "before": 2888,
+          "after": 2888
+        },
+        "total_population": {
+          "before": 17473,
+          "after": 17473
+        },
+        "average_hunger": {
+          "before": 0,
+          "after": 0
+        },
+        "average_prosperity": {
+          "before": 47,
+          "after": 47
+        },
+        "active_settlements": {
+          "before": 4,
+          "after": 4
+        },
+        "closed_routes": {
+          "before": 8,
+          "after": 8
+        },
+        "lore_stored": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_hoard": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_hunts": {
+          "before": 56,
+          "after": 56
+        },
+        "dragon_broods": {
+          "before": 1,
+          "after": 1
+        },
+        "dragon_campaign_victories": {
+          "before": 1,
+          "after": 1
+        },
+        "dragon_deep_wyrm_days": {
+          "before": 118,
+          "after": 118
+        },
+        "dragon_uncrowned_days": {
+          "before": 11845,
+          "after": 11845
+        },
+        "dragon_slain": {
+          "before": 1,
+          "after": 1
+        }
+      }
+    },
+    "6": {
+      "first_differing_annual_row": null,
+      "first_changed_columns": [],
+      "endpoint": {
+        "live_treasures": {
+          "before": 5,
+          "after": 5
+        },
+        "live_treasure_value": {
+          "before": 2752,
+          "after": 2752
+        },
+        "total_population": {
+          "before": 12911,
+          "after": 12911
+        },
+        "average_hunger": {
+          "before": 6,
+          "after": 6
+        },
+        "average_prosperity": {
+          "before": 27,
+          "after": 27
+        },
+        "active_settlements": {
+          "before": 4,
+          "after": 4
+        },
+        "closed_routes": {
+          "before": 8,
+          "after": 8
+        },
+        "lore_stored": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_hoard": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_hunts": {
+          "before": 33,
+          "after": 33
+        },
+        "dragon_broods": {
+          "before": 1,
+          "after": 1
+        },
+        "dragon_campaign_victories": {
+          "before": 1,
+          "after": 1
+        },
+        "dragon_deep_wyrm_days": {
+          "before": 112,
+          "after": 112
+        },
+        "dragon_uncrowned_days": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_slain": {
+          "before": 1,
+          "after": 1
+        }
+      }
+    },
+    "7": {
+      "first_differing_annual_row": null,
+      "first_changed_columns": [],
+      "endpoint": {
+        "live_treasures": {
+          "before": 4,
+          "after": 4
+        },
+        "live_treasure_value": {
+          "before": 3946,
+          "after": 3946
+        },
+        "total_population": {
+          "before": 13065,
+          "after": 13065
+        },
+        "average_hunger": {
+          "before": 29,
+          "after": 29
+        },
+        "average_prosperity": {
+          "before": 26,
+          "after": 26
+        },
+        "active_settlements": {
+          "before": 4,
+          "after": 4
+        },
+        "closed_routes": {
+          "before": 8,
+          "after": 8
+        },
+        "lore_stored": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_hoard": {
+          "before": 2456,
+          "after": 2456
+        },
+        "dragon_hunts": {
+          "before": 1368,
+          "after": 1368
+        },
+        "dragon_broods": {
+          "before": 64,
+          "after": 64
+        },
+        "dragon_campaign_victories": {
+          "before": 1,
+          "after": 1
+        },
+        "dragon_deep_wyrm_days": {
+          "before": 5504421,
+          "after": 5504421
+        },
+        "dragon_uncrowned_days": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_slain": {
+          "before": 0,
+          "after": 0
+        }
+      }
+    },
+    "8": {
+      "first_differing_annual_row": 7940,
+      "first_changed_columns": [
+        "tracked_iron",
+        "tracked_tools",
+        "tracked_weapons",
+        "dragon_stage",
+        "dragon_body_condition",
+        "dragon_regional_influence",
+        "dragon_crowned_days",
+        "dragon_deep_wyrm_days",
+        "next_entity_serial"
+      ],
+      "endpoint": {
+        "live_treasures": {
+          "before": 24,
+          "after": 24
+        },
+        "live_treasure_value": {
+          "before": 31630,
+          "after": 31630
+        },
+        "total_population": {
+          "before": 12850,
+          "after": 12850
+        },
+        "average_hunger": {
+          "before": 7,
+          "after": 5
+        },
+        "average_prosperity": {
+          "before": 25,
+          "after": 26
+        },
+        "active_settlements": {
+          "before": 3,
+          "after": 3
+        },
+        "closed_routes": {
+          "before": 8,
+          "after": 8
+        },
+        "lore_stored": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_hoard": {
+          "before": 240,
+          "after": 240
+        },
+        "dragon_hunts": {
+          "before": 7169,
+          "after": 7192
+        },
+        "dragon_broods": {
+          "before": 27,
+          "after": 32
+        },
+        "dragon_campaign_victories": {
+          "before": 25,
+          "after": 25
+        },
+        "dragon_deep_wyrm_days": {
+          "before": 2468,
+          "after": 1427
+        },
+        "dragon_uncrowned_days": {
+          "before": 0,
+          "after": 0
+        },
+        "dragon_slain": {
+          "before": 0,
+          "after": 0
+        }
+      }
+    }
+  },
+  "seed2_milestones": {
+    "1000": {
+      "live_treasures": {
+        "before": 3,
+        "after": 3
+      },
+      "live_treasure_value": {
+        "before": 1566,
+        "after": 1566
+      },
+      "total_population": {
+        "before": 12758,
+        "after": 12758
+      },
+      "average_hunger": {
+        "before": 7,
+        "after": 7
+      },
+      "average_prosperity": {
+        "before": 26,
+        "after": 26
+      },
+      "active_settlements": {
+        "before": 3,
+        "after": 3
+      },
+      "closed_routes": {
+        "before": 8,
+        "after": 8
+      },
+      "lore_stored": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_hoard": {
+        "before": 3329,
+        "after": 3329
+      },
+      "dragon_hunts": {
+        "before": 97,
+        "after": 97
+      },
+      "dragon_broods": {
+        "before": 4,
+        "after": 4
+      },
+      "dragon_campaign_victories": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_deep_wyrm_days": {
+        "before": 272291,
+        "after": 272291
+      },
+      "dragon_uncrowned_days": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_slain": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    "2000": {
+      "live_treasures": {
+        "before": 3,
+        "after": 3
+      },
+      "live_treasure_value": {
+        "before": 1566,
+        "after": 1566
+      },
+      "total_population": {
+        "before": 12758,
+        "after": 12758
+      },
+      "average_hunger": {
+        "before": 8,
+        "after": 8
+      },
+      "average_prosperity": {
+        "before": 26,
+        "after": 26
+      },
+      "active_settlements": {
+        "before": 3,
+        "after": 3
+      },
+      "closed_routes": {
+        "before": 8,
+        "after": 8
+      },
+      "lore_stored": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_hoard": {
+        "before": 3329,
+        "after": 3329
+      },
+      "dragon_hunts": {
+        "before": 173,
+        "after": 173
+      },
+      "dragon_broods": {
+        "before": 8,
+        "after": 8
+      },
+      "dragon_campaign_victories": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_deep_wyrm_days": {
+        "before": 637291,
+        "after": 637291
+      },
+      "dragon_uncrowned_days": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_slain": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    "4000": {
+      "live_treasures": {
+        "before": 3,
+        "after": 3
+      },
+      "live_treasure_value": {
+        "before": 1566,
+        "after": 1566
+      },
+      "total_population": {
+        "before": 12758,
+        "after": 12758
+      },
+      "average_hunger": {
+        "before": 8,
+        "after": 8
+      },
+      "average_prosperity": {
+        "before": 26,
+        "after": 26
+      },
+      "active_settlements": {
+        "before": 3,
+        "after": 3
+      },
+      "closed_routes": {
+        "before": 8,
+        "after": 8
+      },
+      "lore_stored": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_hoard": {
+        "before": 3329,
+        "after": 3329
+      },
+      "dragon_hunts": {
+        "before": 323,
+        "after": 323
+      },
+      "dragon_broods": {
+        "before": 16,
+        "after": 16
+      },
+      "dragon_campaign_victories": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_deep_wyrm_days": {
+        "before": 1367291,
+        "after": 1367291
+      },
+      "dragon_uncrowned_days": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_slain": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    "8000": {
+      "live_treasures": {
+        "before": 3,
+        "after": 3
+      },
+      "live_treasure_value": {
+        "before": 1566,
+        "after": 1566
+      },
+      "total_population": {
+        "before": 12758,
+        "after": 12758
+      },
+      "average_hunger": {
+        "before": 8,
+        "after": 8
+      },
+      "average_prosperity": {
+        "before": 25,
+        "after": 25
+      },
+      "active_settlements": {
+        "before": 3,
+        "after": 3
+      },
+      "closed_routes": {
+        "before": 8,
+        "after": 8
+      },
+      "lore_stored": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_hoard": {
+        "before": 3329,
+        "after": 3329
+      },
+      "dragon_hunts": {
+        "before": 624,
+        "after": 624
+      },
+      "dragon_broods": {
+        "before": 32,
+        "after": 32
+      },
+      "dragon_campaign_victories": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_deep_wyrm_days": {
+        "before": 2827291,
+        "after": 2827291
+      },
+      "dragon_uncrowned_days": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_slain": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    "16000": {
+      "live_treasures": {
+        "before": 3,
+        "after": 3
+      },
+      "live_treasure_value": {
+        "before": 1566,
+        "after": 1566
+      },
+      "total_population": {
+        "before": 12758,
+        "after": 12758
+      },
+      "average_hunger": {
+        "before": 7,
+        "after": 7
+      },
+      "average_prosperity": {
+        "before": 26,
+        "after": 26
+      },
+      "active_settlements": {
+        "before": 3,
+        "after": 3
+      },
+      "closed_routes": {
+        "before": 8,
+        "after": 8
+      },
+      "lore_stored": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_hoard": {
+        "before": 3329,
+        "after": 3329
+      },
+      "dragon_hunts": {
+        "before": 1224,
+        "after": 1224
+      },
+      "dragon_broods": {
+        "before": 65,
+        "after": 65
+      },
+      "dragon_campaign_victories": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_deep_wyrm_days": {
+        "before": 5747291,
+        "after": 5747291
+      },
+      "dragon_uncrowned_days": {
+        "before": 0,
+        "after": 0
+      },
+      "dragon_slain": {
+        "before": 0,
+        "after": 0
+      }
+    }
+  }
+}

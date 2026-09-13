@@ -1,0 +1,11 @@
+{
+  "source_commit": "66a7eb4957b8da6cf8de04bdccfb152f288544b9",
+  "schema": 99,
+  "generator": 25,
+  "headless_tests_passed": 141,
+  "focused_store_tests": "passed",
+  "store_adapter_cppcheck": "passed",
+  "core_and_store_adapter_webassembly_compile": "passed",
+  "sanitizer_scope": "custody core, store adapter, and store test instrumented; remaining simulation and persistence libraries use the strict release build",
+  "address_and_undefined_behavior_sanitizers": "passed"
+}

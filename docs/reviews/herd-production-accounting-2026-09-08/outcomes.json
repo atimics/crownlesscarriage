@@ -1,0 +1,154 @@
+[
+  {
+    "fixture": "baseline",
+    "dragon_policy": "natural-history",
+    "final_state_hash": "82c5fa3dcf2eaa91",
+    "herd_totals": {
+      "cows": {
+        "feed": {
+          "Wheat": 25823
+        },
+        "output": {
+          "Meat": 308
+        },
+        "cap_loss": {}
+      },
+      "sheep": {
+        "feed": {
+          "Wheat": 8119
+        },
+        "output": {
+          "Meat": 2164,
+          "Wool": 2951
+        },
+        "cap_loss": {}
+      },
+      "ponies": {
+        "feed": {
+          "Wheat": 23728
+        },
+        "output": {},
+        "cap_loss": {}
+      },
+      "dairy": {
+        "dairy_nutrition": 39758,
+        "dairy_used": 39758,
+        "dairy_unused": 0
+      }
+    }
+  },
+  {
+    "fixture": "baseline",
+    "dragon_policy": "slain-at-day-1",
+    "final_state_hash": "c68e362bbaccf38d",
+    "herd_totals": {
+      "cows": {
+        "feed": {
+          "Wheat": 29189
+        },
+        "output": {
+          "Meat": 172
+        },
+        "cap_loss": {}
+      },
+      "sheep": {
+        "feed": {
+          "Wheat": 8677
+        },
+        "output": {
+          "Meat": 2366,
+          "Wool": 3191
+        },
+        "cap_loss": {}
+      },
+      "ponies": {
+        "feed": {
+          "Wheat": 26633
+        },
+        "output": {},
+        "cap_loss": {}
+      },
+      "dairy": {
+        "dairy_nutrition": 46974,
+        "dairy_used": 46974,
+        "dairy_unused": 0
+      }
+    }
+  },
+  {
+    "fixture": "opened-production-pilots",
+    "dragon_policy": "natural-history",
+    "final_state_hash": "28101e0c0e8f1976",
+    "herd_totals": {
+      "cows": {
+        "feed": {
+          "Wheat": 24811
+        },
+        "output": {
+          "Meat": 340
+        },
+        "cap_loss": {}
+      },
+      "sheep": {
+        "feed": {
+          "Wheat": 8435
+        },
+        "output": {
+          "Meat": 2250,
+          "Wool": 3049
+        },
+        "cap_loss": {}
+      },
+      "ponies": {
+        "feed": {
+          "Wheat": 23666
+        },
+        "output": {},
+        "cap_loss": {}
+      },
+      "dairy": {
+        "dairy_nutrition": 37302,
+        "dairy_used": 37302,
+        "dairy_unused": 0
+      }
+    }
+  },
+  {
+    "fixture": "opened-production-pilots",
+    "dragon_policy": "slain-at-day-1",
+    "final_state_hash": "8ac20211bf9cb83b",
+    "herd_totals": {
+      "cows": {
+        "feed": {
+          "Wheat": 29462
+        },
+        "output": {
+          "Meat": 180
+        },
+        "cap_loss": {}
+      },
+      "sheep": {
+        "feed": {
+          "Wheat": 8668
+        },
+        "output": {
+          "Meat": 2234,
+          "Wool": 3082
+        },
+        "cap_loss": {}
+      },
+      "ponies": {
+        "feed": {
+          "Wheat": 25568
+        },
+        "output": {},
+        "cap_loss": {}
+      },
+      "dairy": {
+        "dairy_nutrition": 46824,
+        "dairy_used": 46824,
+        "dairy_unused": 0
+      }
+    }
+  }
+]

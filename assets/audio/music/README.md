@@ -2,8 +2,9 @@
 
 The director ranks 82 soundtrack cues by the current place and situation.
 The catalog contains 185 takes, including the original 149 performances and
-36 town arrangements. The 27 exported MP3s are playable now; 158 takes await
-export. Each file joins play through local installation or the hosted catalog.
+36 town arrangements. There are 47 exported MP3s: 27 bundled takes and 20
+additional hosted takes. The other 138 takes await export. Each file joins play
+through local installation or the hosted catalog.
 
 Road progress blends the origin and destination regions from 100/0 to 0/100.
 The same rule follows a journey in either direction. Nearby work sites add a
@@ -22,7 +23,8 @@ the named town on the surface. Hunger of 40 or more selects shortage. A positive
 food-relief event selects recovery below that threshold for three game days,
 including its delivery day. Everyday applies otherwise. A matching arrangement
 gets twice the usual relevance score, then the usual recent-title penalty.
-The existing library supplies music while the new files await export.
+One take of each town arrangement is available in the hosted library.
+The batch also adds the shared hunger and food-relief themes.
 
 | Change | Timing |
 | --- | --- |

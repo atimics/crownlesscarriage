@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crownless · Speech review</title>
+<style>
+:root{color-scheme:light;font:17px/1.55 system-ui;color:#302d26;background:#f5f0e6}
+*{box-sizing:border-box}body{margin:0}main{max-width:960px;margin:auto;padding:48px 24px}
+h1,h2{font-family:Georgia,serif;font-weight:400;line-height:1.15}h1{font-size:52px;margin:12px 0}h2{font-size:28px}
+a{color:#365f47}header>p{max-width:760px}.eyebrow,.label,small{font-size:13px;color:#685f50}.eyebrow{letter-spacing:.12em;text-transform:uppercase}
+.toolbar{position:sticky;top:0;background:#f5f0e6f5;padding:18px 0;display:flex;gap:12px;flex-wrap:wrap;border-bottom:1px solid #d3c9b7;z-index:1}
+input,select{font:inherit;border:1px solid #a89b85;border-radius:4px;padding:10px;background:white;color:inherit}input{flex:1;min-width:180px}
+article{padding:30px 0;border-bottom:1px solid #cbbfa9}article[hidden]{display:none}.label{font-weight:650;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+p{margin:10px 0 18px}.speech{font:24px/1.5 Georgia,serif;color:#204d38;border-left:3px solid #68967a;padding-left:20px}
+.note{font-size:14px;color:#825427}details{margin:15px 0}summary{cursor:pointer;color:#365f47}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}
+.turn{display:grid;grid-template-columns:155px 1fr;gap:18px;padding:10px 0;margin:0}.turn b{font-size:14px;color:#68604e}.turn span{font:21px/1.45 Georgia,serif}
+@media(max-width:600px){main{padding:28px 18px}h1{font-size:38px}.turn{grid-template-columns:1fr;gap:3px}.toolbar{position:static}.speech{font-size:21px}}
+</style>
+<main>
+<header><div class="eyebrow">Crownless · Current model</div><h1>What the world says</h1>
+<p><!-- SUMMARY --></p>
+<p>Read the held account, the game’s shared wording, and the 5M model’s line together. Conversations use two people observed with the same news in the same place and day. Each reply receives the previous spoken lines.</p>
+<p><a href="REVIEW.md">Read the review</a> · <a href="reference-pairs.txt">Reference pairs</a> · <a href="model-pairs.txt">Model pairs</a> · <a href="conversations.txt">Conversations</a></p>
+</header>
+<div class="toolbar"><label for="view">Show</label><select id="view"><option value="all">Everything</option><option value="account">Accounts</option><option value="conversation">Conversations</option></select><input id="search" type="search" placeholder="Search a name, event, or phrase" aria-label="Search examples"><span id="count" aria-live="polite"></span></div>
+<!-- CARDS -->
+</main>
+<script>
+const cards=[...document.querySelectorAll('article')],view=document.querySelector('#view'),search=document.querySelector('#search');
+function filter(){const query=search.value.toLowerCase();let count=0;for(const card of cards){card.hidden=(view.value!=='all'&&card.dataset.type!==view.value)||!card.dataset.search.toLowerCase().includes(query);if(!card.hidden)count++}document.querySelector('#count').textContent=count+' examples'}
+view.addEventListener('change',filter);search.addEventListener('input',filter);filter();
+</script>
+</html>

@@ -1,0 +1,20 @@
+[
+  {
+    "case": "fresh",
+    "cached_target": "14.0",
+    "executable_minimum": "14.0",
+    "inspection": "/private/tmp/crownless-capture-acceptance-audit/out/build/play/macos-contract/fresh/crownless_sim_runner:\nLoad command 11\n      cmd LC_BUILD_VERSION\n  cmdsize 32\n platform MACOS\n    minos 14.0\n      sdk 26.2\n   ntools 1\n     tool LD\n  version 1230.1"
+  },
+  {
+    "case": "stale",
+    "cached_target": "14.0",
+    "executable_minimum": "14.0",
+    "inspection": "/private/tmp/crownless-capture-acceptance-audit/out/build/play/macos-contract/stale/crownless_sim_runner:\nLoad command 11\n      cmd LC_BUILD_VERSION\n  cmdsize 32\n platform MACOS\n    minos 14.0\n      sdk 26.2\n   ntools 1\n     tool LD\n  version 1230.1"
+  },
+  {
+    "case": "override",
+    "cached_target": "15.0",
+    "executable_minimum": "15.0",
+    "inspection": "/private/tmp/crownless-capture-acceptance-audit/out/build/play/macos-contract/override/crownless_sim_runner:\nLoad command 11\n      cmd LC_BUILD_VERSION\n  cmdsize 32\n platform MACOS\n    minos 15.0\n      sdk 26.2\n   ntools 1\n     tool LD\n  version 1230.1"
+  }
+]

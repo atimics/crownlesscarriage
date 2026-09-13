@@ -94,6 +94,35 @@ static void TestCameraContinuity(void)
                                         GetWorldToScreenEx(point, after, 630, 320)) < 0.001f,
                         "conversation entry must preserve landmark screen positions");
     }
+    static CcSim conversation_sim;
+    CcSimInit(&conversation_sim, UINT32_C(0xc0a71a9e));
+    CcLocalBindPlace(&conversation_sim);
+    for (int turn = 0; turn < 8; ++turn) {
+        CcLocalAgent first;
+        CcLocalAgent second;
+        CcLocalAgentInit(&first, (Vector2){44.25f, 28.85f}, false);
+        float angle = (float)turn * PI * 0.25f;
+        CcLocalAgentInit(&second, (Vector2){44.25f + cosf(angle) * 1.4f,
+                                          28.85f + sinf(angle) * 1.4f}, false);
+        conversation_camera_rig = (ConversationCameraRig){0};
+        Camera3D talk = base;
+        Camera3D street = ExteriorCameraComposed(
+            Vector3Add(first.position, (Vector3){0, 1, 0}),
+            (Vector3){-9, 8, 11}, 14.0f);
+        for (int frame = 0; frame < 180; ++frame)
+            talk = CcLocalConversationCameraInternal(street, &first, &second,
+                true, (float)frame / 60.0f, true, 320);
+        Vector2 first_head = GetWorldToScreenEx(Vector3Add(first.position,
+            (Vector3){0, 1.6f, 0}), talk, 630, 320);
+        Vector2 second_head = GetWorldToScreenEx(Vector3Add(second.position,
+            (Vector3){0, 1.6f, 0}), talk, 630, 320);
+        RequireRenderer(fabsf(first_head.x - second_head.x) >= 26.0f &&
+                        first_head.x > 32 && first_head.x < 598 &&
+                        second_head.x > 32 && second_head.x < 598 &&
+                        first_head.y > 16 && first_head.y < 230 &&
+                        second_head.y > 16 && second_head.y < 230,
+                        "both conversation heads must stay apart and above the dialogue");
+    }
     for (int rate = 0; rate < 3; ++rate) {
         conversation_camera_rig = (ConversationCameraRig){0};
         Camera3D previous = base;

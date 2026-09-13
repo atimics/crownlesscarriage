@@ -1,0 +1,14 @@
+[
+  {
+    "seed": "42",
+    "legacy_checkpoints_equal": 41,
+    "baseline": "seed=42 schema=75 booked=266 arrived=247 lost=19",
+    "current": "seed=42 schema=76 booked=244 arrived=230 lost=14 war_loads=2"
+  },
+  {
+    "seed": "0x5eed0001",
+    "legacy_checkpoints_equal": 41,
+    "baseline": "seed=1592590337 schema=75 booked=298 arrived=278 lost=20",
+    "current": "seed=1592590337 schema=76 booked=344 arrived=324 lost=20 war_loads=1"
+  }
+]

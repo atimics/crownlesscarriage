@@ -1,0 +1,9 @@
+{
+  "simulation_source": "ce4f6c91473f08977f2ce9a8e4203fa28b1663a4",
+  "observer_commit": "ba589d90cb76c3e1e7b30ea6e7010d1f38473849",
+  "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+  "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)",
+  "build": "CMake Release, client off, warnings as errors",
+  "observer_sha256": "b392d7f46265d017ec654e2c2f0f87304d64583d552a81455a043460d25e701e",
+  "scope": "Fresh worlds with no player actions. Six tracked populations; goblin activity observed daily."
+}

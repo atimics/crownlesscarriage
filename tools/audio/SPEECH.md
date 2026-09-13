@@ -74,30 +74,87 @@ This writes a reference WAV and a receipt for each profile under
 and recording fingerprint. Use `--voice mara-v1` to prepare a single voice.
 Choose `cpu`, `mps`, or `cuda` to match the local machine.
 
-Use the existing Chatterbox environment to prepare dialogue from those voices:
+Use Pocket TTS for generated dialogue:
 
 ```sh
-python tools/audio/speech_pack.py out/speech.json --device mps --limit 32
+python -m pip install -r tools/audio/requirements-pocket.txt
+python tools/audio/speech_pack.py out/speech.json --engine pocket --limit 32
 ```
 
-Chatterbox and Qwen use separate dependency sets. `--engine qwen` uses the
-Qwen Base model in the Qwen environment. Downloads are enabled explicitly with
-`--allow-download`. Existing checked recordings are reused. Keep reference
-recordings fixed within a voice version.
+Pocket uses the saved synthetic cast references and runs on CPU. Downloads are
+enabled with `--allow-download`. Voice design remains a separate preparation
+step. Existing checked recordings are reused.
+
+### Goblin speech
+
+`goblin-v1` is Nara Soot-Tongue's voice. It uses a versioned copy of Flint's
+synthetic reference. Pocket generates the exact Hra'khor caption, then the
+bass vocoder processes it at 2x speed. Its 49 Hz foundation and slow pulse keep
+the low throat sound. This voice ID also selects a separate audio cache key.
+The cache checks Pocket, vocoder version, and speed before accepting a goblin
+recording. The worker and pack builder use the same path.
+
+Successful trades at the goblin cave trigger Nara's reply with the actual coin
+payment. The speech exporter includes a sample reply. Native core-model turns
+with the goblin voice apply Hra'khor after English generation. The model retains
+English conversation history, and the caption and audio share the final goblin
+words. Existing human cast assignments stay stable.
+
+```sh
+python tools/audio/speech_pack.py out/speech.json --voice goblin-v1
+python tests/pocket_goblin_tests.py --output out/pocket-goblin-check
+```
+
+The live check generates a human baseline and goblin line through Pocket,
+then checks the finished files and cache receipts. Routine auditions use
+`voice_trial.py --engine pocket`.
 
 ## Local worker
 
+The native game treats speech as an optional local service. The worker keeps one
+PocketTTS model in memory, deduplicates identical requests, and writes a WAV
+and receipt atomically into a persistent content-addressed cache.
+
+Recommended setup:
+
 ```sh
-python tools/audio/speech_worker.py --device mps --cache out/voice-cache
+scripts/setup-voice.sh
+scripts/run-native.sh
+```
+
+`run-native.sh` checks `GET /health` on `127.0.0.1:8766`, starts the worker
+when the local PocketTTS environment is available, and launches the game even
+when it is not. Set `CROWNLESS_VOICE_ALLOW_DOWNLOAD=0` to prevent a model
+download. Captions and packaged audio remain available when the worker is
+absent.
+
+The direct worker command remains useful:
+
+```sh
+python tools/audio/speech_worker.py --engine pocket --cache out/voice-cache --allow-download
 ```
 
 The worker binds to `127.0.0.1:8766`. Submit an exported speech record to
 `POST /v1/speech`. The response contains its key and queue state. Fetch
 `GET /v1/speech/<key>` for a completed WAV. Pending work returns HTTP 202;
-failed generation returns 503. The default queue holds 16 jobs and the cache
-holds 256 MiB. Duplicate requests share a job. Old recordings leave the cache
-as it fills. Exact words, cast profile, delivery, and WAV fingerprints are
-checked before reuse.
+failed generation returns 503. `/health` reports the cast and queue
+configuration. The default queue holds 16 jobs and the cache holds 256 MiB.
+Duplicate requests share a job. Cache receipts include the speech-cache
+format, Pocket version, voice-reference hash, post-processing version and WAV
+hash. A model, reference, effect or format change invalidates old audio
+instead of silently reusing it. Old recordings leave the cache as it fills.
+
+Promote approved generated records into the native runtime pack with:
+
+```sh
+python tools/audio/speech_pack.py out/speech.json \
+  --engine pocket --cache out/voice-cache \
+  --promote assets/audio/voice --limit 100000 --allow-download
+```
+
+Promotion validates every WAV, copies WAV/receipt pairs atomically, and writes
+`speech-pack-manifest.json`. The CMake full build copies that directory into
+the macOS bundle. Review/audition files are not runtime files until promoted.
 
 For a browser on another local port, pass its exact origin with
 `--allow-origin http://localhost:8000`. The worker uses a single model instance

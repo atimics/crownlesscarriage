@@ -1,0 +1,11 @@
+{
+  "id": "cedar-trial",
+  "name": "Cedar",
+  "description": "An older adult woman with a resonant low alto, a light Ghanaian English accent, unhurried musical phrasing, and warm, clear consonants. She sounds amused, capable, and attentive. Natural conversational English. Clean studio recording.",
+  "purpose": "An elder with warmth and musical rhythm. Try her as a healer, a stern creditor, and a travelling storyteller.",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going. We can find a place for your horses.",
+  "seed": 219692197,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "sample_rate": 24000,
+  "sha256": "fba3c2014f9fd2e92298f751c9878b1d2e92bb6f7da1d836eceb802668c65f20"
+}

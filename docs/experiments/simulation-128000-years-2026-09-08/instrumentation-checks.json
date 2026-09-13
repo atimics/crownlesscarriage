@@ -1,0 +1,23 @@
+[
+  {
+    "seed": 1,
+    "years": 10,
+    "default_output_identical": true,
+    "extended_columns_preserve_baseline": true,
+    "treasure_bounds_passed": true
+  },
+  {
+    "seed": 47,
+    "years": 10,
+    "default_output_identical": true,
+    "extended_columns_preserve_baseline": true,
+    "treasure_bounds_passed": true
+  },
+  {
+    "seed": 128,
+    "years": 10,
+    "default_output_identical": true,
+    "extended_columns_preserve_baseline": true,
+    "treasure_bounds_passed": true
+  }
+]

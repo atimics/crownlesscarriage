@@ -1,0 +1,23 @@
+{
+  "voice": "oak-v1",
+  "line": "welcome",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going.",
+  "file": "nano-oak-v1-welcome.wav",
+  "styled_file": "nano-oak-v1-welcome-game.wav",
+  "seconds": 4.32,
+  "generation_seconds": 1.8236660002730787,
+  "first_chunk_seconds": null,
+  "real_time_factor": 0.42214490747062006,
+  "sample_rate": 24000,
+  "seed": 20260912,
+  "reference_sha256": "995b33486a4822e20f666e91ecc52074d8b0331d11e549e055e9b0c3317a5656",
+  "sha256": "86760492b05467c1c617b511d40f10259759e2887c58fb0e5a381ce53fc890d6",
+  "master_sha256": "86760492b05467c1c617b511d40f10259759e2887c58fb0e5a381ce53fc890d6",
+  "wav_sha256": "56b3c12603767cb2fc8e4660697049e7134a30b1d4912c5c921732d1bd989116",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

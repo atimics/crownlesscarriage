@@ -1,3 +1,5 @@
+#include "sim/cc_mine.h"
+#include "sim/cc_road_council.h"
 #include "metagame/cc_metagame.h"
 
 #include "persistence/cc_save.h"
@@ -74,6 +76,8 @@ static bool ParseGood(const char *text, CcGood *good)
     else if (strcmp(text, "wheat") == 0) *good = CC_GOOD_WHEAT;
     else if (strcmp(text, "meat") == 0) *good = CC_GOOD_MEAT;
     else if (strcmp(text, "wool") == 0) *good = CC_GOOD_WOOL;
+    else if (strcmp(text, "rotten-meat") == 0) *good = CC_GOOD_ROTTEN_MEAT;
+    else if (strcmp(text, "rotten-grain") == 0 || strcmp(text, "rotten-wheat") == 0) *good = CC_GOOD_ROTTEN_GRAIN;
     else if (strcmp(text, "stone") == 0) *good = CC_GOOD_STONE;
     else return false;
     return true;
@@ -1172,7 +1176,7 @@ static void DescribeDragon(const CcMetagame *metagame,
                "The dragon is calm. Goblins raid for food, gear, and offerings; only theft from the delivered hoard brings dragon fire.\n");
     } else {
         Append(output, capacity,
-               "No dragon remains to retaliate. Goblins still raid when their lair runs short of food, tools, or weapons.\n");
+               "The dragon has fallen. Red, Purple and Blue compete to fill their own lairs with treasure.\n");
     }
     if (!sim->dragon.slain &&
         sim->player.location_id == sim->dragon.lair_settlement_id) {
@@ -1185,20 +1189,30 @@ static void DescribeGoblins(const CcMetagame *metagame,
                             char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
-    const CcGoblinCult *goblins = &sim->goblins;
+    const CcGoblinSociety *goblins = &sim->goblins;
     const CcSettlement *lair = CcSimSettlement(
         sim, goblins->lair_settlement_id);
-    const char *future = goblins->devotion >= 60 ?
-        goblins->cohesion >= 60 ? "a united dragon court" :
-                                  "fanatical ash-splinters" :
-        goblins->cohesion >= 60 ? "a free lair beyond the dragon" :
-                                  "scattered hungry bands";
     Append(output, capacity,
-           "%s lives beneath %s. Nara Soot-Tongue speaks for its Hoardkeepers, Ashkeepers, Tongues, and Foragers.\n",
-           goblins->name, lair != NULL ? lair->name : "an unknown lair");
+           "Underroad goblins live beneath %s. Nara Soot-Tongue speaks for the porters.\n"
+           "%d goblins; cohesion %d/100. Red, Purple and Blue gather treasure in separate lairs.\n",
+           lair != NULL ? lair->name : "the mountains", goblins->members, goblins->cohesion);
     Append(output, capacity,
-           "%d members; covenant %d/100, cohesion %d/100. Its present course points toward %s.\n",
-           goblins->members, goblins->devotion, goblins->cohesion, future);
+           "Dragon cult: %d humans, %d goblins; covenant %d/100.\n",
+           CcSimCultMembers(sim, CC_CULT_HUMAN), CcSimCultMembers(sim, CC_CULT_GOBLIN), sim->dragon_cult.devotion);
+    Append(output, capacity, "Cult offering chest: %" PRId64 " crowns, %d gold, %d gems.\n",
+           sim->dragon_cult.offering_coins, sim->dragon_cult.offering_stock[CC_GOOD_GOLD], sim->dragon_cult.offering_stock[CC_GOOD_GEMS]);
+    for (int32_t rank = 0; rank < CC_CULT_RANK_COUNT; ++rank) {
+        Append(output, capacity, "%s: %d humans, %d goblins.\n", CcCultRankName(rank),
+               sim->dragon_cult.ranks[CC_CULT_HUMAN][rank], sim->dragon_cult.ranks[CC_CULT_GOBLIN][rank]);
+    }
+    for (int32_t color = 0; color < CC_GOBLIN_FACTION_COUNT; ++color) {
+        const CcGoblinFaction *f = &sim->goblin_politics.factions[color];
+        Append(output, capacity,
+               "%s: %d goblins, %" PRId64 " crowns, %d gold, %d gems in its lair; %" PRId64 " tribute delivered.\n",
+               CcGoblinColorName(color), f->members, f->coins, f->gold, f->gems, f->tribute);
+    }
+    Append(output, capacity, "Dragon crown: %s. All three factions believe further gifts can win favour.\n",
+           CcGoblinColorName(sim->goblin_politics.crown_faction));
     Append(output, capacity,
            "Lair stores: %d Food, %d Tools, %d Weapons, %" PRId64
            " crowns. %d expeditions have been intercepted.\n",
@@ -1206,6 +1220,8 @@ static void DescribeGoblins(const CcMetagame *metagame,
            goblins->lair_stock[CC_GOOD_TOOLS],
            goblins->lair_stock[CC_GOOD_WEAPONS], goblins->lair_coins,
            goblins->expeditions_intercepted);
+    Append(output, capacity, "Rot food: %d Rotten Meat, %d Rotten Grain.\n",
+           goblins->lair_stock[CC_GOOD_ROTTEN_MEAT], goblins->lair_stock[CC_GOOD_ROTTEN_GRAIN]);
     if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ||
         goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND) {
         const CcSettlement *target = CcSimSettlement(
@@ -1225,16 +1241,16 @@ static void DescribeGoblins(const CcMetagame *metagame,
     } else {
         Append(output, capacity, "No expedition is active.\n");
     }
-    if (goblins->dragon_seed_phase != CC_GOBLIN_DRAGON_SEED_NONE) {
+    if (sim->dragon_cult.dragon_seed_phase != CC_GOBLIN_DRAGON_SEED_NONE) {
         Append(output, capacity,
                "The ash-vault project is %s, with about %d years left before it can reveal a dragon seed.\n",
-               goblins->dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_RUMORED ?
+               sim->dragon_cult.dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_RUMORED ?
                    "an open rumor" : "under public preparation",
-               (goblins->dragon_seed_days_remaining + 364) / 365);
+               (sim->dragon_cult.dragon_seed_days_remaining + 364) / 365);
     }
     if (sim->player.location_id == goblins->lair_settlement_id) {
         Append(output, capacity,
-               "Here you may use 'goblins trade food|tools|weapons COUNT'.\n");
+               "Here you may use 'goblins trade food|rotten-meat|rotten-wheat|tools|weapons COUNT'.\n");
     }
     if (sim->player.location_id == goblins->tribute_target_id &&
         (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ||
@@ -1609,7 +1625,7 @@ static void DescribeHelp(char *output, size_t capacity)
 {
     Append(output, capacity,
            "See the world:\n"
-           "  look, people, talk NUMBER, rumors, charters, roads\n"
+           "  look, people, talk NUMBER, rumors, charters, roads, council\n"
            "  causes, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, goblins, archives, status, history [COUNT]\n"
            "  relics — named artifacts of world-historical deeds\n"
            "  mark — compare this campaign against a no-action control of the same seed\n"
@@ -1623,16 +1639,17 @@ static void DescribeHelp(char *output, size_t capacity)
            "  archive-map NUMBER, retrieve-map NUMBER (in Gloamgate)\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
            "Act on the road and world:\n"
-           "  road break|press-on|camp|lodge\n"
+           "  road break|press-on|camp|lodge|clear|pass|load GOOD|unload GOOD\n"
            "  road fight|bargain|supper|turn-back, repair NUMBER tools|cash\n"
            "  stable breed MARE STALLION, stable team SLOT HORSE\n"
+           "  mine visit|look|move DIRECTION|use|pack GOOD|unpack GOOD\n"
            "  underroad enter|look|move NUMBER|search|open\n"
            "  underroad parley|evade|force|retreat\n"
            "  dungeon public|smuggler|close (after reaching the threshold), wait DAYS\n"
            "  dragon steal COUNT, dragon return COUNT (at the cave)\n"
            "  dragon steal-treasure NUMBER, dragon return-treasure\n"
            "  dragon intercept (when tribute approaches the cave)\n"
-           "  goblins trade food|tools|weapons COUNT (at their lair)\n"
+           "  goblins trade food|rotten-meat|rotten-wheat|tools|weapons COUNT (at their lair)\n"
            "  goblins warn|intercept (at the threatened settlement)\n"
            "Keep the test:\n"
            "  save PATH, load PATH, debrief, quit\n");
@@ -1676,6 +1693,14 @@ static bool FinishTravel(CcMetagame *metagame,
     CcSim *sim = &metagame->sim;
     while (sim->journey.active &&
            sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+        if (sim->mine.phase != CC_MINE_NONE) {
+            Append(output,capacity,"The company is exploring the mine. Use 'mine look'.\n");
+            return true;
+        }
+        if (CcMineBranchSubtick(sim) >= 0 && sim->journey.elapsed_subticks == CcMineBranchSubtick(sim)) {
+            Append(output,capacity,"Low Silver Pit branches from this road. Choose 'mine visit' or 'road pass'.\n");
+            return true;
+        }
         if (!AdvanceRuntimeTicks(metagame, CC_WORLD_TICKS_PER_SECOND,
                                  output, capacity)) return false;
     }
@@ -1965,7 +1990,7 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             action.kind = CC_COMMAND_GOBLIN_INTERCEPT;
         } else {
             Append(output, output_capacity,
-                   "Use 'goblins trade food|tools|weapons COUNT', 'goblins warn', or 'goblins intercept'.\n");
+                   "Use 'goblins trade food|rotten-meat|rotten-wheat|tools|weapons COUNT', 'goblins warn', or 'goblins intercept'.\n");
             return false;
         }
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
@@ -2248,7 +2273,78 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         };
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         if (!FinishTravel(metagame, output, output_capacity)) return false;
+    } else if (strcmp(command, "council") == 0) {
+        CcRoadCouncil council = CcSimRoadCouncil(&metagame->sim, metagame->sim.player.location_id);
+        Append(output, output_capacity, "Road meeting: current needs and public commissions.\n");
+        for (int i = 0; i < CC_ROAD_COUNCIL_ROWS; ++i) {
+            const CcRoadCouncilRow *row = &council.rows[i];
+            Append(output, output_capacity, "%s: %s\n", row->name, row->detail);
+            if (row->situation_id != 0U) {
+                const CcSituation *quest = CcSimSituation(&metagame->sim, row->situation_id);
+                if (quest != NULL) Append(output, output_capacity, "  Public work: %s; reward %d; deadline day %d. See charters.\n",
+                    CcSituationKindName(quest->kind), (int)quest->reward, quest->deadline_day);
+            }
+        }
+        Append(output, output_capacity, "Choices: grain fund; bakery support; repair NUMBER tools|cash; charters; wait DAYS.\n");
+        return true;
+    } else if (strcmp(command, "grain") == 0) {
+        CcId town = metagame->sim.player.location_id;
+        if (first != NULL && (strcmp(first, "fund") == 0 || strcmp(first, "end") == 0)) {
+            CcCommand action = {.kind = CC_COMMAND_FUND_GRAIN_SUPPLY, .target_id = town,
+                .amount = strcmp(first, "end") == 0 ? -1 : 0};
+            if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
+        }
+        const CcGrainSupply *supply = CcSimGrainSupply(&metagame->sim, town);
+        CcGrainDeliveryPlan plan = CcSimGrainDeliveryPlan(&metagame->sim, town);
+        const CcCharacter *organiser = CcSimCharacter(&metagame->sim, supply->organiser_id);
+        Append(output, output_capacity, "%s: %s\n", organiser != NULL ? organiser->name : "Grain organiser", plan.reason);
+        Append(output, output_capacity, "Fund: %lld. Spent: %lld. Wheat ordered: %d. Arrived: %d. Lost: %d. Elsewhere: %d.\n",
+            (long long)supply->purse, (long long)supply->spent, supply->ordered, supply->delivered, supply->lost, supply->redirected);
+        Append(output, output_capacity, "Use grain fund to give 200 crowns, or grain end to return the unspent fund.\n");
+        return true;
+    } else if (strcmp(command, "bakery") == 0) {
+        CcBakerySupportPlan plan = CcSimBakerySupportPlan(&metagame->sim, metagame->sim.player.location_id);
+        const CcCharacter *contact = CcSimCharacter(&metagame->sim, plan.contact_id);
+        if (first != NULL && strcmp(first, "support") == 0) {
+            CcCommand support = {.kind = CC_COMMAND_SUPPORT_BAKERY,
+                .target_id = metagame->sim.player.location_id, .amount = plan.building_days};
+            return ApplyCommand(metagame, &support, output, output_capacity);
+        }
+        Append(output, output_capacity, "Bakery contact: %s. %s\n", contact != NULL ? contact->name : "Awaiting a local contact", plan.reason);
+        Append(output, output_capacity, "Wages: %lld crowns. Building: %d days.\n", (long long)plan.coins, plan.building_days);
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            if (plan.cargo[good] > 0) Append(output, output_capacity, "Carriage: %d %s\n", plan.cargo[good], CcGoodName((CcGood)good));
+            if (plan.town_materials[good] > 0) Append(output, output_capacity, "Town stock required: %d %s\n", plan.town_materials[good], CcGoodName((CcGood)good));
+        }
+        if (plan.remembered) Append(output, output_capacity, "%s remembers your earlier bakery support.\n", contact->name);
+        Append(output, output_capacity, "Use bakery support to give the listed cargo and wages.\n");
+        return true;
     } else if (strcmp(command, "road") == 0) {
+        if (first != NULL && (strcmp(first, "load") == 0 || strcmp(first, "unload") == 0)) {
+            CcGood good;
+            if (!ParseGood(second, &good)) {
+                Append(output, output_capacity, "Choose a good to load or unload.\n");
+                return false;
+            }
+            const CcRoadSite *site = CcSimJourneyRoadSiteStop(&metagame->sim);
+            CcCommand transfer = {.kind = CC_COMMAND_TRANSFER_ROAD_SITE,
+                .target_id = site != NULL ? site->id : 0, .good = good,
+                .amount = strcmp(first, "unload") == 0 ? 1 : -1};
+            return ApplyCommand(metagame, &transfer, output, output_capacity);
+        }
+        if (first != NULL && (strcmp(first, "clear") == 0 || strcmp(first, "repair") == 0)) {
+            const CcRoadSite *site = CcSimJourneyRoadSiteStop(&metagame->sim);
+            CcCommand clear = {.kind = strcmp(first, "repair") == 0 ?
+                CC_COMMAND_REPAIR_ROAD_SITE : CC_COMMAND_CLEAR_ROAD_SITE,
+                .target_id = site != NULL ? site->id : 0};
+            return ApplyCommand(metagame, &clear, output, output_capacity);
+        }
+        if (first != NULL && strcmp(first,"pass") == 0) {
+            const CcRoadSite *site=CcSimJourneyRoadSiteStop(&metagame->sim);
+            CcCommand pass={.kind=CC_COMMAND_PASS_ROAD_SITE,.target_id=site != NULL ? site->id : 0};
+            if(!ApplyCommand(metagame,&pass,output,output_capacity)) return false;
+            return FinishTravel(metagame,output,output_capacity);
+        }
         if (metagame->sim.journey.active &&
             metagame->sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
             first != NULL && strcmp(first, "continue") == 0) {
@@ -2354,6 +2450,29 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         Append(output, output_capacity,
                "The treaty bridge reopens. Other shipments can now follow.\n");
+    } else if (strcmp(command, "mine") == 0) {
+        CcCommand action={.target_id=(CcId)metagame->sim.mine.revision};
+        if(first != NULL && strcmp(first,"visit")==0) {
+            const CcRoadSite *site=CcMineSite(&metagame->sim);
+            action.kind=CC_COMMAND_VISIT_MINE; action.target_id=site != NULL ? site->id : 0;
+        } else if(first != NULL && strcmp(first,"use")==0) action.kind=CC_COMMAND_MINE_USE;
+        else if(first != NULL && strcmp(first,"pack")==0 && ParseGood(second,&action.good)) {
+            action.kind=CC_COMMAND_MINE_PACK;action.amount=1;
+        } else if(first != NULL && strcmp(first,"unpack")==0 && ParseGood(second,&action.good)) {
+            action.kind=CC_COMMAND_MINE_PACK;action.amount=-1;
+        } else if(first != NULL && strcmp(first,"move")==0 && second != NULL) {
+            const char *const directions[]={"north","east","south","west"};
+            for(int32_t i=0;i<4;++i) if(strcmp(second,directions[i])==0) {action.kind=CC_COMMAND_MINE_STEP;action.amount=i;}
+            if(action.kind==CC_COMMAND_NONE) {Append(output,output_capacity,"Choose north, east, south, or west.\n");return false;}
+        } else if(first != NULL && strcmp(first,"look")!=0) {
+            Append(output,output_capacity,"Use mine visit|look|move north/east/south/west|use|pack GOOD|unpack GOOD.\n");return false;
+        }
+        if(action.kind != CC_COMMAND_NONE && !ApplyCommand(metagame,&action,output,output_capacity)) return false;
+        const CcMineVisit *m=&metagame->sim.mine;
+        Append(output,output_capacity,"LOW SILVER PIT — %s (%d,%d). Pack %d/8. Light %d.\n%s\n",
+            m->phase==CC_MINE_NONE?"road":m->phase==CC_MINE_YARD?"mine yard":CcMineChamberName(CcMineChamber(m->x,m->y)),
+            m->x,m->y,CcMinePackUsed(&metagame->sim),m->light,
+            CcMineAction(&metagame->sim) != NULL ? CcMineAction(&metagame->sim) : "Walk to the next doorway.");
     } else if (strcmp(command, "underroad") == 0) {
         CcCommand action = {0};
         if (first == NULL || strcmp(first, "look") == 0) {
@@ -2549,12 +2668,12 @@ static void DescribeAgentActions(const CcMetagame *metagame,
     }
     Append(output, capacity,
            "Send exactly one command on the next line. Available command families:\n"
-           "  look, people, talk NUMBER, rumors, charters, roads, causes, notes, cargo, status\n"
+           "  look, people, talk NUMBER, rumors, charters, roads, council, causes, notes, cargo, status\n"
            "  tell NUMBER, keep NUMBER, accept NUMBER, refuse NUMBER, abandon\n"
            "  buy GOOD COUNT, sell GOOD COUNT, buy-map NUMBER, sell-map NUMBER\n"
            "  archive-map NUMBER, retrieve-map NUMBER\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
-           "  road break|press-on|camp|lodge\n"
+           "  road break|press-on|camp|lodge|clear|pass|load GOOD|unload GOOD\n"
            "  road fight|bargain|supper|turn-back, repair NUMBER tools|cash\n"
            "  underroad enter|look|move NUMBER|search|open|parley|evade|force|retreat\n"
            "  dungeon public|smuggler|close, wait DAYS\n"
@@ -2655,6 +2774,9 @@ static bool AgentCommandAllowed(const CcMetagame *metagame,
     char *second = strtok(NULL, " \t\r\n");
     if (command == NULL) return false;
     if (metagame->sim.journey.active) {
+        if (strcmp(command,"mine") == 0) return true;
+        if (strcmp(command,"road") == 0 && first != NULL && (strcmp(first,"pass") == 0 || strcmp(first,"clear") == 0 || strcmp(first,"load") == 0 || strcmp(first,"unload") == 0))
+            return CcSimJourneyRoadSiteStop(&metagame->sim) != NULL;
         return strcmp(command, "look") == 0 || strcmp(command, "roads") == 0 ||
             strcmp(command, "routes") == 0 || strcmp(command, "cargo") == 0 ||
             strcmp(command, "status") == 0 || strcmp(command, "debrief") == 0 ||
@@ -2872,7 +2994,7 @@ bool CcMetagameAgentCounterfactual(const CcMetagame *metagame,
            "Goblin cohesion %d/%d and covenant %d/%d. Dragon shadow %d/%d.\n",
            actual_resolved, control_resolved, actual_failed, control_failed,
            metagame->sim.goblins.cohesion, control->sim.goblins.cohesion,
-           metagame->sim.goblins.devotion, control->sim.goblins.devotion,
+           metagame->sim.dragon_cult.devotion, control->sim.dragon_cult.devotion,
            metagame->sim.dragon.regional_influence,
            control->sim.dragon.regional_influence);
     DescribeCounterfactualEvents(&metagame->sim, &control->sim,

@@ -11,15 +11,18 @@ import re
 import threading
 import time
 
-from speech_format import ROOT, cached_record, load_cast, validate_record
+from speech_format import (ROOT, cached_record, expected_cache_metadata,
+                           load_cast, package_version, validate_record)
 
 
 class SpeechJobs:
-    def __init__(self, cast, folder, engine_factory, limit=16, budget=256 * 1024 * 1024):
+    def __init__(self, cast, folder, engine_factory, metadata_factory=None,
+                 limit=16, budget=256 * 1024 * 1024):
         self.cast = cast
         self.folder = Path(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
         self.engine_factory = engine_factory
+        self.metadata_factory = metadata_factory or (lambda record: None)
         self.engine = None
         self.limit = limit
         self.budget = budget
@@ -34,7 +37,8 @@ class SpeechJobs:
         record = validate_record(raw, self.cast)
         key = record['key']
         with self.lock:
-            ready = cached_record(self.folder, record)
+            ready = cached_record(self.folder, record,
+                                  self.metadata_factory(record))
             if ready is not None:
                 ready.touch()
                 return key, 'ready'
@@ -73,7 +77,8 @@ class SpeechJobs:
                 if self.engine is None:
                     self.engine = self.engine_factory()
                 self.engine(record, self.folder / (key + '.wav'))
-                if cached_record(self.folder, record) is None:
+                if cached_record(self.folder, record,
+                                 self.metadata_factory(record)) is None:
                     raise ValueError('Generation completed with an invalid recording')
                 self.trim(key)
                 with self.lock:
@@ -202,7 +207,7 @@ def main():
     parser.add_argument('--references', type=Path, default=ROOT / 'assets/audio/cast')
     parser.add_argument('--cache', type=Path, default=Path.home() / '.cache/crownless/speech-v1')
     parser.add_argument('--device', choices=('cpu', 'mps', 'cuda'), default='cpu')
-    parser.add_argument('--engine', choices=('chatterbox', 'qwen'), default='chatterbox')
+    parser.add_argument('--engine', choices=('pocket',), default='pocket')
     parser.add_argument('--allow-download', action='store_true')
     parser.add_argument('--allow-origin', action='append', default=[])
     parser.add_argument('--queue-limit', type=int, default=16)
@@ -211,8 +216,11 @@ def main():
     if not 1 <= args.port <= 65535 or not 1 <= args.queue_limit <= 64 or not 2 <= args.cache_mb <= 4096:
         parser.error('Choose a valid port, queue limit, and cache budget')
     from speech_engine import SpeechEngine
-    jobs = SpeechJobs(load_cast(args.cast), args.cache,
+    cast = load_cast(args.cast)
+    engine_version = package_version('pocket-tts')
+    jobs = SpeechJobs(cast, args.cache,
         lambda: SpeechEngine(args.device, args.references, args.engine, args.allow_download),
+        lambda record: expected_cache_metadata(record, args.references, engine_version),
         args.queue_limit, args.cache_mb * 1024 * 1024)
     server = ThreadingHTTPServer(('127.0.0.1', args.port), make_handler(jobs, args.allow_origin))
     server.daemon_threads = True

@@ -1,0 +1,1342 @@
+letter probe — world seeds 9..9, 12 years, purpose "report", topic "all", scan all topics
+
+== world seed 2415085441 — year 2, day 366 ==
+   hunger mean 4.2 / max 25, abandoned settlements 0, closed routes 1, wars 1, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 158
+   writer: Mara Venn (official) at Thornford — 22 held accounts
+  --- purpose: report
+  ---- topic: dragon
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 366
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "dragon" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 22 held accounts relevant to "dragon"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: goblin
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 366
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.
+       cited: Thornford, event 648518346341352492 (GOBLIN RAID), held day 333, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Mara Venn
+  ( 6 of 22 held accounts relevant to "goblin"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: war
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 366
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "war" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 22 held accounts relevant to "war"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: throne
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 366
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "throne" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 22 held accounts relevant to "throne"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: wheat
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 366
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 1. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341351904 (SHORTAGE), held day 116, retellings 4, court bias +44, alarm 14
+  Recorded in truth as I hold it. — Mara Venn
+  ( 1 of 22 held accounts relevant to "wheat"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: herds
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 366
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "herds" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 22 held accounts relevant to "herds"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: ponies
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 366
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "ponies" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 22 held accounts relevant to "ponies"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: road
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 366
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "road" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 22 held accounts relevant to "road"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: bandit
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 366
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "bandit" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 22 held accounts relevant to "bandit"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: treasure
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 366
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "treasure" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 22 held accounts relevant to "treasure"; 0 cited in this letter )
+
+== world seed 2415085441 — year 3, day 731 ==
+   hunger mean 11.8 / max 48, abandoned settlements 0, closed routes 1, wars 1, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 302
+   writer: Jory Fen (traveller) at Silverwick — 28 held accounts
+  --- purpose: report
+  ---- topic: dragon
+  From: Jory Fen (traveller), at Silverwick
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 731
+  Jory Fen carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Varkesh the Unappeased burns Silverwick because 18 stolen crowns remain missing.
+       cited: Silverwick, event 648518346341353944 (DRAGON FIRE), held day 730, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Smoke falls into Silverwick's chimneys; old readers count 14 nights until Varkesh the Unappeased comes.
+       cited: Silverwick, event 648518346341353859 (DRAGON OMEN), held day 716, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Jory Fen
+  ( 2 of 28 held accounts relevant to "dragon"; 2 cited in this letter )
+
+  --- purpose: report
+  ---- topic: goblin
+  From: Jory Fen (traveller), at Silverwick
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 731
+  Jory Fen carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Silverwick, not for distant quantities)
+       cited: Thornford, event 648518346341353724 (GOBLIN RAID), held day 690, retellings 8, court bias +100, alarm 49
+  Recorded in truth as I hold it. — Jory Fen
+  ( 5 of 28 held accounts relevant to "goblin"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: war
+  From: Jory Fen (traveller), at Silverwick
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 731
+  Jory Fen carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "war" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Jory Fen
+  ( 0 of 28 held accounts relevant to "war"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: throne
+  From: Jory Fen (traveller), at Silverwick
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 731
+  Jory Fen carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "throne" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Jory Fen
+  ( 0 of 28 held accounts relevant to "throne"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: wheat
+  From: Jory Fen (traveller), at Silverwick
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 731
+  Jory Fen carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 2. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Silverwick, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341353796 (SHORTAGE), held day 707, retellings 5, court bias +64, alarm 22
+    2. Silverwick has 0 weeks of food; hunger reaches pressure level 1.
+       cited: Silverwick, event 648518346341353728 (SHORTAGE), held day 686, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Jory Fen
+  ( 5 of 28 held accounts relevant to "wheat"; 2 cited in this letter )
+
+  --- purpose: report
+  ---- topic: herds
+  From: Jory Fen (traveller), at Silverwick
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 731
+  Jory Fen carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "herds" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Jory Fen
+  ( 0 of 28 held accounts relevant to "herds"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: ponies
+  From: Jory Fen (traveller), at Silverwick
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 731
+  Jory Fen carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "ponies" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Jory Fen
+  ( 0 of 28 held accounts relevant to "ponies"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: road
+  From: Jory Fen (traveller), at Silverwick
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 731
+  Jory Fen carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "road" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Jory Fen
+  ( 0 of 28 held accounts relevant to "road"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: bandit
+  From: Jory Fen (traveller), at Silverwick
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 731
+  Jory Fen carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "bandit" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Jory Fen
+  ( 0 of 28 held accounts relevant to "bandit"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: treasure
+  From: Jory Fen (traveller), at Silverwick
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 731
+  Jory Fen carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "treasure" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Jory Fen
+  ( 0 of 28 held accounts relevant to "treasure"; 0 cited in this letter )
+
+== world seed 2415085441 — year 4, day 1096 ==
+   hunger mean 13.2 / max 48, abandoned settlements 0, closed routes 1, wars 1, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 422
+   writer: Mara Venn (official) at Thornford — 25 held accounts
+  --- purpose: report
+  ---- topic: dragon
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1096
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "dragon" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 25 held accounts relevant to "dragon"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: goblin
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1096
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Cinder Tithe raids Thornford: 20 Wheat, 15 crowns.
+       cited: Thornford, event 648518346341354985 (GOBLIN RAID), held day 1072, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Mara Venn
+  ( 6 of 25 held accounts relevant to "goblin"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: war
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1096
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "war" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 25 held accounts relevant to "war"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: throne
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1096
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "throne" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 25 held accounts relevant to "throne"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: wheat
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1096
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Silverwick has 0 weeks of food; hunger reaches pressure level 1. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Silverwick, event 648518346341354400 (SHORTAGE), held day 901, retellings 7, court bias +68, alarm 45
+  Recorded in truth as I hold it. — Mara Venn
+  ( 1 of 25 held accounts relevant to "wheat"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: herds
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1096
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "herds" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 25 held accounts relevant to "herds"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: ponies
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1096
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "ponies" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 25 held accounts relevant to "ponies"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: road
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1096
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "road" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 25 held accounts relevant to "road"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: bandit
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1096
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "bandit" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 25 held accounts relevant to "bandit"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: treasure
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1096
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "treasure" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 25 held accounts relevant to "treasure"; 0 cited in this letter )
+
+== world seed 2415085441 — year 5, day 1461 ==
+   hunger mean 28.2 / max 87, abandoned settlements 0, closed routes 0, wars 1, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 557
+   writer: Mara Venn (official) at Thornford — 17 held accounts
+  --- purpose: report
+  ---- topic: dragon
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1461
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "dragon" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 17 held accounts relevant to "dragon"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: goblin
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1461
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Cinder Tithe raids Thornford: 20 Wheat, 15 crowns.
+       cited: Thornford, event 648518346341356263 (GOBLIN RAID), held day 1439, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Mara Venn
+  ( 3 of 17 held accounts relevant to "goblin"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: war
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1461
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "war" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 17 held accounts relevant to "war"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: throne
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1461
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "throne" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 17 held accounts relevant to "throne"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: wheat
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1461
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Gloamgate has 0 weeks of food; hunger reaches pressure level 2.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Gloamgate, event 648518346341356113 (SHORTAGE), held day 1379, retellings 3, court bias +12, alarm 12
+    2. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 2. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341355855 (SHORTAGE), held day 1307, retellings 4, court bias +44, alarm 14
+  Recorded in truth as I hold it. — Mara Venn
+  ( 3 of 17 held accounts relevant to "wheat"; 2 cited in this letter )
+
+  --- purpose: report
+  ---- topic: herds
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1461
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "herds" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 17 held accounts relevant to "herds"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: ponies
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1461
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "ponies" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 17 held accounts relevant to "ponies"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: road
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1461
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "road" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 17 held accounts relevant to "road"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: bandit
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1461
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "bandit" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 17 held accounts relevant to "bandit"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: treasure
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1461
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "treasure" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 17 held accounts relevant to "treasure"; 0 cited in this letter )
+
+== world seed 2415085441 — year 6, day 1826 ==
+   hunger mean 10.8 / max 27, abandoned settlements 0, closed routes 0, wars 0, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 653
+   writer: Mara Venn (official) at Thornford — 29 held accounts
+  --- purpose: report
+  ---- topic: dragon
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1826
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "dragon" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 29 held accounts relevant to "dragon"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: goblin
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1826
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Cinder Tithe raids Gloamgate: 16 Bread, 15 crowns. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Gloamgate, event 648518346341357267 (GOBLIN RAID), held day 1789, retellings 3, court bias +32, alarm 32
+  Recorded in truth as I hold it. — Mara Venn
+  ( 4 of 29 held accounts relevant to "goblin"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: war
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1826
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "war" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 29 held accounts relevant to "war"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: throne
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1826
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Ember Crown moves 28 crowns into Gloamgate's market to buy real grain shipments. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Gloamgate, event 648518346341357285 (DECREE), held day 1793, retellings 3, court bias +32, alarm 14
+    2. Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341356953 (DECREE), held day 1692, retellings 7, court bias +88, alarm 26
+  Recorded in truth as I hold it. — Mara Venn
+  ( 8 of 29 held accounts relevant to "throne"; 2 cited in this letter )
+
+  --- purpose: report
+  ---- topic: wheat
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1826
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Gloamgate has 0 weeks of food; hunger reaches pressure level 3.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Gloamgate, event 648518346341357143 (SHORTAGE), held day 1722, retellings 3, court bias +12, alarm 12
+    2. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 3. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341356961 (SHORTAGE), held day 1692, retellings 7, court bias +88, alarm 29
+  Recorded in truth as I hold it. — Mara Venn
+  ( 4 of 29 held accounts relevant to "wheat"; 2 cited in this letter )
+
+  --- purpose: report
+  ---- topic: herds
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1826
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "herds" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 29 held accounts relevant to "herds"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: ponies
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1826
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "ponies" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 29 held accounts relevant to "ponies"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: road
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1826
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "road" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 29 held accounts relevant to "road"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: bandit
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1826
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "bandit" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 29 held accounts relevant to "bandit"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: treasure
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1826
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "treasure" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Mara Venn
+  ( 0 of 29 held accounts relevant to "treasure"; 0 cited in this letter )
+
+== world seed 2415085441 — year 7, day 2191 ==
+   hunger mean 37.3 / max 100, abandoned settlements 0, closed routes 0, wars 2, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 788
+   writer: Ilyra Senn (refugee) at Gloamgate — 21 held accounts
+  --- purpose: report
+  ---- topic: dragon
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2191
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "dragon" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 0 of 21 held accounts relevant to "dragon"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: goblin
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2191
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Cinder Tithe raids Gloamgate: 16 Bread, 15 crowns.
+       cited: Gloamgate, event 648518346341358210 (GOBLIN RAID), held day 2097, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 4 of 21 held accounts relevant to "goblin"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: war
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2191
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "war" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 0 of 21 held accounts relevant to "war"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: throne
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2191
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Hunger, debt, and sanctions open a night road between Hollowbarrow and Gloamgate.
+       cited: Gloamgate, event 648518346341358352 (DECREE), held day 2157, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Ember Crown moves 28 crowns into Silverwick's market to buy real grain shipments. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Silverwick, event 648518346341358160 (DECREE), held day 2076, retellings 4, court bias +44, alarm 33
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 5 of 21 held accounts relevant to "throne"; 2 cited in this letter )
+
+  --- purpose: report
+  ---- topic: wheat
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2191
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Gloamgate has 0 weeks of food; hunger reaches pressure level 3.
+       cited: Gloamgate, event 648518346341358322 (SHORTAGE), held day 2142, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Silverwick has 0 weeks of food; hunger reaches pressure level 3. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Silverwick, event 648518346341357889 (SHORTAGE), held day 2027, retellings 4, court bias +44, alarm 33
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 3 of 21 held accounts relevant to "wheat"; 2 cited in this letter )
+
+  --- purpose: report
+  ---- topic: herds
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2191
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "herds" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 0 of 21 held accounts relevant to "herds"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: ponies
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2191
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "ponies" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 0 of 21 held accounts relevant to "ponies"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: road
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2191
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "road" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 0 of 21 held accounts relevant to "road"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: bandit
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2191
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Tallow Knives recruits from hungry debtors and unpaid households; road control reaches 70%.
+       cited: Gloamgate, event 648518346341358378 (BANDITS), held day 2171, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 1 of 21 held accounts relevant to "bandit"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: treasure
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2191
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "treasure" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 0 of 21 held accounts relevant to "treasure"; 0 cited in this letter )
+
+== world seed 2415085441 — year 8, day 2556 ==
+   hunger mean 31.0 / max 76, abandoned settlements 0, closed routes 2, wars 1, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 910
+   writer: Wren Wick (official) at Hollowbarrow — 26 held accounts
+  --- purpose: report
+  ---- topic: dragon
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2556
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "dragon" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 26 held accounts relevant to "dragon"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: goblin
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2556
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Cinder Tithe raids Gloamgate: 16 Bread, 16 crowns. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Hollowbarrow, not for distant quantities)
+       cited: Gloamgate, event 648518346341359151 (GOBLIN RAID), held day 2468, retellings 7, court bias +88, alarm 46
+  Recorded in truth as I hold it. — Wren Wick
+  ( 2 of 26 held accounts relevant to "goblin"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: war
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2556
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Star Oath's courier reaches Ember Crown: peace now binds the three courts. Loyal voices credit the crown. They fear worse is coming.
+       cited: Alderwatch, event 648518346341359191 (PEACE), held day 2489, retellings 6, court bias +56, alarm 43
+  Recorded in truth as I hold it. — Wren Wick
+  ( 1 of 26 held accounts relevant to "war"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: throne
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2556
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Star Oath moves 28 crowns into Silverwick's market to buy real grain shipments. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Hollowbarrow, not for distant quantities)
+       cited: Silverwick, event 648518346341359373 (DECREE), held day 2528, retellings 3, court bias +32, alarm 31
+  Recorded in truth as I hold it. — Wren Wick
+  ( 2 of 26 held accounts relevant to "throne"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: wheat
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2556
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 1.
+       cited: Hollowbarrow, event 648518346341359391 (SHORTAGE), held day 2527, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Wren Wick
+  ( 1 of 26 held accounts relevant to "wheat"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: herds
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2556
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "herds" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 26 held accounts relevant to "herds"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: ponies
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2556
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "ponies" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 26 held accounts relevant to "ponies"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: road
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2556
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "road" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 26 held accounts relevant to "road"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: bandit
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2556
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Tallow Knives raids Hollowbarrow and takes 24 Wood.
+       cited: Hollowbarrow, event 648518346341359476 (RAID), held day 2555, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Wren Wick
+  ( 7 of 26 held accounts relevant to "bandit"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: treasure
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2556
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "treasure" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 26 held accounts relevant to "treasure"; 0 cited in this letter )
+
+== world seed 2415085441 — year 9, day 2921 ==
+   hunger mean 30.8 / max 100, abandoned settlements 0, closed routes 2, wars 0, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 957
+   writer: Wren Wick (official) at Hollowbarrow — 22 held accounts
+  --- purpose: report
+  ---- topic: dragon
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2921
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "dragon" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 22 held accounts relevant to "dragon"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: goblin
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2921
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "goblin" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 22 held accounts relevant to "goblin"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: war
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2921
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "war" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 22 held accounts relevant to "war"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: throne
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2921
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+       cited: Hollowbarrow, event 648518346341360588 (DECREE), held day 2912, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Wren Wick
+  ( 2 of 22 held accounts relevant to "throne"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: wheat
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2921
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 2.
+       cited: Hollowbarrow, event 648518346341360550 (SHORTAGE), held day 2898, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Wren Wick
+  ( 2 of 22 held accounts relevant to "wheat"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: herds
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2921
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "herds" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 22 held accounts relevant to "herds"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: ponies
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2921
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "ponies" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 22 held accounts relevant to "ponies"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: road
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2921
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "road" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 22 held accounts relevant to "road"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: bandit
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2921
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Tallow Knives raids Hollowbarrow and takes 28 Wood.
+       cited: Hollowbarrow, event 648518346341360610 (RAID), held day 2919, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Wren Wick
+  ( 8 of 22 held accounts relevant to "bandit"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: treasure
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2921
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "treasure" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 22 held accounts relevant to "treasure"; 0 cited in this letter )
+
+== world seed 2415085441 — year 10, day 3286 ==
+   hunger mean 25.8 / max 100, abandoned settlements 0, closed routes 2, wars 0, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 975
+   writer: Wren Wick (official) at Hollowbarrow — 30 held accounts
+  --- purpose: report
+  ---- topic: dragon
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 3286
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "dragon" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 30 held accounts relevant to "dragon"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: goblin
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 3286
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "goblin" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 30 held accounts relevant to "goblin"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: war
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 3286
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "war" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 30 held accounts relevant to "war"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: throne
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 3286
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+       cited: Hollowbarrow, event 648518346341361671 (DECREE), held day 3276, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Wren Wick
+  ( 3 of 30 held accounts relevant to "throne"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: wheat
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 3286
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 2.
+       cited: Hollowbarrow, event 648518346341361628 (SHORTAGE), held day 3269, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Wren Wick
+  ( 3 of 30 held accounts relevant to "wheat"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: herds
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 3286
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "herds" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 30 held accounts relevant to "herds"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: ponies
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 3286
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "ponies" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 30 held accounts relevant to "ponies"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: road
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 3286
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "road" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 30 held accounts relevant to "road"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: bandit
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 3286
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Tallow Knives raids Hollowbarrow and takes 28 Wood.
+       cited: Hollowbarrow, event 648518346341361692 (RAID), held day 3283, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Wren Wick
+  ( 7 of 30 held accounts relevant to "bandit"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: treasure
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 3286
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "treasure" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 30 held accounts relevant to "treasure"; 0 cited in this letter )
+
+== world seed 2415085441 — year 11, day 3651 ==
+   hunger mean 38.8 / max 100, abandoned settlements 0, closed routes 2, wars 0, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 1002
+   writer: Ilyra Senn (official) at Gloamgate — 22 held accounts
+  --- purpose: report
+  ---- topic: dragon
+  From: Ilyra Senn (official), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Ilyra Senn's registered scribe seal  ·  Composed day 3651
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "dragon" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 0 of 22 held accounts relevant to "dragon"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: goblin
+  From: Ilyra Senn (official), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Ilyra Senn's registered scribe seal  ·  Composed day 3651
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "goblin" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 0 of 22 held accounts relevant to "goblin"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: war
+  From: Ilyra Senn (official), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Ilyra Senn's registered scribe seal  ·  Composed day 3651
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "war" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 0 of 22 held accounts relevant to "war"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: throne
+  From: Ilyra Senn (official), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Ilyra Senn's registered scribe seal  ·  Composed day 3651
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Ember Crown repudiates 562 crowns of monastery debt; a royal service closes and the commons rally.
+       cited: Gloamgate, event 648518346341362715 (DECREE), held day 3640, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341362286 (DECREE), held day 3500, retellings 7, court bias +68, alarm 45
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 2 of 22 held accounts relevant to "throne"; 2 cited in this letter )
+
+  --- purpose: report
+  ---- topic: wheat
+  From: Ilyra Senn (official), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Ilyra Senn's registered scribe seal  ·  Composed day 3651
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 2. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341362591 (SHORTAGE), held day 3605, retellings 6, court bias +56, alarm 27
+    2. Silverwick has 0 weeks of food; hunger reaches pressure level 3. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Silverwick, event 648518346341362278 (SHORTAGE), held day 3500, retellings 4, court bias +44, alarm 33
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 3 of 22 held accounts relevant to "wheat"; 2 cited in this letter )
+
+  --- purpose: report
+  ---- topic: herds
+  From: Ilyra Senn (official), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Ilyra Senn's registered scribe seal  ·  Composed day 3651
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "herds" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 0 of 22 held accounts relevant to "herds"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: ponies
+  From: Ilyra Senn (official), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Ilyra Senn's registered scribe seal  ·  Composed day 3651
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "ponies" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 0 of 22 held accounts relevant to "ponies"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: road
+  From: Ilyra Senn (official), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Ilyra Senn's registered scribe seal  ·  Composed day 3651
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "road" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 0 of 22 held accounts relevant to "road"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: bandit
+  From: Ilyra Senn (official), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Ilyra Senn's registered scribe seal  ·  Composed day 3651
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Tallow Knives raids Silverwick and takes 28 Stone. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Silverwick, event 648518346341362571 (RAID), held day 3592, retellings 5, court bias +44, alarm 44
+    2. The Tallow Knives follows the richest night road and takes its tolls with it.
+       cited: Gloamgate, event 648518346341362280 (BANDITS), held day 3501, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 6 of 22 held accounts relevant to "bandit"; 2 cited in this letter )
+
+  --- purpose: report
+  ---- topic: treasure
+  From: Ilyra Senn (official), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Ilyra Senn's registered scribe seal  ·  Composed day 3651
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "treasure" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 0 of 22 held accounts relevant to "treasure"; 0 cited in this letter )
+
+== world seed 2415085441 — year 12, day 4016 ==
+   hunger mean 40.8 / max 100, abandoned settlements 0, closed routes 4, wars 2, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 1017
+   writer: Wren Wick (official) at Hollowbarrow — 16 held accounts
+  --- purpose: report
+  ---- topic: dragon
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 4016
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "dragon" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 16 held accounts relevant to "dragon"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: goblin
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 4016
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "goblin" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 16 held accounts relevant to "goblin"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: war
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 4016
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "war" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 16 held accounts relevant to "war"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: throne
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 4016
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+       cited: Hollowbarrow, event 648518346341363721 (DECREE), held day 4004, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Wren Wick
+  ( 4 of 16 held accounts relevant to "throne"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: wheat
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 4016
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 2.
+       cited: Hollowbarrow, event 648518346341363441 (SHORTAGE), held day 4011, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Wren Wick
+  ( 2 of 16 held accounts relevant to "wheat"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: herds
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 4016
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "herds" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 16 held accounts relevant to "herds"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: ponies
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 4016
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "ponies" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 16 held accounts relevant to "ponies"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: road
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 4016
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "road" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 16 held accounts relevant to "road"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: bandit
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 4016
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Tallow Knives raids Hollowbarrow and takes 28 Wood.
+       cited: Hollowbarrow, event 648518346341363440 (RAID), held day 4011, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Wren Wick
+  ( 3 of 16 held accounts relevant to "bandit"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: treasure
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 4016
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "treasure" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Wren Wick
+  ( 0 of 16 held accounts relevant to "treasure"; 0 cited in this letter )
+
+== world seed 2415085441 — year 13, day 4381 ==
+   hunger mean 24.5 / max 100, abandoned settlements 0, closed routes 2, wars 0, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 1042
+   writer: Tamsin Kest (laborer) at Rosespire — 24 held accounts
+  --- purpose: report
+  ---- topic: dragon
+  From: Tamsin Kest (laborer), at Rosespire
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Tamsin Kest's registered scribe seal  ·  Composed day 4381
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "dragon" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Tamsin Kest
+  ( 0 of 24 held accounts relevant to "dragon"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: goblin
+  From: Tamsin Kest (laborer), at Rosespire
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Tamsin Kest's registered scribe seal  ·  Composed day 4381
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "goblin" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Tamsin Kest
+  ( 0 of 24 held accounts relevant to "goblin"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: war
+  From: Tamsin Kest (laborer), at Rosespire
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Tamsin Kest's registered scribe seal  ·  Composed day 4381
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "war" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Tamsin Kest
+  ( 0 of 24 held accounts relevant to "war"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: throne
+  From: Tamsin Kest (laborer), at Rosespire
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Tamsin Kest's registered scribe seal  ·  Composed day 4381
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Rosespire, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341364681 (DECREE), held day 4368, retellings 3, court bias +32, alarm 12
+    2. Star Oath moves 28 crowns into Silverwick's market to buy real grain shipments. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Rosespire, not for distant quantities)
+       cited: Silverwick, event 648518346341364344 (DECREE), held day 4228, retellings 3, court bias +32, alarm 31
+  Recorded in truth as I hold it. — Tamsin Kest
+  ( 6 of 24 held accounts relevant to "throne"; 2 cited in this letter )
+
+  --- purpose: report
+  ---- topic: wheat
+  From: Tamsin Kest (laborer), at Rosespire
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Tamsin Kest's registered scribe seal  ·  Composed day 4381
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 3. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Rosespire, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341364521 (SHORTAGE), held day 4305, retellings 3, court bias +32, alarm 12
+  Recorded in truth as I hold it. — Tamsin Kest
+  ( 2 of 24 held accounts relevant to "wheat"; 1 cited in this letter )
+
+  --- purpose: report
+  ---- topic: herds
+  From: Tamsin Kest (laborer), at Rosespire
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Tamsin Kest's registered scribe seal  ·  Composed day 4381
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "herds" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Tamsin Kest
+  ( 0 of 24 held accounts relevant to "herds"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: ponies
+  From: Tamsin Kest (laborer), at Rosespire
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Tamsin Kest's registered scribe seal  ·  Composed day 4381
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "ponies" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Tamsin Kest
+  ( 0 of 24 held accounts relevant to "ponies"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: road
+  From: Tamsin Kest (laborer), at Rosespire
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Tamsin Kest's registered scribe seal  ·  Composed day 4381
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "road" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Tamsin Kest
+  ( 0 of 24 held accounts relevant to "road"; 0 cited in this letter )
+
+  --- purpose: report
+  ---- topic: bandit
+  From: Tamsin Kest (laborer), at Rosespire
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Tamsin Kest's registered scribe seal  ·  Composed day 4381
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Tallow Knives raids Hollowbarrow and takes 28 Wood. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Rosespire, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341364697 (RAID), held day 4375, retellings 3, court bias +32, alarm 12
+    2. The Tallow Knives follows the richest night road and takes its tolls with it. Loyal voices credit the crown.
+       cited: Hollowbarrow, event 648518346341364337 (BANDITS), held day 4228, retellings 3, court bias +32, alarm 12
+  Recorded in truth as I hold it. — Tamsin Kest
+  ( 7 of 24 held accounts relevant to "bandit"; 2 cited in this letter )
+
+  --- purpose: report
+  ---- topic: treasure
+  From: Tamsin Kest (laborer), at Rosespire
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Tamsin Kest's registered scribe seal  ·  Composed day 4381
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    <no held account touches "treasure" — the researcher finds nothing on this subject here>
+  Recorded in truth as I hold it. — Tamsin Kest
+  ( 0 of 24 held accounts relevant to "treasure"; 0 cited in this letter )
+
+

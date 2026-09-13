@@ -2,6 +2,7 @@
 #include "multiplayer/cc_coop_commands.h"
 #include "test_support.h"
 #include "persistence/cc_save.h"
+#include "sim/cc_archive_recruitment.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -10,7 +11,7 @@ static void CheckCommandRoundTrips(void)
     CcSim *direct = CcCoopCreate(42U);
     CcSim *shared = CcCoopCreate(42U);
     CC_CHECK(direct != NULL && shared != NULL);
-    for (int32_t kind = 1; kind <= (int32_t)CC_COMMAND_EXCHANGE_GOSSIP; ++kind) {
+    for (int32_t kind = 1; kind <= (int32_t)CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT; ++kind) {
         CcSimInit(direct, 42U);
         *shared = *direct;
         const char *name = CcCoopActionName((CcCommandKind)kind);
@@ -29,6 +30,24 @@ static void CheckCommandRoundTrips(void)
     }
     CcCoopDestroy(direct);
     CcCoopDestroy(shared);
+}
+
+static void CheckArchiveRecruitment(void)
+{
+    char error[256];
+    CcSim *sim = CcCoopCreate(42U);
+    CC_CHECK(sim != NULL);
+    CcArchiveRecruitmentPlan plan = CcSimArchiveRecruitmentPlan(sim);
+    CC_CHECK(plan.gate == CC_ARCHIVE_RECRUIT_READY);
+    sim->player.location_id = sim->carriage.location_id = plan.seat_id;
+    CC_CHECK(CcCoopApply(sim, "reserve_archive_recruitment", plan.person_id,
+        CC_GOOD_FOOD, 0, error, sizeof(error)));
+    CC_CHECK(sim->archive_recruitment.person_id == plan.person_id);
+    CC_CHECK(sim->archive_recruitment.purse == 50);
+    CC_CHECK(CcCoopApply(sim, "cancel_archive_recruitment", plan.person_id,
+        CC_GOOD_FOOD, 0, error, sizeof(error)));
+    CC_CHECK(sim->archive_recruitment.status == 0);
+    CcCoopDestroy(sim);
 }
 
 static void CheckPartyWipe(void)
@@ -176,6 +195,15 @@ static void CheckSharedDepartureAndRoadStop(void)
     CC_CHECK(CcCoopDecode(guest, bytes, length, error, sizeof(error)));
     CcCoopFree(bytes);
     CC_CHECK(CcSimHash(guest) == stopped && CcSimJourneyRoadSiteStop(guest) != NULL);
+    host->player.cargo[CC_GOOD_TOOLS] = 2;
+    host->player.cargo[CC_GOOD_WOOD] = 1;
+    CC_CHECK(CcCoopApply(host, "clear_road_site", site->id, 0, 0, error, sizeof(error)));
+    CC_CHECK(site->accessible);
+    CC_CHECK(CcCoopEncode(host, &bytes, &length, error, sizeof(error)));
+    CC_CHECK(CcCoopDecode(guest, bytes, length, error, sizeof(error)));
+    CcCoopFree(bytes);
+    CC_CHECK(CcSimHash(host) == CcSimHash(guest));
+    CC_CHECK(CcSimRoadSite(guest, site->id)->accessible);
     CC_CHECK(CcCoopApply(guest, "pass_road_site", site->id, 0, 0, error, sizeof(error)));
     int32_t before = host->carriage.progress_milli;
     CC_CHECK(CcCoopAdvance(host, 60, error, sizeof(error)));
@@ -293,9 +321,33 @@ static void CheckJourneyQuestRetirement(void)
     }
 }
 
+static void CheckTravelHoldClock(void)
+{
+    char error[256];
+    CcSim *normal = CcCoopCreate(117U), *fast = CcCoopCreate(117U);
+    CC_CHECK(normal != NULL && fast != NULL);
+    CC_CHECK(CcCoopApply(normal, "travel", normal->settlements[1].id, 0, 0, error, sizeof(error)));
+    normal->journey.ambush_pending = false;
+    normal->journey.encounter_triggered = true;
+    for (int scenario = 0; scenario < 3; ++scenario) {
+        int target = scenario == 0 ? 0 : scenario == 1 ? 250 : 910;
+        while (normal->journey.active && normal->carriage.progress_milli < target)
+            CC_CHECK(CcCoopAdvance(normal, 1, error, sizeof(error)));
+        CC_CHECK(normal->journey.active);
+        *fast = *normal;
+        CC_CHECK(CcCoopAdvanceTravel(fast, 1, 8, error, sizeof(error)));
+        CC_CHECK(CcCoopAdvance(normal, scenario == 1 ? 8 : 1, error, sizeof(error)));
+        CC_CHECK(CcSimHash(normal) == CcSimHash(fast));
+    }
+    CC_CHECK(!CcCoopAdvanceTravel(fast, 1, 9, error, sizeof(error)));
+    CcCoopDestroy(normal); CcCoopDestroy(fast);
+}
+
 int main(void)
 {
+    CheckTravelHoldClock();
     CheckCommandRoundTrips();
+    CheckArchiveRecruitment();
     CheckJourneyQuestRetirement();
     CheckPartyWipe();
     CheckSharedDepartureAndRoadStop();

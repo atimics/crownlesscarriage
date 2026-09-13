@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CC_CLIENT_SESSION_VERSION UINT32_C(7)
+#define CC_CLIENT_SESSION_VERSION UINT32_C(8)
 #define CC_CLIENT_SESSION_GUARD_COUNT 3
 #define CC_CLIENT_SESSION_RAIDER_COUNT 2
 #define CC_CLIENT_SESSION_SKILL_COUNT 3
@@ -17,7 +17,8 @@ typedef enum CcClientSessionScene {
     CC_CLIENT_SESSION_MARKET = 1,
     CC_CLIENT_SESSION_DUNGEON_SITE = 2,
     CC_CLIENT_SESSION_GOBLIN_SITE = 3,
-    CC_CLIENT_SESSION_DRAGON_SITE = 4
+    CC_CLIENT_SESSION_DRAGON_SITE = 4,
+    CC_CLIENT_SESSION_ROAD_TRAVEL = 5
 } CcClientSessionScene;
 
 typedef enum CcClientSessionCoordinateSpace {

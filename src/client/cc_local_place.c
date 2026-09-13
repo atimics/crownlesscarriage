@@ -40,7 +40,7 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
              -28.0f, 0.64f, 34.0f, 37.0f},
             {CC_LOCAL_TOWN_SCENE_HEART, "THRESHING GREEN",
              44.0f, 29.0f, 46.0f, 0.14f, 29.0f,
-             -20.0f, 0.64f, 26.0f, 26.0f},
+             -20.0f, 0.64f, 26.0f, 14.0f},
             {CC_LOCAL_TOWN_SCENE_LANDMARK, "HILL GRANARIES",
              78.0f, 19.0f, 78.0f, 0.16f, 19.0f,
              -16.0f, 0.64f, 22.0f, 13.0f},
@@ -51,8 +51,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
              58.0f, 50.0f, 60.5f, 0.12f, 50.0f,
              6.0f, 0.62f, 8.0f, 6.3f},
             {CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD, "CARTWRIGHT YARD",
-             42.4f, 55.2f, 39.5f, 0.12f, 52.0f,
-             -5.0f, 0.62f, 8.0f, 6.5f},
+             42.4f, 55.2f, 40.5f, 0.12f, 53.0f,
+             7.0f, 0.62f, 8.0f, 8.4f},
         },
         .keeper_seed = UINT32_C(0xedda1001),
         .terrain_salt = UINT32_C(0x16f11fe9),
@@ -136,14 +136,35 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .compound = "Mine company",
         .keeper_name = "Oren — Company clerk",
         .interior_service = "Ore, tools, and expedition stores",
-        .map_form = "Dense worker terraces climbing toward the pit",
+        .map_form = "Terrace roads above the haulage yard",
+        .lane_count = 10,
+        .lane = {
+            {"Quarry approach", 6.0f, 9, {{96,36}, {91,36}, {86,39},
+                {79,40}, {72,38}, {65,35}, {57,35}, {49,35}, {42,35}}},
+            {"Haulage bend", 5.8f, 5, {{42,35}, {42,40}, {42,45},
+                {42,49}, {42,51.2f}}},
+            {"Company rise", 4.0f, 5, {{79,40}, {78.5f,36}, {78.5f,32.5f},
+                {78.5f,29}, {78.5f,27}}},
+            {"Upper terrace", 4.2f, 7, {{42,35}, {41.5f,29}, {41.5f,21},
+                {41.5f,14}, {44,10}, {51,9}, {60,9}}},
+            {"Workers' lane", 3.2f, 7, {{41.5f,29}, {35,28}, {28,28},
+                {20,28}, {14,29}, {11,26}, {11,23}}},
+            {"Oven walk", 2.0f, 4, {{49,35}, {53,32.5f}, {57,32.5f}, {61,32.5f}}},
+            {"Foundry walk", 2.4f, 5, {{42,45}, {35,45}, {29,45}, {32,48}, {32,54}}},
+            {"Lower terrace", 3.4f, 6, {{42,51.2f}, {46,54}, {58,54},
+                {69,54}, {76,53}, {79,50}}},
+            {"Carriage court", 3.4f, 3, {{42,51.2f}, {40,51.4f}, {37.4f,51.2f}}},
+            {"Store steps", 2.0f, 3, {{49,35}, {50,30}, {50,26.8f}}},
+        },
+        .carriage_lane_count = 3,
+        .carriage_lane = {{0,8}, {1,4}, {8,2}},
         .scene = {
             {CC_LOCAL_TOWN_SCENE_ARRIVAL, "QUARRY APPROACH",
-             82.0f, 34.0f, 81.0f, 0.12f, 34.0f,
-             -11.0f, 0.66f, 16.0f, 8.6f},
-            {CC_LOCAL_TOWN_SCENE_HEART, "MINERS' TERRACES",
-             44.0f, 29.0f, 45.0f, 0.12f, 30.0f,
-             9.0f, 0.66f, 11.0f, 7.4f},
+             82.0f, 34.0f, 65.0f, 0.12f, 31.0f,
+             -25.0f, 0.66f, 32.0f, 30.0f},
+            {CC_LOCAL_TOWN_SCENE_HEART, "CLOCK AND OVENS",
+             44.0f, 29.0f, 51.0f, 0.12f, 20.0f,
+             -16.0f, 0.66f, 24.0f, 22.0f},
             {CC_LOCAL_TOWN_SCENE_LANDMARK, "LOWER SILVERWORKS",
              78.0f, 19.0f, 79.0f, 0.14f, 18.0f,
              -12.0f, 0.64f, 18.0f, 9.2f},
@@ -201,27 +222,27 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         },
         .building = {
             {"Lower bunk row", 19.50f, 15.00f, 9.00f, 10.00f,
-             7.20f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             5.80f, CC_LOCAL_BUILDING_WORKER_ROW, true},
             {"Lampwright row", 31.00f, 14.50f, 7.40f, 9.50f,
-             6.80f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             5.60f, CC_LOCAL_BUILDING_WORKER_ROW, true},
             {"Company store", 44.00f, 16.00f, 12.00f, 10.00f,
              9.40f, CC_LOCAL_BUILDING_CIVIC, true},
             {"Foundry tenement", 20.00f, 34.00f, 10.50f, 8.00f,
-             7.80f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             5.80f, CC_LOCAL_BUILDING_WORKER_ROW, true},
             {"Assay house", 31.00f, 34.50f, 4.50f, 8.30f,
-             6.60f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             4.40f, CC_LOCAL_BUILDING_WORKSHOP, true},
             {"Ore warehouse", 54.50f, 42.00f, 10.00f, 7.00f,
-             6.80f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             4.80f, CC_LOCAL_BUILDING_WORKSHOP, true},
             {"Shift kitchen", 57.00f, 25.50f, 7.00f, 5.50f,
-             5.20f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             3.80f, CC_LOCAL_BUILDING_DOMESTIC, true},
             {"Upper bunk row", 57.00f, 14.00f, 8.00f, 10.00f,
-             7.40f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             6.20f, CC_LOCAL_BUILDING_WORKER_ROW, true},
             {"Powder office", 17.50f, 50.00f, 8.20f, 6.50f,
-             5.80f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             4.20f, CC_LOCAL_BUILDING_WORKSHOP, true},
             {"Smelter lodging", 50.00f, 58.00f, 10.50f, 7.50f,
-             7.10f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             5.40f, CC_LOCAL_BUILDING_WORKER_ROW, true},
             {"East weigh house", 83.00f, 55.00f, 6.50f, 8.00f,
-             6.20f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             4.60f, CC_LOCAL_BUILDING_WORKSHOP, true},
         },
         .compound_structure = {
             {CC_LOCAL_COMPOUND_WALL, 66.50f, 9.50f, 0.90f, 21.00f, 4.20f},
@@ -241,20 +262,41 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .function = CC_SETTLEMENT_MARKET,
         .identity = "THE CROSSROADS MARKET",
         .purpose = "Carriages, contracts, and regional trade",
-        .primary_hall = "Market",
+        .primary_hall = "Market hall",
         .notice_board = "Contract board",
         .training_yard = "Wayfarer trials",
         .compound = "Customs keep",
         .keeper_name = "Mara — Merchant",
         .interior_service = "Contracts, cargo, and regional goods",
-        .map_form = "A radial bazaar gathered around the coach road",
+        .map_form = "Five lanes around the queen fountain",
+        .lane_count = 8,
+        .lane = {
+            {"Customs road", 6.0f, 7, {{96,36}, {90,36}, {84,36},
+                {74,36}, {67,38}, {62,39}, {57.5f,39}}},
+            {"Coach court", 6.0f, 6, {{57.5f,39}, {54.1f,43.6f},
+                {49,47}, {44,48}, {42,51.2f}, {42,56}}},
+            {"Customs rise", 4.2f, 5, {{78.5f,54}, {78.5f,44},
+                {78.5f,34}, {78.5f,27}, {78.5f,23}}},
+            {"Food lane", 4.5f, 4, {{54.1f,27.4f}, {56,30.5f},
+                {61,31.5f}, {65,33}}},
+            {"Cloth yard", 4.8f, 5, {{34.5f,35.5f}, {30,31},
+                {24,28}, {16,28}, {10,27}}},
+            {"Archive lane", 4.0f, 5, {{37.9f,27.4f}, {39.5f,24},
+                {40,19}, {40,12}, {36,8}}},
+            {"Queen's ring", 4.6f, 9, {{57.5f,35.5f}, {54.1f,27.4f},
+                {46,24}, {37.9f,27.4f}, {34.5f,35.5f}, {37.9f,43.6f},
+                {46,47}, {54.1f,43.6f}, {57.5f,35.5f}}},
+            {"Coach shelter", 3.4f, 3, {{42,51.2f}, {40,51.4f}, {37.4f,51.2f}}},
+        },
+        .carriage_lane_count = 3,
+        .carriage_lane = {{0,6}, {1,4}, {7,2}},
         .scene = {
-            {CC_LOCAL_TOWN_SCENE_ARRIVAL, "CUSTOMS CAUSEWAY",
-             82.0f, 34.0f, 81.0f, 0.14f, 34.0f,
-             -11.0f, 0.64f, 17.0f, 8.4f},
-            {CC_LOCAL_TOWN_SCENE_HEART, "CROSSROADS BAZAAR",
-             44.0f, 29.0f, 46.0f, 0.14f, 29.5f,
-             -9.0f, 0.64f, 10.5f, 7.0f},
+            {CC_LOCAL_TOWN_SCENE_ARRIVAL, "MARKET ARRIVAL",
+             82.0f, 34.0f, 61.0f, 0.14f, 34.0f,
+             -26.0f, 0.64f, 32.0f, 38.0f},
+            {CC_LOCAL_TOWN_SCENE_HEART, "QUEEN'S MARKET",
+             44.0f, 29.0f, 46.0f, 0.14f, 35.5f,
+             -22.0f, 0.64f, 28.0f, 30.0f},
             {CC_LOCAL_TOWN_SCENE_LANDMARK, "CUSTOMS KEEP",
              78.0f, 19.0f, 78.0f, 0.16f, 19.0f,
              -11.0f, 0.62f, 18.0f, 9.2f},
@@ -265,8 +307,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
              42.0f, 52.0f, 42.0f, 0.14f, 50.0f,
              6.0f, 0.64f, 8.0f, 6.3f},
             {CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD, "WAYFARERS' YARD",
-             42.4f, 55.2f, 39.5f, 0.14f, 52.0f,
-             -5.0f, 0.64f, 8.0f, 6.4f},
+             42.4f, 55.2f, 38.0f, 0.14f, 54.0f,
+             -5.0f, 0.64f, 8.0f, 9.0f},
         },
         .keeper_seed = UINT32_C(0x6d617261),
         .terrain_salt = UINT32_C(0x45d9f3b1),
@@ -274,13 +316,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
                         CC_LOCAL_PLACE_INDUSTRY |
                         CC_LOCAL_PLACE_CARRIAGE,
         .building_count = 10,
+        .building_yaw_degrees = {-8, -12, 0, 8, -12, -10, 12, 8, -14, 12},
         .primary_building = 2,
         .compound_structure_count = 12,
         .room_name = {
-            "TRAINING YARD", "WEST FARMS", "OLD MINE ROAD",
-            "WORKSHOP STREET", "TOWN SQUARE", "CARRIAGE YARD",
-            "MARKET STEPS", "MILLER'S ROAD", "CROWN GATE",
-            "EAST FIELDS",
+            "WAYFARERS' YARD", "CLOTH YARD", "WAREHOUSE LANE",
+            "ARCHIVE LANE", "QUEEN'S MARKET", "COACH COURT",
+            "MARKET HALL", "TRADING COURTS", "CUSTOMS ROAD",
+            "EAST WAREHOUSES",
         },
         .landmark = {
             {CC_LOCAL_LANDMARK_COMMERCE, 0, "Wool warehouse",
@@ -311,40 +354,40 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
              CC_LOCAL_ROAD_TRADE},
         },
         .building = {
-            {"West hostel", 20.00f, 15.00f, 8.00f, 10.00f,
-             7.20f, CC_LOCAL_BUILDING_DOMESTIC, true},
-            {"Cloth factors", 32.00f, 14.00f, 7.00f, 9.00f,
-             6.40f, CC_LOCAL_BUILDING_WORKSHOP, true},
-            {"Crossroads market", 44.00f, 16.00f, 12.00f, 10.00f,
-             8.80f, CC_LOCAL_BUILDING_CIVIC, true},
-            {"Spice warehouse", 20.00f, 33.00f, 10.00f, 8.00f,
-             6.60f, CC_LOCAL_BUILDING_WORKER_ROW, true},
-            {"Money changers", 31.00f, 35.00f, 4.50f, 8.00f,
-             5.80f, CC_LOCAL_BUILDING_DOMESTIC, true},
-            {"Caravan hostel", 55.00f, 42.00f, 8.00f, 7.00f,
-             6.20f, CC_LOCAL_BUILDING_WORKSHOP, true},
-            {"Public kitchen", 57.00f, 25.00f, 6.50f, 5.50f,
-             5.90f, CC_LOCAL_BUILDING_DOMESTIC, true},
-            {"Guild factors", 57.00f, 14.00f, 7.00f, 9.00f,
+            {"West hostel", 17.00f, 12.00f, 8.00f, 9.00f,
+             5.20f, CC_LOCAL_BUILDING_DOMESTIC, true},
+            {"Archive and mapmakers", 29.00f, 10.00f, 8.00f, 10.00f,
+             5.60f, CC_LOCAL_BUILDING_WORKSHOP, true},
+            {"Market hall", 44.00f, 12.00f, 12.00f, 10.00f,
+             6.20f, CC_LOCAL_BUILDING_CIVIC, true},
+            {"Spice warehouse", 12.00f, 34.00f, 10.00f, 8.00f,
+             5.00f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+            {"Money changers", 24.00f, 38.00f, 6.00f, 7.00f,
+             4.00f, CC_LOCAL_BUILDING_DOMESTIC, true},
+            {"Caravan hostel", 66.00f, 54.00f, 9.00f, 7.00f,
+             4.80f, CC_LOCAL_BUILDING_WORKSHOP, true},
+            {"Public kitchen", 58.00f, 23.00f, 6.50f, 5.50f,
+             4.20f, CC_LOCAL_BUILDING_DOMESTIC, true},
+            {"Guild factors", 58.00f, 10.00f, 6.00f, 9.00f,
              6.10f, CC_LOCAL_BUILDING_WORKER_ROW, true},
-            {"Mapmakers' row", 17.00f, 46.00f, 8.00f, 7.00f,
-             5.80f, CC_LOCAL_BUILDING_WORKSHOP, true},
-            {"Eastern exchange", 50.00f, 58.00f, 10.00f, 7.00f,
-             6.90f, CC_LOCAL_BUILDING_CIVIC, true},
+            {"Cloth stores", 17.00f, 56.00f, 9.00f, 7.00f,
+             4.60f, CC_LOCAL_BUILDING_WORKSHOP, true},
+            {"Eastern exchange", 49.00f, 62.00f, 10.00f, 7.00f,
+             4.80f, CC_LOCAL_BUILDING_CIVIC, true},
         },
         .compound_structure = {
             {CC_LOCAL_COMPOUND_WALL, 66.00f, 9.00f, 1.20f, 23.00f, 6.50f},
             {CC_LOCAL_COMPOUND_WALL, 90.00f, 9.00f, 1.20f, 23.00f, 6.50f},
             {CC_LOCAL_COMPOUND_WALL, 66.00f, 9.00f, 25.20f, 1.20f, 6.50f},
-            {CC_LOCAL_COMPOUND_WALL, 66.00f, 30.80f, 9.50f, 1.20f, 6.50f},
-            {CC_LOCAL_COMPOUND_WALL, 81.50f, 30.80f, 9.70f, 1.20f, 6.50f},
-            {CC_LOCAL_COMPOUND_HALL, 72.00f, 13.00f, 13.00f, 9.00f, 11.50f},
-            {CC_LOCAL_COMPOUND_TOWER, 73.00f, 27.80f, 2.00f, 3.00f, 9.00f},
-            {CC_LOCAL_COMPOUND_TOWER, 82.00f, 27.80f, 2.00f, 3.00f, 9.00f},
+            {CC_LOCAL_COMPOUND_WALL, 66.00f, 30.80f, 9.50f, 1.20f, 2.40f},
+            {CC_LOCAL_COMPOUND_WALL, 81.50f, 30.80f, 9.70f, 1.20f, 2.40f},
+            {CC_LOCAL_COMPOUND_HALL, 72.00f, 13.00f, 13.00f, 9.00f, 8.00f},
+            {CC_LOCAL_COMPOUND_TOWER, 73.00f, 27.80f, 2.00f, 3.00f, 5.50f},
+            {CC_LOCAL_COMPOUND_TOWER, 82.00f, 27.80f, 2.00f, 3.00f, 5.50f},
             {CC_LOCAL_COMPOUND_TOWER, 64.80f, 7.80f, 4.00f, 4.00f, 12.50f},
             {CC_LOCAL_COMPOUND_TOWER, 88.40f, 7.80f, 4.00f, 4.00f, 12.50f},
-            {CC_LOCAL_COMPOUND_TOWER, 64.80f, 29.20f, 4.00f, 4.00f, 12.50f},
-            {CC_LOCAL_COMPOUND_TOWER, 88.40f, 29.20f, 4.00f, 4.00f, 12.50f},
+            {CC_LOCAL_COMPOUND_TOWER, 64.80f, 28.00f, 4.00f, 4.00f, 6.20f},
+            {CC_LOCAL_COMPOUND_TOWER, 88.40f, 28.00f, 4.00f, 4.00f, 6.20f},
         },
     },
     {
@@ -832,4 +875,42 @@ CcLocalLanePoint CcLocalLaneSample(const CcLocalLane *lane, float progress)
             (2.0f * a.z - 5.0f * b.z + 4.0f * c.z - d.z) * t2 +
             (3.0f * b.z - a.z - 3.0f * c.z + d.z) * t3),
     };
+}
+
+const CcBanditGroup *CcLocalTownOccupier(const CcSim *sim, CcId town)
+{
+    if (sim == NULL || town == 0U) return NULL;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        if (sim->bandits[i].camp_settlement_id == town && sim->bandits[i].members > 0)
+            return &sim->bandits[i];
+    }
+    return NULL;
+}
+
+const CcCharacter *CcLocalTownPerson(const CcSim *sim, CcId town, int32_t index)
+{
+    if (sim == NULL || town == 0U || index < 0) return NULL;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *person = &sim->characters[i];
+        if (person->current_settlement_id != town ||
+            person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
+            person->birth_day > sim->current_day ||
+            (person->death_day > 0 && person->death_day <= sim->current_day)) continue;
+        if (index-- == 0) return person;
+    }
+    return NULL;
+}
+
+void CcLocalTownStatus(const CcSim *sim, CcId town, char *text, size_t capacity)
+{
+    if (text == NULL || capacity == 0U) return;
+    const CcSettlement *place = sim != NULL ? CcSimSettlement(sim, town) : NULL;
+    const CcBanditGroup *band = CcLocalTownOccupier(sim, town);
+    if (place == NULL) (void)snprintf(text, capacity, "Roadside");
+    else if (!CcSettlementIsAbandoned(place))
+        (void)snprintf(text, capacity, "%d residents", place->population);
+    else if (band != NULL)
+        (void)snprintf(text, capacity, "Occupied ruins / %.40s / %d bandits / Town services closed",
+                       band->name, band->members);
+    else (void)snprintf(text, capacity, "Abandoned / 0 residents / Town services closed");
 }

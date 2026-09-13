@@ -1,0 +1,70 @@
+add_executable(local_place_tests tests/local_place_tests.c)
+target_link_libraries(local_place_tests PRIVATE
+    crownless_local_place crownless_sim
+)
+cc_strict_warnings(local_place_tests)
+add_test(NAME distinct_local_places COMMAND local_place_tests)
+
+add_executable(town_evolution_tests tests/town_evolution_tests.c)
+target_link_libraries(town_evolution_tests PRIVATE
+    crownless_local_place crownless_persistence)
+cc_strict_warnings(town_evolution_tests)
+add_test(NAME town_evolution COMMAND town_evolution_tests)
+
+add_executable(world_stream_tests tests/world_stream_tests.c)
+target_link_libraries(world_stream_tests PRIVATE crownless_world)
+cc_strict_warnings(world_stream_tests)
+add_test(NAME finite_world_streaming COMMAND world_stream_tests)
+
+if(CC_BUILD_BENCHMARKS)
+    add_test(NAME simulation_shape_metrics
+             COMMAND crownless_sim_metrics --seeds 8 --years 3)
+endif()
+
+add_executable(limb_system_tests tests/limb_system_tests.c)
+target_link_libraries(limb_system_tests PRIVATE crownless_locomotion)
+cc_strict_warnings(limb_system_tests)
+add_test(NAME generalized_limb_system COMMAND limb_system_tests)
+
+add_executable(collision_system_tests tests/collision_system_tests.c)
+target_link_libraries(collision_system_tests PRIVATE crownless_locomotion)
+cc_strict_warnings(collision_system_tests)
+add_test(NAME continuous_character_collision COMMAND collision_system_tests)
+
+add_executable(biomech_system_tests tests/biomech_system_tests.c)
+target_link_libraries(biomech_system_tests PRIVATE crownless_locomotion)
+cc_strict_warnings(biomech_system_tests)
+add_test(NAME generalized_biomechanical_system COMMAND biomech_system_tests)
+
+add_executable(footing_course_tests tests/footing_course_tests.c)
+target_link_libraries(footing_course_tests PRIVATE crownless_locomotion)
+cc_strict_warnings(footing_course_tests)
+add_test(NAME verified_footing_course COMMAND footing_course_tests)
+
+add_executable(creature_rig_tests tests/creature_rig_tests.c)
+target_link_libraries(creature_rig_tests PRIVATE crownless_locomotion)
+cc_strict_warnings(creature_rig_tests)
+add_test(NAME creature_skeletal_muscular_system COMMAND creature_rig_tests)
+
+add_executable(humanoid_skin_tests tests/humanoid_skin_tests.c)
+target_link_libraries(humanoid_skin_tests PRIVATE crownless_locomotion)
+cc_strict_warnings(humanoid_skin_tests)
+add_test(NAME blender_humanoid_skin_contract COMMAND humanoid_skin_tests)
+
+add_executable(quadruped_skin_tests tests/quadruped_skin_tests.c)
+target_link_libraries(quadruped_skin_tests PRIVATE crownless_locomotion)
+cc_strict_warnings(quadruped_skin_tests)
+add_test(NAME blender_quadruped_skin_contract COMMAND quadruped_skin_tests)
+
+add_executable(motion_system_tests tests/motion_system_tests.c)
+target_link_libraries(motion_system_tests PRIVATE crownless_locomotion)
+cc_strict_warnings(motion_system_tests)
+add_test(NAME layered_motion_contract COMMAND motion_system_tests)
+
+add_executable(creature_catalog_tests tests/creature_catalog_tests.c)
+target_link_libraries(creature_catalog_tests PRIVATE
+    crownless_creature_catalog
+)
+cc_strict_warnings(creature_catalog_tests)
+add_test(NAME generated_creature_catalog COMMAND creature_catalog_tests)
+

@@ -1,0 +1,265 @@
+letter probe — world seeds 9..9, 12 years, purpose "report", topic "dragon"
+
+== world seed 2415085441 — year 2, day 366 ==
+   hunger mean 4.2 / max 25, abandoned settlements 0, closed routes 1, wars 1, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 158
+   writer: Mara Venn (official) at Thornford — 22 held accounts
+  --- purpose: report
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 366
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Mara Venn posts a notice at Thornford: Relief charter.
+       cited: Thornford, event 648518346341352626 (NOTICE), held day 365, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.
+       cited: Thornford, event 648518346341352492 (GOBLIN RAID), held day 333, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Tomas Rill posts a notice at Gloamgate: Road compact. Loyal voices credit the crown.
+       cited: Gloamgate, event 648518346341352547 (NOTICE), held day 337, retellings 3, court bias +32, alarm 20
+    4. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 1. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341351904 (SHORTAGE), held day 116, retellings 4, court bias +44, alarm 14
+  Recorded in truth as I hold it. — Mara Venn
+  ( 22 held accounts; 4 cited in this letter )
+
+== world seed 2415085441 — year 3, day 731 ==
+   hunger mean 11.8 / max 48, abandoned settlements 0, closed routes 1, wars 1, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 302
+   writer: Jory Fen (traveller) at Silverwick — 28 held accounts
+  --- purpose: report
+  From: Jory Fen (traveller), at Silverwick
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 731
+  Jory Fen carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Varkesh the Unappeased burns Silverwick because 18 stolen crowns remain missing.
+       cited: Silverwick, event 648518346341353944 (DRAGON FIRE), held day 730, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Smoke falls into Silverwick's chimneys; old readers count 14 nights until Varkesh the Unappeased comes.
+       cited: Silverwick, event 648518346341353859 (DRAGON OMEN), held day 716, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 2. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Silverwick, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341353796 (SHORTAGE), held day 707, retellings 5, court bias +64, alarm 22
+    4. Mara Venn posts a notice at Thornford: Relief charter. Loyal voices credit the crown.
+       cited: Thornford, event 648518346341353781 (NOTICE), held day 703, retellings 6, court bias +56, alarm 24
+    5. Silverwick has 0 weeks of food; hunger reaches pressure level 1.
+       cited: Silverwick, event 648518346341353728 (SHORTAGE), held day 686, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Jory Fen
+  ( 28 held accounts; 5 cited in this letter )
+
+== world seed 2415085441 — year 4, day 1096 ==
+   hunger mean 13.2 / max 48, abandoned settlements 0, closed routes 1, wars 1, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 422
+   writer: Mara Venn (official) at Thornford — 25 held accounts
+  --- purpose: report
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1096
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Mara Venn posts a notice at Thornford: Relief charter.
+       cited: Thornford, event 648518346341355081 (NOTICE), held day 1086, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. The Cinder Tithe raids Thornford: 20 Wheat, 15 crowns.
+       cited: Thornford, event 648518346341354985 (GOBLIN RAID), held day 1072, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Tomas Rill posts a notice at Gloamgate: Quiet commission. Loyal voices credit the crown.
+       cited: Gloamgate, event 648518346341355026 (NOTICE), held day 1065, retellings 3, court bias +32, alarm 26
+    4. Silverwick has 0 weeks of food; hunger reaches pressure level 1. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Silverwick, event 648518346341354400 (SHORTAGE), held day 901, retellings 7, court bias +68, alarm 45
+  Recorded in truth as I hold it. — Mara Venn
+  ( 25 held accounts; 4 cited in this letter )
+
+== world seed 2415085441 — year 5, day 1461 ==
+   hunger mean 28.2 / max 87, abandoned settlements 0, closed routes 0, wars 1, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 557
+   writer: Mara Venn (official) at Thornford — 17 held accounts
+  --- purpose: report
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1461
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Mara Venn posts a notice at Thornford: Relief charter.
+       cited: Thornford, event 648518346341356284 (NOTICE), held day 1450, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. The Cinder Tithe raids Thornford: 20 Wheat, 15 crowns.
+       cited: Thornford, event 648518346341356263 (GOBLIN RAID), held day 1439, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Gloamgate has 0 weeks of food; hunger reaches pressure level 2.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Gloamgate, event 648518346341356113 (SHORTAGE), held day 1379, retellings 3, court bias +12, alarm 12
+    4. Tomas Rill posts a notice at Gloamgate: Quiet commission. Loyal voices credit the crown.
+       cited: Gloamgate, event 648518346341356121 (NOTICE), held day 1380, retellings 3, court bias +32, alarm 29
+    5. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 2. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341355855 (SHORTAGE), held day 1307, retellings 4, court bias +44, alarm 14
+  Recorded in truth as I hold it. — Mara Venn
+  ( 17 held accounts; 5 cited in this letter )
+
+== world seed 2415085441 — year 6, day 1826 ==
+   hunger mean 10.8 / max 27, abandoned settlements 0, closed routes 0, wars 0, pretender crises 0, anointed 3, dragon stage Crowned dragon, hoard 653
+   writer: Mara Venn (official) at Thornford — 29 held accounts
+  --- purpose: report
+  From: Mara Venn (official), at Thornford
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Mara Venn's registered scribe seal  ·  Composed day 1826
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Mara Venn posts a notice at Thornford: Relief charter.
+       cited: Thornford, event 648518346341357370 (NOTICE), held day 1821, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Tomas Rill posts a notice at Gloamgate: Quiet commission. Loyal voices credit the crown. They fear worse is coming.
+       cited: Gloamgate, event 648518346341357303 (NOTICE), held day 1800, retellings 3, court bias +32, alarm 32
+    3. The Cinder Tithe raids Gloamgate: 16 Bread, 15 crowns. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Gloamgate, event 648518346341357267 (GOBLIN RAID), held day 1789, retellings 3, court bias +32, alarm 32
+    4. Ember Crown moves 28 crowns into Gloamgate's market to buy real grain shipments. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Gloamgate, event 648518346341357285 (DECREE), held day 1793, retellings 3, court bias +32, alarm 14
+    5. Gloamgate has 0 weeks of food; hunger reaches pressure level 3.
+       (particulars redacted — the writer vouches only for Thornford, not for distant quantities)
+       cited: Gloamgate, event 648518346341357143 (SHORTAGE), held day 1722, retellings 3, court bias +12, alarm 12
+  Recorded in truth as I hold it. — Mara Venn
+  ( 29 held accounts; 5 cited in this letter )
+
+== world seed 2415085441 — year 7, day 2191 ==
+   hunger mean 37.3 / max 100, abandoned settlements 0, closed routes 0, wars 2, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 788
+   writer: Ilyra Senn (refugee) at Gloamgate — 21 held accounts
+  --- purpose: report
+  From: Ilyra Senn (refugee), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: unmarked personal diary (not admitted to intake)  ·  No seal registered  ·  Composed day 2191
+  Ilyra Senn carries no seal; this writing cannot enter the Scriptorium corpus as it stands.
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Tomas Rill posts a notice at Gloamgate: Quiet commission.
+       cited: Gloamgate, event 648518346341358423 (NOTICE), held day 2185, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. The Tallow Knives recruits from hungry debtors and unpaid households; road control reaches 70%.
+       cited: Gloamgate, event 648518346341358378 (BANDITS), held day 2171, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Hunger, debt, and sanctions open a night road between Hollowbarrow and Gloamgate.
+       cited: Gloamgate, event 648518346341358352 (DECREE), held day 2157, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    4. Gloamgate has 0 weeks of food; hunger reaches pressure level 3.
+       cited: Gloamgate, event 648518346341358322 (SHORTAGE), held day 2142, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    5. The Cinder Tithe raids Gloamgate: 16 Bread, 15 crowns.
+       cited: Gloamgate, event 648518346341358210 (GOBLIN RAID), held day 2097, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 21 held accounts; 5 cited in this letter )
+
+== world seed 2415085441 — year 8, day 2556 ==
+   hunger mean 31.0 / max 76, abandoned settlements 0, closed routes 2, wars 1, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 910
+   writer: Wren Wick (official) at Hollowbarrow — 26 held accounts
+  --- purpose: report
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2556
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Tallow Knives raids Hollowbarrow and takes 24 Wood.
+       cited: Hollowbarrow, event 648518346341359476 (RAID), held day 2555, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Wren Wick posts a notice at Hollowbarrow: Road compact.
+       cited: Hollowbarrow, event 648518346341359470 (NOTICE), held day 2549, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 1.
+       cited: Hollowbarrow, event 648518346341359391 (SHORTAGE), held day 2527, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    4. Star Oath moves 28 crowns into Silverwick's market to buy real grain shipments. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Hollowbarrow, not for distant quantities)
+       cited: Silverwick, event 648518346341359373 (DECREE), held day 2528, retellings 3, court bias +32, alarm 31
+    5. Ilyra Senn posts a notice at Gloamgate: Road compact. Loyal voices credit the crown. They fear worse is coming.
+       cited: Gloamgate, event 648518346341359311 (NOTICE), held day 2493, retellings 7, court bias +68, alarm 65
+  Recorded in truth as I hold it. — Wren Wick
+  ( 26 held accounts; 5 cited in this letter )
+
+== world seed 2415085441 — year 9, day 2921 ==
+   hunger mean 30.8 / max 100, abandoned settlements 0, closed routes 2, wars 0, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 957
+   writer: Wren Wick (official) at Hollowbarrow — 22 held accounts
+  --- purpose: report
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 2921
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Tallow Knives raids Hollowbarrow and takes 28 Wood.
+       cited: Hollowbarrow, event 648518346341360610 (RAID), held day 2919, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+       cited: Hollowbarrow, event 648518346341360588 (DECREE), held day 2912, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 2.
+       cited: Hollowbarrow, event 648518346341360550 (SHORTAGE), held day 2898, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    4. Wren Wick posts a notice at Hollowbarrow: Quiet commission.
+       cited: Hollowbarrow, event 648518346341360559 (NOTICE), held day 2899, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Wren Wick
+  ( 22 held accounts; 4 cited in this letter )
+
+== world seed 2415085441 — year 10, day 3286 ==
+   hunger mean 25.8 / max 100, abandoned settlements 0, closed routes 2, wars 0, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 975
+   writer: Wren Wick (official) at Hollowbarrow — 30 held accounts
+  --- purpose: report
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 3286
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Tallow Knives raids Hollowbarrow and takes 28 Wood.
+       cited: Hollowbarrow, event 648518346341361692 (RAID), held day 3283, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Wren Wick posts a notice at Hollowbarrow: Quiet commission.
+       cited: Hollowbarrow, event 648518346341361701 (NOTICE), held day 3284, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+       cited: Hollowbarrow, event 648518346341361671 (DECREE), held day 3276, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    4. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 2.
+       cited: Hollowbarrow, event 648518346341361628 (SHORTAGE), held day 3269, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    5. Mara Venn posts a notice at Thornford: Relief charter. Loyal voices credit the crown. They fear worse is coming.
+       cited: Thornford, event 648518346341361529 (NOTICE), held day 3251, retellings 7, court bias +48, alarm 45
+  Recorded in truth as I hold it. — Wren Wick
+  ( 30 held accounts; 5 cited in this letter )
+
+== world seed 2415085441 — year 11, day 3651 ==
+   hunger mean 38.8 / max 100, abandoned settlements 0, closed routes 2, wars 0, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 1002
+   writer: Ilyra Senn (official) at Gloamgate — 22 held accounts
+  --- purpose: report
+  From: Ilyra Senn (official), at Gloamgate
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Ilyra Senn's registered scribe seal  ·  Composed day 3651
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Ember Crown repudiates 562 crowns of monastery debt; a royal service closes and the commons rally.
+       cited: Gloamgate, event 648518346341362715 (DECREE), held day 3640, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. Ilyra Senn posts a notice at Gloamgate: Road compact.
+       cited: Gloamgate, event 648518346341362654 (NOTICE), held day 3613, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Wren Wick posts a notice at Hollowbarrow: Road compact. Loyal voices credit the crown. They fear worse is coming.
+       cited: Hollowbarrow, event 648518346341362655 (NOTICE), held day 3613, retellings 6, court bias +36, alarm 44
+    4. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 2. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341362591 (SHORTAGE), held day 3605, retellings 6, court bias +56, alarm 27
+    5. The Tallow Knives raids Silverwick and takes 28 Stone. Loyal voices credit the crown. They fear worse is coming.
+       (particulars redacted — the writer vouches only for Gloamgate, not for distant quantities)
+       cited: Silverwick, event 648518346341362571 (RAID), held day 3592, retellings 5, court bias +44, alarm 44
+  Recorded in truth as I hold it. — Ilyra Senn
+  ( 22 held accounts; 5 cited in this letter )
+
+== world seed 2415085441 — year 12, day 4016 ==
+   hunger mean 40.8 / max 100, abandoned settlements 0, closed routes 4, wars 2, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 1017
+   writer: Wren Wick (official) at Hollowbarrow — 16 held accounts
+  --- purpose: report
+  From: Wren Wick (official), at Hollowbarrow
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Wren Wick's registered scribe seal  ·  Composed day 4016
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 2.
+       cited: Hollowbarrow, event 648518346341363441 (SHORTAGE), held day 4011, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    2. The Tallow Knives raids Hollowbarrow and takes 28 Wood.
+       cited: Hollowbarrow, event 648518346341363440 (RAID), held day 4011, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Wren Wick posts a notice at Hollowbarrow: Road compact.
+       cited: Hollowbarrow, event 648518346341363433 (NOTICE), held day 4011, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    4. Tamsin Kest posts a notice at Rosespire: Sealed dispatch. Loyal voices credit the crown.
+       cited: Rosespire, event 648518346341363494 (NOTICE), held day 4011, retellings 3, court bias +32, alarm 12
+    5. Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+       cited: Hollowbarrow, event 648518346341363721 (DECREE), held day 4004, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+  Recorded in truth as I hold it. — Wren Wick
+  ( 16 held accounts; 5 cited in this letter )
+
+== world seed 2415085441 — year 13, day 4381 ==
+   hunger mean 24.5 / max 100, abandoned settlements 0, closed routes 2, wars 0, pretender crises 3, anointed 0, dragon stage Crowned dragon, hoard 1042
+   writer: Tamsin Kest (laborer) at Rosespire — 24 held accounts
+  --- purpose: report
+  From: Tamsin Kest (laborer), at Rosespire
+  To:   the Scriptorium Intake
+  Paper: stamped scriptorium paper  ·  Seal: Tamsin Kest's registered scribe seal  ·  Composed day 4381
+  To the Scriptorium Intake, in witness of these accounts, I report as follows:
+    1. The Tallow Knives raids Hollowbarrow and takes 28 Wood. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Rosespire, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341364697 (RAID), held day 4375, retellings 3, court bias +32, alarm 12
+    2. Tamsin Drost posts a notice at Rosespire: Sealed dispatch.
+       cited: Rosespire, event 648518346341364690 (NOTICE), held day 4368, retellings 1, court bias +0, alarm 2, vouched (writer's town)
+    3. Wren Wick posts a notice at Hollowbarrow: Quiet commission.
+       cited: Hollowbarrow, event 648518346341364693 (NOTICE), held day 4369, retellings 3, court bias +12, alarm 12
+    4. Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Rosespire, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341364681 (DECREE), held day 4368, retellings 3, court bias +32, alarm 12
+    5. Hollowbarrow has 0 weeks of food; hunger reaches pressure level 3. Loyal voices credit the crown.
+       (particulars redacted — the writer vouches only for Rosespire, not for distant quantities)
+       cited: Hollowbarrow, event 648518346341364521 (SHORTAGE), held day 4305, retellings 3, court bias +32, alarm 12
+  Recorded in truth as I hold it. — Tamsin Kest
+  ( 24 held accounts; 5 cited in this letter )
+
+

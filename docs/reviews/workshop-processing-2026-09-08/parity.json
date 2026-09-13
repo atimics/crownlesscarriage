@@ -1,0 +1,12 @@
+{
+  "weekly_states": {
+    "rows": 1440,
+    "parent_sha256": "7854ee463de59519b115304fab3a80c1e9011294462fe67a62fe887dbd474364",
+    "current_sha256": "7854ee463de59519b115304fab3a80c1e9011294462fe67a62fe887dbd474364"
+  },
+  "annual_states": {
+    "rows": 720,
+    "parent_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10",
+    "current_sha256": "9dec61238009b8e419a12614a569ba07da0fbf6454c10a976c386b8b7acd3b10"
+  }
+}

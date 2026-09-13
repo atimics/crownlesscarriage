@@ -26,6 +26,8 @@ typedef struct CcMetricsHistory {
     int32_t settlement_abandonments;
     int32_t years_hunger_40_plus;
     int32_t years_hunger_60_plus;
+    int32_t years_population_weighted_hunger_40_plus;
+    int32_t years_without_population;
     int32_t years_at_war;
     int32_t years_allied;
     int32_t years_dragon_campaign;
@@ -38,6 +40,10 @@ typedef struct CcMetricsHistory {
     int32_t days_goblin_raid;
     int32_t days_bandit_raid;
     int32_t days_bandit_influence_70_plus;
+    uint64_t bandit_raid_group_days;
+    uint64_t bandit_influence_70_plus_group_days;
+    uint64_t bandit_raid_group_year_samples;
+    uint64_t bandit_influence_70_plus_group_year_samples;
     int32_t dragon_stage_days[7];
     bool route_was_closed[CC_MAX_ROUTES];
     bool settlement_was_abandoned[CC_MAX_SETTLEMENTS];
@@ -62,14 +68,20 @@ static void UpdateDailyHistory(const CcSim *sim, CcMetricsHistory *history)
     if (sim->goblins.raid_motive != CC_GOBLIN_RAID_NONE) {
         history->days_goblin_raid += 1;
     }
+    bool bandit_raid = false;
+    bool bandit_influence = false;
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         if (sim->bandits[i].raid_phase != CC_BANDIT_RAID_IDLE) {
-            history->days_bandit_raid += 1;
+            bandit_raid = true;
+            history->bandit_raid_group_days += 1;
         }
         if (sim->bandits[i].influence >= 70) {
-            history->days_bandit_influence_70_plus += 1;
+            bandit_influence = true;
+            history->bandit_influence_70_plus_group_days += 1;
         }
     }
+    if (bandit_raid) history->days_bandit_raid += 1;
+    if (bandit_influence) history->days_bandit_influence_70_plus += 1;
     if (sim->dragon.life_stage >= CC_DRAGON_STAGE_EGG &&
         sim->dragon.life_stage <= CC_DRAGON_STAGE_AFTERDRAGON) {
         history->dragon_stage_days[sim->dragon.life_stage] += 1;
@@ -81,6 +93,7 @@ static void UpdateHistory(const CcSim *sim, CcMetricsHistory *history)
     int32_t active_settlements = 0;
     int32_t closed_routes = 0;
     CcHungerSnapshot hunger = CcSimHungerSnapshot(sim);
+    CcWelfareSnapshot welfare = CcSimWelfareSnapshot(sim);
     bool has_abandoned_settlement = false;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         bool abandoned = CcSettlementIsAbandoned(&sim->settlements[i]);
@@ -117,6 +130,10 @@ static void UpdateHistory(const CcSim *sim, CcMetricsHistory *history)
     if (hunger.average >= 60) {
         history->years_hunger_60_plus += 1;
     }
+    if (welfare.population_weighted_hunger >= 40.0) {
+        history->years_population_weighted_hunger_40_plus += 1;
+    }
+    if (welfare.population == 0) history->years_without_population += 1;
     bool at_war = false;
     bool allied = false;
     for (int32_t first = 0; first < sim->kingdom_count; ++first) {
@@ -134,18 +151,64 @@ static void UpdateHistory(const CcSim *sim, CcMetricsHistory *history)
     if (sim->goblins.raid_motive != CC_GOBLIN_RAID_NONE) {
         history->years_goblin_raid += 1;
     }
+    bool bandit_raid = false;
+    bool bandit_influence = false;
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         if (sim->bandits[i].raid_phase != CC_BANDIT_RAID_IDLE) {
-            history->years_bandit_raid += 1;
+            bandit_raid = true;
+            history->bandit_raid_group_year_samples += 1;
         }
         if (sim->bandits[i].influence >= 70) {
-            history->years_bandit_influence_70_plus += 1;
+            bandit_influence = true;
+            history->bandit_influence_70_plus_group_year_samples += 1;
         }
     }
+    if (bandit_raid) history->years_bandit_raid += 1;
+    if (bandit_influence) history->years_bandit_influence_70_plus += 1;
+}
+
+static void PrintCampaignMetrics(const CcSim *sim)
+{
+    int32_t live = 0;
+    int64_t value = 0;
+    int32_t newest = 0;
+    int32_t oldest = sim->current_day;
+    int32_t ruined_makers = 0;
+    int32_t ruined_locations = 0;
+    uint64_t identity_hash = UINT64_C(14695981039346656037);
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        const CcTreasure *treasure = &sim->treasures[i];
+        if (treasure->destroyed) continue;
+        live += 1;
+        value += treasure->appraised_value;
+        if (treasure->created_day > newest) newest = treasure->created_day;
+        if (treasure->created_day < oldest) oldest = treasure->created_day;
+        const CcSettlement *maker = CcSimSettlement(sim, treasure->maker_settlement_id);
+        const CcSettlement *location = CcSimSettlement(sim, treasure->location_id);
+        if (maker != NULL && CcSettlementIsAbandoned(maker)) ruined_makers += 1;
+        if (location != NULL && CcSettlementIsAbandoned(location)) ruined_locations += 1;
+        identity_hash = (identity_hash ^ treasure->id) * UINT64_C(1099511628211);
+    }
+    (void)printf(",%d,%" PRId64 ",%d,%d,%d,%d,%" PRIu64 ",%" PRIu64,
+                 live, value, newest, live > 0 ? oldest : 0,
+                 ruined_makers, ruined_locations, identity_hash,
+                 (uint64_t)sim->next_entity_serial);
+    CcMoney purses = 0;
+    int32_t hungry = 0, unsheltered = 0, named_bandits = 0;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *person = &sim->characters[i];
+        purses += person->travel_coins;
+        if (person->bandit_group_id != 0U) named_bandits += 1;
+        else {
+            if (person->hungry_days > 0) hungry += 1;
+            if (person->unsheltered_nights > 0) unsheltered += 1;
+        }
+    }
+    (void)printf(",%" PRId64 ",%d,%d,%d", purses, hungry, unsheltered, named_bandits);
 }
 
 static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
-                      int32_t seed_number, int32_t year)
+                      int32_t seed_number, int32_t year, bool campaign_metrics)
 {
     CcHungerSnapshot hunger = CcSimHungerSnapshot(sim);
     int32_t prosperity_total = 0;
@@ -324,7 +387,7 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         history->years_bandit_raid,
         history->years_bandit_influence_70_plus,
         sim->goblins.members,
-        sim->goblins.devotion,
+        sim->dragon_cult.devotion,
         sim->goblins.cohesion,
         sim->goblins.expeditions_intercepted,
         sim->bandit_count > 0 ? sim->bandits[0].members : 0,
@@ -353,8 +416,111 @@ static void PrintYear(const CcSim *sim, const CcMetricsHistory *history,
         sim->archives.lore_ceiling,
         sim->archives.kit_tool_wear,
         sim->archives.abbot_character_id != 0U ? 1 : 0);
-    (void)printf(",%d\n", hunger.population_weighted);
+    (void)printf(",%d", hunger.population_weighted);
+    CcWelfareSnapshot welfare = CcSimWelfareSnapshot(sim);
+    (void)printf(",2,%d,%u,%u,%" PRIu64 ",%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%d,%d",
+        sim->current_day, sim->schema_version, sim->generator_version,
+        CcSimHash(sim), welfare.hunger, welfare.prosperity, welfare.security,
+        welfare.population_weighted_hunger, welfare.population_weighted_prosperity,
+        welfare.population_weighted_security,
+        history->years_population_weighted_hunger_40_plus,
+        history->years_without_population);
+    (void)printf(",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64,
+        sim->bandit_count > 0 ? sim->bandits[0].id : 0U,
+        history->bandit_raid_group_days, history->bandit_influence_70_plus_group_days,
+        history->bandit_raid_group_year_samples, history->bandit_influence_70_plus_group_year_samples);
+    (void)printf(",%d,%d,%d,%d", sim->goblin_politics.crown_faction,
+        CcSimCultMembers(sim, CC_CULT_HUMAN), CcSimCultMembers(sim, CC_CULT_GOBLIN), sim->dragon_cult.devotion);
+    for (int32_t color = 0; color < CC_GOBLIN_FACTION_COUNT; ++color) {
+        const CcGoblinFaction *f = &sim->goblin_politics.factions[color];
+        (void)printf(",%d,%" PRId64 ",%" PRId64 ",%d", f->members,
+            f->coins + (CcMoney)f->gold * 40 + (CcMoney)f->gems * 70, f->tribute, f->hunted);
+    }
+    for (int32_t species = 0; species < CC_CULT_SPECIES_COUNT; ++species)
+        for (int32_t rank = 0; rank < CC_CULT_RANK_COUNT; ++rank)
+            (void)printf(",%d", sim->dragon_cult.ranks[species][rank]);
+    /* Coin concentration (#398/#399): who holds the tracked gold. Shares are
+       per mille of the coined total. Concentrated holders are the dragon
+       hoard, kingdom treasuries and war chests, goblin holdings, and coin
+       still in flight with the dragon campaign; what remains is circulating
+       — markets, companies, travellers and custody purses. */
+    {
+        CcMoney tracked = CcSimTrackedGold(sim);
+        CcMoney goblin_held = sim->goblins.lair_coins +
+            sim->goblins.carried_tribute +
+            sim->dragon_campaign.recovered_coins;
+        for (int32_t color = 0; color < CC_GOBLIN_FACTION_COUNT; ++color) {
+            goblin_held += sim->goblin_politics.factions[color].coins +
+                sim->goblin_politics.factions[color].carried_coins;
+        }
+        CcMoney concentrated = sim->dragon.hoard + treasury_total +
+            war_chests + goblin_held;
+        int32_t hoard_share = tracked > 0 ?
+            (int32_t)(sim->dragon.hoard * 1000 / tracked) : 0;
+        int32_t treasury_share = tracked > 0 ?
+            (int32_t)((treasury_total + war_chests) * 1000 / tracked) : 0;
+        int32_t goblin_share = tracked > 0 ?
+            (int32_t)(goblin_held * 1000 / tracked) : 0;
+        int32_t circulating_share = tracked > 0 ?
+            (int32_t)((tracked - concentrated) * 1000 / tracked) : 0;
+        (void)printf(",%d,%d,%d,%d", hoard_share, treasury_share,
+                     goblin_share, circulating_share);
+    }
+    if (campaign_metrics) PrintCampaignMetrics(sim);
+    (void)putchar('\n');
 }
+
+static void PrintNutritionYear(FILE *stream, const CcSim *sim,
+                               const CcNutritionAccounting *totals,
+                               const CcNutritionAccounting *previous,
+                               int32_t seed_number, int32_t year)
+{
+    static const CcGood goods[] = {CC_GOOD_BREAD, CC_GOOD_WHEAT, CC_GOOD_MEAT};
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcTownNutritionAccounting *now = &totals->towns[i];
+        const CcTownNutritionAccounting *before = &previous->towns[i];
+        for (size_t g = 0; g < sizeof(goods) / sizeof(goods[0]); ++g) {
+            CcGood good = goods[g];
+            uint64_t aged = now->aged_units[good] - before->aged_units[good];
+            uint64_t overflow = now->overflow_units[good] - before->overflow_units[good];
+            uint64_t eaten = now->civilian_units[good] - before->civilian_units[good];
+            uint64_t nutrition = (uint64_t)CcGoodNutritionValue(good, CC_NUTRITION_CIVILIAN);
+            (void)fprintf(stream,
+                "%d,%" PRIu32 ",%d,%" PRIu64 ",%s,%" PRIu64 ",%" PRIu64
+                ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64
+                ",%" PRIu64 ",%" PRIu64 "\n",
+                seed_number, sim->world_seed, year, sim->settlements[i].id,
+                CcGoodName(good), aged, overflow, eaten,
+                now->aged_units[good], now->overflow_units[good],
+                now->civilian_units[good], (aged + overflow) * nutrition,
+                (now->aged_units[good] + now->overflow_units[good]) * nutrition);
+        }
+    }
+}
+
+static void PrintSettlementTrace(FILE *stream, const CcSim *sim,
+                                 int32_t seed_number, int32_t elapsed_days)
+{
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        int32_t legitimacy = -1;
+        for (int32_t k = 0; k < sim->kingdom_count; ++k) {
+            if (sim->kingdoms[k].id == place->kingdom_id) {
+                legitimacy = sim->kingdoms[k].legitimacy;
+                break;
+            }
+        }
+        (void)fprintf(stream,
+            "%d,%" PRIu32 ",%d,%d,%" PRIu64 ",%" PRIu64 ",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+            seed_number, sim->world_seed, elapsed_days, sim->current_day,
+            place->id, place->kingdom_id, place->population,
+            CcSettlementIsAbandoned(place) ? 1 : 0, place->hunger,
+            place->prosperity, place->security, legitimacy,
+            (int32_t)place->size, (int32_t)place->function,
+            (int32_t)sim->dragon.life_stage, sim->dragon_campaign.victories);
+    }
+}
+#include "sim_route_metrics.inc"
 
 int main(int argc, char **argv)
 {
@@ -362,6 +528,12 @@ int main(int argc, char **argv)
     int32_t years = 10;
     int32_t first_seed = 1;
     bool final_only = false;
+    bool campaign_metrics = false;
+    const char *nutrition_path = NULL;
+    const char *settlements_path = NULL;
+    int32_t trace_every_days = 28;
+    int32_t trace_start_day = 0;
+    const char *route_path = NULL;
     for (int32_t argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--seed") == 0 && argument + 1 < argc) {
             if (!ParsePositive(argv[++argument], &first_seed)) return EXIT_FAILURE;
@@ -371,18 +543,81 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[argument], "--years") == 0 &&
                    argument + 1 < argc) {
             if (!ParsePositive(argv[++argument], &years)) return EXIT_FAILURE;
+        } else if (strcmp(argv[argument], "--campaign-metrics") == 0) {
+            campaign_metrics = true;
+        } else if (strcmp(argv[argument], "--nutrition-csv") == 0 &&
+                   argument + 1 < argc) {
+            nutrition_path = argv[++argument];
+        } else if (strcmp(argv[argument], "--route-csv") == 0 && argument + 1 < argc) {
+            route_path = argv[++argument];
         } else if (strcmp(argv[argument], "--final-only") == 0) {
             final_only = true;
+        } else if (strcmp(argv[argument], "--settlements-csv") == 0 &&
+                   argument + 1 < argc) {
+            settlements_path = argv[++argument];
+        } else if (strcmp(argv[argument], "--trace-every-days") == 0 &&
+                   argument + 1 < argc) {
+            if (!ParsePositive(argv[++argument], &trace_every_days)) return EXIT_FAILURE;
+        } else if (strcmp(argv[argument], "--trace-start-day") == 0 &&
+                   argument + 1 < argc) {
+            if (!ParsePositive(argv[++argument], &trace_start_day)) return EXIT_FAILURE;
         } else {
             (void)fprintf(stderr,
                           "Usage: %s [--seed NUMBER | --seeds COUNT]"
-                          " [--years COUNT] [--final-only]\n",
+                          " [--years COUNT] [--final-only] [--nutrition-csv PATH] [--route-csv PATH] [--campaign-metrics]"
+                          " [--settlements-csv PATH] [--trace-every-days COUNT] [--trace-start-day DAY]\n",
                           argv[0]);
             return EXIT_FAILURE;
         }
     }
 
-    (void)puts(
+    if (trace_start_day > (int64_t)years * 365 ||
+        (settlements_path != NULL && route_path != NULL &&
+         strcmp(settlements_path, route_path) == 0) ||
+        (nutrition_path != NULL && settlements_path != NULL &&
+         strcmp(nutrition_path, settlements_path) == 0)) return EXIT_FAILURE;
+    if ((int64_t)first_seed + seeds - 1 > INT32_MAX ||
+        years > (INT32_MAX - 1) / 365) {
+        (void)fprintf(stderr, "Seed range or duration exceeds the supported day/index range.\n");
+        return EXIT_FAILURE;
+    }
+    if (route_path != NULL && nutrition_path != NULL && strcmp(route_path, nutrition_path) == 0) {
+        (void)fprintf(stderr, "Use separate paths for route and nutrition CSV files.\n");
+        return EXIT_FAILURE;
+    }
+    FILE *route_csv = NULL;
+    if (route_path != NULL) {
+        route_csv = fopen(route_path, "w");
+        if (route_csv == NULL) { perror(route_path); return EXIT_FAILURE; }
+        WriteRouteHeader(route_csv);
+    }
+    FILE *settlements_csv = NULL;
+    if (settlements_path != NULL) {
+        settlements_csv = fopen(settlements_path, "w");
+        if (settlements_csv == NULL) {
+            if (route_csv != NULL) (void)fclose(route_csv);
+            perror(settlements_path);
+            return EXIT_FAILURE;
+        }
+        (void)fputs("seed_number,world_seed,elapsed_days,day,settlement_id,kingdom_id,"
+            "population,abandoned,hunger,prosperity,security,legitimacy,size,function,"
+            "dragon_stage,dragon_campaign_victories\n", settlements_csv);
+    }
+    FILE *nutrition_csv = NULL;
+    if (nutrition_path != NULL) {
+        nutrition_csv = fopen(nutrition_path, "w");
+        if (nutrition_csv == NULL) {
+            if (route_csv != NULL) (void)fclose(route_csv);
+            perror(nutrition_path);
+            if (settlements_csv != NULL) (void)fclose(settlements_csv);
+            return EXIT_FAILURE;
+        }
+        (void)fputs("seed_number,world_seed,year,settlement_id,good,"
+            "aged_units,overflow_units,civilian_units,"
+            "cumulative_aged_units,cumulative_overflow_units,cumulative_civilian_units,"
+            "wasted_nutrition,cumulative_wasted_nutrition\n", nutrition_csv);
+    }
+    (void)printf(
         "seed_number,world_seed,year,average_hunger,maximum_hunger,"
         "average_prosperity,minimum_prosperity,maximum_prosperity,"
         "average_security,minimum_security,maximum_security,"
@@ -420,13 +655,42 @@ int main(int argc, char **argv)
         "dragon_uncrowned_days,dragon_afterdragon_days,archive_scribes,"
         "lore_stored,lore_lost_total,archive_stewardship,"
         "archive_last_recorded_day,lore_ceiling,archive_tool_wear,"
-        "archive_abbot_present,population_weighted_hunger");
+        "archive_abbot_present,population_weighted_hunger,metrics_version,day,"
+        "schema_version,generator_version,state_hash,inhabited_hunger,"
+        "inhabited_prosperity,inhabited_security,weighted_hunger,weighted_prosperity,"
+        "weighted_security,years_population_weighted_hunger_40_plus,years_without_population,first_bandit_id,"
+        "bandit_raid_group_days,bandit_influence_70_plus_group_days,"
+        "bandit_raid_group_year_samples,bandit_influence_70_plus_group_year_samples");
+    (void)printf(",goblin_crown_color,cult_human_members,cult_goblin_members,cult_devotion");
+    static const char *colors[] = {"red", "purple", "blue"};
+    for (int32_t color = 0; color < CC_GOBLIN_FACTION_COUNT; ++color)
+        (void)printf(",goblin_%s_members,goblin_%s_lair_value,goblin_%s_tribute,goblin_%s_hunted",
+            colors[color], colors[color], colors[color], colors[color]);
+    for (int32_t species = 0; species < CC_CULT_SPECIES_COUNT; ++species)
+        for (int32_t rank = 0; rank < CC_CULT_RANK_COUNT; ++rank)
+            (void)printf(",cult_%s_rank_%d", species == CC_CULT_HUMAN ? "human" : "goblin", rank);
+    (void)printf(",hoard_share_permille,treasury_share_permille,"
+                 "goblin_share_permille,circulating_share_permille");
+    if (campaign_metrics) {
+        (void)printf(",live_treasures,live_treasure_value,newest_treasure_day,"
+                     "oldest_treasure_day,treasures_from_ruins,treasures_in_ruins,"
+                     "treasure_identity_hash,next_entity_serial,"
+                     "character_coins,hungry_travellers,unsheltered_travellers,named_bandits");
+    }
+    (void)putchar('\n');
     char error[192];
-    for (int32_t seed_number = first_seed;
-         seed_number < first_seed + seeds; ++seed_number) {
+    for (int64_t index = first_seed; index < (int64_t)first_seed + seeds; ++index) {
+        int32_t seed_number = (int32_t)index;
         CcSim sim;
         CcMetricsHistory history = {0};
+        RouteObservation routes[CC_MAX_ROUTES] = {0};
+        RouteObservation previous_routes[CC_MAX_ROUTES] = {0};
+        CcNutritionAccounting nutrition = {0};
+        CcNutritionAccounting previous_nutrition = {0};
         CcSimInit(&sim, (uint32_t)seed_number * UINT32_C(0x9e3779b9));
+        if (settlements_csv != NULL && trace_start_day == 0) {
+            PrintSettlementTrace(settlements_csv, &sim, seed_number, 0);
+        }
         history.minimum_active_settlements = sim.settlement_count;
         for (int32_t i = 0; i < sim.settlement_count; ++i) {
             history.settlement_was_abandoned[i] =
@@ -437,19 +701,64 @@ int main(int argc, char **argv)
         }
         for (int32_t year = 1; year <= years; ++year) {
             for (int32_t day = 0; day < 365; ++day) {
-                CcSimAdvanceDays(&sim, 1);
+                CcSimAdvanceDaysWithNutritionAccounting(&sim, 1,
+                    nutrition_csv != NULL ? &nutrition : NULL);
                 UpdateDailyHistory(&sim, &history);
+                int32_t elapsed_days = (year - 1) * 365 + day + 1;
+                if (settlements_csv != NULL && elapsed_days >= trace_start_day &&
+                    (elapsed_days == trace_start_day ||
+                     elapsed_days % trace_every_days == 0 || elapsed_days == years * 365)) {
+                    PrintSettlementTrace(settlements_csv, &sim, seed_number, elapsed_days);
+                }
+                if (route_csv != NULL) ObserveRoutes(&sim, routes);
             }
             UpdateHistory(&sim, &history);
             if (!CcSimValidate(&sim, error, sizeof(error))) {
                 (void)fprintf(stderr,
                               "Seed %d failed in year %d: %s\n",
                               seed_number, year, error);
+                if (nutrition_csv != NULL) (void)fclose(nutrition_csv);
+                if (settlements_csv != NULL) (void)fclose(settlements_csv);
+                if (route_csv != NULL) (void)fclose(route_csv);
                 return EXIT_FAILURE;
             }
             if (!final_only || year == years) {
-                PrintYear(&sim, &history, seed_number, year);
+                PrintYear(&sim, &history, seed_number, year, campaign_metrics);
+                if (route_csv != NULL) WriteRouteYear(route_csv, &sim, seed_number, year, routes, previous_routes);
+                if (nutrition_csv != NULL) {
+                    PrintNutritionYear(nutrition_csv, &sim, &nutrition,
+                                       &previous_nutrition, seed_number, year);
+                }
             }
+            previous_nutrition = nutrition;
+            memcpy(previous_routes, routes, sizeof(routes));
+        }
+    }
+    if (route_csv != NULL) {
+        bool failed = ferror(route_csv) != 0;
+        if (fclose(route_csv) != 0) failed = true;
+        if (failed) {
+            if (nutrition_csv != NULL) (void)fclose(nutrition_csv);
+            (void)fprintf(stderr, "Writing route observations failed.\n");
+            if (settlements_csv != NULL) (void)fclose(settlements_csv);
+            return EXIT_FAILURE;
+        }
+    }
+    if (settlements_csv != NULL) {
+        bool failed = ferror(settlements_csv) != 0;
+        if (fclose(settlements_csv) != 0) failed = true;
+        if (failed) {
+            if (nutrition_csv != NULL) (void)fclose(nutrition_csv);
+            (void)fprintf(stderr, "Writing settlement trace failed.\n");
+            return EXIT_FAILURE;
+        }
+    }
+    if (nutrition_csv != NULL) {
+        bool failed = ferror(nutrition_csv) != 0;
+        if (fclose(nutrition_csv) != 0) failed = true;
+        if (failed) {
+            (void)fprintf(stderr, "Writing nutrition accounting failed.\n");
+            return EXIT_FAILURE;
         }
     }
     return EXIT_SUCCESS;

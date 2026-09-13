@@ -1,0 +1,18 @@
+{
+  "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+  "python": "3.14.5 (main, May 10 2026, 10:21:34) [Clang 17.0.0 (clang-1700.6.4.2)]",
+  "numpy": "2.4.4",
+  "matplotlib": "3.10.8",
+  "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)\nTarget: arm64-apple-darwin25.3.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+  "build": "CMake Release, CC_BUILD_CLIENT=OFF, CC_WARNINGS_AS_ERRORS=ON",
+  "validation": {
+    "headless_checks_passed": 117,
+    "speech_test_retry": "The local test server required socket access. The rerun passed.",
+    "sweep_tool_integrity_tests": 7,
+    "archive_probe": "Both arms compiled with -Wall -Wextra -Werror and passed annual validation at all 3200 checkpoints per arm."
+  },
+  "simulation_library_sha256": {
+    "main": "03b3ca0a653d17288308e56d66e9305b41c6c6619f0c7018eff7b4d88b47b004",
+    "candidate": "661ff63381c58cfbf2fca4e1ceee8577b4c495ef609c287a395e459ed6ead5d4"
+  }
+}

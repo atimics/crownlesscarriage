@@ -1,0 +1,307 @@
+Test project /private/tmp/crownless-capture-acceptance-audit/out/build/play
+        Start   1: road_site_use_wear
+  1/151 Test   #1: road_site_use_wear ....................   Passed    0.34 sec
+        Start   2: funded_site_maintenance
+  2/151 Test   #2: funded_site_maintenance ...............   Passed    0.30 sec
+        Start   3: town_production_accounting
+  3/151 Test   #3: town_production_accounting ............   Passed    0.41 sec
+        Start   4: treasure_production_contract
+  4/151 Test   #4: treasure_production_contract ..........   Passed    0.88 sec
+        Start   5: site_carriage_deliveries
+  5/151 Test   #5: site_carriage_deliveries ..............   Passed    1.31 sec
+        Start   6: site_freight_reservations
+  6/151 Test   #6: site_freight_reservations .............   Passed    0.32 sec
+        Start   7: site_freight_planning
+  7/151 Test   #7: site_freight_planning .................   Passed    0.23 sec
+        Start   8: freight_leg_geometry
+  8/151 Test   #8: freight_leg_geometry ..................   Passed    0.23 sec
+        Start   9: road_site_production
+  9/151 Test   #9: road_site_production ..................   Passed    0.60 sec
+        Start  10: common_production_contract
+ 10/151 Test  #10: common_production_contract ............   Passed    0.24 sec
+        Start  11: war_society_from_ruins
+ 11/151 Test  #11: war_society_from_ruins ................   Passed    0.37 sec
+        Start  12: crisis_contested_succession
+ 12/151 Test  #12: crisis_contested_succession ...........   Passed   22.60 sec
+        Start  13: situation_music_and_fades
+ 13/151 Test  #13: situation_music_and_fades .............   Passed    0.28 sec
+        Start  14: streamed_music_and_offline_fallback
+ 14/151 Test  #14: streamed_music_and_offline_fallback ...   Passed    0.23 sec
+        Start  15: soundscape_timing_and_samples
+ 15/151 Test  #15: soundscape_timing_and_samples .........   Passed    0.22 sec
+        Start  16: audio_playback_lifetime
+ 16/151 Test  #16: audio_playback_lifetime ...............   Passed    0.21 sec
+        Start  17: native_speech_delivery
+ 17/151 Test  #17: native_speech_delivery ................   Passed    2.39 sec
+        Start  18: audio_exports_and_voice_assets
+ 18/151 Test  #18: audio_exports_and_voice_assets ........   Passed    1.79 sec
+        Start  19: campaign_speech_pack
+ 19/151 Test  #19: campaign_speech_pack ..................   Passed    0.16 sec
+        Start  20: speech_worker_and_cache
+ 20/151 Test  #20: speech_worker_and_cache ...............   Passed    2.00 sec
+        Start  21: license_page_contract
+ 21/151 Test  #21: license_page_contract .................   Passed    0.01 sec
+        Start  22: macos_configuration_contract
+ 22/151 Test  #22: macos_configuration_contract ..........   Passed   22.86 sec
+        Start  23: macos_deployment_target
+ 23/151 Test  #23: macos_deployment_target ...............   Passed    0.02 sec
+        Start  24: robotics_benchmark
+ 24/151 Test  #24: robotics_benchmark ....................   Passed    0.27 sec
+        Start  25: headless_performance_budget
+ 25/151 Test  #25: headless_performance_budget ...........   Passed    0.39 sec
+        Start  26: benchmark_rejects_day_overflow
+ 26/151 Test  #26: benchmark_rejects_day_overflow ........   Passed    0.00 sec
+        Start  27: deterministic_simulation
+ 27/151 Test  #27: deterministic_simulation ..............   Passed    3.60 sec
+        Start  28: authored_story_beats
+ 28/151 Test  #28: authored_story_beats ..................   Passed    0.21 sec
+        Start  29: speech_identity_and_words
+ 29/151 Test  #29: speech_identity_and_words .............   Passed    0.38 sec
+        Start  30: quest_fronts_and_clocks
+ 30/151 Test  #30: quest_fronts_and_clocks ...............   Passed    0.29 sec
+        Start  31: encounter_loot_tables
+ 31/151 Test  #31: encounter_loot_tables .................   Passed    0.22 sec
+        Start  32: local_session_round_trip
+ 32/151 Test  #32: local_session_round_trip ..............   Passed    0.20 sec
+        Start  33: road_council_and_quests
+ 33/151 Test  #33: road_council_and_quests ...............   Passed    0.21 sec
+        Start  34: grain_supply_and_disruption
+ 34/151 Test  #34: grain_supply_and_disruption ...........   Passed    0.40 sec
+        Start  35: bakery_support_and_memory
+ 35/151 Test  #35: bakery_support_and_memory .............   Passed    0.34 sec
+        Start  36: roadside_camp_choices
+ 36/151 Test  #36: roadside_camp_choices .................   Passed   25.20 sec
+        Start  37: free_road_departures
+ 37/151 Test  #37: free_road_departures ..................   Passed    1.75 sec
+        Start  38: web_speech_delivery
+ 38/151 Test  #38: web_speech_delivery ...................   Passed    0.83 sec
+        Start  39: browser_persistence_contract
+ 39/151 Test  #39: browser_persistence_contract ..........   Passed    0.11 sec
+        Start  40: browser_shared_carriage_contract
+ 40/151 Test  #40: browser_shared_carriage_contract ......   Passed    0.10 sec
+        Start  41: browser_music_download_and_cache
+ 41/151 Test  #41: browser_music_download_and_cache ......   Passed    8.25 sec
+        Start  42: sweep_hunger_analysis
+ 42/151 Test  #42: sweep_hunger_analysis .................   Passed    0.31 sec
+        Start  43: native_shared_company
+ 43/151 Test  #43: native_shared_company .................   Passed    2.57 sec
+        Start  44: music_catalog_metadata
+ 44/151 Test  #44: music_catalog_metadata ................   Passed    0.07 sec
+        Start  45: bundled_music_and_host_catalog
+ 45/151 Test  #45: bundled_music_and_host_catalog ........   Passed    0.16 sec
+        Start  46: webgl2_skinning_uniform_budget
+ 46/151 Test  #46: webgl2_skinning_uniform_budget ........   Passed    0.14 sec
+        Start  47: simulation_runner_resume
+ 47/151 Test  #47: simulation_runner_resume ..............   Passed    0.55 sec
+        Start  48: letter_probe_contracts
+ 48/151 Test  #48: letter_probe_contracts ................   Passed    0.39 sec
+        Start  49: interaction_planner
+ 49/151 Test  #49: interaction_planner ...................   Passed    0.21 sec
+        Start  50: shared_carriage_bridge
+ 50/151 Test  #50: shared_carriage_bridge ................   Passed    2.42 sec
+        Start  51: shared_carriage_server
+ 51/151 Test  #51: shared_carriage_server ................   Passed    4.76 sec
+        Start  52: daily_play_policy
+ 52/151 Test  #52: daily_play_policy .....................   Passed    0.21 sec
+        Start  53: horse_cattle_and_flock_economy
+ 53/151 Test  #53: horse_cattle_and_flock_economy ........   Passed    0.27 sec
+        Start  54: horse_stable_breeding
+ 54/151 Test  #54: horse_stable_breeding .................   Passed    0.23 sec
+        Start  55: route_daily_observations
+ 55/151 Test  #55: route_daily_observations ..............   Passed    0.22 sec
+        Start  56: bandit_exposure_counts
+ 56/151 Test  #56: bandit_exposure_counts ................   Passed    0.19 sec
+        Start  57: ritual_offering_plan
+ 57/151 Test  #57: ritual_offering_plan ..................   Passed    0.20 sec
+        Start  58: campaign_launch_plan
+ 58/151 Test  #58: campaign_launch_plan ..................   Passed    0.19 sec
+        Start  59: roadside_recovery_plan
+ 59/151 Test  #59: roadside_recovery_plan ................   Passed    0.19 sec
+        Start  60: player_agent_checkpoint_validation
+ 60/151 Test  #60: player_agent_checkpoint_validation ....   Passed    0.30 sec
+        Start  61: player_agent_hunger_report
+ 61/151 Test  #61: player_agent_hunger_report ............   Passed    0.23 sec
+        Start  62: inhabited_hunger_metrics
+ 62/151 Test  #62: inhabited_hunger_metrics ..............   Passed    0.20 sec
+        Start  63: threat_group_snapshots
+ 63/151 Test  #63: threat_group_snapshots ................   Passed    0.26 sec
+        Start  64: road_recovery_json
+ 64/151 Test  #64: road_recovery_json ....................   Passed    0.27 sec
+        Start  65: transition_plan_json
+ 65/151 Test  #65: transition_plan_json ..................   Passed    0.49 sec
+        Start  66: archive_work_json
+ 66/151 Test  #66: archive_work_json .....................   Passed    0.27 sec
+        Start  67: road_network_json
+ 67/151 Test  #67: road_network_json .....................   Passed    0.27 sec
+        Start  68: road_observation
+ 68/151 Test  #68: road_observation ......................   Passed    0.22 sec
+        Start  69: road_context_json
+ 69/151 Test  #69: road_context_json .....................   Passed    0.28 sec
+        Start  70: retained_history_json
+ 70/151 Test  #70: retained_history_json .................   Passed    0.26 sec
+        Start  71: production_json_capture
+ 71/151 Test  #71: production_json_capture ...............   Passed    2.95 sec
+        Start  72: route_observation_csv
+ 72/151 Test  #72: route_observation_csv .................   Passed    0.37 sec
+        Start  73: sweep_input_boundaries
+ 73/151 Test  #73: sweep_input_boundaries ................   Passed    0.18 sec
+        Start  74: hunger_report_agreement
+ 74/151 Test  #74: hunger_report_agreement ...............   Passed    0.07 sec
+        Start  75: welfare_report_agreement
+ 75/151 Test  #75: welfare_report_agreement ..............   Passed    0.30 sec
+        Start  76: welfare_plot_inputs
+ 76/151 Test  #76: welfare_plot_inputs ...................   Passed    0.08 sec
+        Start  77: settlement_character_names
+ 77/151 Test  #77: settlement_character_names ............   Passed    1.42 sec
+        Start  78: nutrition_storage_accounting
+ 78/151 Test  #78: nutrition_storage_accounting ..........   Passed    0.55 sec
+        Start  79: nutrition_accounting_csv
+ 79/151 Test  #79: nutrition_accounting_csv ..............   Passed    0.17 sec
+        Start  80: hoard_raid_food_accounting
+ 80/151 Test  #80: hoard_raid_food_accounting ............   Passed    0.33 sec
+        Start  81: osr_long_run_balance
+ 81/151 Test  #81: osr_long_run_balance ..................   Passed    3.76 sec
+        Start  82: rainbow_pony_companions
+ 82/151 Test  #82: rainbow_pony_companions ...............   Passed    0.37 sec
+        Start  83: trade_path_rules
+ 83/151 Test  #83: trade_path_rules ......................   Passed    0.22 sec
+        Start  84: archive_funding_plan
+ 84/151 Test  #84: archive_funding_plan ..................   Passed    0.22 sec
+        Start  85: quest_cast_continuity
+ 85/151 Test  #85: quest_cast_continuity .................   Passed    0.36 sec
+        Start  86: received_account_lifetimes
+ 86/151 Test  #86: received_account_lifetimes ............   Passed    0.58 sec
+        Start  87: identity_ledger_collisions
+ 87/151 Test  #87: identity_ledger_collisions ............   Passed    0.22 sec
+        Start  88: persistence_field_contract
+ 88/151 Test  #88: persistence_field_contract ............   Passed   11.41 sec
+        Start  89: sqlite_round_trip
+ 89/151 Test  #89: sqlite_round_trip .....................   Passed    3.89 sec
+        Start  90: royal_carriage_trade
+ 90/151 Test  #90: royal_carriage_trade ..................   Passed    0.96 sec
+        Start  91: persistent_route_knowledge
+ 91/151 Test  #91: persistent_route_knowledge ............   Passed    0.42 sec
+        Start  92: silverwick_mine_roundtrip
+ 92/151 Test  #92: silverwick_mine_roundtrip .............   Passed    0.33 sec
+        Start  93: persistent_underroad_expeditions
+ 93/151 Test  #93: persistent_underroad_expeditions ......   Passed    0.34 sec
+        Start  94: empty_granary_scenario
+ 94/151 Test  #94: empty_granary_scenario ................   Passed    0.25 sec
+        Start  95: living_world_feedback
+ 95/151 Test  #95: living_world_feedback .................   Passed    0.48 sec
+        Start  96: causal_history_retention
+ 96/151 Test  #96: causal_history_retention ..............   Passed    1.34 sec
+        Start  97: goblin_dragon_causal_cycle
+ 97/151 Test  #97: goblin_dragon_causal_cycle ............   Passed    0.40 sec
+        Start  98: goblin_society_choices
+ 98/151 Test  #98: goblin_society_choices ................   Passed    0.38 sec
+        Start  99: traveller_poverty_recruitment
+ 99/151 Test  #99: traveller_poverty_recruitment .........   Passed    0.45 sec
+        Start 100: dragon_crown_ecology
+100/151 Test #100: dragon_crown_ecology ..................   Passed    0.52 sec
+        Start 101: physical_material_economy
+101/151 Test #101: physical_material_economy .............   Passed    2.13 sec
+        Start 102: material_chain_proofs
+102/151 Test #102: material_chain_proofs .................   Passed    0.23 sec
+        Start 103: traveler_gossip_network
+103/151 Test #103: traveler_gossip_network ...............   Passed    0.65 sec
+        Start 104: grain_food_economy
+104/151 Test #104: grain_food_economy ....................   Passed    0.21 sec
+        Start 105: text_first_metagame
+105/151 Test #105: text_first_metagame ...................   Passed    0.39 sec
+        Start 106: distinct_local_places
+106/151 Test #106: distinct_local_places .................   Passed    0.21 sec
+        Start 107: town_evolution
+107/151 Test #107: town_evolution ........................   Passed    0.28 sec
+        Start 108: finite_world_streaming
+108/151 Test #108: finite_world_streaming ................   Passed    0.34 sec
+        Start 109: simulation_shape_metrics
+109/151 Test #109: simulation_shape_metrics ..............   Passed    0.21 sec
+        Start 110: generalized_limb_system
+110/151 Test #110: generalized_limb_system ...............   Passed    0.20 sec
+        Start 111: continuous_character_collision
+111/151 Test #111: continuous_character_collision ........   Passed    0.18 sec
+        Start 112: generalized_biomechanical_system
+112/151 Test #112: generalized_biomechanical_system ......   Passed    0.18 sec
+        Start 113: verified_footing_course
+113/151 Test #113: verified_footing_course ...............   Passed    0.20 sec
+        Start 114: creature_skeletal_muscular_system
+114/151 Test #114: creature_skeletal_muscular_system .....   Passed    0.19 sec
+        Start 115: blender_humanoid_skin_contract
+115/151 Test #115: blender_humanoid_skin_contract ........   Passed    0.18 sec
+        Start 116: blender_quadruped_skin_contract
+116/151 Test #116: blender_quadruped_skin_contract .......   Passed    0.18 sec
+        Start 117: layered_motion_contract
+117/151 Test #117: layered_motion_contract ...............   Passed    0.18 sec
+        Start 118: generated_creature_catalog
+118/151 Test #118: generated_creature_catalog ............   Passed    0.18 sec
+        Start 119: render_benchmark_contract
+119/151 Test #119: render_benchmark_contract .............   Passed    0.39 sec
+        Start 120: capture_presentation_contract
+120/151 Test #120: capture_presentation_contract .........   Passed    0.00 sec
+        Start 121: capture_scene_contract
+121/151 Test #121: capture_scene_contract ................   Passed    0.00 sec
+        Start 122: capture_frame_contract
+122/151 Test #122: capture_frame_contract ................   Passed    0.00 sec
+        Start 123: capture_request_contract
+123/151 Test #123: capture_request_contract ..............   Passed    0.00 sec
+        Start 124: storybook_travel_boundaries
+124/151 Test #124: storybook_travel_boundaries ...........   Passed    0.39 sec
+        Start 125: travel_audio_presentation
+125/151 Test #125: travel_audio_presentation .............   Passed    0.00 sec
+        Start 126: adventure_town_routes
+126/151 Test #126: adventure_town_routes .................   Passed    4.53 sec
+        Start 127: adventure_trade_terms
+127/151 Test #127: adventure_trade_terms .................   Passed    0.00 sec
+        Start 128: bridge_scene_input
+128/151 Test #128: bridge_scene_input ....................   Passed    0.05 sec
+        Start 129: world_card_input_parity
+129/151 Test #129: world_card_input_parity ...............   Passed    0.16 sec
+        Start 130: silverwick_mine_input
+130/151 Test #130: silverwick_mine_input .................   Passed    0.16 sec
+        Start 131: adventure_input_flow
+131/151 Test #131: adventure_input_flow ..................   Passed    0.35 sec
+        Start 132: title_and_pause_menu
+132/151 Test #132: title_and_pause_menu ..................   Passed    0.23 sec
+        Start 133: map_sale_input
+133/151 Test #133: map_sale_input ........................   Passed    0.15 sec
+        Start 134: town_arrival_parking
+134/151 Test #134: town_arrival_parking ..................   Passed    0.12 sec
+        Start 135: town_departure_to_road_book
+135/151 Test #135: town_departure_to_road_book ...........   Passed    0.12 sec
+        Start 136: roadbook_arrival_transition
+136/151 Test #136: roadbook_arrival_transition ...........   Passed    0.12 sec
+        Start 137: world_session_startup_restore
+137/151 Test #137: world_session_startup_restore .........   Passed    0.13 sec
+        Start 138: town_session_startup_restore
+138/151 Test #138: town_session_startup_restore ..........   Passed    0.02 sec
+        Start 139: solo_party_wipe
+139/151 Test #139: solo_party_wipe .......................   Passed    0.25 sec
+        Start 140: road_encounter_session_restore
+140/151 Test #140: road_encounter_session_restore ........   Passed    0.12 sec
+        Start 141: renderer_skin_rotation
+141/151 Test #141: renderer_skin_rotation ................   Passed    1.39 sec
+        Start 142: physical_goods_displays
+142/151 Test #142: physical_goods_displays ...............   Passed    0.01 sec
+        Start 143: fixed_creature_gait_timing
+143/151 Test #143: fixed_creature_gait_timing ............   Passed    0.23 sec
+        Start 144: creature_pose_after_a_jump
+144/151 Test #144: creature_pose_after_a_jump ............   Passed    0.22 sec
+        Start 145: travel_animation_follows_the_road
+145/151 Test #145: travel_animation_follows_the_road .....   Passed    0.22 sec
+        Start 146: deterministic_npc_population
+146/151 Test #146: deterministic_npc_population ..........   Passed    0.19 sec
+        Start 147: perceptual_visual_palette
+147/151 Test #147: perceptual_visual_palette .............   Passed    0.18 sec
+        Start 148: dynamic_kingdom_heraldry
+148/151 Test #148: dynamic_kingdom_heraldry ..............   Passed    0.19 sec
+        Start 149: local_collision_space
+149/151 Test #149: local_collision_space .................   Passed   12.76 sec
+        Start 150: character_collision_course
+150/151 Test #150: character_collision_course ............   Passed    0.34 sec
+        Start 151: seeded_hilly_terrain
+151/151 Test #151: seeded_hilly_terrain ..................   Passed    0.68 sec
+
+100% tests passed, 0 tests failed out of 151
+
+Total Test time (real) = 180.46 sec

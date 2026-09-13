@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>Music batch playback check</title>
+<button id="run">Check audio</button><pre id="result">Ready</pre><audio controls></audio>
+<script>
+run.onclick=async()=>{
+ const context=new AudioContext(); await context.resume(); result.textContent='Checking';
+ try {
+ const manifest=await (await fetch('/assets/audio/music/hosted.json')).json();
+ let results=[];
+ for(const t of manifest.tracks){
+  const url='/assets/audio/music/'+t.file;
+  const response=await fetch(url); if(!response.ok)throw Error(url);
+  const bytes=await response.arrayBuffer();
+  const decoded=await context.decodeAudioData(bytes);
+  if(Math.abs(decoded.duration-t.duration)>2)throw Error('Duration '+t.stem);
+  let sum=0; const samples=decoded.getChannelData(0);
+  for(let i=0;i<samples.length;i+=32)sum+=samples[i]*samples[i];
+  if(sum/samples.length*32<0.000001)throw Error('Silent '+t.stem);
+  results.push(t.stem+' decoded '+decoded.duration.toFixed(2)+'s');
+  result.textContent=results.join('\n');
+ }
+ const player=document.querySelector('audio'); player.src='/assets/audio/music/'+manifest.tracks[0].file;
+ await player.play();
+ await new Promise((resolve,reject)=>{player.ontimeupdate=()=>{if(player.currentTime>1)resolve()};player.onerror=reject;});
+ player.pause(); result.textContent+='\nPASS: '+results.length+' full decodes; native audio playback advanced.';
+ }catch(e){result.textContent+='\nFAIL '+e.message;}
+};
+</script>

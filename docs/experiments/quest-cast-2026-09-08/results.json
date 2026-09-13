@@ -1,0 +1,64 @@
+{
+  "paired_worlds": 32,
+  "rows": 11584,
+  "legacy_daily_hashes_verified": 5792,
+  "binary_sha256": {
+    "current": "ec3079b6ab61b0bf096feec94a362cafc3ba292f1860db60df9183020c77a963",
+    "legacy": "1449e4616a68d06b4a766d0a315deaa0ccebc93ab26a5bd8adcfb8f3d5e56b18"
+  },
+  "source_sha256": {
+    "src/quest/cc_quest.c": "b343df8f55f7040239207c70d000744decb70d6940f979814675a790374bb902",
+    "src/quest/cc_quest.h": "e362d31fdbec6cdfe4bddef017cc6f6b5fa13a788909b22934a36155056387a7",
+    "src/sim/cc_character_names.inc": "e306a19613c842701ea7a1b2f1ad8eac0008e70dba932488110b0b95c213f2d9",
+    "src/sim/cc_food_economy.c": "ee0a40e9e98bd58de7bc68559b705d19d1307ee7eb7311c0314f96d4634634c9",
+    "src/sim/cc_food_economy_internal.h": "bb89e38fbcf5f7916b070fc0fffce6395d724034ef22a1164cd3142ad393fb3f",
+    "src/sim/cc_goods.c": "0604d3f278f3c77e22a0bd0fa06c6a264544585adf7d0ab857b6dd09e9f6acdd",
+    "src/sim/cc_goods_internal.h": "459c21ff661f956f119827b3bdf6d359bdae7b9a1df8f2ecc122044da8fe467c",
+    "src/sim/cc_grain_supply.inc": "ea6fb7fe18f3957fbe4543d4c0331cdc32543212cc938f6913eda1d5a7c6d847",
+    "src/sim/cc_identity.c": "346b1973f0d486c05f26779d16518be94ed4232123de996ee01a1a0b03d76ff4",
+    "src/sim/cc_identity_internal.h": "8950969169cf8d1add8876f9cd8c2d15ff13d50c2adde115e416963ee5ab0f0b",
+    "src/sim/cc_journey.c": "01a3ccfd85ff1f9a85e5165577a403dad0a4f342bb8b5ab52a2145eff06a75ef",
+    "src/sim/cc_journey_commands.c": "3bd6cd9d5c11d64ee0776e1850f1f4c94f5a40459967a7f38612603dd4e220c8",
+    "src/sim/cc_journey_departure.c": "2f1ba8632ddf50db17d828f0311f739e22aabb2d5b93cce48f1417a316864e98",
+    "src/sim/cc_journey_encounter.c": "188f3ecaac6320967fc22ab7506e1206682b6318b809f867c2f45bc11f4f2f7f",
+    "src/sim/cc_journey_internal.h": "002250786c5ee6d1c65ae32476b92605a40685e210b9609f7d872b717cdd0a23",
+    "src/sim/cc_journey_runtime.c": "12357cc2091415f06f927d2f25b21a1e94885184a5788871bce496e2ef61b178",
+    "src/sim/cc_mine.c": "225d1adecce308b2529a163d45b821bd438bc86fda9be93c658ad42e6b6aeb52",
+    "src/sim/cc_mine.h": "24f0d3d3a2c4857fa25493b51fc9d0024ac64a9e4d0408704fff83c2f4c0e6f4",
+    "src/sim/cc_ponies.c": "55cc18f1a5d376f43a6defbaafbcc2b6ff6ff293b6c4f4d740c4a05f32731361",
+    "src/sim/cc_production.c": "d08bdfc4fed503c41d31d6f4aac620f93a395fca93b1a58e6f820402126d4849",
+    "src/sim/cc_production.h": "a03b073e268a56d8a952ba7f90602b1db069ac45a1878a0e6ccf3b4fdcad1018",
+    "src/sim/cc_production_internal.h": "aa217795abefe0d90dcd58bb510c447395f9edaab9bd048f05a41f5eb11c3bd0",
+    "src/sim/cc_quest_cast.inc": "950c6143afbe10b4c2c6f3c2a12c2a11f1380ffb6192fde621d477b509494220",
+    "src/sim/cc_road_production.inc": "b5edead3239b5316110b0676b61eea65ddbaa5305cb9568a21243686b62c9616",
+    "src/sim/cc_route_rules.c": "235fc54f2f658bb6ea7c9c8c986686ad8a100c600cda0d27e4bc38ab3c7ea3d8",
+    "src/sim/cc_route_rules_internal.h": "8c754426581369b948ad73609701e7cbbcff80162583d02d40027db1b44d9f29",
+    "src/sim/cc_sim.c": "c91ad0f0281223919ff0fb6655ead7c2181e73fae5000d526aea9498cd8db6ab",
+    "src/sim/cc_sim.h": "9577043c07bb39a56b651d60b53ad7a528570a61f83d221a329a5c8be744d568",
+    "src/sim/cc_sim_hash.c": "7b78dede5d04af6f0a4d296bebb3da3b091d497b0d0ecbfc03131eb0cb018e3b",
+    "src/sim/cc_sim_versions.c": "691234a0b6f0da057edd4fe51598f3104aa2690ead808447e0bebffa948dd57d",
+    "src/sim/cc_site_carriages.inc": "730e6f6ba74fa61ac4068e669ecb549106d3f57e984cf156613a25ebcd538bc4",
+    "src/sim/cc_site_freight_plan.inc": "62685dd248299371d876e46172681509281c5a1c3bc1fff142500e1c63d029af",
+    "tools/quest_cast_experiment.c": "41ae31850ec1614eb6eb27667371f07034eaddf4a629326b5c985b78aa99d538"
+  },
+  "arms": {
+    "73": {
+      "visitor_here": 0.34375,
+      "visitor_bandit": 1.0,
+      "new_quests": 12.28125,
+      "person_moves": 0.65625,
+      "role_changes": 2.78125,
+      "allegiance_changes": 8.21875,
+      "hunger": 4.40625
+    },
+    "74": {
+      "visitor_here": 1.0,
+      "visitor_bandit": 1.0,
+      "new_quests": 12.28125,
+      "person_moves": 0.0,
+      "role_changes": 0.0,
+      "allegiance_changes": 0.0,
+      "hunger": 4.40625
+    }
+  }
+}

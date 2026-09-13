@@ -48,8 +48,11 @@ Trade checks cover purse, stock, cargo space, market funds, a changed quote, ful
 
 Run the native checks with `cmake --build --preset play -j 4` and `ctest --preset play --output-on-failure`. The focused checks match `adventure_`, `interaction_planner`, and `daily_play_policy`.
 
-For a separate play session, pass `--campaign /path/to/review.ccsave`. Native review captures use `--capture-ux MODE image.png WIDTH TEXT_SIZE`. Use a relative output filename in the desired output folder. Modes are 0 town, 1 interior, 2 conversation, 3 trade, 4 journal, 5 menu, and 6 local promises. Supported widths are 1040, 1200, and 1600; text size 2 selects the largest setting.
+For a separate play session, pass `--campaign /path/to/review.ccsave`. Native review captures use `--capture-ux MODE image.png WIDTH TEXT_SIZE`. Use a relative output filename in the desired output folder. Modes are 0 town, 1 interior, 2 conversation, 3 trade, 4 journal, 5 menu, and 6 local promises. Supported desktop sizes are 1040×620, 1200×700, 1280×720, 1600×900, and 1920×1080. Pass the width to select its matching height; text size 2 selects the largest setting.
 
 ## Follow-up work
 
 The broader design remains tracked in #216. Further work covers private building interiors, more named conversations, road and site presentation, key remapping, caption options, and full browser and shared-session playtests. New receipt text stays in the current trade screen; lasting history uses the existing journal and quest outcome records. Shared trade uses the existing host command protocol. Host-side binding of price quotes remains a separate improvement.
+
+
+Run `python3 tools/capture_ux_desktop.py PATH_TO_CLIENT` for the desktop reading matrix. It captures conversation, trade, book, and road views at the four required desktop sizes with standard and largest text. Images and per-frame logs go to `out/ux-desktop-review`; `results.json` is written after every frame succeeds. Review the images for layout and readability after the size checks pass.

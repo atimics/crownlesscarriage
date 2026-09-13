@@ -4,6 +4,7 @@
 #include "client/cc_crew.h"
 
 bool CcCoopClientActive(void);
+void CcCoopClientTravelScale(int32_t scale);
 void CcCoopClientConfigure(const char *program, const char *campaign_path, const char *world);
 void CcCoopClientWorldId(char *world, size_t capacity);
 void CcCoopClientEnterWorld(const char *world);

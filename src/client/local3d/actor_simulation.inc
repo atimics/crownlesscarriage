@@ -1005,8 +1005,7 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
     for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
         CcLocalAgent *raider = &course->raiders[i];
         Vector2 raider_position = hostile ?
-            (Vector2){54.60f + (float)i * 0.35f,
-                      i == 0 ? 39.35f : 40.65f} :
+            (Vector2){49.40f + (float)i * 1.80f, 39.45f} :
             (Vector2){i == 0 ? 50.45f : 52.90f,
                       i == 0 ? 39.45f : 40.65f};
         CcLocalAgentInit(raider, raider_position, false);
@@ -2072,6 +2071,13 @@ void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
                                     CcLocalAgent *player,
                                     const CcSim *sim, float delta_time)
 {
+    const CcSettlement *town = sim != NULL ? CcSimSettlement(sim, sim->player.location_id) : NULL;
+    if (course->scene == CC_LOCAL_SCENE_STREET && town != NULL && CcSettlementIsAbandoned(town)) {
+        for (int32_t i = 0; i < CC_LOCAL_TRAVELLER_COUNT; ++i) course->travellers[i].active = false;
+        course->situation_witness_active = false;
+        course->alarm_active = false;
+        return;
+    }
     UpdateCourseTravellers(course, sim, delta_time);
     if (course->scene == CC_LOCAL_SCENE_STREET) {
         CourseConfigureSituationWitness(course, sim);

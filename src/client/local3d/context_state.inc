@@ -156,6 +156,10 @@ typedef struct WorldStructure {
 } WorldStructure;
 
 static const Rectangle CARRIAGE_FOOTPRINT = {35.80f, 48.50f, 3.20f, 5.40f};
+static const Rectangle GLOAMGATE_GATE_POSTS[] = {
+    {83.6f, 32.2f, 0.8f, 0.8f}, {83.6f, 39.0f, 0.8f, 0.8f}
+};
+static const Rectangle GLOAMGATE_FOUNTAIN = {44.65f, 34.15f, 2.70f, 2.70f};
 static const Rectangle DUNGEON_FOOTPRINT = {27.40f, 49.70f, 3.20f, 1.60f};
 
 static const Rectangle ROOM_ART_OBSTACLES[] = {
@@ -216,6 +220,7 @@ typedef enum ArtLightProfileId {
     ART_LIGHT_ROAD_DUSK,
     ART_LIGHT_INTERIOR_EMBER,
     ART_LIGHT_STORYBOOK,
+    ART_LIGHT_FARM_DAY,
     ART_LIGHT_PROFILE_COUNT
 } ArtLightProfileId;
 
@@ -279,6 +284,11 @@ static const ArtLightProfileDefinition ART_LIGHT_PROFILES[] = {
         {0.72f, 0.78f, 0.80f}, {0.72f, 0.86f, 1.06f},
         {142, 161, 153, 255}, 68.0f, 150.0f, 0.38f, 0.16f,
     },
+    [ART_LIGHT_FARM_DAY] = {
+        {-0.60f, 0.72f, 0.35f}, {1.24f, 1.08f, 0.83f},
+        {0.70f, 0.77f, 0.83f}, {0.77f, 0.88f, 1.03f},
+        {42, 62, 70, 255}, 30.0f, 65.0f, 0.46f, 0.16f,
+    },
     [ART_LIGHT_CLEAR_MARKET] = {
         {-0.48f, 0.78f, 0.40f}, {1.18f, 1.06f, 0.88f},
         {0.78f, 0.82f, 0.87f}, {0.82f, 0.92f, 1.06f},
@@ -301,7 +311,7 @@ static const ArtLightProfileDefinition ART_LIGHT_PROFILES[] = {
     },
     [ART_LIGHT_INTERIOR_EMBER] = {
         {-0.38f, 0.52f, 0.76f}, {1.24f, 0.74f, 0.44f},
-        {0.55f, 0.46f, 0.48f}, {0.88f, 0.75f, 0.82f},
+        {0.60f, 0.54f, 0.56f}, {0.82f, 0.82f, 0.94f},
         {31, 23, 25, 255}, 10.0f, 21.0f, 0.52f, 0.17f,
     },
 };
@@ -772,6 +782,78 @@ static const WorldTreePlacement WORLD_TREES[] = {
     {{86.0f, 40.0f}, TREE_FAMILY_ALDER},
     {{93.0f, 36.0f}, TREE_FAMILY_OAK}
 };
+
+static const WorldTreePlacement SILVERWICK_TREES[] = {
+    {{2.5f, 58.0f}, TREE_FAMILY_ALDER},
+    {{6.0f, 62.0f}, TREE_FAMILY_ALDER},
+    {{10.0f, 56.0f}, TREE_FAMILY_POLLARD},
+    {{14.0f, 65.0f}, TREE_FAMILY_OAK},
+    {{18.0f, 58.0f}, TREE_FAMILY_ALDER},
+    {{22.0f, 64.0f}, TREE_FAMILY_ALDER},
+    {{27.0f, 60.0f}, TREE_FAMILY_ALDER},
+    {{33.0f, 66.0f}, TREE_FAMILY_OAK},
+    {{48.0f, 63.0f}, TREE_FAMILY_ALDER},
+    {{54.0f, 59.0f}, TREE_FAMILY_ALDER},
+    {{59.0f, 65.0f}, TREE_FAMILY_POLLARD},
+    {{66.0f, 59.0f}, TREE_FAMILY_OAK},
+    {{73.0f, 64.0f}, TREE_FAMILY_ALDER},
+    {{84.0f, 59.5f}, TREE_FAMILY_ALDER},
+    {{88.0f, 64.0f}, TREE_FAMILY_OAK},
+    {{93.0f, 56.0f}, TREE_FAMILY_ALDER},
+    {{18.0f, 5.0f}, TREE_FAMILY_ALDER},
+    {{24.0f, 8.0f}, TREE_FAMILY_POLLARD},
+    {{31.0f, 5.5f}, TREE_FAMILY_OAK},
+    {{49.0f, 6.0f}, TREE_FAMILY_ALDER},
+    {{57.0f, 5.0f}, TREE_FAMILY_POLLARD},
+    {{62.0f, 3.5f}, TREE_FAMILY_ALDER},
+    {{4.0f, 14.0f}, TREE_FAMILY_POLLARD},
+    {{16.0f, 14.5f}, TREE_FAMILY_ALDER},
+    {{17.0f, 45.0f}, TREE_FAMILY_POLLARD},
+    {{20.0f, 52.0f}, TREE_FAMILY_ALDER},
+    {{57.5f, 41.0f}, TREE_FAMILY_OAK},
+    {{70.0f, 44.0f}, TREE_FAMILY_POLLARD},
+    {{86.0f, 51.0f}, TREE_FAMILY_ALDER},
+    {{93.0f, 30.0f}, TREE_FAMILY_OAK}
+};
+_Static_assert(sizeof(SILVERWICK_TREES) == sizeof(WORLD_TREES),
+               "Silverwick uses the shared tree count");
+
+
+static const WorldTreePlacement GLOAMGATE_TREES[] = {
+    {{2.5f, 58.0f}, TREE_FAMILY_ALDER},
+    {{6.0f, 62.0f}, TREE_FAMILY_ALDER},
+    {{10.0f, 56.0f}, TREE_FAMILY_POLLARD},
+    {{14.0f, 65.0f}, TREE_FAMILY_OAK},
+    {{4.0f, 66.0f}, TREE_FAMILY_ALDER},
+    {{22.0f, 64.0f}, TREE_FAMILY_ALDER},
+    {{27.0f, 60.0f}, TREE_FAMILY_ALDER},
+    {{33.0f, 66.0f}, TREE_FAMILY_OAK},
+    {{48.0f, 63.0f}, TREE_FAMILY_ALDER},
+    {{54.0f, 59.0f}, TREE_FAMILY_ALDER},
+    {{64.0f, 68.0f}, TREE_FAMILY_POLLARD},
+    {{66.0f, 59.0f}, TREE_FAMILY_OAK},
+    {{73.0f, 64.0f}, TREE_FAMILY_ALDER},
+    {{84.0f, 59.5f}, TREE_FAMILY_ALDER},
+    {{88.0f, 64.0f}, TREE_FAMILY_OAK},
+    {{93.0f, 56.0f}, TREE_FAMILY_ALDER},
+    {{18.0f, 5.0f}, TREE_FAMILY_ALDER},
+    {{24.0f, 8.0f}, TREE_FAMILY_POLLARD},
+    {{31.0f, 5.5f}, TREE_FAMILY_OAK},
+    {{49.0f, 6.0f}, TREE_FAMILY_ALDER},
+    {{57.0f, 5.0f}, TREE_FAMILY_POLLARD},
+    {{62.0f, 3.5f}, TREE_FAMILY_ALDER},
+    {{4.0f, 14.0f}, TREE_FAMILY_POLLARD},
+    {{16.0f, 14.5f}, TREE_FAMILY_ALDER},
+    {{17.0f, 45.0f}, TREE_FAMILY_POLLARD},
+    {{20.0f, 52.0f}, TREE_FAMILY_ALDER},
+    {{71.0f, 65.0f}, TREE_FAMILY_OAK},
+    {{70.5f, 39.5f}, TREE_FAMILY_POLLARD},
+    {{86.0f, 40.0f}, TREE_FAMILY_ALDER},
+    {{94.0f, 44.0f}, TREE_FAMILY_OAK}
+};
+_Static_assert(sizeof(GLOAMGATE_TREES) == sizeof(WORLD_TREES),
+               "Market trees share the scenery and sightline slots.");
+
 
 // Orchard rows and riverbank trees frame Thornford's working plots.
 static const WorldTreePlacement THORNFORD_TREES[] = {

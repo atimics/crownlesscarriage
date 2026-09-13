@@ -1,0 +1,8 @@
+{
+  "seed_1_original_binary_128000_endpoint_exact_match": true,
+  "seed_4_original_binary_failure_exact_match": true,
+  "seed_4_failure": "Seed 4 failed in year 94169: Royal carriage 0 invalid (m=0 rc=0 tm=0 lk=0 slots=1/-1/-1 r=-1->-1 dep=34371670 arr=0).",
+  "seed_1_ubsan_128000_endpoint_exact_match": true,
+  "ubsan_binary_sha256": "f64d6cce3c4036f030c07a1d418de1700d570bdd8d9a9de1d43883ffa439aec9",
+  "runner_retains_partial_output_and_exits_nonzero_on_failure": true
+}

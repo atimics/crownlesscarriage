@@ -1,0 +1,172 @@
+[
+  {
+    "path": "out/capture-hooks/book.png",
+    "bytes": 73983,
+    "sha256": "033eee96a57a28540d82cf6a0c4abb4b4928e17bd0d9774d9f1c503ef126155d"
+  },
+  {
+    "path": "out/capture-hooks/conversation.png",
+    "bytes": 166283,
+    "sha256": "17ca170fd179604f780c0a7c674a39e8829781fe5ede5c31ac86d2919602915d"
+  },
+  {
+    "path": "out/capture-hooks/heraldry.png",
+    "bytes": 82037,
+    "sha256": "d2609403d4e2db3d3e3d4f6c65d264112934f85ad78f5cd37864adece8f1413a"
+  },
+  {
+    "path": "out/capture-hooks/menu.png",
+    "bytes": 51683,
+    "sha256": "747880c2b26f22f99daba9e07202d7964e2684c55efa117e486b83fa690f16b0"
+  },
+  {
+    "path": "out/capture-hooks/npc-front.png",
+    "bytes": 133394,
+    "sha256": "a9878040481064f29e2547bc23ed03be70313d251cc38f6d37e03f51a5341604"
+  },
+  {
+    "path": "out/capture-hooks/ponies-large.png",
+    "bytes": 44303,
+    "sha256": "79898a4821d23d30270ea4b2ed58cdbb8d134c9dfe59a82e74565f6cd0757943"
+  },
+  {
+    "path": "out/capture-hooks/ponies-roaming.png",
+    "bytes": 45478,
+    "sha256": "2f1373b342df47d530228e00edcee147ae9a57cc72b34681d08dd6b2d8869a58"
+  },
+  {
+    "path": "out/capture-hooks/ponies.png",
+    "bytes": 53854,
+    "sha256": "d677a7cbb497205deeee3fe1052c34edbd8c3db8c65e37ae923601bf12d1c490"
+  },
+  {
+    "path": "out/capture-hooks/pony-book.png",
+    "bytes": 62580,
+    "sha256": "3cab45820b657fe6db1642ff20aa0311823b1060c8987e00ec173070bd176787"
+  },
+  {
+    "path": "out/capture-hooks/pony-encounter.png",
+    "bytes": 160332,
+    "sha256": "b5a49b3c1533cdce35c796b2b0698138bbe8bf707536910247687665e679dfaa"
+  },
+  {
+    "path": "out/capture-hooks/pony-swap.png",
+    "bytes": 160515,
+    "sha256": "8cccfa3f92c112df675f4adb327e451e37a16ca18951bb34ca77e37e410df837"
+  },
+  {
+    "path": "out/capture-hooks/road-1040.png",
+    "bytes": 202193,
+    "sha256": "0658c6d4b0451b7491bc3bc0b4f4791c24a78590bc7a73f27db126c7ca5cc564"
+  },
+  {
+    "path": "out/capture-hooks/road-1200.png",
+    "bytes": 206993,
+    "sha256": "c5fa81de33b223a57d4b3b32c7f3f17649502222ecc459fd56c74db8064af0e9"
+  },
+  {
+    "path": "out/capture-hooks/road-1280.png",
+    "bytes": 209334,
+    "sha256": "4fb9c2d4b540548f4dfecf70bef18189c4c06167fff170f41258ec6cb5b094b8"
+  },
+  {
+    "path": "out/capture-hooks/trade.png",
+    "bytes": 68461,
+    "sha256": "30f9d36cfb947561b4351677f4659f6b85cf25431f9adfa08497e3b09c8592ba"
+  },
+  {
+    "path": "out/build/client/roadbook-review/arrival-gate.png",
+    "bytes": 136266,
+    "sha256": "e910e476204b26ae02771d0f6fd0089f3f0dc7927490f9a3242faf1392f9d303"
+  },
+  {
+    "path": "out/build/client/roadbook-review/arrival-road-book.png",
+    "bytes": 81715,
+    "sha256": "4381fc015b3c8abcfc5ca4808773c23c93d856590b18598086413ce8aec49818"
+  },
+  {
+    "path": "out/build/client/roadbook-review/arrival-town-gate.png",
+    "bytes": 250614,
+    "sha256": "6990d8074f8a6b8f731e7ef32d133c86ea13d8bbfed7f29b9fc2bac5079179b7"
+  },
+  {
+    "path": "out/build/client/roadbook-review/arrival-town-road.png",
+    "bytes": 274163,
+    "sha256": "26f3996f4fb762b8ecad263dd7edb33755d57c70d66025688885c8c323f0da28"
+  },
+  {
+    "path": "out/build/client/roadbook-review/arrival-yard.png",
+    "bytes": 334531,
+    "sha256": "d5ac7b88f3c931ceee188592e0bee413a21f77d7e546e7cbb20bc5ec2a2c030d"
+  },
+  {
+    "path": "out/build/client/roadbook-review/arrival.png",
+    "bytes": 147305,
+    "sha256": "0f0178ac7053a039b41f916cbef695488c4180a4584cc7f57150853495752070"
+  },
+  {
+    "path": "out/build/client/roadbook-review/departure-gate.png",
+    "bytes": 133590,
+    "sha256": "7aeb16517e3d56ae542c32fee671e2ea22a9f94cab2fae7dfb40e3f147431a2c"
+  },
+  {
+    "path": "out/build/client/roadbook-review/departure-rise.png",
+    "bytes": 103125,
+    "sha256": "27f42d44c26e44cce526246e26011de3b2470399e8a77e917f3f95ae0f2cdddb"
+  },
+  {
+    "path": "out/build/client/roadbook-review/departure-road-book.png",
+    "bytes": 67752,
+    "sha256": "4bcd83f2d8ff4eadae3067fb6a3522b38fc927275c5a9edd0c4f9d10db726a74"
+  },
+  {
+    "path": "out/build/client/roadbook-review/departure.png",
+    "bytes": 107728,
+    "sha256": "7356a208385068f9acd8cd0d46060fbc92d1b10baede50fe91fdfedc8c9fccb5"
+  },
+  {
+    "path": "out/build/client/roadbook-review/fork.png",
+    "bytes": 215636,
+    "sha256": "1bdd38c83736274b9b0eef821a2ab554466b15bd831e4e3be1de2ccc1a993457"
+  },
+  {
+    "path": "out/build/client/roadbook-review/kingdom-marker.png",
+    "bytes": 78344,
+    "sha256": "d3d9a102f8c6db417315ca2596b8eb3776d83192e76704aaf0768ebd3f3509f0"
+  },
+  {
+    "path": "out/build/client/roadbook-review/route-sight-middle.png",
+    "bytes": 65523,
+    "sha256": "30c5c83e51234d7662252ed759208ae5514ae9b90c80db51e7f1a980cac49752"
+  },
+  {
+    "path": "out/build/client/roadbook-review/route-sight-start.png",
+    "bytes": 73277,
+    "sha256": "fef16df26db81348fb5cf773bf7b039a2dc0519666457421105bf20ae2159313"
+  },
+  {
+    "path": "out/build/client/roadbook-review/storybook-arrival.png",
+    "bytes": 275960,
+    "sha256": "4f41e9363ab95faff6dbba65255430cbd8456f34b3b299b6f901151295fec3ad"
+  },
+  {
+    "path": "out/build/client/roadbook-review/storybook-close.png",
+    "bytes": 215601,
+    "sha256": "a653cbc92c343ff917aab525f5d634fcff7edb7aba64f370addeefb6b6cce480"
+  },
+  {
+    "path": "out/build/client/roadbook-review/storybook-pullback.png",
+    "bytes": 255203,
+    "sha256": "4cc27f3b6dc9dbacdef663dc41b96917306034c31d664e378c749401e8be47e6"
+  },
+  {
+    "path": "out/build/client/roadbook-review/storybook-wide.png",
+    "bytes": 213846,
+    "sha256": "17b52ef45ec489a0f06b1e5a4b68f6eb5d3ab686f78bab69f6ed99271c66df39"
+  },
+  {
+    "path": "out/build/client/roadbook-review/travel.png",
+    "bytes": 215601,
+    "sha256": "a653cbc92c343ff917aab525f5d634fcff7edb7aba64f370addeefb6b6cce480"
+  }
+]

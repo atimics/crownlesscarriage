@@ -131,6 +131,17 @@ static void EverydaySpeech(void)
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
     before = sim;
     CcSpeech speech;
+    CC_CHECK(CcSpeechGoblinTrade(&sim, 17, &speech));
+    CC_CHECK(speech.voice_index == CC_SPEECH_GOBLIN_VOICE);
+    CC_CHECK(strcmp(CcSpeechVoiceAt(speech.voice_index)->id, "goblin-v1") == 0);
+    CC_CHECK(strstr(speech.text, "17 crowns fo thu") != NULL);
+    CC_CHECK(strcmp(speech.speaker, "Nara Soot-Tongue") == 0);
+    CcSpeech human;
+    CC_CHECK(CcSpeechCompose(&human, speech.line_id, speech.speaker_id, speech.speaker,
+        7U, speech.text, speech.delivery, speech.priority, speech.source_event_id));
+    CC_CHECK(human.audio_key != speech.audio_key);
+    CC_CHECK(!CcSpeechGoblinTrade(&sim, 0, &speech));
+    CC_CHECK(speech.text[0] == '\0');
     CcId place_id = sim.player.location_id;
     CC_CHECK(CcSpeechGreeting(&sim, place_id, 15, "Town guard", "hall", &speech));
     CC_CHECK(strstr(speech.text, CcSimSettlement(&sim, place_id)->name) != NULL);

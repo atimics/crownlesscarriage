@@ -1,0 +1,14 @@
+[
+  {
+    "version": "parent",
+    "exit_code": 0,
+    "report": "render: scene=roadbook-route frames=1 seconds=0.006705 ms/frame=6.705 fps=149.1 p95=2.256 p95_budget=0.000 p99=2.256 max=2.256 hitches=0 skin_updates=1 skinned_meshes=1 hero_skin_updates=0 hero_skinned_meshes=0 npc_skin_updates=0 npc_skinned_meshes=0 creature_skin_updates=1 creature_skinned_meshes=1 high_detail=0 lod=0 static_batch_draws=52 static_batch_instances=1982 static_batch_vertices=81702",
+    "error": ""
+  },
+  {
+    "version": "current",
+    "exit_code": 1,
+    "report": "",
+    "error": "Render benchmark minimum FPS is invalid."
+  }
+]

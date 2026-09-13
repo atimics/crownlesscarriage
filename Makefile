@@ -177,3 +177,11 @@ blender-world-kit-review-check:
 art-check: art-assets-check test-play blender-character-animations-check blender-npc-assets-check blender-creature-assets-check blender-world-kit-check
 	python3 tools/blender/validate_character_paint_channels.py
 	python3 tools/art/run_art_check.py
+
+.PHONY: production-baseline
+PRODUCTION_BUILD ?= out/build/production-capture
+PRODUCTION_OUTPUT ?= out/reports/production-baseline
+production-baseline:
+	cmake -S . -B $(PRODUCTION_BUILD) -DCC_BUILD_CLIENT=OFF -DCMAKE_BUILD_TYPE=Release
+	cmake --build $(PRODUCTION_BUILD) --target crownless_sim_runner --parallel
+	python3 tools/capture_production.py --runner $(PRODUCTION_BUILD)/crownless_sim_runner --output $(PRODUCTION_OUTPUT)

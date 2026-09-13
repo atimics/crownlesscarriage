@@ -1,0 +1,21 @@
+captured roadbook-review/storybook-close.png
+captured roadbook-review/storybook-pullback.png
+captured roadbook-review/storybook-wide.png
+captured roadbook-review/storybook-arrival.png
+captured roadbook-review/travel.png
+captured roadbook-review/route-sight-start.png
+captured roadbook-review/route-sight-middle.png
+captured roadbook-review/fork.png
+captured roadbook-review/departure-gate.png
+captured roadbook-review/departure-rise.png
+captured roadbook-review/departure.png
+captured roadbook-review/kingdom-marker.png
+captured roadbook-review/departure-road-book.png
+captured roadbook-review/arrival-road-book.png
+captured roadbook-review/arrival.png
+captured roadbook-review/arrival-gate.png
+captured roadbook-review/arrival-town-gate.png
+captured roadbook-review/arrival-town-road.png
+captured roadbook-review/arrival-yard.png
+render: scene=roadbook-route frames=360 seconds=0.833791 ms/frame=2.316 fps=431.8 p95=5.089 p95_budget=40.000 p99=6.272 max=9.144 hitches=0 skin_updates=1 skinned_meshes=1 hero_skin_updates=0 hero_skinned_meshes=0 npc_skin_updates=0 npc_skinned_meshes=0 creature_skin_updates=1 creature_skinned_meshes=1 high_detail=0 lod=0 static_batch_draws=52 static_batch_instances=1982 static_batch_vertices=81702
+render: scene=roadbook-network frames=360 seconds=1.048698 ms/frame=2.913 fps=343.3 p95=5.091 p95_budget=45.000 p99=6.331 max=6.991 hitches=0 skin_updates=1 skinned_meshes=1 hero_skin_updates=0 hero_skinned_meshes=0 npc_skin_updates=0 npc_skinned_meshes=0 creature_skin_updates=1 creature_skinned_meshes=1 high_detail=0 lod=0 static_batch_draws=0 static_batch_instances=0 static_batch_vertices=0

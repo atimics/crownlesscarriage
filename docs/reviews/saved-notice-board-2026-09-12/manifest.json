@@ -1,0 +1,16 @@
+{
+  "parent_revision": "47e51a4d8c524d78239a72b365b9e4ed9df53698",
+  "implementation_revision": "0c0f70d3cd00d852e873f1d2bea9ea1996eb52af",
+  "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)\nTarget: arm64-apple-darwin25.3.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+  "parent_schema": 96,
+  "current_schema": 97,
+  "generator": 25,
+  "parent_sim_bytes": 366840,
+  "current_sim_bytes": 369056,
+  "binaries": {
+    "/private/tmp/notices-parent-probe": "37f8ec4b481d4bfeb82a7e4d16b7ff1fa25d25b6f830452a470c2cb6671d8d15",
+    "/private/tmp/notices-current-probe": "49464643ecf58895dfe312bf9296c9d72aab68e41f0df04be9a3e8f1a9f5527d",
+    "/private/tmp/notices-gossip-parent": "6afc4d1bc1a8c4b694baf5cb732baf71000b5653c1a38025ca8294b1570a69a4",
+    "/private/tmp/notices-gossip-current": "334771acba3ef92929434d87ff5ab1edad250256b7adcb0e3e55404444a5e615"
+  }
+}

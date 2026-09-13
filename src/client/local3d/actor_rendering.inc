@@ -552,7 +552,7 @@ static bool DrawNpcArchetypePose3D(
     const float contact_grid = 0.125f;
     Vector3 contact_shadow = {
         roundf(position.x / contact_grid) * contact_grid,
-        0.006f,
+        position.y + 0.006f,
         roundf(position.z / contact_grid) * contact_grid,
     };
     DrawContactShadow(
@@ -3567,6 +3567,8 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
 static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
                        Rectangle viewport)
 {
+    /* Adventure controls carry scene facts; in-frame captions carry speech. */
+    if (interaction_ui_enabled) return;
     const float bubble_height = 18.0f;
     const float head_clearance = 8.0f;
     int32_t width = (int32_t)lroundf(viewport.width);

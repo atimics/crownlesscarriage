@@ -1,0 +1,151 @@
+[
+  {
+    "semantics": "evaluated_plan_snapshot",
+    "blocked_mask": 0,
+    "blocked_reasons": [],
+    "labor_base_id": "144115188075855876",
+    "supplier_id": "144115188075855876",
+    "next_work_day": 112,
+    "population": 300,
+    "food_rations": 20,
+    "wood": 2,
+    "stone": 2,
+    "tools": 1,
+    "effort": 6,
+    "people_used": 1
+  },
+  {
+    "semantics": "evaluated_plan_snapshot",
+    "blocked_mask": 64,
+    "blocked_reasons": [
+      "food"
+    ],
+    "labor_base_id": "144115188075855876",
+    "supplier_id": "144115188075855876",
+    "next_work_day": 112,
+    "population": 300,
+    "food_rations": 0,
+    "wood": 2,
+    "stone": 2,
+    "tools": 1,
+    "effort": 6,
+    "people_used": 1
+  },
+  {
+    "semantics": "evaluated_plan_snapshot",
+    "blocked_mask": 128,
+    "blocked_reasons": [
+      "wood"
+    ],
+    "labor_base_id": "144115188075855876",
+    "supplier_id": "144115188075855876",
+    "next_work_day": 112,
+    "population": 300,
+    "food_rations": 20,
+    "wood": 0,
+    "stone": 2,
+    "tools": 1,
+    "effort": 6,
+    "people_used": 1
+  },
+  {
+    "semantics": "evaluated_plan_snapshot",
+    "blocked_mask": 256,
+    "blocked_reasons": [
+      "stone"
+    ],
+    "labor_base_id": "144115188075855876",
+    "supplier_id": "144115188075855876",
+    "next_work_day": 112,
+    "population": 300,
+    "food_rations": 20,
+    "wood": 2,
+    "stone": 0,
+    "tools": 1,
+    "effort": 6,
+    "people_used": 1
+  },
+  {
+    "semantics": "evaluated_plan_snapshot",
+    "blocked_mask": 512,
+    "blocked_reasons": [
+      "tools"
+    ],
+    "labor_base_id": "144115188075855876",
+    "supplier_id": "144115188075855876",
+    "next_work_day": 112,
+    "population": 300,
+    "food_rations": 20,
+    "wood": 2,
+    "stone": 2,
+    "tools": 0,
+    "effort": 6,
+    "people_used": 1
+  },
+  {
+    "semantics": "evaluated_plan_snapshot",
+    "blocked_mask": 0,
+    "blocked_reasons": [],
+    "labor_base_id": "144115188075855876",
+    "supplier_id": "144115188075855876",
+    "next_work_day": 112,
+    "population": 300,
+    "food_rations": 20,
+    "wood": 2,
+    "stone": 2,
+    "tools": 1,
+    "effort": 6,
+    "people_used": 1
+  },
+  {
+    "semantics": "evaluated_plan_snapshot",
+    "blocked_mask": 8,
+    "blocked_reasons": [
+      "calendar"
+    ],
+    "labor_base_id": "144115188075855876",
+    "supplier_id": "144115188075855876",
+    "next_work_day": 112,
+    "population": 300,
+    "food_rations": 20,
+    "wood": 2,
+    "stone": 2,
+    "tools": 1,
+    "effort": 6,
+    "people_used": 1
+  },
+  {
+    "semantics": "evaluated_plan_snapshot",
+    "blocked_mask": 2,
+    "blocked_reasons": [
+      "open"
+    ],
+    "labor_base_id": "144115188075855876",
+    "supplier_id": "144115188075855876",
+    "next_work_day": 112,
+    "population": 300,
+    "food_rations": 20,
+    "wood": 2,
+    "stone": 2,
+    "tools": 1,
+    "effort": 6,
+    "people_used": 1
+  },
+  {
+    "semantics": "evaluated_plan_snapshot",
+    "blocked_mask": 1,
+    "blocked_reasons": [
+      "invalid"
+    ],
+    "labor_base_id": "0",
+    "supplier_id": "0",
+    "next_work_day": null,
+    "population": null,
+    "food_rations": null,
+    "wood": null,
+    "stone": null,
+    "tools": null,
+    "effort": null,
+    "people_used": null
+  }
+]

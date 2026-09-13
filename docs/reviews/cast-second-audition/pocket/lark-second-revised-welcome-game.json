@@ -1,0 +1,21 @@
+{
+  "voice": "Lark",
+  "take": "revised",
+  "line": "welcome",
+  "text": "The road is quiet this morning. Come inside, and tell me where you are going.",
+  "seed": 20260912,
+  "file": "lark-second-revised-welcome.wav",
+  "seconds": 4.56,
+  "generation_seconds": 1.550470834132284,
+  "reference_sha256": "63f6bd6da5db2c3498cb8f52691f96991a66dd62839713569613732a5565c904",
+  "sha256": "841ad59acb4e83d7fd87ca1c99353fa230732d62f3bcf5df7fdf4140549a4521",
+  "sample_rate": 24000,
+  "master_sha256": "841ad59acb4e83d7fd87ca1c99353fa230732d62f3bcf5df7fdf4140549a4521",
+  "wav_sha256": "45d23250720cd326329c19d23256fb1af8382a16649d17ba1c540f6123d8f0df",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}

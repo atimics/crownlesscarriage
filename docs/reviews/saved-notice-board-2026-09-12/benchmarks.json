@@ -1,0 +1,44 @@
+[
+  {
+    "arm": "parent",
+    "repetition": 1,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.220859s ns/day=37818.3\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002567s ns/step=713.1\nterrain: seeds=8 points=32768 cpu=0.009907s ns/point=302.3\nchecksum=4fc771c36223c76a\n",
+    "stderr": ""
+  },
+  {
+    "arm": "current",
+    "repetition": 1,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.217533s ns/day=37248.8\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002682s ns/step=745.0\nterrain: seeds=8 points=32768 cpu=0.009963s ns/point=304.0\nchecksum=19583c3a301400cf\n",
+    "stderr": ""
+  },
+  {
+    "arm": "parent",
+    "repetition": 2,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.223212s ns/day=38221.2\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002467s ns/step=685.3\nterrain: seeds=8 points=32768 cpu=0.009939s ns/point=303.3\nchecksum=4fc771c36223c76a\n",
+    "stderr": ""
+  },
+  {
+    "arm": "current",
+    "repetition": 2,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.220042s ns/day=37678.4\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002578s ns/step=716.1\nterrain: seeds=8 points=32768 cpu=0.010183s ns/point=310.8\nchecksum=19583c3a301400cf\n",
+    "stderr": ""
+  },
+  {
+    "arm": "parent",
+    "repetition": 3,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.220710s ns/day=37792.8\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002468s ns/step=685.6\nterrain: seeds=8 points=32768 cpu=0.009829s ns/point=300.0\nchecksum=4fc771c36223c76a\n",
+    "stderr": ""
+  },
+  {
+    "arm": "current",
+    "repetition": 3,
+    "exit_code": 0,
+    "stdout": "simulation: seeds=8 years=2 days=5840 cpu=0.217687s ns/day=37275.2\nlocomotion: agents=6 frames=600 steps=3600 cpu=0.002437s ns/step=676.9\nterrain: seeds=8 points=32768 cpu=0.010070s ns/point=307.3\nchecksum=19583c3a301400cf\n",
+    "stderr": ""
+  }
+]

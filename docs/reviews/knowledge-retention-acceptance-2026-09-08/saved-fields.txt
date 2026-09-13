@@ -1,0 +1,7 @@
+Test project /private/tmp/crownless-smithy-acceptance-audit/out/build/headless
+    Start 82: persistence_field_contract
+1/1 Test #82: persistence_field_contract .......   Passed    6.76 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   6.77 sec

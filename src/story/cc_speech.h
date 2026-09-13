@@ -7,6 +7,7 @@
 #define CC_SPEECH_LINE_CAPACITY 96
 #define CC_SPEECH_LANGUAGE "en"
 #define CC_SPEECH_VERSION 1
+#define CC_SPEECH_GOBLIN_VOICE 13U
 #define CC_SPEECH_JSON_CAPACITY 4096
 
 typedef enum CcSpeechDelivery {
@@ -45,6 +46,8 @@ typedef struct CcSpeech {
     uint64_t audio_key;
 } CcSpeech;
 
+/* Reply after a successful goblin trade, with the exact received payment. */
+bool CcSpeechGoblinTrade(const CcSim *sim, CcMoney payment, CcSpeech *speech);
 size_t CcSpeechVoiceCount(void);
 const CcVoiceProfile *CcSpeechVoiceAt(size_t index);
 uint32_t CcSpeechCharacterVoice(const CcSim *sim, const CcCharacter *character);
@@ -68,6 +71,31 @@ bool CcSpeechGreeting(const CcSim *sim, CcId place_id, CcId object_id,
 bool CcSpeechRealizeGossip(const CcSim *sim, const CcCharacter *speaker,
                            const CcGossip *story, const CcGossipVersion *version,
                            char *text, size_t capacity);
+/* Shared language packet for game speech and core-model examples.
+   account is the held telling; claim is a supported, quantity-free rendering. */
+#define CC_GOSSIP_LANGUAGE_VERSION 2
+typedef enum CcGossipDetail {
+    CC_GOSSIP_DETAIL_FULL,
+    CC_GOSSIP_DETAIL_ACTOR,
+    CC_GOSSIP_DETAIL_SUBJECT
+} CcGossipDetail;
+typedef struct CcGossipLanguage {
+    CcEventKind kind;
+    uint32_t variant;
+    CcGossipDetail detail;
+    int32_t confidence;
+    int32_t retellings;
+    char account[CC_EVENT_TEXT_CAPACITY];
+    char claim[CC_SPEECH_TEXT_CAPACITY];
+} CcGossipLanguage;
+
+/* False leaves claim empty. A valid held account remains available to the game. */
+bool CcSpeechPrepareGossip(const CcSim *sim, const CcGossip *story,
+                            const CcGossipVersion *version, uint32_t variant,
+                            CcGossipLanguage *language);
+/* Plain Crownless wording for core training, with explicit hearsay. */
+bool CcSpeechCoreGossip(const CcGossipLanguage *language,
+                         char *text, size_t capacity);
 bool CcSpeechGossip(const CcSim *sim, CcId character_id, int32_t offset,
                       bool source, CcSpeech *speech);
 bool CcSpeechStory(const CcSim *sim, CcId character_id,
