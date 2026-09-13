@@ -10,6 +10,8 @@ int32_t CcEconomyWarExtraConsumption(const CcSim *sim,
 int32_t CcEconomyEffectiveReserveTarget(const CcSim *sim,
                                       const CcSettlement *place,
                                       CcGood good);
+int32_t CcEconomyReliefReserve(const CcSim *sim,
+    const CcSettlement *origin, const CcSettlement *destination, CcGood good);
 int32_t CcEconomyCivilianFoodUse(const CcSettlement *place);
 int32_t CcEconomyWeeklyFoodUse(const CcSim *sim,
                              const CcSettlement *place);

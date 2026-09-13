@@ -1,4 +1,5 @@
 #include "sim/cc_food_economy_internal.h"
+#include "sim/cc_production_internal.h"
 
 #include <limits.h>
 
@@ -63,6 +64,43 @@ int32_t CcEconomyWeeklyFoodUse(const CcSim *sim,
     return MaximumI32(
         1, CcEconomyCivilianFoodUse(place) +
            CcEconomyWarExtraConsumption(sim, place, CC_GOOD_FOOD));
+}
+
+/* Relief releases part of an existing reserve. The original target remains
+   the ceiling, as in the bread policy; each food's floor uses its nutrition.
+   Wheat also retains one production cycle of bakery and herd inputs. */
+int32_t CcEconomyReliefReserve(const CcSim *sim,
+    const CcSettlement *origin, const CcSettlement *destination, CcGood good)
+{
+    if (sim == NULL || origin == NULL || destination == NULL ||
+        good < 0 || good >= CC_GOOD_COUNT) return 0;
+    int32_t reserve = origin->reserve_target[good];
+    if (CcSettlementIsAbandoned(origin) || CcSettlementIsAbandoned(destination) ||
+        destination->hunger < 65 || origin->hunger >= 35) return reserve;
+    if (sim->schema_version < 100U) {
+        if (good != CC_GOOD_BREAD) return reserve;
+        return MinimumI32(reserve, MaximumI32(
+            CcEconomyWeeklyFoodUse(sim, origin) * 6, reserve / 2));
+    }
+    int32_t nutrition = CcGoodNutritionValue(good, CC_NUTRITION_CIVILIAN);
+    if (nutrition <= 0) return reserve;
+    int64_t floor = ((int64_t)CcEconomyWeeklyFoodUse(sim, origin) *
+        6 * CC_NUTRITION_PER_RATION + nutrition - 1) / nutrition;
+    if (good == CC_GOOD_WHEAT) {
+        int64_t input = CcEconomyBakeryCapacity(origin);
+        if (CcSettlementHasService(origin, CC_SERVICE_FARM)) {
+            input += ((int64_t)origin->cow_adults + origin->cow_calves + 11) / 12;
+            /* Keep the next flock meal through seasonal transitions too. */
+            input += ((int64_t)origin->sheep_adults + origin->sheep_lambs + 23) / 24;
+        }
+        if (CcSettlementHasService(origin, CC_SERVICE_FARM) ||
+            CcSettlementHasService(origin, CC_SERVICE_STABLE))
+            input += ((int64_t)origin->pony_adults + origin->pony_foals + 7) / 8;
+        /* Civilian food and the next work/feed cycle are separate claims. */
+        floor += input;
+    }
+    int32_t bounded_floor = floor > INT32_MAX ? INT32_MAX : (int32_t)floor;
+    return MinimumI32(reserve, MaximumI32(bounded_floor, reserve / 2));
 }
 
 static int32_t FoodStorageCapacity(const CcSim *sim,
