@@ -21,7 +21,11 @@ SITE_DIR="out/build/web/site"
 if command -v butler >/dev/null 2>&1; then
     BUTLER=butler
 else
-    BUTLER="/Applications/Butler.app/Contents/MacOS/butler"
+    BUTLER="$HOME/.local/bin/butler"
+fi
+if [ ! -x "$(command -v "$BUTLER" 2>/dev/null || echo "$BUTLER")" ]; then
+    echo "error: butler not found. Install it from https://itch.io/docs/butler/" >&2
+    exit 1
 fi
 
 echo "==> Building web bundle"

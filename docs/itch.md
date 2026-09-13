@@ -10,10 +10,13 @@ scripts/itch-release.sh                 # build only (dry run)
 
 ## One-time setup
 
-1. Install butler:
+1. Install butler (do NOT use `brew install butler` — that cask is a
+   different application). Download the real one from itch:
 
    ```sh
-   brew install butler
+   mkdir -p ~/.local/bin
+   curl -sL -o /tmp/butler.zip "https://broth.itch.zone/butler/darwin-arm64/15.31.0/archive/default" \
+     && unzip -o /tmp/butler.zip -d ~/.local/bin
    butler login
    ```
 
