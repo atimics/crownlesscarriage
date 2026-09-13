@@ -3580,9 +3580,13 @@ static void SeedSettlementServices(CcSettlement *settlement)
         case CC_SETTLEMENT_FARMING:
             mask |= ServiceBit(CC_SERVICE_FARM) |
                     ServiceBit(CC_SERVICE_GRANARY) |
-                    ServiceBit(CC_SERVICE_STABLE) |
-                    ServiceBit(CC_SERVICE_BAKERY) |
-                    ServiceBit(CC_SERVICE_MILL);
+                    ServiceBit(CC_SERVICE_STABLE);
+            if (CcSettlementServiceCapacity(settlement->size) >= 6) {
+                mask |= ServiceBit(CC_SERVICE_BAKERY) |
+                        ServiceBit(CC_SERVICE_MILL);
+            } else if (CcSettlementServiceCapacity(settlement->size) >= 5) {
+                mask |= ServiceBit(CC_SERVICE_BAKERY);
+            }
             break;
         case CC_SETTLEMENT_MARKET:
             mask |= ServiceBit(CC_SERVICE_MARKET) |
