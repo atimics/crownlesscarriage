@@ -516,6 +516,15 @@ static bool EnsureCharacterLifecycleColumns(sqlite3 *database,
         EnsureColumn(database, "npc_character", "travel_arrival_day",
             "ALTER TABLE npc_character ADD COLUMN travel_arrival_day INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "detail_active",
+            "ALTER TABLE npc_character ADD COLUMN detail_active INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "last_active_day",
+            "ALTER TABLE npc_character ADD COLUMN last_active_day INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "introduced_day",
+            "ALTER TABLE npc_character ADD COLUMN introduced_day INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
         EnsureColumn(database, "meta", "character_births",
             "ALTER TABLE meta ADD COLUMN character_births INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
@@ -2953,8 +2962,8 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
                  "memory_count,memory_write_index,knowledge_count,"
                  "knowledge_write_index,ancestor_id,birth_day,death_day,generation,"
                  "travel_coins,bandit_group_id,hungry_days,unsheltered_nights,occupation,"
-                 "travel_destination_id,travel_arrival_day) "
-                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "travel_destination_id,travel_arrival_day,detail_active,last_active_day,introduced_day) "
+                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &character_statement, error, error_capacity) ||
         !Prepare(database,
                  "INSERT INTO character_memory VALUES(?,?,?,?,?,?);",
@@ -3009,6 +3018,9 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
         BindInt(character_statement, column++, sim->schema_version >= 79U ? (int32_t)character->occupation : 0);
         BindId(character_statement, column++, sim->schema_version >= 82U ? character->travel_destination_id : 0U);
         BindInt(character_statement, column++, sim->schema_version >= 82U ? character->travel_arrival_day : 0);
+        BindInt(character_statement, column++, sim->schema_version >= 101U && character->detail_active ? 1 : 0);
+        BindInt(character_statement, column++, sim->schema_version >= 101U ? character->last_active_day : 0);
+        BindInt(character_statement, column++, sim->schema_version >= 101U ? character->introduced_day : 0);
         if (!StepDone(database, character_statement, error, error_capacity) ||
             !ResetStatement(database, character_statement,
                             error, error_capacity)) goto failed;
@@ -5428,7 +5440,7 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
     int32_t rows = 0;
     while (sqlite3_step(statement) == SQLITE_ROW) {
         int32_t slot = sqlite3_column_int(statement, 0);
-        if (slot != rows || slot < 0 || slot >= CC_MAX_CHARACTERS) {
+        if (slot != rows || slot < 0 || slot >= CcSimCharacterRecordCapacity(sim)) {
             SetError(error, error_capacity,
                      "Character rows exceed save limits.");
             sqlite3_finalize(statement);
@@ -5456,6 +5468,17 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
                 return false;
             }
             character->occupation = (CcCharacterOccupation)occupation;
+        }
+        if (sim->schema_version >= 101U) {
+            int64_t active = sqlite3_column_int64(statement, 28);
+            if (active != 0 && active != 1) {
+                SetError(error, error_capacity, "Character active state is invalid.");
+                sqlite3_finalize(statement);
+                return false;
+            }
+            character->detail_active = active == 1;
+            character->last_active_day = sqlite3_column_int(statement, 29);
+            character->introduced_day = sqlite3_column_int(statement, 30);
         }
         character->role =
             (CcCharacterRole)sqlite3_column_int(statement, 6);

@@ -66,6 +66,7 @@ typedef enum FrontendAction {
     FRONTEND_ACTION_FIELD_INVITATION,
     FRONTEND_ACTION_CONFIRM_REMOVE,
     FRONTEND_ACTION_CAMPAIGN_CHOICE,
+    FRONTEND_ACTION_CAMPAIGN_ROLL,
     FRONTEND_ACTION_DEEP_WYRM,
     FRONTEND_ACTION_BEGIN_DEEP_WYRM,
     FRONTEND_ACTION_WORLD_FIRST = 100,
@@ -91,7 +92,8 @@ typedef struct FrontendState {
     FrontendAction text_field;
     FrontendScreen company_return;
     bool deleting_company;
-    bool deep_wyrm_start;
+    int32_t campaign_index;
+    char campaign_title[65];
     char remove_member[33];
     char remove_name[65];
 } FrontendState;
@@ -106,6 +108,62 @@ static const char *frontend_avatar_options[5][6] = {
     {"Square", "Long", "Broad", "Weathered", NULL, NULL},
     {"Plum", "Moss", "Rust", "Ocean", "Ochre", "Charcoal"}
 };
+
+/* The starting campaigns offered to a new world. The first three are fresh
+   worlds with evocative titles; the last is the recorded Deep Wyrm history.
+   A server accepts only these campaign ids, so every fresh title keeps the
+   shared "new-world" key. */
+typedef struct FrontendCampaign {
+    const char *title;
+    const char *campaign;
+} FrontendCampaign;
+
+static const FrontendCampaign frontend_campaigns[] = {
+    {"The Amber Caravan", "new-world"},
+    {"The Hungry Road", "new-world"},
+    {"The Copper Crown", "new-world"},
+    {"The Day of the Deep Wyrm", "deep-wyrm"},
+};
+
+#define FRONTEND_CAMPAIGN_COUNT ((int32_t)(sizeof(frontend_campaigns) / sizeof(frontend_campaigns[0])))
+#define FRONTEND_FRESH_CAMPAIGN_COUNT 3
+
+static const char *FrontendCampaignTitle(int32_t index)
+{
+    int32_t clamped = (index % FRONTEND_CAMPAIGN_COUNT + FRONTEND_CAMPAIGN_COUNT) %
+        FRONTEND_CAMPAIGN_COUNT;
+    return frontend_campaigns[clamped].title;
+}
+
+static const char *FrontendCampaignId(int32_t index)
+{
+    int32_t clamped = (index % FRONTEND_CAMPAIGN_COUNT + FRONTEND_CAMPAIGN_COUNT) %
+        FRONTEND_CAMPAIGN_COUNT;
+    return frontend_campaigns[clamped].campaign;
+}
+
+/* Choosing a campaign also names the world unless the traveller already typed
+   their own title. */
+static bool FrontendCampaignAutonamed(const FrontendState *state)
+{
+    if (state->world_name[0] == '\0') return true;
+    for (int32_t i = 0; i < FRONTEND_CAMPAIGN_COUNT; ++i) {
+        if (strcmp(state->world_name, frontend_campaigns[i].title) == 0) return true;
+    }
+    return false;
+}
+
+static void FrontendSelectCampaign(FrontendState *state, int32_t index)
+{
+    index = (index % FRONTEND_CAMPAIGN_COUNT + FRONTEND_CAMPAIGN_COUNT) %
+        FRONTEND_CAMPAIGN_COUNT;
+    bool renamed = state->campaign_index != index && FrontendCampaignAutonamed(state);
+    state->campaign_index = index;
+    if (renamed) {
+        (void)snprintf(state->world_name, sizeof(state->world_name), "%s",
+                       frontend_campaigns[index].title);
+    }
+}
 
 static void FrontendChangeAvatar(FrontendState *state, int field, int direction)
 {
@@ -171,7 +229,10 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
         if (create) {
             items[count++] = (FrontendItem){FRONTEND_ACTION_FIELD_PASS, {x, y + 128, 848, 46}, "World pass", true};
             items[count++] = (FrontendItem){FRONTEND_ACTION_CAMPAIGN_CHOICE,
-                {x, y + 186, 848, 36}, state->deep_wyrm_start ? "Campaign: The Day of the Deep Wyrm" : "Campaign: A new world", true};
+                {x, y + 186, 540, 36}, TextFormat("Campaign: %s",
+                    FrontendCampaignTitle(state->campaign_index)), true};
+            items[count++] = (FrontendItem){FRONTEND_ACTION_CAMPAIGN_ROLL,
+                {x + 548, y + 186, 300, 36}, "Roll another title", true};
         }
         items[count++] = (FrontendItem){create ? FRONTEND_ACTION_CREATE_SUBMIT : FRONTEND_ACTION_JOIN_SUBMIT,
             {x, y + 240, 412, 46}, create ? "Create world" : "Join company", true};
@@ -444,6 +505,9 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
         *selected_situation = FirstActiveSituationIndex(sim);
         *view = VIEW_LOCAL;
         *return_view = VIEW_LOCAL;
+        state->campaign_index = FRONTEND_CAMPAIGN_COUNT - 1;
+        (void)snprintf(state->campaign_title, sizeof(state->campaign_title), "%s",
+                       frontend_campaigns[FRONTEND_CAMPAIGN_COUNT - 1].title);
         action = FRONTEND_ACTION_PLAY;
     }
     if (FrontendCompanyAction(state, action)) return;
@@ -565,6 +629,13 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
             if (*journal != NULL && OpeningRequired(sim) && !local->open_world) {
                 BeginOpening(local);
             }
+            if (*journal != NULL && state->campaign_title[0] == '\0') {
+                int32_t pick = (int32_t)(GetTime() * 977.0f) %
+                    FRONTEND_FRESH_CAMPAIGN_COUNT;
+                if (pick < 0) pick = -pick;
+                (void)snprintf(state->campaign_title, sizeof(state->campaign_title),
+                               "%s", frontend_campaigns[pick].title);
+            }
         }
         if (*journal == NULL) {
             if (state->feedback[0] == '\0') {
@@ -596,6 +667,7 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
                                state->feedback, sizeof(state->feedback))) {
             state->has_world = false;
             state->needs_initial_save = false;
+            state->campaign_title[0] = '\0';
             state->screen = FRONTEND_TITLE;
             state->focus = 2;
             CcSimInit(sim, sim->world_seed + UINT32_C(0x9e3779b9));
@@ -654,7 +726,8 @@ static void DrawFrontend(const FrontendState *state,
         state->screen == FRONTEND_REMOVE_MEMBER ? "Remove this traveller?" :
         state->screen == FRONTEND_INVITATION ? "Invite your company" :
         state->screen == FRONTEND_DELETE ? "Delete this world?" :
-        CcCoopClientActive() ? "Company menu" : "Journey paused";
+        CcCoopClientActive() ? "Company menu" :
+        state->campaign_title[0] != '\0' ? state->campaign_title : "Journey paused";
     ClientTouchHeading(title, state->feedback[0] != '\0' ? state->feedback :
         state->screen == FRONTEND_DELETE ? CcCoopClientActive() || state->deleting_company ?
             "This removes the shared world and progress for everyone in the company." :
@@ -835,13 +908,27 @@ static int RunFrontendRegression(void)
     FRONTEND_CHECK(items[2].enabled && items[2].action == FRONTEND_ACTION_PLAY);
     FRONTEND_CHECK(state.screen == FRONTEND_TITLE && journal == NULL);
     FRONTEND_CHECK(!CampaignSaveExists(save_path));
-    FrontendOpen(&state, FRONTEND_CREATE_WORLD);
+    FRONTEND_ACT(FRONTEND_ACTION_CREATE_WORLD);
+    FRONTEND_CHECK(state.screen == FRONTEND_CREATE_WORLD && state.campaign_index == 0);
+    FRONTEND_CHECK(strcmp(state.world_name, frontend_campaigns[0].title) == 0);
+    FRONTEND_CHECK(FrontendItems(&state, items) == 7);
     FRONTEND_ACT(FRONTEND_ACTION_CAMPAIGN_CHOICE);
-    FRONTEND_CHECK(state.deep_wyrm_start);
-    FRONTEND_CHECK(FrontendItems(&state, items) == 6);
-    FRONTEND_CHECK(strstr(items[3].label, CC_DEEP_WYRM_TITLE) != NULL);
+    FRONTEND_CHECK(state.campaign_index == 1);
+    (void)FrontendItems(&state, items);
+    FRONTEND_CHECK(strstr(items[3].label, frontend_campaigns[1].title) != NULL);
     FRONTEND_ACT(FRONTEND_ACTION_CAMPAIGN_CHOICE);
-    FRONTEND_CHECK(!state.deep_wyrm_start);
+    FRONTEND_ACT(FRONTEND_ACTION_CAMPAIGN_CHOICE);
+    FRONTEND_CHECK(state.campaign_index == FRONTEND_CAMPAIGN_COUNT - 1);
+    (void)FrontendItems(&state, items);
+    FRONTEND_CHECK(strstr(items[3].label,
+        frontend_campaigns[FRONTEND_CAMPAIGN_COUNT - 1].title) != NULL);
+    FRONTEND_ACT(FRONTEND_ACTION_CAMPAIGN_CHOICE);
+    FRONTEND_CHECK(state.campaign_index == 0);
+    FRONTEND_CHECK(strcmp(state.world_name, frontend_campaigns[0].title) == 0);
+    int32_t rolled = state.campaign_index;
+    FRONTEND_ACT(FRONTEND_ACTION_CAMPAIGN_ROLL);
+    FRONTEND_CHECK(state.campaign_index != rolled && state.campaign_index >= 0 &&
+        state.campaign_index < FRONTEND_CAMPAIGN_COUNT);
     FrontendOpen(&state, FRONTEND_TITLE);
     CcClientPreferences avatar_preferences;
     CcClientPreferencesDefault(&avatar_preferences);
@@ -877,6 +964,7 @@ static int RunFrontendRegression(void)
     FRONTEND_ACT(FRONTEND_ACTION_OFFLINE);
     FRONTEND_ACT(FRONTEND_ACTION_PLAY);
     FRONTEND_CHECK(state.screen == FRONTEND_PLAYING && state.has_world && journal != NULL);
+    FRONTEND_CHECK(state.campaign_title[0] != '\0');
     FRONTEND_CHECK(CampaignSaveExists(save_path));
     uint32_t first_seed = sim.world_seed;
     uint64_t first_tick = sim.clock.tick;
@@ -947,6 +1035,7 @@ static int RunFrontendRegression(void)
     FRONTEND_ACT(FRONTEND_ACTION_DELETE);
     FRONTEND_ACT(FRONTEND_ACTION_CONFIRM_DELETE);
     FRONTEND_CHECK(state.screen == FRONTEND_TITLE && !state.has_world && journal == NULL);
+    FRONTEND_CHECK(state.campaign_title[0] == '\0');
     FRONTEND_CHECK(!CampaignSaveExists(save_path) && !CampaignSaveExists(session_path));
     FRONTEND_CHECK(CampaignSaveExists(preferences_path) && sim.world_seed != first_seed);
     uint32_t second_seed = sim.world_seed;

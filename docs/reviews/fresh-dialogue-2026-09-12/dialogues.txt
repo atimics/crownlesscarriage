@@ -1,0 +1,301 @@
+F01 — Bread at Rosespire
+- Rosespire's bakery mills 24 Wheat into 24 Bread.
+Speaker: Rosespire has made bread.
+Listener: From wheat?
+Speaker: Yes.
+
+F02 — A rumour of bread
+- ~ Rosespire's bakery mills 24 Wheat into 24 Bread.
+Speaker: People say Rosespire has made bread from wheat.
+Listener: I wonder what the bread is like.
+
+F03 — The uncertain oven
+- ? ~ Rosespire's bakery mills 14 Wheat into 14 Bread.
+Speaker: Rosespire may have made bread from wheat.
+Listener: I wonder what it tastes like.
+
+F04 — Quillen at Silverwick
+- Quillen Barrowward joins The Unpaid Company after 6 days seeking food at Silverwick.
+Speaker: Quillen Barrowward joined the Unpaid Company after looking for food at Silverwick.
+Listener: For long?
+Speaker: Days.
+Listener: A long wait for a meal.
+
+F05 — Alda in the Tallow Knives
+- ~ Alda Millrace joins The Tallow Knives after 7 days seeking food at Gloamgate.
+Speaker: People say Alda Millrace joined the Tallow Knives after looking for food at Gloamgate.
+Listener: Was Alda looking long?
+Speaker: Days, from what I hear.
+Listener: I hope there was a meal at the end of it.
+
+F06 — Reida, perhaps
+- ? ~ Reida Millrace joins The Tallow Knives after 5 days seeking food at Gloamgate.
+Speaker: Reida Millrace may have joined the Tallow Knives after looking for food at Gloamgate.
+Listener: Do you know how Reida got on?
+Speaker: I’d have to ask.
+
+F07 — Two places in the herd
+- Rosespire's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Speaker: Rosespire's herd raised a new calf, and an older calf joined the working herd.
+Listener: The new one is still growing?
+Speaker: Yes. The older one joined the workers.
+Listener: That is good news for the herd.
+
+F08 — Silverwick's calves
+- ~ Silverwick's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Speaker: People say Silverwick has a new calf, and an older calf joined the working herd.
+Listener: Which one joined the workers?
+Speaker: The older calf.
+Listener: I wonder what the new one looks like.
+
+F09 — A doubtful calving report
+- ? ~ Silverwick's cattle herd raises 1 new calf; 1 older calf join the working herd.
+Speaker: Silverwick may have a new calf, and an older calf may have joined the working herd.
+Listener: I wonder what the new calf looks like.
+Speaker: I do too.
+
+F10 — Fodder ran short
+- Rosespire slaughters two cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Speaker: Rosespire slaughtered cattle when the fodder ran short. The beef went into the local store.
+Listener: Will the rest have enough feed?
+Speaker: That’s worth asking.
+
+F11 — Alderwatch's cattle
+- ~ Alderwatch slaughters two cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Speaker: I hear Alderwatch slaughtered cattle after fodder ran short.
+Listener: What happened to the meat?
+Speaker: It went into the local store as beef, from what I hear.
+
+F12 — A story of cattle
+- ? ~ Rosespire slaughters two cow after the herd's fodder runs short; 4 Meat enters the local store as beef.
+Speaker: Rosespire may have slaughtered cattle after fodder ran short.
+Listener: Short of feed?
+Speaker: That’s the story. The beef went into the local store, if it’s true.
+
+F13 — The goblin Keeper
+- A goblin rises to Keeper in the dragon cult through service.
+Speaker: A goblin rose to Keeper in the dragon cult through service.
+Listener: Keeper?
+Speaker: Yes. That is the title.
+Listener: Good for them.
+
+F14 — The Bearer report
+- ~ A goblin rises to Bearer in the dragon cult through service.
+Speaker: People say a goblin rose to Bearer in the dragon cult through service.
+Listener: Bearer of what?
+Speaker: I do not know.
+Listener: The title still sounds busy.
+
+F15 — An uncertain promotion
+- ? ~ A goblin rises to Bearer in the dragon cult through service.
+Speaker: A goblin may have risen to Bearer in the dragon cult through service.
+Listener: Bearer?
+Speaker: That is the word I heard.
+Listener: I wonder what they carry.
+
+F16 — Othwen's life in Hollowbarrow
+- Othwen Herald died at age 64 after a life in Hollowbarrow.
+Speaker: Othwen Herald has died.
+Listener: Where did Othwen live?
+Speaker: Hollowbarrow.
+Listener: I’m sorry to hear it.
+
+F17 — Rodric Bowyer's death
+- ~ Rodric Bowyer died at age 64 after a life in Hollowbarrow.
+Speaker: I hear Rodric Bowyer has died.
+Listener: Rodric lived in Hollowbarrow?
+Speaker: Yes, from what people say.
+Listener: Sad news.
+
+F18 — Uncertain news of Rodric
+- ? ~ Rodric Bowyer died at age 64 after a life in Hollowbarrow.
+Speaker: Rodric Bowyer may have died after a life in Hollowbarrow.
+Listener: I hope someone knows for sure.
+
+F19 — Crowns for grain
+- Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+Speaker: Indigo March has put money into Hollowbarrow’s market to buy grain.
+Listener: Has the grain arrived?
+Speaker: I’ve only heard about the money so far.
+
+F20 — A grain purchase retold
+- ~ Indigo March moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+Speaker: People say Indigo March has sent money to Hollowbarrow’s market for grain.
+Listener: How soon might the grain come?
+Speaker: I’d like to know that myself.
+
+F21 — The Covenant's grain money
+- ? ~ Silver Covenant moves 28 crowns into Hollowbarrow's market to buy real grain shipments.
+Speaker: Silver Covenant may have sent money to Hollowbarrow’s market to buy grain.
+Listener: Grain for Hollowbarrow?
+Speaker: That seems to be the plan, if the story is right.
+
+F22 — Gloamgate burned
+- Varkesh the Unappeased burns Gloamgate because 17 stolen crowns remain missing.
+Speaker: Varkesh the Unappeased burned Gloamgate.
+Listener: What brought that on?
+Speaker: Stolen crowns were still missing.
+Listener: What a terrible price for the town.
+
+F23 — The fire retold
+- ~ Varkesh the Unappeased burns Gloamgate because 17 stolen crowns remain missing.
+Speaker: I hear Varkesh the Unappeased burned Gloamgate over stolen crowns that were still missing.
+Listener: Did anyone find the crowns afterward?
+Speaker: I haven’t heard that part.
+
+F24 — A fire story
+- ? ~ Varkesh the Unappeased burns Gloamgate because 17 stolen crowns remain missing.
+Speaker: Varkesh the Unappeased may have burned Gloamgate over missing stolen crowns.
+Listener: Who took them?
+Speaker: I only heard that they were missing.
+
+F25 — Smoke in the chimneys
+- Smoke falls into Gloamgate's chimneys; old readers count 14 nights until Varkesh the Unappeased comes.
+Speaker: Smoke is falling into Gloamgate’s chimneys.
+Listener: What do the old readers make of it?
+Speaker: They say Varkesh the Unappeased will come before long.
+Listener: I wonder what they see in the smoke.
+
+F26 — Nights counted
+- ~ Smoke falls into Gloamgate's chimneys; old readers count 14 nights until Varkesh the Unappeased comes.
+Speaker: People say smoke is falling into Gloamgate’s chimneys. The old readers expect Varkesh the Unappeased before long.
+Listener: What would you make of that?
+Speaker: I’d be uneasy.
+
+F27 — An uncertain omen
+- ? ~ Smoke falls into Gloamgate's chimneys; old readers count 14 nights until Varkesh the Unappeased comes.
+Speaker: There may be smoke falling into Gloamgate’s chimneys. They say the old readers are counting the nights until Varkesh the Unappeased comes.
+Listener: I wonder how they read the smoke.
+
+F28 — Mutton at Rosespire
+- Rosespire slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton.
+Speaker: Rosespire slaughtered sheep after winter fodder ran short.
+Listener: What happened to the meat?
+Speaker: The mutton went into the local store.
+
+F29 — Fodder and mutton
+- ~ Rosespire slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton.
+Speaker: I hear Rosespire slaughtered sheep after winter fodder ran short, then stored the mutton locally.
+Listener: Will the flock have enough feed now?
+Speaker: I haven’t heard.
+
+F30 — Alderwatch's mutton
+- ? ~ Alderwatch slaughters 1 sheep after winter fodder runs short; 2 Meat enters the local store as mutton.
+Speaker: Alderwatch may have slaughtered sheep after winter fodder ran short.
+Listener: Was the meat kept?
+Speaker: Mutton went into the local store, if the story is true.
+
+F31 — The Cinder Tithe at Gloamgate
+- The Cinder Tithe raids Gloamgate: 13 Bread, 15 crowns, and a named treasure.
+Speaker: The Cinder Tithe raided Gloamgate.
+Listener: What did they take?
+Speaker: Bread, crowns, and a treasure.
+Listener: Which treasure?
+Speaker: That part hasn’t reached me.
+
+F32 — A raid at Rosespire
+- ~ The Cinder Tithe raids Rosespire: 16 Bread, 15 crowns.
+Speaker: People say the Cinder Tithe raided Rosespire and took bread and crowns.
+Listener: How is the town managing?
+Speaker: I’d like to know.
+
+F33 — Wheat taken at Thornford
+- ? ~ The Cinder Tithe raids Thornford: 20 Wheat, 0 crowns.
+Speaker: There’s talk of the Cinder Tithe raiding Thornford for wheat.
+Listener: Crowns as well?
+Speaker: The account says they took none.
+Listener: I wonder what happened to the wheat.
+
+F34 — Grain for the east
+- Thornford's drought harvest cannot supply the eastern settlements.
+Speaker: Thornford’s drought harvest fell short.
+Listener: Who was it meant to feed?
+Speaker: The settlements to the east.
+Listener: That’s hard news for them.
+
+F35 — Grain for the south
+- ~ Thornford's drought harvest cannot supply the southern settlements.
+Speaker: I hear Thornford’s harvest is too small to supply the southern settlements.
+Listener: Could they get grain elsewhere?
+Speaker: I’d have to ask.
+
+F36 — An uncertain harvest
+- ? ~ Thornford's drought harvest cannot supply the southern settlements.
+Speaker: Thornford may have too little grain for the settlements it supplies.
+Listener: Which ones?
+Speaker: Those to the south, from what I heard.
+
+F37 — A new pony
+- Gloamgate raises 1 common pony foal; 1 joins the working herd.
+Speaker: Gloamgate has raised a pony foal, and a pony has joined the working herd.
+Listener: I’d like to see the foal.
+Speaker: So would I.
+
+F38 — Ponies at Alderwatch
+- ~ Alderwatch raises 1 common pony foal; 1 joins the working herd.
+Speaker: There’s word of a new pony foal at Alderwatch.
+Listener: Has their working herd grown too?
+Speaker: A pony has joined it, I hear.
+
+F39 — A foal at Thornford
+- ? ~ Thornford raises 1 common pony foal; 1 joins the working herd.
+Speaker: Someone’s saying Thornford has a new pony foal.
+Listener: A little pony?
+Speaker: That’s what I heard. I’d like to see it myself.
+
+F40 — Lambs and yearlings
+- Rosespire's flock raises 7 new lambs; 7 yearlings join the adult flock.
+Speaker: Rosespire has new lambs, and yearlings have joined the adult flock.
+Listener: The yearlings are the older ones?
+Speaker: Yes. The lambs still have their growing to do.
+
+F41 — A growing flock
+- ~ Alderwatch's flock raises 6 new lambs; 6 yearlings join the adult flock.
+Speaker: I hear Alderwatch has raised lambs.
+Listener: And the yearlings?
+Speaker: They’ve joined the adult flock, from what I hear.
+Listener: Good to hear they’re growing.
+
+F42 — News of lambs
+- ? ~ Alderwatch's flock raises 6 new lambs; 6 yearlings join the adult flock.
+Speaker: There may be new lambs at Alderwatch. Some yearlings have joined the adult flock too, if the story is right.
+Listener: What are the lambs like?
+Speaker: I only heard about them.
+
+F43 — Masonry at Hollowbarrow
+- Hollowbarrow's masons use 1 Stone to repair public buildings.
+Speaker: Hollowbarrow’s masons have repaired public buildings.
+Listener: With stone?
+Speaker: Yes.
+Listener: I’d like to see the work.
+
+F44 — Repairs on hold
+- ~ Gloamgate defers public masonry repairs for want of 2 Stone.
+Speaker: Gloamgate’s public repairs are waiting, I hear.
+Listener: For workers?
+Speaker: For stone, from what people say.
+Listener: They’ll need something to build with.
+
+F45 — Repairs at Silverwick
+- ? ~ Silverwick's masons use 2 Stone to repair public buildings.
+Speaker: Silverwick’s masons may have done some repairs with stone.
+Listener: On the public buildings?
+Speaker: That’s the report.
+
+F46 — Making paper
+- Rosespire's mill uses 1 Wood to make 4 Paper.
+Speaker: Rosespire’s mill has made paper.
+Listener: From what?
+Speaker: Wood.
+Listener: That must be interesting to watch.
+
+F47 — Paper at Gloamgate
+- ~ Gloamgate's mill uses 1 Wood to make 3 Paper.
+Speaker: They say Gloamgate’s mill has made paper from wood.
+Listener: I wonder what will be written on it.
+
+F48 — A rumour of paper
+- ? ~ Gloamgate's mill uses 1 Wood to make 3 Paper.
+Speaker: There’s a rumour that Gloamgate’s mill has made paper.
+Listener: From wood?
+Speaker: That’s what I heard.

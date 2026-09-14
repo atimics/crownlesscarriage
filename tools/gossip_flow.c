@@ -9,7 +9,7 @@
 static CcSim sim;
 static CcGossip previous[CC_MAX_GOSSIP];
 typedef struct Held { CcId person, event, place; CcGossipVersion version; } Held;
-static Held held[CC_MAX_CHARACTERS][CC_MAX_GOSSIP];
+static Held held[CC_MAX_CHARACTER_RECORDS][CC_MAX_GOSSIP];
 static CcTreasure volumes[CC_MAX_TREASURES];
 static CcId last_event;
 

@@ -1,0 +1,41 @@
+{
+  "dialogues": 48,
+  "lines": 158,
+  "distinct_lines": 155,
+  "event_kinds": 16,
+  "bands": {
+    "clear": 16,
+    "retold": 16,
+    "uncertain": 16
+  },
+  "worlds": [
+    1201,
+    1202,
+    1203,
+    1204
+  ],
+  "matching_prior_review_accounts": 5,
+  "matching_prior_96_accounts": 28,
+  "repeated_lines": [
+    {
+      "line": "Yes.",
+      "count": 2
+    },
+    {
+      "line": "I’d have to ask.",
+      "count": 2
+    },
+    {
+      "line": "What happened to the meat?",
+      "count": 2
+    }
+  ],
+  "turn_lengths": {
+    "3": 25,
+    "2": 5,
+    "4": 17,
+    "5": 1
+  },
+  "authorship": "Assistant-written candidates; preference review pending.",
+  "simulation_commit": "90dc717e745103e38351307cd82df0ced93f27e7"
+}

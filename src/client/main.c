@@ -227,6 +227,8 @@ typedef struct LocalState {
     char conversation_line[192];
     int32_t conversation_gossip_slot;
     bool conversation_gossip_source;
+    CcId introduced_ids[64];
+    int32_t introduced_count;
     Vector3 conversation_position;
     int32_t book_page;
     int32_t book_offset;
@@ -1177,6 +1179,7 @@ static void ResetLocalState(LocalState *local)
     local->carriage_stopped = false;
     local->conversation_gossip_slot = -1;
     local->conversation_gossip_source = false;
+    local->introduced_count = 0;
     local->conversation_object = 0;
     local->conversation_position = (Vector3){0};
     local->conversation_name[0] = '\0';
@@ -8468,7 +8471,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     (void)ApplyCommand(*journal, sim, (CcCommand){.kind = CC_COMMAND_HEARD_STORY,
                         .target_id = local->conversation_character_id,
                         .amount = local->conversation_gossip_slot}, message, message_capacity);
-                if (!started) {
+                if (started) {
+                    /* One story per pair: the next Chat opens the next untold account. */
+                    local->conversation_gossip_slot = CcSimNextUntoldStory(
+                        sim, local->conversation_character_id, NULL);
+                    if (local->conversation_gossip_slot < 0) {
+                        (void)snprintf(message, message_capacity, "%s",
+                            "That is all I would share across this road.");
+                    }
+                } else {
                     local->conversation_gossip_slot = CcSimNextUntoldStory(
                         sim, local->conversation_character_id, NULL);
                     CcSpeech answer;

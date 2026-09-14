@@ -2707,6 +2707,13 @@ static void CheckSchema41Upgrade(void)
     CC_CHECK(restored->schema_version == CC_SIM_SCHEMA_VERSION);
     legacy->schema_version = CC_SIM_SCHEMA_VERSION;
     CcSimInitializeGoblinPolitics(legacy);
+    /* The new active-state clock starts at the migration date. */
+    for (int32_t i = 0; i < legacy->character_count; ++i) {
+        CC_CHECK(restored->characters[i].detail_active);
+        CC_CHECK(restored->characters[i].last_active_day == restored->current_day);
+        CC_CHECK(restored->characters[i].introduced_day == 0);
+        legacy->characters[i].last_active_day = legacy->current_day;
+    }
     CC_CHECK(CcSimHash(restored) == CcSimHash(legacy));
     free(restored);
     free(legacy);

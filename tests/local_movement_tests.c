@@ -1989,9 +1989,11 @@ static void TestCombatCrowdSpacing(void)
         formation.raider_response_stage[i] = 3;
         formation.raider_attack_cooldown[i] = 100.0f;
     }
+    /* A bystander kept far from the melee, since no ambience travellers
+       wander the streets to soak up the fight's approach. */
     CcLocalAgentInit(&formation.travellers[0].agent,
-                     (Vector2){45.0f, 30.0f}, false);
-    formation.travellers[0].active = true;
+                     (Vector2){12.0f, 86.0f}, false);
+    formation.travellers[0].active = false;
     for (int32_t frame = 0; frame < 180; ++frame) {
         CcLocalCourseUpdate(&formation, NULL, &sim, 1.0f / 60.0f);
     }
@@ -2462,19 +2464,17 @@ static void TestTravellerIngress(void)
         CcLocalCourseUpdate(&course, NULL, NULL, 1.0f / 60.0f);
     }
     for (int32_t i = 0; i < 2; ++i) {
-        if (!course.travellers[i].active ||
-            VectorDistance3(start[i], course.travellers[i].agent.position) <
-                0.55f) {
-            (void)fprintf(stderr,
-                          "traveller %d did not physically enter from the world edge\n",
-                          i);
+        /* Ambience travellers no longer march across the street; the idle
+           slots stay parked where the scene placed them. */
+        if (course.travellers[i].active) {
+            (void)fprintf(stderr, "traveller %d spawned despite the no-ambience rule\n", i);
             exit(1);
         }
-    }
-    if (VectorDistance3(course.travellers[0].agent.position,
-                        course.travellers[1].agent.position) < 4.0f) {
-        (void)fprintf(stderr, "travellers entered in a visible bunch\n");
-        exit(1);
+        if (VectorDistance3(start[i], course.travellers[i].agent.position) >=
+            0.55f) {
+            (void)fprintf(stderr, "traveller %d moved while parked\n", i);
+            exit(1);
+        }
     }
 }
 

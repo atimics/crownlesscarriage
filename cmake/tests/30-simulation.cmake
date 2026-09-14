@@ -61,6 +61,11 @@ target_link_libraries(travel_departure_tests PRIVATE crownless_persistence)
 cc_strict_warnings(travel_departure_tests)
 add_test(NAME free_road_departures COMMAND travel_departure_tests)
 
+add_executable(body_purse_tests tests/body_purse_tests.c)
+target_link_libraries(body_purse_tests PRIVATE crownless_persistence)
+cc_strict_warnings(body_purse_tests)
+add_test(NAME fallen_body_purses COMMAND body_purse_tests)
+
 add_executable(feed_tray_tests tests/feed_tray_tests.c)
 target_link_libraries(feed_tray_tests PRIVATE crownless_persistence)
 cc_strict_warnings(feed_tray_tests)
