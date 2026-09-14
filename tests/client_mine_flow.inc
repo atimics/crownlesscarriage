@@ -18,6 +18,7 @@ static int RunMineInputRegression(void)
     sim.journey.elapsed_subticks=CcMineBranchSubtick(&sim);
     sim.carriage.progress_milli=(int32_t)((int64_t)sim.journey.elapsed_subticks*1000/sim.journey.total_subticks);
     sim.player.cargo[CC_GOOD_BREAD]=2;
+    sim.player.reputation = 1;
     ResetLocalState(&local);
     local.adventure_ui=true;local.journey_travel_active=true;
     local.opening_step=CC_LOCAL_OPENING_COMPLETE;
