@@ -18,6 +18,7 @@ typedef struct CcCoreConversation {
     CcSpeech player_line, listener_line;
     CcCoreAccount listener_account;
     CcCoreMind listener_mind;
+    bool listener_has_mind;
 } CcCoreConversation;
 
 void CcCoreConversationReset(CcCoreConversation *conversation);

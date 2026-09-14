@@ -5435,7 +5435,13 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
     if (sim->schema_version < 17U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
-                 "SELECT * FROM npc_character ORDER BY slot;",
+                 "SELECT slot,id,name,home_settlement_id,current_settlement_id,"
+                 "faction_id,role,goal,activity,appearance_seed,player_disposition,"
+                 "stress,courage,memory_count,memory_write_index,knowledge_count,"
+                 "knowledge_write_index,ancestor_id,birth_day,death_day,generation,"
+                 "travel_coins,bandit_group_id,hungry_days,unsheltered_nights,"
+                 "occupation,travel_destination_id,travel_arrival_day,detail_active,"
+                 "last_active_day,introduced_day FROM npc_character ORDER BY slot;",
                  &statement, error, error_capacity)) return false;
     int32_t rows = 0;
     while (sqlite3_step(statement) == SQLITE_ROW) {

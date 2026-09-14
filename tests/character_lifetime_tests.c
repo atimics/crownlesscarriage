@@ -153,8 +153,7 @@ static void CheckRetentionOrder(int32_t source, int32_t listener, int32_t accoun
             &retention_prepared.characters[listener].knowledge[account],
             sizeof(CcCharacterKnowledge)) == 0);
         RoundTrip();
-        CC_CHECK(memcmp(sim.historic_characters, restored.historic_characters,
-            (size_t)sim.historic_character_count * sizeof(CcHistoricCharacter)) == 0);
+        CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
     }
     sim = retention_start;
     puts("Verified importance, age, stable-ID ties, and reordered history retirement");

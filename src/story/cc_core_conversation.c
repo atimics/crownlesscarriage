@@ -85,7 +85,8 @@ void CcCoreConversationStep(CcCoreConversation *c, unsigned int budget)
         c->cached = false;
         c->round_phase = 2U;
         CcSpeech listener = c->listener_line;
-        (void)CcCoreConversationPrepareMind(c, &c->listener_account, &c->listener_mind,
+        (void)CcCoreConversationPrepareMind(c, &c->listener_account,
+            c->listener_has_mind ? &c->listener_mind : NULL,
             CC_CORE_CONTROL_SAY, &listener);
         if (!c->pending) {
             Remember(c, c->reply.speaker_id, c->reply.text);
@@ -102,6 +103,7 @@ bool CcCoreConversationStartRoundMind(CcCoreConversation *c,
         player_account == NULL || player == NULL || listener_account == NULL || listener == NULL ||
         player->speaker_id == listener->speaker_id) return false;
     c->listener_account = *listener_account;
+    c->listener_has_mind = listener_mind != NULL;
     if (listener_mind != NULL) c->listener_mind = *listener_mind;
     c->listener_line = *listener;
     c->player_line = *player;
