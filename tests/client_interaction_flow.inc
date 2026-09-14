@@ -632,6 +632,12 @@ static int RunAdventureTownRoutesRegression(void)
         local.adventure_ui = true;
         local.course.automatic_alarm = false;
         BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
+        for (int32_t i = 0; i < local.interactions.count; ++i) {
+            if (local.interactions.targets[i].key.kind == CC_INTERACTION_PERSON &&
+                local.interactions.targets[i].character_id == 0U) {
+                return ClientRegressionFailure("Talkable town figures are always named residents.");
+            }
+        }
         CcInteractionTarget *door = NULL;
         for (int32_t i = 0; i < local.interactions.count; ++i) {
             if (local.interactions.targets[i].key.kind == CC_INTERACTION_DOOR) door = &local.interactions.targets[i];
