@@ -8,6 +8,7 @@ typedef struct CcCoreConversation {
     CcCoreSpoken history[CC_CORE_HISTORY];
     size_t count;
     CcCoreAccount account;
+    CcCoreMind mind;
     CcSpeech original, reply;
     bool cached, pending;
     /* A Chat round generates the player first, then the listener. */
@@ -16,6 +17,7 @@ typedef struct CcCoreConversation {
     bool round_shown;
     CcSpeech player_line, listener_line;
     CcCoreAccount listener_account;
+    CcCoreMind listener_mind;
 } CcCoreConversation;
 
 void CcCoreConversationReset(CcCoreConversation *conversation);
@@ -23,9 +25,15 @@ void CcCoreConversationHear(CcCoreConversation *conversation, CcId speaker, cons
 /* The prepared speech supplies the speaker and source identity. */
 bool CcCoreConversationPrepare(CcCoreConversation *conversation,
                                const CcCoreAccount *account, CcSpeech *speech);
+bool CcCoreConversationPrepareMind(CcCoreConversation *conversation,
+                                   const CcCoreAccount *account, const CcCoreMind *mind,
+                                   CcCoreControl control, CcSpeech *speech);
 bool CcCoreConversationStartRound(CcCoreConversation *conversation,
     const CcCoreAccount *player_account, const CcSpeech *player,
     const CcCoreAccount *listener_account, const CcSpeech *listener);
+bool CcCoreConversationStartRoundMind(CcCoreConversation *conversation,
+    const CcCoreAccount *player_account, const CcCoreMind *player_mind, const CcSpeech *player,
+    const CcCoreAccount *listener_account, const CcCoreMind *listener_mind, const CcSpeech *listener);
 bool CcCoreConversationShown(const CcCoreConversation *conversation, CcSpeech *speech);
 void CcCoreConversationStep(CcCoreConversation *conversation, unsigned int budget);
 void CcCoreConversationAdvance(CcCoreConversation *conversation, unsigned int budget, float seconds);

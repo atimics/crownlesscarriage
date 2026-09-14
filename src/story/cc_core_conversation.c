@@ -27,8 +27,9 @@ void CcCoreConversationHear(CcCoreConversation *c, CcId speaker, const char *tex
     Remember(c, speaker, text); c->cached = false; c->pending = false;
 }
 
-bool CcCoreConversationPrepare(CcCoreConversation *c, const CcCoreAccount *account,
-                               CcSpeech *speech)
+bool CcCoreConversationPrepareMind(CcCoreConversation *c, const CcCoreAccount *account,
+                                   const CcCoreMind *mind, CcCoreControl control,
+                                   CcSpeech *speech)
 {
     if (c == NULL || c->model == NULL || account == NULL || speech == NULL) return false;
     if (!c->cached || c->original.audio_key != speech->audio_key ||
@@ -38,7 +39,9 @@ bool CcCoreConversationPrepare(CcCoreConversation *c, const CcCoreAccount *accou
         c->account.field_count != account->field_count ||
         memcmp(c->account.fields, account->fields, sizeof(account->fields)) != 0) {
         c->account = *account; c->original = *speech; c->reply = *speech; c->cached = true;
-        c->pending = CcCoreModelBegin(c->model, account, speech->speaker_id, c->history, c->count);
+        if (mind != NULL) c->mind = *mind;
+        c->pending = CcCoreModelBeginMind(c->model, account, speech->speaker_id,
+            c->history, c->count, mind, control);
     }
     if (c->pending) {
         return CcSpeechCompose(speech, "gossip.thinking", c->original.speaker_id,
@@ -47,6 +50,12 @@ bool CcCoreConversationPrepare(CcCoreConversation *c, const CcCoreAccount *accou
     }
     *speech = c->reply;
     return true;
+}
+
+bool CcCoreConversationPrepare(CcCoreConversation *c, const CcCoreAccount *account,
+                               CcSpeech *speech)
+{
+    return CcCoreConversationPrepareMind(c, account, NULL, CC_CORE_CONTROL_SAY, speech);
 }
 
 void CcCoreConversationStep(CcCoreConversation *c, unsigned int budget)
@@ -76,7 +85,8 @@ void CcCoreConversationStep(CcCoreConversation *c, unsigned int budget)
         c->cached = false;
         c->round_phase = 2U;
         CcSpeech listener = c->listener_line;
-        (void)CcCoreConversationPrepare(c, &c->listener_account, &listener);
+        (void)CcCoreConversationPrepareMind(c, &c->listener_account, &c->listener_mind,
+            CC_CORE_CONTROL_SAY, &listener);
         if (!c->pending) {
             Remember(c, c->reply.speaker_id, c->reply.text);
             c->round_phase = 3U;
@@ -84,22 +94,31 @@ void CcCoreConversationStep(CcCoreConversation *c, unsigned int budget)
     } else if (c->round_phase == 2U) c->round_phase = 3U;
 }
 
-bool CcCoreConversationStartRound(CcCoreConversation *c,
-    const CcCoreAccount *player_account, const CcSpeech *player,
-    const CcCoreAccount *listener_account, const CcSpeech *listener)
+bool CcCoreConversationStartRoundMind(CcCoreConversation *c,
+    const CcCoreAccount *player_account, const CcCoreMind *player_mind, const CcSpeech *player,
+    const CcCoreAccount *listener_account, const CcCoreMind *listener_mind, const CcSpeech *listener)
 {
     if (c == NULL || c->model == NULL || c->pending || c->round_phase != 0U ||
         player_account == NULL || player == NULL || listener_account == NULL || listener == NULL ||
         player->speaker_id == listener->speaker_id) return false;
     c->listener_account = *listener_account;
+    if (listener_mind != NULL) c->listener_mind = *listener_mind;
     c->listener_line = *listener;
     c->player_line = *player;
     c->cached = false;
     CcSpeech first = *player;
-    if (!CcCoreConversationPrepare(c, player_account, &first) || !c->pending) return false;
+    if (!CcCoreConversationPrepareMind(c, player_account, player_mind, CC_CORE_CONTROL_SAY, &first) || !c->pending) return false;
     c->round_phase = 1U;
     c->round_shown = true;
     return true;
+}
+
+bool CcCoreConversationStartRound(CcCoreConversation *c,
+    const CcCoreAccount *player_account, const CcSpeech *player,
+    const CcCoreAccount *listener_account, const CcSpeech *listener)
+{
+    return CcCoreConversationStartRoundMind(c, player_account, NULL, player,
+        listener_account, NULL, listener);
 }
 
 bool CcCoreConversationShown(const CcCoreConversation *c, CcSpeech *speech)

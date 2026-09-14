@@ -312,8 +312,48 @@ static bool HistoryText(const CcCoreAccount *account, const CcCoreSpoken *messag
     output[written++] = '\n'; output[written] = '\0'; return true;
 }
 
-bool CcCoreModelBegin(CcCoreModel *m, const CcCoreAccount *account,
-                      CcId speaker, const CcCoreSpoken *history, size_t count)
+static const char *GoalName(CcCoreGoal goal)
+{
+    switch (goal) {
+        case CC_CORE_GOAL_KEEP_ORDER: return "keep_order";
+        case CC_CORE_GOAL_SECURE_LIVELIHOOD: return "secure_livelihood";
+        case CC_CORE_GOAL_SURVIVE_CRISIS: return "survive_crisis";
+        case CC_CORE_GOAL_CARRY_NEWS: return "carry_news";
+        default: return "secure_livelihood";
+    }
+}
+
+static const char *LevelName(CcCoreLevel level)
+{
+    switch (level) {
+        case CC_CORE_LEVEL_LOW: return "low";
+        case CC_CORE_LEVEL_MEDIUM: return "medium";
+        case CC_CORE_LEVEL_HIGH: return "high";
+        default: return "medium";
+    }
+}
+
+static const char *ControlName(CcCoreControl control)
+{
+    switch (control) {
+        case CC_CORE_CONTROL_THINK: return "think";
+        case CC_CORE_CONTROL_REMEMBER: return "remember";
+        default: return "say";
+    }
+}
+
+/* Encode one context line (with trailing newline) into the token stream. */
+static bool EncodeLine(CcCoreModel *m, int *n, const char *line)
+{
+    int added = CcCoreModelEncode(line, m->tokens + *n, CONTEXT - *n);
+    if (added < 0) return false;
+    *n += added;
+    return true;
+}
+
+bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
+                          CcId speaker, const CcCoreSpoken *history, size_t count,
+                          const CcCoreMind *mind, CcCoreControl control)
 {
     if (m == NULL) return false;
     m->status = -1; m->text[0] = '\0'; m->length = 0U;
@@ -331,6 +371,31 @@ bool CcCoreModelBegin(CcCoreModel *m, const CcCoreAccount *account,
         if (f.start > source_size || f.length > source_size - f.start || f.role < CC_CORE_NONE ||
             f.role > CC_CORE_QUANTITY || f.knowledge < CC_CORE_KNOWN || f.knowledge > CC_CORE_UNKNOWN) return false;
     }
+    int n = 0;
+    /* Mind context lines precede the spoken history. */
+    char line[CC_EVENT_TEXT_CAPACITY + 16];
+    if (mind != NULL) {
+        if (mind->voice != NULL && mind->voice[0] != '\0') {
+            (void)snprintf(line, sizeof(line), "# voice: %s\n", mind->voice);
+            if (!EncodeLine(m, &n, line)) return false;
+        }
+        (void)snprintf(line, sizeof(line), "# goal: %s\n", GoalName(mind->goal));
+        if (!EncodeLine(m, &n, line)) return false;
+        (void)snprintf(line, sizeof(line), "# stress: %s\n", LevelName(mind->stress));
+        if (!EncodeLine(m, &n, line)) return false;
+        (void)snprintf(line, sizeof(line), "# courage: %s\n", LevelName(mind->courage));
+        if (!EncodeLine(m, &n, line)) return false;
+        for (size_t i = 0U; i < mind->memory_count && i < CC_CORE_MIND_LINES; ++i) {
+            if (mind->memories[i] == NULL || mind->memories[i][0] == '\0') continue;
+            (void)snprintf(line, sizeof(line), "# memory: %s\n", mind->memories[i]);
+            if (!EncodeLine(m, &n, line)) return false;
+        }
+        for (size_t i = 0U; i < mind->thought_count && i < CC_CORE_MIND_LINES; ++i) {
+            if (mind->thoughts[i] == NULL || mind->thoughts[i][0] == '\0') continue;
+            (void)snprintf(line, sizeof(line), "# thought: %s\n", mind->thoughts[i]);
+            if (!EncodeLine(m, &n, line)) return false;
+        }
+    }
     int messages[CC_CORE_HISTORY][256], lengths[CC_CORE_HISTORY], total = 0;
     for (size_t i = 0U; i < count; ++i) {
         if (memchr(history[i].text, 0, sizeof(history[i].text)) == NULL) return false;
@@ -342,12 +407,14 @@ bool CcCoreModelBegin(CcCoreModel *m, const CcCoreAccount *account,
     }
     size_t first = 0U;
     while (total > 256) total -= lengths[first++];
-    int n = 0;
     for (size_t i = first; i < count; ++i) {
         memcpy(m->tokens + n, messages[i], (size_t)lengths[i] * sizeof(int)); n += lengths[i];
     }
-    char cue[16];
-    (void)snprintf(cue, sizeof(cue), "- %s%s", account->confidence < 40 ? "? " : "", account->retellings >= 4 ? "~ " : "");
+    char cue[24];
+    (void)snprintf(cue, sizeof(cue), "- %s%s%s",
+        account->confidence < 40 ? "? " : "",
+        account->retellings >= 4 ? "~ " : "",
+        mind != NULL && mind->witnessed ? "! " : "");
     int added = CcCoreModelEncode(cue, m->tokens + n, CONTEXT - n);
     if (added < 0) return false;
     n += added; m->candidates = 0;
@@ -368,9 +435,20 @@ bool CcCoreModelBegin(CcCoreModel *m, const CcCoreAccount *account,
     added = CcCoreModelEncode("\n", m->tokens + n, CONTEXT - n);
     if (added < 0) return false;
     n += added;
+    (void)snprintf(line, sizeof(line), "# %s:\n", ControlName(control));
+    added = CcCoreModelEncode(line, m->tokens + n, CONTEXT - n);
+    if (added < 0) return false;
+    n += added;
     for (int i = 0; i < n; ++i) m->meta[i][4] = meaning;
     m->prefix = n; m->used = 0; m->actions = 0; m->status = 0;
     return true;
+}
+
+bool CcCoreModelBegin(CcCoreModel *model, const CcCoreAccount *account,
+                      CcId speaker, const CcCoreSpoken *history, size_t count)
+{
+    return CcCoreModelBeginMind(model, account, speaker, history, count,
+                                NULL, CC_CORE_CONTROL_SAY);
 }
 
 int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
@@ -431,6 +509,18 @@ bool CcCoreModelGenerate(CcCoreModel *model, const CcCoreAccount *account,
     if (text == NULL || capacity == 0U) return false;
     text[0] = '\0';
     if (!CcCoreModelBegin(model, account, speaker, history, count)) return false;
+    if (CcCoreModelStep(model, CONTEXT + MAX_ACTIONS) != 1 || model->length >= capacity) return false;
+    memcpy(text, model->text, model->length + 1U); return true;
+}
+
+bool CcCoreModelGenerateMind(CcCoreModel *model, const CcCoreAccount *account,
+                             CcId speaker, const CcCoreSpoken *history, size_t count,
+                             const CcCoreMind *mind, CcCoreControl control,
+                             char *text, size_t capacity)
+{
+    if (text == NULL || capacity == 0U) return false;
+    text[0] = '\0';
+    if (!CcCoreModelBeginMind(model, account, speaker, history, count, mind, control)) return false;
     if (CcCoreModelStep(model, CONTEXT + MAX_ACTIONS) != 1 || model->length >= capacity) return false;
     memcpy(text, model->text, model->length + 1U); return true;
 }
