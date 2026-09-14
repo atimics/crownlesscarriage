@@ -227,6 +227,8 @@ typedef struct LocalState {
     char conversation_line[192];
     int32_t conversation_gossip_slot;
     bool conversation_gossip_source;
+    CcId introduced_ids[64];
+    int32_t introduced_count;
     Vector3 conversation_position;
     int32_t book_page;
     int32_t book_offset;
@@ -1177,6 +1179,7 @@ static void ResetLocalState(LocalState *local)
     local->carriage_stopped = false;
     local->conversation_gossip_slot = -1;
     local->conversation_gossip_source = false;
+    local->introduced_count = 0;
     local->conversation_object = 0;
     local->conversation_position = (Vector3){0};
     local->conversation_name[0] = '\0';

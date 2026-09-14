@@ -129,6 +129,11 @@ int main(void)
     int32_t old_bread = market->stock[CC_GOOD_BREAD];
     farmstead->production[CC_GOOD_BREAD] = 23;
     farmstead->production[CC_GOOD_WHEAT] = 0;
+    /* Give the grain town room for an oven so the economy can run it. */
+    farmstead->size = CC_SETTLEMENT_TOWN;
+    farmstead->service_mask |= Service(CC_SERVICE_FARM) |
+                        Service(CC_SERVICE_GRANARY) |
+                        Service(CC_SERVICE_STABLE);
     market->service_mask &= ~Service(CC_SERVICE_BAKERY);
     CcSimUpgradeGrainEconomy(&migration);
     CC_CHECK(CcSettlementHasService(farmstead, CC_SERVICE_BAKERY));
