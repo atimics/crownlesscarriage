@@ -28,7 +28,9 @@ CC_COOP_API bool CcCoopSnapshot(const CcSim *sim, char *json, size_t capacity);
 CC_COOP_API bool CcCoopEncode(const CcSim *sim, unsigned char **bytes,
                              size_t *length, char *error, size_t capacity);
 CC_COOP_API bool CcCoopDecode(CcSim *sim, const unsigned char *bytes,
-                             size_t length, char *error, size_t capacity);
+                              size_t length, char *error, size_t capacity);
+CC_COOP_API bool CcCoopDecodeRepair(CcSim *sim, const unsigned char *bytes,
+                                    size_t length, char *error, size_t capacity);
 CC_COOP_API void CcCoopFree(void *bytes);
 
 #endif

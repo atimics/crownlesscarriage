@@ -5852,7 +5852,7 @@ static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
 }
 
 static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
-                         char *error, size_t error_capacity)
+                         bool verify_hash, char *error, size_t error_capacity)
 {
     *sim = (CcSim){0};
     if (upgraded != NULL) *upgraded = false;
@@ -5930,7 +5930,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
         SetError(error, error_capacity, validation);
         return false;
     }
-    if (CcSimHash(sim) != expected_hash) {
+    if (verify_hash && CcSimHash(sim) != expected_hash) {
         SetError(error, error_capacity, "Campaign state hash does not match stored data.");
         return false;
     }
@@ -5972,7 +5972,7 @@ bool CcSaveRead(const char *path, CcSim *sim,
         sqlite3_close(database);
         return false;
     }
-    bool ok = LoadDatabase(database, recovered, NULL,
+    bool ok = LoadDatabase(database, recovered, NULL, true,
                            error, error_capacity);
     if (sqlite3_close(database) != SQLITE_OK) {
         SetError(error, error_capacity, "Could not close campaign database.");
@@ -6010,8 +6010,8 @@ bool CcSaveEncode(const CcSim *sim, unsigned char **bytes, size_t *length,
     return true;
 }
 
-bool CcSaveDecode(const unsigned char *bytes, size_t length, CcSim *sim,
-                  char *error, size_t error_capacity)
+static bool DecodeSnapshot(const unsigned char *bytes, size_t length, CcSim *sim,
+                           bool verify_hash, char *error, size_t error_capacity)
 {
     if (bytes == NULL || sim == NULL || length < 100U || length > 8U * 1024U * 1024U ||
         memcmp(bytes, "SQLite format 3\0", 16U) != 0) {
@@ -6034,11 +6034,23 @@ bool CcSaveDecode(const unsigned char *bytes, size_t length, CcSim *sim,
         SQLITE_DESERIALIZE_FREEONCLOSE | SQLITE_DESERIALIZE_RESIZEABLE);
     CcSim *candidate = malloc(sizeof(*candidate));
     bool ok = loaded == SQLITE_OK && candidate != NULL &&
-        LoadDatabase(database, candidate, NULL, error, error_capacity);
+        LoadDatabase(database, candidate, NULL, verify_hash, error, error_capacity);
     if (ok) *sim = *candidate;
     free(candidate);
     sqlite3_close(database);
     return ok;
+}
+
+bool CcSaveDecode(const unsigned char *bytes, size_t length, CcSim *sim,
+                  char *error, size_t error_capacity)
+{
+    return DecodeSnapshot(bytes, length, sim, true, error, error_capacity);
+}
+
+bool CcSaveDecodeRepair(const unsigned char *bytes, size_t length, CcSim *sim,
+                        char *error, size_t error_capacity)
+{
+    return DecodeSnapshot(bytes, length, sim, false, error, error_capacity);
 }
 
 void CcSaveFreeBuffer(void *bytes)
@@ -6407,7 +6419,7 @@ CcJournal *CcJournalResume(const char *path, CcSim *sim,
                       error, error_capacity);
     bool upgraded = false;
     if (ok) {
-        ok = LoadDatabase(journal->database, recovered, &upgraded,
+        ok = LoadDatabase(journal->database, recovered, &upgraded, true,
                           error, error_capacity);
     }
     uint64_t checkpoint_cursor = 0U;
