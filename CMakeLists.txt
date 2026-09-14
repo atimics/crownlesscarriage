@@ -320,9 +320,6 @@ if(CC_BUILD_BENCHMARKS)
     target_link_libraries(crownless_letter_probe PRIVATE crownless_sim)
     cc_strict_warnings(crownless_letter_probe)
 
-    add_executable(crownless_agent_sweep tools/agent_sweep.c)
-    target_link_libraries(crownless_agent_sweep PRIVATE crownless_sim)
-    cc_strict_warnings(crownless_agent_sweep)
 endif()
 
 if(CC_BUILD_CLIENT)

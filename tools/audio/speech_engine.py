@@ -1,12 +1,13 @@
 """Local speech generation using saved cast references."""
 
 import hashlib
+import importlib.metadata
 import os
 from pathlib import Path
 import tempfile
 import wave
 
-from speech_format import ROOT, check_wav
+from speech_format import CACHE_FORMAT, POSTPROCESS_VERSION, ROOT, check_wav
 from voice_style import render_voice
 
 
@@ -27,6 +28,7 @@ class SpeechEngine:
         from pocket_tts import TTSModel
         torch.set_num_threads(2)
         self.model = TTSModel.load_model(language='english')
+        self.engine_version = importlib.metadata.version('pocket-tts')
 
     def __call__(self, record, destination):
         import json
@@ -57,7 +59,9 @@ class SpeechEngine:
             master = Path(temporary) / 'master.wav'
             rendered = Path(temporary) / 'speech.wav'
             sf.write(master, samples, rate, subtype='PCM_16')
-            receipt = dict(record, model=self.engine, seed=seed, take=self.take, cfg_weight=self.cfg_weight,
+            receipt = dict(record, model=self.engine, cache_format=CACHE_FORMAT,
+                engine_version=self.engine_version, postprocess_version=POSTPROCESS_VERSION,
+                seed=seed, take=self.take, cfg_weight=self.cfg_weight,
                 reference_sha256=hashlib.sha256(reference.read_bytes()).hexdigest())
             if record['voice'] == 'goblin-v1':
                 from goblin_voice import render as render_goblin

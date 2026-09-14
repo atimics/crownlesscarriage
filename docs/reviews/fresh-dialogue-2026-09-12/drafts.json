@@ -1,0 +1,496 @@
+[
+  {
+    "source_id": "A001",
+    "title": "Bread at Rosespire",
+    "aim": "The listener wonders what was made.",
+    "lines": [
+      "Rosespire has made bread.",
+      "From wheat?",
+      "Yes."
+    ]
+  },
+  {
+    "source_id": "A002",
+    "title": "A rumour of bread",
+    "aim": "The listener asks what kind of bread was heard about.",
+    "lines": [
+      "People say Rosespire has made bread from wheat.",
+      "I wonder what the bread is like."
+    ]
+  },
+  {
+    "source_id": "A003",
+    "title": "The uncertain oven",
+    "aim": "The listener responds to a faint piece of news.",
+    "lines": [
+      "Rosespire may have made bread from wheat.",
+      "I wonder what it tastes like."
+    ]
+  },
+  {
+    "source_id": "A004",
+    "title": "Quillen at Silverwick",
+    "aim": "The listener asks what brought Quillen to the company.",
+    "lines": [
+      "Quillen Barrowward joined the Unpaid Company after looking for food at Silverwick.",
+      "For long?",
+      "Days.",
+      "A long wait for a meal."
+    ]
+  },
+  {
+    "source_id": "A005",
+    "title": "Alda in the Tallow Knives",
+    "aim": "The listener asks about Alda's reason for joining.",
+    "lines": [
+      "People say Alda Millrace joined the Tallow Knives after looking for food at Gloamgate.",
+      "Was Alda looking long?",
+      "Days, from what I hear.",
+      "I hope there was a meal at the end of it."
+    ]
+  },
+  {
+    "source_id": "A006",
+    "title": "Reida, perhaps",
+    "aim": "The listener asks what Reida was seeking.",
+    "lines": [
+      "Reida Millrace may have joined the Tallow Knives after looking for food at Gloamgate.",
+      "Do you know how Reida got on?",
+      "I’d have to ask."
+    ]
+  },
+  {
+    "source_id": "A007",
+    "title": "Two places in the herd",
+    "aim": "The listener checks the difference between a new calf and an older working calf.",
+    "lines": [
+      "Rosespire's herd raised a new calf, and an older calf joined the working herd.",
+      "The new one is still growing?",
+      "Yes. The older one joined the workers.",
+      "That is good news for the herd."
+    ]
+  },
+  {
+    "source_id": "A008",
+    "title": "Silverwick's calves",
+    "aim": "The listener asks which calf joined the working herd.",
+    "lines": [
+      "People say Silverwick has a new calf, and an older calf joined the working herd.",
+      "Which one joined the workers?",
+      "The older calf.",
+      "I wonder what the new one looks like."
+    ]
+  },
+  {
+    "source_id": "A009",
+    "title": "A doubtful calving report",
+    "aim": "The listener responds to an uncertain calf report.",
+    "lines": [
+      "Silverwick may have a new calf, and an older calf may have joined the working herd.",
+      "I wonder what the new calf looks like.",
+      "I do too."
+    ]
+  },
+  {
+    "source_id": "A010",
+    "title": "Fodder ran short",
+    "aim": "The listener asks why the cattle were slaughtered.",
+    "lines": [
+      "Rosespire slaughtered cattle when the fodder ran short. The beef went into the local store.",
+      "Will the rest have enough feed?",
+      "That’s worth asking."
+    ]
+  },
+  {
+    "source_id": "A011",
+    "title": "Alderwatch's cattle",
+    "aim": "The listener asks what led to the beef in the store.",
+    "lines": [
+      "I hear Alderwatch slaughtered cattle after fodder ran short.",
+      "What happened to the meat?",
+      "It went into the local store as beef, from what I hear."
+    ]
+  },
+  {
+    "source_id": "A012",
+    "title": "A story of cattle",
+    "aim": "The listener responds to an uncertain loss.",
+    "lines": [
+      "Rosespire may have slaughtered cattle after fodder ran short.",
+      "Short of feed?",
+      "That’s the story. The beef went into the local store, if it’s true."
+    ]
+  },
+  {
+    "source_id": "A013",
+    "title": "The goblin Keeper",
+    "aim": "The listener asks what title the goblin earned.",
+    "lines": [
+      "A goblin rose to Keeper in the dragon cult through service.",
+      "Keeper?",
+      "Yes. That is the title.",
+      "Good for them."
+    ]
+  },
+  {
+    "source_id": "A014",
+    "title": "The Bearer report",
+    "aim": "The listener asks what role the goblin took.",
+    "lines": [
+      "People say a goblin rose to Bearer in the dragon cult through service.",
+      "Bearer of what?",
+      "I do not know.",
+      "The title still sounds busy."
+    ]
+  },
+  {
+    "source_id": "A015",
+    "title": "An uncertain promotion",
+    "aim": "The listener asks what role may have been earned.",
+    "lines": [
+      "A goblin may have risen to Bearer in the dragon cult through service.",
+      "Bearer?",
+      "That is the word I heard.",
+      "I wonder what they carry."
+    ]
+  },
+  {
+    "source_id": "A016",
+    "title": "Othwen's life in Hollowbarrow",
+    "aim": "The listener responds to news of Othwen's death.",
+    "lines": [
+      "Othwen Herald has died.",
+      "Where did Othwen live?",
+      "Hollowbarrow.",
+      "I’m sorry to hear it."
+    ]
+  },
+  {
+    "source_id": "A017",
+    "title": "Rodric Bowyer's death",
+    "aim": "The listener responds to retold news of a death.",
+    "lines": [
+      "I hear Rodric Bowyer has died.",
+      "Rodric lived in Hollowbarrow?",
+      "Yes, from what people say.",
+      "Sad news."
+    ]
+  },
+  {
+    "source_id": "A018",
+    "title": "Uncertain news of Rodric",
+    "aim": "The listener hears an uncertain report about a local death.",
+    "lines": [
+      "Rodric Bowyer may have died after a life in Hollowbarrow.",
+      "I hope someone knows for sure."
+    ]
+  },
+  {
+    "source_id": "A019",
+    "title": "Crowns for grain",
+    "aim": "The listener asks about a grain purchase without assuming delivery.",
+    "lines": [
+      "Indigo March has put money into Hollowbarrow’s market to buy grain.",
+      "Has the grain arrived?",
+      "I’ve only heard about the money so far."
+    ]
+  },
+  {
+    "source_id": "A020",
+    "title": "A grain purchase retold",
+    "aim": "The listener takes an interest in a retold market decision.",
+    "lines": [
+      "People say Indigo March has sent money to Hollowbarrow’s market for grain.",
+      "How soon might the grain come?",
+      "I’d like to know that myself."
+    ]
+  },
+  {
+    "source_id": "A021",
+    "title": "The Covenant's grain money",
+    "aim": "The listener asks what an uncertain funding report might change.",
+    "lines": [
+      "Silver Covenant may have sent money to Hollowbarrow’s market to buy grain.",
+      "Grain for Hollowbarrow?",
+      "That seems to be the plan, if the story is right."
+    ]
+  },
+  {
+    "source_id": "A022",
+    "title": "Gloamgate burned",
+    "aim": "The listener asks about the stated cause of a dragon's fire.",
+    "lines": [
+      "Varkesh the Unappeased burned Gloamgate.",
+      "What brought that on?",
+      "Stolen crowns were still missing.",
+      "What a terrible price for the town."
+    ]
+  },
+  {
+    "source_id": "A023",
+    "title": "The fire retold",
+    "aim": "The listener asks a particular question about a retold dragon attack.",
+    "lines": [
+      "I hear Varkesh the Unappeased burned Gloamgate over stolen crowns that were still missing.",
+      "Did anyone find the crowns afterward?",
+      "I haven’t heard that part."
+    ]
+  },
+  {
+    "source_id": "A024",
+    "title": "A fire story",
+    "aim": "The listener reacts to an uncertain report of a dragon's motive.",
+    "lines": [
+      "Varkesh the Unappeased may have burned Gloamgate over missing stolen crowns.",
+      "Who took them?",
+      "I only heard that they were missing."
+    ]
+  },
+  {
+    "source_id": "A025",
+    "title": "Smoke in the chimneys",
+    "aim": "The listener asks about a prophecy while it remains a prediction.",
+    "lines": [
+      "Smoke is falling into Gloamgate’s chimneys.",
+      "What do the old readers make of it?",
+      "They say Varkesh the Unappeased will come before long.",
+      "I wonder what they see in the smoke."
+    ]
+  },
+  {
+    "source_id": "A026",
+    "title": "Nights counted",
+    "aim": "The listener responds to a retold omen with practical concern.",
+    "lines": [
+      "People say smoke is falling into Gloamgate’s chimneys. The old readers expect Varkesh the Unappeased before long.",
+      "What would you make of that?",
+      "I’d be uneasy."
+    ]
+  },
+  {
+    "source_id": "A027",
+    "title": "An uncertain omen",
+    "aim": "The listener asks about an uncertain prophecy without making it certain.",
+    "lines": [
+      "There may be smoke falling into Gloamgate’s chimneys. They say the old readers are counting the nights until Varkesh the Unappeased comes.",
+      "I wonder how they read the smoke."
+    ]
+  },
+  {
+    "source_id": "A028",
+    "title": "Mutton at Rosespire",
+    "aim": "The listener asks about the practical result of a flock cull.",
+    "lines": [
+      "Rosespire slaughtered sheep after winter fodder ran short.",
+      "What happened to the meat?",
+      "The mutton went into the local store."
+    ]
+  },
+  {
+    "source_id": "A029",
+    "title": "Fodder and mutton",
+    "aim": "The listener takes an interest in retold food news.",
+    "lines": [
+      "I hear Rosespire slaughtered sheep after winter fodder ran short, then stored the mutton locally.",
+      "Will the flock have enough feed now?",
+      "I haven’t heard."
+    ]
+  },
+  {
+    "source_id": "A030",
+    "title": "Alderwatch's mutton",
+    "aim": "The listener responds to an uncertain report about local food.",
+    "lines": [
+      "Alderwatch may have slaughtered sheep after winter fodder ran short.",
+      "Was the meat kept?",
+      "Mutton went into the local store, if the story is true."
+    ]
+  },
+  {
+    "source_id": "A031",
+    "title": "The Cinder Tithe at Gloamgate",
+    "aim": "The listener asks about an alleged raid while the treasure stays unnamed.",
+    "lines": [
+      "The Cinder Tithe raided Gloamgate.",
+      "What did they take?",
+      "Bread, crowns, and a treasure.",
+      "Which treasure?",
+      "That part hasn’t reached me."
+    ]
+  },
+  {
+    "source_id": "A032",
+    "title": "A raid at Rosespire",
+    "aim": "The listener asks about retold losses from a raid.",
+    "lines": [
+      "People say the Cinder Tithe raided Rosespire and took bread and crowns.",
+      "How is the town managing?",
+      "I’d like to know."
+    ]
+  },
+  {
+    "source_id": "A033",
+    "title": "Wheat taken at Thornford",
+    "aim": "The listener checks what the raiders took.",
+    "lines": [
+      "There’s talk of the Cinder Tithe raiding Thornford for wheat.",
+      "Crowns as well?",
+      "The account says they took none.",
+      "I wonder what happened to the wheat."
+    ]
+  },
+  {
+    "source_id": "A034",
+    "title": "Grain for the east",
+    "aim": "The listener asks which settlements the short harvest affects.",
+    "lines": [
+      "Thornford’s drought harvest fell short.",
+      "Who was it meant to feed?",
+      "The settlements to the east.",
+      "That’s hard news for them."
+    ]
+  },
+  {
+    "source_id": "A035",
+    "title": "Grain for the south",
+    "aim": "The listener wonders how the shortfall could be met.",
+    "lines": [
+      "I hear Thornford’s harvest is too small to supply the southern settlements.",
+      "Could they get grain elsewhere?",
+      "I’d have to ask."
+    ]
+  },
+  {
+    "source_id": "A036",
+    "title": "An uncertain harvest",
+    "aim": "The listener asks which direction the reported shortage affects.",
+    "lines": [
+      "Thornford may have too little grain for the settlements it supplies.",
+      "Which ones?",
+      "Those to the south, from what I heard."
+    ]
+  },
+  {
+    "source_id": "A037",
+    "title": "A new pony",
+    "aim": "The listener responds to a new foal.",
+    "lines": [
+      "Gloamgate has raised a pony foal, and a pony has joined the working herd.",
+      "I’d like to see the foal.",
+      "So would I."
+    ]
+  },
+  {
+    "source_id": "A038",
+    "title": "Ponies at Alderwatch",
+    "aim": "The listener asks about an account of pony breeding.",
+    "lines": [
+      "There’s word of a new pony foal at Alderwatch.",
+      "Has their working herd grown too?",
+      "A pony has joined it, I hear."
+    ]
+  },
+  {
+    "source_id": "A039",
+    "title": "A foal at Thornford",
+    "aim": "The listener takes an interest in an uncertain birth report.",
+    "lines": [
+      "Someone’s saying Thornford has a new pony foal.",
+      "A little pony?",
+      "That’s what I heard. I’d like to see it myself."
+    ]
+  },
+  {
+    "source_id": "A040",
+    "title": "Lambs and yearlings",
+    "aim": "The listener distinguishes new lambs from the older animals.",
+    "lines": [
+      "Rosespire has new lambs, and yearlings have joined the adult flock.",
+      "The yearlings are the older ones?",
+      "Yes. The lambs still have their growing to do."
+    ]
+  },
+  {
+    "source_id": "A041",
+    "title": "A growing flock",
+    "aim": "The listener asks about the older sheep.",
+    "lines": [
+      "I hear Alderwatch has raised lambs.",
+      "And the yearlings?",
+      "They’ve joined the adult flock, from what I hear.",
+      "Good to hear they’re growing."
+    ]
+  },
+  {
+    "source_id": "A042",
+    "title": "News of lambs",
+    "aim": "The listener seeks a detail beyond the doubtful account.",
+    "lines": [
+      "There may be new lambs at Alderwatch. Some yearlings have joined the adult flock too, if the story is right.",
+      "What are the lambs like?",
+      "I only heard about them."
+    ]
+  },
+  {
+    "source_id": "A043",
+    "title": "Masonry at Hollowbarrow",
+    "aim": "The listener asks about the repair material.",
+    "lines": [
+      "Hollowbarrow’s masons have repaired public buildings.",
+      "With stone?",
+      "Yes.",
+      "I’d like to see the work."
+    ]
+  },
+  {
+    "source_id": "A044",
+    "title": "Repairs on hold",
+    "aim": "The listener finds out why repairs are delayed.",
+    "lines": [
+      "Gloamgate’s public repairs are waiting, I hear.",
+      "For workers?",
+      "For stone, from what people say.",
+      "They’ll need something to build with."
+    ]
+  },
+  {
+    "source_id": "A045",
+    "title": "Repairs at Silverwick",
+    "aim": "The listener asks where the reported work took place.",
+    "lines": [
+      "Silverwick’s masons may have done some repairs with stone.",
+      "On the public buildings?",
+      "That’s the report."
+    ]
+  },
+  {
+    "source_id": "A046",
+    "title": "Making paper",
+    "aim": "The listener asks what went into the paper.",
+    "lines": [
+      "Rosespire’s mill has made paper.",
+      "From what?",
+      "Wood.",
+      "That must be interesting to watch."
+    ]
+  },
+  {
+    "source_id": "A047",
+    "title": "Paper at Gloamgate",
+    "aim": "The listener wonders about the paper’s eventual use.",
+    "lines": [
+      "They say Gloamgate’s mill has made paper from wood.",
+      "I wonder what will be written on it."
+    ]
+  },
+  {
+    "source_id": "A048",
+    "title": "A rumour of paper",
+    "aim": "The listener asks about a doubtful production report.",
+    "lines": [
+      "There’s a rumour that Gloamgate’s mill has made paper.",
+      "From wood?",
+      "That’s what I heard."
+    ]
+  }
+]

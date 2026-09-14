@@ -45,10 +45,30 @@ static const char *AdventureRoleName(CcNpcRole role)
     }
 }
 
-static void AdventureBindPerson(const CcSim *sim, LocalState *local,
+/* A resident is introduced once the player speaks with them; before that the
+   figure keeps its occupation label. */
+static bool AdventureIntroduced(const LocalState *local, CcId id)
+{
+    if (local == NULL || id == 0U) return false;
+    for (int32_t i = 0; i < local->introduced_count; ++i)
+        if (local->introduced_ids[i] == id) return true;
+    return false;
+}
+
+static void AdventureIntroduce(LocalState *local, CcId id)
+{
+    if (local == NULL || id == 0U) return;
+    if (AdventureIntroduced(local, id)) return;
+    if (local->introduced_count <
+        (int32_t)(sizeof(local->introduced_ids) / sizeof(local->introduced_ids[0]))) {
+        local->introduced_ids[local->introduced_count++] = id;
+    }
+}
+
+static bool AdventureBindPerson(const CcSim *sim, LocalState *local,
                                  CcInteractionTarget *target, CcNpcRole role)
 {
-    if (target == NULL) return;
+    if (target == NULL) return false;
     for (int32_t i = 0; i < sim->character_count; ++i) {
         const CcCharacter *person = &sim->characters[i];
         if (person->current_settlement_id != sim->player.location_id ||
@@ -65,8 +85,33 @@ static void AdventureBindPerson(const CcSim *sim, LocalState *local,
         if (used) continue;
         target->character_id = person->id;
         (void)snprintf(target->name, sizeof(target->name), "%s", person->name);
-        return;
+        return true;
     }
+    return false;
+}
+
+/* Every talkable figure in town is a real resident; the scene's role is only
+   a hint for which resident to prefer. Towns never offer anonymous role
+   labels, so a figure with no resident to stand for gets no Talk target. */
+static bool AdventureNamePresented(const CcSim *sim, LocalState *local,
+    CcInteractionTarget *target, CcNpcRole role,
+    const CcCharacter **residents, int32_t resident_count, int32_t slot)
+{
+    if (target == NULL) return false;
+    if (AdventureBindPerson(sim, local, target, role)) return true;
+    if (residents != NULL && resident_count > 0) {
+        for (int32_t step = 0; step < resident_count; ++step) {
+            const CcCharacter *person = residents[(slot + step) % resident_count];
+            bool used = false;
+            for (int32_t j = 0; j < local->interactions.count; ++j)
+                if (local->interactions.targets[j].character_id == person->id) used = true;
+            if (used) continue;
+            target->character_id = person->id;
+            (void)snprintf(target->name, sizeof(target->name), "%s", person->name);
+            return true;
+        }
+    }
+    return false;
 }
 
 static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
@@ -126,27 +171,36 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
                 target->situation_id = local->course.situation_witness_id;
             }
         }
+        CcLocalPresentedPerson people[64];
+        const CcCharacter *residents[64];
+        int32_t resident_count = 0;
+        if (!abandoned) {
+            for (int32_t i = 0; i < 64; ++i) {
+                const CcCharacter *person = CcLocalTownPerson(sim, town->id, i);
+                if (person == NULL) break;
+                residents[resident_count++] = person;
+            }
+        }
         for (int32_t i = 0; !abandoned && i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
             Vector3 position = local->course.runners[i].agent.position;
-            (void)AdventureTarget(local, sim, CC_INTERACTION_PERSON, UINT64_C(0x200000000) + (uint64_t)i,
-                "Town guard", "Talk", (Vector3){position.x, 0, position.z}, 0.9f, 2.0f, 0.7f,
-                (Vector2){position.x, position.z}, 1.8f);
-        }
-        for (int32_t i = 0; !abandoned && i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
-            if (!local->course.travellers[i].active) continue;
-            Vector3 position = local->course.travellers[i].agent.position;
-            CcInteractionTarget *traveller = AdventureTarget(local, sim, CC_INTERACTION_PERSON,
-                UINT64_C(0x300000000) + (uint64_t)i, "Traveller", "Talk",
+            CcInteractionTarget *runner = AdventureTarget(local, sim, CC_INTERACTION_PERSON,
+                UINT64_C(0x200000000) + (uint64_t)i, "Town guard", "Talk",
                 (Vector3){position.x, 0, position.z}, 0.9f, 2.0f, 0.7f,
                 (Vector2){position.x, position.z}, 1.8f);
-            AdventureBindPerson(sim, local, traveller, CC_NPC_ROLE_TRAVELLER);
+            if (runner != NULL &&
+                AdventureNamePresented(sim, local, runner, CC_NPC_ROLE_GUARD,
+                    residents, resident_count, i)) {
+                if (!AdventureIntroduced(local, runner->character_id))
+                    (void)snprintf(runner->name, sizeof(runner->name), "%s", "Town guard");
+            } else {
+                --local->interactions.count;
+            }
         }
         if (DungeonAtSettlement(sim, sim->player.location_id) != NULL) {
             (void)AdventureTarget(local, sim, CC_INTERACTION_SITE, CC_LOCAL_SITE_DUNGEON,
                 "Mine road", "Drive to the mine", (Vector3){LOCAL_DUNGEON.x, 0, LOCAL_DUNGEON.y},
                 2.2f, 3.1f, 1.6f, LOCAL_DUNGEON, 1.3f);
         }
-        CcLocalPresentedPerson people[64];
         if (abandoned) {
             for (int32_t i = 0; i < 8; ++i) {
                 const CcCharacter *person = CcLocalTownPerson(sim, town->id, i);
@@ -169,12 +223,22 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
                         (Vector2){people[i].position.x, people[i].position.z}) < 0.65f)) duplicate = true;
             }
             if (duplicate || people[i].role == CC_NPC_ROLE_RAIDER) continue;
+            CcNpcRole figure_role = people[i].role;
             CcInteractionTarget *resident = AdventureTarget(local, sim, CC_INTERACTION_PERSON,
-                UINT64_C(0x100000000) | (uint64_t)people[i].seed, AdventureRoleName(people[i].role), "Talk",
+                UINT64_C(0x100000000) | (uint64_t)people[i].seed,
+                AdventureRoleName(figure_role), "Talk",
                 (Vector3){people[i].position.x, 0, people[i].position.z},
                 0.9f, 2.0f, 0.7f,
                 (Vector2){people[i].position.x, people[i].position.z}, 1.8f);
-            AdventureBindPerson(sim, local, resident, people[i].role);
+            if (resident != NULL &&
+                AdventureNamePresented(sim, local, resident, figure_role,
+                    residents, resident_count, i)) {
+                if (!AdventureIntroduced(local, resident->character_id))
+                    (void)snprintf(resident->name, sizeof(resident->name), "%s",
+                                   AdventureRoleName(figure_role));
+            } else {
+                --local->interactions.count;
+            }
         }
     }
     for (int32_t i = 0; i < local->interactions.count; ++i)
@@ -202,6 +266,15 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
             local->conversation_gossip_source = false;
             local->conversation_character_id = target->character_id;
             local->conversation_situation_id = target->situation_id;
+            if (target->character_id != 0U) {
+                AdventureIntroduce(local, target->character_id);
+                const CcCharacter *introduced =
+                    CcSimCharacter(sim, target->character_id);
+                if (introduced != NULL) {
+                    (void)snprintf(local->conversation_name,
+                        sizeof(local->conversation_name), "%s", introduced->name);
+                }
+            }
             local->conversation_position = (Vector3){target->x, target->y, target->z};
             (void)snprintf(local->conversation_name, sizeof(local->conversation_name), "%s", target->name);
             (void)snprintf(local->conversation_line, sizeof(local->conversation_line),

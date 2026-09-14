@@ -10,6 +10,18 @@ CcCustodyResult CcSimMakeCustodyContainer(CcSim *sim, CcProductionContext *work,
 CcCustodyResult CcSimRepairCustodyContainer(CcSim *sim, CcProductionContext *work,
     uint64_t container_id, uint64_t revision, CcId event_id, CcProductionReceipt *receipt);
 int32_t CcSimCustodyCarrierLoad(const CcSim *sim, CcId carrier_id);
+/* Schema 102: a fallen person's carried purse (#288/#406). The death drops
+   the coins the person actually carried at the place they fell; the purse is
+   a custody entry owned by the dead person, lying at that place, claimable by
+   whoever is there. Returns false when custody is full; the caller must then
+   resolve the coins another way (never destroy them). */
+bool CcSimLeaveBodyPurse(CcSim *sim, CcId person_id, CcId place_id,
+    CcMoney coins, CcId death_event_id);
+/* Claim a fallen person's purse for the player company at the player's
+   current location. The purse dies with the claim; the coins are conserved. */
+bool CcSimClaimBodyPurse(CcSim *sim, CcId entry_id, char *error, size_t error_capacity);
+/* Is this entry an unclaimed fallen person's purse? */
+bool CcSimIsBodyPurse(const CcSim *sim, const CcCustodyEntry *entry);
 bool CcSimDispatchCustodyCarrier(CcSim *sim, CcId carrier_id, CcId destination_id);
 CcCustodyResult CcSimTransferCustody(CcSim *sim, const CcCustodyTransfer *transfer,
                                     uint64_t *result_id);

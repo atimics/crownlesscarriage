@@ -1545,53 +1545,12 @@ static void UpdateCourseTraining(CcLocalCourse *course, float delta_time)
     }
 }
 
-static int32_t CourseTravellerDemand(const CcSim *sim)
-{
-    int32_t count = 2;
-    if (sim == NULL) return count;
-    for (int32_t i = 0; i < sim->shipment_count && count <
-         CC_LOCAL_TRAVELLER_COUNT; ++i) {
-        if (sim->shipments[i].status == CC_SHIPMENT_TRAVELLING) count += 1;
-    }
-    return count;
-}
-
 static void UpdateCourseTravellers(CcLocalCourse *course, const CcSim *sim,
                                    float delta_time)
 {
-    if (course->scene != CC_LOCAL_SCENE_STREET) return;
-    int32_t demand = CourseTravellerDemand(sim);
-    for (int32_t i = 0; i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
-        CcLocalTraveller *traveller = &course->travellers[i];
-        if (!traveller->active) {
-            if (i >= demand) continue;
-            traveller->respawn_delay -= delta_time;
-            if (traveller->respawn_delay > 0.0f) continue;
-            CcLocalAgentInit(&traveller->agent,
-                             (Vector2){traveller->entry.x,
-                                       traveller->entry.z}, false);
-            traveller->agent.scene = course->scene;
-            traveller->agent.crowned = false;
-            static const Color colors[CC_LOCAL_TRAVELLER_COUNT] = {
-                {118, 134, 145, 255}, {150, 105, 91, 255},
-                {73, 137, 121, 255}, {139, 102, 153, 255}
-            };
-            CcLocalAgentSetNpcAppearance(
-                &traveller->agent, UINT32_C(0x54524100) + (uint32_t)i,
-                i == 3 ? CC_NPC_ROLE_REFUGEE : CC_NPC_ROLE_TRAVELLER,
-                colors[i]);
-            traveller->active = CcLocalAgentSetExactTarget(
-                &traveller->agent, traveller->exit, false);
-            continue;
-        }
-        CcLocalAgentFixedStepInternal(&traveller->agent, delta_time, false);
-        if (traveller->agent.exact_target_valid) continue;
-        float exit_x = traveller->agent.position.x - traveller->exit.x;
-        float exit_z = traveller->agent.position.z - traveller->exit.z;
-        if (exit_x * exit_x + exit_z * exit_z > 0.20f * 0.20f) continue;
-        traveller->active = false;
-        traveller->respawn_delay = 5.5f + (float)i * 1.7f;
-    }
+    /* Ambience travellers were unnamed passers-by with no identity to hold a
+       conversation. They no longer spawn. */
+    (void)course; (void)sim; (void)delta_time;
 }
 
 static int32_t CourseClosestRaider(const CcLocalCourse *course,

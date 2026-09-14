@@ -67,7 +67,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 101
+#define CC_SIM_SCHEMA_VERSION 102
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -346,6 +346,11 @@ typedef enum CcEventKind {
     CC_EVENT_NOTICE_POSTED = 133,
     CC_EVENT_ROAD_SITE_PRODUCTION = 134,
     CC_EVENT_PROPHECY_DELIVERED = 135,
+    /* Schema 100: crown carriage road repair. */
+    CC_EVENT_ROYAL_CARRIAGE_REPAIR_DISPATCHED = 136,
+    CC_EVENT_ROYAL_ROAD_SKIRMISH = 137,
+    /* Schema 102: a fallen person's purse is lifted (#406). */
+    CC_EVENT_BODY_LOOTED = 138,
     CC_EVENT_KIND_COUNT
 } CcEventKind;
 
@@ -641,7 +646,9 @@ typedef enum CcCommandKind {
     CC_COMMAND_RESERVE_ARCHIVE_RECRUITMENT = 60,
     CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT = 61,
     CC_COMMAND_PICKUP_DISPATCH = 62,
-    CC_COMMAND_DELIVER_DISPATCH = 63
+    CC_COMMAND_DELIVER_DISPATCH = 63,
+    /* Schema 102: claim a fallen person's purse where it lies (#288/#406). */
+    CC_COMMAND_TAKE_BODY_PURSE = 64
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -939,7 +946,11 @@ typedef enum CcRoyalCarriageMode {
     CC_ROYAL_CARRIAGE_SITE_UNLOADING,
     CC_ROYAL_CARRIAGE_ARCHIVE_RESERVED,
     CC_ROYAL_CARRIAGE_ARCHIVE_TRAVELLING,
-    CC_ROYAL_CARRIAGE_ARCHIVE_WAITING
+    CC_ROYAL_CARRIAGE_ARCHIVE_WAITING,
+    /* Schema 100: crown carriage road repair (docs/crown-carriage-roads.md).
+       Modes are appended so saved values keep their meaning. */
+    CC_ROYAL_CARRIAGE_REPAIR_TRAVELLING,
+    CC_ROYAL_CARRIAGE_REPAIR_WORKING
 } CcRoyalCarriageMode;
 
 typedef struct CcRoyalCarriage {
@@ -1859,6 +1870,8 @@ typedef struct CcEvent {
     char text[CC_EVENT_TEXT_CAPACITY];
 } CcEvent;
 
+#define CC_FEED_TRAY_CAPACITY 10
+
 typedef struct CcPlayerCompany {
     CcId id;
     CcId location_id;
@@ -1869,6 +1882,9 @@ typedef struct CcPlayerCompany {
     int32_t passenger_capacity;
     int32_t map_capacity;
     int32_t reputation;
+    /* Schema 101: the carriage's feed tray, in wheat units. One crate of
+       wheat (the trade unit) fills it; the team eats from it in town. */
+    int32_t feed_tray_wheat;
     uint32_t map_catalogue_mask;
     uint32_t map_archive_mask;
     uint32_t road_book_site_discovery_mask;
@@ -2089,7 +2105,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 601512,
+_Static_assert(sizeof(CcSim) == 601520,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

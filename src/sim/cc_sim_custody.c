@@ -1,6 +1,12 @@
 #include "sim/cc_sim_custody.h"
 #include <limits.h>
+#include <stdio.h>
 #include "sim/cc_goods_internal.h"
+
+static void SetCustodyError(char *error, size_t capacity, const char *text)
+{
+    if (error != NULL && capacity > 0U) (void)snprintf(error, capacity, "%s", text);
+}
 
 static int64_t StoredCustodyLoad(const void *context, const CcCustodyEntry *entry,
                                  int64_t quantity)
@@ -93,7 +99,11 @@ bool CcSimStoredCustodyValid(const CcSim *sim)
         if (entry->quantity > (entry->kind == CC_CUSTODY_PURSE ?
             CC_SIM_MAX_MONEY : CC_SIM_MAX_UNITS)) return false;
         if (entry->owner_id != sim->player.id &&
-            CcSimSettlement(sim, entry->owner_id) == NULL) return false;
+            CcSimSettlement(sim, entry->owner_id) == NULL &&
+            /* Schema 102: a fallen person's purse is owned by the dead,
+               recorded as a historic character (#288/#406). */
+            !(sim->schema_version >= 102U &&
+              CcSimHistoricCharacter(sim, entry->owner_id) != NULL)) return false;
     }
     return true;
 }
@@ -287,4 +297,85 @@ CcCustodyResult CcSimRepairCustodyContainer(CcSim *sim, CcProductionContext *wor
     work->output_limit -= done.batches;
     if (receipt != NULL) *receipt = done;
     return CC_CUSTODY_READY;
+}
+
+bool CcSimIsBodyPurse(const CcSim *sim, const CcCustodyEntry *entry)
+{
+    if (sim == NULL || entry == NULL || !entry->active ||
+        entry->kind != CC_CUSTODY_PURSE || entry->holder.kind != CC_CUSTODY_STORE)
+        return false;
+    if (entry->owner_id == sim->player.id ||
+        CcSimSettlement(sim, entry->owner_id) != NULL ||
+        CcSimCharacter(sim, entry->owner_id) != NULL) return false;
+    return true;
+}
+
+bool CcSimLeaveBodyPurse(CcSim *sim, CcId person_id, CcId place_id,
+    CcMoney coins, CcId death_event_id)
+{
+    if (sim == NULL || sim->schema_version < 102U || coins <= 0 ||
+        CcSimSettlement(sim, place_id) == NULL ||
+        CcSimCharacter(sim, person_id) == NULL ||
+        sim->custody.next_id == UINT64_MAX) return false;
+    int slot = -1;
+    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+        if (!sim->custody.entries[i].active && sim->custody.entries[i].quantity == 0) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < 0) return false;
+    sim->custody.entries[slot] = (CcCustodyEntry){
+        .id = sim->custody.next_id, .revision = 1,
+        .owner_id = person_id, .holder = {CC_CUSTODY_STORE, place_id},
+        .kind = CC_CUSTODY_PURSE, .quantity = coins, .good = 0,
+        .condition = 100, .capacity = 0, .active = true,
+        .last_event_id = death_event_id};
+    sim->custody.next_id++;
+    if (!CcSimStoredCustodyValid(sim)) return false;
+    return true;
+}
+
+bool CcSimClaimBodyPurse(CcSim *sim, CcId entry_id, char *error, size_t error_capacity)
+{
+    if (sim == NULL || sim->schema_version < 102U) {
+        SetCustodyError(error, error_capacity, "No purse lies here.");
+        return false;
+    }
+    CcCustodyEntry *entry = NULL;
+    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+        if (sim->custody.entries[i].active && sim->custody.entries[i].id == entry_id) {
+            entry = &sim->custody.entries[i];
+            break;
+        }
+    }
+    if (!CcSimIsBodyPurse(sim, entry)) {
+        SetCustodyError(error, error_capacity, "That is not an unclaimed fallen purse.");
+        return false;
+    }
+    if (entry->holder.id != sim->player.location_id) {
+        SetCustodyError(error, error_capacity,
+                 "Reach the place where that purse lies before lifting it.");
+        return false;
+    }
+    CcMoney coins = entry->quantity;
+    if (coins > CC_SIM_MAX_MONEY - sim->player.coins) {
+        SetCustodyError(error, error_capacity, "The company cannot carry that much coin.");
+        return false;
+    }
+    sim->player.coins += coins;
+    entry->quantity = 0;
+    entry->active = false;
+    entry->revision++;
+    if (!CcSimStoredCustodyValid(sim)) {
+        /* Restore rather than leave an invalid half-claim. */
+        sim->player.coins -= coins;
+        entry->quantity = coins;
+        entry->active = true;
+        entry->revision--;
+        SetCustodyError(error, error_capacity, "The claim did not hold.");
+        return false;
+    }
+    SetCustodyError(error, error_capacity, "");
+    return true;
 }

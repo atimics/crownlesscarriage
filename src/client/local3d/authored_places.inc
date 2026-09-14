@@ -744,27 +744,64 @@ static void DrawSettlementBuilding(const WorldBuilding *building,
             }
             break;
         case CC_SETTLEMENT_MINING: {
-
-            float lower_height = height * 0.48f;
-            DrawBuilding(x, z, width, depth, lower_height,
-                         ShadeColor(wall, 0.82f), ShadeColor(roof, 0.78f),
-                         building->door, 1);
-            float upper_width = width * 0.76f;
-            float upper_x = x + (mirror ? width * 0.08f : width * 0.16f);
-            rlPushMatrix();
-            rlTranslatef(0.0f, height * 0.43f, 0.0f);
-            DrawBuilding(upper_x, z + depth * 0.10f,
-                         upper_width, depth * 0.80f, height * 0.54f,
-                         wall, roof, false, building->style);
-            rlPopMatrix();
-            float gantry_x = mirror ? x + width * 0.16f :
-                                      x + width * 0.84f;
-            DrawBox((Vector3){gantry_x, height * 0.58f, z + depth * 0.50f},
-                    (Vector3){0.28f, height * 1.08f, depth * 0.88f},
-                    WORLD_WOOD_SHADOW);
-            DrawBox((Vector3){gantry_x, height * 1.08f, z + depth * 0.50f},
-                    (Vector3){width * 0.28f, 0.26f, depth * 0.88f},
-                    WORLD_WOOD);
+            if (building_index == profile->primary_building) {
+                /* The stopped clock belongs to the company store facade. */
+                DrawBuilding(x, z, width, depth, height * 0.60f,
+                             wall, roof, building->door, 1);
+                float tower_width = width * 0.25f;
+                float tower_x = x + (width - tower_width) * 0.5f;
+                float face_z = z + depth + 0.06f;
+                DrawBox((Vector3){x + width * 0.5f, height * 0.70f,
+                                  z + depth - 1.4f},
+                        (Vector3){tower_width, height * 0.60f, 2.8f}, wall);
+                DrawPitchedRoof(tower_x, z + depth - 2.8f, tower_width,
+                                2.8f, height, wall, roof);
+                Vector3 dial = {x + width * 0.5f, height * 0.83f, face_z};
+                Color face = burnt ? WORLD_STONE_SHADOW :
+                             CC_VISUAL_PALETTE.parchment.light;
+                DrawCylinderEx(dial, Vector3Add(dial, (Vector3){0, 0, 0.10f}),
+                               1.02f, 1.02f, 16, WORLD_METAL_SHADOW);
+                dial.z += 0.12f;
+                DrawCylinderEx(dial, Vector3Add(dial, (Vector3){0, 0, 0.04f}),
+                               0.87f, 0.87f, 16, face);
+                /* Eight o'clock: the minute hand points up, the hour left-down. */
+                DrawBox(Vector3Add(dial, (Vector3){0, 0.34f, 0.08f}),
+                        (Vector3){0.09f, 0.68f, 0.07f}, WORLD_INK);
+                DrawTiltedBox(Vector3Add(dial, (Vector3){-0.22f, -0.13f, 0.08f}),
+                              (Vector3){0.55f, 0.11f, 0.07f},
+                              (Vector3){0, 0, 1}, 30.0f, WORLD_INK);
+            } else if (building->style == CC_LOCAL_BUILDING_WORKER_ROW) {
+                /* Narrow adjoining homes make the working rows legible. */
+                int32_t homes = width >= 9.0f ? 3 : 2;
+                float bay = width / (float)homes;
+                for (int32_t home = 0; home < homes; ++home) {
+                    float home_x = x + (float)home * bay;
+                    float home_height = height * (home % 2 == 0 ? 0.86f : 0.94f);
+                    DrawBuilding(home_x, z, bay, depth, home_height,
+                                 ShadeColor(wall, home % 2 == 0 ? 1.0f : 1.12f),
+                                 roof, building->door, 1);
+                    DrawBox((Vector3){home_x + bay * 0.76f, home_height + 0.6f,
+                                      z + depth * 0.35f},
+                            (Vector3){0.48f, 2.2f, 0.62f}, WORLD_STONE_SHADOW);
+                    DrawBox((Vector3){home_x + bay * 0.76f, home_height + 1.73f,
+                                      z + depth * 0.35f},
+                            (Vector3){0.64f, 0.16f, 0.76f}, WORLD_METAL_SHADOW);
+                }
+            } else {
+                float apron = building_index == 6 ? 0.66f : 0.78f;
+                DrawBuilding(x, z, width, depth * apron, height,
+                             wall, roof, building->door, 1);
+                if (building_index != 6) {
+                    for (int32_t post = 0; post < 2; ++post) {
+                        DrawBox((Vector3){x + 0.3f + (width - 0.6f) * (float)post,
+                                          height * 0.33f, z + depth - 0.25f},
+                                (Vector3){0.22f, height * 0.66f, 0.22f}, WORLD_WOOD);
+                    }
+                    DrawBox((Vector3){x + width * 0.5f, height * 0.67f,
+                                      z + depth * 0.86f},
+                            (Vector3){width, 0.20f, depth * 0.26f}, roof);
+                }
+            }
             break;
         }
         case CC_SETTLEMENT_MARKET: {
@@ -3308,24 +3345,25 @@ static void DrawFarmTerrainStage(const CcSettlement *place,
 
 static void DrawMiningTerrainStage(Vector3 focus)
 {
-    Color iron = WORLD_METAL_SHADOW;
-    Color timber = WORLD_WOOD_SHADOW;
-    for (float x = 65.0f; x < 96.0f; x += 3.5f) {
-        if (!SceneryPointVisible(x, 34.0f, focus)) continue;
-        float ground = CcLocalTerrainHeightAt(x, 34.0f) + 0.055f;
-        for (int32_t rail = -1; rail <= 1; rail += 2) {
-            DrawBox((Vector3){x + 1.75f, ground, 34.0f + (float)rail * 0.62f},
-                    (Vector3){3.65f, 0.10f, 0.10f}, iron);
+    TerrainDetailBegin();
+    for (int32_t lane = 0; lane < ActivePlaceProfile()->lane_count; ++lane) {
+        const TerrainLanePath *path = &terrain_lanes[lane];
+        for (int32_t i = 1; i < path->count; ++i) {
+            Vector2 a = path->point[i - 1], b = path->point[i];
+            if (!SceneryPointVisible(b.x, b.y, focus)) continue;
+            Vector2 tangent = Vector2Normalize(Vector2Subtract(b, a));
+            for (int32_t side = -1; side <= 1; side += 2) {
+                Vector2 offset = {tangent.y * (float)side * path->half_width,
+                                   -tangent.x * (float)side * path->half_width};
+                Vector2 left = Vector2Add(a, offset), right = Vector2Add(b, offset);
+                /* Break the slate edging at joining roads. */
+                Vector2 middle = Vector2Scale(Vector2Add(left, right), 0.5f);
+                if (TerrainLaneInset(middle.x, middle.y, NULL) > 0.3f) continue;
+                TerrainRibbonSegment(left, right, 0.20f, 0.04f, WORLD_STONE_SHADOW);
+            }
         }
-        DrawBox((Vector3){x + 1.75f, ground - 0.035f, 34.0f},
-                (Vector3){0.18f, 0.10f, 2.10f}, timber);
     }
-    if (SceneryPointVisible(75.0f, 42.0f, focus)) {
-        DrawTerrainStageBox(69.0f, 40.8f, 18.0f, 0.65f, 2.25f,
-                            WORLD_STONE_SHADOW);
-        DrawTerrainStageBox(73.0f, 44.0f, 14.0f, 0.65f, 3.30f,
-                            ShadeColor(WORLD_STONE_SHADOW, 0.84f));
-    }
+    TerrainDetailEnd();
 }
 
 static void DrawGloamgateFountain(float ground)
@@ -3762,7 +3800,8 @@ static Color BuildingWallColor(int32_t style,
         case CC_SETTLEMENT_FARMING:
             return BlendColor(CC_VISUAL_PALETTE.parchment.light, WORLD_STONE_LIGHT, 0.18f);
         case CC_SETTLEMENT_MINING:
-            return BlendColor(wall, WORLD_METAL_SHADOW, 0.22f);
+            return BlendColor(WORLD_STONE_SHADOW, WORLD_METAL_LIGHT,
+                              style == CC_LOCAL_BUILDING_CIVIC ? 0.36f : 0.18f);
         case CC_SETTLEMENT_FORTRESS:
             return BlendColor(wall, WORLD_STONE_LIGHT, 0.16f);
         case CC_SETTLEMENT_CAPITAL:
@@ -3797,7 +3836,7 @@ static Color BuildingRoofColor(int32_t style, Color kingdom,
             return BlendColor(WORLD_CROP_LIGHT, CC_VISUAL_PALETTE.gold.light,
                               style == CC_LOCAL_BUILDING_WORKSHOP ? 0.48f : 0.24f);
         case CC_SETTLEMENT_MINING:
-            return BlendColor(roof, WORLD_METAL_SHADOW, 0.24f);
+            return BlendColor(WORLD_EARTH, WORLD_METAL_SHADOW, 0.48f);
         case CC_SETTLEMENT_FORTRESS:
             return BlendColor(roof, WORLD_DANGER, 0.12f);
         case CC_SETTLEMENT_CAPITAL:
@@ -4159,6 +4198,79 @@ static void DrawGloamgateShopLife(const CcSettlement *place,
     }
 }
 
+static void DrawSilverwickBuildingLife(const CcSettlement *place,
+                                       const WorldBuilding *building,
+                                       int32_t index, bool burnt,
+                                       uint32_t conditions)
+{
+    Rectangle pad = building->footprint;
+    float front = pad.y + pad.height - 0.20f;
+    float middle = pad.x + pad.width * 0.5f;
+    Color timber = burnt ? WORLD_INK : WORLD_WOOD;
+    if (index == 6) {
+        /* Ovens and bread shelves sit in the kitchen's covered plot. */
+        for (int32_t oven = 0; oven < 2; ++oven) {
+            float x = pad.x + 1.15f + (pad.width - 2.30f) * (float)oven;
+            DrawBox((Vector3){x, 0.70f, front - 0.75f},
+                    (Vector3){1.8f, 1.4f, 1.6f}, WORLD_STONE_SHADOW);
+            DrawScenerySphere((Vector3){x, 1.36f, front - 0.75f}, 0.86f,
+                               burnt ? WORLD_INK : WORLD_EARTH);
+            DrawBox((Vector3){x, 2.0f, front - 1.15f},
+                    (Vector3){0.46f, 2.0f, 0.46f}, WORLD_STONE_SHADOW);
+            DrawBox((Vector3){x, 0.64f, front + 0.065f},
+                    (Vector3){0.86f, 0.70f, 0.05f}, WORLD_INK);
+            if (!burnt && place->stock[CC_GOOD_WOOD] > 0 &&
+                place->stock[CC_GOOD_WHEAT] > 0) {
+                DrawBox((Vector3){x, 0.50f, front + 0.10f},
+                        (Vector3){0.64f, 0.30f, 0.045f}, WORLD_CROP_LIGHT);
+            }
+        }
+    }
+    if (burnt) {
+        float facade = pad.y + pad.height *
+            (index == 2 || building->style == CC_LOCAL_BUILDING_WORKER_ROW ?
+             1.0f : index == 6 ? 0.66f : 0.78f) + 0.07f;
+        for (int32_t scar = 0; scar < 3; ++scar) {
+            DrawBox((Vector3){pad.x + pad.width * (0.18f + (float)scar * 0.32f),
+                              building->height * 0.42f, facade},
+                    (Vector3){0.30f, building->height * 0.70f, 0.04f}, WORLD_INK);
+        }
+    }
+    if (burnt && (conditions & CC_TOWN_REBUILDING) != 0U) {
+        for (int32_t post = 0; post < 3; ++post) {
+            DrawBox((Vector3){pad.x + 0.3f + (pad.width - 0.6f) * (float)post * 0.5f,
+                              building->height * 0.42f, front + 0.38f},
+                    (Vector3){0.16f, building->height * 0.84f, 0.16f}, WORLD_WOOD_LIGHT);
+        }
+        for (int32_t level = 1; level < 3; ++level) {
+            DrawBox((Vector3){middle, building->height * (float)level * 0.28f, front + 0.38f},
+                    (Vector3){pad.width - 0.3f, 0.16f, 0.40f}, WORLD_WOOD_LIGHT);
+        }
+    }
+    if (burnt || building->style == CC_LOCAL_BUILDING_WORKER_ROW || index == 2) return;
+    CcGood good = index == 6 ? CC_GOOD_BREAD :
+                  index == 4 || index == 8 ? CC_GOOD_TOOLS : CC_GOOD_IRON;
+    int32_t count = place->stock[good] / 4;
+    if (count > 6) count = 6;
+    float shelf_z = pad.y + pad.height * 0.88f;
+    DrawBox((Vector3){middle, 0.65f, shelf_z},
+            (Vector3){2.1f, 0.14f, 0.72f}, timber);
+    for (int32_t leg = -1; leg <= 1; leg += 2) {
+        DrawBox((Vector3){middle + (float)leg * 0.85f, 0.30f, shelf_z},
+                (Vector3){0.12f, 0.60f, 0.50f}, timber);
+    }
+    for (int32_t item = 0; item < count; ++item) {
+        Vector3 at = {middle - 0.65f + (float)(item % 3) * 0.65f,
+                       0.88f + (float)(item / 3) * 0.26f, shelf_z};
+        if (good == CC_GOOD_BREAD) {
+            DrawScenerySphere(at, 0.22f, WORLD_CROP_LIGHT);
+        } else {
+            DrawBox(at, (Vector3){0.52f, 0.22f, 0.36f},
+                    good == CC_GOOD_IRON ? WORLD_METAL_LIGHT : WORLD_WOOD_LIGHT);
+        }
+    }
+}
+
 static void RotateBuildingPlot(Rectangle footprint, float degrees)
 {
     float x = footprint.x + footprint.width * 0.5f;
@@ -4207,9 +4319,10 @@ static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
         rlTranslatef(0.0f, building_base, 0.0f);
         RotateBuildingPlot(building.footprint, profile->building_yaw_degrees[i]);
         bool farming = profile->function == CC_SETTLEMENT_FARMING;
-        static const int32_t fire_rank[] = {4, 2, 0, 1, 6, 5, 3, 7, 2, 4};
+        static const int32_t fire_rank[] = {4, 2, 0, 1, 6, 5, 3, 7, 2, 4, 5};
         bool market = profile->function == CC_SETTLEMENT_MARKET;
-        bool burnt = (farming || market) && i < 10 &&
+        bool mining = profile->function == CC_SETTLEMENT_MINING;
+        bool burnt = (farming || market || mining) && i < 11 &&
                      place->fire_damage > fire_rank[i] * 12 + 8;
         Color wall = BuildingWallColor(building.style, profile);
         Color roof = BuildingRoofColor(building.style, kingdom, profile);
@@ -4225,6 +4338,9 @@ static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
         }
         if (market) {
             DrawGloamgateShopLife(place, &building, i, burnt, conditions);
+        }
+        if (mining) {
+            DrawSilverwickBuildingLife(place, &building, i, burnt, conditions);
         }
         if (reveal > 0.05f) {
             DrawBuildingRevealCap(

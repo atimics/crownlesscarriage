@@ -1,7 +1,7 @@
 {
   "version": 1,
   "grammar_sha256": "ad017639e911c482e86e25f063207504769353dcd05e263d31dd9a6ef9409fb6",
-  "event_count": 136,
+  "event_count": 139,
   "rule_count": 61,
   "events": [
     {
@@ -924,6 +924,24 @@
         "prophecy_delivered_0"
       ],
       "status": "field_rules"
+    },
+    {
+      "kind": "ROYAL_CARRIAGE_REPAIR_DISPATCHED",
+      "value": 136,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "ROYAL_ROAD_SKIRMISH",
+      "value": 137,
+      "rules": [],
+      "status": "legacy_or_uncovered"
+    },
+    {
+      "kind": "BODY_LOOTED",
+      "value": 138,
+      "rules": [],
+      "status": "legacy_or_uncovered"
     }
   ]
 }
