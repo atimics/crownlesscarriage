@@ -9670,8 +9670,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                    message_capacity);
             }
             bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-            for (int32_t good = 0; good < CC_GOOD_COUNT && good < 9;
-                 ++good) {
+            for (int32_t good = 0; good < 9; ++good) {
                 if (!ClientKeyPressed(KEY_ONE + good)) continue;
                 CcCommand trade = {
                     .kind = CC_COMMAND_TRADE,

@@ -334,7 +334,6 @@ float CcClientConvoyGaitCadence(CcClientConvoyGait gait)
         case CC_CLIENT_CONVOY_GAIT_WALK: return 3.6f;
         case CC_CLIENT_CONVOY_GAIT_TROT: return 4.8f;
         case CC_CLIENT_CONVOY_GAIT_CANTER: return 6.0f;
-        case CC_CLIENT_CONVOY_GAIT_COUNT:
         default:
             return 0.0f;
     }
@@ -347,7 +346,6 @@ const char *CcClientConvoyGaitName(CcClientConvoyGait gait)
         case CC_CLIENT_CONVOY_GAIT_WALK: return "WALK";
         case CC_CLIENT_CONVOY_GAIT_TROT: return "TROT";
         case CC_CLIENT_CONVOY_GAIT_CANTER: return "CANTER";
-        case CC_CLIENT_CONVOY_GAIT_COUNT:
         default:
             return "UNKNOWN";
     }
