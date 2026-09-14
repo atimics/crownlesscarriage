@@ -76,15 +76,15 @@ static const char *OccupationName(CcCharacterOccupation occupation)
     }
 }
 
-static const char *BanditName(const CcSim *sim, CcId id)
+static const char *BanditName(const CcSim *world, CcId id)
 {
-    for (int32_t i = 0; i < sim->bandit_count; ++i) {
-        if (sim->bandits[i].id == id) return sim->bandits[i].name;
+    for (int32_t i = 0; i < world->bandit_count; ++i) {
+        if (world->bandits[i].id == id) return world->bandits[i].name;
     }
     return "";
 }
 
-static void JsonMind(const CcSim *sim, const CcCharacter *speaker,
+static void JsonMind(const CcSim *world, const CcCharacter *speaker,
                      const CcGossipVersion *version)
 {
     (void)printf(",\"mind\":{\"goal\":");
@@ -98,7 +98,7 @@ static void JsonMind(const CcSim *sim, const CcCharacter *speaker,
     (void)printf(",\"role\":");
     JsonString(stdout, CcCharacterRoleName(speaker->role));
     (void)printf(",\"bandit\":");
-    JsonString(stdout, BanditName(sim, speaker->bandit_group_id));
+    JsonString(stdout, BanditName(world, speaker->bandit_group_id));
     (void)putchar('}');
 }
 
