@@ -16,6 +16,8 @@ bool CcSaveEncode(const CcSim *sim, unsigned char **bytes, size_t *length,
                   char *error, size_t error_capacity);
 bool CcSaveDecode(const unsigned char *bytes, size_t length, CcSim *sim,
                   char *error, size_t error_capacity);
+bool CcSaveDecodeRepair(const unsigned char *bytes, size_t length, CcSim *sim,
+                        char *error, size_t error_capacity);
 void CcSaveFreeBuffer(void *bytes);
 
 

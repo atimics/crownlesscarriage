@@ -31,9 +31,15 @@ bool CcCoopEncode(const CcSim *sim, unsigned char **bytes, size_t *length,
 }
 
 bool CcCoopDecode(CcSim *sim, const unsigned char *bytes, size_t length,
-                   char *error, size_t capacity)
+                  char *error, size_t capacity)
 {
     return CcSaveDecode(bytes, length, sim, error, capacity);
+}
+
+bool CcCoopDecodeRepair(CcSim *sim, const unsigned char *bytes, size_t length,
+                        char *error, size_t capacity)
+{
+    return CcSaveDecodeRepair(bytes, length, sim, error, capacity);
 }
 
 bool CcCoopApply(CcSim *sim, const char *action, CcId target,

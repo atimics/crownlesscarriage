@@ -24,6 +24,7 @@ class Engine:
             "CcCoopSnapshot": [pointer, text, size],
             "CcCoopEncode": [pointer, c.POINTER(pointer), c.POINTER(size), text, size],
             "CcCoopDecode": [pointer, text, size, text, size],
+            "CcCoopDecodeRepair": [pointer, text, size, text, size],
         }
         for name, args in signatures.items():
             fn = getattr(self.lib, name)
@@ -38,6 +39,7 @@ class Campaign:
         self.lib = engine.lib
         self.handle = self.lib.CcCoopCreate(seed)
         self.error = c.create_string_buffer(512)
+        self.repaired = False
         if not self.handle:
             raise RuntimeError("The campaign could not allocate memory.")
         if saved is None and campaign == "deep-wyrm":
@@ -48,8 +50,12 @@ class Campaign:
         if saved is not None and not self.lib.CcCoopDecode(
             self.handle, saved, len(saved), self.error, len(self.error)
         ):
-            self.close()
-            raise RuntimeError("Campaign recovery failed: " + self.error.value.decode("utf-8"))
+            if self.error.value != b"Campaign state hash does not match stored data." or not self.lib.CcCoopDecodeRepair(
+                self.handle, saved, len(saved), self.error, len(self.error)
+            ):
+                self.close()
+                raise RuntimeError("Campaign recovery failed: " + self.error.value.decode("utf-8"))
+            self.repaired = True
 
     def __enter__(self):
         return self
