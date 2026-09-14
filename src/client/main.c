@@ -6260,7 +6260,8 @@ static CcCoreLevel ClientLevel(int32_t value)
 }
 
 static void ClientMindFor(const CcSim *sim, const CcCharacter *character,
-                          const CcGossipVersion *version, CcCoreMind *mind)
+                          const CcGossipVersion *version, CcCoreMind *mind,
+                          CcGossipLanguage *memory_language)
 {
     *mind = (CcCoreMind){0};
     if (character == NULL) return;
@@ -6275,9 +6276,12 @@ static void ClientMindFor(const CcSim *sim, const CcCharacter *character,
         const CcGossipVersion *held = NULL;
         const CcGossip *older = CcSimPersonalGossip(sim, character->id, i, &held);
         if (older == NULL || held == NULL) break;
-        CcGossipLanguage language;
-        if (CcSpeechPrepareGossip(sim, older, held, 0U, &language) && language.account[0] != '\0') {
-            mind->memories[mind->memory_count++] = language.account;
+        size_t memory = mind->memory_count;
+        if (CcSpeechPrepareGossip(sim, older, held, 0U,
+                                   &memory_language[memory]) &&
+            memory_language[memory].account[0] != '\0') {
+            mind->memories[memory] = memory_language[memory].account;
+            mind->memory_count = memory + 1U;
         }
     }
 }
@@ -6295,7 +6299,10 @@ static bool ClientStartChat(const CcSim *sim, LocalState *local, uint32_t voice)
         uint32_t bit = UINT32_C(1) << (uint32_t)slot;
         if ((player->stories & listener->stories & bit) == 0U) continue;
         const CcGossip *story = CcSimGossipStory(sim, slot);
-        CcGossipLanguage language[2]; CcCoreAccount account[2]; CcSpeech speech[2];
+        CcGossipLanguage language[2];
+        CcGossipLanguage player_memories[CC_CORE_MIND_LINES];
+        CcGossipLanguage listener_memories[CC_CORE_MIND_LINES];
+        CcCoreAccount account[2]; CcSpeech speech[2];
         if (story == NULL ||
             !CcSpeechPrepareGossip(sim, story, &player->versions[slot], 0U, &language[0]) ||
             !CcSpeechPrepareGossip(sim, story, &listener->versions[slot], 0U, &language[1])) continue;
@@ -6310,9 +6317,10 @@ static bool ClientStartChat(const CcSim *sim, LocalState *local, uint32_t voice)
             !CcSpeechStory(sim, local->conversation_character_id, story, &listener->versions[slot],
                 false, &speech[1])) continue;
         CcCoreMind player_mind, listener_mind;
-        ClientMindFor(sim, CcSimCharacter(sim, sim->player.id), &player->versions[slot], &player_mind);
+        ClientMindFor(sim, CcSimCharacter(sim, sim->player.id),
+            &player->versions[slot], &player_mind, player_memories);
         ClientMindFor(sim, CcSimCharacter(sim, local->conversation_character_id),
-            &listener->versions[slot], &listener_mind);
+            &listener->versions[slot], &listener_mind, listener_memories);
         if (CcCoreConversationStartRoundMind(&core_conversation, &account[0], &player_mind, &speech[0],
                 &account[1], &listener_mind, &speech[1])) {
             local->conversation_gossip_slot = slot;

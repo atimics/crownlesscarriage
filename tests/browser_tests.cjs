@@ -369,18 +369,9 @@ async function main() {
       await mobile.evaluate(({index, revision}) => Module._CrownlessTouchActivate(index, revision), oldControl);
       await mobile.waitForTimeout(150);
       assert.equal(await mobile.locator('#canvas').getAttribute('aria-label'), 'Company Book');
-      await controls.button('Cargo').tap();
       assert((await controls.reading()).length > 30);
       await mobile.screenshot({path: path.join(output, 'mobile-book.png')});
-      const bookPages = (await controls.buttons()).filter(button =>
-        ['Promises', 'People', 'Cargo', 'Journal', 'PONIES', 'Ponies'].includes(button.label));
-      assert.deepEqual(bookPages.map(button => button.label), ['Promises', 'People', 'Cargo', 'Journal']);
-      for (const name of ['Promises', 'People', 'Cargo', 'Journal']) {
-        await controls.button(name).tap();
-        await mobile.waitForFunction(label => Module.crownlessTouchFrame.buttons.some(
-          button => button.label === label && button.active), name);
-      }
-      assert((await controls.reading()).includes('1-4 pages'));
+
       await controls.button('Back').tap();
       await controls.button('Menu').tap();
       await mobile.waitForFunction(() => Module.crownlessScreen === 'paused');

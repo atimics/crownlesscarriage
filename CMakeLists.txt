@@ -272,6 +272,10 @@ add_executable(crownless_sim_runner tools/sim_runner.c)
 target_link_libraries(crownless_sim_runner PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_sim_runner)
 
+add_executable(crownless_save_repair tools/save_repair.c)
+target_link_libraries(crownless_save_repair PRIVATE crownless_persistence)
+cc_strict_warnings(crownless_save_repair)
+
 add_executable(crownless_metagame_playtest tools/metagame.c)
 target_link_libraries(crownless_metagame_playtest PRIVATE crownless_metagame)
 cc_strict_warnings(crownless_metagame_playtest)

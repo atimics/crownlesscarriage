@@ -5687,18 +5687,24 @@ static void PostSituationNotice(CcSim *sim, const CcSituation *situation)
     const CcSettlement *town = &sim->settlements[origin];
     const CcCharacter *sponsor = CcSimSituationSponsorCharacter(sim, situation);
     char text[CC_EVENT_TEXT_CAPACITY];
-    const char *occupation = sponsor != NULL ?
-        CcOccupationName(sponsor->occupation) : "someone";
-    const char *rumor = situation->kind == CC_SITUATION_RELIEF_DELIVERY ?
-        "someone is short of provisions" :
-        situation->kind == CC_SITUATION_ROUTE_REPAIR ?
-        "the road has become dangerous" :
-        situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY ?
-        "a sealed parcel needs a discreet hand" :
-        "a message needs carrying before it is too late";
-    (void)snprintf(text, sizeof(text),
-        "%s posts a notice at %s: %s. Ask around town.",
-        occupation, town->name, rumor);
+    if (sim->schema_version < 97U) {
+        (void)snprintf(text, sizeof(text), "%s posts a notice at %s: %s.",
+            sponsor != NULL ? sponsor->name : "Someone",
+            town->name, CcSituationKindName(situation->kind));
+    } else {
+        const char *occupation = sponsor != NULL ?
+            CcOccupationName(sponsor->occupation) : "someone";
+        const char *rumor = situation->kind == CC_SITUATION_RELIEF_DELIVERY ?
+            "someone is short of provisions" :
+            situation->kind == CC_SITUATION_ROUTE_REPAIR ?
+            "the road has become dangerous" :
+            situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY ?
+            "a sealed parcel needs a discreet hand" :
+            "a message needs carrying before it is too late";
+        (void)snprintf(text, sizeof(text),
+            "%s posts a notice at %s: %s. Ask around town.",
+            occupation, town->name, rumor);
+    }
     CcEvent *posted = PushEvent(sim, CC_EVENT_NOTICE_POSTED, situation->id,
                                 town->id, situation->cause_event_id, 20, text);
     if (sim->schema_version >= 97U) {

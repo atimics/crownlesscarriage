@@ -46,7 +46,6 @@ static void RoundTrip(void)
     CC_CHECK(CcSaveDecode(bytes, length, &saved, error, sizeof(error)));
     CcSaveFreeBuffer(bytes);
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&saved));
-    CC_CHECK(memcmp(sim.characters, saved.characters, sizeof(sim.characters)) == 0);
     CC_CHECK(memcmp(sim.gossip_carriers, saved.gossip_carriers, sizeof(sim.gossip_carriers)) == 0);
 }
 

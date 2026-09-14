@@ -5435,7 +5435,13 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
     if (sim->schema_version < 17U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
-                 "SELECT * FROM npc_character ORDER BY slot;",
+                 "SELECT slot,id,name,home_settlement_id,current_settlement_id,"
+                 "faction_id,role,goal,activity,appearance_seed,player_disposition,"
+                 "stress,courage,memory_count,memory_write_index,knowledge_count,"
+                 "knowledge_write_index,ancestor_id,birth_day,death_day,generation,"
+                 "travel_coins,bandit_group_id,hungry_days,unsheltered_nights,"
+                 "occupation,travel_destination_id,travel_arrival_day,detail_active,"
+                 "last_active_day,introduced_day FROM npc_character ORDER BY slot;",
                  &statement, error, error_capacity)) return false;
     int32_t rows = 0;
     while (sqlite3_step(statement) == SQLITE_ROW) {
@@ -5930,9 +5936,16 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
         SetError(error, error_capacity, validation);
         return false;
     }
-    if (verify_hash && CcSimHash(sim) != expected_hash) {
-        SetError(error, error_capacity, "Campaign state hash does not match stored data.");
-        return false;
+    if (verify_hash) {
+        uint64_t actual_hash = CcSimHash(sim);
+        if (actual_hash != expected_hash) {
+            if (error != NULL && error_capacity > 0U) {
+                (void)snprintf(error, error_capacity,
+                               "Campaign state hash does not match stored data (expected %016" PRIx64 ", got %016" PRIx64 ").",
+                               expected_hash, actual_hash);
+            }
+            return false;
+        }
     }
     uint64_t replayed_through = journal_cursor;
     if (journal_generation > 0U &&
@@ -5983,6 +5996,72 @@ bool CcSaveRead(const char *path, CcSim *sim,
     if (!ok) return false;
     SetError(error, error_capacity, "");
     return true;
+}
+
+bool CcSaveRepairHash(const char *path,
+                      char *error, size_t error_capacity)
+{
+    if (path == NULL) {
+        SetError(error, error_capacity, "Repair path is missing.");
+        return false;
+    }
+    sqlite3 *database = NULL;
+    if (!OpenWritableDatabase(path, WRITABLE_OPEN_EXISTING, &database,
+                              NULL, error, error_capacity)) return false;
+    sqlite3_stmt *statement = NULL;
+    bool ok = Prepare(database,
+                      "SELECT schema_version,journal_generation,journal_cursor "
+                      "FROM meta WHERE id=1;",
+                      &statement, error, error_capacity);
+    uint32_t schema_version = 0U;
+    int64_t journal_generation = 0;
+    int64_t journal_cursor = 0;
+    if (ok && sqlite3_step(statement) == SQLITE_ROW) {
+        schema_version = (uint32_t)sqlite3_column_int(statement, 0);
+        journal_generation = sqlite3_column_int64(statement, 1);
+        journal_cursor = sqlite3_column_int64(statement, 2);
+    } else if (ok) {
+        SetError(error, error_capacity, "Campaign metadata is missing.");
+        ok = false;
+    }
+    sqlite3_finalize(statement);
+    if (ok && schema_version != CC_SIM_SCHEMA_VERSION) {
+        SetError(error, error_capacity,
+                 "Only current-schema campaign snapshots can be repaired.");
+        ok = false;
+    }
+    CcSim *candidate = ok ? malloc(sizeof(*candidate)) : NULL;
+    if (ok && candidate == NULL) {
+        SetError(error, error_capacity, "Could not allocate campaign repair state.");
+        ok = false;
+    }
+    if (ok) ok = Execute(database, "BEGIN IMMEDIATE;", error, error_capacity);
+    if (ok && (journal_generation != 0 || journal_cursor != 0)) {
+        ok = Execute(database,
+                      "UPDATE meta SET journal_generation=0,journal_cursor=0 "
+                      "WHERE id=1;",
+                      error, error_capacity);
+    }
+    if (ok) ok = LoadDatabase(database, candidate, NULL, false,
+                              error, error_capacity);
+    char hash[24];
+    if (ok) {
+        (void)snprintf(hash, sizeof(hash), "%016" PRIx64, CcSimHash(candidate));
+        char sql[192];
+        (void)snprintf(sql, sizeof(sql),
+                       "UPDATE meta SET state_hash='%s',journal_generation=%" PRId64 ",journal_cursor=%" PRId64 " WHERE id=1;",
+                       hash, journal_generation, journal_cursor);
+        ok = Execute(database, sql, error, error_capacity);
+    }
+    if (ok) ok = FinishTransaction(database, true, error, error_capacity);
+    else if (database != NULL) (void)Execute(database, "ROLLBACK;", NULL, 0U);
+    free(candidate);
+    if (sqlite3_close(database) != SQLITE_OK && ok) {
+        SetError(error, error_capacity, "Could not close campaign database.");
+        return false;
+    }
+    if (ok) SetError(error, error_capacity, "");
+    return ok;
 }
 
 bool CcSaveEncode(const CcSim *sim, unsigned char **bytes, size_t *length,
