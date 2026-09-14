@@ -45,6 +45,26 @@ static const char *AdventureRoleName(CcNpcRole role)
     }
 }
 
+/* A resident is introduced once the player speaks with them; before that the
+   figure keeps its occupation label. */
+static bool AdventureIntroduced(const LocalState *local, CcId id)
+{
+    if (local == NULL || id == 0U) return false;
+    for (int32_t i = 0; i < local->introduced_count; ++i)
+        if (local->introduced_ids[i] == id) return true;
+    return false;
+}
+
+static void AdventureIntroduce(LocalState *local, CcId id)
+{
+    if (local == NULL || id == 0U) return;
+    if (AdventureIntroduced(local, id)) return;
+    if (local->introduced_count <
+        (int32_t)(sizeof(local->introduced_ids) / sizeof(local->introduced_ids[0]))) {
+        local->introduced_ids[local->introduced_count++] = id;
+    }
+}
+
 static bool AdventureBindPerson(const CcSim *sim, LocalState *local,
                                  CcInteractionTarget *target, CcNpcRole role)
 {
@@ -168,8 +188,11 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
                 (Vector3){position.x, 0, position.z}, 0.9f, 2.0f, 0.7f,
                 (Vector2){position.x, position.z}, 1.8f);
             if (runner != NULL &&
-                !AdventureNamePresented(sim, local, runner, CC_NPC_ROLE_GUARD,
+                AdventureNamePresented(sim, local, runner, CC_NPC_ROLE_GUARD,
                     residents, resident_count, i)) {
+                if (!AdventureIntroduced(local, runner->character_id))
+                    (void)snprintf(runner->name, sizeof(runner->name), "%s", "Town guard");
+            } else {
                 --local->interactions.count;
             }
         }
@@ -200,15 +223,20 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
                         (Vector2){people[i].position.x, people[i].position.z}) < 0.65f)) duplicate = true;
             }
             if (duplicate || people[i].role == CC_NPC_ROLE_RAIDER) continue;
+            CcNpcRole figure_role = people[i].role;
             CcInteractionTarget *resident = AdventureTarget(local, sim, CC_INTERACTION_PERSON,
                 UINT64_C(0x100000000) | (uint64_t)people[i].seed,
-                AdventureRoleName(people[i].role), "Talk",
+                AdventureRoleName(figure_role), "Talk",
                 (Vector3){people[i].position.x, 0, people[i].position.z},
                 0.9f, 2.0f, 0.7f,
                 (Vector2){people[i].position.x, people[i].position.z}, 1.8f);
             if (resident != NULL &&
-                !AdventureNamePresented(sim, local, resident,
-                    people[i].role, residents, resident_count, i)) {
+                AdventureNamePresented(sim, local, resident, figure_role,
+                    residents, resident_count, i)) {
+                if (!AdventureIntroduced(local, resident->character_id))
+                    (void)snprintf(resident->name, sizeof(resident->name), "%s",
+                                   AdventureRoleName(figure_role));
+            } else {
                 --local->interactions.count;
             }
         }
@@ -238,6 +266,15 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
             local->conversation_gossip_source = false;
             local->conversation_character_id = target->character_id;
             local->conversation_situation_id = target->situation_id;
+            if (target->character_id != 0U) {
+                AdventureIntroduce(local, target->character_id);
+                const CcCharacter *introduced =
+                    CcSimCharacter(sim, target->character_id);
+                if (introduced != NULL) {
+                    (void)snprintf(local->conversation_name,
+                        sizeof(local->conversation_name), "%s", introduced->name);
+                }
+            }
             local->conversation_position = (Vector3){target->x, target->y, target->z};
             (void)snprintf(local->conversation_name, sizeof(local->conversation_name), "%s", target->name);
             (void)snprintf(local->conversation_line, sizeof(local->conversation_line),
