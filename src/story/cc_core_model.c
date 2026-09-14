@@ -435,10 +435,12 @@ bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
     added = CcCoreModelEncode("\n", m->tokens + n, CONTEXT - n);
     if (added < 0) return false;
     n += added;
-    (void)snprintf(line, sizeof(line), "# %s:\n", ControlName(control));
-    added = CcCoreModelEncode(line, m->tokens + n, CONTEXT - n);
-    if (added < 0) return false;
-    n += added;
+    if (mind != NULL) {
+        (void)snprintf(line, sizeof(line), "# %s:\n", ControlName(control));
+        added = CcCoreModelEncode(line, m->tokens + n, CONTEXT - n);
+        if (added < 0) return false;
+        n += added;
+    }
     for (int i = 0; i < n; ++i) m->meta[i][4] = meaning;
     m->prefix = n; m->used = 0; m->actions = 0; m->status = 0;
     return true;

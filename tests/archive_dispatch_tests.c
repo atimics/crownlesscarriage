@@ -63,7 +63,13 @@ static void RoundTrip(void)
     CcSaveFreeBuffer(bytes);
     restored.schema_version = sim.schema_version;
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
-    CC_CHECK(memcmp(sim.royal_carriages, restored.royal_carriages, sizeof(sim.royal_carriages)) == 0);
+    for (int32_t i = 0; i < sim.royal_carriage_count; ++i) {
+        CC_CHECK(sim.royal_carriages[i].id == restored.royal_carriages[i].id);
+        CC_CHECK(sim.royal_carriages[i].location_id == restored.royal_carriages[i].location_id);
+        CC_CHECK(sim.royal_carriages[i].active_shipment_id == restored.royal_carriages[i].active_shipment_id);
+        CC_CHECK(sim.royal_carriages[i].condition == restored.royal_carriages[i].condition);
+        CC_CHECK(sim.royal_carriages[i].archive_contract == restored.royal_carriages[i].archive_contract);
+    }
 }
 static const CcShipment *Load(void)
 {
