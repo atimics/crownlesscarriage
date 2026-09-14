@@ -93,9 +93,10 @@ void CcSimRefreshActiveCast(CcSim *sim)
         bool pinned = ProtectedPerson(sim, person);
         /* Current commitments keep their places. New nearby people take the
            next available places, then recent contact and ordinary work. */
+        int32_t days_away = sim->current_day - person->last_active_day;
         int32_t priority = pinned ? (person->detail_active ? 5 : 4) :
-            person->introduced_day > 0 && sim->current_day - person->last_active_day < 14 ? 3 :
-            person->detail_active && sim->current_day - person->last_active_day < 7 ? 2 : 1;
+            person->detail_active ? (days_away < 7 ? 2 : 1) :
+            sim->current_day - person->introduced_day < 14 ? 3 : 1;
         candidates[i] = (CastCandidate){person->id, i, priority, person->last_active_day};
     }
     qsort(candidates, (size_t)sim->character_count, sizeof(candidates[0]), CompareCandidate);

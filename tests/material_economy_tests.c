@@ -371,7 +371,7 @@ int main(void)
     CC_CHECK(strcmp(paper_definition->name, "Paper") == 0);
     CC_CHECK(paper_definition->base_price == 12);
 
-    CcSim paper_mill;
+    static CcSim paper_mill;
     CcSettlement *place;
     for (int32_t capacity = 1; capacity <= 9; ++capacity) {
         place = IsolatedSettlement(&paper_mill);
@@ -394,7 +394,7 @@ int main(void)
         CC_CHECK(place->paper_tool_wear == 1);
     }
 
-    CcSim wet_journey;
+    static CcSim wet_journey;
     CcSimInit(&wet_journey, UINT32_C(0x5a11a9e));
     CcTravelPreview wet_preview = {0};
     for (int32_t day = 1; day <= 100; ++day) {
@@ -427,7 +427,7 @@ int main(void)
     CC_CHECK(strstr(wet_event->text, "Rotten Meat") != NULL);
     CC_CHECK(strstr(wet_event->text, "Rotten Grain") != NULL);
 
-    CcSim dry_journey;
+    static CcSim dry_journey;
     CcSimInit(&dry_journey, UINT32_C(0xd271a9e));
     CcTravelPreview dry_preview = {0};
     for (int32_t day = 1; day <= 100; ++day) {
@@ -452,7 +452,7 @@ int main(void)
     CC_CHECK(dry_journey.player.cargo[CC_GOOD_WHEAT] == 4);
     CC_CHECK(dry_journey.player.cargo[CC_GOOD_ROTTEN_GRAIN] == 0);
 
-    CcSim wood_world;
+    static CcSim wood_world;
     CcSimInit(&wood_world, UINT32_C(0x700d100d));
     CC_CHECK(wood_world.settlements[0].stock[CC_GOOD_WOOD] == 28);
     CC_CHECK(wood_world.settlements[0].reserve_target[CC_GOOD_WOOD] == 18);
@@ -470,7 +470,7 @@ int main(void)
     wood_world.settlements[0].stock[CC_GOOD_WOOD] = -1;
     CC_CHECK(!CcSimValidate(&wood_world, wood_error, sizeof(wood_error)));
 
-    CcSim woodlot;
+    static CcSim woodlot;
     place = IsolatedSettlement(&woodlot);
     place->service_mask |= Service(CC_SERVICE_GRANARY);
     place->production[CC_GOOD_WOOD] = 8;
@@ -493,13 +493,13 @@ int main(void)
     }
     CC_CHECK(harvest_recorded);
 
-    CcSim hand_woodlot;
+    static CcSim hand_woodlot;
     place = IsolatedSettlement(&hand_woodlot);
     place->production[CC_GOOD_WOOD] = 8;
     CcSimAdvanceDays(&hand_woodlot, 6);
     CC_CHECK(place->stock[CC_GOOD_WOOD] == 2);
 
-    CcSim quarry;
+    static CcSim quarry;
     place = IsolatedSettlement(&quarry);
     place->function = CC_SETTLEMENT_MINING;
     place->service_mask |= Service(CC_SERVICE_MINE) |
@@ -522,7 +522,7 @@ int main(void)
     }
     CC_CHECK(quarry_recorded);
 
-    CcSim hand_quarry;
+    static CcSim hand_quarry;
     place = IsolatedSettlement(&hand_quarry);
     place->function = CC_SETTLEMENT_MINING;
     place->service_mask |= Service(CC_SERVICE_MINE);
@@ -530,7 +530,7 @@ int main(void)
     CcSimAdvanceDays(&hand_quarry, 6);
     CC_CHECK(place->stock[CC_GOOD_STONE] == 2);
 
-    CcSim masonry;
+    static CcSim masonry;
     place = IsolatedSettlement(&masonry);
     place->population = 100;
     place->service_mask |= Service(CC_SERVICE_GRANARY) |
@@ -552,14 +552,14 @@ int main(void)
     }
     CC_CHECK(masonry_recorded);
 
-    CcSim no_farm;
+    static CcSim no_farm;
     place = IsolatedSettlement(&no_farm);
     place->field_yield = 100;
     place->production[CC_GOOD_WHEAT] = 8;
     CcSimAdvanceDays(&no_farm, 7);
     CC_CHECK(place->stock[CC_GOOD_FOOD] == 0);
 
-    CcSim farm;
+    static CcSim farm;
     place = IsolatedSettlement(&farm);
     place->service_mask |= Service(CC_SERVICE_FARM);
     place->field_yield = 100;
@@ -569,14 +569,14 @@ int main(void)
     CC_CHECK(place->stock[CC_GOOD_WHEAT] > 0);
     CC_CHECK(place->farm_tool_wear == 1);
 
-    CcSim pantry;
+    static CcSim pantry;
     place = IsolatedSettlement(&pantry);
     place->stock[CC_GOOD_FOOD] = 1000;
     place->consumption[CC_GOOD_FOOD] = 5;
     CcSimAdvanceDays(&pantry, 7);
     CC_CHECK(place->stock[CC_GOOD_FOOD] == 60);
 
-    CcSim granary;
+    static CcSim granary;
     place = IsolatedSettlement(&granary);
     place->service_mask |= Service(CC_SERVICE_GRANARY);
     place->stock[CC_GOOD_FOOD] = 1000;
@@ -584,7 +584,7 @@ int main(void)
     CcSimAdvanceDays(&granary, 7);
     CC_CHECK(place->stock[CC_GOOD_FOOD] == 160);
 
-    CcSim ordinary_spoilage;
+    static CcSim ordinary_spoilage;
     place = IsolatedSettlement(&ordinary_spoilage);
     place->service_mask |= Service(CC_SERVICE_GRANARY);
     place->stock[CC_GOOD_FOOD] = 150;
@@ -592,7 +592,7 @@ int main(void)
     CcSimAdvanceDays(&ordinary_spoilage, 7);
     CC_CHECK(place->stock[CC_GOOD_FOOD] == 144);
 
-    CcSim fed;
+    static CcSim fed;
     place = IsolatedSettlement(&fed);
     place->stock[CC_GOOD_FOOD] = 7;
     place->consumption[CC_GOOD_FOOD] = 7;
@@ -601,14 +601,14 @@ int main(void)
     CC_CHECK(place->stock[CC_GOOD_FOOD] == 0);
     CC_CHECK(place->hunger == 48);
 
-    CcSim starving;
+    static CcSim starving;
     place = IsolatedSettlement(&starving);
     place->consumption[CC_GOOD_FOOD] = 7;
     place->hunger = 50;
     CcSimAdvanceDays(&starving, 7);
     CC_CHECK(place->hunger == 56);
 
-    CcSim tool_convoy;
+    static CcSim tool_convoy;
     CcSimInit(&tool_convoy, UINT32_C(0x7001c0a7));
     tool_convoy.settlement_count = 2;
     tool_convoy.route_count = 1;
@@ -731,7 +731,7 @@ int main(void)
     CC_CHECK(CcSimTrackedGood(&stone_convoy, CC_GOOD_STONE) ==
              stone_before_trade);
 
-    CcSim famine_convoy;
+    static CcSim famine_convoy;
     CcSimInit(&famine_convoy, UINT32_C(0xfa61ce01));
     famine_convoy.settlement_count = 2;
     famine_convoy.route_count = 1;
@@ -798,7 +798,7 @@ int main(void)
         }
     }
     CC_CHECK(loan_recorded);
-    CcSim mine;
+    static CcSim mine;
     place = IsolatedSettlement(&mine);
     place->service_mask |= Service(CC_SERVICE_MINE);
     place->production[CC_GOOD_IRON] = 4;
@@ -812,7 +812,7 @@ int main(void)
     CC_CHECK(place->gold_progress == 1);
     CC_CHECK(place->gem_progress == 1);
 
-    CcSim hand_mine;
+    static CcSim hand_mine;
     place = IsolatedSettlement(&hand_mine);
     place->service_mask |= Service(CC_SERVICE_MINE);
     place->production[CC_GOOD_IRON] = 4;
@@ -822,7 +822,7 @@ int main(void)
     CC_CHECK(place->stock[CC_GOOD_IRON] == 1);
     CC_CHECK(place->gold_progress == 0);
 
-    CcSim smithy;
+    static CcSim smithy;
     place = IsolatedSettlement(&smithy);
     place->service_mask |= Service(CC_SERVICE_SMITHY);
     place->function = CC_SETTLEMENT_FORTRESS;
@@ -840,7 +840,7 @@ int main(void)
     CC_CHECK(place->stock[CC_GOOD_WEAPONS] == 1);
     CC_CHECK(place->smith_tool_wear == 2);
 
-    CcSim woodless_smithy;
+    static CcSim woodless_smithy;
     place = IsolatedSettlement(&woodless_smithy);
     place->service_mask |= Service(CC_SERVICE_SMITHY);
     place->stock[CC_GOOD_IRON] = 10;
@@ -854,7 +854,7 @@ int main(void)
     CC_CHECK(place->stock[CC_GOOD_TOOLS] == 10);
     CC_CHECK(place->stock[CC_GOOD_WEAPONS] == 0);
 
-    CcSim treasure_sim;
+    static CcSim treasure_sim;
     place = IsolatedSettlement(&treasure_sim);
     place->service_mask |= Service(CC_SERVICE_SMITHY);
     place->function = CC_SETTLEMENT_MARKET;
@@ -910,7 +910,7 @@ int main(void)
        and a small working store is left alone. The settlement update runs
        weekly and 91 is thirteen whole weeks, so the quarter day is never
        stepped over. */
-    CcSim paper;
+    static CcSim paper;
     CcSettlement *store = IsolatedSettlement(&paper);
     store->stock[CC_GOOD_PAPER] = 400;
     paper.current_day = 90;
@@ -918,7 +918,7 @@ int main(void)
     CC_CHECK(store->stock[CC_GOOD_PAPER] == 396);
 
     /* A hoard under the floor is untouched however long it sits. */
-    CcSim small;
+    static CcSim small;
     store = IsolatedSettlement(&small);
     store->stock[CC_GOOD_PAPER] = 10;
     small.current_day = 90;
@@ -927,7 +927,7 @@ int main(void)
 
     /* Just over the floor still loses its sheaf, because the hundredth
        rounds to nothing and the minimum takes over. */
-    CcSim sliver;
+    static CcSim sliver;
     store = IsolatedSettlement(&sliver);
     store->stock[CC_GOOD_PAPER] = 11;
     sliver.current_day = 90;
@@ -935,7 +935,7 @@ int main(void)
     CC_CHECK(store->stock[CC_GOOD_PAPER] == 10);
 
     /* Any other week of the quarter leaves the hoard alone. */
-    CcSim between;
+    static CcSim between;
     store = IsolatedSettlement(&between);
     store->stock[CC_GOOD_PAPER] = 400;
     between.current_day = 83;
