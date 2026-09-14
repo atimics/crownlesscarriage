@@ -18,6 +18,8 @@ typedef struct CcCoreConversation {
     CcSpeech player_line, listener_line;
     CcCoreAccount listener_account;
     CcCoreMind listener_mind;
+    char listener_memory[CC_CORE_MIND_LINES][CC_CORE_UTTERANCE];
+    char listener_thoughts[CC_CORE_MIND_LINES][CC_CORE_UTTERANCE];
     bool listener_has_mind;
 } CcCoreConversation;
 

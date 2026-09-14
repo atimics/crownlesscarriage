@@ -95,6 +95,27 @@ void CcCoreConversationStep(CcCoreConversation *c, unsigned int budget)
     } else if (c->round_phase == 2U) c->round_phase = 3U;
 }
 
+static void CopyMind(CcCoreMind *destination, const CcCoreMind *source,
+                     char memory[CC_CORE_MIND_LINES][CC_CORE_UTTERANCE],
+                     char thoughts[CC_CORE_MIND_LINES][CC_CORE_UTTERANCE])
+{
+    *destination = *source;
+    destination->memory_count = source->memory_count < CC_CORE_MIND_LINES ?
+        source->memory_count : CC_CORE_MIND_LINES;
+    destination->thought_count = source->thought_count < CC_CORE_MIND_LINES ?
+        source->thought_count : CC_CORE_MIND_LINES;
+    for (size_t i = 0; i < destination->memory_count; ++i) {
+        (void)snprintf(memory[i], CC_CORE_UTTERANCE, "%s",
+                       source->memories[i] != NULL ? source->memories[i] : "");
+        destination->memories[i] = memory[i];
+    }
+    for (size_t i = 0; i < destination->thought_count; ++i) {
+        (void)snprintf(thoughts[i], CC_CORE_UTTERANCE, "%s",
+                       source->thoughts[i] != NULL ? source->thoughts[i] : "");
+        destination->thoughts[i] = thoughts[i];
+    }
+}
+
 bool CcCoreConversationStartRoundMind(CcCoreConversation *c,
     const CcCoreAccount *player_account, const CcCoreMind *player_mind, const CcSpeech *player,
     const CcCoreAccount *listener_account, const CcCoreMind *listener_mind, const CcSpeech *listener)
@@ -104,7 +125,8 @@ bool CcCoreConversationStartRoundMind(CcCoreConversation *c,
         player->speaker_id == listener->speaker_id) return false;
     c->listener_account = *listener_account;
     c->listener_has_mind = listener_mind != NULL;
-    if (listener_mind != NULL) c->listener_mind = *listener_mind;
+    if (listener_mind != NULL) CopyMind(&c->listener_mind, listener_mind,
+        c->listener_memory, c->listener_thoughts);
     c->listener_line = *listener;
     c->player_line = *player;
     c->cached = false;
