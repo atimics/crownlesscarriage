@@ -1,4 +1,5 @@
 #include "sim/cc_road_council.h"
+#include "sim/cc_occupations.h"
 /* Scene actions and modal UI share the same input boundary. */
 static CcClientPreferences *adventure_preferences;
 static bool adventure_preferences_dirty;
@@ -43,6 +44,15 @@ static const char *AdventureRoleName(CcNpcRole role)
         case CC_NPC_ROLE_HEALER: return "Healer";
         default: return "Neighbour";
     }
+}
+
+static void AdventurePersonLabel(const CcSim *sim, const CcCharacter *person,
+                                 char *label, size_t capacity)
+{
+    if (person == NULL || label == NULL || capacity == 0U) return;
+    (void)snprintf(label, capacity, "%s, %s, %s", person->name,
+        CcOccupationName(person->occupation),
+        CcCharacterRoutineName(CcSimCharacterRoutine(sim, person)));
 }
 
 /* A resident is introduced once the player speaks with them; before that the
@@ -952,7 +962,9 @@ static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
             const CcCharacter *person = &sim->characters[i];
             if (!AdventureKnownPerson(sim, person)) continue;
             if (skipped++ < local->book_offset) continue;
-            CcOverlayDrawText(person->name, x, y, size + 2, CC_GOLD);
+            char person_label[128];
+            AdventurePersonLabel(sim, person, person_label, sizeof(person_label));
+            CcOverlayDrawText(person_label, x, y, size + 2, CC_GOLD);
             const CcSettlement *home = CcSimSettlement(sim, person->home_settlement_id);
             CcOverlayDrawText(TextFormat("%s  /  From %s", CcCharacterRoleName(person->role),
                 home != NULL ? home->name : "the road"), x, y + 28, size, INK);

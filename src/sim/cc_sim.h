@@ -1526,6 +1526,13 @@ typedef enum CcCharacterRole {
     CC_CHARACTER_COURIER
 } CcCharacterRole;
 
+typedef enum CcCharacterRoutine {
+    CC_CHARACTER_ROUTINE_HOME,
+    CC_CHARACTER_ROUTINE_WORK,
+    CC_CHARACTER_ROUTINE_INN,
+    CC_CHARACTER_ROUTINE_ROAD
+} CcCharacterRoutine;
+
 typedef enum CcCharacterOccupation {
     CC_OCCUPATION_NONE,
     CC_OCCUPATION_WOODCUTTER,
@@ -2320,6 +2327,9 @@ bool CcSimSituationCanAccept(const CcSim *sim,
 const char *CcRelationshipHistoryName(CcRelationshipHistory history);
 const char *CcCharacterRoleName(CcCharacterRole role);
 const char *CcCharacterActivityName(CcCharacterActivity activity);
+const char *CcCharacterRoutineName(CcCharacterRoutine routine);
+CcCharacterRoutine CcSimCharacterRoutine(const CcSim *sim,
+                                         const CcCharacter *character);
 const CcSituation *CcSimAcceptedSituation(const CcSim *sim);
 CcId CcSimSituationOfferSettlementId(const CcSim *sim,
                                      const CcSituation *situation);
