@@ -6229,6 +6229,59 @@ static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
 }
 
 /* Each participant supplies their own held version of the same event. */
+static const char *ClientOccupationName(CcCharacterOccupation occupation)
+{
+    switch (occupation) {
+        case CC_OCCUPATION_WOODCUTTER: return "woodcutter";
+        case CC_OCCUPATION_SHEPHERD: return "shepherd";
+        case CC_OCCUPATION_MILLER: return "miller";
+        case CC_OCCUPATION_SMITH: return "smith";
+        case CC_OCCUPATION_QUARRYMAN: return "quarryman";
+        case CC_OCCUPATION_FARMER: return "farmer";
+        case CC_OCCUPATION_BAKER: return "baker";
+        case CC_OCCUPATION_INNKEEPER: return "innkeeper";
+        case CC_OCCUPATION_CARTWRIGHT: return "cartwright";
+        case CC_OCCUPATION_SCRIBE: return "scribe";
+        default: return "resident";
+    }
+}
+
+static const char *ClientBanditName(const CcSim *sim, CcId id)
+{
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        if (sim->bandits[i].id == id) return sim->bandits[i].name;
+    }
+    return "";
+}
+
+static CcCoreLevel ClientLevel(int32_t value)
+{
+    return value < 34 ? CC_CORE_LEVEL_LOW : value > 66 ? CC_CORE_LEVEL_HIGH : CC_CORE_LEVEL_MEDIUM;
+}
+
+static void ClientMindFor(const CcSim *sim, const CcCharacter *character,
+                          const CcGossipVersion *version, CcCoreMind *mind)
+{
+    *mind = (CcCoreMind){0};
+    if (character == NULL) return;
+    mind->goal = (CcCoreGoal)character->goal;
+    mind->stress = ClientLevel(character->stress);
+    mind->courage = ClientLevel(character->courage);
+    mind->witnessed = version != NULL && version->source_character_id == character->id;
+    mind->voice = ClientBanditName(sim, character->bandit_group_id);
+    if (mind->voice[0] == '\0') mind->voice = ClientOccupationName(character->occupation);
+    /* Up to two older held accounts become memories of past events. */
+    for (int32_t i = 0; i < CC_MAX_GOSSIP && mind->memory_count < CC_CORE_MIND_LINES; ++i) {
+        const CcGossipVersion *held = NULL;
+        const CcGossip *older = CcSimPersonalGossip(sim, character->id, i, &held);
+        if (older == NULL || held == NULL) break;
+        CcGossipLanguage language;
+        if (CcSpeechPrepareGossip(sim, older, held, 0U, &language) && language.account[0] != '\0') {
+            mind->memories[mind->memory_count++] = language.account;
+        }
+    }
+}
+
 static bool ClientStartChat(const CcSim *sim, LocalState *local, uint32_t voice)
 {
     const CcGossipCarrier *player = CcSimGossipCarrier(sim, sim->player.id);
@@ -6256,8 +6309,12 @@ static bool ClientStartChat(const CcSim *sim, LocalState *local, uint32_t voice)
                 words, CC_SPEECH_PLAIN, CC_SPEECH_CONVERSATION, story->event_id) ||
             !CcSpeechStory(sim, local->conversation_character_id, story, &listener->versions[slot],
                 false, &speech[1])) continue;
-        if (CcCoreConversationStartRound(&core_conversation, &account[0], &speech[0],
-                &account[1], &speech[1])) {
+        CcCoreMind player_mind, listener_mind;
+        ClientMindFor(sim, CcSimCharacter(sim, sim->player.id), &player->versions[slot], &player_mind);
+        ClientMindFor(sim, CcSimCharacter(sim, local->conversation_character_id),
+            &listener->versions[slot], &listener_mind);
+        if (CcCoreConversationStartRoundMind(&core_conversation, &account[0], &player_mind, &speech[0],
+                &account[1], &listener_mind, &speech[1])) {
             local->conversation_gossip_slot = slot;
             return true;
         }
@@ -9925,55 +9982,24 @@ static void ReadCompanyPage(const CcSim *sim, const LocalState *local)
         if (promise != NULL) {
             char next[192];
             SituationNextAction(sim, promise, next, sizeof(next));
-            (void)snprintf(words, sizeof(words), "Due day %d. %s Progress %d of %d. Reward %" PRId64 " crowns.",
-                promise->deadline_day, next, promise->progress, promise->quantity, promise->reward);
+            (void)snprintf(words, sizeof(words), "Next, %s.", next);
             ClientReadSpeech(sim, words, promise->cause_event_id);
-        } else ClientReadSpeech(sim, "Visit a notice board or speak to a neighbour to find your next promise.", 0);
-        int shown = 0;
-        for (int32_t i = sim->quest_outcome_count - 1 - local->book_offset; i >= 0 && shown < 2; --i, ++shown) {
-            const CcQuestOutcomeRecord *outcome = &sim->quest_outcomes[i];
-            (void)snprintf(words, sizeof(words), "%s. Day %d. %s. Progress %d of %d.",
-                CcQuestEndReasonName(outcome->end_reason), outcome->resolved_day,
-                SituationTitle(outcome->situation_kind), outcome->progress_value, outcome->progress_limit);
-            ClientReadSpeech(sim, words, outcome->resolved_event_id);
+        } else {
+            ClientReadSpeech(sim, "Nothing promised. Read the board or listen in the tavern.", 0);
         }
-    } else if (local->book_page == 1) {
-        int skipped = 0, shown = 0;
+    } else {
+        int32_t shown = 0;
         for (int32_t i = 0; i < sim->character_count && shown < 5; ++i) {
             const CcCharacter *person = &sim->characters[i];
-            if (!AdventureKnownPerson(sim, person) || skipped++ < local->book_offset) continue;
-            const CcSettlement *home = CcSimSettlement(sim, person->home_settlement_id);
-            (void)snprintf(words, sizeof(words), "%s. %s. From %s.", person->name,
-                CcCharacterRoleName(person->role), home != NULL ? home->name : "the road");
+            if (!AdventureKnownPerson(sim, person)) continue;
+            const CcSettlement *where = CcSimSettlement(sim, person->current_settlement_id);
+            (void)snprintf(words, sizeof(words), "%s, the %s. Now %s.",
+                person->name, CcOccupationName(person->occupation),
+                where != NULL ? where->name : "on the road");
             ClientReadSpeech(sim, words, 0);
             ++shown;
         }
-        if (shown == 0) ClientReadSpeech(sim, "People named in the stories you have found appear here.", 0);
-    } else if (local->book_page == 2) {
-        (void)snprintf(words, sizeof(words), "Purse %" PRId64 " crowns. Cargo %d of %d spaces.",
-            sim->player.coins, CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity);
-        ClientReadSpeech(sim, words, 0);
-        int skipped = 0;
-        words[0] = '\0';
-        for (int32_t i = 0; i < CC_GOOD_COUNT; ++i) {
-            if (sim->player.cargo[i] <= 0 || skipped++ < local->book_offset) continue;
-            size_t used = strlen(words);
-            (void)snprintf(words + used, sizeof(words) - used, "%d %s. ", sim->player.cargo[i], CcGoodName((CcGood)i));
-        }
-        ClientReadSpeech(sim, words, 0);
-    } else if (local->book_page == 4 && CcSimDeepWyrmProphecy(sim) != NULL) {
-        ClientReadSpeech(sim, CC_PROPHECY_TITLE, 0);
-        ClientReadSpeech(sim, CC_PROPHECY_WORDS, 0);
-        ClientReadSpeech(sim, CC_PROPHECY_CHARGE, 0);
-    } else {
-        int32_t limit = AdventureBookPageSize(local);
-        for (int32_t i = local->book_offset; i < sim->event_count && i < local->book_offset + limit; ++i) {
-            const CcEvent *event = CcSimRecentEvent(sim, i);
-            if (event != NULL) {
-                (void)snprintf(words, sizeof(words), "Day %d. %s. %s", event->day, CcEventKindName(event->kind), event->text);
-                ClientReadSpeech(sim, words, event->id);
-            }
-        }
+        if (shown == 0) ClientReadSpeech(sim, "No one you know has been named yet.", 0);
     }
 }
 

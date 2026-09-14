@@ -43,6 +43,65 @@ static void JsonEvent(const CcGossip *story, const CcGossipVersion *version,
                  version->confidence, version->retellings);
 }
 
+static const char *GoalName(CcCharacterGoal goal)
+{
+    switch (goal) {
+        case CC_CHARACTER_GOAL_KEEP_ORDER: return "keep_order";
+        case CC_CHARACTER_GOAL_SECURE_LIVELIHOOD: return "secure_livelihood";
+        case CC_CHARACTER_GOAL_SURVIVE_CRISIS: return "survive_crisis";
+        case CC_CHARACTER_GOAL_CARRY_NEWS: return "carry_news";
+        default: return "secure_livelihood";
+    }
+}
+
+static const char *LevelName(int32_t value)
+{
+    return value < 34 ? "low" : value > 66 ? "high" : "medium";
+}
+
+static const char *OccupationName(CcCharacterOccupation occupation)
+{
+    switch (occupation) {
+        case CC_OCCUPATION_WOODCUTTER: return "woodcutter";
+        case CC_OCCUPATION_SHEPHERD: return "shepherd";
+        case CC_OCCUPATION_MILLER: return "miller";
+        case CC_OCCUPATION_SMITH: return "smith";
+        case CC_OCCUPATION_QUARRYMAN: return "quarryman";
+        case CC_OCCUPATION_FARMER: return "farmer";
+        case CC_OCCUPATION_BAKER: return "baker";
+        case CC_OCCUPATION_INNKEEPER: return "innkeeper";
+        case CC_OCCUPATION_CARTWRIGHT: return "cartwright";
+        case CC_OCCUPATION_SCRIBE: return "scribe";
+        default: return "resident";
+    }
+}
+
+static const char *BanditName(const CcSim *world, CcId id)
+{
+    for (int32_t i = 0; i < world->bandit_count; ++i) {
+        if (world->bandits[i].id == id) return world->bandits[i].name;
+    }
+    return "";
+}
+
+static void JsonMind(const CcSim *world, const CcCharacter *speaker,
+                     const CcGossipVersion *version)
+{
+    (void)printf(",\"mind\":{\"goal\":");
+    JsonString(stdout, GoalName(speaker->goal));
+    (void)printf(",\"stress\":");
+    JsonString(stdout, LevelName(speaker->stress));
+    (void)printf(",\"courage\":");
+    JsonString(stdout, LevelName(speaker->courage));
+    (void)printf(",\"witnessed\":%s,\"occupation\":", version->source_character_id == speaker->id ? "true" : "false");
+    JsonString(stdout, OccupationName(speaker->occupation));
+    (void)printf(",\"role\":");
+    JsonString(stdout, CcCharacterRoleName(speaker->role));
+    (void)printf(",\"bandit\":");
+    JsonString(stdout, BanditName(world, speaker->bandit_group_id));
+    (void)putchar('}');
+}
+
 static void JsonEvents(const CcCharacter *speaker, int32_t offset,
                         const CcGossip *story, const CcGossipVersion *version,
                         const CcGossipLanguage *language)
@@ -133,6 +192,7 @@ static bool ExportDay(uint64_t *rows, uint64_t *unsupported)
                     language.retellings, variant);
                 JsonString(stdout, speech);
                 JsonEvents(speaker, offset, story, version, &language);
+                JsonMind(&sim, speaker, version);
                 (void)printf(",\"rule\":\"%d:%" PRIu32 "\"}\n", (int)language.kind, variant);
                 ++*rows;
             }

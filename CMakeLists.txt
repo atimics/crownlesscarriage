@@ -257,6 +257,10 @@ add_executable(core_model_probe tools/core_model_probe.c)
 target_link_libraries(core_model_probe PRIVATE crownless_story)
 cc_strict_warnings(core_model_probe)
 
+add_executable(core_account_batch tools/core_account_batch.c)
+target_link_libraries(core_account_batch PRIVATE crownless_story)
+cc_strict_warnings(core_account_batch)
+
 add_executable(crownless_gossip_corpus tools/gossip_corpus.c)
 target_link_libraries(crownless_gossip_corpus PRIVATE crownless_story)
 cc_strict_warnings(crownless_gossip_corpus)
