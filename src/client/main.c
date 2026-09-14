@@ -10477,13 +10477,17 @@ int main(int argc, char **argv)
         if (CampaignSaveExists(save_path)) {
             journal = CcJournalResume(save_path, &sim, error, sizeof(error));
             bool repaired = false;
-            if (journal == NULL && strstr(error, "state hash") != NULL) {
+            if (journal == NULL) {
+                char original_error[256];
                 char repair_error[256];
+                (void)snprintf(original_error, sizeof(original_error), "%s", error);
                 if (CcSaveRepairHash(save_path, repair_error, sizeof(repair_error))) {
                     journal = CcJournalResume(save_path, &sim, error, sizeof(error));
                     repaired = journal != NULL;
-                } else {
-                    (void)snprintf(error, sizeof(error), "%s", repair_error);
+                }
+                if (journal == NULL) {
+                    (void)snprintf(error, sizeof(error), "%s",
+                                   original_error[0] != '\0' ? original_error : repair_error);
                 }
             }
             (void)snprintf(startup_message, sizeof(startup_message), "%s",
