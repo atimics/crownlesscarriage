@@ -10476,8 +10476,19 @@ int main(int argc, char **argv)
         char error[256];
         if (CampaignSaveExists(save_path)) {
             journal = CcJournalResume(save_path, &sim, error, sizeof(error));
+            bool repaired = false;
+            if (journal == NULL && strstr(error, "state hash") != NULL) {
+                char repair_error[256];
+                if (CcSaveRepairHash(save_path, repair_error, sizeof(repair_error))) {
+                    journal = CcJournalResume(save_path, &sim, error, sizeof(error));
+                    repaired = journal != NULL;
+                } else {
+                    (void)snprintf(error, sizeof(error), "%s", repair_error);
+                }
+            }
             (void)snprintf(startup_message, sizeof(startup_message), "%s",
-                           journal != NULL ? "Campaign resumed." : error);
+                           journal != NULL ? (repaired ?
+                               "Campaign repaired and resumed." : "Campaign resumed.") : error);
         }
     }
 #if defined(PLATFORM_WEB)
