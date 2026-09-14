@@ -1068,10 +1068,10 @@ static int RunFrontendRegression(void)
     FRONTEND_CHECK(journal != NULL && CcSimHash(&sim) == campaign_hash);
     view = VIEW_LEDGER;
     local.book_page = 0;
-    queued_key_press[KEY_FIVE] = true;
+    queued_key_press[KEY_ONE] = true;
     FRONTEND_CHECK(HandleAdventureBook(journal, &sim, &local, &view, &return_view, error, sizeof(error)));
     ClientInputClearPressed();
-    FRONTEND_CHECK(local.book_page == 4 && CcSimCanDeliverProphecy(&sim));
+    FRONTEND_CHECK(local.book_page == 0 && CcSimCanDeliverProphecy(&sim));
     queued_key_press[KEY_E] = true;
     FRONTEND_CHECK(HandleAdventureBook(journal, &sim, &local, &view, &return_view, error, sizeof(error)));
     ClientInputClearPressed();

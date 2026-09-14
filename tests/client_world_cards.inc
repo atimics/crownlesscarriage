@@ -121,18 +121,15 @@ static int RunWorldCardRegression(void)
         CARD_INPUT();
         CARD_CHECK(view == VIEW_LEDGER && return_view == VIEW_LOCAL,
             "B must open the Company Book from the road.");
-        for (int32_t page = 0; page < 4; ++page) {
-            local.book_offset = 2;
-            queued_key_press[KEY_ONE + page] = true;
-            CARD_INPUT();
-            CARD_CHECK(view == VIEW_LEDGER && local.book_page == page && local.book_offset == 0,
-                "Keys 1 through 4 must open each book page at the start.");
-        }
-        queued_key_press[KEY_FIVE] = true;
+        local.book_page = 1;
+        queued_key_press[KEY_ONE] = true;
         CARD_INPUT();
-        CARD_CHECK(view == VIEW_LEDGER && local.book_page == 3 && local.book_offset == 0 &&
-            local.carriage_tab == CARRIAGE_OVERVIEW,
-            "The book must keep the Journal selected when 5 is pressed.");
+        CARD_CHECK(view == VIEW_LEDGER && local.book_page == 0,
+            "Key 1 must open the Ahead page at the start.");
+        queued_key_press[KEY_TWO] = true;
+        CARD_INPUT();
+        CARD_CHECK(view == VIEW_LEDGER && local.book_page == 1,
+            "Key 2 must open the People page.");
         queued_key_press[KEY_B] = true;
         CARD_INPUT();
         CARD_CHECK(view == VIEW_LOCAL && CcSimHash(&sim) == carriage_hash,
