@@ -110,6 +110,7 @@ static void FinishJourneyArrival(CcSim *sim,
     sim->journey.elapsed_subticks = sim->journey.total_subticks;
     sim->journey.active = false;
     sim->journey.phase = CC_JOURNEY_PHASE_NONE;
+    CcSimPeopleEnterSettlement(sim);
     sim->clock.game_minutes_per_second =
         CC_IDLE_GAME_MINUTES_PER_SECOND;
     sim->carriage = (CcCarriageState){

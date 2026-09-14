@@ -836,12 +836,10 @@ void CcLocalCourseInit(CcLocalCourse *course)
             &traveller->agent, UINT32_C(0x54524100) + (uint32_t)i,
             i == 3 ? CC_NPC_ROLE_REFUGEE : CC_NPC_ROLE_TRAVELLER,
             traveller_colors[i]);
-        traveller->active = i < 2;
-        traveller->respawn_delay = 1.8f + (float)i * 1.4f;
-        if (traveller->active) {
-            (void)CcLocalAgentSetExactTarget(&traveller->agent,
-                                             traveller->exit, false);
-        }
+        /* Ambience travellers are retired; their slots stay parked so no unnamed
+       passer-by walks the street. */
+        traveller->active = false;
+        traveller->respawn_delay = 0.0f;
     }
     CcLocalAgentInit(&course->situation_witness,
                      (Vector2){CC_LOCAL_NOTICE_X + 0.92f,

@@ -16,7 +16,7 @@ typedef struct SeenAccount {
     CcId event;
     CcGossipLanguage language;
 } SeenAccount;
-static SeenAccount seen[CC_MAX_CHARACTERS][CC_MAX_GOSSIP];
+static SeenAccount seen[CC_MAX_CHARACTER_RECORDS][CC_MAX_GOSSIP];
 
 static void JsonString(FILE *stream, const char *text)
 {

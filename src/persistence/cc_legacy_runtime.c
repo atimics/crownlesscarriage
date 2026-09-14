@@ -675,6 +675,14 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
     uint32_t legacy_version = sim->schema_version;
     if (!UpgradeLegacyRuntimeSchema(sim, error, error_capacity)) return false;
     if (legacy_version < 99U) CcCustodyInit(&sim->custody);
+    if (legacy_version < 101U) {
+        for (int32_t i = 0; i < sim->character_count; ++i) {
+            sim->characters[i].detail_active = true;
+            sim->characters[i].last_active_day = sim->current_day;
+            sim->characters[i].introduced_day = 0;
+        }
+        CcSimRefreshActiveCast(sim);
+    }
     if (legacy_version < 57U) {
         /* Older saves identify hearts by their original generated name. */
         char name[CC_MAP_NAME_CAPACITY];
