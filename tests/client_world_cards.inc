@@ -280,6 +280,7 @@ static int RunWorldCardRegression(void)
         sim.journey.elapsed_subticks = (int32_t)((int64_t)sim.journey.total_subticks * sim.carriage.progress_milli / 1000);
         for (int32_t i = 0; i < CC_PONY_COUNT; ++i) sim.pony_company.ponies[i].last_met_day = sim.current_day;
         CARD_CHECK(CcSimJourneyRoadSiteStop(&sim) == site, "Fixture must reach the site stop.");
+        sim.player.reputation = 1;
         sim.player.cargo[CC_GOOD_TOOLS] = 2;
         sim.player.cargo[CC_GOOD_WOOD] = 1;
         CARD_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)), error);

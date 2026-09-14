@@ -34,8 +34,8 @@ if(CC_BUILD_CLIENT)
              COMMAND crownless_carriage --test-adventure-input)
     add_test(NAME title_and_pause_menu
              COMMAND crownless_carriage --test-frontend)
-    add_test(NAME map_sale_input
-             COMMAND crownless_carriage --test-map-sale-input)
+    add_test(NAME map_case_content
+             COMMAND crownless_carriage --test-map-case-cuts)
     add_test(NAME town_arrival_parking
              COMMAND crownless_carriage --test-town-arrival-parking)
     add_test(NAME town_departure_to_road_book

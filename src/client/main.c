@@ -138,9 +138,6 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_PAY,
     CONTEXT_ACTION_TRAVEL,
     CONTEXT_ACTION_NEXT_BRANCH,
-    CONTEXT_ACTION_BUY_MAP,
-    CONTEXT_ACTION_SELL_MAP,
-    CONTEXT_ACTION_CONFIRM_MAP_SALE,
     CONTEXT_ACTION_REPAIR_ROUTE,
     CONTEXT_ACTION_PAY_COLLECTOR,
     CONTEXT_ACTION_APPROACH_COLLECTOR,
@@ -282,7 +279,6 @@ typedef struct LocalState {
     bool open_world;
     bool open_world_market;
     CcLocalOpeningStep opening_step;
-    CcId pending_map_sale_id;
     CcId conversation_character_id;
     CcId conversation_situation_id;
 } LocalState;
@@ -659,6 +655,18 @@ static bool OpeningRequired(const CcSim *sim)
         sim->player.accepted_situation_id == 0U &&
         CcSimSituationOfferSettlementId(
             sim, &sim->situations[index]) == sim->player.location_id;
+}
+
+static const char *OpeningDirective(const CcSim *sim, int32_t *step_out)
+{
+    int32_t index = OpeningSituationIndex(sim);
+    const CcSituation *opening = index >= 0 ? &sim->situations[index] : NULL;
+    bool accepted = sim->player.accepted_situation_id != 0U &&
+        opening != NULL && opening->id == sim->player.accepted_situation_id;
+    if (step_out != NULL) *step_out = accepted ? 2 : 1;
+    return accepted ? "Bring the listed food to the market, then board the carriage." :
+        opening != NULL && CcSimSituationCanAccept(sim, opening) ?
+            "Read the notice board, then talk to the giver." : "Read the notice board.";
 }
 
 static bool SituationVisibleToPlayer(const CcSim *sim, int32_t index)
@@ -1217,6 +1225,8 @@ static void ResetLocalState(LocalState *local)
     local->journey_travel_active = false;
     local->travel_time_blend = 0.0f;
     local->travel_fast_forward = false;
+    local->travel_hold_armed = false;
+    local->travel_pointer_down = false;
     local->travel_attention = false;
     local->world_carriage.storybook_travel = false;
     local->journey_combat_active = false;
@@ -2831,6 +2841,9 @@ static const CcDungeon *DungeonAtSettlement(const CcSim *sim, CcId settlement_id
 }
 
 
+static const char *TravelForecastLine(const CcSim *sim);
+static const char *TravelActionDetail(const CcSim *sim, const LocalState *local);
+
 static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
                             bool conversation)
 {
@@ -2851,7 +2864,10 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
     if (local->opening_step != CC_LOCAL_OPENING_COMPLETE) {
         CcOverlayDrawText("THORNFORD  /  THE FIRST BELL",
                           22, 18, 15, INK);
-        const char *beat = "OBJECTIVE  /  Talk to Mara";
+        int32_t opening_step = 1;
+        const char *beat_text = OpeningDirective(sim, &opening_step);
+        const char *beat = TextFormat("OBJECTIVE  /  Step %d of 2  /  %s",
+                                      opening_step, beat_text);
         int beat_width = CcOverlayMeasureText(beat, 8) + 14;
         DrawRectangleRounded((Rectangle){18.0f, 39.0f,
                                           (float)beat_width, 17.0f},
@@ -2899,6 +2915,11 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
         int condition_width = CcOverlayMeasureText(condition_text, 8);
         CcOverlayDrawText(condition_text, GetScreenWidth() - condition_width - 22,
                           40, 8, MUTED);
+    } else if (road) {
+        const char *forecast = TravelForecastLine(sim);
+        int forecast_width = CcOverlayMeasureText(forecast, 8);
+        CcOverlayDrawText(forecast, GetScreenWidth() - forecast_width - 22,
+                          40, 8, TEAL);
     }
     const CcRoadSite *road_stop = CcSimJourneyRoadSiteStop(sim);
     if (local->journey_travel_active && road_stop != NULL) {
@@ -2927,6 +2948,55 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
                 22, 40, 8, MUTED);
         }
     }
+}
+
+static const char *TravelForecastLine(const CcSim *sim)
+{
+    if (!sim->journey.active) {
+        const CcSettlement *from = CcSimSettlement(sim, sim->player.location_id);
+        const CcSettlement *to = CcSimSettlement(sim, sim->journey.destination_id);
+        return TextFormat(
+            "PREPARE  /  %s -> %s   %d WATCHES   HORSES %d%%   CARGO %d/%d",
+            from != NULL ? from->name : "Town", to != NULL ? to->name : "?",
+            CcSimJourneyWatchCount(sim),
+            sim->pony_company.ponies[0].health,
+            CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity);
+    }
+    if (sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
+        return "ROAD AHEAD  /  BLOCKED  /  FACE OR NEGOTIATE";
+    }
+    if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+        return "RESTING  /  THE TEAM RECOVERS  /  RISE WHEN READY";
+    }
+    const CcRoadSite *road_stop = CcSimJourneyRoadSiteStop(sim);
+    if (road_stop != NULL) {
+        return TextFormat(
+            "ROAD AHEAD  /  %s  %s  /  CAMP OR CONTINUE",
+            road_stop->name,
+            road_stop->accessible ? (road_stop->condition < 100 ? "REPAIRABLE" : "CLEAR") : "BLOCKED");
+    }
+    if (sim->journey.ambush_warned && !sim->journey.ambush_resolved) {
+        return "ROAD AHEAD  /  DANGER SIGNALLED  /  PRESS ON OR BUNK DOWN";
+    }
+    if (sim->pony_company.encounter >= 0) {
+        return "ROAD AHEAD  /  PONY COMPANY  /  MEET THEM";
+    }
+    const CcSettlement *to = CcSimSettlement(sim, sim->journey.destination_id);
+    const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
+    return TextFormat(
+        "ROAD AHEAD  /  %s  %d WATCHES   %s",
+        to != NULL ? to->name : "?", CcSimJourneyWatchCount(sim),
+        route != NULL && route->closed ? "CLOSED" :
+        route != NULL && route->condition < 60 ? "ROAD POOR" : "ROAD CLEAR");
+}
+
+static const char *TravelActionDetail(const CcSim *sim, const LocalState *local)
+{
+    if (sim == NULL || local == NULL) return "Move on";
+    if (local->travel_hold_armed) {
+        return TravelNeedsSlowTime(sim) ? "Choice ahead" : "Moving automatically";
+    }
+    return "Tap to start travel";
 }
 
 static bool LocalCombatActive(const LocalState *local)
@@ -3547,21 +3617,6 @@ static const CcRoute *SelectedOutgoingRoute(const CcSim *sim,
     return &sim->routes[selected];
 }
 
-static const CcMap *VisibleMapForRoute(const CcSim *sim, CcId route_id)
-{
-    if (sim == NULL) return NULL;
-    const CcMap *local_offer = NULL;
-    for (int32_t i = 0; i < sim->map_count; ++i) {
-        const CcMap *map = &sim->maps[i];
-        if (map->route_id != route_id || !MapVisibleAtCarriage(sim, map)) {
-            continue;
-        }
-        if (map->owner_id == sim->player.id) return map;
-        local_offer = map;
-    }
-    return local_offer;
-}
-
 static CcId RouteOtherEnd(const CcRoute *route, CcId here)
 {
     if (route == NULL) return 0U;
@@ -4058,6 +4113,11 @@ static bool AdventureHandoffTarget(const CcSim *sim, const LocalState *local,
         target->key.kind == (local->market_interior ? CC_INTERACTION_COUNTER : CC_INTERACTION_DOOR);
 }
 
+static bool FirstDeliveryComplete(const CcSim *sim)
+{
+    return sim != NULL && sim->player.reputation > 0;
+}
+
 static ContextActionSet BuildContextActions(
     const CcSim *sim, const LocalState *local, ClientView view,
     int32_t selected, int32_t selected_situation)
@@ -4387,20 +4447,6 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (view == VIEW_MAP) {
-        const CcMap *map = SelectedVisibleMap(sim, selected);
-        if (map != NULL && map->owner_id == sim->player.location_id) {
-            AddContextAction(&set, CONTEXT_ACTION_BUY_MAP,
-                             TextFormat("Buy map — %d crowns",
-                                        map->ask_price));
-        }
-        if (map != NULL && map->owner_id == sim->player.id) {
-            bool confirming = local->pending_map_sale_id == map->id;
-            AddDetailedContextAction(
-                &set, confirming ? CONTEXT_ACTION_CONFIRM_MAP_SALE : CONTEXT_ACTION_SELL_MAP,
-                confirming ? "Confirm chart sale" : "Sell chart",
-                confirming ? "ENTER" : "S",
-                "GIVE UP THIS CHART'S ROUTE GUIDANCE", true, confirming);
-        }
         AddDetailedContextAction(
             &set, CONTEXT_ACTION_CLOSE_VIEW, "Close map case", "BKSP",
             "RETURN TO THE CARRIAGE", true, false);
@@ -4409,8 +4455,7 @@ static ContextActionSet BuildContextActions(
     if (view == VIEW_ROADS) {
         if (RoadBookDepartureInProgress(local)) {
             AddDetailedContextAction(&set, CONTEXT_ACTION_HOLD_TRAVEL,
-                "Travel", "",
-                "Hold to speed up time", true, local->travel_hold_armed);
+                "Travel", "", "Travel", true, local->travel_hold_armed);
             return set;
         }
         for (int32_t i = 0; i < sim->route_count; ++i) {
@@ -4440,7 +4485,7 @@ static ContextActionSet BuildContextActions(
     if (local->road_choice_active || local->site_travel_active) {
         AddDetailedContextAction(&set, CONTEXT_ACTION_HOLD_TRAVEL,
             "Travel", "",
-            "Hold to speed up time", true, local->travel_hold_armed);
+            TravelActionDetail(sim, local), true, local->travel_hold_armed);
         return set;
     }
 
@@ -4465,29 +4510,39 @@ static ContextActionSet BuildContextActions(
                 set.items[set.count - 1].target = (CcInteractionKey){
                     sim->player.location_id, road_stop->id, CC_INTERACTION_ACTION};
             }
-            for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-                for (int32_t direction = -1; direction <= 1; direction += 2) {
-                    int32_t held = direction > 0 ? sim->player.cargo[good] : road_stop->stock[good];
-                    if (held <= 0) continue;
-                    AddDetailedContextAction(&set, CONTEXT_ACTION_TRANSFER_ROAD_SITE,
-                        TextFormat("%s 1 %s", direction > 0 ? "Unload" : "Load", CcGoodName((CcGood)good)), "",
-                        TextFormat("STORE %d / CARRIAGE %d", road_stop->stock[good], sim->player.cargo[good]), true, false);
-                    ContextAction *action = &set.items[set.count - 1];
-                    action->good = (CcGood)good;
-                    action->amount = direction;
-                    action->target = (CcInteractionKey){sim->player.location_id, road_stop->id, CC_INTERACTION_ACTION};
+            if (FirstDeliveryComplete(sim)) {
+                for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+                    for (int32_t direction = -1; direction <= 1; direction += 2) {
+                        int32_t held = direction > 0 ? sim->player.cargo[good] : road_stop->stock[good];
+                        if (held <= 0) continue;
+                        AddDetailedContextAction(&set, CONTEXT_ACTION_TRANSFER_ROAD_SITE,
+                            TextFormat("%s 1 %s", direction > 0 ? "Unload" : "Load", CcGoodName((CcGood)good)), "",
+                            TextFormat("STORE %d / CARRIAGE %d", road_stop->stock[good], sim->player.cargo[good]), true, false);
+                        ContextAction *action = &set.items[set.count - 1];
+                        action->good = (CcGood)good;
+                        action->amount = direction;
+                        action->target = (CcInteractionKey){sim->player.location_id, road_stop->id, CC_INTERACTION_ACTION};
+                    }
                 }
             }
         }
         if (road_stop != NULL && road_stop == CcMineSite(sim) &&
             sim->journey.elapsed_subticks == CcMineBranchSubtick(sim)) {
             const CcRoute *route=CcSimRoute(sim,road_stop->route_id);
-            bool right=route != NULL && (road_stop->side > 0) == (sim->journey.origin_id == route->from_id);
-            AddDetailedContextAction(&set,CONTEXT_ACTION_VISIT_MINE,
-                right ? "Turn right to Low Silver Pit" : "Turn left to Low Silver Pit", "",
-                "MINE YARD / PARK AND WALK",true,false);
-            AddDetailedContextAction(&set,CONTEXT_ACTION_PASS_ROAD_SITE,
-                "Continue along the road", "", "PASS THE MINE BRANCH",true,false);
+            if (FirstDeliveryComplete(sim)) {
+                bool right=route != NULL && (road_stop->side > 0) == (sim->journey.origin_id == route->from_id);
+                AddDetailedContextAction(&set,CONTEXT_ACTION_VISIT_MINE,
+                    right ? "Turn right to Low Silver Pit" : "Turn left to Low Silver Pit", "",
+                    "MINE YARD / PARK AND WALK",true,false);
+                AddDetailedContextAction(&set,CONTEXT_ACTION_PASS_ROAD_SITE,
+                    "Continue along the road", "", "PASS THE MINE BRANCH",true,false);
+            } else {
+                AddDetailedContextAction(&set, CONTEXT_ACTION_VISIT_MINE,
+                    "Low Silver Pit", "",
+                    "AFTER YOUR FIRST DELIVERY",false,false);
+                AddDetailedContextAction(&set,CONTEXT_ACTION_PASS_ROAD_SITE,
+                    "Continue along the road", "", "PASS THE MINE BRANCH",true,false);
+            }
             return set;
         }
         if (road_stop != NULL) {
@@ -4502,7 +4557,7 @@ static ContextActionSet BuildContextActions(
         if (sim->journey.active || parking) {
             AddDetailedContextAction(&set, CONTEXT_ACTION_HOLD_TRAVEL,
                 "Travel", "",
-                "Hold to speed up time", true, local->travel_hold_armed);
+                TravelActionDetail(sim, local), true, local->travel_hold_armed);
             if (parking) AddDetailedContextAction(&set, CONTEXT_ACTION_SKIP_TRAVEL,
                 "Park carriage", "ENTER", "Finish arriving", true, false);
         }
@@ -4817,6 +4872,12 @@ static void UpdateTravelHold(const CcSim *sim, LocalState *local,
     if (!down || !over_travel) local->travel_hold_armed = false;
     else if (!local->travel_pointer_down) local->travel_hold_armed = true;
     local->travel_pointer_down = down;
+    if (view != VIEW_LOCAL && view != VIEW_ROADS) {
+        local->travel_hold_armed = false;
+    } else if (local->journey_travel_active && !local->carriage_stopped &&
+               !TravelNeedsSlowTime(sim)) {
+        local->travel_hold_armed = true;
+    }
     if (local->travel_hold_armed) local->carriage_stopped = false;
     local->travel_fast_forward = local->travel_hold_armed &&
         local->journey_travel_active && !TravelNeedsSlowTime(sim);
@@ -5596,8 +5657,7 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock,
                              0.16f, 5, paper_color);
         CcOverlayDrawText(map->name, 48, y + 7, 11, INK);
         CcOverlayDrawText(archived ? "IN GLOAMGATE ARCHIVE" :
-                 owned ? "IN THE CASE" :
-                 TextFormat("FOR SALE  %d C", map->ask_price),
+                 owned ? "IN THE CASE" : "GLOAMGATE ATLAS",
                  48, y + 25, 9, owned ? TEAL : CC_GOLD);
         if (map->contraband) CcOverlayDrawText("UNLICENSED", 181, y + 25, 8, CC_VIOLET);
         row += 1;
@@ -6593,16 +6653,15 @@ static int RunTravelHoldRegression(void)
     if (local.travel_fast_forward) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
     sim.carriage.progress_milli = 500;
     UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, pointer, false, 1.0f / 60.0f);
-    if (local.travel_fast_forward || local.travel_hold_armed || local.carriage_stopped) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
-    UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, (Vector2){0, 0}, true, 1.0f / 60.0f);
-    UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, pointer, true, 1.0f / 60.0f);
-    if (local.travel_hold_armed) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
-    UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, pointer, false, 1.0f / 60.0f);
+    if (!local.travel_fast_forward || !local.travel_hold_armed || local.carriage_stopped) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
+    UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, (Vector2){0, 0}, false, 1.0f / 60.0f);
+    if (!local.travel_fast_forward) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
+    local.carriage_stopped = true;
     UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, pointer, true, 1.0f / 60.0f);
     if (!local.travel_fast_forward) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
     UpdateTravelHold(&sim, &local, VIEW_PAUSE, 0, 0, pointer, false, 1.0f / 60.0f);
     if (local.travel_fast_forward || local.travel_hold_armed) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
-    (void)puts("Travel hold accelerates open roads and slows at junctions, release and pause.");
+    (void)puts("Travel moves on while held, slows at junctions, and pauses from the menu.");
     return 0;
 }
 
@@ -8215,7 +8274,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
     }
-    if (*view != VIEW_MAP) local->pending_map_sale_id = 0U;
     ContextAction pressed_action = PressedContextAction(
         sim, local, *view, *selected, *selected_situation);
     if (pressed_action.kind != CONTEXT_ACTION_NONE && !pressed_action.enabled) {
@@ -8634,7 +8692,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
     if (map_requested) {
         if (*view == VIEW_MAP) {
-            local->pending_map_sale_id = 0U;
             *view = *return_view == VIEW_CARRIAGE ?
                 VIEW_CARRIAGE : VIEW_LOCAL;
             *selected = FirstOutgoingRouteIndex(sim);
@@ -9649,37 +9706,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
 
         const CcMap *selected_map = SelectedVisibleMap(sim, *selected);
         if (selected_map == NULL) {
-            local->pending_map_sale_id = 0U;
             return;
         }
         CcId map_id = selected_map->id;
-        if (local->pending_map_sale_id != map_id) local->pending_map_sale_id = 0U;
-        if ((ClientKeyPressed(KEY_B) ||
-             context_action == CONTEXT_ACTION_BUY_MAP) &&
-            selected_map->owner_id == sim->player.location_id) {
-            CcCommand buy = {
-                .kind = CC_COMMAND_BUY_MAP,
-                .target_id = map_id
-            };
-            (void)ApplyCommand(*journal, sim, buy, message,
-                               message_capacity);
-            return;
-        }
-        if (selected_map->owner_id == sim->player.id &&
-            local->pending_map_sale_id == map_id &&
-            (ClientKeyPressed(KEY_ENTER) || context_action == CONTEXT_ACTION_CONFIRM_MAP_SALE)) {
-            CcCommand sell = {.kind = CC_COMMAND_SELL_MAP, .target_id = map_id};
-            (void)ApplyCommand(*journal, sim, sell, message, message_capacity);
-            local->pending_map_sale_id = 0U;
-            return;
-        }
-        if (selected_map->owner_id == sim->player.id &&
-            (ClientKeyPressed(KEY_S) || context_action == CONTEXT_ACTION_SELL_MAP)) {
-            local->pending_map_sale_id = map_id;
-            (void)snprintf(message, message_capacity,
-                           "Sell this chart and give up its route guidance? Enter confirms; Esc closes the case.");
-            return;
-        }
         if (ClientKeyPressed(KEY_A) &&
             selected_map->owner_id == sim->player.id) {
             CcCommand archive = {
@@ -9730,15 +9759,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
     const CcRoute *route = SelectedOutgoingRoute(sim, *selected);
     if (route == NULL) return;
-    const CcMap *map = VisibleMapForRoute(sim, route->id);
-    if (map != NULL &&
-        (ClientKeyPressed(KEY_B) ||
-         context_action == CONTEXT_ACTION_BUY_MAP) &&
-        map->owner_id == sim->player.location_id) {
-        CcCommand buy = {.kind = CC_COMMAND_BUY_MAP, .target_id = map->id};
-        (void)ApplyCommand(*journal, sim, buy, message, message_capacity);
-        return;
-    }
     CcId destination_id = RouteOtherEnd(route, sim->player.location_id);
     if ((ClientKeyPressed(KEY_ENTER) ||
          context_action == CONTEXT_ACTION_TRAVEL) &&
@@ -9863,62 +9883,36 @@ static int ClientRegressionFailure(const char *message)
 #include "../../tests/client_bridge_scene.inc"
 #include "../../tests/map_texture_lifetime.inc"
 
-static int RunMapSaleInputRegression(void)
+static int RunMapCaseCutsRegression(void)
 {
     static CcSim sim;
     static LocalState local;
-    const char *path = "map-sale-input.ccsave";
-    char message[256] = {0}, feedback[256] = {0}, error[192];
-    float feedback_age = 0.0f;
-    int32_t selected = 0, selected_situation = 0;
-    ClientView view = VIEW_ROADS, return_view = VIEW_LOCAL;
+    const char *path = "map-case-cuts.ccsave";
+    char error[192];
+    int32_t selected = 0;
+    ClientView view = VIEW_MAP;
     CcSimInit(&sim, 42U);
     ResetLocalState(&local);
     sim.maps[0].owner_id = sim.player.id;
-    for (int32_t i = 0; i < sim.route_count; ++i) {
-        if (sim.routes[i].id == sim.maps[0].route_id) selected = i;
-    }
     (void)remove(path);
     CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
     if (journal == NULL) return ClientRegressionFailure(error);
-    uint64_t before = CcSimHash(&sim);
-    queued_key_press[KEY_S] = true;
-    HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view,
-                &local, (RenderTexture2D){0}, (Rectangle){0}, 0.0f, path, "",
-                message, sizeof(message), feedback, sizeof(feedback), &feedback_age);
-    ClientInputClearPressed();
-    if (CcSimHash(&sim) != before) return ClientRegressionFailure("Road S changed the campaign.");
-    view = VIEW_MAP;
-    selected = 0;
     ContextActionSet actions = BuildContextActions(&sim, &local, view, selected, 0);
-    if (actions.count < 1 || actions.items[0].kind != CONTEXT_ACTION_SELL_MAP) {
-        return ClientRegressionFailure("The map case needs a labelled sale action.");
+    for (int32_t i = 0; i < actions.count; ++i) {
+        if (strstr(actions.items[i].label, "Buy") != NULL ||
+            strstr(actions.items[i].label, "Sell") != NULL ||
+            strstr(actions.items[i].detail, "ROUTE GUIDANCE") != NULL) {
+            CcJournalAbandon(&journal);
+            return ClientRegressionFailure("The early map case must not sell charts.");
+        }
     }
-    queued_key_press[KEY_S] = true;
-    HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view,
-                &local, (RenderTexture2D){0}, (Rectangle){0}, 0.0f, path, "",
-                message, sizeof(message), feedback, sizeof(feedback), &feedback_age);
-    ClientInputClearPressed();
-    if (CcSimHash(&sim) != before || local.pending_map_sale_id != sim.maps[0].id) {
-        return ClientRegressionFailure("Chart sale must wait for confirmation.");
-    }
-    actions = BuildContextActions(&sim, &local, view, selected, 0);
-    if (actions.items[0].kind != CONTEXT_ACTION_CONFIRM_MAP_SALE ||
-        strstr(actions.items[0].detail, "ROUTE GUIDANCE") == NULL) {
-        return ClientRegressionFailure("Chart confirmation needs its navigation cost.");
-    }
-    CcMoney coins = sim.player.coins;
-    queued_key_press[KEY_ENTER] = true;
-    HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view,
-                &local, (RenderTexture2D){0}, (Rectangle){0}, 0.0f, path, "",
-                message, sizeof(message), feedback, sizeof(feedback), &feedback_age);
-    ClientInputClearPressed();
-    if (sim.maps[0].owner_id != sim.player.location_id || sim.player.coins <= coins) {
-        return ClientRegressionFailure("Confirmed chart sale must transfer the chart and coins.");
+    if (actions.count < 1 || actions.items[actions.count - 1].kind != CONTEXT_ACTION_CLOSE_VIEW) {
+        CcJournalAbandon(&journal);
+        return ClientRegressionFailure("The map case keeps its close action.");
     }
     if (!CcJournalClose(&journal, &sim, error, sizeof(error))) return ClientRegressionFailure(error);
     (void)remove(path);
-    (void)puts("Chart sale input regression passed");
+    (void)puts("Map case keeps viewing and archived charts only");
     return 0;
 }
 #endif
@@ -10235,8 +10229,8 @@ int main(int argc, char **argv)
     if (argc == 2 && strcmp(argv[1], "--test-storybook-travel") == 0) {
         return RunStorybookTravelRegression();
     }
-    if (argc == 2 && strcmp(argv[1], "--test-map-sale-input") == 0) {
-        return RunMapSaleInputRegression();
+    if (argc == 2 && strcmp(argv[1], "--test-map-case-cuts") == 0) {
+        return RunMapCaseCutsRegression();
     }
     if (argc == 2 &&
         strcmp(argv[1], "--test-town-arrival-parking") == 0) {
