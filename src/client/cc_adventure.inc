@@ -923,7 +923,7 @@ static void DrawAdventureAhead(const CcSim *sim, const LocalState *local)
         y += AdventureWrap("The DM points you toward Gloamgate. Carry the prophecy there.",
                            x, y, width, size, CC_GOLD) + 12;
         if (CcSimCanDeliverProphecy(sim))
-            AdventureButton((Rectangle){panel.x + 28, panel.y + panel.height - 112, width, 42},
+            AdventureButton((Rectangle){panel.x + 28.0f, panel.y + panel.height - 112.0f, (float)width, 42.0f},
                 "Deliver the DM's warning  /  E", true, false);
     }
     CcOverlayDrawText("THE BOARD", x, y, AdventureTextSize(12), CC_GOLD);
