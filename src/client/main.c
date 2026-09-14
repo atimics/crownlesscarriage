@@ -6276,11 +6276,12 @@ static void ClientMindFor(const CcSim *sim, const CcCharacter *character,
         const CcGossipVersion *held = NULL;
         const CcGossip *older = CcSimPersonalGossip(sim, character->id, i, &held);
         if (older == NULL || held == NULL) break;
+        size_t memory = mind->memory_count;
         if (CcSpeechPrepareGossip(sim, older, held, 0U,
-                                   &memory_language[mind->memory_count]) &&
-            memory_language[mind->memory_count].account[0] != '\0') {
-            mind->memories[mind->memory_count++] =
-                memory_language[mind->memory_count].account;
+                                   &memory_language[memory]) &&
+            memory_language[memory].account[0] != '\0') {
+            mind->memories[memory] = memory_language[memory].account;
+            mind->memory_count = memory + 1U;
         }
     }
 }
