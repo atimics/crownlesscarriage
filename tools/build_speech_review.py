@@ -93,10 +93,16 @@ def packet(probe, kind, account):
     return json.loads(result.stdout)
 
 
-def speak(probe, model, kind, account, history):
-    result = subprocess.run([str(probe), str(model), str(kind), str(account['confidence']),
-                             str(account['retellings']), model_account(account), *history[-4:]],
-                            capture_output=True, text=True)
+def speak(probe, model, kind, account, history, memories=(), control='say'):
+    occupations = {1: 'woodcutter', 2: 'shepherd', 3: 'miller', 4: 'smith', 5: 'quarryman',
+                   6: 'farmer', 7: 'baker', 8: 'innkeeper', 9: 'cartwright', 10: 'scribe'}
+    voice = occupations.get(account.get('occupation'), 'resident')
+    mind = f'{voice}:secure_livelihood:medium:medium:{control}'
+    args = [str(probe), str(model), str(kind), str(account['confidence']),
+            str(account['retellings']), model_account(account), '--mind', mind]
+    for memory in memories[-2:]: args += ['--memory', memory]
+    args += list(history[-4:])
+    result = subprocess.run(args, capture_output=True, text=True)
     if result.returncode == 1:
         return None
     result.check_returncode()
@@ -149,6 +155,7 @@ def build(args):
     raw = args.output / 'raw'
     raw.mkdir()
     candidates, meetings, reports, events, names, places = [], [], [], {}, {}, {}
+    held_memories = defaultdict(list)
     for seed in args.seeds:
         flow, _ = collect(args.bin_dir / 'crownless_gossip_flow', seed, args.days, raw / f'{seed}-flow.jsonl.gz')
         if flow[0]['seed'] != seed or flow[-1]['type'] != 'finish' or not flow[-1]['valid']:
@@ -160,6 +167,7 @@ def build(args):
                 events[seed, row['event_id']] = dict(text=row['original'], day=row['event_day'], kind=row['kind'])
             elif row['type'] == 'held':
                 names[seed, row['person_id']] = row['name']
+                held_memories[seed, row['person_id']].append(row)
         meetings.extend(pairs(flow, seed))
         rows, log = collect(args.bin_dir / 'crownless_gossip_corpus', seed, args.days, raw / f'{seed}-corpus.jsonl.gz')
         report = json.loads(log)
@@ -208,7 +216,11 @@ def build(args):
             if packets[turn % 2] is None:
                 flags.append(f'Account outside the model parser at turn {turn+1}')
                 break
-            text = speak(model_probe, args.model, meeting['kind'], person, history)
+            controls = ('say', 'remember', 'say', 'think', 'say', 'remember')
+            memories = [m['account'] for m in held_memories[meeting['seed'], person['person_id']]
+                        if m['day'] < meeting['day']]
+            text = speak(model_probe, args.model, meeting['kind'], person, history,
+                         memories=memories, control=controls[turn % len(controls)])
             if text is None:
                 flags.append(f'Model could not complete turn {turn+1}')
                 break

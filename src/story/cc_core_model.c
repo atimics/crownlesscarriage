@@ -333,11 +333,16 @@ static const char *LevelName(CcCoreLevel level)
     }
 }
 
+/* The cue that closes the prompt has to be one the weights were trained on.
+   The shipped checkpoint (zero acts-v1) saw only the three channel cues -- say,
+   remember, think -- so the twelve moves render as the channel each is spoken
+   on. When a checkpoint trained on move cues ships, this returns the move name
+   itself and matches zero's crownless_moves.py CUE table one for one. */
 static const char *ControlName(CcCoreControl control)
 {
     switch (control) {
-        case CC_CORE_CONTROL_THINK: return "think";
-        case CC_CORE_CONTROL_REMEMBER: return "remember";
+        case CC_CORE_CONTROL_RECALL: return "remember";
+        case CC_CORE_CONTROL_MUSE: return "think";
         default: return "say";
     }
 }
@@ -449,8 +454,29 @@ bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
 bool CcCoreModelBegin(CcCoreModel *model, const CcCoreAccount *account,
                       CcId speaker, const CcCoreSpoken *history, size_t count)
 {
+    /* Half the shipped checkpoint's corpus carries no stance at all -- 1250 of
+       the 2500 validation rows in zero's crownless-acts-v1 -- so the
+       stance-less prompt is a shape the model answers directly. Synthesising a
+       stance here would change the prompt, and with it the wording chosen. The
+       stance-only corpus belongs to the move axis, which has no weights yet. */
     return CcCoreModelBeginMind(model, account, speaker, history, count,
                                 NULL, CC_CORE_CONTROL_SAY);
+}
+
+int CcCoreModelPrefixTokens(const CcCoreModel *model, int *tokens, int capacity)
+{
+    if (model == NULL || tokens == NULL || capacity < model->prefix) return -1;
+    memcpy(tokens, model->tokens, (size_t)model->prefix * sizeof(int));
+    return model->prefix;
+}
+
+int CcCoreModelPrefixMeta(const CcCoreModel *model, int *meta, int capacity)
+{
+    if (model == NULL || meta == NULL || capacity < model->prefix * 5) return -1;
+    for (int i = 0; i < model->prefix; ++i) {
+        for (int k = 0; k < 5; ++k) meta[i * 5 + k] = model->meta[i][k];
+    }
+    return model->prefix;
 }
 
 int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
@@ -525,4 +551,17 @@ bool CcCoreModelGenerateMind(CcCoreModel *model, const CcCoreAccount *account,
     if (!CcCoreModelBeginMind(model, account, speaker, history, count, mind, control)) return false;
     if (CcCoreModelStep(model, CONTEXT + MAX_ACTIONS) != 1 || model->length >= capacity) return false;
     memcpy(text, model->text, model->length + 1U); return true;
+}
+
+bool CcCoreModelRunPrefix(CcCoreModel *model)
+{
+    if (model == NULL) return false;
+    return CcCoreModelStep(model, (unsigned int)(model->prefix + 1)) >= 0;
+}
+
+int CcCoreModelHidden(const CcCoreModel *model, float *hidden, int capacity)
+{
+    if (model == NULL || hidden == NULL || capacity < D) return -1;
+    memcpy(hidden, model->hidden, (size_t)D * sizeof(float));
+    return D;
 }

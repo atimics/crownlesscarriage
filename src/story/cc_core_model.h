@@ -34,4 +34,12 @@ bool CcCoreModelGenerateMind(CcCoreModel *model, const CcCoreAccount *account,
                              char *text, size_t capacity);
 /* Tokenizer inspection for parity tests. */
 int CcCoreModelEncode(const char *text, int *tokens, int capacity);
+/* Prefix token inspection for parity tests. */
+int CcCoreModelPrefixTokens(const CcCoreModel *model, int *tokens, int capacity);
+/* Prefix meta inspection for parity tests. */
+int CcCoreModelPrefixMeta(const CcCoreModel *model, int *meta, int capacity);
+/* Hidden-state inspection for parity tests. */
+int CcCoreModelHidden(const CcCoreModel *model, float *hidden, int capacity);
+/* Run the prefix so the final hidden state can be read. */
+bool CcCoreModelRunPrefix(CcCoreModel *model);
 #endif
