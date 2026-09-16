@@ -333,18 +333,27 @@ static const char *LevelName(CcCoreLevel level)
     }
 }
 
-/* The cue that closes the prompt has to be one the weights were trained on.
-   The shipped checkpoint (zero acts-v1) saw only the three channel cues -- say,
-   remember, think -- so the twelve moves render as the channel each is spoken
-   on. When a checkpoint trained on move cues ships, this returns the move name
-   itself and matches zero's crownless_moves.py CUE table one for one. */
+/* The cue that closes the prompt names the move, matching zero's
+   crownless_moves.py CUE table one for one. The shipped checkpoint is trained
+   on those cues: cueing the channel instead puts ten of the twelve moves behind
+   a single "say", which held held-out move accuracy at 19/48 while the loss
+   halved. */
+/* With nothing said yet the speaker is volunteering the account; once someone
+   has spoken it is answering for it. Callers with no move in mind take this
+   rather than inventing one, so every such prompt has the same shape. */
+CcCoreControl CcCoreControlPlain(size_t history_count)
+{
+    return history_count == 0U ? CC_CORE_CONTROL_OPEN : CC_CORE_CONTROL_ANSWER;
+}
+
 static const char *ControlName(CcCoreControl control)
 {
-    switch (control) {
-        case CC_CORE_CONTROL_RECALL: return "remember";
-        case CC_CORE_CONTROL_MUSE: return "think";
-        default: return "say";
-    }
+    static const char *const names[CC_CORE_CONTROL_COUNT] = {
+        "open", "answer", "remark", "affirm", "dispute", "hedge",
+        "attribute", "defer", "settle", "part", "recall", "muse"
+    };
+    return control >= CC_CORE_CONTROL_OPEN && control < CC_CORE_CONTROL_COUNT ?
+        names[control] : "remark";
 }
 
 /* Encode one context line (with trailing newline) into the token stream. */
@@ -377,13 +386,27 @@ bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
             f.role > CC_CORE_QUANTITY || f.knowledge < CC_CORE_KNOWN || f.knowledge > CC_CORE_UNKNOWN) return false;
     }
     int n = 0;
-    /* Mind context lines precede the spoken history. */
+    /* Mind context lines precede the spoken history. Every row of the corpus
+       carries a stance, so a caller with none gets an unremarkable one rather
+       than a prompt shape the model has never seen. Defaulting here rather than
+       at each call site is what keeps the conversation module and the plain
+       generate path rendering the same prompt. */
+    CcCoreMind plain = {0};
+    if (mind == NULL) {
+        plain.goal = CC_CORE_GOAL_SECURE_LIVELIHOOD;
+        plain.stress = CC_CORE_LEVEL_MEDIUM;
+        plain.courage = CC_CORE_LEVEL_MEDIUM;
+        plain.voice = "resident";
+        mind = &plain;
+    }
     char line[CC_EVENT_TEXT_CAPACITY + 16];
     if (mind != NULL) {
-        if (mind->voice != NULL && mind->voice[0] != '\0') {
-            (void)snprintf(line, sizeof(line), "# voice: %s\n", mind->voice);
-            if (!EncodeLine(m, &n, line)) return false;
-        }
+        /* Every row of the corpus names a voice, and the encoder defaults a
+           missing one to "resident" rather than dropping the line. Omitting it
+           here would hand the model a prompt shape it was never trained on. */
+        (void)snprintf(line, sizeof(line), "# voice: %s\n",
+                       mind->voice != NULL && mind->voice[0] != '\0' ? mind->voice : "resident");
+        if (!EncodeLine(m, &n, line)) return false;
         (void)snprintf(line, sizeof(line), "# goal: %s\n", GoalName(mind->goal));
         if (!EncodeLine(m, &n, line)) return false;
         (void)snprintf(line, sizeof(line), "# stress: %s\n", LevelName(mind->stress));
@@ -454,13 +477,8 @@ bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
 bool CcCoreModelBegin(CcCoreModel *model, const CcCoreAccount *account,
                       CcId speaker, const CcCoreSpoken *history, size_t count)
 {
-    /* Half the shipped checkpoint's corpus carries no stance at all -- 1250 of
-       the 2500 validation rows in zero's crownless-acts-v1 -- so the
-       stance-less prompt is a shape the model answers directly. Synthesising a
-       stance here would change the prompt, and with it the wording chosen. The
-       stance-only corpus belongs to the move axis, which has no weights yet. */
-    return CcCoreModelBeginMind(model, account, speaker, history, count,
-                                NULL, CC_CORE_CONTROL_SAY);
+    return CcCoreModelBeginMind(model, account, speaker, history, count, NULL,
+                                CcCoreControlPlain(count));
 }
 
 int CcCoreModelPrefixTokens(const CcCoreModel *model, int *tokens, int capacity)

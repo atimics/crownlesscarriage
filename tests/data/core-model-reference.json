@@ -1,5 +1,5 @@
 {
-  "model_sha256": "216750d9971bac86bfe2b04836db4a547fd94941241fed9ab8ceb28b8b6bf716",
+  "model_sha256": "ed2e03164032cdff48b7fd491dae87e1f3717c940a9f9d1645469dd07b27fd2d",
   "vocabulary": [
     "a",
     "abbacy",
@@ -989,7 +989,7 @@
     "élodie"
   ],
   "zero_sources": {
-    "crownless_v2.py": "2a0ebb54ac98a5a0d3a75b4131e0ab0fe36fb075b6802415b560bc6089e2b68f",
+    "crownless_v2.py": "8d84eb1e8f86fc1d73ad55ebb5a35269a4a41c9d7151e0855b662518aaa986a5",
     "crownless_v2_export.py": "59249330258aff74b7f206a03f85024cad0200e536df3d1a4eab2fde245c0a6a",
     "speak_crownless_v2.py": "607b6051c2c06f95d2e34ad08e55d5bc4b768a19de77ce73dfda4d857de23140"
   },
@@ -1160,7 +1160,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Stone for roads and public works came from Silverwick."
+      "text": "Silverwick quarried stone for roads and public works."
     },
     {
       "kind": 75,
@@ -1232,7 +1232,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "A fodder shortage led Rosespire to slaughter cattle for beef."
+      "text": "Rosespire slaughtered cattle for beef when fodder ran short."
     },
     {
       "kind": 2,
@@ -1288,7 +1288,7 @@
       "confidence": 77,
       "retellings": 3,
       "history": [],
-      "text": "A fodder shortage led Rosespire to slaughter cattle for beef."
+      "text": "Rosespire slaughtered cattle for beef when fodder ran short."
     },
     {
       "kind": 133,
@@ -1304,7 +1304,7 @@
       "confidence": 65,
       "retellings": 4,
       "history": [],
-      "text": "Stone for roads and public works came from Silverwick, according to the word going round."
+      "text": "Silverwick quarried stone for roads and public works, so people say."
     },
     {
       "kind": 2,
@@ -1424,7 +1424,7 @@
       "confidence": 64,
       "retellings": 4,
       "history": [],
-      "text": "A fodder shortage led Rosespire to slaughter cattle for beef, according to the word going round."
+      "text": "Rosespire slaughtered cattle for beef when fodder ran short, so people say."
     },
     {
       "kind": 2,
@@ -1480,7 +1480,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "A fodder shortage led Silverwick to slaughter cattle for beef."
+      "text": "Silverwick slaughtered cattle for beef when fodder ran short."
     },
     {
       "kind": 116,
@@ -1688,7 +1688,7 @@
       "confidence": 38,
       "retellings": 7,
       "history": [],
-      "text": "A fodder shortage led Rosespire to slaughter cattle for beef, if the rumour is true."
+      "text": "Rosespire slaughtered cattle for beef when fodder ran short, if the story is right."
     },
     {
       "kind": 116,
@@ -1954,7 +1954,7 @@
       "history": [
         "How sure are you?"
       ],
-      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, if the rumour is true."
+      "text": "I have it asks."
     },
     {
       "kind": 0,
@@ -1964,7 +1964,7 @@
       "history": [
         "Who told you?"
       ],
-      "text": "Élodie's drought harvest fell short of what the southern settlements needed, if the story is right."
+      "text": "That is the account I hold."
     },
     {
       "kind": 0,
@@ -1974,7 +1974,7 @@
       "history": [
         "We should ask someone who was there."
       ],
-      "text": "I heard a different account. Élodie's drought harvest fell short of what the southern settlements needed, if the story is right. How sure are you?"
+      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, if the rumour is true."
     },
     {
       "kind": 0,
@@ -1984,7 +1984,7 @@
       "history": [
         "Agreed. Let us leave it there for now."
       ],
-      "text": "I heard a different account. Élodie's drought harvest fell short of what the southern settlements needed, if the story is right. How sure are you?"
+      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, if the rumour is true."
     },
     {
       "kind": 0,
@@ -1994,7 +1994,7 @@
       "history": [
         "How sure are you?"
       ],
-      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, according to the word going round."
+      "text": "The account eye how it hold not say."
     },
     {
       "kind": 0,
@@ -2004,7 +2004,7 @@
       "history": [
         "Who told you?"
       ],
-      "text": "Élodie's drought harvest fell short of what the southern settlements needed, so people say."
+      "text": "That is the account I hold."
     },
     {
       "kind": 0,
@@ -2014,7 +2014,7 @@
       "history": [
         "We should ask someone who was there."
       ],
-      "text": "I heard a different account. Élodie's drought harvest fell short of what the southern settlements needed, so people say. How sure are you?"
+      "text": "I will not record it until a witness."
     },
     {
       "kind": 0,
@@ -2024,7 +2024,7 @@
       "history": [
         "Agreed. Let us leave it there for now."
       ],
-      "text": "I heard a different account. Élodie's drought harvest fell short of what the southern settlements needed, so people say. How sure are you?"
+      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, according to the word going round."
     },
     {
       "kind": 0,
@@ -2042,7 +2042,7 @@
       "history": [
         "Thornford's drought harvest fell short of what the eastern settlements needed."
       ],
-      "text": "I heard a different account. The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round. How sure are you?"
+      "text": "The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round."
     },
     {
       "kind": 0,
@@ -2053,7 +2053,7 @@
         "Thornford's drought harvest fell short of what the eastern settlements needed.",
         "I heard a different account. The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round. How sure are you?"
       ],
-      "text": "That is the account I hold. We should ask someone who was there."
+      "text": "That is the account I hold."
     },
     {
       "kind": 0,
@@ -2065,7 +2065,7 @@
         "I heard a different account. The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round. How sure are you?",
         "That is the account I hold. We should ask someone who was there."
       ],
-      "text": "Let's ask around before we pass it on."
+      "text": "The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round."
     },
     {
       "kind": 0,
@@ -2078,7 +2078,7 @@
         "That is the account I hold. We should ask someone who was there.",
         "Let's ask around before we pass it on."
       ],
-      "text": "Agreed. Let's leave it there for now."
+      "text": "Agreed. Let us leave it there for now."
     },
     {
       "kind": 0,
@@ -2091,14 +2091,14 @@
         "Let's ask around before we pass it on.",
         "Agreed. Let's leave it there for now."
       ],
-      "text": "Very well."
+      "text": "The next town before hold."
     },
     {
       "kind": 133,
       "account": "Mara Venn posts a notice at Thornford: Relief charter.",
       "confidence": 93,
       "retellings": 1,
-      "mind": ":secure_livelihood:high:medium:say",
+      "mind": ":secure_livelihood:high:medium:open",
       "memories": [
         "Mara Venn posted a notice about Relief charter in Thornford."
       ],
@@ -2115,111 +2115,111 @@
       "account": "Silverwick has 29 food in store. Its reserve target is 78.",
       "confidence": 57,
       "retellings": 5,
-      "mind": "scribe:secure_livelihood:low:high:think",
+      "mind": "scribe:secure_livelihood:low:high:answer",
       "memories": [],
       "thoughts": [],
       "history": [],
-      "text": "Food stores in Silverwick fell short of the reserve target, according to the word going round."
+      "text": "Silverwick was short of its food reserve target, so people say."
     },
     {
       "kind": 5,
       "account": "Harthwin Orehauler joins The Ditch Parliament after 3 days seeking food at Gloamgate.",
       "confidence": 93,
       "retellings": 1,
-      "mind": "smith:secure_livelihood:low:high:remember",
+      "mind": "smith:secure_livelihood:low:high:remark",
       "memories": [],
       "thoughts": [],
       "history": [],
-      "text": "On the old raid in Harthwin Orehauler used stone to repair public buildings."
+      "text": "I should hide what little we have before they return."
     },
     {
       "kind": 133,
       "account": "Thora Barleycroft posts a notice at Thornford: Relief charter.",
       "confidence": 29,
       "retellings": 8,
-      "mind": ":secure_livelihood:medium:medium:say",
+      "mind": ":secure_livelihood:medium:medium:affirm",
       "memories": [],
       "thoughts": [],
       "history": [
         "What have you heard?"
       ],
-      "text": "Thora Barleycroft posted a notice about Relief charter in Thornford, if the story is right."
+      "text": "I heard that hold, and I will have more."
     },
     {
       "kind": 123,
       "account": "Rosespire's mill uses 1 Wood to make 4 Paper.",
       "confidence": 68,
       "retellings": 4,
-      "mind": "baker:secure_livelihood:medium:high:think",
+      "mind": "baker:secure_livelihood:medium:high:dispute",
       "memories": [],
       "thoughts": [
         "I will keep calm. Every loaf counts."
       ],
       "history": [],
-      "text": "This gives us a chance to recover."
+      "text": "I heard a different account. Rosespire made paper from Wood, so people say. How sure are you?"
     },
     {
       "kind": 116,
       "account": "Gloamgate's woodlot cuts 3 Wood and wears one Tools bundle.",
       "confidence": 100,
       "retellings": 0,
-      "mind": "smith:secure_livelihood:medium:high:remember",
+      "mind": "smith:secure_livelihood:medium:high:hedge",
       "memories": [
         "Mara Venn posted a notice about Relief charter in Thornford."
       ],
       "thoughts": [],
       "history": [],
-      "text": "I remember the old days, before the troubles. This feels like one of them."
+      "text": "It is well travelled. Maybe things are turning around."
     },
     {
       "kind": 120,
       "account": "Silverwick's flock raises 3 new lambs; 3 yearlings join the adult flock.",
       "confidence": 100,
       "retellings": 0,
-      "mind": ":secure_livelihood:medium:medium:say",
+      "mind": ":secure_livelihood:medium:medium:attribute",
       "memories": [],
       "thoughts": [],
       "history": [
         "What have you heard?"
       ],
-      "text": "Silverwick raised lambs and added yearlings to the adult flock."
+      "text": "I had it from someone close to it."
     },
     {
       "kind": 13,
       "account": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments.",
       "confidence": 46,
       "retellings": 5,
-      "mind": "baker:survive_crisis:low:low:think",
+      "mind": "baker:survive_crisis:low:low:defer",
       "memories": [],
       "thoughts": [],
       "history": [],
-      "text": "Money from Star Oath went into the market at Hollowbarrow to buy grain shipments, according to the word going round."
+      "text": "Star Oath put money into Hollowbarrow's market to buy grain shipments, so people say."
     },
     {
       "kind": 78,
       "account": "Silverwick's cattle herd raises 1 new calf; 1 older calf join the working herd.",
       "confidence": 100,
       "retellings": 0,
-      "mind": "baker:survive_crisis:low:medium:remember",
+      "mind": "baker:survive_crisis:low:medium:settle",
       "memories": [],
       "thoughts": [
         "I will keep calm. Every loaf counts."
       ],
       "history": [],
-      "text": "I remember the old days, before the troubles. This feels like one of them."
+      "text": "That will do until we know more."
     },
     {
       "kind": 120,
       "account": "Alderwatch's flock raises 6 new lambs; 6 yearlings join the adult flock.",
       "confidence": 46,
       "retellings": 5,
-      "mind": ":survive_crisis:high:medium:say",
+      "mind": ":survive_crisis:high:medium:part",
       "memories": [],
       "thoughts": [],
       "history": [
         "What have you heard?"
       ],
-      "text": "Alderwatch raised lambs and added yearlings to the adult flock, so people say."
+      "text": "Lambs were raised in Alderwatch, where yearlings joined the adult flock, according to the word going round."
     }
   ],
   "tokenizer": [

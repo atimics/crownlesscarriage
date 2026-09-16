@@ -55,7 +55,7 @@ bool CcCoreConversationPrepareMind(CcCoreConversation *c, const CcCoreAccount *a
 bool CcCoreConversationPrepare(CcCoreConversation *c, const CcCoreAccount *account,
                                CcSpeech *speech)
 {
-    return CcCoreConversationPrepareMind(c, account, NULL, CC_CORE_CONTROL_SAY, speech);
+    return CcCoreConversationPrepareMind(c, account, NULL, CcCoreControlPlain(c->count), speech);
 }
 
 void CcCoreConversationStep(CcCoreConversation *c, unsigned int budget)
@@ -87,7 +87,7 @@ void CcCoreConversationStep(CcCoreConversation *c, unsigned int budget)
         CcSpeech listener = c->listener_line;
         (void)CcCoreConversationPrepareMind(c, &c->listener_account,
             c->listener_has_mind ? &c->listener_mind : NULL,
-            CC_CORE_CONTROL_SAY, &listener);
+            CcCoreControlPlain(c->count), &listener);
         if (!c->pending) {
             Remember(c, c->reply.speaker_id, c->reply.text);
             c->round_phase = 3U;
@@ -131,7 +131,7 @@ bool CcCoreConversationStartRoundMind(CcCoreConversation *c,
     c->player_line = *player;
     c->cached = false;
     CcSpeech first = *player;
-    if (!CcCoreConversationPrepareMind(c, player_account, player_mind, CC_CORE_CONTROL_SAY, &first) || !c->pending) return false;
+    if (!CcCoreConversationPrepareMind(c, player_account, player_mind, CcCoreControlPlain(c->count), &first) || !c->pending) return false;
     c->round_phase = 1U;
     c->round_shown = true;
     return true;

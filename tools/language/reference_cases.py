@@ -47,12 +47,21 @@ for i, turn in enumerate(chat['turns']):
     avatar = chat['avatars'][i % 2]
     cases.append({**{k: avatar[k] for k in ('kind', 'account', 'confidence', 'retellings')},
                   'history': [h['text'] for h in turn['history']]})
+# Every row of the move corpus carries a stance, so CcCoreModelBegin gives a
+# caller with no character in mind an unremarkable one rather than none. These
+# cases pin that path, so they have to be built the way the runtime builds it:
+# same stance, and open or answer depending on whether anyone has spoken.
+PLAIN = {'goal': 'secure_livelihood', 'stress': 'medium', 'courage': 'medium',
+         'memories': [], 'thoughts': []}
 for case in cases:
     packet = json.loads(subprocess.check_output([str(a.account_probe),str(case['kind']),str(case['confidence']),'0',case['account'],'--packet'],text=True))
     row = packet_record(packet,retold=case['retellings']>=4)
     row['kind_id'] = meta['meaning_ids'][packet['rule']]
     history = case['history']
     row['history'] = [{'speaker':'other' if (len(history)-1-i)%2==0 else 'self','text':text} for i,text in enumerate(history)]
+    row['voice'] = 'resident'
+    row['mind'] = dict(PLAIN)
+    row['control'] = 'open' if not history else 'answer'
     output = generate(model,tokenizer,encode_row(tokenizer,row,slots=True,conversation=True))
     if not output['stopped']: raise ValueError('Reference did not stop')
     case['text'] = output['text']
@@ -60,7 +69,9 @@ for case in cases:
 # control cues. Every field the probe receives has to match what the Python
 # encoder saw, or the case pins a disagreement instead of the encoding.
 rng = random.Random(20260912)
-CONTROLS = ('say', 'think', 'remember')
+# The cue names the move now, matching the shipped checkpoint and the probe.
+CONTROLS = ('open', 'answer', 'remark', 'affirm', 'dispute', 'hedge',
+            'attribute', 'defer', 'settle', 'part', 'recall', 'muse')
 for index, base in enumerate(rows):
     if not base['parsed'] or index % 13 != 0: continue
     held = base['account']
