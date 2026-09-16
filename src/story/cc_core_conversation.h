@@ -21,8 +21,14 @@ typedef struct CcCoreConversation {
     char listener_memory[CC_CORE_MIND_LINES][CC_CORE_UTTERANCE];
     char listener_thoughts[CC_CORE_MIND_LINES][CC_CORE_UTTERANCE];
     bool listener_has_mind;
+    /* The move cued for the turn just spoken, so the next one can follow it. */
+    CcCoreControl last_move;
+    bool has_last_move;
 } CcCoreConversation;
 
+/* The move that follows the one just spoken. A conversation that cues the same
+   move every turn gets the same answer every turn; this is what stops that. */
+CcCoreControl CcCoreConversationNextMove(const CcCoreConversation *conversation, CcId speaker);
 void CcCoreConversationReset(CcCoreConversation *conversation);
 void CcCoreConversationHear(CcCoreConversation *conversation, CcId speaker, const char *text);
 /* The prepared speech supplies the speaker and source identity. */

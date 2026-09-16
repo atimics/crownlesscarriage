@@ -76,10 +76,12 @@ int main(int argc, char **argv)
     CC_CHECK(conversation.round_phase == 0U);
     CC_CHECK(CcCoreConversationShown(&conversation, &shown));
     CC_CHECK(shown.speaker_id == original[1].speaker_id);
-    /* Independent generation proves the listener receives the generated player text. */
+    /* Independent generation proves the listener receives the generated player text.
+       It is cued with the move the conversation chose for that turn, since the
+       policy is part of what the model was asked to say. */
     char expected[CC_CORE_UTTERANCE];
-    CC_CHECK(CcCoreModelGenerate(conversation.model, &accounts[1], original[1].speaker_id,
-        conversation.history, 1U, expected, sizeof(expected)));
+    CC_CHECK(CcCoreModelGenerateMind(conversation.model, &accounts[1], original[1].speaker_id,
+        conversation.history, 1U, NULL, conversation.last_move, expected, sizeof(expected)));
     CC_CHECK(strcmp(expected, shown.text) == 0);
     CC_CHECK(CcSimHash(&sim) == before);
     (void)printf("World hash retained: %016" PRIx64 "\n", before);
