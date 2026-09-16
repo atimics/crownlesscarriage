@@ -227,10 +227,10 @@ def build_base_row(sim_row, packet, rules, rng, split, index, override=None):
     # holds nothing, so zero, one, and two memories all have to be common.
     memories = [e['text'] for e in sim_row['events'][:-1]][-2:]
     memories = memories[len(memories) - rng.choice((0, 1, 2)):] if memories else []
+    # Goal, stress and courage travel as row fields (voice, mind), not as
+    # prefix text: the typed encoder carries them on the meta channel, and a
+    # stance line here would be tokenized, span-checked, then discarded.
     lines = []
-    lines.append('# goal: ' + mind['goal'])
-    lines.append('# stress: ' + mind['stress'])
-    lines.append('# courage: ' + mind['courage'])
     lines.extend('# memory: ' + m for m in memories)
     target, output_spans = render(rule['outputs'][variant], values, rule['roles'])
     target = target[0].upper() + target[1:]
