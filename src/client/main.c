@@ -6172,7 +6172,7 @@ static void ClientReadSpeech(const CcSim *sim, const char *text, CcId source)
 }
 
 static void ClientMindFor(const CcSim *sim, const CcCharacter *character,
-                          const CcGossipVersion *version, CcCoreMind *mind,
+                          CcId listener, const CcGossipVersion *version, CcCoreMind *mind,
                           CcGossipLanguage *memory_language);
 
 static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
@@ -6217,7 +6217,7 @@ static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
                            stack buffer below does not outlive the call. */
                         CcCoreMind mind;
                         CcGossipLanguage mind_memories[CC_CORE_MIND_LINES];
-                        ClientMindFor(sim, person, &carrier->versions[slot],
+                        ClientMindFor(sim, person, sim->player.id, &carrier->versions[slot],
                             &mind, mind_memories);
                         (void)CcCoreConversationPrepareMind(&core_conversation, &account,
                             &mind, CcCoreConversationNextMove(&core_conversation,
@@ -6279,7 +6279,7 @@ static CcCoreLevel ClientLevel(int32_t value)
 }
 
 static void ClientMindFor(const CcSim *sim, const CcCharacter *character,
-                          const CcGossipVersion *version, CcCoreMind *mind,
+                          CcId listener, const CcGossipVersion *version, CcCoreMind *mind,
                           CcGossipLanguage *memory_language)
 {
     *mind = (CcCoreMind){0};
@@ -6295,6 +6295,27 @@ static void ClientMindFor(const CcSim *sim, const CcCharacter *character,
     mind->hungry = character->hungry_days > 0;
     mind->sheltered = character->unsheltered_nights == 0;
     mind->in_transit = character->travel_destination_id != 0;
+    /* Company: faction kind by lookup, distance by comparing settlements, and
+       debts and trust from the relationship toward the listener. Trust and
+       obligation run on the sim's ±3 clamped scale, where the sim itself
+       treats ±3 as a settled bond; 2 marks an established one. No debt to
+       oneself: a missing listener, or the speaker, leaves the defaults. */
+    for (int32_t i = 0; i < sim->faction_count; ++i) {
+        if (sim->factions[i].id == character->faction_id) {
+            if (sim->factions[i].kind == CC_FACTION_CROWN) mind->faction = CC_CORE_FACTION_CROWN;
+            else if (sim->factions[i].kind == CC_FACTION_GUILD) mind->faction = CC_CORE_FACTION_GUILD;
+            else if (sim->factions[i].kind == CC_FACTION_COMMONS) mind->faction = CC_CORE_FACTION_COMMONS;
+            break;
+        }
+    }
+    mind->far_from_home = character->home_settlement_id != character->current_settlement_id;
+    if (listener != 0 && listener != character->id) {
+        const CcRelationship *bond = CcSimRelationship(sim, character->id, listener);
+        if (bond != NULL) {
+            mind->owes_listener = bond->obligation >= 2;
+            mind->trusts_listener = bond->trust >= 2;
+        }
+    }
     /* Up to two older held accounts become memories of past events. */
     for (int32_t i = 0; i < CC_MAX_GOSSIP && mind->memory_count < CC_CORE_MIND_LINES; ++i) {
         const CcGossipVersion *held = NULL;
@@ -6342,9 +6363,10 @@ static bool ClientStartChat(const CcSim *sim, LocalState *local, uint32_t voice)
                 false, &speech[1])) continue;
         CcCoreMind player_mind, listener_mind;
         ClientMindFor(sim, CcSimCharacter(sim, sim->player.id),
-            &player->versions[slot], &player_mind, player_memories);
+            local->conversation_character_id, &player->versions[slot], &player_mind,
+            player_memories);
         ClientMindFor(sim, CcSimCharacter(sim, local->conversation_character_id),
-            &listener->versions[slot], &listener_mind, listener_memories);
+            sim->player.id, &listener->versions[slot], &listener_mind, listener_memories);
         if (CcCoreConversationStartRoundMind(&core_conversation, &account[0], &player_mind, &speech[0],
                 &account[1], &listener_mind, &speech[1])) {
             local->conversation_gossip_slot = slot;
