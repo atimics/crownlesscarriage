@@ -24,7 +24,7 @@ static CcCoreControl ControlId(const char *name)
 {
     static const char *const names[CC_CORE_CONTROL_COUNT] = {
         "open", "answer", "remark", "affirm", "dispute", "hedge",
-        "attribute", "defer", "settle", "part", "recall", "muse"
+        "attribute", "defer", "settle", "part", "recall", "muse", "cite"
     };
     for (int i = 0; i < CC_CORE_CONTROL_COUNT; ++i)
         if (strcmp(name, names[i]) == 0) return (CcCoreControl)i;
@@ -90,6 +90,9 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[i], "--memory") == 0 && i + 1 < argc) {
             use_mind = true;
             if (mind.memory_count < CC_CORE_MIND_LINES) mind.memories[mind.memory_count++] = argv[++i];
+        } else if (strcmp(argv[i], "--read") == 0 && i + 1 < argc) {
+            use_mind = true;
+            if (mind.read_count < CC_CORE_MIND_LINES) mind.read[mind.read_count++] = argv[++i];
         } else if (strcmp(argv[i], "--thought") == 0 && i + 1 < argc) {
             use_mind = true;
             if (mind.thought_count < CC_CORE_MIND_LINES) mind.thoughts[mind.thought_count++] = argv[++i];
@@ -132,10 +135,17 @@ int main(int argc, char **argv)
                 for (int i = 0; i < count; ++i) (void)printf("%s%.6f", i == 0 ? "" : " ", (double)hidden[i]);
                 (void)puts("");
             } else if (dump_meta) {
-                int meta[4096 * 5];
-                int count = CcCoreModelPrefixMeta(model, meta, 4096 * 5);
-                for (int i = 0; i < count; ++i) (void)printf("%s%d,%d,%d,%d,%d", i == 0 ? "" : " ",
-                    meta[i * 5], meta[i * 5 + 1], meta[i * 5 + 2], meta[i * 5 + 3], meta[i * 5 + 4]);
+                /* Nine fields now: the five that mark a copied span, then the
+                   four stance ids. A wrong id is invisible in the decoded
+                   prompt, so this dump is the only way parity stays honest. */
+                enum { PROBE_META = 9 };
+                int meta[4096 * PROBE_META];
+                int count = CcCoreModelPrefixMeta(model, meta, 4096 * PROBE_META);
+                for (int i = 0; i < count; ++i) {
+                    (void)printf("%s", i == 0 ? "" : " ");
+                    for (int k = 0; k < PROBE_META; ++k)
+                        (void)printf("%s%d", k == 0 ? "" : ",", meta[i * PROBE_META + k]);
+                }
                 (void)puts("");
             } else {
                 int count = CcCoreModelPrefixTokens(model, out, 4096);
