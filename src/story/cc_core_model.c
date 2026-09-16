@@ -323,7 +323,7 @@ static bool HistoryText(const CcCoreAccount *account, const CcCoreSpoken *messag
 /* Stance ids, matching crownless_v2.py's VOICE_IDS, GOAL_IDS and LEVEL_IDS one
    for one. Zero means absent. This is a wire format shared with the trainer:
    reordering it corrupts every prompt without changing a visible character. */
-static int VoiceId(const char *voice)
+int CcCoreModelVoiceId(const char *voice)
 {
     static const char *const names[] = {"baker", "scribe", "farmer", "smith", "innkeeper",
         "miller", "shepherd", "woodcutter", "resident", "quarryman", "cartwright", "bandit"};
@@ -488,7 +488,7 @@ bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
     for (int i = 0; i < n; ++i) {
         m->meta[i][4] = meaning;
         if (mind == NULL) continue;
-        m->meta[i][5] = VoiceId(mind->voice);
+        m->meta[i][5] = CcCoreModelVoiceId(mind->voice);
         m->meta[i][6] = GoalId(mind->goal);
         m->meta[i][7] = LevelId(mind->stress);
         m->meta[i][8] = LevelId(mind->courage);

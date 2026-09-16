@@ -48,6 +48,10 @@ args = [str(binary),str(model),'0','80','0',"Thornford's drought harvest cannot 
 for replacement in ('', '1.5', '-1', '9999'):
     invalid = args[:]; invalid[2] = replacement
     assert subprocess.run(invalid,capture_output=True).returncode != 0
+unknown = subprocess.run(args + ['--mind','fletcher:keep_order:low:high:remark'],
+                         capture_output=True, text=True)
+assert unknown.returncode == 0 and unknown.stdout.strip()
+assert 'unknown voice' in unknown.stderr, 'a mistyped voice must not pass silently'
 with tempfile.TemporaryDirectory() as folder:
     path = Path(folder)/'bad.ccv2'
     damaged = bytearray(model.read_bytes()); damaged[-1] ^= 1

@@ -34,6 +34,11 @@ bool CcCoreModelGenerateMind(CcCoreModel *model, const CcCoreAccount *account,
                              char *text, size_t capacity);
 /* The cue a caller with no move in mind should use for this much history. */
 CcCoreControl CcCoreControlPlain(size_t history_count);
+/* Voice name to stance id, matching the trainer's VOICE_IDS one for one:
+   twelve trades in order, resident for a missing name, 0 for an unknown one.
+   Zero gates the whole stance block off, so an unknown trade conditions on
+   nothing rather than guessing resident. */
+int CcCoreModelVoiceId(const char *voice);
 /* Tokenizer inspection for parity tests. */
 int CcCoreModelEncode(const char *text, int *tokens, int capacity);
 /* Prefix token inspection for parity tests. */
