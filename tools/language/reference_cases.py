@@ -64,7 +64,7 @@ for case in cases:
     row['mind'] = dict(PLAIN)
     row['control'] = 'open' if not history else 'answer'
     output = generate(model,tokenizer,encode_row(tokenizer,row,slots=True,conversation=True,
-                                                 typed_stance=True))
+                                                 typed_stance=True, situation=True))
     if not output['stopped']: raise ValueError('Reference did not stop')
     case['text'] = output['text']
 # Mind-context reference cases: character voice, goal, stress, memories, and
@@ -96,14 +96,22 @@ for index, base in enumerate(rows):
                    'courage': rng.choice(['low','medium','high']),
                    'memories': [rows[0]['text']] if index % 5 == 0 else [],
                    'thoughts': ["I will keep calm. Every loaf counts."] if index % 4 == 0 else []}
+    # Situation bits ride the meta channel beside the stance; randomize them so
+    # the parity cases exercise the new tables, and append them to the probe
+    # spec in the same order the runtime fills them.
+    row['situation'] = {'hungry': bool(rng.getrandbits(1)),
+                        'sheltered': bool(rng.getrandbits(1)),
+                        'in_transit': bool(rng.getrandbits(1))}
     row['history'] = [{'speaker':'other','text':'What have you heard?'}] if index % 3 == 0 else []
     case['mind'] = ':'.join([voice, row['mind']['goal'], row['mind']['stress'],
-                             row['mind']['courage'], control])
+                             row['mind']['courage'], control] +
+                            ['1' if row['situation'][axis] else '0'
+                             for axis in ('hungry', 'sheltered', 'in_transit')])
     case['memories'] = list(row['mind']['memories'])
     case['thoughts'] = list(row['mind']['thoughts'])
     case['history'] = [h['text'] for h in row['history']]
     output = generate(model,tokenizer,encode_row(tokenizer,row,slots=True,conversation=True,
-                                                 typed_stance=True))
+                                                 typed_stance=True, situation=True))
     if not output['stopped']: raise ValueError('Mind reference did not stop')
     case['text'] = output['text']
     cases.append(case)

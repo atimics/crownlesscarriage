@@ -7,9 +7,10 @@
 #include <string.h>
 
 enum { D = 192, FF = 624, LAYERS = 8, CONTEXT = 512, VOCAB = 4096,
-       HEADS = 6, HD = 32, MAX_ACTIONS = 160, TENSORS = 63,
-       /* role, knowledge, provenance, event, kind, then the four stance ids. */
-       META = 9 };
+       HEADS = 6, HD = 32, MAX_ACTIONS = 160, TENSORS = 66,
+       /* role, knowledge, provenance, event, kind, the four stance ids,
+          then hungry, sheltered, in_transit. */
+       META = 12 };
 typedef struct CoreTensorLayout { int rows, cols; size_t offset, scales; } CoreTensorLayout;
 typedef struct CoreMeaning { const char *name; int id; } CoreMeaning;
 typedef struct CoreToken { const char *bytes; int length; } CoreToken;
@@ -236,6 +237,11 @@ static void Hidden(CcCoreModel *m, int token, const int *meta)
             m->weights[CORE_GOALS][meta[6] * D + j] +
             m->weights[CORE_STRESSES][meta[7] * D + j] +
             m->weights[CORE_COURAGES][meta[8] * D + j];
+        /* The situation rides the same line: three binary axes, always known,
+           so no gate. Index 0 is the learned "not so" vector, not absence. */
+        x[j] += m->weights[CORE_HUNGRY][meta[9] * D + j] +
+            m->weights[CORE_SHELTERED][meta[10] * D + j] +
+            m->weights[CORE_INTRANSIT][meta[11] * D + j];
     }
     for (int layer = 0; layer < LAYERS; ++layer) {
         int base = CORE_BLOCK_BASE + layer * 6;
@@ -415,6 +421,8 @@ bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
         plain.stress = CC_CORE_LEVEL_MEDIUM;
         plain.courage = CC_CORE_LEVEL_MEDIUM;
         plain.voice = "resident";
+        /* Fed, sheltered, home: the unremarkable situation both runtimes agree on. */
+        plain.sheltered = true;
         mind = &plain;
     }
     char line[CC_EVENT_TEXT_CAPACITY + 16];
@@ -492,6 +500,9 @@ bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
         m->meta[i][6] = GoalId(mind->goal);
         m->meta[i][7] = LevelId(mind->stress);
         m->meta[i][8] = LevelId(mind->courage);
+        m->meta[i][9] = mind->hungry ? 1 : 0;
+        m->meta[i][10] = mind->sheltered ? 1 : 0;
+        m->meta[i][11] = mind->in_transit ? 1 : 0;
     }
     m->prefix = n; m->used = 0; m->actions = 0; m->status = 0;
     return true;
@@ -554,7 +565,11 @@ int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
         }
         if (length >= sizeof(m->text) - m->length || memchr(bytes, 0, length) != NULL) { m->status = -1; break; }
         memcpy(m->text + m->length, bytes, length); m->length += length; m->text[m->length] = '\0';
-        ++m->actions; Hidden(m, token, NULL);
+        /* Generated positions carry zero meta, exactly as the trainer's
+           generate() feeds zeros: every gated block skips, while the ungated
+           situation terms add their index-0 vectors on both sides. */
+        static const int blank[META] = {0};
+        ++m->actions; Hidden(m, token, blank);
     }
     if (m->status == 1) {
         size_t at = 0U;

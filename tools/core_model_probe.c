@@ -63,6 +63,9 @@ int main(int argc, char **argv)
     mind.stress = CC_CORE_LEVEL_MEDIUM;
     mind.courage = CC_CORE_LEVEL_MEDIUM;
     mind.voice = NULL;
+    /* Fed, sheltered, home: the default situation both runtimes agree on.
+       Present spec parts overwrite these below; absent ones keep them. */
+    mind.sheltered = true;
     CcCoreControl control = CC_CORE_CONTROL_SAY;
     bool use_mind = false, dump = false;
     for (int i = 6; i < argc; ++i) {
@@ -74,14 +77,17 @@ int main(int argc, char **argv)
             (void)snprintf(spec, sizeof(spec), "%s", argv[++i]);
             char *at = spec;
             int part = 0;
-            while (at != NULL && part < 5) {
+            while (at != NULL && part < 8) {
                 char *sep = strchr(at, ':');
                 if (sep != NULL) *sep = '\0';
                 if (part == 0) mind.voice = at[0] != '\0' ? at : NULL;
                 else if (part == 1) mind.goal = GoalId(at);
                 else if (part == 2) mind.stress = LevelId(at);
                 else if (part == 3) mind.courage = LevelId(at);
-                else control = ControlId(at);
+                else if (part == 4) control = ControlId(at);
+                else if (part == 5) mind.hungry = at[0] == '1';
+                else if (part == 6) mind.sheltered = at[0] == '1';
+                else mind.in_transit = at[0] == '1';
                 at = sep != NULL ? sep + 1 : NULL;
                 ++part;
             }
@@ -142,10 +148,11 @@ int main(int argc, char **argv)
                 for (int i = 0; i < count; ++i) (void)printf("%s%.6f", i == 0 ? "" : " ", (double)hidden[i]);
                 (void)puts("");
             } else if (dump_meta) {
-                /* Nine fields now: the five that mark a copied span, then the
-                   four stance ids. A wrong id is invisible in the decoded
-                   prompt, so this dump is the only way parity stays honest. */
-                enum { PROBE_META = 9 };
+                /* Twelve fields now: the five that mark a copied span, the four
+                   stance ids, then hungry, sheltered, in_transit. A wrong id
+                   is invisible in the decoded prompt, so this dump is the only
+                   way parity stays honest. */
+                enum { PROBE_META = 12 };
                 int meta[4096 * PROBE_META];
                 int count = CcCoreModelPrefixMeta(model, meta, 4096 * PROBE_META);
                 for (int i = 0; i < count; ++i) {

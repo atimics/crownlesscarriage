@@ -39,7 +39,8 @@ def compile_tables():
     lines.append('/* Tensor indices, by name, because export order is not ours to assume. */')
     for label, name in (('CORE_BLOCK_BASE', 'blocks.0.n1.weight'), ('CORE_VOICES', 'voices.weight'),
                         ('CORE_GOALS', 'goals.weight'), ('CORE_STRESSES', 'stresses.weight'),
-                        ('CORE_COURAGES', 'courages.weight')):
+                        ('CORE_COURAGES', 'courages.weight'), ('CORE_HUNGRY', 'hungry.weight'),
+                        ('CORE_SHELTERED', 'sheltered.weight'), ('CORE_INTRANSIT', 'in_transit.weight')):
         if name in names: lines.append('#define %s %d' % (label, names.index(name)))
     lines.append('static const CoreMeaning CORE_MEANINGS[] = {')
     for name, index in sorted(header['meaning_ids'].items()):
