@@ -149,6 +149,9 @@ for pool in ('QUESTIONS', 'CERTAINTY', 'CHECK', 'ASK', 'CLOSE',
 for pool in ('AFFIRM', 'DEFER', 'SETTLE', 'PART', 'HEDGE', 'ATTRIBUTE',
              'DISPUTE_OPEN', 'DISPUTE_CLOSE'):
     _words(getattr(crownless_moves, pool), allowed)
+# Predicament and company openings are authored pools too, quoted verbatim.
+_words(getattr(crownless_moves, 'SITUATION_MARKS'), allowed)
+_words(getattr(crownless_moves, 'SOCIAL_MARKS'), allowed)
 # The reviewed conversation transcript supplies the ordinary dialogue words a
 # reply may reach for without inventing anything.
 _words([turn['text'] for turn in chat['turns']], allowed)
