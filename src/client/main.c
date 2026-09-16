@@ -6171,6 +6171,10 @@ static void ClientReadSpeech(const CcSim *sim, const char *text, CcId source)
         CC_SPEECH_PLAIN, CC_SPEECH_FEEDBACK, source)) ClientSaySpeech(&speech);
 }
 
+static void ClientMindFor(const CcSim *sim, const CcCharacter *character,
+                          const CcGossipVersion *version, CcCoreMind *mind,
+                          CcGossipLanguage *memory_language);
+
 static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
                                      CcSpeech *speech)
 {
@@ -6205,8 +6209,23 @@ static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
                 CcCoreAccount account;
                 if (CcSpeechPrepareGossip(sim, story, &carrier->versions[slot], 0U, &language) &&
                     CcCoreAccountPrepare(story->kind, language.account, language.confidence,
-                        language.retellings, &account))
-                    (void)CcCoreConversationPrepare(&core_conversation, &account, speech);
+                        language.retellings, &account)) {
+                    if (person != NULL) {
+                        /* The speaker's own stance and situation, not the
+                           defaults: a starving traveller should sound like one.
+                           Memories render into the prompt synchronously, so the
+                           stack buffer below does not outlive the call. */
+                        CcCoreMind mind;
+                        CcGossipLanguage mind_memories[CC_CORE_MIND_LINES];
+                        ClientMindFor(sim, person, &carrier->versions[slot],
+                            &mind, mind_memories);
+                        (void)CcCoreConversationPrepareMind(&core_conversation, &account,
+                            &mind, CcCoreConversationNextMove(&core_conversation,
+                                speech->speaker_id), speech);
+                    } else {
+                        (void)CcCoreConversationPrepare(&core_conversation, &account, speech);
+                    }
+                }
             }
             return true;
         }
@@ -6271,6 +6290,11 @@ static void ClientMindFor(const CcSim *sim, const CcCharacter *character,
     mind->witnessed = version != NULL && version->source_character_id == character->id;
     mind->voice = ClientBanditName(sim, character->bandit_group_id);
     if (mind->voice[0] == '\0') mind->voice = ClientOccupationName(character->occupation);
+    /* Predicament, not personality: the situation channel carries where the
+       body is, filled from the same counters the sim already keeps. */
+    mind->hungry = character->hungry_days > 0;
+    mind->sheltered = character->unsheltered_nights == 0;
+    mind->in_transit = character->travel_destination_id != 0;
     /* Up to two older held accounts become memories of past events. */
     for (int32_t i = 0; i < CC_MAX_GOSSIP && mind->memory_count < CC_CORE_MIND_LINES; ++i) {
         const CcGossipVersion *held = NULL;
