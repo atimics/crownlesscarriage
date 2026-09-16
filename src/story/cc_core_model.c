@@ -330,7 +330,10 @@ static int VoiceId(const char *voice)
     if (voice == NULL || voice[0] == '\0') voice = "resident";
     for (size_t i = 0U; i < sizeof(names) / sizeof(names[0]); ++i)
         if (strcmp(voice, names[i]) == 0) return (int)i + 1;
-    return 9; /* resident: an unknown trade still speaks as somebody. */
+    /* Unknown trades condition on nothing, matching the trainer's
+       VOICE_IDS.get(..., 0): the stance block is gated on this id, so 0
+       drops the whole stance rather than guessing resident. */
+    return 0;
 }
 
 static int GoalId(CcCoreGoal goal)
