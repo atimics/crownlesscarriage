@@ -2467,6 +2467,20 @@ CcMoney CcSimTrackedGold(const CcSim *sim);
 int32_t CcSimTrackedGood(const CcSim *sim, CcGood good);
 const CcTreasure *CcSimTreasure(const CcSim *sim, CcId id);
 int32_t CcSimTreasureCountForOwner(const CcSim *sim, CcId owner_id);
+/* One passage of an archive tome, written out from what the sim holds about the
+   place that made it. The four forms the vaults bind are already four kinds of
+   record, so each keeps what its name says: a Ledger keeps the market, an Annal
+   the year's hardships, a Register the roll of the place, a Chronicle its
+   standing. Nothing is stored and nothing is invented, so a passage quoted
+   today reads the same when it is quoted again. Returns false past the last
+   passage, or when the tome is destroyed or unknown. */
+#define CC_TOME_PASSAGES 3
+bool CcSimTomePassage(const CcSim *sim, CcId treasure_id, int index,
+                      char *text, size_t capacity);
+/* A tome the character is placed to have read: one held where they are, or
+   failing that where they are from. Reading is a query rather than an event, so
+   the world's state and its hash are untouched by anyone consulting a book. */
+CcId CcSimReadableTome(const CcSim *sim, CcId character_id);
 int32_t CcSettlementServiceCapacity(CcSettlementSize size);
 int32_t CcSettlementServiceCount(const CcSettlement *settlement);
 void CcSimSeedCommonPonyHerds(CcSim *sim);

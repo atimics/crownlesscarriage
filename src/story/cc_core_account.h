@@ -28,6 +28,10 @@ typedef enum CcCoreControl {
     CC_CORE_CONTROL_AFFIRM, CC_CORE_CONTROL_DISPUTE, CC_CORE_CONTROL_HEDGE,
     CC_CORE_CONTROL_ATTRIBUTE, CC_CORE_CONTROL_DEFER, CC_CORE_CONTROL_SETTLE,
     CC_CORE_CONTROL_PART, CC_CORE_CONTROL_RECALL, CC_CORE_CONTROL_MUSE,
+    /* Quote what you have read. Attribution to a person is `attribute`, which is
+       written in six wordings; a book supplies its own words, so this one is
+       bounded by the shelf rather than by the pool. */
+    CC_CORE_CONTROL_CITE,
     CC_CORE_CONTROL_COUNT
 } CcCoreControl;
 /* The three cues that predate the move axis, kept so callers still build. */
@@ -56,6 +60,11 @@ typedef struct CcCoreMind {
     size_t memory_count;
     const char *thoughts[CC_CORE_MIND_LINES];
     size_t thought_count;
+    /* Passages the speaker has read. Carried like memories, but quotable: the
+       copy mechanism reproduces a span it is pointed at, which is the one thing
+       this model does perfectly. */
+    const char *read[CC_CORE_MIND_LINES];
+    size_t read_count;
 } CcCoreMind;
 
 /* Parse the supplied held telling. The caller owns its evidence. */

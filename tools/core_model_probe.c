@@ -24,7 +24,7 @@ static CcCoreControl ControlId(const char *name)
 {
     static const char *const names[CC_CORE_CONTROL_COUNT] = {
         "open", "answer", "remark", "affirm", "dispute", "hedge",
-        "attribute", "defer", "settle", "part", "recall", "muse"
+        "attribute", "defer", "settle", "part", "recall", "muse", "cite"
     };
     for (int i = 0; i < CC_CORE_CONTROL_COUNT; ++i)
         if (strcmp(name, names[i]) == 0) return (CcCoreControl)i;
@@ -90,6 +90,9 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[i], "--memory") == 0 && i + 1 < argc) {
             use_mind = true;
             if (mind.memory_count < CC_CORE_MIND_LINES) mind.memories[mind.memory_count++] = argv[++i];
+        } else if (strcmp(argv[i], "--read") == 0 && i + 1 < argc) {
+            use_mind = true;
+            if (mind.read_count < CC_CORE_MIND_LINES) mind.read[mind.read_count++] = argv[++i];
         } else if (strcmp(argv[i], "--thought") == 0 && i + 1 < argc) {
             use_mind = true;
             if (mind.thought_count < CC_CORE_MIND_LINES) mind.thoughts[mind.thought_count++] = argv[++i];

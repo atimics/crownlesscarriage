@@ -3530,6 +3530,155 @@ int32_t CcSimTreasureCountForOwner(const CcSim *sim, CcId owner_id)
     return count;
 }
 
+/* The story a tome sets down: one the settlement that bound it knew. Taken in
+   slot order so the same tome always sets down the same story. A chronicle that
+   records the year's dragon is worth quoting; one that records its wheat price
+   is worth shelving. */
+/* What a chronicle reaches for first. A year's dragon, war or raid is what a
+   town keeps a record for; a mill's throughput is what it keeps a ledger for. */
+static bool NotableStory(CcEventKind kind)
+{
+    switch (kind) {
+        case CC_EVENT_DRAGON_SLAIN: case CC_EVENT_DRAGON_BATTLE: case CC_EVENT_DRAGON_HUNT:
+        case CC_EVENT_DRAGON_OMEN: case CC_EVENT_DRAGON_MUSTERED:
+        case CC_EVENT_DRAGON_RETALIATION: case CC_EVENT_DRAGON_HOARD_STOLEN:
+        case CC_EVENT_DRAGON_HOARD_RECOVERED: case CC_EVENT_DRAGON_TREASURE_RETURNED:
+        case CC_EVENT_WAR_DECLARED: case CC_EVENT_SETTLEMENT_RAIDED:
+        case CC_EVENT_GOBLIN_RAIDED: return true;
+        default: return false;
+    }
+}
+
+static const CcGossip *TomeStory(const CcSim *sim, const CcSettlement *made, int index)
+{
+    int32_t position = -1;
+    for (int32_t i = 0; i < sim->settlement_count; ++i)
+        if (sim->settlements[i].id == made->id) { position = i; break; }
+    if (position < 0 || position >= 32) return NULL;
+    uint32_t known = UINT32_C(1) << (uint32_t)position;
+    /* Notable first, then the rest, and never the same text twice: a tome that
+       sets down one thing three times is not a record, it is a stutter. */
+    const char *taken[CC_TOME_PASSAGES] = {0};
+    int chosen = 0;
+    for (int pass = 0; pass < 2; ++pass) {
+        for (int32_t slot = 0; slot < CC_MAX_GOSSIP; ++slot) {
+            const CcGossip *story = CcSimGossipStory(sim, slot);
+            if (story == NULL || story->text[0] == '\0') continue;
+            if ((story->settlement_mask & known) == 0U) continue;
+            if (NotableStory(story->kind) != (pass == 0)) continue;
+            bool repeat = false;
+            for (int i = 0; i < chosen; ++i)
+                if (taken[i] != NULL && strcmp(taken[i], story->text) == 0) repeat = true;
+            if (repeat) continue;
+            if (chosen == index) return story;
+            if (chosen < CC_TOME_PASSAGES) taken[chosen] = story->text;
+            ++chosen;
+        }
+    }
+    return NULL;
+}
+
+/* The vaults bind four forms, and each one is already a kind of record. A tome
+   keeps what its name says it keeps, drawn from the settlement that made it, so
+   a character quoting one is quoting the world rather than repeating a phrase
+   somebody wrote for them. */
+bool CcSimTomePassage(const CcSim *sim, CcId treasure_id, int index,
+                      char *text, size_t capacity)
+{
+    if (sim == NULL || text == NULL || capacity == 0U ||
+        index < 0 || index >= CC_TOME_PASSAGES) return false;
+    const CcTreasure *tome = CcSimTreasure(sim, treasure_id);
+    if (tome == NULL || tome->destroyed) return false;
+    const CcSettlement *made = CcSimSettlement(sim, tome->maker_settlement_id);
+    if (made == NULL) return false;
+    int32_t year = tome->created_day / 364;
+    /* The form is the first word of the bound name, which is what decides the
+       kind of record; falling back to the chronicle keeps an unnamed tome
+       readable rather than silent. */
+    char form[16] = {0};
+    for (size_t i = 0; i + 1U < sizeof(form) && tome->name[i] != '\0' && tome->name[i] != ' '; ++i)
+        form[i] = tome->name[i];
+    if (strcmp(form, "Ledger") == 0) {
+        switch (index) {
+            case 0: (void)snprintf(text, capacity, "The %s sets wheat at %d and bread at %d.",
+                        tome->name, made->price[CC_GOOD_WHEAT], made->price[CC_GOOD_BREAD]); break;
+            case 1: (void)snprintf(text, capacity, "It counts %d wheat in store against a target of %d.",
+                        made->stock[CC_GOOD_WHEAT], made->reserve_target[CC_GOOD_WHEAT]); break;
+            default: (void)snprintf(text, capacity, "The market at %s held %d coins that year.",
+                        made->name, (int)made->market_coins); break;
+        }
+    } else if (strcmp(form, "Annal") == 0) {
+        switch (index) {
+            case 0: (void)snprintf(text, capacity, "The %s records hunger at %d in %s.",
+                        tome->name, made->hunger, made->name); break;
+            case 1: {
+                const CcGossip *story = TomeStory(sim, made, 0);
+                if (story != NULL) {
+                    (void)snprintf(text, capacity, "It sets down that %s", story->text);
+                    break;
+                }
+            }
+            /* fall through to the fire when the year left no story */
+            (void)snprintf(text, capacity, made->last_fire_day > 0 ?
+                        "It sets down the fire of day %d, and the damage it left." :
+                        "It sets down no fire in %d years, which the scribes thought worth saying.",
+                        made->last_fire_day > 0 ? made->last_fire_day : year + 1);
+                break;
+            default: (void)snprintf(text, capacity, "It gives the year as %d, and the town as standing.",
+                        year); break;
+        }
+    } else if (strcmp(form, "Register") == 0) {
+        switch (index) {
+            case 0: (void)snprintf(text, capacity, "The %s rolls %d souls at %s.",
+                        tome->name, made->population, made->name); break;
+            case 1: (void)snprintf(text, capacity, "It names the place a %s.",
+                        CcSettlementFunctionName(made->function)); break;
+            default: (void)snprintf(text, capacity, "It was entered in the year %d and not amended.",
+                        year); break;
+        }
+    } else {
+        /* A chronicle sets down what the town knew. Where it knew nothing worth
+           setting down, it falls back to the standing of the place. */
+        const CcGossip *story = index > 0 ? TomeStory(sim, made, index - 1) : NULL;
+        if (story != NULL) {
+            (void)snprintf(text, capacity, "It sets down that %s", story->text);
+        } else switch (index) {
+            case 0: (void)snprintf(text, capacity, "The %s tells of %s in the year %d.",
+                        tome->name, made->name, year); break;
+            case 1: (void)snprintf(text, capacity, "It puts the prosperity of the place at %d.",
+                        made->prosperity); break;
+            default: (void)snprintf(text, capacity, "It says the watch there stood at %d.",
+                        made->security); break;
+        }
+    }
+    return text[0] != '\0';
+}
+
+CcId CcSimReadableTome(const CcSim *sim, CcId character_id)
+{
+    const CcCharacter *reader = CcSimCharacter(sim, character_id);
+    if (reader == NULL) return 0U;
+    /* Where they stand first, where they are from second: a traveller quotes
+       the archive in front of them before the one back home. */
+    for (int pass = 0; pass < 2; ++pass) {
+        CcId where = pass == 0 ? reader->current_settlement_id : reader->home_settlement_id;
+        if (where == 0U) continue;
+        CcId shelf[CC_MAX_TREASURES];
+        int32_t held = 0;
+        for (int32_t i = 0; i < sim->treasure_count && held < CC_MAX_TREASURES; ++i) {
+            const CcTreasure *tome = &sim->treasures[i];
+            if (tome->destroyed || tome->location_id != where) continue;
+            if (tome->craft_work < 1 || tome->name[0] == '\0') continue;
+            shelf[held++] = tome->id;
+        }
+        /* A town with four books should not have one book. Spread the readers
+           across the shelf by who they are, so the baker and the scribe have
+           read different things and can disagree about them. */
+        if (held > 0) return shelf[(int32_t)(character_id % (CcId)held)];
+    }
+    return 0U;
+}
+
 int32_t CcPlayerMapCount(const CcSim *sim)
 {
     if (sim == NULL) return 0;

@@ -350,7 +350,7 @@ static const char *ControlName(CcCoreControl control)
 {
     static const char *const names[CC_CORE_CONTROL_COUNT] = {
         "open", "answer", "remark", "affirm", "dispute", "hedge",
-        "attribute", "defer", "settle", "part", "recall", "muse"
+        "attribute", "defer", "settle", "part", "recall", "muse", "cite"
     };
     return control >= CC_CORE_CONTROL_OPEN && control < CC_CORE_CONTROL_COUNT ?
         names[control] : "remark";
@@ -416,6 +416,13 @@ bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
         for (size_t i = 0U; i < mind->memory_count && i < CC_CORE_MIND_LINES; ++i) {
             if (mind->memories[i] == NULL || mind->memories[i][0] == '\0') continue;
             (void)snprintf(line, sizeof(line), "# memory: %s\n", mind->memories[i]);
+            if (!EncodeLine(m, &n, line)) return false;
+        }
+        /* Read passages sit with the memories: things the speaker holds and can
+           quote, before the thoughts that are only theirs. */
+        for (size_t i = 0U; i < mind->read_count && i < CC_CORE_MIND_LINES; ++i) {
+            if (mind->read[i] == NULL || mind->read[i][0] == '\0') continue;
+            (void)snprintf(line, sizeof(line), "# read: %s\n", mind->read[i]);
             if (!EncodeLine(m, &n, line)) return false;
         }
         for (size_t i = 0U; i < mind->thought_count && i < CC_CORE_MIND_LINES; ++i) {
