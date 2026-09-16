@@ -7,7 +7,7 @@ from pathlib import Path
 import struct
 
 ROOT = Path(__file__).resolve().parents[2]
-MODEL_SHA = 'ed2e03164032cdff48b7fd491dae87e1f3717c940a9f9d1645469dd07b27fd2d'
+MODEL_SHA = 'c0d48351039ed9111545e3dbd020d4ddb08e918072b70d509a679acae633ff90'
 TOKENIZER_SHA = 'c572de53eb4e739a8ce941ac03d1d5fb6173623af786787cf786b41fd34e9af4'
 
 
@@ -31,6 +31,16 @@ def compile_tables():
         lines.append('    {%d, %d, %dU, %dU}, /* %s */' % (rows, cols, 12 + size + item['offset'],
                      12 + size + item['scales'] if cols else 0, item['name']))
     lines.append('};')
+    # The runtime reads tensors positionally, and the trainer may append the
+    # stance tables after the blocks rather than before them. Emit the indices
+    # by name so a reordered export is a compile error rather than a silently
+    # wrong prompt.
+    names = [item['name'] for item in header['tensors']]
+    lines.append('/* Tensor indices, by name, because export order is not ours to assume. */')
+    for label, name in (('CORE_BLOCK_BASE', 'blocks.0.n1.weight'), ('CORE_VOICES', 'voices.weight'),
+                        ('CORE_GOALS', 'goals.weight'), ('CORE_STRESSES', 'stresses.weight'),
+                        ('CORE_COURAGES', 'courages.weight')):
+        if name in names: lines.append('#define %s %d' % (label, names.index(name)))
     lines.append('static const CoreMeaning CORE_MEANINGS[] = {')
     for name, index in sorted(header['meaning_ids'].items()):
         lines.append('    {"%s", %d},' % (name, index))

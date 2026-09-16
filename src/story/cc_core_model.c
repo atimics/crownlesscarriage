@@ -7,7 +7,9 @@
 #include <string.h>
 
 enum { D = 192, FF = 624, LAYERS = 8, CONTEXT = 512, VOCAB = 4096,
-       HEADS = 6, HD = 32, MAX_ACTIONS = 160, TENSORS = 59 };
+       HEADS = 6, HD = 32, MAX_ACTIONS = 160, TENSORS = 63,
+       /* role, knowledge, provenance, event, kind, then the four stance ids. */
+       META = 9 };
 typedef struct CoreTensorLayout { int rows, cols; size_t offset, scales; } CoreTensorLayout;
 typedef struct CoreMeaning { const char *name; int id; } CoreMeaning;
 typedef struct CoreToken { const char *bytes; int length; } CoreToken;
@@ -21,7 +23,7 @@ struct CcCoreModel {
     float keys[LAYERS][CONTEXT][D], values[LAYERS][CONTEXT][D];
     float cosine[CONTEXT][HD / 2], sine[CONTEXT][HD / 2];
     float sources[CC_CORE_FIELDS][D], hidden[D];
-    int tokens[CONTEXT], meta[CONTEXT][5], positions[CC_CORE_FIELDS];
+    int tokens[CONTEXT], meta[CONTEXT][META], positions[CC_CORE_FIELDS];
     int feedback[CC_CORE_FIELDS], prefix, used, candidates, actions, status;
     char literals[CC_CORE_FIELDS][CC_EVENT_TEXT_CAPACITY];
     char text[CC_CORE_UTTERANCE];
@@ -228,9 +230,15 @@ static void Hidden(CcCoreModel *m, int token, const int *meta)
         if (meta[0] != 0) x[j] += m->weights[1][meta[0] * D + j] + m->weights[2][meta[1] * D + j] +
             m->weights[3][meta[2] * D + j] + m->weights[4][meta[3] * D + j];
         if (meta[4] != 0) x[j] += m->weights[5][meta[4] * D + j];
+        /* The labelled line: voice, goal, stress and courage added at every
+           position rather than retrieved by attention from a line of prompt. */
+        if (meta[5] != 0) x[j] += m->weights[CORE_VOICES][meta[5] * D + j] +
+            m->weights[CORE_GOALS][meta[6] * D + j] +
+            m->weights[CORE_STRESSES][meta[7] * D + j] +
+            m->weights[CORE_COURAGES][meta[8] * D + j];
     }
     for (int layer = 0; layer < LAYERS; ++layer) {
-        int base = 6 + layer * 6;
+        int base = CORE_BLOCK_BASE + layer * 6;
         Norm(x, m->weights[base], z);
         Matvec(m->weights[base + 2], z, qkv, 3 * D, D);
         for (int h = 0; h < HEADS; ++h) for (int i = 0; i < HD / 2; ++i) {
@@ -312,25 +320,32 @@ static bool HistoryText(const CcCoreAccount *account, const CcCoreSpoken *messag
     output[written++] = '\n'; output[written] = '\0'; return true;
 }
 
-static const char *GoalName(CcCoreGoal goal)
+/* Stance ids, matching crownless_v2.py's VOICE_IDS, GOAL_IDS and LEVEL_IDS one
+   for one. Zero means absent. This is a wire format shared with the trainer:
+   reordering it corrupts every prompt without changing a visible character. */
+static int VoiceId(const char *voice)
+{
+    static const char *const names[] = {"baker", "scribe", "farmer", "smith", "innkeeper",
+        "miller", "shepherd", "woodcutter", "resident", "quarryman", "cartwright", "bandit"};
+    if (voice == NULL || voice[0] == '\0') voice = "resident";
+    for (size_t i = 0U; i < sizeof(names) / sizeof(names[0]); ++i)
+        if (strcmp(voice, names[i]) == 0) return (int)i + 1;
+    return 9; /* resident: an unknown trade still speaks as somebody. */
+}
+
+static int GoalId(CcCoreGoal goal)
 {
     switch (goal) {
-        case CC_CORE_GOAL_KEEP_ORDER: return "keep_order";
-        case CC_CORE_GOAL_SECURE_LIVELIHOOD: return "secure_livelihood";
-        case CC_CORE_GOAL_SURVIVE_CRISIS: return "survive_crisis";
-        case CC_CORE_GOAL_CARRY_NEWS: return "carry_news";
-        default: return "secure_livelihood";
+        case CC_CORE_GOAL_KEEP_ORDER: return 1;
+        case CC_CORE_GOAL_SECURE_LIVELIHOOD: return 2;
+        case CC_CORE_GOAL_SURVIVE_CRISIS: return 3;
+        default: return 4;
     }
 }
 
-static const char *LevelName(CcCoreLevel level)
+static int LevelId(CcCoreLevel level)
 {
-    switch (level) {
-        case CC_CORE_LEVEL_LOW: return "low";
-        case CC_CORE_LEVEL_MEDIUM: return "medium";
-        case CC_CORE_LEVEL_HIGH: return "high";
-        default: return "medium";
-    }
+    return level == CC_CORE_LEVEL_LOW ? 1 : level == CC_CORE_LEVEL_MEDIUM ? 2 : 3;
 }
 
 /* The cue that closes the prompt names the move, matching zero's
@@ -401,18 +416,9 @@ bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
     }
     char line[CC_EVENT_TEXT_CAPACITY + 16];
     if (mind != NULL) {
-        /* Every row of the corpus names a voice, and the encoder defaults a
-           missing one to "resident" rather than dropping the line. Omitting it
-           here would hand the model a prompt shape it was never trained on. */
-        (void)snprintf(line, sizeof(line), "# voice: %s\n",
-                       mind->voice != NULL && mind->voice[0] != '\0' ? mind->voice : "resident");
-        if (!EncodeLine(m, &n, line)) return false;
-        (void)snprintf(line, sizeof(line), "# goal: %s\n", GoalName(mind->goal));
-        if (!EncodeLine(m, &n, line)) return false;
-        (void)snprintf(line, sizeof(line), "# stress: %s\n", LevelName(mind->stress));
-        if (!EncodeLine(m, &n, line)) return false;
-        (void)snprintf(line, sizeof(line), "# courage: %s\n", LevelName(mind->courage));
-        if (!EncodeLine(m, &n, line)) return false;
+        /* Voice, goal, stress and courage no longer appear as text. They ride
+           the meta channel, written across the whole prefix below. Memories and
+           thoughts stay: they are content, not categories. */
         for (size_t i = 0U; i < mind->memory_count && i < CC_CORE_MIND_LINES; ++i) {
             if (mind->memories[i] == NULL || mind->memories[i][0] == '\0') continue;
             (void)snprintf(line, sizeof(line), "# memory: %s\n", mind->memories[i]);
@@ -476,7 +482,14 @@ bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
         if (added < 0) return false;
         n += added;
     }
-    for (int i = 0; i < n; ++i) m->meta[i][4] = meaning;
+    for (int i = 0; i < n; ++i) {
+        m->meta[i][4] = meaning;
+        if (mind == NULL) continue;
+        m->meta[i][5] = VoiceId(mind->voice);
+        m->meta[i][6] = GoalId(mind->goal);
+        m->meta[i][7] = LevelId(mind->stress);
+        m->meta[i][8] = LevelId(mind->courage);
+    }
     m->prefix = n; m->used = 0; m->actions = 0; m->status = 0;
     return true;
 }
@@ -497,9 +510,9 @@ int CcCoreModelPrefixTokens(const CcCoreModel *model, int *tokens, int capacity)
 
 int CcCoreModelPrefixMeta(const CcCoreModel *model, int *meta, int capacity)
 {
-    if (model == NULL || meta == NULL || capacity < model->prefix * 5) return -1;
+    if (model == NULL || meta == NULL || capacity < model->prefix * META) return -1;
     for (int i = 0; i < model->prefix; ++i) {
-        for (int k = 0; k < 5; ++k) meta[i * 5 + k] = model->meta[i][k];
+        for (int k = 0; k < META; ++k) meta[i * META + k] = model->meta[i][k];
     }
     return model->prefix;
 }

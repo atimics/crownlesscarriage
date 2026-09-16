@@ -19,6 +19,7 @@ import torch
 from tokenizers import Tokenizer
 from crownless_v2 import encode_row, generate
 import crownless_conversation
+import crownless_moves
 from crownless_v2_export import load_export
 from speak_crownless_v2 import packet_record
 
@@ -62,11 +63,14 @@ for case in cases:
     row['voice'] = 'resident'
     row['mind'] = dict(PLAIN)
     row['control'] = 'open' if not history else 'answer'
-    output = generate(model,tokenizer,encode_row(tokenizer,row,slots=True,conversation=True))
+    output = generate(model,tokenizer,encode_row(tokenizer,row,slots=True,conversation=True,
+                                                 typed_stance=True))
     if not output['stopped']: raise ValueError('Reference did not stop')
     case['text'] = output['text']
 # Mind-context reference cases: character voice, goal, stress, memories, and
-# control cues. Every field the probe receives has to match what the Python
+# control cues. The stance rides the meta channel now, so a wrong field id is
+# invisible in the decoded prompt and these cases are the parity check.
+# Every field the probe receives has to match what the Python
 # encoder saw, or the case pins a disagreement instead of the encoding.
 rng = random.Random(20260912)
 # The cue names the move now, matching the shipped checkpoint and the probe.
@@ -81,7 +85,8 @@ for index, base in enumerate(rows):
     row = packet_record(packet,retold=case['retellings']>=4)
     row['kind_id'] = meta['meaning_ids'][packet['rule']]
     # An empty voice segment leaves the probe's voice NULL, matching a row
-    # with no voice: the encoder then writes no # voice: line on either side.
+    # with no voice: both sides then fall back to the resident id on the meta
+    # channel, and no stance text appears on either side.
     voice = rng.choice(['baker','scribe','farmer','smith']) if index % 3 else ''
     control = CONTROLS[index % len(CONTROLS)]
     row['voice'] = voice or None
@@ -97,7 +102,8 @@ for index, base in enumerate(rows):
     case['memories'] = list(row['mind']['memories'])
     case['thoughts'] = list(row['mind']['thoughts'])
     case['history'] = [h['text'] for h in row['history']]
-    output = generate(model,tokenizer,encode_row(tokenizer,row,slots=True,conversation=True))
+    output = generate(model,tokenizer,encode_row(tokenizer,row,slots=True,conversation=True,
+                                                 typed_stance=True))
     if not output['stopped']: raise ValueError('Mind reference did not stop')
     case['text'] = output['text']
     cases.append(case)
@@ -120,6 +126,12 @@ _words(json.loads((root / 'tools/data/core_account_rules.json').read_text()), al
 for pool in ('QUESTIONS', 'CERTAINTY', 'CHECK', 'ASK', 'CLOSE',
              'VOICE_LINES', 'MEMORY_LINES', 'THOUGHT', 'STRESS_PREFIX'):
     _words(getattr(crownless_conversation, pool), allowed)
+# The move wordings are authored pools too: the checkpoint quotes them
+# verbatim (e.g. a DEFER line containing "hearsay"), so a reply built only
+# from them must not read as invented spelling.
+for pool in ('AFFIRM', 'DEFER', 'SETTLE', 'PART', 'HEDGE', 'ATTRIBUTE',
+             'DISPUTE_OPEN', 'DISPUTE_CLOSE'):
+    _words(getattr(crownless_moves, pool), allowed)
 # The reviewed conversation transcript supplies the ordinary dialogue words a
 # reply may reach for without inventing anything.
 _words([turn['text'] for turn in chat['turns']], allowed)
@@ -129,8 +141,9 @@ for case in cases:
     _words(case.get('memories', []), allowed); _words(case.get('thoughts', []), allowed)
 result = {'model_sha256':hashlib.sha256(model_path.read_bytes()).hexdigest(),
           'vocabulary':sorted(allowed),
-          'zero_sources':{name:hashlib.sha256((a.zero/'scripts'/name).read_bytes()).hexdigest() for name in
-                          ('crownless_v2.py','crownless_v2_export.py','speak_crownless_v2.py')},
+           'zero_sources':{name:hashlib.sha256((a.zero/'scripts'/name).read_bytes()).hexdigest() for name in
+                           ('crownless_v2.py','crownless_v2_export.py','speak_crownless_v2.py',
+                            'crownless_conversation.py','crownless_moves.py')},
           'cases':cases, 'tokenizer':[{'text':text,'ids':tokenizer.encode(text).ids} for text in texts]}
 a.output.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
 print(len(cases),'reference sentences and',len(texts),'tokenizer cases')

@@ -1,5 +1,5 @@
 {
-  "model_sha256": "ed2e03164032cdff48b7fd491dae87e1f3717c940a9f9d1645469dd07b27fd2d",
+  "model_sha256": "c0d48351039ed9111545e3dbd020d4ddb08e918072b70d509a679acae633ff90",
   "vocabulary": [
     "a",
     "abbacy",
@@ -21,6 +21,7 @@
     "age",
     "ago",
     "agreed",
+    "agrees",
     "ahead",
     "aiming",
     "air",
@@ -29,6 +30,8 @@
     "all",
     "alliance",
     "almost",
+    "alone",
+    "already",
     "always",
     "am",
     "amid",
@@ -48,6 +51,7 @@
     "apparently",
     "appeared",
     "are",
+    "armed",
     "arose",
     "around",
     "arrive",
@@ -62,15 +66,21 @@
     "available",
     "away",
     "axe",
+    "aye",
     "back",
     "bad",
+    "badly",
     "bake",
+    "bakehouse",
     "bakery",
     "bandit",
+    "bar",
     "barely",
     "barleycroft",
+    "barn",
     "barret",
     "be",
+    "bear",
     "bearer",
     "bearers",
     "beautiful",
@@ -80,8 +90,10 @@
     "beef",
     "been",
     "before",
+    "began",
     "behind",
     "being",
+    "believe",
     "believed",
     "best",
     "better",
@@ -107,6 +119,7 @@
     "breeds",
     "bridge",
     "bring",
+    "bringing",
     "brood",
     "brought",
     "build",
@@ -132,14 +145,17 @@
     "can",
     "cannot",
     "care",
+    "carefully",
     "carriage",
     "carried",
     "carries",
     "carry",
     "carrying",
     "cart",
+    "carters",
     "carts",
     "cattle",
+    "certain",
     "challenger",
     "champion",
     "chance",
@@ -155,6 +171,7 @@
     "clears",
     "close",
     "closed",
+    "closer",
     "closes",
     "clutch",
     "coin",
@@ -182,11 +199,14 @@
     "could",
     "council",
     "count",
+    "counted",
+    "counter",
     "counting",
     "counts",
     "courier",
     "court",
     "courts",
+    "cover",
     "cow",
     "crafted",
     "credit",
@@ -204,8 +224,10 @@
     "customers",
     "cut",
     "cuts",
+    "cutting",
     "damage",
     "dangerous",
+    "dark",
     "date",
     "day",
     "days",
@@ -223,25 +245,32 @@
     "did",
     "died",
     "different",
+    "differently",
     "displaced",
     "distant",
+    "district",
     "ditch",
     "do",
     "documented",
     "does",
     "dog",
+    "doing",
     "door",
     "doors",
     "dough",
     "down",
     "dragon",
+    "drift",
     "drink",
     "drought",
+    "drovers",
     "dry",
     "due",
     "dungeon",
+    "dusk",
     "dust",
     "ear",
+    "early",
     "earn",
     "easier",
     "eastern",
@@ -251,13 +280,17 @@
     "eating",
     "eats",
     "eggs",
+    "either",
     "else",
     "empties",
     "empty",
     "end",
     "engrave",
     "enough",
+    "enter",
     "enters",
+    "entry",
+    "evening",
     "every",
     "everyone",
     "everything",
@@ -267,6 +300,7 @@
     "expected",
     "expenses",
     "eye",
+    "eyes",
     "failed",
     "fair",
     "faircopy",
@@ -275,6 +309,7 @@
     "falls",
     "family",
     "famine",
+    "far",
     "farming",
     "fast",
     "faster",
@@ -287,6 +322,7 @@
     "feet",
     "fell",
     "felt",
+    "field",
     "fields",
     "file",
     "fill",
@@ -316,12 +352,17 @@
     "fortune",
     "forward",
     "fourth",
+    "fresh",
+    "fretting",
     "friend",
+    "frightened",
+    "frightens",
     "from",
     "full",
     "funded",
     "funding",
     "funds",
+    "further",
     "gained",
     "gambling",
     "gathered",
@@ -334,7 +375,9 @@
     "gives",
     "gloamgate",
     "gloamward",
+    "go",
     "goblin",
+    "god",
     "goes",
     "going",
     "gold",
@@ -346,12 +389,14 @@
     "granaries",
     "granary",
     "grew",
+    "grind",
     "grinds",
     "ground",
     "group",
     "grows",
     "guarded",
     "guards",
+    "guess",
     "guest",
     "guests",
     "had",
@@ -374,6 +419,7 @@
     "hear",
     "heard",
     "hears",
+    "hearsay",
     "heart",
     "heavy",
     "held",
@@ -381,6 +427,8 @@
     "here",
     "hidden",
     "hide",
+    "high",
+    "hill",
     "his",
     "hoard",
     "hoarding",
@@ -400,8 +448,10 @@
     "hungry",
     "hurry",
     "i",
+    "idle",
     "if",
     "ilyra",
+    "improve",
     "improved",
     "in",
     "ingel",
@@ -430,6 +480,7 @@
     "kingdom",
     "knead",
     "know",
+    "knowing",
     "knows",
     "lack",
     "lacking",
@@ -437,8 +488,10 @@
     "lamb",
     "lambs",
     "land",
+    "lane",
     "large",
     "last",
+    "late",
     "later",
     "lawful",
     "lays",
@@ -469,6 +522,7 @@
     "living",
     "load",
     "loaf",
+    "loaves",
     "local",
     "locally",
     "long",
@@ -493,8 +547,10 @@
     "market",
     "masonry",
     "masons",
+    "matches",
     "material",
     "matter",
+    "matters",
     "maybe",
     "me",
     "meals",
@@ -510,6 +566,7 @@
     "milled",
     "mills",
     "millstone",
+    "mind",
     "missing",
     "mob",
     "monastic",
@@ -517,6 +574,7 @@
     "moon",
     "more",
     "most",
+    "mouths",
     "move",
     "moves",
     "much",
@@ -527,6 +585,7 @@
     "name",
     "named",
     "names",
+    "near",
     "need",
     "needed",
     "needs",
@@ -537,12 +596,14 @@
     "new",
     "news",
     "next",
+    "night",
     "nightfall",
     "nights",
     "no",
     "none",
     "not",
     "note",
+    "noted",
     "nothing",
     "notice",
     "now",
@@ -552,6 +613,7 @@
     "of",
     "off",
     "office",
+    "often",
     "old",
     "older",
     "omen",
@@ -566,9 +628,11 @@
     "ore",
     "orehauler",
     "other",
+    "otherwise",
     "our",
     "out",
     "output",
+    "oven",
     "ovens",
     "over",
     "own",
@@ -625,9 +689,11 @@
     "quarried",
     "quarry",
     "questions",
+    "quickly",
     "quiet",
     "quietly",
     "quill",
+    "quite",
     "raid",
     "raided",
     "raiders",
@@ -670,6 +736,8 @@
     "repair",
     "repaired",
     "repairs",
+    "repeat",
+    "repeated",
     "report",
     "reported",
     "rerouted",
@@ -688,6 +756,7 @@
     "rillbank",
     "riot",
     "rises",
+    "risk",
     "road",
     "roads",
     "roadside",
@@ -705,16 +774,21 @@
     "ruined",
     "rule",
     "ruler",
+    "rumour",
     "run",
     "runs",
     "s",
+    "sacks",
     "saddlebags",
     "safe",
     "safely",
     "safer",
+    "said",
     "same",
     "saved",
     "saw",
+    "say",
+    "says",
     "scale",
     "scarce",
     "schedule",
@@ -725,6 +799,7 @@
     "seal",
     "sealed",
     "season",
+    "second",
     "secrets",
     "see",
     "seeds",
@@ -732,16 +807,20 @@
     "seeks",
     "seen",
     "sell",
+    "send",
     "senn",
     "service",
+    "serving",
     "set",
     "settle",
     "settlement",
     "settlements",
+    "several",
     "shaking",
     "shall",
     "share",
     "sharpen",
+    "sharpening",
     "sheared",
     "shearing",
     "shears",
@@ -760,8 +839,10 @@
     "silven",
     "silverwick",
     "simple",
+    "since",
     "sings",
     "site",
+    "sits",
     "sky",
     "slain",
     "slaughter",
@@ -770,6 +851,7 @@
     "slaying",
     "slays",
     "sleeps",
+    "slept",
     "slew",
     "smaller",
     "smell",
@@ -777,13 +859,16 @@
     "smiles",
     "smoke",
     "so",
+    "soil",
     "some",
     "somehow",
     "someone",
     "something",
+    "soon",
     "sought",
     "southern",
     "space",
+    "spare",
     "spends",
     "spent",
     "spirebank",
@@ -800,6 +885,7 @@
     "steady",
     "still",
     "stolen",
+    "stomach",
     "stone",
     "stones",
     "stop",
@@ -809,6 +895,8 @@
     "stores",
     "stories",
     "story",
+    "straight",
+    "straighter",
     "stuff",
     "succeeded",
     "succeeds",
@@ -820,11 +908,16 @@
     "suppose",
     "sure",
     "survived",
+    "swear",
     "swords",
     "sworn",
+    "tables",
     "take",
     "takes",
     "taking",
+    "tale",
+    "talk",
+    "talking",
     "target",
     "taste",
     "taught",
@@ -850,6 +943,7 @@
     "this",
     "thora",
     "thornford",
+    "those",
     "thought",
     "three",
     "throne",
@@ -864,6 +958,7 @@
     "told",
     "toll",
     "tomas",
+    "tonight",
     "too",
     "took",
     "tool",
@@ -873,6 +968,8 @@
     "towns",
     "trade",
     "trailhead",
+    "travel",
+    "travelled",
     "traveller",
     "travels",
     "traversed",
@@ -896,8 +993,10 @@
     "two",
     "uncared",
     "under",
+    "understood",
     "unemployed",
     "unfunded",
+    "unsure",
     "until",
     "unwatched",
     "up",
@@ -911,11 +1010,13 @@
     "venn",
     "very",
     "view",
+    "wait",
     "waited",
     "waiting",
     "waits",
     "walk",
     "walked",
+    "walks",
     "wall",
     "walls",
     "want",
@@ -929,6 +1030,8 @@
     "warning",
     "was",
     "waste",
+    "watch",
+    "watching",
     "water",
     "way",
     "we",
@@ -949,16 +1052,20 @@
     "when",
     "where",
     "whether",
+    "which",
     "while",
     "who",
+    "whoever",
     "whole",
     "whose",
     "will",
     "wine",
     "winter",
     "wiped",
+    "wish",
     "with",
     "without",
+    "witness",
     "wolves",
     "wood",
     "woodcutting",
@@ -966,6 +1073,7 @@
     "woodpile",
     "wool",
     "word",
+    "words",
     "wore",
     "work",
     "worked",
@@ -973,6 +1081,8 @@
     "working",
     "works",
     "worn",
+    "worries",
+    "worrying",
     "worse",
     "worst",
     "worth",
@@ -980,18 +1090,25 @@
     "write",
     "writing",
     "written",
+    "wrong",
+    "wrote",
     "year",
     "yearling",
     "yearlings",
     "years",
     "yet",
     "you",
+    "your",
+    "yours",
+    "yourself",
     "élodie"
   ],
   "zero_sources": {
-    "crownless_v2.py": "8d84eb1e8f86fc1d73ad55ebb5a35269a4a41c9d7151e0855b662518aaa986a5",
+    "crownless_v2.py": "aa0d42e55809a8f75438473c8671bacd6bbb9fe5de8e327263f08903eddbe759",
     "crownless_v2_export.py": "59249330258aff74b7f206a03f85024cad0200e536df3d1a4eab2fde245c0a6a",
-    "speak_crownless_v2.py": "607b6051c2c06f95d2e34ad08e55d5bc4b768a19de77ce73dfda4d857de23140"
+    "speak_crownless_v2.py": "607b6051c2c06f95d2e34ad08e55d5bc4b768a19de77ce73dfda4d857de23140",
+    "crownless_conversation.py": "5c0bfa7ae7b0474ae73bdbf3b55318b59e0cf4d4c548d6806c09a2471bfb9b78",
+    "crownless_moves.py": "f56098be70fb0a8076b0601dfe69fc8363398c6a84b680916bc1a108f3f78560"
   },
   "cases": [
     {
@@ -1184,7 +1301,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Rosespire made bread from wheat."
+      "text": "Bread was made from wheat in Rosespire."
     },
     {
       "kind": 5,
@@ -1232,7 +1349,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Rosespire slaughtered cattle for beef when fodder ran short."
+      "text": "A fodder shortage led Rosespire to slaughter cattle for beef."
     },
     {
       "kind": 2,
@@ -1256,7 +1373,7 @@
       "confidence": 68,
       "retellings": 4,
       "history": [],
-      "text": "Rosespire made bread from wheat, so people say."
+      "text": "Bread was made from wheat in Rosespire, according to the word going round."
     },
     {
       "kind": 123,
@@ -1288,7 +1405,7 @@
       "confidence": 77,
       "retellings": 3,
       "history": [],
-      "text": "Rosespire slaughtered cattle for beef when fodder ran short."
+      "text": "A fodder shortage led Rosespire to slaughter cattle for beef."
     },
     {
       "kind": 133,
@@ -1312,7 +1429,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "There was hunger in Hollowbarrow."
+      "text": "Hunger was reported in Hollowbarrow."
     },
     {
       "kind": 133,
@@ -1344,7 +1461,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Rosespire made bread from wheat."
+      "text": "Bread was made from wheat in Rosespire."
     },
     {
       "kind": 5,
@@ -1392,7 +1509,7 @@
       "confidence": 56,
       "retellings": 5,
       "history": [],
-      "text": "There was hunger in Hollowbarrow, according to the word going round."
+      "text": "Hunger was reported in Hollowbarrow, so people say."
     },
     {
       "kind": 123,
@@ -1408,7 +1525,7 @@
       "confidence": 68,
       "retellings": 4,
       "history": [],
-      "text": "Rosespire made bread from wheat, so people say."
+      "text": "Bread was made from wheat in Rosespire, according to the word going round."
     },
     {
       "kind": 133,
@@ -1424,7 +1541,7 @@
       "confidence": 64,
       "retellings": 4,
       "history": [],
-      "text": "Rosespire slaughtered cattle for beef when fodder ran short, so people say."
+      "text": "A fodder shortage led Rosespire to slaughter cattle for beef, according to the word going round."
     },
     {
       "kind": 2,
@@ -1432,7 +1549,7 @@
       "confidence": 35,
       "retellings": 7,
       "history": [],
-      "text": "There was hunger in Hollowbarrow, if the rumour is true."
+      "text": "Hunger was reported in Hollowbarrow, if the story is right."
     },
     {
       "kind": 5,
@@ -1464,7 +1581,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "There was hunger in Hollowbarrow."
+      "text": "Hunger was reported in Hollowbarrow."
     },
     {
       "kind": 5,
@@ -1480,7 +1597,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Silverwick slaughtered cattle for beef when fodder ran short."
+      "text": "A fodder shortage led Silverwick to slaughter cattle for beef."
     },
     {
       "kind": 116,
@@ -1664,7 +1781,7 @@
       "confidence": 56,
       "retellings": 5,
       "history": [],
-      "text": "There was hunger in Hollowbarrow, according to the word going round."
+      "text": "Hunger was reported in Hollowbarrow, so people say."
     },
     {
       "kind": 116,
@@ -1904,7 +2021,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Rosespire made bread from wheat."
+      "text": "Bread was made from wheat in Rosespire."
     },
     {
       "kind": 2,
@@ -1912,7 +2029,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "There was hunger in Hollowbarrow."
+      "text": "Hunger was reported in Hollowbarrow."
     },
     {
       "kind": 120,
@@ -1954,7 +2071,7 @@
       "history": [
         "How sure are you?"
       ],
-      "text": "I have it asks."
+      "text": "I would not enter it on hearsay."
     },
     {
       "kind": 0,
@@ -1964,7 +2081,7 @@
       "history": [
         "Who told you?"
       ],
-      "text": "That is the account I hold."
+      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, if the rumour is true."
     },
     {
       "kind": 0,
@@ -1974,7 +2091,7 @@
       "history": [
         "We should ask someone who was there."
       ],
-      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, if the rumour is true."
+      "text": "We should ask someone who was there."
     },
     {
       "kind": 0,
@@ -1984,7 +2101,7 @@
       "history": [
         "Agreed. Let us leave it there for now."
       ],
-      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, if the rumour is true."
+      "text": "Ask someone who saw it. I need to know."
     },
     {
       "kind": 0,
@@ -1994,7 +2111,7 @@
       "history": [
         "How sure are you?"
       ],
-      "text": "The account eye how it hold not say."
+      "text": "I would not enter it on hearsay."
     },
     {
       "kind": 0,
@@ -2004,7 +2121,7 @@
       "history": [
         "Who told you?"
       ],
-      "text": "That is the account I hold."
+      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, according to the word going round."
     },
     {
       "kind": 0,
@@ -2014,7 +2131,7 @@
       "history": [
         "We should ask someone who was there."
       ],
-      "text": "I will not record it until a witness."
+      "text": "We should ask someone who was there."
     },
     {
       "kind": 0,
@@ -2024,7 +2141,7 @@
       "history": [
         "Agreed. Let us leave it there for now."
       ],
-      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, according to the word going round."
+      "text": "Ask someone who saw it. I need to know."
     },
     {
       "kind": 0,
@@ -2042,7 +2159,7 @@
       "history": [
         "Thornford's drought harvest fell short of what the eastern settlements needed."
       ],
-      "text": "The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round."
+      "text": "We should ask someone who was there."
     },
     {
       "kind": 0,
@@ -2053,7 +2170,7 @@
         "Thornford's drought harvest fell short of what the eastern settlements needed.",
         "I heard a different account. The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round. How sure are you?"
       ],
-      "text": "That is the account I hold."
+      "text": "I stand by what I said."
     },
     {
       "kind": 0,
@@ -2065,7 +2182,7 @@
         "I heard a different account. The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round. How sure are you?",
         "That is the account I hold. We should ask someone who was there."
       ],
-      "text": "The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round."
+      "text": "We should ask someone who was there."
     },
     {
       "kind": 0,
@@ -2078,7 +2195,7 @@
         "That is the account I hold. We should ask someone who was there.",
         "Let's ask around before we pass it on."
       ],
-      "text": "Agreed. Let us leave it there for now."
+      "text": "Ask someone who saw it. I need to know."
     },
     {
       "kind": 0,
@@ -2091,7 +2208,7 @@
         "Let's ask around before we pass it on.",
         "Agreed. Let's leave it there for now."
       ],
-      "text": "The next town before hold."
+      "text": "We should ask someone who was there."
     },
     {
       "kind": 133,
@@ -2130,7 +2247,7 @@
       "memories": [],
       "thoughts": [],
       "history": [],
-      "text": "I should hide what little we have before they return."
+      "text": "The town needs to post guards before the next raid."
     },
     {
       "kind": 133,
@@ -2143,7 +2260,7 @@
       "history": [
         "What have you heard?"
       ],
-      "text": "I heard that hold, and I will have more."
+      "text": "I will keep an ear out."
     },
     {
       "kind": 123,
@@ -2156,7 +2273,7 @@
         "I will keep calm. Every loaf counts."
       ],
       "history": [],
-      "text": "I heard a different account. Rosespire made paper from Wood, so people say. How sure are you?"
+      "text": "I heard it otherwise. Paper was made from Wood in Rosespire, according to the word going round. How sure are you?"
     },
     {
       "kind": 116,
@@ -2169,7 +2286,7 @@
       ],
       "thoughts": [],
       "history": [],
-      "text": "It is well travelled. Maybe things are turning around."
+      "text": "I would rather hear it from a witness."
     },
     {
       "kind": 120,
@@ -2206,7 +2323,7 @@
         "I will keep calm. Every loaf counts."
       ],
       "history": [],
-      "text": "That will do until we know more."
+      "text": "Agreed. I have loaves waiting."
     },
     {
       "kind": 120,
@@ -2219,7 +2336,7 @@
       "history": [
         "What have you heard?"
       ],
-      "text": "Lambs were raised in Alderwatch, where yearlings joined the adult flock, according to the word going round."
+      "text": "Alderwatch raised lambs and added yearlings to the adult flock, so people say."
     }
   ],
   "tokenizer": [

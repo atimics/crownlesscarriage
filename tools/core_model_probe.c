@@ -135,10 +135,17 @@ int main(int argc, char **argv)
                 for (int i = 0; i < count; ++i) (void)printf("%s%.6f", i == 0 ? "" : " ", (double)hidden[i]);
                 (void)puts("");
             } else if (dump_meta) {
-                int meta[4096 * 5];
-                int count = CcCoreModelPrefixMeta(model, meta, 4096 * 5);
-                for (int i = 0; i < count; ++i) (void)printf("%s%d,%d,%d,%d,%d", i == 0 ? "" : " ",
-                    meta[i * 5], meta[i * 5 + 1], meta[i * 5 + 2], meta[i * 5 + 3], meta[i * 5 + 4]);
+                /* Nine fields now: the five that mark a copied span, then the
+                   four stance ids. A wrong id is invisible in the decoded
+                   prompt, so this dump is the only way parity stays honest. */
+                enum { PROBE_META = 9 };
+                int meta[4096 * PROBE_META];
+                int count = CcCoreModelPrefixMeta(model, meta, 4096 * PROBE_META);
+                for (int i = 0; i < count; ++i) {
+                    (void)printf("%s", i == 0 ? "" : " ");
+                    for (int k = 0; k < PROBE_META; ++k)
+                        (void)printf("%s%d", k == 0 ? "" : ",", meta[i * PROBE_META + k]);
+                }
                 (void)puts("");
             } else {
                 int count = CcCoreModelPrefixTokens(model, out, 4096);
