@@ -52,6 +52,10 @@ unknown = subprocess.run(args + ['--mind','fletcher:keep_order:low:high:remark']
                          capture_output=True, text=True)
 assert unknown.returncode == 0 and unknown.stdout.strip()
 assert 'unknown voice' in unknown.stderr, 'a mistyped voice must not pass silently'
+strange = subprocess.run(args + ['--mind','baker:keep_order:low:high:remark:0:1:0:0:0:empire:0'],
+                         capture_output=True, text=True)
+assert strange.returncode == 0 and strange.stdout.strip()
+assert 'unknown faction' in strange.stderr, 'a mistyped faction must not pass silently'
 with tempfile.TemporaryDirectory() as folder:
     path = Path(folder)/'bad.ccv2'
     damaged = bytearray(model.read_bytes()); damaged[-1] ^= 1

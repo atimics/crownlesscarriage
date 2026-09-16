@@ -34,6 +34,14 @@ static CcCoreControl ControlId(const char *name)
     return CC_CORE_CONTROL_REMARK;
 }
 
+static CcCoreFaction FactionId(const char *name)
+{
+    if (strcmp(name, "crown") == 0) return CC_CORE_FACTION_CROWN;
+    if (strcmp(name, "guild") == 0) return CC_CORE_FACTION_GUILD;
+    if (strcmp(name, "commons") == 0) return CC_CORE_FACTION_COMMONS;
+    return CC_CORE_FACTION_NONE;
+}
+
 int main(int argc, char **argv)
 {
     if (argc == 3 && strcmp(argv[1], "--encode") == 0) {
@@ -67,7 +75,7 @@ int main(int argc, char **argv)
        Present spec parts overwrite these below; absent ones keep them. */
     mind.sheltered = true;
     CcCoreControl control = CC_CORE_CONTROL_SAY;
-    bool use_mind = false, dump = false;
+    bool use_mind = false, dump = false, faction_unknown = false;
     for (int i = 6; i < argc; ++i) {
         if (strcmp(argv[i], "--mind") == 0 && i + 1 < argc) {
             use_mind = true;
@@ -77,7 +85,7 @@ int main(int argc, char **argv)
             (void)snprintf(spec, sizeof(spec), "%s", argv[++i]);
             char *at = spec;
             int part = 0;
-            while (at != NULL && part < 8) {
+            while (at != NULL && part < 12) {
                 char *sep = strchr(at, ':');
                 if (sep != NULL) *sep = '\0';
                 if (part == 0) mind.voice = at[0] != '\0' ? at : NULL;
@@ -87,7 +95,15 @@ int main(int argc, char **argv)
                 else if (part == 4) control = ControlId(at);
                 else if (part == 5) mind.hungry = at[0] == '1';
                 else if (part == 6) mind.sheltered = at[0] == '1';
-                else mind.in_transit = at[0] == '1';
+                else if (part == 7) mind.in_transit = at[0] == '1';
+                else if (part == 8) mind.owes_listener = at[0] == '1';
+                else if (part == 9) mind.trusts_listener = at[0] == '1';
+                else if (part == 10) {
+                    mind.faction = FactionId(at);
+                    if (at[0] != '\0' && mind.faction == CC_CORE_FACTION_NONE)
+                        faction_unknown = true;
+                }
+                else mind.far_from_home = at[0] == '1';
                 at = sep != NULL ? sep + 1 : NULL;
                 ++part;
             }
@@ -136,6 +152,8 @@ int main(int argc, char **argv)
     if (use_mind && mind.voice != NULL && CcCoreModelVoiceId(mind.voice) == 0)
         (void)fprintf(stderr, "warning: unknown voice '%s' conditions on no stance\n",
                       mind.voice);
+    if (use_mind && faction_unknown)
+        (void)fprintf(stderr, "warning: unknown faction gates the faction table off\n");
     if (dump) {
         int out[4096];
         bool works = use_mind ? CcCoreModelBeginMind(model, &account, 1U, spoken, spoken_count, &mind, control)
@@ -148,11 +166,11 @@ int main(int argc, char **argv)
                 for (int i = 0; i < count; ++i) (void)printf("%s%.6f", i == 0 ? "" : " ", (double)hidden[i]);
                 (void)puts("");
             } else if (dump_meta) {
-                /* Twelve fields now: the five that mark a copied span, the four
-                   stance ids, then hungry, sheltered, in_transit. A wrong id
-                   is invisible in the decoded prompt, so this dump is the only
-                   way parity stays honest. */
-                enum { PROBE_META = 12 };
+                /* Sixteen fields now: the five that mark a copied span, the four
+                   stance ids, hungry, sheltered, in_transit, owes, trusts,
+                   faction, far. A wrong id is invisible in the decoded prompt,
+                   so this dump is the only way parity stays honest. */
+                enum { PROBE_META = 16 };
                 int meta[4096 * PROBE_META];
                 int count = CcCoreModelPrefixMeta(model, meta, 4096 * PROBE_META);
                 for (int i = 0; i < count; ++i) {

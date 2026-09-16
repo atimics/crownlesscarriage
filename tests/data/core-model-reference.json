@@ -1,5 +1,5 @@
 {
-  "model_sha256": "96544becb7a76da742007b783a27cad82654b89169c0454630a1800f7b7bda00",
+  "model_sha256": "be69b01ffe045b86008a0d98c749a76a6720bd9ab57d0c62ddcfaa9e390b6684",
   "vocabulary": [
     "a",
     "abbacy",
@@ -20,6 +20,7 @@
     "against",
     "age",
     "ago",
+    "agree",
     "agreed",
     "agrees",
     "ahead",
@@ -42,6 +43,7 @@
     "anointing",
     "anoints",
     "another",
+    "answer",
     "answers",
     "anvil",
     "any",
@@ -95,6 +97,7 @@
     "being",
     "believe",
     "believed",
+    "belly",
     "best",
     "better",
     "between",
@@ -138,6 +141,8 @@
     "buy",
     "by",
     "calf",
+    "call",
+    "calls",
     "calm",
     "calves",
     "calving",
@@ -221,6 +226,7 @@
     "crumbles",
     "cult",
     "cup",
+    "custom",
     "customers",
     "cut",
     "cuts",
@@ -247,6 +253,7 @@
     "different",
     "differently",
     "displaced",
+    "distance",
     "distant",
     "district",
     "ditch",
@@ -260,6 +267,7 @@
     "dough",
     "down",
     "dragon",
+    "dream",
     "drift",
     "drink",
     "drought",
@@ -272,6 +280,7 @@
     "ear",
     "early",
     "earn",
+    "ears",
     "easier",
     "eastern",
     "easy",
@@ -290,6 +299,7 @@
     "enter",
     "enters",
     "entry",
+    "even",
     "evening",
     "every",
     "everyone",
@@ -314,6 +324,7 @@
     "fast",
     "faster",
     "fat",
+    "favor",
     "fear",
     "fed",
     "feed",
@@ -371,6 +382,7 @@
     "gems",
     "get",
     "gets",
+    "getting",
     "give",
     "gives",
     "gloamgate",
@@ -384,6 +396,7 @@
     "gone",
     "good",
     "goods",
+    "got",
     "governing",
     "grain",
     "granaries",
@@ -397,8 +410,10 @@
     "guarded",
     "guards",
     "guess",
+    "guessing",
     "guest",
     "guests",
+    "guild",
     "had",
     "half",
     "hammer",
@@ -421,6 +436,7 @@
     "hears",
     "hearsay",
     "heart",
+    "hearth",
     "heavy",
     "held",
     "herd",
@@ -481,6 +497,7 @@
     "knead",
     "know",
     "knowing",
+    "known",
     "knows",
     "lack",
     "lacking",
@@ -505,6 +522,7 @@
     "leaving",
     "led",
     "ledger",
+    "ledgers",
     "left",
     "leftovers",
     "legal",
@@ -517,6 +535,7 @@
     "lift",
     "light",
     "like",
+    "likewise",
     "line",
     "little",
     "living",
@@ -562,6 +581,7 @@
     "men",
     "mend",
     "message",
+    "miles",
     "mill",
     "milled",
     "mills",
@@ -573,6 +593,7 @@
     "money",
     "moon",
     "more",
+    "morning",
     "most",
     "mouths",
     "move",
@@ -581,6 +602,7 @@
     "must",
     "mutton",
     "my",
+    "myself",
     "nails",
     "name",
     "named",
@@ -591,6 +613,7 @@
     "needs",
     "neglected",
     "negotiable",
+    "neighbors",
     "neighbours",
     "network",
     "new",
@@ -635,6 +658,9 @@
     "oven",
     "ovens",
     "over",
+    "owe",
+    "owed",
+    "owes",
     "own",
     "page",
     "panic",
@@ -645,6 +671,7 @@
     "party",
     "pass",
     "passed",
+    "passing",
     "pasture",
     "paths",
     "patience",
@@ -762,6 +789,7 @@
     "roadside",
     "roll",
     "rolls",
+    "roof",
     "room",
     "roost",
     "rose",
@@ -813,6 +841,7 @@
     "serving",
     "set",
     "settle",
+    "settled",
     "settlement",
     "settlements",
     "several",
@@ -833,6 +862,7 @@
     "shortage",
     "should",
     "shoulders",
+    "shows",
     "shrinking",
     "shut",
     "silence",
@@ -866,6 +896,7 @@
     "something",
     "soon",
     "sought",
+    "sound",
     "southern",
     "space",
     "spare",
@@ -877,6 +908,7 @@
     "split",
     "spread",
     "spring",
+    "square",
     "stable",
     "stand",
     "star",
@@ -901,6 +933,8 @@
     "succeeded",
     "succeeds",
     "succession",
+    "such",
+    "supper",
     "supplied",
     "supplies",
     "supply",
@@ -911,6 +945,7 @@
     "swear",
     "swords",
     "sworn",
+    "table",
     "tables",
     "take",
     "takes",
@@ -928,6 +963,7 @@
     "thank",
     "thanked",
     "thankful",
+    "thanks",
     "that",
     "the",
     "their",
@@ -945,6 +981,7 @@
     "thornford",
     "those",
     "thought",
+    "thoughts",
     "three",
     "throne",
     "through",
@@ -1000,6 +1037,7 @@
     "until",
     "unwatched",
     "up",
+    "urgent",
     "us",
     "use",
     "used",
@@ -1067,6 +1105,7 @@
     "without",
     "witness",
     "wolves",
+    "wonder",
     "wood",
     "woodcutting",
     "woodlot",
@@ -1096,6 +1135,7 @@
     "yearling",
     "yearlings",
     "years",
+    "yesterday",
     "yet",
     "you",
     "your",
@@ -1104,11 +1144,11 @@
     "élodie"
   ],
   "zero_sources": {
-    "crownless_v2.py": "6a3ed3de487bc0e736dd7c7e136f6f5202b3f4d7f2fde07a16be24efe4699133",
+    "crownless_v2.py": "5ede4180a100ce6bd4c8f688486757c29e74994f264ce5f9a453a5f84a61da7f",
     "crownless_v2_export.py": "59249330258aff74b7f206a03f85024cad0200e536df3d1a4eab2fde245c0a6a",
-    "speak_crownless_v2.py": "15853fb503269a44a1539644b5f399d3bb1dc6c50b9e052facb77336298bbb13",
+    "speak_crownless_v2.py": "773bf6c008fa364afaf6e059998400b3723013805c9779893b36778f891b5725",
     "crownless_conversation.py": "5c0bfa7ae7b0474ae73bdbf3b55318b59e0cf4d4c548d6806c09a2471bfb9b78",
-    "crownless_moves.py": "44fbda5d24e9dc4ef481334446583999892aaec74c40764084f7735f294eaafe"
+    "crownless_moves.py": "af3b0bc58b3d7615c26225d0d07226bc5a9d806b50aa5bb638af44ac81226518"
   },
   "cases": [
     {
@@ -1133,7 +1173,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Silverwick was short of its food reserve target."
+      "text": "Food stores in Silverwick fell short of the reserve target."
     },
     {
       "kind": 133,
@@ -1213,7 +1253,7 @@
       "confidence": 57,
       "retellings": 5,
       "history": [],
-      "text": "Silverwick was short of its food reserve target, so people say."
+      "text": "Food stores in Silverwick fell short of the reserve target, according to the word going round."
     },
     {
       "kind": 133,
@@ -1269,7 +1309,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Gloamgate was short of its food reserve target."
+      "text": "Food stores in Gloamgate fell short of the reserve target."
     },
     {
       "kind": 118,
@@ -1301,7 +1341,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Rosespire made bread from wheat."
+      "text": "Bread was made from wheat in Rosespire."
     },
     {
       "kind": 5,
@@ -1357,7 +1397,7 @@
       "confidence": 66,
       "retellings": 4,
       "history": [],
-      "text": "Gloamgate was short of its food reserve target, so people say."
+      "text": "Food stores in Gloamgate fell short of the reserve target, according to the word going round."
     },
     {
       "kind": 49,
@@ -1373,7 +1413,7 @@
       "confidence": 68,
       "retellings": 4,
       "history": [],
-      "text": "Rosespire made bread from wheat, so people say."
+      "text": "Bread was made from wheat in Rosespire, according to the word going round."
     },
     {
       "kind": 123,
@@ -1397,7 +1437,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Hollowbarrow was short of its food reserve target."
+      "text": "Food stores in Hollowbarrow fell short of the reserve target."
     },
     {
       "kind": 79,
@@ -1421,7 +1461,7 @@
       "confidence": 65,
       "retellings": 4,
       "history": [],
-      "text": "Silverwick quarried stone for roads and public works, so people say."
+      "text": "Stone for roads and public works came from Silverwick, according to the word going round."
     },
     {
       "kind": 2,
@@ -1445,7 +1485,7 @@
       "confidence": 59,
       "retellings": 5,
       "history": [],
-      "text": "Hollowbarrow was short of its food reserve target, so people say."
+      "text": "Food stores in Hollowbarrow fell short of the reserve target, according to the word going round."
     },
     {
       "kind": 5,
@@ -1461,7 +1501,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Rosespire made bread from wheat."
+      "text": "Bread was made from wheat in Rosespire."
     },
     {
       "kind": 5,
@@ -1477,7 +1517,7 @@
       "confidence": 51,
       "retellings": 5,
       "history": [],
-      "text": "Gloamgate Moon Cup was completed in Gloamgate, according to the word going round."
+      "text": "Gloamgate finished making Gloamgate Moon Cup, so people say."
     },
     {
       "kind": 5,
@@ -1525,7 +1565,7 @@
       "confidence": 68,
       "retellings": 4,
       "history": [],
-      "text": "Rosespire made bread from wheat, so people say."
+      "text": "Bread was made from wheat in Rosespire, according to the word going round."
     },
     {
       "kind": 133,
@@ -2021,7 +2061,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Rosespire made bread from wheat."
+      "text": "Bread was made from wheat in Rosespire."
     },
     {
       "kind": 2,
@@ -2159,7 +2199,7 @@
       "history": [
         "Thornford's drought harvest fell short of what the eastern settlements needed."
       ],
-      "text": "The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round."
+      "text": "Thornford's drought harvest fell short of what the southern settlements needed, so people say."
     },
     {
       "kind": 0,
@@ -2170,7 +2210,7 @@
         "Thornford's drought harvest fell short of what the eastern settlements needed.",
         "I heard a different account. The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round. How sure are you?"
       ],
-      "text": "I stand by what I said."
+      "text": "I have it as I told it."
     },
     {
       "kind": 0,
@@ -2182,7 +2222,7 @@
         "I heard a different account. The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round. How sure are you?",
         "That is the account I hold. We should ask someone who was there."
       ],
-      "text": "We should ask someone who was there."
+      "text": "The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round."
     },
     {
       "kind": 0,
@@ -2195,7 +2235,7 @@
         "That is the account I hold. We should ask someone who was there.",
         "Let's ask around before we pass it on."
       ],
-      "text": "Ask someone who saw it. I need to know."
+      "text": "The drought harvest in Thornford fell short of supplies for the eastern settlements."
     },
     {
       "kind": 0,
@@ -2208,14 +2248,14 @@
         "Let's ask around before we pass it on.",
         "Agreed. Let's leave it there for now."
       ],
-      "text": "We should ask someone who was there."
+      "text": "Ask someone who saw it. I need to know."
     },
     {
       "kind": 133,
       "account": "Mara Venn posts a notice at Thornford: Relief charter.",
       "confidence": 93,
       "retellings": 1,
-      "mind": ":secure_livelihood:high:medium:open:0:0:0",
+      "mind": ":secure_livelihood:high:medium:open:0:0:0:1:1:commons:0",
       "memories": [
         "Mara Venn posted a notice about Relief charter in Thornford."
       ],
@@ -2232,105 +2272,105 @@
       "account": "Silverwick has 29 food in store. Its reserve target is 78.",
       "confidence": 57,
       "retellings": 5,
-      "mind": "smith:secure_livelihood:low:high:answer:0:0:0",
+      "mind": "scribe:secure_livelihood:medium:medium:answer:1:1:1:0:1::0",
       "memories": [],
       "thoughts": [],
       "history": [],
-      "text": "Silverwick was short of its food reserve target, so people say."
+      "text": "Hunger was reported in Silverwick, so people say."
     },
     {
       "kind": 5,
       "account": "Harthwin Orehauler joins The Ditch Parliament after 3 days seeking food at Gloamgate.",
       "confidence": 93,
       "retellings": 1,
-      "mind": "baker:secure_livelihood:medium:high:remark:1:1:0",
+      "mind": "smith:secure_livelihood:medium:high:remark:0:0:1:0:0:crown:0",
       "memories": [],
       "thoughts": [],
       "history": [],
-      "text": "I carry it to keep ear. I should find shelter before nightfall."
+      "text": "I from have to it three times this week. I should find shelter before nightfall."
     },
     {
       "kind": 133,
       "account": "Thora Barleycroft posts a notice at Thornford: Relief charter.",
       "confidence": 29,
       "retellings": 8,
-      "mind": ":secure_livelihood:medium:high:affirm:0:0:1",
+      "mind": ":survive_crisis:high:low:affirm:0:0:0:0:1:guild:1",
       "memories": [],
       "thoughts": [],
       "history": [
         "What have you heard?"
       ],
-      "text": "I will keep an ear out."
+      "text": "Between you and me. It came from someone who was there, if the rumour is true. I am still counting what remains."
     },
     {
       "kind": 123,
       "account": "Rosespire's mill uses 1 Wood to make 4 Paper.",
       "confidence": 68,
       "retellings": 4,
-      "mind": "smith:secure_livelihood:low:low:dispute:0:1:0",
+      "mind": "scribe:secure_livelihood:low:high:dispute:0:1:1:1:0::0",
       "memories": [],
       "thoughts": [
         "I will keep calm. Every loaf counts."
       ],
       "history": [],
-      "text": "I heard a different account. Rosespire made paper from Wood, so people say. How sure are you?"
+      "text": "I heard a different account. Paper was made from Wood in Rosespire, according to the word going round. How sure are you?"
     },
     {
       "kind": 116,
       "account": "Gloamgate's woodlot cuts 3 Wood and wears one Tools bundle.",
       "confidence": 100,
       "retellings": 0,
-      "mind": "scribe:survive_crisis:medium:low:hedge:1:0:1",
+      "mind": "farmer:secure_livelihood:low:medium:hedge:1:1:1:0:0:commons:0",
       "memories": [
         "Mara Venn posted a notice about Relief charter in Thornford."
       ],
       "thoughts": [],
       "history": [],
-      "text": "I have a different account. Gloamgate cut wood and wore out tools. How sure are you?"
+      "text": "My belly has been empty two days. That is the account I hold."
     },
     {
       "kind": 120,
       "account": "Silverwick's flock raises 3 new lambs; 3 yearlings join the adult flock.",
       "confidence": 100,
       "retellings": 0,
-      "mind": ":survive_crisis:low:low:attribute:1:0:1",
+      "mind": ":survive_crisis:low:low:attribute:1:1:0:0:1:commons:0",
       "memories": [],
       "thoughts": [],
       "history": [
         "What have you heard?"
       ],
-      "text": "I had it from someone close to it."
+      "text": "For your ears only. It came from someone who was there, as I understood it."
     },
     {
       "kind": 13,
       "account": "Star Oath moves 28 crowns into Hollowbarrow's market to buy real grain shipments.",
       "confidence": 46,
       "retellings": 5,
-      "mind": "smith:secure_livelihood:medium:medium:defer:0:0:0",
+      "mind": "baker:secure_livelihood:low:low:defer:0:0:0:1:0:commons:1",
       "memories": [],
       "thoughts": [],
       "history": [],
-      "text": "Money from Star Oath went into the market at Hollowbarrow to buy grain shipments, according to the word going round."
+      "text": "For you, I will ask it myself. I am only passing through. Ask someone who was there."
     },
     {
       "kind": 78,
       "account": "Silverwick's cattle herd raises 1 new calf; 1 older calf join the working herd.",
       "confidence": 100,
       "retellings": 0,
-      "mind": "scribe:keep_order:medium:low:settle:0:0:1",
+      "mind": "baker:secure_livelihood:high:high:settle:1:0:1:1:1:guild:0",
       "memories": [],
       "thoughts": [
         "I will keep calm. Every loaf counts."
       ],
       "history": [],
-      "text": "Agreed. Let us leave it there for now."
+      "text": "Call us even and leave it there. I cannot think on an empty stomach. Leave it. I want them counted before dark."
     },
     {
       "kind": 120,
       "account": "Alderwatch's flock raises 6 new lambs; 6 yearlings join the adult flock.",
       "confidence": 46,
       "retellings": 5,
-      "mind": ":survive_crisis:high:low:part:0:1:0",
+      "mind": ":secure_livelihood:high:medium:part:0:0:1:1:1:crown:0",
       "memories": [],
       "thoughts": [],
       "history": [

@@ -7,7 +7,7 @@ from pathlib import Path
 import struct
 
 ROOT = Path(__file__).resolve().parents[2]
-MODEL_SHA = '96544becb7a76da742007b783a27cad82654b89169c0454630a1800f7b7bda00'
+MODEL_SHA = 'be69b01ffe045b86008a0d98c749a76a6720bd9ab57d0c62ddcfaa9e390b6684'
 TOKENIZER_SHA = 'c572de53eb4e739a8ce941ac03d1d5fb6173623af786787cf786b41fd34e9af4'
 
 
@@ -41,6 +41,8 @@ def compile_tables():
                         ('CORE_GOALS', 'goals.weight'), ('CORE_STRESSES', 'stresses.weight'),
                         ('CORE_COURAGES', 'courages.weight'), ('CORE_HUNGRY', 'hungry.weight'),
                         ('CORE_SHELTERED', 'sheltered.weight'), ('CORE_INTRANSIT', 'in_transit.weight'),
+                        ('CORE_OWES', 'owes.weight'), ('CORE_TRUSTS', 'trusts.weight'),
+                        ('CORE_FACTION', 'faction.weight'), ('CORE_FAR', 'far.weight'),
                         ('CORE_NORM', 'norm.weight'), ('CORE_COPY_START', 'copy_start.weight'),
                         ('CORE_COPY_END', 'copy_end.weight'), ('CORE_COPY_GATE', 'copy_gate.weight'),
                         ('CORE_COPY_BIAS', 'copy_gate.bias')):
