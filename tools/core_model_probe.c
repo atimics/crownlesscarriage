@@ -57,6 +57,7 @@ int main(int argc, char **argv)
     bool dump_meta = false, dump_hidden = false;
     const char *history_text[MAX_HISTORY] = {0};
     int history_count = 0;
+    char spec[256] = {0};
     CcCoreMind mind = {0};
     mind.goal = CC_CORE_GOAL_SECURE_LIVELIHOOD;
     mind.stress = CC_CORE_LEVEL_MEDIUM;
@@ -67,7 +68,9 @@ int main(int argc, char **argv)
     for (int i = 6; i < argc; ++i) {
         if (strcmp(argv[i], "--mind") == 0 && i + 1 < argc) {
             use_mind = true;
-            char spec[256];
+            /* mind.voice points into this buffer, so it has to outlive the
+               branch that fills it: the prompt is built after the whole
+               argument vector is parsed. */
             (void)snprintf(spec, sizeof(spec), "%s", argv[++i]);
             char *at = spec;
             int part = 0;
