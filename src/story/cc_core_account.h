@@ -65,6 +65,12 @@ typedef struct CcCoreMind {
        this model does perfectly. */
     const char *read[CC_CORE_MIND_LINES];
     size_t read_count;
+    /* Where the body is, not who holds it: hungry, sheltered and in transit
+       ride the meta channel as three binary ids. The conversation fills these
+       from live character state; the probe takes them as trailing 0/1 parts. */
+    bool hungry;
+    bool sheltered;
+    bool in_transit;
 } CcCoreMind;
 
 /* Parse the supplied held telling. The caller owns its evidence. */

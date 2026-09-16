@@ -7,7 +7,7 @@ from pathlib import Path
 import struct
 
 ROOT = Path(__file__).resolve().parents[2]
-MODEL_SHA = 'd495451a8e353757289ef7f304f3cda333e0f6a680aea545eee073a6a9159800'
+MODEL_SHA = '96544becb7a76da742007b783a27cad82654b89169c0454630a1800f7b7bda00'
 TOKENIZER_SHA = 'c572de53eb4e739a8ce941ac03d1d5fb6173623af786787cf786b41fd34e9af4'
 
 
@@ -39,7 +39,11 @@ def compile_tables():
     lines.append('/* Tensor indices, by name, because export order is not ours to assume. */')
     for label, name in (('CORE_BLOCK_BASE', 'blocks.0.n1.weight'), ('CORE_VOICES', 'voices.weight'),
                         ('CORE_GOALS', 'goals.weight'), ('CORE_STRESSES', 'stresses.weight'),
-                        ('CORE_COURAGES', 'courages.weight')):
+                        ('CORE_COURAGES', 'courages.weight'), ('CORE_HUNGRY', 'hungry.weight'),
+                        ('CORE_SHELTERED', 'sheltered.weight'), ('CORE_INTRANSIT', 'in_transit.weight'),
+                        ('CORE_NORM', 'norm.weight'), ('CORE_COPY_START', 'copy_start.weight'),
+                        ('CORE_COPY_END', 'copy_end.weight'), ('CORE_COPY_GATE', 'copy_gate.weight'),
+                        ('CORE_COPY_BIAS', 'copy_gate.bias')):
         if name in names: lines.append('#define %s %d' % (label, names.index(name)))
     lines.append('static const CoreMeaning CORE_MEANINGS[] = {')
     for name, index in sorted(header['meaning_ids'].items()):
