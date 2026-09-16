@@ -20,9 +20,20 @@ typedef enum CcCoreGoal {
 typedef enum CcCoreLevel {
     CC_CORE_LEVEL_LOW, CC_CORE_LEVEL_MEDIUM, CC_CORE_LEVEL_HIGH
 } CcCoreLevel;
+/* The move a turn performs. The cue that closes the prompt names it directly:
+   cueing the channel instead leaves ten of these behind a single "say", and the
+   model cannot tell which of five targets is wanted. */
 typedef enum CcCoreControl {
-    CC_CORE_CONTROL_SAY, CC_CORE_CONTROL_THINK, CC_CORE_CONTROL_REMEMBER
+    CC_CORE_CONTROL_OPEN, CC_CORE_CONTROL_ANSWER, CC_CORE_CONTROL_REMARK,
+    CC_CORE_CONTROL_AFFIRM, CC_CORE_CONTROL_DISPUTE, CC_CORE_CONTROL_HEDGE,
+    CC_CORE_CONTROL_ATTRIBUTE, CC_CORE_CONTROL_DEFER, CC_CORE_CONTROL_SETTLE,
+    CC_CORE_CONTROL_PART, CC_CORE_CONTROL_RECALL, CC_CORE_CONTROL_MUSE,
+    CC_CORE_CONTROL_COUNT
 } CcCoreControl;
+/* The three cues that predate the move axis, kept so callers still build. */
+#define CC_CORE_CONTROL_SAY CC_CORE_CONTROL_REMARK
+#define CC_CORE_CONTROL_THINK CC_CORE_CONTROL_MUSE
+#define CC_CORE_CONTROL_REMEMBER CC_CORE_CONTROL_RECALL
 typedef struct CcCoreField {
     size_t start, length; /* UTF-8 byte offsets into the held text. */
     CcCoreRole role;

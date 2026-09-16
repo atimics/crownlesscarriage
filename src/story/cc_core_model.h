@@ -32,6 +32,16 @@ bool CcCoreModelGenerateMind(CcCoreModel *model, const CcCoreAccount *account,
                              CcId speaker, const CcCoreSpoken *history, size_t count,
                              const CcCoreMind *mind, CcCoreControl control,
                              char *text, size_t capacity);
+/* The cue a caller with no move in mind should use for this much history. */
+CcCoreControl CcCoreControlPlain(size_t history_count);
 /* Tokenizer inspection for parity tests. */
 int CcCoreModelEncode(const char *text, int *tokens, int capacity);
+/* Prefix token inspection for parity tests. */
+int CcCoreModelPrefixTokens(const CcCoreModel *model, int *tokens, int capacity);
+/* Prefix meta inspection for parity tests. */
+int CcCoreModelPrefixMeta(const CcCoreModel *model, int *meta, int capacity);
+/* Hidden-state inspection for parity tests. */
+int CcCoreModelHidden(const CcCoreModel *model, float *hidden, int capacity);
+/* Run the prefix so the final hidden state can be read. */
+bool CcCoreModelRunPrefix(CcCoreModel *model);
 #endif

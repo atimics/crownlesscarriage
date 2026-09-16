@@ -12,6 +12,7 @@ format consumed by the ZERO conversation trainer.
 """
 import argparse
 import hashlib
+import itertools
 import json
 import random
 import re
@@ -222,7 +223,10 @@ def build_base_row(sim_row, packet, rules, rng, split, index, override=None):
         mind = dict(mind, **{k: v for k, v in override.items() if v is not None})
         witnessed = mind['witnessed']
         cue = ('? ' if confidence < 40 else '') + ('~ ' if retold else '') + ('! ' if witnessed else '')
+    # How much the character recalls varies: a resident met on the first day
+    # holds nothing, so zero, one, and two memories all have to be common.
     memories = [e['text'] for e in sim_row['events'][:-1]][-2:]
+    memories = memories[len(memories) - rng.choice((0, 1, 2)):] if memories else []
     lines = []
     lines.append('# goal: ' + mind['goal'])
     lines.append('# stress: ' + mind['stress'])
@@ -288,6 +292,14 @@ def build(output, probe, batch_binary, seeds, days, limit=25000, seed=20260919):
     split_limits = {'train': limit, 'validation': held_out, 'test': held_out}
     for split in SPLITS:
         split_rows = [r for r in sim_rows if world_split(r['provenance']['world_seed']) == split]
+        # The sim emits some kinds far more often than others. Interleaving by
+        # kind makes the take-until-limit below a balanced sample instead of a
+        # census dominated by whatever the world happens to do most.
+        by_kind = {}
+        for row in split_rows:
+            by_kind.setdefault(int(row['rule'].split(':')[0]), []).append(row)
+        split_rows = [row for group in itertools.zip_longest(*(by_kind[k] for k in sorted(by_kind)))
+                      for row in group if row is not None]
         rng = random.Random(f'{seed}:{split}')
         voices = sorted({('bandit' if r['mind'].get('bandit') else r['mind'].get('occupation') or r['mind'].get('role') or 'resident')
                          for r in split_rows})

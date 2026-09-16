@@ -3,13 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const char *GoalByName(const char *name)
-{
-    if (strcmp(name, "keep_order") == 0) return name;
-    if (strcmp(name, "survive_crisis") == 0) return name;
-    if (strcmp(name, "carry_news") == 0) return name;
-    return "secure_livelihood";
-}
+#define MAX_HISTORY 8
 
 static CcCoreGoal GoalId(const char *name)
 {
@@ -28,9 +22,16 @@ static CcCoreLevel LevelId(const char *name)
 
 static CcCoreControl ControlId(const char *name)
 {
-    if (strcmp(name, "think") == 0) return CC_CORE_CONTROL_THINK;
-    if (strcmp(name, "remember") == 0) return CC_CORE_CONTROL_REMEMBER;
-    return CC_CORE_CONTROL_SAY;
+    static const char *const names[CC_CORE_CONTROL_COUNT] = {
+        "open", "answer", "remark", "affirm", "dispute", "hedge",
+        "attribute", "defer", "settle", "part", "recall", "muse"
+    };
+    for (int i = 0; i < CC_CORE_CONTROL_COUNT; ++i)
+        if (strcmp(name, names[i]) == 0) return (CcCoreControl)i;
+    /* The cues that predate the move axis. */
+    if (strcmp(name, "think") == 0) return CC_CORE_CONTROL_MUSE;
+    if (strcmp(name, "remember") == 0) return CC_CORE_CONTROL_RECALL;
+    return CC_CORE_CONTROL_REMARK;
 }
 
 int main(int argc, char **argv)
@@ -53,36 +54,37 @@ int main(int argc, char **argv)
     if (end == argv[4] || *end != '\0' || retellings < 0 || retellings > 100) { CcCoreModelFree(model); return 2; }
     CcCoreAccount account;
     bool okay = CcCoreAccountPrepare((CcEventKind)kind, argv[5], (int32_t)confidence, (int32_t)retellings, &account);
-    CcCoreSpoken history[CC_CORE_HISTORY] = {0};
+    bool dump_meta = false, dump_hidden = false;
+    const char *history_text[MAX_HISTORY] = {0};
     int history_count = 0;
+    char spec[256] = {0};
     CcCoreMind mind = {0};
     mind.goal = CC_CORE_GOAL_SECURE_LIVELIHOOD;
     mind.stress = CC_CORE_LEVEL_MEDIUM;
     mind.courage = CC_CORE_LEVEL_MEDIUM;
+    mind.voice = NULL;
     CcCoreControl control = CC_CORE_CONTROL_SAY;
-    bool use_mind = false;
+    bool use_mind = false, dump = false;
     for (int i = 6; i < argc; ++i) {
         if (strcmp(argv[i], "--mind") == 0 && i + 1 < argc) {
             use_mind = true;
-            char spec[256];
+            /* mind.voice points into this buffer, so it has to outlive the
+               branch that fills it: the prompt is built after the whole
+               argument vector is parsed. */
             (void)snprintf(spec, sizeof(spec), "%s", argv[++i]);
-            char *voice = spec, *goal = NULL, *stress = NULL, *courage = NULL, *ctr = NULL;
             char *at = spec;
-            for (int part = 0; part < 5 && at != NULL; ++part) {
+            int part = 0;
+            while (at != NULL && part < 5) {
                 char *sep = strchr(at, ':');
                 if (sep != NULL) *sep = '\0';
-                if (part == 0) voice = at;
-                else if (part == 1) goal = at;
-                else if (part == 2) stress = at;
-                else if (part == 3) courage = at;
-                else ctr = at;
+                if (part == 0) mind.voice = at[0] != '\0' ? at : NULL;
+                else if (part == 1) mind.goal = GoalId(at);
+                else if (part == 2) mind.stress = LevelId(at);
+                else if (part == 3) mind.courage = LevelId(at);
+                else control = ControlId(at);
                 at = sep != NULL ? sep + 1 : NULL;
+                ++part;
             }
-            mind.voice = voice[0] != '\0' ? voice : NULL;
-            if (goal != NULL) mind.goal = GoalId(GoalByName(goal));
-            if (stress != NULL) mind.stress = LevelId(stress);
-            if (courage != NULL) mind.courage = LevelId(courage);
-            if (ctr != NULL) control = ControlId(ctr);
         } else if (strcmp(argv[i], "--witnessed") == 0) {
             use_mind = true; mind.witnessed = true;
         } else if (strcmp(argv[i], "--memory") == 0 && i + 1 < argc) {
@@ -91,18 +93,64 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[i], "--thought") == 0 && i + 1 < argc) {
             use_mind = true;
             if (mind.thought_count < CC_CORE_MIND_LINES) mind.thoughts[mind.thought_count++] = argv[++i];
+        } else if (strcmp(argv[i], "--dump-meta") == 0) {
+            dump = true; dump_meta = true;
+        } else if (strcmp(argv[i], "--dump-hidden") == 0) {
+            dump = true; dump_hidden = true;
+        } else if (strcmp(argv[i], "--dump-prefix") == 0) {
+            dump = true;
         } else {
-            if (history_count >= CC_CORE_HISTORY || strlen(argv[i]) >= sizeof(history[0].text)) { CcCoreModelFree(model); return 2; }
-            history[history_count].speaker = ((argc - 1 - i) % 2) == 0 ? 2U : 1U;
-            (void)snprintf(history[history_count].text, sizeof(history[0].text), "%s", argv[i]);
+            if (history_count >= MAX_HISTORY) { CcCoreModelFree(model); return 2; }
+            history_text[history_count] = argv[i];
             ++history_count;
         }
     }
+    CcCoreSpoken history[MAX_HISTORY] = {0};
+    for (int i = 0; i < history_count; ++i) {
+        /* The most recent spoken line is the other speaker (2); older lines
+           alternate self (1). This matches the Python training convention. */
+        size_t from_end = (size_t)(history_count - 1 - i);
+        history[i].speaker = (from_end % 2U) == 0U ? 2U : 1U;
+        if (strlen(history_text[i]) >= sizeof(history[0].text)) { CcCoreModelFree(model); return 2; }
+        (void)snprintf(history[i].text, sizeof(history[0].text), "%s", history_text[i]);
+    }
+    /* The encoder keeps only the last CC_CORE_HISTORY lines. Speakers were
+       assigned over the whole list above, so taking the tail here matches the
+       Python reference rather than failing the longer cases outright. */
+    int first = history_count > CC_CORE_HISTORY ? history_count - CC_CORE_HISTORY : 0;
+    const CcCoreSpoken *spoken = history + first;
+    size_t spoken_count = (size_t)(history_count - first);
+    if (dump) {
+        int out[4096];
+        bool works = use_mind ? CcCoreModelBeginMind(model, &account, 1U, spoken, spoken_count, &mind, control)
+                              : CcCoreModelBegin(model, &account, 1U, spoken, spoken_count);
+        if (works) {
+            if (dump_hidden) {
+                if (!CcCoreModelRunPrefix(model)) { CcCoreModelFree(model); return 1; }
+                float hidden[256];
+                int count = CcCoreModelHidden(model, hidden, 256);
+                for (int i = 0; i < count; ++i) (void)printf("%s%.6f", i == 0 ? "" : " ", (double)hidden[i]);
+                (void)puts("");
+            } else if (dump_meta) {
+                int meta[4096 * 5];
+                int count = CcCoreModelPrefixMeta(model, meta, 4096 * 5);
+                for (int i = 0; i < count; ++i) (void)printf("%s%d,%d,%d,%d,%d", i == 0 ? "" : " ",
+                    meta[i * 5], meta[i * 5 + 1], meta[i * 5 + 2], meta[i * 5 + 3], meta[i * 5 + 4]);
+                (void)puts("");
+            } else {
+                int count = CcCoreModelPrefixTokens(model, out, 4096);
+                for (int i = 0; i < count; ++i) (void)printf("%s%d", i == 0 ? "" : " ", out[i]);
+                (void)puts("");
+            }
+        }
+        CcCoreModelFree(model);
+        return works ? 0 : 1;
+    }
     char text[CC_CORE_UTTERANCE];
-    if (use_mind) okay = okay && CcCoreModelGenerateMind(model, &account, 1U, history,
-        (size_t)history_count, &mind, control, text, sizeof(text));
-    else okay = okay && CcCoreModelGenerate(model, &account, 1U, history,
-        (size_t)history_count, text, sizeof(text));
+    if (use_mind) okay = okay && CcCoreModelGenerateMind(model, &account, 1U, spoken,
+        spoken_count, &mind, control, text, sizeof(text));
+    else okay = okay && CcCoreModelGenerate(model, &account, 1U, spoken,
+        spoken_count, text, sizeof(text));
     if (okay) (void)puts(text);
     CcCoreModelFree(model);
     return okay ? 0 : 1;
