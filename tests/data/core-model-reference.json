@@ -1,5 +1,5 @@
 {
-  "model_sha256": "c0d48351039ed9111545e3dbd020d4ddb08e918072b70d509a679acae633ff90",
+  "model_sha256": "d495451a8e353757289ef7f304f3cda333e0f6a680aea545eee073a6a9159800",
   "vocabulary": [
     "a",
     "abbacy",
@@ -1104,9 +1104,9 @@
     "élodie"
   ],
   "zero_sources": {
-    "crownless_v2.py": "aa0d42e55809a8f75438473c8671bacd6bbb9fe5de8e327263f08903eddbe759",
+    "crownless_v2.py": "50a19961c29d660f1ea0ac952c6131ac0d1f7315a8b98dacc3bdd5348061bc17",
     "crownless_v2_export.py": "59249330258aff74b7f206a03f85024cad0200e536df3d1a4eab2fde245c0a6a",
-    "speak_crownless_v2.py": "607b6051c2c06f95d2e34ad08e55d5bc4b768a19de77ce73dfda4d857de23140",
+    "speak_crownless_v2.py": "15853fb503269a44a1539644b5f399d3bb1dc6c50b9e052facb77336298bbb13",
     "crownless_conversation.py": "5c0bfa7ae7b0474ae73bdbf3b55318b59e0cf4d4c548d6806c09a2471bfb9b78",
     "crownless_moves.py": "f56098be70fb0a8076b0601dfe69fc8363398c6a84b680916bc1a108f3f78560"
   },
@@ -1133,7 +1133,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Silverwick was short of its food reserve target."
+      "text": "Food stores in Silverwick fell short of the reserve target."
     },
     {
       "kind": 133,
@@ -1269,7 +1269,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Gloamgate was short of its food reserve target."
+      "text": "Food stores in Gloamgate fell short of the reserve target."
     },
     {
       "kind": 118,
@@ -1277,7 +1277,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Silverwick quarried stone for roads and public works."
+      "text": "Stone for roads and public works came from Silverwick."
     },
     {
       "kind": 75,
@@ -1373,7 +1373,7 @@
       "confidence": 68,
       "retellings": 4,
       "history": [],
-      "text": "Bread was made from wheat in Rosespire, according to the word going round."
+      "text": "Rosespire made bread from wheat, so people say."
     },
     {
       "kind": 123,
@@ -1397,7 +1397,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Hollowbarrow was short of its food reserve target."
+      "text": "Food stores in Hollowbarrow fell short of the reserve target."
     },
     {
       "kind": 79,
@@ -1421,7 +1421,7 @@
       "confidence": 65,
       "retellings": 4,
       "history": [],
-      "text": "Silverwick quarried stone for roads and public works, so people say."
+      "text": "Stone for roads and public works came from Silverwick, according to the word going round."
     },
     {
       "kind": 2,
@@ -1429,7 +1429,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Hunger was reported in Hollowbarrow."
+      "text": "There was hunger in Hollowbarrow."
     },
     {
       "kind": 133,
@@ -1509,7 +1509,7 @@
       "confidence": 56,
       "retellings": 5,
       "history": [],
-      "text": "Hunger was reported in Hollowbarrow, so people say."
+      "text": "There was hunger in Hollowbarrow, according to the word going round."
     },
     {
       "kind": 123,
@@ -1525,7 +1525,7 @@
       "confidence": 68,
       "retellings": 4,
       "history": [],
-      "text": "Bread was made from wheat in Rosespire, according to the word going round."
+      "text": "Rosespire made bread from wheat, so people say."
     },
     {
       "kind": 133,
@@ -1541,7 +1541,7 @@
       "confidence": 64,
       "retellings": 4,
       "history": [],
-      "text": "A fodder shortage led Rosespire to slaughter cattle for beef, according to the word going round."
+      "text": "Rosespire slaughtered cattle for beef when fodder ran short, so people say."
     },
     {
       "kind": 2,
@@ -1549,7 +1549,7 @@
       "confidence": 35,
       "retellings": 7,
       "history": [],
-      "text": "Hunger was reported in Hollowbarrow, if the story is right."
+      "text": "There was hunger in Hollowbarrow, if the rumour is true."
     },
     {
       "kind": 5,
@@ -1581,7 +1581,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Hunger was reported in Hollowbarrow."
+      "text": "There was hunger in Hollowbarrow."
     },
     {
       "kind": 5,
@@ -1605,7 +1605,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Thornford cut wood and wore out tools."
+      "text": "Woodcutting in Thornford wore out tools."
     },
     {
       "kind": 116,
@@ -1613,7 +1613,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Hollowbarrow cut wood and wore out tools."
+      "text": "Woodcutting in Hollowbarrow wore out tools."
     },
     {
       "kind": 116,
@@ -1621,7 +1621,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Gloamgate cut wood and wore out tools."
+      "text": "Woodcutting in Gloamgate wore out tools."
     },
     {
       "kind": 116,
@@ -1629,7 +1629,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Alderwatch cut wood and wore out tools."
+      "text": "Woodcutting in Alderwatch wore out tools."
     },
     {
       "kind": 116,
@@ -1637,7 +1637,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Silverwick cut wood and wore out tools."
+      "text": "Woodcutting in Silverwick wore out tools."
     },
     {
       "kind": 116,
@@ -1645,7 +1645,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Rosespire cut wood and wore out tools."
+      "text": "Woodcutting in Rosespire wore out tools."
     },
     {
       "kind": 5,
@@ -1685,7 +1685,7 @@
       "confidence": 75,
       "retellings": 3,
       "history": [],
-      "text": "Gloamgate cut wood and wore out tools."
+      "text": "Woodcutting in Gloamgate wore out tools."
     },
     {
       "kind": 116,
@@ -1693,7 +1693,7 @@
       "confidence": 84,
       "retellings": 2,
       "history": [],
-      "text": "Thornford cut wood and wore out tools."
+      "text": "Woodcutting in Thornford wore out tools."
     },
     {
       "kind": 116,
@@ -1701,7 +1701,7 @@
       "confidence": 84,
       "retellings": 2,
       "history": [],
-      "text": "Alderwatch cut wood and wore out tools."
+      "text": "Woodcutting in Alderwatch wore out tools."
     },
     {
       "kind": 120,
@@ -1709,7 +1709,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Thornford raised lambs and added yearlings to the adult flock."
+      "text": "Lambs were raised in Thornford, where yearlings joined the adult flock."
     },
     {
       "kind": 121,
@@ -1717,7 +1717,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Thornford sheared the spring flock and stored wool."
+      "text": "Wool was stored after the spring shearing in Thornford."
     },
     {
       "kind": 120,
@@ -1725,7 +1725,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Silverwick raised lambs and added yearlings to the adult flock."
+      "text": "Lambs were raised in Silverwick, where yearlings joined the adult flock."
     },
     {
       "kind": 121,
@@ -1733,7 +1733,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Silverwick sheared the spring flock and stored wool."
+      "text": "Wool was stored after the spring shearing in Silverwick."
     },
     {
       "kind": 120,
@@ -1741,7 +1741,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Alderwatch raised lambs and added yearlings to the adult flock."
+      "text": "Lambs were raised in Alderwatch, where yearlings joined the adult flock."
     },
     {
       "kind": 121,
@@ -1749,7 +1749,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Alderwatch sheared the spring flock and stored wool."
+      "text": "Wool was stored after the spring shearing in Alderwatch."
     },
     {
       "kind": 120,
@@ -1757,7 +1757,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Rosespire raised lambs and added yearlings to the adult flock."
+      "text": "Lambs were raised in Rosespire, where yearlings joined the adult flock."
     },
     {
       "kind": 121,
@@ -1765,7 +1765,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Rosespire sheared the spring flock and stored wool."
+      "text": "Wool was stored after the spring shearing in Rosespire."
     },
     {
       "kind": 116,
@@ -1773,7 +1773,7 @@
       "confidence": 82,
       "retellings": 2,
       "history": [],
-      "text": "Rosespire cut wood and wore out tools."
+      "text": "Woodcutting in Rosespire wore out tools."
     },
     {
       "kind": 2,
@@ -1781,7 +1781,7 @@
       "confidence": 56,
       "retellings": 5,
       "history": [],
-      "text": "Hunger was reported in Hollowbarrow, so people say."
+      "text": "There was hunger in Hollowbarrow, according to the word going round."
     },
     {
       "kind": 116,
@@ -1789,7 +1789,7 @@
       "confidence": 66,
       "retellings": 4,
       "history": [],
-      "text": "Thornford cut wood and wore out tools, so people say."
+      "text": "Woodcutting in Thornford wore out tools, according to the word going round."
     },
     {
       "kind": 116,
@@ -1797,7 +1797,7 @@
       "confidence": 66,
       "retellings": 4,
       "history": [],
-      "text": "Alderwatch cut wood and wore out tools, so people say."
+      "text": "Woodcutting in Alderwatch wore out tools, according to the word going round."
     },
     {
       "kind": 79,
@@ -1813,7 +1813,7 @@
       "confidence": 67,
       "retellings": 3,
       "history": [],
-      "text": "Hollowbarrow cut wood and wore out tools."
+      "text": "Woodcutting in Hollowbarrow wore out tools."
     },
     {
       "kind": 133,
@@ -1837,7 +1837,7 @@
       "confidence": 46,
       "retellings": 5,
       "history": [],
-      "text": "Hollowbarrow cut wood and wore out tools, so people say."
+      "text": "Woodcutting in Hollowbarrow wore out tools, according to the word going round."
     },
     {
       "kind": 123,
@@ -1869,7 +1869,7 @@
       "confidence": 62,
       "retellings": 4,
       "history": [],
-      "text": "Rosespire cut wood and wore out tools, so people say."
+      "text": "Woodcutting in Rosespire wore out tools, according to the word going round."
     },
     {
       "kind": 51,
@@ -1893,7 +1893,7 @@
       "confidence": 51,
       "retellings": 5,
       "history": [],
-      "text": "Gloamgate cut wood and wore out tools, so people say."
+      "text": "Woodcutting in Gloamgate wore out tools, according to the word going round."
     },
     {
       "kind": 13,
@@ -1917,7 +1917,7 @@
       "confidence": 78,
       "retellings": 2,
       "history": [],
-      "text": "Silverwick cut wood and wore out tools."
+      "text": "Woodcutting in Silverwick wore out tools."
     },
     {
       "kind": 80,
@@ -1933,7 +1933,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Silverwick raised calves and added older calves to the working herd."
+      "text": "Calves were raised in Silverwick, where older calves joined the working herd."
     },
     {
       "kind": 80,
@@ -1957,7 +1957,7 @@
       "confidence": 100,
       "retellings": 0,
       "history": [],
-      "text": "Alderwatch raised calves and added older calves to the working herd."
+      "text": "Calves were raised in Alderwatch, where older calves joined the working herd."
     },
     {
       "kind": 119,
@@ -2029,7 +2029,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Hunger was reported in Hollowbarrow."
+      "text": "There was hunger in Hollowbarrow."
     },
     {
       "kind": 120,
@@ -2071,7 +2071,7 @@
       "history": [
         "How sure are you?"
       ],
-      "text": "I would not enter it on hearsay."
+      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, if the rumour is true."
     },
     {
       "kind": 0,
@@ -2080,6 +2080,16 @@
       "retellings": 5,
       "history": [
         "Who told you?"
+      ],
+      "text": "Élodie's drought harvest fell short of what the southern settlements needed, if the story is right."
+    },
+    {
+      "kind": 0,
+      "account": "Élodie's drought harvest cannot supply the southern settlements.",
+      "confidence": 20,
+      "retellings": 5,
+      "history": [
+        "We should ask someone who was there."
       ],
       "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, if the rumour is true."
     },
@@ -2089,19 +2099,9 @@
       "confidence": 20,
       "retellings": 5,
       "history": [
-        "We should ask someone who was there."
-      ],
-      "text": "We should ask someone who was there."
-    },
-    {
-      "kind": 0,
-      "account": "Élodie's drought harvest cannot supply the southern settlements.",
-      "confidence": 20,
-      "retellings": 5,
-      "history": [
         "Agreed. Let us leave it there for now."
       ],
-      "text": "Ask someone who saw it. I need to know."
+      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, if the rumour is true."
     },
     {
       "kind": 0,
@@ -2111,7 +2111,7 @@
       "history": [
         "How sure are you?"
       ],
-      "text": "I would not enter it on hearsay."
+      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, according to the word going round."
     },
     {
       "kind": 0,
@@ -2121,7 +2121,7 @@
       "history": [
         "Who told you?"
       ],
-      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, according to the word going round."
+      "text": "Élodie's drought harvest fell short of what the southern settlements needed, so people say."
     },
     {
       "kind": 0,
@@ -2141,7 +2141,7 @@
       "history": [
         "Agreed. Let us leave it there for now."
       ],
-      "text": "Ask someone who saw it. I need to know."
+      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, according to the word going round."
     },
     {
       "kind": 0,
@@ -2159,7 +2159,7 @@
       "history": [
         "Thornford's drought harvest fell short of what the eastern settlements needed."
       ],
-      "text": "We should ask someone who was there."
+      "text": "The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round."
     },
     {
       "kind": 0,
@@ -2170,7 +2170,7 @@
         "Thornford's drought harvest fell short of what the eastern settlements needed.",
         "I heard a different account. The drought harvest in Thornford fell short of supplies for the southern settlements, according to the word going round. How sure are you?"
       ],
-      "text": "I stand by what I said."
+      "text": "I would not stand behind it yet."
     },
     {
       "kind": 0,
@@ -2247,7 +2247,7 @@
       "memories": [],
       "thoughts": [],
       "history": [],
-      "text": "The town needs to post guards before the next raid."
+      "text": "The town next town meight came, we lost more than this."
     },
     {
       "kind": 133,
@@ -2273,7 +2273,7 @@
         "I will keep calm. Every loaf counts."
       ],
       "history": [],
-      "text": "I heard it otherwise. Paper was made from Wood in Rosespire, according to the word going round. How sure are you?"
+      "text": "I heard it otherwise. Rosespire made paper from Wood, so people say. Where did yours come from?"
     },
     {
       "kind": 116,
@@ -2286,7 +2286,7 @@
       ],
       "thoughts": [],
       "history": [],
-      "text": "I would rather hear it from a witness."
+      "text": "I would not enter it on hearsay."
     },
     {
       "kind": 120,
