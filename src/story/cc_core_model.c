@@ -278,7 +278,7 @@ static void Hidden(CcCoreModel *m, int token, const int *meta)
         Matvec(m->weights[base + 5], feed, update, D, FF);
         for (int j = 0; j < D; ++j) x[j] += update[j];
     }
-    Norm(x, m->weights[54], m->hidden);
+    Norm(x, m->weights[CORE_NORM], m->hidden);
     ++m->used;
 }
 
@@ -543,11 +543,11 @@ int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
             continue;
         }
         if (m->actions >= MAX_ACTIONS || m->used >= CONTEXT) { m->status = -1; break; }
-        float gate = Dot(m->weights[57], m->hidden, D) + m->weights[58][0];
+        float gate = Dot(m->weights[CORE_COPY_GATE], m->hidden, D) + m->weights[CORE_COPY_BIAS][0];
         int token = 0; const char *bytes = NULL; size_t length = 0U;
         if (m->candidates > 0 && gate > 0.0f) {
             float a[D], b[D], best = -FLT_MAX; int chosen = 0;
-            Matvec(m->weights[55], m->hidden, a, D, D); Matvec(m->weights[56], m->hidden, b, D, D);
+            Matvec(m->weights[CORE_COPY_START], m->hidden, a, D, D); Matvec(m->weights[CORE_COPY_END], m->hidden, b, D, D);
             for (int i = 0; i < m->candidates; ++i) {
                 float score = Dot(a, m->sources[i], D) + Dot(b, m->sources[i], D);
                 if (score > best) { best = score; chosen = i; }
