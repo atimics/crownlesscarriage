@@ -23,10 +23,16 @@ p.add_argument('--corpus', type=Path, default=None)
 p.add_argument('--copy-per-move', type=int, default=20)
 p.add_argument('--cell-sample', type=int, default=5)
 p.add_argument('--wording-sample', type=int, default=200)
+p.add_argument('--model', type=Path, default=None)
+p.add_argument('--tokenizer', type=Path, default=None)
 a = p.parse_args()
 ZERO = a.zero
 if a.corpus is None:
     a.corpus = ZERO / 'out/crownless-moves-v2'
+if a.model is None:
+    a.model = CROWN / 'assets/language/core.ccv2'
+if a.tokenizer is None:
+    a.tokenizer = CROWN / 'assets/language/tokenizer.json'
 sys.path.insert(0, str(ZERO / 'scripts'))
 
 import torch
@@ -36,9 +42,8 @@ from crownless_v2_export import load_export
 
 torch.set_num_threads(4)
 CORPUS = a.corpus
-model, meta = load_export(CROWN / 'assets/language/core.ccv2',
-                          CROWN / 'assets/language/tokenizer.json')
-tokenizer = Tokenizer.from_file(str(CROWN / 'assets/language/tokenizer.json'))
+model, meta = load_export(a.model, a.tokenizer)
+tokenizer = Tokenizer.from_file(str(a.tokenizer))
 MEANING = meta['meaning_ids']
 
 
