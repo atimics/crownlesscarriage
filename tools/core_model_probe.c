@@ -123,6 +123,13 @@ int main(int argc, char **argv)
     int first = history_count > CC_CORE_HISTORY ? history_count - CC_CORE_HISTORY : 0;
     const CcCoreSpoken *spoken = history + first;
     size_t spoken_count = (size_t)(history_count - first);
+    /* An unknown voice zeroes the stance block on both runtimes, which reads
+       as the model ignoring goal, stress and courage too. Warn rather than
+       fail: the prompt is still well-formed, but a typo here nukes all
+       conditioning, and that should never pass silently. */
+    if (use_mind && mind.voice != NULL && CcCoreModelVoiceId(mind.voice) == 0)
+        (void)fprintf(stderr, "warning: unknown voice '%s' conditions on no stance\n",
+                      mind.voice);
     if (dump) {
         int out[4096];
         bool works = use_mind ? CcCoreModelBeginMind(model, &account, 1U, spoken, spoken_count, &mind, control)
