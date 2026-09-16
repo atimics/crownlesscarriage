@@ -102,16 +102,25 @@ for index, base in enumerate(rows):
     row['situation'] = {'hungry': bool(rng.getrandbits(1)),
                         'sheltered': bool(rng.getrandbits(1)),
                         'in_transit': bool(rng.getrandbits(1))}
+    row['social'] = {'owes_listener': bool(rng.getrandbits(1)),
+                     'trusts_listener': bool(rng.getrandbits(1)),
+                     'faction': rng.choice([None, 'crown', 'guild', 'commons']),
+                     'far_from_home': bool(rng.getrandbits(1))}
     row['history'] = [{'speaker':'other','text':'What have you heard?'}] if index % 3 == 0 else []
     case['mind'] = ':'.join([voice, row['mind']['goal'], row['mind']['stress'],
                              row['mind']['courage'], control] +
                             ['1' if row['situation'][axis] else '0'
-                             for axis in ('hungry', 'sheltered', 'in_transit')])
+                             for axis in ('hungry', 'sheltered', 'in_transit')] +
+                            ['1' if row['social'][axis] else '0'
+                             for axis in ('owes_listener', 'trusts_listener')] +
+                            [row['social']['faction'] or ''] +
+                            ['1' if row['social']['far_from_home'] else '0'])
     case['memories'] = list(row['mind']['memories'])
     case['thoughts'] = list(row['mind']['thoughts'])
     case['history'] = [h['text'] for h in row['history']]
     output = generate(model,tokenizer,encode_row(tokenizer,row,slots=True,conversation=True,
-                                                 typed_stance=True, situation=True))
+                                                 typed_stance=True, situation=True,
+                                                 social=True))
     if not output['stopped']: raise ValueError('Mind reference did not stop')
     case['text'] = output['text']
     cases.append(case)

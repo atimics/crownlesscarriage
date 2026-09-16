@@ -7,10 +7,10 @@
 #include <string.h>
 
 enum { D = 192, FF = 624, LAYERS = 8, CONTEXT = 512, VOCAB = 4096,
-       HEADS = 6, HD = 32, MAX_ACTIONS = 160, TENSORS = 66,
+       HEADS = 6, HD = 32, MAX_ACTIONS = 160, TENSORS = 70,
        /* role, knowledge, provenance, event, kind, the four stance ids,
-          then hungry, sheltered, in_transit. */
-       META = 12 };
+          hungry, sheltered, in_transit, owes, trusts, faction, far. */
+       META = 16 };
 typedef struct CoreTensorLayout { int rows, cols; size_t offset, scales; } CoreTensorLayout;
 typedef struct CoreMeaning { const char *name; int id; } CoreMeaning;
 typedef struct CoreToken { const char *bytes; int length; } CoreToken;
@@ -242,6 +242,12 @@ static void Hidden(CcCoreModel *m, int token, const int *meta)
         x[j] += m->weights[CORE_HUNGRY][meta[9] * D + j] +
             m->weights[CORE_SHELTERED][meta[10] * D + j] +
             m->weights[CORE_INTRANSIT][meta[11] * D + j];
+        /* Company likewise: debts, trust and distance always known; faction
+           may be absent (0, gated like voice). */
+        x[j] += m->weights[CORE_OWES][meta[12] * D + j] +
+            m->weights[CORE_TRUSTS][meta[13] * D + j] +
+            m->weights[CORE_FAR][meta[15] * D + j];
+        if (meta[14] != 0) x[j] += m->weights[CORE_FACTION][meta[14] * D + j];
     }
     for (int layer = 0; layer < LAYERS; ++layer) {
         int base = CORE_BLOCK_BASE + layer * 6;
@@ -503,6 +509,10 @@ bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
         m->meta[i][9] = mind->hungry ? 1 : 0;
         m->meta[i][10] = mind->sheltered ? 1 : 0;
         m->meta[i][11] = mind->in_transit ? 1 : 0;
+        m->meta[i][12] = mind->owes_listener ? 1 : 0;
+        m->meta[i][13] = mind->trusts_listener ? 1 : 0;
+        m->meta[i][14] = (int)mind->faction;
+        m->meta[i][15] = mind->far_from_home ? 1 : 0;
     }
     m->prefix = n; m->used = 0; m->actions = 0; m->status = 0;
     return true;

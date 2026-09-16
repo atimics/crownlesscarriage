@@ -38,6 +38,12 @@ typedef enum CcCoreControl {
 #define CC_CORE_CONTROL_SAY CC_CORE_CONTROL_REMARK
 #define CC_CORE_CONTROL_THINK CC_CORE_CONTROL_MUSE
 #define CC_CORE_CONTROL_REMEMBER CC_CORE_CONTROL_RECALL
+/* Faction kinds, matching the trainer's FACTION_IDS one for one. Zero means
+   no faction on record and gates the table off, like an unknown voice. */
+typedef enum CcCoreFaction {
+    CC_CORE_FACTION_NONE, CC_CORE_FACTION_CROWN, CC_CORE_FACTION_GUILD,
+    CC_CORE_FACTION_COMMONS
+} CcCoreFaction;
 typedef struct CcCoreField {
     size_t start, length; /* UTF-8 byte offsets into the held text. */
     CcCoreRole role;
@@ -71,6 +77,11 @@ typedef struct CcCoreMind {
     bool hungry;
     bool sheltered;
     bool in_transit;
+    /* Company: debts, trust and distance always known; faction may be absent. */
+    bool owes_listener;
+    bool trusts_listener;
+    CcCoreFaction faction;
+    bool far_from_home;
 } CcCoreMind;
 
 /* Parse the supplied held telling. The caller owns its evidence. */

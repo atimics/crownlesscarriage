@@ -41,6 +41,8 @@ def compile_tables():
                         ('CORE_GOALS', 'goals.weight'), ('CORE_STRESSES', 'stresses.weight'),
                         ('CORE_COURAGES', 'courages.weight'), ('CORE_HUNGRY', 'hungry.weight'),
                         ('CORE_SHELTERED', 'sheltered.weight'), ('CORE_INTRANSIT', 'in_transit.weight'),
+                        ('CORE_OWES', 'owes.weight'), ('CORE_TRUSTS', 'trusts.weight'),
+                        ('CORE_FACTION', 'faction.weight'), ('CORE_FAR', 'far.weight'),
                         ('CORE_NORM', 'norm.weight'), ('CORE_COPY_START', 'copy_start.weight'),
                         ('CORE_COPY_END', 'copy_end.weight'), ('CORE_COPY_GATE', 'copy_gate.weight'),
                         ('CORE_COPY_BIAS', 'copy_gate.bias')):
