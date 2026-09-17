@@ -637,8 +637,8 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
                        RenderTexture2D target,
                        Rectangle destination);
 const char *CcLocalSiteName(const CcSim *sim, CcLocalSiteKind site);
-Camera3D CcLocalMineCamera(const CcSim *sim);
-void CcLocalDrawMine3D(const CcSim *sim, const CcLocalAgent *agent,
+Camera3D CcLocalMineCamera(const CcSim *sim, int32_t facing);
+void CcLocalDrawMine3D(const CcSim *sim, const CcLocalAgent *agent, int32_t facing,
                        RenderTexture2D target, Rectangle destination);
 void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
                        CcLocalSiteKind site, bool travelling,
