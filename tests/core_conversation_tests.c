@@ -106,6 +106,20 @@ int main(int argc, char **argv)
     CcCoreAccount bad = accounts[0]; bad.fields[0].start = SIZE_MAX;
     CC_CHECK(!CcCoreModelBegin(conversation.model, &bad, original[0].speaker_id, NULL, 0U));
     CC_CHECK(CcCoreModelText(conversation.model) == NULL);
+    /* Memory sharing: the held memory that names what the conversation named,
+       and nothing when the speaker is unwilling or nothing overlaps. */
+    CcCoreMind mind = {0};
+    mind.memories[0] = "Rosespire's mill uses 1 Wood to make 4 Paper.";
+    mind.memories[1] = "A goblin rises to Keeper in the dragon cult through service.";
+    mind.memory_count = 2;
+    CcCoreSpoken talk[1] = {0};
+    (void)snprintf(talk[0].text, sizeof(talk[0].text), "What of the mill at Rosespire?");
+    CC_CHECK(CcCoreMemoryShare(&mind, talk, 1U, true) == mind.memories[0]);
+    CC_CHECK(CcCoreMemoryShare(&mind, talk, 1U, false) == NULL);
+    (void)snprintf(talk[0].text, sizeof(talk[0].text), "Tell me about the mill at Rosespire.");
+    CC_CHECK(CcCoreMemoryShare(&mind, talk, 1U, true) == mind.memories[0]);
+    (void)snprintf(talk[0].text, sizeof(talk[0].text), "Nothing here concerns any of it.");
+    CC_CHECK(CcCoreMemoryShare(&mind, talk, 1U, true) == NULL);
     CcCoreModelFree(conversation.model);
     return 0;
 }
