@@ -535,8 +535,123 @@ static void ValidateExpiredPromiseMemory(void)
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
+static void CheckEmptyUnderroad(const CcSim *sim)
+{
+    CcStoryUnderroadExcerpt excerpt = CcStoryUnderroadCurrentExcerpt(sim);
+    CC_CHECK(excerpt.title == NULL && excerpt.line_count == 0U && !excerpt.searched);
+    for (size_t i = 0U; i < CC_STORY_UNDERROAD_MAX_LINES; ++i) {
+        CC_CHECK(excerpt.lines[i] == NULL);
+    }
+}
+
+static void ValidateUnderroadFragments(void)
+{
+    static const int32_t rooms[] = {8, 10, 17, 18, 19, 23};
+    static const char *names[] = {
+        "Bell Shaft", "Hall of Ash Clerks", "Furnace Shrine",
+        "Porters' Grave", "Hoard Threshold", "King's Survey Room"
+    };
+    static const uint32_t flags[] = {
+        CC_DUNGEON_ROOM_DRAGON_SIGN, CC_DUNGEON_ROOM_GOBLIN,
+        CC_DUNGEON_ROOM_HAZARD | CC_DUNGEON_ROOM_DRAGON_SIGN,
+        CC_DUNGEON_ROOM_HAZARD,
+        CC_DUNGEON_ROOM_OBJECTIVE | CC_DUNGEON_ROOM_DRAGON_SIGN,
+        CC_DUNGEON_ROOM_SAFE
+    };
+    static CcSim sim;
+    static CcSim before;
+    CcSimInit(&sim, UINT32_C(0x71a7e5));
+    CheckEmptyUnderroad(NULL);
+    CheckEmptyUnderroad(&sim);
+    sim.dungeon_expedition.active = true;
+    sim.dungeon_expedition.dungeon_id = sim.dungeons[0].id;
+    for (size_t i = 0U; i < sizeof(rooms) / sizeof(rooms[0]); ++i) {
+        sim.dungeon_expedition.current_room = rooms[i];
+        CcDungeonRoom *room = &sim.dungeons[0].rooms[rooms[i]];
+        CC_CHECK(strcmp(room->name, names[i]) == 0 && room->flags == flags[i]);
+        CheckEmptyUnderroad(&sim);
+        room->state_flags = CC_DUNGEON_ROOM_SEARCHED;
+        CheckEmptyUnderroad(&sim);
+        room->state_flags = CC_DUNGEON_ROOM_DISCOVERED;
+        memcpy(&before, &sim, sizeof(sim));
+        CcStoryUnderroadExcerpt seen = CcStoryUnderroadCurrentExcerpt(&sim);
+        CC_CHECK(seen.line_count == CC_STORY_UNDERROAD_STANZA_LINES && !seen.searched);
+        CC_CHECK(strcmp(seen.title, "The Bell That Was Eaten") == 0);
+        CC_CHECK(memcmp(&before, &sim, sizeof(sim)) == 0);
+        for (size_t line = seen.line_count; line < CC_STORY_UNDERROAD_MAX_LINES; ++line) {
+            CC_CHECK(seen.lines[line] == NULL);
+        }
+        room->state_flags |= CC_DUNGEON_ROOM_SEARCHED;
+        memcpy(&before, &sim, sizeof(sim));
+        CcStoryUnderroadExcerpt searched = CcStoryUnderroadCurrentExcerpt(&sim);
+        CC_CHECK(searched.line_count == CC_STORY_UNDERROAD_MAX_LINES && searched.searched);
+        CC_CHECK(memcmp(&before, &sim, sizeof(sim)) == 0);
+        for (size_t line = 0U; line < searched.line_count; ++line) {
+            CC_CHECK(searched.lines[line] != NULL && searched.lines[line][0] != '\0');
+            CC_CHECK(strlen(searched.lines[line]) < CC_STORY_UNDERROAD_LINE_CAPACITY);
+            CC_CHECK(strchr(searched.lines[line], '\n') == NULL);
+            if (line < seen.line_count) CC_CHECK(seen.lines[line] == searched.lines[line]);
+            for (size_t other = 0U; other < line; ++other) {
+                CC_CHECK(strcmp(searched.lines[line], searched.lines[other]) != 0);
+            }
+        }
+        if (rooms[i] == 17) {
+            CC_CHECK(strcmp(searched.lines[4], "'Zrrathek voruul. Kna'zoth deri'shka.'") == 0);
+        }
+        const CcDungeonEncounterKind encounters[] = {
+            CC_DUNGEON_ENCOUNTER_STONEBACKS, CC_DUNGEON_ENCOUNTER_TITHE_KEEPERS,
+            CC_DUNGEON_ENCOUNTER_GOBLIN_DESERTERS, CC_DUNGEON_ENCOUNTER_MONSTERS,
+            CC_DUNGEON_ENCOUNTER_SMUGGLERS
+        };
+        for (size_t e = 0U; e < sizeof(encounters) / sizeof(encounters[0]); ++e) {
+            sim.dungeon_expedition.encounter_kind = encounters[e];
+            CheckEmptyUnderroad(&sim);
+        }
+        sim.dungeon_expedition.encounter_kind = CC_DUNGEON_ENCOUNTER_NONE;
+        sim.dungeon_expedition.active = false;
+        CheckEmptyUnderroad(&sim);
+        sim.dungeon_expedition.active = true;
+        CcDungeonRoom original = *room;
+        memset(room->name, 'x', sizeof(room->name));
+        CheckEmptyUnderroad(&sim);
+        *room = original;
+        room->kind = CC_DUNGEON_ROOM_MINE_MOUTH;
+        CheckEmptyUnderroad(&sim);
+        *room = original;
+    }
+    for (int32_t i = 0; i < sim.dungeons[0].room_count; ++i) {
+        bool authored = false;
+        for (size_t r = 0U; r < sizeof(rooms) / sizeof(rooms[0]); ++r) {
+            if (i == rooms[r]) authored = true;
+        }
+        if (authored) continue;
+        sim.dungeon_expedition.current_room = i;
+        sim.dungeons[0].rooms[i].state_flags |= CC_DUNGEON_ROOM_DISCOVERED | CC_DUNGEON_ROOM_SEARCHED;
+        CheckEmptyUnderroad(&sim);
+    }
+    sim.dungeon_expedition.current_room = -1;
+    CheckEmptyUnderroad(&sim);
+    sim.dungeon_expedition.current_room = CC_MAX_DUNGEON_ROOMS;
+    CheckEmptyUnderroad(&sim);
+    sim.dungeon_expedition.current_room = 8;
+    int32_t count = sim.dungeons[0].room_count;
+    sim.dungeons[0].room_count = 8;
+    CheckEmptyUnderroad(&sim);
+    sim.dungeons[0].room_count = CC_MAX_DUNGEON_ROOMS + 1;
+    CheckEmptyUnderroad(&sim);
+    sim.dungeons[0].room_count = count;
+    sim.dungeon_expedition.dungeon_id = 0U;
+    CheckEmptyUnderroad(&sim);
+    sim.dungeon_expedition.dungeon_id = sim.dungeons[0].id;
+    sim.dungeon_count = 0;
+    CheckEmptyUnderroad(&sim);
+    sim.dungeon_count = CC_MAX_DUNGEONS + 1;
+    CheckEmptyUnderroad(&sim);
+}
+
 int main(void)
 {
+    ValidateUnderroadFragments();
     ValidateCatalogue();
     ValidatePlayerChoices();
     ValidateRoadCompanyVoices();

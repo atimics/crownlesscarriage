@@ -3744,7 +3744,7 @@ static Vector2 DungeonMapPoint(const CcDungeonRoom *room)
 {
     return room == NULL ? (Vector2){0.0f, 0.0f} :
         (Vector2){105.0f + (float)room->map_x * 68.0f,
-                  305.0f + (float)room->map_y * 58.0f};
+                  265.0f + (float)room->map_y * 38.0f};
 }
 
 static void DrawDungeonPanel(const CcSim *sim)
@@ -3804,6 +3804,17 @@ static void DrawDungeonPanel(const CcSim *sim)
         CcOverlayDrawText(TextFormat("%.18s", room->name),
                           (int)point.x - 22, (int)point.y + 16, 7,
                           here ? INK : MUTED);
+    }
+
+    CcStoryUnderroadExcerpt excerpt = CcStoryUnderroadCurrentExcerpt(sim);
+    if (excerpt.line_count > 0U) {
+        CcOverlayDrawText(excerpt.title, 66, 420, 12, CC_GOLD);
+        for (size_t i = 0U; i < excerpt.line_count; ++i) {
+            CcOverlayDrawText(excerpt.lines[i], 66, 443 + (int)i * 17, 10, INK);
+        }
+        CcOverlayDrawText(excerpt.searched ? "Search fragment recovered." :
+            "Search chamber to read the hidden fragment; normal turn and noise costs apply.",
+            66, 549, 9, MUTED);
     }
 
     int x = 958;

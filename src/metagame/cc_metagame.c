@@ -1602,6 +1602,16 @@ static void DescribeUnderroad(const CcMetagame *metagame,
                CcDungeonReactionName(expedition->encounter_reaction));
         return;
     }
+    CcStoryUnderroadExcerpt excerpt = CcStoryUnderroadCurrentExcerpt(sim);
+    if (excerpt.line_count > 0U) {
+        Append(output, capacity, "%s\n", excerpt.title);
+        for (size_t i = 0U; i < excerpt.line_count; ++i) {
+            Append(output, capacity, "  %s\n", excerpt.lines[i]);
+        }
+        Append(output, capacity, "%s\n", excerpt.searched ?
+            "Search fragment recovered." :
+            "Search chamber to read the hidden fragment; normal turn and noise costs apply.");
+    }
     int32_t exits = CcSimDungeonVisibleExitCount(sim);
     Append(output, capacity, "Passages:\n");
     for (int32_t i = 0; i < exits; ++i) {
