@@ -6924,7 +6924,39 @@ static int RunStorybookTravelRegression(void)
             return 1;
         }
     }
-    (void)puts("Storybook travel: time, warning, rest, arrival and journal replay passed");
+    for (int32_t turn = 0; turn < 4; ++turn) {
+        /* The travel view is a side-scroller: the camera stands square to the
+           heading rather than behind it, so the company passes in profile and
+           the land parallaxes. Checked on four headings because the road
+           curves and the framing must hold all the way round. */
+        float heading = (float)turn * 0.5f * PI + 0.37f;
+        CcLocalWorldCarriageState framed = local.world_carriage;
+        framed.camera_heading_yaw = heading;
+        framed.camera_weight = 0.0f;
+        float forward_x = sinf(heading), forward_z = cosf(heading);
+        Camera3D camera = CcLocalStorybookCameraInternal(
+            &local.world_stream.manifest, &framed);
+        float flat_x = camera.position.x - framed.position.x;
+        float flat_z = camera.position.z - framed.position.z;
+        float span = sqrtf(flat_x * flat_x + flat_z * flat_z);
+        float view_x = camera.target.x - camera.position.x;
+        float view_z = camera.target.z - camera.position.z;
+        float view_span = sqrtf(view_x * view_x + view_z * view_z);
+        float lead = (camera.target.x - framed.position.x) * forward_x +
+                     (camera.target.z - framed.position.z) * forward_z;
+        if (span < 12.0f)
+            { (void)fprintf(stderr, "The travel camera must stand off the verge.\n"); return 1; }
+        if (fabsf(flat_x * forward_x + flat_z * forward_z) > span * 0.02f)
+            { (void)fprintf(stderr, "The travel camera must stand square to the heading, not behind it.\n"); return 1; }
+        if (view_span < 0.001f ||
+            (-view_z * forward_x + view_x * forward_z) / view_span < 0.9f)
+            { (void)fprintf(stderr, "Travel must read left to right.\n"); return 1; }
+        if (lead <= 0.0f)
+            { (void)fprintf(stderr, "The frame must lead the company down the road.\n"); return 1; }
+        if (camera.target.y <= framed.position.y)
+            { (void)fprintf(stderr, "The company must sit below the centre of the frame.\n"); return 1; }
+    }
+    (void)puts("Storybook travel: time, warning, rest, arrival, profile framing and journal replay passed");
     return 0;
 }
 

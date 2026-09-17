@@ -891,24 +891,29 @@ static void OpenWorldRevealedBounds(const CcSim *sim,
     *maximum_z = far + margin;
 }
 
-static Camera3D StorybookCamera(const CcWorldManifest *manifest,
-                                 const CcLocalWorldCarriageState *carriage)
+Camera3D CcLocalStorybookCameraInternal(const CcWorldManifest *manifest,
+                                        const CcLocalWorldCarriageState *carriage)
 {
     float wide = SmoothStep01(carriage->camera_weight);
     float heading = carriage->camera_heading_yaw;
     Vector3 forward = {sinf(heading), 0.0f, cosf(heading)};
     Vector3 right = {cosf(heading), 0.0f, -sinf(heading)};
+    /* Side-scrolling profile. The camera stands off the verge perpendicular to
+       the heading, so the company passes in silhouette and the land behind it
+       slides at its own rate: near verges sweep, far hills barely move. It is
+       held on -right so the direction of travel reads left to right. Leading
+       the focus forward puts the company left of centre with the road ahead
+       open, and lifts it into the lower third of the frame. */
     Vector3 focus = Vector3Add(carriage->position,
-        Vector3Add(Vector3Scale(forward, 5.0f + wide * 12.0f),
-                   (Vector3){0.0f, 1.8f, 0.0f}));
+        Vector3Add(Vector3Scale(forward, 7.5f + wide * 9.0f),
+                   (Vector3){0.0f, 3.0f + wide * 1.4f, 0.0f}));
     Vector3 position = Vector3Add(carriage->position,
-        Vector3Add(Vector3Scale(right, 19.0f + wide * 36.0f),
-            Vector3Add(Vector3Scale(forward, -20.0f - wide * 39.0f),
-                       (Vector3){0.0f, 10.0f + wide * 54.0f, 0.0f})));
+        Vector3Add(Vector3Scale(right, -(31.0f + wide * 34.0f)),
+                   (Vector3){0.0f, 3.6f + wide * 22.0f, 0.0f}));
     position.y = fmaxf(position.y,
-        CcWorldTerrainHeight(manifest, position.x, position.z) + 5.5f);
+        CcWorldTerrainHeight(manifest, position.x, position.z) + 3.0f);
     return (Camera3D){.position = position, .target = focus,
-        .up = {0.0f, 1.0f, 0.0f}, .fovy = 43.0f,
+        .up = {0.0f, 1.0f, 0.0f}, .fovy = 32.0f + wide * 11.0f,
         .projection = CAMERA_PERSPECTIVE};
 }
 
@@ -1268,7 +1273,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     if (storybook) {
         CcLocalWorldCarriageState travel_camera = *carriage;
         if (town_arrival) travel_camera.camera_weight = carriage->arrival_travel_weight;
-        camera = StorybookCamera(&stream->manifest, &travel_camera);
+        camera = CcLocalStorybookCameraInternal(&stream->manifest, &travel_camera);
         if (town_arrival) {
             camera.position = Vector3Lerp(close_position, camera.position, camera_weight);
             camera.target = Vector3Lerp(close_focus, camera.target, camera_weight);

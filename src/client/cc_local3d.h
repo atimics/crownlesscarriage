@@ -612,6 +612,10 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
                             float clock, RenderTexture2D target,
                             Rectangle destination);
 bool CcLocalOpenWorldUsesKingdomMarkers(float camera_weight);
+/* Exposed so the travel regression can assert the side-scrolling profile. */
+Camera3D CcLocalStorybookCameraInternal(
+    const CcWorldManifest *manifest,
+    const CcLocalWorldCarriageState *carriage);
 void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                        const CcLocalCourse *course, bool travelling,
                        bool parley, const CcLocalConvoyState *convoy,
