@@ -1,4 +1,5 @@
 #include "metagame/cc_metagame.h"
+#include "story/cc_story.h"
 
 #include "test_support.h"
 #include <stdio.h>
@@ -119,8 +120,115 @@ static void CheckJourneyContext(void)
     CC_CHECK(CcMetagameAgentExecute(&game, "road continue", output, sizeof(output)));
 }
 
+static void CheckUnderroadText(CcMetagame *game, char *output, size_t capacity)
+{
+    static CcSim before;
+    memcpy(&before, &game->sim, sizeof(before));
+    CC_CHECK(CcMetagameExecute(game, "underroad look", output, capacity));
+    CC_CHECK(memcmp(&before, &game->sim, sizeof(before)) == 0);
+    CcStoryUnderroadExcerpt excerpt = CcStoryUnderroadCurrentExcerpt(&game->sim);
+    if (excerpt.line_count == 0U) {
+        CC_CHECK(strstr(output, "The Bell That Was Eaten") == NULL);
+        return;
+    }
+    CC_CHECK(strstr(output, excerpt.title) != NULL);
+    for (size_t i = 0U; i < excerpt.line_count; ++i) {
+        CC_CHECK(strstr(output, excerpt.lines[i]) != NULL);
+    }
+    CC_CHECK(strstr(output, "underroad retreat") != NULL);
+    CC_CHECK(strstr(output, "unmapped passage") != NULL);
+}
+
+static void CheckEatenBellEpisode(void)
+{
+    static CcMetagame game;
+    char output[16384];
+    const int32_t rooms[] = {8, 10, 17, 18, 19, 23};
+    for (size_t r = 0U; r < sizeof(rooms) / sizeof(rooms[0]); ++r) {
+        CcMetagameInit(&game, UINT32_C(0x71a7e5));
+        game.sim.player.location_id = game.sim.dungeons[0].settlement_id;
+        game.sim.carriage.location_id = game.sim.player.location_id;
+        game.sim.player.cargo[CC_GOOD_FOOD] = 8;
+        CC_CHECK(CcMetagameExecute(&game, "underroad enter", output, sizeof(output)));
+        game.sim.dungeon_expedition.current_room = rooms[r];
+        CcDungeonRoom *room = &game.sim.dungeons[0].rooms[rooms[r]];
+        CheckUnderroadText(&game, output, sizeof(output));
+        room->state_flags |= CC_DUNGEON_ROOM_DISCOVERED;
+        CheckUnderroadText(&game, output, sizeof(output));
+        CC_CHECK(strstr(output, "Search chamber to read") != NULL);
+        if ((room->flags & CC_DUNGEON_ROOM_HAZARD) != 0U) {
+            CC_CHECK(strstr(output, "chamber itself looks dangerous") != NULL);
+        }
+        if ((room->flags & CC_DUNGEON_ROOM_DRAGON_SIGN) != 0U) {
+            CC_CHECK(strstr(output, "Warm air and old tribute marks") != NULL);
+        }
+        room->state_flags |= CC_DUNGEON_ROOM_SEARCHED;
+        CcStoryUnderroadExcerpt complete = CcStoryUnderroadCurrentExcerpt(&game.sim);
+        room->state_flags &= ~(uint32_t)CC_DUNGEON_ROOM_SEARCHED;
+        for (size_t i = CC_STORY_UNDERROAD_STANZA_LINES; i < complete.line_count; ++i) {
+            CC_CHECK(strstr(output, complete.lines[i]) == NULL);
+        }
+        game.sim.dungeon_expedition.encounter_kind = CC_DUNGEON_ENCOUNTER_TITHE_KEEPERS;
+        game.sim.dungeon_expedition.encounter_room = rooms[r];
+        game.sim.dungeon_expedition.encounter_reaction = 12;
+        CheckUnderroadText(&game, output, sizeof(output));
+        CC_CHECK(strstr(output, "underroad parley") != NULL);
+        CC_CHECK(strstr(output, "underroad evade") != NULL);
+        CC_CHECK(strstr(output, "underroad force") != NULL);
+        CC_CHECK(!CcMetagameExecute(&game, "underroad search", output, sizeof(output)));
+        CC_CHECK((room->state_flags & CC_DUNGEON_ROOM_SEARCHED) == 0U);
+        CC_CHECK(CcMetagameExecute(&game, "underroad parley", output, sizeof(output)));
+        int32_t turns = game.sim.dungeon_expedition.turns_elapsed;
+        int32_t light = game.sim.dungeon_expedition.light_remaining;
+        CC_CHECK(CcMetagameExecute(&game, "underroad search", output, sizeof(output)));
+        CC_CHECK((room->state_flags & CC_DUNGEON_ROOM_SEARCHED) != 0U);
+        CC_CHECK(game.sim.dungeon_expedition.turns_elapsed == turns + 1);
+        CC_CHECK(game.sim.dungeon_expedition.light_remaining < light);
+        CC_CHECK(game.sim.dungeon_expedition.noise > 0);
+        if (game.sim.dungeon_expedition.encounter_kind != CC_DUNGEON_ENCOUNTER_NONE) {
+            CC_CHECK(strstr(output, "The Bell That Was Eaten") == NULL);
+            game.sim.dungeon_expedition.encounter_reaction = 12;
+            CC_CHECK(CcMetagameExecute(&game, "underroad parley", output, sizeof(output)));
+        }
+        CheckUnderroadText(&game, output, sizeof(output));
+        CC_CHECK(strstr(output, "Search fragment recovered.") != NULL);
+        CC_CHECK(!CcMetagameExecute(&game, "underroad search", output, sizeof(output)));
+        CC_CHECK(strstr(output, "already been searched") != NULL);
+        CC_CHECK(CcMetagameExecute(&game, "underroad retreat", output, sizeof(output)));
+        CheckUnderroadText(&game, output, sizeof(output));
+    }
+    CcMetagameInit(&game, UINT32_C(0x71a7e5));
+    game.sim.player.location_id = game.sim.dungeons[0].settlement_id;
+    game.sim.carriage.location_id = game.sim.player.location_id;
+    game.sim.player.cargo[CC_GOOD_FOOD] = 8;
+    CC_CHECK(CcMetagameExecute(&game, "underroad enter", output, sizeof(output)));
+    const int32_t path[] = {1, 2, 5, 23, 8};
+    for (size_t step = 0U; step < sizeof(path) / sizeof(path[0]); ++step) {
+        if (game.sim.dungeon_expedition.encounter_kind != CC_DUNGEON_ENCOUNTER_NONE) {
+            game.sim.dungeon_expedition.encounter_reaction = 12;
+            CC_CHECK(CcMetagameExecute(&game, "underroad parley", output, sizeof(output)));
+        }
+        int32_t exit_number = 0;
+        for (int32_t e = 0; e < CcSimDungeonVisibleExitCount(&game.sim); ++e) {
+            if (CcSimDungeonVisibleExitAt(&game.sim, e) == path[step]) exit_number = e + 1;
+        }
+        CC_CHECK(exit_number > 0);
+        ExecuteNumber(&game, "underroad move", exit_number, output, sizeof(output));
+        CC_CHECK((game.sim.dungeons[0].rooms[path[step]].state_flags & CC_DUNGEON_ROOM_DISCOVERED) != 0U);
+        if (path[step] == 23 || path[step] == 8) {
+            if (game.sim.dungeon_expedition.encounter_kind != CC_DUNGEON_ENCOUNTER_NONE) {
+                game.sim.dungeon_expedition.encounter_reaction = 12;
+                CC_CHECK(CcMetagameExecute(&game, "underroad parley", output, sizeof(output)));
+            }
+            CheckUnderroadText(&game, output, sizeof(output));
+            CC_CHECK(CcStoryUnderroadCurrentExcerpt(&game.sim).line_count == CC_STORY_UNDERROAD_STANZA_LINES);
+        }
+    }
+}
+
 int main(void)
 {
+    CheckEatenBellEpisode();
     CheckJourneyContext();
     char output[16384];
     char error[192];

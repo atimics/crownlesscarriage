@@ -324,6 +324,93 @@ static const CcStoryLineTemplate STORY_LINES[] = {
 #undef STORY_LINE
 #undef STORY_RELATIONSHIP_LINE
 
+typedef struct CcUnderroadFragment {
+    int32_t room_index;
+    const char *room_name;
+    CcDungeonRoomKind room_kind;
+    char lines[CC_STORY_UNDERROAD_MAX_LINES][CC_STORY_UNDERROAD_LINE_CAPACITY];
+} CcUnderroadFragment;
+
+static const CcUnderroadFragment UNDERROAD_FRAGMENTS[] = {
+    {8, "Bell Shaft", CC_DUNGEON_ROOM_SHAFT, {
+        "Old journal, The Bell That Was Eaten: 'Eira went first, her arm barring the shaft.'",
+        "'Arin unfolded his map. Where was the bell? I wrote down the silence instead.'",
+        "'Eira: Stay behind me. Arin: A shaft for a bell, but no room for its swing?'",
+        "Under the journal's folded leaf: 'The bell was swallowed, a porter told us. Not stolen.'",
+        "'Arin: Then where did its sound go? Eira: Do not lean over to ask.'",
+        "'I kept writing. Below my question, someone had drawn a second mouth.'"
+    }},
+    {10, "Hall of Ash Clerks", CC_DUNGEON_ROOM_ARCHIVE, {
+        "An ash clerk's deposition: 'Red, Purple, Blue: rival goblin colors, not one congregation.'",
+        "'Human and goblin cultists knelt together. The porters waited outside, still owed their bread.'",
+        "'A Red collector said: The dragon favors us. A Blue porter asked: Does favor carry its own sacks?'",
+        "On the deposition's reverse: 'A Purple clerk refused to count the kneeling as all goblins.'",
+        "'We carry tribute, a porter said. That does not mean we worship what takes it.'",
+        "The clerk records the cult's belief: 'The swallowed bell still calls. Silence is its congregation.'"
+    }},
+    {17, "Furnace Shrine", CC_DUNGEON_ROOM_SHRINE, {
+        "A scorched ritual copy calls the dragon an unending invocation; this is the cult's belief.",
+        "Its speaker's part reads: 'The cult does not summon me. I am the summoning that never ended'.",
+        "Beside it, a witness wrote: 'Two violet lights opened where I had expected an altar.'",
+        "Beneath the ritual copy, an untranslated liturgical refrain:",
+        "'Zrrathek voruul. Kna'zoth deri'shka.'",
+        "A witness's marginal note: 'The second mouth moved. The kneeling mouths tried to keep up.'"
+    }},
+    {18, "Porters' Grave", CC_DUNGEON_ROOM_VAULT, {
+        "A porter's memorial: 'They entered our names as offerings. We had signed for wages.'",
+        "'Red sacks, Blue straps, Purple tallies. Under the loads our shoulders were the same.'",
+        "'Tell the clerks: a dead carrier is not proof that the road wanted carrying.'",
+        "Behind the memorial, a copied exchange: 'Priest: The silence knows you. Porter: Then it knows my price.'",
+        "'Eira: We can turn back. Arin: But the map ends here. Eira: We do not have to.'",
+        "The journal's writer adds: 'I copied their refusal before I copied another prayer.'"
+    }},
+    {19, "Hoard Threshold", CC_DUNGEON_ROOM_THRESHOLD, {
+        "A torn witness account: 'Two violet lights found us. Beneath them, the second mouth opened.'",
+        "'Arin said, You are-- and stopped. Eira put herself between him and what he could not name.'",
+        "'It felt like recognition, but hungry. I wrote that it knew us. I cannot prove that it did.'",
+        "Inside the torn fold: 'A cultist called it welcome. The porter beside me called it appetite.'",
+        "'Dragon favor is not friendship, she said. Do not mistake being spared for being loved.'",
+        "'Eira took Arin's map hand. I shut the book before I could finish his sentence for him.'"
+    }},
+    {23, "King's Survey Room", CC_DUNGEON_ROOM_ARCHIVE, {
+        "An old survey copy bears a note signed Arin: 'The Bell That Was Eaten is testimony, not a scale map.'",
+        "'I drew a circle for the missing bell. Eira asked whether it marked a place or a fear.'",
+        "The accompanying journal says: 'I am the one who wrote our descent. Do not mistake ink for witness.'",
+        "Under the survey backing: 'Arin: Should I close the circle? Eira: Leave us a way out.'",
+        "The writer's last note: 'The cult called silence an answer. The porters kept the right to disagree.'",
+        "'I left You are-- unfinished. Let no later hand turn our uncertainty into a command to kneel.'"
+    }}
+};
+
+CcStoryUnderroadExcerpt CcStoryUnderroadCurrentExcerpt(const CcSim *sim)
+{
+    CcStoryUnderroadExcerpt excerpt = {0};
+    if (sim == NULL || !sim->dungeon_expedition.active ||
+        sim->dungeon_expedition.encounter_kind != CC_DUNGEON_ENCOUNTER_NONE ||
+        sim->dungeon_count <= 0 || sim->dungeon_count > CC_MAX_DUNGEONS) return excerpt;
+    const CcDungeon *dungeon = CcSimDungeon(sim, sim->dungeon_expedition.dungeon_id);
+    int32_t index = sim->dungeon_expedition.current_room;
+    if (dungeon == NULL || dungeon->room_count <= 0 ||
+        dungeon->room_count > CC_MAX_DUNGEON_ROOMS || index < 0 ||
+        index >= dungeon->room_count) return excerpt;
+    const CcDungeonRoom *room = &dungeon->rooms[index];
+    if ((room->state_flags & CC_DUNGEON_ROOM_DISCOVERED) == 0U) return excerpt;
+    for (size_t i = 0U; i < sizeof(UNDERROAD_FRAGMENTS) / sizeof(UNDERROAD_FRAGMENTS[0]); ++i) {
+        const CcUnderroadFragment *fragment = &UNDERROAD_FRAGMENTS[i];
+        if (index != fragment->room_index || room->kind != fragment->room_kind ||
+            strncmp(room->name, fragment->room_name, sizeof(room->name)) != 0) continue;
+        excerpt.title = "The Bell That Was Eaten";
+        excerpt.searched = (room->state_flags & CC_DUNGEON_ROOM_SEARCHED) != 0U;
+        excerpt.line_count = excerpt.searched ? CC_STORY_UNDERROAD_MAX_LINES :
+                                               CC_STORY_UNDERROAD_STANZA_LINES;
+        for (size_t line = 0U; line < excerpt.line_count; ++line) {
+            excerpt.lines[line] = fragment->lines[line];
+        }
+        break;
+    }
+    return excerpt;
+}
+
 static CcStorySpeakerRole CharacterRole(const CcSituation *situation,
                                         const CcCharacter *character)
 {

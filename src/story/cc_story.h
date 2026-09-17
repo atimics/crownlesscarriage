@@ -57,4 +57,19 @@ const char *CcStoryPlayerChoiceText(CcSituationKind kind,
                                     CcStoryPlayerChoice choice);
 const char *CcStoryRoadCompanyLine(const CcBanditGroup *company);
 
+enum {
+    CC_STORY_UNDERROAD_STANZA_LINES = 3,
+    CC_STORY_UNDERROAD_MAX_LINES = 6,
+    CC_STORY_UNDERROAD_LINE_CAPACITY = 112
+};
+
+typedef struct CcStoryUnderroadExcerpt {
+    const char *title;
+    const char *lines[CC_STORY_UNDERROAD_MAX_LINES];
+    size_t line_count;
+    bool searched;
+} CcStoryUnderroadExcerpt;
+
+CcStoryUnderroadExcerpt CcStoryUnderroadCurrentExcerpt(const CcSim *sim);
+
 #endif
