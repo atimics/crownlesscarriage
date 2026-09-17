@@ -67,3 +67,46 @@ for rule in data['rules']:
                 assert omitted == expected, (rule['id'], omitted, expected)
         count += 1
 print(f'{count} native grammar forms passed with role and malformed-input checks')
+
+# The inverse: a spoken rendering parses back to its event. Kind-constrained
+# where it matters, because two kinds (goblin and settlement raid) render
+# identically and only the actor's type tells them apart -- the sim knows its
+# own actor, so it parses with the kind in hand.
+inverse = 0
+for rule in data['rules']:
+    fields = [values[x] for x in rule['roles']]
+    for slot, allowed in rule.get('allowed', {}).items():
+        fields[int(slot)] = allowed[0]
+    if 'less_than' in rule: fields[rule['less_than'][1]] = '8'
+    for template in rule['outputs'] + [rule['challenge']]:
+        speech = template.format(*fields)
+        parsed = json.loads(subprocess.check_output(
+            [sys.argv[1], '--parse-kind', str(kinds[rule['kind']]), speech], text=True))
+        assert parsed['kind'] == kinds[rule['kind']], (rule['id'], speech, parsed)
+        inverse += 1
+        # Every recovered span slices the speech it was parsed from.
+        raw = speech.encode()
+        for field in parsed['fields']:
+            assert raw[field['start']:field['end']].decode() == field['text'], (rule['id'], field)
+            # When the parse lands on the rendered rule, the slots that the
+            # template carries recover exactly the values it was written from.
+        if parsed['rule'] == rule['id']:
+            used = {int(x) for x in re.findall(r'\{(\d)\}', template)}
+            for field in parsed['fields']:
+                if field['field'] in used:
+                    assert field['text'] == fields[field['field']], (rule['id'], field, fields)
+        # A hedged or retold telling carries a known tail in place of the period.
+        if speech.endswith('.'):
+            for tail in (', so people say.', ', if the story is right.',
+                         ', according to the word going round.'):
+                parses = subprocess.run(
+                    [sys.argv[1], '--parse-kind', str(kinds[rule['kind']]), speech[:-1] + tail],
+                    capture_output=True, text=True)
+                assert parses.returncode == 0, (rule['id'], speech[:-1] + tail)
+# The inverse abstains rather than guessing at speech no rule renders.
+assert subprocess.run([sys.argv[1], '--parse', 'nothing here matches a rule.'],
+                      capture_output=True).returncode == 1
+assert subprocess.run([sys.argv[1], '--parse-kind', '0', 'nothing here matches a rule.'],
+                      capture_output=True).returncode == 1
+print(f'{inverse} spoken renderings parsed back to their event, tails and abstention checked')
+

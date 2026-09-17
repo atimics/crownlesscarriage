@@ -88,6 +88,14 @@ typedef struct CcCoreMind {
 bool CcCoreAccountPrepare(CcEventKind kind, const char *held_text,
                           int32_t confidence, int32_t retellings,
                           CcCoreAccount *account);
+/* The inverse: recover the event a spoken rendering came from. `Parse` tries
+   every rule's speech renderings; `ParseKind` only those of one kind, for a
+   caller that already knows what it is listening for. Both strip a known
+   evidential tail and abstain rather than guess. */
+bool CcCoreAccountParse(const char *speech, CcCoreAccount *account);
+bool CcCoreAccountParseKind(CcEventKind kind, const char *speech,
+                            CcCoreAccount *account);
+CcEventKind CcCoreAccountKind(const CcCoreAccount *account);
 bool CcCoreAccountRender(const CcCoreAccount *account, uint32_t variant,
                          char *text, size_t capacity);
 const char *CcCoreAccountRule(const CcCoreAccount *account);

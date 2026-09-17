@@ -36,8 +36,9 @@ def compile_rules(check=False):
         positive = sum(1 << i for i in r.get('positive', []))
         left, right = r.get('less_than', [-1, -1])
         if left >= 0: assert r['roles'][left] == r['roles'][right] == 'quantity'
-        lines.append('{CC_EVENT_%s, %s, %s, {%s, %s}, %d, {%s}, {%s}, %d, %d, %d},' % (
+        lines.append('{CC_EVENT_%s, %s, %s, {%s, %s}, %s, %d, {%s}, {%s}, %d, %d, %d},' % (
             r['kind'], q(r['id']), q(r['source']), q(r['outputs'][0]), q(r['outputs'][1]),
+            q(r['challenge']),
             len(r['roles']), ', '.join(map(str, roles)), ', '.join(allowed), positive, left, right))
     coverage = {'version': 1, 'grammar_sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
                 'event_count': len(kinds), 'rule_count': len(ids), 'events': []}
