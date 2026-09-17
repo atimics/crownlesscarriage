@@ -6219,9 +6219,22 @@ static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
                         CcGossipLanguage mind_memories[CC_CORE_MIND_LINES];
                         ClientMindFor(sim, person, sim->player.id, &carrier->versions[slot],
                             &mind, mind_memories);
+                        CcCoreControl move = CcCoreConversationNextMove(
+                            &core_conversation, speech->speaker_id);
+                        /* Share a held memory the conversation named, when the
+                           speaker trusts the listener enough to offer it. The
+                           chosen memory is presented alone and cued as recall,
+                           so the reply reproduces it exactly. */
+                        const char *share = CcCoreMemoryShare(&mind,
+                            core_conversation.history, core_conversation.count,
+                            mind.trusts_listener);
+                        if (share != NULL) {
+                            mind.memories[0] = share;
+                            mind.memory_count = 1;
+                            move = CC_CORE_CONTROL_RECALL;
+                        }
                         (void)CcCoreConversationPrepareMind(&core_conversation, &account,
-                            &mind, CcCoreConversationNextMove(&core_conversation,
-                                speech->speaker_id), speech);
+                            &mind, move, speech);
                     } else {
                         (void)CcCoreConversationPrepare(&core_conversation, &account, speech);
                     }

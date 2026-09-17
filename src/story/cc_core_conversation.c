@@ -1,5 +1,6 @@
 #include "story/cc_hrakhor.h"
 #include "story/cc_core_conversation.h"
+#include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -66,8 +67,50 @@ CcCoreControl CcCoreConversationNextMove(const CcCoreConversation *c, CcId speak
     return MOVE_REPLIES[c->last_move][(hash >> 32) & 3U];
 }
 
-static void Remember(CcCoreConversation *c, CcId speaker, const char *text)
+/* Words long enough to be names or content, matched case-insensitively. The
+   retrieval measurement put lexical overlap at 83% top-1 against 21% for the
+   budget-free embedder, so the cheap exact signal is the one to use. */
+static size_t SharedWords(const char *a, const char *b)
 {
+    size_t score = 0U;
+    for (const char *p = a; *p != '\0';) {
+        if (!isalnum((unsigned char)*p)) { ++p; continue; }
+        const char *start = p;
+        while (*p != '\0' && isalnum((unsigned char)*p)) ++p;
+        size_t length = (size_t)(p - start);
+        if (length < 4U) continue;
+        for (const char *q = b; *q != '\0';) {
+            if (!isalnum((unsigned char)*q)) { ++q; continue; }
+            const char *other = q;
+            while (*q != '\0' && isalnum((unsigned char)*q)) ++q;
+            if ((size_t)(q - other) != length) continue;
+            size_t k = 0U;
+            while (k < length &&
+                   tolower((unsigned char)start[k]) == tolower((unsigned char)other[k])) ++k;
+            if (k == length) { ++score; break; }
+        }
+    }
+    return score;
+}
+
+const char *CcCoreMemoryShare(const CcCoreMind *mind, const CcCoreSpoken *history,
+                              size_t count, bool willing)
+{
+    if (mind == NULL || !willing || (count > 0U && history == NULL)) return NULL;
+    const char *best = NULL;
+    size_t best_score = 0U;
+    for (size_t i = 0U; i < mind->memory_count && i < CC_CORE_MIND_LINES; ++i) {
+        const char *memory = mind->memories[i];
+        if (memory == NULL || memory[0] == '\0') continue;
+        size_t score = 0U;
+        for (size_t h = 0U; h < count; ++h)
+            score += SharedWords(memory, history[h].text);
+        if (score > best_score) { best_score = score; best = memory; }
+    }
+    return best;
+}
+
+static void Remember(CcCoreConversation *c, CcId speaker, const char *text){
     if (text == NULL || text[0] == '\0' || strlen(text) >= CC_CORE_UTTERANCE) return;
     if (c->count == CC_CORE_HISTORY) {
         memmove(c->history, c->history + 1, (CC_CORE_HISTORY - 1U) * sizeof(c->history[0]));

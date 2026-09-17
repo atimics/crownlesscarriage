@@ -29,6 +29,13 @@ typedef struct CcCoreConversation {
 /* The move that follows the one just spoken. A conversation that cues the same
    move every turn gets the same answer every turn; this is what stops that. */
 CcCoreControl CcCoreConversationNextMove(const CcCoreConversation *conversation, CcId speaker);
+/* A memory to share into the conversation: the held memory that names
+   something the conversation named, or NULL when none does or the speaker is
+   unwilling. Willingness is the speaker's trust in the listener, decided by the
+   caller; the match is lexical, which beat the budget-free embedder on this
+   world's entity-grounded relevance. */
+const char *CcCoreMemoryShare(const CcCoreMind *mind, const CcCoreSpoken *history,
+                              size_t count, bool willing);
 void CcCoreConversationReset(CcCoreConversation *conversation);
 void CcCoreConversationHear(CcCoreConversation *conversation, CcId speaker, const char *text);
 /* The prepared speech supplies the speaker and source identity. */
