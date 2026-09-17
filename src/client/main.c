@@ -250,6 +250,9 @@ typedef struct LocalState {
     CcWorldStream world_stream;
     CcLocalAgent agent;
     CcLocalCourse course;
+    int32_t mine_facing;
+    CcMinePhase mine_view_phase;
+    float mine_cooldown;
     CcLocalConvoyState convoy;
     CcLocalWorldCarriageState world_carriage;
     CcClientDepartureTransition departure;
@@ -8356,7 +8359,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             *save_feedback_age=0.0f;
             (void)SaveClientWorld(*journal,sim,local,save_path,session_path,save_feedback,save_feedback_capacity);
             (void)snprintf(message,message_capacity,"%s",save_feedback);
-        } else HandleMineInput(*journal,sim,local_target,delta_time,message,message_capacity);
+        } else HandleMineInput(*journal,sim,local,delta_time,message,message_capacity);
         return;
     }
     if (HandleCaravanRecovery(local, view, return_view, GetTime(),
@@ -11226,7 +11229,7 @@ int main(int argc, char **argv)
         if(sim.mine.phase != CC_MINE_NONE && !persistence_blocked &&
             (view == VIEW_LOCAL || view == VIEW_ROADS)) {
             CcOverlayFlush();
-            DrawMineScene(&sim,&local.agent,local_target,message);
+            DrawMineScene(&sim,&local,local_target,message);
             CcOverlayFlush();
         }
         if (frontend.screen != FRONTEND_PLAYING) {

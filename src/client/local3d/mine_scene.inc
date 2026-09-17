@@ -1,36 +1,29 @@
 #include "sim/cc_mine.h"
 
-/* Each room is staged as a fixed view. The high dungeon views keep a
-   visible wall face and the full character silhouette. */
-Camera3D CcLocalMineCamera(const CcSim *sim)
+Camera3D CcLocalMineCamera(const CcSim *sim, int32_t facing)
 {
-    bool underground=sim->mine.phase==CC_MINE_LEVEL;
-    Vector3 focus,offset;
-    float lens;
-    if(underground) {
-        int column=sim->mine.x<10?0:sim->mine.x<22?1:2;
-        const float centers[]={5.0f,15.5f,26.0f};
-        focus=(Vector3){centers[column],0,sim->mine.y<10?4.0f:15.5f};
-        offset=(Vector3){3.8f,19.0f,10.0f}; lens=48.0f;
-    } else if(sim->mine.y<10) {
-        focus=(Vector3){15,0,6};offset=(Vector3){-15,13,18};lens=53;
-    } else {
-        focus=(Vector3){15,0,14};offset=(Vector3){-17,14,21};lens=53;
+    if(sim->mine.phase==CC_MINE_LEVEL) {
+        const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
+        facing=((facing%4)+4)%4;
+        Vector3 eye={(float)sim->mine.x,1.15f,(float)sim->mine.y};
+        return (Camera3D){.position=eye,
+            .target={eye.x+(float)dx[facing],eye.y,eye.z+(float)dy[facing]},
+            .up={0,1,0},.fovy=64,.projection=CAMERA_PERSPECTIVE};
     }
-    return PerspectiveCameraComposed(focus,offset,lens);
+    return PerspectiveCameraComposed((Vector3){15,0,10},(Vector3){-22,16,6},53);
 }
 static void MineBox(float x,float y,float z,float w,float h,float d,Color color)
 {
     DrawCube((Vector3){x,y,z},w,h,d,color);
 }
-void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
+void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,int32_t facing,
                        RenderTexture2D target,Rectangle destination)
 {
     PrepareRuntimeAssets(0U);
-    bool overhead=sim->mine.phase==CC_MINE_LEVEL;
-    Camera3D camera=CcLocalMineCamera(sim);
+    bool underground=sim->mine.phase==CC_MINE_LEVEL;
+    Camera3D camera=CcLocalMineCamera(sim,facing);
     ArtComposition art=ROAD_ART_COMPOSITION;
-    art.light_profile=overhead?ART_LIGHT_INTERIOR_EMBER:ART_LIGHT_STORYBOOK;
+    art.light_profile=underground?ART_LIGHT_INTERIOR_EMBER:ART_LIGHT_STORYBOOK;
     art.focal_point=camera.target;
     CcLocalAgent hero;
     CcLocalAgentInit(&hero,(Vector2){0,0},true);
@@ -44,12 +37,13 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
     ClearBackground(ArtLightBackground(art.light_profile));
     BeginMode3D(camera);
     BeginWorldLighting(camera,&art);
-    if (overhead) {
+    if (underground) {
         for (int y=1;y<CC_MINE_HEIGHT-1;++y) for(int x=1;x<CC_MINE_WIDTH-1;++x) {
             bool walk=CcMineWalkable(sim,CC_MINE_LEVEL,x,y);
             if(walk) {
                 Color tint=((x+y)%2)?floor:(Color){179,171,145,255};
-                MineBox((float)x,0,(float)y,1.0f,.12f,1.0f,tint);
+                MineBox((float)x,-.08f,(float)y,.98f,.12f,.98f,tint);
+                MineBox((float)x,2.5f,(float)y,1,.12f,1,(Color){59,61,61,255});
             } else {
                 bool edge=CcMineWalkable(sim,CC_MINE_LEVEL,x+1,y)||CcMineWalkable(sim,CC_MINE_LEVEL,x-1,y)||
                     CcMineWalkable(sim,CC_MINE_LEVEL,x,y+1)||CcMineWalkable(sim,CC_MINE_LEVEL,x,y-1);
