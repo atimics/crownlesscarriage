@@ -7,7 +7,7 @@ from pathlib import Path
 import struct
 
 ROOT = Path(__file__).resolve().parents[2]
-MODEL_SHA = '41f949b7b81bcaf466d3624fc4ca35d77571cba74e4214b376a022e21432c21b'
+MODEL_SHA = '7d1c3cd5e46738ba7cd60673e58f05e12535ac46204b07a8449f41a6fcb936c9'
 TOKENIZER_SHA = 'c572de53eb4e739a8ce941ac03d1d5fb6173623af786787cf786b41fd34e9af4'
 
 

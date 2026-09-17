@@ -31,6 +31,8 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--zero', type=Path, required=True)
 p.add_argument('--checkpoint', type=Path, required=True)
 p.add_argument('--tokenizer', type=Path, required=True)
+p.add_argument('--corpus', type=Path, required=True,
+               help='Corpus directory holding the split (e.g. <zero>/out/crownless-moves-v8)')
 p.add_argument('--split', default='wording')
 a = p.parse_args()
 sys.path.insert(0, str(a.zero / 'scripts'))
@@ -59,7 +61,7 @@ def main():
     model, meta = load_export(a.checkpoint, a.tokenizer)
     tokenizer = Tokenizer.from_file(str(a.tokenizer))
     M = meta['meaning_ids']
-    rows = [json.loads(l) for l in open(a.zero / f'out/crownless-moves-v7/{a.split}.jsonl')]
+    rows = [json.loads(l) for l in open(a.corpus / f'{a.split}.jsonl')]
     rows = [dict(r, kind_id=M[r['rule']]) for r in rows if r['rule'] in M]
     held = [r for r in rows if r['move'] == 'recall' and r['mind']['memories']]
 

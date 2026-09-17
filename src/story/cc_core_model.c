@@ -490,6 +490,23 @@ bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
         }
         ++n;
     }
+    /* A recalled memory is offered as a copy candidate beside the account
+       fields, so the reply reproduces it instead of reaching for a memorised
+       line. Field 8 borrows marker [F7] (token 8); only a recall cue adds it.
+       Mirrors crownless_v2.encode_row one for one. */
+    if (mind != NULL && control == CC_CORE_CONTROL_RECALL && mind->memory_count > 0U) {
+        const char *memory = mind->memories[mind->memory_count - 1U];
+        size_t length = strlen(memory);
+        if (length < sizeof(m->literals[0])) {
+            m->tokens[n] = 8;
+            m->meta[n][0] = 0; m->meta[n][1] = CC_CORE_KNOWN;
+            m->meta[n][2] = 3; m->meta[n][3] = 1;
+            int c = m->candidates++;
+            m->positions[c] = n; m->feedback[c] = 8;
+            memcpy(m->literals[c], memory, length); m->literals[c][length] = '\0';
+            ++n;
+        }
+    }
     added = CcCoreModelEncode("\n", m->tokens + n, CONTEXT - n);
     if (added < 0) return false;
     n += added;

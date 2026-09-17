@@ -1,5 +1,5 @@
 {
-  "model_sha256": "41f949b7b81bcaf466d3624fc4ca35d77571cba74e4214b376a022e21432c21b",
+  "model_sha256": "7d1c3cd5e46738ba7cd60673e58f05e12535ac46204b07a8449f41a6fcb936c9",
   "vocabulary": [
     "a",
     "abbacy",
@@ -10,11 +10,13 @@
     "according",
     "account",
     "accounts",
+    "act",
     "action",
     "actor",
     "added",
     "adult",
     "afford",
+    "afraid",
     "after",
     "again",
     "against",
@@ -201,6 +203,7 @@
     "continued",
     "convoy",
     "copper",
+    "costs",
     "could",
     "council",
     "count",
@@ -232,12 +235,15 @@
     "cuts",
     "cutting",
     "damage",
+    "danger",
     "dangerous",
     "dark",
     "date",
     "day",
     "days",
     "dead",
+    "decide",
+    "decided",
     "declared",
     "decree",
     "defers",
@@ -554,12 +560,14 @@
     "lost",
     "lot",
     "loud",
+    "loudly",
     "low",
     "luck",
     "made",
     "make",
     "makes",
     "making",
+    "man",
     "many",
     "mara",
     "march",
@@ -587,6 +595,7 @@
     "mills",
     "millstone",
     "mind",
+    "mine",
     "missing",
     "mob",
     "monastic",
@@ -615,6 +624,7 @@
     "negotiable",
     "neighbors",
     "neighbours",
+    "nerve",
     "network",
     "new",
     "news",
@@ -681,6 +691,7 @@
     "people",
     "perhaps",
     "place",
+    "plain",
     "plan",
     "plant",
     "pleasant",
@@ -697,9 +708,11 @@
     "power",
     "pray",
     "prayer",
+    "press",
     "pressure",
     "pretender",
     "previous",
+    "price",
     "produce",
     "produced",
     "production",
@@ -952,6 +965,7 @@
     "taking",
     "tale",
     "talk",
+    "talked",
     "talking",
     "target",
     "taste",
@@ -1084,6 +1098,7 @@
     "went",
     "were",
     "what",
+    "whatever",
     "wheat",
     "wheel",
     "wheels",
@@ -1144,7 +1159,7 @@
     "élodie"
   ],
   "zero_sources": {
-    "crownless_v2.py": "5ede4180a100ce6bd4c8f688486757c29e74994f264ce5f9a453a5f84a61da7f",
+    "crownless_v2.py": "f75bdb231ffe9de2f788ad9c80cba1b5e88203de2eb482a1d7d9f9d8e6ce5aca",
     "crownless_v2_export.py": "59249330258aff74b7f206a03f85024cad0200e536df3d1a4eab2fde245c0a6a",
     "speak_crownless_v2.py": "773bf6c008fa364afaf6e059998400b3723013805c9779893b36778f891b5725",
     "crownless_conversation.py": "5c0bfa7ae7b0474ae73bdbf3b55318b59e0cf4d4c548d6806c09a2471bfb9b78",
@@ -1349,7 +1364,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Harthwin Orehauler joined The Ditch Parliament after seeking food at Gloamgate."
+      "text": "After seeking food at Gloamgate, Harthwin Orehauler joined The Ditch Parliament."
     },
     {
       "kind": 133,
@@ -1381,7 +1396,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Wardis Rillbank joined The Ditch Parliament after seeking food at Gloamgate."
+      "text": "After seeking food at Gloamgate, Wardis Rillbank joined The Ditch Parliament."
     },
     {
       "kind": 79,
@@ -1493,7 +1508,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Spirel Spirebank joined The Ditch Parliament after seeking food at Silverwick."
+      "text": "After seeking food at Silverwick, Spirel Spirebank joined The Ditch Parliament."
     },
     {
       "kind": 117,
@@ -1509,7 +1524,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Silven Quill joined The Ditch Parliament after seeking food at Silverwick."
+      "text": "After seeking food at Silverwick, Silven Quill joined The Ditch Parliament."
     },
     {
       "kind": 49,
@@ -1525,7 +1540,7 @@
       "confidence": 51,
       "retellings": 5,
       "history": [],
-      "text": "Wardis Rillbank joined The Ditch Parliament after seeking food at Gloamgate, so people say."
+      "text": "After seeking food at Gloamgate, Wardis Rillbank joined The Ditch Parliament, according to the word going round."
     },
     {
       "kind": 5,
@@ -1533,7 +1548,7 @@
       "confidence": 51,
       "retellings": 5,
       "history": [],
-      "text": "Harthwin Orehauler joined The Ditch Parliament after seeking food at Gloamgate, so people say."
+      "text": "After seeking food at Gloamgate, Harthwin Orehauler joined The Ditch Parliament, according to the word going round."
     },
     {
       "kind": 5,
@@ -1541,7 +1556,7 @@
       "confidence": 93,
       "retellings": 1,
       "history": [],
-      "text": "Barret Relicward joined The Ditch Parliament after seeking food at Gloamgate."
+      "text": "After seeking food at Gloamgate, Barret Relicward joined The Ditch Parliament."
     },
     {
       "kind": 2,
@@ -1597,7 +1612,7 @@
       "confidence": 48,
       "retellings": 5,
       "history": [],
-      "text": "Silven Quill joined The Ditch Parliament after seeking food at Silverwick, so people say."
+      "text": "After seeking food at Silverwick, Silven Quill joined The Ditch Parliament, according to the word going round."
     },
     {
       "kind": 5,
@@ -1605,7 +1620,7 @@
       "confidence": 49,
       "retellings": 5,
       "history": [],
-      "text": "Spirel Spirebank joined The Ditch Parliament after seeking food at Silverwick, so people say."
+      "text": "After seeking food at Silverwick, Spirel Spirebank joined The Ditch Parliament, according to the word going round."
     },
     {
       "kind": 118,
@@ -1629,7 +1644,7 @@
       "confidence": 51,
       "retellings": 5,
       "history": [],
-      "text": "Barret Relicward joined The Ditch Parliament after seeking food at Gloamgate, so people say."
+      "text": "After seeking food at Gloamgate, Barret Relicward joined The Ditch Parliament, according to the word going round."
     },
     {
       "kind": 79,
@@ -2121,7 +2136,7 @@
       "history": [
         "Who told you?"
       ],
-      "text": "Élodie's drought harvest fell short of what the southern settlements needed, if the story is right."
+      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, if the rumour is true."
     },
     {
       "kind": 0,
@@ -2161,7 +2176,7 @@
       "history": [
         "Who told you?"
       ],
-      "text": "Élodie's drought harvest fell short of what the southern settlements needed, so people say."
+      "text": "The drought harvest in Élodie fell short of supplies for the southern settlements, according to the word going round."
     },
     {
       "kind": 0,
@@ -2248,7 +2263,7 @@
         "Let's ask around before we pass it on.",
         "Agreed. Let's leave it there for now."
       ],
-      "text": "Someone will know the price of it. We should ask someone who was there."
+      "text": "Ask what it costs before we act. We should ask someone who was there."
     },
     {
       "kind": 133,
@@ -2287,7 +2302,7 @@
       "memories": [],
       "thoughts": [],
       "history": [],
-      "text": "I came, I will apar more. I came to warn you. Harthwin Orehauler joined The Ditch Parliament after seeking food at Gloamgate."
+      "text": "I came, I will apar. I remember when this was a quiet road. Now every raid is a memory."
     },
     {
       "kind": 133,
@@ -2300,7 +2315,7 @@
       "history": [
         "What have you heard?"
       ],
-      "text": "I would rather someone else said it. I would rather be doing than talking."
+      "text": "I would rather someone else said it. It came to me second hand. I could not name who first."
     },
     {
       "kind": 123,
@@ -2350,7 +2365,7 @@
       "memories": [],
       "thoughts": [],
       "history": [],
-      "text": "I walked in with it this morning. I bring word from further than here. Star Oath put money into Hollowbarrow's market to buy grain shipments, so people say."
+      "text": "I only just came down the road. I bring word from further than here. Star Oath put money into Hollowbarrow's market to buy grain shipments, so people say."
     },
     {
       "kind": 78,
@@ -2377,6 +2392,34 @@
         "What have you heard?"
       ],
       "text": "Alderwatch raised lambs and added yearlings to the adult flock, so people say."
+    },
+    {
+      "kind": 133,
+      "account": "Mara Venn posts a notice at Thornford: Relief charter.",
+      "confidence": 93,
+      "retellings": 1,
+      "mind": "baker:keep_order:high:low:recall:0:1:0:0:0::0",
+      "memories": [
+        "Silverwick repaired public buildings with stone."
+      ],
+      "thoughts": [],
+      "history": [],
+      "text": "I remember the old days, before the troubles. This feels like one of them. It reminds me of when Silverwick repaired public buildings with stone."
+    },
+    {
+      "kind": 0,
+      "account": "Thornford's drought harvest cannot supply the eastern settlements.",
+      "confidence": 93,
+      "retellings": 1,
+      "mind": "baker:keep_order:high:low:recall:0:1:0:0:0::0",
+      "memories": [
+        "Silverwick repaired public buildings with stone."
+      ],
+      "thoughts": [],
+      "history": [
+        "What have you heard?"
+      ],
+      "text": "The last shortage led Thornford to slaughter cattle for beef."
     }
   ],
   "tokenizer": [

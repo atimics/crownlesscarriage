@@ -124,6 +124,36 @@ for index, base in enumerate(rows):
     if not output['stopped']: raise ValueError('Mind reference did not stop')
     case['text'] = output['text']
     cases.append(case)
+# Recall and muse controls, which the index cycle above does not reach, and a
+# held memory: these exercise the memory copy candidate (field 8, marker [F7]).
+# The memory text is fixed so both runtimes offer the same candidate and the
+# copy parity is pinned, not left to chance.
+MEMORY = 'Silverwick repaired public buildings with stone.'
+for index, base in enumerate([r for r in rows if r['parsed']][:2]):
+    held = base['account']
+    case = {'kind': base['kind'], 'account': held['account'], 'confidence': held['confidence'],
+            'retellings': held['retellings']}
+    packet = json.loads(subprocess.check_output(
+        [str(a.account_probe),str(case['kind']),str(case['confidence']),'0',case['account'],'--packet'],text=True))
+    row = packet_record(packet,retold=case['retellings']>=4)
+    row['kind_id'] = meta['meaning_ids'][packet['rule']]
+    row['voice'] = 'baker'
+    row['control'] = 'recall'
+    row['mind'] = {'goal':'keep_order','stress':'high','courage':'low',
+                   'memories':[MEMORY],'thoughts':[]}
+    row['situation'] = {'hungry': False, 'sheltered': True, 'in_transit': False}
+    row['social'] = {'owes_listener': False, 'trusts_listener': False,
+                     'faction': None, 'far_from_home': False}
+    row['history'] = [{'speaker':'other','text':'What have you heard?'}] if index else []
+    case['mind'] = 'baker:keep_order:high:low:recall:0:1:0:0:0::0'
+    case['memories'] = [MEMORY]
+    case['thoughts'] = []
+    case['history'] = [h['text'] for h in row['history']]
+    output = generate(model,tokenizer,encode_row(tokenizer,row,slots=True,conversation=True,
+                                                 typed_stance=True, situation=True, social=True))
+    if not output['stopped']: raise ValueError('Recall reference did not stop')
+    case['text'] = output['text']
+    cases.append(case)
 rng = random.Random(41)
 texts = ['self: [F0] has heard a different account.\n- ~ [F0]\n', "I'm unsure. It's hers. We'll see."]
 texts += [''.join(rng.choice(['word','Élodie','_','  ','\n','!',"'re",'[F0]','42','🤔','家']) for _ in range(10)) for _ in range(300)]
@@ -152,6 +182,7 @@ for pool in ('AFFIRM', 'DEFER', 'SETTLE', 'PART', 'HEDGE', 'ATTRIBUTE',
 # Predicament and company openings are authored pools too, quoted verbatim.
 _words(getattr(crownless_moves, 'SITUATION_MARKS'), allowed)
 _words(getattr(crownless_moves, 'SOCIAL_MARKS'), allowed)
+_words(getattr(crownless_moves, 'STANCE_MARKS'), allowed)
 # The reviewed conversation transcript supplies the ordinary dialogue words a
 # reply may reach for without inventing anything.
 _words([turn['text'] for turn in chat['turns']], allowed)
