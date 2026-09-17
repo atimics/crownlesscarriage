@@ -5,7 +5,7 @@
 
 typedef struct CoreRule {
     CcEventKind kind;
-    const char *id, *pattern, *outputs[2];
+    const char *id, *pattern, *outputs[2], *challenge;
     size_t field_count;
     CcCoreRole roles[CC_CORE_FIELDS];
     const char *allowed[CC_CORE_FIELDS];
@@ -42,9 +42,10 @@ static bool Quantity(const char *at, size_t length, uint64_t *value)
     return false;
 }
 
-static bool Match(const CoreRule *rule, CcCoreAccount *account)
+static bool Match(const CoreRule *rule, const char *pattern, CcCoreAccount *account,
+                  bool numeric)
 {
-    const char *pattern = rule->pattern, *at = account->text;
+    const char *at = account->text;
     while (*pattern != '\0') {
         if (pattern[0] != '{') {
             if (*pattern++ != *at++) return false;
@@ -87,7 +88,7 @@ static bool Match(const CoreRule *rule, CcCoreAccount *account)
         at = end;
     }
     if (*at != '\0') return false;
-    if (rule->less_left >= 0) {
+    if (numeric && rule->less_left >= 0) {
         const CcCoreField *left = &account->fields[rule->less_left];
         const CcCoreField *right = &account->fields[rule->less_right];
         uint64_t a = 0U, b = 0U;
@@ -110,7 +111,7 @@ bool CcCoreAccountPrepare(CcEventKind kind, const char *held_text,
     for (size_t i = 0U; i < sizeof(Rules) / sizeof(Rules[0]); ++i) {
         if (Rules[i].kind != kind) continue;
         account->field_count = Rules[i].field_count;
-        if (Match(&Rules[i], account)) {
+        if (Match(&Rules[i], Rules[i].pattern, account, true)) {
             account->rule_index = i;
             return true;
         }
@@ -124,6 +125,104 @@ const char *CcCoreAccountRule(const CcCoreAccount *account)
     if (account == NULL || account->text[0] == '\0' ||
         account->rule_index >= sizeof(Rules) / sizeof(Rules[0])) return "";
     return Rules[account->rule_index].id;
+}
+
+CcEventKind CcCoreAccountKind(const CcCoreAccount *account)
+{
+    if (account == NULL || account->rule_index >= sizeof(Rules) / sizeof(Rules[0]))
+        return CC_EVENT_KIND_COUNT;
+    return Rules[account->rule_index].kind;
+}
+
+/* The evidential tails the corpus appends to a rendered claim. A hedged or
+   retold telling carries one in place of the closing period, so trimming it
+   recovers the template the claim was rendered from. Finite and authored, the
+   same discipline the pools run on. */
+static bool TrimTail(char *text)
+{
+    static const char *const tails[] = {
+        ", so people say.", ", according to the word going round.",
+        ", if the story is right.", ", if the rumour is true."};
+    size_t length = strlen(text);
+    for (size_t i = 0U; i < sizeof(tails) / sizeof(tails[0]); ++i) {
+        size_t tail = strlen(tails[i]);
+        if (length >= tail && strcmp(text + length - tail, tails[i]) == 0) {
+            text[length - tail] = '.';
+            text[length - tail + 1U] = '\0';
+            return true;
+        }
+    }
+    return false;
+}
+
+/* A rendering is more specific the more literal text it fixes. Without this,
+   "X and Y went to war." claims "The courts of X and Y went to war." first,
+   and "{0} raided {1}." claims "Thornford was raided by Mara Venn." with the
+   actor read as "Thornford was". Among renderings that match, the most
+   literal wins; ties keep authoring order. */
+static size_t LiteralLength(const char *pattern)
+{
+    size_t literal = 0U;
+    for (size_t i = 0U; pattern[i] != '\0'; ++i) {
+        if (pattern[i] == '{' && pattern[i + 1U] != '\0' && pattern[i + 2U] == '}') {
+            i += 2U;
+            continue;
+        }
+        ++literal;
+    }
+    return literal;
+}
+
+static bool ParseInto(const char *speech, CcEventKind kind, bool any,
+                      CcCoreAccount *account)
+{
+    if (account == NULL) return false;
+    *account = (CcCoreAccount){0};
+    if (speech == NULL || strlen(speech) >= sizeof(account->text)) return false;
+    (void)snprintf(account->text, sizeof(account->text), "%s", speech);
+    account->confidence = 80;
+    for (int pass = 0; pass < 2; ++pass) {
+        /* The corpus hedges a rendered claim with a known tail; retry without it. */
+        if (pass == 1 && !TrimTail(account->text)) break;
+        bool found = false;
+        size_t best_score = 0U, best_rule = 0U, best_count = 0U;
+        CcCoreField best_fields[CC_CORE_FIELDS];
+        for (size_t i = 0U; i < sizeof(Rules) / sizeof(Rules[0]); ++i) {
+            if (!any && Rules[i].kind != kind) continue;
+            const char *const forms[3] = {Rules[i].outputs[0], Rules[i].outputs[1],
+                                          Rules[i].challenge};
+            for (size_t f = 0U; f < 3U; ++f) {
+                size_t score = LiteralLength(forms[f]);
+                if (found && score <= best_score) continue;
+                account->field_count = Rules[i].field_count;
+                if (Match(&Rules[i], forms[f], account, false)) {
+                    found = true;
+                    best_score = score;
+                    best_rule = i;
+                    best_count = account->field_count;
+                    memcpy(best_fields, account->fields, sizeof(best_fields));
+                }
+            }
+        }
+        if (found) {
+            account->rule_index = best_rule;
+            account->field_count = best_count;
+            memcpy(account->fields, best_fields, sizeof(best_fields));
+            return true;
+        }
+    }
+    *account = (CcCoreAccount){0};
+    return false;
+}
+
+bool CcCoreAccountParse(const char *speech, CcCoreAccount *account)
+{
+    return ParseInto(speech, CC_EVENT_KIND_COUNT, true, account);
+}
+
+bool CcCoreAccountParseKind(CcEventKind kind, const char *speech, CcCoreAccount *account)
+{
+    return ParseInto(speech, kind, false, account);
 }
 
 static bool Append(char *text, size_t capacity, size_t *used,

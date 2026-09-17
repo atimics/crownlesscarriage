@@ -21,6 +21,42 @@ static void JsonSpan(const char *text, size_t length)
 
 int main(int argc, char **argv)
 {
+    /* The inverse: recover the event a spoken rendering came from. */
+    if (argc == 3 && strcmp(argv[1], "--parse") == 0) {
+        CcCoreAccount account;
+        if (!CcCoreAccountParse(argv[2], &account)) return 1;
+        (void)printf("{\"kind\":%d,\"rule\":", (int)CcCoreAccountKind(&account));
+        JsonSpan(CcCoreAccountRule(&account), strlen(CcCoreAccountRule(&account)));
+        (void)printf(",\"fields\":[");
+        for (size_t i = 0U; i < account.field_count; ++i) {
+            const CcCoreField *f = &account.fields[i];
+            (void)printf("%s{\"field\":%zu,\"start\":%zu,\"end\":%zu,\"role\":%d,\"text\":",
+                i == 0U ? "" : ",", i, f->start, f->start + f->length, (int)f->role);
+            JsonSpan(account.text + f->start, f->length);
+            (void)putchar('}');
+        }
+        (void)puts("]}");
+        return 0;
+    }
+    if (argc == 4 && strcmp(argv[1], "--parse-kind") == 0) {
+        char *end = NULL;
+        long kind = strtol(argv[2], &end, 10);
+        if (end == argv[2] || *end != '\0' || kind < 0 || kind >= CC_EVENT_KIND_COUNT) return 2;
+        CcCoreAccount account;
+        if (!CcCoreAccountParseKind((CcEventKind)kind, argv[3], &account)) return 1;
+        (void)printf("{\"kind\":%d,\"rule\":", (int)CcCoreAccountKind(&account));
+        JsonSpan(CcCoreAccountRule(&account), strlen(CcCoreAccountRule(&account)));
+        (void)printf(",\"fields\":[");
+        for (size_t i = 0U; i < account.field_count; ++i) {
+            const CcCoreField *f = &account.fields[i];
+            (void)printf("%s{\"field\":%zu,\"start\":%zu,\"end\":%zu,\"role\":%d,\"text\":",
+                i == 0U ? "" : ",", i, f->start, f->start + f->length, (int)f->role);
+            JsonSpan(account.text + f->start, f->length);
+            (void)putchar('}');
+        }
+        (void)puts("]}");
+        return 0;
+    }
     if (argc < 5 || argc > 9) return 2;
     char *end = NULL;
     long kind = strtol(argv[1], &end, 10);
