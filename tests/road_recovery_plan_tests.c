@@ -71,6 +71,31 @@ int main(void)
     CC_CHECK(CcSimRoadRecoveryPlan(NULL, 0U).blocked == CC_ROAD_RECOVERY_INVALID);
     CC_CHECK(CcSimRoadRecoveryPlan(NULL, 0U).population == -1);
 
+    /* A road that healed past the threshold reopens even when no repair can
+       run: every closure is condition-driven, so the flag must not outlive the
+       condition that set it. Strip the endpoints bare so CcSimRoadRecoveryPlan
+       is blocked and cannot be what reopens it. */
+    Fixture(); sim.current_day = 111;
+    sim.routes[0].condition = CC_ROUTE_REOPEN_CONDITION + 20;
+    sim.routes[0].closed = true;
+    memset(CcSimSettlementMutable(&sim, sim.routes[0].from_id)->stock, 0,
+           sizeof(CcSimSettlementMutable(&sim, sim.routes[0].from_id)->stock));
+    memset(CcSimSettlementMutable(&sim, sim.routes[0].to_id)->stock, 0,
+           sizeof(CcSimSettlementMutable(&sim, sim.routes[0].to_id)->stock));
+    CC_CHECK(CcSimRoadRecoveryPlan(&sim, sim.routes[0].id).blocked != 0U);
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(!sim.routes[0].closed);
+    /* A road still below the threshold stays shut. */
+    Fixture(); sim.current_day = 111;
+    sim.routes[0].condition = CC_ROUTE_REOPEN_CONDITION - 1;
+    sim.routes[0].closed = true;
+    memset(CcSimSettlementMutable(&sim, sim.routes[0].from_id)->stock, 0,
+           sizeof(CcSimSettlementMutable(&sim, sim.routes[0].from_id)->stock));
+    memset(CcSimSettlementMutable(&sim, sim.routes[0].to_id)->stock, 0,
+           sizeof(CcSimSettlementMutable(&sim, sim.routes[0].to_id)->stock));
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(sim.routes[0].closed);
+
     /* The real daily loop reopens a supplied road when the war border is lifted. */
     Fixture(); sim.current_day = 111;
     CcSimSettlementMutable(&sim, sim.routes[0].from_id)->stock[CC_GOOD_STONE] = 4;

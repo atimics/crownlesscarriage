@@ -14967,7 +14967,7 @@ static void AdvanceRoadsideRecovery(CcSim *sim, CcRoute *route)
     supplier->stock[CC_GOOD_TOOLS] -= 1;
     route->condition = ClampI32(route->condition + plan.effort, 0, 100);
     labor_base->population = MaximumI32(0, labor_base->population - plan.people_used);
-    if (route->condition < 45) return;
+    if (route->condition < CC_ROUTE_REOPEN_CONDITION) return;
 
     route->closed = false;
     route->security = ClampI32(route->security + 4, 0, 100);
@@ -15099,6 +15099,25 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 (void)PushEvent(sim, CC_EVENT_ROUTE_DECAY, route->id, route->to_id,
                                 LatestLocalCause(sim, route->to_id), route->condition, text);
             }
+        }
+        /* Closure is condition-driven, so a road whose surface has come back
+           must be able to reopen on its own. Reopening lived only inside the
+           two repair routines, which need supplies and labour, so a road that
+           healed by any other means stayed shut at full condition forever.
+           This sits outside the !closed block above, which never sees a
+           closed road. */
+        if (route->closed && sim->current_day % 28 == 0 &&
+            route->condition >= CC_ROUTE_REOPEN_CONDITION) {
+            route->closed = false;
+            char text[CC_EVENT_TEXT_CAPACITY];
+            const CcSettlement *from = CcSimSettlement(sim, route->from_id);
+            const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+            (void)snprintf(text, sizeof(text),
+                           "The %s-%s road opens again now its surface holds.",
+                           from != NULL ? from->name : "western",
+                           to != NULL ? to->name : "eastern");
+            (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, route->id, route->to_id,
+                            LatestLocalCause(sim, route->to_id), route->condition, text);
         }
     }
 
@@ -15450,7 +15469,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 }
                 best_route->condition = ClampI32(
                     best_route->condition + 25, 0, 100);
-                if (best_route->condition >= 45) {
+                if (best_route->condition >= CC_ROUTE_REOPEN_CONDITION) {
                     best_route->closed = false;
                     best_route->security = ClampI32(
                         best_route->security + 6, 0, 100);
