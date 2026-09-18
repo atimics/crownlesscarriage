@@ -86,11 +86,16 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,int32_t facing
             if(i<4) MineBox(x+3.5f,1.1f,18,7,.12f,.12f,(Color){116,98,64,255});
         }
     }
-    rlPushMatrix();
-    rlTranslatef((float)sim->mine.x,-hero.position.y,(float)sim->mine.y);
-    DrawRobotShell(&hero);
-    DrawCombatSword(&hero);
-    rlPopMatrix();
+    /* The yard is seen from outside, so the company stands in it. Underground
+       the camera is the company's own eye, and drawing the figure there puts
+       it through the near plane and fills the screen. */
+    if (!underground) {
+        rlPushMatrix();
+        rlTranslatef((float)sim->mine.x,-hero.position.y,(float)sim->mine.y);
+        DrawRobotShell(&hero);
+        DrawCombatSword(&hero);
+        rlPopMatrix();
+    }
     EndWorldLighting();
     EndMode3D();
     EndTextureMode();
