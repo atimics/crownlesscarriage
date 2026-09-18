@@ -2207,6 +2207,9 @@ const char *CcJourneyPaceName(CcJourneyPace pace);
 int32_t CcSimJourneyEtaMinutes(const CcSim *sim);
 CcJourneyStopKind CcSimJourneyStop(const CcSim *sim);
 int32_t CcSimJourneyWatchNumber(const CcSim *sim);
+/* True once the afternoon watch has begun and the company is on the road:
+   camping is a decision about the hour, not about a scheduled stop. */
+bool CcSimJourneyCanCampOnRoad(const CcSim *sim);
 int32_t CcSimJourneyWatchCount(const CcSim *sim);
 const char *CcSimRoadHouseName(const CcSim *sim, CcId route_id);
 int32_t CcSimRoadHouseDistanceMiles(const CcSim *sim, CcId route_id);

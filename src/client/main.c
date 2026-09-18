@@ -189,7 +189,8 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_DUNGEON_RESEAL,
     CONTEXT_ACTION_VISIT_MINE,
     CONTEXT_ACTION_STEP_DOWN,
-    CONTEXT_ACTION_BOARD_CARRIAGE
+    CONTEXT_ACTION_BOARD_CARRIAGE,
+    CONTEXT_ACTION_MAKE_ROAD_CAMP
 } ContextActionKind;
 
 typedef struct ContextAction {
@@ -4509,6 +4510,10 @@ static ContextActionSet BuildContextActions(
     if (local->journey_travel_active) {
         /* Travel is the company moving; stopping hands the road back to the
            same walk the town uses, so the countryside is not a separate game. */
+        if (CcSimJourneyCanCampOnRoad(sim)) {
+            AddDetailedContextAction(&set, CONTEXT_ACTION_MAKE_ROAD_CAMP,
+                "Make camp", "", "REST HERE UNTIL MORNING", true, false);
+        }
         if (local->open_world) {
             if (local->world_carriage.hero_embarked) {
                 AddDetailedContextAction(&set, CONTEXT_ACTION_STEP_DOWN,
@@ -4556,8 +4561,13 @@ static ContextActionSet BuildContextActions(
                 }
             }
         }
+        /* The stop window holds the carriage for many subticks, but the turn
+           used to be offered on exactly one of them. Everywhere else in the
+           window the company fell through to "Camp at ..." -- which spends the
+           stop and takes the branch with it. Reaching the branch is enough. */
         if (road_stop != NULL && road_stop == CcMineSite(sim) &&
-            sim->journey.elapsed_subticks == CcMineBranchSubtick(sim)) {
+            CcMineBranchSubtick(sim) >= 0 &&
+            sim->journey.elapsed_subticks >= CcMineBranchSubtick(sim)) {
             const CcRoute *route=CcSimRoute(sim,road_stop->route_id);
             if (FirstDeliveryComplete(sim)) {
                 bool right=route != NULL && (road_stop->side > 0) == (sim->journey.origin_id == route->from_id);
@@ -8533,6 +8543,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             CcCommand command = {.kind = context_action == CONTEXT_ACTION_REPAIR_ROAD_SITE ?
                 CC_COMMAND_REPAIR_ROAD_SITE : CC_COMMAND_CLEAR_ROAD_SITE, .target_id = site->id};
             (void)ApplyCommand(*journal, sim, command, message, message_capacity);
+        }
+        return;
+    }
+    if (context_action == CONTEXT_ACTION_MAKE_ROAD_CAMP) {
+        CcCommand camp = {.kind = CC_COMMAND_MAKE_CAMP};
+        if (ApplyCommand(*journal, sim, camp, message, message_capacity)) {
+            local->carriage_stopped = true;
+            local->travel_fast_forward = false;
+            local->travel_attention = true;
         }
         return;
     }
