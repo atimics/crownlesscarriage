@@ -4509,7 +4509,9 @@ static ContextActionSet BuildContextActions(
     if (local->journey_travel_active) {
         /* Travel is the company moving; stopping hands the road back to the
            same walk the town uses, so the countryside is not a separate game. */
-        if (local->open_world) {
+        if (local->open_world && CcSimJourneyRoadSiteStop(sim) == NULL) {
+            /* At a roadside stop that place's own actions lead; stepping down
+               belongs to the open road between them. */
             if (local->world_carriage.hero_embarked) {
                 AddDetailedContextAction(&set, CONTEXT_ACTION_STEP_DOWN,
                     "Stop and step down", "",
