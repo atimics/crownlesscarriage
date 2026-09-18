@@ -311,24 +311,27 @@ static int RunWorldCardRegression(void)
         CARD_CHECK(WorldCardIndex(&opened, CONTEXT_ACTION_CLEAR_ROAD_SITE, 0) < 0,
             "An opened site offers its remaining actions.");
         CARD_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)), error);
-        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_CAMP_ROAD_SITE, 0, mode != 0),
-            "A camp needs matching card and world actions.");
+        /* A roadside place is a turn-off now, not a bed: it offers its own
+           business or the road on. Camping moved to the hour and the road, so
+           the card under test here is the one that drives past. */
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_PASS_ROAD_SITE, 0, mode != 0),
+            "Driving on needs matching card and world actions.");
         if (mode != 0) {
-            CcInteractionTarget *camp = NULL;
+            CcInteractionTarget *onward = NULL;
             for (int32_t i = 0; i < local.interactions.count; ++i)
-                if (local.interactions.targets[i].action == CONTEXT_ACTION_CAMP_ROAD_SITE) camp = &local.interactions.targets[i];
-            CARD_CHECK(camp != NULL, "The camp needs a world target.");
-            uint64_t subject = camp->subject_id;
-            camp->subject_id = subject + 1;
+                if (local.interactions.targets[i].action == CONTEXT_ACTION_PASS_ROAD_SITE) onward = &local.interactions.targets[i];
+            CARD_CHECK(onward != NULL, "Driving on needs a world target.");
+            uint64_t subject = onward->subject_id;
+            onward->subject_id = subject + 1;
             ContextActionSet current = BuildContextActions(&sim, &local, view, selected, 0);
             CARD_CHECK(WorldContextActionAt(&sim, &local, view, &current, client_test_pointer).kind == CONTEXT_ACTION_NONE,
-                "A camp tap must keep the identity of the camp that was drawn.");
-            camp->subject_id = subject;
+                "A tap must keep the identity of the site that was drawn.");
+            onward->subject_id = subject;
         }
         int32_t progress = sim.carriage.progress_milli;
         CARD_INPUT();
         CARD_CHECK(CcSimJourneyRoadSiteStop(&sim) == NULL && sim.carriage.progress_milli == progress,
-            "Camping through either control must rest at the same road position.");
+            "Driving on through either control must leave the same road position.");
         results[mode] = CcSimHash(&sim);
         CARD_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)), error);
         CARD_CHECK(CcJournalClose(&journal, &sim, error, sizeof(error)), error);
@@ -341,6 +344,6 @@ static int RunWorldCardRegression(void)
     (void)remove(path);
 #undef CARD_CHECK
 #undef CARD_INPUT
-    puts("World cards: nearest four, doors, site returns, roads, stop, drive, pace, camp and reload passed");
+    puts("World cards: nearest four, doors, site returns, roads, stop, drive, pace, road on and reload passed");
     return 0;
 }
