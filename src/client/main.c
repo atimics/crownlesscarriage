@@ -4586,9 +4586,16 @@ static ContextActionSet BuildContextActions(
             return set;
         }
         if (road_stop != NULL) {
-            AddDetailedContextAction(
-                &set, CONTEXT_ACTION_CAMP_ROAD_SITE, TextFormat("Camp at %.28s", road_stop->name), "",
-                "1 WATCH / REST TEAM / +3 RISK", true, false);
+            /* Every roadside place is a turn-off, not a bed: the company either
+               has business here or drives on. Camping used to live on this
+               stop, which spent it -- resting is now a decision about the hour
+               and belongs to the road, not to the place. Continuing must stay
+               offered at every site, because the carriage holds here and a site
+               with nothing else to give would otherwise strand it. */
+            AddDetailedContextAction(&set, CONTEXT_ACTION_PASS_ROAD_SITE,
+                "Continue along the road", "",
+                TextFormat("STAY ON THE ROAD PAST %.20s", road_stop->name),
+                true, false);
             set.items[set.count - 1].target = (CcInteractionKey){sim->player.location_id, road_stop->id, CC_INTERACTION_ACTION};
         }
         bool parking = !sim->journey.active &&

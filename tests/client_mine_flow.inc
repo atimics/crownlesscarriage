@@ -60,6 +60,38 @@ static int RunMineInputRegression(void)
     }
     MINE_CHECK(visit >= 0 && pass >= 0 && clear >= 0,
         "Mine branch needs entry, continue and clearing cards.");
+    /* A roadside place is a turn-off, not a bed. Camping there used to spend
+       the stop and take the mine's branch with it, so the card is gone and
+       every site keeps a way to drive on instead. Checked at an ordinary site,
+       not the mine: the mine branch returns its own cards before camping was
+       ever reached, so asserting there proves nothing. */
+    {
+        CcSim ordinary = sim;
+        const CcRoadSite *plain = NULL;
+        for (int32_t i = 0; i < ordinary.road_site_count; ++i) {
+            const CcRoadSite *candidate = &ordinary.road_sites[i];
+            if (candidate->route_id == ordinary.journey.route_id &&
+                candidate != CcMineSite(&ordinary)) { plain = candidate; break; }
+        }
+        MINE_CHECK(plain != NULL, "The mine route needs an ordinary site to check.");
+        const CcRoute *route = CcSimRoute(&ordinary, plain->route_id);
+        int32_t progress = ordinary.journey.origin_id == route->from_id ?
+            plain->progress_milli : 1000 - plain->progress_milli;
+        ordinary.carriage.progress_milli = progress;
+        ordinary.journey.elapsed_subticks = (int32_t)(
+            (int64_t)ordinary.journey.total_subticks * progress / 1000);
+        MINE_CHECK(CcSimJourneyRoadSiteStop(&ordinary) == plain,
+            "The ordinary site must be the stop under test.");
+        ContextActionSet plain_actions =
+            BuildContextActions(&ordinary, &local, view, 0, 0);
+        bool camps = false, drives_on = false;
+        for (int32_t i = 0; i < plain_actions.count; ++i) {
+            if (plain_actions.items[i].kind == CONTEXT_ACTION_CAMP_ROAD_SITE) camps = true;
+            if (plain_actions.items[i].kind == CONTEXT_ACTION_PASS_ROAD_SITE) drives_on = true;
+        }
+        MINE_CHECK(!camps, "A roadside stop must not offer camping.");
+        MINE_CHECK(drives_on, "Every roadside stop must offer the road on.");
+    }
     Rectangle button=ContextActionBounds(visit,actions.count,false);
     client_test_pointer_active=true;client_test_pointer=(Vector2){button.x+button.width/2,button.y+button.height/2};
     queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
