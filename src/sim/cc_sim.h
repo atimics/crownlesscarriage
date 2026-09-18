@@ -69,6 +69,9 @@
    convoy leg is schema 93. */
 #define CC_SIM_SCHEMA_VERSION 102
 #define CC_ROAD_SITE_CAPACITY 24
+/* A road carries traffic again once its surface holds this well. Every
+   closure is condition-driven and leaves the road far below it. */
+#define CC_ROUTE_REOPEN_CONDITION 45
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60

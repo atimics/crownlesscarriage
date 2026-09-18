@@ -14948,10 +14948,44 @@ CcRoadRecoveryPlan CcSimRoadRecoveryPlan(const CcSim *sim, CcId route_id)
     return plan;
 }
 
+/* A resealed dungeon closes its mine road deliberately, leaving the surface
+   untouched, so that road must never be reopened by a condition rule. */
+static bool RouteSealedByDungeon(CcSim *sim, const CcRoute *route)
+{
+    if (sim == NULL || route == NULL) return false;
+    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+        const CcDungeon *dungeon = &sim->dungeons[i];
+        if (dungeon->state != CC_DUNGEON_SEALED &&
+            dungeon->state != CC_DUNGEON_RESEALED) continue;
+        const CcRoute *mine_road = DungeonRouteMutable(sim, dungeon);
+        if (mine_road != NULL && mine_road->id == route->id) return true;
+    }
+    return false;
+}
+
 static void AdvanceRoadsideRecovery(CcSim *sim, CcRoute *route)
 {
     if (sim == NULL || route == NULL || !route->closed || sim->current_day % 112 != 0)
         return;
+    /* A road already back at the threshold needs no repair, only opening.
+       The resource gate below guards the work, not the decision, so leaving
+       the check behind it strands a sound road whose endpoints happen to be
+       short of wood, stone, tools or people. A dungeon that was sealed or
+       resealed keeps its road shut: that closure is a decision, not decay. */
+    if (route->condition >= CC_ROUTE_REOPEN_CONDITION &&
+        !RouteSealedByDungeon(sim, route)) {
+        route->closed = false;
+        char opened[CC_EVENT_TEXT_CAPACITY];
+        const CcSettlement *open_from = CcSimSettlement(sim, route->from_id);
+        const CcSettlement *open_to = CcSimSettlement(sim, route->to_id);
+        (void)snprintf(opened, sizeof(opened),
+                       "The %s-%s road opens again: its surface never needed the work.",
+                       open_from != NULL ? open_from->name : "western",
+                       open_to != NULL ? open_to->name : "eastern");
+        (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, route->id, route->to_id,
+                        LatestLocalCause(sim, route->to_id), route->condition, opened);
+        return;
+    }
     CcRoadRecoveryPlan plan = CcSimRoadRecoveryPlan(sim, route->id);
     if (plan.blocked != 0U) return;
     CcSettlement *from = CcSimSettlementMutable(sim, route->from_id);
@@ -14967,7 +15001,7 @@ static void AdvanceRoadsideRecovery(CcSim *sim, CcRoute *route)
     supplier->stock[CC_GOOD_TOOLS] -= 1;
     route->condition = ClampI32(route->condition + plan.effort, 0, 100);
     labor_base->population = MaximumI32(0, labor_base->population - plan.people_used);
-    if (route->condition < 45) return;
+    if (route->condition < CC_ROUTE_REOPEN_CONDITION) return;
 
     route->closed = false;
     route->security = ClampI32(route->security + 4, 0, 100);
@@ -15450,7 +15484,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 }
                 best_route->condition = ClampI32(
                     best_route->condition + 25, 0, 100);
-                if (best_route->condition >= 45) {
+                if (best_route->condition >= CC_ROUTE_REOPEN_CONDITION) {
                     best_route->closed = false;
                     best_route->security = ClampI32(
                         best_route->security + 6, 0, 100);
