@@ -152,12 +152,27 @@ static bool ApplyRoadSiteStop(CcSim *sim, const CcCommand *command,
     return true;
 }
 
+bool CcSimJourneyCanCampOnRoad(const CcSim *sim)
+{
+    return sim != NULL && sim->journey.active &&
+        sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
+        CcSimJourneyStop(sim) == CC_JOURNEY_STOP_NONE &&
+        CcSimJourneyWatchNumber(sim) % 2 == 0;
+}
+
 static bool ApplyJourneyStopAction(CcSim *sim, const CcCommand *command,
                                    char *error, size_t error_capacity,
                               CcJourneyRecordEvent record_event)
 {
     CcJourneyStopKind stop = CcSimJourneyStop(sim);
-    if (sim == NULL || command == NULL || stop == CC_JOURNEY_STOP_NONE) {
+    /* Making camp is the one stop action the road itself offers: once the
+       afternoon watch has begun the company can halt anywhere. Every other
+       action still belongs to a scheduled stop. */
+    bool road_camp = command != NULL &&
+        command->kind == CC_COMMAND_MAKE_CAMP &&
+        CcSimJourneyCanCampOnRoad(sim);
+    if (sim == NULL || command == NULL ||
+        (stop == CC_JOURNEY_STOP_NONE && !road_camp)) {
         SetError(error, error_capacity,
                  "The carriage is not waiting at a travel stop.");
         return false;
@@ -192,7 +207,7 @@ static bool ApplyJourneyStopAction(CcSim *sim, const CcCommand *command,
         (void)snprintf(
             text, sizeof(text),
             "The company presses through the midday stop. The team tires and the road grows harder to read.");
-    } else if (command->kind == CC_COMMAND_MAKE_CAMP && overnight) {
+    } else if (command->kind == CC_COMMAND_MAKE_CAMP && (overnight || road_camp)) {
         int32_t hunger_recovery = sim->schema_version >= 101U ? 8 : 5;
         RecoverJourneyTeam(sim, 8, hunger_recovery);
         sim->journey.danger = ClampI32(sim->journey.danger + 3, 0, 95);

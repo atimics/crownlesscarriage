@@ -102,11 +102,23 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
         return Fail(error,capacity,"Load this campaign with the current mine rules.");
     if (command->kind == CC_COMMAND_VISIT_MINE) {
         const CcRoadSite *site=CcMineSite(sim);
+        /* Reaching the branch is enough; the stop window already says the
+           company is there. Requiring an exact subtick left the turn offered
+           on one tick and campable on all the others. */
         if (m->phase != CC_MINE_NONE || site == NULL || site->id != command->target_id ||
-            CcSimJourneyRoadSiteStop(sim) != site || sim->journey.elapsed_subticks != CcMineBranchSubtick(sim))
+            CcSimJourneyRoadSiteStop(sim) != site ||
+            CcMineBranchSubtick(sim) < 0 ||
+            sim->journey.elapsed_subticks < CcMineBranchSubtick(sim))
             return Fail(error,capacity,"Follow the road to the Low Silver Pit branch first.");
         if (sim->dungeon_expedition.active || sim->pony_company.encounter >= 0)
             return Fail(error,capacity,"Finish the current visit before taking the mine branch.");
+        /* Turning off anchors the journey at the branch: the company leaves the
+           road there whether it reached the mark exactly or a few subticks on,
+           and the visit invariant holds the carriage at that anchor. */
+        int32_t branch=CcMineBranchSubtick(sim);
+        sim->journey.elapsed_subticks=branch;
+        sim->carriage.progress_milli=(int32_t)(
+            (int64_t)branch*1000/sim->journey.total_subticks);
         m->site_id=site->id; m->phase=CC_MINE_YARD; m->x=15; m->y=17;
         m->return_speed=sim->carriage.speed_milli_per_second;
         sim->carriage.mode=CC_CARRIAGE_STOPPED;

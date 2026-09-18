@@ -65,6 +65,27 @@ int main(void)
 {
     static CcSim sim,restored,changed;
     for(int i=0;i<2;++i) AtBranch(&sim,i!=0);
+    {
+        /* The turn must survive the whole stop window, not one subtick of it.
+           Offered on a single tick, every other tick in the window fell
+           through to "Camp at ..." -- which spends the stop and takes the
+           branch with it, so the expedition was lost by resting. */
+        static CcSim late;
+        AtBranch(&late, false);
+        int32_t branch = CcMineBranchSubtick(&late);
+        CC_CHECK(branch >= 0);
+        late.journey.elapsed_subticks = branch + 10;
+        late.carriage.progress_milli = (int32_t)(
+            (int64_t)late.journey.elapsed_subticks * 1000 /
+            late.journey.total_subticks);
+        CC_CHECK(CcSimJourneyRoadSiteStop(&late) == CcMineSite(&late));
+        late.player.cargo[CC_GOOD_BREAD] = 3;
+        CcCommand turn = {.kind = CC_COMMAND_VISIT_MINE,
+                          .target_id = CcMineSite(&late)->id};
+        Check(CcSimApply(&late, &turn, error, sizeof(error)));
+        CC_CHECK(late.mine.phase == CC_MINE_YARD);
+        Check(CcSimValidate(&late, error, sizeof(error)));
+    }
     CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=CcMineSite(&sim)->id};
     sim.player.cargo[CC_GOOD_BREAD]=3;
     Check(CcSimApply(&sim,&visit,error,sizeof(error)));
