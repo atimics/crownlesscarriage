@@ -187,7 +187,9 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_DUNGEON_PUBLIC_ROUTE,
     CONTEXT_ACTION_DUNGEON_SMUGGLER_ROUTE,
     CONTEXT_ACTION_DUNGEON_RESEAL,
-    CONTEXT_ACTION_VISIT_MINE
+    CONTEXT_ACTION_VISIT_MINE,
+    CONTEXT_ACTION_STEP_DOWN,
+    CONTEXT_ACTION_BOARD_CARRIAGE
 } ContextActionKind;
 
 typedef struct ContextAction {
@@ -4505,6 +4507,19 @@ static ContextActionSet BuildContextActions(
     }
 
     if (local->journey_travel_active) {
+        /* Travel is the company moving; stopping hands the road back to the
+           same walk the town uses, so the countryside is not a separate game. */
+        if (local->open_world) {
+            if (local->world_carriage.hero_embarked) {
+                AddDetailedContextAction(&set, CONTEXT_ACTION_STEP_DOWN,
+                    "Stop and step down", "",
+                    "WALK THE ROADSIDE", true, false);
+            } else {
+                AddDetailedContextAction(&set, CONTEXT_ACTION_BOARD_CARRIAGE,
+                    "Board the carriage", "",
+                    "TAKE UP THE ROAD AGAIN", true, false);
+            }
+        }
         const CcRoadSite *road_stop = CcSimJourneyRoadSiteStop(sim);
         if (road_stop != NULL && !road_stop->accessible) {
             bool tree = road_stop->blocker == CC_ROAD_SITE_BLOCKER_TREE;
@@ -6925,6 +6940,31 @@ static int RunStorybookTravelRegression(void)
             return 1;
         }
     }
+    {
+        /* Stopping hands the road back to the town's own walk, so the two are
+           one world: travelling offers the step down, and standing on the
+           verge offers the way back aboard. */
+        local.journey_travel_active = true;
+        local.open_world = true;
+        local.world_carriage.hero_embarked = true;
+        ContextActionSet aboard = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+        bool offers_step_down = false, offers_board = false;
+        for (int32_t i = 0; i < aboard.count; ++i)
+            if (aboard.items[i].kind == CONTEXT_ACTION_STEP_DOWN) offers_step_down = true;
+        local.world_carriage.hero_embarked = false;
+        ContextActionSet afoot = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+        for (int32_t i = 0; i < afoot.count; ++i)
+            if (afoot.items[i].kind == CONTEXT_ACTION_BOARD_CARRIAGE) offers_board = true;
+        local.world_carriage.hero_embarked = true;
+        if (!offers_step_down) {
+            (void)fprintf(stderr, "Travel must offer the step down.\n");
+            return 1;
+        }
+        if (!offers_board) {
+            (void)fprintf(stderr, "Standing on the verge must offer the way back aboard.\n");
+            return 1;
+        }
+    }
     for (int32_t turn = 0; turn < 4; ++turn) {
         /* The travel view is a side-scroller: the camera stands square to the
            heading rather than behind it, so the company passes in profile and
@@ -8494,6 +8534,32 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 CC_COMMAND_REPAIR_ROAD_SITE : CC_COMMAND_CLEAR_ROAD_SITE, .target_id = site->id};
             (void)ApplyCommand(*journal, sim, command, message, message_capacity);
         }
+        return;
+    }
+    if (context_action == CONTEXT_ACTION_STEP_DOWN && local->open_world) {
+        local->carriage_stopped = true;
+        local->travel_hold_armed = false;
+        local->travel_fast_forward = false;
+        local->convoy.pace = 0.0f;
+        local->world_carriage.pace = 0.0f;
+        local->world_carriage.hero_embarked = false;
+        local->world_carriage.camera_target = 0.38f;
+        local->agent.position = local->world_carriage.position;
+        local->agent.facing_yaw = local->world_carriage.heading_yaw;
+        CcLocalAgentStop(&local->agent);
+        (void)snprintf(message, message_capacity,
+                       "The team halts. Walk where you like; the carriage waits.");
+        return;
+    }
+    if (context_action == CONTEXT_ACTION_BOARD_CARRIAGE && local->open_world) {
+        local->world_carriage.hero_embarked = true;
+        local->world_carriage.camera_target = 0.0f;
+        local->carriage_stopped = false;
+        local->agent.position = local->world_carriage.position;
+        local->agent.facing_yaw = local->world_carriage.heading_yaw;
+        CcLocalAgentStop(&local->agent);
+        (void)snprintf(message, message_capacity,
+                       "The company boards and the road goes on.");
         return;
     }
     if (context_action == CONTEXT_ACTION_VISIT_MINE || context_action == CONTEXT_ACTION_PASS_ROAD_SITE) {
