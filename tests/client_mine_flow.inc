@@ -90,7 +90,8 @@ static int RunMineInputRegression(void)
         pick_local.mine_known[MineCell(7,4)]=1;
         MINE_CHECK(MinePathStep(&picked,&pick_local,7,4)==1,
             "A remembered corridor must keep multi-step pointing useful.");
-        MINE_CHECK(!MineLineVisible(&picked,(Vector3){5,.55f,4},(Vector3){15,0,11}),
+        MINE_CHECK(!MineLineVisibleExcept(&picked,(Vector3){5,.55f,4},
+                                          (Vector3){15,0,11},-1,-1),
             "A wall must hide floor beyond it from the pointer route.");
         memset(pick_local.mine_known,1,sizeof(pick_local.mine_known));
         picked.mine.x=15; picked.mine.y=12;

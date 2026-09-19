@@ -128,10 +128,6 @@ static float MineOccluderDistance(const CcSim *sim,Ray ray,float limit)
 }
 static bool MineLineVisibleExcept(const CcSim *sim,Vector3 from,Vector3 to,
                                   int32_t skip_x,int32_t skip_y);
-static bool MineLineVisible(const CcSim *sim,Vector3 from,Vector3 to)
-{
-    return MineLineVisibleExcept(sim,from,to,-1,-1);
-}
 static bool MineLineVisibleExcept(const CcSim *sim,Vector3 from,Vector3 to,
                                   int32_t skip_x,int32_t skip_y)
 {
