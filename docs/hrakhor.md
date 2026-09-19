@@ -43,9 +43,22 @@ repeated encounters.
 | tunnel | grak'nukh | stone shelter |
 | trade | vesh'rakh | friendly taking |
 | peace / war | vesh'khor / krath'khor | friendship / danger among clans |
+| ash / ashes | zhur / zhuruk | cooled dragon fire, counted by `-uk` |
+| lair / cave | nukh / grak'nukh | a clan hollow / a stone hollow |
+| shrine | zhur'nukh | an ash hollow kept for ritual |
+| offering / offerings | khor'rakh / khor'rakhuk | a gift gathered for the clan |
+| egg / eggs | kesh / keshuk | a dragon beginning, counted by `-uk` |
+| clutch / brood | kesh'khor / kesh'drok | eggs held as kin / eggs held as strength |
+| seed | kesh | a hidden dragon beginning |
 
 “I gathered food. You built shelter.” becomes
 “Sha rakh'ed zhek. Thu grosh'ed nukh.”
+
+“Only if we go in daylight.” stays entirely in English because its words carry
+ordinary daylight meaning. “Ashkeepers seal the ash-vault while the lair
+waits.” becomes “Ashkeepers seal tak zhur-vault while tak nukh waits.” A shrine
+is a `zhur'nukh`, an ash hollow; a clutch is `kesh'khor`, eggs held as clan kin;
+and a brood is `kesh'drok`, eggs held as strength.
 
 “I do not trust the court, if the rumour is true.” becomes
 “Sha do not trust tak drok'khor, if tak rumour is true.”
