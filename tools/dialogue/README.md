@@ -2,6 +2,8 @@
 
 For the procedural abstract-syntax prototype and shared human/goblin meaning,
 see [SYNTAX.md](SYNTAX.md).
+The trained 5M syntax checkpoint and native pair runner are documented in
+[TRAIN-SYNTAX.md](TRAIN-SYNTAX.md).
 
 Each worker is one person. It receives that person's view and produces one
 speech turn or an action. The runner delivers accepted speech to the other
