@@ -9,6 +9,25 @@ typedef struct CcReviewJourneyOptions {
     int32_t tick_step;
 } CcReviewJourneyOptions;
 
+static bool ContinueReviewRoadChoice(CcSim *sim, char *error,
+                                     size_t error_capacity)
+{
+    if (!sim->journey.active ||
+        sim->journey.phase != CC_JOURNEY_PHASE_ROAD_CHOICE) return false;
+    CcRoadLegPreview previews[3];
+    int32_t preview_count = CcRoadNextLegPreviews(sim, previews, 3);
+    for (int32_t i = 0; i < preview_count; ++i) {
+        if (previews[i].direction != sim->journey.road_direction ||
+            previews[i].segment_id == CC_PILOT_ROAD_MILL_SEGMENT_ID) continue;
+        CcCommand choose = {
+            .kind = CC_COMMAND_CHOOSE_ROAD_LEG,
+            .target_id = previews[i].decision_token
+        };
+        return CcSimApply(sim, &choose, error, error_capacity);
+    }
+    return false;
+}
+
 static void PrepareReviewJourney(CcSim *sim, CcReviewJourneyOptions options)
 {
     int32_t charter_index = FirstActiveSituationIndex(sim);
@@ -68,26 +87,46 @@ static void PrepareReviewJourney(CcSim *sim, CcReviewJourneyOptions options)
             int32_t target_progress = options.target_progress;
             int32_t setup_ticks = 0;
             while (sim->journey.active &&
-                   sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
                    sim->carriage.progress_milli < target_progress &&
                    setup_ticks < 10000) {
+                if (sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE) {
+                    if (!ContinueReviewRoadChoice(
+                            sim, setup_error, sizeof(setup_error))) break;
+                    continue;
+                }
+                if (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) break;
                 CcSimAdvanceRuntimeTicks(
                     sim, options.tick_step);
                 setup_ticks += 1;
             }
+            if (!options.finish_arrival && sim->journey.active &&
+                sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE) {
+                if (!ContinueReviewRoadChoice(
+                        sim, setup_error, sizeof(setup_error))) return;
+            }
             if (options.finish_arrival) {
                 while (sim->journey.active &&
-                       sim->journey.phase ==
-                           CC_JOURNEY_PHASE_TRAVELLING &&
                        setup_ticks < 20000) {
+                    if (sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE) {
+                        if (!ContinueReviewRoadChoice(
+                                sim, setup_error, sizeof(setup_error))) break;
+                        continue;
+                    }
+                    if (sim->journey.phase !=
+                            CC_JOURNEY_PHASE_TRAVELLING) break;
                     CcSimAdvanceRuntimeTicks(
                         sim, CC_WORLD_TICKS_PER_SECOND);
                     setup_ticks += 1;
                 }
             }
         } else {
-            while (sim->journey.active &&
-                   sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+            while (sim->journey.active) {
+                if (sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE) {
+                    if (!ContinueReviewRoadChoice(
+                            sim, setup_error, sizeof(setup_error))) break;
+                    continue;
+                }
+                if (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) break;
                 CcSimAdvanceRuntimeTicks(
                     sim, CC_WORLD_TICKS_PER_SECOND);
             }
@@ -99,6 +138,11 @@ static void PrepareReviewJourney(CcSim *sim, CcReviewJourneyOptions options)
             (void)CcSimApply(sim, &resolve, setup_error,
                              sizeof(setup_error));
             while (sim->journey.active) {
+                if (sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE) {
+                    if (!ContinueReviewRoadChoice(
+                            sim, setup_error, sizeof(setup_error))) break;
+                    continue;
+                }
                 CcSimAdvanceRuntimeTicks(
                     sim, CC_WORLD_TICKS_PER_SECOND);
             }

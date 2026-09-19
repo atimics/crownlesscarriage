@@ -186,11 +186,41 @@ async function main() {
     await game.waitForFunction(hash => document.body.dataset.companyHash === hash, travelling.state.hash);
     await owner.evaluate(() => Module.ccCoop.togglePause());
     for (const page of [owner, game]) await page.waitForFunction(() => !Module.ccCoop.paused());
-    const firstStop = await owner.evaluate(() => Module.ccCoop.apply('skip_watch', '0', 0, 0));
-    assert.equal(firstStop.accepted, true);
-    assert(firstStop.world.state.journey.road_site, 'A nearby stop is offered');
-    const firstJourney = firstStop.world.state.journey;
-    // Leaving the option alone keeps the shared carriage moving.
+    const onwardLeg = road => road?.next_legs?.find(
+      leg => leg.direction === road.direction && leg.kind !== 3);
+    let firstWorld = null;
+    for (let step = 0; step < 32 && firstWorld === null; ++step) {
+      const current = (await state()).state;
+      if (current.journey.road_site) {
+        firstWorld = current;
+        break;
+      }
+      const leg = onwardLeg(current.road_position);
+      if (leg) {
+        const previousRevision = current.road_position.revision;
+        const chosen = await owner.evaluate(token =>
+          Module.ccCoop.apply('road_leg', token, 0, 0), leg.token);
+        assert.equal(chosen.accepted, true, chosen.message);
+        assert.notEqual(chosen.world.state.road_position.revision, previousRevision,
+          'The exact current road token advances the shared revision');
+        continue;
+      }
+      const advanced = await owner.evaluate(() =>
+        Module.ccCoop.apply('skip_watch', '0', 0, 0));
+      assert.equal(advanced.accepted, true, advanced.message);
+      if (advanced.world.state.journey.road_site) firstWorld = advanced.world.state;
+    }
+    assert(firstWorld?.journey.road_site, 'A nearby stop is offered');
+    const firstJourney = firstWorld.journey;
+    const siteLeg = onwardLeg(firstWorld.road_position);
+    assert(siteLeg, 'The physical road site offers a current onward token');
+    const siteRevision = firstWorld.road_position.revision;
+    const leftSite = await owner.evaluate(token =>
+      Module.ccCoop.apply('road_leg', token, 0, 0), siteLeg.token);
+    assert.equal(leftSite.accepted, true, leftSite.message);
+    assert.notEqual(leftSite.world.state.road_position.revision, siteRevision,
+      'The exact site token resolves the physical road choice');
+    // Resolving the physical site keeps the shared carriage moving.
     await game.waitForFunction(progress => {
       const reading = Module.crownlessTouchFrame?.reading || '';
       return !reading.includes('Press on') && !reading.includes('Fast forward') &&
