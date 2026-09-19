@@ -1,5 +1,8 @@
 # Participant dialogue
 
+For the procedural abstract-syntax prototype and shared human/goblin meaning,
+see [SYNTAX.md](SYNTAX.md).
+
 Each worker is one person. It receives that person's view and produces one
 speech turn or an action. The runner delivers accepted speech to the other
 worker as an observation. Each worker keeps its identity throughout an episode.
