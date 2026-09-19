@@ -37,6 +37,40 @@
       .game-field { position: fixed; opacity: 0; margin: 0; padding: 0; font-size: 16px; border: 0; z-index: 2; }
       #touch-actions { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); z-index: 10001; }
       #touch-actions:focus-within { width: min(420px, calc(100vw - 24px)); height: auto; max-height: 50vh; overflow: auto; clip-path: none; right: 12px; bottom: 12px; padding: 12px; background: #171512; border: 1px solid #8e8168; z-index: 10001; }
+      #touch-actions h2 { margin: 0 0 8px; font: 700 20px Georgia, serif; color: #f1d58a; }
+      #touch-actions p { margin: 6px 0; line-height: 1.35; }
+      .touch-reading { white-space: pre-line; }
+      .touch-buttons { display: grid; gap: 8px; }
+      .touch-buttons button { min-height: 44px; padding: 8px 12px; text-align: left; }
+      .touch-scene-details { margin-top: 12px; }
+      .touch-scene-details summary { min-height: 44px; padding: 10px 0; cursor: pointer; color: #d1bd8d; }
+      @media (orientation: portrait) and (max-width: 600px) {
+        #stage, #stage.expanded { grid-template-rows: auto minmax(0, 1fr) auto; }
+        #game-frame { grid-row: 1; width: 100%; aspect-ratio: 16 / 9; }
+        canvas {
+          width: 100%;
+          height: 100%;
+        }
+        #touch-actions, #touch-actions:focus-within {
+          grid-row: 2;
+          position: static;
+          inset: auto;
+          width: auto;
+          height: auto;
+          min-height: 0;
+          max-height: none;
+          overflow: auto;
+          clip-path: none;
+          padding: 14px 16px;
+          border: 0;
+          border-top: 1px solid #5b513f;
+          border-bottom: 1px solid #5b513f;
+          background: #171512;
+          font: 16px Georgia, serif;
+          z-index: 2;
+        }
+        #save-status { grid-row: 3; }
+      }
     </style>
   </head>
   <body>

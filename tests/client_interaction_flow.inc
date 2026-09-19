@@ -337,6 +337,71 @@ static int RunAdventureInputRegression(void)
     if (handoff_result != 0) return handoff_result;
     int presented_result = RunPresentedTargetRegression();
     if (presented_result != 0) return presented_result;
+    {
+        CcSim choice_sim;
+        LocalState choice_local = {0};
+        char error[192] = "", label[128] = "";
+        CcSimInit(&choice_sim, 42U);
+        ResetLocalState(&choice_local);
+        choice_local.adventure_ui = true;
+        int32_t opening = OpeningSituationIndex(&choice_sim);
+        CcSituation *offer = opening >= 0 ?
+            &choice_sim.situations[opening] : NULL;
+        const CcCharacter *giver = offer != NULL ?
+            CcSimSituationConversationCharacter(
+                &choice_sim, offer, choice_sim.player.location_id) : NULL;
+        if (offer == NULL || giver == NULL)
+            return ClientRegressionFailure("The opening promise needs its giver.");
+        choice_local.conversation_situation_id = offer->id;
+        choice_local.conversation_character_id = giver->id;
+        ContextActionSet choices = BuildContextActions(
+            &choice_sim, &choice_local, VIEW_CHARACTER, opening, opening);
+        if (choices.count != 2 ||
+            choices.items[0].kind != CONTEXT_ACTION_LISTEN_CHARACTER ||
+            strcmp(ContextTouchActionLabel(&choice_local, VIEW_CHARACTER, 0,
+                &choices.items[0], label, sizeof(label)),
+                "1 What do they need?") != 0 ||
+            choices.items[1].kind != CONTEXT_ACTION_CLOSE_VIEW ||
+            strncmp(ContextTouchActionLabel(&choice_local, VIEW_CHARACTER, 1,
+                &choices.items[1], label, sizeof(label)), "2 ", 2) != 0)
+            return ClientRegressionFailure(
+                "Opening semantic choices must publish their real number keys.");
+        CcCommand listen = {.kind = CC_COMMAND_CHARACTER_RESPONSE,
+            .target_id = offer->id,
+            .amount = CC_CHARACTER_RESPONSE_LISTEN};
+        if (!CcSimApply(&choice_sim, &listen, error, sizeof(error)))
+            return ClientRegressionFailure(error);
+        giver = CcSimCharacter(&choice_sim, choice_local.conversation_character_id);
+        if (giver == NULL || !CcCharacterRemembers(
+                giver, CC_CHARACTER_MEMORY_MET_PLAYER, offer->id)) {
+            (void)fprintf(stderr, "conversation=%" PRIu64 " sponsor=%" PRIu64
+                " affected=%" PRIu64 " memory=%d\n",
+                choice_local.conversation_character_id,
+                offer->sponsor_character_id, offer->affected_character_id,
+                giver != NULL ? giver->memory_count : -1);
+            return ClientRegressionFailure(
+                "The opening answer must belong to its visible speaker.");
+        }
+        choices = BuildContextActions(
+            &choice_sim, &choice_local, VIEW_CHARACTER, opening, opening);
+        if (choices.count != 2 ||
+            choices.items[0].kind != CONTEXT_ACTION_PLEDGE_CHARACTER ||
+            strcmp(ContextTouchActionLabel(&choice_local, VIEW_CHARACTER, 0,
+                &choices.items[0], label, sizeof(label)),
+                "1 I'll take the job.") != 0 ||
+            choices.items[1].kind != CONTEXT_ACTION_CLOSE_VIEW ||
+            strncmp(ContextTouchActionLabel(&choice_local, VIEW_CHARACTER, 1,
+                &choices.items[1], label, sizeof(label)), "2 ", 2) != 0)
+            return ClientRegressionFailure(
+                "Promise choices must announce the same numbered actions as the canvas.");
+        CcCommand pledge = listen;
+        pledge.amount = CC_CHARACTER_RESPONSE_PLEDGE_HELP;
+        if (!CcSimApply(&choice_sim, &pledge, error, sizeof(error)) ||
+            choice_sim.player.accepted_situation_id != offer->id ||
+            choice_sim.player.cargo[CC_GOOD_FOOD] != 8)
+            return ClientRegressionFailure(
+                "The announced first promise choice must load Mara's eight Bread.");
+    }
     static CcSim sim;
     static LocalState local;
     char message[256] = "", feedback[256] = "", error[192] = "";
