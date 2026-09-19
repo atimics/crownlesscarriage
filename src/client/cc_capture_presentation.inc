@@ -47,6 +47,22 @@ static bool CcCaptureActive(const CcCaptureRequest *request) { return request->c
 static bool CcCaptureConfigureWindow(const CcCaptureRequest *request,
     int argc, char **argv, CcCaptureWindow *window)
 {
+    if (request->capture_mine_yard && argc >= 5) {
+        char *width_end = NULL;
+        char *height_end = NULL;
+        long width = strtol(argv[3], &width_end, 10);
+        long height = strtol(argv[4], &height_end, 10);
+        if (width_end == argv[3] || *width_end != '\0' ||
+            height_end == argv[4] || *height_end != '\0' ||
+            width < 390 || width > 1920 || height < 390 || height > 1080) {
+            (void)fprintf(stderr, "Mine capture size must be 390..1920 by 390..1080.\n");
+            return false;
+        }
+        window->width = (int32_t)width;
+        window->height = (int32_t)height;
+        window->minimum_width = (int32_t)width;
+        window->minimum_height = (int32_t)height;
+    }
     if ((request->capture_road_fork || request->capture_pony_book) && argc >= 4) {
         char *end = NULL;
         long width = strtol(argv[3], &end, 10);

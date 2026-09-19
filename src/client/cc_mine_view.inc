@@ -1,8 +1,20 @@
 static int MineScreenWidth(void) { return GetScreenWidth()>0?GetScreenWidth():1040; }
 static int MineScreenHeight(void) { return GetScreenHeight()>0?GetScreenHeight():620; }
+static bool MineShortLandscape(void)
+{
+    return MineScreenWidth()>=700 && MineScreenHeight()<500;
+}
+static Rectangle MineViewportForSize(int32_t width,int32_t height)
+{
+    float top=width>=700&&height<500?145.0f:230.0f;
+    float bottom=(float)height-176.0f;
+    return (Rectangle){0,top,(float)width,bottom-top};
+}
 static Rectangle MineViewport(void)
 {
-    return (Rectangle){0,230,(float)GetScreenWidth(),(float)GetScreenHeight()-406};
+    int32_t width=GetScreenWidth(),height=GetScreenHeight();
+    if(width<=0||height<=0) return (Rectangle){0};
+    return MineViewportForSize(width,height);
 }
 static Rectangle MineControl(int32_t index)
 {
@@ -30,20 +42,24 @@ static int32_t MineGoodsRows(const int32_t goods[CC_GOOD_COUNT])
     return rows>0?rows:1;
 }
 static void MineDrawGoods(const char *title,const int32_t goods[CC_GOOD_COUNT],
-                          int32_t x,int32_t y,Color color)
+                          int32_t x,int32_t y,int32_t width,Color color)
 {
     CcOverlayDrawText(title,x,y,10,color);
     if(goods==NULL) {
         CcOverlayDrawText("Walk to yard anchor.",x,y+13,10,MUTED);
         return;
     }
-    int32_t row=0;
+    int32_t columns=MineShortLandscape()?2:1;
+    int32_t rows=(MineGoodsRows(goods)+columns-1)/columns;
+    int32_t item=0;
     for(int32_t good=0;good<CC_GOOD_COUNT;++good) {
         if(goods[good]<=0) continue;
-        CcOverlayDrawText(TextFormat("%s %d",CcGoodName((CcGood)good),goods[good]),x,y+13+row*11,10,color);
-        ++row;
+        int32_t column=item/rows,row=item%rows;
+        CcOverlayDrawText(TextFormat("%s %d",CcGoodName((CcGood)good),goods[good]),
+            x+column*(width/columns),y+13+row*11,10,color);
+        ++item;
     }
-    if(row==0) CcOverlayDrawText("empty",x,y+13,10,MUTED);
+    if(item==0) CcOverlayDrawText("empty",x,y+13,10,MUTED);
 }
 static void MineReceipt(char *message,size_t capacity,const CcCommand *command)
 {
@@ -336,6 +352,8 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
     SyncMineView(sim,local);
     bool underground=sim->mine.phase==CC_MINE_LEVEL;
     bool compact=MineScreenWidth()<600;
+    bool short_landscape=MineShortLandscape();
+    bool brief=compact||short_landscape;
     DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),BACKGROUND);
     CcLocalDrawMine3D(sim,&local->agent,local->mine_facing,target,MineViewport());
     if(underground) {
@@ -346,24 +364,35 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
         MineLabel(target,sim,local,(Vector3){15,3,3},15,3,"Mine Mouth / walk in");
         MineLabel(target,sim,local,(Vector3){18,1,19},18,19,"Carriage / transfer goods");
     }
-    CcOverlayDrawText(underground?"THE UNDERROAD / 01":compact?"MINE YARD":"LOW SILVER PIT / MINE YARD",22,20,11,TEAL);
+    int32_t title_y=short_landscape?12:20;
+    int32_t subtitle_y=short_landscape?30:43;
+    int32_t summary_y=short_landscape?50:65;
+    int32_t goods_y=short_landscape?65:80;
+    CcOverlayDrawText(underground?"THE UNDERROAD / 01":brief?"MINE YARD":"LOW SILVER PIT / MINE YARD",22,title_y,11,TEAL);
     CcOverlayDrawText(underground?CcMineChamberName(CcMineChamber(sim->mine.x,sim->mine.y)):
-        compact?"Carriage at mine road":"The carriage waits beside the mine road",22,43,compact?16:20,INK);
+        brief?"Carriage at mine road":"The carriage waits beside the mine road",22,subtitle_y,brief?14:20,INK);
     int32_t pack_used=CcMinePackUsed(sim);
     int32_t carriage_used=CcPlayerCargoUsed(&sim->player);
     bool at_carriage=MineAtCarriage(sim);
-    if(compact) CcOverlayDrawText(TextFormat("Pack %d/8 | Cart %d/%d | Light %d",
-        pack_used,carriage_used,sim->player.cargo_capacity,sim->mine.light),22,65,10,INK);
+    if(brief) CcOverlayDrawText(TextFormat("Pack %d/8 | Cart %d/%d | Light %d",
+        pack_used,carriage_used,sim->player.cargo_capacity,sim->mine.light),22,summary_y,10,INK);
     else CcOverlayDrawText(TextFormat("Pack %d/8, free %d  |  Carriage %d/%d, free %d  |  Light %d",
         pack_used,CC_MINE_PACK_CAPACITY-pack_used,carriage_used,sim->player.cargo_capacity,
-        sim->player.cargo_capacity-carriage_used,sim->mine.light),22,65,10,INK);
-    MineDrawGoods("Pack",sim->mine.pack,22,80,TEAL);
-    MineDrawGoods(at_carriage?(compact?"Cart":"Carriage"):(compact?"Cart out of reach":"Carriage out of reach"),
-        at_carriage?sim->player.cargo:NULL,MineScreenWidth()/2+12,80,at_carriage?TEAL:MUTED);
-    CcOverlayDrawText(TextFormat(compact?"Selected %s x%d  |  pack %d  carriage %d":
-        "Selected %s x%d  |  pack %d  carriage %d  |  good [ ]  quantity - +",
-        CcGoodName(local->mine_good),local->mine_quantity,sim->mine.pack[local->mine_good],
-        sim->player.cargo[local->mine_good]),22,GetScreenHeight()-176,11,INK);
+        sim->player.cargo_capacity-carriage_used,sim->mine.light),22,summary_y,10,INK);
+    int32_t pane_width=MineScreenWidth()/2-34;
+    MineDrawGoods("Pack",sim->mine.pack,22,goods_y,pane_width,TEAL);
+    MineDrawGoods(at_carriage?(brief?"Cart":"Carriage"):(brief?"Cart out of reach":"Carriage out of reach"),
+        at_carriage?sim->player.cargo:NULL,MineScreenWidth()/2+12,goods_y,pane_width,
+        at_carriage?TEAL:MUTED);
+    const char *selection=at_carriage?
+        TextFormat(brief?"Selected %s x%d | pack %d | cart %d":
+            "Selected %s x%d  |  pack %d  carriage %d  |  good [ ]  quantity - +",
+            CcGoodName(local->mine_good),local->mine_quantity,sim->mine.pack[local->mine_good],
+            sim->player.cargo[local->mine_good]):
+        TextFormat(brief?"Selected %s x%d | pack %d | cart out of reach":
+            "Selected %s x%d  |  pack %d  |  carriage out of reach  |  good [ ]  quantity - +",
+            CcGoodName(local->mine_good),local->mine_quantity,sim->mine.pack[local->mine_good]);
+    CcOverlayDrawText(selection,22,GetScreenHeight()-176,11,INK);
     const char *action=CcMineAction(sim);
     bool can_board=!at_carriage || carriage_used+pack_used<=sim->player.cargo_capacity;
     bool can_pack=at_carriage && sim->player.cargo[local->mine_good]>=local->mine_quantity &&
@@ -380,13 +409,13 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
     } else if(at_carriage && pack_used==CC_MINE_PACK_CAPACITY)
         hint="Pack is full. Unload selected goods, or walk to the mine mouth.";
     CcOverlayDrawText(hint,22,GetScreenHeight()-151,11,TEAL);
-    AdventureButton(MineSelectionControl(0),compact?"Good <":"Previous good",true,false);
-    AdventureButton(MineSelectionControl(1),compact?"Good >":"Next good",true,false);
+    AdventureButton(MineSelectionControl(0),brief?"Good <":"Previous good",true,false);
+    AdventureButton(MineSelectionControl(1),brief?"Good >":"Next good",true,false);
     AdventureButton(MineSelectionControl(2),"Less",local->mine_quantity>1,false);
     AdventureButton(MineSelectionControl(3),"More",local->mine_quantity<CC_MINE_PACK_CAPACITY,false);
-    AdventureButton(MineControl(0),compact?"Use / E":action!=NULL?action:"Use / E",action!=NULL&&can_board,false);
-    AdventureButton(MineControl(1),TextFormat(compact?"Pack %d":"Pack %d / P",local->mine_quantity),can_pack,false);
-    AdventureButton(MineControl(2),TextFormat(compact?"Unload %d":"Unload %d / U",local->mine_quantity),can_unload,false);
+    AdventureButton(MineControl(0),brief?"Use / E":action!=NULL?action:"Use / E",action!=NULL&&can_board,false);
+    AdventureButton(MineControl(1),TextFormat(brief?"Pack %d":"Pack %d / P",local->mine_quantity),can_pack,false);
+    AdventureButton(MineControl(2),TextFormat(brief?"Unload %d":"Unload %d / U",local->mine_quantity),can_unload,false);
     CcOverlayDrawText(message,22,GetScreenHeight()-29,10,INK);
     if(!compact) CcOverlayDrawText("Click where to walk  |  [ ] good  - + amount  |  F5 save",GetScreenWidth()-390,23,10,MUTED);
 }

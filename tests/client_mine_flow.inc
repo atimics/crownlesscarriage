@@ -228,8 +228,10 @@ static int RunMineInputRegression(void)
         int32_t inventory_rows=MineGoodsRows(inventory.mine.pack);
         if(MineGoodsRows(inventory.player.cargo)>inventory_rows)
             inventory_rows=MineGoodsRows(inventory.player.cargo);
-        MINE_CHECK(94+inventory_rows*11<=MineViewport().y,
+        MINE_CHECK(94+inventory_rows*11<=MineViewportForSize(1040,620).y,
             "Several goods must fit above the mine viewport.");
+        MINE_CHECK(MineViewportForSize(844,390).height>0,
+            "The mine view must retain positive height below its inventory.");
         for(int32_t good=0;good<CC_GOOD_COUNT;++good) {
             char line[64];
             (void)snprintf(line,sizeof(line),"%s %d",CcGoodName((CcGood)good),999);
