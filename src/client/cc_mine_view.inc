@@ -53,14 +53,6 @@ static Rectangle MineViewport(const CcSim *sim,const LocalState *local)
     return MineViewportForContent(width,height,
         local!=NULL&&local->mine_inventory_expanded,MineInventoryRows(sim));
 }
-static void MineRenderTargetSizeForInventory(int32_t width,int32_t height,
-                                             bool expanded,int32_t *out_width,
-                                             int32_t *out_height)
-{
-    Rectangle view=MineViewportForInventory(width,height,expanded);
-    *out_width=(int32_t)fmaxf(1.0f,roundf(view.width));
-    *out_height=(int32_t)fmaxf(1.0f,roundf(view.height));
-}
 static void MineRenderTargetSize(const CcSim *sim,const LocalState *local,
                                  int32_t *out_width,int32_t *out_height)
 {

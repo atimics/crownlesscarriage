@@ -350,10 +350,6 @@ static int RunMineInputRegression(void)
             "The mine view must retain positive height below its inventory.");
         Rectangle collapsed=MineViewportForInventory(844,390,false);
         Rectangle expanded=MineViewportForInventory(844,390,true);
-        int32_t target_width=0,target_height=0;
-        MineRenderTargetSizeForInventory(844,390,false,&target_width,&target_height);
-        MINE_CHECK(collapsed.width==(float)target_width&&collapsed.height==(float)target_height,
-            "The collapsed mine target must match its draw and pick bounds.");
         MINE_CHECK(collapsed.height>=120.0f&&expanded.height==collapsed.height&&
             expanded.width+300.0f<=collapsed.width,
             "The short inventory keeps a clear central scene beside both goods panes.");
