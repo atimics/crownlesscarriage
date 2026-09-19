@@ -51,6 +51,10 @@ static bool MineRayBoxDistance(Ray ray,BoundingBox box,float *out_distance)
     const float direction[]={ray.direction.x,ray.direction.y,ray.direction.z};
     const float minimum[]={box.min.x,box.min.y,box.min.z};
     const float maximum[]={box.max.x,box.max.y,box.max.z};
+    float direction_length_squared=ray.direction.x*ray.direction.x+
+        ray.direction.y*ray.direction.y+ray.direction.z*ray.direction.z;
+    if(!isfinite(direction_length_squared)||direction_length_squared<=.000000000001f)
+        return false;
     float near_distance=0.0f,far_distance=INFINITY;
     for(int32_t axis=0;axis<3;++axis) {
         if(!isfinite(origin[axis])||!isfinite(direction[axis])) return false;

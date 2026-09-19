@@ -72,6 +72,9 @@ static int RunMineInputRegression(void)
         MINE_CHECK(!MineRayBoxDistance((Ray){.position={NAN,0.7f,10},.direction={1,0,0}},
                                        slab_box,&slab_distance),
             "A non-finite ray must miss without creating a non-finite distance.");
+        MINE_CHECK(!MineRayBoxDistance((Ray){.position={15,0.7f,10},.direction={0,0,0}},
+                                       slab_box,&slab_distance),
+            "A zero-length ray has no direction and must miss cleanly.");
         Camera3D camera=CcLocalMineCamera(&picked,pick_local.mine_facing);
         Vector2 clear_floor=GetWorldToScreenEx((Vector3){9,0,4},camera,630,320);
         MINE_CHECK(clear_floor.x>=0&&clear_floor.x<630&&clear_floor.y>=0&&clear_floor.y<320,
