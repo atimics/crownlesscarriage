@@ -24,6 +24,35 @@ async function main() {
   const browser = await chromium.launch({args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
   const context = await browser.newContext({viewport: {width: 1280, height: 900}});
   const page = await context.newPage();
+  async function assertSaveStatusLane(target, width, height) {
+    await target.setViewportSize({width, height});
+    await target.waitForTimeout(100);
+    const layout = await target.evaluate(() => {
+      const canvas = document.querySelector('#canvas').getBoundingClientRect();
+      const status = document.querySelector('#save-status').getBoundingClientRect();
+      const scaleX = canvas.width / document.querySelector('#canvas').width;
+      const scaleY = canvas.height / document.querySelector('#canvas').height;
+      const buttons = (Module.crownlessTouchFrame?.buttons || []).map(button => ({
+        left: canvas.left + button.x * scaleX,
+        top: canvas.top + button.y * scaleY,
+        right: canvas.left + (button.x + button.width) * scaleX,
+        bottom: canvas.top + (button.y + button.height) * scaleY
+      }));
+      return {
+        canvas: {left: canvas.left, top: canvas.top, right: canvas.right, bottom: canvas.bottom},
+        status: {left: status.left, top: status.top, right: status.right, bottom: status.bottom},
+        buttons
+      };
+    });
+    assert(layout.status.top >= layout.canvas.bottom - 1, JSON.stringify(layout));
+    assert(layout.status.left >= -1 && layout.status.right <= width + 1 &&
+      layout.status.top >= -1 && layout.status.bottom <= height + 1, JSON.stringify(layout));
+    for (const button of layout.buttons) {
+      const overlap = button.left < layout.status.right && button.right > layout.status.left &&
+        button.top < layout.status.bottom && button.bottom > layout.status.top;
+      assert(!overlap, JSON.stringify({layout, button}));
+    }
+  }
   async function selectMenuItem(index) {
     await page.locator('#canvas').focus();
     while (await page.evaluate(() => Module.crownlessMenuFocus) !== index) {
@@ -352,13 +381,20 @@ async function main() {
             `A fresh campaign stalled on screen '${screen}' after Enter at title.`);
     }
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision + 2);
+    await assertSaveStatusLane(page, 1280, 720);
+    await page.screenshot({path: path.join(output, 'save-lane-desktop.png')});
     const recovery = await page.evaluate(() => {
       window.dispatchEvent(new ErrorEvent('error', {message: 'Injected runtime failure'}));
+      const loading = document.querySelector('#loading');
       const runtime = {
         visible: !document.querySelector('#loading').hidden,
         text: document.querySelector('#status').textContent,
         progressHidden: document.querySelector('#progress').hidden,
-        progressValue: document.querySelector('#progress').value
+        progressValue: document.querySelector('#progress').value,
+        panelRole: loading.getAttribute('role'),
+        statusRole: document.querySelector('#status').getAttribute('role'),
+        panelTabIndex: loading.tabIndex,
+        focused: document.activeElement === loading
       };
       const event = new Event('webglcontextlost', {cancelable: true});
       document.querySelector('#canvas').dispatchEvent(event);
@@ -373,7 +409,11 @@ async function main() {
         visible: true,
         text: 'The game stopped after startup. Your browser state remains open. Check the browser console.',
         progressHidden: true,
-        progressValue: 0
+        progressValue: 0,
+        panelRole: 'alert',
+        statusRole: 'status',
+        panelTabIndex: -1,
+        focused: true
       },
       graphics: {visible: true, text: 'The graphics context was lost. Reload the page to continue.', prevented: true}
     });
@@ -388,6 +428,8 @@ async function main() {
     try {
       await mobile.goto(`http://127.0.0.1:${server.address().port}/`);
       await mobile.waitForFunction(() => window.Module?.crownlessScreen === 'title' && Module.crownlessTouchFrame?.buttons.length);
+      await assertSaveStatusLane(mobile, 390, 844);
+      await mobile.screenshot({path: path.join(output, 'save-lane-portrait.png')});
       const controls = gameControls(mobile, true);
       assert.equal(await mobile.locator('#touch-panel, #touch-actions, #exit-fullscreen').count(), 0);
       for (const [width, height] of [[320, 740], [390, 844], [667, 375], [844, 390], [1024, 768]]) {

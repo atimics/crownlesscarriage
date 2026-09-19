@@ -6,13 +6,14 @@
     <meta name="theme-color" content="#171512">
     <title>Crownless Carriage</title>
     <style>
-      :root { color-scheme: dark; background: #0b0a09; color: #e8dfc9; }
+      :root { color-scheme: dark; background: #0b0a09; color: #e8dfc9; --save-status-lane: 56px; }
       * { box-sizing: border-box; }
       html, body, main, #stage { width: 100%; height: 100%; margin: 0; overflow: hidden; }
-      #stage { display: grid; place-items: center; position: relative; }
+      #stage { display: grid; grid-template-rows: minmax(0, calc(100dvh - var(--save-status-lane))) var(--save-status-lane); position: relative; }
+      #game-frame { display: grid; place-items: center; min-width: 0; min-height: 0; overflow: hidden; position: relative; }
       canvas {
-        display: block; width: min(100vw, calc(100dvh * 16 / 9));
-        height: min(100dvh, calc(100vw * 9 / 16)); border: 0; outline: none;
+        display: block; width: min(100vw, calc((100dvh - var(--save-status-lane)) * 16 / 9));
+        height: min(calc(100dvh - var(--save-status-lane)), calc(100vw * 9 / 16)); border: 0; outline: none;
       }
       #loading {
         position: absolute; inset: 0; display: grid; place-items: center;
@@ -21,7 +22,7 @@
       #loading[hidden] { display: none; }
       #progress { display: block; width: min(280px, 70vw); margin-top: 12px; accent-color: #9f8657; }
       #save-status {
-        position: absolute; left: 16px; bottom: 16px; z-index: 1;
+        align-self: center; justify-self: stretch; margin: 6px 16px;
         max-width: min(460px, calc(100vw - 32px)); padding: 7px 10px;
         border: 1px solid #5b513f; border-radius: 3px; background: #171512e8;
         color: #e8dfc9; font: 14px Georgia, serif;
@@ -39,11 +40,13 @@
   <body>
     <main>
       <div id="stage">
-        <canvas id="canvas" aria-label="Crownless Carriage game" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
-        <div id="loading" role="status">
-          <div>
-            <span id="status">Downloading the world…</span>
-            <progress id="progress" value="0" max="100" hidden></progress>
+        <div id="game-frame">
+          <canvas id="canvas" aria-label="Crownless Carriage game" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+          <div id="loading" role="alert" aria-atomic="true" tabindex="-1">
+            <div>
+              <span id="status" role="status" aria-live="assertive">Downloading the world…</span>
+              <progress id="progress" value="0" max="100" hidden></progress>
+            </div>
           </div>
         </div>
         <div id="save-status" role="status" aria-live="polite" data-state="ready">Save status: preparing browser storage.</div>
@@ -57,12 +60,21 @@
       const progressElement = document.querySelector("#progress");
       const saveStatusElement = document.querySelector("#save-status");
 
+      function showRecovery(text) {
+        Module.crownlessRecoveryActive = true;
+        progressElement.hidden = true;
+        progressElement.value = 0;
+        Module.setStatus(text);
+        loading.focus();
+      }
+
       var Module = {
         preRun: [],
         postRun: [function () {
           Module.crownlessRuntimeReady = true;
           if (!Module.crownlessRecoveryActive) loading.hidden = true;
-          canvas.focus();
+          if (Module.crownlessRecoveryActive) loading.focus();
+          else canvas.focus();
         }],
         canvas,
         print: console.log.bind(console),
@@ -96,10 +108,7 @@
 
       Module.setStatus("Downloading the world…");
       window.addEventListener("error", function () {
-        Module.crownlessRecoveryActive = true;
-        progressElement.hidden = true;
-        progressElement.value = 0;
-        Module.setStatus(Module.crownlessRuntimeReady
+        showRecovery(Module.crownlessRuntimeReady
           ? "The game stopped after startup. Your browser state remains open. Check the browser console."
           : "The game could not start. Check the browser console.");
       });
@@ -111,10 +120,7 @@
       canvas.addEventListener("pointerdown", function () { canvas.focus(); });
       canvas.addEventListener("webglcontextlost", function (event) {
         event.preventDefault();
-        Module.crownlessRecoveryActive = true;
-        progressElement.hidden = true;
-        progressElement.value = 0;
-        Module.setStatus("The graphics context was lost. Reload the page to continue.");
+        showRecovery("The graphics context was lost. Reload the page to continue.");
       });
       const stage = document.querySelector("#stage");
       function leaveExpandedView() {
