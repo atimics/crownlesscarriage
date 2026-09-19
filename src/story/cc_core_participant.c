@@ -52,8 +52,21 @@ bool CcCoreParticipantBuild(const CcSim *sim, CcId speaker, CcId listener,
     if (bond != NULL) { p->relationship = *bond; p->has_relationship = true; }
     for (int32_t i = 0; i < self->memory_count && i < CC_CHARACTER_MEMORY_CAPACITY; ++i)
         p->memories[p->memory_count++] = self->memories[i];
-    for (int32_t i = 0; i < self->knowledge_count && i < CC_CHARACTER_KNOWLEDGE_CAPACITY; ++i)
-        p->knowledge[p->knowledge_count++] = self->knowledge[i];
+    for (int32_t i = 0; i < self->knowledge_count && i < CC_CHARACTER_KNOWLEDGE_CAPACITY; ++i) {
+        const CcCharacterKnowledge *known = &self->knowledge[i];
+        size_t slot = p->knowledge_count++;
+        p->knowledge[slot] = *known;
+        /* Resolve only the event directly recorded in this person's knowledge.
+           Its source and certainty remain attached to the remembered account. */
+        const CcEvent *event = known->event_id != 0U ? CcSimEvent(sim, known->event_id) : NULL;
+        if (event != NULL && known->day <= sim->current_day &&
+            event->day <= known->day && event->text[0] != '\0') {
+            CcCoreKnownEvent *detail = &p->knowledge_events[slot];
+            detail->available = true;
+            detail->day = event->day;
+            (void)snprintf(detail->text, sizeof(detail->text), "%s", event->text);
+        }
+    }
     for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
         const CcGossipVersion *version = NULL;
         const CcGossip *story = CcSimPersonalGossip(sim, speaker, i, &version);
