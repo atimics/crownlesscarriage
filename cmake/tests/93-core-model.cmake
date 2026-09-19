@@ -26,4 +26,7 @@ if(CC_PYTHON3_EXECUTABLE)
     add_test(NAME participant_training_inputs COMMAND ${CC_PYTHON3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/participant_training_tests.py
         $<TARGET_FILE:core_model_probe>)
+    add_test(NAME participant_reviewed_corpus COMMAND ${CC_PYTHON3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/reviewed_corpus_tests.py
+        $<TARGET_FILE:core_model_probe>)
 endif()
