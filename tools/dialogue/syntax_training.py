@@ -58,14 +58,23 @@ def histories(person):
     for topic, plan, term in [('food','check_stores','vulnerable_first'),
                              ('safety','seek_safe_work','daylight'),
                              ('work','seek_paid_work','pay_before_work')]:
-        acts=[{'move':'request','topic':topic}, {'move':'propose','plan':plan,'reply':0},
-              {'move':'condition','term':term,'reply':1}, {'move':'accept','reply':2}]
-        for n in range(1,5):
-            result.append([{'speaker_id': other if (n-i)%2 else own, 'act':copy.deepcopy(a)}
-                           for i,a in enumerate(acts[:n])])
-        refused=copy.deepcopy(acts); refused[-1]={'move':'decline','reply':2}
-        result.append([{'speaker_id': other if (4-i)%2 else own, 'act':a}
-                       for i,a in enumerate(refused)])
+        for opening in ('request','need'):
+            acts=[{'move':opening,'topic':topic}, {'move':'propose','plan':plan,'reply':0},
+                  {'move':'condition','term':term,'reply':1}, {'move':'accept','reply':2}]
+            candidates=[acts[:n] for n in range(1,5)]
+            refused=copy.deepcopy(acts); refused[-1]={'move':'decline','reply':2}
+            candidates.append(refused)
+            for candidate in candidates:
+                n=len(candidate)
+                heard=[{'speaker_id': other if (n-i)%2 else own, 'act':copy.deepcopy(a)}
+                       for i,a in enumerate(candidate)]
+                # A self-reported need in history must fit this frozen own state.
+                if opening=='need' and heard[0]['speaker_id']==own:
+                    try:
+                        validate(heard[0]['act'],person,[])
+                    except ValueError:
+                        continue
+                result.append(heard)
     return result
 
 

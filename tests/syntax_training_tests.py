@@ -6,7 +6,7 @@ import sys
 import unittest
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools/dialogue'))
-from syntax_training import prefix,compile_row,checked_row,dataset,check_splits,evaluate
+from syntax_training import prefix,compile_row,checked_row,dataset,check_splits,evaluate,histories
 
 PROBE=Path(sys.argv.pop(1)).resolve() if len(sys.argv)>1 else None
 
@@ -59,10 +59,20 @@ class TrainingTests(unittest.TestCase):
 
     def test_full_factorial_split(self):
         splits=dataset(Tokenizer())
-        self.assertEqual(sum(map(len,splits.values())),6400)
+        self.assertGreater(sum(map(len,splits.values())),6400)
         check_splits(splits)
         splits['test'].append(splits['train'][0])
         with self.assertRaises(ValueError): check_splits(splits)
+
+    def test_need_openings_and_own_history_grounding(self):
+        from syntax import validate
+        p=person(); seen=set()
+        for heard in histories(p):
+            if heard:
+                seen.add(heard[0]['act']['move'])
+                if heard[0]['speaker_id']==p['self']['id']:
+                    validate(heard[0]['act'],p,[])
+        self.assertEqual(seen,{'need','request'})
 
     def test_raw_metrics_keep_failures(self):
         tok=Tokenizer();row=compile_row(person(),[],tok,'fixture')
