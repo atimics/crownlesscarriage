@@ -3297,20 +3297,48 @@ static void DrawFarmTerrainStage(const CcSettlement *place,
             TerrainNaturalHeight(river_x, z) : TerrainVisualHeightAt(river_x, z);
         float next_ground = TerrainPointInPlayableWorld(next_x, z + 4.0f) ?
             TerrainNaturalHeight(next_x, z + 4.0f) : TerrainVisualHeightAt(next_x, z + 4.0f);
-        Vector3 a = {river_x - 3.6f, ground + 0.12f, z};
-        Vector3 b = {next_x - 3.6f, next_ground + 0.12f, z + 4.0f};
-        Vector3 c = {next_x + 3.6f, next_ground + 0.12f, z + 4.0f};
-        Vector3 d = {river_x + 3.6f, ground + 0.12f, z};
-        DrawTriangle3D(a, b, c, water);
-        DrawTriangle3D(a, c, d, water);
+        // Shared edge positions keep the shallow bands continuous around bends.
+        const float banks[] = {-3.6f, -3.05f, -2.25f, -1.2f,
+                                1.2f, 2.25f, 3.05f, 3.6f};
+        for (int32_t band = 0; band < 7; ++band) {
+            int32_t depth = band < 3 ? band : 6 - band;
+            float shallow = (float)(3 - depth) / 3.0f;
+            Color pigment = BlendColor(
+                ShadeColor(water, 0.78f),
+                BlendColor(water, CC_VISUAL_PALETTE.parchment.light, 0.24f),
+                shallow * shallow);
+            Vector3 a = {river_x + banks[band], ground + 0.12f, z};
+            Vector3 b = {next_x + banks[band], next_ground + 0.12f, z + 4.0f};
+            Vector3 c = {next_x + banks[band + 1], next_ground + 0.12f, z + 4.0f};
+            Vector3 d = {river_x + banks[band + 1], ground + 0.12f, z};
+            DrawTriangle3D(a, b, c, pigment);
+            DrawTriangle3D(a, c, d, pigment);
+        }
         if (fabsf(z - 34.0f) > 4.0f) {
-            float offset = sinf(z * 0.61f) * 1.7f;
-            Vector3 ripple = {river_x + offset, ground + 0.15f, z + 0.4f};
-            Vector3 tip = {next_x + offset, next_ground + 0.15f, z + 2.8f};
-            DrawTriangle3D(ripple,
-                (Vector3){(ripple.x + tip.x) * 0.5f - 0.14f,
-                          (ripple.y + tip.y) * 0.5f, (ripple.z + tip.z) * 0.5f},
-                tip, BlendColor(water, CC_VISUAL_PALETTE.parchment.light, 0.42f));
+            for (int32_t stroke = 0; stroke < 3; ++stroke) {
+                float seed = z * 0.61f + (float)stroke * 2.39f;
+                float phase = clock * 0.65f + seed;
+                float drift = sinf(phase) * 0.25f;
+                float from = 0.16f + (float)stroke * 0.18f + drift * 0.12f;
+                float to = from + 0.22f + sinf(seed) * 0.06f;
+                float offset = sinf(seed) * 2.45f;
+                // Interpolate both height and bend on the same water quad.
+                Vector3 a = {Lerp(river_x, next_x, from) + offset,
+                             Lerp(ground, next_ground, from) + 0.135f,
+                             z + from * 4.0f};
+                Vector3 c = {Lerp(river_x, next_x, to) + offset + 0.10f,
+                             Lerp(ground, next_ground, to) + 0.135f,
+                             z + to * 4.0f};
+                Vector3 b = Vector3Lerp(a, c, 0.5f);
+                Vector3 d = b;
+                b.x -= 0.10f + 0.035f * sinf(seed);
+                d.x += 0.10f + 0.035f * sinf(seed);
+                float glint = 0.22f + 0.13f * (0.5f + 0.5f * sinf(phase));
+                Color foam = BlendColor(water,
+                    CC_VISUAL_PALETTE.parchment.light, glint);
+                DrawTriangle3D(a, b, c, foam);
+                DrawTriangle3D(a, c, d, foam);
+            }
         }
     }
     DrawThornfordRiverbank(focus);
