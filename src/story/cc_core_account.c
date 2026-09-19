@@ -45,7 +45,7 @@ static bool Quantity(const char *at, size_t length, uint64_t *value)
 typedef struct MatchBudget { unsigned int attempts; } MatchBudget;
 
 static bool MatchField(const CoreRule *rule, CcCoreAccount *account, unsigned int slot,
-                       const char *at, const char *end, bool terminal_separator)
+                       const char *at, const char *end)
 {
     CcCoreField *field = &account->fields[slot];
     field->start = (size_t)(at - account->text);
@@ -54,9 +54,6 @@ static bool MatchField(const CoreRule *rule, CcCoreAccount *account, unsigned in
     char marker[] = {'{', (char)('0' + slot), '}', '\0'};
     field->spoken = strstr(rule->outputs[0], marker) != NULL || strstr(rule->outputs[1], marker) != NULL;
     field->knowledge = account->confidence < 40 ? CC_CORE_UNCERTAIN : CC_CORE_KNOWN;
-    /* A comma before a terminal sentence separator indicates another clause
-       was swallowed into this value. Keep punctuation in ordinary names. */
-    if (terminal_separator && memchr(at, ',', field->length) != NULL) return false;
     if (rule->allowed[slot] != NULL) {
         char option[CC_EVENT_TEXT_CAPACITY + 3];
         option[0] = '|';
@@ -103,7 +100,7 @@ static bool MatchPattern(const CoreRule *rule, const char *pattern, CcCoreAccoun
         if (++budget->attempts > 4096U) return false;
         if (separator_length != 0U && strncmp(end, pattern, separator_length) != 0) continue;
         CcCoreField saved = account->fields[slot];
-        if (!MatchField(rule, account, slot, at, end, terminal_separator)) { account->fields[slot] = saved; continue; }
+        if (!MatchField(rule, account, slot, at, end)) { account->fields[slot] = saved; continue; }
         const char *rest = next == NULL ? pattern + separator_length : next;
         if (MatchPattern(rule, rest, account, end + separator_length, budget)) return true;
         account->fields[slot] = saved;
