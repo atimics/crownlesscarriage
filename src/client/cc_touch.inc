@@ -123,7 +123,8 @@ static void ClientTouchAdd(Rectangle bounds, const char *label, bool enabled, bo
     button->bounds = bounds;
     button->enabled = enabled;
     button->active = active;
-    (void)snprintf(button->label, sizeof(button->label), "%s", label);
+    (void)snprintf(button->label, sizeof(button->label), "%.*s",
+        (int)sizeof(button->label) - 1, label);
 }
 
 static void ClientTouchEnd(void)
