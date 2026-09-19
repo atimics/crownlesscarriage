@@ -325,8 +325,10 @@ const char *CcMineAction(const CcSim *sim)
 {
     const CcMineVisit *m=&sim->mine;
     if (m->phase == CC_MINE_YARD) {
-        if (Near(m,15,18)) return "Board carriage and return to road";
-        if (Near(m,15,3)) return "Enter Mine Mouth on foot";
+        if (Near(m,CC_MINE_YARD_CARRIAGE_X,CC_MINE_YARD_CARRIAGE_Y))
+            return "Board carriage and return to road";
+        if (Near(m,CC_MINE_YARD_MOUTH_X,CC_MINE_YARD_MOUTH_Y))
+            return "Enter Mine Mouth on foot";
     } else if (m->phase == CC_MINE_LEVEL) {
         if (Near(m,5,3)) return "Step outside to the mine yard";
         if (Near(m,15,10) && !m->bar_open) return "Lift the wooden bar";
@@ -379,7 +381,9 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
         sim->journey.elapsed_subticks=branch;
         sim->carriage.progress_milli=(int32_t)(
             (int64_t)branch*1000/sim->journey.total_subticks);
-        m->site_id=site->id; m->phase=CC_MINE_YARD; m->x=15; m->y=17;
+        m->site_id=site->id; m->phase=CC_MINE_YARD;
+        m->x=CC_MINE_YARD_CARRIAGE_X;
+        m->y=CC_MINE_YARD_CARRIAGE_Y-1;
         m->return_speed=sim->carriage.speed_milli_per_second;
         sim->carriage.mode=CC_CARRIAGE_STOPPED;
         sim->carriage.speed_milli_per_second=0;
@@ -409,7 +413,8 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
                 if (x == 9 && y == 15) m->bypass_route_seen=true;
             } else SpendMinutes(sim,1);
         } else if (command->kind == CC_COMMAND_MINE_PACK) {
-            if (m->phase != CC_MINE_YARD || !Near(m,15,18))
+            if (m->phase != CC_MINE_YARD ||
+                !Near(m,CC_MINE_YARD_CARRIAGE_X,CC_MINE_YARD_CARRIAGE_Y))
                 return Fail(error,capacity,"Pack supplies beside the carriage.");
             if (command->good < 0 || command->good >= CC_GOOD_COUNT ||
                 command->amount == 0 || command->amount < -CC_MINE_PACK_CAPACITY ||
@@ -528,7 +533,8 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
                     quantity,error,capacity)) return false;
             }
         } else if (command->kind == CC_COMMAND_MINE_USE) {
-            if (m->phase == CC_MINE_YARD && Near(m,15,3)) {
+            if (m->phase == CC_MINE_YARD &&
+                Near(m,CC_MINE_YARD_MOUTH_X,CC_MINE_YARD_MOUTH_Y)) {
                 const CcDungeon *d=&sim->dungeons[0];
                 if (d->state == CC_DUNGEON_SEALED || d->state == CC_DUNGEON_RESEALED)
                     return Fail(error,capacity,"The mine mouth is sealed.");
@@ -538,9 +544,12 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
                 m->phase=CC_MINE_LEVEL; m->x=5; m->y=4; m->light=18; m->steps=0; m->seen|=1U;
                 SpendMinutes(sim,1);
             } else if (m->phase == CC_MINE_LEVEL && Near(m,5,3)) {
-                m->phase=CC_MINE_YARD; m->x=15; m->y=4; m->light=0; m->steps=0;
+                m->phase=CC_MINE_YARD; m->x=CC_MINE_YARD_MOUTH_X;
+                m->y=CC_MINE_YARD_MOUTH_Y+1; m->light=0; m->steps=0;
                 SpendMinutes(sim,1);
-            } else if (m->phase == CC_MINE_YARD && Near(m,15,18)) {
+            } else if (m->phase == CC_MINE_YARD &&
+                       Near(m,CC_MINE_YARD_CARRIAGE_X,
+                            CC_MINE_YARD_CARRIAGE_Y)) {
                 if (!StowMinePack(sim,error,capacity)) return false;
                 const CcRoadSite *site=CcMineSite(sim);
                 sim->journey.road_site_stop_mask |= UINT32_C(1) << (int32_t)(site-sim->road_sites);

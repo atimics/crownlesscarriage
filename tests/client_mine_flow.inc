@@ -196,12 +196,19 @@ static int RunMineInputRegression(void)
             "The saved hauler formation must stay fixed when the player moves.");
         Vector2 hauler=GetWorldToScreenEx(
             (Vector3){hauler_position.x,1.55f,hauler_position.y},camera,630,320);
+        Vector2 hauler_head=GetWorldToScreenEx(
+            (Vector3){hauler_position.x,2.05f,hauler_position.y},camera,630,320);
+        Vector2 hauler_feet=GetWorldToScreenEx(
+            (Vector3){hauler_position.x,.05f,hauler_position.y},camera,630,320);
         MINE_CHECK(hauler.x>=0&&hauler.x<630&&hauler.y>=0&&hauler.y<320,
             "The visible hauler body must project into the render target.");
+        MINE_CHECK(hauler_head.y>=0&&hauler_head.y<320&&
+            hauler_feet.y>=0&&hauler_feet.y<320,
+            "The offer camera must keep the hauler's head and feet in frame.");
         MINE_CHECK(MinePick(&picked,&pick_local,surface,hauler,&tx,&ty,&target) &&
             target==MINE_INTENT_HAULERS && tx==26 && ty==16,
             "An upward hauler-body ray must name the saved hauler group.");
-        Rectangle mine_view=MineViewport(&pick_local);
+        Rectangle mine_view=MineViewport(&picked,&pick_local);
         if(mine_view.width<=0||mine_view.height<=0)
             mine_view=(Rectangle){0,0,630,320};
         client_test_pointer_active=true;
@@ -214,10 +221,31 @@ static int RunMineInputRegression(void)
         MINE_CHECK(strstr(message,"Choose the visible hauler action")!=NULL &&
             pick_local.mine_target_x<0,
             "A visible hauler click must select the group at its reachable approach.");
+        picked.mine.phase=CC_MINE_YARD;
+        picked.mine.x=CC_MINE_YARD_CARRIAGE_X;
+        picked.mine.y=CC_MINE_YARD_CARRIAGE_Y-1;
+        BoundingBox carriage_bounds={0};
+        MINE_CHECK(MineTargetBounds(&picked,MINE_INTENT_CARRIAGE,
+                &carriage_bounds,&tx,&ty) &&
+            tx==CC_MINE_YARD_CARRIAGE_X &&
+            ty==CC_MINE_YARD_CARRIAGE_Y &&
+            fabsf((carriage_bounds.min.x+carriage_bounds.max.x)*.5f-
+                (float)CC_MINE_YARD_CARRIAGE_X)<.001f &&
+            fabsf((carriage_bounds.min.z+carriage_bounds.max.z)*.5f-
+                (float)CC_MINE_YARD_CARRIAGE_Y)<.001f &&
+            MineAtCarriage(&picked) && MineIntentCanUse(&picked,MINE_INTENT_CARRIAGE),
+            "The drawn carriage, pick volume and legal approach must share one yard anchor.");
+        Camera3D yard_camera=CcLocalMineCamera(&picked,0);
+        float yard_dx=yard_camera.position.x-yard_camera.target.x;
+        float yard_dy=yard_camera.position.y-yard_camera.target.y;
+        float yard_dz=yard_camera.position.z-yard_camera.target.z;
+        float yard_span=sqrtf(yard_dx*yard_dx+yard_dy*yard_dy+yard_dz*yard_dz);
+        MINE_CHECK(yard_camera.projection==CAMERA_PERSPECTIVE &&
+            yard_span>=12.0f && yard_span<=20.0f && yard_camera.fovy<=48.0f,
+            "The yard camera must keep people, cargo and interaction targets at a readable scale.");
         pick_local.mine_target_x=26; pick_local.mine_target_y=5;
         pick_local.mine_intent_target=MINE_INTENT_SURVEY;
         pick_local.mine_intent_revision=picked.mine.revision;
-        picked.mine.phase=CC_MINE_YARD;
         SyncMineView(&picked,&pick_local);
         MINE_CHECK(pick_local.mine_target_x<0 && pick_local.mine_intent_revision<0,
             "Phase changes and reload-style local resets must cancel queued input.");
@@ -287,6 +315,44 @@ static int RunMineInputRegression(void)
         MINE_CHECK(!camps, "A roadside stop must not offer camping.");
         MINE_CHECK(drives_on, "Every roadside stop must offer the road on.");
     }
+    {
+        static CcSim travel_state;
+        static LocalState travel_local;
+        travel_state=sim;
+        travel_local=local;
+        travel_state.journey.active=true;
+        travel_state.journey.phase=CC_JOURNEY_PHASE_TRAVELLING;
+        travel_local.journey_travel_active=true;
+        travel_local.travel_hold_armed=false;
+        MINE_CHECK(strcmp(TravelActionDetail(&travel_state,&travel_local),
+            "Hold to travel faster")==0,
+            "An active road must describe the current moving state.");
+        travel_state.journey.phase=CC_JOURNEY_PHASE_BLOCKED;
+        MINE_CHECK(strcmp(TravelActionDetail(&travel_state,&travel_local),
+            "Choice ahead")==0,
+            "A blocked road must describe its pending choice.");
+        travel_state.journey.phase=CC_JOURNEY_PHASE_RESTING;
+        MINE_CHECK(strcmp(TravelActionDetail(&travel_state,&travel_local),
+            "Resting until morning")==0,
+            "A resting road must describe its saved phase.");
+    }
+    {
+        static CcSim readable_manifest;
+        readable_manifest=sim;
+        (void)memset(readable_manifest.player.cargo,0,
+            sizeof(readable_manifest.player.cargo));
+        readable_manifest.player.cargo[CC_GOOD_FOOD]=1;
+        readable_manifest.player.cargo[CC_GOOD_GOLD]=1;
+        readable_manifest.player.cargo_capacity=12;
+        char summary[512];
+        CarriageReadingSummary(&readable_manifest,summary,sizeof(summary));
+        MINE_CHECK(strstr(summary,"Bread 1")!=NULL&&
+            strstr(summary,"Raw Gold 1")!=NULL&&
+            strstr(summary,"Load 2 of 12, free 10")!=NULL&&
+            strstr(summary,"Team ")!=NULL&&
+            strstr(summary,"Carriage condition ")!=NULL,
+            "The semantic carriage manifest must include quantities, free space, team, and condition.");
+    }
     Rectangle button=ContextActionBounds(visit,actions.count,false);
     client_test_pointer_active=true;client_test_pointer=(Vector2){button.x+button.width/2,button.y+button.height/2};
     queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
@@ -298,16 +364,16 @@ static int RunMineInputRegression(void)
         int32_t inventory_rows=MineGoodsRows(inventory.mine.pack);
         if(MineGoodsRows(inventory.player.cargo)>inventory_rows)
             inventory_rows=MineGoodsRows(inventory.player.cargo);
-        MINE_CHECK((float)(94+inventory_rows*11)<=MineViewportForSize(1040,620).y,
+        Rectangle populated=MineViewportForContent(1040,620,false,inventory_rows);
+        Rectangle one_row=MineViewportForContent(1040,620,false,1);
+        MINE_CHECK((float)(104+inventory_rows*11)<=populated.y,
             "Several goods must fit above the mine viewport.");
+        MINE_CHECK(one_row.y<populated.y&&one_row.height>populated.height,
+            "A short manifest must return useful height to the mine scene.");
         MINE_CHECK(MineViewportForSize(844,390).height>0,
             "The mine view must retain positive height below its inventory.");
-        Rectangle collapsed=MineViewportForInventory(844,390,false);
-        Rectangle expanded=MineViewportForInventory(844,390,true);
-        int32_t target_width=0,target_height=0;
-        MineRenderTargetSizeForInventory(844,390,false,&target_width,&target_height);
-        MINE_CHECK(collapsed.width==(float)target_width&&collapsed.height==(float)target_height,
-            "The collapsed mine target must match its draw and pick bounds.");
+        Rectangle collapsed=MineViewportForContent(844,390,false,12);
+        Rectangle expanded=MineViewportForContent(844,390,true,12);
         MINE_CHECK(collapsed.height>=120.0f&&expanded.height==collapsed.height&&
             expanded.width+300.0f<=collapsed.width,
             "The short inventory keeps a clear central scene beside both goods panes.");
@@ -376,7 +442,7 @@ static int RunMineInputRegression(void)
         MINE_CHECK(input_journal!=NULL,"Pointer input needs a separate mine journal.");
         RenderTexture2D surface={.texture={.width=630,.height=960}};
 #define INPUT_STEP(direction) do { CcCommand step={.kind=CC_COMMAND_MINE_STEP,.target_id=(CcId)input.mine.revision,.amount=(direction)}; MINE_CHECK(ApplyCommand(input_journal,&input,step,message,sizeof(message)),"Pointer fixture needs a legal mine step."); } while(0)
-#define INPUT_POINTER(point) do { Camera3D pointer_camera=CcLocalMineCamera(&input,input_local.mine_facing); Vector2 raw_pointer=GetWorldToScreenEx((point),pointer_camera,630,960); Rectangle pointer_view=MineViewport(&input_local); if(pointer_view.width<=0||pointer_view.height<=0) pointer_view=(Rectangle){0,0,630,960}; MINE_CHECK(raw_pointer.x>=0&&raw_pointer.x<630&&raw_pointer.y>=0&&raw_pointer.y<960,"Pointer fixture must stay inside the rendered mine view."); Vector2 pointer={pointer_view.x+raw_pointer.x*pointer_view.width/630.0f,pointer_view.y+raw_pointer.y*pointer_view.height/960.0f}; client_test_pointer_active=true;client_test_pointer=pointer;queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));client_test_pointer_active=false;ClientInputClearPressed(); } while(0)
+#define INPUT_POINTER(point) do { Camera3D pointer_camera=CcLocalMineCamera(&input,input_local.mine_facing); Vector2 raw_pointer=GetWorldToScreenEx((point),pointer_camera,630,960); Rectangle pointer_view=MineViewport(&input,&input_local); if(pointer_view.width<=0||pointer_view.height<=0) pointer_view=(Rectangle){0,0,630,960}; MINE_CHECK(raw_pointer.x>=0&&raw_pointer.x<630&&raw_pointer.y>=0&&raw_pointer.y<960,"Pointer fixture must stay inside the rendered mine view."); Vector2 pointer={pointer_view.x+raw_pointer.x*pointer_view.width/630.0f,pointer_view.y+raw_pointer.y*pointer_view.height/960.0f}; client_test_pointer_active=true;client_test_pointer=pointer;queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));client_test_pointer_active=false;ClientInputClearPressed(); } while(0)
         for(int i=0;i<10;++i) INPUT_STEP(1);
         for(int i=0;i<2;++i) INPUT_STEP(2);
         input_local.mine_facing=2; MineRememberVisible(&input,&input_local);
@@ -473,6 +539,17 @@ static int RunMineInputRegression(void)
             fabsf(input_local.agent.position.x-25.0f)<.001f&&
             fabsf(input_local.agent.position.z-16.0f)<.001f,
             "C must stage the saved hauler group at the saved mine approach.");
+        Camera3D fight_camera=CcLocalMineCombatCamera(
+            &input_local.agent,&input_local.course,input_local.mine_facing);
+        for(int32_t raider=0;raider<CC_LOCAL_RAIDER_COUNT;++raider) {
+            const CcLocalAgent *body=&input_local.course.raiders[raider];
+            Vector2 head=GetWorldToScreenEx((Vector3){body->position.x,
+                body->position.y+2.05f,body->position.z},fight_camera,630,320);
+            Vector2 feet=GetWorldToScreenEx((Vector3){body->position.x,
+                body->position.y+.05f,body->position.z},fight_camera,630,320);
+            MINE_CHECK(head.y>=0&&head.y<320&&feet.y>=0&&feet.y<320,
+                "The contest camera must keep each hauler's head and feet in frame.");
+        }
         queued_key_press[KEY_SPACE]=true;
         HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
         ClientInputClearPressed();
@@ -627,14 +704,20 @@ static int RunMineInputRegression(void)
     int32_t carriage_x=-1,carriage_y=-1;
     MineIntentTarget carriage_target=MINE_INTENT_MOVE;
     bool carriage_picked=false;
+    Rectangle yard_view=MineViewport(&sim,&local);
+    if(yard_view.width<=0||yard_view.height<=0)
+        yard_view=(Rectangle){0,0,630,960};
     for(int32_t sample_z=17;sample_z<=20&&!carriage_picked;++sample_z)
-        for(int32_t sample_x=17;sample_x<=19&&!carriage_picked;++sample_x) {
+        for(int32_t sample_x=14;sample_x<=16&&!carriage_picked;++sample_x) {
             Vector2 sample=GetWorldToScreenEx(
                 (Vector3){(float)sample_x,1.0f,(float)sample_z},yard_camera,630,960);
+            Vector2 pointer={yard_view.x+sample.x*yard_view.width/630.0f,
+                yard_view.y+sample.y*yard_view.height/960.0f};
             MineIntentTarget sampled_target=MINE_INTENT_MOVE;
             int32_t sampled_x=-1,sampled_y=-1;
-            if(MinePick(&sim,&local,yard_surface,sample,&sampled_x,&sampled_y,
-                        &sampled_target)&&sampled_target==MINE_INTENT_CARRIAGE) {
+            bool sampled=MinePick(&sim,&local,yard_surface,pointer,
+                &sampled_x,&sampled_y,&sampled_target);
+            if(sampled&&sampled_target==MINE_INTENT_CARRIAGE) {
                 carriage_pixel=sample;carriage_x=sampled_x;carriage_y=sampled_y;
                 carriage_target=sampled_target;carriage_picked=true;
             }
@@ -642,9 +725,6 @@ static int RunMineInputRegression(void)
     MINE_CHECK(carriage_picked && carriage_target==MINE_INTENT_CARRIAGE &&
         carriage_x==15 && carriage_y==18,
         "The visible carriage must publish a named pointer target.");
-    Rectangle yard_view=MineViewport(&local);
-    if(yard_view.width<=0||yard_view.height<=0)
-        yard_view=(Rectangle){0,0,630,960};
     Vector2 carriage_pointer={yard_view.x+carriage_pixel.x*yard_view.width/630.0f,
         yard_view.y+carriage_pixel.y*yard_view.height/960.0f};
     client_test_pointer_active=true;

@@ -55,6 +55,8 @@ typedef struct CcCaptureRequest {
     bool capture_mine_level;
     bool capture_mine_offer;
     bool capture_mine_contest;
+    bool capture_mine_road;
+    bool capture_mine_road_reverse;
     bool capture_underroad;
     bool capture_atmosphere;
     CcLocalAtmospherePreset capture_atmosphere_preset;
@@ -279,6 +281,10 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
     request->capture_mine_menu = argc >= 2 && strcmp(argv[1],"--capture-mine-menu") == 0;
     request->capture_mine_offer=argc>=2&&strcmp(argv[1],"--capture-mine-offer")==0;
     request->capture_mine_contest=argc>=2&&strcmp(argv[1],"--capture-mine-contest")==0;
+    request->capture_mine_road=argc>=2&&
+        strcmp(argv[1],"--capture-mine-road-forward")==0;
+    request->capture_mine_road_reverse=argc>=2&&
+        strcmp(argv[1],"--capture-mine-road-reverse")==0;
     request->capture_mine_level = request->capture_mine_menu ||
         request->capture_mine_offer || request->capture_mine_contest ||
         (argc >= 2 && strcmp(argv[1],"--capture-mine-level") == 0);
@@ -419,7 +425,7 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
     request->capture_menu = argc >= 2 && strcmp(argv[1], "--capture-menu") == 0;
     request->capture_delete = argc >= 2 && strcmp(argv[1], "--capture-delete-menu") == 0;
     request->capture = argc >= 2 &&
-                   (strcmp(argv[1], "--capture") == 0 || request->capture_mine_yard || request->capture_mine_level || request->capture_ux || request->capture_title ||
+                   (strcmp(argv[1], "--capture") == 0 || request->capture_mine_yard || request->capture_mine_level || request->capture_mine_road || request->capture_mine_road_reverse || request->capture_ux || request->capture_title ||
                     request->capture_menu || request->capture_delete || request->capture_world ||
                     request->capture_board ||
                     request->capture_opening ||

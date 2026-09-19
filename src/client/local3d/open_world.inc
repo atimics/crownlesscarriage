@@ -719,6 +719,60 @@ static void DrawOpenWorldRoadSiteBlocker(
     }
 }
 
+static void DrawOpenWorldMineRoadLandmark(
+    const CcWorldManifest *manifest,
+    const CcWorldRoadSitePlacement *placement)
+{
+    if (manifest == NULL || placement == NULL ||
+        placement->kind != CC_ROAD_SITE_MINE) return;
+    float heading = placement->blocker_heading_yaw;
+    float ground = CcWorldTerrainHeight(
+        manifest, placement->destination.x, placement->destination.z);
+    Vector3 base = {placement->destination.x, ground,
+                    placement->destination.z};
+    const Color timber = {83, 62, 44, 255};
+    const Color iron = {72, 78, 80, 255};
+    const Color portal = {24, 30, 33, 255};
+    DrawOrientedBox(base, (Vector3){0.0f, 1.05f, 0.42f},
+                    (Vector3){2.55f, 2.10f, 0.34f}, heading, portal);
+    for (int32_t side = -1; side <= 1; side += 2) {
+        DrawOrientedBox(base,
+            (Vector3){(float)side * 1.55f, 1.35f, 0.0f},
+            (Vector3){0.28f, 2.70f, 0.28f}, heading, timber);
+    }
+    DrawOrientedBox(base, (Vector3){0.0f, 2.63f, 0.0f},
+                    (Vector3){3.45f, 0.28f, 0.32f}, heading, timber);
+    DrawOrientedBox(base, (Vector3){0.0f, 3.42f, 0.52f},
+                    (Vector3){0.24f, 1.75f, 0.24f}, heading, timber);
+    DrawOrientedBox(base, (Vector3){0.0f, 4.24f, 0.52f},
+                    (Vector3){2.20f, 0.22f, 0.22f}, heading, timber);
+    for (int32_t ore = -1; ore <= 1; ++ore) {
+        Vector3 pile = LocalPoint(base, 2.5f + (float)ore * 0.42f,
+                                  0.38f, -0.15f, heading);
+        DrawSmallSphere(pile, 0.52f, ore == 0 ? WORLD_STONE_LIGHT : iron);
+    }
+    /* A tall hoist at the bend reads from either direction on the main road.
+       The lower portal remains at the physical end of the mine spur. */
+    CcWorldPoint hoist_point={
+        placement->junction.x+(placement->bend.x-placement->junction.x)*.55f,
+        placement->junction.z+(placement->bend.z-placement->junction.z)*.55f};
+    float bend_ground=CcWorldTerrainHeight(
+        manifest,hoist_point.x,hoist_point.z);
+    Vector3 hoist={hoist_point.x,bend_ground,hoist_point.z};
+    for(int32_t across=-1;across<=1;across+=2)
+        for(int32_t depth=-1;depth<=1;depth+=2)
+            DrawOrientedBox(hoist,
+                (Vector3){(float)across*1.45f,3.6f,(float)depth*.85f},
+                (Vector3){0.42f,7.2f,0.42f},heading,timber);
+    DrawOrientedBox(hoist,(Vector3){0.0f,7.05f,0.0f},
+        (Vector3){3.45f,0.38f,2.2f},heading,timber);
+    DrawOrientedBox(hoist,(Vector3){0.0f,5.65f,0.0f},
+        (Vector3){0.38f,0.38f,3.1f},heading,timber);
+    Vector3 wheel=hoist;
+    wheel.y+=5.65f;
+    DrawSmallSphere(wheel,0.92f,iron);
+}
+
 static void DrawOpenWorldRoadSites(
     const CcSim *sim, const CcWorldManifest *manifest,
     const CcLocalWorldCarriageState *carriage, Vector3 focus,
@@ -733,12 +787,13 @@ static void DrawOpenWorldRoadSites(
         const CcWorldRoutePlacement *route =
             CcWorldRoutePlacementForId(manifest, placement->route_id);
         CcRoadBookRouteView visibility = {0};
-        if (site == NULL || route == NULL ||
-            !OpenWorldReadRouteView(
-                sim, route, carriage, &visibility) ||
-            !CcRoadBookShowsRouteAmount(
-                &visibility, CcWorldRouteJourneyAmount(route, route->from_id,
-                    (float)site->progress_milli / 1000.0f))) {
+        if(site==NULL||route==NULL) continue;
+        bool current_stop=CcSimJourneyRoadSiteStop(sim)==site;
+        if (!current_stop &&
+            (!OpenWorldReadRouteView(sim,route,carriage,&visibility)||
+             !CcRoadBookShowsRouteAmount(
+                &visibility,CcWorldRouteJourneyAmount(route,route->from_id,
+                    (float)site->progress_milli/1000.0f)))) {
             continue;
         }
         float dx = placement->junction.x - focus.x;
@@ -766,6 +821,7 @@ static void DrawOpenWorldRoadSites(
         DrawOpenWorldRibbonSegment(
             manifest, placement->bend, end,
             4.2f, 0.12f, track, true, true);
+        DrawOpenWorldMineRoadLandmark(manifest, placement);
         if (!site->accessible) DrawOpenWorldRoadSiteBlocker(manifest, placement);
     }
 }

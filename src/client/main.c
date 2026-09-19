@@ -3006,7 +3006,9 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
     if (local->journey_travel_active && road_stop != NULL) {
         DrawPanel((Rectangle){22.0f, 86.0f, 460.0f, 68.0f}, PANEL_DEEP);
         CcOverlayDrawText(road_stop->name, 38, 100, 16, INK);
-        CcOverlayDrawText("ROADSIDE STOP / CAMP OR CONTINUE",
+        CcOverlayDrawText(road_stop == CcMineSite(sim) ?
+                          "MINE TURN-OFF / ENTER YARD OR CONTINUE" :
+                          "ROADSIDE STOP / CHOOSE OR CONTINUE",
                           38, 131, 9, TEAL);
     }
     if (!road && !site && place != NULL) {
@@ -3051,8 +3053,14 @@ static const char *TravelForecastLine(const CcSim *sim)
     }
     const CcRoadSite *road_stop = CcSimJourneyRoadSiteStop(sim);
     if (road_stop != NULL) {
+        if (road_stop == CcMineSite(sim)) {
+            return TextFormat(
+                "ROAD AHEAD  /  %s  %s  /  ENTER YARD OR CONTINUE",
+                road_stop->name,
+                road_stop->accessible ? "CLEAR" : "BLOCKED");
+        }
         return TextFormat(
-            "ROAD AHEAD  /  %s  %s  /  CAMP OR CONTINUE",
+            "ROAD AHEAD  /  %s  %s  /  CHOOSE OR CONTINUE",
             road_stop->name,
             road_stop->accessible ? (road_stop->condition < 100 ? "REPAIRABLE" : "CLEAR") : "BLOCKED");
     }
@@ -3074,8 +3082,19 @@ static const char *TravelForecastLine(const CcSim *sim)
 static const char *TravelActionDetail(const CcSim *sim, const LocalState *local)
 {
     if (sim == NULL || local == NULL) return "Move on";
+    if (sim->journey.active && sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
+        return "Choice ahead";
+    }
+    if (sim->journey.active && sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+        return "Resting until morning";
+    }
     if (local->travel_hold_armed) {
         return TravelNeedsSlowTime(sim) ? "Choice ahead" : "Moving automatically";
+    }
+    if (sim->journey.active &&
+        sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+        return local->journey_travel_active ?
+            "Hold to travel faster" : "Resume road travel";
     }
     return "Tap to start travel";
 }
@@ -6163,6 +6182,48 @@ static const char *RoadCarriageStatus(const CcSim *sim)
     return sim->carriage.mode == CC_CARRIAGE_MOVING ? "MOVING" : "STOPPED";
 }
 
+static void CarriageReadingSummary(const CcSim *sim, char *summary,
+                                   size_t summary_capacity)
+{
+    if (summary == NULL || summary_capacity == 0U) return;
+    summary[0] = '\0';
+    if (sim == NULL) return;
+    int32_t used = CcPlayerCargoUsed(&sim->player);
+    int32_t free_slots = sim->player.cargo_capacity - used;
+    if (free_slots < 0) free_slots = 0;
+    size_t length = (size_t)snprintf(summary, summary_capacity, "Manifest: ");
+    if (length >= summary_capacity) length = summary_capacity - 1U;
+    bool has_goods = false;
+    for (int32_t good = 0; good < CC_GOOD_COUNT && length < summary_capacity - 1U;
+         ++good) {
+        if (sim->player.cargo[good] <= 0) continue;
+        int written = snprintf(summary + length, summary_capacity - length,
+            "%s%s %d", has_goods ? ", " : "", CcGoodName((CcGood)good),
+            sim->player.cargo[good]);
+        if (written < 0) break;
+        size_t added = (size_t)written;
+        length += added < summary_capacity - length ?
+            added : summary_capacity - length - 1U;
+        has_goods = true;
+    }
+    if (!has_goods && length < summary_capacity - 1U) {
+        int written = snprintf(summary + length, summary_capacity - length, "empty");
+        if (written > 0) {
+            size_t added = (size_t)written;
+            length += added < summary_capacity - length ?
+                added : summary_capacity - length - 1U;
+        }
+    }
+    if (length < summary_capacity - 1U) {
+        (void)snprintf(summary + length, summary_capacity - length,
+            ". Load %d of %d, free %d. Team %d ponies, readiness %d of 100. "
+            "Carriage condition %d of 100.",
+            used, sim->player.cargo_capacity, free_slots,
+            CcSimHorseTeamCount(sim), CcSimHorseTeamReadiness(sim),
+            sim->carriage.condition);
+    }
+}
+
 static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
                                Texture2D economic_goods)
 {
@@ -6178,6 +6239,9 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
         local->carriage_inspection_road ?
             "On the road. Review this route, cargo, promise, and team." :
             "Choose Overview or Ponies.");
+    char reading_summary[512];
+    CarriageReadingSummary(sim, reading_summary, sizeof(reading_summary));
+    ClientTouchRecordText(reading_summary);
     DrawPanel((Rectangle){24.0f, 78.0f, (float)GetScreenWidth() - 48.0f,
         (float)GetScreenHeight() - 94.0f}, PANEL_DEEP);
     CcOverlayDrawText("THE CROWNLESS CARRIAGE", 52, 102, 23, INK);
@@ -11429,7 +11493,7 @@ int main(int argc, char **argv)
         int32_t local_target_width=CC_LOCAL_ART_WIDTH;
         int32_t local_target_height=CC_LOCAL_ART_HEIGHT;
         if(sim.mine.phase!=CC_MINE_NONE)
-            MineRenderTargetSize(&local,&local_target_width,&local_target_height);
+            MineRenderTargetSize(&sim,&local,&local_target_width,&local_target_height);
         if(local_target.texture.width!=local_target_width ||
            local_target.texture.height!=local_target_height) {
             UnloadRenderTexture(local_target);

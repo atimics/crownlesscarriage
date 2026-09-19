@@ -149,13 +149,16 @@
           : "The game could not start. Check the browser console.");
       });
       window.addEventListener("keydown", function (event) {
-        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-          event.preventDefault();
-        }
         if ((event.ctrlKey || event.metaKey) && event.shiftKey &&
             event.key.toLowerCase() === "d" && Module.downloadCrownlessDiagnostics) {
           event.preventDefault();
+          event.stopPropagation();
           Module.downloadCrownlessDiagnostics();
+        }
+      }, true);
+      window.addEventListener("keydown", function (event) {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+          event.preventDefault();
         }
       });
       canvas.addEventListener("pointerdown", function () { canvas.focus(); });

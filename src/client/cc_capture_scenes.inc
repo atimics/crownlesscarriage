@@ -123,6 +123,31 @@ static void CcCaptureSceneAbort(RenderTexture2D target, ClientMapTextures *maps,
 
 static void CcCapturePrepareJourney(const CcCaptureRequest *request, CcSim *sim)
 {
+    if (request->capture_mine_road || request->capture_mine_road_reverse) {
+        const CcRoadSite *site=CcMineSite(sim);
+        const CcRoute *route=site!=NULL?CcSimRoute(sim,site->route_id):NULL;
+        if(route==NULL) return;
+        CcId origin=request->capture_mine_road_reverse?route->to_id:route->from_id;
+        CcId destination=request->capture_mine_road_reverse?route->from_id:route->to_id;
+        sim->player.location_id=origin;
+        sim->carriage.location_id=origin;
+        char error[192];
+        CcCommand travel={.kind=CC_COMMAND_TRAVEL,.target_id=destination};
+        if(!CcSimApply(sim,&travel,error,sizeof(error))) return;
+        sim->journey.situation_id=0U;
+        sim->journey.encounter_subticks=0;
+        sim->journey.ambush_pending=false;
+        sim->journey.encounter_triggered=true;
+        sim->pony_company.encounter=-1;
+        sim->player.reputation=1;
+        int32_t branch=CcMineBranchSubtick(sim);
+        if(branch>=0) {
+            sim->journey.elapsed_subticks=branch;
+            sim->carriage.progress_milli=(int32_t)(
+                (int64_t)branch*1000/sim->journey.total_subticks);
+        }
+        return;
+    }
     if (!(request->capture_encounter || request->capture_travel ||
           request->capture_route_sight || request->capture_road ||
           request->capture_parley || request->capture_aftermath ||
@@ -425,7 +450,8 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
             (void)CcLocalCourseSelectPlayerTarget(&scene->local->course, &scene->local->agent, 0);
         }
     }
-    if (request->capture_travel || request->capture_route_sight) {
+    if (request->capture_travel || request->capture_route_sight ||
+        request->capture_mine_road || request->capture_mine_road_reverse) {
         BeginRoadTravelState(scene->sim, scene->local);
         scene->local->travel_time_blend = request->capture_storybook ? request->storybook_blend :
                                    request->capture_route_sight ? 1.0f : 0.0f;
@@ -874,6 +900,11 @@ static bool CcCapturePrepareMessage(const CcCaptureRequest *request, CcCaptureSc
         (void)snprintf(message, message_size, "Speak with the captain.");
     } else if (request->capture_travel || request->capture_route_sight) {
         (void)snprintf(message, message_size, "Travelling.");
+    }
+    if(request->capture_mine_road||request->capture_mine_road_reverse) {
+        scene->local->adventure_ui=true;
+        (*scene->view)=VIEW_LOCAL;
+        (void)snprintf(message,message_size,"Low Silver Pit road landmark.");
     }
     if(request->capture_mine_yard || request->capture_mine_level) {
         const CcRoadSite *site=CcMineSite(scene->sim);

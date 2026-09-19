@@ -33,6 +33,7 @@
     semantic.addEventListener(type, event => event.stopPropagation());
   }
   const actionNodes = [];
+  let semanticSceneTitle = null;
   document.querySelector('#stage').append(semantic);
   Module.renderCrownlessTouch = frame => {
     semantic.hidden = !document.querySelector('#loading').hidden;
@@ -41,8 +42,11 @@
     heading.textContent = frame.title || 'Crownless Carriage';
     detail.textContent = frame.detail || '';
     reading.textContent = frame.reading || '';
-    sceneDetails.open = frame.title === 'Company Book' ||
-      frame.buttons.some(button => /^\d+\s/.test(button.label));
+    if (frame.title !== semanticSceneTitle) {
+      sceneDetails.open = frame.title === 'Company Book' ||
+        frame.buttons.some(button => /^\d+\s/.test(button.label));
+      semanticSceneTitle = frame.title;
+    }
     frame.buttons.forEach((button, index) => {
       let action = actionNodes[index];
       if (!action) { action = document.createElement('button'); actionNodes[index] = action; actions.append(action); }

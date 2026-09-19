@@ -186,6 +186,18 @@ static int RunCapturePresentationRegression(void)
     if(!CcCaptureRequestParse(3,mine_contest,&request)||
        !request.capture_mine_contest||!request.capture_mine_level||!request.capture)
         return ClientRegressionFailure("Mine contest capture must stage local combat.");
+    char *mine_road_forward[]={"crownless","--capture-mine-road-forward","forward.png"};
+    if(!CcCaptureRequestParse(3,mine_road_forward,&request)||
+       !request.capture_mine_road||request.capture_mine_road_reverse||
+       !request.capture||strcmp(request.capture_path,"forward.png")!=0||
+       !CcCaptureNeedsRoadbook(&request)||
+       !CcCapturePresentationFor(&request,&state,false).adventure_ui)
+        return ClientRegressionFailure("Mine road capture must stage the forward route.");
+    char *mine_road_reverse[]={"crownless","--capture-mine-road-reverse","reverse.png"};
+    if(!CcCaptureRequestParse(3,mine_road_reverse,&request)||
+       request.capture_mine_road||!request.capture_mine_road_reverse||
+       !request.capture||strcmp(request.capture_path,"reverse.png")!=0)
+        return ClientRegressionFailure("Mine road capture must stage the reverse route.");
     request = (CcCaptureRequest){.capture_gameplay_reel = true};
     state.gameplay_reel.stage = GAMEPLAY_REEL_QUEST_COMPLETE;
     play = CcCapturePresentationFor(&request, &state, false);

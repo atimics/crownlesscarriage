@@ -477,8 +477,10 @@ async function main() {
         first.focus();
         const normal = first.getBoundingClientRect();
         first.click();
+        panel.querySelector('details').open = true;
         Module.renderCrownlessTouch({...frame, revision: 702});
         const retained = document.activeElement === first;
+        const retainedDetails = panel.querySelector('details').open;
         Module.renderCrownlessTouch({...frame, revision: 703,
           buttons: [
             {label: 'Inspect Bread x7', enabled: true, active: false},
@@ -487,6 +489,17 @@ async function main() {
         const removalFocus = document.activeElement === panel.querySelector('h2');
         const changed = actions.querySelector('button');
         changed.focus();
+        const downloadDiagnostics = Module.downloadCrownlessDiagnostics;
+        let diagnosticDownloads = 0;
+        let diagnosticBubbled = 0;
+        Module.downloadCrownlessDiagnostics = () => { diagnosticDownloads += 1; };
+        const countGameKey = () => { diagnosticBubbled += 1; };
+        document.addEventListener('keydown', countGameKey);
+        changed.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'd', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true
+        }));
+        document.removeEventListener('keydown', countGameKey);
+        Module.downloadCrownlessDiagnostics = downloadDiagnostics;
         const content = {
           title: panel.querySelector('h2').textContent,
           detail: panel.querySelectorAll('p')[0].textContent,
@@ -514,15 +527,18 @@ async function main() {
           normalVisible: normal.width > 20 && normal.height > 20,
           normalInView: normal.top >= panel.getBoundingClientRect().top &&
             normal.bottom <= panel.getBoundingClientRect().bottom,
-          retained, removalFocus, expandedVisible, recovery
+          retained, retainedDetails, diagnosticDownloads, diagnosticBubbled,
+          removalFocus, expandedVisible, recovery
         };
       });
       assert.deepEqual(semantics, {
         title: 'Mine yard', detail: 'Carriage beside the mine road.',
         reading: 'Pack 2 of 8. Cart 4 of 12.', actionCount: 2, actionsNested: true,
-        detailsOpen: false, disabled: true, activation: [[0, 701]], normalVisible: true,
+        detailsOpen: true, disabled: true, activation: [[0, 701]], normalVisible: true,
         normalInView: true,
-        retained: true, removalFocus: true, expandedVisible: true, recovery: true
+        retained: true, retainedDetails: true, removalFocus: true,
+        diagnosticDownloads: 1, diagnosticBubbled: 0,
+        expandedVisible: true, recovery: true
       });
       for (const [width, height] of [[320, 740], [390, 844], [667, 375], [844, 390], [1024, 768]]) {
         await mobile.setViewportSize({width, height});
