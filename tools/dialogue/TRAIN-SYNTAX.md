@@ -4,13 +4,13 @@ The syntax model predicts a public dialogue act from one person's state and
 the observed acts. The human and Hra'khor renderers supply spoken words.
 
 The first training run distils the seven-move procedural policy. The dataset
-contains 6,400 explicitly synthetic examples across 400 own-state combinations.
+contains 10,300 explicitly synthetic examples across 400 own-state combinations.
 Those combinations vary goal, hunger, stress, courage and coins. Public histories
 cover food, safety and paid work, including conditions, acceptance and refusal.
 The test concerns this finite policy. Richer choices require additional rules.
 
-Whole state combinations are assigned by a stable hash: 5,152 training rows,
-608 development rows and 640 test rows. The compiler checks group and exact
+Whole state combinations are assigned by a stable hash: 8,299 training rows,
+983 development rows and 1,018 test rows. The compiler checks group and exact
 model-input separation. Shared act targets are intentional: they are the public
 vocabulary. The first run evaluates a fixed balanced sample of 112 rows from
 each held-out split. The old checkpoint uses those same test inputs as a baseline.
@@ -43,6 +43,23 @@ and an error receipt. Metrics are raw greedy output: valid acts and exact policy
 matches are counted separately. Model output is checked before rendering.
 
 ## Native execution
+
+The checked `assets/language/dialogue-syntax.ccv2` can be used directly:
+
+```sh
+python tools/dialogue/build_syntax_probe.py \
+  --model assets/language/dialogue-syntax.ccv2 --build /path/to/build \
+  --output /tmp/syntax-native
+python tools/dialogue/syntax_student.py --snapshot /tmp/pair.json \
+  --model assets/language/dialogue-syntax.ccv2 --probe /tmp/syntax-native/probe \
+  --surface-probe /path/to/build/core_account_probe --output /tmp/syntax-people
+```
+
+The released model used two stages: 1,200 steps with the original 6,400-example
+generator at commit `1745918c`, then 800 steps with the repaired generator at
+`4070eb57`, using stage one's export as `--reference`. The repair added stated
+needs to public histories after an invalid plan appeared in a real work scene.
+The run archives preserve both stages, source hashes and the failed scene.
 
 Build `core_model_probe` and `core_account_probe` in a matching Crownless build.
 The ZERO checker compiles a probe with this checkpoint's exact tensor tables:

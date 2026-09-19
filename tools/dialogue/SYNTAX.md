@@ -73,11 +73,11 @@ their existing training or evaluation split.
 
 ## The 5M model
 
-The next model task is `own state + heard public acts -> next act`. Keep the
+The model task is `own state + heard public acts -> next act`. Keep the
 versioned syntax and semantic validator as its output contract. The procedural
-policy supplies examples; the renderer remains independent. The current
-participant trainer expects speech/action JSON, so a syntax dataset adapter,
-token budget and loss-mask checks are the next training step.
+policy supplies examples; the renderer remains independent. A trained checkpoint,
+syntax dataset adapter, loss-mask checks and a native pair runner now implement
+this contract. See [TRAIN-SYNTAX.md](TRAIN-SYNTAX.md) for scope and commands.
 
 Before scaling training, expand the decision rules and test state changes that
 should change the act. Hold out world/character groups and combinations of
@@ -85,5 +85,5 @@ needs, proposals and terms. Measure valid replies, grounding, term retention,
 useful decisions and repetition separately from surface wording. Repeated
 five-turn scripts alone support learning this baseline's narrow behaviour.
 
-The prototype lives in the offline tools. Runtime policy integration and a
-new trained checkpoint follow after the meaning contract has been reviewed.
+The prototype and trained checkpoint run through the offline tools. In-game
+policy integration is the next runtime step.
