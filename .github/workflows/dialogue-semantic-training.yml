@@ -1,0 +1,149 @@
+name: Semantic 5M training
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: Training steps for the CPU run
+        required: false
+        default: '800'
+        type: string
+  pull_request:
+    paths:
+      - '.github/workflows/dialogue-semantic-training.yml'
+      - 'tools/dialogue/**'
+      - 'tests/dialogue_semantic_training_tests.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: semantic-5m-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verifier-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python tests/dialogue_semantic_training_tests.py
+
+  detect:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    outputs:
+      relevant: ${{ steps.sources.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: sources
+        shell: bash
+        run: |
+          relevant=false
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            relevant=true
+          else
+            previous="$(git describe --tags --match 'v*.*.*' --abbrev=0 "$GITHUB_SHA^" 2>/dev/null || true)"
+            if [ -n "$previous" ] && git diff --quiet "$previous" "$GITHUB_SHA" -- \
+              tools/dialogue models/dialogue-syntax assets/language CMakeLists.txt \
+              src/story src/sim src/rules tools/core_model_probe.c; then
+              relevant=false
+            else
+              relevant=true
+            fi
+          fi
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+
+  train:
+    needs: detect
+    if: needs.detect.outputs.relevant == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      ZERO_COMMIT: 49e6bfedc6d91196e652d89309b23cafd8fc2ce9
+      STEPS: ${{ inputs.steps || '800' }}
+    steps:
+      - name: Checkout Crownless with release history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Record relevant source changes
+        run: |
+          previous="$(git describe --tags --match 'v*.*.*' --abbrev=0 "$GITHUB_SHA^" 2>/dev/null || true)"
+          if [ -n "$previous" ]; then
+            git diff --name-status "$previous" "$GITHUB_SHA" -- \
+              tools/dialogue models/dialogue-syntax assets/language CMakeLists.txt src/story src/sim src/rules tools/core_model_probe.c \
+              > source-diff.txt
+          else
+            printf '%s\n' "No earlier release tag is available; this is the first release comparison." > source-diff.txt
+          fi
+          cat source-diff.txt
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned CPU dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'torch==2.8.0' --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r tools/dialogue/requirements-semantic-training.txt
+      - name: Checkout pinned ZERO source
+        run: git clone --no-checkout https://github.com/atimics/zero.git zero
+      - name: Pin ZERO commit
+        working-directory: zero
+        run: git checkout --detach "$ZERO_COMMIT"
+      - name: Train semantic model
+        run: |
+          mkdir -p artifacts/semantic-5m
+          timeout 8m python tools/dialogue/train_semantic_ids.py \
+            --zero "$GITHUB_WORKSPACE/zero" \
+            --reference models/dialogue-syntax/model.ccv2 \
+            --tokenizer assets/language/tokenizer.json \
+            --output artifacts/semantic-5m/run \
+            --steps "$STEPS" 2>&1 | tee artifacts/semantic-5m/training.log
+      - name: Build native libraries
+        run: |
+          cmake -S . -B out/build/semantic-training -DCMAKE_BUILD_TYPE=Release \
+            -DCC_BUILD_CLIENT=OFF -DCC_BUILD_GRAPHICS_PROBES=OFF
+          cmake --build out/build/semantic-training --target crownless_story crownless_sim --parallel 2
+      - name: Build native semantic probe
+        run: |
+          python tools/dialogue/build_syntax_probe.py \
+            --model artifacts/semantic-5m/run/last.ccv2 \
+            --build out/build/semantic-training \
+            --output artifacts/semantic-5m/native
+      - name: Require exact policy and native parity
+        run: |
+          python tools/dialogue/verify_semantic_training.py \
+            --run artifacts/semantic-5m/run \
+            --probe artifacts/semantic-5m/native/probe 2>&1 | tee artifacts/semantic-5m/gate.log
+      - name: Upload failed run and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-5m-run-${{ github.run_id }}
+          path: |
+            artifacts/semantic-5m
+            source-diff.txt
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Publish verified model artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-5m-model-${{ github.ref_name }}
+          path: |
+            artifacts/semantic-5m/run/last.ccv2
+            artifacts/semantic-5m/run/manifest.json
+            artifacts/semantic-5m/run/test-evaluation.json
+            artifacts/semantic-5m/run/native-parity.json
+          if-no-files-found: error
+          retention-days: 90
