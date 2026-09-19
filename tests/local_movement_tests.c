@@ -1958,6 +1958,20 @@ static void TestMineEncounterCombat(void)
         (void)fprintf(stderr,"mine encounter lost saved approach or group identity\n");
         exit(1);
     }
+    static CcLocalCourse source_tile_course;
+    static CcLocalAgent source_tile_player;
+    sim.mine.x=sim.mine.source_x;
+    sim.mine.y=sim.mine.source_y;
+    CcLocalAgentInit(&source_tile_player,(Vector2){3.0f,3.0f},false);
+    CcLocalCourseInit(&source_tile_course);
+    CcLocalCourseStageMineEncounter(&source_tile_course,&source_tile_player,&sim);
+    if(fabsf(source_tile_player.position.x-(float)sim.mine.source_x)>.001f ||
+       fabsf(source_tile_player.position.z-(float)sim.mine.source_y)>.001f) {
+        (void)fprintf(stderr,"mine encounter moved the player off the saved source tile\n");
+        exit(1);
+    }
+    sim.mine.x=25;
+    sim.mine.y=16;
     victor.combat.health=88.0f;
     for(int32_t i=0;i<CC_LOCAL_RAIDER_COUNT;++i)
         victory.raiders[i].combat.health=12.0f;

@@ -125,7 +125,8 @@ typedef enum MineIntentTarget {
     MINE_INTENT_EXIT,
     MINE_INTENT_BAR,
     MINE_INTENT_SURVEY,
-    MINE_INTENT_HAULERS
+    MINE_INTENT_HAULERS,
+    MINE_INTENT_COUNT
 } MineIntentTarget;
 static void MineClearIntent(LocalState *local)
 {
@@ -323,7 +324,18 @@ static bool MineTargetBounds(const CcSim *sim,MineIntentTarget target,BoundingBo
         if(sim->mine.phase!=CC_MINE_LEVEL ||
            sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_BARGAINED ||
            sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_CONTESTED) return false;
-        *out_box=MineBoxBounds(26,.65f,15.2f,3.0f,1.3f,1.2f); *out_x=26;*out_y=16; return true;
+        {
+            Vector2 first=CcLocalMineHaulerPosition(sim,0);
+            Vector2 second=CcLocalMineHaulerPosition(sim,1);
+            float min_x=fminf(first.x,second.x)-.45f;
+            float max_x=fmaxf(first.x,second.x)+.45f;
+            float min_z=fminf(first.y,second.y)-.45f;
+            float max_z=fmaxf(first.y,second.y)+.45f;
+            *out_box=MineBoxBounds((min_x+max_x)*.5f,.95f,
+                (min_z+max_z)*.5f,max_x-min_x,1.9f,max_z-min_z);
+            *out_x=sim->mine.source_x;*out_y=sim->mine.source_y;
+            return true;
+        }
     default: return false;
     }
 }
@@ -341,12 +353,14 @@ static bool MinePick(const CcSim *sim,const LocalState *local,
                    (mouse.y-view.y)*(float)target.texture.height/view.height};
     Ray ray=GetScreenToWorldRayEx(pixel,CcLocalMineCamera(sim,local->mine_facing),
                                   target.texture.width,target.texture.height);
-    if(fabsf(ray.direction.y)<.0001f) return false;
-    float distance=-ray.position.y/ray.direction.y;
-    if(distance<=0.0f) return false;
+    float distance=INFINITY;
+    if(fabsf(ray.direction.y)>=.0001f) {
+        float floor_distance=-ray.position.y/ray.direction.y;
+        if(floor_distance>0.0f) distance=floor_distance;
+    }
     MineIntentTarget picked=MINE_INTENT_MOVE;
     float nearest=distance;
-    for(int32_t candidate=MINE_INTENT_MOUTH;candidate<=MINE_INTENT_SURVEY;++candidate) {
+    for(int32_t candidate=MINE_INTENT_MOUTH;candidate<MINE_INTENT_COUNT;++candidate) {
         BoundingBox box; int32_t x,y;
         if(!MineTargetBounds(sim,(MineIntentTarget)candidate,&box,&x,&y)) continue;
         float hit_distance=0.0f;
@@ -360,6 +374,7 @@ static bool MinePick(const CcSim *sim,const LocalState *local,
         }
     }
     if(picked!=MINE_INTENT_MOVE) {*out_target=picked;return true;}
+    if(!isfinite(distance)) return false;
     if(MineOccluderDistance(sim,ray,distance)<distance) return false;
     *out_x=(int32_t)roundf(ray.position.x+distance*ray.direction.x);
     *out_y=(int32_t)roundf(ray.position.z+distance*ray.direction.z);

@@ -180,6 +180,40 @@ static int RunMineInputRegression(void)
         MINE_CHECK(MinePick(&picked,&pick_local,surface,survey,&tx,&ty,&target) &&
             target==MINE_INTENT_SURVEY,
             "A visible survey click must name the survey rather than nearby floor.");
+        picked.mine.x=25; picked.mine.y=16;
+        picked.mine.source_x=26; picked.mine.source_y=16;
+        picked.mine.source_owner_id=picked.goblins.id;
+        picked.mine.encounter_outcome=CC_MINE_ENCOUNTER_OPEN;
+        pick_local.mine_facing=1;
+        MineRememberVisible(&picked,&pick_local);
+        camera=CcLocalMineCamera(&picked,pick_local.mine_facing);
+        Vector2 hauler_position=CcLocalMineHaulerPosition(&picked,0);
+        picked.mine.x=23; picked.mine.y=16;
+        Vector2 moved_view_position=CcLocalMineHaulerPosition(&picked,0);
+        picked.mine.x=25;
+        MINE_CHECK(hauler_position.x==moved_view_position.x &&
+            hauler_position.y==moved_view_position.y,
+            "The saved hauler formation must stay fixed when the player moves.");
+        Vector2 hauler=GetWorldToScreenEx(
+            (Vector3){hauler_position.x,1.55f,hauler_position.y},camera,630,320);
+        MINE_CHECK(hauler.x>=0&&hauler.x<630&&hauler.y>=0&&hauler.y<320,
+            "The visible hauler body must project into the render target.");
+        MINE_CHECK(MinePick(&picked,&pick_local,surface,hauler,&tx,&ty,&target) &&
+            target==MINE_INTENT_HAULERS && tx==26 && ty==16,
+            "An upward hauler-body ray must name the saved hauler group.");
+        Rectangle mine_view=MineViewport(&pick_local);
+        if(mine_view.width<=0||mine_view.height<=0)
+            mine_view=(Rectangle){0,0,630,320};
+        client_test_pointer_active=true;
+        client_test_pointer=(Vector2){mine_view.x+hauler.x*mine_view.width/630.0f,
+            mine_view.y+hauler.y*mine_view.height/320.0f};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+        HandleMineInput(journal,&picked,&pick_local,surface,.2f,message,sizeof(message));
+        client_test_pointer_active=false;
+        ClientInputClearPressed();
+        MINE_CHECK(strstr(message,"Choose the visible hauler action")!=NULL &&
+            pick_local.mine_target_x<0,
+            "A visible hauler click must select the group at its reachable approach.");
         pick_local.mine_target_x=26; pick_local.mine_target_y=5;
         pick_local.mine_intent_target=MINE_INTENT_SURVEY;
         pick_local.mine_intent_revision=picked.mine.revision;

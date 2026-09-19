@@ -1024,6 +1024,34 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
     if (hostile) CcLocalCourseRaiseAlarmNear(course, player);
 }
 
+static Vector2 MineEncounterApproach(const CcSim *sim)
+{
+    return (Vector2){(float)sim->mine.x,(float)sim->mine.y};
+}
+
+Vector2 CcLocalMineHaulerPosition(const CcSim *sim,int32_t index)
+{
+    float side=index==0?-.45f:.45f;
+    return (Vector2){(float)sim->mine.source_x,
+                     (float)sim->mine.source_y+side};
+}
+
+static void InitMineHauler(CcLocalAgent *raider,const CcSim *sim,
+                           Vector2 approach,int32_t index)
+{
+    Vector2 position=CcLocalMineHaulerPosition(sim,index);
+    CcLocalAgentInit(raider,position,false);
+    CcLocalAgentSetScene(raider,CC_LOCAL_SCENE_MINE);
+    CcLocalCombatSetTeam(raider,CC_COMBAT_RAIDER);
+    raider->crowned=false;
+    uint64_t mark=sim->goblins.id;
+    CcLocalAgentSetNpcAppearance(raider,
+        (uint32_t)(mark^(mark>>32U)^((uint64_t)index*UINT64_C(0x9e3779b9))),
+        CC_NPC_ROLE_RAIDER,(Color){72,124,84,255});
+    raider->facing_yaw=atan2f(approach.x-position.x,
+                              approach.y-position.y);
+}
+
 void CcLocalCourseStageMineEncounter(CcLocalCourse *course,
                                      CcLocalAgent *player,
                                      const CcSim *sim)
@@ -1034,10 +1062,7 @@ void CcLocalCourseStageMineEncounter(CcLocalCourse *course,
     CcAthleticProfile hero_athletics=player->athletics;
     Color hero_tunic=player->tunic_color;
     bool hero_crowned=player->crowned;
-    Vector2 approach={(float)sim->mine.x,(float)sim->mine.y};
-    if (sim->mine.x==sim->mine.source_x && sim->mine.y==sim->mine.source_y)
-        approach=(Vector2){(float)sim->mine.source_x-1.0f,
-                           (float)sim->mine.source_y};
+    Vector2 approach=MineEncounterApproach(sim);
     CcLocalCourseInit(course);
     CcLocalMineSetBarOpen(sim->mine.bar_open);
     CcLocalAgentInit(player,approach,false);
@@ -1054,28 +1079,12 @@ void CcLocalCourseStageMineEncounter(CcLocalCourse *course,
         course->runners[i].agent.combat.health=0.0f;
         course->runners[i].agent.combat.life_state=CC_LIFE_DEAD;
     }
-    uint64_t mark=sim->goblins.id;
-    float toward_x=(float)sim->mine.source_x-approach.x;
-    float toward_z=(float)sim->mine.source_y-approach.y;
-    float length=sqrtf(toward_x*toward_x+toward_z*toward_z);
-    if (length<0.01f) {toward_x=1.0f;toward_z=0.0f;length=1.0f;}
-    toward_x/=length;toward_z/=length;
-    float side_x=-toward_z,side_z=toward_x;
     course->raider_company_id=sim->goblins.id;
     (void)snprintf(course->raider_company_name,
         sizeof(course->raider_company_name),"Silverwick haulers");
     for (int32_t i=0;i<CC_LOCAL_RAIDER_COUNT;++i) {
         CcLocalAgent *raider=&course->raiders[i];
-        float side=(i==0?-0.45f:0.45f);
-        Vector2 position={(float)sim->mine.source_x+side_x*side,
-            (float)sim->mine.source_y+side_z*side};
-        CcLocalAgentInit(raider,position,false);
-        CcLocalAgentSetScene(raider,CC_LOCAL_SCENE_MINE);
-        CcLocalCombatSetTeam(raider,CC_COMBAT_RAIDER);
-        raider->crowned=false;
-        CcLocalAgentSetNpcAppearance(raider,
-            (uint32_t)(mark^(mark>>32U)^((uint64_t)i*UINT64_C(0x9e3779b9))),
-            CC_NPC_ROLE_RAIDER,(Color){72,124,84,255});
+        InitMineHauler(raider,sim,approach,i);
         (void)snprintf(course->raider_names[i],
             sizeof(course->raider_names[i]),"Hauler %d",i+1);
         course->raider_entry[i]=raider->position;

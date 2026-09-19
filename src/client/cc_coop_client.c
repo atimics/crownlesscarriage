@@ -3,6 +3,7 @@
 #endif
 #include "client/cc_coop_client.h"
 #include "client/cc_company.h"
+#include "client/cc_client_session.h"
 #include "persistence/cc_save.h"
 #include "multiplayer/cc_coop_commands.h"
 #include <inttypes.h>

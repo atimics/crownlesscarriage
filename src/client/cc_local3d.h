@@ -650,6 +650,7 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
                        Rectangle destination);
 const char *CcLocalSiteName(const CcSim *sim, CcLocalSiteKind site);
 Camera3D CcLocalMineCamera(const CcSim *sim, int32_t facing);
+Vector2 CcLocalMineHaulerPosition(const CcSim *sim, int32_t index);
 void CcLocalDrawMine3D(const CcSim *sim, const CcLocalAgent *agent,
                        const CcLocalCourse *course, int32_t facing,
                        RenderTexture2D target, Rectangle destination);
