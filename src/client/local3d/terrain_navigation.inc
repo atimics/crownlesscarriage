@@ -1264,9 +1264,17 @@ static bool CourseWaterContains(CcLocalSceneKind scene, float x, float z)
            z >= COURSE_POOL.y && z <= COURSE_POOL.y + COURSE_POOL.height;
 }
 
+static bool local_mine_bar_open = false;
+
+void CcLocalMineSetBarOpen(bool bar_open)
+{
+    local_mine_bar_open = bar_open;
+}
+
 static float SurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 {
-    if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET) {
+    if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET &&
+        scene != CC_LOCAL_SCENE_MINE) {
         return CcLocalTerrainHeightAt(x, z);
     }
     if (scene == CC_LOCAL_SCENE_ROAD) {
@@ -1290,7 +1298,8 @@ static float SurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 
 static float BodySurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 {
-    if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET) {
+    if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET &&
+        scene != CC_LOCAL_SCENE_MINE) {
         return CcLocalTerrainHeightAt(x, z);
     }
     if (scene == CC_LOCAL_SCENE_ROAD) {
@@ -1316,7 +1325,8 @@ static float BodySurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 
 static Vector3 SurfaceNormalAt(CcLocalSceneKind scene, float x, float z)
 {
-    if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET) {
+    if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET &&
+        scene != CC_LOCAL_SCENE_MINE) {
         return CcLocalTerrainNormalAt(x, z);
     }
     if (scene != CC_LOCAL_SCENE_STREET) return (Vector3){0.0f, 1.0f, 0.0f};
@@ -1429,6 +1439,20 @@ static bool OpenWorldTownBodyBlocked(const CcWorldManifest *manifest,
 static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
                               float radius)
 {
+    if (scene == CC_LOCAL_SCENE_MINE) {
+        int32_t minimum_x=(int32_t)floorf(x-radius+0.5f);
+        int32_t maximum_x=(int32_t)floorf(x+radius+0.5f);
+        int32_t minimum_y=(int32_t)floorf(z-radius+0.5f);
+        int32_t maximum_y=(int32_t)floorf(z+radius+0.5f);
+        for (int32_t y=minimum_y;y<=maximum_y;++y)
+            for (int32_t cell_x=minimum_x;cell_x<=maximum_x;++cell_x)
+                if (!CcMineWalkableState(CC_MINE_LEVEL,cell_x,y,
+                                         local_mine_bar_open) &&
+                    CircleTouchesFootprint(x,z,radius,
+                        (Rectangle){(float)cell_x-.5f,(float)y-.5f,1,1}))
+                    return true;
+        return false;
+    }
     if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET) {
         const CcWorldManifest *manifest = &active_world_stream->manifest;
         return x < manifest->minimum_x + radius ||
@@ -1901,10 +1925,22 @@ static int32_t GatherLocalCollisionBoxes(const LocalProbeContext *context,
 {
     CcLocalSceneKind scene = context != NULL ? context->scene :
                                                CC_LOCAL_SCENE_STREET;
+    int32_t count = 0;
+    if (scene == CC_LOCAL_SCENE_MINE) {
+        /* Local combat is bounded to the Lower Passage. These are the same
+           wall cells drawn around its authored chamber and its west doorway. */
+        AddLocalCollisionBox(boxes,&count,(Rectangle){23.5f,11.5f,5,1},0,2.5f);
+        AddLocalCollisionBox(boxes,&count,(Rectangle){23.5f,18.5f,5,1},0,2.5f);
+        AddLocalCollisionBox(boxes,&count,(Rectangle){28.5f,12.5f,1,6},0,2.5f);
+        AddLocalCollisionBox(boxes,&count,(Rectangle){22.5f,12.5f,1,2},0,2.5f);
+        AddLocalCollisionBox(boxes,&count,(Rectangle){22.5f,15.5f,1,3},0,2.5f);
+        if (!local_mine_bar_open)
+            AddLocalCollisionBox(boxes,&count,(Rectangle){14.5f,9.5f,1,1},0,2.5f);
+        return count;
+    }
     if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET) {
         return GatherTownCollisionBoxes(&active_world_stream->manifest, boxes);
     }
-    int32_t count = 0;
     if (scene == CC_LOCAL_SCENE_MARKET) {
         AddLocalCollisionBox(boxes, &count, MARKET_COUNTER_FOOTPRINT,
                              0.0f, 1.12f);
@@ -2138,6 +2174,28 @@ static bool LocalWorldSphereSweep(CcLocalSceneKind scene, Vector3 previous,
                                   Vector3 proposed, float radius,
                                   Vector3 *resolved, Vector3 *normal)
 {
+    if (scene == CC_LOCAL_SCENE_MINE) {
+        Vector3 travel = Vector3Subtract(proposed, previous);
+        float distance = Vector3Length(travel);
+        int32_t steps = (int32_t)ceilf(distance / 0.08f);
+        if (steps < 1) steps = 1;
+        Vector3 last = previous;
+        for (int32_t step = 1; step <= steps; ++step) {
+            float fraction = (float)step / (float)steps;
+            Vector3 point = Vector3Add(previous,
+                Vector3Scale(travel, fraction));
+            if (StaticBodyBlocked(scene, point.x, point.z, radius)) {
+                if (resolved != NULL) *resolved = last;
+                if (normal != NULL) {
+                    *normal = distance > 0.0001f ?
+                        Vector3Scale(travel, -1.0f / distance) :
+                        (Vector3){0.0f, 1.0f, 0.0f};
+                }
+                return true;
+            }
+            last = point;
+        }
+    }
     LocalProbeContext context = {.scene = scene};
     CcBiomechVec3 corrected = {proposed.x, proposed.y, proposed.z};
     CcBiomechVec3 contact = {0};
@@ -2466,8 +2524,10 @@ static CcLocalSceneKind AgentSceneForCall(const CcLocalAgent *agent,
                                           bool market_interior)
 {
     if (market_interior) return CC_LOCAL_SCENE_MARKET;
+    if (agent != NULL && agent->scene == CC_LOCAL_SCENE_MINE)
+        return CC_LOCAL_SCENE_MINE;
     return agent != NULL && agent->scene == CC_LOCAL_SCENE_ROAD ?
-           CC_LOCAL_SCENE_ROAD : CC_LOCAL_SCENE_STREET;
+        CC_LOCAL_SCENE_ROAD : CC_LOCAL_SCENE_STREET;
 }
 
 static void ApplyAgentWalkingProfile(CcLocalAgent *agent)
@@ -2571,7 +2631,7 @@ void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
 void CcLocalAgentSetScene(CcLocalAgent *agent, CcLocalSceneKind scene)
 {
     if (agent == NULL || scene < CC_LOCAL_SCENE_STREET ||
-        scene > CC_LOCAL_SCENE_ROAD) return;
+        scene > CC_LOCAL_SCENE_MINE) return;
     agent->scene = scene;
     agent->position.y = SurfaceHeightAt(
         scene, agent->position.x, agent->position.z);

@@ -903,12 +903,30 @@ static bool CcCapturePrepareMessage(const CcCaptureRequest *request, CcCaptureSc
                 strcmp(scene->argv[5],"expanded")==0;
         }
         if(request->capture_mine_level) {
-            scene->sim->mine.phase=CC_MINE_LEVEL; scene->sim->mine.x=15; scene->sim->mine.y=9;scene->sim->mine.light=18;scene->sim->mine.seen=3;
+            scene->sim->mine.phase=CC_MINE_LEVEL;
+            scene->sim->mine.x=request->capture_mine_offer||request->capture_mine_contest?25:15;
+            scene->sim->mine.y=request->capture_mine_offer||request->capture_mine_contest?16:9;
+            scene->sim->mine.light=18;scene->sim->mine.seen=63;
             scene->local->mine_view_phase=CC_MINE_LEVEL;
-            scene->local->mine_facing=2;
+            scene->local->mine_facing=request->capture_mine_offer?1:2;
+            if(request->capture_mine_offer) {
+                scene->sim->mine.pack[CC_GOOD_BREAD]=2;
+                scene->sim->mine.pack[CC_GOOD_IRON]=6;
+                (void)snprintf(message,message_size,
+                    "Two Bread for one Gold. Review the pack before committing.");
+            }
+            if(request->capture_mine_contest) {
+                scene->sim->mine.contest_active=true;
+                CcLocalCourseStageMineEncounter(&scene->local->course,
+                    &scene->local->agent,scene->sim);
+                scene->local->mine_combat_active=true;
+                (void)snprintf(message,message_size,
+                    "The Silverwick haulers defend their carried load.");
+            }
         }
         (*scene->view)=VIEW_LOCAL;
-        (void)snprintf(message,message_size,"Follow the mine road. Pack food before entering.");
+        if(!request->capture_mine_offer&&!request->capture_mine_contest)
+            (void)snprintf(message,message_size,"Follow the mine road. Pack food before entering.");
     }
     return true;
 }

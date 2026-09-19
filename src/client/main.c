@@ -278,6 +278,7 @@ typedef struct LocalState {
     bool mine_visibility_bar_open;
     uint32_t mine_visibility_scans;
     uint32_t mine_visibility_rays;
+    bool mine_combat_active;
     CcLocalConvoyState convoy;
     CcLocalWorldCarriageState world_carriage;
     CcClientDepartureTransition departure;
@@ -1279,6 +1280,7 @@ static void ResetLocalState(LocalState *local)
     local->mine_visibility_bar_open = false;
     local->mine_visibility_scans = 0;
     local->mine_visibility_rays = 0;
+    local->mine_combat_active = false;
     local->departure = (CcClientDepartureTransition){
         .phase = CC_CLIENT_DEPARTURE_READY,
     };
@@ -2083,6 +2085,8 @@ static void RestoreAthleticProfile(CcAthleticProfile *profile,
 static CcClientRoadEncounterMode RoadEncounterMode(
     const LocalState *local)
 {
+    if (local != NULL && local->mine_combat_active &&
+        local->course.mine_encounter) return CC_CLIENT_ROAD_ENCOUNTER_MINE;
     if (local == NULL || !local->course.road_encounter) {
         return CC_CLIENT_ROAD_ENCOUNTER_NONE;
     }
@@ -2246,6 +2250,11 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
     };
     CaptureAthleticProfile(&session.athletics, &local->agent.athletics);
     CaptureRoadEncounter(&session.road_encounter, local);
+    if (session.road_encounter.mode == CC_CLIENT_ROAD_ENCOUNTER_MINE) {
+        session.road_encounter.mine_source_id=sim->mine.source_id;
+        session.road_encounter.mine_group_id=sim->goblins.id;
+        session.road_encounter.mine_revision=sim->mine.revision;
+    }
     return CcClientSessionWrite(path, &session, error, error_capacity);
 }
 
@@ -2491,6 +2500,19 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
         RestoreRoadEncounter(local, &session.road_encounter);
         RestoreAthleticProfile(&local->agent.athletics,
                                &session.athletics);
+        return true;
+    }
+    if (session.road_encounter.mode == CC_CLIENT_ROAD_ENCOUNTER_MINE) {
+        if (!sim->mine.contest_active ||
+            session.road_encounter.mine_source_id != sim->mine.source_id ||
+            session.road_encounter.mine_group_id != sim->goblins.id ||
+            session.road_encounter.mine_revision != sim->mine.revision) return false;
+        ResetLocalStatePreservingAthletics(local);
+        CcLocalCourseStageMineEncounter(&local->course,&local->agent,sim);
+        RestoreRoadEncounter(local,&session.road_encounter);
+        RestoreAthleticProfile(&local->agent.athletics,&session.athletics);
+        local->mine_combat_active=true;
+        local->mine_view_phase=sim->mine.phase;
         return true;
     }
     if (session.scene == CC_CLIENT_SESSION_ROAD_TRAVEL) {
@@ -8552,7 +8574,41 @@ static int RunSoloPartyWipeRegression(void)
     if (ResolveSoloPartyWipe(NULL, &sim, &local, &view, message, sizeof(message)) ||
         CcSimHash(&sim) != hash) return 1;
     LeaveOpenWorld(&local);
-    (void)puts("Solo death advances the world once and starts the next company.");
+    static CcSim mine_sim;
+    CcSimInit(&mine_sim,UINT32_C(0x51e7));
+    const CcRoadSite *site=CcMineSite(&mine_sim);
+    const CcRoute *road=CcSimRoute(&mine_sim,site->route_id);
+    mine_sim.player.location_id=road->from_id;
+    mine_sim.carriage.location_id=road->from_id;
+    CcCommand travel={.kind=CC_COMMAND_TRAVEL,.target_id=road->to_id};
+    if(!ApplyCommand(NULL,&mine_sim,travel,message,sizeof(message))) return 1;
+    mine_sim.pony_company.encounter=-1;
+    mine_sim.journey.ambush_pending=false;
+    mine_sim.journey.elapsed_subticks=CcMineBranchSubtick(&mine_sim);
+    mine_sim.carriage.progress_milli=(int32_t)((int64_t)
+        mine_sim.journey.elapsed_subticks*1000/mine_sim.journey.total_subticks);
+    CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=site->id};
+    if(!ApplyCommand(NULL,&mine_sim,visit,message,sizeof(message))) return 1;
+    mine_sim.mine.phase=CC_MINE_LEVEL;
+    mine_sim.mine.x=25;
+    mine_sim.mine.y=16;
+    mine_sim.mine.light=18;
+    mine_sim.mine.seen=UINT32_C(1)<<5;
+    mine_sim.mine.contest_active=true;
+    ResetLocalState(&local);
+    CcLocalCourseStageMineEncounter(&local.course,&local.agent,&mine_sim);
+    local.mine_combat_active=true;
+    int32_t mine_day=mine_sim.current_day;
+    CcId source_id=mine_sim.mine.source_id;
+    CcLocalAgentDie(&local.agent);
+    if(!ResolveSoloPartyWipe(NULL,&mine_sim,&local,&view,message,sizeof(message)) ||
+       mine_sim.current_day!=mine_day+CC_PARTY_WIPE_DAYS ||
+       mine_sim.mine.phase!=CC_MINE_NONE || mine_sim.mine.contest_active ||
+       mine_sim.mine.encounter_outcome!=CC_MINE_ENCOUNTER_BROKEN_CONTACT ||
+       mine_sim.mine.player_injury!=100 || mine_sim.mine.source_id!=source_id ||
+       !CcSimValidate(&mine_sim,message,sizeof(message))) return 1;
+    LeaveOpenWorld(&local);
+    (void)puts("Solo and mine deaths advance the world once and preserve the mine outcome.");
     return 0;
 }
 #endif
@@ -9228,7 +9284,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             LeaveOpenWorld(local);
             ResetLocalState(local);
             (void)InitializeOpenWorld(sim, local, false);
-            if (sim->journey.active &&
+            if (sim->mine.phase != CC_MINE_NONE &&
+                RestoreClientStartupSession(
+                    session_path,sim,local,view,selected)) {
+                *view=VIEW_LOCAL;
+            } else if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
                 BeginRoadLocalState(sim, local, false);
                 *view = VIEW_LOCAL;

@@ -46,7 +46,8 @@ int32_t CcMineBranchSubtick(const CcSim *sim)
     int32_t progress=sim->journey.origin_id == route->from_id ? site->progress_milli : 1000-site->progress_milli;
     return (int32_t)(((int64_t)sim->journey.total_subticks*progress+999)/1000);
 }
-bool CcMineWalkable(const CcSim *sim, CcMinePhase phase, int32_t x, int32_t y)
+bool CcMineWalkableState(CcMinePhase phase, int32_t x, int32_t y,
+                         bool bar_open)
 {
     if (x < 1 || x >= CC_MINE_WIDTH-1 || y < 1 || y >= CC_MINE_HEIGHT-1) return false;
     if (phase == CC_MINE_YARD) {
@@ -55,9 +56,14 @@ bool CcMineWalkable(const CcSim *sim, CcMinePhase phase, int32_t x, int32_t y)
                !In(x,y,3,11,6,4) && !In(x,y,22,11,6,4);
     }
     if (phase != CC_MINE_LEVEL) return false;
-    if (x == 15 && y == 10 && !sim->mine.bar_open) return false;
+    if (x == 15 && y == 10 && !bar_open) return false;
     return CcMineChamber(x,y) >= 0 || In(x,y,9,4,3,1) || In(x,y,19,4,4,1) ||
         In(x,y,15,7,1,6) || In(x,y,5,7,1,6) || In(x,y,9,15,3,1) || In(x,y,20,15,4,1);
+}
+bool CcMineWalkable(const CcSim *sim, CcMinePhase phase, int32_t x, int32_t y)
+{
+    return sim != NULL && CcMineWalkableState(
+        phase,x,y,sim->mine.bar_open);
 }
 int32_t CcMinePackUsed(const CcSim *sim)
 {
@@ -124,17 +130,19 @@ void CcMineInitializeLoad(CcSim *sim)
 {
     if (sim == NULL || sim->dungeon_count == 0 || sim->player.id == 0 ||
         sim->goblins.id == 0 ||
-        sim->mine.source_id != 0 || sim->mine.cache_id != 0 ||
         sim->custody.next_id > UINT64_MAX - 3U) return;
     /* This runs only for the current campaign schema. Legacy journal replay
        keeps the shipped 96-slot table until its runtime upgrade finishes. */
     if (sim->schema_version < 103U) return;
     sim->custody.capacity=CC_CUSTODY_CAPACITY;
+    CcMineVisit *mine=&sim->mine;
+    if (mine->source_id != 0 || mine->cache_id != 0) {
+        return;
+    }
     int32_t slots=0;
     for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i)
         if (sim->custody.entries[i].id == 0) ++slots;
     if (slots < 3) return;
-    CcMineVisit *mine=&sim->mine;
     uint64_t authored_serial=((uint64_t)sim->world_seed << 1U) | UINT64_C(1);
     mine->source_id=CcMakeId(CC_ENTITY_MINE_SOURCE,authored_serial);
     mine->source_owner_id=sim->goblins.id;
@@ -158,6 +166,38 @@ void CcMineInitializeLoad(CcSim *sim)
         ++next;
     }
 }
+bool CcMineSettleFallenPack(CcSim *sim)
+{
+    if (sim == NULL || sim->mine.source_id == 0 ||
+        sim->mine.source_owner_id != sim->goblins.id) return false;
+    for (int32_t good=0;good<CC_GOOD_COUNT;++good) {
+        int32_t quantity=sim->mine.pack[good];
+        if (quantity < 0 || sim->player.cargo[good] < 0 ||
+            sim->player.cargo[good] > CC_SIM_MAX_UNITS-quantity) return false;
+    }
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        const CcCustodyEntry *entry=&sim->custody.entries[i];
+        if (!entry->active || entry->holder.kind!=CC_CUSTODY_MINE_PACK ||
+            entry->holder.id!=sim->player.id) continue;
+        if (entry->kind!=CC_CUSTODY_GOODS || entry->owner_id!=sim->goblins.id ||
+            entry->quantity<=0) return false;
+    }
+    /* Personal supplies return to the parked carriage. Goods still owned by
+       the haulers return to their recorded Lower Passage holder. */
+    for (int32_t good=0;good<CC_GOOD_COUNT;++good) {
+        sim->player.cargo[good]+=sim->mine.pack[good];
+        sim->mine.pack[good]=0;
+    }
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        CcCustodyEntry *entry=&sim->custody.entries[i];
+        if (!entry->active || entry->holder.kind!=CC_CUSTODY_MINE_PACK ||
+            entry->holder.id!=sim->player.id) continue;
+        entry->holder=(CcCustodyHolder){CC_CUSTODY_SITE,sim->mine.source_id};
+        entry->revision+=1;
+        entry->last_event_id=(uint64_t)sim->mine.revision+1U;
+    }
+    return true;
+}
 static bool Near(const CcMineVisit *mine, int32_t x, int32_t y)
 {
     return abs(mine->x-x)+abs(mine->y-y) <= 1;
@@ -165,6 +205,50 @@ static bool Near(const CcMineVisit *mine, int32_t x, int32_t y)
 static bool MineLocationReachable(const CcMineVisit *mine, int32_t x, int32_t y)
 {
     return mine->phase == CC_MINE_LEVEL && Near(mine,x,y);
+}
+static bool MineHaulersNeedBread(const CcSim *sim)
+{
+    /* The source holder is the haulers' present stock. It is the local food
+       need used by this offer, rather than a remote town or lair balance. */
+    return CcMineSourceGood(sim,CC_GOOD_BREAD) < 2;
+}
+static bool MineSourceOwnershipReady(const CcSim *sim)
+{
+    const CcMineVisit *mine=&sim->mine;
+    return mine->source_id != 0 && mine->source_owner_id == sim->goblins.id &&
+        mine->cache_owner_id == sim->player.id && sim->goblins.id != 0 &&
+        sim->player.id != 0;
+}
+static bool MineCreditSourceGood(CcSim *sim, CcGood good, int32_t quantity)
+{
+    if (sim == NULL || good < 0 || good >= CC_GOOD_COUNT || quantity <= 0)
+        return false;
+    CcMineVisit *mine=&sim->mine;
+    if (sim->custody.next_id == 0 || sim->custody.next_id == UINT64_MAX)
+        return false;
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        CcCustodyEntry *entry=&sim->custody.entries[i];
+        if (!entry->active || entry->kind != CC_CUSTODY_GOODS ||
+            entry->good != (int32_t)good ||
+            entry->holder.kind != CC_CUSTODY_SITE ||
+            entry->holder.id != mine->source_id ||
+            entry->owner_id != mine->source_owner_id) continue;
+        if (entry->quantity > CC_SIM_MAX_UNITS-quantity) return false;
+        entry->quantity+=quantity;
+        entry->revision+=1;
+        entry->last_event_id=(uint64_t)mine->revision+1U;
+        return true;
+    }
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        CcCustodyEntry *entry=&sim->custody.entries[i];
+        if (entry->id != 0) continue;
+        *entry=(CcCustodyEntry){.id=sim->custody.next_id++,.revision=1,
+            .owner_id=mine->source_owner_id,.last_event_id=(uint64_t)mine->revision+1U,
+            .holder={CC_CUSTODY_SITE,mine->source_id},.kind=CC_CUSTODY_GOODS,
+            .quantity=quantity,.good=(int32_t)good,.condition=100,.active=true};
+        return true;
+    }
+    return false;
 }
 static bool Fail(char *error, size_t capacity, const char *text);
 static bool MineTransfer(CcSim *sim, CcCustodyHolder source,
@@ -247,7 +331,14 @@ const char *CcMineAction(const CcSim *sim)
         if (Near(m,5,3)) return "Step outside to the mine yard";
         if (Near(m,15,10) && !m->bar_open) return "Lift the wooden bar";
         if (Near(m,26,4) && !m->surveyed) return "Read the workers' survey";
-        if (Near(m,26,16)) return "Inspect the lower passage";
+        if (Near(m,26,16)) {
+            if (m->contest_active) return "Haulers engaged: fight or break contact";
+            if (m->encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED)
+                return "Take the defeated haulers' load";
+            if (m->encounter_outcome == CC_MINE_ENCOUNTER_BARGAINED)
+                return "Gold paid from the hauler load";
+            return "Hungry goblin haulers: bargain or contest";
+        }
     }
     return NULL;
 }
@@ -300,6 +391,8 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
             static const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
             if (command->amount < 0 || command->amount > 3)
                 return Fail(error,capacity,"Choose north, east, south, or west.");
+            if (m->contest_active)
+                return Fail(error,capacity,"Break contact with the haulers before walking away.");
             int32_t x=m->x+dx[command->amount], y=m->y+dy[command->amount];
             if (!CcMineWalkable(sim,m->phase,x,y))
                 return Fail(error,capacity,"Stone or a closed passage blocks this step.");
@@ -309,6 +402,11 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
                 if (m->steps == 0) { if(m->light > 0) m->light-=1; SpendMinutes(sim,5); }
                 int32_t chamber=CcMineChamber(x,y);
                 if (chamber >= 0) m->seen |= UINT32_C(1) << chamber;
+                /* The Gatehouse, Rope Store, and Stair Hall form the mine's
+                   existing side loop. Passing the central bar cannot create
+                   a bypass result; reaching the source-side tile after this
+                   loop does. */
+                if (x == 9 && y == 15) m->bypass_route_seen=true;
             } else SpendMinutes(sim,1);
         } else if (command->kind == CC_COMMAND_MINE_PACK) {
             if (m->phase != CC_MINE_YARD || !Near(m,15,18))
@@ -331,13 +429,78 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
                 return Fail(error,capacity,"Reach the Lower Passage load before inspecting it.");
             if (error != NULL && capacity > 0) error[0]='\0';
             return true;
+        } else if (command->kind == CC_COMMAND_MINE_BARGAIN) {
+            if (!MineLocationReachable(m,m->source_x,m->source_y))
+                return Fail(error,capacity,"Reach the haulers before offering their food.");
+            if (m->encounter_outcome == CC_MINE_ENCOUNTER_BARGAINED)
+                return Fail(error,capacity,"The haulers have already settled this offer.");
+            if (m->encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED)
+                return Fail(error,capacity,"The Lower Passage contest has already been settled.");
+            if (m->contest_active)
+                return Fail(error,capacity,"Break contact before changing the offer.");
+            if (!MineSourceOwnershipReady(sim) || !MineHaulersNeedBread(sim) ||
+                m->pack[CC_GOOD_BREAD] < 2 || CcMineSourceGood(sim,CC_GOOD_GOLD) < 1)
+                return Fail(error,capacity,"Carry two Bread in the mine pack for the haulers.");
+            CcMineVisit original_mine=*m;
+            CcCustodyState original_custody=sim->custody;
+            /* Debit the offered Bread before checking the combined pack.
+               This permits an eight-slot pack that already holds the offer. */
+            m->pack[CC_GOOD_BREAD]-=2;
+            if (!MineCreditSourceGood(sim,CC_GOOD_BREAD,2) ||
+                CcMinePackUsed(sim)+1 > CC_MINE_PACK_CAPACITY) {
+                *m=original_mine;
+                sim->custody=original_custody;
+                return Fail(error,capacity,"The haulers cannot receive that offer here.");
+            }
+            /* Source release is scoped to this atomic exchange. The committed
+               bargain closes it again, so it grants no later source access. */
+            m->source_released=true;
+            if (!MineTransfer(sim,(CcCustodyHolder){CC_CUSTODY_SITE,m->source_id},
+                (CcCustodyHolder){CC_CUSTODY_MINE_PACK,sim->player.id},CC_GOOD_GOLD,1,
+                error,capacity)) {
+                *m=original_mine;
+                sim->custody=original_custody;
+                return false;
+            }
+            m->source_released=false;
+            m->encounter_outcome=CC_MINE_ENCOUNTER_BARGAINED;
+        } else if (command->kind == CC_COMMAND_MINE_CONTEST) {
+            if (!MineLocationReachable(m,m->source_x,m->source_y))
+                return Fail(error,capacity,"Reach the haulers before challenging their load.");
+            if (m->encounter_outcome == CC_MINE_ENCOUNTER_BARGAINED ||
+                m->encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED)
+                return Fail(error,capacity,"The Lower Passage fight has already ended.");
+            if (m->contest_active)
+                return Fail(error,capacity,"The Lower Passage contest is already active.");
+            m->contest_active=true;
+        } else if (command->kind == CC_COMMAND_MINE_BREAK_CONTACT) {
+            if (!MineLocationReachable(m,m->source_x,m->source_y))
+                return Fail(error,capacity,"Reach the haulers before withdrawing.");
+            if (!m->contest_active || m->source_owner_id != sim->goblins.id ||
+                command->amount < 0 || command->amount > 100)
+                return Fail(error,capacity,"There is no Lower Passage fight to break from.");
+            m->contest_active=false;
+            m->encounter_outcome=CC_MINE_ENCOUNTER_BROKEN_CONTACT;
+            m->player_injury=(uint8_t)command->amount;
+        } else if (command->kind == CC_COMMAND_MINE_RESOLVE_CONTEST) {
+            if (!MineLocationReachable(m,m->source_x,m->source_y) ||
+                !m->contest_active || m->source_owner_id != sim->goblins.id ||
+                command->amount < 0 || command->amount > 100)
+                return Fail(error,capacity,"Refresh the active Lower Passage contest.");
+            m->contest_active=false;
+            m->source_released=true;
+            m->encounter_outcome=CC_MINE_ENCOUNTER_CONTESTED;
+            m->player_injury=(uint8_t)command->amount;
         } else if (command->kind == CC_COMMAND_MINE_TAKE) {
             if (!MineLocationReachable(m,m->source_x,m->source_y))
                 return Fail(error,capacity,"Reach the Lower Passage load before taking from it.");
             if (command->good < 0 || command->good >= CC_GOOD_COUNT || command->amount <= 0)
                 return Fail(error,capacity,"Choose a positive quantity from the load.");
-            if (!m->source_released)
+            if (m->encounter_outcome != CC_MINE_ENCOUNTER_CONTESTED ||
+                !m->source_released)
                 return Fail(error,capacity,"The haulers have not released this load.");
+            if (command->amount > CcMineSourceGood(sim,command->good))
+                return Fail(error,capacity,"The haulers have not released that quantity.");
             if (CcMinePackUsed(sim)+command->amount > CC_MINE_PACK_CAPACITY)
                 return Fail(error,capacity,"Make room in the eight-slot pack before taking more.");
             if (!MineTransfer(sim,(CcCustodyHolder){CC_CUSTODY_SITE,m->source_id},
@@ -392,7 +555,7 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
                 sim->dungeons[0].rooms[0].state_flags |= CC_DUNGEON_ROOM_SEARCHED | CC_DUNGEON_ROOM_DISCOVERED;
                 SpendMinutes(sim,5);
             } else if (m->phase == CC_MINE_LEVEL && Near(m,26,16)) {
-                return Fail(error,capacity,"Rubble fills the stair to Lamp Hall. The workers' survey is in the east records room.");
+                return Fail(error,capacity,"Use Bargain, Contest, or Break contact at the haulers.");
             } else return Fail(error,capacity,"Walk to a doorway, the bar, or the workers' records.");
         } else return Fail(error,capacity,"Choose a mine action.");
     }
@@ -418,6 +581,16 @@ bool CcMineValidate(const CcSim *sim)
             !CcMineWalkable(sim,CC_MINE_LEVEL,m->cache_x,m->cache_y) ||
             (m->source_x == m->cache_x && m->source_y == m->cache_y)) return false;
         if (CcMineCacheUsed(sim) > CC_MINE_CACHE_CAPACITY) return false;
+        if (sim->schema_version >= 104U &&
+            (m->encounter_outcome < CC_MINE_ENCOUNTER_OPEN ||
+             m->encounter_outcome > CC_MINE_ENCOUNTER_BROKEN_CONTACT ||
+             m->player_injury > 100 ||
+             (m->source_released !=
+              (m->encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED)) ||
+             (m->contest_active &&
+              (m->encounter_outcome == CC_MINE_ENCOUNTER_BARGAINED ||
+               m->encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED ||
+               m->source_owner_id != sim->goblins.id)))) return false;
     }
     if (m->phase == CC_MINE_NONE)
         return m->site_id == 0 && m->x == 0 && m->y == 0 && m->return_speed == 0 &&
