@@ -1,31 +1,14 @@
 #!/usr/bin/env python3
-"""Field-membership metric: does a reply name an entity the speaker was not given?
+"""Check capitalized name tokens against input evidence.
 
-A pool-family reply (remark, muse, recall, ...) draws its entities from the
-row's spoken fields, so the correct check is not copy containment but field
-membership: every name in the reply must appear in the prompt the speaker was
-given (account, fields, history, memories). A name that does not is invented.
-
-A common word surfaces as lowercase somewhere in the corpus; a name does not.
-Watermarking names against the corpus would miss a wholly invented name
-("Varkesh" appears nowhere), so the test is the inverse: any capitalised token
-whose lowercase form is not a common word is a name, known or invented.
-
-Measured on the v2 wording-miss benchmark (`braid/docs/
-crownless-audit-misses.v2.jsonl`):
-    reference false positives   0/51
-    lexical-ok specificity      22/22   (no valid reply flagged)
-    content recall              2/4     (the two entity-invention errors)
-and on the corpus's own authored targets over 5,000 rows: 0 false positives.
-It is a sound *safety* gate -- never flag a correct reply -- that catches
-entity invention. It does not catch semantic errors (wrong memory, wrong
-sentiment), which are 2 of the 4 content misses.
-
-    python3 tools/language/measure_field_membership.py \
-        --zero <zero-checkout> --braid <braid-checkout>
+This lexical diagnostic measures name membership. Use separate claim checks
+for roles, quantities, source, time and offer scope. Freeze calibration from
+training data before scoring held-out rows. See EVALUATION.md for the contract.
 """
 import argparse
+import hashlib
 import json
+import unicodedata
 import re
 from collections import Counter
 from pathlib import Path
@@ -38,37 +21,73 @@ STOPWORDS = {'i', 'my', 'me', 'mine', 'we', 'our', 'you', 'your', 'he', 'she',
              'well', 'yes', 'one', 'two', 'now', 'then', 'still', 'even'}
 
 
-def common_words(zero, sample=20000):
-    """Tokens that ever appear lowercase: these are ordinary words, not names."""
-    lower = Counter()
-    rows = [json.loads(l) for l in open(zero / 'out/crownless-moves-v5/wording.jsonl')]
-    for line in open(zero / 'out/crownless-moves-v7/train.jsonl'):
-        rows.append(json.loads(line))
-        if len(rows) >= sample:
+def normalized(text):
+    return unicodedata.normalize('NFKC', text).replace('’', "'").casefold()
+
+
+def entity_tokens(text):
+    # The possessive suffix expresses ownership of the same entity.
+    return {normalized(t).removesuffix("'s") for t in WORD.findall(text)}
+
+
+def freeze_calibration(source, destination, sample=20000):
+    """Build once from the training split; record its exact identity."""
+    if source.name != 'train.jsonl':
+        raise ValueError('calibration source must be train.jsonl')
+    if sample <= 0:
+        raise ValueError('sample must be positive')
+    data = source.read_bytes()
+    words = set()
+    count = 0
+    for line in data.decode('utf-8').splitlines():
+        if count == sample:
             break
-    for row in rows:
-        for text in [row['output'], row['prefix'], *row.get('accepted', [])]:
+        row = json.loads(line)
+        for text in [row['prefix'], row['output'], *row.get('accepted', [])]:
             for token in WORD.findall(text):
-                if not token[0].isupper():
-                    lower[token.lower()] += 1
-    return set(lower)
+                if token[0].islower():
+                    words.add(normalized(token))
+        count += 1
+    receipt = {'version': 1, 'source_split': 'train',
+               'source_sha256': hashlib.sha256(data).hexdigest(),
+               'rows': count, 'words': sorted(words)}
+    # Exclusive creation keeps an existing calibration fixed.
+    with destination.open('x', encoding='utf-8') as f:
+        json.dump(receipt, f, indent=2, sort_keys=True)
+        f.write('\n')
+    return receipt
+
+
+def common_words(calibration):
+    receipt = json.loads(calibration.read_text(encoding='utf-8'))
+    if receipt['version'] != 1 or receipt['source_split'] != 'train':
+        raise ValueError('expected version 1 training calibration')
+    return set(receipt['words'])
 
 
 def prompt_text(row):
-    parts = [row['prefix'], row['output']]
-    parts += [f['text'] for f in row['fields']]
-    parts += [h['text'] for h in row['history']]
-    parts += row.get('mind', {}).get('memories', [])
-    return '\n'.join(parts)
+    """Use captured input when present, or the legacy corpus prefix.
+
+    model_input contains the decoded prefix after truncation and the actual
+    accessible copy strings. Targets and raw row metadata stay separate.
+    """
+    if 'model_input' in row:
+        evidence = row['model_input']
+        return '\n'.join([evidence['prefix'], *evidence['copy_spans']])
+    return row['prefix']
 
 
-def invented(candidate, allowed, common):
+def invented(candidate, allowed, common, aliases=None):
+    """Match whole name tokens; explicit aliases map a variant to its name."""
+    aliases = {normalized(k).removesuffix("'s"): normalized(v).removesuffix("'s")
+               for k, v in (aliases or {}).items()}
+    allowed_tokens = {aliases.get(t, t) for t in entity_tokens(allowed)}
     out = []
     for token in WORD.findall(candidate):
-        low = token.lower()
+        low = normalized(token).removesuffix("'s")
         if not token[0].isupper() or low in common or low in STOPWORDS:
             continue
-        if token not in allowed:
+        if aliases.get(low, low) not in allowed_tokens:
             out.append(token)
     return out
 
@@ -76,11 +95,22 @@ def invented(candidate, allowed, common):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--zero', type=Path, required=True)
-    p.add_argument('--braid', type=Path, required=True)
+    p.add_argument('--braid', type=Path)
+    p.add_argument('--calibration', type=Path, required=True)
+    p.add_argument('--freeze-calibration', action='store_true',
+                   help='Create calibration from v7 train.jsonl, then exit')
     p.add_argument('--at-scale', action='store_true',
                    help='Also check the corpus authored targets for false positives')
     args = p.parse_args()
-    common = common_words(args.zero)
+    if args.freeze_calibration:
+        freeze_calibration(args.zero / 'out/crownless-moves-v7/train.jsonl',
+                           args.calibration)
+        return
+    if args.braid is None:
+        p.error('--braid is required for evaluation')
+    common = common_words(args.calibration)
+    print('evidence: corpus prefix (legacy rows); captured input when supplied')
+    print('calibration sha256:', hashlib.sha256(args.calibration.read_bytes()).hexdigest())
 
     rows = [json.loads(l) for l in open(args.braid / 'docs/crownless-audit-misses.v2.jsonl')]
     corpus = {json.loads(l)['id']: json.loads(l)
