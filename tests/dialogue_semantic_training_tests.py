@@ -4,13 +4,22 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
 GATE = ROOT / "tools/dialogue/verify_semantic_training.py"
+sys.path.insert(0, str(ROOT / "tools/dialogue"))
+from semantic_training_sources import is_relevant
 
 
 class SemanticTrainingGateTests(unittest.TestCase):
+    def test_source_selector_includes_training_inputs_and_runtime(self):
+        self.assertTrue(is_relevant(["tools/data/core_account_rules.json"]))
+        self.assertTrue(is_relevant(["src/sim/cc_sim.h"]))
+        self.assertTrue(is_relevant(["tools/dialogue/requirements-semantic-training.txt"]))
+        self.assertFalse(is_relevant(["docs/README.md"]))
+
     def make_run(self, records, export=b"model"):
         directory = Path(tempfile.mkdtemp())
         (directory / "last.ccv2").write_bytes(export)

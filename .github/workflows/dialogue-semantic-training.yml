@@ -16,6 +16,10 @@ on:
       - '.github/workflows/dialogue-semantic-training.yml'
       - 'tools/dialogue/**'
       - 'tests/dialogue_semantic_training_tests.py'
+      - 'tools/data/core_account_rules.json'
+      - 'src/story/**'
+      - 'src/sim/**'
+      - 'src/rules/**'
 
 permissions:
   contents: read
@@ -52,9 +56,8 @@ jobs:
             relevant=true
           else
             previous="$(git describe --tags --match 'v*.*.*' --abbrev=0 "$GITHUB_SHA^" 2>/dev/null || true)"
-            if [ -n "$previous" ] && git diff --quiet "$previous" "$GITHUB_SHA" -- \
-              tools/dialogue models/dialogue-syntax assets/language CMakeLists.txt \
-              src/story src/sim src/rules tools/core_model_probe.c; then
+            if [ -n "$previous" ] && ! git diff --name-only "$previous" "$GITHUB_SHA" | \
+              python tools/dialogue/semantic_training_sources.py | grep -qx true; then
               relevant=false
             else
               relevant=true
@@ -79,9 +82,7 @@ jobs:
         run: |
           previous="$(git describe --tags --match 'v*.*.*' --abbrev=0 "$GITHUB_SHA^" 2>/dev/null || true)"
           if [ -n "$previous" ]; then
-            git diff --name-status "$previous" "$GITHUB_SHA" -- \
-              tools/dialogue models/dialogue-syntax assets/language CMakeLists.txt src/story src/sim src/rules tools/core_model_probe.c \
-              > source-diff.txt
+            git diff --name-status "$previous" "$GITHUB_SHA" > source-diff.txt
           else
             printf '%s\n' "No earlier release tag is available; this is the first release comparison." > source-diff.txt
           fi
@@ -100,8 +101,20 @@ jobs:
       - name: Pin ZERO commit
         working-directory: zero
         run: git checkout --detach "$ZERO_COMMIT"
+      - name: Check dialogue event coverage
+        run: |
+          if python tools/dialogue/audit_grammar.py --help 2>&1 | grep -q -- '--check'; then
+            python tools/dialogue/audit_grammar.py --check
+          else
+            echo 'Coverage check will run after the full event-coverage change is merged.'
+          fi
       - name: Train semantic model
         run: |
+          case "$STEPS" in (*[!0-9]*|'') echo 'steps must be an integer from 1 to 2000' >&2; exit 1;; esac
+          if [ "$STEPS" -lt 1 ] || [ "$STEPS" -gt 2000 ]; then
+            echo 'steps must be an integer from 1 to 2000' >&2
+            exit 1
+          fi
           mkdir -p artifacts/semantic-5m
           timeout 8m python tools/dialogue/train_semantic_ids.py \
             --zero "$GITHUB_WORKSPACE/zero" \
