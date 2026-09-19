@@ -604,10 +604,29 @@ static int TestStreamFollowsCarriage(void)
     return 0;
 }
 
+static int TestRouteLengthForSimNeedsNoWorldStream(void)
+{
+    CcSim sim;
+    CcWorldManifest manifest;
+    CcSimInit(&sim, UINT32_C(0x5eed432));
+    CHECK(CcWorldManifestBuild(&manifest, &sim));
+    CHECK(manifest.route_count >= 2);
+    for (int32_t index = 0; index < manifest.route_count; ++index) {
+        const CcWorldRoutePlacement *route = &manifest.routes[index];
+        float measured = CcWorldRouteLength(route);
+        float from_sim = CcWorldRouteLengthForSim(&sim, route->route_id);
+        CHECK(isfinite(measured) && measured > 1.0f);
+        CHECK(fabsf(measured - from_sim) < 0.0001f);
+    }
+    CHECK(CcWorldRouteLengthForSim(&sim, 0U) == 0.0f);
+    return 0;
+}
+
 int main(void)
 {
     if (TestRoadQueryParity() != 0) return 1;
     if (TestStreamFollowsCarriage() != 0) return 1;
+    if (TestRouteLengthForSimNeedsNoWorldStream() != 0) return 1;
     if (TestCanonicalRoadManifest() != 0) return 1;
     if (TestManifestIsStableAndFinite() != 0) return 1;
     if (TestRoadDistrictSites() != 0) return 1;

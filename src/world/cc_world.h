@@ -146,6 +146,7 @@ bool CcWorldRoutePose(const CcWorldRoutePlacement *route, CcId origin_id,
                       float journey_amount, CcWorldPoint *position,
                       float *heading_yaw);
 float CcWorldRouteLength(const CcWorldRoutePlacement *route);
+float CcWorldRouteLengthForSim(const CcSim *sim, CcId route_id);
 float CcWorldRouteSampleAmount(const CcWorldRoutePlacement *route,
                                int32_t sample_index);
 CcWorldPoint CcWorldSettlementLocalPoint(

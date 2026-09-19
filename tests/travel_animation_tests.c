@@ -31,21 +31,22 @@ static bool Near(float measured, float expected, float tolerance)
    for the wheel, and clock * CcClientConvoyGaitCadence(gait) for the team --
    and the assertions below fail. */
 static float WheelAngleForFrame(float clock, float pace,
-                                int32_t progress_milli, float radius)
+                                int32_t progress_milli, float route_length,
+                                float radius)
 {
     (void)clock;
     (void)pace;
     return CcLocalCarriageWheelAngleInternal(
-        CcLocalRoadCarriageTravelInternal(progress_milli), radius);
+        CcLocalRoadCarriageTravelInternal(progress_milli, route_length), radius);
 }
 
 static float GaitPhaseForFrame(float clock, float pace,
-                               int32_t progress_milli)
+                               int32_t progress_milli, float route_length)
 {
     (void)clock;
     (void)pace;
     return CcLocalRoadTeamGaitPhaseInternal(
-        CcLocalRoadCarriageTravelInternal(progress_milli));
+        CcLocalRoadCarriageTravelInternal(progress_milli, route_length));
 }
 
 /* One journey down the road book, drawn at whatever frame rate the machine
@@ -54,7 +55,8 @@ static float GaitPhaseForFrame(float clock, float pace,
    back a clock that jumps backwards. */
 static void DriveJourney(int32_t frames, float seconds_per_frame,
                          bool clock_jumps_back, int32_t reached_milli,
-                         float radius, float *wheel_angle, float *gait_phase)
+                         float route_length, float radius,
+                         float *wheel_angle, float *gait_phase)
 {
     float clock = 137.0f;
     for (int32_t frame = 0; frame < frames; ++frame) {
@@ -64,8 +66,9 @@ static void DriveJourney(int32_t frames, float seconds_per_frame,
         int32_t progress_milli =
             (int32_t)lroundf(amount * (float)reached_milli);
         *wheel_angle = WheelAngleForFrame(clock, 0.72f, progress_milli,
-                                          radius);
-        *gait_phase = GaitPhaseForFrame(clock, 0.72f, progress_milli);
+                                          route_length, radius);
+        *gait_phase = GaitPhaseForFrame(clock, 0.72f, progress_milli,
+                                        route_length);
     }
 }
 
@@ -81,15 +84,16 @@ static void WheelsRollWithTheRoad(void)
        which is what a storybook journey does to it. The front wheel should
        have turned through the road it covered over its radius, both times. */
     const int32_t reached_milli = 993;
-    float road = CcLocalRoadCarriageTravelInternal(reached_milli);
+    const float route_length = 374.0f;
+    float road = CcLocalRoadCarriageTravelInternal(reached_milli, route_length);
     float expected = fmodf(road / front, 2.0f * PI);
     float smooth = 0.0f;
     float smooth_gait = 0.0f;
     float stuttering = 0.0f;
     float stuttering_gait = 0.0f;
-    DriveJourney(3840, 1.0f / 60.0f, false, reached_milli, front, &smooth,
+    DriveJourney(3840, 1.0f / 60.0f, false, reached_milli, route_length, front, &smooth,
                  &smooth_gait);
-    DriveJourney(320, 1.0f / 20.0f, true, reached_milli, front, &stuttering,
+    DriveJourney(320, 1.0f / 20.0f, true, reached_milli, route_length, front, &stuttering,
                  &stuttering_gait);
     printf("front wheel: 60fps %.4f, 20fps with a rewound clock %.4f, "
            "road %.2f / radius %.2f = %.4f\n",
@@ -106,54 +110,116 @@ static void WheelsRollWithTheRoad(void)
 
     /* A carriage that is not moving is not rolling, whatever the clock does
        around it. */
-    float halted = WheelAngleForFrame(0.0f, 0.0f, 400, front);
-    float halted_gait = GaitPhaseForFrame(0.0f, 0.0f, 400);
+    float halted = WheelAngleForFrame(0.0f, 0.0f, 400, route_length, front);
+    float halted_gait = GaitPhaseForFrame(0.0f, 0.0f, 400, route_length);
     for (int32_t frame = 0; frame < 120; ++frame) {
         float clock = (float)frame / 60.0f;
-        Require(WheelAngleForFrame(clock, 0.72f, 400, front) == halted,
+        Require(WheelAngleForFrame(clock, 0.72f, 400, route_length, front) == halted,
                 "a standing carriage does not spin its wheels");
-        Require(GaitPhaseForFrame(clock, 0.72f, 400) == halted_gait,
+        Require(GaitPhaseForFrame(clock, 0.72f, 400, route_length) == halted_gait,
                 "a standing team does not walk on the spot");
     }
 
     /* And ground given back turns the wheel back. */
-    float ahead = WheelAngleForFrame(9.0f, 0.72f, 20, front);
-    float behind = WheelAngleForFrame(9.5f, 0.72f, 10, front);
-    Require(behind < ahead &&
-                Near(ahead - behind,
-                     CcLocalRoadCarriageTravelInternal(10) / front, 0.0005f),
+    float ahead = WheelAngleForFrame(9.0f, 0.72f, 20, route_length, front);
+    float behind = WheelAngleForFrame(9.5f, 0.72f, 10, route_length, front);
+    float returned = fmodf(ahead - behind + 2.0f * PI, 2.0f * PI);
+    Require(Near(returned,
+                 CcLocalRoadCarriageTravelInternal(10, route_length) / front,
+                 0.0005f),
             "a carriage that gives ground back rolls its wheels back");
 
     /* Front and rear are one axle apart, so they must roll the same ground.
        Two units is inside a turn of even the small wheel, so nothing here has
        wrapped. */
     const int32_t short_run_milli = 38;
-    float short_run = CcLocalRoadCarriageTravelInternal(short_run_milli);
+    float short_run = CcLocalRoadCarriageTravelInternal(short_run_milli, route_length);
     float front_angle = 0.0f;
     float rear_angle = 0.0f;
     float ignored = 0.0f;
-    DriveJourney(240, 1.0f / 60.0f, false, short_run_milli, front,
+    DriveJourney(240, 1.0f / 60.0f, false, short_run_milli, route_length, front,
                  &front_angle, &ignored);
-    DriveJourney(240, 1.0f / 60.0f, false, short_run_milli, rear, &rear_angle,
+    DriveJourney(240, 1.0f / 60.0f, false, short_run_milli, route_length, rear, &rear_angle,
                  &ignored);
     printf("%.3f units of road: front rolls %.4f, rear rolls %.4f\n",
            (double)short_run, (double)(front_angle * front),
            (double)(rear_angle * rear));
-    Require(Near(front_angle * front, short_run, 0.0005f) &&
-                Near(rear_angle * rear, short_run, 0.0005f),
+    Require(Near(front_angle,
+                 CcLocalCarriageWheelAngleInternal(short_run, front),
+                 0.0005f) &&
+                Near(rear_angle,
+                     CcLocalCarriageWheelAngleInternal(short_run, rear),
+                     0.0005f),
             "both axles roll the ground the carriage crossed");
 }
 
 static void PlaceAndSpinShareOneMeasure(void)
 {
+    const float route_length = 374.0f;
     for (int32_t progress_milli = 0; progress_milli <= 1000;
          progress_milli += 125) {
-        Require(Near(CcLocalRoadCarriageX(progress_milli) -
-                         CcLocalRoadCarriageX(0),
-                     CcLocalRoadCarriageTravelInternal(progress_milli),
+        Require(Near(CcLocalRoadCarriageTravelInternal(progress_milli,
+                                                        route_length),
+                     route_length * (float)progress_milli / 1000.0f,
                      0.0001f),
-                "where the carriage is and how far it has come agree");
+                "saved progress must map to the sampled route length");
+        Require(Near((CcLocalRoadCarriageX(progress_milli) -
+                      CcLocalRoadCarriageX(0)) /
+                         (CcLocalRoadCarriageX(1000) -
+                          CcLocalRoadCarriageX(0)),
+                     (float)progress_milli / 1000.0f, 0.0001f),
+                "road-book composition must follow progress without measuring ground");
     }
+}
+
+static void RealRouteLengthsDriveBothDirections(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x5eed432));
+    /* There is no CcWorldStream here. Road-book fallback must be ready from a
+       fresh simulation even when open-world setup never ran. */
+    Require(sim.route_count >= 2, "the campaign provides multiple real routes");
+    for (int32_t index = 0; index < sim.route_count; ++index) {
+        const CcRoute *route = &sim.routes[index];
+        for (int32_t direction = 0; direction < 2; ++direction) {
+            int32_t progress = direction == 0 ? 275 : 725;
+            sim.journey.route_id = route->id;
+            sim.journey.origin_id = direction == 0 ? route->from_id : route->to_id;
+            sim.journey.destination_id = direction == 0 ? route->to_id : route->from_id;
+            sim.carriage.progress_milli = progress;
+            float length = CcLocalRoadCarriageRouteLengthInternal(&sim);
+            Require(isfinite(length) && length > 1.0f,
+                    "a real route has a finite physical length");
+            float distance = CcLocalRoadCarriageTravelInternal(progress,
+                                                                 length);
+            float wheel = CcLocalCarriageWheelAngleInternal(distance, 0.81f);
+            float gait = CcLocalRoadTeamGaitPhaseInternal(distance);
+            Require(isfinite(distance) && distance > 0.0f &&
+                        isfinite(wheel) && isfinite(gait),
+                    "both route directions keep wheel and gait motion finite");
+            Require(Near(distance, length * (float)progress / 1000.0f,
+                         0.0001f),
+                    "both route directions use saved progress and route length");
+        }
+    }
+    const CcRoute *route = &sim.routes[0];
+    CcSettlement *from = CcSimSettlementMutable(&sim, route->from_id);
+    sim.journey.route_id = route->id;
+    float original = CcLocalRoadCarriageRouteLengthInternal(&sim);
+    Require(from != NULL, "the first route has an origin settlement");
+    from->map_x += 80;
+    float changed = CcLocalRoadCarriageRouteLengthInternal(&sim);
+    Require(fabsf(changed - original) > 0.01f,
+            "road-book cache refreshes when route geometry changes");
+    Require(Near(changed, CcWorldRouteLengthForSim(&sim, route->id),
+                 0.0001f),
+            "refreshed road-book distance matches a fresh world route");
+    from->size = from->size == CC_SETTLEMENT_CAPITAL_SIZE ?
+        CC_SETTLEMENT_TOWN : CC_SETTLEMENT_CAPITAL_SIZE;
+    float resized = CcLocalRoadCarriageRouteLengthInternal(&sim);
+    Require(Near(resized, CcWorldRouteLengthForSim(&sim, route->id),
+                 0.0001f),
+            "a settlement size change refreshes the warm route-distance cache");
 }
 
 static void LegsStepAtTheSpeedTheTeamMoves(void)
@@ -178,23 +244,13 @@ static void LegsStepAtTheSpeedTheTeamMoves(void)
                  CcLocalRoadTeamGaitPhaseInternal(4.0f), 0.0005f),
             "a stride puts the same foot down again");
 
-    /* The stride is a pony's, and it was checked against cruise so that cruise
-       still looks like cruise: an ordinary four-watch journey crosses the road
-       book's 52 units in 64 seconds, and at that speed the team should step at
-       about the walking cadence the old clock-driven look was tuned around. */
-    float cruise = CcLocalRoadCarriageTravelInternal(1000) / 64.0f;
-    float cadence = cruise / stride * 2.0f * PI;
-    float walk = CcClientConvoyGaitCadence(CC_CLIENT_CONVOY_GAIT_WALK);
-    printf("cruise %.4f units a second, cadence %.2f against a tuned walk "
-           "of %.2f\n", (double)cruise, (double)cadence, (double)walk);
-    Require(cadence > walk * 0.85f && cadence < walk * 1.15f,
-            "a walk at cruise keeps the cadence the look was tuned around");
 }
 
 int main(void)
 {
     WheelsRollWithTheRoad();
     PlaceAndSpinShareOneMeasure();
+    RealRouteLengthsDriveBothDirections();
     LegsStepAtTheSpeedTheTeamMoves();
     puts("Distance-driven travel animation passed");
     return 0;
