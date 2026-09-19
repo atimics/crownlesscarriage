@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "grammar_sha256": "9536180def7478b1c5489cf8f5351c55bf60bc30991cca29eed53d3b9fc6bd85",
+  "grammar_sha256": "93d543354bbc4dc99a015279e619ac25f45a2cba58305a9499447a3774dfe5c2",
   "event_count": 139,
   "rule_count": 157,
   "events": [
@@ -412,8 +412,8 @@
       "kind": "GOBLIN_RAID_DEPARTED",
       "value": 50,
       "rules": [
-        "goblin_raid_departed_grounded_0",
-        "goblin_raid_departed_grounded_1"
+        "goblin_raid_departed_grounded_1",
+        "goblin_raid_departed_grounded_0"
       ],
       "status": "field_rules"
     },
