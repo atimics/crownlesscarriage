@@ -2,6 +2,7 @@
 #include "multiplayer/cc_coop_commands.h"
 #include "persistence/cc_save.h"
 #include "persistence/cc_starting_campaign.h"
+#include "sim/cc_road_position.h"
 
 #include <inttypes.h>
 #include <stdarg.h>
@@ -64,7 +65,7 @@ bool CcCoopApply(CcSim *sim, const char *action, CcId target,
     }
     CcCommand command = { .target_id = target, .good = (CcGood)good, .amount = amount };
     if (action != NULL) {
-        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_MINE_RESOLVE_CONTEST; ++i) {
+        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_CHOOSE_ROAD_LEG; ++i) {
             if (strcmp(action, CcCoopActionName((CcCommandKind)i)) == 0) command.kind = (CcCommandKind)i;
         }
     }
@@ -208,7 +209,44 @@ bool CcCoopSnapshot(const CcSim *sim, char *text, size_t capacity)
         Goods(&json, road_site->stock);
         Put(&json, "}");
     } else Put(&json, "null");
-    Put(&json, "},");
+    Put(&json, "},\"road_position\":");
+    if (sim->journey.road_position_active) {
+        Put(&json, "{\"journey\":\"%" PRIu64
+            "\",\"goal\":\"%" PRIu64 "\",\"segment\":\"%" PRIu64
+            "\",\"anchor\":\"%" PRIu64 "\",\"stop\":\"%" PRIu64
+            "\",\"return\":\"%" PRIu64 "\",\"direction\":%d,"
+            "\"coordinate\":%d,\"travelled\":%d,\"remaining\":%d,"
+            "\"leg_length\":%d,\"geometry_length\":%d,"
+            "\"progress_milli\":%d,\"revision\":%u,\"next_legs\":[",
+            sim->journey.road_journey_id, sim->journey.road_goal_id,
+            sim->journey.road_segment_id, sim->journey.road_anchor_id,
+            sim->journey.road_stop_anchor_id,
+            sim->journey.road_return_anchor_id,
+            sim->journey.road_direction,
+            sim->journey.road_coordinate_units,
+            sim->journey.road_distance_travelled_units,
+            sim->journey.road_distance_remaining_units,
+            sim->journey.road_leg_length_units,
+            sim->journey.road_geometry_length_units,
+            sim->journey.road_compatibility_milli,
+            sim->journey.road_revision);
+        CcRoadLegPreview previews[3];
+        int32_t preview_count = CcRoadNextLegPreviews(sim, previews, 3);
+        for (int32_t i = 0; i < preview_count; ++i) {
+            const CcRoadLegPreview *preview = &previews[i];
+            Put(&json, "%s{\"token\":\"%" PRIu64
+                "\",\"segment\":\"%" PRIu64
+                "\",\"destination\":\"%" PRIu64
+                "\",\"kind\":%d,\"direction\":%d,\"distance\":%d,"
+                "\"subticks\":%d}", i ? "," : "",
+                preview->decision_token, preview->segment_id,
+                preview->destination_anchor_id,
+                (int)preview->destination_kind, (int)preview->direction,
+                preview->length_units, preview->travel_subticks);
+        }
+        Put(&json, "]}");
+    } else Put(&json, "null");
+    Put(&json, ",");
     Put(&json, "\"goods\":[");
     for (int32_t i = 0; i < CC_GOOD_COUNT; ++i) {
         if (i) Put(&json, ",");

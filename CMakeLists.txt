@@ -126,6 +126,7 @@ add_library(crownless_sim
     src/sim/cc_active_cast.c
     src/sim/cc_road_council.c
     src/sim/cc_route_rules.c
+    src/sim/cc_road_position.c
     src/sim/cc_journey_departure.c
     src/sim/cc_journey_encounter.c
     src/sim/cc_journey_runtime.c
@@ -138,6 +139,9 @@ add_library(crownless_sim
     src/sim/cc_ponies.c
 )
 target_include_directories(crownless_sim PUBLIC src)
+if(NOT MSVC)
+    target_link_libraries(crownless_sim PUBLIC m)
+endif()
 cc_strict_warnings(crownless_sim)
 
 add_library(crownless_story

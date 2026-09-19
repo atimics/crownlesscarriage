@@ -119,15 +119,11 @@ static void Depart(CcId destination)
 static void Arrive(void)
 {
     for (int32_t step = 0; step < 10000 && sim.journey.active; ++step) {
-        if (sim.journey.phase == CC_JOURNEY_PHASE_RESTING) {
-            CcCommand rest = {
-                .kind = CcSimJourneyStop(&sim) == CC_JOURNEY_STOP_MIDDAY ?
-                    CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP
-            };
-            CC_CHECK(CcSimApply(&sim, &rest, error, sizeof(error)));
-        } else {
-            CC_CHECK(sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
+        if (sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
             CcSimAdvanceRuntimeTicks(&sim, CC_WORLD_TICKS_PER_SECOND);
+        } else {
+            CC_CHECK(CcTestContinueJourneyPause(
+                &sim, error, sizeof(error)));
         }
     }
     CC_CHECK(!sim.journey.active);

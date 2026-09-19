@@ -849,6 +849,32 @@ uint64_t CcSimHash(const CcSim *sim)
         if (sim->schema_version >= 39U) {
             HASH_VALUE(sim->journey.road_site_stop_mask);
         }
+        if (sim->schema_version >= 105U) {
+            HASH_VALUE(sim->journey.road_position_active);
+            HASH_VALUE(sim->journey.road_waiting_choice);
+            HASH_VALUE(sim->journey.road_journey_id);
+            HASH_VALUE(sim->journey.road_goal_id);
+            HASH_VALUE(sim->journey.road_segment_id);
+            HASH_VALUE(sim->journey.road_anchor_id);
+            HASH_VALUE(sim->journey.road_stop_anchor_id);
+            HASH_VALUE(sim->journey.road_return_anchor_id);
+            HASH_VALUE(sim->journey.road_direction);
+            HASH_VALUE(sim->journey.road_coordinate_units);
+            HASH_VALUE(sim->journey.road_distance_travelled_units);
+            HASH_VALUE(sim->journey.road_distance_remaining_units);
+            HASH_VALUE(sim->journey.road_leg_length_units);
+            HASH_VALUE(sim->journey.road_leg_start_coordinate_units);
+            HASH_VALUE(sim->journey.road_leg_end_coordinate_units);
+            HASH_VALUE(sim->journey.road_leg_elapsed_subticks);
+            HASH_VALUE(sim->journey.road_leg_total_subticks);
+            HASH_VALUE(sim->journey.road_geometry_length_units);
+            HASH_VALUE(sim->journey.road_compatibility_milli);
+            HASH_VALUE(sim->journey.road_revision);
+            for (int32_t i = 0; i < 33; ++i) {
+                HASH_VALUE(sim->journey.road_geometry_x_units[i]);
+                HASH_VALUE(sim->journey.road_geometry_z_units[i]);
+            }
+        }
         HASH_VALUE(sim->journey.parent_event_id);
         HASH_VALUE(sim->carriage.mode);
         HASH_VALUE(sim->carriage.location_id);

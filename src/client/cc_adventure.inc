@@ -206,9 +206,18 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
                 --local->interactions.count;
             }
         }
-        if (DungeonAtSettlement(sim, sim->player.location_id) != NULL) {
+        const CcDungeon *local_dungeon = DungeonAtSettlement(
+            sim, sim->player.location_id);
+        if (local_dungeon != NULL) {
+            const CcRoadSite *mine = CcMineSite(sim);
+            CcId mine_route_id = 0U;
+            CcId mine_destination_id = 0U;
+            bool mine_road = mine != NULL && CcRoadSiteJourneyTarget(
+                sim, mine->id, &mine_route_id, &mine_destination_id);
             (void)AdventureTarget(local, sim, CC_INTERACTION_SITE, CC_LOCAL_SITE_DUNGEON,
-                "Mine road", "Drive to the mine", (Vector3){LOCAL_DUNGEON.x, 0, LOCAL_DUNGEON.y},
+                mine_road ? "Low Silver Pit road" : local_dungeon->name,
+                mine_road ? "Drive to Low Silver Pit" : "Travel to the dungeon",
+                (Vector3){LOCAL_DUNGEON.x, 0, LOCAL_DUNGEON.y},
                 2.2f, 3.1f, 1.6f, LOCAL_DUNGEON, 1.3f);
         }
         if (abandoned) {
@@ -337,7 +346,8 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
 }
 
 /* Called before legacy movement and command handling. A handled click is consumed. */
-static bool HandleAdventureScene(CcSim *sim, LocalState *local,
+static bool HandleAdventureScene(CcJournal *journal, CcSim *sim,
+    LocalState *local,
     ClientView *view, ClientView *return_view, int32_t *selected_situation,
     const CcInteractionTarget *card_target, float dt,
     char *message, size_t capacity)
@@ -384,7 +394,32 @@ static bool HandleAdventureScene(CcSim *sim, LocalState *local,
     CcInteractionKey pending = local->interaction.pending;
     const CcInteractionTarget *target = CcInteractionFind(&local->interactions, pending);
     if (CcInteractionAdvance(&local->interaction, &local->interactions, position.x, position.y, dt)) {
-        if (target != NULL) AdventureActivate(sim, local, target, view, return_view, selected_situation);
+        const CcRoadSite *mine = target != NULL &&
+                target->key.kind == CC_INTERACTION_SITE &&
+                target->key.object == CC_LOCAL_SITE_DUNGEON ?
+            CcMineSite(sim) : NULL;
+        CcId route_id = 0U;
+        CcId destination_id = 0U;
+        bool mine_road = journal != NULL && mine != NULL &&
+            CcRoadSiteJourneyTarget(
+                sim, mine->id, &route_id, &destination_id);
+        if (mine_road) {
+            CcCommand travel = {
+                .kind = CC_COMMAND_TRAVEL,
+                .target_id = destination_id
+            };
+            if (ApplyCommand(
+                    journal, sim, travel, message, capacity)) {
+                BeginRoadTravelState(sim, local);
+                (void)snprintf(
+                    message, capacity,
+                    "The carriage takes the Alderwatch road toward the Low Silver Pit branch.");
+            }
+        } else if (target != NULL) {
+            AdventureActivate(
+                sim, local, target, view, return_view,
+                selected_situation);
+        }
         return true;
     }
     if (!local->interaction.approaching) {

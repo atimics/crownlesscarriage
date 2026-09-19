@@ -14,6 +14,7 @@
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
 #include "sim/cc_production.h"
+#include "sim/cc_road_position.h"
 #include "sim/cc_mine.h"
 #include "story/cc_story.h"
 #include "story/cc_core_conversation.h"
@@ -36,6 +37,13 @@
 
 static CcCoreConversation core_conversation;
 static CcId core_conversation_speaker;
+
+#if defined(PLATFORM_WEB)
+EMSCRIPTEN_KEEPALIVE int CrownlessRoadGeometrySelfTest(void)
+{
+    return CcRoadGeometryKnownFixtures() ? 1 : 0;
+}
+#endif
 
 #define BACKGROUND CC_STYLE_BACKGROUND
 #define PANEL CC_STYLE_PANEL
@@ -154,6 +162,7 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_CLEAR_ROAD_SITE,
     CONTEXT_ACTION_TRANSFER_ROAD_SITE,
     CONTEXT_ACTION_REPAIR_ROAD_SITE,
+    CONTEXT_ACTION_CHOOSE_ROAD_LEG,
     CONTEXT_ACTION_JUMP,
     CONTEXT_ACTION_RAISE_ALARM,
     CONTEXT_ACTION_SELECT_TARGET,
@@ -2223,7 +2232,8 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
     if (!LocalSessionEligible(local) ||
         (local->journey_travel_active && (!sim->journey.active ||
          (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING &&
-          sim->journey.phase != CC_JOURNEY_PHASE_RESTING)))) {
+          sim->journey.phase != CC_JOURNEY_PHASE_RESTING &&
+          sim->journey.phase != CC_JOURNEY_PHASE_ROAD_CHOICE)))) {
         if (error != NULL && error_capacity > 0U) {
             (void)snprintf(error, error_capacity,
                            "Finish the current movement before saving.");
@@ -2518,7 +2528,8 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
     if (session.scene == CC_CLIENT_SESSION_ROAD_TRAVEL) {
         if (!sim->journey.active || session.route_id != sim->journey.route_id ||
             (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING &&
-             sim->journey.phase != CC_JOURNEY_PHASE_RESTING)) return false;
+             sim->journey.phase != CC_JOURNEY_PHASE_RESTING &&
+             sim->journey.phase != CC_JOURNEY_PHASE_ROAD_CHOICE)) return false;
         BeginRoadTravelState(sim, local);
         RestoreRoadEncounter(local, &session.road_encounter);
         RestoreAthleticProfile(&local->agent.athletics, &session.athletics);
@@ -4577,6 +4588,39 @@ static ContextActionSet BuildContextActions(
     }
 
     if (local->journey_travel_active) {
+        if (sim->journey.road_position_active) {
+            CcRoadLegPreview previews[3];
+            int32_t preview_count = CcRoadNextLegPreviews(
+                sim, previews, 3);
+            for (int32_t i = 0; i < preview_count; ++i) {
+                const CcSettlement *town = CcSimSettlement(
+                    sim, previews[i].destination_anchor_id);
+                const CcRoadSite *site = CcSimRoadSite(
+                    sim, previews[i].destination_anchor_id);
+                const char *name = town != NULL ? town->name :
+                    site != NULL ? site->name :
+                    previews[i].destination_anchor_id ==
+                        CC_PILOT_ROAD_JUNCTION_ID ? "Stag's Mill junction" :
+                    previews[i].destination_anchor_id ==
+                        CC_PILOT_ROAD_CHECKPOINT_ID ? "reserved checkpoint" :
+                        "road anchor";
+                AddDetailedContextAction(
+                    &set, CONTEXT_ACTION_CHOOSE_ROAD_LEG,
+                    sim->journey.road_waiting_choice ?
+                        TextFormat("Drive to %s", name) :
+                        TextFormat("Turn back to %s", name),
+                    TextFormat("%d", set.count + 1),
+                    TextFormat("%d UNITS / ABOUT %d MIN",
+                        previews[i].length_units,
+                        previews[i].travel_subticks /
+                            CC_WORLD_MINUTE_SUBTICKS),
+                    true, false);
+                set.items[set.count - 1].target = (CcInteractionKey){
+                    sim->journey.road_anchor_id,
+                    previews[i].decision_token, CC_INTERACTION_ACTION};
+            }
+            if (sim->journey.road_waiting_choice) return set;
+        }
         /* Travel is the company moving; stopping hands the road back to the
            same walk the town uses, so the countryside is not a separate game. */
         if (CcSimJourneyCanCampOnRoad(sim)) {
@@ -4738,9 +4782,13 @@ static ContextActionSet BuildContextActions(
         }
         if (GridDistance(position, entrance) < 2.25f) {
             if (local->site_kind == CC_LOCAL_SITE_DUNGEON) {
+                const CcDungeon *site_dungeon = DungeonAtSettlement(
+                    sim, sim->player.location_id);
                 AddDetailedContextAction(
                     &set, CONTEXT_ACTION_EXPEDITION,
-                    "Enter the Underroad", "E",
+                    TextFormat("Enter %s",
+                               site_dungeon != NULL ? site_dungeon->name :
+                                   "the Underroad"), "E",
                     "NEEDS 1 BREAD OR MEAT ABOARD",
                     CcNutritionAvailable(sim->player.cargo,
                                          CC_NUTRITION_TRAVEL) >=
@@ -6932,6 +6980,10 @@ static int RunStorybookTravelRegression(void)
             (void)fprintf(stderr, "Storybook setup: %s\n", error);
             return 1;
         }
+        /* This regression covers the older watch and encounter boundaries.
+           Physical road boundaries have their own runtime regression. */
+        sim.journey.road_position_active = false;
+        sim.journey.road_waiting_choice = false;
         sim.journey.situation_id = 0U;
         sim.journey.encounter_subticks = 0;
         sim.journey.encounter_triggered = true;
@@ -7990,10 +8042,8 @@ static int RunWorldSessionStartupRegression(void)
             route_placement, sim.player.location_id,
             0.0f,
             &shared_gate_position, &shared_gate_heading) ||
-        !SessionTestFloatMatches(
-            shared_gate_position.x, branch_place->gate.x) ||
-        !SessionTestFloatMatches(
-            shared_gate_position.z, branch_place->gate.z) ||
+        fabsf(shared_gate_position.x - branch_place->gate.x) > 0.0011f ||
+        fabsf(shared_gate_position.z - branch_place->gate.z) > 0.0011f ||
         !WriteVersionThreeWorldSession(
             session_path, &sim, shared_gate_position,
             shared_gate_heading)) {
@@ -8020,10 +8070,10 @@ static int RunWorldSessionStartupRegression(void)
             shared_gate_restore.world_carriage.route_amount,
             shared_gate_route_amount) ||
         shared_gate_selected != fallback_route_index ||
-        !SessionTestFloatMatches(
-            shared_gate_restore.agent.position.x, branch_place->gate.x) ||
-        !SessionTestFloatMatches(
-            shared_gate_restore.agent.position.z, branch_place->gate.z)) {
+        fabsf(shared_gate_restore.agent.position.x -
+              branch_place->gate.x) > 0.0011f ||
+        fabsf(shared_gate_restore.agent.position.z -
+              branch_place->gate.z) > 0.0011f) {
         (void)fprintf(
             stderr,
             "Version 3 shared gate: restored=%d route=%llu expected=%llu "
@@ -8050,10 +8100,10 @@ static int RunWorldSessionStartupRegression(void)
             route_placement, sim.player.location_id,
             junction_journey_amount,
             &migrated_gate_position, &migrated_gate_heading) ||
-        !SessionTestFloatMatches(
-            migrated_gate_position.x, branch_place->junction.x) ||
-        !SessionTestFloatMatches(
-            migrated_gate_position.z, branch_place->junction.z) ||
+        fabsf(migrated_gate_position.x -
+              branch_place->junction.x) > 0.0011f ||
+        fabsf(migrated_gate_position.z -
+              branch_place->junction.z) > 0.0011f ||
         !WriteVersionThreeWorldSession(
             session_path, &sim, legacy_gate_position,
             legacy_gate_heading)) {
@@ -8807,6 +8857,20 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     ContextActionKind context_action = pressed_action.kind;
+    if (context_action == CONTEXT_ACTION_NONE && *view == VIEW_LOCAL &&
+        local->journey_travel_active &&
+        sim->journey.road_position_active) {
+        for (int32_t i = 0; i < available_cards.count && i < 8; ++i) {
+            if (available_cards.items[i].enabled &&
+                available_cards.items[i].kind ==
+                    CONTEXT_ACTION_CHOOSE_ROAD_LEG &&
+                ClientKeyPressed(KEY_ONE + i)) {
+                pressed_action = available_cards.items[i];
+                context_action = pressed_action.kind;
+                break;
+            }
+        }
+    }
     if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) && context_action == CONTEXT_ACTION_NONE &&
         PointerOverContextAction(sim, local, *view, *selected, *selected_situation, ClientPointerPosition())) return;
     CommandActionKind command_action = local->adventure_ui ? COMMAND_ACTION_NONE : PressedCommandAction(local, *view);
@@ -8856,6 +8920,14 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             local->travel_fast_forward = false;
             local->travel_attention = true;
         }
+        return;
+    }
+    if (context_action == CONTEXT_ACTION_CHOOSE_ROAD_LEG) {
+        CcCommand choice = {
+            .kind = CC_COMMAND_CHOOSE_ROAD_LEG,
+            .target_id = pressed_action.target.object
+        };
+        (void)ApplyCommand(*journal, sim, choice, message, message_capacity);
         return;
     }
     if (HandleRoadCarriageInteraction(sim, local, view, context_action,
@@ -9033,7 +9105,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
     if (command_action == COMMAND_ACTION_NONE &&
         (context_action == CONTEXT_ACTION_NONE || context_action == CONTEXT_ACTION_WORLD_TARGET) &&
-        HandleAdventureScene(sim, local, view, return_view, selected_situation,
+        HandleAdventureScene(*journal, sim, local, view, return_view,
+            selected_situation,
             context_action == CONTEXT_ACTION_WORLD_TARGET ?
                 CcInteractionFind(&local->interactions, pressed_action.target) : NULL,
             delta_time, message, message_capacity)) {
@@ -10021,14 +10094,27 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                  (interact && GridDistance(position, LOCAL_DUNGEON) <
                                   1.35f))) {
                 const CcRoadSite *mine=CcMineSite(sim);
-                const CcRoute *road=mine != NULL ? CcSimRoute(sim,mine->route_id) : NULL;
-                if(road != NULL) {
-                    *selected=(int32_t)(road-sim->routes);
-                    SetOpenWorldCarriageAtRoadGate(sim,local,road->id);
-                    *view=VIEW_ROADS;
+                CcId route_id = 0U;
+                CcId destination_id = 0U;
+                if (mine != NULL && CcRoadSiteJourneyTarget(
+                        sim, mine->id, &route_id, &destination_id)) {
+                    const CcRoute *road = CcSimRoute(sim, route_id);
+                    CcCommand travel = {
+                        .kind = CC_COMMAND_TRAVEL,
+                        .target_id = destination_id
+                    };
+                    if (road != NULL && ApplyCommand(
+                            *journal, sim, travel, message,
+                            message_capacity)) {
+                        *selected = (int32_t)(road - sim->routes);
+                        SetOpenWorldCarriageAtRoadGate(sim, local, route_id);
+                        BeginRoadTravelState(sim, local);
+                        *view = VIEW_LOCAL;
+                        (void)snprintf(
+                            message, message_capacity,
+                            "The carriage takes the Alderwatch road toward the Low Silver Pit branch.");
+                    }
                 }
-                (void)snprintf(message, message_capacity,
-                               "Follow the Alderwatch road to the Low Silver Pit branch.");
                 return;
             }
             if (local->site_kind == CC_LOCAL_SITE_NONE &&

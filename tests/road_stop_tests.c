@@ -151,8 +151,17 @@ static void CheckPersistence(void)
         CC_CHECK(restored.journey.road_site_stop_mask == 0U);
         CC_CHECK(CcSimJourneyRoadSiteStop(&restored) != NULL);
         if (version == 38U) {
-            restored.schema_version = version;
-            CC_CHECK(CcSimHash(&restored) == legacy_hash);
+            /* Schema 105 turns an exact legacy stop into an explicit pause.
+               Compare the older hashed fields in their schema-38 form. */
+            CcSim legacy_projection = restored;
+            legacy_projection.journey.phase = sim.journey.phase;
+            legacy_projection.clock.game_minutes_per_second =
+                sim.clock.game_minutes_per_second;
+            legacy_projection.carriage.mode = sim.carriage.mode;
+            legacy_projection.carriage.speed_milli_per_second =
+                sim.carriage.speed_milli_per_second;
+            legacy_projection.schema_version = version;
+            CC_CHECK(CcSimHash(&legacy_projection) == legacy_hash);
         }
         (void)remove(path);
     }
@@ -253,9 +262,15 @@ static void CheckPre62Save(void)
     CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
-    restored.schema_version = 62U;
-    CC_CHECK(CcSimHash(&restored) == hash);
-    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSim legacy_projection = restored;
+    legacy_projection.journey.phase = sim.journey.phase;
+    legacy_projection.clock.game_minutes_per_second =
+        sim.clock.game_minutes_per_second;
+    legacy_projection.carriage.mode = sim.carriage.mode;
+    legacy_projection.carriage.speed_milli_per_second =
+        sim.carriage.speed_milli_per_second;
+    legacy_projection.schema_version = 62U;
+    CC_CHECK(CcSimHash(&legacy_projection) == hash);
     CC_CHECK(CcSimApply(&restored, &clear, error, sizeof(error)));
     CC_CHECK(restored.road_sites[0].accessible);
     CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
@@ -314,9 +329,15 @@ static void CheckStoreTransfers(void)
     CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
-    restored.schema_version = 63;
-    CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
-    restored.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcSim legacy_projection = restored;
+    legacy_projection.journey.phase = sim.journey.phase;
+    legacy_projection.clock.game_minutes_per_second =
+        sim.clock.game_minutes_per_second;
+    legacy_projection.carriage.mode = sim.carriage.mode;
+    legacy_projection.carriage.speed_milli_per_second =
+        sim.carriage.speed_milli_per_second;
+    legacy_projection.schema_version = 63;
+    CC_CHECK(CcSimHash(&sim) == CcSimHash(&legacy_projection));
     for (int32_t slot = 0; slot < restored.road_site_count; ++slot)
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
             CC_CHECK(restored.road_sites[slot].stock[good] == 0);
@@ -465,6 +486,20 @@ static void CheckRepairs(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     sim = restored;
     CC_CHECK(sim.schema_version == CC_SIM_SCHEMA_VERSION && site->condition == 97);
+    if (sim.journey.road_position_active) {
+        CcRoadLegPreview previews[3];
+        int32_t preview_count = CcRoadNextLegPreviews(&sim, previews, 3);
+        const CcRoadLegPreview *mill_leg = NULL;
+        for (int32_t i = 0; i < preview_count; ++i) {
+            if (previews[i].destination_anchor_id == site->id)
+                mill_leg = &previews[i];
+        }
+        CC_CHECK(mill_leg != NULL);
+        CC_CHECK(CcRoadChooseNextLeg(
+            &sim, mill_leg->decision_token, error, sizeof(error)));
+        CC_CHECK(CcRoadAdvanceLeg(&sim, INT32_MAX));
+        CC_CHECK(CcSimJourneyRoadSiteStop(&sim) == site);
+    }
     CcCommand repair = {.kind = CC_COMMAND_REPAIR_ROAD_SITE, .target_id = site->id};
     CC_CHECK(CcSimApply(&sim, &repair, error, sizeof(error)) && site->condition == 100);
     (void)remove(path);

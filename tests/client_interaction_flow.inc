@@ -34,14 +34,16 @@ static int RunRoadJourneySaveRegression(void)
             BeginRoadTravelState(&sim, &local);
         }
         if (scenario == 4) {
-            sim.journey.total_subticks = 2 * CC_WORLD_WATCH_SUBTICKS;
-            sim.journey.elapsed_subticks = CC_WORLD_WATCH_SUBTICKS;
-            sim.journey.phase = CC_JOURNEY_PHASE_RESTING;
-            sim.clock.game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND;
-            sim.carriage.mode = CC_CARRIAGE_STOPPED;
-            sim.carriage.speed_milli_per_second = 0;
-            sim.carriage.progress_milli = (int32_t)(
-                (int64_t)sim.journey.elapsed_subticks * 1000 / sim.journey.total_subticks);
+            for (int step = 0; step < 20000 &&
+                 sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING; ++step) {
+                ROAD_SAVE_CHECK(CcJournalAdvanceRuntimeTicks(
+                    journal, &sim, 1, error, sizeof(error)),
+                    "Advance to a saved road stop.");
+            }
+            ROAD_SAVE_CHECK(sim.journey.active &&
+                (sim.journey.phase == CC_JOURNEY_PHASE_RESTING ||
+                 sim.journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE),
+                "Reach a real saved road stop.");
         }
         local.agent.combat.health = 77.0f;
         local.agent.athletics.travel_training_distance = 5.5f;
@@ -327,10 +329,293 @@ static int RunConversationFocusRegression(void)
     return 0;
 }
 
+static int RunAdventureMineRoadRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    const char *path = "adventure-mine-road.ccsave";
+    char error[256] = "";
+    char message[256] = "";
+    (void)remove(path);
+    CcSimInit(&sim, UINT32_C(0x3235a7ed));
+    const CcRoadSite *mine = CcMineSite(&sim);
+    if (mine == NULL)
+        return ClientRegressionFailure("Low Silver Pit must have an authored road site.");
+    const CcRoute *route = CcSimRoute(&sim, mine->route_id);
+    if (route == NULL)
+        return ClientRegressionFailure("Low Silver Pit must have an authored route.");
+    CcId silverwick = sim.dungeons[0].settlement_id;
+    if (route->from_id != silverwick && route->to_id != silverwick)
+        return ClientRegressionFailure("Silverwick must be an endpoint of the mine road.");
+    sim.player.location_id = silverwick;
+    sim.carriage.location_id = silverwick;
+    (void)snprintf(sim.dungeons[0].name,
+                   sizeof(sim.dungeons[0].name),
+                   "%s", "The Saintless Vault");
+    CcLocalBindPlace(&sim);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    local.course.automatic_alarm = false;
+    BuildAdventureTargets(
+        &sim, &local, (RenderTexture2D){0}, (Rectangle){0});
+    CcInteractionTarget *mine_card = NULL;
+    for (int32_t i = 0; i < local.interactions.count; ++i) {
+        CcInteractionTarget *candidate = &local.interactions.targets[i];
+        if (candidate->key.kind == CC_INTERACTION_SITE &&
+            candidate->key.object == CC_LOCAL_SITE_DUNGEON) {
+            mine_card = candidate;
+            break;
+        }
+    }
+    if (mine_card == NULL ||
+        strcmp(mine_card->name, "Low Silver Pit road") != 0)
+        return ClientRegressionFailure("The shipped mine card must name the Low Silver Pit road.");
+    CcSim other = sim;
+    other.dungeons[0].settlement_id = other.settlements[4].id;
+    other.player.location_id = other.settlements[4].id;
+    other.carriage.location_id = other.player.location_id;
+    CcLocalBindPlace(&other);
+    LocalState other_local;
+    ResetLocalState(&other_local);
+    other_local.adventure_ui = true;
+    BuildAdventureTargets(
+        &other, &other_local, (RenderTexture2D){0}, (Rectangle){0});
+    const CcInteractionTarget *other_card = NULL;
+    for (int32_t i = 0; i < other_local.interactions.count; ++i) {
+        const CcInteractionTarget *candidate =
+            &other_local.interactions.targets[i];
+        if (candidate->key.kind == CC_INTERACTION_SITE &&
+            candidate->key.object == CC_LOCAL_SITE_DUNGEON) {
+            other_card = candidate;
+            break;
+        }
+    }
+    if (other_card == NULL ||
+        strcmp(other_card->name, "The Saintless Vault") != 0)
+        return ClientRegressionFailure("A dungeon away from the mine road must keep its authored name.");
+    CcLocalBindPlace(&sim);
+    RepositionHero(
+        &local, (Vector2){mine_card->approach_x,
+                          mine_card->approach_z}, false);
+    CcJournal *journal = CcJournalStart(
+        path, &sim, error, sizeof(error));
+    if (journal == NULL) return ClientRegressionFailure(error);
+    ClientView view = VIEW_LOCAL;
+    ClientView return_view = VIEW_LOCAL;
+    int32_t selected_situation = 0;
+    for (int32_t frame = 0; frame < 8 && !sim.journey.active; ++frame) {
+        (void)HandleAdventureScene(
+            journal, &sim, &local, &view, &return_view,
+            &selected_situation, frame == 0 ? mine_card : NULL,
+            1.0f / 60.0f, message, sizeof(message));
+    }
+    bool passed = sim.journey.active &&
+        sim.journey.route_id == mine->route_id &&
+        local.site_kind == CC_LOCAL_SITE_NONE &&
+        !sim.dungeon_expedition.active &&
+        local.journey_travel_active;
+    CcJournalAbandon(&journal);
+    (void)remove(path);
+    if (!passed)
+        return ClientRegressionFailure("The adventure mine card must begin the real Silverwick-Alderwatch road journey.");
+    return 0;
+}
+
+static bool DispatchDisplayedRoadChoice(
+    CcJournal **journal, CcSim *sim, LocalState *local,
+    ClientView *view, ClientView *return_view, int32_t *selected,
+    int32_t *selected_situation, CcId destination_anchor,
+    bool keyboard, const char *path, char *message, size_t message_capacity)
+{
+    CcRoadLegPreview previews[3];
+    int32_t preview_count = CcRoadNextLegPreviews(sim, previews, 3);
+    const CcRoadLegPreview *preview = NULL;
+    for (int32_t i = 0; i < preview_count; ++i) {
+        if (previews[i].destination_anchor_id == destination_anchor)
+            preview = &previews[i];
+    }
+    if (preview == NULL) return false;
+    ContextActionSet actions = BuildContextActions(
+        sim, local, *view, *selected, *selected_situation);
+    int32_t action_index = -1;
+    for (int32_t i = 0; i < actions.count; ++i) {
+        if (actions.items[i].kind == CONTEXT_ACTION_CHOOSE_ROAD_LEG &&
+            actions.items[i].target.place == sim->journey.road_anchor_id &&
+            actions.items[i].target.object == preview->decision_token) {
+            action_index = i;
+            break;
+        }
+    }
+    if (action_index < 0) return false;
+    char expected_hint[8];
+    (void)snprintf(expected_hint, sizeof(expected_hint), "%d", action_index + 1);
+    if (strcmp(actions.items[action_index].key_hint, expected_hint) != 0)
+        return false;
+    int32_t expected_coordinate = sim->journey.road_coordinate_units;
+    CcPilotRoadTopology pilot;
+    if (!CcPilotRoadTopologyBuildWithLength(
+            sim, sim->journey.road_geometry_length_units, &pilot)) return false;
+    if (sim->journey.road_waiting_choice &&
+        preview->segment_id == pilot.mill_segment_id) {
+        expected_coordinate = preview->direction == CC_ROAD_DIRECTION_FORWARD ?
+            0 : pilot.mill_spur_length_units;
+    }
+    if (keyboard) {
+        queued_key_press[KEY_ONE + action_index] = true;
+    } else {
+        local->card_page = action_index / ContextActionPageSize(&actions);
+        int32_t first = ContextCardFirst(local, &actions);
+        int32_t shown = ContextCardCount(&actions, first);
+        Rectangle bounds = ContextActionBounds(
+            action_index - first, shown, actions.combat);
+        client_test_pointer_active = true;
+        client_test_pointer = (Vector2){
+            bounds.x + bounds.width * 0.5f,
+            bounds.y + bounds.height * 0.5f
+        };
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+    }
+    char feedback[128] = "";
+    float feedback_age = 0.0f;
+    HandleInput(journal, sim, selected, selected_situation, view,
+        return_view, local, (RenderTexture2D){0}, (Rectangle){0},
+        1.0f / 60.0f, path, "", message, message_capacity,
+        feedback, sizeof(feedback), &feedback_age);
+    client_test_pointer_active = false;
+    ClientInputClearPressed();
+    return sim->journey.road_revision == preview->journey_revision + 1U &&
+        sim->journey.road_segment_id == preview->segment_id &&
+        sim->journey.road_direction == (int32_t)preview->direction &&
+        sim->journey.road_stop_anchor_id == destination_anchor &&
+        sim->journey.road_coordinate_units == expected_coordinate &&
+        sim->journey.road_leg_start_coordinate_units == expected_coordinate;
+}
+
+static int RunDisplayedRoadChoiceRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    const char *path = "displayed-road-choice.ccsave";
+    char error[256] = "", message[256] = "";
+    (void)remove(path);
+    CcSimInit(&sim, UINT32_C(0x3235a7ed));
+    CcPilotRoadTopology pilot;
+    if (!CcPilotRoadTopologyBuild(&sim, &pilot))
+        return ClientRegressionFailure("Build the displayed pilot road fixture.");
+    sim.player.location_id = pilot.origin_id;
+    sim.carriage.location_id = pilot.origin_id;
+    CcCommand travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = pilot.destination_id
+    };
+    if (!CcSimApply(&sim, &travel, error, sizeof(error)) ||
+        !sim.journey.road_position_active)
+        return ClientRegressionFailure("Start the displayed pilot road journey.");
+    sim.journey.encounter_triggered = true;
+    for (int32_t step = 0;
+         step < 16 && sim.journey.road_anchor_id != pilot.junction_id;
+         ++step) {
+        (void)CcRoadAdvanceLeg(&sim, INT32_MAX);
+        if (sim.journey.road_anchor_id == pilot.junction_id) break;
+        CcRoadLegPreview previews[3];
+        int32_t count = CcRoadNextLegPreviews(&sim, previews, 3);
+        const CcRoadLegPreview *forward = NULL;
+        for (int32_t i = 0; i < count; ++i) {
+            if (previews[i].direction == CC_ROAD_DIRECTION_FORWARD &&
+                previews[i].segment_id != pilot.mill_segment_id)
+                forward = &previews[i];
+        }
+        if (forward == NULL || !CcRoadChooseNextLeg(
+                &sim, forward->decision_token, error, sizeof(error)))
+            return ClientRegressionFailure("Reach the displayed Stag's Mill junction.");
+    }
+    if (sim.journey.road_anchor_id != pilot.junction_id ||
+        !sim.journey.road_waiting_choice)
+        return ClientRegressionFailure("Stop at the displayed Stag's Mill junction.");
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    local.journey_travel_active = true;
+    local.carriage_stopped = true;
+    ClientView view = VIEW_LOCAL;
+    ClientView return_view = VIEW_LOCAL;
+    int32_t selected = 0;
+    int32_t selected_situation = 0;
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+#define DISPLAYED_ROAD_CHECK(condition, reason) do { if (!(condition)) { \
+    CcJournalAbandon(&journal); (void)remove(path); \
+    return ClientRegressionFailure(reason); } } while (0)
+    DISPLAYED_ROAD_CHECK(journal != NULL, "Start the displayed road choice journal.");
+    DISPLAYED_ROAD_CHECK(DispatchDisplayedRoadChoice(
+        &journal, &sim, &local, &view, &return_view, &selected,
+        &selected_situation, pilot.mill_site_id, false, path,
+        message, sizeof(message)),
+        "A pointer choice must dispatch the exact Stag's Mill leg.");
+    DISPLAYED_ROAD_CHECK(sim.journey.road_coordinate_units == 0,
+        "The mill spur must begin at its saved junction coordinate.");
+    int32_t half_time = sim.journey.road_leg_total_subticks / 2;
+    DISPLAYED_ROAD_CHECK(!CcRoadAdvanceLeg(&sim, half_time),
+        "The half-spur fixture must remain between its anchors.");
+    int32_t half_coordinate = sim.journey.road_coordinate_units;
+    DISPLAYED_ROAD_CHECK(half_coordinate > 0 &&
+        half_coordinate < pilot.mill_spur_length_units &&
+        CcJournalCheckpoint(journal, &sim, error, sizeof(error)),
+        "Save the half-spur coordinate before reversing.");
+    DISPLAYED_ROAD_CHECK(DispatchDisplayedRoadChoice(
+        &journal, &sim, &local, &view, &return_view, &selected,
+        &selected_situation, pilot.junction_id, true, path,
+        message, sizeof(message)),
+        "Keyboard choice one must reverse from the exact half-spur coordinate.");
+    DISPLAYED_ROAD_CHECK(sim.journey.road_coordinate_units == half_coordinate &&
+        sim.journey.road_leg_length_units == half_coordinate,
+        "Half-spur reversal must keep its saved coordinate and return cost.");
+    DISPLAYED_ROAD_CHECK(CcRoadAdvanceLeg(&sim, INT32_MAX) &&
+        sim.journey.road_anchor_id == pilot.junction_id &&
+        sim.journey.road_coordinate_units == pilot.origin_to_junction_units &&
+        CcJournalCheckpoint(journal, &sim, error, sizeof(error)),
+        "The reversed half-spur must return to its main-road anchor.");
+    DISPLAYED_ROAD_CHECK(DispatchDisplayedRoadChoice(
+        &journal, &sim, &local, &view, &return_view, &selected,
+        &selected_situation, pilot.mill_site_id, true, path,
+        message, sizeof(message)),
+        "A keyboard choice must dispatch the full Stag's Mill leg.");
+    DISPLAYED_ROAD_CHECK(CcRoadAdvanceLeg(&sim, INT32_MAX) &&
+        sim.journey.road_anchor_id == pilot.mill_site_id &&
+        CcJournalCheckpoint(journal, &sim, error, sizeof(error)),
+        "The keyboard mill leg must arrive at Stag's Mill.");
+    DISPLAYED_ROAD_CHECK(DispatchDisplayedRoadChoice(
+        &journal, &sim, &local, &view, &return_view, &selected,
+        &selected_situation, pilot.junction_id, false, path,
+        message, sizeof(message)),
+        "A pointer choice must dispatch the mill return leg.");
+    DISPLAYED_ROAD_CHECK(CcRoadAdvanceLeg(&sim, INT32_MAX) &&
+        sim.journey.road_anchor_id == pilot.junction_id &&
+        sim.journey.road_coordinate_units == pilot.origin_to_junction_units &&
+        CcJournalCheckpoint(journal, &sim, error, sizeof(error)),
+        "The mill return must keep the authored main-road anchor.");
+    DISPLAYED_ROAD_CHECK(DispatchDisplayedRoadChoice(
+        &journal, &sim, &local, &view, &return_view, &selected,
+        &selected_situation, pilot.destination_id, true, path,
+        message, sizeof(message)),
+        "A keyboard choice must dispatch the goal leg.");
+    DISPLAYED_ROAD_CHECK(CcRoadAdvanceLeg(&sim, INT32_MAX) &&
+        sim.journey.road_anchor_id == pilot.destination_id &&
+        sim.journey.road_coordinate_units == pilot.main_length_units,
+        "The displayed goal leg must reach its saved physical coordinate.");
+    DISPLAYED_ROAD_CHECK(CcJournalClose(
+        &journal, &sim, error, sizeof(error)), error);
+    (void)remove(path);
+#undef DISPLAYED_ROAD_CHECK
+    return 0;
+}
+
 static int RunAdventureInputRegression(void)
 {
+    int mine_road_result = RunAdventureMineRoadRegression();
+    if (mine_road_result != 0) return mine_road_result;
     int road_result = RunPresentedRoadRegression();
     if (road_result != 0) return road_result;
+    int displayed_road_result = RunDisplayedRoadChoiceRegression();
+    if (displayed_road_result != 0) return displayed_road_result;
     int focus_result = RunConversationFocusRegression();
     if (focus_result != 0) return focus_result;
     int handoff_result = RunDeliveryHandoffRegression();
@@ -714,10 +999,10 @@ static int RunAdventureTownRoutesRegression(void)
         int32_t selected_situation = 0;
         char message[256] = "";
         queued_key_press[KEY_F] = true;
-        (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
+        (void)HandleAdventureScene(NULL, &sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
         ClientInputClearPressed();
         for (int frame = 0; frame < 3000 && !local.market_interior && local.interaction.approaching; ++frame) {
-            (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
+            (void)HandleAdventureScene(NULL, &sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
         }
         if (!local.market_interior) {
             fprintf(stderr, "town type %d at %.2f %.2f: %s / %s\n", type, local.agent.position.x, local.agent.position.z, message, local.interaction.feedback);
@@ -730,10 +1015,10 @@ static int RunAdventureTownRoutesRegression(void)
         counter->visible = true;
         local.interaction.focus = counter->key;
         queued_key_press[KEY_F] = true;
-        (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
+        (void)HandleAdventureScene(NULL, &sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
         ClientInputClearPressed();
         for (int frame = 0; frame < 1200 && view == VIEW_LOCAL && local.interaction.approaching; ++frame)
-            (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
+            (void)HandleAdventureScene(NULL, &sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
         if (view != VIEW_TRADE) return ClientRegressionFailure("Each keeper must be reachable from the shop entrance.");
     }
     puts("six town door and counter routes passed");

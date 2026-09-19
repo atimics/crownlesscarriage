@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "sim/cc_road_position.h"
+
 
 #define CC_CHECK(expression)                                                   \
     do {                                                                       \
@@ -13,5 +15,40 @@
             exit(EXIT_FAILURE);                                                \
         }                                                                      \
     } while (0)
+
+static inline bool CcTestContinueJourneyPause(
+    CcSim *sim, char *error, size_t error_capacity)
+{
+    if (sim == NULL) return false;
+    if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+        CcCommand resume = {
+            .kind = CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
+                CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP
+        };
+        return CcSimApply(sim, &resume, error, error_capacity);
+    }
+    if (sim->journey.phase != CC_JOURNEY_PHASE_ROAD_CHOICE) return false;
+    const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+    if (site != NULL) {
+        CcCommand pass = {
+            .kind = CC_COMMAND_PASS_ROAD_SITE,
+            .target_id = site->id
+        };
+        return CcSimApply(sim, &pass, error, error_capacity);
+    }
+    CcRoadLegPreview previews[3];
+    int32_t count = CcRoadNextLegPreviews(sim, previews, 3);
+    for (int32_t i = 0; i < count; ++i) {
+        if (previews[i].direction == sim->journey.road_direction &&
+            previews[i].segment_id != CC_PILOT_ROAD_MILL_SEGMENT_ID) {
+            CcCommand choose = {
+                .kind = CC_COMMAND_CHOOSE_ROAD_LEG,
+                .target_id = previews[i].decision_token
+            };
+            return CcSimApply(sim, &choose, error, error_capacity);
+        }
+    }
+    return false;
+}
 
 #endif

@@ -47,13 +47,40 @@ static void ExecuteNumber(CcMetagame *metagame, const char *verb,
 static void ResolveRoadRhythm(CcMetagame *metagame,
                               char *output, size_t capacity)
 {
-    while (metagame->sim.journey.active &&
-           (metagame->sim.journey.phase == CC_JOURNEY_PHASE_RESTING ||
-            CcSimJourneyRoadSiteStop(&metagame->sim) != NULL)) {
-        const char *command = CcSimJourneyRoadSiteStop(&metagame->sim) != NULL ? "road pass" :
-            CcSimJourneyStop(&metagame->sim) == CC_JOURNEY_STOP_MIDDAY ?
+    for (int32_t step = 0; step < 200 && metagame->sim.journey.active &&
+         metagame->sim.journey.phase != CC_JOURNEY_PHASE_BLOCKED; ++step) {
+        const char *command = NULL;
+        char choice[32];
+        if (CcSimJourneyRoadSiteStop(&metagame->sim) != NULL) {
+            command = "road pass";
+        } else if (metagame->sim.journey.phase ==
+                   CC_JOURNEY_PHASE_TRAVELLING) {
+            command = "road continue";
+        } else if (metagame->sim.journey.phase ==
+                   CC_JOURNEY_PHASE_ROAD_CHOICE) {
+            CcRoadLegPreview previews[3];
+            int32_t count = CcRoadNextLegPreviews(
+                &metagame->sim, previews, 3);
+            int32_t onward = -1;
+            for (int32_t i = 0; i < count; ++i) {
+                if (previews[i].direction ==
+                        metagame->sim.journey.road_direction &&
+                    previews[i].segment_id !=
+                        CC_PILOT_ROAD_MILL_SEGMENT_ID) onward = i;
+            }
+            CC_CHECK(onward >= 0);
+            (void)snprintf(choice, sizeof(choice),
+                           "road choose %d", onward + 1);
+            command = choice;
+        } else if (metagame->sim.journey.phase ==
+                   CC_JOURNEY_PHASE_RESTING) {
+            command = CcSimJourneyStop(&metagame->sim) ==
+                    CC_JOURNEY_STOP_MIDDAY ?
                 "road break" : "road camp";
-        CC_CHECK(CcMetagameExecute(metagame, command, output, capacity));
+        }
+        CC_CHECK(command != NULL);
+        CC_CHECK(CcMetagameExecute(
+            metagame, command, output, capacity));
     }
 }
 
@@ -66,6 +93,9 @@ static void CheckJourneyContext(void)
     CcMetagameInit(&game, 42U);
     CC_CHECK(CcMetagameExecute(&game, "accept 1", output, sizeof(output)));
     CC_CHECK(CcMetagameExecute(&game, "travel 1", output, sizeof(output)));
+    CC_CHECK(strstr(output, "road choose") != NULL);
+    ResolveRoadRhythm(&game, output, sizeof(output));
+    CC_CHECK(!game.sim.journey.active);
     const char *commands[] = {"travel 2", "road press-on", "road camp"};
     const char *phases[] = {"midday road stop", "overnight road stop", "checkpoint encounter"};
     for (int32_t i = 0; i < 3; ++i) {
@@ -288,6 +318,23 @@ int main(void)
         &agent_view, agent_action, output, sizeof(output)));
     CC_CHECK(CcMetagameAgentExecute(
         &agent_view, "travel 1", output, sizeof(output)));
+    CcRoadLegPreview agent_previews[3];
+    int32_t agent_preview_count = CcRoadNextLegPreviews(
+        &agent_view.sim, agent_previews, 3);
+    int32_t agent_onward = -1;
+    for (int32_t i = 0; i < agent_preview_count; ++i) {
+        if (agent_previews[i].direction ==
+                agent_view.sim.journey.road_direction &&
+            agent_previews[i].segment_id !=
+                CC_PILOT_ROAD_MILL_SEGMENT_ID) agent_onward = i;
+    }
+    CC_CHECK(agent_onward >= 0);
+    (void)snprintf(agent_action, sizeof(agent_action),
+                   "road choose %d", agent_onward + 1);
+    CC_CHECK(CcMetagameAgentExecute(
+        &agent_view, agent_action, output, sizeof(output)));
+    ResolveRoadRhythm(&agent_view, output, sizeof(output));
+    CC_CHECK(!agent_view.sim.journey.active);
     uint64_t journaled_hash = CcSimHash(&agent_view.sim);
     uint64_t control_hash = 0U;
     CC_CHECK(CcMetagameAgentCounterfactual(
@@ -393,6 +440,7 @@ int main(void)
 
     CC_CHECK(CcMetagameExecute(&metagame, "travel 1", output,
                                sizeof(output)));
+    ResolveRoadRhythm(&metagame, output, sizeof(output));
     CC_CHECK(strstr(output, "headless fountain") != NULL);
     CC_CHECK(metagame.sim.player.location_id ==
              metagame.sim.settlements[1].id);
@@ -548,6 +596,7 @@ int main(void)
     CC_CHECK(lawful.sim.player.cargo[CC_GOOD_FOOD] == 8);
     CC_CHECK(CcMetagameExecute(&lawful, "travel 1", output,
                                sizeof(output)));
+    ResolveRoadRhythm(&lawful, output, sizeof(output));
     CC_CHECK(CcMetagameExecute(&lawful, "travel 2", output,
                                sizeof(output)));
     ResolveRoadRhythm(&lawful, output, sizeof(output));
@@ -581,6 +630,7 @@ int main(void)
     CcMetagameInit(&supper, UINT32_C(42));
     CC_CHECK(CcMetagameExecute(&supper, "travel 1", output,
                                sizeof(output)));
+    ResolveRoadRhythm(&supper, output, sizeof(output));
     quiet_number = SituationNumber(
         &supper, CC_SITUATION_BLACK_MARKET_DELIVERY);
     ExecuteNumber(&supper, "accept", quiet_number, output, sizeof(output));

@@ -7,9 +7,13 @@
 
 static void AdvanceJourney(CcSim *sim)
 {
-    while (sim->journey.active &&
-           sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-        CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+    char error[192];
+    while (sim->journey.active) {
+        if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING)
+            CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+        else
+            CC_CHECK(CcTestContinueJourneyPause(
+                sim, error, sizeof(error)));
     }
 }
 

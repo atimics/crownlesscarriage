@@ -1,4 +1,5 @@
 #include "world/cc_world.h"
+#include "sim/cc_road_position.h"
 
 #include <float.h>
 #include <math.h>
@@ -142,14 +143,15 @@ static int TestCanonicalRoadManifest(void)
     CHECK(manifest.generator_version == CC_GENERATOR_VERSION);
     CHECK(fabsf(manifest.settlements[1].junction.x - 264.997284f) < 0.0001f);
     CHECK(fabsf(manifest.settlements[1].junction.z - 242.611099f) < 0.0001f);
-    CHECK(fabsf(manifest.routes[0].control.x - 147.306854f) < 0.0001f);
-    CHECK(fabsf(manifest.routes[0].control.z - 306.920654f) < 0.0001f);
+    /* Shared road geometry rounds to the nearest 0.001 world unit. */
+    CHECK(fabsf(manifest.routes[0].control.x - 147.306854f) < 0.0011f);
+    CHECK(fabsf(manifest.routes[0].control.z - 306.920654f) < 0.0011f);
     CHECK(fabsf(manifest.routes[0]
                     .samples[CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE].x -
-                119.164772f) < 0.0001f);
+                119.164772f) < 0.0011f);
     CHECK(fabsf(manifest.routes[0]
                     .samples[CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE].x -
-                264.997284f) < 0.0001f);
+                264.997284f) < 0.0011f);
     return 0;
 }
 
@@ -295,7 +297,7 @@ static int TestRoutesShareAuthoredGateConnectors(void)
             &manifest.settlements[settlement_index];
         CcWorldPoint authored_gate = CcWorldSettlementLocalPoint(
             &manifest, settlement->settlement_id, 96.0f, 36.0f);
-        CHECK(PointDistance(authored_gate, settlement->gate) < 0.0001f);
+        CHECK(PointDistance(authored_gate, settlement->gate) < 0.0011f);
         CHECK(PointDistance(settlement->center, settlement->junction) >
               settlement->radius);
         float connector_dx = settlement->junction.x - settlement->gate.x;
@@ -327,14 +329,14 @@ static int TestRoutesShareAuthoredGateConnectors(void)
                 CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE :
                 CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE;
             CHECK(PointDistance(placement->samples[gate_sample],
-                                settlement->gate) < 0.0001f);
+                                settlement->gate) < 0.0011f);
             CHECK(PointDistance(placement->samples[junction_sample],
-                                settlement->junction) < 0.0001f);
+                                settlement->junction) < 0.0011f);
             CcWorldPoint pose;
             float heading = 0.0f;
             CHECK(CcWorldRoutePose(placement, settlement->settlement_id,
                                    0.0f, &pose, &heading));
-            CHECK(PointDistance(pose, settlement->gate) < 0.0001f);
+            CHECK(PointDistance(pose, settlement->gate) < 0.0011f);
             CHECK(fabsf(sinf(heading) -
                         sinf(settlement->entrance_heading_yaw)) < 0.0001f);
             CHECK(fabsf(cosf(heading) -
@@ -343,7 +345,7 @@ static int TestRoutesShareAuthoredGateConnectors(void)
                 branch_gate = pose;
                 branch_heading = heading;
             } else {
-                CHECK(PointDistance(branch_gate, pose) < 0.0001f);
+                CHECK(PointDistance(branch_gate, pose) < 0.0011f);
                 CHECK(fabsf(sinf(branch_heading) - sinf(heading)) < 0.0001f);
                 CHECK(fabsf(cosf(branch_heading) - cosf(heading)) < 0.0001f);
             }
@@ -615,10 +617,78 @@ static int TestRouteLengthForSimNeedsNoWorldStream(void)
         const CcWorldRoutePlacement *route = &manifest.routes[index];
         float measured = CcWorldRouteLength(route);
         float from_sim = CcWorldRouteLengthForSim(&sim, route->route_id);
+        CcRoadGeometry geometry;
+        CHECK(CcRoadGeometryBuild(&sim, route->route_id, &geometry));
         CHECK(isfinite(measured) && measured > 1.0f);
         CHECK(fabsf(measured - from_sim) < 0.0001f);
+        CHECK(fabsf(measured *
+              (float)CC_ROAD_GEOMETRY_UNITS_PER_WORLD_UNIT -
+              (float)geometry.full_length_units) <= 16.0f);
     }
     CHECK(CcWorldRouteLengthForSim(&sim, 0U) == 0.0f);
+    return 0;
+}
+
+static int TestActiveJourneyKeepsFrozenRouteSamples(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x3235a7ed));
+    CcPilotRoadTopology pilot;
+    CHECK(CcPilotRoadTopologyBuild(&sim, &pilot));
+    sim.journey.active = true;
+    sim.journey.origin_id = pilot.origin_id;
+    sim.journey.destination_id = pilot.destination_id;
+    sim.journey.route_id = pilot.route_id;
+    sim.journey.total_subticks = 10000;
+    CHECK(CcRoadBeginPilotJourney(&sim, UINT64_C(3239100)));
+    CcWorldManifest before;
+    CHECK(CcWorldManifestBuild(&before, &sim));
+    const CcWorldRoutePlacement *before_route =
+        CcWorldRoutePlacementForId(&before, pilot.route_id);
+    CHECK(before_route != NULL);
+
+    sim.settlements[0].size = CC_SETTLEMENT_CAPITAL_SIZE;
+    sim.settlements[0].population = 999999;
+    sim.settlements[1].size = CC_SETTLEMENT_HAMLET;
+    sim.settlements[1].population = 1;
+    CcRoadGeometry current;
+    CHECK(CcRoadGeometryBuild(&sim, pilot.route_id, &current));
+    CHECK(current.journey_length_units !=
+          sim.journey.road_geometry_length_units);
+    CcWorldManifest after;
+    CHECK(CcWorldManifestBuild(&after, &sim));
+    const CcWorldRoutePlacement *after_route =
+        CcWorldRoutePlacementForId(&after, pilot.route_id);
+    CHECK(after_route != NULL);
+    for (int32_t i = 0; i < CC_WORLD_ROUTE_SAMPLE_COUNT; ++i) {
+        CHECK(before_route->samples[i].x == after_route->samples[i].x);
+        CHECK(before_route->samples[i].z == after_route->samples[i].z);
+    }
+    sim.journey = (CcJourneyEncounter){
+        .active = true,
+        .phase = CC_JOURNEY_PHASE_TRAVELLING,
+        .origin_id = pilot.origin_id,
+        .destination_id = pilot.destination_id,
+        .route_id = pilot.route_id,
+        .total_subticks = 10000
+    };
+    CHECK(CcRoadBeginPilotJourney(&sim, UINT64_C(3239200)));
+    CHECK(sim.journey.road_geometry_length_units ==
+          current.journey_length_units);
+    CcWorldManifest next_journey;
+    CHECK(CcWorldManifestBuild(&next_journey, &sim));
+    const CcWorldRoutePlacement *next_route =
+        CcWorldRoutePlacementForId(&next_journey, pilot.route_id);
+    CHECK(next_route != NULL);
+    bool moved = false;
+    for (int32_t i = 0; i < CC_WORLD_ROUTE_SAMPLE_COUNT; ++i) {
+        if (before_route->samples[i].x != next_route->samples[i].x ||
+            before_route->samples[i].z != next_route->samples[i].z) {
+            moved = true;
+            break;
+        }
+    }
+    CHECK(moved);
     return 0;
 }
 
@@ -627,6 +697,7 @@ int main(void)
     if (TestRoadQueryParity() != 0) return 1;
     if (TestStreamFollowsCarriage() != 0) return 1;
     if (TestRouteLengthForSimNeedsNoWorldStream() != 0) return 1;
+    if (TestActiveJourneyKeepsFrozenRouteSamples() != 0) return 1;
     if (TestCanonicalRoadManifest() != 0) return 1;
     if (TestManifestIsStableAndFinite() != 0) return 1;
     if (TestRoadDistrictSites() != 0) return 1;

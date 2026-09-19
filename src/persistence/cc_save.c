@@ -1208,6 +1208,22 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " journey_pace INTEGER NOT NULL DEFAULT 1,"
         " ambush_warned INTEGER NOT NULL DEFAULT 0,"
         " road_site_stop_mask INTEGER NOT NULL DEFAULT 0);"
+        "CREATE TABLE IF NOT EXISTS player_road_position ("
+        " id INTEGER PRIMARY KEY CHECK(id=1), active INTEGER NOT NULL,"
+        " waiting_choice INTEGER NOT NULL, journey_id INTEGER NOT NULL,"
+        " goal_id INTEGER NOT NULL, segment_id INTEGER NOT NULL,"
+        " anchor_id INTEGER NOT NULL, stop_anchor_id INTEGER NOT NULL,"
+        " return_anchor_id INTEGER NOT NULL, direction INTEGER NOT NULL,"
+        " coordinate_units INTEGER NOT NULL, travelled_units INTEGER NOT NULL,"
+        " remaining_units INTEGER NOT NULL, leg_length_units INTEGER NOT NULL,"
+        " leg_start_units INTEGER NOT NULL, leg_end_units INTEGER NOT NULL,"
+        " leg_elapsed_subticks INTEGER NOT NULL,"
+        " leg_total_subticks INTEGER NOT NULL,"
+        " geometry_length_units INTEGER NOT NULL,"
+        " compatibility_milli INTEGER NOT NULL, revision INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS player_road_geometry ("
+        " sample INTEGER PRIMARY KEY, x_units INTEGER NOT NULL,"
+        " z_units INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS delayed_echo ("
         " id INTEGER PRIMARY KEY CHECK(id=1), active INTEGER NOT NULL,"
         " situation_id INTEGER NOT NULL, settlement_id INTEGER NOT NULL,"
@@ -3167,6 +3183,63 @@ static bool SaveJourneyState(sqlite3 *database, const CcSim *sim,
     sqlite3_finalize(statement);
     if (!result) return false;
 
+    if (sim->schema_version >= 105U) {
+        if (!Prepare(database,
+                "INSERT INTO player_road_position VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                &statement, error, error_capacity)) return false;
+        int road_column = 1;
+        BindInt(statement, road_column++,
+                sim->journey.road_position_active ? 1 : 0);
+        BindInt(statement, road_column++,
+                sim->journey.road_waiting_choice ? 1 : 0);
+        BindId(statement, road_column++, sim->journey.road_journey_id);
+        BindId(statement, road_column++, sim->journey.road_goal_id);
+        BindId(statement, road_column++, sim->journey.road_segment_id);
+        BindId(statement, road_column++, sim->journey.road_anchor_id);
+        BindId(statement, road_column++, sim->journey.road_stop_anchor_id);
+        BindId(statement, road_column++, sim->journey.road_return_anchor_id);
+        BindInt(statement, road_column++, sim->journey.road_direction);
+        BindInt(statement, road_column++, sim->journey.road_coordinate_units);
+        BindInt(statement, road_column++,
+                sim->journey.road_distance_travelled_units);
+        BindInt(statement, road_column++,
+                sim->journey.road_distance_remaining_units);
+        BindInt(statement, road_column++, sim->journey.road_leg_length_units);
+        BindInt(statement, road_column++,
+                sim->journey.road_leg_start_coordinate_units);
+        BindInt(statement, road_column++,
+                sim->journey.road_leg_end_coordinate_units);
+        BindInt(statement, road_column++,
+                sim->journey.road_leg_elapsed_subticks);
+        BindInt(statement, road_column++,
+                sim->journey.road_leg_total_subticks);
+        BindInt(statement, road_column++,
+                sim->journey.road_geometry_length_units);
+        BindInt(statement, road_column++,
+                sim->journey.road_compatibility_milli);
+        BindInt(statement, road_column++,
+                (int32_t)sim->journey.road_revision);
+        result = StepDone(database, statement, error, error_capacity);
+        sqlite3_finalize(statement);
+        if (!result || !Prepare(database,
+                "INSERT INTO player_road_geometry VALUES(?,?,?);",
+                &statement, error, error_capacity)) return false;
+        for (int32_t sample = 0; sample < 33; ++sample) {
+            sqlite3_reset(statement);
+            sqlite3_clear_bindings(statement);
+            BindInt(statement, 1, sample);
+            BindInt(statement, 2,
+                    sim->journey.road_geometry_x_units[sample]);
+            BindInt(statement, 3,
+                    sim->journey.road_geometry_z_units[sample]);
+            if (!StepDone(database, statement, error, error_capacity)) {
+                sqlite3_finalize(statement);
+                return false;
+            }
+        }
+        sqlite3_finalize(statement);
+    }
+
     if (!Prepare(database,
                  "INSERT INTO runtime_state (id,clock_tick,minute_subticks,"
                  "game_minutes_per_second,journey_phase,departure_day,"
@@ -3440,6 +3513,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM causal_event;"
             "DELETE FROM player_company; DELETE FROM player_commitment;"
             "DELETE FROM player_journey; DELETE FROM runtime_state;"
+            "DELETE FROM player_road_position; DELETE FROM player_road_geometry;"
             "DELETE FROM delayed_echo; DELETE FROM material_economy;"
             "DELETE FROM player_material_economy;"
             "DELETE FROM goblin_material_economy;"
@@ -5836,6 +5910,95 @@ static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
         return false;
     }
     sqlite3_finalize(statement);
+
+    if (sim->schema_version >= 105U) {
+        if (!Prepare(database,
+                "SELECT active,waiting_choice,journey_id,goal_id,segment_id,"
+                "anchor_id,stop_anchor_id,return_anchor_id,direction,"
+                "coordinate_units,travelled_units,remaining_units,"
+                "leg_length_units,leg_start_units,leg_end_units,"
+                "leg_elapsed_subticks,leg_total_subticks,"
+                "geometry_length_units,compatibility_milli,revision "
+                "FROM player_road_position WHERE id=1;",
+                &statement, error, error_capacity)) return false;
+        result = sqlite3_step(statement);
+        if (result == SQLITE_ROW) {
+            int road_column = 0;
+            sim->journey.road_position_active =
+                sqlite3_column_int(statement, road_column++) != 0;
+            sim->journey.road_waiting_choice =
+                sqlite3_column_int(statement, road_column++) != 0;
+            sim->journey.road_journey_id =
+                (CcId)sqlite3_column_int64(statement, road_column++);
+            sim->journey.road_goal_id =
+                (CcId)sqlite3_column_int64(statement, road_column++);
+            sim->journey.road_segment_id =
+                (CcId)sqlite3_column_int64(statement, road_column++);
+            sim->journey.road_anchor_id =
+                (CcId)sqlite3_column_int64(statement, road_column++);
+            sim->journey.road_stop_anchor_id =
+                (CcId)sqlite3_column_int64(statement, road_column++);
+            sim->journey.road_return_anchor_id =
+                (CcId)sqlite3_column_int64(statement, road_column++);
+            sim->journey.road_direction =
+                sqlite3_column_int(statement, road_column++);
+            sim->journey.road_coordinate_units =
+                sqlite3_column_int(statement, road_column++);
+            sim->journey.road_distance_travelled_units =
+                sqlite3_column_int(statement, road_column++);
+            sim->journey.road_distance_remaining_units =
+                sqlite3_column_int(statement, road_column++);
+            sim->journey.road_leg_length_units =
+                sqlite3_column_int(statement, road_column++);
+            sim->journey.road_leg_start_coordinate_units =
+                sqlite3_column_int(statement, road_column++);
+            sim->journey.road_leg_end_coordinate_units =
+                sqlite3_column_int(statement, road_column++);
+            sim->journey.road_leg_elapsed_subticks =
+                sqlite3_column_int(statement, road_column++);
+            sim->journey.road_leg_total_subticks =
+                sqlite3_column_int(statement, road_column++);
+            sim->journey.road_geometry_length_units =
+                sqlite3_column_int(statement, road_column++);
+            sim->journey.road_compatibility_milli =
+                sqlite3_column_int(statement, road_column++);
+            sim->journey.road_revision =
+                (uint32_t)sqlite3_column_int(statement, road_column++);
+        } else if (result != SQLITE_DONE) {
+            SetSqlError(error, error_capacity, database,
+                        "Could not read saved road position");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        sqlite3_finalize(statement);
+        if (!Prepare(database,
+                "SELECT sample,x_units,z_units FROM player_road_geometry "
+                "ORDER BY sample;", &statement, error, error_capacity)) {
+            return false;
+        }
+        int32_t sample_count = 0;
+        while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+            int32_t sample = sqlite3_column_int(statement, 0);
+            if (sample < 0 || sample >= 33 || sample != sample_count++) {
+                SetError(error, error_capacity,
+                         "Saved road geometry samples are invalid.");
+                sqlite3_finalize(statement);
+                return false;
+            }
+            sim->journey.road_geometry_x_units[sample] =
+                sqlite3_column_int(statement, 1);
+            sim->journey.road_geometry_z_units[sample] =
+                sqlite3_column_int(statement, 2);
+        }
+        if (result != SQLITE_DONE ||
+            (sim->journey.road_position_active && sample_count != 33)) {
+            SetError(error, error_capacity,
+                     "Saved road geometry is incomplete.");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        sqlite3_finalize(statement);
+    }
 
     if (!Prepare(database,
                  "SELECT active,situation_id,settlement_id,parent_event_id,"

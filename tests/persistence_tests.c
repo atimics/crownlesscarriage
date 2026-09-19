@@ -36,19 +36,16 @@ static void RemoveDatabase(const char *path)
 
 static void CompleteJourney(CcSim *sim, char *error, size_t error_capacity)
 {
-    while (sim->journey.active) {
+    int32_t turns = 0;
+    while (sim->journey.active && turns++ < 100000) {
         if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
             CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
-        } else if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
-            CcCommand rest = {
-                .kind = CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
-                    CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP
-            };
-            CC_CHECK(CcSimApply(sim, &rest, error, error_capacity));
         } else {
-            CC_CHECK(false);
+            CC_CHECK(CcTestContinueJourneyPause(
+                sim, error, error_capacity));
         }
     }
+    CC_CHECK(!sim->journey.active);
 }
 
 static int64_t ReadSqliteInteger(const char *path, const char *sql)
@@ -1528,6 +1525,8 @@ static void CheckSchema21Compatibility(char *error, size_t error_capacity)
 static void PrepareLegacyJourneyTiming(CcSim *sim, int32_t travel_days,
                                        char *error, size_t error_capacity)
 {
+    sim->journey.road_position_active = false;
+    sim->journey.road_waiting_choice = false;
     int32_t new_total = sim->journey.total_subticks;
     int32_t old_total = travel_days * CC_WORLD_DAY_SUBTICKS;
     CC_CHECK(new_total > 0);
@@ -1734,6 +1733,8 @@ static void CheckSchema25Compatibility(char *error, size_t error_capacity)
         .target_id = legacy.settlements[1].id
     };
     CC_CHECK(CcSimApply(&legacy, &travel, error, error_capacity));
+    legacy.journey.road_position_active = false;
+    legacy.journey.road_waiting_choice = false;
     legacy.journey.ambush_pending = false;
     CcSimAdvanceRuntimeTicks(&legacy, 480);
     int32_t journey_total = legacy.journey.total_subticks;
@@ -2475,14 +2476,17 @@ static void CheckJourneyStopPersistence(char *error, size_t error_capacity)
     };
     CC_CHECK(CcSimApply(&sim, &travel, error, error_capacity));
     sim.journey.ambush_pending = false;
-    while (sim.journey.active) {
-        CcSimAdvanceRuntimeTicks(&sim, CC_WORLD_TICKS_PER_SECOND);
-    }
+    CompleteJourney(&sim, error, error_capacity);
     travel.target_id = sim.settlements[0].id;
     CC_CHECK(CcSimApply(&sim, &travel, error, error_capacity));
     sim.journey.ambush_pending = false;
-    while (sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-        CcSimAdvanceRuntimeTicks(&sim, CC_WORLD_TICKS_PER_SECOND);
+    while (sim.journey.active &&
+           sim.journey.phase != CC_JOURNEY_PHASE_RESTING) {
+        if (sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING)
+            CcSimAdvanceRuntimeTicks(&sim, CC_WORLD_TICKS_PER_SECOND);
+        else
+            CC_CHECK(CcTestContinueJourneyPause(
+                &sim, error, error_capacity));
     }
     CC_CHECK(CcSimJourneyStop(&sim) == CC_JOURNEY_STOP_MIDDAY);
     CC_CHECK(CcSaveWrite(path, &sim, error, error_capacity));
@@ -2653,6 +2657,304 @@ static void CheckShippedSaveCompatibility(char *error,
     CC_CHECK(replayed.current_day == 7);
     CC_CHECK(replayed.clock.tick == 6U);
     CC_CHECK(CcSimValidate(&replayed, error, error_capacity));
+}
+
+static void ClearSavedRoadPosition(CcJourneyEncounter *journey)
+{
+    journey->road_position_active = false;
+    journey->road_waiting_choice = false;
+    journey->road_journey_id = 0U;
+    journey->road_goal_id = 0U;
+    journey->road_segment_id = 0U;
+    journey->road_anchor_id = 0U;
+    journey->road_stop_anchor_id = 0U;
+    journey->road_return_anchor_id = 0U;
+    journey->road_direction = 0;
+    journey->road_coordinate_units = 0;
+    journey->road_distance_travelled_units = 0;
+    journey->road_distance_remaining_units = 0;
+    journey->road_leg_length_units = 0;
+    journey->road_leg_start_coordinate_units = 0;
+    journey->road_leg_end_coordinate_units = 0;
+    journey->road_leg_elapsed_subticks = 0;
+    journey->road_leg_total_subticks = 0;
+    journey->road_geometry_length_units = 0;
+    journey->road_compatibility_milli = 0;
+    journey->road_revision = 0U;
+    memset(journey->road_geometry_x_units, 0,
+           sizeof(journey->road_geometry_x_units));
+    memset(journey->road_geometry_z_units, 0,
+           sizeof(journey->road_geometry_z_units));
+}
+
+static void CheckSchema104RoadMigration(char *error,
+                                        size_t error_capacity)
+{
+    /* These are gameplay databases from schema-104 runtime d30028cc. They
+       were checkpointed to journal_mode=DELETE for portable read-only use.
+       Package SHA-256 values after that checkpoint are:
+       pilot road: 237701f28aef7fcca9e4ed56e9cc324514aa9d51463b2e4fec3ac07efebffa39
+       site stop: 4af6e66e1b41c60b97856a7615474d71dc6878ec545d625536fadf1b040c0761
+       checkpoint: 1b1df0b8931f735f61e5f9ac5fc5aa907d2e7a5b30e0deed1fb19abbefdd97e6
+       mill stop: 8a91964656a09285cbb08f50452c8fd8d3cc9217026fac4f227c6273d7927dd3
+       mine road: 6d046dddea304ebe5c9f2125cc7ac0ec26731cd596018e34d146e7b560f46fef */
+    char pilot_file[512];
+    (void)snprintf(
+        pilot_file, sizeof(pilot_file),
+        "%s/tests/fixtures/shipped/"
+        "schema-104-generator-25-pilot-road-journal.ccsave",
+        CC_TEST_SOURCE_DIR);
+    /* Generated by the schema-104 runtime at d30028cc. The base hash and
+       final action hash prove that the two journal rows remain intact. */
+    CC_CHECK(ReadSqliteInteger(
+        pilot_file,
+        "SELECT schema_version=104 AND generator_version=25 AND "
+        "state_hash='dfa5e2a1991660ea' FROM meta WHERE id=1;") == 1);
+    CC_CHECK(ReadSqliteInteger(
+        pilot_file, "SELECT COUNT(*) FROM action_journal;") == 2);
+    CC_CHECK(ReadSqliteInteger(
+        pilot_file,
+        "SELECT post_state_hash='607d65c39be3cf66' FROM action_journal "
+        "ORDER BY ordinal DESC LIMIT 1;") == 1);
+
+    CcSim pilot;
+    CC_CHECK(CcSaveRead(pilot_file, &pilot, error, error_capacity));
+    CcPilotRoadTopology topology;
+    CC_CHECK(pilot.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(pilot.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(CcPilotRoadTopologyBuild(&pilot, &topology));
+    CC_CHECK(pilot.journey.active);
+    CC_CHECK(pilot.journey.route_id == topology.route_id);
+    CC_CHECK(pilot.journey.road_position_active);
+    CC_CHECK(pilot.journey.road_compatibility_milli == 128);
+    CC_CHECK(pilot.journey.road_coordinate_units ==
+             CcRoadScaleDistance(topology.main_length_units, 128));
+    CC_CHECK(pilot.journey.road_geometry_length_units ==
+             topology.main_length_units);
+    CC_CHECK(CcRoadSavedPositionValid(&pilot));
+    CC_CHECK(CcSimValidate(&pilot, error, error_capacity));
+    CC_CHECK(CcSimHash(&pilot) == UINT64_C(11247705008884842349));
+
+    char stop_file[512];
+    (void)snprintf(
+        stop_file, sizeof(stop_file),
+        "%s/tests/fixtures/shipped/"
+        "schema-104-generator-25-pilot-road-stop-journal.ccsave",
+        CC_TEST_SOURCE_DIR);
+    CC_CHECK(ReadSqliteInteger(
+        stop_file,
+        "SELECT schema_version=104 AND generator_version=25 AND "
+        "state_hash='dfa5e2a1991660ea' FROM meta WHERE id=1;") == 1);
+    CC_CHECK(ReadSqliteInteger(
+        stop_file, "SELECT COUNT(*) FROM action_journal;") == 4);
+    CC_CHECK(ReadSqliteInteger(
+        stop_file,
+        "SELECT post_state_hash='5f82afb07e27503f' FROM action_journal "
+        "ORDER BY ordinal DESC LIMIT 1;") == 1);
+    CcSim stopped;
+    CC_CHECK(CcSaveRead(stop_file, &stopped, error, error_capacity));
+    const CcRoadSite *passed = NULL;
+    const CcRoadSite *pending = NULL;
+    int32_t passed_slot = -1;
+    int32_t pending_slot = -1;
+    for (int32_t i = 0; i < stopped.road_site_count; ++i) {
+        if (strcmp(stopped.road_sites[i].name, "Nine Furrows") == 0) {
+            passed = &stopped.road_sites[i];
+            passed_slot = i;
+        }
+        if (strcmp(stopped.road_sites[i].name, "The Broken Crown") == 0) {
+            pending = &stopped.road_sites[i];
+            pending_slot = i;
+        }
+    }
+    CC_CHECK(passed != NULL && pending != NULL);
+    CC_CHECK(stopped.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(stopped.journey.road_position_active);
+    CC_CHECK(stopped.journey.road_waiting_choice);
+    CC_CHECK(stopped.journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE);
+    CC_CHECK(stopped.journey.road_compatibility_milli == 377);
+    CC_CHECK(stopped.journey.road_anchor_id == pending->id);
+    CC_CHECK(stopped.journey.road_stop_anchor_id == pending->id);
+    CC_CHECK((stopped.journey.road_site_stop_mask &
+              (UINT32_C(1) << passed_slot)) != 0U);
+    CC_CHECK((stopped.journey.road_site_stop_mask &
+              (UINT32_C(1) << pending_slot)) == 0U);
+    CC_CHECK(CcSimJourneyRoadSiteStop(&stopped) == pending);
+    CC_CHECK(CcRoadSavedPositionValid(&stopped));
+    CC_CHECK(CcSimValidate(&stopped, error, error_capacity));
+    CC_CHECK(CcSimHash(&stopped) == UINT64_C(10574037191700380558));
+    CcCommand pass_pending = {
+        .kind = CC_COMMAND_PASS_ROAD_SITE,
+        .target_id = pending->id
+    };
+    CC_CHECK(CcSimApply(
+        &stopped, &pass_pending, error, error_capacity));
+    CC_CHECK((stopped.journey.road_site_stop_mask &
+              (UINT32_C(1) << passed_slot)) != 0U);
+    CC_CHECK((stopped.journey.road_site_stop_mask &
+              (UINT32_C(1) << pending_slot)) != 0U);
+    CC_CHECK(stopped.journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
+    CC_CHECK(stopped.journey.road_anchor_id == pending->id);
+    CC_CHECK(stopped.journey.road_stop_anchor_id ==
+             CC_PILOT_ROAD_CHECKPOINT_ID);
+    CC_CHECK(CcSimValidate(&stopped, error, error_capacity));
+
+    char checkpoint_file[512];
+    (void)snprintf(
+        checkpoint_file, sizeof(checkpoint_file),
+        "%s/tests/fixtures/shipped/"
+        "schema-104-generator-25-pilot-checkpoint-journal.ccsave",
+        CC_TEST_SOURCE_DIR);
+    CC_CHECK(ReadSqliteInteger(
+        checkpoint_file,
+        "SELECT schema_version=104 AND generator_version=25 AND "
+        "state_hash='dfa5e2a1991660ea' FROM meta WHERE id=1;") == 1);
+    CC_CHECK(ReadSqliteInteger(
+        checkpoint_file, "SELECT COUNT(*) FROM action_journal;") == 2);
+    CC_CHECK(ReadSqliteInteger(
+        checkpoint_file,
+        "SELECT post_state_hash='34e7d5fbca8119e7' FROM action_journal "
+        "ORDER BY ordinal DESC LIMIT 1;") == 1);
+    CcSim checkpoint;
+    CC_CHECK(CcSaveRead(
+        checkpoint_file, &checkpoint, error, error_capacity));
+    CC_CHECK(checkpoint.journey.road_position_active);
+    CC_CHECK(checkpoint.journey.road_waiting_choice);
+    CC_CHECK(checkpoint.journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE);
+    CC_CHECK(checkpoint.journey.road_compatibility_milli == 500);
+    CC_CHECK(checkpoint.journey.road_anchor_id ==
+             CC_PILOT_ROAD_CHECKPOINT_ID);
+    CC_CHECK(checkpoint.journey.road_coordinate_units ==
+             topology.checkpoint_distance_units);
+    CC_CHECK(CcRoadSavedPositionValid(&checkpoint));
+    CC_CHECK(CcSimValidate(&checkpoint, error, error_capacity));
+    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(8176053365761530070));
+
+    CcSim blocked = checkpoint;
+    ClearSavedRoadPosition(&blocked.journey);
+    blocked.journey.phase = CC_JOURNEY_PHASE_BLOCKED;
+    blocked.journey.encounter_triggered = true;
+    blocked.journey.ambush_pending = false;
+    blocked.journey.ambush_resolved = false;
+    blocked.player.cargo[CC_GOOD_FOOD] = 7;
+    blocked.player.cargo[CC_GOOD_TOOLS] = 3;
+    blocked.clock.minute_subticks = 12345;
+    blocked.carriage.mode = CC_CARRIAGE_STOPPED;
+    blocked.carriage.speed_milli_per_second = 0;
+    int32_t blocked_food = blocked.player.cargo[CC_GOOD_FOOD];
+    int32_t blocked_tools = blocked.player.cargo[CC_GOOD_TOOLS];
+    int32_t blocked_time = blocked.clock.minute_subticks;
+    CcId blocked_situation = blocked.journey.situation_id;
+    CC_CHECK(CcRoadMigrateLegacyJourney(&blocked));
+    CC_CHECK(blocked.journey.phase == CC_JOURNEY_PHASE_BLOCKED);
+    CC_CHECK(blocked.journey.encounter_triggered);
+    CC_CHECK(blocked.journey.situation_id == blocked_situation);
+    CC_CHECK(blocked.player.cargo[CC_GOOD_FOOD] == blocked_food);
+    CC_CHECK(blocked.player.cargo[CC_GOOD_TOOLS] == blocked_tools);
+    CC_CHECK(blocked.clock.minute_subticks == blocked_time);
+    CC_CHECK(blocked.journey.road_position_active);
+    CC_CHECK(!blocked.journey.road_waiting_choice);
+    CC_CHECK(blocked.journey.road_coordinate_units ==
+             topology.checkpoint_distance_units);
+    CC_CHECK(blocked.journey.road_distance_remaining_units > 0);
+    CC_CHECK(CcRoadSavedPositionValid(&blocked));
+    CC_CHECK(CcSimValidate(&blocked, error, error_capacity));
+    CcCommand resolve = {.kind = CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT};
+    CC_CHECK(CcSimApply(&blocked, &resolve, error, error_capacity));
+    CC_CHECK(blocked.journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
+    int32_t resolved_coordinate = blocked.journey.road_coordinate_units;
+    CC_CHECK(!CcRoadAdvanceLeg(&blocked, 1));
+    CC_CHECK(blocked.journey.road_coordinate_units > resolved_coordinate);
+
+    CcSim resting = checkpoint;
+    ClearSavedRoadPosition(&resting.journey);
+    resting.journey.phase = CC_JOURNEY_PHASE_RESTING;
+    resting.journey.elapsed_subticks = CC_WORLD_WATCH_SUBTICKS;
+    resting.clock.minute_subticks = 23456;
+    CC_CHECK(CcRoadMigrateLegacyJourney(&resting));
+    CC_CHECK(resting.journey.phase == CC_JOURNEY_PHASE_RESTING);
+    CC_CHECK(resting.journey.road_waiting_choice);
+    CC_CHECK(resting.journey.road_anchor_id ==
+             CC_PILOT_ROAD_CHECKPOINT_ID);
+    CC_CHECK(resting.journey.road_coordinate_units ==
+             topology.checkpoint_distance_units);
+    CC_CHECK(resting.clock.minute_subticks == 23456);
+    CC_CHECK(CcRoadSavedPositionValid(&resting));
+    CC_CHECK(CcSimValidate(&resting, error, error_capacity));
+
+    char mill_stop_file[512];
+    (void)snprintf(
+        mill_stop_file, sizeof(mill_stop_file),
+        "%s/tests/fixtures/shipped/"
+        "schema-104-generator-25-pilot-mill-stop-journal.ccsave",
+        CC_TEST_SOURCE_DIR);
+    CC_CHECK(ReadSqliteInteger(
+        mill_stop_file,
+        "SELECT schema_version=104 AND generator_version=25 AND "
+        "state_hash='dfa5e2a1991660ea' FROM meta WHERE id=1;") == 1);
+    CC_CHECK(ReadSqliteInteger(
+        mill_stop_file, "SELECT COUNT(*) FROM action_journal;") == 2);
+    CC_CHECK(ReadSqliteInteger(
+        mill_stop_file,
+        "SELECT post_state_hash='59db2de6588a3bc9' FROM action_journal "
+        "ORDER BY ordinal DESC LIMIT 1;") == 1);
+    CcSim mill_stop;
+    CC_CHECK(CcSaveRead(
+        mill_stop_file, &mill_stop, error, error_capacity));
+    CC_CHECK(mill_stop.journey.road_position_active);
+    CC_CHECK(mill_stop.journey.road_waiting_choice);
+    CC_CHECK(mill_stop.journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE);
+    CC_CHECK(mill_stop.journey.road_compatibility_milli == 820);
+    CC_CHECK(mill_stop.journey.road_anchor_id ==
+             CC_PILOT_ROAD_JUNCTION_ID);
+    CC_CHECK(mill_stop.journey.road_coordinate_units ==
+             topology.origin_to_junction_units);
+    CcRoadLegPreview mill_previews[3];
+    int32_t mill_preview_count = CcRoadNextLegPreviews(
+        &mill_stop, mill_previews, 3);
+    bool mill_choice = false;
+    for (int32_t i = 0; i < mill_preview_count; ++i) {
+        if (mill_previews[i].destination_anchor_id ==
+            topology.mill_site_id) mill_choice = true;
+    }
+    CC_CHECK(mill_choice);
+    CC_CHECK(CcRoadSavedPositionValid(&mill_stop));
+    CC_CHECK(CcSimValidate(&mill_stop, error, error_capacity));
+    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(2209600173079735809));
+
+    char mine_file[512];
+    (void)snprintf(
+        mine_file, sizeof(mine_file),
+        "%s/tests/fixtures/shipped/"
+        "schema-104-generator-25-mine-road-journal.ccsave",
+        CC_TEST_SOURCE_DIR);
+    /* This fixture follows the real road and mine actions through the bypass
+       to an active Lower Passage contest before schema-105 migration. */
+    CC_CHECK(ReadSqliteInteger(
+        mine_file,
+        "SELECT schema_version=104 AND generator_version=25 AND "
+        "state_hash='b661e90b3fe150f6' FROM meta WHERE id=1;") == 1);
+    CC_CHECK(ReadSqliteInteger(
+        mine_file, "SELECT COUNT(*) FROM action_journal;") == 54);
+    CC_CHECK(ReadSqliteInteger(
+        mine_file,
+        "SELECT post_state_hash='e2d37241306e6abf' FROM action_journal "
+        "ORDER BY ordinal DESC LIMIT 1;") == 1);
+
+    CcSim mine;
+    CC_CHECK(CcSaveRead(mine_file, &mine, error, error_capacity));
+    CC_CHECK(mine.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(mine.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(mine.journey.active);
+    CC_CHECK(!mine.journey.road_position_active);
+    CC_CHECK(mine.mine.phase == CC_MINE_LEVEL);
+    CC_CHECK(mine.mine.revision == 51);
+    CC_CHECK(mine.mine.bypass_route_seen);
+    CC_CHECK(mine.mine.contest_active);
+    CC_CHECK(mine.mine.encounter_outcome == CC_MINE_ENCOUNTER_OPEN);
+    CC_CHECK(mine.mine.player_injury == 0);
+    CC_CHECK(CcSimValidate(&mine, error, error_capacity));
+    CC_CHECK(CcSimHash(&mine) == UINT64_C(4839969671547376780));
 }
 
 static void CheckDragonHairPersistence(void)
@@ -3437,6 +3739,7 @@ int main(void)
     CheckSchema89RecruitmentReserveJournal();
     CheckSchema89HistoricalCast();
     CheckSchema90RecruitmentLifetimeJournal();
+    CheckSchema104RoadMigration(error, sizeof(error));
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
     CheckSchema41Upgrade();

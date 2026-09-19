@@ -69,8 +69,15 @@ static void CheckPaymentsAtEncounter(bool carriage_away)
     sim.player.coins = 0;
     CcCommand depart = {.kind = CC_COMMAND_TRAVEL, .target_id = offer->target_id};
     CC_CHECK(CcSimApply(&sim, &depart, error, sizeof(error)));
-    for (int32_t step = 0; step < 2000 && sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING; ++step)
-        CcSimAdvanceRuntimeTicks(&sim, 1);
+    for (int32_t step = 0;
+         step < 4000 && sim.journey.phase != CC_JOURNEY_PHASE_BLOCKED;
+         ++step) {
+        if (sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING)
+            CcSimAdvanceRuntimeTicks(&sim, 1);
+        else
+            CC_CHECK(CcTestContinueJourneyPause(
+                &sim, error, sizeof(error)));
+    }
     CC_CHECK(sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED);
     CC_CHECK(sim.carriage.progress_milli >= 350);
     CC_CHECK(sim.player.coins == 0);
@@ -130,6 +137,7 @@ static void CheckJourneySaves(void)
             sim.custody.capacity = CC_CUSTODY_CAPACITY;
             CcMineInitializeLoad(&sim);
         }
+        if (version < 105U) CC_CHECK(CcRoadMigrateLegacyJourney(&sim));
         CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
         (void)remove(path);
     }
