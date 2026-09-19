@@ -7,6 +7,7 @@
   const pending = new Map();
   const transitions = [];
   let nextToken = 1;
+  let firstActionableRecorded = false;
 
   function safeBuild(value) {
     return String(value || '0.1.0-web').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 40) || 'web';
@@ -17,14 +18,9 @@
     return ['runtime', 'campaign', 'new-campaign', 'none'].includes(action) ? action : 'other';
   }
   function currentScene(frame) {
-    const title = String(frame?.title || '').toLowerCase();
-    if (title.includes('mine') || title.includes('underroad') || title.includes('passage') ||
-        title.includes('gatehouse') || title.includes('lamp room') || title.includes('records')) return 'mine';
-    if (title.includes('road') || title.includes('journey') || title.includes('carriage')) return 'road';
-    if (title.includes('company book')) return 'book';
-    const screen = String(module.crownlessScreen || 'startup');
-    return ['startup', 'title', 'avatar', 'playing', 'paused'].includes(screen) ?
-      screen : 'other';
+    const scene = String(frame?.scene || 'startup');
+    return ['startup', 'menu', 'town', 'road', 'mine', 'book', 'dungeon',
+      'carriage', 'conversation', 'trade'].includes(scene) ? scene : 'other';
   }
   function revision(frame) {
     const value = frame?.revision;
@@ -65,6 +61,10 @@
   function publishFrame(frame) {
     const now = clock.now();
     const scene = currentScene(frame);
+    if (!firstActionableRecorded && frame?.buttons?.some(button => button.enabled)) {
+      append('first-actionable', 0, {action: 'runtime', frame});
+      firstActionableRecorded = true;
+    }
     for (let i = transitions.length - 1; i >= 0; --i) {
       const item = transitions[i];
       if (scene !== item.scene) {
@@ -87,12 +87,12 @@
     URL.revokeObjectURL(url);
   }
 
-  module.crownlessBuild = module.crownlessBuild || '0.1.0-web';
+  module.crownlessBuild = module.crownlessBuild || 'unknown-web-build';
   module.crownlessDiagnostics = {begin, finish, beginAction, publishFrame, snapshot};
   module.exportCrownlessDiagnostics = exportJson;
   module.downloadCrownlessDiagnostics = download;
-  const startup = begin('startup', {action: 'runtime'});
   module.postRun = module.postRun || [];
-  module.postRun.push(() => finish(startup, {frame: module.crownlessTouchFrame}));
+  module.postRun.push(() => append('runtime-ready', 0,
+    {action: 'runtime', frame: module.crownlessTouchFrame}));
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);

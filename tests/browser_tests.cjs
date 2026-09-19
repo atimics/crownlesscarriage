@@ -616,7 +616,8 @@ async function main() {
       const timings = await mobile.evaluate(() =>
         JSON.parse(Module.exportCrownlessDiagnostics()));
       assert(timings.entries.length <= timings.capacity);
-      assert(timings.entries.some(entry => entry.stage === 'startup'));
+      assert(timings.entries.some(entry => entry.stage === 'runtime-ready'));
+      assert(timings.entries.some(entry => entry.stage === 'first-actionable'));
       assert(timings.entries.some(entry => entry.stage === 'action'));
       assert(timings.entries.some(entry => entry.stage === 'transition'));
       assert(timings.entries.some(entry => entry.stage === 'save'));
@@ -624,7 +625,7 @@ async function main() {
         Number.isFinite(entry.duration_ms) && entry.duration_ms >= 0 &&
         Number.isSafeInteger(entry.revision) &&
         /^[A-Za-z0-9._-]+$/.test(entry.build) &&
-        /^(startup|title|avatar|playing|paused|mine|road|book|other)$/.test(entry.scene) &&
+        /^(startup|menu|town|road|mine|book|dungeon|carriage|conversation|trade|other)$/.test(entry.scene) &&
         /^(runtime|campaign|new-campaign|none|other|touch-\d+)$/.test(entry.action)));
       await fs.writeFile(path.join(output, 'local-timings.json'),
         JSON.stringify(timings, null, 2));

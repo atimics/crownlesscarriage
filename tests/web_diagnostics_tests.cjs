@@ -18,16 +18,18 @@ globals.Module.postRun[0]();
 const diagnostics = globals.Module.crownlessDiagnostics;
 let token = diagnostics.begin('save', {action: 'campaign'});
 now = 134.75;
-assert(diagnostics.finish(token, {frame: {title: 'Mine yard', revision: 7}}));
-token = diagnostics.beginAction(2, {title: 'Mine yard', revision: 7});
+assert(diagnostics.finish(token, {frame: {title: 'Mine yard', scene: 'mine', revision: 7}}));
+token = diagnostics.beginAction(2, {title: 'Mine yard', scene: 'mine', revision: 7});
 now = 151;
-diagnostics.publishFrame({title: 'Company Book', revision: 8});
-assert(diagnostics.finish(token, {frame: {title: 'Company Book', revision: 8}}));
+diagnostics.publishFrame({title: 'Company Book', scene: 'book', revision: 8,
+  buttons: [{enabled: true}]});
+assert(diagnostics.finish(token, {frame: {title: 'Company Book', scene: 'book', revision: 8}}));
+assert(diagnostics.snapshot().entries.some(entry => entry.stage === 'first-actionable'));
 
 for (let index = 0; index < 110; ++index) {
   token = diagnostics.begin('action', {action: 'private words must stay out'});
   now += 1;
-  diagnostics.finish(token, {frame: {title: 'A person name', revision: index}});
+  diagnostics.finish(token, {frame: {title: 'A person name', scene: 'town', revision: index}});
 }
 const snapshot = diagnostics.snapshot();
 assert.equal(snapshot.schema, 1);

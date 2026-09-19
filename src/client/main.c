@@ -11590,6 +11590,15 @@ int main(int argc, char **argv)
             frontend.screen == FRONTEND_INVITATION ? "invitation" :
             frontend.screen == FRONTEND_REMOVE_MEMBER ? "remove" : "playing", frontend.focus, (int)frontend.avatar);
 #endif
+        ClientTouchScene(frontend.screen != FRONTEND_PLAYING ? "menu" :
+            sim.mine.phase != CC_MINE_NONE &&
+                (view == VIEW_LOCAL || view == VIEW_ROADS) ? "mine" :
+            view == VIEW_LEDGER || view == VIEW_SITUATIONS ? "book" :
+            view == VIEW_DUNGEON || view == VIEW_DRAGON_CAVE ? "dungeon" :
+            view == VIEW_CARRIAGE ? "carriage" :
+            view == VIEW_CHARACTER ? "conversation" :
+            view == VIEW_TRADE ? "trade" :
+            sim.journey.active || local.journey_travel_active ? "road" : "town");
         ClientTouchEnd();
         EndDrawing();
 #if defined(PLATFORM_WEB)
