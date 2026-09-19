@@ -6,9 +6,12 @@ Camera3D CcLocalMineCamera(const CcSim *sim, int32_t facing)
         const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
         facing=((facing%4)+4)%4;
         Vector3 eye={(float)sim->mine.x,1.15f,(float)sim->mine.y};
+        bool near_haulers=abs(sim->mine.x-sim->mine.source_x)+
+            abs(sim->mine.y-sim->mine.source_y)<=1;
         return (Camera3D){.position=eye,
             .target={eye.x+(float)dx[facing],eye.y,eye.z+(float)dy[facing]},
-            .up={0,1,0},.fovy=64,.projection=CAMERA_PERSPECTIVE};
+            .up={0,1,0},.fovy=near_haulers?98.0f:64.0f,
+            .projection=CAMERA_PERSPECTIVE};
     }
     return PerspectiveCameraComposed((Vector3){15,0,11},(Vector3){0,10,16},48);
 }
@@ -21,12 +24,14 @@ Camera3D CcLocalMineCombatCamera(const CcLocalAgent *agent,
 {
     Camera3D camera={.position={agent->position.x,agent->position.y+1.25f,
                                agent->position.z},
-                     .up={0,1,0},.fovy=68,.projection=CAMERA_PERSPECTIVE};
+                     .up={0,1,0},.fovy=98,.projection=CAMERA_PERSPECTIVE};
     int32_t selected=agent->combat.target_index;
     if (selected>=0 && selected<CC_LOCAL_RAIDER_COUNT) {
-        const CcLocalAgent *target=&course->raiders[selected];
-        camera.target=(Vector3){target->position.x,target->position.y+.95f,
-                                target->position.z};
+        const CcLocalAgent *first=&course->raiders[0];
+        const CcLocalAgent *second=&course->raiders[1];
+        camera.target=(Vector3){(first->position.x+second->position.x)*.5f,
+                                camera.position.y-.10f,
+                                (first->position.z+second->position.z)*.5f};
     } else {
         const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
         facing=((facing%4)+4)%4;

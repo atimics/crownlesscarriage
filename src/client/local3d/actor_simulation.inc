@@ -1032,10 +1032,7 @@ static Vector2 MineEncounterApproach(const CcSim *sim)
 Vector2 CcLocalMineHaulerPosition(const CcSim *sim,int32_t index)
 {
     float side=index==0?-.45f:.45f;
-    /* The load occupies the source tile. The haulers stand one pace behind it,
-       inside the same room, so the player's adjacent approach can show their
-       full bodies while the source remains in honest reach. */
-    return (Vector2){(float)sim->mine.source_x+1.0f,
+    return (Vector2){(float)sim->mine.source_x,
                      (float)sim->mine.source_y+side};
 }
 
