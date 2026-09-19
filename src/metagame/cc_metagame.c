@@ -2465,6 +2465,17 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         if(first != NULL && strcmp(first,"visit")==0) {
             const CcRoadSite *site=CcMineSite(&metagame->sim);
             action.kind=CC_COMMAND_VISIT_MINE; action.target_id=site != NULL ? site->id : 0;
+        } else if(first != NULL && strcmp(first,"inspect")==0) {
+            action.kind=CC_COMMAND_MINE_INSPECT;
+        } else if(first != NULL && strcmp(first,"take")==0 &&
+                  ParseGood(second,&action.good) && ParseAmount(third,&action.amount)) {
+            action.kind=CC_COMMAND_MINE_TAKE;
+        } else if(first != NULL && strcmp(first,"cache")==0 &&
+                  ParseGood(second,&action.good) && ParseAmount(third,&action.amount)) {
+            action.kind=CC_COMMAND_MINE_CACHE;
+        } else if(first != NULL && strcmp(first,"recover")==0 &&
+                  ParseGood(second,&action.good) && ParseAmount(third,&action.amount)) {
+            action.kind=CC_COMMAND_MINE_CACHE; action.amount=-action.amount;
         } else if(first != NULL && strcmp(first,"use")==0) action.kind=CC_COMMAND_MINE_USE;
         else if(first != NULL && strcmp(first,"pack")==0 && ParseGood(second,&action.good)) {
             action.kind=CC_COMMAND_MINE_PACK;action.amount=1;
@@ -2475,7 +2486,7 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             for(int32_t i=0;i<4;++i) if(strcmp(second,directions[i])==0) {action.kind=CC_COMMAND_MINE_STEP;action.amount=i;}
             if(action.kind==CC_COMMAND_NONE) {Append(output,output_capacity,"Choose north, east, south, or west.\n");return false;}
         } else if(first != NULL && strcmp(first,"look")!=0) {
-            Append(output,output_capacity,"Use mine visit|look|move north/east/south/west|use|pack GOOD|unpack GOOD.\n");return false;
+            Append(output,output_capacity,"Use mine visit|look|move north/east/south/west|use|pack GOOD|unpack GOOD|inspect|take GOOD AMOUNT|cache GOOD AMOUNT|recover GOOD AMOUNT.\n");return false;
         }
         if(action.kind != CC_COMMAND_NONE && !ApplyCommand(metagame,&action,output,output_capacity)) return false;
         const CcMineVisit *m=&metagame->sim.mine;
@@ -2483,6 +2494,10 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             m->phase==CC_MINE_NONE?"road":m->phase==CC_MINE_YARD?"mine yard":CcMineChamberName(CcMineChamber(m->x,m->y)),
             m->x,m->y,CcMinePackUsed(&metagame->sim),m->light,
             CcMineAction(&metagame->sim) != NULL ? CcMineAction(&metagame->sim) : "Walk to the next doorway.");
+        if (m->phase == CC_MINE_LEVEL) {
+            Append(output, output_capacity, "Hauler load %d. Rope Store cache %d.\n",
+                   CcMineSourceUsed(&metagame->sim), CcMineCacheUsed(&metagame->sim));
+        }
     } else if (strcmp(command, "underroad") == 0) {
         CcCommand action = {0};
         if (first == NULL || strcmp(first, "look") == 0) {

@@ -1,4 +1,5 @@
 #include "sim/cc_occupations.h"
+#include "sim/cc_mine.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
 
@@ -149,6 +150,11 @@ static void CheckSuccessionSaves(void)
         CcSim restored;
         CcSimInit(&sim, UINT32_C(0x50cc0e5));
         sim.schema_version = version;
+        if (version < 103U) {
+            sim.mine = (CcMineVisit){0};
+            CcCustodyInit(&sim.custody);
+            sim.custody.capacity = CC_CUSTODY_LEGACY_CAPACITY;
+        }
         int32_t slot = 2;
         sim.kingdoms[slot].pretender_crises = 3;
         sim.kingdoms[slot].anointed = false;
@@ -164,6 +170,10 @@ static void CheckSuccessionSaves(void)
         CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
         CC_CHECK(restored.kingdoms[slot].ruler_character_id == winner_id);
         sim.schema_version = CC_SIM_SCHEMA_VERSION;
+        if (version < 103U) {
+            sim.custody.capacity = CC_CUSTODY_CAPACITY;
+            CcMineInitializeLoad(&sim);
+        }
         if (version < 75U) CcSimInitializeGoblinPolitics(&sim);
         if (version < 79U) CcSimInitializeOccupations(&sim);
         if (version < 101U) {

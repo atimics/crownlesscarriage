@@ -64,7 +64,9 @@ static inline const char *CcCoopActionName(CcCommandKind kind)
         "repair_road_site",
         "support_bakery", "fund_grain_supply", "deliver_prophecy",
         "reserve_archive_recruitment", "cancel_archive_recruitment",
+        "pickup_dispatch", "deliver_dispatch", "take_body_purse",
+        "mine_inspect", "mine_take", "mine_cache",
     };
-    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT ? names[(int)kind] : "";
+    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_MINE_CACHE ? names[(int)kind] : "";
 }
 #endif

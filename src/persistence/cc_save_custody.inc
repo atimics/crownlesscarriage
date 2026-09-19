@@ -8,7 +8,8 @@ static bool SaveCustody(sqlite3 *database, const CcSim *sim, char *error, size_t
     bool ok = StepDone(database, statement, error, capacity);
     sqlite3_finalize(statement);
     if (!ok || !Prepare(database, "INSERT INTO custody_entry VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", &statement, error, capacity)) return false;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY && ok; ++i) {
+    int32_t rows=sim->schema_version < 103U ? CC_CUSTODY_LEGACY_CAPACITY : CC_CUSTODY_CAPACITY;
+    for (int i = 0; i < rows && ok; ++i) {
         const CcCustodyEntry *entry = &sim->custody.entries[i];
         BindInt(statement, 1, i);
         BindId(statement, 2, entry->id); BindId(statement, 3, entry->revision);
@@ -39,7 +40,11 @@ static bool ReadCustody(sqlite3 *database, CcSim *sim, char *error, size_t capac
     if (sqlite3_step(statement) != SQLITE_DONE) goto invalid;
     sqlite3_finalize(statement); statement = NULL;
     if (!Prepare(database, "SELECT slot,id,revision,owner_id,source_id,last_event_id,holder_kind,holder_id,kind,reference_id,quantity,good,condition,capacity,active FROM custody_entry ORDER BY slot;", &statement, error, capacity)) return false;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    int32_t rows=sim->schema_version < 103U ? CC_CUSTODY_LEGACY_CAPACITY : CC_CUSTODY_CAPACITY;
+    sim->custody.capacity=rows;
+    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i)
+        sim->custody.entries[i]=(CcCustodyEntry){0};
+    for (int i = 0; i < rows; ++i) {
         if (sqlite3_step(statement) != SQLITE_ROW) goto invalid;
         for (int column = 0; column < 15; ++column)
             if (sqlite3_column_type(statement, column) != SQLITE_INTEGER) goto invalid;

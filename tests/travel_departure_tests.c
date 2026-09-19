@@ -1,4 +1,5 @@
 #include "persistence/cc_save.h"
+#include "sim/cc_mine.h"
 #include "test_support.h"
 
 #include <stdio.h>
@@ -105,6 +106,11 @@ static void CheckJourneySaves(void)
     for (uint32_t version = 40U; version <= CC_SIM_SCHEMA_VERSION; ++version) {
         CcSimInit(&sim, 42U);
         sim.schema_version = version;
+        if (version < 103U) {
+            sim.mine = (CcMineVisit){0};
+            CcCustodyInit(&sim.custody);
+            sim.custody.capacity = CC_CUSTODY_LEGACY_CAPACITY;
+        }
         sim.player.coins = 100;
         CcCommand depart = {.kind = CC_COMMAND_TRAVEL, .target_id = sim.settlements[1].id};
         CC_CHECK(CcSimApply(&sim, &depart, error, sizeof(error)));
@@ -120,6 +126,10 @@ static void CheckJourneySaves(void)
         CC_CHECK(restored.journey.fare_reserved == paid);
         CC_CHECK(restored.carriage.progress_milli == progress);
         sim.schema_version = CC_SIM_SCHEMA_VERSION;
+        if (version < 103U) {
+            sim.custody.capacity = CC_CUSTODY_CAPACITY;
+            CcMineInitializeLoad(&sim);
+        }
         CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
         (void)remove(path);
     }

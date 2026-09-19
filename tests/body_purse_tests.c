@@ -220,6 +220,9 @@ static void TestLegacySchemaStillInherits(void)
 {
     CcSimInit(&sim, UINT32_C(0xb04d5eed));
     sim.schema_version = 101U;
+    sim.mine = (CcMineVisit){0};
+    CcCustodyInit(&sim.custody);
+    sim.custody.capacity = CC_CUSTODY_LEGACY_CAPACITY;
     CcCharacter *dead = DoomCarrier(60);
     CC_CHECK(dead != NULL);
     CcMoney coins = dead->travel_coins;

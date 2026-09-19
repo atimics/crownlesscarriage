@@ -1,4 +1,5 @@
 #include "sim/cc_mine.h"
+#include "sim/cc_sim_custody.h"
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,13 +61,181 @@ bool CcMineWalkable(const CcSim *sim, CcMinePhase phase, int32_t x, int32_t y)
 }
 int32_t CcMinePackUsed(const CcSim *sim)
 {
+    if (sim == NULL) return 0;
     int64_t used=0;
-    for (int32_t i=0;i<CC_GOOD_COUNT;++i) used += sim->mine.pack[i];
+    for (int32_t i=0;i<CC_GOOD_COUNT;++i) {
+        int32_t quantity=sim->mine.pack[i];
+        if (quantity < 0 || used > INT_MAX-quantity) return INT_MAX;
+        used+=quantity;
+    }
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        const CcCustodyEntry *entry=&sim->custody.entries[i];
+        if (entry->active && entry->kind == CC_CUSTODY_GOODS &&
+            entry->holder.kind == CC_CUSTODY_MINE_PACK &&
+            entry->holder.id == sim->player.id) {
+            if (entry->quantity < 0 || entry->quantity > INT_MAX ||
+                used > INT_MAX-entry->quantity) return INT_MAX;
+            used += entry->quantity;
+        }
+    }
     return used > INT_MAX ? INT_MAX : (int32_t)used;
+}
+static int32_t MineCustodyGood(const CcSim *sim, CcCustodyHolderKind kind,
+                               CcId holder_id, CcGood good)
+{
+    int64_t used=0;
+    if (sim == NULL || good < 0 || good >= CC_GOOD_COUNT) return 0;
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        const CcCustodyEntry *entry=&sim->custody.entries[i];
+        if (entry->active && entry->kind == CC_CUSTODY_GOODS &&
+            entry->holder.kind == kind && entry->holder.id == holder_id && entry->good == (int32_t)good)
+            used += entry->quantity;
+    }
+    return used > INT_MAX ? INT_MAX : (int32_t)used;
+}
+int32_t CcMinePackGood(const CcSim *sim, CcGood good)
+{
+    if (sim == NULL || good < 0 || good >= CC_GOOD_COUNT) return 0;
+    int64_t total=(int64_t)sim->mine.pack[good]+MineCustodyGood(sim,
+        CC_CUSTODY_MINE_PACK,sim->player.id,good);
+    return total > INT_MAX ? INT_MAX : (int32_t)total;
+}
+int32_t CcMineSourceGood(const CcSim *sim, CcGood good)
+{
+    return sim == NULL ? 0 : MineCustodyGood(sim,CC_CUSTODY_SITE,sim->mine.source_id,good);
+}
+int32_t CcMineCacheGood(const CcSim *sim, CcGood good)
+{
+    return sim == NULL ? 0 : MineCustodyGood(sim,CC_CUSTODY_SITE,sim->mine.cache_id,good);
+}
+int32_t CcMineSourceUsed(const CcSim *sim)
+{
+    int64_t total=0;
+    for (int32_t good=0;good<CC_GOOD_COUNT;++good) total+=CcMineSourceGood(sim,(CcGood)good);
+    return total > INT_MAX ? INT_MAX : (int32_t)total;
+}
+int32_t CcMineCacheUsed(const CcSim *sim)
+{
+    int64_t total=0;
+    for (int32_t good=0;good<CC_GOOD_COUNT;++good) total+=CcMineCacheGood(sim,(CcGood)good);
+    return total > INT_MAX ? INT_MAX : (int32_t)total;
+}
+void CcMineInitializeLoad(CcSim *sim)
+{
+    if (sim == NULL || sim->dungeon_count == 0 || sim->player.id == 0 ||
+        sim->goblins.id == 0 ||
+        sim->mine.source_id != 0 || sim->mine.cache_id != 0 ||
+        sim->custody.next_id > UINT64_MAX - 3U) return;
+    /* This runs only for the current campaign schema. Legacy journal replay
+       keeps the shipped 96-slot table until its runtime upgrade finishes. */
+    if (sim->schema_version < 103U) return;
+    sim->custody.capacity=CC_CUSTODY_CAPACITY;
+    int32_t slots=0;
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i)
+        if (sim->custody.entries[i].id == 0) ++slots;
+    if (slots < 3) return;
+    CcMineVisit *mine=&sim->mine;
+    uint64_t authored_serial=((uint64_t)sim->world_seed << 1U) | UINT64_C(1);
+    mine->source_id=CcMakeId(CC_ENTITY_MINE_SOURCE,authored_serial);
+    mine->source_owner_id=sim->goblins.id;
+    mine->cache_id=CcMakeId(CC_ENTITY_MINE_CACHE,authored_serial);
+    mine->cache_owner_id=sim->player.id;
+    /* The fixed load awaits in the Lower Passage. The Rope Store is a real,
+       separate cache location, so a return trip has a recorded choice. */
+    mine->source_x=26; mine->source_y=16;
+    mine->cache_x=5; mine->cache_y=15;
+    mine->source_released=false;
+    const CcGood goods[] = {CC_GOOD_IRON,CC_GOOD_GOLD,CC_GOOD_GEMS};
+    const int32_t quantities[] = {8,3,2};
+    int32_t next=0;
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody) && next<3;++i) {
+        CcCustodyEntry *entry=&sim->custody.entries[i];
+        if (entry->id != 0) continue;
+        *entry=(CcCustodyEntry){.id=sim->custody.next_id++,.revision=1,
+            .owner_id=mine->source_owner_id,
+            .holder={CC_CUSTODY_SITE,mine->source_id},.kind=CC_CUSTODY_GOODS,
+            .quantity=quantities[next],.good=(int32_t)goods[next],.condition=100,.active=true};
+        ++next;
+    }
 }
 static bool Near(const CcMineVisit *mine, int32_t x, int32_t y)
 {
     return abs(mine->x-x)+abs(mine->y-y) <= 1;
+}
+static bool MineLocationReachable(const CcMineVisit *mine, int32_t x, int32_t y)
+{
+    return mine->phase == CC_MINE_LEVEL && Near(mine,x,y);
+}
+static bool Fail(char *error, size_t capacity, const char *text);
+static bool MineTransfer(CcSim *sim, CcCustodyHolder source,
+                         CcCustodyHolder destination, CcGood good,
+                         int32_t quantity, char *error, size_t capacity)
+{
+    CcCustodyResult result=CcSimTransferMineGoods(sim,source,destination,good,
+        quantity,(uint64_t)sim->mine.revision+1U);
+    if (result == CC_CUSTODY_READY) return true;
+    if (result == CC_CUSTODY_STALE) return Fail(error,capacity,"Refresh the mine position before moving that load.");
+    if (result == CC_CUSTODY_FULL) return Fail(error,capacity,"The destination has no room for that quantity.");
+    if (result == CC_CUSTODY_REMOTE) return Fail(error,capacity,"Reach both the carried pack and the located holder first.");
+    if (result == CC_CUSTODY_FORBIDDEN) return Fail(error,capacity,"The mine load is not available for that transfer.");
+    return Fail(error,capacity,"That holder does not contain the requested quantity.");
+}
+static bool StowMinePack(CcSim *sim, char *error, size_t capacity)
+{
+    int32_t carried[CC_GOOD_COUNT]={0};
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        const CcCustodyEntry *entry=&sim->custody.entries[i];
+        if (!entry->active || entry->holder.kind != CC_CUSTODY_MINE_PACK ||
+            entry->holder.id != sim->player.id) continue;
+        if (entry->kind != CC_CUSTODY_GOODS || entry->good < 0 ||
+            entry->good >= CC_GOOD_COUNT || entry->quantity > INT32_MAX - carried[entry->good])
+            return Fail(error,capacity,"The carried mine manifest is invalid.");
+        carried[entry->good]+=(int32_t)entry->quantity;
+    }
+    if (CcPlayerCargoUsed(&sim->player)+CcMinePackUsed(sim) > sim->player.cargo_capacity)
+        return Fail(error,capacity,"Make room in the carriage for the carried pack.");
+    for (int32_t good=0;good<CC_GOOD_COUNT;++good) {
+        if (sim->player.cargo[good] > CC_SIM_MAX_UNITS-sim->mine.pack[good]-carried[good])
+            return Fail(error,capacity,"The carriage cannot hold the carried mine load.");
+    }
+    for (int32_t good=0;good<CC_GOOD_COUNT;++good) {
+        sim->player.cargo[good]+=sim->mine.pack[good]+carried[good];
+        sim->mine.pack[good]=0;
+    }
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        CcCustodyEntry *entry=&sim->custody.entries[i];
+        if (entry->active && entry->holder.kind == CC_CUSTODY_MINE_PACK &&
+            entry->holder.id == sim->player.id) {
+            entry->quantity=0; entry->active=false; entry->revision+=1;
+            entry->last_event_id=(uint64_t)sim->mine.revision+1U;
+        }
+    }
+    return true;
+}
+static bool UnpackMineGood(CcSim *sim, CcGood good, int32_t quantity,
+                           char *error, size_t capacity)
+{
+    if (quantity <= 0 || CcMinePackGood(sim,good) < quantity ||
+        CcPlayerCargoUsed(&sim->player) > sim->player.cargo_capacity-quantity)
+        return Fail(error,capacity,"Check the carried goods and carriage space.");
+    int32_t legacy=sim->mine.pack[good] < quantity ? sim->mine.pack[good] : quantity;
+    int32_t remaining=quantity-legacy;
+    CcCustodyState candidate=sim->custody;
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody) && remaining>0;++i) {
+        CcCustodyEntry *entry=&candidate.entries[i];
+        if (!entry->active || entry->kind != CC_CUSTODY_GOODS || entry->good != (int32_t)good ||
+            entry->holder.kind != CC_CUSTODY_MINE_PACK || entry->holder.id != sim->player.id) continue;
+        int32_t moved=entry->quantity < remaining ? (int32_t)entry->quantity : remaining;
+        entry->quantity-=moved; entry->revision+=1;
+        entry->last_event_id=(uint64_t)sim->mine.revision+1U;
+        if (entry->quantity == 0) entry->active=false;
+        remaining-=moved;
+    }
+    if (remaining != 0) return Fail(error,capacity,"The carried mine manifest is invalid.");
+    sim->custody=candidate;
+    sim->mine.pack[good]-=legacy;
+    sim->player.cargo[good]+=quantity;
+    return true;
 }
 const char *CcMineAction(const CcSim *sim)
 {
@@ -152,10 +321,49 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
             if (amount > 0 && (sim->player.cargo[good] < amount ||
                 CcMinePackUsed(sim)+amount > CC_MINE_PACK_CAPACITY))
                 return Fail(error,capacity,"Check the carriage stock and eight-slot pack.");
-            if (amount < 0 && (m->pack[good] < -amount ||
-                CcPlayerCargoUsed(&sim->player)-amount > sim->player.cargo_capacity))
-                return Fail(error,capacity,"Check the carried goods and carriage space.");
-            m->pack[good]+=amount; sim->player.cargo[good]-=amount;
+            if (amount < 0) {
+                if (!UnpackMineGood(sim,(CcGood)good,-amount,error,capacity)) return false;
+            } else {
+                m->pack[good]+=amount; sim->player.cargo[good]-=amount;
+            }
+        } else if (command->kind == CC_COMMAND_MINE_INSPECT) {
+            if (!MineLocationReachable(m,m->source_x,m->source_y))
+                return Fail(error,capacity,"Reach the Lower Passage load before inspecting it.");
+            if (error != NULL && capacity > 0) error[0]='\0';
+            return true;
+        } else if (command->kind == CC_COMMAND_MINE_TAKE) {
+            if (!MineLocationReachable(m,m->source_x,m->source_y))
+                return Fail(error,capacity,"Reach the Lower Passage load before taking from it.");
+            if (command->good < 0 || command->good >= CC_GOOD_COUNT || command->amount <= 0)
+                return Fail(error,capacity,"Choose a positive quantity from the load.");
+            if (!m->source_released)
+                return Fail(error,capacity,"The haulers have not released this load.");
+            if (CcMinePackUsed(sim)+command->amount > CC_MINE_PACK_CAPACITY)
+                return Fail(error,capacity,"Make room in the eight-slot pack before taking more.");
+            if (!MineTransfer(sim,(CcCustodyHolder){CC_CUSTODY_SITE,m->source_id},
+                (CcCustodyHolder){CC_CUSTODY_MINE_PACK,sim->player.id},command->good,
+                command->amount,error,capacity)) return false;
+        } else if (command->kind == CC_COMMAND_MINE_CACHE) {
+            if (!MineLocationReachable(m,m->cache_x,m->cache_y))
+                return Fail(error,capacity,"Reach the Rope Store cache before moving its goods.");
+            if (command->good < 0 || command->good >= CC_GOOD_COUNT || command->amount == 0)
+                return Fail(error,capacity,"Choose a good and a non-zero cache quantity.");
+            if (command->amount > 0) {
+                if (m->pack[command->good] > 0)
+                    return Fail(error,capacity,"The Rope Store holds only the haulers' load.");
+                if (!MineTransfer(sim,(CcCustodyHolder){CC_CUSTODY_MINE_PACK,sim->player.id},
+                    (CcCustodyHolder){CC_CUSTODY_SITE,m->cache_id},command->good,
+                    command->amount,error,capacity)) return false;
+            } else {
+                if (command->amount == INT_MIN)
+                    return Fail(error,capacity,"Choose a supported cache quantity.");
+                int32_t quantity=-command->amount;
+                if (CcMinePackUsed(sim)+quantity > CC_MINE_PACK_CAPACITY)
+                    return Fail(error,capacity,"Make room in the eight-slot pack before recovering goods.");
+                if (!MineTransfer(sim,(CcCustodyHolder){CC_CUSTODY_SITE,m->cache_id},
+                    (CcCustodyHolder){CC_CUSTODY_MINE_PACK,sim->player.id},command->good,
+                    quantity,error,capacity)) return false;
+            }
         } else if (command->kind == CC_COMMAND_MINE_USE) {
             if (m->phase == CC_MINE_YARD && Near(m,15,3)) {
                 const CcDungeon *d=&sim->dungeons[0];
@@ -170,11 +378,7 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
                 m->phase=CC_MINE_YARD; m->x=15; m->y=4; m->light=0; m->steps=0;
                 SpendMinutes(sim,1);
             } else if (m->phase == CC_MINE_YARD && Near(m,15,18)) {
-                if (CcPlayerCargoUsed(&sim->player)+CcMinePackUsed(sim) > sim->player.cargo_capacity)
-                    return Fail(error,capacity,"Make room in the carriage for the carried pack.");
-                for (int32_t good=0;good<CC_GOOD_COUNT;++good) {
-                    sim->player.cargo[good]+=m->pack[good]; m->pack[good]=0;
-                }
+                if (!StowMinePack(sim,error,capacity)) return false;
                 const CcRoadSite *site=CcMineSite(sim);
                 sim->journey.road_site_stop_mask |= UINT32_C(1) << (int32_t)(site-sim->road_sites);
                 sim->carriage.mode=CC_CARRIAGE_MOVING;
@@ -204,6 +408,17 @@ bool CcMineValidate(const CcSim *sim)
     for (int32_t good=0;good<CC_GOOD_COUNT;++good)
         if (m->pack[good] < 0 || m->pack[good] > CC_MINE_PACK_CAPACITY) return false;
     if (CcMinePackUsed(sim) > CC_MINE_PACK_CAPACITY) return false;
+    if (sim->schema_version >= 103U) {
+        if (m->source_id == 0 || m->cache_id == 0 || m->source_id == m->cache_id ||
+            CcIdKind(m->source_id) != CC_ENTITY_MINE_SOURCE ||
+            CcIdKind(m->cache_id) != CC_ENTITY_MINE_CACHE ||
+            m->source_owner_id != sim->goblins.id ||
+            m->cache_owner_id != sim->player.id ||
+            !CcMineWalkable(sim,CC_MINE_LEVEL,m->source_x,m->source_y) ||
+            !CcMineWalkable(sim,CC_MINE_LEVEL,m->cache_x,m->cache_y) ||
+            (m->source_x == m->cache_x && m->source_y == m->cache_y)) return false;
+        if (CcMineCacheUsed(sim) > CC_MINE_CACHE_CAPACITY) return false;
+    }
     if (m->phase == CC_MINE_NONE)
         return m->site_id == 0 && m->x == 0 && m->y == 0 && m->return_speed == 0 &&
             m->light == 0 && m->steps == 0 && CcMinePackUsed(sim) == 0;

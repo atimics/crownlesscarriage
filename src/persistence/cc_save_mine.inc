@@ -19,7 +19,17 @@ static bool SaveMine(sqlite3 *database, const CcSim *sim, char *error, size_t er
             sqlite3_finalize(statement); return false;
         }
     }
-    sqlite3_finalize(statement); return true;
+    sqlite3_finalize(statement);
+    if (sim->schema_version < 103U) return true;
+    if (!Prepare(database,"INSERT INTO mine_load_state VALUES(1,?,?,?,?,?,?,?,?,?);",
+        &statement,error,error_capacity)) return false;
+    BindId(statement,1,m->source_id); BindId(statement,2,m->source_owner_id);
+    BindId(statement,3,m->cache_id); BindId(statement,4,m->cache_owner_id);
+    BindInt(statement,5,m->source_x); BindInt(statement,6,m->source_y);
+    BindInt(statement,7,m->cache_x); BindInt(statement,8,m->cache_y);
+    BindInt(statement,9,m->source_released ? 1 : 0);
+    ok=StepDone(database,statement,error,error_capacity);
+    sqlite3_finalize(statement); return ok;
 }
 static bool ReadMine(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
 {
@@ -46,5 +56,21 @@ static bool ReadMine(sqlite3 *database, CcSim *sim, char *error, size_t error_ca
     }
     sqlite3_finalize(statement);
     if (count != CC_GOOD_COUNT) {SetError(error,error_capacity,"Mine pack is incomplete."); return false;}
+    if (sim->schema_version < 103U) return true;
+    if (!Prepare(database,"SELECT source_id,source_owner_id,cache_id,cache_owner_id,source_x,source_y,cache_x,cache_y,source_released FROM mine_load_state WHERE slot=1;",
+        &statement,error,error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW) {
+        sqlite3_finalize(statement); SetError(error,error_capacity,"Mine load is missing."); return false;
+    }
+    m->source_id=(CcId)sqlite3_column_int64(statement,0);
+    m->source_owner_id=(CcId)sqlite3_column_int64(statement,1);
+    m->cache_id=(CcId)sqlite3_column_int64(statement,2);
+    m->cache_owner_id=(CcId)sqlite3_column_int64(statement,3);
+    m->source_x=sqlite3_column_int(statement,4); m->source_y=sqlite3_column_int(statement,5);
+    m->cache_x=sqlite3_column_int(statement,6); m->cache_y=sqlite3_column_int(statement,7);
+    m->source_released=sqlite3_column_int(statement,8)!=0;
+    bool done=sqlite3_step(statement)==SQLITE_DONE;
+    sqlite3_finalize(statement);
+    if (!done) {SetError(error,error_capacity,"Mine load rows are invalid."); return false;}
     return true;
 }

@@ -1,4 +1,5 @@
 #include "persistence/cc_legacy_runtime_internal.h"
+#include "sim/cc_mine.h"
 #include "sim/cc_sim_versions_internal.h"
 
 #include <stdio.h>
@@ -714,9 +715,9 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
         if (sim->dragon.slain && slain_count < 1) slain_count = 1;
         sim->dragon.dragons_slain = slain_count;
     }
+    if (legacy_version < 103U) CcMineInitializeLoad(sim);
     /* Legacy upgrades can seed residents and situation casts through
        separate paths; make the final living cast unique before validation. */
     MakeLegacyCharacterNamesUnique(sim);
     return true;
 }
-

@@ -5,7 +5,15 @@
 
 static CcSim sim, before, loaded;
 static CcId town, event;
+static uint64_t crate_id;
 static char error[256];
+
+static CcCustodyEntry *Entry(uint64_t id)
+{
+    for (int32_t slot = 0; slot < CcCustodyEffectiveCapacity(&sim.custody); ++slot)
+        if (sim.custody.entries[slot].id == id) return &sim.custody.entries[slot];
+    return NULL;
+}
 
 static void Prepare(void)
 {
@@ -17,9 +25,10 @@ static void Prepare(void)
     CcProductionContext work = {.producer_id = town, .storage_id = town,
         .location_id = town, .stock = sim.settlements[0].stock, .capacity = 1,
         .output_limit = 1, .work_available = 2, .condition = 100, .enabled = true};
-    uint64_t crate = 0;
-    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 1, event, &crate, NULL) == CC_CUSTODY_READY);
-    CC_CHECK(crate == 1 && work.work_available == 0);
+    uint64_t expected_id = sim.custody.next_id;
+    crate_id = 0;
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, expected_id, event, &crate_id, NULL) == CC_CUSTODY_READY);
+    CC_CHECK(crate_id == expected_id && work.work_available == 0);
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
@@ -27,8 +36,8 @@ static void RejectPack(int32_t quantity, CcCustodyResult expected)
 {
     before = sim;
     uint64_t id = 999;
-    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, quantity, 1,
-        sim.custody.entries[0].revision, sim.custody.next_id, event, &id) == expected);
+    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, quantity, crate_id,
+        Entry(crate_id)->revision, sim.custody.next_id, event, &id) == expected);
     CC_CHECK(id == 999 && memcmp(&sim, &before, sizeof(sim)) == 0);
 }
 
@@ -38,15 +47,18 @@ static void Journey(void)
     int32_t total = CcSimTrackedGood(&sim, CC_GOOD_WHEAT);
     CcMoney coins = CcSimTrackedGold(&sim);
     uint64_t id = 0;
-    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 7, 1, 1, 2, event, &id) == CC_CUSTODY_READY);
-    CC_CHECK(id == 2 && sim.custody.next_id == 3);
+    uint64_t expected_goods = sim.custody.next_id;
+    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 7, crate_id, 1,
+        expected_goods, event, &id) == CC_CUSTODY_READY);
+    CC_CHECK(id == expected_goods && sim.custody.next_id == expected_goods + 1U);
     CC_CHECK(sim.settlements[0].stock[CC_GOOD_WHEAT] == 993);
-    CC_CHECK(sim.custody.entries[0].revision == 2);
+    CC_CHECK(Entry(crate_id)->revision == 2);
     const CcCustodyEntry *entry = CcCustodyFind(&sim.custody, id);
-    CC_CHECK(entry != NULL && entry->quantity == 7 && entry->holder.id == 1);
+    CC_CHECK(entry != NULL && entry->quantity == 7 && entry->holder.id == crate_id);
     CC_CHECK(entry->last_event_id == event && entry->condition == 100);
     before = sim;
-    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 7, 1, 1, 2, event, NULL) == CC_CUSTODY_STALE);
+    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 7, crate_id, 1,
+        expected_goods, event, NULL) == CC_CUSTODY_STALE);
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
     unsigned char *bytes = NULL; size_t length = 0;
     CC_CHECK(CcSaveEncode(&sim, &bytes, &length, error, sizeof(error)));
@@ -67,9 +79,10 @@ static void Journey(void)
     CC_CHECK(CcSimTrackedGood(&sim, CC_GOOD_WHEAT) == total && CcSimTrackedGold(&sim) == coins);
     CC_CHECK(sim.settlements[0].stock[CC_GOOD_WHEAT] == 1000);
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
-    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 2, 1,
-        sim.custody.entries[0].revision, sim.custody.next_id, event, &id) == CC_CUSTODY_READY);
-    CC_CHECK(id == 4 && CcCustodyFind(&sim.custody, 2) == NULL);
+    uint64_t replacement_id = sim.custody.next_id;
+    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 2, crate_id,
+        Entry(crate_id)->revision, replacement_id, event, &id) == CC_CUSTODY_READY);
+    CC_CHECK(id == replacement_id && CcCustodyFind(&sim.custody, expected_goods) == NULL);
 }
 
 static void FreightSlots(void)
@@ -78,7 +91,8 @@ static void FreightSlots(void)
     int32_t total = CcSimTrackedGood(&sim, CC_GOOD_WHEAT);
     uint64_t id = 0;
     /* Royal freight fits ten wheat per slot, so the ten-slot crate fits 100. */
-    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 100, 1, 1, 2, event, &id) == CC_CUSTODY_READY);
+    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 100, crate_id, 1,
+        sim.custody.next_id, event, &id) == CC_CUSTODY_READY);
     RejectPack(1, CC_CUSTODY_FULL);
     CC_CHECK(CcSimUnpackStoreGoods(&sim, town, id, 2, 50, event) == CC_CUSTODY_READY);
     CC_CHECK(CcCustodyFind(&sim.custody, id)->quantity == 50);
@@ -93,8 +107,9 @@ static void CarrierJourney(void)
     CC_CHECK(carrier->location_id == town && carrier->mode == CC_ROYAL_CARRIAGE_IDLE);
     CcId destination = sim.settlements[1].id;
     uint64_t id = 0;
-    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 7, 1, 1, 2, event, &id) == CC_CUSTODY_READY);
-    CcCustodyTransfer load = {.entry_id = 1, .revision = 2, .actor_id = town,
+    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 7, crate_id, 1,
+        sim.custody.next_id, event, &id) == CC_CUSTODY_READY);
+    CcCustodyTransfer load = {.entry_id = crate_id, .revision = 2, .actor_id = town,
         .event_id = event, .destination = {CC_CUSTODY_CARRIER, carrier->id}, .quantity = 1};
     CC_CHECK(CcSimTransferCustody(&sim, &load, NULL) == CC_CUSTODY_READY);
     CC_CHECK(CcSimCustodyCarrierLoad(&sim, carrier->id) == 2);
@@ -115,7 +130,7 @@ static void CarrierJourney(void)
     CC_CHECK(!CcSimDispatchCustodyCarrier(&sim, carrier->id, destination));
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
     CC_CHECK(carrier->active_shipment_id == 0);
-    CcCustodyTransfer unload = {.entry_id = 1, .revision = 3, .actor_id = town,
+    CcCustodyTransfer unload = {.entry_id = crate_id, .revision = 3, .actor_id = town,
         .event_id = event, .destination = {CC_CUSTODY_STORE, destination}, .quantity = 1};
     before = sim;
     CC_CHECK(CcSimTransferCustody(&sim, &unload, NULL) == CC_CUSTODY_REMOTE);
@@ -144,8 +159,8 @@ static void CarrierJourney(void)
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
     int32_t total = CcSimTrackedGood(&sim, CC_GOOD_WHEAT);
     CC_CHECK(CcSimTransferCustody(&sim, &unload, NULL) == CC_CUSTODY_READY);
-    CC_CHECK(CcCustodyFind(&sim.custody, 1)->holder.id == destination);
-    CC_CHECK(CcCustodyFind(&sim.custody, id)->holder.id == 1);
+    CC_CHECK(CcCustodyFind(&sim.custody, crate_id)->holder.id == destination);
+    CC_CHECK(CcCustodyFind(&sim.custody, id)->holder.id == crate_id);
     CC_CHECK(CcCustodyFind(&sim.custody, id)->quantity == 7);
     CC_CHECK(CcCustodyFind(&sim.custody, id)->owner_id == town);
     CC_CHECK(CcSimCustodyCarrierLoad(&sim, carrier->id) == 0);
@@ -158,15 +173,21 @@ static void BookingGates(void)
     Prepare();
     CcRoyalCarriage *carrier = &sim.royal_carriages[0];
     CcId destination = sim.settlements[1].id;
-    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 14, 1, 1, 2, event, NULL) == CC_CUSTODY_READY);
-    sim.custody.entries[2] = sim.custody.entries[0];
-    sim.custody.entries[2].id = 3;
-    sim.custody.entries[2].revision = 1;
-    sim.custody.next_id = 4;
-    CcCustodyTransfer load = {.entry_id = 1, .revision = 2, .actor_id = town,
+    uint64_t goods_id = sim.custody.next_id;
+    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 14, crate_id, 1,
+        goods_id, event, NULL) == CC_CUSTODY_READY);
+    int32_t duplicate_slot = -1;
+    for (int32_t slot = 0; slot < CcCustodyEffectiveCapacity(&sim.custody); ++slot)
+        if (!sim.custody.entries[slot].active) { duplicate_slot = slot; break; }
+    CC_CHECK(duplicate_slot >= 0);
+    uint64_t duplicate_id = sim.custody.next_id++;
+    sim.custody.entries[duplicate_slot] = *Entry(crate_id);
+    sim.custody.entries[duplicate_slot].id = duplicate_id;
+    sim.custody.entries[duplicate_slot].revision = 1;
+    CcCustodyTransfer load = {.entry_id = crate_id, .revision = 2, .actor_id = town,
         .event_id = event, .destination = {CC_CUSTODY_CARRIER, carrier->id}, .quantity = 1};
     CC_CHECK(CcSimTransferCustody(&sim, &load, NULL) == CC_CUSTODY_READY);
-    load.entry_id = 3; load.revision = 1;
+    load.entry_id = duplicate_id; load.revision = 1;
     CC_CHECK(CcSimTransferCustody(&sim, &load, NULL) == CC_CUSTODY_READY);
     CC_CHECK(CcSimCustodyCarrierLoad(&sim, carrier->id) == 4);
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
@@ -176,8 +197,8 @@ static void BookingGates(void)
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
     carrier->next_dispatch_day = sim.current_day;
     CC_CHECK(CcSimDispatchCustodyCarrier(&sim, carrier->id, destination));
-    CcCustodyTransfer repack = {.entry_id = 2, .revision = 2, .actor_id = town,
-        .event_id = event, .destination = {CC_CUSTODY_CONTAINER_HOLDER, 3}, .quantity = 1};
+    CcCustodyTransfer repack = {.entry_id = goods_id, .revision = 2, .actor_id = town,
+        .event_id = event, .destination = {CC_CUSTODY_CONTAINER_HOLDER, duplicate_id}, .quantity = 1};
     before = sim;
     CC_CHECK(CcSimTransferCustody(&sim, &repack, NULL) == CC_CUSTODY_FORBIDDEN);
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
@@ -200,8 +221,9 @@ static void Manufacturing(void)
     CcMoney coins = CcSimTrackedGold(&sim);
     CcProductionReceipt receipt = {0};
     uint64_t id = 999;
-    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 2, event, &id, &receipt) == CC_CUSTODY_READY);
-    CC_CHECK(id == 2 && receipt.gate == CC_PRODUCTION_READY);
+    uint64_t expected_id = sim.custody.next_id;
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, expected_id, event, &id, &receipt) == CC_CUSTODY_READY);
+    CC_CHECK(id == expected_id && receipt.gate == CC_PRODUCTION_READY);
     CC_CHECK(receipt.producer_id == town && receipt.storage_id == town && receipt.location_id == town);
     CC_CHECK(receipt.inputs[0] == 4 && receipt.inputs[1] == 1 && receipt.work == 2 && receipt.batches == 1 && receipt.output == 0);
     CC_CHECK(work.work_available == 0 && work.capacity == 2 && work.output_limit == 2);
@@ -211,48 +233,54 @@ static void Manufacturing(void)
     before = sim;
     CcProductionContext old_work = work;
     CcProductionReceipt old_receipt = receipt;
-    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 2, event, &id, &receipt) == CC_CUSTODY_STALE);
-    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 3, event, &id, &receipt) == CC_CUSTODY_INVALID);
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, expected_id, event, &id, &receipt) == CC_CUSTODY_STALE);
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, expected_id + 1U, event, &id, &receipt) == CC_CUSTODY_INVALID);
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
     CC_CHECK(memcmp(&work, &old_work, sizeof(work)) == 0);
-    CC_CHECK(memcmp(&receipt, &old_receipt, sizeof(receipt)) == 0 && id == 2);
+    CC_CHECK(memcmp(&receipt, &old_receipt, sizeof(receipt)) == 0 && id == expected_id);
     work.work_available = 2;
     work.location_id = sim.settlements[1].id;
-    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 3, event, NULL, NULL) == CC_CUSTODY_INVALID);
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, sim.custody.next_id,
+        event, NULL, NULL) == CC_CUSTODY_INVALID);
     work.location_id = town;
     sim.settlements[0].stock[CC_GOOD_WOOD] = 3;
     before = sim;
-    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 3, event, NULL, NULL) == CC_CUSTODY_INVALID);
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, sim.custody.next_id,
+        event, NULL, NULL) == CC_CUSTODY_INVALID);
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0 && work.work_available == 2);
     sim.settlements[0].stock[CC_GOOD_WOOD] = 4;
     sim.settlements[0].stock[CC_GOOD_TOOLS] = 0;
     before = sim;
-    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 3, event, NULL, NULL) == CC_CUSTODY_INVALID);
+    CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, sim.custody.next_id,
+        event, NULL, NULL) == CC_CUSTODY_INVALID);
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0 && work.work_available == 2);
 }
 
 static void Repairs(void)
 {
     Prepare();
-    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 7, 1, 1, 2, event, NULL) == CC_CUSTODY_READY);
-    sim.custody.entries[0].condition = 60;
+    uint64_t goods_id = sim.custody.next_id;
+    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 7, crate_id, 1,
+        goods_id, event, NULL) == CC_CUSTODY_READY);
+    Entry(crate_id)->condition = 60;
     CcProductionContext work = {.producer_id = town, .storage_id = town,
         .location_id = town, .stock = sim.settlements[0].stock, .capacity = 2,
         .output_limit = 2, .work_available = 2, .condition = 100, .enabled = true};
     int32_t wood = CcSimTrackedGood(&sim, CC_GOOD_WOOD);
     CcProductionReceipt receipt = {0};
-    CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, 1, 2, event, &receipt) == CC_CUSTODY_READY);
-    CC_CHECK(sim.custody.entries[0].condition == 85 && sim.custody.entries[0].revision == 3);
+    CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, crate_id, 2, event, &receipt) == CC_CUSTODY_READY);
+    CC_CHECK(Entry(crate_id)->condition == 85 && Entry(crate_id)->revision == 3);
     CC_CHECK(receipt.inputs[0] == 1 && receipt.work == 1 && work.work_available == 1);
     before = sim;
-    CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, 1, 2, event, &receipt) == CC_CUSTODY_STALE);
+    CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, crate_id, 2, event, &receipt) == CC_CUSTODY_STALE);
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0 && work.work_available == 1);
-    CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, 1, 3, event, &receipt) == CC_CUSTODY_READY);
-    CC_CHECK(sim.custody.entries[0].condition == 100 && sim.custody.entries[0].revision == 4);
+    CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, crate_id, 3, event, &receipt) == CC_CUSTODY_READY);
+    CC_CHECK(Entry(crate_id)->condition == 100 && Entry(crate_id)->revision == 4);
     CC_CHECK(work.work_available == 0 && CcSimTrackedGood(&sim, CC_GOOD_WOOD) == wood - 2);
-    CC_CHECK(CcCustodyFind(&sim.custody, 2)->quantity == 7 && CcCustodyFind(&sim.custody, 2)->holder.id == 1);
+    CC_CHECK(CcCustodyFind(&sim.custody, goods_id)->quantity == 7 &&
+        CcCustodyFind(&sim.custody, goods_id)->holder.id == crate_id);
     before = sim;
-    CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, 1, 4, event, NULL) == CC_CUSTODY_INVALID);
+    CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, crate_id, 4, event, NULL) == CC_CUSTODY_INVALID);
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
@@ -261,7 +289,7 @@ static void WorkshopWorldGates(void)
 {
     for (int scenario = 0; scenario < 2; ++scenario) {
         Prepare();
-        sim.custody.entries[0].condition = 50;
+        Entry(crate_id)->condition = 50;
         CcProductionContext work = {.producer_id = town, .storage_id = town,
             .location_id = town, .stock = sim.settlements[0].stock, .capacity = 2,
             .output_limit = 2, .work_available = 3, .condition = 100, .enabled = true};
@@ -274,16 +302,18 @@ static void WorkshopWorldGates(void)
         CcProductionReceipt receipt = {.work = 999};
         CcProductionReceipt old_receipt = receipt;
         uint64_t id = 999;
-        CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 2, event, &id, &receipt) == CC_CUSTODY_INVALID);
-        CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, 1, 1, event, &receipt) == CC_CUSTODY_INVALID);
+        CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, sim.custody.next_id,
+            event, &id, &receipt) == CC_CUSTODY_INVALID);
+        CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, crate_id, 1, event, &receipt) == CC_CUSTODY_INVALID);
         CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0);
         CC_CHECK(memcmp(&work, &old_work, sizeof(work)) == 0);
         CC_CHECK(memcmp(&receipt, &old_receipt, sizeof(receipt)) == 0 && id == 999);
         sim.settlements[0].population = population;
         sim.settlements[0].fire_damage = fire;
-        CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, 1, 1, event, &receipt) == CC_CUSTODY_READY);
-        CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, 2, event, &id, &receipt) == CC_CUSTODY_READY);
-        CC_CHECK(work.work_available == 0 && id == 2);
+        CC_CHECK(CcSimRepairCustodyContainer(&sim, &work, crate_id, 1, event, &receipt) == CC_CUSTODY_READY);
+        uint64_t expected_id = sim.custody.next_id;
+        CC_CHECK(CcSimMakeCustodyContainer(&sim, &work, expected_id, event, &id, &receipt) == CC_CUSTODY_READY);
+        CC_CHECK(work.work_available == 0 && id == expected_id);
         CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
     }
 }
@@ -292,20 +322,20 @@ static void Gates(void)
 {
     Prepare(); RejectPack(0, CC_CUSTODY_INVALID); RejectPack(1001, CC_CUSTODY_INVALID);
     RejectPack(101, CC_CUSTODY_FULL);
-    sim.custody.entries[0].holder.id = sim.settlements[1].id;
+    Entry(crate_id)->holder.id = sim.settlements[1].id;
     RejectPack(1, CC_CUSTODY_REMOTE);
-    sim.custody.entries[0].holder.id = town;
-    sim.custody.entries[0].owner_id = sim.player.id;
+    Entry(crate_id)->holder.id = town;
+    Entry(crate_id)->owner_id = sim.player.id;
     RejectPack(1, CC_CUSTODY_FORBIDDEN);
     Prepare();
-    for (int i = 1; i < CC_CUSTODY_CAPACITY; ++i) {
-        sim.custody.entries[i] = (CcCustodyEntry){.id = (uint64_t)i + 1, .revision = 1,
+    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+        if (sim.custody.entries[i].active) continue;
+        sim.custody.entries[i] = (CcCustodyEntry){.id = sim.custody.next_id++, .revision = 1,
             .owner_id = town, .holder = {CC_CUSTODY_STORE, town},
             .kind = CC_CUSTODY_GOODS, .quantity = 1, .good = CC_GOOD_WHEAT,
             .condition = 100, .active = true};
         sim.settlements[0].stock[CC_GOOD_WHEAT]--;
     }
-    sim.custody.next_id = CC_CUSTODY_CAPACITY + 1;
     RejectPack(1, CC_CUSTODY_FULL);
     CcProductionContext work = {.producer_id = town, .storage_id = town,
         .location_id = town, .stock = sim.settlements[0].stock, .capacity = 1,
@@ -315,7 +345,8 @@ static void Gates(void)
     CC_CHECK(memcmp(&sim, &before, sizeof(sim)) == 0 && work.work_available == 2);
     Prepare();
     uint64_t id = 0;
-    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 2, 1, 1, 2, event, &id) == CC_CUSTODY_READY);
+    CC_CHECK(CcSimPackStoreGoods(&sim, town, CC_GOOD_WHEAT, 2, crate_id, 1,
+        sim.custody.next_id, event, &id) == CC_CUSTODY_READY);
     sim.settlements[0].stock[CC_GOOD_WHEAT] = CC_SIM_MAX_UNITS;
     before = sim;
     CC_CHECK(CcSimUnpackStoreGoods(&sim, town, id, 2, 2, event) == CC_CUSTODY_FULL);

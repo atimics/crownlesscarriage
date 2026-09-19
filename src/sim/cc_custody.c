@@ -4,13 +4,21 @@
 
 void CcCustodyInit(CcCustodyState *state)
 {
-    *state = (CcCustodyState){.next_id = 1};
+    *state = (CcCustodyState){.next_id = 1,.capacity=CC_CUSTODY_CAPACITY};
+}
+
+int32_t CcCustodyEffectiveCapacity(const CcCustodyState *state)
+{
+    if (state == NULL || state->capacity == 0) return CC_CUSTODY_LEGACY_CAPACITY;
+    if (state->capacity == CC_CUSTODY_LEGACY_CAPACITY ||
+        state->capacity == CC_CUSTODY_CAPACITY) return state->capacity;
+    return 0;
 }
 
 const CcCustodyEntry *CcCustodyFind(const CcCustodyState *state, uint64_t id)
 {
     if (state == NULL || id == 0) return NULL;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i)
+    for (int i = 0; i < CcCustodyEffectiveCapacity(state); ++i)
         if (state->entries[i].active && state->entries[i].id == id)
             return &state->entries[i];
     return NULL;
@@ -25,7 +33,7 @@ static bool RootHolder(const CcCustodyState *state, CcCustodyHolder holder,
                        CcCustodyHolder *root)
 {
     if (holder.id == 0 || holder.kind < CC_CUSTODY_STORE ||
-        holder.kind > CC_CUSTODY_CONTAINER_HOLDER) return false;
+        holder.kind > CC_CUSTODY_MINE_PACK) return false;
     if (holder.kind == CC_CUSTODY_CONTAINER_HOLDER) {
         const CcCustodyEntry *box = CcCustodyFind(state, holder.id);
         if (box == NULL || box->kind != CC_CUSTODY_CONTAINER ||
@@ -33,7 +41,8 @@ static bool RootHolder(const CcCustodyState *state, CcCustodyHolder holder,
         holder = box->holder;
     }
     if (holder.id == 0 || holder.kind < CC_CUSTODY_STORE ||
-        holder.kind >= CC_CUSTODY_CONTAINER_HOLDER) return false;
+        holder.kind == CC_CUSTODY_CONTAINER_HOLDER ||
+        holder.kind > CC_CUSTODY_MINE_PACK) return false;
     *root = holder;
     return true;
 }
@@ -64,7 +73,7 @@ static bool Load(const CcCustodyState *state, const CcCustodyRules *rules, CcCus
 {
     *load = 0;
     *count = 0;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < CcCustodyEffectiveCapacity(state); ++i) {
         const CcCustodyEntry *entry = &state->entries[i];
         if (!entry->active) continue;
         CcCustodyHolder actual = entry->holder;
@@ -89,9 +98,11 @@ static bool EmptyEntry(const CcCustodyEntry *entry)
 
 bool CcCustodyValidate(const CcCustodyState *state, const CcCustodyRules *rules)
 {
-    if (state == NULL || state->next_id == 0 || rules == NULL ||
+    int32_t slots=CcCustodyEffectiveCapacity(state);
+    if (state == NULL || state->next_id == 0 ||
+        (slots != CC_CUSTODY_LEGACY_CAPACITY && slots != CC_CUSTODY_CAPACITY) || rules == NULL ||
         rules->resolve == NULL || rules->good_count <= 0) return false;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < slots; ++i) {
         const CcCustodyEntry *entry = &state->entries[i];
         if (entry->id == 0) {
             if (!EmptyEntry(entry)) return false;
@@ -99,7 +110,7 @@ bool CcCustodyValidate(const CcCustodyState *state, const CcCustodyRules *rules)
         }
         if (entry->id >= state->next_id || entry->revision == 0 || entry->owner_id == 0 ||
             entry->source_id >= entry->id || entry->holder.id == 0 ||
-            entry->holder.kind < CC_CUSTODY_STORE || entry->holder.kind > CC_CUSTODY_CONTAINER_HOLDER ||
+            entry->holder.kind < CC_CUSTODY_STORE || entry->holder.kind > CC_CUSTODY_MINE_PACK ||
             entry->kind < CC_CUSTODY_GOODS ||
             entry->kind > CC_CUSTODY_CONTAINER || entry->condition < 0 ||
             entry->condition > 100 || entry->capacity < 0 ||
@@ -134,9 +145,9 @@ bool CcCustodyValidate(const CcCustodyState *state, const CcCustodyRules *rules)
         CcCustodyLocation location = {0};
         int64_t capacity = 0, used = 0;
         int count = 0;
-        if (!rules->resolve(rules->context, root, &location, &capacity) ||
+        if (!rules->resolve(rules->context,root,&location,&capacity) ||
             !ValidLocation(location) || capacity < 0 ||
-            !Load(state, rules, root, true, &used, &count) || used > capacity) return false;
+            !Load(state,rules,root,true,&used,&count) || used > capacity) return false;
         if (entry->kind == CC_CUSTODY_CONTAINER) {
             CcCustodyHolder contents = {CC_CUSTODY_CONTAINER_HOLDER, entry->id};
             if (!Load(state, rules, contents, false, &used, &count) ||
@@ -156,10 +167,12 @@ static uint64_t HashWord(uint64_t hash, uint64_t word)
     return hash;
 }
 
-uint64_t CcCustodyHash(const CcCustodyState *state)
+uint64_t CcCustodyHashForCapacity(const CcCustodyState *state, int32_t capacity)
 {
+    if (state == NULL || (capacity != CC_CUSTODY_LEGACY_CAPACITY &&
+        capacity != CC_CUSTODY_CAPACITY)) return 0;
     uint64_t hash = HashWord(UINT64_C(14695981039346656037), state->next_id);
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < capacity; ++i) {
         const CcCustodyEntry *entry = &state->entries[i];
         hash = HashWord(hash, entry->id);
         hash = HashWord(hash, entry->revision);
@@ -179,9 +192,14 @@ uint64_t CcCustodyHash(const CcCustodyState *state)
     return hash;
 }
 
+uint64_t CcCustodyHash(const CcCustodyState *state)
+{
+    return CcCustodyHashForCapacity(state,CcCustodyEffectiveCapacity(state));
+}
+
 static int FreeSlot(const CcCustodyState *state)
 {
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i)
+    for (int i = 0; i < CcCustodyEffectiveCapacity(state); ++i)
         if (!state->entries[i].active && state->entries[i].quantity == 0) return i;
     return -1;
 }
@@ -262,7 +280,7 @@ CcCustodyResult CcCustodyPlanTransfer(const CcCustodyState *state,
     if (split && (FreeSlot(state) < 0 || state->next_id == 0 || state->next_id == UINT64_MAX))
         return CC_CUSTODY_FULL;
     if (split) {
-        for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i)
+        for (int i = 0; i < CcCustodyEffectiveCapacity(state); ++i)
             if (state->entries[i].id >= state->next_id) return CC_CUSTODY_INVALID;
     }
     return CC_CUSTODY_READY;

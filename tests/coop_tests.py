@@ -380,6 +380,23 @@ class CoopTests(unittest.TestCase):
                 self.assertEqual(result['world']['state'], before)
                 self.assertTrue(self.worlds.command(self.id, self.a, body)['duplicate'])
 
+    def test_mine_take_cache_payloads_and_stale_revision_reach_the_host(self):
+        before = self.worlds.view(self.id, self.a)
+        for action in ('mine_take', 'mine_cache'):
+            body = self.command(self.a, action, target='0', good=1, amount=1)
+            result = self.worlds.command(self.id, self.a, body)
+            self.assertFalse(result['accepted'])
+            self.assertIn('mine position', result['message'])
+            self.assertEqual(result['world']['state'], before['state'])
+        stale = self.command(self.a, 'mine_take', target='0', good=1, amount=1)
+        self.assertTrue(self.worlds.command(
+            self.id, self.a, self.command(self.a, 'trade', good=0, amount=1))['accepted'])
+        stale['sequence'] += 1
+        with self.assertRaises(ApiError) as rejected:
+            self.worlds.command(self.id, self.a, stale)
+        self.assertEqual(rejected.exception.status, 409)
+        self.assertIn('company has changed', rejected.exception.message)
+
     def test_two_players_clear_and_reload_a_road_site(self):
         def apply(token, action, **values):
             body = self.command(token, action, **values)

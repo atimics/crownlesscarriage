@@ -1441,7 +1441,11 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " phase INTEGER NOT NULL,site_id INTEGER NOT NULL,x INTEGER NOT NULL,y INTEGER NOT NULL,"
         " revision INTEGER NOT NULL,return_speed INTEGER NOT NULL,light INTEGER NOT NULL,"
         " steps INTEGER NOT NULL,seen INTEGER NOT NULL,bar_open INTEGER NOT NULL,surveyed INTEGER NOT NULL);"
-        "CREATE TABLE IF NOT EXISTS mine_pack (good INTEGER PRIMARY KEY,quantity INTEGER NOT NULL);";
+        "CREATE TABLE IF NOT EXISTS mine_pack (good INTEGER PRIMARY KEY,quantity INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS mine_load_state (slot INTEGER PRIMARY KEY CHECK(slot=1),"
+        " source_id INTEGER NOT NULL,source_owner_id INTEGER NOT NULL,cache_id INTEGER NOT NULL,"
+        " cache_owner_id INTEGER NOT NULL,source_x INTEGER NOT NULL,source_y INTEGER NOT NULL,"
+        " cache_x INTEGER NOT NULL,cache_y INTEGER NOT NULL,source_released INTEGER NOT NULL);";
     return Execute(database, "CREATE TABLE IF NOT EXISTS custody_state (slot INTEGER PRIMARY KEY,next_id INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS custody_entry (slot INTEGER PRIMARY KEY,id INTEGER NOT NULL,revision INTEGER NOT NULL,owner_id INTEGER NOT NULL,source_id INTEGER NOT NULL,last_event_id INTEGER NOT NULL,holder_kind INTEGER NOT NULL,holder_id INTEGER NOT NULL,kind INTEGER NOT NULL,reference_id INTEGER NOT NULL,quantity INTEGER NOT NULL,good INTEGER NOT NULL,condition INTEGER NOT NULL,capacity INTEGER NOT NULL,active INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS notice_state (id INTEGER PRIMARY KEY CHECK(id=1),ready INTEGER NOT NULL);", error, error_capacity) &&
@@ -3394,7 +3398,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
     }
     return Execute(database,
             "DELETE FROM goblin_faction; DELETE FROM goblin_politics; DELETE FROM dragon_cult; DELETE FROM dragon_cult_store;"
-            "DELETE FROM custody_state; DELETE FROM custody_entry; DELETE FROM mine_visit; DELETE FROM mine_pack;"
+            "DELETE FROM custody_state; DELETE FROM custody_entry; DELETE FROM mine_visit; DELETE FROM mine_pack; DELETE FROM mine_load_state;"
             "DELETE FROM notice_state; DELETE FROM notice_board; DELETE FROM gossip_state; DELETE FROM gossip_account; DELETE FROM gossip_carrier;"
             "DELETE FROM gossip_version;"
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
