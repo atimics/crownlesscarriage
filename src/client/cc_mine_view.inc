@@ -404,10 +404,13 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
         "Walk to the carriage to transfer selected goods.";
     if(at_carriage && carriage_used+pack_used>sim->player.cargo_capacity) {
         hint=carriage_used==sim->player.cargo_capacity?
-            "Carriage has no free space. Keep the pack and walk to the mine mouth.":
-            "Choose a packed good and amount that fits, then unload or walk to the mine mouth.";
+            (brief?"Cart full. Keep the pack or enter the mine.":
+                "Carriage has no free space. Keep the pack and walk to the mine mouth."):
+            (brief?"Choose goods that fit, then unload or enter.":
+                "Choose a packed good and amount that fits, then unload or walk to the mine mouth.");
     } else if(at_carriage && pack_used==CC_MINE_PACK_CAPACITY)
-        hint="Pack is full. Unload selected goods, or walk to the mine mouth.";
+        hint=brief?"Pack full. Unload goods or enter the mine.":
+            "Pack is full. Unload selected goods, or walk to the mine mouth.";
     CcOverlayDrawText(hint,22,GetScreenHeight()-151,11,TEAL);
     AdventureButton(MineSelectionControl(0),brief?"Good <":"Previous good",true,false);
     AdventureButton(MineSelectionControl(1),brief?"Good >":"Next good",true,false);
