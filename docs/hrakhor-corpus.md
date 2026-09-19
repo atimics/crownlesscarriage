@@ -5,6 +5,9 @@ tribute, travel, raids, dragon eggs, ritual, defence, stores, barter, fear,
 loss, remembrance, and uncertainty. Each scenario uses an existing simulation
 event rule. The names and values are authored examples. Personal feelings and
 plans are authored speech, with that origin recorded on every output row.
+Report turns can focus on part of an event; the full account stays beside the
+speech. Their meaning is reviewed by hand. The automated checks cover parsing
+and rendering fidelity.
 
 Hra'khor grows around goblin life. English carries borrowed and everyday ideas.
 “Only if we go in daylight.” stays English. Ash, shrines, offerings, caves, and

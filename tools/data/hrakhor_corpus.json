@@ -162,7 +162,7 @@
       "turns": [
         {
           "intent": "report",
-          "english": "The Cinder Tithe returned from Thornford with Food and gear for the lair."
+          "english": "The Cinder Tithe returned from Thornford; Food and gear entered the lair stores."
         },
         {
           "intent": "ask",
