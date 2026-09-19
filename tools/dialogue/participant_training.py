@@ -63,7 +63,7 @@ def observed(event, own_id):
 
 def build_prompt(request, tokenizer, context=CONTEXT, reply_tokens=REPLY_TOKENS):
     """Select solely from the actor input. Reserve the same reply space every time."""
-    if not 1 <= reply_tokens < context <= CONTEXT:
+    if not (1 <= reply_tokens <= REPLY_TOKENS and reply_tokens < context <= CONTEXT):
         raise ValueError('invalid context or reply budget')
     p = request['participant']
     me, listener = p['self'], p['listener']
@@ -95,7 +95,7 @@ def build_prompt(request, tokenizer, context=CONTEXT, reply_tokens=REPLY_TOKENS)
     # question while keeping its answer creates the wrong learning problem.
     latest = ('heard:' + wire(event_value(turns[-1])) + '\n') if turns else ''
     cue = 'turn:\n'
-    budget = context - reply_tokens
+    budget = min(context - reply_tokens, CONTEXT - REPLY_TOKENS)
     included, dropped, sections = [], [], {}
 
     def render():

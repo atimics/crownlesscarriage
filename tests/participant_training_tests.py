@@ -88,6 +88,10 @@ class TrainingTests(unittest.TestCase):
         row['output'] = {'kind': 'speech', 'text': 'a' * 511}
         with self.assertRaisesRegex(ValueError, 'byte limit'):
             compile_row(row, self.tokenizer)
+        with self.assertRaisesRegex(ValueError, 'invalid context'):
+            build_prompt(row['input'], self.tokenizer, reply_tokens=161)
+        prefix = build_prompt(RECORD['rows'][3]['input'], self.tokenizer, reply_tokens=32)
+        self.assertLessEqual(len(prefix['tokens']), 352)
 
     def test_literal_control_strings_survive_as_speech(self):
         row = copy.deepcopy(RECORD['rows'][0])

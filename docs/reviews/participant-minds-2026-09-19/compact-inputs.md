@@ -26,7 +26,7 @@ and 4 repeat an agreed plan. Every compiled row awaits compact-context review.
 
 `compact-inputs.json.gz` maps original artifact names to exact text: six previews,
 an empty rejection file, and the receipt. SHA-256:
-`2294cfbe79d781cc4fb1fc2897ba318f6e238889bbe680aa0371d8c0041ea76a`.
+`5eb2516460f21ce776c6362dc13a587d817d6502c872b5a6906de5f32e059eb6`.
 The receipt binds the compiler, native probe and source rows. The source rows
 come from `paired-teacher.json.gz` in this directory.
 
