@@ -14,6 +14,8 @@ endif()
 
 find_program(CC_PYTHON3_EXECUTABLE python3)
 if(CC_PYTHON3_EXECUTABLE)
+    add_test(NAME dialogue_semantic_ids
+        COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/semantic_ids_tests.py)
     add_test(NAME syntax_training_contract
         COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/syntax_training_tests.py $<TARGET_FILE:core_model_probe>)
     add_test(NAME dialogue_syntax

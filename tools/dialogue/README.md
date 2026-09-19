@@ -4,6 +4,9 @@ For the procedural abstract-syntax prototype and shared human/goblin meaning,
 see [SYNTAX.md](SYNTAX.md).
 The trained 5M syntax checkpoint and native pair runner are documented in
 [TRAIN-SYNTAX.md](TRAIN-SYNTAX.md).
+Direct semantic IDs, four-byte act records and the trained compact policy are
+documented in [SEMANTIC-IDS.md](SEMANTIC-IDS.md). The simulation comparison is in
+[KNOWLEDGE-COVERAGE.md](KNOWLEDGE-COVERAGE.md).
 
 Each worker is one person. It receives that person's view and produces one
 speech turn or an action. The runner delivers accepted speech to the other

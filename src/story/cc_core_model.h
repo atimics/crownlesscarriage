@@ -48,6 +48,10 @@ int CcCoreModelEncode(const char *text, int *tokens, int capacity);
    supplies the exact prefix text; all conditioning is text and copy is empty.
    At most 352 tokens leaves 160 positions for the reply and EOS. */
 bool CcCoreModelBeginParticipant(CcCoreModel *model, const char *prefix);
+/* Semantic-ID v1 input bypasses text tokenization. Output is three IDs plus
+   EOS, checked by the dialogue codec. Raw partial IDs remain inspectable. */
+bool CcCoreModelBeginSemantic(CcCoreModel *model, const int *ids, int count);
+int CcCoreModelSemanticTokens(const CcCoreModel *model, int *ids, int capacity);
 /* Prefix token inspection for parity tests. */
 int CcCoreModelPrefixTokens(const CcCoreModel *model, int *tokens, int capacity);
 /* Prefix meta inspection for parity tests. */
