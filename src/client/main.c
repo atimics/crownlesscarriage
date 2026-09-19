@@ -5101,6 +5101,33 @@ static bool PresentedRoadActionAt(const CcSim *sim, const LocalState *local,
     return false;
 }
 
+static const char *ContextChoiceWords(const char *label)
+{
+    const char *words = label;
+    if (words[0] >= '1' && words[0] <= '9') words += 1;
+    else if (strncmp(words, "Esc", 3) == 0) words += 3;
+    while (*words == ' ') words += 1;
+    return words;
+}
+
+static const char *ContextTouchActionLabel(
+    const LocalState *local, ClientView view, int32_t action_index,
+    const ContextAction *action, char *label, size_t label_capacity)
+{
+    if (action->kind == CONTEXT_ACTION_WORLD_TARGET) {
+        (void)snprintf(label, label_capacity, "%s %s",
+                       action->detail, action->label);
+        return label;
+    }
+    if (local->adventure_ui && view == VIEW_CHARACTER) {
+        const char *words = ContextChoiceWords(action->label);
+        (void)snprintf(label, label_capacity, "%d %s",
+                       action_index + 1, words);
+        return label;
+    }
+    return action->label;
+}
+
 static void DrawContextActionTray(const CcSim *sim, LocalState *local,
                                   ClientView view, int32_t selected,
                                   int32_t selected_situation)
@@ -5141,8 +5168,9 @@ static void DrawContextActionTray(const CcSim *sim, LocalState *local,
     for (int32_t i = first; i < first + shown; ++i) {
         Rectangle bounds = ContextActionBounds(i - first, shown, actions.combat);
         const ContextAction *action = &actions.items[i];
-        ClientTouchAdd(bounds, action->kind == CONTEXT_ACTION_WORLD_TARGET ?
-            TextFormat("%s %s", action->detail, action->label) : action->label,
+        char touch_label[128];
+        ClientTouchAdd(bounds, ContextTouchActionLabel(
+            local, view, i, action, touch_label, sizeof(touch_label)),
             action->enabled, action->active);
         bool hover = action->enabled && CheckCollisionPointRec(mouse, bounds);
         Color accent = ContextActionColor(action->kind);
@@ -5198,8 +5226,7 @@ static void DrawContextActionTray(const CcSim *sim, LocalState *local,
                         action->key_hint[0] != '\0';
         const char *action_label = action->label;
         if (local->adventure_ui && view == VIEW_CHARACTER) {
-            if (action_label[0] >= '1' && action_label[0] <= '9' && action_label[1] == ' ') action_label += 2;
-            else if (strncmp(action_label, "Esc ", 4) == 0) action_label += 4;
+            action_label = ContextChoiceWords(action_label);
         }
         int label_size = local->adventure_ui ? AdventureTextSize(18) : detailed ? 10 : 11;
         if (local->adventure_ui) {
@@ -5392,6 +5419,7 @@ static void DrawCombatStatusLine(const LocalState *local,
 
 static const float SAVE_FEEDBACK_VISIBLE_SECONDS = 5.0f;
 
+#if !defined(PLATFORM_WEB)
 static void DrawSaveFeedbackToast(const char *message, float message_age)
 {
     const float fade_seconds = 0.8f;
@@ -5416,6 +5444,7 @@ static void DrawSaveFeedbackToast(const char *message, float message_age)
     CcOverlayDrawText(toast, (int)x + 15, (int)y + 9, 10,
                       Fade(INK, opacity));
 }
+#endif
 
 static Rectangle CommandActionBounds(CommandActionKind action)
 {
@@ -6057,6 +6086,13 @@ static Rectangle CarriageTabBounds(int32_t tab)
         94.0f, 136.0f, 40.0f};
 }
 
+static const char *RoadCarriageStatus(const CcSim *sim)
+{
+    if (sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) return "BLOCKED";
+    if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) return "RESTING";
+    return sim->carriage.mode == CC_CARRIAGE_MOVING ? "MOVING" : "STOPPED";
+}
+
 static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
                                Texture2D economic_goods)
 {
@@ -6067,7 +6103,11 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                   Fade(BACKGROUND, 0.78f));
     ClientTouchBegin();
-    ClientTouchHeading("The Crownless Carriage", "Choose Overview or Ponies.");
+    ClientTouchHeading(
+        "The Crownless Carriage",
+        local->carriage_inspection_road ?
+            "On the road. Review this route, cargo, promise, and team." :
+            "Choose Overview or Ponies.");
     DrawPanel((Rectangle){24.0f, 78.0f, (float)GetScreenWidth() - 48.0f,
         (float)GetScreenHeight() - 94.0f}, PANEL_DEEP);
     CcOverlayDrawText("THE CROWNLESS CARRIAGE", 52, 102, 23, INK);
@@ -6189,7 +6229,15 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
             444, 282, 55U, 11, INK);
     }
     CcFoodEconomy food = {0};
-    if (place != NULL && CcSimFoodEconomyAtSettlement(
+    if (local->carriage_inspection_road) {
+        CcOverlayDrawText("ROAD STATUS", 444, 526, 8, MUTED);
+        CcOverlayDrawText(
+            TextFormat("%d%% travelled  /  %s",
+                       sim->carriage.progress_milli / 10,
+                       RoadCarriageStatus(sim)),
+            444, 549, 10,
+            sim->carriage.mode == CC_CARRIAGE_MOVING ? TEAL : CC_GOLD);
+    } else if (place != NULL && CcSimFoodEconomyAtSettlement(
             sim, place->id, &food)) {
         const char *food_state = food.stock < food.weekly_consumption * 2 ?
             "SHORTAGE" : food.stock < food.reserve_target ? "TIGHT" :
@@ -6231,17 +6279,25 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
                    CcPlayerMapCount(sim), sim->player.map_capacity),
         888, 506, 9, INK);
     CcOverlayDrawText(
+        local->carriage_inspection_road ?
+            TextFormat("ROUTE %d%%  /  CARGO %d/%d",
+                       sim->carriage.progress_milli / 10,
+                       cargo_used, sim->player.cargo_capacity) :
         local->site_kind == CC_LOCAL_SITE_NONE ?
             TextFormat("%d ROADS LEAVE THIS TOWN",
                        OutgoingRouteCount(sim)) :
             "RETURN ROAD IS READY",
         888, 552, 10, CC_GOLD);
     CcOverlayDrawText(
+        local->carriage_inspection_road ?
+            TextFormat("CARRIAGE %s ON THIS ROAD",
+                       RoadCarriageStatus(sim)) :
         CcSimHorseTeamReadiness(sim) < 30 ?
             "TEAM MUST REST BEFORE DEPARTURE" :
             "DEPARTURE CHECKS READY",
         888, 584, 8,
-        CcSimHorseTeamReadiness(sim) < 30 ? DANGER : TEAL);
+        !local->carriage_inspection_road &&
+            CcSimHorseTeamReadiness(sim) < 30 ? DANGER : TEAL);
 }
 
 static void ClientSpeechPath(const CcSpeech *speech, char *path, size_t capacity)
@@ -7041,6 +7097,17 @@ static int RunRoadCarriageTargetRegression(void)
         !InitializeOpenWorld(&sim, &local, false)) {
         return ClientRegressionFailure("Set up the road carriage target.");
     }
+    if (strcmp(RoadCarriageStatus(&sim), "MOVING") != 0)
+        return ClientRegressionFailure("A moving road inspection must report the saved carriage mode.");
+    sim.journey.phase = CC_JOURNEY_PHASE_RESTING;
+    sim.carriage.mode = CC_CARRIAGE_STOPPED;
+    if (strcmp(RoadCarriageStatus(&sim), "RESTING") != 0)
+        return ClientRegressionFailure("A road watch must report its saved resting phase.");
+    sim.journey.phase = CC_JOURNEY_PHASE_BLOCKED;
+    if (strcmp(RoadCarriageStatus(&sim), "BLOCKED") != 0)
+        return ClientRegressionFailure("A captain stop must report its saved blocked phase.");
+    sim.journey.phase = CC_JOURNEY_PHASE_TRAVELLING;
+    sim.carriage.mode = CC_CARRIAGE_MOVING;
     BeginRoadTravelState(&sim, &local);
     if (!local.world_carriage.visible || !local.world_carriage.hero_embarked) {
         return ClientRegressionFailure("Show the carriage on the active road.");
@@ -8579,7 +8646,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (ClientKeyPressed(KEY_F5) || queued_save_shortcut) {
             *save_feedback_age=0.0f;
             (void)SaveClientWorld(*journal,sim,local,save_path,session_path,save_feedback,save_feedback_capacity);
+#if !defined(PLATFORM_WEB)
             (void)snprintf(message,message_capacity,"%s",save_feedback);
+#endif
         } else HandleMineInput(*journal,sim,local,local_target,delta_time,message,message_capacity);
         return;
     }
@@ -11437,9 +11506,11 @@ int main(int argc, char **argv)
             DrawDragonCavePanel(&sim);
         }
         CcOverlayFlush();
+#if !defined(PLATFORM_WEB)
         if (!persistence_blocked && presentation.save_feedback) {
             DrawSaveFeedbackToast(save_feedback, save_feedback_age);
         }
+#endif
         if (!persistence_blocked && presentation.context_actions) {
             if ((view == VIEW_LOCAL || view == VIEW_ROADS) && !LocalCombatActive(&local) &&
                 sim.pony_company.encounter < 0) DrawAdventureFocus(&sim, &local, view, selected, selected_situation);
