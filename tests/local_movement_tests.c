@@ -1428,8 +1428,10 @@ static CcCombatOutcome RunCombatStrike(CcLocalAgent *attacker,
         exit(1);
     }
     for (int32_t frame = 0; frame < 120; ++frame) {
-        CcLocalAgentUpdate(attacker, 1.0f / 60.0f, true);
-        CcLocalAgentUpdate(defender, 1.0f / 60.0f, true);
+        CcLocalAgentUpdate(attacker, 1.0f / 60.0f,
+                           attacker->scene == CC_LOCAL_SCENE_MARKET);
+        CcLocalAgentUpdate(defender, 1.0f / 60.0f,
+                           defender->scene == CC_LOCAL_SCENE_MARKET);
         if (CcHumanoidGaitConsumeStrikeImpact(&attacker->humanoid)) {
             return CcLocalCombatResolveStrike(attacker, defender);
         }
@@ -1888,6 +1890,7 @@ static void TestMineEncounterCombat(void)
     sim.mine.player_injury=27;
 
     static CcLocalAgent attacker,defender;
+    Vector3 resolved={0},normal={0};
     InitCombatant(&attacker,(Vector2){15.0f,9.43f},0.0f,
                   CC_COMBAT_PLAYER);
     InitCombatant(&defender,(Vector2){15.0f,10.57f},PI,
@@ -1895,29 +1898,46 @@ static void TestMineEncounterCombat(void)
     CcLocalAgentSetScene(&attacker,CC_LOCAL_SCENE_MINE);
     CcLocalAgentSetScene(&defender,CC_LOCAL_SCENE_MINE);
     CcLocalMineSetBarOpen(false);
+    if(!CcLocalProbePhysicsSphereInternal(CC_LOCAL_SCENE_MINE,
+        (Vector3){15.0f,.94f,9.43f},(Vector3){15.0f,.94f,10.57f},.045f,
+        &resolved,&normal)) {
+        (void)fprintf(stderr,"closed mine bar is absent from the local collision probe\n");
+        exit(1);
+    }
     CcCombatOutcome blocked=RunCombatStrike(&attacker,&defender);
     if(blocked!=CC_COMBAT_OUTCOME_MISS ||
        defender.combat.health!=CC_LOCAL_COMBAT_MAX_HEALTH) {
         (void)fprintf(stderr,
-            "closed mine bar allowed a strike through it: outcome %d health %.1f impact %.2f,%.2f,%.2f\n",
-            blocked,defender.combat.health,attacker.combat.impact_point.x,
+            "closed mine bar allowed a strike through it: outcome %d health %.1f scene %d impact %.2f,%.2f,%.2f\n",
+            blocked,defender.combat.health,attacker.scene,attacker.combat.impact_point.x,
             attacker.combat.impact_point.y,attacker.combat.impact_point.z);
         exit(1);
     }
-    InitCombatant(&attacker,(Vector2){15.0f,9.43f},0.0f,
+    CcLocalMineSetBarOpen(true);
+    if(CcLocalProbePhysicsSphereInternal(CC_LOCAL_SCENE_MINE,
+        (Vector3){15.0f,.94f,9.43f},(Vector3){15.0f,.94f,10.57f},.045f,
+        &resolved,&normal)) {
+        (void)fprintf(stderr,"open mine bar remained in the local collision probe\n");
+        exit(1);
+    }
+    InitCombatant(&attacker,(Vector2){26.0f,15.43f},0.0f,
                   CC_COMBAT_PLAYER);
-    InitCombatant(&defender,(Vector2){15.0f,10.57f},PI,
+    InitCombatant(&defender,(Vector2){26.0f,16.57f},PI,
                   CC_COMBAT_RAIDER);
     CcLocalAgentSetScene(&attacker,CC_LOCAL_SCENE_MINE);
     CcLocalAgentSetScene(&defender,CC_LOCAL_SCENE_MINE);
-    CcLocalMineSetBarOpen(true);
-    if(RunCombatStrike(&attacker,&defender)!=CC_COMBAT_OUTCOME_HIT) {
-        (void)fprintf(stderr,"open mine bar blocked the ordinary strike\n");
+    CcCombatOutcome open=RunCombatStrike(&attacker,&defender);
+    if(open!=CC_COMBAT_OUTCOME_HIT) {
+        (void)fprintf(stderr,
+            "open mine bar blocked the ordinary strike: outcome %d health %.1f scene %d impact %.2f,%.2f,%.2f\n",
+            open,defender.combat.health,attacker.scene,
+            attacker.combat.impact_point.x,attacker.combat.impact_point.y,
+            attacker.combat.impact_point.z);
         exit(1);
     }
     for(int32_t frame=0;frame<180;++frame) {
-        CcLocalAgentUpdate(&attacker,1.0f/60.0f,true);
-        CcLocalAgentUpdate(&defender,1.0f/60.0f,true);
+        CcLocalAgentUpdate(&attacker,1.0f/60.0f,false);
+        CcLocalAgentUpdate(&defender,1.0f/60.0f,false);
     }
     if(!CcLocalCombatBeginStrike(&attacker,&defender)) {
         (void)fprintf(stderr,"mine strike did not reach ordinary recovery\n");
@@ -2019,7 +2039,7 @@ static void TestCombatStanceStability(void)
 
 static void TestCombatCrowdSpacing(void)
 {
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, 144U);
     CcLocalCourse course;
     CcLocalCourseInit(&course);
@@ -2850,6 +2870,7 @@ static void TestTownSquareGroundSightlines(void)
 
 int main(void)
 {
+    TestMineEncounterCombat();
     /* Large campaign fixtures use static storage to keep room for nested checks. */
     TestTownSquareGroundSightlines();
     CcLocalTerrainMeshStatsInternal terrain_mesh =
@@ -4070,7 +4091,6 @@ int main(void)
         return 1;
     }
 
-    TestMineEncounterCombat();
     TestSharedCombat();
     TestDeathLifecycle();
     TestTargetDrivenCombat();

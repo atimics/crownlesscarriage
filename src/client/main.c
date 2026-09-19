@@ -8661,6 +8661,16 @@ static int RunSoloPartyWipeRegression(void)
     mine_sim.mine.y=16;
     mine_sim.mine.light=18;
     mine_sim.mine.seen=UINT32_C(1)<<5;
+    mine_sim.player.cargo[CC_GOOD_BREAD]=2;
+    mine_sim.player.cargo[CC_GOOD_BREAD]-=2;
+    mine_sim.mine.pack[CC_GOOD_BREAD]=2;
+    int32_t source_gold=CcMineSourceGood(&mine_sim,CC_GOOD_GOLD);
+    mine_sim.mine.encounter_outcome=CC_MINE_ENCOUNTER_CONTESTED;
+    mine_sim.mine.source_released=true;
+    CcCommand take={.kind=CC_COMMAND_MINE_TAKE,
+        .target_id=(CcId)mine_sim.mine.revision,.good=CC_GOOD_GOLD,.amount=1};
+    if(!ApplyCommand(NULL,&mine_sim,take,message,sizeof(message)) ||
+       CcMinePackGood(&mine_sim,CC_GOOD_GOLD)!=1) return 1;
     mine_sim.mine.contest_active=true;
     ResetLocalState(&local);
     CcLocalCourseStageMineEncounter(&local.course,&local.agent,&mine_sim);
@@ -8672,8 +8682,31 @@ static int RunSoloPartyWipeRegression(void)
        mine_sim.current_day!=mine_day+CC_PARTY_WIPE_DAYS ||
        mine_sim.mine.phase!=CC_MINE_NONE || mine_sim.mine.contest_active ||
        mine_sim.mine.encounter_outcome!=CC_MINE_ENCOUNTER_BROKEN_CONTACT ||
-       mine_sim.mine.player_injury!=100 || mine_sim.mine.source_id!=source_id ||
+       mine_sim.mine.player_injury!=0 || mine_sim.mine.source_id!=source_id ||
+       mine_sim.player.cargo[CC_GOOD_BREAD]!=2 ||
+       CcMinePackUsed(&mine_sim)!=0 ||
+       CcMineSourceGood(&mine_sim,CC_GOOD_GOLD)!=source_gold ||
        !CcSimValidate(&mine_sim,message,sizeof(message))) return 1;
+    LeaveOpenWorld(&local);
+    travel.target_id=road->to_id;
+    if(!ApplyCommand(NULL,&mine_sim,travel,message,sizeof(message))) return 1;
+    mine_sim.pony_company.encounter=-1;
+    mine_sim.journey.ambush_pending=false;
+    mine_sim.journey.elapsed_subticks=CcMineBranchSubtick(&mine_sim);
+    mine_sim.carriage.progress_milli=(int32_t)((int64_t)
+        mine_sim.journey.elapsed_subticks*1000/mine_sim.journey.total_subticks);
+    if(!ApplyCommand(NULL,&mine_sim,visit,message,sizeof(message))) return 1;
+    mine_sim.mine.phase=CC_MINE_LEVEL;
+    mine_sim.mine.x=25;
+    mine_sim.mine.y=16;
+    CcCommand contest={.kind=CC_COMMAND_MINE_CONTEST,
+        .target_id=(CcId)mine_sim.mine.revision};
+    if(!ApplyCommand(NULL,&mine_sim,contest,message,sizeof(message))) return 1;
+    ResetLocalState(&local);
+    CcLocalCourseStageMineEncounter(&local.course,&local.agent,&mine_sim);
+    if(local.agent.combat.life_state!=CC_LIFE_ALIVE ||
+       local.agent.combat.health!=CC_LOCAL_COMBAT_MAX_HEALTH ||
+       local.course.raider_company_id!=mine_sim.goblins.id) return 1;
     LeaveOpenWorld(&local);
     (void)puts("Solo and mine deaths advance the world once and preserve the mine outcome.");
     return 0;
