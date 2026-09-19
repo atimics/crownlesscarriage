@@ -15,23 +15,23 @@
   const semantic = document.createElement('section');
   semantic.id = 'touch-actions';
   semantic.setAttribute('aria-live', 'off');
+  const heading = document.createElement('h2');
+  const detail = document.createElement('p');
+  const reading = document.createElement('p');
+  const actions = document.createElement('div');
+  semantic.append(heading, detail, reading, actions);
+  const actionNodes = [];
   document.body.append(semantic);
   Module.renderCrownlessTouch = frame => {
     canvas.setAttribute('aria-label', frame.title || 'Crownless Carriage game');
     const focused = document.activeElement?.dataset?.touchKey;
-    semantic.replaceChildren();
-    const heading = document.createElement('h2');
     heading.textContent = frame.title || 'Crownless Carriage';
-    semantic.append(heading);
-    const detail = document.createElement('p');
     detail.textContent = frame.detail || '';
-    semantic.append(detail);
-    const reading = document.createElement('p');
     reading.textContent = frame.reading || '';
-    semantic.append(reading);
     frame.buttons.forEach((button, index) => {
-      const action = document.createElement('button');
-      const key = `${button.label}:${index}`;
+      let action = actionNodes[index];
+      if (!action) { action = document.createElement('button'); actionNodes[index] = action; actions.append(action); }
+      const key = String(index);
       action.dataset.touchKey = key;
       action.textContent = button.label;
       action.disabled = !button.enabled;
@@ -40,6 +40,7 @@
       semantic.append(action);
       if (focused === key) action.focus();
     });
+    while (actionNodes.length > frame.buttons.length) actionNodes.pop().remove();
   };
   const fields = new Map();
   Module.renderCrownlessFields = descriptors => {
