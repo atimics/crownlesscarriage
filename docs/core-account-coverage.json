@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "grammar_sha256": "d13126c622c4f62a66135edadb557a05731011eeb8486d61edf7407aab0e4eae",
+  "grammar_sha256": "9536180def7478b1c5489cf8f5351c55bf60bc30991cca29eed53d3b9fc6bd85",
   "event_count": 139,
-  "rule_count": 128,
+  "rule_count": 157,
   "events": [
     {
       "kind": "HARVEST_FAILED",
@@ -412,7 +412,8 @@
       "kind": "GOBLIN_RAID_DEPARTED",
       "value": 50,
       "rules": [
-        "goblin_raid_departed_grounded_0"
+        "goblin_raid_departed_grounded_0",
+        "goblin_raid_departed_grounded_1"
       ],
       "status": "field_rules"
     },
@@ -492,8 +493,10 @@
     {
       "kind": "COURIER_DISTORTED",
       "value": 60,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "courier_distorted_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "WAR_DECLARED",
@@ -522,14 +525,18 @@
     {
       "kind": "DRAGON_MUSTERED",
       "value": 64,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_mustered_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DRAGON_BATTLE",
       "value": 65,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_battle_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DRAGON_SLAIN",
@@ -590,14 +597,18 @@
     {
       "kind": "DRAGON_AFTERSHOCK",
       "value": 73,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_aftershock_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DRAGON_SUCCESSOR",
       "value": 74,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_successor_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_CULT_RALLIED",
@@ -620,8 +631,10 @@
     {
       "kind": "ENCOUNTER_WITHDRAWN",
       "value": 77,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "encounter_withdrawn_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "COW_CALVING",
@@ -659,8 +672,10 @@
     {
       "kind": "HORSE_TEAM_CHANGED",
       "value": 82,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "horse_team_changed_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_RAID_PREPARED",
@@ -673,14 +688,18 @@
     {
       "kind": "GOBLIN_TARGET_WARNED",
       "value": 84,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_target_warned_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_EXPEDITION_INTERCEPTED",
       "value": 85,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_expedition_intercepted_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_TRADE",
@@ -693,14 +712,18 @@
     {
       "kind": "GOBLIN_DRAGON_SEED_RUMORED",
       "value": 87,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_dragon_seed_rumored_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_DRAGON_SEED_PREPARED",
       "value": 88,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_dragon_seed_prepared_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "CHARACTER_INTERACTION",
@@ -713,14 +736,18 @@
     {
       "kind": "JOURNEY_WARNING",
       "value": 90,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "journey_warning_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "AMBUSH_EVADED",
       "value": 91,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "ambush_evaded_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "ENCOUNTER_LOOT",
@@ -742,62 +769,82 @@
     {
       "kind": "DUNGEON_EXPEDITION_BEGAN",
       "value": 94,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dungeon_expedition_began_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DUNGEON_ROOM_ENTERED",
       "value": 95,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dungeon_room_entered_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DUNGEON_ENCOUNTER",
       "value": 96,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dungeon_encounter_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DUNGEON_SHORTCUT_OPENED",
       "value": 97,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dungeon_shortcut_opened_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DUNGEON_LOOT",
       "value": 98,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dungeon_loot_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DUNGEON_THRESHOLD_REACHED",
       "value": 99,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dungeon_threshold_reached_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DUNGEON_EXPEDITION_ENDED",
       "value": 100,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dungeon_expedition_ended_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "RELATIONSHIP_HISTORY",
       "value": 101,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "relationship_history_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "RUMOR_SHARED",
       "value": 102,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "rumor_shared_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "FACT_REVEALED",
       "value": 103,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "fact_revealed_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "RELATIONSHIP_CHANGED",
@@ -810,8 +857,10 @@
     {
       "kind": "FRONT_CREATED",
       "value": 105,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "front_created_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "FRONT_RESOLVED",
@@ -832,10 +881,8 @@
     {
       "kind": "QUEST_PROGRESS",
       "value": 108,
-      "rules": [
-        "quest_progress_source_0"
-      ],
-      "status": "field_rules"
+      "rules": [],
+      "status": "legacy_or_uncovered"
     },
     {
       "kind": "LORE_RECORDED",
@@ -865,14 +912,18 @@
     {
       "kind": "JOURNEY_CAMP",
       "value": 112,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "journey_camp_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "ROAD_HOUSE_LODGING",
       "value": 113,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "road_house_lodging_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "CHARACTER_BORN",
@@ -1061,20 +1112,26 @@
     {
       "kind": "ROYAL_CARRIAGE_REPAIR_DISPATCHED",
       "value": 136,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "royal_carriage_repair_dispatched_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "ROYAL_ROAD_SKIRMISH",
       "value": 137,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "royal_road_skirmish_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "BODY_LOOTED",
       "value": 138,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "body_looted_source_0"
+      ],
+      "status": "field_rules"
     }
   ]
 }
