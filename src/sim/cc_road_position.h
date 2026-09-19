@@ -85,6 +85,10 @@ bool CcPilotRoadTopologyBuildWithLength(const CcSim *sim,
                                         CcPilotRoadTopology *topology);
 bool CcRoadGeometryBuild(const CcSim *sim, CcId route_id,
                          CcRoadGeometry *geometry);
+int32_t CcRoadGeometryBuildAll(const CcSim *sim,
+                               CcRoadGeometry *geometries,
+                               int32_t capacity);
+bool CcRoadGeometryKnownFixtures(void);
 int32_t CcRoadScaleDistance(int32_t total_units, int32_t progress_milli);
 int32_t CcRoadProgressMilli(int32_t travelled_units,
                             int32_t total_units);

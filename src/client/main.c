@@ -14,6 +14,7 @@
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
 #include "sim/cc_production.h"
+#include "sim/cc_road_position.h"
 #include "sim/cc_mine.h"
 #include "story/cc_story.h"
 #include "story/cc_core_conversation.h"
@@ -36,6 +37,13 @@
 
 static CcCoreConversation core_conversation;
 static CcId core_conversation_speaker;
+
+#if defined(PLATFORM_WEB)
+EMSCRIPTEN_KEEPALIVE int CrownlessRoadGeometrySelfTest(void)
+{
+    return CcRoadGeometryKnownFixtures() ? 1 : 0;
+}
+#endif
 
 #define BACKGROUND CC_STYLE_BACKGROUND
 #define PANEL CC_STYLE_PANEL
