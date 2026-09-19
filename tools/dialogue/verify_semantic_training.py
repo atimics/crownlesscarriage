@@ -14,6 +14,7 @@ def main():
     args = parser.parse_args()
     test = json.loads((args.run / "test-evaluation.json").read_text())
     manifest = json.loads((args.run / "manifest.json").read_text())
+    prefix_flag = "--policy-prefix" if manifest.get('format') == 'crownless-policy-v2' else "--semantic-prefix"
     errors = []
     if manifest.get("status") != "complete":
         errors.append(f"training manifest status is {manifest.get('status')!r}")
@@ -37,7 +38,7 @@ def main():
         prefix = ",".join(str(value) for value in row["prefix_ids"])
         try:
             result = subprocess.run(
-                [str(args.probe), str(args.run / "last.ccv2"), "--semantic-prefix", prefix, "--generate"],
+                [str(args.probe), str(args.run / "last.ccv2"), prefix_flag, prefix, "--generate"],
                 capture_output=True, text=True, timeout=args.timeout, check=False,
             )
         except subprocess.TimeoutExpired as error:

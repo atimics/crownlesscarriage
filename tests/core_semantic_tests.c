@@ -30,6 +30,17 @@ int main(int argc, char **argv)
     CC_CHECK(!CcCoreModelBeginPolicy(model, bad_id, 5));
     const int no_marker[] = {1280, 129, 1024, 1281};
     CC_CHECK(!CcCoreModelBeginPolicy(model, no_marker, 4));
+    const int one_choice[] = {1280, 1580, 1024, 1281};
+    CC_CHECK(CcCoreModelBeginPolicy(model, one_choice, 4));
+    CC_CHECK(CcCoreModelStep(model, 1024U) == 1);
+    CC_CHECK(CcCoreModelSemanticTokens(model, output, 352) == 1);
+    CC_CHECK(output[0] == 1024);
+    CC_CHECK(CcCoreModelText(model) == NULL);
+    const int changed_choice[] = {1280, 1580, 1030, 1281};
+    CC_CHECK(CcCoreModelBeginPolicy(model, changed_choice, 4));
+    CC_CHECK(CcCoreModelStep(model, 1024U) == 1);
+    CC_CHECK(CcCoreModelSemanticTokens(model, output, 352) == 1);
+    CC_CHECK(output[0] == 1030);
     CcCoreModelFree(model);
     return 0;
 }

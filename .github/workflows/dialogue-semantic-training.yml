@@ -9,7 +9,7 @@ on:
       steps:
         description: Training steps for the CPU run
         required: false
-        default: '800'
+        default: '3000'
         type: string
   pull_request:
     paths:
@@ -73,10 +73,10 @@ jobs:
     needs: detect
     if: needs.detect.outputs.relevant == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       ZERO_COMMIT: 49e6bfedc6d91196e652d89309b23cafd8fc2ce9
-      STEPS: ${{ inputs.steps || '800' }}
+      STEPS: ${{ inputs.steps || '3000' }}
     steps:
       - name: Checkout Crownless with release history
         uses: actions/checkout@v4
@@ -109,13 +109,13 @@ jobs:
         run: python tools/dialogue/audit_grammar.py --check
       - name: Train semantic model
         run: |
-          case "$STEPS" in (*[!0-9]*|'') echo 'steps must be an integer from 1 to 2000' >&2; exit 1;; esac
-          if [ "$STEPS" -lt 1 ] || [ "$STEPS" -gt 2000 ]; then
-            echo 'steps must be an integer from 1 to 2000' >&2
+          case "$STEPS" in (*[!0-9]*|'') echo 'steps must be an integer from 1 to 6000' >&2; exit 1;; esac
+          if [ "$STEPS" -lt 1 ] || [ "$STEPS" -gt 6000 ]; then
+            echo 'steps must be an integer from 1 to 6000' >&2
             exit 1
           fi
           mkdir -p artifacts/semantic-5m
-          timeout 8m python tools/dialogue/train_semantic_ids.py \
+          timeout 18m python tools/dialogue/train_policy.py \
             --zero "$GITHUB_WORKSPACE/zero" \
             --reference models/dialogue-syntax/model.ccv2 \
             --tokenizer assets/language/tokenizer.json \
