@@ -21,6 +21,7 @@ typedef struct CcCaptureRequest {
     bool capture_dragon_hoard_map;
     bool capture_carriage;
     bool capture_carriage_target;
+    bool capture_road_carriage;
     bool capture_dojo;
     bool capture_jump;
     bool capture_action_reel;
@@ -131,6 +132,8 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
         strcmp(argv[1], "--capture-carriage") == 0;
     request->capture_carriage_target = argc >= 2 &&
         strcmp(argv[1], "--capture-carriage-target") == 0;
+    request->capture_road_carriage = argc >= 2 &&
+        strcmp(argv[1], "--capture-road-carriage") == 0;
     request->capture_dojo = argc >= 2 && strcmp(argv[1], "--capture-dojo") == 0;
     request->capture_jump = argc >= 2 && strcmp(argv[1], "--capture-jump") == 0;
     request->capture_action_reel = argc >= 2 &&
@@ -420,7 +423,7 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
                     request->capture_road_zoom ||
                     request->capture_map_case || request->capture_dragon_hoard_map ||
                     request->capture_carriage_target || request->capture_dojo ||
-                    request->capture_carriage ||
+                    request->capture_carriage || request->capture_road_carriage ||
                     request->capture_jump || request->capture_action_reel ||
                     request->capture_gameplay_reel || request->capture_encounter ||
                     request->capture_witness || request->capture_character ||

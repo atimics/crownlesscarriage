@@ -44,6 +44,151 @@ static Vector3 WorldActionAlongRoad(const LocalState *local, Vector3 carriage, f
     return point;
 }
 
+/* The road carriage keeps one identity while the renderer updates its pose.
+ * The route id and current simulation progress form the activation revision. */
+static bool RoadCarriageTarget(const CcSim *sim, const LocalState *local,
+                               CcInteractionTarget *target)
+{
+    if (sim == NULL || local == NULL || target == NULL ||
+        !local->journey_travel_active || !local->open_world ||
+        !local->world_carriage.visible || !sim->journey.active ||
+        sim->journey.route_id == 0U) return false;
+    Vector3 carriage = WorldActionCarriagePosition(local);
+    Vector3 approach = WorldActionAlongRoad(local, carriage, 0.0f, 3.4f);
+    *target = (CcInteractionTarget){
+        .key = {sim->player.location_id, sim->journey.route_id,
+                CC_INTERACTION_CARRIAGE},
+        .subject_id = sim->journey.route_id,
+        .amount = sim->carriage.progress_milli,
+        .x = carriage.x, .y = carriage.y, .z = carriage.z,
+        .width = 3.4f, .height = 3.2f, .depth = 5.2f,
+        .approach_x = approach.x, .approach_z = approach.z,
+        .radius = 1.45f, .available = true};
+    (void)snprintf(target->name, sizeof(target->name), "Crownless carriage");
+    (void)snprintf(target->verb, sizeof(target->verb),
+                   local->world_carriage.hero_embarked ?
+                       "Inspect carriage" : "Board carriage");
+    return true;
+}
+
+static bool RoadCarriageRevisionMatches(const CcSim *sim,
+                                        const LocalState *local)
+{
+    return sim != NULL && local != NULL && sim->journey.active &&
+        sim->journey.route_id == local->road_carriage_route_id &&
+        sim->carriage.progress_milli == local->road_carriage_progress_milli;
+}
+
+static bool BeginRoadCarriageApproach(const CcSim *sim, LocalState *local,
+                                      char *message, size_t capacity)
+{
+    CcInteractionTarget target = {0};
+    if (!RoadCarriageTarget(sim, local, &target) ||
+        local->world_carriage.hero_embarked) return false;
+    local->road_carriage_route_id = sim->journey.route_id;
+    local->road_carriage_progress_milli = sim->carriage.progress_milli;
+    if (!CcInteractionStart(&local->interaction, &target,
+                            local->agent.position.x,
+                            local->agent.position.z)) return false;
+    if (!CcLocalAgentApproachInteraction(&local->agent,
+            (Vector2){target.approach_x, target.approach_z},
+            target.radius * 0.9f, false)) {
+        CcInteractionCancel(&local->interaction,
+                            "Choose a clear path to the carriage.");
+        (void)snprintf(message, capacity, "%s", local->interaction.feedback);
+        return true;
+    }
+    (void)snprintf(message, capacity, "Approaching the carriage.");
+    return true;
+}
+
+static bool HandleRoadCarriageInteraction(
+    const CcSim *sim, LocalState *local, ClientView *view,
+    ContextActionKind action, CcInteractionKey key, float delta_time,
+    char *message, size_t capacity)
+{
+    if (sim == NULL || local == NULL || view == NULL ||
+        !local->journey_travel_active || !local->open_world) return false;
+    if (*view == VIEW_LOCAL && ClientKeyPressed(KEY_F) &&
+        action == CONTEXT_ACTION_NONE) {
+        action = local->world_carriage.hero_embarked ?
+            CONTEXT_ACTION_INSPECT_CARRIAGE : CONTEXT_ACTION_BOARD_CARRIAGE;
+    }
+    bool carriage_target = action == CONTEXT_ACTION_WORLD_TARGET &&
+        key.kind == CC_INTERACTION_CARRIAGE && key.object == sim->journey.route_id;
+    if ((action == CONTEXT_ACTION_INSPECT_CARRIAGE || carriage_target) &&
+        local->world_carriage.hero_embarked) {
+        local->carriage_inspection_road = true;
+        CcInteractionCancel(&local->interaction, "");
+        *view = VIEW_CARRIAGE;
+        message[0] = '\0';
+        return true;
+    }
+    if ((action == CONTEXT_ACTION_BOARD_CARRIAGE || carriage_target) &&
+        !local->interaction.approaching) {
+        return BeginRoadCarriageApproach(sim, local, message, capacity);
+    }
+    if (!local->interaction.approaching ||
+        local->interaction.pending.kind != CC_INTERACTION_CARRIAGE) return false;
+    bool manual_movement = ClientKeyPressed(KEY_ESCAPE) ||
+        ClientKeyPressed(KEY_W) || ClientKeyPressed(KEY_A) ||
+        ClientKeyPressed(KEY_S) || ClientKeyPressed(KEY_D) ||
+        ClientKeyPressed(KEY_UP) || ClientKeyPressed(KEY_DOWN) ||
+        ClientKeyPressed(KEY_LEFT) || ClientKeyPressed(KEY_RIGHT) ||
+        IsKeyDown(KEY_W) || IsKeyDown(KEY_A) || IsKeyDown(KEY_S) ||
+        IsKeyDown(KEY_D) || IsKeyDown(KEY_UP) || IsKeyDown(KEY_DOWN) ||
+        IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_RIGHT) ||
+        (action == CONTEXT_ACTION_NONE &&
+         ClientMouseButtonPressed(MOUSE_BUTTON_LEFT));
+    if (manual_movement ||
+        (action != CONTEXT_ACTION_NONE &&
+         action != CONTEXT_ACTION_BOARD_CARRIAGE)) {
+        CcInteractionCancel(&local->interaction, "Approach cancelled.");
+        CcLocalAgentStop(&local->agent);
+        (void)snprintf(message, capacity, "%s", local->interaction.feedback);
+        return false;
+    }
+    CcInteractionTarget target = {0};
+    if (!RoadCarriageTarget(sim, local, &target) ||
+        !RoadCarriageRevisionMatches(sim, local)) {
+        CcInteractionCancel(&local->interaction,
+                            "The carriage moved. Choose it again.");
+        CcLocalAgentStop(&local->agent);
+        (void)snprintf(message, capacity, "%s", local->interaction.feedback);
+        return true;
+    }
+    CcInteractionPlan plan = {.targets = {target}, .count = 1};
+    if (CcInteractionAdvance(&local->interaction, &plan,
+                             local->agent.position.x, local->agent.position.z,
+                             delta_time)) {
+        float dx = local->agent.position.x - local->world_carriage.position.x;
+        float dz = local->agent.position.z - local->world_carriage.position.z;
+        if (dx * dx + dz * dz > 4.8f * 4.8f ||
+            !RoadCarriageRevisionMatches(sim, local)) {
+            (void)snprintf(message, capacity,
+                           "The carriage is out of reach. Choose it again.");
+            return true;
+        }
+        local->world_carriage.hero_embarked = true;
+        local->world_carriage.camera_target = 0.0f;
+        local->carriage_stopped = false;
+        CcLocalAgentStop(&local->agent);
+        (void)snprintf(message, capacity,
+                       "The company boards and the road goes on.");
+        return true;
+    }
+    if (local->interaction.repath_seconds <= 0.0f &&
+        !local->agent.target_valid) {
+        (void)CcLocalAgentApproachInteraction(&local->agent,
+            (Vector2){target.approach_x, target.approach_z},
+            target.radius * 0.9f, false);
+        local->interaction.repath_seconds = 0.75f;
+    }
+    (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                             delta_time, false, true);
+    return true;
+}
+
 static void BuildWorldActionTargets(const CcSim *sim, LocalState *local, ClientView view,
     int32_t selected, int32_t selected_situation, RenderTexture2D texture, Rectangle destination)
 {
@@ -53,6 +198,29 @@ static void BuildWorldActionTargets(const CcSim *sim, LocalState *local, ClientV
     int32_t branch = 0;
     for (int32_t i = 0; i < actions.count; ++i) {
         const ContextAction *action = &actions.items[i];
+        if (action->kind == CONTEXT_ACTION_BOARD_CARRIAGE ||
+            action->kind == CONTEXT_ACTION_INSPECT_CARRIAGE) {
+            CcInteractionTarget road_target = {0};
+            if (!RoadCarriageTarget(sim, local, &road_target)) continue;
+            road_target.key = (CcInteractionKey){sim->player.location_id,
+                ((uint64_t)action->kind << 32) | (uint32_t)action->amount,
+                CC_INTERACTION_ACTION};
+            road_target.action = (int32_t)action->kind;
+            road_target.amount = action->amount;
+            (void)snprintf(road_target.name, sizeof(road_target.name), "%s",
+                           action->label);
+            (void)snprintf(road_target.verb, sizeof(road_target.verb), "%s",
+                           action->label);
+            if (local->interactions.count >= CC_INTERACTION_CAPACITY) break;
+            CcInteractionTarget *target =
+                &local->interactions.targets[local->interactions.count++];
+            *target = road_target;
+            CcLocalAgent camera_subject = local->agent;
+            camera_subject.scene = CC_LOCAL_SCENE_STREET;
+            CcLocalProjectInteraction(&camera_subject, texture, destination,
+                                      target);
+            continue;
+        }
         Vector3 position = carriage;
         float width = 3.4f, height = 3.4f, depth = 4.8f;
         bool project = true;
@@ -79,6 +247,8 @@ static void BuildWorldActionTargets(const CcSim *sim, LocalState *local, ClientV
                 break;
             }
             case CONTEXT_ACTION_HOLD_TRAVEL: break;
+            case CONTEXT_ACTION_INSPECT_CARRIAGE: break;
+            case CONTEXT_ACTION_BOARD_CARRIAGE: break;
             case CONTEXT_ACTION_CLOSE_VIEW:
                 if (view != VIEW_ROADS) project = false;
                 if (!local->open_world) position = (Vector3){29, 0, 41};

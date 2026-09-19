@@ -22,6 +22,7 @@ static CcCapturePresentation CcCapturePresentationFor(
     };
 #if defined(CC_CLIENT_SELF_TESTS)
     result.adventure_ui |= request->capture_ux || request->capture_road_fork ||
+        request->capture_road_carriage ||
         request->capture_road || request->capture_parley;
     result.navigation |= request->capture_ux;
     result.accept_input = !(request->capture_ux || request->capture_road_fork);
@@ -95,13 +96,14 @@ static void CcCaptureSelectStart(const CcCaptureRequest *request, int32_t *selec
         request->capture_encounter ? VIEW_ENCOUNTER : request->capture_underroad ? VIEW_DUNGEON :
         request->capture_dragon_cave ? VIEW_DRAGON_CAVE : request->capture_road_fork ? VIEW_ROADS :
         (request->capture_map_case || request->capture_dragon_hoard_map) ? VIEW_MAP :
-        request->capture_carriage ? VIEW_CARRIAGE : VIEW_LOCAL;
+        (request->capture_carriage || request->capture_road_carriage) ? VIEW_CARRIAGE : VIEW_LOCAL;
 }
 
 static bool CcCaptureNeedsRoadbook(const CcCaptureRequest *request)
 {
     return request->capture_world || request->capture_travel || request->capture_route_sight ||
-        request->capture_road_fork || request->capture_road_zoom;
+        request->capture_road_fork || request->capture_road_zoom ||
+        request->capture_road_carriage;
 }
 
 static bool CcCaptureJourneyReady(const CcCaptureRequest *request, const CcSim *sim,

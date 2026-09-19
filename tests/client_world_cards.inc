@@ -253,6 +253,26 @@ static int RunWorldCardRegression(void)
         CARD_INPUT();
         CARD_CHECK(sim.journey.active && sim.journey.destination_id == destination && view == VIEW_LOCAL,
             "A road tap and its card must travel to the same destination.");
+        local.carriage_stopped = true;
+        uint64_t road_hash = CcSimHash(&sim);
+        Vector3 road_anchor = local.world_carriage.position;
+        int32_t road_progress = sim.carriage.progress_milli;
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected,
+            CONTEXT_ACTION_INSPECT_CARRIAGE, 0, mode != 0),
+            "The travelling carriage needs matching card and world inspection actions.");
+        CARD_INPUT();
+        CARD_CHECK(view == VIEW_CARRIAGE && local.carriage_inspection_road &&
+            CcSimHash(&sim) == road_hash && sim.carriage.progress_milli == road_progress &&
+            hypotf(local.world_carriage.position.x - road_anchor.x,
+                   local.world_carriage.position.z - road_anchor.z) < 0.001f,
+            "Carriage inspection must preserve the road anchor for card and world taps.");
+        queued_key_press[KEY_BACKSPACE] = true;
+        CARD_INPUT();
+        CARD_CHECK(view == VIEW_LOCAL && !local.carriage_inspection_road &&
+            CcSimHash(&sim) == road_hash && sim.carriage.progress_milli == road_progress &&
+            hypotf(local.world_carriage.position.x - road_anchor.x,
+                   local.world_carriage.position.z - road_anchor.z) < 0.001f,
+            "Returning from inspection must resume the same road anchor.");
         CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_HOLD_TRAVEL, 0, mode != 0),
             "Travel needs a hold action.");
         local.carriage_stopped = true;

@@ -9,6 +9,11 @@ static int RunCaptureRequestRegression(void)
     if (!CcCaptureRequestParse(3, plain, &request) || !request.capture ||
         strcmp(request.capture_path, "proof.png") != 0)
         return ClientRegressionFailure("A plain capture must retain its output path.");
+    char *road_carriage[] = {"crownless", "--capture-road-carriage", "road-carriage.png"};
+    if (!CcCaptureRequestParse(3, road_carriage, &request) || !request.capture ||
+        !request.capture_road_carriage ||
+        strcmp(request.capture_path, "road-carriage.png") != 0)
+        return ClientRegressionFailure("Road carriage capture must retain its exact journey scene.");
     char *ux[] = {"crownless", "--capture-ux", "14", "ux.png", "1040", "2"};
     if (!CcCaptureRequestParse(6, ux, &request) || !request.capture_ux ||
         !request.capture || request.capture_ux_view != 14 ||

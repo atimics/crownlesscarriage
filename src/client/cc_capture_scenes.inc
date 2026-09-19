@@ -289,9 +289,8 @@ static bool CcCapturePrepareDeparture(const CcCaptureRequest *request, CcCapture
         (*scene->view) = VIEW_LOCAL;
     }
     if (request->capture_carriage || request->capture_carriage_target) {
-        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-            scene->sim->player.cargo[good] = 1;
-        }
+        memset(scene->sim->player.cargo, 0, sizeof(scene->sim->player.cargo));
+        scene->sim->player.cargo[CC_GOOD_BREAD] = 8;
     }
     if (request->capture_carriage) {
         RepositionHero(scene->local, LOCAL_CARRIAGE_BAY, false);
@@ -657,6 +656,37 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
 
 static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *scene)
 {
+    if (request->capture_road_carriage) {
+        int32_t opening = OpeningSituationIndex(scene->sim);
+        const CcSituation *offer = opening >= 0 ? &scene->sim->situations[opening] : NULL;
+        const CcRoute *road = NULL;
+        for (int32_t i = 0; i < scene->sim->route_count; ++i)
+            if (scene->sim->routes[i].from_id == scene->sim->player.location_id) {
+                road = &scene->sim->routes[i];
+                break;
+            }
+        CcId destination = road != NULL ?
+            RouteOtherEnd(road, scene->sim->player.location_id) : 0U;
+        if (offer == NULL || destination == 0U || road == NULL) return false;
+        const CcSettlement *place = CcSimSettlement(scene->sim, destination);
+        if (place == NULL || strcmp(place->name, "Gloamgate") != 0) return false;
+        char error[192] = "";
+        CcCommand listen = {.kind = CC_COMMAND_CHARACTER_RESPONSE,
+                            .target_id = offer->id,
+                            .amount = CC_CHARACTER_RESPONSE_LISTEN};
+        CcCommand pledge = listen;
+        pledge.amount = CC_CHARACTER_RESPONSE_PLEDGE_HELP;
+        CcCommand travel = {.kind = CC_COMMAND_TRAVEL,
+                            .target_id = destination};
+        if (!CcSimApply(scene->sim, &listen, error, sizeof(error)) ||
+            !CcSimApply(scene->sim, &pledge, error, sizeof(error)) ||
+            scene->sim->player.cargo[CC_GOOD_BREAD] != 8 ||
+            !CcSimApply(scene->sim, &travel, error, sizeof(error))) return false;
+        BeginRoadTravelState(scene->sim, scene->local);
+        scene->local->carriage_inspection_road = true;
+        (*scene->view) = VIEW_CARRIAGE;
+        return true;
+    }
     if (request->capture_ux && request->capture_ux_view >= 21) {
         scene->local->adventure_ui = true;
         if (request->capture_ux_view == 23) {
