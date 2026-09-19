@@ -75,7 +75,23 @@ static bool CcCaptureConfigureWindow(const CcCaptureRequest *request,
         window->width = (int32_t)width;
         window->height = request->capture_pony_book && window->width == 1040 ? 620 : 700;
     }
-    if (request->capture_ux && argc >= 5) {
+    if (request->capture_ux && request->capture_ux_view == 24 && argc >= 6) {
+        char *width_end = NULL;
+        char *height_end = NULL;
+        long width = strtol(argv[4], &width_end, 10);
+        long height = strtol(argv[5], &height_end, 10);
+        if (width_end == argv[4] || *width_end != '\0' ||
+            height_end == argv[5] || *height_end != '\0' ||
+            width < 342 || width > 1920 || height < 560 || height > 1080) {
+            (void)fprintf(stderr,
+                "Mine notes capture size must be 342..1920 by 560..1080.\n");
+            return false;
+        }
+        window->width = (int32_t)width;
+        window->height = (int32_t)height;
+        window->minimum_width = (int32_t)width;
+        window->minimum_height = (int32_t)height;
+    } else if (request->capture_ux && argc >= 5) {
         char *end = NULL;
         long width = strtol(argv[4], &end, 10);
         int32_t height;
@@ -91,7 +107,8 @@ static bool CcCaptureConfigureWindow(const CcCaptureRequest *request,
         window->width = (int32_t)width;
         window->height = height;
     }
-    if (request->capture_road_fork || request->capture_pony_book || request->capture_ux) {
+    if (request->capture_road_fork || request->capture_pony_book ||
+        (request->capture_ux && request->capture_ux_view != 24)) {
         window->minimum_width = 1040;
         window->minimum_height = 620;
     }
