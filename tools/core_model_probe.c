@@ -92,7 +92,7 @@ int main(int argc, char **argv)
         }
         CcCoreModel *model = CcCoreModelLoad(argv[1]);
         if (model == NULL) return 3;
-        bool okay = CcCoreModelBeginPolicy(model, ids, ids, count);
+        bool okay = CcCoreModelBeginPolicy(model, ids, count);
         if (okay && strcmp(argv[4], "--generate") == 0) {
             okay = CcCoreModelStep(model, 1024U) == 1;
             int output[8];

@@ -19,14 +19,15 @@ int main(int argc, char **argv)
     CC_CHECK(CcCoreModelBeginSemantic(model, ids, 11));
     CC_CHECK(CcCoreModelBeginParticipant(model, "crownless-person-v2\nnext:"));
     CC_CHECK(CcCoreModelSemanticTokens(model, output, 352) == -1);
-    CC_CHECK(CcCoreModelBeginPolicy(model, ids, ids, 11));
+    const int policy_ids[] = {1280, 129, 160, 176, 178, 306, 512, 512, 512, 512, 1281};
+    CC_CHECK(CcCoreModelBeginPolicy(model, policy_ids, 11));
     CC_CHECK(CcCoreModelPrefixTokens(model, output, 352) == 11);
-    for (int i = 0; i < 11; ++i) CC_CHECK(output[i] == ids[i]);
-    CC_CHECK(!CcCoreModelBeginPolicy(model, NULL, ids, 11));
-    CC_CHECK(!CcCoreModelBeginPolicy(model, ids, NULL, 11));
-    const int bad_path[] = {128, 129, 131};
-    const int bad_ids[] = {128, 0, 131};
-    CC_CHECK(!CcCoreModelBeginPolicy(model, bad_path, bad_ids, 3));
+    for (int i = 0; i < 11; ++i) CC_CHECK(output[i] == policy_ids[i]);
+    CC_CHECK(!CcCoreModelBeginPolicy(model, NULL, 11));
+    const int bad_frame[] = {128, 129, 131};
+    CC_CHECK(!CcCoreModelBeginPolicy(model, bad_frame, 3));
+    const int bad_id[] = {1280, 0, 1281};
+    CC_CHECK(!CcCoreModelBeginPolicy(model, bad_id, 3));
     CcCoreModelFree(model);
     return 0;
 }
