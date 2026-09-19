@@ -16579,7 +16579,7 @@ static bool ApplyMineReportReturn(CcSim *sim, const CcCommand *command,
             sim->current_day);
     CcEvent *event=PushEvent(sim,CC_EVENT_FACT_REVEALED,
         site != NULL ? site->id : mine->source_id,sim->dungeons[0].settlement_id,
-        parent,sale_receipt ? -(int32_t)kind : (int32_t)kind,text);
+        parent,(int32_t)kind,text);
     RememberKnowledge(sim,jory,CC_KNOWLEDGE_WITNESS_ACCOUNT,
         situation->id,sim->player.id,event->id,
         CC_KNOWLEDGE_TOLD,false,sim->current_day);

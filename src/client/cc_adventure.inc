@@ -1035,6 +1035,20 @@ static void DrawAdventurePeople(const CcSim *sim, const LocalState *local)
         (void)AdventureWrap("No one you know has been named yet. Follow the stories.", x, y, width, size, MUTED);
 }
 
+static void AdventureMineReportAccount(const CcSim *sim,char *account,
+                                       size_t capacity)
+{
+    const CcCharacter *recipient=CcSimCharacter(sim,sim->mine.report_recipient_id);
+    if (sim->mine.report_kind == CC_MINE_RETURN_HAUL)
+        (void)snprintf(account,capacity,
+            "Crownless Company reported %d %s from the tracked partial haul to %s",
+            sim->mine.report_quantity,CcGoodName((CcGood)sim->mine.report_good),
+            recipient != NULL ? recipient->name : "Jory");
+    else (void)snprintf(account,capacity,
+        "Crownless Company shared the attributed route account with %s",
+        recipient != NULL ? recipient->name : "Jory");
+}
+
 static void DrawAdventureMineNotes(const CcSim *sim, const LocalState *local)
 {
     Rectangle panel=AdventurePanel();
@@ -1076,23 +1090,8 @@ static void DrawAdventureMineNotes(const CcSim *sim, const LocalState *local)
     }
     if (section < 0 || section == 2) {
       if (sim->mine.report_event_id != 0U) {
-        const CcCharacter *recipient=CcSimCharacter(sim,sim->mine.report_recipient_id);
-        const CcEvent *report=CcSimEvent(sim,sim->mine.report_event_id);
-        bool sale_receipt=report != NULL && report->magnitude < 0;
         char account[160];
-        if (sim->mine.report_kind == CC_MINE_RETURN_HAUL && sale_receipt)
-            (void)snprintf(account,sizeof(account),
-                "Crownless Company told %s about the sale of %d %s",
-                recipient != NULL ? recipient->name : "Jory",
-                sim->mine.report_quantity,CcGoodName((CcGood)sim->mine.report_good));
-        else if (sim->mine.report_kind == CC_MINE_RETURN_HAUL)
-            (void)snprintf(account,sizeof(account),
-                "Crownless Company showed %s %d %s from the tracked partial haul",
-                recipient != NULL ? recipient->name : "Jory",
-                sim->mine.report_quantity,CcGoodName((CcGood)sim->mine.report_good));
-        else (void)snprintf(account,sizeof(account),
-            "Crownless Company shared the attributed route account with %s",
-            recipient != NULL ? recipient->name : "Jory");
+        AdventureMineReportAccount(sim,account,sizeof(account));
         const char *outcome=sim->mine.reported_encounter_outcome == CC_MINE_ENCOUNTER_BARGAINED ?
             "bargained with haulers" :
             sim->mine.reported_encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED ?

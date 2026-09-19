@@ -5,8 +5,6 @@
 #include "metagame/cc_metagame.h"
 #include "test_support.h"
 #include <limits.h>
-#include <inttypes.h>
-#include <sqlite3.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -405,7 +403,7 @@ static void TestMineReturnRecords(void)
         haul.mine.report_recipient_id==jory->id&&haul.mine.report_event_id!=0U&&
         KnowledgeCount(&haul,jory->id)==jory_before+1);
     const CcEvent *report_event=CcSimEvent(&haul,haul.mine.report_event_id);
-    CC_CHECK(report_event!=NULL&&report_event->magnitude<0&&
+    CC_CHECK(report_event!=NULL&&report_event->magnitude==CC_MINE_RETURN_HAUL&&
         strstr(report_event->text,"sale of 1 Raw Gold")!=NULL&&
         strstr(report_event->text,"still yield")!=NULL);
     int32_t others_after=0;
@@ -450,36 +448,42 @@ static void EnterMineThroughMiddle(CcSim *sim)
 
 static void TestMineSurveyMigrationAndReturns(void)
 {
-    CcSim legacy,restored,information,retreat;
-    EnterMineThroughMiddle(&legacy);
-    Walk(&legacy,26,4);
-    legacy.schema_version=105U;
-    legacy.mine.return_revision=0;
-    CcId depleted_gold_root=legacy.mine.gold_source_entry_id;
-    CcCustodyEntry *depleted_gold=NULL;
-    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&legacy.custody);++i)
-        if(legacy.custody.entries[i].id==depleted_gold_root)
-            depleted_gold=&legacy.custody.entries[i];
-    CC_CHECK(depleted_gold!=NULL);
-    depleted_gold->holder=(CcCustodyHolder){CC_CUSTODY_MINE_PACK,legacy.player.id};
-    depleted_gold->quantity=0;
-    depleted_gold->active=false;
-    depleted_gold->revision+=1;
-    legacy.mine.bread_source_entry_id=0U;
-    legacy.mine.iron_source_entry_id=0U;
-    legacy.mine.gold_source_entry_id=0U;
-    legacy.mine.gems_source_entry_id=0U;
-    Apply(&legacy,CC_COMMAND_MINE_USE,0);
-    CC_CHECK(legacy.mine.surveyed && legacy.mine.survey_event_id==0U);
-    Check(CcSaveWrite("mine-survey-105.ccsave",&legacy,error,sizeof(error)));
-    Check(CcSaveRead("mine-survey-105.ccsave",&restored,error,sizeof(error)));
-    CC_CHECK(restored.schema_version==106U&&restored.mine.surveyed&&
-        restored.mine.survey_event_id==0U&&restored.mine.return_revision==1&&
-        restored.mine.iron_source_entry_id!=0U&&restored.mine.gold_source_entry_id!=0U&&
+    static CcSim restored,reloaded;
+    CcSim information,retreat;
+    const char *fixture=CC_TEST_SOURCE_DIR
+        "/tests/fixtures/shipped/schema-105-generator-25-mine-custody-journal.ccsave";
+    Check(CcSaveRead(fixture,&restored,error,sizeof(error)));
+    Check(CcSimValidate(&restored,error,sizeof(error)));
+    uint64_t migrated_hash=CcSimHash(&restored);
+    CC_CHECK(migrated_hash==UINT64_C(13156381989558921086));
+    Check(CcSaveRead(fixture,&reloaded,error,sizeof(error)));
+    CC_CHECK(CcSimHash(&reloaded)==migrated_hash);
+    const CcCustodyEntry *depleted_gold=NULL;
+    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&restored.custody);++i)
+        if(restored.custody.entries[i].id==restored.mine.gold_source_entry_id)
+            depleted_gold=&restored.custody.entries[i];
+    CC_CHECK(restored.schema_version==106U&&restored.generator_version==25U&&
+        restored.mine.return_revision==1&&restored.mine.surveyed&&
+        restored.mine.survey_event_id==0U&&
+        restored.mine.survey_read_day==0&&restored.mine.survey_observed_day==0&&
+        restored.mine.iron_source_entry_id!=0U&&
+        restored.mine.gold_source_entry_id!=0U&&
         restored.mine.gems_source_entry_id!=0U&&
-        restored.mine.gold_source_entry_id==depleted_gold_root&&
+        depleted_gold!=NULL&&!depleted_gold->active&&depleted_gold->quantity==0&&
         CcMineSourceGood(&restored,CC_GOOD_GOLD)==0&&
-        restored.player.cargo[CC_GOOD_GOLD]==0);
+        TrackedGoodAt(&restored,CC_GOOD_IRON,CC_CUSTODY_MINE_PACK,
+            restored.player.id)==1&&
+        TrackedGoodAt(&restored,CC_GOOD_IRON,CC_CUSTODY_SITE,
+            restored.mine.cache_id)==3&&
+        restored.player.cargo[CC_GOOD_GOLD]==3&&
+        restored.player.cargo[CC_GOOD_IRON]==1&&
+        CarriedTrackedGood(&restored,CC_GOOD_GOLD)==0&&
+        CarriedTrackedGood(&restored,CC_GOOD_IRON)==0&&
+        CcSimMineReturnEvidence(&restored)==CC_MINE_RETURN_NONE);
+    restored.player.cargo[CC_GOOD_BREAD]=1;
+    ApplyGood(&restored,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,1);
+    Walk(&restored,15,3);Apply(&restored,CC_COMMAND_MINE_USE,0);
+    Walk(&restored,26,4);
     int32_t revision=restored.mine.revision;
     Apply(&restored,CC_COMMAND_MINE_USE,0);
     CC_CHECK(restored.mine.survey_event_id!=0U&&restored.mine.survey_read_day==restored.current_day&&
@@ -513,7 +517,6 @@ static void TestMineSurveyMigrationAndReturns(void)
     uint64_t before=CcSimHash(&retreat);
     CC_CHECK(!CcSimApply(&retreat,&report,error,sizeof(error))&&
         CcSimHash(&retreat)==before&&retreat.mine.report_event_id==0U);
-    (void)remove("mine-survey-105.ccsave");
 }
 static int WriteSharedMineFixture(const char *mode,const char *path)
 {
@@ -546,157 +549,10 @@ static int WriteSharedMineFixture(const char *mode,const char *path)
     return 0;
 }
 
-static bool MakeFixturePortable(const char *path)
-{
-    sqlite3 *database=NULL;
-    if(sqlite3_open_v2(path,&database,SQLITE_OPEN_READWRITE,NULL)!=SQLITE_OK) {
-        if(database!=NULL) sqlite3_close(database);
-        return false;
-    }
-    char *sqlite_error=NULL;
-    bool ok=sqlite3_exec(database,
-        "PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode=DELETE; VACUUM;",
-        NULL,NULL,&sqlite_error)==SQLITE_OK;
-    sqlite3_free(sqlite_error);
-    if(sqlite3_close(database)!=SQLITE_OK) ok=false;
-    return ok;
-}
-
-static void RemoveFixtureSidecars(const char *path)
-{
-    char sidecar[1024];
-    (void)snprintf(sidecar,sizeof(sidecar),"%s-wal",path);
-    (void)remove(sidecar);
-    (void)snprintf(sidecar,sizeof(sidecar),"%s-shm",path);
-    (void)remove(sidecar);
-}
-
-static void ApplyFixtureJournal(CcJournal *journal,CcSim *sim,
-    CcCommandKind kind,CcGood good,int32_t amount)
-{
-    CcCommand command={.kind=kind,.target_id=(CcId)sim->mine.revision,
-        .good=good,.amount=amount};
-    Check(CcJournalApply(journal,sim,&command,error,sizeof(error)));
-    Check(CcSimValidate(sim,error,sizeof(error)));
-}
-
-static void WalkFixtureJournal(CcJournal *journal,CcSim *sim,int32_t tx,int32_t ty)
-{
-    int32_t queue[CC_MINE_WIDTH*CC_MINE_HEIGHT];
-    int32_t prev[CC_MINE_WIDTH*CC_MINE_HEIGHT];
-    int32_t dirs[CC_MINE_WIDTH*CC_MINE_HEIGHT];
-    for(int32_t i=0;i<CC_MINE_WIDTH*CC_MINE_HEIGHT;++i) prev[i]=-1;
-    int32_t root=sim->mine.y*CC_MINE_WIDTH+sim->mine.x,head=0,tail=0;
-    queue[tail++]=root; prev[root]=root;
-    const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
-    while(head<tail) {
-        int32_t cell=queue[head++],x=cell%CC_MINE_WIDTH,y=cell/CC_MINE_WIDTH;
-        for(int32_t d=0;d<4;++d) {
-            int32_t nx=x+dx[d],ny=y+dy[d];
-            if(!CcMineWalkable(sim,sim->mine.phase,nx,ny)) continue;
-            int32_t next=ny*CC_MINE_WIDTH+nx;
-            if(prev[next]>=0) continue;
-            prev[next]=cell; dirs[next]=d; queue[tail++]=next;
-        }
-    }
-    int32_t target=ty*CC_MINE_WIDTH+tx,count=0;
-    CC_CHECK(prev[target]>=0);
-    while(target!=root) {queue[count++]=dirs[target];target=prev[target];}
-    while(count>0)
-        ApplyFixtureJournal(journal,sim,CC_COMMAND_MINE_STEP,CC_GOOD_BREAD,
-            queue[--count]);
-}
-
-static int WriteSchema105MineCustodyFixture(const char *path)
-{
-    static CcSim sim,restored;
-    (void)remove(path);
-    RemoveFixtureSidecars(path);
-    AtBranch(&sim,false);
-    sim.player.cargo[CC_GOOD_BREAD]=1;
-    CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,
-        .target_id=CcMineSite(&sim)->id};
-    Check(CcSimApply(&sim,&visit,error,sizeof(error)));
-    ApplyGood(&sim,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,1);
-    Walk(&sim,15,3); Apply(&sim,CC_COMMAND_MINE_USE,0);
-    Walk(&sim,9,15); Walk(&sim,26,16);
-    Apply(&sim,CC_COMMAND_MINE_CONTEST,0);
-    Apply(&sim,CC_COMMAND_MINE_RESOLVE_CONTEST,17);
-    ApplyGood(&sim,CC_COMMAND_MINE_TAKE,CC_GOOD_GOLD,3);
-    ApplyGood(&sim,CC_COMMAND_MINE_TAKE,CC_GOOD_IRON,5);
-    Walk(&sim,5,15);
-    ApplyGood(&sim,CC_COMMAND_MINE_CACHE,CC_GOOD_IRON,3);
-    Walk(&sim,26,4);
-    CC_CHECK(!sim.mine.surveyed&&CcMinePackGood(&sim,CC_GOOD_GOLD)==3&&
-        CcMinePackGood(&sim,CC_GOOD_IRON)==2&&CcMineCacheGood(&sim,CC_GOOD_IRON)==3);
-    uint64_t base_hash=CcSimHash(&sim);
-    CcJournal *journal=CcJournalStart(path,&sim,error,sizeof(error));
-    Check(journal!=NULL);
-    ApplyFixtureJournal(journal,&sim,CC_COMMAND_MINE_USE,CC_GOOD_BREAD,0);
-    WalkFixtureJournal(journal,&sim,5,3);
-    ApplyFixtureJournal(journal,&sim,CC_COMMAND_MINE_USE,CC_GOOD_BREAD,0);
-    WalkFixtureJournal(journal,&sim,15,18);
-    ApplyFixtureJournal(journal,&sim,CC_COMMAND_MINE_PACK,CC_GOOD_GOLD,-3);
-    ApplyFixtureJournal(journal,&sim,CC_COMMAND_MINE_PACK,CC_GOOD_IRON,-1);
-    uint64_t final_hash=CcSimHash(&sim);
-    CcJournalAbandon(&journal);
-    Check(MakeFixturePortable(path));
-    Check(CcSaveRead(path,&restored,error,sizeof(error)));
-    CC_CHECK(CcSimHash(&restored)==final_hash&&
-        restored.schema_version==105U&&restored.mine.phase==CC_MINE_YARD&&
-        restored.mine.surveyed&&
-        CcMinePackGood(&restored,CC_GOOD_IRON)==1&&
-        CcMineCacheGood(&restored,CC_GOOD_IRON)==3&&
-        restored.player.cargo[CC_GOOD_GOLD]==3&&
-        restored.player.cargo[CC_GOOD_IRON]==1);
-    RemoveFixtureSidecars(path);
-    printf("schema=%u generator=%u base_hash=%" PRIu64
-        " final_hash=%" PRIu64 " inactive_gold_roots=%d pack_iron=%d cache_iron=%d\n",
-        restored.schema_version,restored.generator_version,base_hash,final_hash,
-        1,1,3);
-    return 0;
-}
-
-static int VerifySchema105MineCustodyFixture(const char *path)
-{
-    static CcSim sim;
-    if(!CcSaveRead(path,&sim,error,sizeof(error))) {
-        fprintf(stderr,"Fixture read: %s\n",error);
-        return 1;
-    }
-    int32_t inactive_gold=0,pack_iron=0,cache_iron=0;
-    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&sim.custody);++i) {
-        const CcCustodyEntry *entry=&sim.custody.entries[i];
-        if(entry->kind!=CC_CUSTODY_GOODS||entry->owner_id!=sim.goblins.id) continue;
-        if(!entry->active&&entry->good==CC_GOOD_GOLD&&entry->source_id==0U)
-            inactive_gold+=1;
-        if(entry->active&&entry->good==CC_GOOD_IRON&&
-           entry->holder.kind==CC_CUSTODY_MINE_PACK&&entry->holder.id==sim.player.id)
-            pack_iron+=(int32_t)entry->quantity;
-        if(entry->active&&entry->good==CC_GOOD_IRON&&
-           entry->holder.kind==CC_CUSTODY_SITE&&entry->holder.id==sim.mine.cache_id)
-            cache_iron+=(int32_t)entry->quantity;
-    }
-    if(sim.schema_version!=105U||sim.generator_version!=25U||
-       CcSimHash(&sim)!=UINT64_C(4059271005757223396)||
-       sim.mine.phase!=CC_MINE_YARD||!sim.mine.surveyed||
-       inactive_gold!=1||pack_iron!=1||cache_iron!=3||
-       sim.player.cargo[CC_GOOD_GOLD]!=3||sim.player.cargo[CC_GOOD_IRON]!=1) {
-        fprintf(stderr,"Fixture state does not match the schema 105 receipt.\n");
-        return 1;
-    }
-    printf("schema=105 final_hash=%" PRIu64
-        " inactive_gold_roots=1 pack_iron=1 cache_iron=3\n",CcSimHash(&sim));
-    return 0;
-}
 int main(int argc,char **argv)
 {
     if(argc==4 && strcmp(argv[1],"--write-shared-mine-fixture")==0)
         return WriteSharedMineFixture(argv[2],argv[3]);
-    if(argc==3 && strcmp(argv[1],"--write-schema105-mine-fixture")==0)
-        return WriteSchema105MineCustodyFixture(argv[2]);
-    if(argc==3 && strcmp(argv[1],"--verify-schema105-mine-fixture")==0)
-        return VerifySchema105MineCustodyFixture(argv[2]);
     static CcSim sim,restored,changed,haul,loaded,legacy,capacity,prechange;
     static CcSim bargain,contest,withdrawn,failed;
     (void)remove("mine-load-replay.ccsave");
