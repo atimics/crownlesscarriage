@@ -80,3 +80,29 @@ The worker logs the compact input and raw generation to stderr, validates one
 JSON turn, and preserves its actor ID across requests. The paired runner stores
 those logs and handles episode memory. The shipped game continues to use its
 current account checkpoint while this training path is evaluated.
+
+## Assemble reviewed turns
+
+`reviewed_corpus.py` binds each review to hashes of the full source candidate
+and its exact compact preview. The reviewer records source and compact decisions,
+a name, notes, and the evidence needed for the target. Evidence references use
+arrays such as `["self", "coins"]`, `["account", 0]`, or `["turn", 1]`.
+Indices refer to the original request. The assembler checks that each cited
+record remains in the compact input. Reviewers still judge truth, meaning and
+whether the turn contributes to the exchange.
+
+```sh
+python3 tools/dialogue/reviewed_corpus.py \
+  --candidates /tmp/pair/training-candidates.jsonl \
+  --reviews /tmp/reviews.json --probe BUILD/core_model_probe \
+  --world-group world-and-shared-history --output /tmp/reviewed
+```
+
+The output preserves source candidates, reviews and exclusions, and writes
+`trainable.jsonl` plus a hash receipt. Duplicate candidates count once. Use a
+fresh output directory. The command succeeds when at least one row is accepted.
+Related snapshots and forks share one world group. The Zero participant trainer
+requires separate groups for training and validation.
+
+The reviewed pilot and its held-out replies are recorded in
+`docs/reviews/participant-minds-2026-09-19/reviewed-corpus.md`.
