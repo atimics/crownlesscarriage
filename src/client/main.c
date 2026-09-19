@@ -8857,6 +8857,20 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     ContextActionKind context_action = pressed_action.kind;
+    if (context_action == CONTEXT_ACTION_NONE && *view == VIEW_LOCAL &&
+        local->journey_travel_active &&
+        sim->journey.road_position_active) {
+        for (int32_t i = 0; i < available_cards.count && i < 8; ++i) {
+            if (available_cards.items[i].enabled &&
+                available_cards.items[i].kind ==
+                    CONTEXT_ACTION_CHOOSE_ROAD_LEG &&
+                ClientKeyPressed(KEY_ONE + i)) {
+                pressed_action = available_cards.items[i];
+                context_action = pressed_action.kind;
+                break;
+            }
+        }
+    }
     if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) && context_action == CONTEXT_ACTION_NONE &&
         PointerOverContextAction(sim, local, *view, *selected, *selected_situation, ClientPointerPosition())) return;
     CommandActionKind command_action = local->adventure_ui ? COMMAND_ACTION_NONE : PressedCommandAction(local, *view);
