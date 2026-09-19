@@ -21,6 +21,23 @@ The pack holds eight goods, including supplies and recovered goods. Entry consum
 
 The source in the Lower Passage begins with eight Iron, three Raw Gold, and two Gems. Each transfer changes that finite source. The Rope Store cache holds seven goods and persists between visits. Select the quantity that fits, and inspect the remaining load before choosing another trip.
 
+## The Lower Passage haulers
+
+Two haulers guard the source. Their offer is two packed Bread for one Raw Gold.
+Pack at least three Bread before a first descent: entry spends one, leaving two
+for the offer. The bargain spends the Bread and transfers the Gold together. It
+settles once, and the source keeps its remaining goods.
+
+The western passages provide a physical way around the barred route. Exploring
+that route keeps the choice of returning to the haulers. Walking out is also a
+valid end to the visit.
+
+A local company can choose Contest to use the existing combat controls. Target
+selects a hauler, Strike attacks, and Break contact returns to exploration at the
+current mine position with the injury retained. The fight and its result persist
+with the local scene. Shared companies can bargain and explore; the displayed
+contest guidance directs that fight to local play.
+
 Return through the entrance and walk to the carriage. Transfer the chosen goods, then choose Board to resume the same road journey. Remaining supplies return to the carriage. The source, cache, survey, and opened bar remain saved for later visits.
 
 On a narrow portrait screen, the scene appears above readable action buttons. Open Scene details for the full scene text. The save footer reports the browser save result.
@@ -31,7 +48,7 @@ Facing is local camera state. Turning is free. A fresh descent faces east into t
 
 The simulation owns position, collision, carried goods, elapsed time, opened passages, and the road anchor. The screen, text controls, and shared company commands use those rules. Each movement carries the current mine revision so a repeated request cannot take another step.
 
-Schema 59 introduced the mine visit and pack. Schema 103 adds finite source and cache custody. Older saves verify their original hash and replay before migration. Journal replay restores the same position, supplies, goods, and holder identities.
+Schema 59 introduced the mine visit and pack. Schema 103 adds finite source and cache custody. Schema 104 adds the hauler encounter, and local scene version 9 preserves its combat state. Older saves verify their original hash and replay before migration. Journal replay restores the same position, supplies, goods, and holder identities.
 
 Text controls: `mine visit`, `mine look`, `mine move north`, `mine use`, `mine pack Bread`, `mine unpack Bread`, and `road pass`.
 
@@ -41,7 +58,7 @@ Text controls: `mine visit`, `mine look`, `mine move north`, `mine use`, `mine p
 
 ## Scope
 
-This slice builds the Silverwick road branch, surface yard, and zone 01. The remaining 23 levels, Hollowbarrow entrance, goblin encounters, and route to the dragon cave follow the wider Underroad design. The existing abstract Underroad expedition remains available through its earlier commands while the mapped levels are built.
+This slice builds the Silverwick road branch, surface yard, zone 01, and its hauling encounter. The remaining 23 levels, Hollowbarrow entrance, and route to the dragon cave follow the wider Underroad design. The existing abstract Underroad expedition remains available through its earlier commands while the mapped levels are built.
 
 ## Checks
 
