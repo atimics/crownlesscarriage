@@ -16503,8 +16503,8 @@ static bool ApplyMineLearnLead(CcSim *sim, const CcCommand *command,
     const CcSettlement *from=route != NULL ? CcSimSettlement(sim,route->from_id) : NULL;
     const CcSettlement *to=route != NULL ? CcSimSettlement(sim,route->to_id) : NULL;
     (void)snprintf(text,sizeof(text),from_jory ?
-        "Day %d: Jory marks the Low Silver Pit turnout on the %s-%s road; workers' records hold route guidance." :
-        "Day %d: Silverwick's shift record marks the Low Silver Pit turnout on the %s-%s road and its workers' records.",
+        "Day %d: Jory: Low Silver Pit, %.20s-%.20s road. Workers' records give route guidance." :
+        "Day %d: Shift record: Low Silver Pit, %.20s-%.20s road. Workers' records give route guidance.",
         sim->current_day,from != NULL ? from->name : "Alderwatch",
         to != NULL ? to->name : "Silverwick");
     CcEvent *event=PushEvent(sim,CC_EVENT_LORE_RECORDED,site->id,
