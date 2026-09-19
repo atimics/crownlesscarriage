@@ -68,6 +68,21 @@ uint64_t CcSimHash(const CcSim *sim)
                 HASH_VALUE(sim->mine.bypass_route_seen); HASH_VALUE(sim->mine.contest_active);
                 HASH_VALUE(sim->mine.encounter_outcome); HASH_VALUE(sim->mine.player_injury);
             }
+            if (sim->schema_version >= 106U) {
+                HASH_VALUE(sim->mine.bread_source_entry_id);
+                HASH_VALUE(sim->mine.iron_source_entry_id);
+                HASH_VALUE(sim->mine.gold_source_entry_id);
+                HASH_VALUE(sim->mine.gems_source_entry_id);
+                HASH_VALUE(sim->mine.return_revision);
+                HASH_VALUE(sim->mine.lead_source_id); HASH_VALUE(sim->mine.lead_event_id);
+                HASH_VALUE(sim->mine.lead_day); HASH_VALUE(sim->mine.lead_document);
+                HASH_VALUE(sim->mine.survey_source_id); HASH_VALUE(sim->mine.survey_event_id);
+                HASH_VALUE(sim->mine.survey_read_day); HASH_VALUE(sim->mine.survey_observed_day);
+                HASH_VALUE(sim->mine.bypass_event_id); HASH_VALUE(sim->mine.bypass_day);
+                HASH_VALUE(sim->mine.report_recipient_id); HASH_VALUE(sim->mine.report_event_id);
+                HASH_VALUE(sim->mine.report_day); HASH_VALUE(sim->mine.report_kind);
+                HASH_VALUE(sim->mine.reported_encounter_outcome);
+            }
         }
     }
     if (sim->schema_version >= 73U) {

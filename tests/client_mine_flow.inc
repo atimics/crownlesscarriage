@@ -11,22 +11,49 @@ static int RunMineInputRegression(void)
     CcSimInit(&sim,0x71a7e5);
     const CcRoadSite *site=CcMineSite(&sim);
     const CcRoute *road=CcSimRoute(&sim,site->route_id);
-    sim.player.location_id=road->from_id;sim.carriage.location_id=road->from_id;
-    CcCommand travel={.kind=CC_COMMAND_TRAVEL,.target_id=road->to_id};
-    if(!CcSimApply(&sim,&travel,error,sizeof(error))) return ClientRegressionFailure(error);
-    sim.pony_company.encounter=-1;
-    sim.journey.elapsed_subticks=CcMineBranchSubtick(&sim);
-    sim.carriage.progress_milli=(int32_t)((int64_t)sim.journey.elapsed_subticks*1000/sim.journey.total_subticks);
+    CcId silverwick=sim.dungeons[0].settlement_id;
+    sim.player.location_id=silverwick;sim.carriage.location_id=silverwick;
+    CcCommand travel={.kind=CC_COMMAND_TRAVEL,
+        .target_id=road->from_id==silverwick?road->to_id:road->from_id};
     sim.player.cargo[CC_GOOD_BREAD]=2;
     sim.player.reputation = 1;
     ResetLocalState(&local);
-    local.adventure_ui=true;local.journey_travel_active=true;
+    local.adventure_ui=true;
     local.opening_step=CC_LOCAL_OPENING_COMPLETE;
     CcJournal *journal=CcJournalStart(path,&sim,error,sizeof(error));
     if(journal==NULL) return ClientRegressionFailure(error);
 #define MINE_CHECK(test,text) do { if(!(test)) { (void)CcJournalClose(&journal,&sim,error,sizeof(error)); (void)remove(path); return ClientRegressionFailure(text); } } while(0)
 #define MINE_INPUT() do { HandleInput(&journal,&sim,&selected,&situation,&view,&back,&local,(RenderTexture2D){0},(Rectangle){0},.2f,path,"",message,sizeof(message),feedback,sizeof(feedback),&feedback_age); ClientInputClearPressed(); } while(0)
 #define MINE_KEY(key) do { queued_key_press[key]=true; MINE_INPUT(); } while(0)
+    const CcCharacter *jory=CcSimMineEvidenceContact(&sim);
+    MINE_CHECK(jory!=NULL&&CcSimMineLeadSupported(&sim),
+        "Silverwick must expose Jory's existing mine concern.");
+    local.conversation_character_id=jory->id;
+    ContextActionSet mine_replies=BuildContextActions(&sim,&local,VIEW_CHARACTER,0,0);
+    MINE_CHECK(mine_replies.count>=4&&
+        mine_replies.items[0].kind==CONTEXT_ACTION_MINE_LEAD&&mine_replies.items[0].enabled&&
+        strstr(mine_replies.items[0].label,"Low Silver Pit")!=NULL,
+        "Jory's visible conversation must offer the mine lead first.");
+    MINE_CHECK(mine_replies.items[1].kind==CONTEXT_ACTION_MINE_REPORT&&
+        !mine_replies.items[1].enabled&&
+        strstr(mine_replies.items[1].detail,"LOAD OR ROUTE")!=NULL,
+        "Jory's return action must explain the missing evidence.");
+    view=VIEW_CHARACTER;
+    MINE_KEY(KEY_ONE);
+    MINE_CHECK(sim.mine.lead_event_id!=0U&&strstr(message,"Company Book")!=NULL,
+        "The ordinary Jory lead action must journal its dated Book entry.");
+    mine_replies=BuildContextActions(&sim,&local,VIEW_CHARACTER,0,0);
+    for(int32_t i=0;i<mine_replies.count;++i)
+        MINE_CHECK(mine_replies.items[i].kind!=CONTEXT_ACTION_MINE_LEAD,
+            "A learned lead must not publish a duplicate action.");
+    local.conversation_character_id=0U;
+    view=VIEW_LOCAL;
+    MINE_CHECK(ApplyCommand(journal,&sim,travel,message,sizeof(message)),
+        "The lead must leave ordinary departure available.");
+    sim.pony_company.encounter=-1;
+    sim.journey.elapsed_subticks=CcMineBranchSubtick(&sim);
+    sim.carriage.progress_milli=(int32_t)((int64_t)sim.journey.elapsed_subticks*1000/sim.journey.total_subticks);
+    local.journey_travel_active=true;
     {
         static CcSim frame;
         frame=sim;

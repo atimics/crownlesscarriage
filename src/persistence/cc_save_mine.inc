@@ -32,6 +32,22 @@ static bool SaveMine(sqlite3 *database, const CcSim *sim, char *error, size_t er
     BindInt(statement,12,(int32_t)m->encounter_outcome);
     BindInt(statement,13,(int32_t)m->player_injury);
     ok=StepDone(database,statement,error,error_capacity);
+    sqlite3_finalize(statement);
+    if (!ok || sim->schema_version < 106U) return ok;
+    if (!Prepare(database,"INSERT INTO mine_return_state VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+        &statement,error,error_capacity)) return false;
+    BindId(statement,1,m->bread_source_entry_id); BindId(statement,2,m->iron_source_entry_id);
+    BindId(statement,3,m->gold_source_entry_id); BindId(statement,4,m->gems_source_entry_id);
+    BindInt(statement,5,m->return_revision);
+    BindId(statement,6,m->lead_source_id); BindId(statement,7,m->lead_event_id);
+    BindInt(statement,8,m->lead_day); BindInt(statement,9,m->lead_document ? 1 : 0);
+    BindId(statement,10,m->survey_source_id); BindId(statement,11,m->survey_event_id);
+    BindInt(statement,12,m->survey_read_day); BindInt(statement,13,m->survey_observed_day);
+    BindId(statement,14,m->bypass_event_id); BindInt(statement,15,m->bypass_day);
+    BindId(statement,16,m->report_recipient_id); BindId(statement,17,m->report_event_id);
+    BindInt(statement,18,m->report_day); BindInt(statement,19,(int32_t)m->report_kind);
+    BindInt(statement,20,(int32_t)m->reported_encounter_outcome);
+    ok=StepDone(database,statement,error,error_capacity);
     sqlite3_finalize(statement); return ok;
 }
 static bool ReadMine(sqlite3 *database, CcSim *sim, char *error, size_t error_capacity)
@@ -79,5 +95,37 @@ static bool ReadMine(sqlite3 *database, CcSim *sim, char *error, size_t error_ca
     bool done=sqlite3_step(statement)==SQLITE_DONE;
     sqlite3_finalize(statement);
     if (!done) {SetError(error,error_capacity,"Mine load rows are invalid."); return false;}
+    if (sim->schema_version < 106U) return true;
+    if (!Prepare(database,"SELECT bread_source_entry_id,iron_source_entry_id,gold_source_entry_id,gems_source_entry_id,"
+        "return_revision,lead_source_id,lead_event_id,lead_day,lead_document,"
+        "survey_source_id,survey_event_id,survey_read_day,survey_observed_day,bypass_event_id,bypass_day,"
+        "report_recipient_id,report_event_id,report_day,report_kind,reported_encounter_outcome "
+        "FROM mine_return_state WHERE slot=1;",&statement,error,error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW) {
+        sqlite3_finalize(statement); SetError(error,error_capacity,"Mine return record is missing."); return false;
+    }
+    m->bread_source_entry_id=(CcId)sqlite3_column_int64(statement,0);
+    m->iron_source_entry_id=(CcId)sqlite3_column_int64(statement,1);
+    m->gold_source_entry_id=(CcId)sqlite3_column_int64(statement,2);
+    m->gems_source_entry_id=(CcId)sqlite3_column_int64(statement,3);
+    m->return_revision=sqlite3_column_int(statement,4);
+    m->lead_source_id=(CcId)sqlite3_column_int64(statement,5);
+    m->lead_event_id=(CcId)sqlite3_column_int64(statement,6);
+    m->lead_day=sqlite3_column_int(statement,7);
+    m->lead_document=sqlite3_column_int(statement,8)!=0;
+    m->survey_source_id=(CcId)sqlite3_column_int64(statement,9);
+    m->survey_event_id=(CcId)sqlite3_column_int64(statement,10);
+    m->survey_read_day=sqlite3_column_int(statement,11);
+    m->survey_observed_day=sqlite3_column_int(statement,12);
+    m->bypass_event_id=(CcId)sqlite3_column_int64(statement,13);
+    m->bypass_day=sqlite3_column_int(statement,14);
+    m->report_recipient_id=(CcId)sqlite3_column_int64(statement,15);
+    m->report_event_id=(CcId)sqlite3_column_int64(statement,16);
+    m->report_day=sqlite3_column_int(statement,17);
+    m->report_kind=(uint8_t)sqlite3_column_int(statement,18);
+    m->reported_encounter_outcome=(uint8_t)sqlite3_column_int(statement,19);
+    done=sqlite3_step(statement)==SQLITE_DONE;
+    sqlite3_finalize(statement);
+    if (!done) {SetError(error,error_capacity,"Mine return rows are invalid."); return false;}
     return true;
 }

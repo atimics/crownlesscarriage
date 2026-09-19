@@ -16331,6 +16331,209 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
     }
 }
 
+static const CcSituation *MineEvidenceSituation(const CcSim *sim,
+                                                CcId contact_id)
+{
+    if (sim == NULL || sim->dungeon_count == 0) return NULL;
+    for (int32_t i=0;i<sim->situation_count;++i) {
+        const CcSituation *situation=&sim->situations[i];
+        if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION &&
+            situation->target_id == sim->dungeons[0].id &&
+            situation->affected_character_id == contact_id) return situation;
+    }
+    return NULL;
+}
+
+const CcCharacter *CcSimMineEvidenceContact(const CcSim *sim)
+{
+    if (sim == NULL || sim->dungeon_count == 0) return NULL;
+    CcId town_id=sim->dungeons[0].settlement_id;
+    for (int32_t i=0;i<sim->situation_count;++i) {
+        const CcSituation *situation=&sim->situations[i];
+        if (situation->kind != CC_SITUATION_MONSTER_EXPEDITION ||
+            situation->target_id != sim->dungeons[0].id) continue;
+        const CcCharacter *contact=CcSimCharacter(sim,situation->affected_character_id);
+        if (contact != NULL && strcmp(contact->name,"Jory Fen") == 0 &&
+            contact->death_day > sim->current_day &&
+            contact->current_settlement_id == town_id) return contact;
+    }
+    for (int32_t i=0;i<sim->character_count;++i) {
+        const CcCharacter *contact=&sim->characters[i];
+        if (strcmp(contact->name,"Jory Fen") == 0 &&
+            contact->death_day > sim->current_day &&
+            contact->current_settlement_id == town_id) return contact;
+    }
+    return NULL;
+}
+
+bool CcSimMineLeadSupported(const CcSim *sim)
+{
+    const CcCharacter *jory=CcSimMineEvidenceContact(sim);
+    const CcSituation *situation=jory != NULL ?
+        MineEvidenceSituation(sim,jory->id) : NULL;
+    if (situation == NULL) return false;
+    for (int32_t i=0;i<jory->knowledge_count;++i) {
+        const CcCharacterKnowledge *known=&jory->knowledge[i];
+        if (known->kind == CC_KNOWLEDGE_PROBLEM_RUMOR &&
+            known->subject_id == situation->id && known->event_id != 0U)
+            return true;
+    }
+    return false;
+}
+
+static const CcCustodyEntry *MineTrackedGood(const CcSim *sim, bool sold)
+{
+    if (sim == NULL || sim->schema_version < 106U || sim->dungeon_count == 0)
+        return NULL;
+    CcId town_id=sim->dungeons[0].settlement_id;
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        const CcCustodyEntry *entry=&sim->custody.entries[i];
+        if (!entry->active || entry->kind != CC_CUSTODY_GOODS ||
+            entry->quantity <= 0 || !CcSimMineEntryTracked(sim,entry))
+            continue;
+        bool carried=!sold && entry->owner_id == sim->goblins.id &&
+            entry->holder.kind == CC_CUSTODY_PLAYER &&
+            entry->holder.id == sim->player.id;
+        bool delivered=sold && entry->owner_id == town_id &&
+            entry->holder.kind == CC_CUSTODY_STORE && entry->holder.id == town_id;
+        if (carried || delivered) return entry;
+    }
+    return NULL;
+}
+
+CcMineReturnKind CcSimMineReturnEvidence(const CcSim *sim)
+{
+    if (MineTrackedGood(sim,false) != NULL || MineTrackedGood(sim,true) != NULL)
+        return CC_MINE_RETURN_HAUL;
+    if (sim != NULL && sim->schema_version >= 106U &&
+        (sim->mine.survey_event_id != 0U || sim->mine.bypass_event_id != 0U))
+        return CC_MINE_RETURN_INFORMATION;
+    return CC_MINE_RETURN_NONE;
+}
+
+static bool ApplyMineLearnLead(CcSim *sim, const CcCommand *command,
+                               char *error, size_t error_capacity)
+{
+    CcMineVisit *mine=&sim->mine;
+    if (sim->schema_version < 106U || command->target_id != (CcId)mine->return_revision) {
+        SetError(error,error_capacity,"Refresh the Silverwick mine record first.");
+        return false;
+    }
+    if (sim->dungeon_count == 0 || sim->player.location_id != sim->dungeons[0].settlement_id ||
+        sim->journey.active) {
+        SetError(error,error_capacity,"Read the Low Silver Pit lead in Silverwick.");
+        return false;
+    }
+    if (mine->lead_event_id != 0U) {
+        SetError(error,error_capacity,"The company already holds this dated lead.");
+        return false;
+    }
+    const CcCharacter *jory=CcSimMineEvidenceContact(sim);
+    bool from_jory=command->amount == 1;
+    if ((from_jory && !CcSimMineLeadSupported(sim)) ||
+        (!from_jory && command->amount != 2)) {
+        SetError(error,error_capacity,"Choose Jory's known rumor or the dated shift record.");
+        return false;
+    }
+    const CcRoadSite *site=CcMineSite(sim);
+    if (site == NULL) {
+        SetError(error,error_capacity,"Silverwick has no Low Silver Pit record.");
+        return false;
+    }
+    CcId parent=0U;
+    if (from_jory) {
+        const CcSituation *situation=MineEvidenceSituation(sim,jory->id);
+        for (int32_t i=0;situation != NULL && i<jory->knowledge_count;++i) {
+            const CcCharacterKnowledge *known=&jory->knowledge[i];
+            if (known->kind == CC_KNOWLEDGE_PROBLEM_RUMOR &&
+                known->subject_id == situation->id) { parent=known->event_id; break; }
+        }
+    }
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text,sizeof(text),from_jory ?
+        "Day %d: Jory Fen shares his recorded Low Silver Pit concern with the Crownless Company." :
+        "Day %d: the company reads Silverwick's dated Low Silver Pit shift record before departure.",
+        sim->current_day);
+    CcEvent *event=PushEvent(sim,CC_EVENT_LORE_RECORDED,site->id,
+        sim->dungeons[0].settlement_id,parent,1,text);
+    mine->lead_source_id=from_jory ? jory->id : sim->dungeons[0].settlement_id;
+    mine->lead_event_id=event->id;
+    mine->lead_day=sim->current_day;
+    mine->lead_document=!from_jory;
+    mine->return_revision+=1;
+    SetError(error,error_capacity,from_jory ?
+        "Jory's dated concern is now in the Company Book." :
+        "The dated shift record is now in the Company Book.");
+    return true;
+}
+
+static bool ApplyMineReportReturn(CcSim *sim, const CcCommand *command,
+                                  char *error, size_t error_capacity)
+{
+    CcMineVisit *mine=&sim->mine;
+    if (sim->schema_version < 106U || command->target_id != (CcId)mine->return_revision) {
+        SetError(error,error_capacity,"Refresh the Silverwick mine record first.");
+        return false;
+    }
+    if (sim->dungeon_count == 0 || sim->player.location_id != sim->dungeons[0].settlement_id ||
+        sim->journey.active) {
+        SetError(error,error_capacity,"Return to Jory in Silverwick first.");
+        return false;
+    }
+    const CcCharacter *contact=CcSimMineEvidenceContact(sim);
+    CcCharacter *jory=contact != NULL ? CharacterMutable(sim,contact->id) : NULL;
+    const CcSituation *situation=jory != NULL ?
+        MineEvidenceSituation(sim,jory->id) : NULL;
+    if (jory == NULL) {
+        SetError(error,error_capacity,"Jory is away from Silverwick.");
+        return false;
+    }
+    if (situation == NULL) {
+        SetError(error,error_capacity,"Jory has no Silverwick mine thread to receive this account.");
+        return false;
+    }
+    if (mine->report_event_id != 0U) {
+        SetError(error,error_capacity,"Jory already holds this mine return.");
+        return false;
+    }
+    CcMineReturnKind kind=CcSimMineReturnEvidence(sim);
+    if (kind == CC_MINE_RETURN_NONE) {
+        SetError(error,error_capacity,
+            "Jory needs a tracked mine load or a recorded route observation. The work remains unfinished.");
+        return false;
+    }
+    const CcRoadSite *site=CcMineSite(sim);
+    const CcCustodyEntry *haul=MineTrackedGood(sim,false);
+    if (haul == NULL) haul=MineTrackedGood(sim,true);
+    CcId parent=kind == CC_MINE_RETURN_HAUL && haul != NULL ? haul->last_event_id :
+        mine->bypass_event_id != 0U ? mine->bypass_event_id : mine->survey_event_id;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    const char *outcome=mine->encounter_outcome == CC_MINE_ENCOUNTER_BARGAINED ?
+        "after a bargain" : mine->encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED ?
+        "after a fight" : mine->encounter_outcome == CC_MINE_ENCOUNTER_BROKEN_CONTACT ?
+        "after breaking contact" : "without settling the hauler encounter";
+    (void)snprintf(text,sizeof(text),kind == CC_MINE_RETURN_HAUL ?
+        "Day %d: the Crownless Company gives Jory a tracked Low Silver Pit haul account, %s." :
+        "Day %d: the Crownless Company gives Jory its attributed Low Silver Pit route account, %s.",
+        sim->current_day,outcome);
+    CcEvent *event=PushEvent(sim,CC_EVENT_FACT_REVEALED,
+        site != NULL ? site->id : mine->source_id,sim->dungeons[0].settlement_id,
+        parent,(int32_t)kind,text);
+    RememberKnowledge(sim,jory,CC_KNOWLEDGE_WITNESS_ACCOUNT,
+        situation->id,sim->player.id,event->id,
+        CC_KNOWLEDGE_TOLD,false,sim->current_day);
+    mine->report_recipient_id=jory->id;
+    mine->report_event_id=event->id;
+    mine->report_day=sim->current_day;
+    mine->report_kind=(uint8_t)kind;
+    mine->reported_encounter_outcome=mine->encounter_outcome;
+    mine->return_revision+=1;
+    SetError(error,error_capacity,kind == CC_MINE_RETURN_HAUL ?
+        "Jory records the tracked haul. Oren can handle any ordinary sale." :
+        "Jory records the route account with its source and date.");
+    return true;
+}
+
 static bool ApplyTrade(CcSim *sim, const CcCommand *command,
                        char *error, size_t error_capacity)
 {
@@ -16346,6 +16549,7 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
     }
     int32_t amount = command->amount;
     int32_t price = settlement->price[command->good];
+    CcId mine_sale_event_id=0U;
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
     if (amount < 0 && accepted != NULL &&
         (accepted->kind == CC_SITUATION_RELIEF_DELIVERY ||
@@ -16401,6 +16605,22 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
                      "The local market lacks enough coin for that purchase.");
             return false;
         }
+        if (sim->schema_version >= 106U) {
+            CcCustodyResult plan=CcSimPlanMineSale(
+                sim,settlement->id,command->good,selling);
+            if (plan != CC_CUSTODY_READY || sim->next_entity_serial == UINT64_MAX) {
+                SetError(error,error_capacity,
+                    "The carried mine record cannot be settled with this sale.");
+                return false;
+            }
+            mine_sale_event_id=CcMakeId(CC_ENTITY_EVENT,sim->next_entity_serial);
+            if (CcSimApplyMineSale(sim,settlement->id,command->good,selling,
+                                   mine_sale_event_id) != CC_CUSTODY_READY) {
+                SetError(error,error_capacity,
+                    "The carried mine record changed before the sale.");
+                return false;
+            }
+        }
         sim->player.cargo[command->good] -= selling;
         settlement->stock[command->good] += selling;
         settlement->market_coins -= proceeds;
@@ -16426,6 +16646,10 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
             CC_EVENT_RELIEF : CC_EVENT_PLAYER_TRADE,
         sim->player.id, settlement->id, 0,
         amount > 0 ? amount : -amount, text);
+    if (mine_sale_event_id != 0U && trade->id != mine_sale_event_id) {
+        SetError(error,error_capacity,"The mine sale receipt lost its event identity.");
+        return false;
+    }
     if (amount < 0) {
         ProgressDeliverySituations(
             sim, settlement->id, command->good, -amount,
@@ -19129,7 +19353,9 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_RESERVE_ARCHIVE_RECRUITMENT ||
         command->kind == CC_COMMAND_CANCEL_ARCHIVE_RECRUITMENT ||
         command->kind == CC_COMMAND_SUPPORT_BAKERY ||
-        command->kind == CC_COMMAND_TAKE_BODY_PURSE;
+        command->kind == CC_COMMAND_TAKE_BODY_PURSE ||
+        command->kind == CC_COMMAND_MINE_LEARN_LEAD ||
+        command->kind == CC_COMMAND_MINE_REPORT_RETURN;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
                  "Settlement business must wait until the carriage arrives.");
@@ -19154,6 +19380,10 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_CHOOSE_ROAD_LEG:
             return CcRoadChooseNextLeg(sim, command->target_id,
                                        error, error_capacity);
+        case CC_COMMAND_MINE_LEARN_LEAD:
+            return ApplyMineLearnLead(sim,command,error,error_capacity);
+        case CC_COMMAND_MINE_REPORT_RETURN:
+            return ApplyMineReportReturn(sim,command,error,error_capacity);
         case CC_COMMAND_EXCHANGE_GOSSIP:
             return ApplyExchangeGossip(sim, command, error, error_capacity);
         case CC_COMMAND_HEARD_STORY:
