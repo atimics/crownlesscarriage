@@ -37,7 +37,6 @@
       action.disabled = !button.enabled;
       action.setAttribute('aria-pressed', button.active ? 'true' : 'false');
       action.onclick = () => Module._CrownlessTouchActivate(index, frame.revision);
-      semantic.append(action);
       if (focused === key) action.focus();
     });
     while (actionNodes.length > frame.buttons.length) actionNodes.pop().remove();
