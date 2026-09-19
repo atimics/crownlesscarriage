@@ -17,14 +17,27 @@ int main(void)
     CcSimInit(&sim, UINT32_C(0x3235a7ed));
     CcPilotRoadTopology pilot;
     CHECK(CcPilotRoadTopologyBuild(&sim, &pilot));
+    CcRoadGeometry geometry;
+    CHECK(CcRoadGeometryBuild(&sim, pilot.route_id, &geometry));
+    CHECK(geometry.full_length_units == 261356);
+    CHECK(geometry.journey_length_units == 204556);
+    CHECK(geometry.control.x_units == 147659);
+    CHECK(geometry.control.z_units == 307287);
     CHECK(pilot.route_id != 0U && pilot.mill_site_id != 0U);
     CHECK(pilot.origin_id == sim.settlements[0].id);
     CHECK(pilot.destination_id == sim.settlements[1].id);
     CHECK(pilot.junction_progress_milli == 820);
-    CHECK(pilot.origin_to_junction_units == 42640);
-    CHECK(pilot.junction_to_destination_units == 9360);
+    CHECK(pilot.main_length_units == geometry.journey_length_units);
+    CHECK(pilot.origin_to_junction_units == 167736);
+    CHECK(pilot.junction_to_destination_units == 36820);
+    CHECK(pilot.origin_to_junction_units ==
+          CcRoadScaleDistance(pilot.main_length_units, 820));
+    CHECK(pilot.origin_to_junction_units +
+          pilot.junction_to_destination_units == pilot.main_length_units);
     CHECK(pilot.mill_spur_length_units == 24000);
-    CHECK(pilot.checkpoint_distance_units == 26000);
+    CHECK(pilot.checkpoint_distance_units ==
+          CcRoadScaleDistance(pilot.main_length_units, 500));
+    CHECK(pilot.checkpoint_distance_units == 102278);
 
     CcPilotRoadTopology resized = pilot;
     sim.settlements[0].size = CC_SETTLEMENT_CAPITAL_SIZE;
@@ -32,9 +45,14 @@ int main(void)
     sim.settlements[1].size = CC_SETTLEMENT_HAMLET;
     sim.settlements[1].population = 1;
     CHECK(CcPilotRoadTopologyBuild(&sim, &resized));
-    CHECK(resized.origin_to_junction_units ==
+    CHECK(resized.main_length_units != pilot.main_length_units);
+    CcPilotRoadTopology frozen;
+    CHECK(CcPilotRoadTopologyBuildWithLength(
+        &sim, geometry.journey_length_units, &frozen));
+    CHECK(frozen.main_length_units == pilot.main_length_units);
+    CHECK(frozen.origin_to_junction_units ==
           pilot.origin_to_junction_units);
-    CHECK(resized.junction_to_destination_units ==
+    CHECK(frozen.junction_to_destination_units ==
           pilot.junction_to_destination_units);
     CHECK(resized.mill_spur_length_units == pilot.mill_spur_length_units);
 
@@ -44,27 +62,53 @@ int main(void)
     CHECK(CcRoadTravelSubticks(26000, 1001, 52000) == 501);
 
     uint64_t token = CcRoadPreviewToken(
-        pilot.destination_id, pilot.junction_id, 9U,
+        UINT64_C(323001), pilot.destination_id, pilot.junction_id,
+        pilot.origin_to_junction_units, pilot.origin_to_junction_units, 0,
+        9U,
         pilot.destination_segment_id, CC_ROAD_DIRECTION_FORWARD);
     CHECK(token != 0U);
     CHECK(token == CcRoadPreviewToken(
-        pilot.destination_id, pilot.junction_id, 9U,
+        UINT64_C(323001), pilot.destination_id, pilot.junction_id,
+        pilot.origin_to_junction_units, pilot.origin_to_junction_units, 0,
+        9U,
         pilot.destination_segment_id, CC_ROAD_DIRECTION_FORWARD));
     CHECK(token != CcRoadPreviewToken(
-        pilot.destination_id, pilot.junction_id, 10U,
+        UINT64_C(323001), pilot.destination_id, pilot.junction_id,
+        pilot.origin_to_junction_units, pilot.origin_to_junction_units, 0,
+        10U,
         pilot.destination_segment_id, CC_ROAD_DIRECTION_FORWARD));
     CHECK(token != CcRoadPreviewToken(
-        pilot.destination_id, pilot.junction_id, 9U,
+        UINT64_C(323001), pilot.destination_id, pilot.junction_id,
+        pilot.origin_to_junction_units, pilot.origin_to_junction_units, 0,
+        9U,
         pilot.mill_segment_id, CC_ROAD_DIRECTION_FORWARD));
     CHECK(token != CcRoadPreviewToken(
-        pilot.destination_id, pilot.junction_id, 9U,
+        UINT64_C(323001), pilot.destination_id, pilot.junction_id,
+        pilot.origin_to_junction_units, pilot.origin_to_junction_units, 0,
+        9U,
         pilot.destination_segment_id, CC_ROAD_DIRECTION_REVERSE));
+    CHECK(token != CcRoadPreviewToken(
+        UINT64_C(323002), pilot.destination_id, pilot.junction_id,
+        pilot.origin_to_junction_units, pilot.origin_to_junction_units, 0,
+        9U, pilot.destination_segment_id, CC_ROAD_DIRECTION_FORWARD));
+    CHECK(token != CcRoadPreviewToken(
+        UINT64_C(323001), pilot.destination_id, pilot.junction_id,
+        pilot.origin_to_junction_units + 1,
+        pilot.origin_to_junction_units, 0, 9U,
+        pilot.destination_segment_id, CC_ROAD_DIRECTION_FORWARD));
+    CHECK(token != CcRoadPreviewToken(
+        UINT64_C(323001), pilot.destination_id, pilot.junction_id,
+        pilot.origin_to_junction_units,
+        pilot.origin_to_junction_units - 1, 1, 9U,
+        pilot.destination_segment_id, CC_ROAD_DIRECTION_FORWARD));
 
     CcRoute first_route = sim.routes[0];
     sim.routes[0] = sim.routes[7];
     sim.routes[7] = first_route;
     CHECK(CcPilotRoadTopologyBuild(&sim, &resized));
     CHECK(resized.route_id == pilot.route_id);
+
+    CHECK(token == UINT64_C(16498057034038110418));
 
     puts("Pilot road identity, fixed distance, and preview tokens passed.");
     return EXIT_SUCCESS;

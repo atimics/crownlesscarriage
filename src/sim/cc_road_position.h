@@ -10,8 +10,26 @@
 #define CC_PILOT_ROAD_DESTINATION_SEGMENT_ID UINT64_C(0x7300032300000002)
 #define CC_PILOT_ROAD_MILL_SEGMENT_ID UINT64_C(0x7300032300000003)
 
-#define CC_PILOT_ROAD_MAIN_LENGTH_UNITS INT32_C(52000)
 #define CC_PILOT_ROAD_UNITS_PER_SPUR_UNIT INT32_C(1000)
+#define CC_ROAD_GEOMETRY_UNITS_PER_WORLD_UNIT INT32_C(1000)
+#define CC_ROAD_GEOMETRY_SAMPLE_COUNT 33
+#define CC_ROAD_GEOMETRY_FROM_JUNCTION_SAMPLE 1
+#define CC_ROAD_GEOMETRY_TO_JUNCTION_SAMPLE 31
+
+typedef struct CcRoadGeometryPoint {
+    int32_t x_units;
+    int32_t z_units;
+} CcRoadGeometryPoint;
+
+typedef struct CcRoadGeometry {
+    CcId route_id;
+    CcId from_id;
+    CcId to_id;
+    CcRoadGeometryPoint control;
+    CcRoadGeometryPoint samples[CC_ROAD_GEOMETRY_SAMPLE_COUNT];
+    int32_t full_length_units;
+    int32_t journey_length_units;
+} CcRoadGeometry;
 
 typedef enum CcRoadDirection {
     CC_ROAD_DIRECTION_NONE = 0,
@@ -62,13 +80,21 @@ typedef struct CcRoadLegPreview {
 
 bool CcPilotRoadTopologyBuild(const CcSim *sim,
                               CcPilotRoadTopology *topology);
+bool CcPilotRoadTopologyBuildWithLength(const CcSim *sim,
+                                        int32_t main_length_units,
+                                        CcPilotRoadTopology *topology);
+bool CcRoadGeometryBuild(const CcSim *sim, CcId route_id,
+                         CcRoadGeometry *geometry);
 int32_t CcRoadScaleDistance(int32_t total_units, int32_t progress_milli);
 int32_t CcRoadProgressMilli(int32_t travelled_units,
                             int32_t total_units);
 int32_t CcRoadTravelSubticks(int32_t leg_units,
                              int32_t route_total_subticks,
                              int32_t route_length_units);
-uint64_t CcRoadPreviewToken(CcId journey_goal_id, CcId anchor_id,
+uint64_t CcRoadPreviewToken(CcId journey_id, CcId journey_goal_id,
+                            CcId anchor_id, int32_t coordinate_units,
+                            int32_t distance_travelled,
+                            int32_t distance_remaining,
                             uint32_t journey_revision, CcId segment_id,
                             CcRoadDirection direction);
 
