@@ -3,6 +3,7 @@
 #include "multiplayer/cc_coop.h"
 #include "metagame/cc_metagame.h"
 #include "test_support.h"
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,7 +70,23 @@ static void AtBranch(CcSim *sim,bool reverse)
 }
 int main(void)
 {
-    static CcSim sim,restored,changed,haul,loaded,legacy;
+    static CcSim sim,restored,changed,haul,loaded,legacy,capacity;
+    CcSimInit(&changed,0x71a7e5);
+    uint64_t initialized_hash=CcSimHash(&changed);
+    CcId initialized_source=changed.mine.source_id, initialized_cache=changed.mine.cache_id;
+    CcMineInitializeLoad(&changed);
+    CC_CHECK(CcSimHash(&changed)==initialized_hash &&
+        changed.mine.source_id==initialized_source && changed.mine.cache_id==initialized_cache);
+    changed.mine.pack[CC_GOOD_BREAD]=-1;
+    CC_CHECK(CcMinePackUsed(&changed)==INT_MAX);
+    capacity=changed;
+    capacity.mine.source_id=capacity.mine.source_owner_id=0;
+    capacity.mine.cache_id=capacity.mine.cache_owner_id=0;
+    CcCustodyInit(&capacity.custody);
+    capacity.custody.next_id=UINT64_MAX-2U;
+    CcMineInitializeLoad(&capacity);
+    CC_CHECK(capacity.mine.source_id==0 && capacity.mine.cache_id==0 &&
+        capacity.custody.next_id==UINT64_MAX-2U);
     for(int i=0;i<2;++i) AtBranch(&sim,i!=0);
     {
         /* The turn must survive the whole stop window, not one subtick of it.
@@ -196,6 +213,14 @@ int main(void)
     legacy.mine.cache_x=legacy.mine.cache_y=0;
     legacy.mine.source_released=false;
     CcCustodyInit(&legacy.custody);
+    for (int32_t slot=0;slot<CC_CUSTODY_LEGACY_CAPACITY;++slot) {
+        legacy.custody.entries[slot]=(CcCustodyEntry){.id=(uint64_t)slot+1U,
+            .revision=1,.owner_id=legacy.player.id,
+            .holder={CC_CUSTODY_STORE,legacy.settlements[0].id},
+            .kind=CC_CUSTODY_GOODS,.quantity=1,.good=CC_GOOD_BREAD,
+            .condition=100,.active=true};
+    }
+    legacy.custody.next_id=CC_CUSTODY_LEGACY_CAPACITY+1U;
     Check(CcSaveWrite("mine-load-schema-102-fixture.ccsave",&legacy,error,sizeof(error)));
     Check(CcSaveRead("mine-load-schema-102-fixture.ccsave",&restored,error,sizeof(error)));
     CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION);
@@ -204,6 +229,9 @@ int main(void)
     CC_CHECK(CcMinePackUsed(&restored)==legacy.mine.pack[CC_GOOD_BREAD]);
     CC_CHECK(restored.mine.source_x==26 && restored.mine.source_y==16 &&
         restored.mine.cache_x==5 && restored.mine.cache_y==15);
+    CC_CHECK(restored.custody.entries[CC_CUSTODY_LEGACY_CAPACITY-1].id==
+        CC_CUSTODY_LEGACY_CAPACITY &&
+        restored.custody.entries[CC_CUSTODY_LEGACY_CAPACITY-1].owner_id==restored.player.id);
     int32_t anchor=sim.journey.elapsed_subticks;
     CcSimAdvanceRuntimeTicks(&sim,1000);
     CC_CHECK(sim.journey.elapsed_subticks==anchor);
@@ -335,10 +363,31 @@ int main(void)
     CC_CHECK(CcMetagameExecute(&text,"mine inspect",output,sizeof(output)));
     CC_CHECK(CcSimHash(&text.sim)==text_inspect_hash &&
         strstr(output,"Hauler load")!=NULL);
+    Walk(&haul,5,3); Apply(&haul,CC_COMMAND_MINE_USE,0);
+    Walk(&haul,15,18);
+    int32_t stowed_gems=haul.player.cargo[CC_GOOD_GEMS];
+    ApplyGood(&haul,CC_COMMAND_MINE_PACK,CC_GOOD_GEMS,-1);
+    CC_CHECK(haul.player.cargo[CC_GOOD_GEMS]==stowed_gems+1 &&
+        CcMinePackGood(&haul,CC_GOOD_GEMS)==1);
+    uint64_t before_board=CcSimHash(&haul);
+    Apply(&haul,CC_COMMAND_MINE_USE,0);
+    CC_CHECK(haul.mine.phase==CC_MINE_NONE && CcMinePackUsed(&haul)==0 &&
+        CcMineSourceUsed(&haul)==0 && CcMineCacheUsed(&haul)==7);
+    int32_t boarded_gems=haul.player.cargo[CC_GOOD_GEMS];
+    uint64_t boarded_hash=CcSimHash(&haul);
+    CcCommand board_again={.kind=CC_COMMAND_MINE_USE,.target_id=(CcId)haul.mine.revision};
+    CC_CHECK(!CcSimApply(&haul,&board_again,error,sizeof(error)) &&
+        haul.player.cargo[CC_GOOD_GEMS]==boarded_gems && CcSimHash(&haul)==boarded_hash &&
+        boarded_hash!=before_board);
+    Check(CcSaveWrite("mine-load-stow.ccsave",&haul,error,sizeof(error)));
+    Check(CcSaveRead("mine-load-stow.ccsave",&loaded,error,sizeof(error)));
+    CC_CHECK(loaded.mine.phase==CC_MINE_NONE && loaded.player.cargo[CC_GOOD_GEMS]==boarded_gems &&
+        CcMineSourceUsed(&loaded)==0 && CcMineCacheUsed(&loaded)==7);
     (void)remove(path);(void)remove("mine-replay.ccsave");
     (void)remove("mine-load-replay.ccsave");
     (void)remove("mine-load-roundtrip-103.ccsave");
     (void)remove("mine-load-schema-102-fixture.ccsave");
+    (void)remove("mine-load-stow.ccsave");
     (void)remove("mine-load-roundtrip.ccsave");
     (void)remove("mine-load-schema-102.ccsave");
     puts("Silverwick mine: road, yard, pack, level, return, persistence, replay, shared and text controls passed.");

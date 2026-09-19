@@ -51,7 +51,7 @@ int main(void)
     sim.custody.entries[2] = (CcCustodyEntry){.id = 3, .revision = 1,
         .owner_id = sim.player.id, .holder = {CC_CUSTODY_CONTAINER_HOLDER, 1},
         .kind = CC_CUSTODY_PURSE, .quantity = 2, .condition = 100, .active = true};
-    sim.custody.entries[95] = (CcCustodyEntry){.id = 4, .revision = UINT64_MAX,
+    sim.custody.entries[CC_CUSTODY_CAPACITY - 1] = (CcCustodyEntry){.id = 4, .revision = UINT64_MAX,
         .owner_id = sim.player.id, .source_id = 2, .last_event_id = UINT64_MAX,
         .holder = {CC_CUSTODY_CHARACTER, UINT64_MAX}, .kind = CC_CUSTODY_GOODS};
     sim.custody.next_id = 5;
@@ -61,8 +61,8 @@ int main(void)
     const char *corruptions[] = {
         "DELETE FROM custody_state;", "UPDATE custody_state SET next_id=4;",
         "UPDATE custody_state SET next_id='bad';", "INSERT INTO custody_state VALUES(2,5);",
-        "DELETE FROM custody_entry WHERE slot=95;",
-        "UPDATE custody_entry SET slot=96 WHERE slot=95;",
+        "DELETE FROM custody_entry WHERE slot=98;",
+        "UPDATE custody_entry SET slot=99 WHERE slot=98;",
         "UPDATE custody_entry SET quantity=4294967296 WHERE slot=1;",
         "UPDATE custody_entry SET good=4294967296 WHERE slot=1;",
         "UPDATE custody_entry SET active=2 WHERE slot=1;",
@@ -81,7 +81,8 @@ int main(void)
     CC_CHECK(CcSimHash(&sim) == legacy_hash);
     CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
     CC_CHECK(CcSaveRead(path, &loaded, error, sizeof(error)));
-    CC_CHECK(loaded.schema_version == CC_SIM_SCHEMA_VERSION && loaded.custody.next_id == 1);
+    CC_CHECK(loaded.schema_version == CC_SIM_SCHEMA_VERSION && loaded.custody.next_id == 4 &&
+        loaded.mine.source_id != 0 && loaded.mine.cache_id != 0);
     CC_CHECK(CcSimValidate(&loaded, error, sizeof(error)));
     (void)remove(path);
     return 0;

@@ -4,7 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define CC_CUSTODY_CAPACITY 96
+#define CC_CUSTODY_LEGACY_CAPACITY 96
+#define CC_CUSTODY_CAPACITY 99
 #define CC_CUSTODY_MANIFEST_CAPACITY 16
 
 typedef enum {

@@ -63,12 +63,20 @@ int32_t CcMinePackUsed(const CcSim *sim)
 {
     if (sim == NULL) return 0;
     int64_t used=0;
-    for (int32_t i=0;i<CC_GOOD_COUNT;++i) used += sim->mine.pack[i];
+    for (int32_t i=0;i<CC_GOOD_COUNT;++i) {
+        int32_t quantity=sim->mine.pack[i];
+        if (quantity < 0 || used > INT_MAX-quantity) return INT_MAX;
+        used+=quantity;
+    }
     for (int32_t i=0;i<CC_CUSTODY_CAPACITY;++i) {
         const CcCustodyEntry *entry=&sim->custody.entries[i];
         if (entry->active && entry->kind == CC_CUSTODY_GOODS &&
             entry->holder.kind == CC_CUSTODY_MINE_PACK &&
-            entry->holder.id == sim->player.id) used += entry->quantity;
+            entry->holder.id == sim->player.id) {
+            if (entry->quantity < 0 || entry->quantity > INT_MAX ||
+                used > INT_MAX-entry->quantity) return INT_MAX;
+            used += entry->quantity;
+        }
     }
     return used > INT_MAX ? INT_MAX : (int32_t)used;
 }
@@ -120,7 +128,7 @@ void CcMineInitializeLoad(CcSim *sim)
         sim->custody.next_id > UINT64_MAX - 3U) return;
     int32_t slots=0;
     for (int32_t i=0;i<CC_CUSTODY_CAPACITY;++i)
-        if (!sim->custody.entries[i].active && sim->custody.entries[i].quantity == 0) ++slots;
+        if (sim->custody.entries[i].id == 0) ++slots;
     if (slots < 3) return;
     CcMineVisit *mine=&sim->mine;
     uint64_t authored_serial=((uint64_t)sim->world_seed << 1U) | UINT64_C(1);
@@ -138,7 +146,7 @@ void CcMineInitializeLoad(CcSim *sim)
     int32_t next=0;
     for (int32_t i=0;i<CC_CUSTODY_CAPACITY && next<3;++i) {
         CcCustodyEntry *entry=&sim->custody.entries[i];
-        if (entry->active || entry->quantity != 0) continue;
+        if (entry->id != 0) continue;
         *entry=(CcCustodyEntry){.id=sim->custody.next_id++,.revision=1,
             .owner_id=mine->source_owner_id,
             .holder={CC_CUSTODY_SITE,mine->source_id},.kind=CC_CUSTODY_GOODS,
