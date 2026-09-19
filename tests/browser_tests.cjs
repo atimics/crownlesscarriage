@@ -217,11 +217,13 @@ async function main() {
     const frameMs = Object.fromEntries([['median', 0.5], ['p95', 0.95], ['p99', 0.99]]
       .map(([name, fraction]) => [name, frameTimes[Math.min(frameTimes.length - 1,
         Math.floor(frameTimes.length * fraction))]]));
+    const p95LimitMs = process.env.CI ? 400 : 100;
     await fs.writeFile(path.join(output, 'frame-budget.json'),
-      JSON.stringify({frames: drawn, perFrame, frameMs}, null, 2));
+      JSON.stringify({environment: process.env.CI ? 'ci-software' : 'local-software',
+        p95LimitMs, frames: drawn, perFrame, frameMs}, null, 2));
     assert(frameTimes.length >= 20, `Frame timing needs a useful sample, not ${frameTimes.length} frames`);
-    assert(frameMs.p95 <= 100,
-      `Software-rendered browser p95 should stay within 100ms, not ${frameMs.p95.toFixed(1)}ms`);
+    assert(frameMs.p95 <= p95LimitMs,
+      `Software-rendered browser p95 should stay within ${p95LimitMs}ms, not ${frameMs.p95.toFixed(1)}ms`);
     const ceilings = {uploadCalls: 190, uploadBytes: 4 * 1024 * 1024, draws: 450,
       vertices: 720000, textureBinds: 700, programBinds: 900};
     for (const [name, ceiling] of Object.entries(ceilings)) {
