@@ -39,8 +39,12 @@ static CcBanditGroup *PrepareBlockedEncounter(CcSim *sim, uint32_t seed,
     };
     CC_CHECK(CcSimApply(sim, &travel, error, error_capacity));
     while (sim->journey.active &&
-           sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-        CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+           sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED) {
+        if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING)
+            CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+        else
+            CC_CHECK(CcTestContinueJourneyPause(
+                sim, error, error_capacity));
     }
     CC_CHECK(sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED);
     for (int32_t i = 0; i < sim->bandit_count; ++i) {

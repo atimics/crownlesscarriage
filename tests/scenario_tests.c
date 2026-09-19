@@ -26,7 +26,8 @@ static void AdvanceUntilStop(CcSim *sim)
     char error[192];
     while (sim->journey.active) {
         if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-            const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+            const CcRoadSite *site = sim->journey.road_position_active ?
+                NULL : CcSimJourneyRoadSiteStop(sim);
             if (site != NULL) {
                 CcCommand pass = {.kind=CC_COMMAND_PASS_ROAD_SITE,.target_id=site->id};
                 CC_CHECK(CcSimApply(sim,&pass,error,sizeof(error)));
@@ -38,6 +39,9 @@ static void AdvanceUntilStop(CcSim *sim)
                     CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP
             };
             CC_CHECK(CcSimApply(sim, &rest, error, sizeof(error)));
+        } else if (sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE) {
+            CC_CHECK(CcTestContinueJourneyPause(
+                sim, error, sizeof(error)));
         } else {
             break;
         }

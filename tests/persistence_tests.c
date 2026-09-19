@@ -1528,6 +1528,8 @@ static void CheckSchema21Compatibility(char *error, size_t error_capacity)
 static void PrepareLegacyJourneyTiming(CcSim *sim, int32_t travel_days,
                                        char *error, size_t error_capacity)
 {
+    sim->journey.road_position_active = false;
+    sim->journey.road_waiting_choice = false;
     int32_t new_total = sim->journey.total_subticks;
     int32_t old_total = travel_days * CC_WORLD_DAY_SUBTICKS;
     CC_CHECK(new_total > 0);
@@ -1734,6 +1736,8 @@ static void CheckSchema25Compatibility(char *error, size_t error_capacity)
         .target_id = legacy.settlements[1].id
     };
     CC_CHECK(CcSimApply(&legacy, &travel, error, error_capacity));
+    legacy.journey.road_position_active = false;
+    legacy.journey.road_waiting_choice = false;
     legacy.journey.ambush_pending = false;
     CcSimAdvanceRuntimeTicks(&legacy, 480);
     int32_t journey_total = legacy.journey.total_subticks;
