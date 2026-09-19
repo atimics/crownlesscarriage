@@ -52,6 +52,10 @@ bool CcCoreModelBeginParticipant(CcCoreModel *model, const char *prefix);
    EOS, checked by the dialogue codec. Raw partial IDs remain inspectable. */
 bool CcCoreModelBeginSemantic(CcCoreModel *model, const int *ids, int count);
 int CcCoreModelSemanticTokens(const CcCoreModel *model, int *ids, int capacity);
+/* Policy v2 input uses a token path as its prefix. Output is one action ID
+   (1024..1087) followed by EOS, with all other output IDs rejected. */
+bool CcCoreModelBeginPolicy(CcCoreModel *model, const int *path,
+                            const int *ids, int count);
 /* Prefix token inspection for parity tests. */
 int CcCoreModelPrefixTokens(const CcCoreModel *model, int *tokens, int capacity);
 /* Prefix meta inspection for parity tests. */
