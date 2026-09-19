@@ -6174,6 +6174,48 @@ static const char *RoadCarriageStatus(const CcSim *sim)
     return sim->carriage.mode == CC_CARRIAGE_MOVING ? "MOVING" : "STOPPED";
 }
 
+static void CarriageReadingSummary(const CcSim *sim, char *summary,
+                                   size_t summary_capacity)
+{
+    if (summary == NULL || summary_capacity == 0U) return;
+    summary[0] = '\0';
+    if (sim == NULL) return;
+    int32_t used = CcPlayerCargoUsed(&sim->player);
+    int32_t free_slots = sim->player.cargo_capacity - used;
+    if (free_slots < 0) free_slots = 0;
+    size_t length = (size_t)snprintf(summary, summary_capacity, "Manifest: ");
+    if (length >= summary_capacity) length = summary_capacity - 1U;
+    bool has_goods = false;
+    for (int32_t good = 0; good < CC_GOOD_COUNT && length < summary_capacity - 1U;
+         ++good) {
+        if (sim->player.cargo[good] <= 0) continue;
+        int written = snprintf(summary + length, summary_capacity - length,
+            "%s%s %d", has_goods ? ", " : "", CcGoodName((CcGood)good),
+            sim->player.cargo[good]);
+        if (written < 0) break;
+        size_t added = (size_t)written;
+        length += added < summary_capacity - length ?
+            added : summary_capacity - length - 1U;
+        has_goods = true;
+    }
+    if (!has_goods && length < summary_capacity - 1U) {
+        int written = snprintf(summary + length, summary_capacity - length, "empty");
+        if (written > 0) {
+            size_t added = (size_t)written;
+            length += added < summary_capacity - length ?
+                added : summary_capacity - length - 1U;
+        }
+    }
+    if (length < summary_capacity - 1U) {
+        (void)snprintf(summary + length, summary_capacity - length,
+            ". Load %d of %d, free %d. Team %d ponies, readiness %d of 100. "
+            "Carriage condition %d of 100.",
+            used, sim->player.cargo_capacity, free_slots,
+            CcSimHorseTeamCount(sim), CcSimHorseTeamReadiness(sim),
+            sim->carriage.condition);
+    }
+}
+
 static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
                                Texture2D economic_goods)
 {
@@ -6189,6 +6231,9 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
         local->carriage_inspection_road ?
             "On the road. Review this route, cargo, promise, and team." :
             "Choose Overview or Ponies.");
+    char reading_summary[512];
+    CarriageReadingSummary(sim, reading_summary, sizeof(reading_summary));
+    ClientTouchRecordText(reading_summary);
     DrawPanel((Rectangle){24.0f, 78.0f, (float)GetScreenWidth() - 48.0f,
         (float)GetScreenHeight() - 94.0f}, PANEL_DEEP);
     CcOverlayDrawText("THE CROWNLESS CARRIAGE", 52, 102, 23, INK);

@@ -329,6 +329,23 @@ static int RunMineInputRegression(void)
             "Resting until morning")==0,
             "A resting road must describe its saved phase.");
     }
+    {
+        static CcSim readable_manifest;
+        readable_manifest=sim;
+        (void)memset(readable_manifest.player.cargo,0,
+            sizeof(readable_manifest.player.cargo));
+        readable_manifest.player.cargo[CC_GOOD_FOOD]=1;
+        readable_manifest.player.cargo[CC_GOOD_GOLD]=1;
+        readable_manifest.player.cargo_capacity=12;
+        char summary[512];
+        CarriageReadingSummary(&readable_manifest,summary,sizeof(summary));
+        MINE_CHECK(strstr(summary,"Bread 1")!=NULL&&
+            strstr(summary,"Raw Gold 1")!=NULL&&
+            strstr(summary,"Load 2 of 12, free 10")!=NULL&&
+            strstr(summary,"Team ")!=NULL&&
+            strstr(summary,"Carriage condition ")!=NULL,
+            "The semantic carriage manifest must include quantities, free space, team, and condition.");
+    }
     Rectangle button=ContextActionBounds(visit,actions.count,false);
     client_test_pointer_active=true;client_test_pointer=(Vector2){button.x+button.width/2,button.y+button.height/2};
     queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;

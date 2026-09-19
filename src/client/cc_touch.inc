@@ -159,6 +159,7 @@ static void ClientTouchBegin(void) {}
 static void ClientTouchEnd(void) {}
 static void ClientTouchHeading(const char *title, const char *detail) { (void)title; (void)detail; }
 static void ClientTouchScene(const char *scene) { (void)scene; }
+static void ClientTouchRecordText(const char *text) { (void)text; }
 static void ClientTouchAdd(Rectangle bounds, const char *label, bool enabled, bool active)
 { (void)bounds; (void)label; (void)enabled; (void)active; }
 #endif
