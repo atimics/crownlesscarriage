@@ -857,7 +857,9 @@ static bool CcCapturePrepareMessage(const CcCaptureRequest *request, CcCaptureSc
         CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=site->id};
         if(!CcSimApply(scene->sim,&visit,mine_error,sizeof(mine_error))) return false;
         if(request->capture_mine_level) {
-            scene->sim->mine.phase=CC_MINE_LEVEL; scene->sim->mine.x=15; scene->sim->mine.y=5;scene->sim->mine.light=18;scene->sim->mine.seen=3;
+            scene->sim->mine.phase=CC_MINE_LEVEL; scene->sim->mine.x=15; scene->sim->mine.y=9;scene->sim->mine.light=18;scene->sim->mine.seen=3;
+            scene->local->mine_view_phase=CC_MINE_LEVEL;
+            scene->local->mine_facing=2;
         }
         (*scene->view)=VIEW_LOCAL;
         (void)snprintf(message,message_size,"Follow the mine road. Pack food before entering.");

@@ -44,7 +44,7 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,int32_t facing
                 Color tint=((x+y)%2)?floor:(Color){179,171,145,255};
                 MineBox((float)x,-.08f,(float)y,.98f,.12f,.98f,tint);
                 MineBox((float)x,2.5f,(float)y,1,.12f,1,(Color){59,61,61,255});
-            } else {
+            } else if(!(x==15&&y==10&&!sim->mine.bar_open)) {
                 bool edge=CcMineWalkable(sim,CC_MINE_LEVEL,x+1,y)||CcMineWalkable(sim,CC_MINE_LEVEL,x-1,y)||
                     CcMineWalkable(sim,CC_MINE_LEVEL,x,y+1)||CcMineWalkable(sim,CC_MINE_LEVEL,x,y-1);
                 if(edge) MineBox((float)x,.7f,(float)y,1,1.4f,1,stone);
@@ -55,7 +55,14 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,int32_t facing
         MineBox(5,.12f,3,.85f,.15f,.85f,(Color){94,153,140,255});
         MineBox(26,.18f,4,.85f,.3f,.65f,(Color){121,75,45,255});
         MineBox(26,.37f,4,.6f,.06f,.45f,sim->mine.surveyed?(Color){85,166,151,255}:(Color){248,223,153,255});
-        if(!sim->mine.bar_open) MineBox(15,.85f,10,1.3f,.2f,.3f,(Color){151,84,44,255});
+        if(!sim->mine.bar_open) {
+            const Color wood={151,84,44,255};
+            MineBox(14.6f,.7f,10,.16f,1.4f,.16f,wood);
+            MineBox(15.4f,.7f,10,.16f,1.4f,.16f,wood);
+            MineBox(15,.35f,10,.95f,.18f,.18f,wood);
+            MineBox(15,.85f,10,.95f,.18f,.18f,wood);
+            MineBox(15,1.25f,10,.95f,.18f,.18f,wood);
+        }
         for(int i=0;i<3;++i) MineBox(25.4f+(float)i*.6f,.23f,16,.55f,.46f,1.2f,stone);
         for(int i=0;i<4;++i) MineBox(3.5f+(float)i*.6f,.2f,16,.4f,.4f,.7f,(Color){133,111,74,255});
     } else {
