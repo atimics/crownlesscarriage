@@ -45,6 +45,7 @@ class ReviewTests(unittest.TestCase):
         row = copy.deepcopy(self.coworkers[1])
         # Deliberately mistaken approval must still fail the evidence check.
         row['review_status'] = 'pending'
+        row['input']['participant']['held_accounts'][0]['account'] += ' x' * 200
         packed, review = self.review(row, [['account', 0]])
         with self.assertRaisesRegex(ValueError, 'required evidence was omitted'):
             approve(row, packed, review, 'world-1202')
@@ -77,6 +78,15 @@ class ReviewTests(unittest.TestCase):
         packed, review = self.review(row, [])
         with self.assertRaisesRegex(ValueError, 'world_group'):
             approve(row, packed, review, '')
+
+    def test_relationship_review_distinguishes_retained_values_from_cause_id(self):
+        row = self.coworkers[0]
+        packed, review = self.review(row, [['relationship', 'history']])
+        self.assertEqual(approve(row, packed, review, 'world-1202')['review_status'], 'approved_compact')
+        for ref in (['relationship'], ['relationship', 'cause_event_id']):
+            packed, review = self.review(row, [ref])
+            with self.assertRaisesRegex(ValueError, 'required evidence was omitted'):
+                approve(row, packed, review, 'world-1202')
 
     def test_original_rejection_is_preserved(self):
         row = self.coworkers[1]

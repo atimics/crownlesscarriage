@@ -42,10 +42,27 @@ class TrainingTests(unittest.TestCase):
         args = [str(PROBE), str(MODEL), '--participant-prefix']
         meta = subprocess.check_output(args + [prefix['text'], '--dump-meta'], text=True)
         self.assertEqual(list(map(int, meta.split())), [0] * (16 * len(prefix['tokens'])))
-        for bad in ('', 'legacy prompt', 'crownless-person-v1\n[EOS]',
+        legacy = prefix['text'].replace('crownless-person-v2\n', 'crownless-person-v1\n', 1)
+        self.assertEqual(subprocess.run(args + [legacy, '--dump-prefix'],
+            capture_output=True).returncode, 0)
+        for bad in ('', 'legacy prompt', 'crownless-person-v3\nself:[]', 'crownless-person-v1\n[EOS]',
                     'crownless-person-v1\n' + 'x ' * 400):
             self.assertNotEqual(subprocess.run(args + [bad, '--dump-prefix'],
                 capture_output=True).returncode, 0)
+
+    def test_cattle_source_survives_with_latest_question(self):
+        record = json.loads(gzip.decompress((ROOT / 'docs/reviews/participant-minds-2026-09-19/validation-teachers.json.gz').read_bytes()))
+        row = record['rows'][2]
+        prompt = compile_row(row, self.tokenizer)['prompt']
+        self.assertIn(['account', 0], prompt['included'])
+        self.assertIn(row['input']['observed_turns'][-1]['text'], prompt['text'])
+        self.assertIn('"self","Silverwick', prompt['text'])
+        self.assertNotIn('cause_event_id', prompt['text'])
+        self.assertLessEqual(len(prompt['tokens']), 352)
+        # Unrelated sources retain their ID; they must not become own memories.
+        other = copy.deepcopy(record['rows'][0])
+        other['input']['participant']['held_accounts'][0]['source_id'] = '99999'
+        self.assertIn('"99999"', compile_row(other, self.tokenizer)['prompt']['text'])
 
     def test_loss_teaches_only_actor_output_and_eos(self):
         packed = compile_row(RECORD['rows'][2], self.tokenizer)

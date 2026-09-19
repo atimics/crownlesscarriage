@@ -17,7 +17,11 @@ def retained_evidence(row, packed):
     person = request['participant']
     retained = {('self', key) for key in SELF_FIELDS}
     retained.update({('listener', 'name'), ('place', 'name'), ('day',),
-                     ('relationship',), ('available_actions',)})
+                     ('available_actions',)})
+    if packed['prompt']['format'] == 'crownless-person-v1':
+        retained.add(('relationship',))
+    else:
+        retained.update(('relationship', key) for key in ('affinity', 'trust', 'obligation', 'history'))
     optional = {tuple(key) for key in packed['prompt']['included']}
     retained.update(optional)
     if ('group', 0) in optional:
@@ -28,6 +32,8 @@ def retained_evidence(row, packed):
     available = {('self', key) for key in SELF_FIELDS}
     available.update({('self', 'band'), ('self', 'faction_id'), ('listener', 'name'),
                       ('place', 'name'), ('day',), ('relationship',), ('available_actions',), ('group', 0)})
+    if isinstance(person['relationship'], dict):
+        available.update(('relationship', key) for key in person['relationship'])
     for kind, records in (('account', person.get('held_accounts', [])),
                           ('turn', turns),
                           ('observed_memory', request.get('remembered_observations', [])),
