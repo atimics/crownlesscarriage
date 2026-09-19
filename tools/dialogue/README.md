@@ -114,14 +114,18 @@ artifact; integrating it into game saves is a later delivery.
 
 ## Rebuild sequence and completion evidence
 
+The compact student compiler and experimental native worker are described in
+[TRAINING.md](TRAINING.md). Their six-turn token and context-loss report is in
+`docs/reviews/participant-minds-2026-09-19/compact-inputs.md`.
+
 1. Shared participant snapshots, separate workers, one-person targets, observed
    memory and the same-event correction policy: implemented here.
 2. A bounded paired-teacher collection from real needs, relationships and
    danger; review each turn and preserve every failure. Include trade, love,
    war, work, community, adventure, and fear/loss as their state becomes available.
-3. A compact participant encoder shared by training and native inference,
-   with captured truncation and copy fields. The current full teacher packet
-   is deliberately richer than the 512-token student context.
+3. The first compact participant encoder shares its prompt builder with the
+   experimental native worker and records omitted context. Compare its text
+   fields with explicit copying and longer context during student training.
 4. Train fresh and warm-start 5M candidates at matched token budgets. Evaluate
    responsiveness, useful contribution, coherence, grounding, fluent speech,
    identity, memory, and actions across complete held-out encounters.

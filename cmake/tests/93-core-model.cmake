@@ -23,4 +23,7 @@ if(CC_PYTHON3_EXECUTABLE)
     add_test(NAME paired_participant_protocol COMMAND ${CC_PYTHON3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/paired_participant_tests.py
         $<TARGET_FILE:crownless_participant_probe>)
+    add_test(NAME participant_training_inputs COMMAND ${CC_PYTHON3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/participant_training_tests.py
+        $<TARGET_FILE:core_model_probe>)
 endif()

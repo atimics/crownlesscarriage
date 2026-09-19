@@ -26,6 +26,8 @@ bool CcCoreModelBeginMind(CcCoreModel *model, const CcCoreAccount *account,
 /* Returns 0 while working, 1 on a complete sentence, -1 on failure. */
 int CcCoreModelStep(CcCoreModel *model, unsigned int budget);
 const char *CcCoreModelText(const CcCoreModel *model);
+/* Diagnostic output, including an unfinished UTF-8 suffix after failure. */
+const char *CcCoreModelDraft(const CcCoreModel *model);
 bool CcCoreModelGenerate(CcCoreModel *model, const CcCoreAccount *account,
                          CcId speaker, const CcCoreSpoken *history, size_t count,
                          char *text, size_t capacity);
@@ -42,6 +44,10 @@ CcCoreControl CcCoreControlPlain(size_t history_count);
 int CcCoreModelVoiceId(const char *voice);
 /* Tokenizer inspection for parity tests. */
 int CcCoreModelEncode(const char *text, int *tokens, int capacity);
+/* Experimental participant checkpoint input. The shared training compiler
+   supplies the exact prefix text; all conditioning is text and copy is empty.
+   At most 352 tokens leaves 160 positions for the reply and EOS. */
+bool CcCoreModelBeginParticipant(CcCoreModel *model, const char *prefix);
 /* Prefix token inspection for parity tests. */
 int CcCoreModelPrefixTokens(const CcCoreModel *model, int *tokens, int capacity);
 /* Prefix meta inspection for parity tests. */
