@@ -42,15 +42,17 @@ int main(void)
         "Ash is cold. Offerings rest by the shrine. The clutch stayed in the cave. The brood guards the eggs.",
         100U, text, sizeof(text)));
     CC_CHECK(strcmp(text,
-        "Zhur is cold. Khor'rakhuk rest by tak zhur'nukh. Tak kesh'khor stayed in tak grak'nukh. Tak kesh'drok guards tak keshuk.") == 0);
+        "Ash is cold. Khor'rakhuk rest by tak ash'nukh. Tak kesh'khor stayed in tak grak'nukh. Tak kesh'drok guards tak keshuk.") == 0);
     /* Daylight terms and hyphenated culture names stay readable around roots. */
     CC_CHECK(CcHrakhorLiteral(
         "Ashkeepers seal the ash-vault while the lair waits. The road stays open.",
         100U, text, sizeof(text)));
     CC_CHECK(strcmp(text,
-        "Ashkeepers seal tak zhur-vault while tak nukh waits. Tak road stays open.") == 0);
+        "Ashkeepers seal tak ash-grak'rakh while tak nukh waits. Tak road stays open.") == 0);
     CC_CHECK(CcHrakhorLiteral("Only if we go in daylight.", 100U, text, sizeof(text)));
     CC_CHECK(strcmp(text, "Only if we go in daylight.") == 0);
+    CC_CHECK(CcHrakhorLiteral("Ash, ash, ashes, ash-vault, vaults.", 100U, text, sizeof(text)));
+    CC_CHECK(strcmp(text, "Ash, ash, ashes, ash-grak'rakh, grak'rakhuk.") == 0);
     CC_CHECK(CcCoreAccountPrepare(CC_EVENT_NOTICE_POSTED,
         "Ash posts a notice at Shrine: Egg.", 20, 0, &account));
     CC_CHECK(CcHrakhorCorrupt(&account,

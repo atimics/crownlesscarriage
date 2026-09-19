@@ -23,11 +23,11 @@ static const struct { const char *english, *goblin; } Words[] = {
     {"tunnel", "grak'nukh"}, {"tunnels", "grak'nukhuk"},
     {"trade", "vesh'rakh"}, {"traded", "vesh'rakh'ed"},
     {"peace", "vesh'khor"}, {"war", "krath'khor"},
-    /* Ash, shrine, and egg roots belong to the dragon-keeping clans. */
-    {"ash", "zhur"}, {"ashes", "zhuruk"},
+    /* Ash stays shared English; shrine and egg roots belong to the clans. */
     {"lair", "nukh"},
     {"cave", "grak'nukh"}, {"caves", "grak'nukhuk"},
-    {"shrine", "zhur'nukh"}, {"shrines", "zhur'nukhuk"},
+    {"shrine", "ash'nukh"}, {"shrines", "ash'nukhuk"},
+    {"vault", "grak'rakh"}, {"vaults", "grak'rakhuk"},
     {"offering", "khor'rakh"}, {"offerings", "khor'rakhuk"},
     {"egg", "kesh"}, {"eggs", "keshuk"},
     {"clutch", "kesh'khor"}, {"brood", "kesh'drok"}, {"seed", "kesh"}

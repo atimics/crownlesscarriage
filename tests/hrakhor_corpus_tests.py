@@ -36,7 +36,8 @@ class CorpusTests(unittest.TestCase):
         self.assertIn('may be hidden', rows['warned-1']['hrakhor'])
         self.assertIn('do not know whether', rows['rumour-2']['hrakhor'])
         self.assertIn('at least twenty years away', rows['rumour-0']['hrakhor'])
-        self.assertIn("zhur'nukh", rows['seed-2']['hrakhor'])
+        self.assertIn("ash-grak'rakh", rows['rumour-0']['hrakhor'])
+        self.assertIn("ash'nukh", rows['seed-2']['hrakhor'])
         self.assertIn('keshuk', rows['brood-0']['hrakhor'])
 
     def test_repeatable_and_zero_strength(self):

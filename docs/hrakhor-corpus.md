@@ -11,7 +11,9 @@ and rendering fidelity.
 
 Hra'khor grows around goblin life. English carries borrowed and everyday ideas.
 “Only if we go in daylight.” stays English. Ash, shrines, offerings, caves, and
-dragon clutches use roots from the clan voice. Names retain their spelling.
+dragon clutches belong to the clan voice. Ash and ashes are shared English and
+goblin words; shrine uses the compound `ash'nukh`. Names retain their spelling.
+Vault is `grak'rakh`, stone keeping, so ash-vault becomes `ash-grak'rakh`.
 
 ## Build the pairs
 
@@ -61,7 +63,7 @@ knowledge, and reply context. The existing model remains the seven-move policy.
 | English | Hra'khor |
 |---|---|
 | I would rather trade mushrooms than go to war. | Sha would rather vesh'rakh mukuk than go to krath'khor. |
-| I keep ash by the shrine for those we lost. | Sha keep zhur by tak zhur'nukh fo those we lost. |
+| I keep ash by the shrine for those we lost. | Sha keep ash by tak ash'nukh fo those we lost. |
 | Who will guard the clutch while we gather food? | Who will guard tak kesh'khor while we rakh zhek? |
 | I do not know whether the offering will help. | Sha do not know whether tak khor'rakh will help. |
 | Only if we go in daylight. | Only if we go in daylight. |
