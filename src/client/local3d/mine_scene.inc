@@ -10,7 +10,7 @@ Camera3D CcLocalMineCamera(const CcSim *sim, int32_t facing)
             .target={eye.x+(float)dx[facing],eye.y,eye.z+(float)dy[facing]},
             .up={0,1,0},.fovy=64,.projection=CAMERA_PERSPECTIVE};
     }
-    return PerspectiveCameraComposed((Vector3){15,0,11},(Vector3){-15,10,5},48);
+    return PerspectiveCameraComposed((Vector3){15,0,11},(Vector3){0,10,16},48);
 }
 static void MineBox(float x,float y,float z,float w,float h,float d,Color color)
 {

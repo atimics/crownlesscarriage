@@ -631,11 +631,8 @@ static bool MineForwardUse(const CcSim *sim,int32_t dir)
 {
     const CcMineVisit *m=&sim->mine;
     if(m->phase==CC_MINE_YARD)
-        return (dir==0 && m->x==CC_MINE_YARD_MOUTH_X &&
-                (m->y==CC_MINE_YARD_MOUTH_Y+1||m->y==CC_MINE_YARD_MOUTH_Y)) ||
-            (dir==2 && m->x==CC_MINE_YARD_CARRIAGE_X &&
-             (m->y==CC_MINE_YARD_CARRIAGE_Y-1||
-              m->y==CC_MINE_YARD_CARRIAGE_Y));
+        return dir==0 && m->x==CC_MINE_YARD_MOUTH_X &&
+            (m->y==CC_MINE_YARD_MOUTH_Y+1||m->y==CC_MINE_YARD_MOUTH_Y);
     return dir==0 && m->x==5 && (m->y==4||m->y==3);
 }
 static bool MineIntentCanUse(const CcSim *sim,MineIntentTarget target)

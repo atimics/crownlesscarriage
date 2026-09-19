@@ -201,7 +201,7 @@ static int RunMineInputRegression(void)
         MINE_CHECK(MinePick(&picked,&pick_local,surface,hauler,&tx,&ty,&target) &&
             target==MINE_INTENT_HAULERS && tx==26 && ty==16,
             "An upward hauler-body ray must name the saved hauler group.");
-        Rectangle mine_view=MineViewport(&pick_local);
+        Rectangle mine_view=MineViewport(&picked,&pick_local);
         if(mine_view.width<=0||mine_view.height<=0)
             mine_view=(Rectangle){0,0,630,320};
         client_test_pointer_active=true;
@@ -686,14 +686,20 @@ static int RunMineInputRegression(void)
     int32_t carriage_x=-1,carriage_y=-1;
     MineIntentTarget carriage_target=MINE_INTENT_MOVE;
     bool carriage_picked=false;
+    Rectangle yard_view=MineViewport(&sim,&local);
+    if(yard_view.width<=0||yard_view.height<=0)
+        yard_view=(Rectangle){0,0,630,960};
     for(int32_t sample_z=17;sample_z<=20&&!carriage_picked;++sample_z)
-        for(int32_t sample_x=17;sample_x<=19&&!carriage_picked;++sample_x) {
+        for(int32_t sample_x=14;sample_x<=16&&!carriage_picked;++sample_x) {
             Vector2 sample=GetWorldToScreenEx(
                 (Vector3){(float)sample_x,1.0f,(float)sample_z},yard_camera,630,960);
+            Vector2 pointer={yard_view.x+sample.x*yard_view.width/630.0f,
+                yard_view.y+sample.y*yard_view.height/960.0f};
             MineIntentTarget sampled_target=MINE_INTENT_MOVE;
             int32_t sampled_x=-1,sampled_y=-1;
-            if(MinePick(&sim,&local,yard_surface,sample,&sampled_x,&sampled_y,
-                        &sampled_target)&&sampled_target==MINE_INTENT_CARRIAGE) {
+            bool sampled=MinePick(&sim,&local,yard_surface,pointer,
+                &sampled_x,&sampled_y,&sampled_target);
+            if(sampled&&sampled_target==MINE_INTENT_CARRIAGE) {
                 carriage_pixel=sample;carriage_x=sampled_x;carriage_y=sampled_y;
                 carriage_target=sampled_target;carriage_picked=true;
             }
@@ -701,9 +707,6 @@ static int RunMineInputRegression(void)
     MINE_CHECK(carriage_picked && carriage_target==MINE_INTENT_CARRIAGE &&
         carriage_x==15 && carriage_y==18,
         "The visible carriage must publish a named pointer target.");
-    Rectangle yard_view=MineViewport(&local);
-    if(yard_view.width<=0||yard_view.height<=0)
-        yard_view=(Rectangle){0,0,630,960};
     Vector2 carriage_pointer={yard_view.x+carriage_pixel.x*yard_view.width/630.0f,
         yard_view.y+carriage_pixel.y*yard_view.height/960.0f};
     client_test_pointer_active=true;
