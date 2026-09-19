@@ -64,6 +64,10 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(sim->mine.source_x); HASH_VALUE(sim->mine.source_y);
             HASH_VALUE(sim->mine.cache_x); HASH_VALUE(sim->mine.cache_y);
             HASH_VALUE(sim->mine.source_released);
+            if (sim->schema_version >= 104U) {
+                HASH_VALUE(sim->mine.bypass_route_seen); HASH_VALUE(sim->mine.contest_active);
+                HASH_VALUE(sim->mine.encounter_outcome); HASH_VALUE(sim->mine.player_injury);
+            }
         }
     }
     if (sim->schema_version >= 73U) {

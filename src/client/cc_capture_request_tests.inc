@@ -178,6 +178,14 @@ static int RunCapturePresentationRegression(void)
     mine[4] = "389";
     if (CcCaptureConfigureWindow(&request, 5, mine, &window))
         return ClientRegressionFailure("Mine capture must reject an unreadable landscape height.");
+    char *mine_offer[]={"crownless","--capture-mine-offer","offer.png"};
+    if(!CcCaptureRequestParse(3,mine_offer,&request)||
+       !request.capture_mine_offer||!request.capture_mine_level||!request.capture)
+        return ClientRegressionFailure("Mine offer capture must stage the Lower Passage.");
+    char *mine_contest[]={"crownless","--capture-mine-contest","contest.png"};
+    if(!CcCaptureRequestParse(3,mine_contest,&request)||
+       !request.capture_mine_contest||!request.capture_mine_level||!request.capture)
+        return ClientRegressionFailure("Mine contest capture must stage local combat.");
     request = (CcCaptureRequest){.capture_gameplay_reel = true};
     state.gameplay_reel.stage = GAMEPLAY_REEL_QUEST_COMPLETE;
     play = CcCapturePresentationFor(&request, &state, false);

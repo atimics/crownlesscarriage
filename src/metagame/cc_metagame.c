@@ -2476,6 +2476,12 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         } else if(first != NULL && strcmp(first,"recover")==0 &&
                   ParseGood(second,&action.good) && ParseAmount(third,&action.amount)) {
             action.kind=CC_COMMAND_MINE_CACHE; action.amount=-action.amount;
+        } else if(first != NULL && strcmp(first,"bargain")==0) {
+            action.kind=CC_COMMAND_MINE_BARGAIN;
+        } else if(first != NULL && strcmp(first,"contest")==0) {
+            action.kind=CC_COMMAND_MINE_CONTEST;
+        } else if(first != NULL && strcmp(first,"break")==0) {
+            action.kind=CC_COMMAND_MINE_BREAK_CONTACT;
         } else if(first != NULL && strcmp(first,"use")==0) action.kind=CC_COMMAND_MINE_USE;
         else if(first != NULL && strcmp(first,"pack")==0 && ParseGood(second,&action.good)) {
             action.kind=CC_COMMAND_MINE_PACK;action.amount=1;
@@ -2486,7 +2492,7 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             for(int32_t i=0;i<4;++i) if(strcmp(second,directions[i])==0) {action.kind=CC_COMMAND_MINE_STEP;action.amount=i;}
             if(action.kind==CC_COMMAND_NONE) {Append(output,output_capacity,"Choose north, east, south, or west.\n");return false;}
         } else if(first != NULL && strcmp(first,"look")!=0) {
-            Append(output,output_capacity,"Use mine visit|look|move north/east/south/west|use|pack GOOD|unpack GOOD|inspect|take GOOD AMOUNT|cache GOOD AMOUNT|recover GOOD AMOUNT.\n");return false;
+            Append(output,output_capacity,"Use mine visit|look|move north/east/south/west|use|pack GOOD|unpack GOOD|inspect|bargain|contest|break|take GOOD AMOUNT|cache GOOD AMOUNT|recover GOOD AMOUNT.\n");return false;
         }
         if(action.kind != CC_COMMAND_NONE && !ApplyCommand(metagame,&action,output,output_capacity)) return false;
         const CcMineVisit *m=&metagame->sim.mine;

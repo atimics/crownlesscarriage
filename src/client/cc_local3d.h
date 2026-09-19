@@ -84,7 +84,8 @@ typedef enum CcLocalWorldTargetKind {
 typedef enum CcLocalSceneKind {
     CC_LOCAL_SCENE_STREET = 0,
     CC_LOCAL_SCENE_MARKET,
-    CC_LOCAL_SCENE_ROAD
+    CC_LOCAL_SCENE_ROAD,
+    CC_LOCAL_SCENE_MINE
 } CcLocalSceneKind;
 
 typedef struct CcLocalMovementPreview {
@@ -422,6 +423,7 @@ typedef struct CcLocalCourse {
     bool raider_response_waypoint_active[CC_LOCAL_RAIDER_COUNT];
     bool situation_witness_active;
     bool road_encounter;
+    bool mine_encounter;
     CcLocalSceneKind scene;
 } CcLocalCourse;
 
@@ -497,6 +499,7 @@ const char *CcLocalTraversalName(CcTraversalMode mode);
 void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
                                bool market_interior);
 void CcLocalAgentSetScene(CcLocalAgent *agent, CcLocalSceneKind scene);
+void CcLocalMineSetBarOpen(bool bar_open);
 void CcLocalAgentCycleMorphology(CcLocalAgent *agent, bool market_interior);
 const char *CcLocalAgentMorphologyName(const CcLocalAgent *agent);
 bool CcLocalAgentBeginFreeClimb(CcLocalAgent *agent,
@@ -542,6 +545,9 @@ void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
 void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
                                      CcLocalAgent *player,
                                      bool hostile);
+void CcLocalCourseStageMineEncounter(CcLocalCourse *course,
+                                     CcLocalAgent *player,
+                                     const CcSim *sim);
 void CcLocalCourseBindRaiderCompany(CcLocalCourse *course,
                                     const CcSim *sim);
 const char *CcLocalRaiderRoleName(CcLocalRaiderRole role);
@@ -644,7 +650,8 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
                        Rectangle destination);
 const char *CcLocalSiteName(const CcSim *sim, CcLocalSiteKind site);
 Camera3D CcLocalMineCamera(const CcSim *sim, int32_t facing);
-void CcLocalDrawMine3D(const CcSim *sim, const CcLocalAgent *agent, int32_t facing,
+void CcLocalDrawMine3D(const CcSim *sim, const CcLocalAgent *agent,
+                       const CcLocalCourse *course, int32_t facing,
                        RenderTexture2D target, Rectangle destination);
 void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
                        CcLocalSiteKind site, bool travelling,

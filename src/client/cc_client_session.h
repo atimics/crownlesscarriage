@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CC_CLIENT_SESSION_VERSION UINT32_C(8)
+#define CC_CLIENT_SESSION_VERSION UINT32_C(9)
 #define CC_CLIENT_SESSION_GUARD_COUNT 3
 #define CC_CLIENT_SESSION_RAIDER_COUNT 2
 #define CC_CLIENT_SESSION_SKILL_COUNT 3
@@ -30,7 +30,8 @@ typedef enum CcClientRoadEncounterMode {
     CC_CLIENT_ROAD_ENCOUNTER_NONE = 0,
     CC_CLIENT_ROAD_ENCOUNTER_FIGHT = 1,
     CC_CLIENT_ROAD_ENCOUNTER_PARLEY = 2,
-    CC_CLIENT_ROAD_ENCOUNTER_LOCAL = 3
+    CC_CLIENT_ROAD_ENCOUNTER_LOCAL = 3,
+    CC_CLIENT_ROAD_ENCOUNTER_MINE = 4
 } CcClientRoadEncounterMode;
 
 typedef struct CcClientEncounterActor {
@@ -81,6 +82,9 @@ typedef struct CcClientRoadEncounter {
     int32_t raider_initial_resolve;
     int32_t raider_resolve;
     int32_t defenses_completed;
+    uint64_t mine_source_id;
+    uint64_t mine_group_id;
+    int32_t mine_revision;
     bool alarm_active;
     bool raiders_retreating;
 } CcClientRoadEncounter;

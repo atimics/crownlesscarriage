@@ -16,12 +16,16 @@ static void MineBox(float x,float y,float z,float w,float h,float d,Color color)
 {
     DrawCube((Vector3){x,y,z},w,h,d,color);
 }
-void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,int32_t facing,
+void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
+                       const CcLocalCourse *course,int32_t facing,
                        RenderTexture2D target,Rectangle destination)
 {
     PrepareRuntimeAssets(0U);
     bool underground=sim->mine.phase==CC_MINE_LEVEL;
-    Camera3D camera=CcLocalMineCamera(sim,facing);
+    bool combat=sim->mine.contest_active && course!=NULL && course->mine_encounter;
+    Camera3D camera=combat?(Camera3D){.position={22.2f,3.8f,20.4f},
+        .target={25.0f,.9f,16.0f},.up={0,1,0},.fovy=55,
+        .projection=CAMERA_PERSPECTIVE}:CcLocalMineCamera(sim,facing);
     ArtComposition art=ROAD_ART_COMPOSITION;
     art.light_profile=underground?ART_LIGHT_INTERIOR_EMBER:ART_LIGHT_STORYBOOK;
     art.focal_point=camera.target;
@@ -64,6 +68,27 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,int32_t facing
             MineBox(15,1.25f,10,.95f,.18f,.18f,wood);
         }
         for(int i=0;i<3;++i) MineBox(25.4f+(float)i*.6f,.23f,16,.55f,.46f,1.2f,stone);
+        /* This is the same saved source owner used by mine custody. The two
+           figures remain in the Lower Passage until the authoritative result
+           says that their bargain or contest has ended. */
+        if (!combat && sim->mine.source_owner_id == sim->goblins.id &&
+            sim->mine.encounter_outcome!=CC_MINE_ENCOUNTER_BARGAINED &&
+            sim->mine.encounter_outcome!=CC_MINE_ENCOUNTER_CONTESTED) {
+            const Color goblin = {72, 124, 84, 255};
+            for (int i = 0; i < 2; ++i) {
+                float x = 25.25f + (float)i * 1.45f;
+                MineBox(x,.62f,15.2f,.46f,1.24f,.46f,goblin);
+                MineBox(x,.18f,15.2f,.72f,.22f,.72f,(Color){94,72,49,255});
+            }
+        }
+        if (combat) {
+            DrawRobotShell(agent);
+            DrawCombatSword(agent);
+            DrawCombatSkillTell(agent);
+            DrawCombatImpact(agent);
+            for (int32_t i=0;i<CC_LOCAL_RAIDER_COUNT;++i)
+                DrawCourseRaider(&course->raiders[i]);
+        }
         for(int i=0;i<4;++i) MineBox(3.5f+(float)i*.6f,.2f,16,.4f,.4f,.7f,(Color){133,111,74,255});
     } else {
         MineBox(15,-.18f,10,33,.3f,23,(Color){119,144,112,255});

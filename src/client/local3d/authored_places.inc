@@ -1863,6 +1863,7 @@ static float TerrainRoadAmount(float x, float z)
 CcSoundCue CcLocalFootstepSurfaceAt(CcLocalSceneKind scene, float x, float z)
 {
     if (scene == CC_LOCAL_SCENE_MARKET) return CC_SOUND_STEP_WOOD;
+    if (scene == CC_LOCAL_SCENE_MINE) return CC_SOUND_STEP_STONE;
     if (active_world_stream != NULL) {
         CcWorldSurfaceKind surface = CcWorldSurfaceAt(
             &active_world_stream->manifest, x, z);
