@@ -107,8 +107,27 @@ static void ReadyAtHaulers(CcSim *sim)
     CC_CHECK(!sim->mine.source_released && CcMinePackGood(sim,CC_GOOD_GOLD)==0);
     Walk(sim,26,16);
 }
-int main(void)
+static int WriteSharedMineFixture(const char *mode,const char *path)
 {
+    static CcSim sim;
+    ReadyAtHaulers(&sim);
+    if(strcmp(mode,"contest")==0) Apply(&sim,CC_COMMAND_MINE_CONTEST,0);
+    else if(strcmp(mode,"bargain")!=0) return 1;
+    uint8_t *bytes=NULL;
+    size_t length=0;
+    if(!CcCoopEncode(&sim,&bytes,&length,error,sizeof(error))) return 1;
+    FILE *file=fopen(path,"wb");
+    bool written=file!=NULL && fwrite(bytes,1,length,file)==length;
+    if(file!=NULL && fclose(file)!=0) written=false;
+    CcCoopFree(bytes);
+    if(!written) return 1;
+    printf("%u\n",sim.mine.revision);
+    return 0;
+}
+int main(int argc,char **argv)
+{
+    if(argc==4 && strcmp(argv[1],"--write-shared-mine-fixture")==0)
+        return WriteSharedMineFixture(argv[2],argv[3]);
     static CcSim sim,restored,changed,haul,loaded,legacy,capacity,prechange;
     static CcSim bargain,contest,withdrawn,failed;
     (void)remove("mine-load-replay.ccsave");

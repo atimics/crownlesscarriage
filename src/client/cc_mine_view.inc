@@ -562,10 +562,6 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
             "Pack is full. Unload selected goods, or walk to the mine mouth.";
     MineSetTouchDetail(sim,hint);
     CcOverlayDrawText(hint,22,GetScreenHeight()-151,11,TEAL);
-    AdventureButton(MineSelectionControl(0),brief?"Good <":"Previous good",true,false);
-    AdventureButton(MineSelectionControl(1),brief?"Good >":"Next good",true,false);
-    AdventureButton(MineSelectionControl(2),"Less",local->mine_quantity>1,false);
-    AdventureButton(MineSelectionControl(3),"More",local->mine_quantity<CC_MINE_PACK_CAPACITY,false);
     if(sim->mine.contest_active) {
         AdventureButton(MineControl(0),"Target / T",true,false);
         AdventureButton(MineControl(1),"Strike / Space",true,false);
@@ -596,6 +592,10 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
         AdventureButton(MineControl(1),TextFormat(brief?"Pack %d":"Pack %d / P",local->mine_quantity),can_pack,false);
         AdventureButton(MineControl(2),TextFormat(brief?"Unload %d":"Unload %d / U",local->mine_quantity),can_unload,false);
     }
+    AdventureButton(MineSelectionControl(0),brief?"Good <":"Previous good",true,false);
+    AdventureButton(MineSelectionControl(1),brief?"Good >":"Next good",true,false);
+    AdventureButton(MineSelectionControl(2),"Less",local->mine_quantity>1,false);
+    AdventureButton(MineSelectionControl(3),"More",local->mine_quantity<CC_MINE_PACK_CAPACITY,false);
     AdventureButton(MineNavigationControl(0),"Save F5",true,false);
     AdventureButton(MineNavigationControl(1),"Menu Esc",true,false);
     CcOverlayDrawText(message,22,GetScreenHeight()-29,10,INK);
