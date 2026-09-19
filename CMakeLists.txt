@@ -134,6 +134,7 @@ add_library(crownless_story
     src/story/cc_core_account.c
     src/story/cc_core_model.c
     src/story/cc_core_conversation.c
+    src/story/cc_core_participant.c
     src/story/cc_speech_json.c
 )
 target_include_directories(crownless_story PUBLIC src)
@@ -252,6 +253,10 @@ target_include_directories(crownless_metagame PUBLIC src)
 target_link_libraries(crownless_metagame PUBLIC
     crownless_persistence crownless_story)
 cc_strict_warnings(crownless_metagame)
+
+add_executable(crownless_participant_probe tools/participant_probe.c)
+target_link_libraries(crownless_participant_probe PRIVATE crownless_story crownless_persistence)
+cc_strict_warnings(crownless_participant_probe)
 
 add_executable(core_model_probe tools/core_model_probe.c)
 target_link_libraries(core_model_probe PRIVATE crownless_story)

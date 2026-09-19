@@ -17,6 +17,7 @@
 #include "sim/cc_mine.h"
 #include "story/cc_story.h"
 #include "story/cc_core_conversation.h"
+#include "story/cc_core_participant.h"
 #include "world/cc_world.h"
 
 #include "raylib.h"
@@ -6247,7 +6248,7 @@ static void ClientReadSpeech(const CcSim *sim, const char *text, CcId source)
 }
 
 static void ClientMindFor(const CcSim *sim, const CcCharacter *character,
-                          CcId listener, const CcGossipVersion *version, CcCoreMind *mind,
+                          CcId listener, CcId event, const CcGossipVersion *version, CcCoreMind *mind,
                           CcGossipLanguage *memory_language);
 
 static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
@@ -6292,10 +6293,10 @@ static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
                            stack buffer below does not outlive the call. */
                         CcCoreMind mind;
                         CcGossipLanguage mind_memories[CC_CORE_MIND_LINES];
-                        ClientMindFor(sim, person, sim->player.id, &carrier->versions[slot],
+                        ClientMindFor(sim, person, sim->player.id, story->event_id, &carrier->versions[slot],
                             &mind, mind_memories);
-                        CcCoreControl move = CcCoreConversationNextMove(
-                            &core_conversation, speech->speaker_id);
+                        CcCoreControl move = CcCoreConversationReplyMove(
+                            &core_conversation, &account, speech->source_event_id, speech->speaker_id);
                         /* Share a held memory the conversation named, when the
                            speaker trusts the listener enough to offer it. The
                            chosen memory is presented alone and cued as recall,
@@ -6335,88 +6336,15 @@ static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
     return true;
 }
 
-/* Each participant supplies their own held version of the same event. */
-static const char *ClientOccupationName(CcCharacterOccupation occupation)
-{
-    switch (occupation) {
-        case CC_OCCUPATION_WOODCUTTER: return "woodcutter";
-        case CC_OCCUPATION_SHEPHERD: return "shepherd";
-        case CC_OCCUPATION_MILLER: return "miller";
-        case CC_OCCUPATION_SMITH: return "smith";
-        case CC_OCCUPATION_QUARRYMAN: return "quarryman";
-        case CC_OCCUPATION_FARMER: return "farmer";
-        case CC_OCCUPATION_BAKER: return "baker";
-        case CC_OCCUPATION_INNKEEPER: return "innkeeper";
-        case CC_OCCUPATION_CARTWRIGHT: return "cartwright";
-        case CC_OCCUPATION_SCRIBE: return "scribe";
-        default: return "resident";
-    }
-}
-
-static const char *ClientBanditName(const CcSim *sim, CcId id)
-{
-    for (int32_t i = 0; i < sim->bandit_count; ++i) {
-        if (sim->bandits[i].id == id) return sim->bandits[i].name;
-    }
-    return "";
-}
-
-static CcCoreLevel ClientLevel(int32_t value)
-{
-    return value < 34 ? CC_CORE_LEVEL_LOW : value > 66 ? CC_CORE_LEVEL_HIGH : CC_CORE_LEVEL_MEDIUM;
-}
-
 static void ClientMindFor(const CcSim *sim, const CcCharacter *character,
-                          CcId listener, const CcGossipVersion *version, CcCoreMind *mind,
+                          CcId listener, CcId event, const CcGossipVersion *version, CcCoreMind *mind,
                           CcGossipLanguage *memory_language)
 {
+    CcCoreParticipant participant;
     *mind = (CcCoreMind){0};
-    if (character == NULL) return;
-    mind->goal = (CcCoreGoal)character->goal;
-    mind->stress = ClientLevel(character->stress);
-    mind->courage = ClientLevel(character->courage);
-    mind->witnessed = version != NULL && version->source_character_id == character->id;
-    mind->voice = ClientBanditName(sim, character->bandit_group_id);
-    if (mind->voice[0] == '\0') mind->voice = ClientOccupationName(character->occupation);
-    /* Predicament, not personality: the situation channel carries where the
-       body is, filled from the same counters the sim already keeps. */
-    mind->hungry = character->hungry_days > 0;
-    mind->sheltered = character->unsheltered_nights == 0;
-    mind->in_transit = character->travel_destination_id != 0;
-    /* Company: faction kind by lookup, distance by comparing settlements, and
-       debts and trust from the relationship toward the listener. Trust and
-       obligation run on the sim's ±3 clamped scale, where the sim itself
-       treats ±3 as a settled bond; 2 marks an established one. No debt to
-       oneself: a missing listener, or the speaker, leaves the defaults. */
-    for (int32_t i = 0; i < sim->faction_count; ++i) {
-        if (sim->factions[i].id == character->faction_id) {
-            if (sim->factions[i].kind == CC_FACTION_CROWN) mind->faction = CC_CORE_FACTION_CROWN;
-            else if (sim->factions[i].kind == CC_FACTION_GUILD) mind->faction = CC_CORE_FACTION_GUILD;
-            else if (sim->factions[i].kind == CC_FACTION_COMMONS) mind->faction = CC_CORE_FACTION_COMMONS;
-            break;
-        }
-    }
-    mind->far_from_home = character->home_settlement_id != character->current_settlement_id;
-    if (listener != 0 && listener != character->id) {
-        const CcRelationship *bond = CcSimRelationship(sim, character->id, listener);
-        if (bond != NULL) {
-            mind->owes_listener = bond->obligation >= 2;
-            mind->trusts_listener = bond->trust >= 2;
-        }
-    }
-    /* Up to two older held accounts become memories of past events. */
-    for (int32_t i = 0; i < CC_MAX_GOSSIP && mind->memory_count < CC_CORE_MIND_LINES; ++i) {
-        const CcGossipVersion *held = NULL;
-        const CcGossip *older = CcSimPersonalGossip(sim, character->id, i, &held);
-        if (older == NULL || held == NULL) break;
-        size_t memory = mind->memory_count;
-        if (CcSpeechPrepareGossip(sim, older, held, 0U,
-                                   &memory_language[memory]) &&
-            memory_language[memory].account[0] != '\0') {
-            mind->memories[memory] = memory_language[memory].account;
-            mind->memory_count = memory + 1U;
-        }
-    }
+    if (character == NULL || !CcCoreParticipantBuild(sim, character->id, listener, &participant)) return;
+    CcCoreParticipantMind(&participant, event,
+        version != NULL && version->source_character_id == character->id, mind, memory_language);
 }
 
 static bool ClientStartChat(const CcSim *sim, LocalState *local, uint32_t voice)
@@ -6451,10 +6379,10 @@ static bool ClientStartChat(const CcSim *sim, LocalState *local, uint32_t voice)
                 false, &speech[1])) continue;
         CcCoreMind player_mind, listener_mind;
         ClientMindFor(sim, CcSimCharacter(sim, sim->player.id),
-            local->conversation_character_id, &player->versions[slot], &player_mind,
+            local->conversation_character_id, story->event_id, &player->versions[slot], &player_mind,
             player_memories);
         ClientMindFor(sim, CcSimCharacter(sim, local->conversation_character_id),
-            sim->player.id, &listener->versions[slot], &listener_mind, listener_memories);
+            sim->player.id, story->event_id, &listener->versions[slot], &listener_mind, listener_memories);
         if (CcCoreConversationStartRoundMind(&core_conversation, &account[0], &player_mind, &speech[0],
                 &account[1], &listener_mind, &speech[1])) {
             local->conversation_gossip_slot = slot;
