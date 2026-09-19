@@ -22,8 +22,9 @@
   const actions = document.createElement('div');
   semantic.append(heading, detail, reading, actions);
   const actionNodes = [];
-  document.body.append(semantic);
+  document.querySelector('#stage').append(semantic);
   Module.renderCrownlessTouch = frame => {
+    semantic.hidden = !document.querySelector('#loading').hidden;
     canvas.setAttribute('aria-label', frame.title || 'Crownless Carriage game');
     const focused = document.activeElement?.dataset?.touchKey;
     heading.textContent = frame.title || 'Crownless Carriage';
