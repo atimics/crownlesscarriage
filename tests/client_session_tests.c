@@ -55,7 +55,16 @@ static bool RewriteSessionAsLegacy(const char *path, int version)
         strncmp(line, "ATHLETICS ", 10U) == 0;
     if (ok && version >= 6) ok = fputs(line, target) >= 0;
     while (ok && fgets(line, sizeof(line), source) != NULL) {
-        ok = fputs(line, target) >= 0;
+        if (version < 9 && strncmp(line, "ROAD ", 5U) == 0) {
+            float engagement=0.0f,alarm=0.0f,event=0.0f;
+            int initial=0,resolve=0,completed=0,active=0,retreating=0;
+            ok=sscanf(line,"ROAD %f %f %f %d %d %d %d %d",
+                &engagement,&alarm,&event,&initial,&resolve,&completed,
+                &active,&retreating)==8 &&
+                fprintf(target,"ROAD %.9g %.9g %.9g %d %d %d %d %d\n",
+                    (double)engagement,(double)alarm,(double)event,initial,
+                    resolve,completed,active,retreating)>0;
+        } else ok = fputs(line, target) >= 0;
     }
     if (source != NULL && fclose(source) != 0) ok = false;
     if (target != NULL && fclose(target) != 0) ok = false;
@@ -167,6 +176,28 @@ int main(void)
     CC_CHECK(restored.road_encounter.raider_resolve == 51);
     CC_CHECK(restored.road_encounter.alarm_active);
 
+    CcClientSession mine_encounter=encounter;
+    mine_encounter.road_encounter.mode=CC_CLIENT_ROAD_ENCOUNTER_MINE;
+    mine_encounter.road_encounter.mine_source_id=UINT64_C(0x410000000000002a);
+    mine_encounter.road_encounter.mine_group_id=UINT64_C(0x1200000000000017);
+    mine_encounter.road_encounter.mine_revision=37;
+    mine_encounter.road_encounter.player.position_x=25.0f;
+    mine_encounter.road_encounter.player.position_z=16.0f;
+    mine_encounter.road_encounter.player.health=41.0f;
+    CC_CHECK(CcClientSessionValidate(&mine_encounter));
+    CC_CHECK(CcClientSessionWrite(session_path,&mine_encounter,
+                                  error,sizeof(error)));
+    CC_CHECK(CcClientSessionRead(session_path,&restored,error,sizeof(error)));
+    CC_CHECK(restored.road_encounter.mode==CC_CLIENT_ROAD_ENCOUNTER_MINE);
+    CC_CHECK(restored.road_encounter.mine_source_id==
+             mine_encounter.road_encounter.mine_source_id);
+    CC_CHECK(restored.road_encounter.mine_group_id==
+             mine_encounter.road_encounter.mine_group_id);
+    CC_CHECK(restored.road_encounter.mine_revision==37);
+    CC_CHECK(fabsf(restored.road_encounter.player.health-41.0f)<0.0001f);
+    CC_CHECK(fabsf(restored.road_encounter.player.position_x-25.0f)<0.0001f);
+    CC_CHECK(fabsf(restored.road_encounter.player.position_z-16.0f)<0.0001f);
+
     CcClientSession invalid = original;
     invalid.version += 1U;
     CC_CHECK(!CcClientSessionValidate(&invalid));
@@ -198,6 +229,9 @@ int main(void)
     CC_CHECK(!CcClientSessionValidate(&invalid));
     CC_CHECK(!CcClientSessionWrite(session_path, &invalid,
                                    error, sizeof(error)));
+    invalid=mine_encounter;
+    invalid.road_encounter.mine_group_id=0;
+    CC_CHECK(!CcClientSessionValidate(&invalid));
 
     FILE *version_four_without_route = fopen(session_path, "wb");
     CC_CHECK(version_four_without_route != NULL);

@@ -60,10 +60,20 @@ static Rectangle MineInventoryControl(void)
     return (Rectangle){18.0f, MineShortLandscape() ? 63.0f : 94.0f,
         (float)MineScreenWidth() - 36.0f, 24.0f};
 }
+static Rectangle MineNavigationControl(int32_t index)
+{
+    return (Rectangle){(float)MineScreenWidth()-166.0f+(float)index*76.0f,
+        12.0f,72.0f,32.0f};
+}
 static bool MineAtCarriage(const CcSim *sim)
 {
     return sim->mine.phase==CC_MINE_YARD &&
         abs(sim->mine.x-15)+abs(sim->mine.y-18)<=1;
+}
+static bool MineAtCache(const CcSim *sim)
+{
+    return sim->mine.phase==CC_MINE_LEVEL &&
+        abs(sim->mine.x-sim->mine.cache_x)+abs(sim->mine.y-sim->mine.cache_y)<=1;
 }
 static int32_t MineGoodsRows(const int32_t goods[CC_GOOD_COUNT])
 {
@@ -100,6 +110,12 @@ static void MineReceipt(char *message,size_t capacity,const CcCommand *command)
     if(command->kind==CC_COMMAND_MINE_PACK) {
         (void)snprintf(message,capacity,"%d %s moved %s.",amount,good,
             command->amount>0?"from carriage to pack":"from pack to carriage");
+    } else if(command->kind==CC_COMMAND_MINE_TAKE) {
+        (void)snprintf(message,capacity,"Took %d %s from the hauler load.",amount,good);
+    } else if(command->kind==CC_COMMAND_MINE_CACHE) {
+        (void)snprintf(message,capacity,"%s %d %s %s the Rope Store cache.",
+            command->amount>0?"Cached":"Recovered",amount,good,
+            command->amount>0?"in":"from");
     }
 }
 typedef enum MineIntentTarget {
@@ -108,7 +124,9 @@ typedef enum MineIntentTarget {
     MINE_INTENT_CARRIAGE,
     MINE_INTENT_EXIT,
     MINE_INTENT_BAR,
-    MINE_INTENT_SURVEY
+    MINE_INTENT_SURVEY,
+    MINE_INTENT_HAULERS,
+    MINE_INTENT_COUNT
 } MineIntentTarget;
 static void MineClearIntent(LocalState *local)
 {
@@ -302,6 +320,22 @@ static bool MineTargetBounds(const CcSim *sim,MineIntentTarget target,BoundingBo
     case MINE_INTENT_SURVEY:
         if(sim->mine.phase!=CC_MINE_LEVEL||sim->mine.surveyed) return false;
         *out_box=MineBoxBounds(26,.37f,4,.6f,.12f,.45f); *out_x=26;*out_y=4; return true;
+    case MINE_INTENT_HAULERS:
+        if(sim->mine.phase!=CC_MINE_LEVEL ||
+           sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_BARGAINED ||
+           sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_CONTESTED) return false;
+        {
+            Vector2 first=CcLocalMineHaulerPosition(sim,0);
+            Vector2 second=CcLocalMineHaulerPosition(sim,1);
+            float min_x=fminf(first.x,second.x)-.45f;
+            float max_x=fmaxf(first.x,second.x)+.45f;
+            float min_z=fminf(first.y,second.y)-.45f;
+            float max_z=fmaxf(first.y,second.y)+.45f;
+            *out_box=MineBoxBounds((min_x+max_x)*.5f,.95f,
+                (min_z+max_z)*.5f,max_x-min_x,1.9f,max_z-min_z);
+            *out_x=sim->mine.source_x;*out_y=sim->mine.source_y;
+            return true;
+        }
     default: return false;
     }
 }
@@ -319,12 +353,14 @@ static bool MinePick(const CcSim *sim,const LocalState *local,
                    (mouse.y-view.y)*(float)target.texture.height/view.height};
     Ray ray=GetScreenToWorldRayEx(pixel,CcLocalMineCamera(sim,local->mine_facing),
                                   target.texture.width,target.texture.height);
-    if(fabsf(ray.direction.y)<.0001f) return false;
-    float distance=-ray.position.y/ray.direction.y;
-    if(distance<=0.0f) return false;
+    float distance=INFINITY;
+    if(fabsf(ray.direction.y)>=.0001f) {
+        float floor_distance=-ray.position.y/ray.direction.y;
+        if(floor_distance>0.0f) distance=floor_distance;
+    }
     MineIntentTarget picked=MINE_INTENT_MOVE;
     float nearest=distance;
-    for(int32_t candidate=MINE_INTENT_MOUTH;candidate<=MINE_INTENT_SURVEY;++candidate) {
+    for(int32_t candidate=MINE_INTENT_MOUTH;candidate<MINE_INTENT_COUNT;++candidate) {
         BoundingBox box; int32_t x,y;
         if(!MineTargetBounds(sim,(MineIntentTarget)candidate,&box,&x,&y)) continue;
         float hit_distance=0.0f;
@@ -338,6 +374,7 @@ static bool MinePick(const CcSim *sim,const LocalState *local,
         }
     }
     if(picked!=MINE_INTENT_MOVE) {*out_target=picked;return true;}
+    if(!isfinite(distance)) return false;
     if(MineOccluderDistance(sim,ray,distance)<distance) return false;
     *out_x=(int32_t)roundf(ray.position.x+distance*ray.direction.x);
     *out_y=(int32_t)roundf(ray.position.z+distance*ray.direction.z);
@@ -379,18 +416,43 @@ static void MineLabel(RenderTexture2D target,const CcSim *sim,const LocalState *
     DrawRectangle(x-width/2-5,y-4,width+10,18,Fade(BACKGROUND,.88f));
     CcOverlayDrawText(text,x-width/2,y,10,INK);
 }
+static void MineBeginTouchFrame(const CcSim *sim)
+{
+    bool underground=sim!=NULL&&sim->mine.phase==CC_MINE_LEVEL;
+    ClientTouchBegin();
+    ClientTouchHeading(underground?"The Underroad":"Mine Yard",
+        underground?CcMineChamberName(CcMineChamber(sim->mine.x,sim->mine.y)):
+        "The carriage waits beside the mine road.");
+}
+static void MineSetTouchDetail(const CcSim *sim,const char *hint)
+{
+    bool underground=sim!=NULL&&sim->mine.phase==CC_MINE_LEVEL;
+    char detail[512];
+    (void)snprintf(detail,sizeof(detail),"%s. %s",
+        underground?CcMineChamberName(CcMineChamber(sim->mine.x,sim->mine.y)):
+            "The carriage waits beside the mine road",
+        hint!=NULL?hint:"");
+    ClientTouchHeading(underground?"The Underroad":"Mine Yard",detail);
+}
 static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D target, const char *message)
 {
     SyncMineView(sim,local);
     bool underground=sim->mine.phase==CC_MINE_LEVEL;
+    MineBeginTouchFrame(sim);
     bool compact=MineScreenWidth()<600;
     bool short_landscape=MineShortLandscape();
     bool brief=compact||short_landscape;
     DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),BACKGROUND);
-    CcLocalDrawMine3D(sim,&local->agent,local->mine_facing,target,MineViewport(local));
+    CcLocalDrawMine3D(sim,&local->agent,&local->course,local->mine_facing,
+        target,MineViewport(local));
     if(underground) {
         if(!sim->mine.bar_open) MineLabel(target,sim,local,(Vector3){15,1,10},15,10,"Wooden bar / lift it");
         if(!sim->mine.surveyed) MineLabel(target,sim,local,(Vector3){26,.6f,4},26,4,"Workers' survey");
+        if(sim->mine.source_owner_id==sim->goblins.id &&
+           sim->mine.encounter_outcome!=CC_MINE_ENCOUNTER_BARGAINED &&
+           sim->mine.encounter_outcome!=CC_MINE_ENCOUNTER_CONTESTED)
+            MineLabel(target,sim,local,(Vector3){26,.8f,15.2f},26,16,
+                sim->mine.contest_active?"Goblin haulers / engaged":"Goblin haulers / hungry");
         MineLabel(target,sim,local,(Vector3){5,.6f,3},5,3,"Back to the yard");
     } else {
         MineLabel(target,sim,local,(Vector3){15,3,3},15,3,"Mine Mouth / walk in");
@@ -437,7 +499,9 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
                 at_carriage?TEAL:MUTED);
         }
     }
-    const char *selection=at_carriage?
+    const char *selection=sim->mine.contest_active?
+        TextFormat("You %.0f health  |  Hauler resolve %d",
+            local->agent.combat.health,local->course.raider_resolve):at_carriage?
         TextFormat(brief?"Selected %s x%d | pack %d | cart %d":
             "Selected %s x%d  |  pack %d  carriage %d  |  good [ ]  quantity - +",
             CcGoodName(local->mine_good),local->mine_quantity,pack_goods[local->mine_good],
@@ -447,15 +511,47 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
             CcGoodName(local->mine_good),local->mine_quantity,pack_goods[local->mine_good]);
     CcOverlayDrawText(selection,22,GetScreenHeight()-176,11,INK);
     const char *action=CcMineAction(sim);
+    bool at_haulers=underground && abs(sim->mine.x-sim->mine.source_x)+
+        abs(sim->mine.y-sim->mine.source_y)<=1;
+    bool at_cache=MineAtCache(sim);
     bool can_board=!at_carriage || carriage_used+pack_used<=sim->player.cargo_capacity;
     bool can_pack=at_carriage && sim->player.cargo[local->mine_good]>=local->mine_quantity &&
         pack_used+local->mine_quantity<=CC_MINE_PACK_CAPACITY;
     bool can_unload=at_carriage && pack_goods[local->mine_good]>=local->mine_quantity &&
         carriage_used+local->mine_quantity<=sim->player.cargo_capacity;
+    bool can_take=at_haulers &&
+        sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_CONTESTED &&
+        CcMineSourceGood(sim,local->mine_good)>=local->mine_quantity &&
+        pack_used+local->mine_quantity<=CC_MINE_PACK_CAPACITY;
+    bool can_cache=at_cache && sim->mine.pack[local->mine_good]==0 &&
+        pack_goods[local->mine_good]>=local->mine_quantity &&
+        CcMineCacheUsed(sim)+local->mine_quantity<=CC_MINE_CACHE_CAPACITY;
+    bool can_recover=at_cache &&
+        CcMineCacheGood(sim,local->mine_good)>=local->mine_quantity &&
+        pack_used+local->mine_quantity<=CC_MINE_PACK_CAPACITY;
     const char *hint=action!=NULL?action:underground?
         "Inspect your pack or point where the company should walk.":
         "Walk to the carriage to transfer selected goods.";
-    if(at_carriage && carriage_used+pack_used>sim->player.cargo_capacity) {
+    if(at_haulers && !sim->mine.contest_active &&
+       sim->mine.encounter_outcome!=CC_MINE_ENCOUNTER_BARGAINED &&
+       sim->mine.encounter_outcome!=CC_MINE_ENCOUNTER_CONTESTED) {
+        int32_t bread=CcMinePackGood(sim,CC_GOOD_BREAD);
+        int32_t gold=CcMineSourceGood(sim,CC_GOOD_GOLD);
+        int32_t after=pack_used-2+1;
+        hint=TextFormat("Offer 2 Bread (%d carried) for 1 Gold (%d in load). Pack %d/8 -> %d/8. Entry ration spent; 2 Bread must remain.",
+            bread,gold,pack_used,after);
+    } else if(!underground && sim->mine.phase==CC_MINE_YARD &&
+              abs(sim->mine.x-15)+abs(sim->mine.y-3)<=1) {
+        hint="Entry spends 1 Bread and starts Light 18. Pack 3 Bread to keep 2 for the hauler offer.";
+    } else if(at_haulers &&
+        sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_CONTESTED) {
+        hint=TextFormat("Hauler load has %d %s. Pack %d/8. Inspect or take the selected amount.",
+            CcMineSourceGood(sim,local->mine_good),CcGoodName(local->mine_good),pack_used);
+    } else if(at_cache) {
+        hint=TextFormat("Rope Store has %d %s. Pack has %d. Cache or recover the selected amount.",
+            CcMineCacheGood(sim,local->mine_good),CcGoodName(local->mine_good),
+            pack_goods[local->mine_good]);
+    } else if(at_carriage && carriage_used+pack_used>sim->player.cargo_capacity) {
         hint=carriage_used==sim->player.cargo_capacity?
             (brief?"Cart full. Keep the pack or enter the mine.":
                 "Carriage has no free space. Keep the pack and walk to the mine mouth."):
@@ -464,14 +560,44 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
     } else if(at_carriage && pack_used==CC_MINE_PACK_CAPACITY)
         hint=brief?"Pack full. Unload goods or enter the mine.":
             "Pack is full. Unload selected goods, or walk to the mine mouth.";
+    MineSetTouchDetail(sim,hint);
     CcOverlayDrawText(hint,22,GetScreenHeight()-151,11,TEAL);
+    if(sim->mine.contest_active) {
+        AdventureButton(MineControl(0),"Target / T",true,false);
+        AdventureButton(MineControl(1),"Strike / Space",true,false);
+        AdventureButton(MineControl(2),"Break contact / R",true,false);
+    } else if(at_haulers &&
+              sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_CONTESTED) {
+        AdventureButton(MineControl(0),"Inspect load / E",true,false);
+        AdventureButton(MineControl(1),TextFormat("Take %d / P",local->mine_quantity),can_take,false);
+        AdventureButton(MineControl(2),"Load released",false,false);
+    } else if(at_haulers &&
+              sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_BARGAINED) {
+        AdventureButton(MineControl(0),"Inspect load / E",true,false);
+        AdventureButton(MineControl(1),"Offer settled",false,false);
+        AdventureButton(MineControl(2),"Haulers fed",false,false);
+    } else if(at_haulers) {
+        AdventureButton(MineControl(0),"Bargain / B",true,false);
+        AdventureButton(MineControl(1),CcCoopClientActive()?"Contest: local play":"Contest / C",
+            !CcCoopClientActive(),false);
+        AdventureButton(MineControl(2),"Contact held",false,false);
+    } else if(at_cache) {
+        AdventureButton(MineControl(0),TextFormat("Cache %d / C",local->mine_quantity),can_cache,false);
+        AdventureButton(MineControl(1),TextFormat("Recover %d / R",local->mine_quantity),can_recover,false);
+        AdventureButton(MineControl(2),"Rope Store",false,false);
+    } else {
+        AdventureButton(MineControl(0),at_carriage?(brief?"Board / E":"Board carriage / E"):
+            brief?"Use / E":action!=NULL?action:"Use / E",
+            action!=NULL&&can_board,false);
+        AdventureButton(MineControl(1),TextFormat(brief?"Pack %d":"Pack %d / P",local->mine_quantity),can_pack,false);
+        AdventureButton(MineControl(2),TextFormat(brief?"Unload %d":"Unload %d / U",local->mine_quantity),can_unload,false);
+    }
     AdventureButton(MineSelectionControl(0),brief?"Good <":"Previous good",true,false);
     AdventureButton(MineSelectionControl(1),brief?"Good >":"Next good",true,false);
     AdventureButton(MineSelectionControl(2),"Less",local->mine_quantity>1,false);
     AdventureButton(MineSelectionControl(3),"More",local->mine_quantity<CC_MINE_PACK_CAPACITY,false);
-    AdventureButton(MineControl(0),brief?"Use / E":action!=NULL?action:"Use / E",action!=NULL&&can_board,false);
-    AdventureButton(MineControl(1),TextFormat(brief?"Pack %d":"Pack %d / P",local->mine_quantity),can_pack,false);
-    AdventureButton(MineControl(2),TextFormat(brief?"Unload %d":"Unload %d / U",local->mine_quantity),can_unload,false);
+    AdventureButton(MineNavigationControl(0),"Save F5",true,false);
+    AdventureButton(MineNavigationControl(1),"Menu Esc",true,false);
     CcOverlayDrawText(message,22,GetScreenHeight()-29,10,INK);
     if(!compact) CcOverlayDrawText("Click where to walk  |  [ ] good  - + amount  |  F5 save",GetScreenWidth()-390,23,10,MUTED);
 }
@@ -479,8 +605,7 @@ static bool MineForwardUse(const CcSim *sim,int32_t dir)
 {
     const CcMineVisit *m=&sim->mine;
     if(m->phase==CC_MINE_YARD)
-        return (dir==0 && m->x==15 && (m->y==4||m->y==3)) ||
-            (dir==2 && m->x==15 && (m->y==17||m->y==18));
+        return dir==0 && m->x==15 && (m->y==4||m->y==3);
     return dir==0 && m->x==5 && (m->y==4||m->y==3);
 }
 static bool MineIntentCanUse(const CcSim *sim,MineIntentTarget target)
@@ -523,20 +648,75 @@ static bool MineIntentGoal(const CcSim *sim,const LocalState *local,MineIntentTa
     *out_x=best%CC_MINE_WIDTH;*out_y=best/CC_MINE_WIDTH;
     return true;
 }
+static void MineAlignLocalAgent(const CcSim *sim,LocalState *local)
+{
+    if(sim==NULL||local==NULL) return;
+    CcLocalAgentSetScene(&local->agent,CC_LOCAL_SCENE_MINE);
+    local->agent.position.x=(float)sim->mine.x;
+    local->agent.position.y=0.0f;
+    local->agent.position.z=(float)sim->mine.y;
+    local->agent.target_point=local->agent.position;
+    local->agent.command_point=local->agent.position;
+    local->agent.command_origin=local->agent.position;
+}
 static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
                             RenderTexture2D target,float dt,char *message,size_t capacity)
 {
     SyncMineView(sim,local);
+    CcLocalMineSetBarOpen(sim->mine.bar_open);
+    if(sim->mine.contest_active && !local->mine_combat_active) {
+        CcLocalCourseStageMineEncounter(&local->course,&local->agent,sim);
+        local->mine_combat_active=true;
+    }
+    if(sim->mine.contest_active) {
+        (void)CcLocalWorldUpdate(&local->course,&local->agent,sim,dt,false,true);
+        if(local->course.defenses_completed>0) {
+            int32_t injury=(int32_t)lroundf(fmaxf(0.0f,
+                CC_LOCAL_COMBAT_MAX_HEALTH-local->agent.combat.health));
+            CcCommand resolved={.kind=CC_COMMAND_MINE_RESOLVE_CONTEST,
+                .target_id=(CcId)sim->mine.revision,.amount=injury};
+            if(ApplyCommand(journal,sim,resolved,message,capacity)) {
+                MineAlignLocalAgent(sim,local);
+                local->mine_combat_active=false;
+                local->course.mine_encounter=false;
+                (void)snprintf(message,capacity,
+                    "The haulers yield their carried mine goods. Injury %d.",injury);
+            }
+            return;
+        }
+    } else {
+        local->mine_combat_active=false;
+        local->course.mine_encounter=false;
+    }
     local->mine_cooldown-=dt;
     MineRememberVisible(sim,local);
     if(local->mine_target_x>=0 && local->mine_intent_revision!=sim->mine.revision)
         MineClearIntent(local);
+    bool at_haulers=sim->mine.phase==CC_MINE_LEVEL &&
+        abs(sim->mine.x-sim->mine.source_x)+abs(sim->mine.y-sim->mine.source_y)<=1;
+    bool at_cache=MineAtCache(sim);
     int32_t control=-1,good_change=0,quantity_change=0;
     if(ClientKeyPressed(KEY_E)) control=4;
     if(ClientKeyPressed(KEY_P)) control=5;
     if(ClientKeyPressed(KEY_U)) control=6;
     if(ClientKeyPressed(KEY_I) && MineShortLandscape())
         local->mine_inventory_expanded=!local->mine_inventory_expanded;
+    if(sim->mine.contest_active && ClientKeyPressed(KEY_T)) control=4;
+    if(sim->mine.contest_active && ClientKeyPressed(KEY_SPACE)) control=5;
+    if(!sim->mine.contest_active && at_haulers &&
+       sim->mine.encounter_outcome!=CC_MINE_ENCOUNTER_BARGAINED &&
+       sim->mine.encounter_outcome!=CC_MINE_ENCOUNTER_CONTESTED &&
+       ClientKeyPressed(KEY_B)) control=4;
+    if(!sim->mine.contest_active && at_haulers &&
+       sim->mine.encounter_outcome!=CC_MINE_ENCOUNTER_BARGAINED &&
+       sim->mine.encounter_outcome!=CC_MINE_ENCOUNTER_CONTESTED &&
+       ClientKeyPressed(KEY_C)) control=5;
+    if(!sim->mine.contest_active && at_haulers &&
+       sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_CONTESTED &&
+       ClientKeyPressed(KEY_T)) control=5;
+    if(!sim->mine.contest_active && at_cache && ClientKeyPressed(KEY_C)) control=4;
+    if(!sim->mine.contest_active && at_cache && ClientKeyPressed(KEY_R)) control=5;
+    if(sim->mine.contest_active && ClientKeyPressed(KEY_R)) control=9;
     if(ClientKeyPressed(KEY_LEFT_BRACKET)) good_change=-1;
     if(ClientKeyPressed(KEY_RIGHT_BRACKET)) good_change=1;
     if(ClientKeyPressed(KEY_MINUS)) quantity_change=-1;
@@ -552,7 +732,7 @@ static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
         else if(CheckCollisionPointRec(mouse,MineSelectionControl(1))) good_change=1;
         else if(CheckCollisionPointRec(mouse,MineSelectionControl(2))) quantity_change=-1;
         else if(CheckCollisionPointRec(mouse,MineSelectionControl(3))) quantity_change=1;
-        else {
+        else if(!sim->mine.contest_active) {
             int32_t tx=0,ty=0;
             MineIntentTarget picked=MINE_INTENT_MOVE;
             if(MinePick(sim,local,target,mouse,&tx,&ty,&picked)) {
@@ -586,7 +766,12 @@ static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
         } else if(sim->mine.x==goal_x && sim->mine.y==goal_y) {
             MineIntentTarget intent=(MineIntentTarget)local->mine_intent_target;
             MineClearIntent(local);
-            if(intent!=MINE_INTENT_MOVE && MineIntentCanUse(sim,intent)) control=4;
+            if(intent==MINE_INTENT_HAULERS)
+                (void)snprintf(message,capacity,"Choose the visible hauler action.");
+            else if(intent==MINE_INTENT_CARRIAGE)
+                (void)snprintf(message,capacity,
+                    "Carriage reached. Choose Pack, Unload, or Board.");
+            else if(intent!=MINE_INTENT_MOVE && MineIntentCanUse(sim,intent)) control=4;
         } else {
             dir=MinePathStep(sim,local,goal_x,goal_y);
             if(dir<0) {
@@ -596,7 +781,60 @@ static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
         }
     }
     CcCommand command={.target_id=(CcId)sim->mine.revision};
-    if(control==4) command.kind=CC_COMMAND_MINE_USE;
+    if(sim->mine.contest_active && control==4) {
+        int32_t current=local->agent.combat.target_index;
+        int32_t target_index=current==0?1:0;
+        if(!CcLocalCourseSelectPlayerTarget(&local->course,&local->agent,target_index))
+            (void)CcLocalCourseSelectPlayerTarget(&local->course,&local->agent,current);
+        (void)snprintf(message,capacity,"Focused on %s.",
+            local->course.raider_names[local->agent.combat.target_index<0?0:
+                local->agent.combat.target_index]);
+        return;
+    } else if(sim->mine.contest_active && control==5) {
+        bool struck=CcLocalCourseBeginPlayerStrike(&local->course,&local->agent);
+        (void)snprintf(message,capacity,"%s",
+            struck?"Strike committed.":"Closing to striking distance.");
+        return;
+    } else if(sim->mine.contest_active && (control==6||control==9)) {
+        command.kind=CC_COMMAND_MINE_BREAK_CONTACT;
+        command.amount=(int32_t)lroundf(fmaxf(0.0f,
+            CC_LOCAL_COMBAT_MAX_HEALTH-local->agent.combat.health));
+    } else if(sim->mine.contest_active && ClientKeyPressed(KEY_X)) {
+        bool guarded=!local->agent.humanoid.guard_requested;
+        (void)CcLocalCourseSetPlayerGuarded(&local->course,&local->agent,guarded);
+        (void)snprintf(message,capacity,"Guard %s.",guarded?"raised":"lowered");
+        return;
+    } else if(at_haulers &&
+              sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_CONTESTED &&
+              control==4) command.kind=CC_COMMAND_MINE_INSPECT;
+    else if(at_haulers &&
+            sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_CONTESTED &&
+            control==5) {
+        command.kind=CC_COMMAND_MINE_TAKE;
+        command.good=local->mine_good;
+        command.amount=local->mine_quantity;
+    } else if(at_haulers &&
+              sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_BARGAINED &&
+              control==4) command.kind=CC_COMMAND_MINE_INSPECT;
+    else if(at_haulers && control==4) command.kind=CC_COMMAND_MINE_BARGAIN;
+    else if(at_haulers && control==5) {
+        if(CcCoopClientActive()) {
+            (void)snprintf(message,capacity,
+                "Contest needs local combat. Bargain remains available here.");
+            return;
+        }
+        command.kind=CC_COMMAND_MINE_CONTEST;
+    }
+    else if(at_cache && control==4) {
+        command.kind=CC_COMMAND_MINE_CACHE;
+        command.good=local->mine_good;
+        command.amount=local->mine_quantity;
+    } else if(at_cache && control==5) {
+        command.kind=CC_COMMAND_MINE_CACHE;
+        command.good=local->mine_good;
+        command.amount=-local->mine_quantity;
+    }
+    else if(control==4) command.kind=CC_COMMAND_MINE_USE;
     else if(control==5) {
         command.kind=CC_COMMAND_MINE_PACK; command.amount=local->mine_quantity;
         command.good=local->mine_good;
@@ -621,14 +859,45 @@ static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
            step keeps the facing the player set with A and D. */
         if(sim->mine.phase==CC_MINE_LEVEL&&!relative) local->mine_facing=dir;
     }
+    bool entering=command.kind==CC_COMMAND_MINE_USE &&
+        sim->mine.phase==CC_MINE_YARD && abs(sim->mine.x-15)+abs(sim->mine.y-3)<=1;
+    int32_t bread_before=entering?sim->mine.pack[CC_GOOD_BREAD]:0;
+    int32_t meat_before=entering?sim->mine.pack[CC_GOOD_MEAT]:0;
     bool stowing=command.kind==CC_COMMAND_MINE_USE && MineAtCarriage(sim);
     int32_t stowed=stowing?CcMinePackUsed(sim):0;
     if(command.kind!=CC_COMMAND_NONE) {
         bool ok=ApplyCommand(journal,sim,command,message,capacity);
         if(ok) {
+            if(command.kind==CC_COMMAND_MINE_CONTEST) {
+                CcLocalCourseStageMineEncounter(&local->course,&local->agent,sim);
+                local->mine_combat_active=true;
+                (void)snprintf(message,capacity,
+                    "The haulers draw steel. Choose a target and strike.");
+            } else if(command.kind==CC_COMMAND_MINE_BREAK_CONTACT) {
+                MineAlignLocalAgent(sim,local);
+                local->mine_combat_active=false;
+                local->course.mine_encounter=false;
+                (void)snprintf(message,capacity,
+                    "Contact broken. Walk back through the visible mine.");
+            }
             SyncMineView(sim,local);
             if(local->mine_target_x>=0) local->mine_intent_revision=sim->mine.revision;
-            if(command.kind==CC_COMMAND_MINE_PACK) MineReceipt(message,capacity,&command);
+            if(command.kind==CC_COMMAND_MINE_PACK ||
+               command.kind==CC_COMMAND_MINE_TAKE ||
+               command.kind==CC_COMMAND_MINE_CACHE)
+                MineReceipt(message,capacity,&command);
+            else if(command.kind==CC_COMMAND_MINE_INSPECT)
+                (void)snprintf(message,capacity,
+                    "Hauler load: Iron %d, Gold %d, Gems %d.",
+                    CcMineSourceGood(sim,CC_GOOD_IRON),
+                    CcMineSourceGood(sim,CC_GOOD_GOLD),
+                    CcMineSourceGood(sim,CC_GOOD_GEMS));
+            else if(entering) {
+                const char *ration=bread_before>sim->mine.pack[CC_GOOD_BREAD]?"Bread":
+                    meat_before>sim->mine.pack[CC_GOOD_MEAT]?"Meat":"ration";
+                (void)snprintf(message,capacity,
+                    "Entered the mine: 1 %s spent. Light 18.",ration);
+            }
             else if(stowing) (void)snprintf(message,capacity,
                 "Stowed %d goods in the carriage and boarded for the road.",stowed);
         } else MineClearIntent(local);

@@ -1,4 +1,5 @@
 import io
+import ctypes as c
 import json
 from pathlib import Path
 import sqlite3
@@ -98,6 +99,33 @@ class CoopTests(unittest.TestCase):
         view = self.worlds.view(self.id, token)
         return {'protocol': 1, 'sequence': view['next_sequence'],
                 'action_revision': view['action_revision'], 'action': action, **values}
+
+    def stage_shared_mine(self, mode):
+        fixture = Path(self.temp.name) / f'mine-{mode}.bin'
+        executable = Path(LIBRARY).resolve().parent / 'mine_tests'
+        made = subprocess.run([executable, '--write-shared-mine-fixture', mode, fixture],
+                              check=True, capture_output=True, text=True)
+        revision = int(made.stdout.strip())
+        with self.engine.open(saved=fixture.read_bytes()) as sim:
+            state, view = sim.save(), sim.snapshot()
+        self.worlds.db.execute(
+            'UPDATE worlds SET state=?,view=?,revision=revision+1,action_revision=action_revision+1 WHERE id=?',
+            (state, json.dumps(view), self.id))
+        self.worlds.db.execute('DELETE FROM scene_contexts WHERE world=?', (self.id,))
+        return revision
+
+    def shared_mine_goods(self):
+        pointer = c.c_void_p
+        for name in ('CcMinePackGood', 'CcMineSourceGood'):
+            function = getattr(self.engine.lib, name)
+            function.argtypes, function.restype = [pointer, c.c_int32], c.c_int32
+        saved = self.worlds.db.execute(
+            'SELECT state FROM worlds WHERE id=?', (self.id,)).fetchone()['state']
+        with self.engine.open(saved=saved) as sim:
+            pack = self.engine.lib.CcMinePackGood
+            source = self.engine.lib.CcMineSourceGood
+            return (pack(sim.handle, 0), pack(sim.handle, 4),
+                    source(sim.handle, 0), source(sim.handle, 4))
 
     def check_cached_view_upgrade(self, travelling=False, paused=False):
         self.worlds.command(self.id, self.a, self.command(self.a, good=0, amount=1))
@@ -334,12 +362,12 @@ class CoopTests(unittest.TestCase):
 
     def test_player_session_versions(self):
         context = self.worlds.view(self.id, self.a)['session_context']
-        for version in (7, 8):
+        for version in (7, 8, 9):
             saved = dict(sequence=version, context=context,
                          session=f'CROWNLESS_SESSION {version}\nlaunch test\n')
             self.worlds.save_session(self.id, self.a, saved)
             self.assertEqual(self.worlds.view(self.id, self.a, campaign=True)['session'], saved)
-        for version in (6, 9):
+        for version in (6, 10):
             with self.assertRaises(ApiError):
                 self.worlds.save_session(self.id, self.a, dict(sequence=10, context=context,
                     session=f'CROWNLESS_SESSION {version}\nlaunch test\n'))
@@ -396,6 +424,44 @@ class CoopTests(unittest.TestCase):
             self.worlds.command(self.id, self.a, stale)
         self.assertEqual(rejected.exception.status, 409)
         self.assertIn('company has changed', rejected.exception.message)
+
+    def test_shared_mine_bargain_and_break_contact_reach_the_host(self):
+        revision = self.stage_shared_mine('bargain')
+        before = self.shared_mine_goods()
+        self.assertEqual(before, (2, 0, 0, 3))
+        stale = self.command(self.a, 'mine_bargain', target=str(revision))
+        moved = self.worlds.command(
+            self.id, self.a,
+            self.command(self.a, 'mine_step', target=str(revision), amount=3))
+        self.assertTrue(moved['accepted'], moved['message'])
+        stale['sequence'] += 1
+        with self.assertRaises(ApiError) as rejected:
+            self.worlds.command(self.id, self.a, stale)
+        self.assertEqual(rejected.exception.status, 409)
+        self.assertIn('company has changed', rejected.exception.message)
+        self.assertEqual(self.shared_mine_goods(), before)
+        returned = self.worlds.command(
+            self.id, self.a,
+            self.command(self.a, 'mine_step', target=str(revision + 1), amount=1))
+        self.assertTrue(returned['accepted'], returned['message'])
+        bargained = self.worlds.command(
+            self.id, self.a, self.command(self.a, 'mine_bargain', target=str(revision + 2)))
+        self.assertTrue(bargained['accepted'], bargained['message'])
+        self.assertEqual(self.shared_mine_goods(), (0, 1, 2, 2))
+
+        revision = self.stage_shared_mine('contest')
+        with self.assertRaises(ApiError):
+            self.worlds.command(
+                self.id, self.a, self.command(self.a, 'mine_contest', target=str(revision)))
+        broken = self.worlds.command(
+            self.id, self.a,
+            self.command(self.a, 'mine_break_contact', target=str(revision), amount=27))
+        self.assertTrue(broken['accepted'], broken['message'])
+        repeated = self.worlds.command(
+            self.id, self.a,
+            self.command(self.a, 'mine_break_contact', target=str(revision + 1), amount=27))
+        self.assertFalse(repeated['accepted'])
+        self.assertIn('fight', repeated['message'].lower())
 
     def test_two_players_clear_and_reload_a_road_site(self):
         def apply(token, action, **values):

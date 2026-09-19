@@ -18990,6 +18990,25 @@ static bool ApplyPartyWipe(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Refresh the world before the next generation.");
         return false;
     }
+    if (sim->mine.phase != CC_MINE_NONE) {
+        if (!CcMineSettleFallenPack(sim)) {
+            SetError(error,error_capacity,
+                     "Refresh the mine manifest before advancing the company.");
+            return false;
+        }
+        sim->mine.phase=CC_MINE_NONE;
+        sim->mine.site_id=0;
+        sim->mine.x=0;
+        sim->mine.y=0;
+        sim->mine.return_speed=0;
+        sim->mine.light=0;
+        sim->mine.steps=0;
+        sim->mine.contest_active=false;
+        sim->mine.source_released=false;
+        sim->mine.encounter_outcome=CC_MINE_ENCOUNTER_BROKEN_CONTACT;
+        sim->mine.player_injury=0;
+        sim->mine.revision+=1;
+    }
     sim->journey = (CcJourneyEncounter){0};
     sim->dungeon_expedition = (CcDungeonExpedition){
         .current_room = -1,
@@ -19059,16 +19078,16 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Command target is missing.");
         return false;
     }
+    bool party_wipe = command->kind == CC_COMMAND_PARTY_WIPE;
     bool mine_action = (command->kind >= CC_COMMAND_VISIT_MINE &&
         command->kind <= CC_COMMAND_MINE_PACK) ||
         (command->kind >= CC_COMMAND_MINE_INSPECT &&
-         command->kind <= CC_COMMAND_MINE_CACHE);
-    if (sim->mine.phase != CC_MINE_NONE && !mine_action) {
+         command->kind <= CC_COMMAND_MINE_RESOLVE_CONTEST);
+    if (sim->mine.phase != CC_MINE_NONE && !mine_action && !party_wipe) {
         SetError(error, error_capacity, "Return to the road through the mine yard first.");
         return false;
     }
     if (mine_action) return CcMineApply(sim, command, error, error_capacity);
-    bool party_wipe = command->kind == CC_COMMAND_PARTY_WIPE;
     if (!party_wipe && sim->schema_version >= 40U && sim->pony_company.encounter >= 0 &&
         (command->kind < CC_COMMAND_MEET_PONY || command->kind > CC_COMMAND_LEAVE_PONY)) {
         SetError(error, error_capacity, "Finish your pony visit before continuing.");
@@ -19126,6 +19145,10 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_MINE_INSPECT:
         case CC_COMMAND_MINE_TAKE:
         case CC_COMMAND_MINE_CACHE:
+        case CC_COMMAND_MINE_BARGAIN:
+        case CC_COMMAND_MINE_CONTEST:
+        case CC_COMMAND_MINE_BREAK_CONTACT:
+        case CC_COMMAND_MINE_RESOLVE_CONTEST:
             return CcMineApply(sim, command, error, error_capacity);
         case CC_COMMAND_EXCHANGE_GOSSIP:
             return ApplyExchangeGossip(sim, command, error, error_capacity);

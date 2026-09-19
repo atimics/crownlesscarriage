@@ -1,5 +1,5 @@
 /* Reading and input metadata describe the controls drawn inside the game. */
-#if defined(PLATFORM_WEB)
+#if defined(PLATFORM_WEB) || defined(CC_CLIENT_SELF_TESTS)
 #define CLIENT_TOUCH_BUTTONS 96
 typedef struct ClientTouchButton {
     Rectangle bounds;
@@ -14,9 +14,11 @@ static int touch_count;
 static int touch_previous_count;
 static int touch_revision;
 static bool touch_enabled;
+#if defined(PLATFORM_WEB)
 static bool touch_pointer_pending;
 static bool touch_pointer_held;
 static Vector2 touch_pointer;
+#endif
 static char touch_title[128];
 static char touch_detail[512];
 static char touch_scene[24];
@@ -27,6 +29,7 @@ static char touch_reading[8192];
 static char touch_previous_reading[8192];
 static size_t touch_reading_length;
 
+#if defined(PLATFORM_WEB)
 EMSCRIPTEN_KEEPALIVE void CrownlessTouchHold(float x, float y, int held)
 {
     touch_pointer_held = held && isfinite(x) && isfinite(y) &&
@@ -73,10 +76,15 @@ EM_JS(void, ClientTouchPublishEnd, (), {
     if (Module.renderCrownlessTouch) Module.renderCrownlessTouch(Module.crownlessTouchFrame);
 });
 #pragma clang diagnostic pop
+#endif
 
 static void ClientTouchBegin(void)
 {
+#if defined(PLATFORM_WEB)
     touch_enabled = ClientTouchEnabled() != 0;
+#else
+    touch_enabled = true;
+#endif
     touch_count = 0;
     (void)memset(touch_buttons, 0, sizeof(touch_buttons));
     touch_title[0] = '\0';
@@ -115,7 +123,8 @@ static void ClientTouchAdd(Rectangle bounds, const char *label, bool enabled, bo
     button->bounds = bounds;
     button->enabled = enabled;
     button->active = active;
-    (void)snprintf(button->label, sizeof(button->label), "%s", label);
+    (void)snprintf(button->label, sizeof(button->label), "%.*s",
+        (int)sizeof(button->label) - 1, label);
 }
 
 static void ClientTouchEnd(void)
@@ -135,6 +144,7 @@ static void ClientTouchEnd(void)
     (void)snprintf(touch_previous_detail, sizeof(touch_previous_detail), "%s", touch_detail);
     (void)snprintf(touch_previous_scene, sizeof(touch_previous_scene), "%s", touch_scene);
     (void)snprintf(touch_previous_reading, sizeof(touch_previous_reading), "%s", touch_reading);
+#if defined(PLATFORM_WEB)
     ClientTouchPublishBegin(touch_title, touch_detail, touch_reading, touch_scene, touch_revision);
     for (int i = 0; i < touch_count; ++i) {
         Rectangle bounds = touch_buttons[i].bounds;
@@ -142,6 +152,7 @@ static void ClientTouchEnd(void)
             bounds.x, bounds.y, bounds.width, bounds.height);
     }
     ClientTouchPublishEnd();
+#endif
 }
 #else
 static void ClientTouchBegin(void) {}

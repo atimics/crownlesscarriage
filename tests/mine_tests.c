@@ -89,14 +89,53 @@ static void ReturnToMineBranch(CcSim *sim)
     CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=site->id};
     Check(CcSimApply(sim,&visit,error,sizeof(error)));
 }
-int main(void)
+static void ReadyAtHaulers(CcSim *sim)
 {
+    AtBranch(sim,false);
+    sim->player.cargo[CC_GOOD_BREAD]=4;
+    sim->player.cargo[CC_GOOD_IRON]=8;
+    CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,
+        .target_id=CcMineSite(sim)->id};
+    Check(CcSimApply(sim,&visit,error,sizeof(error)));
+    ApplyGood(sim,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,3);
+    ApplyGood(sim,CC_COMMAND_MINE_PACK,CC_GOOD_IRON,5);
+    Walk(sim,15,3);
+    Apply(sim,CC_COMMAND_MINE_USE,0);
+    CC_CHECK(!sim->mine.bar_open);
+    Walk(sim,9,15);
+    CC_CHECK(sim->mine.bypass_route_seen);
+    CC_CHECK(!sim->mine.source_released && CcMinePackGood(sim,CC_GOOD_GOLD)==0);
+    Walk(sim,26,16);
+}
+static int WriteSharedMineFixture(const char *mode,const char *path)
+{
+    static CcSim sim;
+    ReadyAtHaulers(&sim);
+    if(strcmp(mode,"contest")==0) Apply(&sim,CC_COMMAND_MINE_CONTEST,0);
+    else if(strcmp(mode,"bargain")!=0) return 1;
+    uint8_t *bytes=NULL;
+    size_t length=0;
+    if(!CcCoopEncode(&sim,&bytes,&length,error,sizeof(error))) return 1;
+    FILE *file=fopen(path,"wb");
+    bool written=file!=NULL && fwrite(bytes,1,length,file)==length;
+    if(file!=NULL && fclose(file)!=0) written=false;
+    CcCoopFree(bytes);
+    if(!written) return 1;
+    printf("%u\n",sim.mine.revision);
+    return 0;
+}
+int main(int argc,char **argv)
+{
+    if(argc==4 && strcmp(argv[1],"--write-shared-mine-fixture")==0)
+        return WriteSharedMineFixture(argv[2],argv[3]);
     static CcSim sim,restored,changed,haul,loaded,legacy,capacity,prechange;
+    static CcSim bargain,contest,withdrawn,failed;
     (void)remove("mine-load-replay.ccsave");
     (void)remove("mine-load-roundtrip-103.ccsave");
     (void)remove("mine-load-schema-102-fixture.ccsave");
     (void)remove("mine-load-stow.ccsave");
     (void)remove("mine-roundtrip.ccsave");
+    (void)remove("mine-encounter-active.ccsave");
     (void)remove("mine-replay.ccsave");
     (void)remove("mine-load-roundtrip.ccsave");
     (void)remove("mine-load-schema-102.ccsave");
@@ -134,6 +173,101 @@ int main(void)
         restored.custody.capacity==CC_CUSTODY_CAPACITY &&
         CcMineSourceUsed(&restored)==13 && CcMineCacheUsed(&restored)==0);
     for(int i=0;i<2;++i) AtBranch(&sim,i!=0);
+    ReadyAtHaulers(&bargain);
+    CcCustodyHolder source={CC_CUSTODY_SITE,bargain.mine.source_id};
+    CcCustodyHolder carried={CC_CUSTODY_MINE_PACK,bargain.player.id};
+    uint64_t closed_source_hash=CcSimHash(&bargain);
+    CC_CHECK(CcSimTransferMineGoods(&bargain,source,carried,CC_GOOD_GOLD,1,
+        (uint64_t)bargain.mine.revision+1U)==CC_CUSTODY_FORBIDDEN);
+    CC_CHECK(CcSimHash(&bargain)==closed_source_hash);
+    /* The walk around the closed bar reaches the source without changing
+       custody. Add the eighth carried unit, then prove that the offered Bread
+       is debited before the Gold credit checks pack capacity. */
+    bargain.mine.pack[CC_GOOD_IRON]+=1;
+    bargain.player.cargo[CC_GOOD_IRON]-=1;
+    CC_CHECK(CcMinePackUsed(&bargain)==CC_MINE_PACK_CAPACITY &&
+        CcMinePackGood(&bargain,CC_GOOD_BREAD)==2);
+    failed=bargain;
+    CcCommand stale_bargain={.kind=CC_COMMAND_MINE_BARGAIN,
+        .target_id=(CcId)(failed.mine.revision-1)};
+    uint64_t failed_hash=CcSimHash(&failed);
+    CC_CHECK(!CcSimApply(&failed,&stale_bargain,error,sizeof(error)) &&
+        CcSimHash(&failed)==failed_hash);
+    failed=bargain;
+    failed.mine.pack[CC_GOOD_BREAD]=1;
+    CcCommand bargain_command={.kind=CC_COMMAND_MINE_BARGAIN,
+        .target_id=(CcId)failed.mine.revision};
+    failed_hash=CcSimHash(&failed);
+    CC_CHECK(!CcSimApply(&failed,&bargain_command,error,sizeof(error)) &&
+        CcSimHash(&failed)==failed_hash);
+    int32_t bread_total=CcSimTrackedGood(&bargain,CC_GOOD_BREAD);
+    int32_t gold_total=CcSimTrackedGood(&bargain,CC_GOOD_GOLD);
+    Apply(&bargain,CC_COMMAND_MINE_BARGAIN,0);
+    CC_CHECK(bargain.mine.encounter_outcome==CC_MINE_ENCOUNTER_BARGAINED &&
+        !bargain.mine.source_released && CcMinePackUsed(&bargain)==7 &&
+        CcMinePackGood(&bargain,CC_GOOD_BREAD)==0 &&
+        CcMinePackGood(&bargain,CC_GOOD_GOLD)==1 &&
+        CcMineSourceGood(&bargain,CC_GOOD_BREAD)==2 &&
+        CcMineSourceGood(&bargain,CC_GOOD_GOLD)==2 &&
+        CcSimTrackedGood(&bargain,CC_GOOD_BREAD)==bread_total &&
+        CcSimTrackedGood(&bargain,CC_GOOD_GOLD)==gold_total);
+    closed_source_hash=CcSimHash(&bargain);
+    CC_CHECK(CcSimTransferMineGoods(&bargain,source,carried,CC_GOOD_GOLD,1,
+        (uint64_t)bargain.mine.revision+1U)==CC_CUSTODY_FORBIDDEN &&
+        CcSimHash(&bargain)==closed_source_hash);
+
+    ReadyAtHaulers(&contest);
+    {
+        uint64_t shared_open_hash=CcSimHash(&contest);
+        CC_CHECK(!CcCoopApply(&contest,"mine_contest",
+            (CcId)contest.mine.revision,0,0,error,sizeof(error)) &&
+            CcSimHash(&contest)==shared_open_hash &&
+            strstr(error,"local company")!=NULL);
+    }
+    Apply(&contest,CC_COMMAND_MINE_CONTEST,0);
+    CC_CHECK(contest.mine.contest_active &&
+        contest.mine.source_owner_id==contest.goblins.id);
+    {
+        uint64_t shared_active_hash=CcSimHash(&contest);
+        CC_CHECK(!CcCoopApply(&contest,"mine_resolve_contest",
+            (CcId)contest.mine.revision,0,23,error,sizeof(error)) &&
+            CcSimHash(&contest)==shared_active_hash &&
+            strstr(error,"local combat course")!=NULL);
+    }
+    Check(CcSaveWrite("mine-encounter-active.ccsave",&contest,error,sizeof(error)));
+    Check(CcSaveRead("mine-encounter-active.ccsave",&restored,error,sizeof(error)));
+    CC_CHECK(CcSimHash(&restored)==CcSimHash(&contest) &&
+        restored.mine.contest_active &&
+        restored.mine.source_id==contest.mine.source_id &&
+        restored.mine.source_owner_id==restored.goblins.id);
+    CcCommand stale_resolution={.kind=CC_COMMAND_MINE_RESOLVE_CONTEST,
+        .target_id=(CcId)(contest.mine.revision-1),.amount=23};
+    uint64_t active_hash=CcSimHash(&contest);
+    CC_CHECK(!CcSimApply(&contest,&stale_resolution,error,sizeof(error)) &&
+        CcSimHash(&contest)==active_hash);
+    CcCommand resolution={.kind=CC_COMMAND_MINE_RESOLVE_CONTEST,
+        .target_id=(CcId)contest.mine.revision,.amount=23};
+    Check(CcSimApply(&contest,&resolution,error,sizeof(error)));
+    CC_CHECK(!contest.mine.contest_active && contest.mine.source_released &&
+        contest.mine.encounter_outcome==CC_MINE_ENCOUNTER_CONTESTED &&
+        contest.mine.player_injury==23);
+    active_hash=CcSimHash(&contest);
+    CC_CHECK(!CcSimApply(&contest,&resolution,error,sizeof(error)) &&
+        CcSimHash(&contest)==active_hash);
+    ApplyGood(&contest,CC_COMMAND_MINE_TAKE,CC_GOOD_GOLD,1);
+
+    ReadyAtHaulers(&withdrawn);
+    Apply(&withdrawn,CC_COMMAND_MINE_CONTEST,0);
+    int32_t contact_x=withdrawn.mine.x,contact_y=withdrawn.mine.y;
+    Apply(&withdrawn,CC_COMMAND_MINE_BREAK_CONTACT,100);
+    CC_CHECK(withdrawn.mine.x==contact_x && withdrawn.mine.y==contact_y &&
+        withdrawn.mine.encounter_outcome==CC_MINE_ENCOUNTER_BROKEN_CONTACT &&
+        withdrawn.mine.player_injury==100 && !withdrawn.mine.contest_active);
+    Apply(&withdrawn,CC_COMMAND_MINE_STEP,3);
+    Walk(&withdrawn,26,16);
+    Check(CcCoopApply(&withdrawn,"mine_bargain",
+        (CcId)withdrawn.mine.revision,0,0,error,sizeof(error)));
+    CC_CHECK(withdrawn.mine.encounter_outcome==CC_MINE_ENCOUNTER_BARGAINED);
     {
         /* The turn must survive the whole stop window, not one subtick of it.
            Offered on a single tick, every other tick in the window fell
@@ -183,6 +317,7 @@ int main(void)
     /* #763 will set this only after its goblin-hauler bargain. This fixture
        exercises the released command path without adding encounter choices. */
     haul.mine.source_released=true;
+    haul.mine.encounter_outcome=CC_MINE_ENCOUNTER_CONTESTED;
     int32_t iron_total=CcSimTrackedGood(&haul,CC_GOOD_IRON);
     Check(CcCoopApply(&haul,"mine_take",(CcId)haul.mine.revision,CC_GOOD_IRON,3,error,sizeof(error)));
     Check(CcSimValidate(&haul,error,sizeof(error)));
@@ -448,6 +583,7 @@ int main(void)
     (void)remove("mine-load-roundtrip-103.ccsave");
     (void)remove("mine-load-schema-102-fixture.ccsave");
     (void)remove("mine-load-stow.ccsave");
+    (void)remove("mine-encounter-active.ccsave");
     (void)remove("mine-load-roundtrip.ccsave");
     (void)remove("mine-load-schema-102.ccsave");
     puts("Silverwick mine: road, yard, pack, level, return, persistence, replay, shared and text controls passed.");

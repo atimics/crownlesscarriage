@@ -267,7 +267,7 @@ static void RequireSolidStreetHouse(const char *name, float wall_x,
 
 static void TestPlaceLandmarkCollision(void)
 {
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, UINT32_C(0x1a7d4a2b));
     sim.player.location_id = sim.settlements[0].id;
     CcLocalBindPlace(&sim);
@@ -307,7 +307,7 @@ static void TestPlaceLandmarkCollision(void)
 
 static void TestTownPlanCollisionAndGate(void)
 {
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, UINT32_C(0x7a11c0de));
     for (int32_t settlement = 0;
          settlement < sim.settlement_count; ++settlement) {
@@ -1428,8 +1428,10 @@ static CcCombatOutcome RunCombatStrike(CcLocalAgent *attacker,
         exit(1);
     }
     for (int32_t frame = 0; frame < 120; ++frame) {
-        CcLocalAgentUpdate(attacker, 1.0f / 60.0f, true);
-        CcLocalAgentUpdate(defender, 1.0f / 60.0f, true);
+        CcLocalAgentUpdate(attacker, 1.0f / 60.0f,
+                           attacker->scene == CC_LOCAL_SCENE_MARKET);
+        CcLocalAgentUpdate(defender, 1.0f / 60.0f,
+                           defender->scene == CC_LOCAL_SCENE_MARKET);
         if (CcHumanoidGaitConsumeStrikeImpact(&attacker->humanoid)) {
             return CcLocalCombatResolveStrike(attacker, defender);
         }
@@ -1669,7 +1671,7 @@ static void TestDeathLifecycle(void)
         exit(1);
     }
 
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, 917U);
     CcLocalCourse course;
     CcLocalCourseInit(&course);
@@ -1707,7 +1709,7 @@ static void TestDeathLifecycle(void)
 
 static void TestTargetDrivenCombat(void)
 {
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, 91U);
     CcLocalCourse course;
     CcLocalCourseInit(&course);
@@ -1877,6 +1879,133 @@ static void TestTargetDrivenCombat(void)
     }
 }
 
+static void TestMineEncounterCombat(void)
+{
+    static CcSim sim;
+    CcSimInit(&sim,UINT32_C(0x51e7));
+    sim.mine.phase=CC_MINE_LEVEL;
+    sim.mine.x=25;
+    sim.mine.y=16;
+    sim.mine.bar_open=false;
+    sim.mine.player_injury=27;
+
+    static CcLocalAgent attacker,defender;
+    Vector3 resolved={0},normal={0};
+    InitCombatant(&attacker,(Vector2){15.0f,9.43f},0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&defender,(Vector2){15.0f,10.57f},PI,
+                  CC_COMBAT_RAIDER);
+    CcLocalAgentSetScene(&attacker,CC_LOCAL_SCENE_MINE);
+    CcLocalAgentSetScene(&defender,CC_LOCAL_SCENE_MINE);
+    CcLocalMineSetBarOpen(false);
+    if(!CcLocalProbePhysicsSphereInternal(CC_LOCAL_SCENE_MINE,
+        (Vector3){15.0f,.94f,9.43f},(Vector3){15.0f,.94f,10.57f},.045f,
+        &resolved,&normal)) {
+        (void)fprintf(stderr,"closed mine bar is absent from the local collision probe\n");
+        exit(1);
+    }
+    CcCombatOutcome blocked=RunCombatStrike(&attacker,&defender);
+    if(blocked!=CC_COMBAT_OUTCOME_MISS ||
+       defender.combat.health!=CC_LOCAL_COMBAT_MAX_HEALTH) {
+        (void)fprintf(stderr,
+            "closed mine bar allowed a strike through it: outcome %d health %.1f scene %d impact %.2f,%.2f,%.2f\n",
+            blocked,defender.combat.health,attacker.scene,attacker.combat.impact_point.x,
+            attacker.combat.impact_point.y,attacker.combat.impact_point.z);
+        exit(1);
+    }
+    CcLocalMineSetBarOpen(true);
+    if(CcLocalProbePhysicsSphereInternal(CC_LOCAL_SCENE_MINE,
+        (Vector3){15.0f,.94f,9.43f},(Vector3){15.0f,.94f,10.57f},.045f,
+        &resolved,&normal)) {
+        (void)fprintf(stderr,"open mine bar remained in the local collision probe\n");
+        exit(1);
+    }
+    InitCombatant(&attacker,(Vector2){26.0f,15.43f},0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&defender,(Vector2){26.0f,16.57f},PI,
+                  CC_COMBAT_RAIDER);
+    CcLocalAgentSetScene(&attacker,CC_LOCAL_SCENE_MINE);
+    CcLocalAgentSetScene(&defender,CC_LOCAL_SCENE_MINE);
+    CcCombatOutcome open=RunCombatStrike(&attacker,&defender);
+    if(open!=CC_COMBAT_OUTCOME_HIT) {
+        (void)fprintf(stderr,
+            "open mine bar blocked the ordinary strike: outcome %d health %.1f scene %d impact %.2f,%.2f,%.2f\n",
+            open,defender.combat.health,attacker.scene,
+            attacker.combat.impact_point.x,attacker.combat.impact_point.y,
+            attacker.combat.impact_point.z);
+        exit(1);
+    }
+    for(int32_t frame=0;frame<180;++frame) {
+        CcLocalAgentUpdate(&attacker,1.0f/60.0f,false);
+        CcLocalAgentUpdate(&defender,1.0f/60.0f,false);
+    }
+    if(!CcLocalCombatBeginStrike(&attacker,&defender)) {
+        (void)fprintf(stderr,"mine strike did not reach ordinary recovery\n");
+        exit(1);
+    }
+
+    static CcLocalCourse victory;
+    static CcLocalAgent victor;
+    CcLocalAgentInit(&victor,(Vector2){3.0f,3.0f},false);
+    CcLocalCourseInit(&victory);
+    CcLocalCourseStageMineEncounter(&victory,&victor,&sim);
+    if(victory.scene!=CC_LOCAL_SCENE_MINE ||
+       victor.scene!=CC_LOCAL_SCENE_MINE ||
+       fabsf(victor.position.x-25.0f)>0.001f ||
+       fabsf(victor.position.z-16.0f)>0.001f ||
+       fabsf(victor.combat.health-73.0f)>0.001f ||
+       victory.raider_company_id!=sim.goblins.id) {
+        (void)fprintf(stderr,"mine encounter lost saved approach or group identity\n");
+        exit(1);
+    }
+    static CcLocalCourse source_tile_course;
+    static CcLocalAgent source_tile_player;
+    sim.mine.x=sim.mine.source_x;
+    sim.mine.y=sim.mine.source_y;
+    CcLocalAgentInit(&source_tile_player,(Vector2){3.0f,3.0f},false);
+    CcLocalCourseInit(&source_tile_course);
+    CcLocalCourseStageMineEncounter(&source_tile_course,&source_tile_player,&sim);
+    if(fabsf(source_tile_player.position.x-(float)sim.mine.source_x)>.001f ||
+       fabsf(source_tile_player.position.z-(float)sim.mine.source_y)>.001f) {
+        (void)fprintf(stderr,"mine encounter moved the player off the saved source tile\n");
+        exit(1);
+    }
+    sim.mine.x=25;
+    sim.mine.y=16;
+    victor.combat.health=88.0f;
+    for(int32_t i=0;i<CC_LOCAL_RAIDER_COUNT;++i)
+        victory.raiders[i].combat.health=12.0f;
+    for(int32_t frame=0;frame<12000 && victory.defenses_completed==0 &&
+        victor.combat.life_state!=CC_LIFE_DEAD;++frame)
+        CcLocalCourseUpdate(&victory,&victor,&sim,1.0f/60.0f);
+    if(victory.defenses_completed!=1 || victor.combat.health>88.0f) {
+        (void)fprintf(stderr,
+            "mine contest did not resolve through course combat: win %d health %.1f resolve %d\n",
+            victory.defenses_completed,victor.combat.health,
+            victory.raider_resolve);
+        exit(1);
+    }
+
+    static CcLocalCourse defeat;
+    static CcLocalAgent defeated;
+    CcLocalAgentInit(&defeated,(Vector2){3.0f,3.0f},false);
+    CcLocalCourseInit(&defeat);
+    CcLocalCourseStageMineEncounter(&defeat,&defeated,&sim);
+    defeated.combat.health=1.0f;
+    defeated.combat.weapon_mode=CC_WEAPON_NONE;
+    CcLocalCourseClearPlayerTarget(&defeated);
+    for(int32_t frame=0;frame<12000 &&
+        defeated.combat.life_state!=CC_LIFE_DEAD;++frame)
+        CcLocalCourseUpdate(&defeat,&defeated,&sim,1.0f/60.0f);
+    if(defeated.combat.life_state!=CC_LIFE_DEAD ||
+       defeat.defenses_completed!=0) {
+        (void)fprintf(stderr,
+            "mine defeat path did not retain the active encounter: life %d wins %d\n",
+            defeated.combat.life_state,defeat.defenses_completed);
+        exit(1);
+    }
+}
+
 static void TestCombatStanceStability(void)
 {
     CcLocalAgent guard;
@@ -1924,7 +2053,7 @@ static void TestCombatStanceStability(void)
 
 static void TestCombatCrowdSpacing(void)
 {
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, 144U);
     CcLocalCourse course;
     CcLocalCourseInit(&course);
@@ -2755,6 +2884,7 @@ static void TestTownSquareGroundSightlines(void)
 
 int main(void)
 {
+    TestMineEncounterCombat();
     /* Large campaign fixtures use static storage to keep room for nested checks. */
     TestTownSquareGroundSightlines();
     CcLocalTerrainMeshStatsInternal terrain_mesh =

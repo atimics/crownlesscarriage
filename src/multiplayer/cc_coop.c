@@ -64,11 +64,20 @@ bool CcCoopApply(CcSim *sim, const char *action, CcId target,
     }
     CcCommand command = { .target_id = target, .good = (CcGood)good, .amount = amount };
     if (action != NULL) {
-        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_MINE_CACHE; ++i) {
+        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_MINE_RESOLVE_CONTEST; ++i) {
             if (strcmp(action, CcCoopActionName((CcCommandKind)i)) == 0) command.kind = (CcCommandKind)i;
         }
     }
     if (command.kind == CC_COMMAND_CHANGE_DUNGEON) command.dungeon_state = (CcDungeonState)amount;
+    if (command.kind == CC_COMMAND_MINE_CONTEST ||
+        command.kind == CC_COMMAND_MINE_RESOLVE_CONTEST) {
+        if (error != NULL && capacity > 0U)
+            (void)snprintf(error, capacity,
+                command.kind == CC_COMMAND_MINE_CONTEST ?
+                    "Play the Lower Passage contest in a local company. Bargain remains available here." :
+                    "Finish the Lower Passage fight through the local combat course.");
+        return false;
+    }
     if (sim == NULL || command.kind == CC_COMMAND_NONE ||
         good < 0 || good >= CC_GOOD_COUNT ||
         amount < -CC_SIM_MAX_UNITS || amount > CC_SIM_MAX_UNITS) {

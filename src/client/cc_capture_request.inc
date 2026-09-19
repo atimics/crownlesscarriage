@@ -53,6 +53,8 @@ typedef struct CcCaptureRequest {
     bool capture_mine_yard;
     bool capture_mine_menu;
     bool capture_mine_level;
+    bool capture_mine_offer;
+    bool capture_mine_contest;
     bool capture_underroad;
     bool capture_atmosphere;
     CcLocalAtmospherePreset capture_atmosphere_preset;
@@ -275,7 +277,11 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
         strcmp(argv[1], "--capture-dragon-cave") == 0;
     request->capture_mine_yard = argc >= 2 && strcmp(argv[1],"--capture-mine-yard") == 0;
     request->capture_mine_menu = argc >= 2 && strcmp(argv[1],"--capture-mine-menu") == 0;
-    request->capture_mine_level = request->capture_mine_menu || (argc >= 2 && strcmp(argv[1],"--capture-mine-level") == 0);
+    request->capture_mine_offer=argc>=2&&strcmp(argv[1],"--capture-mine-offer")==0;
+    request->capture_mine_contest=argc>=2&&strcmp(argv[1],"--capture-mine-contest")==0;
+    request->capture_mine_level = request->capture_mine_menu ||
+        request->capture_mine_offer || request->capture_mine_contest ||
+        (argc >= 2 && strcmp(argv[1],"--capture-mine-level") == 0);
     request->capture_underroad = argc >= 2 &&
         strcmp(argv[1], "--capture-underroad") == 0;
     request->capture_atmosphere = argc >= 2 &&

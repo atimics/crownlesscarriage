@@ -1024,6 +1024,87 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
     if (hostile) CcLocalCourseRaiseAlarmNear(course, player);
 }
 
+static Vector2 MineEncounterApproach(const CcSim *sim)
+{
+    return (Vector2){(float)sim->mine.x,(float)sim->mine.y};
+}
+
+Vector2 CcLocalMineHaulerPosition(const CcSim *sim,int32_t index)
+{
+    float side=index==0?-.45f:.45f;
+    return (Vector2){(float)sim->mine.source_x,
+                     (float)sim->mine.source_y+side};
+}
+
+static void InitMineHauler(CcLocalAgent *raider,const CcSim *sim,
+                           Vector2 approach,int32_t index)
+{
+    Vector2 position=CcLocalMineHaulerPosition(sim,index);
+    CcLocalAgentInit(raider,position,false);
+    CcLocalAgentSetScene(raider,CC_LOCAL_SCENE_MINE);
+    CcLocalCombatSetTeam(raider,CC_COMBAT_RAIDER);
+    raider->crowned=false;
+    uint64_t mark=sim->goblins.id;
+    CcLocalAgentSetNpcAppearance(raider,
+        (uint32_t)(mark^(mark>>32U)^((uint64_t)index*UINT64_C(0x9e3779b9))),
+        CC_NPC_ROLE_RAIDER,(Color){72,124,84,255});
+    raider->facing_yaw=atan2f(approach.x-position.x,
+                              approach.y-position.y);
+}
+
+void CcLocalCourseStageMineEncounter(CcLocalCourse *course,
+                                     CcLocalAgent *player,
+                                     const CcSim *sim)
+{
+    if (course == NULL || player == NULL || sim == NULL ||
+        sim->mine.source_owner_id != sim->goblins.id) return;
+    CcNpcAppearance hero_appearance=player->appearance;
+    CcAthleticProfile hero_athletics=player->athletics;
+    Color hero_tunic=player->tunic_color;
+    bool hero_crowned=player->crowned;
+    Vector2 approach=MineEncounterApproach(sim);
+    CcLocalCourseInit(course);
+    CcLocalMineSetBarOpen(sim->mine.bar_open);
+    CcLocalAgentInit(player,approach,false);
+    player->appearance=hero_appearance;
+    player->athletics=hero_athletics;
+    player->tunic_color=hero_tunic;
+    player->crowned=hero_crowned;
+    CcLocalAgentSetScene(player,CC_LOCAL_SCENE_MINE);
+    CcLocalCombatSetTeam(player,CC_COMBAT_PLAYER);
+    player->combat.health=fmaxf(0.0f,
+        CC_LOCAL_COMBAT_MAX_HEALTH-(float)sim->mine.player_injury);
+    if (player->combat.health<=0.0f) CcLocalAgentDie(player);
+    for (int32_t i=0;i<CC_LOCAL_COURSE_RUNNER_COUNT;++i) {
+        course->runners[i].agent.combat.health=0.0f;
+        course->runners[i].agent.combat.life_state=CC_LIFE_DEAD;
+    }
+    course->raider_company_id=sim->goblins.id;
+    (void)snprintf(course->raider_company_name,
+        sizeof(course->raider_company_name),"Silverwick haulers");
+    for (int32_t i=0;i<CC_LOCAL_RAIDER_COUNT;++i) {
+        CcLocalAgent *raider=&course->raiders[i];
+        InitMineHauler(raider,sim,approach,i);
+        (void)snprintf(course->raider_names[i],
+            sizeof(course->raider_names[i]),"Hauler %d",i+1);
+        course->raider_entry[i]=raider->position;
+        course->raider_response_stage[i]=3;
+        course->raider_response_waypoint_active[i]=false;
+    }
+    course->scene=CC_LOCAL_SCENE_MINE;
+    course->road_encounter=false;
+    course->mine_encounter=true;
+    course->combat_origin=(Vector3){approach.x,0.0f,approach.y};
+    course->combat_origin_valid=true;
+    course->automatic_alarm=false;
+    course->alarm_active=true;
+    course->engagement_time=0.0f;
+    course->raider_initial_resolve=78;
+    course->raider_resolve=78;
+    course->defenses_completed=0;
+    (void)CcLocalCourseSelectPlayerTarget(course,player,0);
+}
+
 void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
                                  const CcLocalAgent *player)
 {
@@ -1460,6 +1541,12 @@ static bool CourseRaiderResponseWaypoint(const CcLocalCourse *course,
         };
         if (stage >= 4) return false;
         *waypoint = road_routes[raider][stage];
+        return true;
+    }
+    if (course != NULL && course->mine_encounter) {
+        if (stage > 2) return false;
+        *waypoint=(Vector3){27.35f-(float)stage*.70f,0.0f,
+            raider==0?15.45f:16.55f};
         return true;
     }
     if (stage >= 3) return false;
