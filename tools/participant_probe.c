@@ -56,7 +56,15 @@ static void Participant(const CcCoreParticipant *p)
         printf("%s{\"kind\":%d,\"day\":%d,\"certainty\":%d,\"private\":%s,\"subject_id\":",
                i ? "," : "", (int)k->kind, k->day, (int)k->certainty, k->private_knowledge ? "true" : "false");
         Id(k->subject_id); printf(",\"event_id\":"); Id(k->event_id);
-        printf(",\"source_id\":"); Id(k->source_character_id); Field("source_name", k->source_name); putchar('}');
+        printf(",\"source_id\":"); Id(k->source_character_id); Field("source_name", k->source_name);
+        const CcCoreKnownEvent *detail = &p->knowledge_events[i];
+        if (detail->available) {
+            printf(",\"event_day\":%d", detail->day);
+            Field("event_text", detail->text);
+        } else {
+            printf(",\"event_day\":null,\"event_text\":null");
+        }
+        putchar('}');
     }
     printf("],\"held_accounts\":[");
     for (size_t i = 0; i < p->account_count; ++i) {

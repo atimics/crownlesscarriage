@@ -64,6 +64,24 @@ class TrainingTests(unittest.TestCase):
         other['input']['participant']['held_accounts'][0]['source_id'] = '99999'
         self.assertIn('"99999"', compile_row(other, self.tokenizer)['prompt']['text'])
 
+    def test_luna_known_event_keeps_source_and_certainty(self):
+        record = json.loads(gzip.decompress((ROOT / 'docs/reviews/participant-minds-2026-09-19/luna-mine-teachers.json.gz').read_bytes()))
+        for row in record['rows']:
+            prompt = compile_row(row, self.tokenizer)['prompt']
+            self.assertIn(['knowledge', 0], prompt['included'])
+            known = row['input']['participant']['knowledge'][0]
+            values = [json.loads(line.split(':', 1)[1]) for line in prompt['text'].splitlines()
+                      if line.startswith('knowledge:')]
+            self.assertEqual(len(values), 1)
+            self.assertEqual(values[0][2], known['certainty'])
+            self.assertEqual(values[0][3], known['private'])
+            self.assertEqual(values[0][-2:], [known['event_day'], known['event_text']])
+        first = compile_row(record['rows'][0], self.tokenizer)['prompt']['text']
+        self.assertNotIn('Pale Ore-Eaters', first)
+        reply = compile_row(record['rows'][1], self.tokenizer)['prompt']['text']
+        self.assertIn('Pale Ore-Eaters', reply)
+        self.assertIn('3,true,"self","Bren Alder"', reply)
+
     def test_loss_teaches_only_actor_output_and_eos(self):
         packed = compile_row(RECORD['rows'][2], self.tokenizer)
         n = len(packed['prompt']['tokens'])

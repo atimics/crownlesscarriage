@@ -12,6 +12,12 @@ typedef struct CcCoreHeldAccount {
     CcGossipLanguage language;
 } CcCoreHeldAccount;
 
+typedef struct CcCoreKnownEvent {
+    bool available;
+    int32_t day;
+    char text[CC_EVENT_TEXT_CAPACITY];
+} CcCoreKnownEvent;
+
 typedef struct CcCoreParticipant {
     CcId id, listener_id, home_id, place_id, faction_id, bandit_id;
     char name[CC_NAME_CAPACITY], listener_name[CC_NAME_CAPACITY];
@@ -28,6 +34,7 @@ typedef struct CcCoreParticipant {
     CcCharacterMemory memories[CC_CHARACTER_MEMORY_CAPACITY];
     size_t memory_count;
     CcCharacterKnowledge knowledge[CC_CHARACTER_KNOWLEDGE_CAPACITY];
+    CcCoreKnownEvent knowledge_events[CC_CHARACTER_KNOWLEDGE_CAPACITY];
     size_t knowledge_count;
     CcCoreHeldAccount accounts[CC_MAX_GOSSIP];
     size_t account_count;
