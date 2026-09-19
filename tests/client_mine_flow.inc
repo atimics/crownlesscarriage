@@ -61,6 +61,14 @@ static int RunMineInputRegression(void)
         picked.mine.x=15; picked.mine.y=9; pick_local.mine_facing=2;
         camera=CcLocalMineCamera(&picked,pick_local.mine_facing);
         Vector2 bar=GetWorldToScreenEx((Vector3){15,.85f,10},camera,630,320);
+        int label_x=-1,label_y=-1;
+        MINE_CHECK(MineLabelPosition(surface,&picked,&pick_local,(Vector3){15,1,10},15,10,
+                                      &label_x,&label_y) &&
+            label_x>=80 && label_x<=550 && label_y>=12 && label_y<=300,
+            "The closed bar must keep a visible label inside the mine view.");
+        MINE_CHECK(!MineLabelPosition(surface,&picked,&pick_local,(Vector3){15,1,12},15,12,
+                                       &label_x,&label_y),
+            "A wall before a named target must hide its label.");
         MINE_CHECK(MinePick(&picked,&pick_local,surface,bar,&tx,&ty,&target) &&
             target==MINE_INTENT_BAR,
             "A visible bar click must name the bar rather than its floor.");

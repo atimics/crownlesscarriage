@@ -68,17 +68,24 @@ static float MineOccluderDistance(const CcSim *sim,Ray ray,float limit)
 {
     return MineOccluderDistanceExcept(sim,ray,limit,-1,-1);
 }
+static bool MineLineVisibleExcept(const CcSim *sim,Vector3 from,Vector3 to,
+                                  int32_t skip_x,int32_t skip_y);
 static bool MineLineVisible(const CcSim *sim,Vector3 from,Vector3 to)
+{
+    return MineLineVisibleExcept(sim,from,to,-1,-1);
+}
+static bool MineLineVisibleExcept(const CcSim *sim,Vector3 from,Vector3 to,
+                                  int32_t skip_x,int32_t skip_y)
 {
     float dx=to.x-from.x,dy=to.y-from.y,dz=to.z-from.z;
     float distance=sqrtf(dx*dx+dy*dy+dz*dz);
     if(distance<=.001f) return true;
     Ray ray={.position=from,.direction={dx/distance,dy/distance,dz/distance}};
-    return MineOccluderDistance(sim,ray,distance-.01f)>=distance-.01f;
+    return MineOccluderDistanceExcept(sim,ray,distance-.01f,skip_x,skip_y)>=distance-.01f;
 }
 static void MineRememberVisible(const CcSim *sim,LocalState *local)
 {
-    Vector3 eye={sim->mine.x,.55f,sim->mine.y};
+    Vector3 eye={(float)sim->mine.x,.55f,(float)sim->mine.y};
     for(int32_t y=1;y<CC_MINE_HEIGHT-1;++y) for(int32_t x=1;x<CC_MINE_WIDTH-1;++x) {
         if(CcMineWalkable(sim,sim->mine.phase,x,y) &&
            MineLineVisible(sim,eye,(Vector3){(float)x,0,(float)y}))
@@ -170,10 +177,10 @@ static bool MinePick(const CcSim *sim,const LocalState *local,
     return CcMineWalkable(sim,sim->mine.phase,*out_x,*out_y);
 }
 /* Name the things you can walk to, the way a town names its doors. */
-static void MineLabel(RenderTexture2D target, const CcSim *sim, const LocalState *local,
-                      Vector3 point, const char *text)
+static bool MineLabelPosition(RenderTexture2D target,const CcSim *sim,const LocalState *local,
+                              Vector3 point,int32_t skip_x,int32_t skip_y,int *out_x,int *out_y)
 {
-    if(target.texture.width<=0||target.texture.height<=0) return;
+    if(target.texture.width<=0||target.texture.height<=0) return false;
     Camera3D camera=CcLocalMineCamera(sim,local->mine_facing);
     /* A point behind the eye still projects to a screen position, so the
        label would float over the passage ahead. Drop it instead. */
@@ -182,14 +189,24 @@ static void MineLabel(RenderTexture2D target, const CcSim *sim, const LocalState
     Vector3 toward={point.x-camera.position.x,point.y-camera.position.y,
                     point.z-camera.position.z};
     if(gaze.x*toward.x+gaze.y*toward.y+gaze.z*toward.z<=0.0f ||
-       !MineLineVisible(sim,camera.position,point)) return;
+       !MineLineVisibleExcept(sim,camera.position,point,skip_x,skip_y)) return false;
     Vector2 pixel=GetWorldToScreenEx(point,camera,
                                      target.texture.width,target.texture.height);
     Rectangle view=MineViewport();
+    if((view.width<=0||view.height<=0) && target.texture.width>0&&target.texture.height>0)
+        view=(Rectangle){0,0,(float)target.texture.width,(float)target.texture.height};
     int x=(int)(view.x+pixel.x*view.width/(float)target.texture.width);
     int y=(int)(view.y+pixel.y*view.height/(float)target.texture.height);
     if((float)x<view.x+80 || (float)x>view.x+view.width-80 ||
-       (float)y<view.y+12 || (float)y>view.y+view.height-20) return;
+       (float)y<view.y+12 || (float)y>view.y+view.height-20) return false;
+    *out_x=x; *out_y=y;
+    return true;
+}
+static void MineLabel(RenderTexture2D target,const CcSim *sim,const LocalState *local,
+                      Vector3 point,int32_t target_x,int32_t target_y,const char *text)
+{
+    int x,y;
+    if(!MineLabelPosition(target,sim,local,point,target_x,target_y,&x,&y)) return;
     int width=CcOverlayMeasureText(text,10);
     DrawRectangle(x-width/2-5,y-4,width+10,18,Fade(BACKGROUND,.88f));
     CcOverlayDrawText(text,x-width/2,y,10,INK);
@@ -201,12 +218,12 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
     DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),BACKGROUND);
     CcLocalDrawMine3D(sim,&local->agent,local->mine_facing,target,MineViewport());
     if(underground) {
-        if(!sim->mine.bar_open) MineLabel(target,sim,local,(Vector3){15,1,10},"Wooden bar / lift it");
-        if(!sim->mine.surveyed) MineLabel(target,sim,local,(Vector3){26,.6f,4},"Workers' survey");
-        MineLabel(target,sim,local,(Vector3){5,.6f,3},"Back to the yard");
+        if(!sim->mine.bar_open) MineLabel(target,sim,local,(Vector3){15,1,10},15,10,"Wooden bar / lift it");
+        if(!sim->mine.surveyed) MineLabel(target,sim,local,(Vector3){26,.6f,4},26,4,"Workers' survey");
+        MineLabel(target,sim,local,(Vector3){5,.6f,3},5,3,"Back to the yard");
     } else {
-        MineLabel(target,sim,local,(Vector3){15,3,3},"Mine Mouth / walk in");
-        MineLabel(target,sim,local,(Vector3){18,1,19},"Carriage / pack food");
+        MineLabel(target,sim,local,(Vector3){15,3,3},15,3,"Mine Mouth / walk in");
+        MineLabel(target,sim,local,(Vector3){18,1,19},18,19,"Carriage / pack food");
     }
     CcOverlayDrawText(underground?"THE UNDERROAD / 01":"LOW SILVER PIT / MINE YARD",22,20,11,TEAL);
     CcOverlayDrawText(underground?CcMineChamberName(CcMineChamber(sim->mine.x,sim->mine.y)):"The carriage waits beside the mine road",22,43,20,INK);
