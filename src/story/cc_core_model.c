@@ -29,6 +29,8 @@ struct CcCoreModel {
     char literals[CC_CORE_FIELDS][CC_EVENT_TEXT_CAPACITY];
     char text[CC_CORE_UTTERANCE];
     size_t length;
+    bool semantic;
+    int semantic_ids[8];
 };
 
 static bool Utf8(const char *s, size_t n, uint32_t *code, size_t *width)
@@ -400,7 +402,7 @@ bool CcCoreModelBeginMind(CcCoreModel *m, const CcCoreAccount *account,
                           const CcCoreMind *mind, CcCoreControl control)
 {
     if (m == NULL) return false;
-    m->status = -1; m->text[0] = '\0'; m->length = 0U;
+    m->status = -1; m->text[0] = '\0'; m->length = 0U; m->semantic = false;
     if (account == NULL || count > CC_CORE_HISTORY || (count > 0U && history == NULL) ||
         account->field_count > CC_CORE_FIELDS || memchr(account->text, 0, sizeof(account->text)) == NULL) return false;
     int meaning = 0;
@@ -545,7 +547,7 @@ bool CcCoreModelBegin(CcCoreModel *model, const CcCoreAccount *account,
 bool CcCoreModelBeginParticipant(CcCoreModel *m, const char *prefix)
 {
     if (m == NULL) return false;
-    m->status = -1; m->text[0] = '\0'; m->length = 0U;
+    m->status = -1; m->text[0] = '\0'; m->length = 0U; m->semantic = false;
     m->prefix = 0; m->used = 0; m->actions = 0; m->candidates = 0;
     memset(m->meta, 0, sizeof(m->meta));
     static const char format[] = "crownless-person-v1\n";
@@ -560,6 +562,29 @@ bool CcCoreModelBeginParticipant(CcCoreModel *m, const char *prefix)
         if (m->tokens[i] < 9) return false;
     m->prefix = n; m->status = 0;
     return true;
+}
+
+bool CcCoreModelBeginSemantic(CcCoreModel *m, const int *ids, int count)
+{
+    if (m == NULL) return false;
+    m->status = -1; m->text[0] = '\0'; m->length = 0U; m->semantic = true;
+    m->prefix = 0; m->used = 0; m->actions = 0; m->candidates = 0;
+    memset(m->meta, 0, sizeof(m->meta));
+    if (ids == NULL || count < 2 || count > CONTEXT - MAX_ACTIONS ||
+        ids[0] != 128 || ids[count - 1] != 131) return false;
+    for (int i = 0; i < count; ++i) {
+        if (ids[i] < 9 || ids[i] >= VOCAB) return false;
+        m->tokens[i] = ids[i];
+    }
+    m->prefix = count; m->status = 0;
+    return true;
+}
+
+int CcCoreModelSemanticTokens(const CcCoreModel *m, int *ids, int capacity)
+{
+    if (m == NULL || !m->semantic || ids == NULL || capacity < m->actions) return -1;
+    memcpy(ids, m->semantic_ids, (size_t)m->actions * sizeof(int));
+    return m->actions;
 }
 
 int CcCoreModelPrefixTokens(const CcCoreModel *model, int *tokens, int capacity)
@@ -590,6 +615,7 @@ int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
             continue;
         }
         if (m->actions >= MAX_ACTIONS || m->used >= CONTEXT) { m->status = -1; break; }
+        if (m->semantic && m->actions >= 8) { m->status = -1; break; }
         float gate = Dot(m->weights[CORE_COPY_GATE], m->hidden, D) + m->weights[CORE_COPY_BIAS][0];
         int token = 0; const char *bytes = NULL; size_t length = 0U;
         if (m->candidates > 0 && gate > 0.0f) {
@@ -604,11 +630,21 @@ int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
             float best = -FLT_MAX;
             for (int i = 0; i < VOCAB; ++i) {
                 if (i >= 1 && i <= 8) continue;
+                if (m->semantic && i != 0 && !(i >= 9 && i <= 15) &&
+                    !(i >= 32 && i <= 41) && !(i >= 64 && i <= 96)) continue;
                 float score = Dot(m->weights[0] + i * D, m->hidden, D);
                 if (score > best) { best = score; token = i; }
             }
             if (token == 0) { m->status = 1; break; }
-            bytes = CORE_TOKENS[token].bytes; length = (size_t)CORE_TOKENS[token].length;
+            if (!m->semantic) {
+                bytes = CORE_TOKENS[token].bytes; length = (size_t)CORE_TOKENS[token].length;
+            }
+        }
+        if (m->semantic) {
+            static const int blank[META] = {0};
+            m->semantic_ids[m->actions++] = token;
+            Hidden(m, token, blank);
+            continue;
         }
         if (length >= sizeof(m->text) - m->length || memchr(bytes, 0, length) != NULL) { m->status = -1; break; }
         memcpy(m->text + m->length, bytes, length); m->length += length; m->text[m->length] = '\0';
@@ -618,7 +654,9 @@ int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
         static const int blank[META] = {0};
         ++m->actions; Hidden(m, token, blank);
     }
-    if (m->status == 1) {
+    if (m->status == 1 && m->semantic) {
+        if (m->actions != 3) m->status = -1;
+    } else if (m->status == 1) {
         size_t at = 0U;
         while (at < m->length) {
             uint32_t code = 0U; size_t width = 0U;
@@ -631,7 +669,7 @@ int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
 }
 const char *CcCoreModelText(const CcCoreModel *model)
 {
-    return model != NULL && model->status == 1 ? model->text : NULL;
+    return model != NULL && !model->semantic && model->status == 1 ? model->text : NULL;
 }
 const char *CcCoreModelDraft(const CcCoreModel *model)
 {
