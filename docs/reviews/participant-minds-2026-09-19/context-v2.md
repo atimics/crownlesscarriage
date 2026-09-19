@@ -33,3 +33,21 @@ chosen version in its manifest and checkpoint and requires one version across
 training and validation. Dataset reviews must be repeated after changing input
 format. Experimental workers use the current compiler's v2 input; use the earlier
 compiler with historical v1 checkpoints. The game retains its shipped checkpoint.
+
+## A new food-reserve exchange
+
+`food-teachers.json.gz` adds six original turns from independent Ilyra Senn and
+Tomas Rill sessions in world 1203, day 31. Both held a day 14 account of Gloamgate's
+food reserve. The selected source account stays in every v2 compact input, along
+with the latest speech. Three turns pass source and compact review.
+
+The accepted turns propose checking stock, asking how much is already promised,
+sharing the count, and reviewing rations against food on hand when deliveries
+might arrive late. One turn repeats an existing proposal. Two turns assert that
+the speaker has eaten based on zero hungry days. The simulation sets that field
+to zero for residents at home, so it provides weaker evidence than a recorded
+meal. Those original turns remain excluded in the archive. Future teacher
+instructions should explain this field as a recorded hunger counter.
+
+This scene has its own `1203-main-b3a8` history group. It was collected after the
+100-step experiment above and was used for source and compact review only.
