@@ -50,6 +50,27 @@ int main(int argc, char **argv)
         for (int i = 0; i < n; ++i) (void)printf("%s%d", i == 0 ? "" : " ", tokens[i]);
         (void)puts(""); return 0;
     }
+    if (argc == 5 && strcmp(argv[2], "--participant-prefix") == 0) {
+        CcCoreModel *model = CcCoreModelLoad(argv[1]);
+        if (model == NULL) return 3;
+        bool okay = CcCoreModelBeginParticipant(model, argv[3]);
+        if (okay && strcmp(argv[4], "--dump-prefix") == 0) {
+            int tokens[512];
+            int count = CcCoreModelPrefixTokens(model, tokens, 512);
+            for (int i = 0; i < count; ++i) (void)printf("%s%d", i ? " " : "", tokens[i]);
+            (void)puts("");
+        } else if (okay && strcmp(argv[4], "--dump-meta") == 0) {
+            int meta[512 * 16];
+            int count = CcCoreModelPrefixMeta(model, meta, 512 * 16);
+            for (int i = 0; i < count * 16; ++i) (void)printf("%s%d", i ? " " : "", meta[i]);
+            (void)puts("");
+        } else if (okay && strcmp(argv[4], "--generate") == 0) {
+            okay = CcCoreModelStep(model, 1024U) == 1;
+            (void)puts(CcCoreModelDraft(model));
+        } else okay = false;
+        CcCoreModelFree(model);
+        return okay ? 0 : 1;
+    }
     if (argc < 6) return 2;
     CcCoreModel *model = CcCoreModelLoad(argv[1]);
     if (model == NULL) return 3;

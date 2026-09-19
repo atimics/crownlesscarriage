@@ -542,6 +542,22 @@ bool CcCoreModelBegin(CcCoreModel *model, const CcCoreAccount *account,
                                 CcCoreControlPlain(count));
 }
 
+bool CcCoreModelBeginParticipant(CcCoreModel *m, const char *prefix)
+{
+    if (m == NULL) return false;
+    m->status = -1; m->text[0] = '\0'; m->length = 0U;
+    m->prefix = 0; m->used = 0; m->actions = 0; m->candidates = 0;
+    memset(m->meta, 0, sizeof(m->meta));
+    static const char format[] = "crownless-person-v1\n";
+    if (prefix == NULL || strncmp(prefix, format, sizeof(format) - 1U) != 0) return false;
+    int n = CcCoreModelEncode(prefix, m->tokens, CONTEXT - MAX_ACTIONS);
+    if (n <= 0) return false;
+    for (int i = 0; i < n; ++i)
+        if (m->tokens[i] < 9) return false;
+    m->prefix = n; m->status = 0;
+    return true;
+}
+
 int CcCoreModelPrefixTokens(const CcCoreModel *model, int *tokens, int capacity)
 {
     if (model == NULL || tokens == NULL || capacity < model->prefix) return -1;
@@ -612,6 +628,10 @@ int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
 const char *CcCoreModelText(const CcCoreModel *model)
 {
     return model != NULL && model->status == 1 ? model->text : NULL;
+}
+const char *CcCoreModelDraft(const CcCoreModel *model)
+{
+    return model != NULL ? model->text : NULL;
 }
 bool CcCoreModelGenerate(CcCoreModel *model, const CcCoreAccount *account,
                          CcId speaker, const CcCoreSpoken *history, size_t count,
