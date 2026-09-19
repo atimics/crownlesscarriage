@@ -144,8 +144,12 @@ static void WheelsRollWithTheRoad(void)
     printf("%.3f units of road: front rolls %.4f, rear rolls %.4f\n",
            (double)short_run, (double)(front_angle * front),
            (double)(rear_angle * rear));
-    Require(Near(front_angle * front, short_run, 0.0005f) &&
-                Near(rear_angle * rear, short_run, 0.0005f),
+    Require(Near(front_angle,
+                 CcLocalCarriageWheelAngleInternal(short_run, front),
+                 0.0005f) &&
+                Near(rear_angle,
+                     CcLocalCarriageWheelAngleInternal(short_run, rear),
+                     0.0005f),
             "both axles roll the ground the carriage crossed");
 }
 
