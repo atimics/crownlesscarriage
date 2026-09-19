@@ -17,6 +17,15 @@ static Rectangle MineViewportForInventory(int32_t width,int32_t height,bool expa
         view.y=94.0f;
         view.height=(float)height-176.0f-view.y;
     }
+    float source_aspect=(float)CC_LOCAL_ART_WIDTH/(float)CC_LOCAL_ART_HEIGHT;
+    float view_aspect=view.width/view.height;
+    if(view_aspect>source_aspect) {
+        float fitted=view.height*source_aspect;
+        view.x+=(view.width-fitted)*.5f; view.width=fitted;
+    } else {
+        float fitted=view.width/source_aspect;
+        view.y+=(view.height-fitted)*.5f; view.height=fitted;
+    }
     return view;
 }
 static Rectangle MineViewport(const LocalState *local)
