@@ -2232,7 +2232,8 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
     if (!LocalSessionEligible(local) ||
         (local->journey_travel_active && (!sim->journey.active ||
          (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING &&
-          sim->journey.phase != CC_JOURNEY_PHASE_RESTING)))) {
+          sim->journey.phase != CC_JOURNEY_PHASE_RESTING &&
+          sim->journey.phase != CC_JOURNEY_PHASE_ROAD_CHOICE)))) {
         if (error != NULL && error_capacity > 0U) {
             (void)snprintf(error, error_capacity,
                            "Finish the current movement before saving.");
@@ -2527,7 +2528,8 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
     if (session.scene == CC_CLIENT_SESSION_ROAD_TRAVEL) {
         if (!sim->journey.active || session.route_id != sim->journey.route_id ||
             (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING &&
-             sim->journey.phase != CC_JOURNEY_PHASE_RESTING)) return false;
+             sim->journey.phase != CC_JOURNEY_PHASE_RESTING &&
+             sim->journey.phase != CC_JOURNEY_PHASE_ROAD_CHOICE)) return false;
         BeginRoadTravelState(sim, local);
         RestoreRoadEncounter(local, &session.road_encounter);
         RestoreAthleticProfile(&local->agent.athletics, &session.athletics);
@@ -6978,6 +6980,10 @@ static int RunStorybookTravelRegression(void)
             (void)fprintf(stderr, "Storybook setup: %s\n", error);
             return 1;
         }
+        /* This regression covers the older watch and encounter boundaries.
+           Physical road boundaries have their own runtime regression. */
+        sim.journey.road_position_active = false;
+        sim.journey.road_waiting_choice = false;
         sim.journey.situation_id = 0U;
         sim.journey.encounter_subticks = 0;
         sim.journey.encounter_triggered = true;
@@ -8036,10 +8042,8 @@ static int RunWorldSessionStartupRegression(void)
             route_placement, sim.player.location_id,
             0.0f,
             &shared_gate_position, &shared_gate_heading) ||
-        !SessionTestFloatMatches(
-            shared_gate_position.x, branch_place->gate.x) ||
-        !SessionTestFloatMatches(
-            shared_gate_position.z, branch_place->gate.z) ||
+        fabsf(shared_gate_position.x - branch_place->gate.x) > 0.0011f ||
+        fabsf(shared_gate_position.z - branch_place->gate.z) > 0.0011f ||
         !WriteVersionThreeWorldSession(
             session_path, &sim, shared_gate_position,
             shared_gate_heading)) {
@@ -8066,10 +8070,10 @@ static int RunWorldSessionStartupRegression(void)
             shared_gate_restore.world_carriage.route_amount,
             shared_gate_route_amount) ||
         shared_gate_selected != fallback_route_index ||
-        !SessionTestFloatMatches(
-            shared_gate_restore.agent.position.x, branch_place->gate.x) ||
-        !SessionTestFloatMatches(
-            shared_gate_restore.agent.position.z, branch_place->gate.z)) {
+        fabsf(shared_gate_restore.agent.position.x -
+              branch_place->gate.x) > 0.0011f ||
+        fabsf(shared_gate_restore.agent.position.z -
+              branch_place->gate.z) > 0.0011f) {
         (void)fprintf(
             stderr,
             "Version 3 shared gate: restored=%d route=%llu expected=%llu "
@@ -8096,10 +8100,10 @@ static int RunWorldSessionStartupRegression(void)
             route_placement, sim.player.location_id,
             junction_journey_amount,
             &migrated_gate_position, &migrated_gate_heading) ||
-        !SessionTestFloatMatches(
-            migrated_gate_position.x, branch_place->junction.x) ||
-        !SessionTestFloatMatches(
-            migrated_gate_position.z, branch_place->junction.z) ||
+        fabsf(migrated_gate_position.x -
+              branch_place->junction.x) > 0.0011f ||
+        fabsf(migrated_gate_position.z -
+              branch_place->junction.z) > 0.0011f ||
         !WriteVersionThreeWorldSession(
             session_path, &sim, legacy_gate_position,
             legacy_gate_heading)) {

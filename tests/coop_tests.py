@@ -494,20 +494,59 @@ class CoopTests(unittest.TestCase):
     def test_two_players_camp_continue_and_resume_the_same_road(self):
         def apply(token, action, target='0'):
             result = self.worlds.command(self.id, token, self.command(token, action, target=target))
-            self.assertTrue(result['accepted'], result['message'])
+            self.assertTrue(result['accepted'],
+                            f"{action}: {result['message']} "
+                            f"journey={result['world']['state']['journey']} "
+                            f"road={result['world']['state']['road_position']}")
             return result['world']['state']
+        def choose_onward(token, state):
+            site = state['journey']['road_site']
+            road = state['road_position']
+            if site is not None and len(road['next_legs']) == 1:
+                return apply(token, 'road_leg', road['next_legs'][0]['token'])
+            if site is not None:
+                return apply(token, 'pass_road_site', site['id'])
+            choices = [item for item in road['next_legs']
+                       if item['direction'] == road['direction'] and
+                       item['kind'] != 3]
+            leg = choices[0] if choices else road['next_legs'][0]
+            return apply(token, 'road_leg', leg['token'])
         destination = next(t['id'] for t in self.worlds.view(self.id, self.a)['state']['travel'] if t['available'])
         apply(self.a, 'travel', destination)
         stopped = apply(self.b, 'skip_watch')
-        site = stopped['journey']['road_site']
-        self.assertIsNotNone(site)
-        self.assertEqual(apply(self.a, 'skip_watch'), stopped)
+        stale_skip = self.worlds.command(
+            self.id, self.a, self.command(self.a, 'skip_watch'))
+        self.assertFalse(stale_skip['accepted'])
+        self.assertEqual(stale_skip['world']['state'], stopped)
+        mill_visits = 0
+        for _ in range(200):
+            if (not stopped['journey']['active'] or
+                    stopped['journey']['stop'] == 2):
+                break
+            if stopped['journey']['stop'] == 1:
+                stopped = apply(self.b, 'press_on')
+            elif (stopped['journey']['road_site'] is not None or
+                    stopped['journey']['phase'] == 4):
+                mill = next((item for item in
+                             stopped['road_position']['next_legs']
+                             if item['kind'] == 3), None)
+                if mill is not None and mill_visits < 8:
+                    stopped = apply(self.b, 'road_leg', mill['token'])
+                    mill_visits += 1
+                else:
+                    stopped = choose_onward(self.b, stopped)
+            else:
+                stopped = apply(self.b, 'skip_watch')
+        self.assertTrue(stopped['journey']['active'])
+        self.assertGreater(mill_visits, 0)
+        self.assertEqual(stopped['journey']['stop'], 2)
         self.worlds.close()
         self.worlds = Worlds(self.path, self.engine)
         self.assertEqual(self.worlds.view(self.id, self.b)['state'], stopped)
-        body = self.command(self.b, 'camp_road_site', target=site['id'])
+        body = self.command(self.b, 'camp')
         camp = self.worlds.command(self.id, self.b, body)
-        self.assertTrue(camp['accepted'])
+        self.assertTrue(camp['accepted'],
+                        f"{camp['message']} {camp['world']['state']['journey']}")
         camped = camp['world']['state']
         elapsed = (camped['day'] - stopped['day']) * 1440 + camped['minute'] - stopped['minute']
         self.assertEqual(elapsed, 480)
@@ -516,16 +555,35 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(self.worlds.command(self.id, self.b, body)['world']['state'], camped)
         self.assertEqual(self.worlds.view(self.id, self.a)['state'], camped)
         next_stop = apply(self.a, 'skip_watch')
-        self.assertGreater(next_stop['journey']['progress'], stopped['journey']['progress'])
-        self.assertIsNotNone(next_stop['journey']['road_site'])
-        continued = apply(self.b, 'pass_road_site', next_stop['journey']['road_site']['id'])
+        self.assertNotEqual(
+            (next_stop['road_position']['coordinate'],
+             next_stop['road_position']['travelled'],
+             next_stop['road_position']['remaining']),
+            (camped['road_position']['coordinate'],
+             camped['road_position']['travelled'],
+             camped['road_position']['remaining']))
+        while (next_stop['journey']['phase'] != 4 and
+               next_stop['journey']['road_site'] is None):
+            if next_stop['journey']['stop'] != 0:
+                next_stop = apply(self.a, 'camp')
+            else:
+                next_stop = apply(self.a, 'skip_watch')
+        continued = choose_onward(self.b, next_stop)
         self.assertIsNone(continued['journey']['road_site'])
         self.worlds.close()
         self.worlds = Worlds(self.path, self.engine)
         self.assertEqual(self.worlds.view(self.id, self.a)['state'], continued)
         self.assertEqual(self.worlds.view(self.id, self.b)['state'], continued)
         moving = apply(self.a, 'skip_watch')
-        self.assertGreater(moving['journey']['progress'], continued['journey']['progress'])
+        self.assertEqual(moving['road_position']['journey'],
+                         continued['road_position']['journey'])
+        self.assertNotEqual(
+            (moving['road_position']['coordinate'],
+             moving['road_position']['travelled'],
+             moving['road_position']['remaining']),
+            (continued['road_position']['coordinate'],
+             continued['road_position']['travelled'],
+             continued['road_position']['remaining']))
 
     def test_failed_command_is_atomic_and_has_a_receipt(self):
         before = self.worlds.view(self.id, self.a)['state']

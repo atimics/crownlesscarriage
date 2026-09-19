@@ -65,6 +65,8 @@ static bool AdvanceToAnchor(CcSim *sim, CcId target,
             continue;
         }
         if (sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) return false;
+        if (!sim->journey.road_waiting_choice)
+            CC_CHECK(CcSimJourneyRoadSiteStop(sim) == NULL);
         if (sim->journey.road_waiting_choice) {
             const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
             if (site != NULL) {

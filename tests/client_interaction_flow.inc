@@ -34,14 +34,16 @@ static int RunRoadJourneySaveRegression(void)
             BeginRoadTravelState(&sim, &local);
         }
         if (scenario == 4) {
-            sim.journey.total_subticks = 2 * CC_WORLD_WATCH_SUBTICKS;
-            sim.journey.elapsed_subticks = CC_WORLD_WATCH_SUBTICKS;
-            sim.journey.phase = CC_JOURNEY_PHASE_RESTING;
-            sim.clock.game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND;
-            sim.carriage.mode = CC_CARRIAGE_STOPPED;
-            sim.carriage.speed_milli_per_second = 0;
-            sim.carriage.progress_milli = (int32_t)(
-                (int64_t)sim.journey.elapsed_subticks * 1000 / sim.journey.total_subticks);
+            for (int step = 0; step < 20000 &&
+                 sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING; ++step) {
+                ROAD_SAVE_CHECK(CcJournalAdvanceRuntimeTicks(
+                    journal, &sim, 1, error, sizeof(error)),
+                    "Advance to a saved road stop.");
+            }
+            ROAD_SAVE_CHECK(sim.journey.active &&
+                (sim.journey.phase == CC_JOURNEY_PHASE_RESTING ||
+                 sim.journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE),
+                "Reach a real saved road stop.");
         }
         local.agent.combat.health = 77.0f;
         local.agent.athletics.travel_training_distance = 5.5f;

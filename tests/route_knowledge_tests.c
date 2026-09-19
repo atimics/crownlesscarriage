@@ -39,16 +39,47 @@ static void AdvanceJourneyToArrival(CcSim *sim)
     while (sim->journey.active) {
         if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
             CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
-        } else if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
-            CcCommand rest = {
-                .kind = CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
-                    CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP
-            };
-            CC_CHECK(CcSimApply(sim, &rest, error, sizeof(error)));
         } else {
-            break;
+            CC_CHECK(CcTestContinueJourneyPause(
+                sim, error, sizeof(error)));
         }
     }
+}
+
+static bool ContinueJournalRoadChoice(CcJournal *journal, CcSim *sim,
+                                      char *error, size_t error_capacity)
+{
+    if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+        CcCommand resume = {
+            .kind = CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
+                CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP
+        };
+        return CcJournalApply(
+            journal, sim, &resume, error, error_capacity);
+    }
+    if (sim->journey.phase != CC_JOURNEY_PHASE_ROAD_CHOICE) return false;
+    const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+    if (site != NULL) {
+        CcCommand pass = {
+            .kind = CC_COMMAND_PASS_ROAD_SITE,
+            .target_id = site->id
+        };
+        return CcJournalApply(journal, sim, &pass, error, error_capacity);
+    }
+    CcRoadLegPreview previews[3];
+    int32_t count = CcRoadNextLegPreviews(sim, previews, 3);
+    for (int32_t i = 0; i < count; ++i) {
+        if (previews[i].direction == sim->journey.road_direction &&
+            previews[i].segment_id != CC_PILOT_ROAD_MILL_SEGMENT_ID) {
+            CcCommand choose = {
+                .kind = CC_COMMAND_CHOOSE_ROAD_LEG,
+                .target_id = previews[i].decision_token
+            };
+            return CcJournalApply(
+                journal, sim, &choose, error, error_capacity);
+        }
+    }
+    return false;
 }
 
 static void PrepareJourneyView(CcSim *sim, const CcRoute *route,
@@ -499,12 +530,15 @@ int main(void)
         &sim, road->id);
     CC_CHECK(partial != NULL);
     CC_CHECK(partial->from_reveal_milli == 280);
-    int32_t midpoint_ticks = sim.journey.total_subticks / 60;
-    while (midpoint_ticks > 0) {
-        int32_t batch = midpoint_ticks > 3600 ? 3600 : midpoint_ticks;
-        CC_CHECK(CcJournalAdvanceRuntimeTicks(
-            journal, &sim, batch, error, sizeof(error)));
-        midpoint_ticks -= batch;
+    for (int32_t step = 0;
+         step < 20000 && sim.carriage.progress_milli < 500; ++step) {
+        if (sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+            CC_CHECK(CcJournalAdvanceRuntimeTicks(
+                journal, &sim, 1, error, sizeof(error)));
+        } else {
+            CC_CHECK(ContinueJournalRoadChoice(
+                journal, &sim, error, sizeof(error)));
+        }
     }
     CC_CHECK(sim.journey.active);
     CC_CHECK(sim.carriage.progress_milli == 500);

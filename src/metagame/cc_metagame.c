@@ -283,7 +283,10 @@ static void DescribeJourney(const CcMetagame *metagame,
     const CcSettlement *destination = CcSimSettlement(sim, sim->journey.destination_id);
     const char *phase = sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ?
         "travelling" : sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED ?
-        "checkpoint encounter" : CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
+        "checkpoint encounter" :
+        sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE ?
+        "named road junction" :
+        CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
         "midday road stop" : "overnight road stop";
     Append(output, capacity, "\n%s toward %s, day %d, watch %d of %d: %s.\n",
            StoryRoadName(sim, route), destination != NULL ? destination->name : "unmarked track",
@@ -1764,6 +1767,9 @@ static bool FinishTravel(CcMetagame *metagame,
             Append(output, capacity,
                    "The afternoon watch ends beyond the road houses. Choose 'road camp' and set a lantern watch.\n");
         }
+    } else if (sim->journey.active &&
+               sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE) {
+        DescribeJourney(metagame, output, capacity);
     } else {
         const CcSettlement *place = CurrentPlace(metagame);
         if (IsNamedSettlement(sim, place, 1)) {
@@ -2853,6 +2859,11 @@ static bool AgentCommandAllowed(const CcMetagame *metagame,
     if (command == NULL) return false;
     if (metagame->sim.journey.active) {
         if (strcmp(command,"mine") == 0) return true;
+        if (strcmp(command, "road") == 0 && first != NULL &&
+            strcmp(first, "choose") == 0) {
+            return metagame->sim.journey.road_position_active &&
+                metagame->sim.journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE;
+        }
         if (strcmp(command,"road") == 0 && first != NULL && (strcmp(first,"pass") == 0 || strcmp(first,"clear") == 0 || strcmp(first,"load") == 0 || strcmp(first,"unload") == 0))
             return CcSimJourneyRoadSiteStop(&metagame->sim) != NULL;
         return strcmp(command, "look") == 0 || strcmp(command, "roads") == 0 ||
@@ -2900,7 +2911,8 @@ static bool AgentCommandAllowed(const CcMetagame *metagame,
     if (strcmp(command, "road") == 0) {
         return metagame->sim.journey.active &&
             (metagame->sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED ||
-             metagame->sim.journey.phase == CC_JOURNEY_PHASE_RESTING);
+             metagame->sim.journey.phase == CC_JOURNEY_PHASE_RESTING ||
+             metagame->sim.journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE);
     }
     if (strcmp(command, "underroad") == 0 ||
         strcmp(command, "dungeon") == 0) {

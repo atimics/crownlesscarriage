@@ -60,6 +60,7 @@ static int RunWorldCardRegression(void)
 #define CARD_CHECK(test, reason) do { if (!(test)) { \
     client_test_pointer_active = false; ClientInputClearPressed(); \
     if (journal != NULL) (void)CcJournalClose(&journal, &sim, error, sizeof(error)); \
+    (void)fprintf(stderr, "World card regression line %d: ", __LINE__); \
     (void)remove(path); return ClientRegressionFailure(reason); } } while (0)
 #define CARD_INPUT() do { HandleInput(&journal, &sim, &selected, &selected_situation, \
     &view, &return_view, &local, (RenderTexture2D){0}, (Rectangle){0}, 1.0f / 60.0f, path, "", \
@@ -292,6 +293,8 @@ static int RunWorldCardRegression(void)
             if (sim.road_sites[i].route_id == sim.journey.route_id) { site = &sim.road_sites[i]; break; }
         CARD_CHECK(site != NULL, "Fixture route needs a camp stop.");
         const CcRoute *travelling = CcSimRoute(&sim, sim.journey.route_id);
+        sim.journey.road_position_active = false;
+        sim.journey.road_waiting_choice = false;
         sim.carriage.progress_milli = travelling->from_id == sim.journey.origin_id ?
             site->progress_milli : 1000 - site->progress_milli;
         sim.journey.elapsed_subticks = (int32_t)((int64_t)sim.journey.total_subticks * sim.carriage.progress_milli / 1000);

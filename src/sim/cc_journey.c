@@ -206,11 +206,12 @@ const CcRoadSite *CcSimJourneyRoadSiteStop(const CcSim *sim)
 {
     if (sim == NULL || sim->schema_version < 39U ||
         !sim->journey.active) return NULL;
-    if (sim->journey.road_position_active &&
-        sim->journey.road_waiting_choice) {
-        for (int32_t i = 0; i < sim->road_site_count; ++i) {
-            if (sim->road_sites[i].id == sim->journey.road_anchor_id)
-                return &sim->road_sites[i];
+    if (sim->journey.road_position_active) {
+        if (sim->journey.road_waiting_choice) {
+            for (int32_t i = 0; i < sim->road_site_count; ++i) {
+                if (sim->road_sites[i].id == sim->journey.road_anchor_id)
+                    return &sim->road_sites[i];
+            }
         }
         return NULL;
     }
