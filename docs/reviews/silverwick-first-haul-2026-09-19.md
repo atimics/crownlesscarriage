@@ -38,6 +38,23 @@ Those findings were sent to the implementation workstreams. The survey's
 readable content and the town's response are checked with the later content
 change.
 
+## Road and portrait follow-up
+
+Production revision `e4956d74` loaded the same town checkpoint after the road
+save upgrade: Silverwick, day 17, 57 crowns, one Bread and one Raw Gold. Its
+WASM SHA-256 was
+`5d13bb1f991cebc1e9d177a98693be568f99823cd8879b237c056fcb94ab72bc`.
+At 390 × 844, the ordinary Board action opened the carriage. Scene details
+showed Bread 1, Raw Gold 1, load 2/12, free 10, one pony, readiness 99/100,
+and carriage condition 67/100. The manually opened details stayed open through
+scene updates. Step away and Save returned the browser's saved receipt.
+
+The corrected town action led to the Silverwick–Alderwatch road. The displayed
+left turn entered Low Silver Pit. Packing one Bread left Raw Gold 1 in the
+carriage. Clicking the visible mouth entered Gatehouse, spent the one Bread,
+and set light to 18. An observed-floor click reached the Lamp room. Reloading
+then restored the explicit day-17 town checkpoint for the final combined check.
+
 ## Timing and build receipts
 
 PR #833 merged the local diagnostic export at

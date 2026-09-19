@@ -65,7 +65,12 @@ Facing is local camera state. Turning is free. A fresh descent faces east into t
 
 The simulation owns position, collision, carried goods, elapsed time, opened passages, and the road anchor. The screen, text controls, and shared company commands use those rules. Each movement carries the current mine revision so a repeated request cannot take another step.
 
-Schema 59 introduced the mine visit and pack. Schema 103 adds finite source and cache custody. Schema 104 adds the hauler encounter, and local scene version 9 preserves its combat state. Older saves verify their original hash and replay before migration. Journal replay restores the same position, supplies, goods, and holder identities.
+Schema 59 introduced the mine visit and pack. Schema 103 adds finite source and cache custody. Schema 104 adds the hauler encounter, and local scene version 9 preserves its combat state. Schema 105 saves the pilot road's physical position. Schema 106 adds attributed mine notes, return reports, and cargo provenance through repacking and sale. Older saves verify their original hash and replay before migration. Journal replay restores the same position, supplies, goods, and holder identities.
+
+Old aggregate carriage goods retain their saved quantities. Their mine origin
+stays uncertain when the old save lacks a custody chain. An old survey keeps its
+surveyed state; rereading records the current reading date and leaves its earlier
+observation date unknown.
 
 Text controls: `mine visit`, `mine look`, `mine move north`, `mine use`, `mine pack Bread`, `mine unpack Bread`, and `road pass`.
 
