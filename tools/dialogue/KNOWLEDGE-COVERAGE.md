@@ -41,6 +41,17 @@ The act references a fact; the renderer chooses the language. The listener gets
 the communicated claim with its source and certainty, and can compare it with
 their own information. Reply references and proposal terms remain explicit.
 
+`event_facts.py` now provides the first bounded bridge. `build_facts` reads only
+the participant's `held_accounts`, gives each account a stable owner and event
+digest reference, and keeps its kind, text, source, day, confidence, and private
+flag. Knowledge records supply the simulation's `doubtful`, `told`, or
+`witnessed` certainty. `validate_act` accepts only `report`, `ask` and `warn`
+references from the current participant snapshot. Private facts stay private.
+`validate_event_registry` checks all 139 simulation event kinds, including kinds
+without an account grammar rule. The renderer quotes unparsed text with source
+and day attribution. This is a grounding and coverage bridge; it makes no claim
+about a new learned model.
+
 The current four-byte act record is suitable for its small fixed vocabulary.
 General facts and actions need additional typed records: entity references,
 quantities, dates and lists of conditions. Extend the versioned format with
