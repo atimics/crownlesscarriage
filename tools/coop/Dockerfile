@@ -10,7 +10,7 @@ COPY cmake ./cmake
 COPY tools/*.c ./tools/
 COPY tools/coop ./tools/coop
 RUN cmake -S . -B build -DCC_BUILD_CLIENT=OFF -DCC_BUILD_BENCHMARKS=OFF -DCMAKE_BUILD_TYPE=Release \
-    && cmake --build build --target coop_bridge_tests --parallel 2 \
+    && cmake --build build --target coop_bridge_tests mine_tests --parallel 2 \
     && ctest --test-dir build --output-on-failure -R '^shared_carriage_'
 
 FROM python:3.12-slim-bookworm
