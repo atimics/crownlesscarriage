@@ -19,8 +19,10 @@ static bool touch_pointer_held;
 static Vector2 touch_pointer;
 static char touch_title[128];
 static char touch_detail[512];
+static char touch_scene[24];
 static char touch_previous_title[128];
 static char touch_previous_detail[512];
+static char touch_previous_scene[24];
 static char touch_reading[8192];
 static char touch_previous_reading[8192];
 static size_t touch_reading_length;
@@ -61,8 +63,8 @@ EMSCRIPTEN_KEEPALIVE void CrownlessTouchKey(int key)
 #pragma clang diagnostic ignored "-Wstrict-prototypes"
 #pragma clang diagnostic ignored "-Wextra-semi"
 EM_JS(int, ClientTouchEnabled, (), { return !!Module.crownlessTouchEnabled; });
-EM_JS(void, ClientTouchPublishBegin, (const char *title, const char *detail, const char *reading, int revision), {
-    Module.crownlessTouchFrame = {title: UTF8ToString(title), detail: UTF8ToString(detail), reading: UTF8ToString(reading), revision, buttons: []};
+EM_JS(void, ClientTouchPublishBegin, (const char *title, const char *detail, const char *reading, const char *scene, int revision), {
+    Module.crownlessTouchFrame = {title: UTF8ToString(title), detail: UTF8ToString(detail), reading: UTF8ToString(reading), scene: UTF8ToString(scene), revision, buttons: []};
 });
 EM_JS(void, ClientTouchPublishButton, (const char *label, int enabled, int active, float x, float y, float width, float height), {
     Module.crownlessTouchFrame.buttons.push({label: UTF8ToString(label), enabled: !!enabled, active: !!active, x, y, width, height});
@@ -79,6 +81,7 @@ static void ClientTouchBegin(void)
     (void)memset(touch_buttons, 0, sizeof(touch_buttons));
     touch_title[0] = '\0';
     touch_detail[0] = '\0';
+    touch_scene[0] = '\0';
     touch_reading[0] = '\0';
     touch_reading_length = 0;
 }
@@ -100,6 +103,11 @@ static void ClientTouchHeading(const char *title, const char *detail)
     (void)snprintf(touch_detail, sizeof(touch_detail), "%s", detail);
 }
 
+static void ClientTouchScene(const char *scene)
+{
+    (void)snprintf(touch_scene, sizeof(touch_scene), "%s", scene);
+}
+
 static void ClientTouchAdd(Rectangle bounds, const char *label, bool enabled, bool active)
 {
     if (!touch_enabled || touch_count >= CLIENT_TOUCH_BUTTONS) return;
@@ -118,14 +126,16 @@ static void ClientTouchEnd(void)
     if (!buttons_changed &&
         strcmp(touch_title, touch_previous_title) == 0 &&
         strcmp(touch_detail, touch_previous_detail) == 0 &&
+        strcmp(touch_scene, touch_previous_scene) == 0 &&
         strcmp(touch_reading, touch_previous_reading) == 0) return;
     if (buttons_changed) touch_revision = touch_revision == INT32_MAX ? 1 : touch_revision + 1;
     touch_previous_count = touch_count;
     (void)memcpy(touch_previous, touch_buttons, sizeof(touch_buttons));
     (void)snprintf(touch_previous_title, sizeof(touch_previous_title), "%s", touch_title);
     (void)snprintf(touch_previous_detail, sizeof(touch_previous_detail), "%s", touch_detail);
+    (void)snprintf(touch_previous_scene, sizeof(touch_previous_scene), "%s", touch_scene);
     (void)snprintf(touch_previous_reading, sizeof(touch_previous_reading), "%s", touch_reading);
-    ClientTouchPublishBegin(touch_title, touch_detail, touch_reading, touch_revision);
+    ClientTouchPublishBegin(touch_title, touch_detail, touch_reading, touch_scene, touch_revision);
     for (int i = 0; i < touch_count; ++i) {
         Rectangle bounds = touch_buttons[i].bounds;
         ClientTouchPublishButton(touch_buttons[i].label, touch_buttons[i].enabled, touch_buttons[i].active,
@@ -137,6 +147,7 @@ static void ClientTouchEnd(void)
 static void ClientTouchBegin(void) {}
 static void ClientTouchEnd(void) {}
 static void ClientTouchHeading(const char *title, const char *detail) { (void)title; (void)detail; }
+static void ClientTouchScene(const char *scene) { (void)scene; }
 static void ClientTouchAdd(Rectangle bounds, const char *label, bool enabled, bool active)
 { (void)bounds; (void)label; (void)enabled; (void)active; }
 #endif

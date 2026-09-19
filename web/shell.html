@@ -152,6 +152,11 @@
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
           event.preventDefault();
         }
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey &&
+            event.key.toLowerCase() === "d" && Module.downloadCrownlessDiagnostics) {
+          event.preventDefault();
+          Module.downloadCrownlessDiagnostics();
+        }
       });
       canvas.addEventListener("pointerdown", function () { canvas.focus(); });
       canvas.addEventListener("webglcontextlost", function (event) {

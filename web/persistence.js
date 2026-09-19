@@ -287,6 +287,8 @@
     const campaign = FS.readFile(campaignFile);
     const hasSession = FS.analyzePath(sessionFile).exists;
     const session = hasSession ? FS.readFile(sessionFile) : null;
+    const timing = Module.crownlessDiagnostics?.begin(
+      "save", {action: "campaign"});
     setSaveStatus("saving to this browser.", "saving");
     try {
       await persistCampaign(campaign, session, false);
@@ -294,11 +296,16 @@
     } catch (error) {
       setSaveStatus("could not save. Your journal and scene remain in this tab.", "failed");
       throw error;
+    } finally {
+      Module.crownlessDiagnostics?.finish(
+        timing, {frame: Module.crownlessTouchFrame});
     }
   };
 
   Module.persistCrownlessNewCampaign = async function (campaignFile) {
     const campaign = FS.readFile(campaignFile);
+    const timing = Module.crownlessDiagnostics?.begin(
+      "save", {action: "new-campaign"});
     setSaveStatus("saving to this browser.", "saving");
     try {
       await persistCampaign(campaign, null, true);
@@ -306,6 +313,9 @@
     } catch (error) {
       setSaveStatus("could not save. Your journal and scene remain in this tab.", "failed");
       throw error;
+    } finally {
+      Module.crownlessDiagnostics?.finish(
+        timing, {frame: Module.crownlessTouchFrame});
     }
   };
 

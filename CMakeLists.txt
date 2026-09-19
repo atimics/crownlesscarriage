@@ -12,6 +12,21 @@ endif()
 
 project(crownless_carriage VERSION 0.1.0 LANGUAGES C)
 
+set(CC_BUILD_REVISION "$ENV{GITHUB_SHA}")
+if(NOT CC_BUILD_REVISION)
+    execute_process(
+        COMMAND git rev-parse --verify HEAD
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE CC_BUILD_REVISION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+endif()
+if(NOT CC_BUILD_REVISION)
+    set(CC_BUILD_REVISION "source-${PROJECT_VERSION}")
+endif()
+string(SUBSTRING "${CC_BUILD_REVISION}" 0 12 CC_BUILD_REVISION_SHORT)
+
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
@@ -341,6 +356,9 @@ if(CC_BUILD_CLIENT)
     set(BUILD_GAMES OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     if(EMSCRIPTEN)
+        set(CC_WEB_BUILD_METADATA "${CMAKE_CURRENT_BINARY_DIR}/crownless_build.js")
+        file(WRITE "${CC_WEB_BUILD_METADATA}"
+            "Module.crownlessBuild = '${CC_BUILD_REVISION_SHORT}';\n")
         set(PLATFORM Web CACHE STRING "" FORCE)
         set(OPENGL_VERSION "ES 3.0" CACHE STRING "" FORCE)
     endif()
@@ -727,7 +745,7 @@ if(CC_BUILD_CLIENT)
             SUFFIX ".html"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/site"
             LINK_DEPENDS
-                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CMAKE_CURRENT_SOURCE_DIR}/web/music.js;${CMAKE_CURRENT_SOURCE_DIR}/web/voice.js"
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/diagnostics.js;${CC_WEB_BUILD_METADATA};${CMAKE_CURRENT_SOURCE_DIR}/web/coop/avatar.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CMAKE_CURRENT_SOURCE_DIR}/web/music.js;${CMAKE_CURRENT_SOURCE_DIR}/web/voice.js"
         )
         target_compile_definitions(crownless_carriage PRIVATE PLATFORM_WEB)
         set_property(TARGET crownless_carriage PROPERTY C_EXTENSIONS ON)
@@ -748,6 +766,8 @@ if(CC_BUILD_CLIENT)
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/music.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/voice.js"
+            "--pre-js=${CC_WEB_BUILD_METADATA}"
+            "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/diagnostics.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/touch.js"
         )
     elseif(APPLE)
