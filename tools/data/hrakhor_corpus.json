@@ -1,0 +1,300 @@
+{
+  "schema": "crownless.hrakhor_corpus.v1",
+  "origin": "authored examples using simulation event formats",
+  "purpose": "language realization; one participant turn per record",
+  "scenarios": [
+    {
+      "id": "tribute",
+      "topic": "tribute",
+      "split": "train",
+      "rule": "goblin_tribute_delivered_grounded_0",
+      "fields": [
+        "The Cinder Tithe",
+        "17",
+        "Embermaw"
+      ],
+      "turns": [
+        {
+          "intent": "report",
+          "english": "The Cinder Tithe laid 17 crowns in Embermaw's hoard."
+        },
+        {
+          "intent": "ask",
+          "english": "Will the tribute keep our clan safe?"
+        },
+        {
+          "intent": "propose",
+          "english": "Let us gather food before another offering."
+        }
+      ]
+    },
+    {
+      "id": "depart",
+      "topic": "travel",
+      "split": "train",
+      "rule": "goblin_tribute_departed_grounded_0",
+      "fields": [
+        "The Cinder Tithe",
+        "Embermaw"
+      ],
+      "turns": [
+        {
+          "intent": "report",
+          "english": "The Cinder Tithe carries spoils toward Embermaw's cave."
+        },
+        {
+          "intent": "condition",
+          "english": "Only if we go in daylight."
+        },
+        {
+          "intent": "warn",
+          "english": "I fear danger near the lair."
+        }
+      ]
+    },
+    {
+      "id": "raid",
+      "topic": "raid",
+      "split": "train",
+      "rule": "goblin_raided_0",
+      "fields": [
+        "The Cinder Tithe",
+        "Thornford",
+        "20",
+        "16"
+      ],
+      "turns": [
+        {
+          "intent": "report",
+          "english": "The Cinder Tithe took 20 Wheat and 16 crowns from Thornford."
+        },
+        {
+          "intent": "ask",
+          "english": "Will the raid leave enough food for our clan?"
+        },
+        {
+          "intent": "propose",
+          "english": "I would rather trade mushrooms than go to war."
+        }
+      ]
+    },
+    {
+      "id": "brood",
+      "topic": "eggs",
+      "split": "train",
+      "rule": "dragon_brood_0",
+      "fields": [
+        "Embermaw",
+        "3"
+      ],
+      "turns": [
+        {
+          "intent": "report",
+          "english": "Embermaw laid 3 eggs. The Ashkeepers sealed the brood hoard."
+        },
+        {
+          "intent": "ask",
+          "english": "Who will guard the clutch while we gather food?"
+        },
+        {
+          "intent": "propose",
+          "english": "Let us build shelter near the cave."
+        }
+      ]
+    },
+    {
+      "id": "seed",
+      "topic": "ritual",
+      "split": "train",
+      "rule": "goblin_dragon_seed_source_0",
+      "fields": [
+        "18",
+        "Ash Hollow"
+      ],
+      "turns": [
+        {
+          "intent": "report",
+          "english": "The Ashkeepers gathered 18 crowns and grave gifts at Ash Hollow for the hidden dragon seed."
+        },
+        {
+          "intent": "ask",
+          "english": "Will our offerings bring a dragon?"
+        },
+        {
+          "intent": "express",
+          "english": "I keep ash by the shrine for those we lost."
+        }
+      ]
+    },
+    {
+      "id": "warned",
+      "topic": "defence",
+      "split": "train",
+      "rule": "goblin_target_warned_source_0",
+      "fields": [
+        "Thornford",
+        "The Cinder Tithe"
+      ],
+      "turns": [
+        {
+          "intent": "report",
+          "english": "The company warned Thornford about The Cinder Tithe."
+        },
+        {
+          "intent": "warn",
+          "english": "The food may be hidden. I fear this raid."
+        },
+        {
+          "intent": "propose",
+          "english": "Let us seek peace with the court."
+        }
+      ]
+    },
+    {
+      "id": "returned",
+      "topic": "stores",
+      "split": "train",
+      "rule": "goblin_raid_returned_grounded_0",
+      "fields": [
+        "The Cinder Tithe",
+        "Thornford"
+      ],
+      "turns": [
+        {
+          "intent": "report",
+          "english": "The Cinder Tithe returned from Thornford with Food and gear for the lair."
+        },
+        {
+          "intent": "ask",
+          "english": "Can we share the food with our friends?"
+        },
+        {
+          "intent": "express",
+          "english": "I want our clan home before daylight."
+        }
+      ]
+    },
+    {
+      "id": "trade",
+      "topic": "barter",
+      "split": "development",
+      "rule": "goblin_trade_source_0",
+      "fields": [
+        "4",
+        "Tools",
+        "12"
+      ],
+      "turns": [
+        {
+          "intent": "report",
+          "english": "Nara Soot-Tongue bought 4 Tools for 12 crowns."
+        },
+        {
+          "intent": "propose",
+          "english": "I would trade mushrooms for food."
+        },
+        {
+          "intent": "condition",
+          "english": "Only if the clan keeps enough for the eggs."
+        }
+      ]
+    },
+    {
+      "id": "retaliation",
+      "topic": "fear",
+      "split": "development",
+      "rule": "dragon_retaliation_0",
+      "fields": [
+        "Embermaw",
+        "Thornford",
+        "7"
+      ],
+      "turns": [
+        {
+          "intent": "report",
+          "english": "Embermaw burned Thornford over 7 missing crowns."
+        },
+        {
+          "intent": "express",
+          "english": "I fear the dragon more than the court."
+        },
+        {
+          "intent": "propose",
+          "english": "Let us find shelter away from the fire."
+        }
+      ]
+    },
+    {
+      "id": "intercepted",
+      "topic": "loss",
+      "split": "test",
+      "rule": "goblin_expedition_intercepted_source_0",
+      "fields": [
+        "The Cinder Tithe",
+        "Thornford",
+        "2"
+      ],
+      "turns": [
+        {
+          "intent": "report",
+          "english": "Crownless turned The Cinder Tithe back outside Thornford. 2 goblins fell."
+        },
+        {
+          "intent": "express",
+          "english": "I grieve for our friends. The clan feels small tonight."
+        },
+        {
+          "intent": "propose",
+          "english": "Let us bring food to those who came home."
+        }
+      ]
+    },
+    {
+      "id": "aftershock",
+      "topic": "remembrance",
+      "split": "test",
+      "rule": "dragon_aftershock_source_0",
+      "fields": [
+        "Embermaw",
+        "4"
+      ],
+      "turns": [
+        {
+          "intent": "report",
+          "english": "Embermaw's dragon shadow cooled to 4. The ash fields and goblin shrines remain."
+        },
+        {
+          "intent": "express",
+          "english": "I remember the fire when I pass the shrine."
+        },
+        {
+          "intent": "ask",
+          "english": "Could we build a home beyond the ash?"
+        }
+      ]
+    },
+    {
+      "id": "rumour",
+      "topic": "uncertainty",
+      "split": "test",
+      "rule": "goblin_dragon_seed_rumored_source_0",
+      "fields": [
+        "The Cinder Tithe"
+      ],
+      "turns": [
+        {
+          "intent": "report",
+          "english": "Nara Soot-Tongue says The Cinder Tithe opened an ash-vault. Any dragon seed is at least twenty years away."
+        },
+        {
+          "intent": "ask",
+          "english": "Is there an egg, or only a rumour?"
+        },
+        {
+          "intent": "express",
+          "english": "I do not know whether the offering will help."
+        }
+      ]
+    }
+  ]
+}
