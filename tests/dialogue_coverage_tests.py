@@ -1,5 +1,6 @@
 """Prove the event gate fails when the simulation and grammar drift apart."""
 import json
+import copy
 from pathlib import Path
 import shutil
 import sys
@@ -8,7 +9,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools/dialogue'))
+sys.path.insert(0, str(ROOT / 'tools'))
 from audit_grammar import check_coverage, inventory
+from compile_core_accounts import compatible_grammars
 
 
 class CoverageTests(unittest.TestCase):
@@ -62,6 +65,21 @@ class CoverageTests(unittest.TestCase):
         path.write_text(json.dumps(data))
         with self.assertRaisesRegex(ValueError, 'lack simulation source wording'):
             check_coverage(inventory(self.root))
+
+    def test_model_compatibility_requires_every_learned_rule(self):
+        data = json.loads((ROOT / 'tools/data/core_account_rules.json').read_text())
+        manifest = json.loads((ROOT / 'tools/data/core_account_compatibility.json').read_text())
+        expected = [manifest['grammars'][0]['sha256']]
+        self.assertEqual(compatible_grammars(data, manifest), expected)
+        changed = copy.deepcopy(data)
+        changed['rules'][0]['outputs'][0] += ' changed'
+        self.assertEqual(compatible_grammars(changed, manifest), [])
+        removed = copy.deepcopy(data)
+        removed['rules'].pop(0)
+        self.assertEqual(compatible_grammars(removed, manifest), [])
+        changed = copy.deepcopy(data)
+        changed['roles'].reverse()
+        self.assertEqual(compatible_grammars(changed, manifest), [])
 
 
 if __name__ == '__main__':

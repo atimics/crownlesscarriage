@@ -18,6 +18,16 @@ static const CoreRule Rules[] = {
 
 const char *CcCoreAccountGrammar(void) { return CC_CORE_GRAMMAR_SHA256; }
 
+bool CcCoreAccountGrammarCompatible(const char *hash)
+{
+    static const char *const compatible[] = CC_CORE_COMPATIBLE_GRAMMARS;
+    if (hash == NULL) return false;
+    for (size_t i = 0U; i < sizeof(compatible) / sizeof(compatible[0]); ++i) {
+        if (strcmp(hash, compatible[i]) == 0) return true;
+    }
+    return false;
+}
+
 static bool Quantity(const char *at, size_t length, uint64_t *value)
 {
     static const char *const words[] = {"zero", "one", "two", "three", "four", "five", "six",

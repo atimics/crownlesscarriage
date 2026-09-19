@@ -1235,8 +1235,8 @@
       ],
       "source": "{0} withdrawn after another power intervenes.",
       "outputs": [
-        "The company withdrew from {0} after another power intervened.",
-        "The account says the company withdrew from {0} after another power intervened."
+        "The charter for {0} was withdrawn after another power intervened.",
+        "Another power intervened and the charter for {0} was withdrawn."
       ],
       "challenge": "{0} withdrawn after another power intervenes.",
       "emitter": {
@@ -1553,7 +1553,8 @@
       },
       "allowed": {
         "2": [
-          ", and a named treasure"
+          ", and a named treasure",
+          ""
         ]
       }
     },
@@ -1795,7 +1796,7 @@
         "{0} left its lair to raid {1}, where defenders waited.",
         "Warned defenders waited at {1} for the raid from {0}."
       ],
-      "challenge": "{0} left its lair to raid {1}, where warned defenders wait.",
+      "challenge": "{0} leaves its lair to raid {1}, where warned defenders wait.",
       "emitter": {
         "file": "src/sim/cc_sim.c",
         "format": "%s leaves its lair to raid %s, where warned defenders wait."
@@ -1813,7 +1814,7 @@
         "{0} left its lair to raid {1}.",
         "The raid from {0} targeted {1}."
       ],
-      "challenge": "{0} left its lair to raid {1}.",
+      "challenge": "{0} leaves its lair to raid {1}.",
       "emitter": {
         "file": "src/sim/cc_sim.c",
         "format": "%s leaves its lair to raid %s."
@@ -1978,7 +1979,7 @@
         "{0} told the company about {1}.",
         "The company heard {1} from {0}."
       ],
-      "challenge": "The company received an account of {1} from {0}."
+      "challenge": "The Crownless company hears {0}'s account of {1}."
     },
     {
       "id": "dragon_crowned_source_0",
@@ -1993,7 +1994,7 @@
         "{0} became {1}.",
         "The dragon {0} took the stage of {1}."
       ],
-      "challenge": "The dragon named {0} became {1} because {2}."
+      "challenge": "{0} becomes {1}: {2}."
     },
     {
       "id": "dragon_hoard_recovered_source_0",
@@ -2008,7 +2009,7 @@
         "The dragon host returned recovered crowns to allied realms and brought trinkets to {2}.",
         "Recovered hoard goods reached {2} after the dragon host's return."
       ],
-      "challenge": "The host returned {0} crowns through {1} realms to {2}."
+      "challenge": "The dragon host returns {0} recovered crowns to {1} allied realms and unloads the cave's trinkets at {2}."
     },
     {
       "id": "dragon_hunt_source_0",
@@ -2023,7 +2024,7 @@
         "{0} ate spoiled stores.",
         "Spoiled stores fed {0}."
       ],
-      "challenge": "The dragon {0} consumed {1} Rotten Meat and {2} Rotten Grain while hunting."
+      "challenge": "{0} eats {1} Rotten Meat and {2} Rotten Grain, clearing the spoiled stores."
     },
     {
       "id": "dragon_uncrowned_source_0",
@@ -2038,7 +2039,7 @@
         "{0} lost its crown and became {1}.",
         "The dragon {0} became {1} after its crown failed."
       ],
-      "challenge": "The dragon named {0} became {1} because {2}."
+      "challenge": "{0} becomes {1}: {2}."
     },
     {
       "id": "dragon_whelp_dispersed_source_0",
@@ -2052,7 +2053,7 @@
         "Whelps left {1}'s brood hoard.",
         "{1}'s brood sent whelps toward distant caves."
       ],
-      "challenge": "{0} whelps left the brood hoard of {1}."
+      "challenge": "{0} whelps leave {1}'s brood hoard to seek distant caves."
     },
     {
       "id": "encounter_loot_source_0",
@@ -2063,38 +2064,38 @@
       ],
       "source": "The company strips the broken cordon: {0} {1} recovered.",
       "outputs": [
-        "The company recovered goods from the broken cordon.",
-        "Goods came from the broken cordon."
+        "The company recovered {1} from the broken cordon.",
+        "The broken cordon yielded {1} to the company."
       ],
-      "challenge": "The broken cordon yielded {0} {1}."
+      "challenge": "The company strips the broken cordon: {0} {1} recovered."
     },
     {
       "id": "front_resolved_source_0",
       "kind": "FRONT_RESOLVED",
       "roles": [
-        "actor",
+        "detail",
         "detail"
       ],
       "source": "{0} resolves: {1}.",
       "outputs": [
-        "The {0} story front resolved.",
-        "The {0} story front reached its outcome."
+        "The {0} was resolved: {1}.",
+        "The outcome of {0} was {1}."
       ],
-      "challenge": "The story front {0} resolved with {1}."
+      "challenge": "{0} resolves: {1}."
     },
     {
       "id": "front_failed_source_0",
       "kind": "FRONT_FAILED",
       "roles": [
-        "actor",
+        "detail",
         "detail"
       ],
       "source": "{0} closes without an answer: {1}.",
       "outputs": [
-        "The {0} story front failed.",
-        "The {0} story front closed without an answer."
+        "The {0} closed without an answer: {1}.",
+        "The outcome of {0} was {1}."
       ],
-      "challenge": "The story front {0} failed because {1}."
+      "challenge": "{0} closes without an answer: {1}."
     },
     {
       "id": "goblin_dragon_seed_source_0",
@@ -2108,7 +2109,7 @@
         "The Ashkeepers prepared a hidden dragon seed at {1}.",
         "A hidden dragon seed drew offerings at {1}."
       ],
-      "challenge": "The Ashkeepers gathered crowns at {1} for a hidden dragon seed."
+      "challenge": "The Ashkeepers gather {0} crowns and grave gifts at {1} for the hidden dragon seed."
     },
     {
       "id": "goblin_raid_prepared_source_0",
@@ -2123,7 +2124,7 @@
         "{0} prepared a raid against {1}.",
         "A raid against {1} was prepared by {0}."
       ],
-      "challenge": "The raiders of {0} prepared a {2} raid against {1}."
+      "challenge": "{0} scouts {1} for a {2} raid from the camp."
     },
     {
       "id": "goblin_trade_source_0",
@@ -2138,7 +2139,7 @@
         "Nara Soot-Tongue bought goods from the company.",
         "The lair bought {1} and paid the company."
       ],
-      "challenge": "The lair trade bought {1} goods for crowns."
+      "challenge": "Nara Soot-Tongue buys {0} {1} from the Crownless company for {2} crowns; the lair relies less on the dragon."
     },
     {
       "id": "journey_break_source_0",
@@ -2150,10 +2151,10 @@
       ],
       "source": "The company unloads {0} {1} into {2}.",
       "outputs": [
-        "The company changed its road stores at {2}.",
-        "Goods went into {2} during a journey break."
+        "The company unloaded {1} into {2}.",
+        "The company put {1} into {2} during a road break."
       ],
-      "challenge": "During a journey break, the company unloaded goods into {2}."
+      "challenge": "The company unloads {0} {1} into {2}."
     },
     {
       "id": "lore_recorded_source_0",
@@ -2167,21 +2168,21 @@
         "{0} joined the archive.",
         "The archive received a page from {0}."
       ],
-      "challenge": "The archive recorded lore from {0}: {1}."
+      "challenge": "{0} joins the archive. Their first page records: {1}."
     },
     {
       "id": "relationship_changed_source_0",
       "kind": "RELATIONSHIP_CHANGED",
       "roles": [
-        "actor",
-        "detail"
+        "recipient",
+        "actor"
       ],
       "source": "The player decides to tell {0} what {1} heard.",
       "outputs": [
         "The player decided to tell {0} what {1} heard.",
-        "The player decided to tell {0} what {1} heard."
+        "What {1} heard was what the player decided to tell {0}."
       ],
-      "challenge": "The player changed the relationship with {0} by telling {1}."
+      "challenge": "The player decides to tell {0} what {1} heard."
     },
     {
       "id": "courier_distorted_source_0",
@@ -2192,10 +2193,10 @@
       ],
       "source": "A corrupt mayor in {0} breaks the seal and reads it backward; the courts record {1}.",
       "outputs": [
-        "A courier message was distorted for {0}.",
-        "The courts received a distorted message at {0}."
+        "A corrupt mayor in {0} broke the seal and distorted the message.",
+        "The courts recorded {1} after a corrupt mayor in {0} distorted the message."
       ],
-      "challenge": "The source account states: A corrupt mayor in {0} breaks the seal and reads it backward; the courts record {1}."
+      "challenge": "A corrupt mayor in {0} breaks the seal and reads it backward; the courts record {1}."
     },
     {
       "id": "dragon_mustered_source_0",
@@ -2210,7 +2211,7 @@
         "{0} sent a dragon host from {1} under {2}.",
         "A dragon host left {1} under {2}, sent by {0}."
       ],
-      "challenge": "The source account states: {0} sends the host from {1} under {2}: 32 food, 8 tools, 12 weapons."
+      "challenge": "{0} sends the host from {1} under {2}: 32 food, 8 tools, 12 weapons."
     },
     {
       "id": "dragon_battle_source_0",
@@ -2225,7 +2226,7 @@
         "{0}'s host broke and survivors brought knowledge home.",
         "Survivors carried knowledge home after {0}'s host broke."
       ],
-      "challenge": "The source account states: {0}'s host breaks: {1} against {2}; survivors bring knowledge home."
+      "challenge": "{0}'s host breaks: {1} against {2}; survivors bring knowledge home."
     },
     {
       "id": "dragon_aftershock_source_0",
@@ -2236,10 +2237,10 @@
       ],
       "source": "{0}'s dragon shadow cools to {1}; abandoned vents, ash fields, and goblin shrines still shape the country.",
       "outputs": [
-        "{0}'s dragon shadow cooled after the dragon's decline.",
-        "The dragon's shadow faded while {0} remained marked by it."
+        "{0}'s dragon shadow cooled; abandoned vents, ash fields, and goblin shrines remained.",
+        "Abandoned vents, ash fields, and goblin shrines remained as {0}'s influence cooled."
       ],
-      "challenge": "The source account states: {0}'s dragon shadow cools to {1}; abandoned vents, ash fields, and goblin shrines still shape the country."
+      "challenge": "{0}'s dragon shadow cools to {1}; abandoned vents, ash fields, and goblin shrines still shape the country."
     },
     {
       "id": "dragon_successor_source_0",
@@ -2252,9 +2253,9 @@
       "source": "{0} hatches from {1}'s visible clutch; {2} siblings leave with goblins.",
       "outputs": [
         "{0} hatched from {1}'s visible clutch.",
-        "{0} hatched from {1}'s visible clutch."
+        "The visible clutch of {1} produced {0}."
       ],
-      "challenge": "The source account states: {0} hatches from {1}'s visible clutch; {2} siblings leave with goblins."
+      "challenge": "{0} hatches from {1}'s visible clutch; {2} siblings leave with goblins."
     },
     {
       "id": "encounter_withdrawn_source_0",
@@ -2267,7 +2268,7 @@
         "The carriage returned to {0} before blood was drawn.",
         "The company withdrew to {0} before the fight began."
       ],
-      "challenge": "The source account states: The Crownless carriage refuses the fight and returns to {0} before blood is drawn."
+      "challenge": "The Crownless carriage refuses the fight and returns to {0} before blood is drawn."
     },
     {
       "id": "horse_team_changed_source_0",
@@ -2282,49 +2283,49 @@
         "{0} joined the carriage team.",
         "The carriage team changed when {0} joined."
       ],
-      "challenge": "The source account states: {0} joins the carriage team; {1} is boarded at {2}."
+      "challenge": "{0} joins the carriage team; {1} is boarded at {2}."
     },
     {
       "id": "goblin_target_warned_source_0",
       "kind": "GOBLIN_TARGET_WARNED",
       "roles": [
         "place",
-        "place"
+        "actor"
       ],
       "source": "The Crownless company warns {0} about {1}; stores are hidden and defenders gather.",
       "outputs": [
         "The company warned {0} about {1}.",
-        "The company warned {0} about {1}."
+        "The warning about {1} reached {0} from the company."
       ],
-      "challenge": "The source account states: The Crownless company warns {0} about {1}; stores are hidden and defenders gather."
+      "challenge": "The Crownless company warns {0} about {1}; stores are hidden and defenders gather."
     },
     {
       "id": "goblin_expedition_intercepted_source_0",
       "kind": "GOBLIN_EXPEDITION_INTERCEPTED",
       "roles": [
-        "place",
+        "actor",
         "place",
         "quantity"
       ],
       "source": "Crownless turns {0} back outside {1}; {2} goblins fall. Survivors close ranks.",
       "outputs": [
-        "Crownless turned the expedition back outside {1}.",
-        "The goblin expedition was intercepted near {1}."
+        "Crownless turned {0} back outside {1}; survivors closed ranks.",
+        "Survivors closed ranks after Crownless turned {0} back outside {1}."
       ],
-      "challenge": "The source account states: Crownless turns {0} back outside {1}; {2} goblins fall. Survivors close ranks."
+      "challenge": "Crownless turns {0} back outside {1}; {2} goblins fall. Survivors close ranks."
     },
     {
       "id": "goblin_dragon_seed_rumored_source_0",
       "kind": "GOBLIN_DRAGON_SEED_RUMORED",
       "roles": [
-        "place"
+        "actor"
       ],
       "source": "Nara Soot-Tongue admits that {0} has opened an ash-vault; any dragon seed is at least twenty years away.",
       "outputs": [
         "Nara Soot-Tongue said that {0} had opened an ash-vault.",
-        "Nara Soot-Tongue said that {0} had opened an ash-vault."
+        "The report that {0} had opened an ash-vault came from Nara Soot-Tongue."
       ],
-      "challenge": "The source account states: Nara Soot-Tongue admits that {0} has opened an ash-vault; any dragon seed is at least twenty years away."
+      "challenge": "Nara Soot-Tongue admits that {0} has opened an ash-vault; any dragon seed is at least twenty years away."
     },
     {
       "id": "dungeon_room_entered_source_0",
@@ -2335,9 +2336,9 @@
       "source": "The company enters {0}.",
       "outputs": [
         "The company entered {0}.",
-        "The company entered {0}."
+        "The company went into {0}."
       ],
-      "challenge": "The source account states: The company enters {0}."
+      "challenge": "The company enters {0}."
     },
     {
       "id": "journey_camp_source_0",
@@ -2354,14 +2355,14 @@
       "id": "goblin_dragon_seed_prepared_source_0",
       "kind": "GOBLIN_DRAGON_SEED_PREPARED",
       "roles": [
-        "place"
+        "actor"
       ],
       "source": "{0}'s Ashkeepers begin public work on the ash-vault; Food, Tools, Weapons, coin, and relics are still required.",
       "outputs": [
         "{0}'s Ashkeepers began public work on the ash-vault.",
         "The Ashkeepers of {0} began preparing the ash-vault."
       ],
-      "challenge": "The source account states: {0}'s Ashkeepers begin public work on the ash-vault; Food, Tools, Weapons, coin, and relics are still required."
+      "challenge": "{0}'s Ashkeepers begin public work on the ash-vault; Food, Tools, Weapons, coin, and relics are still required."
     },
     {
       "id": "journey_warning_source_0",
@@ -2374,7 +2375,7 @@
         "Scouts warned of riders from {0}.",
         "Riders from {0} were seen shadowing the carriage."
       ],
-      "challenge": "The source account states: Scouts spot riders from {0} shadowing the carriage. Careful pace may lose them before the road narrows."
+      "challenge": "Scouts spot riders from {0} shadowing the carriage. Careful pace may lose them before the road narrows."
     },
     {
       "id": "ambush_evaded_source_0",
@@ -2387,7 +2388,7 @@
         "The company evaded {0}.",
         "The riders of {0} were left behind."
       ],
-      "challenge": "The source account states: The careful team leaves {0} behind on a watched side track; no cargo or crowns are lost."
+      "challenge": "The careful team leaves {0} behind on a watched side track; no cargo or crowns are lost."
     },
     {
       "id": "dungeon_expedition_began_source_0",
@@ -2401,7 +2402,7 @@
         "The company entered {1} from {0}.",
         "The Underroad expedition began at {1}."
       ],
-      "challenge": "The source account states: The company leaves the carriage at {0} and enters {1}."
+      "challenge": "The company leaves the carriage at {0} and enters {1}."
     },
     {
       "id": "dungeon_encounter_source_0",
@@ -2416,7 +2417,7 @@
         "A {0} found the company in {1}.",
         "The company met a {0} in {1}."
       ],
-      "challenge": "The source account states: A {0} finds the company in {1}; its reaction is {2}."
+      "challenge": "A {0} finds the company in {1}; its reaction is {2}."
     },
     {
       "id": "dungeon_shortcut_opened_source_0",
@@ -2439,10 +2440,10 @@
       ],
       "source": "The company recovers {0} {1} from {2}.",
       "outputs": [
-        "The company recovered goods from {2}.",
-        "Goods were recovered from {2} below the road."
+        "The company recovered {1} from {2}.",
+        "The {1} came from {2}."
       ],
-      "challenge": "The source account states: The company recovers {0} {1} from {2}."
+      "challenge": "The company recovers {0} {1} from {2}."
     },
     {
       "id": "dungeon_threshold_reached_source_0",
@@ -2455,7 +2456,7 @@
         "The company reached {0}.",
         "The company reached the Underroad threshold at {0}."
       ],
-      "challenge": "The source account states: The company reaches {0}. Heat and tribute tracks continue toward Hollowbarrow."
+      "challenge": "The company reaches {0}. Heat and tribute tracks continue toward Hollowbarrow."
     },
     {
       "id": "dungeon_expedition_ended_source_0",
@@ -2468,7 +2469,7 @@
         "The company returned to the carriage.",
         "The Underroad expedition ended with the company back at the carriage."
       ],
-      "challenge": "The source account states: The company returns to the carriage after {0} turns."
+      "challenge": "The company returns to the carriage after {0} turns."
     },
     {
       "id": "relationship_history_source_0",
@@ -2482,7 +2483,7 @@
         "{0} and {1} shared a long working history.",
         "The history between {0} and {1} was remembered."
       ],
-      "challenge": "The source account states: {0} and {1} worked together for years and still trust each other."
+      "challenge": "{0} and {1} worked together for years and still trust each other."
     },
     {
       "id": "rumor_shared_source_0",
@@ -2496,7 +2497,7 @@
         "{0} shared this gossip: \"{1}\"",
         "This was the gossip from {0}: \"{1}\""
       ],
-      "challenge": "The source account states: {0} share gossip: {1}"
+      "challenge": "{0} share gossip: {1}"
     },
     {
       "id": "fact_revealed_source_0",
@@ -2510,21 +2511,21 @@
         "The company heard {0}'s account of {1}.",
         "{0}'s account revealed {1} to the company."
       ],
-      "challenge": "The source account states: The Crownless company hears {0}'s account of {1}."
+      "challenge": "The Crownless company hears {0}'s account of {1}."
     },
     {
       "id": "front_created_source_0",
       "kind": "FRONT_CREATED",
       "roles": [
-        "actor",
+        "detail",
         "detail"
       ],
       "source": "{0} begins: {1}",
       "outputs": [
-        "{0} began: {1}",
+        "The {0} began: {1}",
         "The account of {0} began: {1}"
       ],
-      "challenge": "The source account states: {0} begins: {1}"
+      "challenge": "{0} begins: {1}"
     },
     {
       "id": "road_house_lodging_source_0",
@@ -2538,7 +2539,7 @@
         "The company lodged at {1}.",
         "The company paid for beds and stable feed at {1}."
       ],
-      "challenge": "The source account states: The company pays {0} crowns at {1}. Warm beds, stable feed, and a wheelwright make the morning safer."
+      "challenge": "The company pays {0} crowns at {1}. Warm beds, stable feed, and a wheelwright make the morning safer."
     },
     {
       "id": "royal_carriage_repair_dispatched_source_0",
@@ -2553,7 +2554,7 @@
         "The crown of {0} sent a carriage to repair the road.",
         "Repair work was dispatched from {0} toward the broken road."
       ],
-      "challenge": "The source account states: The crown of {0} sends its carriage to mend the broken {1}-{2} road."
+      "challenge": "The crown of {0} sends its carriage to mend the broken {1}-{2} road."
     },
     {
       "id": "royal_road_skirmish_source_0",
@@ -2569,7 +2570,7 @@
         "Escorts of {0} and {1} faced off and withdrew.",
         "The royal road skirmish between {0} and {1} ended with both escorts withdrawing."
       ],
-      "challenge": "The source account states: Escorts of {0} and {1} face off on the broken {2}-{3} road; both withdraw."
+      "challenge": "Escorts of {0} and {1} face off on the broken {2}-{3} road; both withdraw."
     },
     {
       "id": "body_looted_source_0",
@@ -2580,10 +2581,10 @@
       ],
       "source": "Bandits of {0} lift the unclaimed purse of {1}.",
       "outputs": [
-        "Bandits lifted the purse of {1}.",
-        "The purse of {1} was taken by bandits."
+        "Bandits of {0} lifted the unclaimed purse of {1}.",
+        "The unclaimed purse of {1} was taken by bandits of {0}."
       ],
-      "challenge": "The source account states: Bandits of {0} lift the unclaimed purse of {1}."
+      "challenge": "Bandits of {0} lift the unclaimed purse of {1}."
     },
     {
       "id": "quest_progress_grounded_0",
@@ -2595,7 +2596,7 @@
       ],
       "source": "{0} progresses to {1} of {2} with recorded evidence.",
       "outputs": [
-        "{0} advanced with recorded evidence.",
+        "Progress was recorded for {0}.",
         "Recorded evidence advanced {0}."
       ],
       "challenge": "{0} progresses to {1} of {2} with recorded evidence.",

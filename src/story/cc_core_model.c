@@ -177,7 +177,7 @@ CcCoreModel *CcCoreModelLoad(const char *path)
     (void)fclose(file);
     uint64_t hash = UINT64_C(14695981039346656037);
     if (valid) for (size_t i = 0U; i < CORE_FILE_SIZE; ++i) hash = (hash ^ raw[i]) * UINT64_C(1099511628211);
-    if (!valid || hash != CORE_FILE_HASH || strcmp(CORE_GRAMMAR, CcCoreAccountGrammar()) != 0) { free(raw); return NULL; }
+    if (!valid || hash != CORE_FILE_HASH || !CcCoreAccountGrammarCompatible(CORE_GRAMMAR)) { free(raw); return NULL; }
     CcCoreModel *model = calloc(1U, sizeof(*model));
     if (model == NULL) { free(raw); return NULL; }
     for (int i = 0; i < TENSORS; ++i) {

@@ -82,3 +82,11 @@ that grounding gap.
 Suggested order: owned fact references and reports; needs and typed trade;
 promises and remembered outcomes; relationship exchanges; then witnessed harm
 and grief after the simulation records the required personal events.
+
+## Checkpoint compatibility
+
+The shipped checkpoint knows 61 named rules. The compiler verifies hashes for
+those exact rules and their role layout before it accepts the old grammar hash.
+Adding rules preserves that compatibility. Changing a learned rule removes
+compatibility until a suitable checkpoint is supplied. New rule IDs use the
+procedural account renderer; the old checkpoint continues to use its learned IDs.
