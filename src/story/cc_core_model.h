@@ -7,6 +7,7 @@
 typedef struct CcCoreModel CcCoreModel;
 typedef struct CcCoreSpoken {
     CcId speaker;
+    CcId source_event_id; /* Event supplied by the simulation for this turn. */
     char text[CC_CORE_UTTERANCE];
 } CcCoreSpoken;
 

@@ -15,3 +15,12 @@ if(CC_BUILD_CLIENT AND NOT EMSCRIPTEN)
     add_test(NAME core_model_game_conversation COMMAND crownless_carriage
         --test-core-language ${CMAKE_CURRENT_SOURCE_DIR}/assets/language/core.ccv2)
 endif()
+add_executable(core_participant_tests tests/core_participant_tests.c)
+target_link_libraries(core_participant_tests PRIVATE crownless_story)
+cc_strict_warnings(core_participant_tests)
+add_test(NAME core_participant_grounding COMMAND core_participant_tests)
+if(CC_PYTHON3_EXECUTABLE)
+    add_test(NAME paired_participant_protocol COMMAND ${CC_PYTHON3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/paired_participant_tests.py
+        $<TARGET_FILE:crownless_participant_probe>)
+endif()

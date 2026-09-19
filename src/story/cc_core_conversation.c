@@ -12,59 +12,41 @@ void CcCoreConversationReset(CcCoreConversation *c)
     *c = (CcCoreConversation){0}; c->model = model;
 }
 
-/* What the corpus answers with. The four rows below are measured over the 904
-   turns of crownless-moves-v2 whose preceding move can be identified: after
-   hedge it settles or defers evenly (416 turns), after settle it parts every
-   time (208), after answer it remarks, recalls, disputes or affirms (156), and
-   after open it affirms about half the time (124). Four slots per row
-   approximate those shares.
-
-   The remaining rows are authored from what each move does, because the
-   corpus's other turns are questions rather than moves and cannot be
-   classified. They carry the same arc the measured ones do: an account is
-   given, it is corroborated or disputed, its certainty and source are pressed,
-   and then the exchange is closed and left. */
-static const CcCoreControl MOVE_REPLIES[CC_CORE_CONTROL_COUNT][4] = {
-    [CC_CORE_CONTROL_OPEN] = {CC_CORE_CONTROL_AFFIRM, CC_CORE_CONTROL_AFFIRM,
-                              CC_CORE_CONTROL_REMARK, CC_CORE_CONTROL_DISPUTE},
-    [CC_CORE_CONTROL_ANSWER] = {CC_CORE_CONTROL_REMARK, CC_CORE_CONTROL_RECALL,
-                                CC_CORE_CONTROL_DISPUTE, CC_CORE_CONTROL_AFFIRM},
-    [CC_CORE_CONTROL_HEDGE] = {CC_CORE_CONTROL_SETTLE, CC_CORE_CONTROL_DEFER,
-                               CC_CORE_CONTROL_SETTLE, CC_CORE_CONTROL_DEFER},
-    [CC_CORE_CONTROL_SETTLE] = {CC_CORE_CONTROL_PART, CC_CORE_CONTROL_PART,
-                                CC_CORE_CONTROL_PART, CC_CORE_CONTROL_PART},
-    [CC_CORE_CONTROL_AFFIRM] = {CC_CORE_CONTROL_HEDGE, CC_CORE_CONTROL_REMARK,
-                                CC_CORE_CONTROL_HEDGE, CC_CORE_CONTROL_ATTRIBUTE},
-    [CC_CORE_CONTROL_DISPUTE] = {CC_CORE_CONTROL_ATTRIBUTE, CC_CORE_CONTROL_HEDGE,
-                                 CC_CORE_CONTROL_ATTRIBUTE, CC_CORE_CONTROL_HEDGE},
-    [CC_CORE_CONTROL_ATTRIBUTE] = {CC_CORE_CONTROL_HEDGE, CC_CORE_CONTROL_DEFER,
-                                   CC_CORE_CONTROL_HEDGE, CC_CORE_CONTROL_DEFER},
-    [CC_CORE_CONTROL_DEFER] = {CC_CORE_CONTROL_SETTLE, CC_CORE_CONTROL_SETTLE,
-                               CC_CORE_CONTROL_SETTLE, CC_CORE_CONTROL_SETTLE},
-    [CC_CORE_CONTROL_REMARK] = {CC_CORE_CONTROL_ATTRIBUTE, CC_CORE_CONTROL_HEDGE,
-                                CC_CORE_CONTROL_ATTRIBUTE, CC_CORE_CONTROL_HEDGE},
-    [CC_CORE_CONTROL_RECALL] = {CC_CORE_CONTROL_REMARK, CC_CORE_CONTROL_HEDGE,
-                                CC_CORE_CONTROL_REMARK, CC_CORE_CONTROL_HEDGE},
-    [CC_CORE_CONTROL_MUSE] = {CC_CORE_CONTROL_OPEN, CC_CORE_CONTROL_OPEN,
-                              CC_CORE_CONTROL_OPEN, CC_CORE_CONTROL_OPEN},
-    /* Parting is the end of it; a speaker who has said goodbye says it again
-       rather than reopening the subject. */
-    [CC_CORE_CONTROL_PART] = {CC_CORE_CONTROL_PART, CC_CORE_CONTROL_PART,
-                              CC_CORE_CONTROL_PART, CC_CORE_CONTROL_PART},
-};
-
 CcCoreControl CcCoreConversationNextMove(const CcCoreConversation *c, CcId speaker)
 {
-    if (c == NULL) return CC_CORE_CONTROL_OPEN;
-    if (!c->has_last_move || c->count == 0U) return CC_CORE_CONTROL_OPEN;
-    if (c->last_move < CC_CORE_CONTROL_OPEN || c->last_move >= CC_CORE_CONTROL_COUNT)
+    if (c == NULL || c->count == 0U) return CC_CORE_CONTROL_OPEN;
+    const CcCoreSpoken *last = &c->history[c->count - 1U];
+    if (last->speaker != speaker && strchr(last->text, '?') != NULL)
         return CC_CORE_CONTROL_ANSWER;
-    /* Deterministic in the speaker and the turn, so a replayed conversation
-       takes the same path without drawing on any shared generator. */
-    uint64_t hash = UINT64_C(14695981039346656037);
-    hash = (hash ^ (uint64_t)speaker) * UINT64_C(1099511628211);
-    hash = (hash ^ (uint64_t)c->count) * UINT64_C(1099511628211);
-    return MOVE_REPLIES[c->last_move][(hash >> 32) & 3U];
+    return CC_CORE_CONTROL_REMARK;
+}
+
+/* A correction needs a differing spoken field in a recognised account.
+   Matching claims invite a personal response. The next model can select
+   richer intents using the participant view and its own observed turns. */
+CcCoreControl CcCoreConversationReplyMove(const CcCoreConversation *c,
+                                         const CcCoreAccount *own, CcId event, CcId speaker)
+{
+    CcCoreControl move = CcCoreConversationNextMove(c, speaker);
+    if (c == NULL || c->count == 0U || own == NULL || own->field_count > CC_CORE_FIELDS || move == CC_CORE_CONTROL_ANSWER)
+        return move;
+    const CcCoreSpoken *last = &c->history[c->count - 1U];
+    CcCoreAccount heard;
+    if (event == 0U || last->source_event_id != event || last->speaker == speaker ||
+        !CcCoreAccountParseKind(CcCoreAccountKind(own), last->text, &heard) ||
+        heard.rule_index != own->rule_index || heard.field_count != own->field_count)
+        return move;
+    for (size_t i = 0; i < own->field_count; ++i) {
+        const CcCoreField *a = &own->fields[i], *b = &heard.fields[i];
+        if (a->start >= sizeof(own->text) || a->length >= sizeof(own->text) - a->start) return move;
+        if (!a->spoken || !b->spoken || a->knowledge != CC_CORE_KNOWN ||
+            a->length == 0U || b->length == 0U) continue;
+        if (a->length != b->length) return CC_CORE_CONTROL_DISPUTE;
+        for (size_t j = 0; j < a->length; ++j)
+            if (tolower((unsigned char)own->text[a->start + j]) !=
+                tolower((unsigned char)heard.text[b->start + j])) return CC_CORE_CONTROL_DISPUTE;
+    }
+    return move;
 }
 
 /* Words long enough to be names or content, matched case-insensitively. The
@@ -110,20 +92,21 @@ const char *CcCoreMemoryShare(const CcCoreMind *mind, const CcCoreSpoken *histor
     return best;
 }
 
-static void Remember(CcCoreConversation *c, CcId speaker, const char *text){
+static void Remember(CcCoreConversation *c, CcId speaker, CcId event, const char *text){
     if (text == NULL || text[0] == '\0' || strlen(text) >= CC_CORE_UTTERANCE) return;
     if (c->count == CC_CORE_HISTORY) {
         memmove(c->history, c->history + 1, (CC_CORE_HISTORY - 1U) * sizeof(c->history[0]));
         --c->count;
     }
     c->history[c->count].speaker = speaker;
+    c->history[c->count].source_event_id = event;
     (void)snprintf(c->history[c->count].text, sizeof(c->history[0].text), "%s", text);
     ++c->count;
 }
 void CcCoreConversationHear(CcCoreConversation *c, CcId speaker, const char *text)
 {
     if (c == NULL) return;
-    Remember(c, speaker, text); c->cached = false; c->pending = false;
+    Remember(c, speaker, 0U, text); c->cached = false; c->pending = false;
 }
 
 bool CcCoreConversationPrepareMind(CcCoreConversation *c, const CcCoreAccount *account,
@@ -156,7 +139,7 @@ bool CcCoreConversationPrepare(CcCoreConversation *c, const CcCoreAccount *accou
                                CcSpeech *speech)
 {
     return CcCoreConversationPrepareMind(c, account, NULL,
-        CcCoreConversationNextMove(c, speech->speaker_id), speech);
+        CcCoreConversationReplyMove(c, account, speech->source_event_id, speech->speaker_id), speech);
 }
 
 void CcCoreConversationStep(CcCoreConversation *c, unsigned int budget)
@@ -179,7 +162,7 @@ void CcCoreConversationStep(CcCoreConversation *c, unsigned int budget)
                 c->original.speaker, c->original.voice_index, words,
                 c->original.delivery, c->original.priority, c->original.source_event_id)) c->reply = generated;
     }
-    Remember(c, c->reply.speaker_id, memory_text != NULL ? memory_text : c->reply.text);
+    Remember(c, c->reply.speaker_id, c->reply.source_event_id, memory_text != NULL ? memory_text : c->reply.text);
     if (c->round_phase == 1U) {
         c->player_line = c->reply;
         c->player_seconds = 2.0f + (float)strlen(c->player_line.text) / 16.0f;
@@ -188,9 +171,9 @@ void CcCoreConversationStep(CcCoreConversation *c, unsigned int budget)
         CcSpeech listener = c->listener_line;
         (void)CcCoreConversationPrepareMind(c, &c->listener_account,
             c->listener_has_mind ? &c->listener_mind : NULL,
-            CcCoreConversationNextMove(c, listener.speaker_id), &listener);
+            CcCoreConversationReplyMove(c, &c->listener_account, listener.source_event_id, listener.speaker_id), &listener);
         if (!c->pending) {
-            Remember(c, c->reply.speaker_id, c->reply.text);
+            Remember(c, c->reply.speaker_id, c->reply.source_event_id, c->reply.text);
             c->round_phase = 3U;
         }
     } else if (c->round_phase == 2U) c->round_phase = 3U;
@@ -233,7 +216,7 @@ bool CcCoreConversationStartRoundMind(CcCoreConversation *c,
     c->cached = false;
     CcSpeech first = *player;
     if (!CcCoreConversationPrepareMind(c, player_account, player_mind,
-            CcCoreConversationNextMove(c, first.speaker_id), &first) || !c->pending) return false;
+            CcCoreConversationReplyMove(c, player_account, first.source_event_id, first.speaker_id), &first) || !c->pending) return false;
     c->round_phase = 1U;
     c->round_shown = true;
     return true;

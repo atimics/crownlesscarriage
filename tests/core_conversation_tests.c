@@ -120,6 +120,33 @@ int main(int argc, char **argv)
     CC_CHECK(CcCoreMemoryShare(&mind, talk, 1U, true) == mind.memories[0]);
     (void)snprintf(talk[0].text, sizeof(talk[0].text), "Nothing here concerns any of it.");
     CC_CHECK(CcCoreMemoryShare(&mind, talk, 1U, true) == NULL);
+    /* Identical accounts invite a response, including after a previous dispute.
+       A changed place in a recognised claim is a genuine correction. */
+    CcCoreConversationReset(&conversation);
+    CcCoreAccount dragon;
+    CC_CHECK(CcCoreAccountPrepare(CC_EVENT_DRAGON_RETALIATION,
+        "Varkesh the Unappeased burns Gloamgate because 17 stolen crowns remain missing.",
+        93, 1, &dragon));
+    CC_CHECK(CcCoreConversationReplyMove(&conversation, &dragon, 42U, 2U) == CC_CORE_CONTROL_OPEN);
+    CcCoreConversationHear(&conversation, 1U,
+        "Varkesh the Unappeased burned Gloamgate over money missing from the hoard.");
+    conversation.history[conversation.count - 1U].source_event_id = 42U;
+    conversation.last_move = CC_CORE_CONTROL_DISPUTE;
+    conversation.has_last_move = true;
+    CC_CHECK(CcCoreConversationReplyMove(&conversation, &dragon, 42U, 2U) == CC_CORE_CONTROL_REMARK);
+    CcCoreConversationHear(&conversation, 1U,
+        "Varkesh the Unappeased burned Rosespire over money missing from the hoard.");
+    CC_CHECK(CcCoreConversationReplyMove(&conversation, &dragon, 42U, 2U) == CC_CORE_CONTROL_REMARK);
+    conversation.history[conversation.count - 1U].source_event_id = 43U;
+    CC_CHECK(CcCoreConversationReplyMove(&conversation, &dragon, 42U, 2U) == CC_CORE_CONTROL_REMARK);
+    conversation.history[conversation.count - 1U].source_event_id = 42U;
+    CC_CHECK(CcCoreConversationReplyMove(&conversation, &dragon, 42U, 2U) == CC_CORE_CONTROL_DISPUTE);
+    dragon.fields[1].knowledge = CC_CORE_UNCERTAIN;
+    CC_CHECK(CcCoreConversationReplyMove(&conversation, &dragon, 42U, 2U) == CC_CORE_CONTROL_REMARK);
+    CcCoreConversationHear(&conversation, 1U, "What happened at Gloamgate?");
+    CC_CHECK(CcCoreConversationReplyMove(&conversation, &dragon, 42U, 2U) == CC_CORE_CONTROL_ANSWER);
+    CcCoreConversationHear(&conversation, 1U, "I should help them rebuild.");
+    CC_CHECK(CcCoreConversationReplyMove(&conversation, &dragon, 42U, 2U) == CC_CORE_CONTROL_REMARK);
     CcCoreModelFree(conversation.model);
     return 0;
 }

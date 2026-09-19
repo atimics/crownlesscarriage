@@ -26,9 +26,11 @@ typedef struct CcCoreConversation {
     bool has_last_move;
 } CcCoreConversation;
 
-/* The move that follows the one just spoken. A conversation that cues the same
-   move every turn gets the same answer every turn; this is what stops that. */
+/* Select an opening, answer or personal reaction from the received turn. */
 CcCoreControl CcCoreConversationNextMove(const CcCoreConversation *conversation, CcId speaker);
+/* Select a correction when a recognised claim differs from this person's account. */
+CcCoreControl CcCoreConversationReplyMove(const CcCoreConversation *conversation,
+                                         const CcCoreAccount *account, CcId event, CcId speaker);
 /* A memory to share into the conversation: the held memory that names
    something the conversation named, or NULL when none does or the speaker is
    unwilling. Willingness is the speaker's trust in the listener, decided by the
