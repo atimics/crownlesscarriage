@@ -4,6 +4,12 @@ cc_strict_warnings(sim_tests)
 cc_large_sim_stack(sim_tests)
 add_test(NAME deterministic_simulation COMMAND sim_tests)
 
+add_executable(road_position_tests tests/road_position_tests.c)
+target_link_libraries(road_position_tests PRIVATE crownless_sim)
+cc_strict_warnings(road_position_tests)
+cc_large_sim_stack(road_position_tests)
+add_test(NAME saved_road_position COMMAND road_position_tests)
+
 add_executable(story_tests tests/story_tests.c)
 target_link_libraries(story_tests PRIVATE crownless_story)
 cc_strict_warnings(story_tests)

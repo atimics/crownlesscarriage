@@ -111,6 +111,7 @@ add_library(crownless_sim
     src/sim/cc_active_cast.c
     src/sim/cc_road_council.c
     src/sim/cc_route_rules.c
+    src/sim/cc_road_position.c
     src/sim/cc_journey_departure.c
     src/sim/cc_journey_encounter.c
     src/sim/cc_journey_runtime.c
