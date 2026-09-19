@@ -19,6 +19,7 @@ from typing import Any, Iterable, Mapping
 ROOT = Path(__file__).resolve().parents[2]
 SIM_ENUM = ROOT / "src" / "sim" / "cc_sim.h"
 ACTS = frozenset(("report", "ask", "warn"))
+KNOWLEDGE_CERTAINTY = {1: "doubtful", 2: "told", 3: "witnessed"}
 
 
 def _read_registry() -> dict[str, int]:
@@ -85,6 +86,12 @@ def _id(value: Any, label: str) -> str:
     raise ValueError(f"{label} needs a stable non-zero ID")
 
 
+def _source_id(value: Any) -> str:
+    if value is None or value == 0 or value == "0":
+        return "unknown"
+    return _id(value, "source_id")
+
+
 def _score(account: Mapping[str, Any], name: str) -> int | None:
     if name not in account:
         return None
@@ -104,7 +111,8 @@ class EventFact:
     kind_name: str
     text: str
     source_id: str
-    certainty: int | None
+    certainty: str | None
+    certainty_value: int | None
     confidence: int | None
     day: int
     private: bool
@@ -114,31 +122,35 @@ class EventFact:
         return asdict(self)
 
 
-def _fact_from_account(owner_id: str, account: Mapping[str, Any]) -> EventFact:
+def _fact_from_account(owner_id: str, account: Mapping[str, Any], knowledge: Mapping[str, Any] | None) -> EventFact:
     event_id = _id(account.get("event_id"), "event_id")
-    source_id = _id(account.get("source_id", account.get("source_character_id")), "source_id")
+    source_id = _source_id(account.get("source_id", account.get("source_character_id")))
     kind = event_kind_value(account.get("kind"))
     text = account.get("account", account.get("text", ""))
-    if not isinstance(text, str) or not text.strip() or "\0" in text:
-        raise ValueError("account text must be non-empty UTF-8 text")
+    if (not isinstance(text, str) or not text.strip() or
+            any(ord(char) < 32 for char in text) or len(text.encode("utf-8")) >= 144):
+        raise ValueError("account text must be printable UTF-8 text under 144 bytes")
     day = account.get("day")
     if isinstance(day, bool) or not isinstance(day, int) or day < 0:
         raise ValueError("day must be a non-negative integer")
-    private = account.get("private", account.get("private_knowledge", False))
+    private = knowledge.get("private", knowledge.get("private_knowledge", False)) if knowledge else account.get("private", account.get("private_knowledge", False))
     if not isinstance(private, bool):
         raise ValueError("private must be boolean")
-    parser_supported = account.get("parser_supported", False)
-    if not isinstance(parser_supported, bool):
-        raise ValueError("parser_supported must be boolean")
-    certainty = _score(account, "certainty")
+    # A caller supplied parser flag is not evidence. This bridge quotes held
+    # text until the native account grammar proves a parse.
+    parser_supported = False
+    certainty_value = knowledge.get("certainty") if knowledge else None
+    if certainty_value is not None and certainty_value not in KNOWLEDGE_CERTAINTY:
+        raise ValueError("certainty must be doubtful, told or witnessed")
+    certainty = KNOWLEDGE_CERTAINTY.get(certainty_value)
     confidence = _score(account, "confidence")
     digest_input = {"owner_id": owner_id, "event_id": event_id, "kind": kind,
-                    "text": text, "source_id": source_id, "certainty": certainty,
+                    "text": text, "source_id": source_id, "certainty": certainty_value,
                     "confidence": confidence,
                     "day": day, "private": private}
     digest = hashlib.sha256(json.dumps(digest_input, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return EventFact(owner_id, event_id, "fact:" + digest[:24], digest, kind,
-                     event_kind_name(kind), text, source_id, certainty, confidence, day,
+                     event_kind_name(kind), text, source_id, certainty, certainty_value, confidence, day,
                      private, parser_supported)
 
 
@@ -152,7 +164,11 @@ def build_facts(participant: Mapping[str, Any]) -> list[EventFact]:
     accounts = participant.get("held_accounts", [])
     if not isinstance(accounts, list):
         raise ValueError("held_accounts must be a list")
-    facts = [_fact_from_account(owner_id, item) for item in accounts
+    knowledge_by_event = {}
+    for item in participant.get("knowledge", []):
+        if isinstance(item, Mapping) and item.get("event_id") is not None:
+            knowledge_by_event[str(item["event_id"])] = item
+    facts = [_fact_from_account(owner_id, item, knowledge_by_event.get(str(item.get("event_id")))) for item in accounts
              if isinstance(item, Mapping)]
     if len(facts) != len(accounts):
         raise ValueError("each held account must be an object")
@@ -168,7 +184,7 @@ def fact_for_ref(facts: Iterable[EventFact], account_ref: str) -> EventFact:
     raise ValueError("fact reference is not owned by the participant")
 
 
-def validate_act(act: Mapping[str, Any], facts: Iterable[EventFact] | Mapping[str, Any], listener_id: Any = None) -> EventFact:
+def validate_act(act: Mapping[str, Any], participant: Mapping[str, Any], listener_id: Any = None) -> EventFact:
     """Validate report, ask and warn acts against the participant's own facts."""
     if not isinstance(act, Mapping) or act.get("kind") not in ACTS:
         raise ValueError("act kind must be report, ask or warn")
@@ -176,22 +192,22 @@ def validate_act(act: Mapping[str, Any], facts: Iterable[EventFact] | Mapping[st
         raise ValueError("act has unknown fields")
     if not isinstance(act.get("fact_ref"), str):
         raise ValueError("fact_ref is required")
-    current = build_facts(facts) if isinstance(facts, Mapping) else list(facts)
+    if not isinstance(participant, Mapping):
+        raise ValueError("act validation needs the current participant snapshot")
+    current = build_facts(participant)
     fact = fact_for_ref(current, act["fact_ref"])
     if fact.private and (listener_id is None or _id(listener_id, "listener_id") != fact.owner_id):
         raise ValueError("private fact cannot be disclosed to this listener")
     return fact
 
 
-def render_fact_act(act: Mapping[str, Any], facts: Iterable[EventFact], listener_id: Any = None) -> str:
+def render_fact_act(act: Mapping[str, Any], participant: Mapping[str, Any], listener_id: Any = None) -> str:
     """Render a bounded, attributed claim after act validation."""
-    fact = validate_act(act, facts, listener_id)
-    source = "the source" if fact.source_id == fact.owner_id else "person " + fact.source_id
-    certainty = "I have heard"
-    if fact.certainty is not None:
-        certainty = "I have a high-confidence account" if fact.certainty >= 80 else "I have an account with some confidence" if fact.certainty >= 50 else "I have an uncertain account"
+    fact = validate_act(act, participant, listener_id)
+    source = "an unknown source" if fact.source_id == "unknown" else ("my own account" if fact.source_id == fact.owner_id else "person " + fact.source_id)
+    certainty = "I have heard this" if fact.certainty is None else "I was told this" if fact.certainty == "told" else "I witnessed this" if fact.certainty == "witnessed" else "I have a doubtful account"
+    quoted = '"' + fact.text.replace('"', "'") + '"'
     if act["kind"] == "ask":
-        return f"Do you know about the account from {source}?"
+        return f"Do you know this account from {source}: {quoted}?"
     prefix = "Be warned" if act["kind"] == "warn" else certainty
-    claim = fact.text if fact.parser_supported else "something happened, but I have only an unparsed account"
-    return f"{prefix}: {claim} (from {source}, on day {fact.day})"
+    return f"{prefix}: {quoted} (an unparsed account from {source}, on day {fact.day})"

@@ -25,6 +25,12 @@ def account(**changes):
     return value
 
 
+def with_knowledge(value, **changes):
+    result = copy.deepcopy(value)
+    result["knowledge"] = [{"event_id": value["held_accounts"][0]["event_id"], **changes}]
+    return result
+
+
 class EventFactsTests(unittest.TestCase):
     def test_registry_has_every_sim_kind(self):
         receipt = validate_event_registry()
@@ -32,11 +38,12 @@ class EventFactsTests(unittest.TestCase):
         self.assertEqual(sorted(v for v in EVENT_KIND_REGISTRY.values()), list(range(139)))
 
     def test_facts_use_held_accounts_and_keep_fields(self):
-        fact = build_facts(participant(account(kind=0, confidence=73, private=True)))[0]
+        fact = build_facts(with_knowledge(participant(account(kind=0, confidence=73)), certainty=2, private=True))[0]
         self.assertEqual(fact.kind, 0)
         self.assertEqual(fact.text, "A purse was lifted.")
         self.assertEqual(fact.source_id, "22")
-        self.assertIsNone(fact.certainty)
+        self.assertEqual(fact.certainty, "told")
+        self.assertEqual(fact.certainty_value, 2)
         self.assertEqual(fact.confidence, 73)
         self.assertEqual(fact.day, 8)
         self.assertTrue(fact.private)
@@ -44,43 +51,63 @@ class EventFactsTests(unittest.TestCase):
         self.assertEqual(len(fact.account_digest), 64)
 
     def test_reference_is_stable_and_owner_bound(self):
-        first = build_facts(participant(account()))[0]
-        second = build_facts(participant(account()))[0]
+        first = build_facts(participant(account(source_id="0")))[0]
+        second = build_facts(participant(account(source_id="0")))[0]
         self.assertEqual(first.account_ref, second.account_ref)
         altered = build_facts(participant(account(account="A different account.")))[0]
         self.assertNotEqual(first.account_ref, altered.account_ref)
         with self.assertRaisesRegex(ValueError, "owned"):
-            validate_act({"kind": "report", "fact_ref": "fact:foreign"}, [first])
+            validate_act({"kind": "report", "fact_ref": "fact:foreign"}, participant(account()))
 
     def test_private_facts_cannot_be_disclosed(self):
-        fact = build_facts(participant(account(private=True)))[0]
+        current = with_knowledge(participant(account()), certainty=1, private=True)
+        fact = build_facts(current)[0]
         with self.assertRaisesRegex(ValueError, "private"):
-            render_fact_act({"kind": "report", "fact_ref": fact.account_ref}, [fact], "18")
+            render_fact_act({"kind": "report", "fact_ref": fact.account_ref}, current, "18")
         self.assertIn("unparsed account", render_fact_act(
-            {"kind": "report", "fact_ref": fact.account_ref}, [fact], "17"))
+            {"kind": "report", "fact_ref": fact.account_ref}, current, "17"))
 
     def test_act_kind_and_fields_are_checked(self):
-        fact = build_facts(participant(account(parser_supported=True)))[0]
+        current = participant(account(parser_supported=True))
+        fact = build_facts(current)[0]
         with self.assertRaisesRegex(ValueError, "report, ask or warn"):
-            validate_act({"kind": "say", "fact_ref": fact.account_ref}, [fact])
+            validate_act({"kind": "say", "fact_ref": fact.account_ref}, current)
         self.assertIn("day 8", render_fact_act(
-            {"kind": "warn", "fact_ref": fact.account_ref}, [fact]))
+            {"kind": "warn", "fact_ref": fact.account_ref}, current))
         self.assertIn("Do you know", render_fact_act(
-            {"kind": "ask", "fact_ref": fact.account_ref}, [fact]))
+            {"kind": "ask", "fact_ref": fact.account_ref}, current))
 
     def test_missing_certainty_stays_unknown(self):
         value = account()
         del value["confidence"]
-        fact = build_facts(participant(value))[0]
+        current = participant(value)
+        fact = build_facts(current)[0]
         self.assertIsNone(fact.certainty)
         self.assertIn("I have heard", render_fact_act(
-            {"kind": "report", "fact_ref": fact.account_ref}, [fact]))
+            {"kind": "report", "fact_ref": fact.account_ref}, current))
+
+    def test_snapshot_bounds_and_knowledge_certainty(self):
+        current = with_knowledge(participant(account(day=999999, source_id="0")),
+                                 certainty=3, private=False)
+        fact = build_facts(current)[0]
+        self.assertEqual(fact.source_id, "unknown")
+        self.assertEqual(fact.certainty, "witnessed")
+        with self.assertRaisesRegex(ValueError, "printable"):
+            build_facts(participant(account(account="bad\ntext")))
+        with self.assertRaisesRegex(ValueError, "under 144"):
+            build_facts(participant(account(account="x" * 144)))
+
+    def test_stale_fact_reference_is_rejected_from_current_snapshot(self):
+        old = participant(account(event_id="901"))
+        ref = build_facts(old)[0].account_ref
+        current = participant(account(event_id="902"))
+        with self.assertRaisesRegex(ValueError, "owned"):
+            validate_act({"kind": "report", "fact_ref": ref}, current)
 
     def test_malformed_and_foreign_fields_are_rejected(self):
         for changes, message in (({"kind": 139}, "unknown event kind"),
                                  ({"day": -1}, "non-negative"),
-                                 ({"confidence": 101}, "0 through 100"),
-                                 ({"source_id": "0"}, "stable")):
+                                 ({"confidence": 101}, "0 through 100")):
             with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, message):
                 build_facts(participant(account(**changes)))
 
