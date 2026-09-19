@@ -109,6 +109,7 @@ static int RunMineInputRegression(void)
         camera=CcLocalMineCamera(&picked,pick_local.mine_facing);
         Vector2 bar=GetWorldToScreenEx((Vector3){15,.85f,10},camera,630,320);
         int label_x=-1,label_y=-1;
+        BoundingBox bar_bounds={0};
         Ray bar_ray={.position={15,1.15f,9},.direction={0,-.3f,1}};
         MINE_CHECK(MineClosedBarDistance(bar_ray,&slab_distance) &&
             fabsf(MineOccluderDistance(&picked,bar_ray,100.0f)-slab_distance)<.001f,
@@ -123,7 +124,7 @@ static int RunMineInputRegression(void)
             "A wall before a named target must hide its label.");
         picked.mine.x=15; picked.mine.y=9; pick_local.mine_facing=2;
         MINE_CHECK(!CcMineWalkable(&picked,CC_MINE_LEVEL,15,10) &&
-            MineTargetBounds(&picked,MINE_INTENT_BAR,(BoundingBox[1]){{0}},&tx,&ty) &&
+            MineTargetBounds(&picked,MINE_INTENT_BAR,&bar_bounds,&tx,&ty) &&
             tx==15 && ty==10,
             "The visible closed bar must retain its blocking tile and matching pick bounds.");
         MINE_CHECK(MinePick(&picked,&pick_local,surface,bar,&tx,&ty,&target) &&
