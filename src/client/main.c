@@ -191,7 +191,8 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_VISIT_MINE,
     CONTEXT_ACTION_STEP_DOWN,
     CONTEXT_ACTION_BOARD_CARRIAGE,
-    CONTEXT_ACTION_MAKE_ROAD_CAMP
+    CONTEXT_ACTION_MAKE_ROAD_CAMP,
+    CONTEXT_ACTION_INSPECT_CARRIAGE
 } ContextActionKind;
 
 typedef struct ContextAction {
@@ -223,6 +224,12 @@ typedef struct LocalState {
     Vector2 presented_card_origin;
     ClientView interaction_view;
     bool carriage_stopped;
+    /* A roadside inspection is a read-only overlay.  Keep the route and
+       progress that selected the current carriage so boarding can reject a
+       carriage that has since moved. */
+    bool carriage_inspection_road;
+    CcId road_carriage_route_id;
+    int32_t road_carriage_progress_milli;
     uint64_t conversation_object;
     char conversation_name[64];
     char conversation_line[192];
@@ -316,6 +323,9 @@ static void DrawAdventurePromises(const CcSim *sim, int32_t selected);
 static void DrawAdventureFeedback(const char *message);
 static void AdventureButton(Rectangle bounds, const char *label, bool enabled, bool active);
 static void DrawCarriagePonies(const CcSim *sim);
+#if defined(CC_CLIENT_SELF_TESTS)
+static int ClientRegressionFailure(const char *message);
+#endif
 
 typedef struct ActionReelState {
     int32_t stage;
@@ -4423,6 +4433,12 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (view == VIEW_CARRIAGE) {
+        if (local->carriage_inspection_road) {
+            AddDetailedContextAction(
+                &set, CONTEXT_ACTION_CLOSE_VIEW, "Return to road", "BKSP",
+                "KEEP THIS JOURNEY IN PLACE", true, false);
+            return set;
+        }
         bool away_from_town = local->site_kind != CC_LOCAL_SITE_NONE;
         AddDetailedContextAction(
             &set,
@@ -4545,6 +4561,8 @@ static ContextActionSet BuildContextActions(
         }
         if (local->open_world) {
             if (local->world_carriage.hero_embarked) {
+                AddDetailedContextAction(&set, CONTEXT_ACTION_INSPECT_CARRIAGE,
+                    "Inspect carriage", "F", "TEAM AND CARRIED GOODS", true, false);
                 AddDetailedContextAction(&set, CONTEXT_ACTION_STEP_DOWN,
                     "Stop and step down", "",
                     "WALK THE ROADSIDE", true, false);
@@ -6051,10 +6069,19 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
     DrawPanel((Rectangle){24.0f, 78.0f, (float)GetScreenWidth() - 48.0f,
         (float)GetScreenHeight() - 94.0f}, PANEL_DEEP);
     CcOverlayDrawText("THE CROWNLESS CARRIAGE", 52, 102, 23, INK);
+    const CcSettlement *road_origin = CcSimSettlement(
+        sim, sim->journey.origin_id);
+    const CcSettlement *road_destination = CcSimSettlement(
+        sim, sim->journey.destination_id);
     CcOverlayDrawText(
         TextFormat("%s / %s",
+                   local->carriage_inspection_road ? "ON THE ROAD" :
                    local->site_kind == CC_LOCAL_SITE_NONE ?
                        "LOADING BAY" : "ROADSIDE BAY",
+                   local->carriage_inspection_road ?
+                       TextFormat("%s to %s",
+                                  road_origin != NULL ? road_origin->name : "ROAD",
+                                  road_destination != NULL ? road_destination->name : "ROAD") :
                    local->site_kind == CC_LOCAL_SITE_NONE ?
                        (place != NULL ? place->name : "TOWN") :
                        CcLocalSiteName(sim, local->site_kind)),
@@ -6106,8 +6133,7 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
             CcOverlayDrawText(TextFormat("%d", good + 1),
                               x + 20, y + 17, 7, MUTED);
         }
-        CcOverlayDrawText((CcGood)good == CC_GOOD_FOOD ?
-                              "FOOD BOXES" : CcGoodName((CcGood)good),
+        CcOverlayDrawText(CcGoodName((CcGood)good),
                           x + 45, y + 12, 9, INK);
         const char *quantity = TextFormat("x%d", sim->player.cargo[good]);
         int32_t quantity_width = CcOverlayMeasureText(quantity, 9);
@@ -6971,6 +6997,153 @@ static int RunStorybookTravelRegression(void)
             { (void)fprintf(stderr, "The company must sit below the centre of the frame.\n"); return 1; }
     }
     (void)puts("Storybook travel: time, warning, rest, arrival, profile framing and journal replay passed");
+    return 0;
+}
+
+static int RunRoadCarriageTargetRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    char error[192] = "", message[192] = "";
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    int32_t opening = OpeningSituationIndex(&sim);
+    const CcSituation *offer = opening >= 0 ? &sim.situations[opening] : NULL;
+    const CcSettlement *origin = CcSimSettlement(&sim, sim.player.location_id);
+    const CcRoute *road = NULL;
+    for (int32_t i = 0; i < sim.route_count; ++i)
+        if (sim.routes[i].from_id == sim.player.location_id) { road = &sim.routes[i]; break; }
+    const CcSettlement *destination = road != NULL ?
+        CcSimSettlement(&sim, RouteOtherEnd(road, sim.player.location_id)) : NULL;
+    CcCommand listen = {.kind = CC_COMMAND_CHARACTER_RESPONSE,
+                        .target_id = offer != NULL ? offer->id : 0U,
+                        .amount = CC_CHARACTER_RESPONSE_LISTEN};
+    CcCommand pledge = {.kind = CC_COMMAND_CHARACTER_RESPONSE,
+                        .target_id = offer != NULL ? offer->id : 0U,
+                        .amount = CC_CHARACTER_RESPONSE_PLEDGE_HELP};
+    if (offer == NULL || origin == NULL || road == NULL || destination == NULL ||
+        strcmp(origin->name, "Thornford") != 0 ||
+        strcmp(destination->name, "Gloamgate") != 0 ||
+        offer->good != CC_GOOD_BREAD || offer->quantity != 8) {
+        return ClientRegressionFailure("Mara's eight Bread delivery must load at Thornford.");
+    }
+    if (!CcSimApply(&sim, &listen, error, sizeof(error)) ||
+        !CcSimApply(&sim, &pledge, error, sizeof(error)) ||
+        sim.player.cargo[CC_GOOD_BREAD] != 8) {
+        (void)fprintf(stderr, "Mara delivery setup: %s / cargo %d\n", error,
+                      sim.player.cargo[CC_GOOD_BREAD]);
+        return ClientRegressionFailure("Mara's eight Bread delivery must load at Thornford.");
+    }
+    CcCommand travel = {.kind = CC_COMMAND_TRAVEL, .target_id = destination->id};
+    if (!CcSimApply(&sim, &travel, error, sizeof(error)) ||
+        !InitializeOpenWorld(&sim, &local, false)) {
+        return ClientRegressionFailure("Set up the road carriage target.");
+    }
+    BeginRoadTravelState(&sim, &local);
+    if (!local.world_carriage.visible || !local.world_carriage.hero_embarked) {
+        return ClientRegressionFailure("Show the carriage on the active road.");
+    }
+    uint64_t journey_before = CcSimHash(&sim);
+    Vector3 anchor = local.world_carriage.position;
+    local.world_carriage.hero_embarked = false;
+    local.carriage_stopped = true;
+    local.agent.position.x += 18.0f;
+    Vector3 before_approach = local.agent.position;
+    ClientView view = VIEW_LOCAL;
+    if (!HandleRoadCarriageInteraction(&sim, &local, &view,
+        CONTEXT_ACTION_BOARD_CARRIAGE, (CcInteractionKey){0},
+        1.0f / 60.0f, message, sizeof(message)) ||
+        !local.interaction.approaching || local.world_carriage.hero_embarked ||
+        fabsf(local.agent.position.x - before_approach.x) > 0.001f) {
+        return ClientRegressionFailure("Distant boarding must begin an approach without moving the traveller.");
+    }
+    queued_key_press[KEY_W] = true;
+    bool cancelled = HandleRoadCarriageInteraction(&sim, &local, &view,
+        CONTEXT_ACTION_NONE, (CcInteractionKey){0}, 1.0f / 60.0f,
+        message, sizeof(message));
+    ClientInputClearPressed();
+    if (cancelled || local.interaction.approaching) {
+        return ClientRegressionFailure("Manual movement must cancel the carriage approach.");
+    }
+    queued_key_press[KEY_F] = true;
+    bool keyboard_started = HandleRoadCarriageInteraction(&sim, &local, &view,
+        CONTEXT_ACTION_NONE, (CcInteractionKey){0}, 1.0f / 60.0f,
+        message, sizeof(message));
+    ClientInputClearPressed();
+    if (!keyboard_started || !local.interaction.approaching) {
+        return ClientRegressionFailure("F must start the same carriage approach as the visible target.");
+    }
+    queued_key_press[KEY_ESCAPE] = true;
+    cancelled = HandleRoadCarriageInteraction(&sim, &local, &view,
+        CONTEXT_ACTION_NONE, (CcInteractionKey){0}, 1.0f / 60.0f,
+        message, sizeof(message));
+    ClientInputClearPressed();
+    if (cancelled || local.interaction.approaching) {
+        return ClientRegressionFailure("Escape must cancel the carriage approach.");
+    }
+    queued_key_press[KEY_F] = true;
+    keyboard_started = HandleRoadCarriageInteraction(&sim, &local, &view,
+        CONTEXT_ACTION_NONE, (CcInteractionKey){0}, 1.0f / 60.0f,
+        message, sizeof(message));
+    ClientInputClearPressed();
+    if (!keyboard_started || !local.interaction.approaching) {
+        return ClientRegressionFailure("F must restart a cancelled carriage approach.");
+    }
+    cancelled = HandleRoadCarriageInteraction(&sim, &local, &view,
+        CONTEXT_ACTION_HOLD_TRAVEL, (CcInteractionKey){0}, 1.0f / 60.0f,
+        message, sizeof(message));
+    if (cancelled || local.interaction.approaching) {
+        return ClientRegressionFailure("Selecting another road action must cancel the carriage approach.");
+    }
+    queued_key_press[KEY_F] = true;
+    keyboard_started = HandleRoadCarriageInteraction(&sim, &local, &view,
+        CONTEXT_ACTION_NONE, (CcInteractionKey){0}, 1.0f / 60.0f,
+        message, sizeof(message));
+    ClientInputClearPressed();
+    if (!keyboard_started || !local.interaction.approaching) {
+        return ClientRegressionFailure("The carriage approach must resume after another action.");
+    }
+    CcInteractionTarget target = {0};
+    if (!RoadCarriageTarget(&sim, &local, &target)) {
+        return ClientRegressionFailure("Build the visible road carriage target.");
+    }
+    local.agent.position.x = target.approach_x;
+    local.agent.position.z = target.approach_z;
+    if (!HandleRoadCarriageInteraction(&sim, &local, &view,
+        CONTEXT_ACTION_NONE, (CcInteractionKey){0}, 1.0f / 60.0f,
+        message, sizeof(message)) || !local.world_carriage.hero_embarked ||
+        CcSimHash(&sim) != journey_before) {
+        return ClientRegressionFailure("Arrival at the carriage must board without changing the journey.");
+    }
+    local.world_carriage.hero_embarked = false;
+    local.carriage_stopped = true;
+    local.agent.position.x = target.approach_x - 12.0f;
+    local.agent.position.z = target.approach_z;
+    if (!HandleRoadCarriageInteraction(&sim, &local, &view,
+        CONTEXT_ACTION_BOARD_CARRIAGE, (CcInteractionKey){0},
+        1.0f / 60.0f, message, sizeof(message))) {
+        return ClientRegressionFailure("Start the stale carriage approach.");
+    }
+    sim.carriage.progress_milli += 1;
+    if (!HandleRoadCarriageInteraction(&sim, &local, &view,
+        CONTEXT_ACTION_NONE, (CcInteractionKey){0}, 1.0f / 60.0f,
+        message, sizeof(message)) || local.interaction.approaching ||
+        local.world_carriage.hero_embarked || strstr(message, "moved") == NULL) {
+        return ClientRegressionFailure("A changed carriage revision must reject boarding.");
+    }
+    sim.carriage.progress_milli -= 1;
+    local.world_carriage.hero_embarked = true;
+    if (!HandleRoadCarriageInteraction(&sim, &local, &view,
+        CONTEXT_ACTION_INSPECT_CARRIAGE, (CcInteractionKey){0},
+        1.0f / 60.0f, message, sizeof(message)) || view != VIEW_CARRIAGE ||
+        !local.carriage_inspection_road || CcSimHash(&sim) != journey_before ||
+        hypotf(anchor.x - local.world_carriage.position.x,
+               anchor.z - local.world_carriage.position.z) > 0.001f) {
+        return ClientRegressionFailure("Carriage inspection must preserve the road anchor and journey.");
+    }
+    local.carriage_inspection_road = false;
+    LeaveOpenWorld(&local);
+    (void)puts("Road carriage target: approach, revision, inspection, and Bread manifest passed");
     return 0;
 }
 
@@ -8518,6 +8691,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
+    if (HandleRoadCarriageInteraction(sim, local, view, context_action,
+                                      pressed_action.target, delta_time,
+                                      message, message_capacity)) {
+        return;
+    }
     if (context_action == CONTEXT_ACTION_STEP_DOWN && local->open_world) {
         local->carriage_stopped = true;
         local->travel_hold_armed = false;
@@ -8531,17 +8709,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         CcLocalAgentStop(&local->agent);
         (void)snprintf(message, message_capacity,
                        "The team halts. Walk where you like; the carriage waits.");
-        return;
-    }
-    if (context_action == CONTEXT_ACTION_BOARD_CARRIAGE && local->open_world) {
-        local->world_carriage.hero_embarked = true;
-        local->world_carriage.camera_target = 0.0f;
-        local->carriage_stopped = false;
-        local->agent.position = local->world_carriage.position;
-        local->agent.facing_yaw = local->world_carriage.heading_yaw;
-        CcLocalAgentStop(&local->agent);
-        (void)snprintf(message, message_capacity,
-                       "The company boards and the road goes on.");
         return;
     }
     if (context_action == CONTEXT_ACTION_VISIT_MINE || context_action == CONTEXT_ACTION_PASS_ROAD_SITE) {
@@ -8991,6 +9158,13 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     if (*view == VIEW_CARRIAGE) {
         if (ClientKeyPressed(KEY_BACKSPACE) || ClientKeyPressed(KEY_ESCAPE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
+            if (local->carriage_inspection_road) {
+                local->carriage_inspection_road = false;
+                *view = VIEW_LOCAL;
+                (void)snprintf(message, message_capacity,
+                               "Back on the road beside the carriage.");
+                return;
+            }
             CcLocalAgentClearWorldTarget(&local->agent);
             *view = VIEW_LOCAL;
             return;
@@ -10415,6 +10589,9 @@ int main(int argc, char **argv)
     if (argc == 2 && strcmp(argv[1], "--test-travel-hold") == 0) return RunTravelHoldRegression();
     if (argc == 2 && strcmp(argv[1], "--test-storybook-travel") == 0) {
         return RunStorybookTravelRegression();
+    }
+    if (argc == 2 && strcmp(argv[1], "--test-road-carriage-target") == 0) {
+        return RunRoadCarriageTargetRegression();
     }
     if (argc == 2 && strcmp(argv[1], "--test-map-case-cuts") == 0) {
         return RunMapCaseCutsRegression();
