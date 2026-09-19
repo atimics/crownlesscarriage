@@ -2,13 +2,14 @@
 
 The Low Silver Pit branch lies on the Alderwatch–Silverwick road. Travel stops at the branch. Choose the left or right turn shown for the current direction, or continue along the road.
 
-The branch opens a small mine yard. The carriage stays beside the road. Pack Bread or Meat beside it, then walk north to the timber doorway. Use the doorway to enter Mine Mouth in a mostly overhead 3D view.
+The branch opens a small mine yard. The carriage stays beside the road. Pack Bread or Meat beside it, then walk north to the timber doorway. Walk through the doorway to enter Mine Mouth in first person.
 
-Both places use the town renderer, world lighting, and character model. The yard has two fixed King's Quest style compositions, covering the carriage court and mine doorway. Each dungeon room has a fixed high camera with visible wall depth. Ground clicks use the camera for the current view.
+Both places use shared world lighting and model helpers from the town renderer. The yard has a composed exterior camera. Underground, the camera follows the saved tile at eye height and looks in a local cardinal direction. The company model remains visible in the yard. Ground clicks use the camera for the current view. The [continuous-world contract](outside-city-redesign.md) defines how these views and their interactions connect.
 
-## Controls
+## Controls at the reviewed baseline (`52d2e879`)
 
-- WASD, arrow keys, or the ground: walk.
+- Yard: WASD, arrow keys, or a ground click walk.
+- Underground: W/S or up/down step forward/back; A/D or left/right turn. Ground clicks select a walking destination.
 - E or Use: interact with a nearby doorway, bar, or survey.
 - P or Pack food: move one Bread or Meat from carriage to pack.
 - F5: save the campaign and current position.
@@ -20,11 +21,17 @@ Return through the entrance, walk to the carriage, and use it to resume the same
 
 ## Shared rules and saves
 
+Facing is local camera state. Turning is free. A fresh descent faces east into the level; the yard uses its fixed camera. Reload restores the saved mine tile and resets local facing to the phase default. Submitted movement already names a cardinal direction, so a different client camera cannot reinterpret it.
+
 The simulation owns position, collision, carried goods, elapsed time, opened passages, and the road anchor. The screen, text controls, and shared company commands use those rules. Each movement carries the current mine revision so a repeated request cannot take another step.
 
 Save schema 59 adds the mine visit and pack. Schema 57 and 58 saves retain their old hash during verification, then upgrade with an empty visit. Journal replay restores the same position and supplies.
 
 Text controls: `mine visit`, `mine look`, `mine move north`, `mine use`, `mine pack Bread`, `mine unpack Bread`, and `road pass`.
+
+## Delivery
+
+[#797](https://github.com/atimics/crownlesscarriage/issues/797) completes visible target picking and deliberate use. [#484](https://github.com/atimics/crownlesscarriage/issues/484) exposes pack/unpack quantities and connects the finite load and cache. [#763](https://github.com/atimics/crownlesscarriage/issues/763) binds the hauling party to that load. [#764](https://github.com/atimics/crownlesscarriage/issues/764) connects attributed information and the town return. [#762](https://github.com/atimics/crownlesscarriage/issues/762) owns connected ordinary-input acceptance.
 
 ## Scope
 
