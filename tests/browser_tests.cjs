@@ -428,6 +428,8 @@ async function main() {
     try {
       await mobile.goto(`http://127.0.0.1:${server.address().port}/`);
       await mobile.waitForFunction(() => window.Module?.crownlessScreen === 'title' && Module.crownlessTouchFrame?.buttons.length);
+      await mobile.evaluate(() => Module.setCrownlessSaveStatus(
+        'could not save. Your journal and scene remain in this tab. Reload after checking browser storage.', 'failed'));
       await assertSaveStatusLane(mobile, 390, 844);
       await mobile.screenshot({path: path.join(output, 'save-lane-portrait.png')});
       const controls = gameControls(mobile, true);
