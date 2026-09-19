@@ -5,6 +5,8 @@
 #include "metagame/cc_metagame.h"
 #include "test_support.h"
 #include <limits.h>
+#include <inttypes.h>
+#include <sqlite3.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -124,10 +126,132 @@ static int WriteSharedMineFixture(const char *mode,const char *path)
     printf("%u\n",sim.mine.revision);
     return 0;
 }
+
+static bool MakeFixturePortable(const char *path)
+{
+    sqlite3 *database=NULL;
+    if(sqlite3_open_v2(path,&database,SQLITE_OPEN_READWRITE,NULL)!=SQLITE_OK) {
+        if(database!=NULL) sqlite3_close(database);
+        return false;
+    }
+    char *sqlite_error=NULL;
+    bool ok=sqlite3_exec(database,
+        "PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode=DELETE; VACUUM;",
+        NULL,NULL,&sqlite_error)==SQLITE_OK;
+    sqlite3_free(sqlite_error);
+    if(sqlite3_close(database)!=SQLITE_OK) ok=false;
+    return ok;
+}
+
+static void RemoveFixtureSidecars(const char *path)
+{
+    char sidecar[1024];
+    (void)snprintf(sidecar,sizeof(sidecar),"%s-wal",path);
+    (void)remove(sidecar);
+    (void)snprintf(sidecar,sizeof(sidecar),"%s-shm",path);
+    (void)remove(sidecar);
+}
+
+static int WriteSchema105MineCustodyFixture(const char *path)
+{
+    static CcSim sim,restored;
+    (void)remove(path);
+    RemoveFixtureSidecars(path);
+    AtBranch(&sim,false);
+    sim.player.cargo[CC_GOOD_BREAD]=1;
+    CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,
+        .target_id=CcMineSite(&sim)->id};
+    Check(CcSimApply(&sim,&visit,error,sizeof(error)));
+    ApplyGood(&sim,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,1);
+    Walk(&sim,15,3); Apply(&sim,CC_COMMAND_MINE_USE,0);
+    Walk(&sim,9,15); Walk(&sim,26,16);
+    Apply(&sim,CC_COMMAND_MINE_CONTEST,0);
+    Apply(&sim,CC_COMMAND_MINE_RESOLVE_CONTEST,17);
+    ApplyGood(&sim,CC_COMMAND_MINE_TAKE,CC_GOOD_GOLD,3);
+    ApplyGood(&sim,CC_COMMAND_MINE_TAKE,CC_GOOD_IRON,5);
+    Walk(&sim,5,15);
+    ApplyGood(&sim,CC_COMMAND_MINE_CACHE,CC_GOOD_IRON,3);
+    Walk(&sim,5,3); Apply(&sim,CC_COMMAND_MINE_USE,0);
+    Walk(&sim,15,18);
+    ApplyGood(&sim,CC_COMMAND_MINE_PACK,CC_GOOD_GOLD,-3);
+
+    int32_t inactive_gold=0,pack_iron=0,cache_iron=0;
+    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&sim.custody);++i) {
+        const CcCustodyEntry *entry=&sim.custody.entries[i];
+        if(entry->kind!=CC_CUSTODY_GOODS||entry->owner_id!=sim.goblins.id) continue;
+        if(!entry->active&&entry->good==CC_GOOD_GOLD&&entry->source_id==0U)
+            inactive_gold+=1;
+        if(entry->active&&entry->good==CC_GOOD_IRON&&
+           entry->holder.kind==CC_CUSTODY_MINE_PACK&&entry->holder.id==sim.player.id)
+            pack_iron+=(int32_t)entry->quantity;
+        if(entry->active&&entry->good==CC_GOOD_IRON&&
+           entry->holder.kind==CC_CUSTODY_SITE&&entry->holder.id==sim.mine.cache_id)
+            cache_iron+=(int32_t)entry->quantity;
+    }
+    CC_CHECK(inactive_gold==1&&pack_iron==2&&cache_iron==3);
+    uint64_t base_hash=CcSimHash(&sim);
+    CcJournal *journal=CcJournalStart(path,&sim,error,sizeof(error));
+    Check(journal!=NULL);
+    CcCommand unload={.kind=CC_COMMAND_MINE_PACK,
+        .target_id=(CcId)sim.mine.revision,.good=CC_GOOD_IRON,.amount=-1};
+    Check(CcJournalApply(journal,&sim,&unload,error,sizeof(error)));
+    uint64_t final_hash=CcSimHash(&sim);
+    CcJournalAbandon(&journal);
+    Check(MakeFixturePortable(path));
+    Check(CcSaveRead(path,&restored,error,sizeof(error)));
+    CC_CHECK(CcSimHash(&restored)==final_hash&&
+        restored.schema_version==105U&&restored.mine.phase==CC_MINE_YARD&&
+        CcMinePackGood(&restored,CC_GOOD_IRON)==1&&
+        CcMineCacheGood(&restored,CC_GOOD_IRON)==3&&
+        restored.player.cargo[CC_GOOD_GOLD]==3&&
+        restored.player.cargo[CC_GOOD_IRON]==1);
+    RemoveFixtureSidecars(path);
+    printf("schema=%u generator=%u base_hash=%" PRIu64
+        " final_hash=%" PRIu64 " inactive_gold_roots=%d pack_iron=%d cache_iron=%d\n",
+        restored.schema_version,restored.generator_version,base_hash,final_hash,
+        inactive_gold,1,cache_iron);
+    return 0;
+}
+
+static int VerifySchema105MineCustodyFixture(const char *path)
+{
+    static CcSim sim;
+    if(!CcSaveRead(path,&sim,error,sizeof(error))) {
+        fprintf(stderr,"Fixture read: %s\n",error);
+        return 1;
+    }
+    int32_t inactive_gold=0,pack_iron=0,cache_iron=0;
+    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&sim.custody);++i) {
+        const CcCustodyEntry *entry=&sim.custody.entries[i];
+        if(entry->kind!=CC_CUSTODY_GOODS||entry->owner_id!=sim.goblins.id) continue;
+        if(!entry->active&&entry->good==CC_GOOD_GOLD&&entry->source_id==0U)
+            inactive_gold+=1;
+        if(entry->active&&entry->good==CC_GOOD_IRON&&
+           entry->holder.kind==CC_CUSTODY_MINE_PACK&&entry->holder.id==sim.player.id)
+            pack_iron+=(int32_t)entry->quantity;
+        if(entry->active&&entry->good==CC_GOOD_IRON&&
+           entry->holder.kind==CC_CUSTODY_SITE&&entry->holder.id==sim.mine.cache_id)
+            cache_iron+=(int32_t)entry->quantity;
+    }
+    if(sim.schema_version!=105U||sim.generator_version!=25U||
+       CcSimHash(&sim)!=UINT64_C(15565720608068038444)||
+       sim.mine.phase!=CC_MINE_YARD||inactive_gold!=1||pack_iron!=1||cache_iron!=3||
+       sim.player.cargo[CC_GOOD_GOLD]!=3||sim.player.cargo[CC_GOOD_IRON]!=1) {
+        fprintf(stderr,"Fixture state does not match the schema 105 receipt.\n");
+        return 1;
+    }
+    printf("schema=105 final_hash=%" PRIu64
+        " inactive_gold_roots=1 pack_iron=1 cache_iron=3\n",CcSimHash(&sim));
+    return 0;
+}
 int main(int argc,char **argv)
 {
     if(argc==4 && strcmp(argv[1],"--write-shared-mine-fixture")==0)
         return WriteSharedMineFixture(argv[2],argv[3]);
+    if(argc==3 && strcmp(argv[1],"--write-schema105-mine-fixture")==0)
+        return WriteSchema105MineCustodyFixture(argv[2]);
+    if(argc==3 && strcmp(argv[1],"--verify-schema105-mine-fixture")==0)
+        return VerifySchema105MineCustodyFixture(argv[2]);
     static CcSim sim,restored,changed,haul,loaded,legacy,capacity,prechange;
     static CcSim bargain,contest,withdrawn,failed;
     (void)remove("mine-load-replay.ccsave");
