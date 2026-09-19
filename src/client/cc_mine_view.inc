@@ -30,10 +30,6 @@ static Rectangle MineViewportForContent(int32_t width,int32_t height,
     }
     return view;
 }
-static Rectangle MineViewportForInventory(int32_t width,int32_t height,bool expanded)
-{
-    return MineViewportForContent(width,height,expanded,12);
-}
 static int32_t MineInventoryRows(const CcSim *sim)
 {
     int32_t pack_goods[CC_GOOD_COUNT];

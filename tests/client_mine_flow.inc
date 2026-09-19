@@ -365,8 +365,8 @@ static int RunMineInputRegression(void)
             "A short manifest must return useful height to the mine scene.");
         MINE_CHECK(MineViewportForSize(844,390).height>0,
             "The mine view must retain positive height below its inventory.");
-        Rectangle collapsed=MineViewportForInventory(844,390,false);
-        Rectangle expanded=MineViewportForInventory(844,390,true);
+        Rectangle collapsed=MineViewportForContent(844,390,false,12);
+        Rectangle expanded=MineViewportForContent(844,390,true,12);
         MINE_CHECK(collapsed.height>=120.0f&&expanded.height==collapsed.height&&
             expanded.width+300.0f<=collapsed.width,
             "The short inventory keeps a clear central scene beside both goods panes.");
