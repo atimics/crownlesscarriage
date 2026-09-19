@@ -12,8 +12,40 @@
       active ? 1 : 0);
   }
   Module.crownlessTouchEnabled = true;
+  const semantic = document.createElement('section');
+  semantic.id = 'touch-actions';
+  semantic.setAttribute('aria-live', 'off');
+  const heading = document.createElement('h2');
+  heading.tabIndex = -1;
+  const detail = document.createElement('p');
+  const reading = document.createElement('p');
+  const actions = document.createElement('div');
+  semantic.append(heading, detail, reading, actions);
+  for (const type of ['keydown', 'keyup', 'keypress']) {
+    semantic.addEventListener(type, event => event.stopPropagation());
+  }
+  const actionNodes = [];
+  document.querySelector('#stage').append(semantic);
   Module.renderCrownlessTouch = frame => {
+    semantic.hidden = !document.querySelector('#loading').hidden;
     canvas.setAttribute('aria-label', frame.title || 'Crownless Carriage game');
+    const focused = document.activeElement?.dataset?.touchKey;
+    heading.textContent = frame.title || 'Crownless Carriage';
+    detail.textContent = frame.detail || '';
+    reading.textContent = frame.reading || '';
+    frame.buttons.forEach((button, index) => {
+      let action = actionNodes[index];
+      if (!action) { action = document.createElement('button'); actionNodes[index] = action; actions.append(action); }
+      const key = `${button.label}:${index}`;
+      action.dataset.touchKey = key;
+      action.textContent = button.label;
+      action.disabled = !button.enabled;
+      action.setAttribute('aria-pressed', button.active ? 'true' : 'false');
+      action.onclick = () => Module._CrownlessTouchActivate(index, frame.revision);
+      if (focused === key) action.focus();
+    });
+    while (actionNodes.length > frame.buttons.length) actionNodes.pop().remove();
+    if (focused && !actionNodes.some(action => action.dataset.touchKey === focused)) heading.focus();
   };
   const fields = new Map();
   Module.renderCrownlessFields = descriptors => {

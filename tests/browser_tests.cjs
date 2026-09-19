@@ -434,7 +434,71 @@ async function main() {
       await assertSaveStatusLane(mobile, 390, 844);
       await mobile.screenshot({path: path.join(output, 'save-lane-portrait.png')});
       const controls = gameControls(mobile, true);
-      assert.equal(await mobile.locator('#touch-panel, #touch-actions, #exit-fullscreen').count(), 0);
+      assert.equal(await mobile.locator('#touch-actions').count(), 1);
+      const semantics = await mobile.evaluate(() => {
+        const panel = document.querySelector('#touch-actions');
+        const actions = panel.querySelector('div');
+        const loading = document.querySelector('#loading');
+        const stage = document.querySelector('#stage');
+        const frame = {
+          title: 'Mine yard', detail: 'Carriage beside the mine road.',
+          reading: 'Pack 2 of 8. Cart 4 of 12.', revision: 701,
+          buttons: [
+            {label: 'Inspect Bread x8', enabled: true, active: false},
+            {label: 'Unload 1', enabled: false, active: false}
+          ]
+        };
+        const activate = Module._CrownlessTouchActivate;
+        window.semanticActivations = [];
+        Module._CrownlessTouchActivate = (index, revision) =>
+          window.semanticActivations.push([index, revision]);
+        Module.renderCrownlessTouch(frame);
+        const first = actions.querySelector('button');
+        first.focus();
+        const normal = first.getBoundingClientRect();
+        first.click();
+        Module.renderCrownlessTouch({...frame, revision: 702});
+        const retained = document.activeElement === first;
+        Module.renderCrownlessTouch({...frame, revision: 703,
+          buttons: [
+            {label: 'Inspect Bread x7', enabled: true, active: false},
+            {label: 'Unload 1', enabled: false, active: false}
+          ]});
+        const removalFocus = document.activeElement === panel.querySelector('h2');
+        const changed = actions.querySelector('button');
+        changed.focus();
+        const content = {
+          title: panel.querySelector('h2').textContent,
+          detail: panel.querySelectorAll('p')[0].textContent,
+          reading: panel.querySelectorAll('p')[1].textContent,
+          actionCount: actions.querySelectorAll('button').length,
+          actionsNested: [...actions.querySelectorAll('button')].every(button => button.parentElement === actions),
+          disabled: actions.querySelectorAll('button')[1].disabled
+        };
+        stage.classList.add('expanded');
+        const expanded = changed.getBoundingClientRect();
+        const expandedVisible = expanded.width > 20 && expanded.height > 20 &&
+          Number(getComputedStyle(panel).zIndex) > Number(getComputedStyle(stage).zIndex);
+        stage.classList.remove('expanded');
+        loading.hidden = false;
+        Module.renderCrownlessTouch(frame);
+        loading.focus();
+        const recovery = panel.hidden && document.activeElement === loading;
+        loading.hidden = true;
+        Module.renderCrownlessTouch(Module.crownlessTouchFrame);
+        Module._CrownlessTouchActivate = activate;
+        return {...content,
+          activation: window.semanticActivations,
+          normalVisible: normal.width > 20 && normal.height > 20,
+          retained, removalFocus, expandedVisible, recovery
+        };
+      });
+      assert.deepEqual(semantics, {
+        title: 'Mine yard', detail: 'Carriage beside the mine road.',
+        reading: 'Pack 2 of 8. Cart 4 of 12.', actionCount: 2, actionsNested: true,
+        disabled: true, activation: [[0, 701]], normalVisible: true,
+        retained: true, removalFocus: true, expandedVisible: true, recovery: true
+      });
       for (const [width, height] of [[320, 740], [390, 844], [667, 375], [844, 390], [1024, 768]]) {
         await mobile.setViewportSize({width, height});
         await mobile.waitForTimeout(100);
@@ -458,7 +522,9 @@ async function main() {
       assert((await controls.buttons()).every(button => !/More objects|Previous objects|Fast forward|Press on/.test(button.label)));
       await mobile.screenshot({path: path.join(output, 'mobile-nearby-cards.png')});
       const oldControl = await controls.button('Menu').read();
-      await controls.button('Book').tap();
+      const bookButton = mobile.locator('#touch-actions button').filter({hasText: /^Book/});
+      await bookButton.focus();
+      await mobile.keyboard.press('Enter');
       await mobile.waitForFunction(() => Module.crownlessTouchFrame.title === 'Company Book');
       await mobile.evaluate(({index, revision}) => Module._CrownlessTouchActivate(index, revision), oldControl);
       await mobile.waitForTimeout(150);
@@ -466,7 +532,9 @@ async function main() {
       assert((await controls.reading()).length > 30);
       await mobile.screenshot({path: path.join(output, 'mobile-book.png')});
 
-      await controls.button('Back').tap();
+      const backButton = mobile.locator('#touch-actions button').filter({hasText: /^Back/});
+      await backButton.focus();
+      await mobile.keyboard.press('Enter');
       await controls.button('Menu').tap();
       await mobile.waitForFunction(() => Module.crownlessScreen === 'paused');
       const revision = await mobile.evaluate(() => Module.crownlessSaveRevision);
