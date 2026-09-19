@@ -25,7 +25,7 @@ static bool RootHolder(const CcCustodyState *state, CcCustodyHolder holder,
                        CcCustodyHolder *root)
 {
     if (holder.id == 0 || holder.kind < CC_CUSTODY_STORE ||
-        holder.kind > CC_CUSTODY_CONTAINER_HOLDER) return false;
+        holder.kind > CC_CUSTODY_MINE_PACK) return false;
     if (holder.kind == CC_CUSTODY_CONTAINER_HOLDER) {
         const CcCustodyEntry *box = CcCustodyFind(state, holder.id);
         if (box == NULL || box->kind != CC_CUSTODY_CONTAINER ||
@@ -33,7 +33,8 @@ static bool RootHolder(const CcCustodyState *state, CcCustodyHolder holder,
         holder = box->holder;
     }
     if (holder.id == 0 || holder.kind < CC_CUSTODY_STORE ||
-        holder.kind >= CC_CUSTODY_CONTAINER_HOLDER) return false;
+        holder.kind == CC_CUSTODY_CONTAINER_HOLDER ||
+        holder.kind > CC_CUSTODY_MINE_PACK) return false;
     *root = holder;
     return true;
 }
@@ -99,7 +100,7 @@ bool CcCustodyValidate(const CcCustodyState *state, const CcCustodyRules *rules)
         }
         if (entry->id >= state->next_id || entry->revision == 0 || entry->owner_id == 0 ||
             entry->source_id >= entry->id || entry->holder.id == 0 ||
-            entry->holder.kind < CC_CUSTODY_STORE || entry->holder.kind > CC_CUSTODY_CONTAINER_HOLDER ||
+            entry->holder.kind < CC_CUSTODY_STORE || entry->holder.kind > CC_CUSTODY_MINE_PACK ||
             entry->kind < CC_CUSTODY_GOODS ||
             entry->kind > CC_CUSTODY_CONTAINER || entry->condition < 0 ||
             entry->condition > 100 || entry->capacity < 0 ||
@@ -134,9 +135,9 @@ bool CcCustodyValidate(const CcCustodyState *state, const CcCustodyRules *rules)
         CcCustodyLocation location = {0};
         int64_t capacity = 0, used = 0;
         int count = 0;
-        if (!rules->resolve(rules->context, root, &location, &capacity) ||
+        if (!rules->resolve(rules->context,root,&location,&capacity) ||
             !ValidLocation(location) || capacity < 0 ||
-            !Load(state, rules, root, true, &used, &count) || used > capacity) return false;
+            !Load(state,rules,root,true,&used,&count) || used > capacity) return false;
         if (entry->kind == CC_CUSTODY_CONTAINER) {
             CcCustodyHolder contents = {CC_CUSTODY_CONTAINER_HOLDER, entry->id};
             if (!Load(state, rules, contents, false, &used, &count) ||

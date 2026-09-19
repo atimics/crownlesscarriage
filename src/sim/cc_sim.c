@@ -4679,6 +4679,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcSimInitializeRoadSites(sim);
     CcSimInitializeRoyalCarriages(sim);
     CcPoniesInit(sim);
+    CcMineInitializeLoad(sim);
     CcSimInitializeOccupations(sim);
 }
 
@@ -19045,7 +19046,10 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Command target is missing.");
         return false;
     }
-    bool mine_action = command->kind >= CC_COMMAND_VISIT_MINE && command->kind <= CC_COMMAND_MINE_PACK;
+    bool mine_action = (command->kind >= CC_COMMAND_VISIT_MINE &&
+        command->kind <= CC_COMMAND_MINE_PACK) ||
+        (command->kind >= CC_COMMAND_MINE_INSPECT &&
+         command->kind <= CC_COMMAND_MINE_CACHE);
     if (sim->mine.phase != CC_MINE_NONE && !mine_action) {
         SetError(error, error_capacity, "Return to the road through the mine yard first.");
         return false;
@@ -19106,6 +19110,9 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_MINE_STEP:
         case CC_COMMAND_MINE_USE:
         case CC_COMMAND_MINE_PACK:
+        case CC_COMMAND_MINE_INSPECT:
+        case CC_COMMAND_MINE_TAKE:
+        case CC_COMMAND_MINE_CACHE:
             return CcMineApply(sim, command, error, error_capacity);
         case CC_COMMAND_EXCHANGE_GOSSIP:
             return ApplyExchangeGossip(sim, command, error, error_capacity);

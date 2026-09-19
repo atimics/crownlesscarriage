@@ -54,6 +54,13 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(sim->mine.steps); HASH_VALUE(sim->mine.seen);
         HASH_VALUE(sim->mine.bar_open); HASH_VALUE(sim->mine.surveyed);
         for (int32_t good=0;good<CC_GOOD_COUNT;++good) HASH_VALUE(sim->mine.pack[good]);
+        if (sim->schema_version >= 103U) {
+            HASH_VALUE(sim->mine.source_id); HASH_VALUE(sim->mine.source_owner_id);
+            HASH_VALUE(sim->mine.cache_id); HASH_VALUE(sim->mine.cache_owner_id);
+            HASH_VALUE(sim->mine.source_x); HASH_VALUE(sim->mine.source_y);
+            HASH_VALUE(sim->mine.cache_x); HASH_VALUE(sim->mine.cache_y);
+            HASH_VALUE(sim->mine.source_released);
+        }
     }
     if (sim->schema_version >= 73U) {
         for (int i = 0; i < sim->settlement_count; ++i) {

@@ -25,6 +25,11 @@ bool CcSimIsBodyPurse(const CcSim *sim, const CcCustodyEntry *entry);
 bool CcSimDispatchCustodyCarrier(CcSim *sim, CcId carrier_id, CcId destination_id);
 CcCustodyResult CcSimTransferCustody(CcSim *sim, const CcCustodyTransfer *transfer,
                                     uint64_t *result_id);
+/* Schema 103: move a finite mine load between its source, carried pack, and
+   located cache. The mine command supplies revision/context; custody supplies
+   entry revisions, capacity, splitting, and conservation. */
+CcCustodyResult CcSimTransferMineGoods(CcSim *sim, CcCustodyHolder source,
+    CcCustodyHolder destination, CcGood good, int32_t quantity, uint64_t event_id);
 bool CcSimStoredCustodyValid(const CcSim *sim);
 /* The town is the authority for its bulk store and its owned containers.
    Allocation and container revisions bind packing to the observed state. */

@@ -67,7 +67,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 102
+#define CC_SIM_SCHEMA_VERSION 103
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -104,7 +104,9 @@ typedef enum CcEntityKind {
     CC_ENTITY_FRONT = 20,
     CC_ENTITY_QUEST_OUTCOME = 21,
     CC_ENTITY_ROAD_SITE = 22,
-    CC_ENTITY_ROYAL_CARRIAGE = 23
+    CC_ENTITY_ROYAL_CARRIAGE = 23,
+    CC_ENTITY_MINE_SOURCE = 24,
+    CC_ENTITY_MINE_CACHE = 25
 } CcEntityKind;
 
 typedef enum CcGood {
@@ -648,7 +650,11 @@ typedef enum CcCommandKind {
     CC_COMMAND_PICKUP_DISPATCH = 62,
     CC_COMMAND_DELIVER_DISPATCH = 63,
     /* Schema 102: claim a fallen person's purse where it lies (#288/#406). */
-    CC_COMMAND_TAKE_BODY_PURSE = 64
+    CC_COMMAND_TAKE_BODY_PURSE = 64,
+    /* Schema 103: inspect, take from, and cache the finite mine load (#484). */
+    CC_COMMAND_MINE_INSPECT = 65,
+    CC_COMMAND_MINE_TAKE = 66,
+    CC_COMMAND_MINE_CACHE = 67
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1916,6 +1922,15 @@ typedef struct CcMineVisit {
     bool bar_open;
     bool surveyed;
     int32_t pack[CC_GOOD_COUNT];
+    /* Schema 103: one goblin-hauler load and player-owned cache in the
+       six-room mine. A later bargain releases the load to this command seam. */
+    CcId source_id;
+    CcId source_owner_id;
+    CcId cache_id;
+    CcId cache_owner_id;
+    int32_t source_x, source_y;
+    int32_t cache_x, cache_y;
+    bool source_released;
 } CcMineVisit;
 
 typedef struct CcCommand {
@@ -2112,7 +2127,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 601520,
+_Static_assert(sizeof(CcSim) == 601576,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
