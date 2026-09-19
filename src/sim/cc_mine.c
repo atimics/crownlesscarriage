@@ -68,7 +68,7 @@ int32_t CcMinePackUsed(const CcSim *sim)
         if (quantity < 0 || used > INT_MAX-quantity) return INT_MAX;
         used+=quantity;
     }
-    for (int32_t i=0;i<CC_CUSTODY_CAPACITY;++i) {
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
         const CcCustodyEntry *entry=&sim->custody.entries[i];
         if (entry->active && entry->kind == CC_CUSTODY_GOODS &&
             entry->holder.kind == CC_CUSTODY_MINE_PACK &&
@@ -85,7 +85,7 @@ static int32_t MineCustodyGood(const CcSim *sim, CcCustodyHolderKind kind,
 {
     int64_t used=0;
     if (sim == NULL || good < 0 || good >= CC_GOOD_COUNT) return 0;
-    for (int32_t i=0;i<CC_CUSTODY_CAPACITY;++i) {
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
         const CcCustodyEntry *entry=&sim->custody.entries[i];
         if (entry->active && entry->kind == CC_CUSTODY_GOODS &&
             entry->holder.kind == kind && entry->holder.id == holder_id && entry->good == (int32_t)good)
@@ -126,8 +126,12 @@ void CcMineInitializeLoad(CcSim *sim)
         sim->goblins.id == 0 ||
         sim->mine.source_id != 0 || sim->mine.cache_id != 0 ||
         sim->custody.next_id > UINT64_MAX - 3U) return;
+    /* This runs only for the current campaign schema. Legacy journal replay
+       keeps the shipped 96-slot table until its runtime upgrade finishes. */
+    if (sim->schema_version < 103U) return;
+    sim->custody.capacity=CC_CUSTODY_CAPACITY;
     int32_t slots=0;
-    for (int32_t i=0;i<CC_CUSTODY_CAPACITY;++i)
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i)
         if (sim->custody.entries[i].id == 0) ++slots;
     if (slots < 3) return;
     CcMineVisit *mine=&sim->mine;
@@ -144,7 +148,7 @@ void CcMineInitializeLoad(CcSim *sim)
     const CcGood goods[] = {CC_GOOD_IRON,CC_GOOD_GOLD,CC_GOOD_GEMS};
     const int32_t quantities[] = {8,3,2};
     int32_t next=0;
-    for (int32_t i=0;i<CC_CUSTODY_CAPACITY && next<3;++i) {
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody) && next<3;++i) {
         CcCustodyEntry *entry=&sim->custody.entries[i];
         if (entry->id != 0) continue;
         *entry=(CcCustodyEntry){.id=sim->custody.next_id++,.revision=1,
@@ -179,7 +183,7 @@ static bool MineTransfer(CcSim *sim, CcCustodyHolder source,
 static bool StowMinePack(CcSim *sim, char *error, size_t capacity)
 {
     int32_t carried[CC_GOOD_COUNT]={0};
-    for (int32_t i=0;i<CC_CUSTODY_CAPACITY;++i) {
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
         const CcCustodyEntry *entry=&sim->custody.entries[i];
         if (!entry->active || entry->holder.kind != CC_CUSTODY_MINE_PACK ||
             entry->holder.id != sim->player.id) continue;
@@ -198,7 +202,7 @@ static bool StowMinePack(CcSim *sim, char *error, size_t capacity)
         sim->player.cargo[good]+=sim->mine.pack[good]+carried[good];
         sim->mine.pack[good]=0;
     }
-    for (int32_t i=0;i<CC_CUSTODY_CAPACITY;++i) {
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
         CcCustodyEntry *entry=&sim->custody.entries[i];
         if (entry->active && entry->holder.kind == CC_CUSTODY_MINE_PACK &&
             entry->holder.id == sim->player.id) {
@@ -217,7 +221,7 @@ static bool UnpackMineGood(CcSim *sim, CcGood good, int32_t quantity,
     int32_t legacy=sim->mine.pack[good] < quantity ? sim->mine.pack[good] : quantity;
     int32_t remaining=quantity-legacy;
     CcCustodyState candidate=sim->custody;
-    for (int32_t i=0;i<CC_CUSTODY_CAPACITY && remaining>0;++i) {
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody) && remaining>0;++i) {
         CcCustodyEntry *entry=&candidate.entries[i];
         if (!entry->active || entry->kind != CC_CUSTODY_GOODS || entry->good != (int32_t)good ||
             entry->holder.kind != CC_CUSTODY_MINE_PACK || entry->holder.id != sim->player.id) continue;

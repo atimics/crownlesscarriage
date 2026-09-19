@@ -2368,7 +2368,7 @@ CcMoney CcSimTrackedGold(const CcSim *sim)
                     sim->hoard_raiders.carried_treasure +
                     sim->dragon_campaign.recovered_coins;
     if (sim->schema_version >= 99U) {
-        for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+        for (int i = 0; i < CcCustodyEffectiveCapacity(&sim->custody); ++i) {
             const CcCustodyEntry *entry = &sim->custody.entries[i];
             if (entry->active && entry->kind == CC_CUSTODY_PURSE) total += entry->quantity;
         }
@@ -2407,7 +2407,7 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
                     sim->dragon.hoard_goods[good] +
                     sim->dragon_campaign.supplies[good];
     if (sim->schema_version >= 99U) {
-        for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+        for (int i = 0; i < CcCustodyEffectiveCapacity(&sim->custody); ++i) {
             const CcCustodyEntry *entry = &sim->custody.entries[i];
             if (entry->active && entry->kind == CC_CUSTODY_GOODS && entry->good == (int32_t)good)
                 total += entry->quantity;
@@ -7429,7 +7429,7 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
 static void ClaimFallenPursesByBandits(CcSim *sim)
 {
     if (sim->schema_version < 102U) return;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < CcCustodyEffectiveCapacity(&sim->custody); ++i) {
         CcCustodyEntry *entry = &sim->custody.entries[i];
         if (!CcSimIsBodyPurse(sim, entry)) continue;
         CcBanditGroup *camp = NULL;
@@ -11402,7 +11402,7 @@ static void RecordCharacterLifetime(CcSim *sim, const CcCharacter *person)
            purse to the place's market as found money, so the entry never
            outlives its owner's name. */
         CcId leaving = sim->historic_characters[slot].id;
-        for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+        for (int i = 0; i < CcCustodyEffectiveCapacity(&sim->custody); ++i) {
             CcCustodyEntry *entry = &sim->custody.entries[i];
             if (!CcSimIsBodyPurse(sim, entry) || entry->owner_id != leaving) continue;
             CcMoney coins = entry->quantity;

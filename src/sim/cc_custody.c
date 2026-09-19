@@ -4,13 +4,21 @@
 
 void CcCustodyInit(CcCustodyState *state)
 {
-    *state = (CcCustodyState){.next_id = 1};
+    *state = (CcCustodyState){.next_id = 1,.capacity=CC_CUSTODY_CAPACITY};
+}
+
+int32_t CcCustodyEffectiveCapacity(const CcCustodyState *state)
+{
+    if (state == NULL || state->capacity == 0) return CC_CUSTODY_LEGACY_CAPACITY;
+    if (state->capacity == CC_CUSTODY_LEGACY_CAPACITY ||
+        state->capacity == CC_CUSTODY_CAPACITY) return state->capacity;
+    return 0;
 }
 
 const CcCustodyEntry *CcCustodyFind(const CcCustodyState *state, uint64_t id)
 {
     if (state == NULL || id == 0) return NULL;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i)
+    for (int i = 0; i < CcCustodyEffectiveCapacity(state); ++i)
         if (state->entries[i].active && state->entries[i].id == id)
             return &state->entries[i];
     return NULL;
@@ -65,7 +73,7 @@ static bool Load(const CcCustodyState *state, const CcCustodyRules *rules, CcCus
 {
     *load = 0;
     *count = 0;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < CcCustodyEffectiveCapacity(state); ++i) {
         const CcCustodyEntry *entry = &state->entries[i];
         if (!entry->active) continue;
         CcCustodyHolder actual = entry->holder;
@@ -90,9 +98,11 @@ static bool EmptyEntry(const CcCustodyEntry *entry)
 
 bool CcCustodyValidate(const CcCustodyState *state, const CcCustodyRules *rules)
 {
-    if (state == NULL || state->next_id == 0 || rules == NULL ||
+    int32_t slots=CcCustodyEffectiveCapacity(state);
+    if (state == NULL || state->next_id == 0 ||
+        (slots != CC_CUSTODY_LEGACY_CAPACITY && slots != CC_CUSTODY_CAPACITY) || rules == NULL ||
         rules->resolve == NULL || rules->good_count <= 0) return false;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < slots; ++i) {
         const CcCustodyEntry *entry = &state->entries[i];
         if (entry->id == 0) {
             if (!EmptyEntry(entry)) return false;
@@ -157,10 +167,12 @@ static uint64_t HashWord(uint64_t hash, uint64_t word)
     return hash;
 }
 
-uint64_t CcCustodyHash(const CcCustodyState *state)
+uint64_t CcCustodyHashForCapacity(const CcCustodyState *state, int32_t capacity)
 {
+    if (state == NULL || (capacity != CC_CUSTODY_LEGACY_CAPACITY &&
+        capacity != CC_CUSTODY_CAPACITY)) return 0;
     uint64_t hash = HashWord(UINT64_C(14695981039346656037), state->next_id);
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < capacity; ++i) {
         const CcCustodyEntry *entry = &state->entries[i];
         hash = HashWord(hash, entry->id);
         hash = HashWord(hash, entry->revision);
@@ -180,9 +192,14 @@ uint64_t CcCustodyHash(const CcCustodyState *state)
     return hash;
 }
 
+uint64_t CcCustodyHash(const CcCustodyState *state)
+{
+    return CcCustodyHashForCapacity(state,CcCustodyEffectiveCapacity(state));
+}
+
 static int FreeSlot(const CcCustodyState *state)
 {
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i)
+    for (int i = 0; i < CcCustodyEffectiveCapacity(state); ++i)
         if (!state->entries[i].active && state->entries[i].quantity == 0) return i;
     return -1;
 }
@@ -263,7 +280,7 @@ CcCustodyResult CcCustodyPlanTransfer(const CcCustodyState *state,
     if (split && (FreeSlot(state) < 0 || state->next_id == 0 || state->next_id == UINT64_MAX))
         return CC_CUSTODY_FULL;
     if (split) {
-        for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i)
+        for (int i = 0; i < CcCustodyEffectiveCapacity(state); ++i)
             if (state->entries[i].id >= state->next_id) return CC_CUSTODY_INVALID;
     }
     return CC_CUSTODY_READY;

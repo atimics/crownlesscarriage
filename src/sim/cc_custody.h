@@ -36,6 +36,7 @@ typedef struct {
 
 typedef struct {
     uint64_t next_id;
+    int32_t capacity;
     CcCustodyEntry entries[CC_CUSTODY_CAPACITY];
 } CcCustodyState;
 
@@ -67,8 +68,10 @@ typedef enum {
 
 /* Game adapters supply physical placement and permission from current state. */
 void CcCustodyInit(CcCustodyState *state);
+int32_t CcCustodyEffectiveCapacity(const CcCustodyState *state);
 bool CcCustodyValidate(const CcCustodyState *state, const CcCustodyRules *rules);
 uint64_t CcCustodyHash(const CcCustodyState *state);
+uint64_t CcCustodyHashForCapacity(const CcCustodyState *state, int32_t capacity);
 const CcCustodyEntry *CcCustodyFind(const CcCustodyState *state, uint64_t id);
 CcCustodyResult CcCustodyPlanTransfer(const CcCustodyState *state,
     const CcCustodyRules *rules, const CcCustodyTransfer *transfer);

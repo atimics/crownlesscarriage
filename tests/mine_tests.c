@@ -1,4 +1,5 @@
 #include "sim/cc_mine.h"
+#include "sim/cc_sim_custody.h"
 #include "persistence/cc_save.h"
 #include "multiplayer/cc_coop.h"
 #include "metagame/cc_metagame.h"
@@ -68,9 +69,37 @@ static void AtBranch(CcSim *sim,bool reverse)
     CC_CHECK(CcSimHash(sim)==held);
     Check(CcSimValidate(sim,error,sizeof(error)));
 }
+static void ReturnToMineBranch(CcSim *sim)
+{
+    for (int32_t ticks=0;sim->journey.active && ticks<100000;++ticks)
+        CcSimAdvanceRuntimeTicks(sim,1);
+    CC_CHECK(!sim->journey.active);
+    const CcRoadSite *site=CcMineSite(sim);
+    const CcRoute *road=CcSimRoute(sim,site->route_id);
+    CcId destination=sim->player.location_id==road->from_id ? road->to_id : road->from_id;
+    CcCommand travel={.kind=CC_COMMAND_TRAVEL,.target_id=destination};
+    Check(CcSimApply(sim,&travel,error,sizeof(error)));
+    sim->pony_company.encounter=-1;
+    sim->journey.ambush_pending=false;
+    sim->journey.elapsed_subticks=CcMineBranchSubtick(sim)-1;
+    sim->carriage.progress_milli=(int32_t)((int64_t)sim->journey.elapsed_subticks*1000/
+        sim->journey.total_subticks);
+    CcSimAdvanceRuntimeTicks(sim,1);
+    CC_CHECK(sim->journey.elapsed_subticks==CcMineBranchSubtick(sim));
+    CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=site->id};
+    Check(CcSimApply(sim,&visit,error,sizeof(error)));
+}
 int main(void)
 {
-    static CcSim sim,restored,changed,haul,loaded,legacy,capacity;
+    static CcSim sim,restored,changed,haul,loaded,legacy,capacity,prechange;
+    (void)remove("mine-load-replay.ccsave");
+    (void)remove("mine-load-roundtrip-103.ccsave");
+    (void)remove("mine-load-schema-102-fixture.ccsave");
+    (void)remove("mine-load-stow.ccsave");
+    (void)remove("mine-roundtrip.ccsave");
+    (void)remove("mine-replay.ccsave");
+    (void)remove("mine-load-roundtrip.ccsave");
+    (void)remove("mine-load-schema-102.ccsave");
     CcSimInit(&changed,0x71a7e5);
     uint64_t initialized_hash=CcSimHash(&changed);
     CcId initialized_source=changed.mine.source_id, initialized_cache=changed.mine.cache_id;
@@ -87,6 +116,23 @@ int main(void)
     CcMineInitializeLoad(&capacity);
     CC_CHECK(capacity.mine.source_id==0 && capacity.mine.cache_id==0 &&
         capacity.custody.next_id==UINT64_MAX-2U);
+    /* This file was written by the released schema-102 build at 2d56168d.
+       A 102 hash reads only the shipped 96 custody rows before migration. */
+    CcSimInit(&prechange,0x71a7e5);
+    prechange.schema_version=102U;
+    prechange.mine.source_id=prechange.mine.source_owner_id=0;
+    prechange.mine.cache_id=prechange.mine.cache_owner_id=0;
+    prechange.mine.source_x=prechange.mine.source_y=0;
+    prechange.mine.cache_x=prechange.mine.cache_y=0;
+    prechange.mine.source_released=false;
+    CcCustodyInit(&prechange.custody);
+    prechange.custody.capacity=CC_CUSTODY_LEGACY_CAPACITY;
+    CC_CHECK(CcSimHash(&prechange)==UINT64_C(2100520264052232360));
+    Check(CcSaveRead(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-102-generator-25-prechange.ccsave",
+        &restored,error,sizeof(error)));
+    CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION &&
+        restored.custody.capacity==CC_CUSTODY_CAPACITY &&
+        CcMineSourceUsed(&restored)==13 && CcMineCacheUsed(&restored)==0);
     for(int i=0;i<2;++i) AtBranch(&sim,i!=0);
     {
         /* The turn must survive the whole stop window, not one subtick of it.
@@ -213,6 +259,7 @@ int main(void)
     legacy.mine.cache_x=legacy.mine.cache_y=0;
     legacy.mine.source_released=false;
     CcCustodyInit(&legacy.custody);
+    legacy.custody.capacity=CC_CUSTODY_LEGACY_CAPACITY;
     for (int32_t slot=0;slot<CC_CUSTODY_LEGACY_CAPACITY;++slot) {
         legacy.custody.entries[slot]=(CcCustodyEntry){.id=(uint64_t)slot+1U,
             .revision=1,.owner_id=legacy.player.id,
@@ -221,6 +268,11 @@ int main(void)
             .condition=100,.active=true};
     }
     legacy.custody.next_id=CC_CUSTODY_LEGACY_CAPACITY+1U;
+    /* A full historic table has no hidden three-slot extension while old
+       commands and runtime work replay against schema 102. */
+    CC_CHECK(!CcSimLeaveBodyPurse(&legacy,legacy.characters[0].id,
+        legacy.settlements[0].id,1,1));
+    CC_CHECK(legacy.custody.entries[CC_CUSTODY_LEGACY_CAPACITY].id==0);
     Check(CcSaveWrite("mine-load-schema-102-fixture.ccsave",&legacy,error,sizeof(error)));
     Check(CcSaveRead("mine-load-schema-102-fixture.ccsave",&restored,error,sizeof(error)));
     CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION);
@@ -383,6 +435,14 @@ int main(void)
     Check(CcSaveRead("mine-load-stow.ccsave",&loaded,error,sizeof(error)));
     CC_CHECK(loaded.mine.phase==CC_MINE_NONE && loaded.player.cargo[CC_GOOD_GEMS]==boarded_gems &&
         CcMineSourceUsed(&loaded)==0 && CcMineCacheUsed(&loaded)==7);
+    ReturnToMineBranch(&loaded);
+    ApplyGood(&loaded,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,1);
+    Walk(&loaded,15,3); Apply(&loaded,CC_COMMAND_MINE_USE,0);
+    Walk(&loaded,26,16);
+    CC_CHECK(CcMineSourceUsed(&loaded)==0);
+    Walk(&loaded,5,15);
+    CC_CHECK(CcMineCacheGood(&loaded,CC_GOOD_IRON)==5 &&
+        CcMineCacheGood(&loaded,CC_GOOD_GOLD)==2);
     (void)remove(path);(void)remove("mine-replay.ccsave");
     (void)remove("mine-load-replay.ccsave");
     (void)remove("mine-load-roundtrip-103.ccsave");

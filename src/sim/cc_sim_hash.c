@@ -46,7 +46,11 @@ uint64_t CcSimHash(const CcSim *sim)
     bool hash_lifecycles = sim->schema_version >= 26U;
     uint64_t hash = UINT64_C(1469598103934665603);
 #define HASH_VALUE(value) hash = HashU64(hash, (uint64_t)(value))
-    if (sim->schema_version >= 99U) HASH_VALUE(CcCustodyHash(&sim->custody));
+    if (sim->schema_version >= 99U) {
+        int32_t custody_capacity=sim->schema_version < 103U ?
+            CC_CUSTODY_LEGACY_CAPACITY : CC_CUSTODY_CAPACITY;
+        HASH_VALUE(CcCustodyHashForCapacity(&sim->custody,custody_capacity));
+    }
     if (sim->schema_version >= 59U) {
         HASH_VALUE(sim->mine.phase); HASH_VALUE(sim->mine.site_id);
         HASH_VALUE(sim->mine.x); HASH_VALUE(sim->mine.y); HASH_VALUE(sim->mine.revision);

@@ -45,7 +45,7 @@ int32_t CcSimCustodyCarrierLoad(const CcSim *sim, CcId carrier_id)
 {
     if (sim == NULL || sim->schema_version < 99U) return 0;
     int64_t total = 0;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < CcCustodyEffectiveCapacity(&sim->custody); ++i) {
         const CcCustodyEntry *entry = &sim->custody.entries[i];
         if (!entry->active) continue;
         CcCustodyHolder root = entry->holder;
@@ -127,10 +127,13 @@ static bool ResolveStoredCustody(const void *context, CcCustodyHolder holder,
 bool CcSimStoredCustodyValid(const CcSim *sim)
 {
     if (sim == NULL) return false;
+    int32_t expected_capacity=sim->schema_version < 103U ?
+        CC_CUSTODY_LEGACY_CAPACITY : CC_CUSTODY_CAPACITY;
+    if (CcCustodyEffectiveCapacity(&sim->custody) != expected_capacity) return false;
     const CcCustodyRules rules = {.context = sim,
         .good_count = CC_GOOD_COUNT, .load = StoredCustodyLoad, .resolve = ResolveStoredCustody};
     if (!CcCustodyValidate(&sim->custody, &rules)) return false;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < CcCustodyEffectiveCapacity(&sim->custody); ++i) {
         const CcCustodyEntry *entry = &sim->custody.entries[i];
         if (!entry->active) continue;
         if (entry->quantity > (entry->kind == CC_CUSTODY_PURSE ?
@@ -193,7 +196,7 @@ CcCustodyResult CcSimTransferMineGoods(CcSim *sim, CcCustodyHolder source,
     const CcCustodyRules rules={.context=sim,.good_count=CC_GOOD_COUNT,
         .load=MineCustodyLoad,.resolve=ResolveStoredCustody,.permit=PermitMineTransfer};
     int64_t available=0;
-    for (int32_t i=0;i<CC_CUSTODY_CAPACITY;++i) {
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
         const CcCustodyEntry *entry=&candidate.entries[i];
         if (entry->active && entry->kind == CC_CUSTODY_GOODS && entry->good == (int32_t)good &&
             SameMineHolder(entry->holder,source.kind,source.id)) available+=entry->quantity;
@@ -202,7 +205,7 @@ CcCustodyResult CcSimTransferMineGoods(CcSim *sim, CcCustodyHolder source,
     int32_t remaining=quantity;
     while (remaining > 0) {
         const CcCustodyEntry *entry=NULL;
-        for (int32_t i=0;i<CC_CUSTODY_CAPACITY;++i) {
+        for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
             const CcCustodyEntry *candidate_entry=&candidate.entries[i];
             if (candidate_entry->active && candidate_entry->kind == CC_CUSTODY_GOODS &&
                 candidate_entry->good == (int32_t)good &&
@@ -264,7 +267,7 @@ CcCustodyResult CcSimPackStoreGoods(CcSim *sim, CcId town_id,
     if (box->owner_id != town_id) return CC_CUSTODY_FORBIDDEN;
     if (next_id == UINT64_MAX) return CC_CUSTODY_FULL;
     int slot = -1;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < CcCustodyEffectiveCapacity(&sim->custody); ++i) {
         if (!sim->custody.entries[i].active && sim->custody.entries[i].quantity == 0) {
             slot = i;
             break;
@@ -313,7 +316,7 @@ CcCustodyResult CcSimUnpackStoreGoods(CcSim *sim, CcId town_id,
     uint64_t moved_id = 0;
     CcCustodyResult result = CcCustodyApplyTransfer(&candidate, &rules, &move, &moved_id);
     if (result != CC_CUSTODY_READY) return result;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < CcCustodyEffectiveCapacity(&sim->custody); ++i) {
         CcCustodyEntry *moved = &candidate.entries[i];
         if (moved->id == moved_id) {
             moved->quantity = 0;
@@ -349,7 +352,7 @@ CcCustodyResult CcSimMakeCustodyContainer(CcSim *sim, CcProductionContext *work,
     if (next_id != sim->custody.next_id) return CC_CUSTODY_STALE;
     if (next_id == UINT64_MAX) return CC_CUSTODY_FULL;
     int slot = -1;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < CcCustodyEffectiveCapacity(&sim->custody); ++i) {
         if (!sim->custody.entries[i].active && sim->custody.entries[i].quantity == 0) {
             slot = i;
             break;
@@ -435,7 +438,7 @@ bool CcSimLeaveBodyPurse(CcSim *sim, CcId person_id, CcId place_id,
         CcSimCharacter(sim, person_id) == NULL ||
         sim->custody.next_id == UINT64_MAX) return false;
     int slot = -1;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < CcCustodyEffectiveCapacity(&sim->custody); ++i) {
         if (!sim->custody.entries[i].active && sim->custody.entries[i].quantity == 0) {
             slot = i;
             break;
@@ -460,7 +463,7 @@ bool CcSimClaimBodyPurse(CcSim *sim, CcId entry_id, char *error, size_t error_ca
         return false;
     }
     CcCustodyEntry *entry = NULL;
-    for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i) {
+    for (int i = 0; i < CcCustodyEffectiveCapacity(&sim->custody); ++i) {
         if (sim->custody.entries[i].active && sim->custody.entries[i].id == entry_id) {
             entry = &sim->custody.entries[i];
             break;

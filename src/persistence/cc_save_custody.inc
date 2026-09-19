@@ -41,6 +41,7 @@ static bool ReadCustody(sqlite3 *database, CcSim *sim, char *error, size_t capac
     sqlite3_finalize(statement); statement = NULL;
     if (!Prepare(database, "SELECT slot,id,revision,owner_id,source_id,last_event_id,holder_kind,holder_id,kind,reference_id,quantity,good,condition,capacity,active FROM custody_entry ORDER BY slot;", &statement, error, capacity)) return false;
     int32_t rows=sim->schema_version < 103U ? CC_CUSTODY_LEGACY_CAPACITY : CC_CUSTODY_CAPACITY;
+    sim->custody.capacity=rows;
     for (int i = 0; i < CC_CUSTODY_CAPACITY; ++i)
         sim->custody.entries[i]=(CcCustodyEntry){0};
     for (int i = 0; i < rows; ++i) {
