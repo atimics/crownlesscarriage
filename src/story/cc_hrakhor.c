@@ -22,7 +22,15 @@ static const struct { const char *english, *goblin; } Words[] = {
     {"raid", "krath'rakh"}, {"raided", "krath'rakh'ed"},
     {"tunnel", "grak'nukh"}, {"tunnels", "grak'nukhuk"},
     {"trade", "vesh'rakh"}, {"traded", "vesh'rakh'ed"},
-    {"peace", "vesh'khor"}, {"war", "krath'khor"}
+    {"peace", "vesh'khor"}, {"war", "krath'khor"},
+    /* Ash, shrine, and egg roots belong to the dragon-keeping clans. */
+    {"ash", "zhur"}, {"ashes", "zhuruk"},
+    {"lair", "nukh"},
+    {"cave", "grak'nukh"}, {"caves", "grak'nukhuk"},
+    {"shrine", "zhur'nukh"}, {"shrines", "zhur'nukhuk"},
+    {"offering", "khor'rakh"}, {"offerings", "khor'rakhuk"},
+    {"egg", "kesh"}, {"eggs", "keshuk"},
+    {"clutch", "kesh'khor"}, {"brood", "kesh'drok"}, {"seed", "kesh"}
 };
 
 static bool WordByte(unsigned char c)
