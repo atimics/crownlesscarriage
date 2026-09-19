@@ -374,30 +374,33 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
     int32_t pack_used=CcMinePackUsed(sim);
     int32_t carriage_used=CcPlayerCargoUsed(&sim->player);
     bool at_carriage=MineAtCarriage(sim);
+    int32_t pack_goods[CC_GOOD_COUNT];
+    for(int32_t good=0;good<CC_GOOD_COUNT;++good)
+        pack_goods[good]=CcMinePackGood(sim,(CcGood)good);
     if(brief) CcOverlayDrawText(TextFormat("Pack %d/8 | Cart %d/%d | Light %d",
         pack_used,carriage_used,sim->player.cargo_capacity,sim->mine.light),22,summary_y,10,INK);
     else CcOverlayDrawText(TextFormat("Pack %d/8, free %d  |  Carriage %d/%d, free %d  |  Light %d",
         pack_used,CC_MINE_PACK_CAPACITY-pack_used,carriage_used,sim->player.cargo_capacity,
         sim->player.cargo_capacity-carriage_used,sim->mine.light),22,summary_y,10,INK);
     int32_t pane_width=MineScreenWidth()/2-34;
-    MineDrawGoods("Pack",sim->mine.pack,22,goods_y,pane_width,TEAL);
+    MineDrawGoods("Pack",pack_goods,22,goods_y,pane_width,TEAL);
     MineDrawGoods(at_carriage?(brief?"Cart":"Carriage"):(brief?"Cart out of reach":"Carriage out of reach"),
         at_carriage?sim->player.cargo:NULL,MineScreenWidth()/2+12,goods_y,pane_width,
         at_carriage?TEAL:MUTED);
     const char *selection=at_carriage?
         TextFormat(brief?"Selected %s x%d | pack %d | cart %d":
             "Selected %s x%d  |  pack %d  carriage %d  |  good [ ]  quantity - +",
-            CcGoodName(local->mine_good),local->mine_quantity,sim->mine.pack[local->mine_good],
+            CcGoodName(local->mine_good),local->mine_quantity,pack_goods[local->mine_good],
             sim->player.cargo[local->mine_good]):
         TextFormat(brief?"Selected %s x%d | pack %d | cart out of reach":
             "Selected %s x%d  |  pack %d  |  carriage out of reach  |  good [ ]  quantity - +",
-            CcGoodName(local->mine_good),local->mine_quantity,sim->mine.pack[local->mine_good]);
+            CcGoodName(local->mine_good),local->mine_quantity,pack_goods[local->mine_good]);
     CcOverlayDrawText(selection,22,GetScreenHeight()-176,11,INK);
     const char *action=CcMineAction(sim);
     bool can_board=!at_carriage || carriage_used+pack_used<=sim->player.cargo_capacity;
     bool can_pack=at_carriage && sim->player.cargo[local->mine_good]>=local->mine_quantity &&
         pack_used+local->mine_quantity<=CC_MINE_PACK_CAPACITY;
-    bool can_unload=at_carriage && sim->mine.pack[local->mine_good]>=local->mine_quantity &&
+    bool can_unload=at_carriage && pack_goods[local->mine_good]>=local->mine_quantity &&
         carriage_used+local->mine_quantity<=sim->player.cargo_capacity;
     const char *hint=action!=NULL?action:underground?
         "Inspect your pack or point where the company should walk.":
