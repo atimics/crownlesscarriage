@@ -1022,6 +1022,32 @@ bool CcRoadSavedPositionValid(const CcSim *sim)
     return saved_length == sim->journey.road_geometry_length_units;
 }
 
+static bool CurrentMainAnchor(const CcSim *sim,
+                              const CcPilotRoadTopology *pilot,
+                              int32_t coordinate, CcId *anchor)
+{
+    if (coordinate == pilot->checkpoint_distance_units) {
+        *anchor = pilot->checkpoint_id;
+        return true;
+    }
+    if (coordinate == pilot->origin_to_junction_units) {
+        *anchor = pilot->junction_id;
+        return true;
+    }
+    for (int32_t i = 0; i < sim->road_site_count; ++i) {
+        const CcRoadSite *site = &sim->road_sites[i];
+        if (site->route_id != pilot->route_id || IsPilotMill(pilot, site) ||
+            (sim->journey.road_site_stop_mask & (UINT32_C(1) << i)) != 0U)
+            continue;
+        if (coordinate == CcRoadScaleDistance(
+                pilot->main_length_units, site->progress_milli)) {
+            *anchor = site->id;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool CcRoadMigrateLegacyJourney(CcSim *sim)
 {
     if (sim == NULL || !sim->journey.active ||
@@ -1043,6 +1069,9 @@ bool CcRoadMigrateLegacyJourney(CcSim *sim)
         pilot.main_length_units, forward ? progress : 1000 - progress);
     CcRoadDirection direction = forward ? CC_ROAD_DIRECTION_FORWARD :
                                           CC_ROAD_DIRECTION_REVERSE;
+    CcId current_anchor = 0U;
+    bool waiting_at_anchor = sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED &&
+        CurrentMainAnchor(sim, &pilot, coordinate, &current_anchor);
     CcId next_anchor = 0U;
     CcRoadAnchorKind next_kind = CC_ROAD_ANCHOR_NONE;
     int32_t next_coordinate = coordinate;
@@ -1062,6 +1091,10 @@ bool CcRoadMigrateLegacyJourney(CcSim *sim)
             CC_ROAD_DIRECTION_REVERSE : CC_ROAD_DIRECTION_FORWARD,
         &previous_anchor, &previous_kind, &previous_coordinate);
     (void)previous_kind;
+    if (waiting_at_anchor) {
+        next_anchor = current_anchor;
+        next_coordinate = coordinate;
+    }
     int32_t leg_length = next_coordinate >= previous_coordinate ?
         next_coordinate - previous_coordinate :
         previous_coordinate - next_coordinate;
@@ -1079,26 +1112,41 @@ bool CcRoadMigrateLegacyJourney(CcSim *sim)
         sim->journey.road_journey_id = UINT64_C(0x3230000000000001);
     sim->journey.road_goal_id = sim->journey.destination_id;
     sim->journey.road_segment_id = MainSegmentAt(
-        &pilot, coordinate, direction);
-    sim->journey.road_anchor_id = previous_anchor;
-    sim->journey.road_stop_anchor_id = next_anchor;
-    sim->journey.road_return_anchor_id = previous_anchor;
+        &pilot, waiting_at_anchor ? previous_coordinate : coordinate,
+        direction);
+    sim->journey.road_anchor_id = waiting_at_anchor ? current_anchor :
+        previous_anchor;
+    sim->journey.road_stop_anchor_id = waiting_at_anchor ? current_anchor :
+        next_anchor;
+    sim->journey.road_return_anchor_id = waiting_at_anchor ? current_anchor :
+        previous_anchor;
     sim->journey.road_direction = (int32_t)direction;
     sim->journey.road_coordinate_units = coordinate;
-    sim->journey.road_distance_travelled_units = travelled;
-    sim->journey.road_distance_remaining_units = leg_length - travelled;
+    sim->journey.road_distance_travelled_units = waiting_at_anchor ?
+        leg_length : travelled;
+    sim->journey.road_distance_remaining_units = waiting_at_anchor ?
+        0 : leg_length - travelled;
     sim->journey.road_leg_length_units = leg_length;
     sim->journey.road_leg_start_coordinate_units = previous_coordinate;
     sim->journey.road_leg_end_coordinate_units = next_coordinate;
     sim->journey.road_leg_total_subticks = leg_time;
-    sim->journey.road_leg_elapsed_subticks = (int32_t)(
-        ((int64_t)leg_time * travelled + leg_length / 2) / leg_length);
+    sim->journey.road_leg_elapsed_subticks = waiting_at_anchor ? leg_time :
+        (int32_t)(((int64_t)leg_time * travelled + leg_length / 2) /
+                  leg_length);
     sim->journey.road_geometry_length_units = geometry.journey_length_units;
     sim->journey.road_compatibility_milli = progress;
     sim->journey.road_revision = 1U;
     for (int32_t i = 0; i < CC_ROAD_GEOMETRY_SAMPLE_COUNT; ++i) {
         sim->journey.road_geometry_x_units[i] = geometry.samples[i].x_units;
         sim->journey.road_geometry_z_units[i] = geometry.samples[i].z_units;
+    }
+    if (waiting_at_anchor) {
+        sim->journey.road_waiting_choice = true;
+        if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING)
+            sim->journey.phase = CC_JOURNEY_PHASE_ROAD_CHOICE;
+        sim->clock.game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND;
+        sim->carriage.mode = CC_CARRIAGE_STOPPED;
+        sim->carriage.speed_milli_per_second = 0;
     }
     return true;
 }
