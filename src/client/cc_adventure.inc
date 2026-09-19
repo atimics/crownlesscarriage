@@ -206,9 +206,18 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
                 --local->interactions.count;
             }
         }
-        if (DungeonAtSettlement(sim, sim->player.location_id) != NULL) {
+        const CcDungeon *local_dungeon = DungeonAtSettlement(
+            sim, sim->player.location_id);
+        if (local_dungeon != NULL) {
+            const CcRoadSite *mine = CcMineSite(sim);
+            CcId mine_route_id = 0U;
+            CcId mine_destination_id = 0U;
+            bool mine_road = mine != NULL && CcRoadSiteJourneyTarget(
+                sim, mine->id, &mine_route_id, &mine_destination_id);
             (void)AdventureTarget(local, sim, CC_INTERACTION_SITE, CC_LOCAL_SITE_DUNGEON,
-                "Low Silver Pit road", "Drive to Low Silver Pit", (Vector3){LOCAL_DUNGEON.x, 0, LOCAL_DUNGEON.y},
+                mine_road ? "Low Silver Pit road" : local_dungeon->name,
+                mine_road ? "Drive to Low Silver Pit" : "Travel to the dungeon",
+                (Vector3){LOCAL_DUNGEON.x, 0, LOCAL_DUNGEON.y},
                 2.2f, 3.1f, 1.6f, LOCAL_DUNGEON, 1.3f);
         }
         if (abandoned) {
@@ -385,19 +394,21 @@ static bool HandleAdventureScene(CcJournal *journal, CcSim *sim,
     CcInteractionKey pending = local->interaction.pending;
     const CcInteractionTarget *target = CcInteractionFind(&local->interactions, pending);
     if (CcInteractionAdvance(&local->interaction, &local->interactions, position.x, position.y, dt)) {
-        if (target != NULL && target->key.kind == CC_INTERACTION_SITE &&
-            target->key.object == CC_LOCAL_SITE_DUNGEON && journal != NULL) {
-            const CcRoadSite *mine = CcMineSite(sim);
-            CcId route_id = 0U;
-            CcId destination_id = 0U;
+        const CcRoadSite *mine = target != NULL &&
+                target->key.kind == CC_INTERACTION_SITE &&
+                target->key.object == CC_LOCAL_SITE_DUNGEON ?
+            CcMineSite(sim) : NULL;
+        CcId route_id = 0U;
+        CcId destination_id = 0U;
+        bool mine_road = journal != NULL && mine != NULL &&
+            CcRoadSiteJourneyTarget(
+                sim, mine->id, &route_id, &destination_id);
+        if (mine_road) {
             CcCommand travel = {
-                .kind = CC_COMMAND_TRAVEL
+                .kind = CC_COMMAND_TRAVEL,
+                .target_id = destination_id
             };
-            if (mine != NULL && CcRoadSiteJourneyTarget(
-                    sim, mine->id, &route_id, &destination_id)) {
-                travel.target_id = destination_id;
-            }
-            if (travel.target_id != 0U && ApplyCommand(
+            if (ApplyCommand(
                     journal, sim, travel, message, capacity)) {
                 BeginRoadTravelState(sim, local);
                 (void)snprintf(

@@ -368,6 +368,30 @@ static int RunAdventureMineRoadRegression(void)
     if (mine_card == NULL ||
         strcmp(mine_card->name, "Low Silver Pit road") != 0)
         return ClientRegressionFailure("The shipped mine card must name the Low Silver Pit road.");
+    CcSim other = sim;
+    other.dungeons[0].settlement_id = other.settlements[4].id;
+    other.player.location_id = other.settlements[4].id;
+    other.carriage.location_id = other.player.location_id;
+    CcLocalBindPlace(&other);
+    LocalState other_local;
+    ResetLocalState(&other_local);
+    other_local.adventure_ui = true;
+    BuildAdventureTargets(
+        &other, &other_local, (RenderTexture2D){0}, (Rectangle){0});
+    const CcInteractionTarget *other_card = NULL;
+    for (int32_t i = 0; i < other_local.interactions.count; ++i) {
+        const CcInteractionTarget *candidate =
+            &other_local.interactions.targets[i];
+        if (candidate->key.kind == CC_INTERACTION_SITE &&
+            candidate->key.object == CC_LOCAL_SITE_DUNGEON) {
+            other_card = candidate;
+            break;
+        }
+    }
+    if (other_card == NULL ||
+        strcmp(other_card->name, "The Saintless Vault") != 0)
+        return ClientRegressionFailure("A dungeon away from the mine road must keep its authored name.");
+    CcLocalBindPlace(&sim);
     RepositionHero(
         &local, (Vector2){mine_card->approach_x,
                           mine_card->approach_z}, false);
