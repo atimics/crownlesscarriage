@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "grammar_sha256": "ad017639e911c482e86e25f063207504769353dcd05e263d31dd9a6ef9409fb6",
+  "grammar_sha256": "d13126c622c4f62a66135edadb557a05731011eeb8486d61edf7407aab0e4eae",
   "event_count": 139,
-  "rule_count": 61,
+  "rule_count": 128,
   "events": [
     {
       "kind": "HARVEST_FAILED",
@@ -32,14 +32,18 @@
     {
       "kind": "SHIPMENT_DEPARTED",
       "value": 3,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "shipment_departed_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "SHIPMENT_ARRIVED",
       "value": 4,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "shipment_arrived_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "BANDIT_PRESSURE",
@@ -53,44 +57,58 @@
     {
       "kind": "MONSTER_PRESSURE",
       "value": 6,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "monster_pressure_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "PLAYER_TRADE",
       "value": 7,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "player_trade_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "PLAYER_TRAVEL",
       "value": 8,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "player_travel_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "ROUTE_REPAIRED",
       "value": 9,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "route_repaired_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DUNGEON_CHANGED",
       "value": 10,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dungeon_changed_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "RELIEF",
       "value": 11,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "relief_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "SHIPMENT_LOST",
       "value": 12,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "shipment_lost_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "KINGDOM_ACTION",
@@ -103,104 +121,139 @@
     {
       "kind": "ROUTE_DECAY",
       "value": 14,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "route_decay_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "FACTION_SHIFT",
       "value": 15,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "faction_shift_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "SITUATION_CREATED",
       "value": 16,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "situation_created_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "SITUATION_RESOLVED",
       "value": 17,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "situation_resolved_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "SITUATION_FAILED",
       "value": 18,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "situation_failed_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "PLAYER_AMBUSH",
       "value": 19,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "player_ambush_grounded_0",
+        "player_ambush_grounded_1"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "MAP_BOUGHT",
       "value": 20,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "map_bought_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "MAP_SOLD",
       "value": 21,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "map_sold_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "CHARTER_ACCEPTED",
       "value": 22,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "charter_accepted_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "CHARTER_ABANDONED",
       "value": 23,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "charter_abandoned_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "JOURNEY_ENCOUNTER",
       "value": 24,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "journey_encounter_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "ENCOUNTER_COMBAT",
       "value": 25,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "encounter_combat_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "ENCOUNTER_NEGOTIATED",
       "value": 26,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "encounter_negotiated_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DELAYED_ECHO",
       "value": 27,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "delayed_echo_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "JOURNEY_DEPARTED",
       "value": 28,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "journey_departed_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "SERVICE_OPENED",
       "value": 29,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "service_opened_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "BANDIT_RAID_DEPARTED",
       "value": 30,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "bandit_raid_departed_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "SETTLEMENT_RAIDED",
@@ -214,32 +267,42 @@
     {
       "kind": "BANDIT_RAID_RETURNED",
       "value": 32,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "bandit_raid_returned_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_TRIBUTE_DEPARTED",
       "value": 33,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_tribute_departed_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_TRIBUTE_TAKEN",
       "value": 34,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_tribute_taken_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_TRIBUTE_DELIVERED",
       "value": 35,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_tribute_delivered_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DRAGON_HOARD_STOLEN",
       "value": 36,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_hoard_stolen_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DRAGON_OMEN",
@@ -252,8 +315,10 @@
     {
       "kind": "DRAGON_TREASURE_RETURNED",
       "value": 38,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_treasure_returned_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DRAGON_RETALIATION",
@@ -266,56 +331,74 @@
     {
       "kind": "INEQUALITY_PRESSURE",
       "value": 40,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "inequality_pressure_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "HOARD_HEIST_DEPARTED",
       "value": 41,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "hoard_heist_departed_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "HOARD_HEIST_RETURNED",
       "value": 42,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "hoard_heist_returned_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "WAR_PRESSURE",
       "value": 43,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "war_pressure_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "WAR_CHEST_FUNDED",
       "value": 44,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "war_chest_funded_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "WAR_SUPPLY_BOUGHT",
       "value": 45,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "war_supply_bought_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "WAR_SUPPLY_SHORTAGE",
       "value": 46,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "war_supply_shortage_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "RESOURCE_EXTRACTED",
       "value": 47,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "resource_extracted_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "SMITH_PRODUCTION",
       "value": 48,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "smith_production_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "TREASURE_CRAFTED",
@@ -328,8 +411,10 @@
     {
       "kind": "GOBLIN_RAID_DEPARTED",
       "value": 50,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_raid_departed_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_RAIDED",
@@ -343,50 +428,66 @@
     {
       "kind": "GOBLIN_RAID_RETURNED",
       "value": 52,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_raid_returned_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "WAR_MATERIEL_LOST",
       "value": 53,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "war_materiel_lost_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "IRON_LEDGER_LOAN",
       "value": 54,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "iron_ledger_loan_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "IRON_LEDGER_REPAID",
       "value": 55,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "iron_ledger_repaid_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_HOARD_DEFENDED",
       "value": 56,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_hoard_defended_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "COURIER_DEPARTED",
       "value": 57,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "courier_departed_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "COURIER_ARRIVED",
       "value": 58,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "courier_arrived_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "COURIER_LOST",
       "value": 59,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "courier_lost_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "COURIER_DISTORTED",
@@ -441,26 +542,34 @@
     {
       "kind": "DRAGON_HOARD_RECOVERED",
       "value": 67,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_hoard_recovered_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DRAGON_HUNT",
       "value": 68,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_hunt_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DRAGON_CROWNED",
       "value": 69,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_crowned_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DRAGON_UNCROWNED",
       "value": 70,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_uncrowned_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DRAGON_BROOD",
@@ -473,8 +582,10 @@
     {
       "kind": "DRAGON_WHELP_DISPERSED",
       "value": 72,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "dragon_whelp_dispersed_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "DRAGON_AFTERSHOCK",
@@ -501,8 +612,10 @@
     {
       "kind": "GOBLIN_DRAGON_SEED",
       "value": 76,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_dragon_seed_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "ENCOUNTER_WITHDRAWN",
@@ -552,8 +665,10 @@
     {
       "kind": "GOBLIN_RAID_PREPARED",
       "value": 83,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_raid_prepared_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_TARGET_WARNED",
@@ -570,8 +685,10 @@
     {
       "kind": "GOBLIN_TRADE",
       "value": 86,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "goblin_trade_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_DRAGON_SEED_RUMORED",
@@ -588,8 +705,10 @@
     {
       "kind": "CHARACTER_INTERACTION",
       "value": 89,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "character_interaction_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "JOURNEY_WARNING",
@@ -606,8 +725,10 @@
     {
       "kind": "ENCOUNTER_LOOT",
       "value": 92,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "encounter_loot_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "GOBLIN_TUNNEL_TRAVERSED",
@@ -681,8 +802,10 @@
     {
       "kind": "RELATIONSHIP_CHANGED",
       "value": 104,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "relationship_changed_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "FRONT_CREATED",
@@ -693,26 +816,34 @@
     {
       "kind": "FRONT_RESOLVED",
       "value": 106,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "front_resolved_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "FRONT_FAILED",
       "value": 107,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "front_failed_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "QUEST_PROGRESS",
       "value": 108,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "quest_progress_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "LORE_RECORDED",
       "value": 109,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "lore_recorded_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "LORE_LOST",
@@ -726,8 +857,10 @@
     {
       "kind": "JOURNEY_BREAK",
       "value": 111,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "journey_break_source_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "JOURNEY_CAMP",
