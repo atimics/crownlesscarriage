@@ -23,6 +23,8 @@ def main():
     records = test.get("records", [])
     if test.get("count") != len(records):
         errors.append("evaluation count does not match records")
+    if manifest.get('datasets', {}).get('test', {}).get('rows') != len(records):
+        errors.append('evaluation must cover the complete test dataset')
     if not records or test.get("exact") != test.get("count") or any(
         not (row.get("exact") and row.get("valid") and row.get("eos")) for row in records
     ):
@@ -38,15 +40,19 @@ def main():
                 [str(args.probe), str(args.run / "last.ccv2"), "--semantic-prefix", prefix, "--generate"],
                 capture_output=True, text=True, timeout=args.timeout, check=False,
             )
-        except subprocess.TimeoutExpired:
-            failures.append({"row": number, "error": "probe timeout"})
+        except subprocess.TimeoutExpired as error:
+            failures.append({"row": number, "error": "probe timeout",
+                             'stdout': repr(error.stdout), 'stderr': repr(error.stderr)})
             continue
         output = result.stdout.strip()
-        native = [int(value) for value in output.split()] if output else []
+        try:
+            native = [int(value) for value in output.split()] if output else []
+        except ValueError:
+            native = None
         if result.returncode != 0 or native != row["ids"]:
             failures.append({"row": number, "returncode": result.returncode,
                              "python": row["ids"], "native": native,
-                             "stderr": result.stderr[-400:]})
+                             "stdout": result.stdout, "stderr": result.stderr})
         checked += 1
     parity = {"checked": checked, "failures": failures}
     (args.run / "native-parity.json").write_text(json.dumps(parity, indent=2) + "\n")

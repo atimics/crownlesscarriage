@@ -2584,6 +2584,25 @@
         "The purse of {1} was taken by bandits."
       ],
       "challenge": "The source account states: Bandits of {0} lift the unclaimed purse of {1}."
+    },
+    {
+      "id": "quest_progress_grounded_0",
+      "kind": "QUEST_PROGRESS",
+      "roles": [
+        "detail",
+        "quantity",
+        "quantity"
+      ],
+      "source": "{0} progresses to {1} of {2} with recorded evidence.",
+      "outputs": [
+        "{0} advanced with recorded evidence.",
+        "Recorded evidence advanced {0}."
+      ],
+      "challenge": "{0} progresses to {1} of {2} with recorded evidence.",
+      "emitter": {
+        "file": "src/sim/cc_sim.c",
+        "format": "%s progresses to %d of %d with recorded evidence."
+      }
     }
   ]
 }

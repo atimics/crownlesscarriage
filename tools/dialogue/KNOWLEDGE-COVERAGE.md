@@ -6,13 +6,23 @@ own goal, hunger, distress, courage, coins and public dialogue acts. These are
 the current model's learning boundaries.
 
 The simulation declares 139 event kinds and 67 non-empty command kinds. The
-older account grammar has 61 rules covering 44 event kinds; 95 event kinds have
-no account rule. This is a count of event templates, not a percentage of all
-knowledge understood. The new policy currently has zero concrete event-claim
-forms. Its generic safety topic expresses concern without identifying an event.
+account grammar now has 158 rules covering all 139 event kinds. The earlier
+inventory covered 44. This measures event-kind coverage: each kind has a
+source-backed parsing and rendering form. Each kind can have further wording
+variants, and distorted retellings can still fall outside these forms.
 
-Run `python3 tools/dialogue/audit_grammar.py --output coverage.json` for the
-complete covered/missing event lists, enum inventories and source hashes.
+`QUEST_PROGRESS` now records actual advances caused by quest evidence. Its
+parent links to the evidence event. Historical `PLAYER_AMBUSH` formats remain
+supported for old accounts, with their source commit recorded in a fixture.
+
+Run `python3 tools/dialogue/audit_grammar.py --check --output coverage.json`.
+CI requires a rule for every declared event, checks source wording against
+simulation formats, and checks the generated native grammar. Regression tests
+add an event, remove its rule, and invent a source pattern to prove failure.
+Native tests exercise every rule's rendered forms and recovered field spans.
+
+The compact 5M checkpoint still learns seven dialogue moves. The event fact
+bridge below supplies the data contract for a future event-selection policy.
 
 | Simulation knowledge | Existing representation | Current dialogue policy | Next grammar work |
 | --- | --- | --- | --- |
@@ -28,7 +38,7 @@ complete covered/missing event lists, enum inventories and source hashes.
 
 ## Facts before more moves
 
-The next useful bridge is a bounded table of facts owned by the participant.
+The event bridge builds a bounded table of facts owned by the participant.
 Each fact needs a stable reference, predicate, entity references, typed values,
 date, source, certainty and disclosure status. Preserve the original evidence
 alongside the compact model input. Select from the person's own held accounts,
@@ -47,10 +57,11 @@ digest reference, and keeps its kind, text, source, day, confidence, and private
 flag. Knowledge records supply the simulation's `doubtful`, `told`, or
 `witnessed` certainty. `validate_act` accepts only `report`, `ask` and `warn`
 references from the current participant snapshot. Private facts stay private.
-`validate_event_registry` checks all 139 simulation event kinds, including kinds
-without an account grammar rule. The renderer quotes unparsed text with source
-and day attribution. This is a grounding and coverage bridge; it makes no claim
-about a new learned model.
+`validate_event_registry` checks all 139 simulation event kinds. The renderer
+quotes held text with source and day attribution. Certainty applies when the
+knowledge record has the same text as the held account. This bridge is ready
+for event-selection training; the current compact checkpoint uses its existing
+seven-move policy.
 
 The current four-byte act record is suitable for its small fixed vocabulary.
 General facts and actions need additional typed records: entity references,

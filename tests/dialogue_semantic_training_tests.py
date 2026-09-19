@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import subprocess
 import tempfile
+import shutil
 import unittest
 import sys
 
@@ -22,19 +23,21 @@ class SemanticTrainingGateTests(unittest.TestCase):
 
     def make_run(self, records, export=b"model"):
         directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory)
         (directory / "last.ccv2").write_bytes(export)
         import hashlib
         digest = hashlib.sha256(export).hexdigest()
-        (directory / "manifest.json").write_text(json.dumps({"status": "complete", "export_sha256": digest}))
+        (directory / "manifest.json").write_text(json.dumps({"status": "complete", "export_sha256": digest,
+                                                           'datasets': {'test': {'rows': len(records)}}}))
         (directory / "test-evaluation.json").write_text(json.dumps({
             "count": len(records), "exact": sum(row.get("exact", False) for row in records),
             "records": records,
         }))
         return directory
 
-    def run_gate(self, directory):
+    def run_gate(self, directory, stdout='9 32 64', status=0):
         probe = directory / "probe"
-        probe.write_text("#!/bin/sh\nprintf '9 32 64\\n'")
+        probe.write_text("#!/bin/sh\nprintf '" + stdout + "\\n'\nexit " + str(status) + '\n')
         probe.chmod(0o755)
         return subprocess.run(["python3", str(GATE), "--run", str(directory), "--probe", str(probe)], capture_output=True)
 
@@ -49,6 +52,20 @@ class SemanticTrainingGateTests(unittest.TestCase):
         directory = self.make_run([{"exact": True, "valid": True, "eos": True, "prefix_ids": [128, 131], "ids": [9, 32, 64]}])
         (directory / "last.ccv2").write_bytes(b"tampered")
         self.assertNotEqual(self.run_gate(directory).returncode, 0)
+
+    def test_native_failure_keeps_receipt(self):
+        for output, status in [('bad output', 0), ('9 32 64', 1), ('9 33 64', 0)]:
+            directory = self.make_run([{'exact': True, 'valid': True, 'eos': True,
+                                       'prefix_ids': [128, 131], 'ids': [9, 32, 64]}])
+            self.assertNotEqual(self.run_gate(directory, output, status).returncode, 0)
+            receipt = json.loads((directory / 'native-parity.json').read_text())
+            self.assertEqual(len(receipt['failures']), 1)
+            self.assertIn(output, receipt['failures'][0]['stdout'])
+
+    def test_complete_parity_passes(self):
+        directory = self.make_run([{'exact': True, 'valid': True, 'eos': True,
+                                   'prefix_ids': [128, 131], 'ids': [9, 32, 64]}])
+        self.assertEqual(self.run_gate(directory).returncode, 0)
 
 
 if __name__ == "__main__":

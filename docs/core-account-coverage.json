@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "grammar_sha256": "93d543354bbc4dc99a015279e619ac25f45a2cba58305a9499447a3774dfe5c2",
+  "grammar_sha256": "61eca885255108dad602a6110b9ef491104a4eea6fcec9d9acf7aa4da3aa6a11",
   "event_count": 139,
-  "rule_count": 157,
+  "rule_count": 158,
   "events": [
     {
       "kind": "HARVEST_FAILED",
@@ -881,8 +881,10 @@
     {
       "kind": "QUEST_PROGRESS",
       "value": 108,
-      "rules": [],
-      "status": "legacy_or_uncovered"
+      "rules": [
+        "quest_progress_grounded_0"
+      ],
+      "status": "field_rules"
     },
     {
       "kind": "LORE_RECORDED",

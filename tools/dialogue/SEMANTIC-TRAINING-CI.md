@@ -1,7 +1,7 @@
 # Reproducible semantic 5M training
 
-The `Semantic 5M training` workflow runs on semantic model release tags and on
-manual dispatch. It compares the dialogue sources with the previous release,
+The `Semantic 5M training` workflow runs on `v*.*.*` release tags and on
+manual dispatch. Relevant source changes select release runs; manual runs always train. It compares the dialogue sources with the previous release,
 trains on a CPU runner, and keeps the full run directory and logs for 14 days.
 The model artifact is published only after every test row matches the authored
 policy and the native C probe produces the same semantic IDs as Python.
@@ -28,3 +28,13 @@ probe MODEL --semantic-prefix COMMA_IDS --generate
 The helper `verify_semantic_training.py` writes `native-parity.json` and keeps
 failure details in the run artifact. A failed training, build, or gate keeps
 its partial checkpoint and logs through the always-uploaded artifact.
+
+The workflow uses a standard Ubuntu CPU runner, a 20-minute job limit, and an
+8-minute training limit. The normal run has 800 steps. Manual requests accept
+1 through 2,000 steps; the same full evaluation gate applies. The verified
+model artifact lasts 90 days. It is available for review and later integration
+into the game. The workflow leaves the shipped checkpoint under version control.
+
+The current training target is the seven-move dialogue policy. Event grammar
+coverage is checked before training. Training an event-selection head is the
+next step after the participant fact contract.
