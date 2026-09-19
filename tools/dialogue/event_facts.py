@@ -146,6 +146,9 @@ def _fact_from_account(owner_id: str, account: Mapping[str, Any], knowledge: Map
     certainty_value = knowledge.get("certainty") if knowledge else None
     if certainty_value is not None and (type(certainty_value) is not int or certainty_value not in KNOWLEDGE_CERTAINTY):
         raise ValueError("certainty must be doubtful, told or witnessed")
+    if knowledge and knowledge.get('event_text') != text:
+        # Certainty about an event does not certify a changed retelling.
+        certainty_value = None
     certainty = KNOWLEDGE_CERTAINTY.get(certainty_value)
     confidence = _score(account, "confidence")
     digest_input = {"owner_id": owner_id, "event_id": event_id, "kind": kind,
@@ -216,10 +219,10 @@ def validate_act(act: Mapping[str, Any], participant: Mapping[str, Any], listene
 def render_fact_act(act: Mapping[str, Any], participant: Mapping[str, Any], listener_id: Any = None) -> str:
     """Render a bounded, attributed claim after act validation."""
     fact = validate_act(act, participant, listener_id)
-    source = "an unknown source" if fact.source_id == "unknown" else ("my own account" if fact.source_id == fact.owner_id else "person " + fact.source_id)
+    source = "an unknown source" if fact.source_id == "unknown" else ("my own account" if fact.source_id == fact.owner_id else "another person")
     certainty = "I have heard this" if fact.certainty is None else "I was told this" if fact.certainty == "told" else "I witnessed this" if fact.certainty == "witnessed" else "I have a doubtful account"
     quoted = '"' + fact.text.replace('"', "'") + '"'
     if act["kind"] == "ask":
         return f"Do you know this account from {source}: {quoted}?"
     prefix = "Be warned" if act["kind"] == "warn" else certainty
-    return f"{prefix}: {quoted} (an unparsed account from {source}, on day {fact.day})"
+    return f"{prefix}: {quoted} (from {source}, on day {fact.day})"

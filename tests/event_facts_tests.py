@@ -27,7 +27,8 @@ def account(**changes):
 
 def with_knowledge(value, **changes):
     result = copy.deepcopy(value)
-    result["knowledge"] = [{"event_id": value["held_accounts"][0]["event_id"], **changes}]
+    result["knowledge"] = [{"event_id": value["held_accounts"][0]["event_id"],
+                            "event_text": value["held_accounts"][0]['account'], **changes}]
     return result
 
 
@@ -64,7 +65,7 @@ class EventFactsTests(unittest.TestCase):
         fact = build_facts(current)[0]
         with self.assertRaisesRegex(ValueError, "private"):
             render_fact_act({"kind": "report", "fact_ref": fact.account_ref}, current, "18")
-        self.assertIn("unparsed account", render_fact_act(
+        self.assertIn("A purse was lifted.", render_fact_act(
             {"kind": "report", "fact_ref": fact.account_ref}, current, "17"))
 
     def test_act_kind_and_fields_are_checked(self):
@@ -105,6 +106,11 @@ class EventFactsTests(unittest.TestCase):
         current = participant(account(event_id="902"))
         with self.assertRaisesRegex(ValueError, "owned"):
             validate_act({"kind": "report", "fact_ref": ref}, current)
+
+    def test_certainty_does_not_certify_changed_retelling(self):
+        own = with_knowledge(participant(account()), certainty=3,
+                             event_text='A different event account.')
+        self.assertIsNone(build_facts(own)[0].certainty)
 
     def test_foreign_owner_and_private_account(self):
         own = participant(account(private=True))

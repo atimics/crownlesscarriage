@@ -15,7 +15,9 @@ def literal_formats(root):
     for path in paths:
         if not path.exists():
             continue
-        text = path.read_text()
+        text = re.sub(STRING + r'|/\*.*?\*/|//[^\n]*',
+                      lambda m: m.group() if m.group().startswith('"') else ' ',
+                      path.read_text(), flags=re.S)
         for match in CHAIN.finditer(text):
             parts = re.findall(STRING + r'|PRI[douxX]\d+', match.group())
             try:
@@ -25,6 +27,16 @@ def literal_formats(root):
             if not isinstance(value, str) or len(value) < 8:
                 continue
             result.append((str(path.relative_to(root)), value))
+            if (path.name == 'cc_journey_encounter.c' and
+                    value.startswith('The company strips the broken cordon:') and
+                    re.search(r'snprintf\(text \+ length, sizeof\(text\) - length, "\."\)', text)):
+                result.append((str(path.relative_to(root)), value + '.'))
+        # Front completion chooses the verb before formatting the message.
+        # Expand only the assignments inside that emitter function.
+        front = re.search(r'static void FinishFrontAfterSituation\(.*?(?=\nstatic )', text, re.S)
+        if front and '"%s %s: %s."' in front.group():
+            for verb in re.findall(r'verb\s*=\s*"([^"\\]+)"', front.group()):
+                result.append((str(path.relative_to(root)), '%s ' + verb + ': %s.'))
     return result
 
 
@@ -45,7 +57,7 @@ def accepts_template(fmt, rule):
     chunks.append(re.escape(fmt[end:]))
     # A bare string insertion cannot establish a reviewed event format.
     fixed = PRINTF.sub('', fmt)
-    if len(fixed.strip()) < 8:
+    if len(fixed.strip()) < 5:
         return False
     if re.fullmatch(''.join(chunks), rule['source']) is not None:
         return True
