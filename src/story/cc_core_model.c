@@ -31,6 +31,7 @@ struct CcCoreModel {
     size_t length;
     bool semantic;
     bool policy;
+    bool policy_allowed[64];
     int semantic_ids[8];
 };
 
@@ -590,14 +591,32 @@ bool CcCoreModelBeginPolicy(CcCoreModel *m, const int *ids, int count)
     m->status = -1; m->text[0] = '\0'; m->length = 0U;
     m->semantic = false; m->policy = true;
     m->prefix = 0; m->used = 0; m->actions = 0; m->candidates = 0;
+    memset(m->policy_allowed, 0, sizeof(m->policy_allowed));
     memset(m->meta, 0, sizeof(m->meta));
     if (ids == NULL || count < 2 || count > CONTEXT - MAX_ACTIONS ||
         ids[0] != 1280 || ids[count - 1] != 1281)
         return false;
+    int marker = -1;
     for (int i = 0; i < count; ++i) {
         if (ids[i] < 9 || ids[i] >= VOCAB) return false;
+        if (ids[i] == 1580) {
+            if (marker >= 0) return false;
+            marker = i;
+        }
+    }
+    if (marker < 0 || count - marker - 2 < 1 || count - marker - 2 > 38) return false;
+    for (int i = marker + 1; i < count - 1; ++i) {
+        if (ids[i] < 1024 || ids[i] > 1087 || m->policy_allowed[ids[i] - 1024]) return false;
+        m->policy_allowed[ids[i] - 1024] = true;
+    }
+    for (int i = marker + 1; i < count - 1; ++i) {
+        if (ids[i] == 1580) return false;
+    }
+    for (int i = 0; i < count - 1; ++i) {
+        if (i != marker && ids[i] == 1281) return false;
         m->tokens[i] = ids[i];
     }
+    m->tokens[count - 1] = ids[count - 1];
     m->prefix = count; m->status = 0;
     return true;
 }
@@ -636,6 +655,7 @@ int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
                 if (m->positions[i] == position) memcpy(m->sources[i], m->hidden, sizeof(m->hidden));
             continue;
         }
+        if (m->policy && m->actions == 1) { m->status = 1; break; }
         if (m->actions >= MAX_ACTIONS || m->used >= CONTEXT) { m->status = -1; break; }
         if (m->semantic && m->actions >= 8) { m->status = -1; break; }
         if (m->policy && m->actions >= 2) { m->status = -1; break; }
@@ -655,7 +675,8 @@ int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
                 if (i >= 1 && i <= 8) continue;
                 if (m->semantic && i != 0 && !(i >= 9 && i <= 15) &&
                     !(i >= 32 && i <= 41) && !(i >= 64 && i <= 96)) continue;
-                if (m->policy && i != 0 && (i < 1024 || i > 1087)) continue;
+                if (m->policy && i != 0 && (i < 1024 || i > 1087 ||
+                    !m->policy_allowed[i - 1024])) continue;
                 float score = Dot(m->weights[0] + i * D, m->hidden, D);
                 if (score > best) { best = score; token = i; }
             }
