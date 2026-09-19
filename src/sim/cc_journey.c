@@ -135,6 +135,12 @@ int32_t CcSimJourneyWatchNumber(const CcSim *sim)
 {
     int32_t watch_count = CcSimJourneyWatchCount(sim);
     if (watch_count <= 0) return 0;
+    if (sim->journey.road_position_active) {
+        int32_t completed =
+            sim->journey.elapsed_subticks / CC_WORLD_WATCH_SUBTICKS;
+        return sim->journey.phase == CC_JOURNEY_PHASE_RESTING ?
+            completed : completed + 1;
+    }
     if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
         return MinimumI32(
             watch_count,
@@ -150,7 +156,8 @@ CcJourneyStopKind CcSimJourneyStop(const CcSim *sim)
     if (sim == NULL || !sim->journey.active ||
         sim->journey.phase != CC_JOURNEY_PHASE_RESTING ||
         sim->journey.elapsed_subticks <= 0 ||
-        sim->journey.elapsed_subticks >= sim->journey.total_subticks ||
+        (!sim->journey.road_position_active &&
+         sim->journey.elapsed_subticks >= sim->journey.total_subticks) ||
         sim->journey.elapsed_subticks % CC_WORLD_WATCH_SUBTICKS != 0) {
         return CC_JOURNEY_STOP_NONE;
     }

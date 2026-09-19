@@ -664,6 +664,31 @@ static int TestActiveJourneyKeepsFrozenRouteSamples(void)
         CHECK(before_route->samples[i].x == after_route->samples[i].x);
         CHECK(before_route->samples[i].z == after_route->samples[i].z);
     }
+    sim.journey = (CcJourneyEncounter){
+        .active = true,
+        .phase = CC_JOURNEY_PHASE_TRAVELLING,
+        .origin_id = pilot.origin_id,
+        .destination_id = pilot.destination_id,
+        .route_id = pilot.route_id,
+        .total_subticks = 10000
+    };
+    CHECK(CcRoadBeginPilotJourney(&sim, UINT64_C(3239200)));
+    CHECK(sim.journey.road_geometry_length_units ==
+          current.journey_length_units);
+    CcWorldManifest next_journey;
+    CHECK(CcWorldManifestBuild(&next_journey, &sim));
+    const CcWorldRoutePlacement *next_route =
+        CcWorldRoutePlacementForId(&next_journey, pilot.route_id);
+    CHECK(next_route != NULL);
+    bool moved = false;
+    for (int32_t i = 0; i < CC_WORLD_ROUTE_SAMPLE_COUNT; ++i) {
+        if (before_route->samples[i].x != next_route->samples[i].x ||
+            before_route->samples[i].z != next_route->samples[i].z) {
+            moved = true;
+            break;
+        }
+    }
+    CHECK(moved);
     return 0;
 }
 

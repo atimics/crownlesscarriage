@@ -275,7 +275,15 @@ static bool ApplyJourneyStopAction(CcSim *sim, const CcCommand *command,
         sim, event_kind, sim->player.id, sim->journey.route_id,
         sim->journey.parent_event_id, magnitude, text);
     sim->journey.parent_event_id = event->id;
-    ResumeJourney(sim);
+    if (sim->journey.road_position_active &&
+        sim->journey.road_waiting_choice) {
+        sim->journey.phase = CC_JOURNEY_PHASE_ROAD_CHOICE;
+        sim->clock.game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND;
+        sim->carriage.mode = CC_CARRIAGE_STOPPED;
+        sim->carriage.speed_milli_per_second = 0;
+    } else {
+        ResumeJourney(sim);
+    }
     SetError(error, error_capacity, "");
     return true;
 }

@@ -322,6 +322,32 @@ static const CcRoadSite *RoadSiteNamed(const CcSim *sim,
     return NULL;
 }
 
+bool CcRoadSiteJourneyTarget(const CcSim *sim, CcId site_id,
+                             CcId *route_id, CcId *destination_id)
+{
+    if (sim == NULL || site_id == 0U || route_id == NULL ||
+        destination_id == NULL || sim->journey.active) return false;
+    const CcRoadSite *site = NULL;
+    for (int32_t i = 0; i < sim->road_site_count; ++i) {
+        if (sim->road_sites[i].id == site_id) {
+            site = &sim->road_sites[i];
+            break;
+        }
+    }
+    if (site == NULL) return false;
+    const CcRoute *route = CcSimRoute(sim, site->route_id);
+    if (route == NULL) return false;
+    CcId destination = 0U;
+    if (route->from_id == sim->player.location_id)
+        destination = route->to_id;
+    else if (route->to_id == sim->player.location_id)
+        destination = route->from_id;
+    if (destination == 0U) return false;
+    *route_id = route->id;
+    *destination_id = destination;
+    return true;
+}
+
 int32_t CcRoadScaleDistance(int32_t total_units, int32_t progress_milli)
 {
     if (total_units <= 0 || progress_milli <= 0) return 0;
@@ -585,8 +611,20 @@ static bool SetPilotLeg(CcSim *sim, const CcPilotRoadTopology *pilot,
     int32_t length = end_coordinate >= start_coordinate ?
         end_coordinate - start_coordinate : start_coordinate - end_coordinate;
     if (length <= 0) return false;
-    int32_t leg_time = CcRoadTravelSubticks(
-        length, sim->journey.total_subticks, pilot->main_length_units);
+    int32_t leg_time = 0;
+    if (segment == pilot->mill_segment_id) {
+        leg_time = CcRoadTravelSubticks(
+            length, sim->journey.total_subticks, pilot->main_length_units);
+    } else {
+        int32_t start_time = CcRoadTravelSubticks(
+            start_coordinate, sim->journey.total_subticks,
+            pilot->main_length_units);
+        int32_t end_time = CcRoadTravelSubticks(
+            end_coordinate, sim->journey.total_subticks,
+            pilot->main_length_units);
+        leg_time = end_time >= start_time ? end_time - start_time :
+            start_time - end_time;
+    }
     if (leg_time <= 0) leg_time = 1;
     sim->journey.road_segment_id = segment;
     sim->journey.road_direction = (int32_t)direction;
@@ -771,11 +809,15 @@ bool CcRoadChooseNextLeg(CcSim *sim, uint64_t decision_token,
         return false;
     }
     CcId old_anchor = sim->journey.road_anchor_id;
+    CcId old_stop_anchor = sim->journey.road_stop_anchor_id;
+    bool was_waiting = sim->journey.road_waiting_choice;
     int32_t start = sim->journey.road_coordinate_units;
     int32_t end = start;
     if (chosen->segment_id == pilot.mill_segment_id) {
-        start = chosen->direction == CC_ROAD_DIRECTION_FORWARD ? 0 :
-            pilot.mill_spur_length_units;
+        if (was_waiting) {
+            start = chosen->direction == CC_ROAD_DIRECTION_FORWARD ? 0 :
+                pilot.mill_spur_length_units;
+        }
         end = chosen->direction == CC_ROAD_DIRECTION_FORWARD ?
             pilot.mill_spur_length_units : 0;
     } else {
@@ -794,6 +836,7 @@ bool CcRoadChooseNextLeg(CcSim *sim, uint64_t decision_token,
         RoadError(error, error_capacity, "That road leg has no distance.");
         return false;
     }
+    if (!was_waiting) sim->journey.road_return_anchor_id = old_stop_anchor;
     RoadError(error, error_capacity, "");
     return true;
 }
@@ -845,6 +888,67 @@ bool CcRoadAdvanceLeg(CcSim *sim, int32_t journey_subticks)
     return true;
 }
 
+static int32_t RouteProgressForCoordinate(const CcSim *sim,
+                                          const CcPilotRoadTopology *pilot,
+                                          int32_t coordinate)
+{
+    int32_t from_origin = sim->journey.origin_id == pilot->origin_id ?
+        coordinate : pilot->main_length_units - coordinate;
+    return CcRoadTravelSubticks(
+        from_origin, sim->journey.total_subticks,
+        pilot->main_length_units);
+}
+
+int32_t CcRoadRouteProgressSubticks(const CcSim *sim)
+{
+    if (sim == NULL || !sim->journey.road_position_active) return -1;
+    CcPilotRoadTopology pilot;
+    if (!CcPilotRoadTopologyBuildWithLength(
+            sim, sim->journey.road_geometry_length_units, &pilot)) return -1;
+    if (sim->journey.road_segment_id == pilot.mill_segment_id) {
+        return CcRoadTravelSubticks(
+            pilot.origin_to_junction_units,
+            sim->journey.total_subticks, pilot.main_length_units);
+    }
+    return RouteProgressForCoordinate(
+        sim, &pilot, sim->journey.road_coordinate_units);
+}
+
+int32_t CcRoadSubticksUntilRouteProgress(const CcSim *sim,
+                                         int32_t target_subticks)
+{
+    if (sim == NULL || !sim->journey.road_position_active ||
+        sim->journey.road_waiting_choice || target_subticks < 0) return -1;
+    CcPilotRoadTopology pilot;
+    if (!CcPilotRoadTopologyBuildWithLength(
+            sim, sim->journey.road_geometry_length_units, &pilot) ||
+        sim->journey.road_segment_id == pilot.mill_segment_id) return -1;
+    int32_t current = CcRoadRouteProgressSubticks(sim);
+    int32_t end = RouteProgressForCoordinate(
+        sim, &pilot, sim->journey.road_leg_end_coordinate_units);
+    if (current >= target_subticks) return 0;
+    if (end < target_subticks || end <= current) return -1;
+    int32_t remaining = sim->journey.road_leg_total_subticks -
+        sim->journey.road_leg_elapsed_subticks;
+    int32_t low = 1;
+    int32_t high = remaining;
+    while (low < high) {
+        int32_t middle = low + (high - low) / 2;
+        int32_t elapsed = sim->journey.road_leg_elapsed_subticks + middle;
+        int32_t travelled = (int32_t)(
+            ((int64_t)sim->journey.road_leg_length_units * elapsed +
+             sim->journey.road_leg_total_subticks / 2) /
+            sim->journey.road_leg_total_subticks);
+        int32_t coordinate = sim->journey.road_leg_start_coordinate_units +
+            (sim->journey.road_direction == CC_ROAD_DIRECTION_FORWARD ?
+                 travelled : -travelled);
+        if (RouteProgressForCoordinate(
+                sim, &pilot, coordinate) >= target_subticks) high = middle;
+        else low = middle + 1;
+    }
+    return low;
+}
+
 bool CcRoadSavedPositionValid(const CcSim *sim)
 {
     if (sim == NULL || !sim->journey.road_position_active) return true;
@@ -872,11 +976,14 @@ bool CcRoadSavedPositionValid(const CcSim *sim)
         sim->journey.road_compatibility_milli > 1000 ||
         (sim->journey.road_waiting_choice &&
          (sim->journey.road_distance_remaining_units != 0 ||
-          sim->journey.phase != CC_JOURNEY_PHASE_ROAD_CHOICE ||
+          (sim->journey.phase != CC_JOURNEY_PHASE_ROAD_CHOICE &&
+           sim->journey.phase != CC_JOURNEY_PHASE_RESTING) ||
           sim->journey.road_anchor_id !=
               sim->journey.road_stop_anchor_id)) ||
         (!sim->journey.road_waiting_choice &&
-         sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING)) return false;
+         sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING &&
+         sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED &&
+         sim->journey.phase != CC_JOURNEY_PHASE_RESTING)) return false;
     bool spur = sim->journey.road_segment_id == pilot.mill_segment_id;
     bool spur_returned = spur && sim->journey.road_waiting_choice &&
         sim->journey.road_anchor_id == pilot.junction_id &&
@@ -913,4 +1020,85 @@ bool CcRoadSavedPositionValid(const CcSim *sim)
         saved_length += PointDistanceUnits(first, second);
     }
     return saved_length == sim->journey.road_geometry_length_units;
+}
+
+bool CcRoadMigrateLegacyJourney(CcSim *sim)
+{
+    if (sim == NULL || !sim->journey.active ||
+        sim->journey.road_position_active) return true;
+    CcPilotRoadTopology pilot;
+    CcRoadGeometry geometry;
+    if (!CcPilotRoadTopologyBuild(sim, &pilot) ||
+        sim->journey.route_id != pilot.route_id ||
+        !CcRoadGeometryBuild(sim, pilot.route_id, &geometry)) return true;
+    bool forward = sim->journey.origin_id == pilot.origin_id &&
+        sim->journey.destination_id == pilot.destination_id;
+    bool reverse = sim->journey.origin_id == pilot.destination_id &&
+        sim->journey.destination_id == pilot.origin_id;
+    if (!forward && !reverse) return true;
+    int32_t progress = sim->carriage.progress_milli;
+    if (progress < 0) progress = 0;
+    if (progress > 1000) progress = 1000;
+    int32_t coordinate = CcRoadScaleDistance(
+        pilot.main_length_units, forward ? progress : 1000 - progress);
+    CcRoadDirection direction = forward ? CC_ROAD_DIRECTION_FORWARD :
+                                          CC_ROAD_DIRECTION_REVERSE;
+    CcId next_anchor = 0U;
+    CcRoadAnchorKind next_kind = CC_ROAD_ANCHOR_NONE;
+    int32_t next_coordinate = coordinate;
+    if (!NextMainAnchor(sim, &pilot, coordinate, direction,
+                        &next_anchor, &next_kind, &next_coordinate)) {
+        next_anchor = sim->journey.destination_id;
+        next_coordinate = direction == CC_ROAD_DIRECTION_FORWARD ?
+            pilot.main_length_units : 0;
+    }
+    (void)next_kind;
+    CcId previous_anchor = sim->journey.origin_id;
+    CcRoadAnchorKind previous_kind = CC_ROAD_ANCHOR_NONE;
+    int32_t previous_coordinate = direction == CC_ROAD_DIRECTION_FORWARD ?
+        0 : pilot.main_length_units;
+    (void)NextMainAnchor(sim, &pilot, coordinate,
+        direction == CC_ROAD_DIRECTION_FORWARD ?
+            CC_ROAD_DIRECTION_REVERSE : CC_ROAD_DIRECTION_FORWARD,
+        &previous_anchor, &previous_kind, &previous_coordinate);
+    (void)previous_kind;
+    int32_t leg_length = next_coordinate >= previous_coordinate ?
+        next_coordinate - previous_coordinate :
+        previous_coordinate - next_coordinate;
+    int32_t travelled = coordinate >= previous_coordinate ?
+        coordinate - previous_coordinate : previous_coordinate - coordinate;
+    int32_t leg_time = CcRoadTravelSubticks(
+        leg_length, sim->journey.total_subticks, pilot.main_length_units);
+    if (leg_length <= 0 || leg_time <= 0) return false;
+    sim->journey.road_position_active = true;
+    sim->journey.road_waiting_choice = false;
+    sim->journey.road_journey_id = sim->journey.parent_event_id != 0U ?
+        sim->journey.parent_event_id :
+        (sim->journey.route_id ^ sim->clock.tick ^ UINT64_C(0x3230000000000001));
+    if (sim->journey.road_journey_id == 0U)
+        sim->journey.road_journey_id = UINT64_C(0x3230000000000001);
+    sim->journey.road_goal_id = sim->journey.destination_id;
+    sim->journey.road_segment_id = MainSegmentAt(
+        &pilot, coordinate, direction);
+    sim->journey.road_anchor_id = previous_anchor;
+    sim->journey.road_stop_anchor_id = next_anchor;
+    sim->journey.road_return_anchor_id = previous_anchor;
+    sim->journey.road_direction = (int32_t)direction;
+    sim->journey.road_coordinate_units = coordinate;
+    sim->journey.road_distance_travelled_units = travelled;
+    sim->journey.road_distance_remaining_units = leg_length - travelled;
+    sim->journey.road_leg_length_units = leg_length;
+    sim->journey.road_leg_start_coordinate_units = previous_coordinate;
+    sim->journey.road_leg_end_coordinate_units = next_coordinate;
+    sim->journey.road_leg_total_subticks = leg_time;
+    sim->journey.road_leg_elapsed_subticks = (int32_t)(
+        ((int64_t)leg_time * travelled + leg_length / 2) / leg_length);
+    sim->journey.road_geometry_length_units = geometry.journey_length_units;
+    sim->journey.road_compatibility_milli = progress;
+    sim->journey.road_revision = 1U;
+    for (int32_t i = 0; i < CC_ROAD_GEOMETRY_SAMPLE_COUNT; ++i) {
+        sim->journey.road_geometry_x_units[i] = geometry.samples[i].x_units;
+        sim->journey.road_geometry_z_units[i] = geometry.samples[i].z_units;
+    }
+    return true;
 }

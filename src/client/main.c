@@ -10071,14 +10071,27 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                  (interact && GridDistance(position, LOCAL_DUNGEON) <
                                   1.35f))) {
                 const CcRoadSite *mine=CcMineSite(sim);
-                const CcRoute *road=mine != NULL ? CcSimRoute(sim,mine->route_id) : NULL;
-                if(road != NULL) {
-                    *selected=(int32_t)(road-sim->routes);
-                    SetOpenWorldCarriageAtRoadGate(sim,local,road->id);
-                    *view=VIEW_ROADS;
+                CcId route_id = 0U;
+                CcId destination_id = 0U;
+                if (mine != NULL && CcRoadSiteJourneyTarget(
+                        sim, mine->id, &route_id, &destination_id)) {
+                    const CcRoute *road = CcSimRoute(sim, route_id);
+                    CcCommand travel = {
+                        .kind = CC_COMMAND_TRAVEL,
+                        .target_id = destination_id
+                    };
+                    if (road != NULL && ApplyCommand(
+                            *journal, sim, travel, message,
+                            message_capacity)) {
+                        *selected = (int32_t)(road - sim->routes);
+                        SetOpenWorldCarriageAtRoadGate(sim, local, route_id);
+                        BeginRoadTravelState(sim, local);
+                        *view = VIEW_LOCAL;
+                        (void)snprintf(
+                            message, message_capacity,
+                            "The carriage takes the Alderwatch road toward the Low Silver Pit branch.");
+                    }
                 }
-                (void)snprintf(message, message_capacity,
-                               "Follow the Alderwatch road to the Low Silver Pit branch.");
                 return;
             }
             if (local->site_kind == CC_LOCAL_SITE_NONE &&

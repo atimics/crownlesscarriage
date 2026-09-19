@@ -1,15 +1,58 @@
 #include "sim/cc_sim.h"
+#include "sim/cc_road_position.h"
 
 #include "test_support.h"
 #include <stdio.h>
 #include <string.h>
+
+static void ContinueRoadChoice(CcSim *sim, char *error,
+                               size_t error_capacity)
+{
+    const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+    if (site != NULL) {
+        CcCommand pass = {
+            .kind = CC_COMMAND_PASS_ROAD_SITE,
+            .target_id = site->id
+        };
+        CC_CHECK(CcSimApply(sim, &pass, error, error_capacity));
+        return;
+    }
+    CcRoadLegPreview previews[3];
+    int32_t count = CcRoadNextLegPreviews(sim, previews, 3);
+    const CcRoadLegPreview *onward = NULL;
+    for (int32_t i = 0; i < count; ++i) {
+        if (previews[i].direction == sim->journey.road_direction &&
+            previews[i].segment_id != CC_PILOT_ROAD_MILL_SEGMENT_ID)
+            onward = &previews[i];
+    }
+    CC_CHECK(onward != NULL);
+    CcCommand choose = {
+        .kind = CC_COMMAND_CHOOSE_ROAD_LEG,
+        .target_id = onward->decision_token
+    };
+    CC_CHECK(CcSimApply(sim, &choose, error, error_capacity));
+}
+
+static void AdvanceUntilTravelPause(CcSim *sim)
+{
+    char error[160];
+    while (sim->journey.active &&
+           sim->journey.phase != CC_JOURNEY_PHASE_RESTING &&
+           sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED) {
+        if (sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE)
+            ContinueRoadChoice(sim, error, sizeof(error));
+        else
+            CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+    }
+}
 
 static void AdvanceTravellingJourney(CcSim *sim)
 {
     char error[160];
     while (sim->journey.active) {
         if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-            const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+            const CcRoadSite *site = sim->journey.road_position_active ?
+                NULL : CcSimJourneyRoadSiteStop(sim);
             if (site != NULL) {
                 CcCommand pass = {.kind=CC_COMMAND_PASS_ROAD_SITE,.target_id=site->id};
                 CC_CHECK(CcSimApply(sim,&pass,error,sizeof(error)));
@@ -21,6 +64,8 @@ static void AdvanceTravellingJourney(CcSim *sim)
                     CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP
             };
             CC_CHECK(CcSimApply(sim, &rest, error, sizeof(error)));
+        } else if (sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE) {
+            ContinueRoadChoice(sim, error, sizeof(error));
         } else {
             break;
         }
@@ -701,9 +746,7 @@ int main(void)
     CC_CHECK(realtime.journey.departure_day == return_preparation_day + 1);
     CC_CHECK(realtime.clock.minute_subticks == 0);
     realtime.journey.ambush_pending = false;
-    while (realtime.journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-        CcSimAdvanceRuntimeTicks(&realtime, CC_WORLD_TICKS_PER_SECOND);
-    }
+    AdvanceUntilTravelPause(&realtime);
     CC_CHECK(CcSimJourneyStop(&realtime) == CC_JOURNEY_STOP_MIDDAY);
     int32_t break_danger = realtime.journey.danger;
     int32_t break_fatigue = realtime.horse_team[0].fatigue;
@@ -716,9 +759,7 @@ int main(void)
     CC_CHECK(realtime.horse_team[0].fatigue < break_fatigue);
     CC_CHECK(pressed_on.journey.danger > break_danger);
     CC_CHECK(pressed_on.horse_team[0].fatigue > break_fatigue);
-    while (realtime.journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-        CcSimAdvanceRuntimeTicks(&realtime, CC_WORLD_TICKS_PER_SECOND);
-    }
+    AdvanceUntilTravelPause(&realtime);
     CC_CHECK(CcSimJourneyStop(&realtime) == CC_JOURNEY_STOP_OVERNIGHT);
     CC_CHECK(CcSimJourneyRoadHouseAvailable(&realtime));
     realtime.horse_team[0].fatigue = 30;
@@ -788,9 +829,9 @@ int main(void)
     int32_t push_condition = push_pace.carriage.condition;
     int32_t careful_fatigue = careful_pace.horse_team[0].fatigue;
     int32_t push_fatigue = push_pace.horse_team[0].fatigue;
-    CcSimAdvanceRuntimeTicks(&careful_pace, 480);
-    CcSimAdvanceRuntimeTicks(&steady_pace, 480);
-    CcSimAdvanceRuntimeTicks(&push_pace, 480);
+    CcSimAdvanceRuntimeTicks(&careful_pace, 100);
+    CcSimAdvanceRuntimeTicks(&steady_pace, 100);
+    CcSimAdvanceRuntimeTicks(&push_pace, 100);
     CC_CHECK(careful_pace.carriage.progress_milli <
              steady_pace.carriage.progress_milli);
     CC_CHECK(steady_pace.carriage.progress_milli <
@@ -817,8 +858,11 @@ int main(void)
     warned_road.journey.ambush_resolved = false;
     warned_road.journey.encounter_triggered = false;
     while (!warned_road.journey.ambush_warned) {
-        CcSimAdvanceRuntimeTicks(&warned_road,
-                                 CC_WORLD_TICKS_PER_SECOND);
+        if (warned_road.journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE)
+            ContinueRoadChoice(&warned_road, error, sizeof(error));
+        else
+            CcSimAdvanceRuntimeTicks(&warned_road,
+                                     CC_WORLD_TICKS_PER_SECOND);
     }
     CC_CHECK(CcSimRecentEvent(&warned_road, 0)->kind ==
              CC_EVENT_JOURNEY_WARNING);
@@ -829,8 +873,11 @@ int main(void)
     CC_CHECK(CcSimApply(&careful_escape, &set_careful,
                         error, sizeof(error)));
     while (!careful_escape.journey.ambush_resolved) {
-        CcSimAdvanceRuntimeTicks(&careful_escape,
-                                 CC_WORLD_TICKS_PER_SECOND);
+        if (careful_escape.journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE)
+            ContinueRoadChoice(&careful_escape, error, sizeof(error));
+        else
+            CcSimAdvanceRuntimeTicks(&careful_escape,
+                                     CC_WORLD_TICKS_PER_SECOND);
     }
     CC_CHECK(careful_escape.journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
     CC_CHECK(CcSimRecentEvent(&careful_escape, 0)->kind ==
@@ -839,10 +886,7 @@ int main(void)
     CC_CHECK(CcPlayerCargoUsed(&careful_escape.player) == warning_cargo);
     CC_CHECK(CcSimApply(&warned_block, &set_push,
                         error, sizeof(error)));
-    while (warned_block.journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-        CcSimAdvanceRuntimeTicks(&warned_block,
-                                 CC_WORLD_TICKS_PER_SECOND);
-    }
+    AdvanceUntilTravelPause(&warned_block);
     CC_CHECK(warned_block.journey.phase == CC_JOURNEY_PHASE_BLOCKED);
     CC_CHECK(CcSimRecentEvent(&warned_block, 0)->kind ==
              CC_EVENT_JOURNEY_ENCOUNTER);

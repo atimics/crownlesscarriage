@@ -83,6 +83,8 @@ bool CcPilotRoadTopologyBuild(const CcSim *sim,
 bool CcPilotRoadTopologyBuildWithLength(const CcSim *sim,
                                         int32_t main_length_units,
                                         CcPilotRoadTopology *topology);
+bool CcRoadSiteJourneyTarget(const CcSim *sim, CcId site_id,
+                             CcId *route_id, CcId *destination_id);
 bool CcRoadGeometryBuild(const CcSim *sim, CcId route_id,
                          CcRoadGeometry *geometry);
 int32_t CcRoadGeometryBuildAll(const CcSim *sim,
@@ -108,6 +110,10 @@ int32_t CcRoadNextLegPreviews(const CcSim *sim,
 bool CcRoadChooseNextLeg(CcSim *sim, uint64_t decision_token,
                          char *error, size_t error_capacity);
 bool CcRoadAdvanceLeg(CcSim *sim, int32_t journey_subticks);
+int32_t CcRoadRouteProgressSubticks(const CcSim *sim);
+int32_t CcRoadSubticksUntilRouteProgress(const CcSim *sim,
+                                         int32_t target_subticks);
 bool CcRoadSavedPositionValid(const CcSim *sim);
+bool CcRoadMigrateLegacyJourney(CcSim *sim);
 
 #endif

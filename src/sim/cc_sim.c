@@ -21545,8 +21545,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 sim->journey.total_subticks < CC_WORLD_WATCH_SUBTICKS ||
                 sim->journey.total_subticks >
                     CC_SIM_MAX_ROUTE_DAYS * 2 * CC_WORLD_WATCH_SUBTICKS ||
-                sim->journey.elapsed_subticks >
-                    sim->journey.total_subticks ||
+                (!sim->journey.road_position_active &&
+                 sim->journey.elapsed_subticks >
+                    sim->journey.total_subticks) ||
                 sim->journey.encounter_subticks < 0 ||
                 sim->journey.encounter_subticks >
                     sim->journey.total_subticks ||

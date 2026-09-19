@@ -108,7 +108,8 @@ static void FinishJourneyArrival(CcSim *sim,
             treasure->location_id = destination->id;
         }
     }
-    sim->journey.elapsed_subticks = sim->journey.total_subticks;
+    if (!sim->journey.road_position_active)
+        sim->journey.elapsed_subticks = sim->journey.total_subticks;
     sim->journey.road_position_active = false;
     sim->journey.road_waiting_choice = false;
     sim->journey.active = false;
@@ -133,7 +134,9 @@ static void FinishJourneyArrival(CcSim *sim,
         }
     }
     char text[CC_EVENT_TEXT_CAPACITY];
-    int32_t journey_watches =
+    int32_t journey_watches = sim->journey.road_position_active ?
+        (sim->journey.elapsed_subticks + CC_WORLD_WATCH_SUBTICKS - 1) /
+            CC_WORLD_WATCH_SUBTICKS :
         sim->journey.total_subticks / CC_WORLD_WATCH_SUBTICKS;
     (void)snprintf(text, sizeof(text),
                    "The carriage reaches %.24s from %.24s after %d road watches at %s pace (%d%% danger).",
@@ -218,34 +221,56 @@ void CcJourneyAdvanceTicks(CcSim *sim, int32_t ticks,
         int32_t clock_rate = CC_TRAVEL_GAME_MINUTES_PER_SECOND;
         int32_t journey_rate = CcJourneyPaceRate(sim->journey.pace);
         sim->clock.game_minutes_per_second = clock_rate;
-        sim->clock.minute_subticks += clock_rate;
+        int32_t next_watch =
+            (sim->journey.elapsed_subticks / CC_WORLD_WATCH_SUBTICKS + 1) *
+            CC_WORLD_WATCH_SUBTICKS;
+        int32_t next_limit = sim->journey.road_position_active ? next_watch :
+            MinimumI32(sim->journey.total_subticks, next_watch);
+        if (mine_stop > sim->journey.elapsed_subticks)
+            next_limit = MinimumI32(next_limit, mine_stop);
+        int32_t previous_elapsed = sim->journey.elapsed_subticks;
+        int32_t advance = MinimumI32(
+            journey_rate, next_limit - sim->journey.elapsed_subticks);
+        if (sim->journey.road_position_active) {
+            advance = MinimumI32(
+                advance, sim->journey.road_leg_total_subticks -
+                    sim->journey.road_leg_elapsed_subticks);
+            int32_t hazard = -1;
+            if (sim->journey.ambush_pending) {
+                int32_t warning = CcRoadSubticksUntilRouteProgress(
+                    sim, sim->journey.total_subticks * 45 / 100);
+                int32_t ambush = CcRoadSubticksUntilRouteProgress(
+                    sim, sim->journey.total_subticks * 60 / 100);
+                if (!sim->journey.ambush_warned && warning >= 0)
+                    hazard = warning;
+                if (ambush >= 0 && (hazard < 0 || ambush < hazard))
+                    hazard = ambush;
+            }
+            if (!sim->journey.encounter_triggered &&
+                sim->journey.situation_id != 0U) {
+                int32_t encounter = CcRoadSubticksUntilRouteProgress(
+                    sim, sim->journey.encounter_subticks);
+                if (encounter >= 0 && (hazard < 0 || encounter < hazard))
+                    hazard = encounter;
+            }
+            if (hazard >= 0) advance = MinimumI32(advance, hazard);
+        }
+        if (advance < 0) advance = 0;
+        int32_t clock_advance = sim->journey.road_position_active ?
+            (int32_t)(((int64_t)advance * clock_rate + journey_rate / 2) /
+                      journey_rate) : clock_rate;
+        sim->clock.minute_subticks += clock_advance;
         while (sim->clock.minute_subticks >= CC_WORLD_DAY_SUBTICKS) {
             sim->clock.minute_subticks -= CC_WORLD_DAY_SUBTICKS;
             CcSimAdvanceDays(sim, 1);
         }
-        int32_t next_watch =
-            (sim->journey.elapsed_subticks / CC_WORLD_WATCH_SUBTICKS + 1) *
-            CC_WORLD_WATCH_SUBTICKS;
-        int32_t next_limit = MinimumI32(
-            sim->journey.total_subticks, next_watch);
-        if (mine_stop > sim->journey.elapsed_subticks) next_limit=MinimumI32(next_limit,mine_stop);
-        int32_t previous_elapsed = sim->journey.elapsed_subticks;
-        sim->journey.elapsed_subticks = MinimumI32(
-            next_limit, sim->journey.elapsed_subticks + journey_rate);
+        sim->journey.elapsed_subticks += advance;
         if (!sim->journey.road_position_active)
             sim->carriage.progress_milli = sim->journey.total_subticks > 0 ?
             (int32_t)(((int64_t)sim->journey.elapsed_subticks * 1000) /
                       sim->journey.total_subticks) : 0;
-        if (sim->journey.road_position_active &&
-            CcRoadAdvanceLeg(sim, journey_rate)) {
-            services->reveal_journey_road(sim);
-            if (sim->journey.road_anchor_id ==
-                    sim->journey.road_goal_id &&
-                CcSimSettlement(sim, sim->journey.road_anchor_id) != NULL) {
-                FinishJourneyArrival(sim, services);
-            }
-            continue;
-        }
+        bool road_arrived = sim->journey.road_position_active &&
+            advance > 0 && CcRoadAdvanceLeg(sim, advance);
         services->reveal_journey_road(sim);
         if (mine_stop >= 0 && sim->journey.elapsed_subticks == mine_stop) break;
         if (!sim->journey.road_position_active &&
@@ -254,29 +279,43 @@ void CcJourneyAdvanceTicks(CcSim *sim, int32_t ticks,
             FinishJourneyArrival(sim, services);
             continue;
         }
-        if (sim->journey.elapsed_subticks != previous_elapsed &&
-            sim->journey.elapsed_subticks == next_watch) {
-            CcJourneyApplyWatchStrain(sim);
-            PauseJourneyForWatchStop(sim, services);
-            continue;
-        }
+        int32_t route_progress = sim->journey.road_position_active ?
+            CcRoadRouteProgressSubticks(sim) :
+            sim->journey.elapsed_subticks;
         if (sim->journey.ambush_pending &&
             !sim->journey.ambush_warned &&
-            sim->journey.elapsed_subticks >=
-                sim->journey.total_subticks * 45 / 100) {
+            route_progress >= sim->journey.total_subticks * 45 / 100) {
             WarnJourneyAmbush(sim, services);
         }
         if (sim->journey.ambush_pending &&
-            sim->journey.elapsed_subticks >=
-                sim->journey.total_subticks * 60 / 100) {
+            route_progress >= sim->journey.total_subticks * 60 / 100) {
             ResolveWarnedJourneyAmbush(sim, services);
             if (sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) continue;
         }
         if (!sim->journey.encounter_triggered &&
             sim->journey.situation_id != 0U &&
-            sim->journey.elapsed_subticks >=
-                sim->journey.encounter_subticks) {
+            route_progress >= sim->journey.encounter_subticks) {
             InterruptJourney(sim, services);
+            continue;
+        }
+        if (road_arrived) {
+            bool watch_boundary =
+                sim->journey.elapsed_subticks != previous_elapsed &&
+                sim->journey.elapsed_subticks == next_watch;
+            if (watch_boundary) CcJourneyApplyWatchStrain(sim);
+            if (sim->journey.road_anchor_id ==
+                    sim->journey.road_goal_id &&
+                CcSimSettlement(sim, sim->journey.road_anchor_id) != NULL) {
+                FinishJourneyArrival(sim, services);
+            } else if (watch_boundary) {
+                PauseJourneyForWatchStop(sim, services);
+            }
+            continue;
+        }
+        if (sim->journey.elapsed_subticks != previous_elapsed &&
+            sim->journey.elapsed_subticks == next_watch) {
+            CcJourneyApplyWatchStrain(sim);
+            PauseJourneyForWatchStop(sim, services);
             continue;
         }
     }
