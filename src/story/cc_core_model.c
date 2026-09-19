@@ -692,6 +692,7 @@ int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
                 m->status = -1; break;
             }
             m->semantic_ids[m->actions++] = token;
+            if (m->policy) { m->status = 1; break; }
             Hidden(m, token, blank);
             continue;
         }

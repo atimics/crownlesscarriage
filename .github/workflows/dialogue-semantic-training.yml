@@ -9,7 +9,7 @@ on:
       steps:
         description: Training steps for the CPU run
         required: false
-        default: '3000'
+        default: '4000'
         type: string
   pull_request:
     paths:
@@ -76,7 +76,7 @@ jobs:
     timeout-minutes: 30
     env:
       ZERO_COMMIT: 49e6bfedc6d91196e652d89309b23cafd8fc2ce9
-      STEPS: ${{ inputs.steps || '3000' }}
+      STEPS: ${{ inputs.steps || '4000' }}
     steps:
       - name: Checkout Crownless with release history
         uses: actions/checkout@v4

@@ -22,7 +22,7 @@ def fixture(seed, identity='1', listener='2'):
     return {'self': {'id': identity, 'name': 'Speaker ' + identity, 'goal': 'secure_livelihood',
                     'coins': rng.choice((0, 1, 3, 7)), 'hungry_days': rng.choice((0, 2)),
                     'stress': rng.choice((28, 70)), 'courage': rng.choice((30, 80)),
-                    'faction_id': rng.choice(('0', '7'))},
+                    'unsheltered_nights': rng.choice((0, 1)), 'faction_id': rng.choice(('0', '7'))},
             'listener': {'id': listener, 'name': 'Speaker ' + listener}, 'day': 2,
             'relationship': {'trust': rng.choice((-2, 0, 2)), 'affinity': rng.choice((0, 2)),
                              'obligation': rng.choice((-2, 0, 2))},
@@ -41,7 +41,7 @@ def row_for(person, heard, requested):
             'labels': [-100]*(len(x)-1)+y+[0], 'source': 'procedural-policy-v2'}
 
 
-def dataset(worlds=192):
+def dataset(worlds=384):
     rng = random.Random(23); by_input = {}
     for seed in range(worlds):
         people = [fixture(2*seed), fixture(2*seed+1, '2', '1')]

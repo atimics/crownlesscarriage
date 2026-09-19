@@ -16,25 +16,26 @@ the CPU index, then install
 `tools/dialogue/requirements-semantic-training.txt`. Point `--zero` at the
 same pinned ZERO checkout. Use the tracked
 `models/dialogue-syntax/model.ccv2` and `assets/language/tokenizer.json` inputs.
-The normal 800-step CPU run takes about 90 seconds on the reference machine.
+The default run uses 4,000 steps and fresh weights for the nine-goal participant policy.
 
 Build native libraries with `CC_BUILD_CLIENT=OFF`, then run
 `tools/dialogue/build_syntax_probe.py`. The probe invocation is:
 
 ```sh
-probe MODEL --semantic-prefix COMMA_IDS --generate
+probe MODEL --policy-prefix COMMA_IDS --generate
 ```
 
 The helper `verify_semantic_training.py` writes `native-parity.json` and keeps
 failure details in the run artifact. A failed training, build, or gate keeps
 its partial checkpoint and logs through the always-uploaded artifact.
 
-The workflow uses a standard Ubuntu CPU runner, a 20-minute job limit, and an
-8-minute training limit. The normal run has 800 steps. Manual requests accept
-1 through 2,000 steps; the same full evaluation gate applies. The verified
+The workflow uses a standard Ubuntu CPU runner, a 30-minute job limit, and an
+18-minute training limit. The normal run has 4,000 steps. Manual requests accept
+1 through 6,000 steps; the same full evaluation gate applies. The verified
 model artifact lasts 90 days. It is available for review and later integration
 into the game. The workflow leaves the shipped checkpoint under version control.
 
-The current training target is the seven-move dialogue policy. Event grammar
-coverage is checked before training. Training an event-selection head is the
-next step after the participant fact contract.
+The current target has nine goal families and 38 acts. See [POLICIES.md](POLICIES.md)
+for state grounding, the compact wire, and local rollout commands. Event grammar
+coverage is checked before training. The seven-move trainer remains available
+as `train_semantic_ids.py` for reproducing earlier experiments.

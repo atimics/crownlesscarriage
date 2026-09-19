@@ -3,6 +3,7 @@ import argparse
 from collections import defaultdict
 import hashlib
 import json
+import math
 from pathlib import Path
 import random
 import sys
@@ -23,7 +24,7 @@ def generate(model, row):
         x = torch.tensor([row['prompt']['tokens']], dtype=torch.long)
         hidden, cache = model.hidden(x, torch.zeros((*x.shape, 16), dtype=torch.long))
         prefix = row['prompt']['tokens']
-        allowed = torch.tensor(prefix[prefix.index(1580)+1:-1], dtype=torch.long)
+        allowed = torch.tensor(sorted(prefix[prefix.index(1580)+1:-1]), dtype=torch.long)
         weights = model.embedding.weight[allowed]
         token = int(allowed[(weights @ hidden[0, -1]).argmax()])
         return {'ids': [token], 'eos': True}
@@ -51,7 +52,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('zero', 'reference', 'tokenizer', 'output'):
         parser.add_argument('--' + name, type=Path, required=True)
-    parser.add_argument('--steps', type=int, default=3000)
+    parser.add_argument('--steps', type=int, default=4000)
     args = parser.parse_args()
     if args.steps <= 0 or args.output.exists(): parser.error('positive steps and fresh output required')
     sys.path.insert(0, str(args.zero.resolve() / 'scripts'))
@@ -89,6 +90,8 @@ def main():
         model.train()
         with (args.output / 'history.jsonl').open('w') as history:
             for step in range(1, args.steps + 1):
+                rate = 3e-5 + .5 * (3e-4 - 3e-5) * (1 + math.cos(math.pi * (step-1) / args.steps))
+                for group in optimizer.param_groups: group['lr'] = rate
                 optimizer.zero_grad(set_to_none=True)
                 value = loss(model, [rng.choice(rng.choice(pools)) for _ in range(32)], 'cpu')
                 if not torch.isfinite(value): raise ValueError('nonfinite loss')

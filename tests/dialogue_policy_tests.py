@@ -88,6 +88,22 @@ class PolicyTests(unittest.TestCase):
             with self.assertRaises(ValueError): allowed(b, forged)
         forged = copy.deepcopy(h); forged[0]['act']['reply'] = 8
         with self.assertRaises(ValueError): allowed(b, forged)
+        forged = copy.deepcopy(h); forged[0]['act']['intent'] = 'ask_feeling'
+        with self.assertRaises(ValueError): allowed(b, forged)
+
+    def test_daylight_terms_and_closing(self):
+        a, b = person(), person('2', '1')
+        h = [event(a, [], 'seek_shelter', 'safety')]
+        h.append(event(b, h, 'offer_escort'))
+        h.append(event(a, h, 'daylight'))
+        agreed = make_act('accept', b, h)
+        self.assertEqual(agreed['proposal']['condition'], 'daylight')
+        h.append({'speaker_id': '2', 'act': agreed})
+        self.assertEqual(allowed(a, h), {'end'})
+
+    def test_shelter_loss_changes_opening(self):
+        p = person(); p['self']['unsheltered_nights'] = 2
+        self.assertEqual(decide(p, [])['intent'], 'seek_shelter')
 
     def test_memory_owner_and_kind(self):
         p = person(); p['memories'] = [{'kind': 3, 'day': 1, 'subject_id': '3', 'event_id': '50'}]
@@ -95,6 +111,23 @@ class PolicyTests(unittest.TestCase):
         self.assertIn('help', render(a, p, [], 'trust'))
         p['memories'][0]['kind'] = 4
         with self.assertRaises(ValueError): validate(a, p, [], 'trust')
+
+    def test_regret_and_owned_reason(self):
+        a, b = person(), person('2', '1')
+        a['relationship']['trust'] = -2
+        h = [event(a, [], 'grievance', 'conflict')]
+        b['memories'] = [{'kind': 4, 'day': 1, 'subject_id': '3', 'event_id': '50'}]
+        self.assertEqual(decide(b, h)['intent'], 'apologise')
+        self.assertIn('help fell through', render(decide(b, h), b, h))
+        from event_facts import EVENT_KIND_REGISTRY
+        for p in (a, b):
+            p['held_accounts'] = [{'event_id': '51', 'source_id': p['self']['id'], 'day': 1,
+                'kind': EVENT_KIND_REGISTRY['DRAGON_RETALIATION'], 'confidence': 80,
+                'account': 'Embermaw burns Thornford because 7 stolen crowns remain missing.'}]
+        h = [event(a, [], 'report_fact', 'learn')]
+        act = decide(b, h)
+        self.assertEqual(act['intent'], 'explain_cause')
+        self.assertEqual(act['claim']['owner'], '2')
 
     def test_saved_participant_snapshot(self):
         data = json.load(gzip.open(ROOT / 'docs/reviews/participant-minds-2026-09-19/syntax-prototype.json.gz'))

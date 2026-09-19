@@ -26,7 +26,7 @@ LOSS_KINDS = {'CHARACTER_DIED', 'DRAGON_RETALIATION', 'DRAGON_BATTLE',
               'GOBLIN_EXPEDITION_INTERCEPTED', 'SETTLEMENT_RAZED', 'DRAGON_ATTACKED'}
 PROPOSALS = {'offer_help', 'offer_exchange', 'offer_trade', 'counter_offer',
              'offer_escort', 'seek_shelter', 'offer_company', 'promise',
-             'demand_repair', 'request_tribute', 'bargain'}
+             'demand_repair', 'request_tribute', 'bargain', 'daylight'}
 
 
 def wire(value):
@@ -49,7 +49,7 @@ def view(person):
                 if m.get('kind') in (1, 2, 3, 4) and 0 <= m.get('day', -1) <= person['day']]
     return {'hungry': own['hungry_days'] > 0, 'afraid': own['stress'] >= 60,
             'rich': own['coins'] >= 3, 'coin': own['coins'] > 0,
-            'brave': own['courage'] >= 60, 'trust': relation.get('trust', 0) > 0,
+            'shelterless': own.get('unsheltered_nights', 0) > 0, 'brave': own['courage'] >= 60, 'trust': relation.get('trust', 0) > 0,
             'close': relation.get('affinity', 0) > 0,
             'wronged': relation.get('trust', 0) < 0 or relation.get('obligation', 0) < 0,
             'duty': relation.get('obligation', 0) > 0,
@@ -61,7 +61,7 @@ def view(person):
 
 
 FEATURES = ('hungry', 'afraid', 'rich', 'coin', 'brave', 'trust', 'close',
-            'wronged', 'duty', 'clan', 'loss', 'memory', 'helped', 'withdrew', 'fact')
+            'wronged', 'duty', 'clan', 'loss', 'memory', 'helped', 'withdrew', 'fact', 'shelterless')
 
 
 def goal(person, heard, requested=None):
@@ -73,7 +73,7 @@ def goal(person, heard, requested=None):
         return heard[-1]['act']['goal']
     v = view(person)
     if v['loss'] and v['afraid']: return 'grief'
-    if v['afraid']: return 'safety'
+    if v['afraid'] or v['shelterless']: return 'safety'
     if v['hungry']: return 'help'
     if v['wronged']: return 'conflict'
     if v['duty'] and v['clan']: return 'clan'
@@ -108,7 +108,7 @@ def history_check(person, heard):
                     proposal['action'] not in PROPOSALS or proposal['resource'] not in ('coins', 'time') or
                     type(proposal['cost']) is not int or not 0 <= proposal['cost'] <= 3 or
                     (proposal['resource'] == 'time') != (proposal['cost'] == 0) or
-                    proposal['condition'] != 'mutual_agreement'):
+                    proposal['condition'] not in ('mutual_agreement', 'daylight')):
                 raise ValueError('invalid public proposal')
         if (act['intent'] in PROPOSALS or act['intent'] == 'accept') != (proposal is not None):
             raise ValueError('proposal must belong to the speech intent')
@@ -168,7 +168,10 @@ def allowed(person, heard, requested=None):
     last = heard[-1]['act'] if heard else None
     if last and last.get('proposal') and affordable(person, last['proposal']): legal.add('accept')
     if not last: legal -= {'accept', 'decline', 'acknowledge', 'counter_offer', 'forgive'}
-    if len(heard) >= 12: return {'end'}
+    if len(heard) >= 12 or (last and last['intent'] in ('accept', 'decline', 'acknowledge', 'forgive', 'refuse_duty', 'ask_space')):
+        return {'end'}
+    if last and v['afraid'] and g not in ('safety', 'grief') and last['intent'] not in ('warn', 'seek_shelter', 'comfort'):
+        return legal & {'warn', 'seek_shelter', 'ask_space', 'end'}
     return legal
 
 
@@ -185,7 +188,7 @@ def choose(person, heard, requested=None):
     elif last == 'seek_shelter': preferred = 'offer_escort' if 'offer_escort' in legal else 'accept'
     elif last == 'warn': preferred = 'seek_shelter'
     elif last == 'offer_escort': preferred = 'daylight'
-    elif last == 'daylight': preferred = 'acknowledge'
+    elif last == 'daylight': preferred = 'accept'
     elif not heard:
         preferred = {'help': 'explain_need' if v['hungry'] else 'request_help',
             'trade': 'offer_trade', 'safety': 'warn' if v['afraid'] else 'seek_shelter',
@@ -237,7 +240,7 @@ def make_act(action, person, heard, requested=None):
         if action in ('request_tribute', 'demand_repair'): cost = 1
         act['proposal'] = {'actor': own, 'recipient': other, 'action': action,
             'resource': 'coins' if cost else 'time', 'cost': cost, 'payer': payer,
-            'condition': 'mutual_agreement'}
+            'condition': 'daylight' if action == 'daylight' else 'mutual_agreement'}
     if action == 'accept':
         act['proposal'] = json.loads(wire(heard[-1]['act']['proposal']))
     if action in ('report_fact', 'explain_cause', 'express_grief', 'recall_loss'):

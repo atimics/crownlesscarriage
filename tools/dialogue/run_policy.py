@@ -13,6 +13,15 @@ def run(snapshot, model=None, probe=None, language='human', language_probe=None,
     validate_snapshot(snapshot)
     if not 1 <= limit <= 16: raise ValueError('turn limit must be 1..16')
     if (model is None) != (probe is None): raise ValueError('model and native probe belong together')
+    if model:
+        manifest = json.loads(Path(model).with_name('manifest.json').read_text())
+        model_hash = hashlib.sha256(Path(model).read_bytes()).hexdigest()
+        policy_hash = hashlib.sha256(Path(__file__).with_name('policy.py').read_bytes()).hexdigest()
+        policy_sources = [value for path, value in manifest.get('sources', {}).items()
+                          if Path(path).name == 'policy.py']
+        if (manifest.get('format') != 'crownless-policy-v2' or manifest.get('status') != 'complete' or
+                manifest.get('export_sha256') != model_hash or policy_sources != [policy_hash]):
+            raise ValueError('model manifest must match the current policy and model')
     history = []; turns = []
     for index in range(limit):
         person = snapshot['participants'][index % 2]
