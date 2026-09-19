@@ -139,6 +139,9 @@ add_library(crownless_sim
     src/sim/cc_ponies.c
 )
 target_include_directories(crownless_sim PUBLIC src)
+if(NOT MSVC)
+    target_link_libraries(crownless_sim PUBLIC m)
+endif()
 cc_strict_warnings(crownless_sim)
 
 add_library(crownless_story
