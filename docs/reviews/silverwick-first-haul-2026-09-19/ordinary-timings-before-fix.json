@@ -1,0 +1,182 @@
+{
+  "schema": 1,
+  "capacity": 96,
+  "entries": [
+    {
+      "stage": "runtime-ready",
+      "duration_ms": 70.2,
+      "build": "9df2e966a327",
+      "scene": "startup",
+      "revision": 0,
+      "action": "runtime"
+    },
+    {
+      "stage": "first-actionable",
+      "duration_ms": 599.2,
+      "build": "9df2e966a327",
+      "scene": "menu",
+      "revision": 1,
+      "action": "runtime"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 8.4,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 24,
+      "action": "touch-0"
+    },
+    {
+      "stage": "transition",
+      "duration_ms": 1763.6,
+      "build": "9df2e966a327",
+      "scene": "book",
+      "revision": 25,
+      "action": "touch-0"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 2.2,
+      "build": "9df2e966a327",
+      "scene": "book",
+      "revision": 25,
+      "action": "touch-1"
+    },
+    {
+      "stage": "transition",
+      "duration_ms": 14,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 26,
+      "action": "touch-1"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 4.3,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 26,
+      "action": "touch-1"
+    },
+    {
+      "stage": "transition",
+      "duration_ms": 2365.4,
+      "build": "9df2e966a327",
+      "scene": "conversation",
+      "revision": 28,
+      "action": "touch-1"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 4.6,
+      "build": "9df2e966a327",
+      "scene": "conversation",
+      "revision": 28,
+      "action": "touch-0"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 4.6,
+      "build": "9df2e966a327",
+      "scene": "conversation",
+      "revision": 29,
+      "action": "touch-1"
+    },
+    {
+      "stage": "transition",
+      "duration_ms": 14.9,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 30,
+      "action": "touch-1"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 4.6,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 31,
+      "action": "touch-4"
+    },
+    {
+      "stage": "transition",
+      "duration_ms": 15.7,
+      "build": "9df2e966a327",
+      "scene": "book",
+      "revision": 32,
+      "action": "touch-4"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 2,
+      "build": "9df2e966a327",
+      "scene": "book",
+      "revision": 32,
+      "action": "touch-3"
+    },
+    {
+      "stage": "transition",
+      "duration_ms": 29471.4,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 34,
+      "action": "touch-3"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 1.4,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 34,
+      "action": "touch-6"
+    },
+    {
+      "stage": "save",
+      "duration_ms": 12.5,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 34,
+      "action": "campaign"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 4.8,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 34,
+      "action": "touch-1"
+    },
+    {
+      "stage": "transition",
+      "duration_ms": 1366,
+      "build": "9df2e966a327",
+      "scene": "book",
+      "revision": 36,
+      "action": "touch-1"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 4.2,
+      "build": "9df2e966a327",
+      "scene": "book",
+      "revision": 36,
+      "action": "touch-1"
+    },
+    {
+      "stage": "transition",
+      "duration_ms": 15.8,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 37,
+      "action": "touch-1"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 1.9,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 37,
+      "action": "touch-3"
+    }
+  ]
+}

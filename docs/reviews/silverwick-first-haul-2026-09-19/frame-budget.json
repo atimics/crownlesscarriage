@@ -1,0 +1,20 @@
+{
+  "environment": "local-software",
+  "p95LimitMs": 100,
+  "frames": 173,
+  "perFrame": {
+    "uploadCalls": 123.23699421965318,
+    "uploadBytes": 2572600.9942196533,
+    "draws": 215.30057803468208,
+    "vertices": 480535.0289017341,
+    "textureBinds": 344.97109826589593,
+    "programBinds": 494.0346820809249,
+    "skippedUploads": 0,
+    "skippedBytes": 0
+  },
+  "frameMs": {
+    "median": 24.90000000000009,
+    "p95": 26.600000000000364,
+    "p99": 33.90000000000009
+  }
+}

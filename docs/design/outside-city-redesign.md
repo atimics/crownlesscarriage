@@ -135,10 +135,11 @@ finite source, carriage, and cache. The haulers offer a saved bargain and a loca
 combat encounter. Portrait controls put readable actions beside the scene.
 
 The [connected journey record](../reviews/silverwick-first-haul-2026-09-19.md)
-lists the ordinary-input observations and the exact builds used. Saved junction
-and reversal travel is tracked in #323; attributed information and the town
-return are tracked in #764. Each delivery needs its own final merged receipt and
-the connected checks above.
+lists the ordinary-input observations and exact builds. PR #836 delivered saved
+junction and reversal travel for #323. PR #841 delivered the attributed lead,
+records, and explicit town report for #764. PR #831 aligned the mine yard and
+road landmark with the shared carriage and repaired phone layouts. The record
+keeps each merged delivery separate from the ordinary-input observations.
 
 Local timing diagnostics record the first actionable screen, input, scene
 transitions, and saves. Ctrl/Cmd+Shift+D exports the bounded local record as JSON.
