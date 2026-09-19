@@ -63,7 +63,11 @@ async function main() {
     const upload = prototype.bufferSubData;
     prototype.bufferSubData = function(target, offset, source, sourceOffset, length) {
       budget.uploadCalls++;
-      budget.uploadBytes += arguments.length >= 5 ? length : (source && source.byteLength) || 0;
+      const elementSize = source?.BYTES_PER_ELEMENT || 1;
+      const start = sourceOffset || 0;
+      const count = arguments.length >= 5 && length !== 0
+        ? length : Math.max(0, (source?.length || 0) - start);
+      budget.uploadBytes += count * elementSize;
       return upload.apply(this, arguments);
     };
     const elements = prototype.drawElements;
@@ -139,6 +143,7 @@ async function main() {
       assert.deepEqual(Buffer.from(actual), expected, file.filename);
     }
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), 0);
+    assert.match(await page.locator('#save-status').innerText(), /browser can save this campaign/i);
     await page.screenshot({path: path.join(output, 'title.png')});
     assert.equal(await page.locator('header, footer, iframe').count(), 0);
     await selectMenuItem(3);
@@ -199,6 +204,22 @@ async function main() {
       assert.equal(result.error, 0, `${result.name} must be a valid WebGL operation`);
       assert.deepEqual(result.actual, result.expected, `${result.name} must preserve uploaded bytes`);
     }
+    const uploadOverloads = await page.evaluate(() => {
+      const gl = document.createElement('canvas').getContext('webgl2');
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      const source = new Uint16Array([10, 20, 30, 40]);
+      gl.bufferData(gl.ARRAY_BUFFER, source.byteLength, gl.DYNAMIC_DRAW);
+      const before = window.frameBudget.uploadBytes;
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, source, 1, 0);
+      const zeroLength = window.frameBudget.uploadBytes - before;
+      const afterZero = window.frameBudget.uploadBytes;
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, source, 1);
+      const omittedLength = window.frameBudget.uploadBytes - afterZero;
+      gl.deleteBuffer(buffer);
+      return {zeroLength, omittedLength};
+    });
+    assert.deepEqual(uploadOverloads, {zeroLength: 6, omittedLength: 6});
     const shaders = await page.evaluate(() => window.shaderLinks);
     assert(shaders.every(shader => shader.linked), JSON.stringify(shaders));
     assert(shaders.every(shader => shader.vectors <= 256), JSON.stringify(shaders));
@@ -295,6 +316,8 @@ async function main() {
     await page.waitForFunction(() => window.saveRejectionSeen);
     await page.waitForTimeout(250);
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision);
+    assert.match(await page.locator('#save-status').innerText(), /could not save/i);
+    assert.equal(await page.locator('#save-status').getAttribute('data-state'), 'failed');
     await page.screenshot({path: path.join(output, 'rejected-save.png')});
     await page.evaluate(() => { IDBDatabase.prototype.transaction = window.originalSaveTransaction; });
     rejectedWrite = false;
@@ -407,6 +430,39 @@ async function main() {
         await mobile.waitForFunction(() => !document.querySelector('#stage').classList.contains('expanded'));
       }
     } finally { await phone.close(); }
+    const recoveryContext = await browser.newContext({viewport: {width: 1280, height: 900}});
+    const recoveryPage = await recoveryContext.newPage();
+    try {
+      await recoveryPage.goto(`http://127.0.0.1:${server.address().port}/`);
+      await recoveryPage.waitForFunction(() => window.Module?.crownlessRuntimeReady &&
+        document.querySelector('#loading').hidden, undefined, {timeout: 120000});
+      const recovery = await recoveryPage.evaluate(() => {
+        window.dispatchEvent(new ErrorEvent('error', {message: 'Injected runtime failure'}));
+        const runtime = {
+          visible: !document.querySelector('#loading').hidden,
+          text: document.querySelector('#status').textContent,
+          progressHidden: document.querySelector('#progress').hidden,
+          progressValue: document.querySelector('#progress').value
+        };
+        const event = new Event('webglcontextlost', {cancelable: true});
+        document.querySelector('#canvas').dispatchEvent(event);
+        return {runtime, graphics: {
+          visible: !document.querySelector('#loading').hidden,
+          text: document.querySelector('#status').textContent,
+          prevented: event.defaultPrevented
+        }};
+      });
+      assert.deepEqual(recovery, {
+        runtime: {
+          visible: true,
+          text: 'The game stopped after startup. Your browser state remains open. Check the browser console.',
+          progressHidden: true,
+          progressValue: 0
+        },
+        graphics: {visible: true, text: 'The graphics context was lost. Reload the page to continue.', prevented: true}
+      });
+      await recoveryPage.screenshot({path: path.join(output, 'graphics-recovery.png')});
+    } finally { await recoveryContext.close(); }
     assert.deepEqual(errors, []);
     console.log('Browser desktop and mobile layout, touch input, menus, saves, shaders, fullscreen, and reload checks passed');
   } finally {

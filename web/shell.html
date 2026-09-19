@@ -20,6 +20,14 @@
       }
       #loading[hidden] { display: none; }
       #progress { display: block; width: min(280px, 70vw); margin-top: 12px; accent-color: #9f8657; }
+      #save-status {
+        position: absolute; left: 16px; bottom: 16px; z-index: 1;
+        max-width: min(460px, calc(100vw - 32px)); padding: 7px 10px;
+        border: 1px solid #5b513f; border-radius: 3px; background: #171512e8;
+        color: #e8dfc9; font: 14px Georgia, serif;
+      }
+      #save-status[data-state="failed"] { border-color: #b66b56; color: #ffd5ca; }
+      #save-status[data-state="saving"] { border-color: #9f8657; }
       #company-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
       button { border: 1px solid #8e8168; border-radius: 3px; background: #24211c; color: #e8dfc9; font: inherit; cursor: pointer; }
       [hidden] { display: none !important; }
@@ -38,6 +46,7 @@
             <progress id="progress" value="0" max="100" hidden></progress>
           </div>
         </div>
+        <div id="save-status" role="status" aria-live="polite" data-state="ready">Save status: preparing browser storage.</div>
       </div>
       <span id="company-status" role="status" aria-live="polite"></span>
     </main>
@@ -46,11 +55,13 @@
       const loading = document.querySelector("#loading");
       const statusElement = document.querySelector("#status");
       const progressElement = document.querySelector("#progress");
+      const saveStatusElement = document.querySelector("#save-status");
 
       var Module = {
         preRun: [],
         postRun: [function () {
-          loading.hidden = true;
+          this.crownlessRuntimeReady = true;
+          if (!this.crownlessRecoveryActive) loading.hidden = true;
           canvas.focus();
         }],
         canvas,
@@ -58,9 +69,10 @@
         printErr: console.error.bind(console),
         setStatus(text) {
           if (!text) {
-            loading.hidden = true;
+            if (!this.crownlessRecoveryActive) loading.hidden = true;
             return;
           }
+          loading.hidden = false;
           statusElement.textContent = text;
           const match = text.match(/\((\d+(?:\.\d+)?)\/(\d+)\)/);
           if (match) {
@@ -68,6 +80,10 @@
             progressElement.value = Number(match[1]);
             progressElement.max = Number(match[2]);
           }
+        },
+        setCrownlessSaveStatus(text, state) {
+          saveStatusElement.textContent = `Save status: ${text}`;
+          saveStatusElement.dataset.state = state || "ready";
         },
         totalDependencies: 0,
         monitorRunDependencies(left) {
@@ -80,7 +96,12 @@
 
       Module.setStatus("Downloading the world…");
       window.addEventListener("error", function () {
-        Module.setStatus("The game could not start. Check the browser console.");
+        Module.crownlessRecoveryActive = true;
+        progressElement.hidden = true;
+        progressElement.value = 0;
+        Module.setStatus(Module.crownlessRuntimeReady
+          ? "The game stopped after startup. Your browser state remains open. Check the browser console."
+          : "The game could not start. Check the browser console.");
       });
       window.addEventListener("keydown", function (event) {
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
@@ -90,6 +111,9 @@
       canvas.addEventListener("pointerdown", function () { canvas.focus(); });
       canvas.addEventListener("webglcontextlost", function (event) {
         event.preventDefault();
+        Module.crownlessRecoveryActive = true;
+        progressElement.hidden = true;
+        progressElement.value = 0;
         Module.setStatus("The graphics context was lost. Reload the page to continue.");
       });
       const stage = document.querySelector("#stage");
