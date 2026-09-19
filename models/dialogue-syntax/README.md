@@ -1,6 +1,6 @@
 # Dialogue syntax checkpoint
 
-`dialogue-syntax.ccv2` is a 4,945,153-parameter policy checkpoint for
+`model.ccv2` is a 4,945,153-parameter policy checkpoint for
 `crownless-dialogue-syntax-v1`. It uses the existing tokenizer and the MIT license
 in this directory. Human and Hra'khor wording comes from the shared renderer.
 

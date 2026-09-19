@@ -77,4 +77,4 @@ training/runner contract tests and 13 existing participant compiler tests passed
 The standalone builder was also exercised with the exported checkpoint.
 
 Model hash: `321431dc03e6dd6ae7749b6e991004b64f9cc2f83930ddd3c385ab1a4863eb26`.
-See `assets/language/DIALOGUE-SYNTAX.md` and `tools/dialogue/TRAIN-SYNTAX.md`.
+See `models/dialogue-syntax/README.md` and `tools/dialogue/TRAIN-SYNTAX.md`.

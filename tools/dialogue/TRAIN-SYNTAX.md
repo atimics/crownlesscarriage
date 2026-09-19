@@ -44,14 +44,14 @@ matches are counted separately. Model output is checked before rendering.
 
 ## Native execution
 
-The checked `assets/language/dialogue-syntax.ccv2` can be used directly:
+The checked `models/dialogue-syntax/model.ccv2` can be used directly:
 
 ```sh
 python tools/dialogue/build_syntax_probe.py \
-  --model assets/language/dialogue-syntax.ccv2 --build /path/to/build \
+  --model models/dialogue-syntax/model.ccv2 --build /path/to/build \
   --output /tmp/syntax-native
 python tools/dialogue/syntax_student.py --snapshot /tmp/pair.json \
-  --model assets/language/dialogue-syntax.ccv2 --probe /tmp/syntax-native/probe \
+  --model models/dialogue-syntax/model.ccv2 --probe /tmp/syntax-native/probe \
   --surface-probe /path/to/build/core_account_probe --output /tmp/syntax-people
 ```
 
