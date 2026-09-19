@@ -41,6 +41,7 @@ for a larger corpus.
 | Raid end | 0% | 36% |
 | Food end | 0% | 36% |
 | Generation end | 0% | 36% |
+| Publication | 0% | 37% |
 
 The stop threshold was an increase of five percentage points in either
 allowance. Readings are account-wide integer percentages and may update with
