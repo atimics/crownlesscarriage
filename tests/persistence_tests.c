@@ -2690,6 +2690,14 @@ static void ClearSavedRoadPosition(CcJourneyEncounter *journey)
 static void CheckSchema104RoadMigration(char *error,
                                         size_t error_capacity)
 {
+    /* These are gameplay databases from schema-104 runtime d30028cc. They
+       were checkpointed to journal_mode=DELETE for portable read-only use.
+       Package SHA-256 values after that checkpoint are:
+       pilot road: 237701f28aef7fcca9e4ed56e9cc324514aa9d51463b2e4fec3ac07efebffa39
+       site stop: 4af6e66e1b41c60b97856a7615474d71dc6878ec545d625536fadf1b040c0761
+       checkpoint: 1b1df0b8931f735f61e5f9ac5fc5aa907d2e7a5b30e0deed1fb19abbefdd97e6
+       mill stop: 8a91964656a09285cbb08f50452c8fd8d3cc9217026fac4f227c6273d7927dd3
+       mine road: 6d046dddea304ebe5c9f2125cc7ac0ec26731cd596018e34d146e7b560f46fef */
     char pilot_file[512];
     (void)snprintf(
         pilot_file, sizeof(pilot_file),
