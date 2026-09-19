@@ -28,6 +28,37 @@ static int RunMineInputRegression(void)
 #define MINE_INPUT() do { HandleInput(&journal,&sim,&selected,&situation,&view,&back,&local,(RenderTexture2D){0},(Rectangle){0},.2f,path,"",message,sizeof(message),feedback,sizeof(feedback),&feedback_age); ClientInputClearPressed(); } while(0)
 #define MINE_KEY(key) do { queued_key_press[key]=true; MINE_INPUT(); } while(0)
     {
+        static CcSim frame;
+        frame=sim;
+        frame.mine.phase=CC_MINE_LEVEL;
+        frame.mine.x=25;
+        frame.mine.y=16;
+        frame.mine.pack[CC_GOOD_BREAD]=2;
+        ClientTouchBegin();
+        ClientTouchHeading("Old town","Old actions");
+        ClientTouchAdd((Rectangle){0,0,1,1},"Old action",true,false);
+        ClientTouchRecordText("Old town cargo");
+        MineBeginTouchFrame(&frame);
+        char offer[256];
+        (void)snprintf(offer,sizeof(offer),
+            "Offer 2 Bread (%d carried) for 1 Gold (%d in load). Pack %d/8 -> %d/8.",
+            CcMinePackGood(&frame,CC_GOOD_BREAD),
+            CcMineSourceGood(&frame,CC_GOOD_GOLD),CcMinePackUsed(&frame),
+            CcMinePackUsed(&frame)-1);
+        MineSetTouchDetail(&frame,offer);
+        ClientTouchAdd((Rectangle){0,0,1,1},"Bargain / B",true,false);
+        ClientTouchAdd((Rectangle){0,0,1,1},"Contest / C",true,false);
+        ClientTouchRecordText("Pack 2/8");
+        MINE_CHECK(touch_count==2 && strcmp(touch_title,"The Underroad")==0 &&
+            strstr(touch_detail,"Lower passage")!=NULL &&
+            strstr(touch_detail,"Offer 2 Bread (2 carried) for 1 Gold (3 in load)")!=NULL &&
+            strcmp(touch_buttons[0].label,"Bargain / B")==0 &&
+            strcmp(touch_buttons[1].label,"Contest / C")==0 &&
+            strstr(touch_reading,"Pack 2/8")!=NULL &&
+            strstr(touch_reading,"Old town")==NULL,
+            "A mine semantic frame must replace stale actions with its current offer, quantities, and controls.");
+    }
+    {
         /* The input path receives pixels from both mouse and browser touch
            synthesis.  Give it a fixed render size so this check exercises
            the same screen-ray pick as ordinary pointing. */

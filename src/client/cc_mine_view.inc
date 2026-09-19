@@ -396,10 +396,29 @@ static void MineLabel(RenderTexture2D target,const CcSim *sim,const LocalState *
     DrawRectangle(x-width/2-5,y-4,width+10,18,Fade(BACKGROUND,.88f));
     CcOverlayDrawText(text,x-width/2,y,10,INK);
 }
+static void MineBeginTouchFrame(const CcSim *sim)
+{
+    bool underground=sim!=NULL&&sim->mine.phase==CC_MINE_LEVEL;
+    ClientTouchBegin();
+    ClientTouchHeading(underground?"The Underroad":"Mine Yard",
+        underground?CcMineChamberName(CcMineChamber(sim->mine.x,sim->mine.y)):
+        "The carriage waits beside the mine road.");
+}
+static void MineSetTouchDetail(const CcSim *sim,const char *hint)
+{
+    bool underground=sim!=NULL&&sim->mine.phase==CC_MINE_LEVEL;
+    char detail[512];
+    (void)snprintf(detail,sizeof(detail),"%s. %s",
+        underground?CcMineChamberName(CcMineChamber(sim->mine.x,sim->mine.y)):
+            "The carriage waits beside the mine road",
+        hint!=NULL?hint:"");
+    ClientTouchHeading(underground?"The Underroad":"Mine Yard",detail);
+}
 static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D target, const char *message)
 {
     SyncMineView(sim,local);
     bool underground=sim->mine.phase==CC_MINE_LEVEL;
+    MineBeginTouchFrame(sim);
     bool compact=MineScreenWidth()<600;
     bool short_landscape=MineShortLandscape();
     bool brief=compact||short_landscape;
@@ -518,6 +537,7 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
     } else if(at_carriage && pack_used==CC_MINE_PACK_CAPACITY)
         hint=brief?"Pack full. Unload goods or enter the mine.":
             "Pack is full. Unload selected goods, or walk to the mine mouth.";
+    MineSetTouchDetail(sim,hint);
     CcOverlayDrawText(hint,22,GetScreenHeight()-151,11,TEAL);
     AdventureButton(MineSelectionControl(0),brief?"Good <":"Previous good",true,false);
     AdventureButton(MineSelectionControl(1),brief?"Good >":"Next good",true,false);
