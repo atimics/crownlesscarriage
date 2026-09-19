@@ -267,6 +267,7 @@ typedef struct LocalState {
     int32_t mine_target_x, mine_target_y;
     CcGood mine_good;
     int32_t mine_quantity;
+    bool mine_inventory_expanded;
     /* Mine routes and named uses are local presentation state.  They are
        rebuilt after loading and never become campaign-facing state. */
     int32_t mine_intent_target;
@@ -1268,6 +1269,7 @@ static void ResetLocalState(LocalState *local)
     local->mine_target_y = -1;
     local->mine_good = CC_GOOD_BREAD;
     local->mine_quantity = 1;
+    local->mine_inventory_expanded = false;
     local->mine_intent_target = 0;
     local->mine_intent_revision = -1;
     memset(local->mine_known, 0, sizeof(local->mine_known));

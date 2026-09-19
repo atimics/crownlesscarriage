@@ -28,6 +28,11 @@ static Rectangle MineSelectionControl(int32_t index)
     return (Rectangle){18.0f+(float)index*(button_width+4.0f),
         (float)MineScreenHeight()-126,button_width,30};
 }
+static Rectangle MineInventoryControl(void)
+{
+    return (Rectangle){18.0f, MineShortLandscape() ? 63.0f : 94.0f,
+        (float)MineScreenWidth() - 36.0f, 24.0f};
+}
 static bool MineAtCarriage(const CcSim *sim)
 {
     return sim->mine.phase==CC_MINE_YARD &&
@@ -367,7 +372,7 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
     int32_t title_y=short_landscape?12:20;
     int32_t subtitle_y=short_landscape?30:43;
     int32_t summary_y=short_landscape?50:65;
-    int32_t goods_y=short_landscape?65:80;
+    int32_t goods_y=short_landscape?94:80;
     CcOverlayDrawText(underground?"THE UNDERROAD / 01":brief?"MINE YARD":"LOW SILVER PIT / MINE YARD",22,title_y,11,TEAL);
     CcOverlayDrawText(underground?CcMineChamberName(CcMineChamber(sim->mine.x,sim->mine.y)):
         brief?"Carriage at mine road":"The carriage waits beside the mine road",22,subtitle_y,brief?14:20,INK);
@@ -383,10 +388,15 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
         pack_used,CC_MINE_PACK_CAPACITY-pack_used,carriage_used,sim->player.cargo_capacity,
         sim->player.cargo_capacity-carriage_used,sim->mine.light),22,summary_y,10,INK);
     int32_t pane_width=MineScreenWidth()/2-34;
-    MineDrawGoods("Pack",pack_goods,22,goods_y,pane_width,TEAL);
-    MineDrawGoods(at_carriage?(brief?"Cart":"Carriage"):(brief?"Cart out of reach":"Carriage out of reach"),
-        at_carriage?sim->player.cargo:NULL,MineScreenWidth()/2+12,goods_y,pane_width,
-        at_carriage?TEAL:MUTED);
+    AdventureButton(MineInventoryControl(),
+        short_landscape ? (local->mine_inventory_expanded ? "Hide inventory" : "Show inventory") :
+        "Inventory", true, local->mine_inventory_expanded);
+    if (!short_landscape || local->mine_inventory_expanded) {
+        MineDrawGoods("Pack",pack_goods,22,goods_y,pane_width,TEAL);
+        MineDrawGoods(at_carriage?(brief?"Cart":"Carriage"):(brief?"Cart out of reach":"Carriage out of reach"),
+            at_carriage?sim->player.cargo:NULL,MineScreenWidth()/2+12,goods_y,pane_width,
+            at_carriage?TEAL:MUTED);
+    }
     const char *selection=at_carriage?
         TextFormat(brief?"Selected %s x%d | pack %d | cart %d":
             "Selected %s x%d  |  pack %d  carriage %d  |  good [ ]  quantity - +",
@@ -491,7 +501,9 @@ static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
     if(ClientKeyPressed(KEY_EQUAL)) quantity_change=1;
     if(ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mouse=ClientPointerPosition();
-        if(CheckCollisionPointRec(mouse,MineControl(0))) control=4;
+        if(CheckCollisionPointRec(mouse,MineInventoryControl()) && MineShortLandscape())
+            local->mine_inventory_expanded=!local->mine_inventory_expanded;
+        else if(CheckCollisionPointRec(mouse,MineControl(0))) control=4;
         else if(CheckCollisionPointRec(mouse,MineControl(1))) control=5;
         else if(CheckCollisionPointRec(mouse,MineControl(2))) control=6;
         else if(CheckCollisionPointRec(mouse,MineSelectionControl(0))) good_change=-1;
