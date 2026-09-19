@@ -23,7 +23,8 @@ static CcCapturePresentation CcCapturePresentationFor(
 #if defined(CC_CLIENT_SELF_TESTS)
     result.adventure_ui |= request->capture_ux || request->capture_road_fork ||
         request->capture_road_carriage ||
-        request->capture_road || request->capture_parley;
+        request->capture_road || request->capture_parley ||
+        request->capture_mine_road || request->capture_mine_road_reverse;
     result.navigation |= request->capture_ux;
     result.accept_input = !(request->capture_ux || request->capture_road_fork);
     result.update_convoy = !(request->capture_road_arrival || request->capture_storybook);
@@ -119,7 +120,8 @@ static bool CcCaptureNeedsRoadbook(const CcCaptureRequest *request)
 {
     return request->capture_world || request->capture_travel || request->capture_route_sight ||
         request->capture_road_fork || request->capture_road_zoom ||
-        request->capture_road_carriage;
+        request->capture_road_carriage || request->capture_mine_road ||
+        request->capture_mine_road_reverse;
 }
 
 static bool CcCaptureJourneyReady(const CcCaptureRequest *request, const CcSim *sim,

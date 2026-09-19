@@ -16,8 +16,8 @@ static void MineBox(float x,float y,float z,float w,float h,float d,Color color)
 {
     DrawCube((Vector3){x,y,z},w,h,d,color);
 }
-static Camera3D MineCombatCamera(const CcLocalAgent *agent,
-                                 const CcLocalCourse *course,int32_t facing)
+Camera3D CcLocalMineCombatCamera(const CcLocalAgent *agent,
+                                const CcLocalCourse *course,int32_t facing)
 {
     Camera3D camera={.position={agent->position.x,agent->position.y+1.25f,
                                agent->position.z},
@@ -43,7 +43,7 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
     PrepareRuntimeAssets(0U);
     bool underground=sim->mine.phase==CC_MINE_LEVEL;
     bool combat=sim->mine.contest_active && course!=NULL && course->mine_encounter;
-    Camera3D camera=combat?MineCombatCamera(agent,course,facing):
+    Camera3D camera=combat?CcLocalMineCombatCamera(agent,course,facing):
         CcLocalMineCamera(sim,facing);
     ArtComposition art=ROAD_ART_COMPOSITION;
     art.light_profile=underground?ART_LIGHT_INTERIOR_EMBER:ART_LIGHT_STORYBOOK;

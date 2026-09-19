@@ -196,8 +196,15 @@ static int RunMineInputRegression(void)
             "The saved hauler formation must stay fixed when the player moves.");
         Vector2 hauler=GetWorldToScreenEx(
             (Vector3){hauler_position.x,1.55f,hauler_position.y},camera,630,320);
+        Vector2 hauler_head=GetWorldToScreenEx(
+            (Vector3){hauler_position.x,2.05f,hauler_position.y},camera,630,320);
+        Vector2 hauler_feet=GetWorldToScreenEx(
+            (Vector3){hauler_position.x,.05f,hauler_position.y},camera,630,320);
         MINE_CHECK(hauler.x>=0&&hauler.x<630&&hauler.y>=0&&hauler.y<320,
             "The visible hauler body must project into the render target.");
+        MINE_CHECK(hauler_head.y>=0&&hauler_head.y<320&&
+            hauler_feet.y>=0&&hauler_feet.y<320,
+            "The offer camera must keep the hauler's head and feet in frame.");
         MINE_CHECK(MinePick(&picked,&pick_local,surface,hauler,&tx,&ty,&target) &&
             target==MINE_INTENT_HAULERS && tx==26 && ty==16,
             "An upward hauler-body ray must name the saved hauler group.");
@@ -532,6 +539,17 @@ static int RunMineInputRegression(void)
             fabsf(input_local.agent.position.x-25.0f)<.001f&&
             fabsf(input_local.agent.position.z-16.0f)<.001f,
             "C must stage the saved hauler group at the saved mine approach.");
+        Camera3D fight_camera=CcLocalMineCombatCamera(
+            &input_local.agent,&input_local.course,input_local.mine_facing);
+        for(int32_t raider=0;raider<CC_LOCAL_RAIDER_COUNT;++raider) {
+            const CcLocalAgent *body=&input_local.course.raiders[raider];
+            Vector2 head=GetWorldToScreenEx((Vector3){body->position.x,
+                body->position.y+2.05f,body->position.z},fight_camera,630,320);
+            Vector2 feet=GetWorldToScreenEx((Vector3){body->position.x,
+                body->position.y+.05f,body->position.z},fight_camera,630,320);
+            MINE_CHECK(head.y>=0&&head.y<320&&feet.y>=0&&feet.y<320,
+                "The contest camera must keep each hauler's head and feet in frame.");
+        }
         queued_key_press[KEY_SPACE]=true;
         HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
         ClientInputClearPressed();

@@ -3006,7 +3006,9 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
     if (local->journey_travel_active && road_stop != NULL) {
         DrawPanel((Rectangle){22.0f, 86.0f, 460.0f, 68.0f}, PANEL_DEEP);
         CcOverlayDrawText(road_stop->name, 38, 100, 16, INK);
-        CcOverlayDrawText("ROADSIDE STOP / CAMP OR CONTINUE",
+        CcOverlayDrawText(road_stop == CcMineSite(sim) ?
+                          "MINE TURN-OFF / ENTER YARD OR CONTINUE" :
+                          "ROADSIDE STOP / CHOOSE OR CONTINUE",
                           38, 131, 9, TEAL);
     }
     if (!road && !site && place != NULL) {
@@ -3051,8 +3053,14 @@ static const char *TravelForecastLine(const CcSim *sim)
     }
     const CcRoadSite *road_stop = CcSimJourneyRoadSiteStop(sim);
     if (road_stop != NULL) {
+        if (road_stop == CcMineSite(sim)) {
+            return TextFormat(
+                "ROAD AHEAD  /  %s  %s  /  ENTER YARD OR CONTINUE",
+                road_stop->name,
+                road_stop->accessible ? "CLEAR" : "BLOCKED");
+        }
         return TextFormat(
-            "ROAD AHEAD  /  %s  %s  /  CAMP OR CONTINUE",
+            "ROAD AHEAD  /  %s  %s  /  CHOOSE OR CONTINUE",
             road_stop->name,
             road_stop->accessible ? (road_stop->condition < 100 ? "REPAIRABLE" : "CLEAR") : "BLOCKED");
     }

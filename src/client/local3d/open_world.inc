@@ -751,6 +751,26 @@ static void DrawOpenWorldMineRoadLandmark(
                                   0.38f, -0.15f, heading);
         DrawSmallSphere(pile, 0.52f, ore == 0 ? WORLD_STONE_LIGHT : iron);
     }
+    /* A tall hoist at the bend reads from either direction on the main road.
+       The lower portal remains at the physical end of the mine spur. */
+    CcWorldPoint hoist_point={
+        placement->junction.x+(placement->bend.x-placement->junction.x)*.55f,
+        placement->junction.z+(placement->bend.z-placement->junction.z)*.55f};
+    float bend_ground=CcWorldTerrainHeight(
+        manifest,hoist_point.x,hoist_point.z);
+    Vector3 hoist={hoist_point.x,bend_ground,hoist_point.z};
+    for(int32_t across=-1;across<=1;across+=2)
+        for(int32_t depth=-1;depth<=1;depth+=2)
+            DrawOrientedBox(hoist,
+                (Vector3){(float)across*1.45f,3.6f,(float)depth*.85f},
+                (Vector3){0.42f,7.2f,0.42f},heading,timber);
+    DrawOrientedBox(hoist,(Vector3){0.0f,7.05f,0.0f},
+        (Vector3){3.45f,0.38f,2.2f},heading,timber);
+    DrawOrientedBox(hoist,(Vector3){0.0f,5.65f,0.0f},
+        (Vector3){0.38f,0.38f,3.1f},heading,timber);
+    Vector3 wheel=hoist;
+    wheel.y+=5.65f;
+    DrawSmallSphere(wheel,0.92f,iron);
 }
 
 static void DrawOpenWorldRoadSites(
@@ -767,12 +787,13 @@ static void DrawOpenWorldRoadSites(
         const CcWorldRoutePlacement *route =
             CcWorldRoutePlacementForId(manifest, placement->route_id);
         CcRoadBookRouteView visibility = {0};
-        if (site == NULL || route == NULL ||
-            !OpenWorldReadRouteView(
-                sim, route, carriage, &visibility) ||
-            !CcRoadBookShowsRouteAmount(
-                &visibility, CcWorldRouteJourneyAmount(route, route->from_id,
-                    (float)site->progress_milli / 1000.0f))) {
+        if(site==NULL||route==NULL) continue;
+        bool current_stop=CcSimJourneyRoadSiteStop(sim)==site;
+        if (!current_stop &&
+            (!OpenWorldReadRouteView(sim,route,carriage,&visibility)||
+             !CcRoadBookShowsRouteAmount(
+                &visibility,CcWorldRouteJourneyAmount(route,route->from_id,
+                    (float)site->progress_milli/1000.0f)))) {
             continue;
         }
         float dx = placement->junction.x - focus.x;
