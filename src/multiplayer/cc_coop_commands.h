@@ -68,7 +68,8 @@ static inline const char *CcCoopActionName(CcCommandKind kind)
         "mine_inspect", "mine_take", "mine_cache", "mine_bargain",
         "mine_contest", "mine_break_contact", "mine_resolve_contest",
         "road_leg",
+        "mine_learn_lead", "mine_report_return",
     };
-    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_CHOOSE_ROAD_LEG ? names[(int)kind] : "";
+    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_MINE_REPORT_RETURN ? names[(int)kind] : "";
 }
 #endif

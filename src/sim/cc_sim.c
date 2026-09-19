@@ -642,6 +642,13 @@ static void GatherPinnedEvents(const CcSim *sim, CcId incoming_parent,
     }
     PinEvent(set, incoming_parent);
     PinEvent(set, sim->journey.parent_event_id);
+    if (sim->schema_version >= 106U) {
+        PinEvent(set, sim->mine.lead_event_id);
+        PinEvent(set, sim->mine.survey_event_id);
+        PinEvent(set, sim->mine.bypass_event_id);
+        PinEvent(set, sim->mine.haul_receipt_event_id);
+        PinEvent(set, sim->mine.report_event_id);
+    }
     PinEvent(set, sim->delayed_echo.parent_event_id);
     PinEvent(set, sim->goblins.tribute_event_id);
     PinEvent(set, sim->dragon.hoard_event_id);
@@ -737,6 +744,13 @@ static void RedirectEventReference(CcSim *sim, CcId removed_id,
     }
     if (sim->journey.parent_event_id == removed_id) {
         sim->journey.parent_event_id = replacement_id;
+    }
+    if (sim->schema_version >= 106U) {
+        CcId *mine_events[] = {&sim->mine.lead_event_id,
+            &sim->mine.survey_event_id,&sim->mine.bypass_event_id,
+            &sim->mine.haul_receipt_event_id,&sim->mine.report_event_id};
+        for (size_t i=0;i<sizeof(mine_events)/sizeof(mine_events[0]);++i)
+            if (*mine_events[i] == removed_id) *mine_events[i]=replacement_id;
     }
     if (sim->delayed_echo.parent_event_id == removed_id) {
         sim->delayed_echo.parent_event_id = replacement_id;
@@ -16399,7 +16413,7 @@ static const CcCustodyEntry *MineTrackedCarriedGood(const CcSim *sim)
 }
 
 static bool MineReturnHaul(const CcSim *sim, CcGood *good, int32_t *quantity,
-                           CcId *event_id)
+                           CcId *event_id, bool *sale_receipt)
 {
     const CcCustodyEntry *carried=MineTrackedCarriedGood(sim);
     if (carried != NULL) {
@@ -16415,6 +16429,7 @@ static bool MineReturnHaul(const CcSim *sim, CcGood *good, int32_t *quantity,
         if (good != NULL) *good=(CcGood)carried->good;
         if (quantity != NULL) *quantity=total;
         if (event_id != NULL) *event_id=carried->last_event_id;
+        if (sale_receipt != NULL) *sale_receipt=false;
         return total > 0;
     }
     if (sim != NULL && sim->mine.haul_receipt_event_id != 0U &&
@@ -16424,6 +16439,7 @@ static bool MineReturnHaul(const CcSim *sim, CcGood *good, int32_t *quantity,
         if (good != NULL) *good=(CcGood)sim->mine.haul_receipt_good;
         if (quantity != NULL) *quantity=sim->mine.haul_receipt_quantity;
         if (event_id != NULL) *event_id=sim->mine.haul_receipt_event_id;
+        if (sale_receipt != NULL) *sale_receipt=true;
         return true;
     }
     return false;
@@ -16431,12 +16447,12 @@ static bool MineReturnHaul(const CcSim *sim, CcGood *good, int32_t *quantity,
 
 bool CcSimMineReturnHaul(const CcSim *sim, CcGood *good, int32_t *quantity)
 {
-    return MineReturnHaul(sim,good,quantity,NULL);
+    return MineReturnHaul(sim,good,quantity,NULL,NULL);
 }
 
 CcMineReturnKind CcSimMineReturnEvidence(const CcSim *sim)
 {
-    if (MineReturnHaul(sim,NULL,NULL,NULL))
+    if (MineReturnHaul(sim,NULL,NULL,NULL,NULL))
         return CC_MINE_RETURN_HAUL;
     if (sim != NULL && sim->schema_version >= 106U &&
         (sim->mine.survey_event_id != 0U || sim->mine.bypass_event_id != 0U))
@@ -16543,14 +16559,19 @@ static bool ApplyMineReportReturn(CcSim *sim, const CcCommand *command,
     CcGood haul_good=CC_GOOD_BREAD;
     int32_t haul_quantity=0;
     CcId haul_event=0U;
+    bool sale_receipt=false;
     bool has_haul=kind == CC_MINE_RETURN_HAUL &&
-        MineReturnHaul(sim,&haul_good,&haul_quantity,&haul_event);
+        MineReturnHaul(sim,&haul_good,&haul_quantity,&haul_event,&sale_receipt);
     CcId parent=has_haul ? haul_event :
         mine->bypass_event_id != 0U ? mine->bypass_event_id : mine->survey_event_id;
     char text[CC_EVENT_TEXT_CAPACITY];
-    if (has_haul)
+    if (has_haul && sale_receipt)
         (void)snprintf(text,sizeof(text),
-            "Day %d: Jory sees %d %s from Low Silver Pit. 'This proves the turnout can still yield. I will mark the load.'",
+            "Day %d: Crownless Company tells Jory about the sale of %d %s from Low Silver Pit. 'This proves the turnout can still yield.'",
+            sim->current_day,haul_quantity,CcGoodName(haul_good));
+    else if (has_haul)
+        (void)snprintf(text,sizeof(text),
+            "Day %d: Crownless Company shows Jory %d %s from Low Silver Pit. 'This proves the turnout can still yield.'",
             sim->current_day,haul_quantity,CcGoodName(haul_good));
     else
         (void)snprintf(text,sizeof(text),
@@ -16558,7 +16579,7 @@ static bool ApplyMineReportReturn(CcSim *sim, const CcCommand *command,
             sim->current_day);
     CcEvent *event=PushEvent(sim,CC_EVENT_FACT_REVEALED,
         site != NULL ? site->id : mine->source_id,sim->dungeons[0].settlement_id,
-        parent,(int32_t)kind,text);
+        parent,sale_receipt ? -(int32_t)kind : (int32_t)kind,text);
     RememberKnowledge(sim,jory,CC_KNOWLEDGE_WITNESS_ACCOUNT,
         situation->id,sim->player.id,event->id,
         CC_KNOWLEDGE_TOLD,false,sim->current_day);
@@ -16570,10 +16591,15 @@ static bool ApplyMineReportReturn(CcSim *sim, const CcCommand *command,
     mine->report_kind=(uint8_t)kind;
     mine->reported_encounter_outcome=mine->encounter_outcome;
     mine->return_revision+=1;
-    if (has_haul) {
+    if (has_haul && sale_receipt) {
         if (error != NULL && error_capacity > 0U)
             (void)snprintf(error,error_capacity,
-                "Jory sees %d %s from Low Silver Pit: 'This proves the turnout can still yield.' Oren can handle the sale.",
+                "Crownless Company tells Jory about the sale of %d %s: 'This proves the turnout can still yield.'",
+                haul_quantity,CcGoodName(haul_good));
+    } else if (has_haul) {
+        if (error != NULL && error_capacity > 0U)
+            (void)snprintf(error,error_capacity,
+                "Crownless Company shows Jory %d %s from Low Silver Pit: 'This proves the turnout can still yield.' Oren can handle the sale.",
                 haul_quantity,CcGoodName(haul_good));
     }
     else

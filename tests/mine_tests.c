@@ -327,19 +327,20 @@ static void TestMineReturnRecords(void)
     const CcCharacter *jory=CcSimMineEvidenceContact(&lead);
     CC_CHECK(jory!=NULL && CcSimMineLeadSupported(&lead));
     uint64_t before=CcSimHash(&lead);
-    CcCommand stale_lead={.kind=CC_COMMAND_MINE_LEARN_LEAD,
-        .target_id=(CcId)(lead.mine.return_revision-1),.amount=1};
-    CC_CHECK(!CcSimApply(&lead,&stale_lead,error,sizeof(error)) && CcSimHash(&lead)==before);
-    CcCommand learn={.kind=CC_COMMAND_MINE_LEARN_LEAD,
-        .target_id=(CcId)lead.mine.return_revision,.amount=1};
-    Check(CcSimApply(&lead,&learn,error,sizeof(error)));
+    CC_CHECK(!CcCoopApply(&lead,"mine_learn_lead",
+        (CcId)(lead.mine.return_revision-1),0,1,error,sizeof(error)) &&
+        CcSimHash(&lead)==before);
+    Check(CcCoopApply(&lead,"mine_learn_lead",
+        (CcId)lead.mine.return_revision,0,1,error,sizeof(error)));
     CC_CHECK(lead.mine.lead_event_id!=0U && lead.mine.lead_source_id==jory->id &&
         !lead.mine.lead_document && lead.mine.lead_day==lead.current_day);
     const CcEvent *lead_event=CcSimEvent(&lead,lead.mine.lead_event_id);
     CC_CHECK(lead_event!=NULL&&strstr(lead_event->text,"Alderwatch-Silverwick")!=NULL&&
         strstr(lead_event->text,"workers' records")!=NULL);
-    before=CcSimHash(&lead);learn.target_id=(CcId)lead.mine.return_revision;
-    CC_CHECK(!CcSimApply(&lead,&learn,error,sizeof(error)) && CcSimHash(&lead)==before);
+    before=CcSimHash(&lead);
+    CC_CHECK(!CcCoopApply(&lead,"mine_learn_lead",
+        (CcId)lead.mine.return_revision,0,1,error,sizeof(error)) &&
+        CcSimHash(&lead)==before);
 
     CcSimInit(&fallback,UINT32_C(0x106fa11));
     silverwick=fallback.dungeons[0].settlement_id;
@@ -393,27 +394,28 @@ static void TestMineReturnRecords(void)
     int32_t others_before=0;
     for(int32_t i=0;i<haul.character_count;++i)
         if(haul.characters[i].id!=jory->id) others_before+=haul.characters[i].knowledge_count;
-    CcCommand report={.kind=CC_COMMAND_MINE_REPORT_RETURN,
-        .target_id=(CcId)(haul.mine.return_revision-1)};
     before=CcSimHash(&haul);
-    CC_CHECK(!CcSimApply(&haul,&report,error,sizeof(error))&&CcSimHash(&haul)==before);
-    CC_CHECK(!CcCoopApply(&haul,"mine_report_return",(CcId)haul.mine.return_revision,
-        0,0,error,sizeof(error))&&CcSimHash(&haul)==before);
-    report.target_id=(CcId)haul.mine.return_revision;
-    Check(CcSimApply(&haul,&report,error,sizeof(error)));
+    CC_CHECK(!CcCoopApply(&haul,"mine_report_return",
+        (CcId)(haul.mine.return_revision-1),0,0,error,sizeof(error))&&
+        CcSimHash(&haul)==before);
+    Check(CcCoopApply(&haul,"mine_report_return",
+        (CcId)haul.mine.return_revision,0,0,error,sizeof(error)));
     CC_CHECK(haul.mine.report_kind==CC_MINE_RETURN_HAUL&&
         haul.mine.report_good==CC_GOOD_GOLD&&haul.mine.report_quantity==1&&
         haul.mine.report_recipient_id==jory->id&&haul.mine.report_event_id!=0U&&
         KnowledgeCount(&haul,jory->id)==jory_before+1);
     const CcEvent *report_event=CcSimEvent(&haul,haul.mine.report_event_id);
-    CC_CHECK(report_event!=NULL&&strstr(report_event->text,"1 Raw Gold")!=NULL&&
+    CC_CHECK(report_event!=NULL&&report_event->magnitude<0&&
+        strstr(report_event->text,"sale of 1 Raw Gold")!=NULL&&
         strstr(report_event->text,"still yield")!=NULL);
     int32_t others_after=0;
     for(int32_t i=0;i<haul.character_count;++i)
         if(haul.characters[i].id!=jory->id) others_after+=haul.characters[i].knowledge_count;
     CC_CHECK(others_after==others_before);
-    before=CcSimHash(&haul);report.target_id=(CcId)haul.mine.return_revision;
-    CC_CHECK(!CcSimApply(&haul,&report,error,sizeof(error))&&CcSimHash(&haul)==before);
+    before=CcSimHash(&haul);
+    CC_CHECK(!CcCoopApply(&haul,"mine_report_return",
+        (CcId)haul.mine.return_revision,0,0,error,sizeof(error))&&
+        CcSimHash(&haul)==before);
     Check(CcSaveWrite("mine-return-106.ccsave",&haul,error,sizeof(error)));
     Check(CcSaveRead("mine-return-106.ccsave",&restored,error,sizeof(error)));
     CC_CHECK(CcSimHash(&haul)==CcSimHash(&restored)&&
@@ -426,7 +428,7 @@ static void TestMineReturnRecords(void)
     old_gold.player.cargo[CC_GOOD_GOLD]=1;
     old_gold.mine.encounter_outcome=CC_MINE_ENCOUNTER_BARGAINED;
     CC_CHECK(CcSimMineReturnEvidence(&old_gold)==CC_MINE_RETURN_NONE);
-    report=(CcCommand){.kind=CC_COMMAND_MINE_REPORT_RETURN,
+    CcCommand report={.kind=CC_COMMAND_MINE_REPORT_RETURN,
         .target_id=(CcId)old_gold.mine.return_revision};
     before=CcSimHash(&old_gold);
     CC_CHECK(!CcSimApply(&old_gold,&report,error,sizeof(error))&&
@@ -516,9 +518,22 @@ static void TestMineSurveyMigrationAndReturns(void)
 static int WriteSharedMineFixture(const char *mode,const char *path)
 {
     static CcSim sim;
-    ReadyAtHaulers(&sim);
-    if(strcmp(mode,"contest")==0) Apply(&sim,CC_COMMAND_MINE_CONTEST,0);
-    else if(strcmp(mode,"bargain")!=0) return 1;
+    bool return_command=false;
+    if(strcmp(mode,"lead")==0) {
+        CcSimInit(&sim,UINT32_C(0x1061ead));
+        CcId silverwick=sim.dungeons[0].settlement_id;
+        sim.player.location_id=silverwick;sim.carriage.location_id=silverwick;
+        if(!CcSimMineLeadSupported(&sim)) return 1;
+        return_command=true;
+    } else {
+        ReadyAtHaulers(&sim);
+        if(strcmp(mode,"contest")==0) Apply(&sim,CC_COMMAND_MINE_CONTEST,0);
+        else if(strcmp(mode,"report")==0) {
+            Apply(&sim,CC_COMMAND_MINE_BARGAIN,0);
+            ReturnFromMineToSilverwick(&sim);
+            return_command=true;
+        } else if(strcmp(mode,"bargain")!=0) return 1;
+    }
     uint8_t *bytes=NULL;
     size_t length=0;
     if(!CcCoopEncode(&sim,&bytes,&length,error,sizeof(error))) return 1;
@@ -527,7 +542,7 @@ static int WriteSharedMineFixture(const char *mode,const char *path)
     if(file!=NULL && fclose(file)!=0) written=false;
     CcCoopFree(bytes);
     if(!written) return 1;
-    printf("%u\n",sim.mine.revision);
+    printf("%u\n",return_command?sim.mine.return_revision:sim.mine.revision);
     return 0;
 }
 

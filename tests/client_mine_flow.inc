@@ -1,3 +1,5 @@
+#include "sim/cc_sim_custody.h"
+
 static int RunMineInputRegression(void)
 {
     static CcSim sim, restored;
@@ -444,6 +446,87 @@ static int RunMineInputRegression(void)
     queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
     MINE_CHECK(CcMinePackUsed(&sim)==2 && strstr(message,"carriage to pack")!=NULL,
         "Packing must leave a clear transfer receipt.");
+    {
+        static CcSim tracked_input;
+        static LocalState tracked_local;
+        tracked_input=sim;
+        tracked_local=local;
+        tracked_input.mine.source_released=true;
+        tracked_input.mine.encounter_outcome=CC_MINE_ENCOUNTER_CONTESTED;
+        CcCustodyEntry *tracked_gold=NULL;
+        for(int32_t i=0;i<CcCustodyEffectiveCapacity(&tracked_input.custody);++i)
+            if(tracked_input.custody.entries[i].id==
+               tracked_input.mine.gold_source_entry_id)
+                tracked_gold=&tracked_input.custody.entries[i];
+        MINE_CHECK(tracked_gold!=NULL&&tracked_gold->active&&tracked_gold->quantity==3,
+            "The tracked input fixture must find the finite mine Gold root.");
+        tracked_gold->holder=(CcCustodyHolder){CC_CUSTODY_MINE_PACK,
+            tracked_input.player.id};
+        tracked_gold->revision+=1;
+        tracked_gold->last_event_id=(uint64_t)tracked_input.mine.revision+1U;
+        MINE_CHECK(CcSimValidate(&tracked_input,error,sizeof(error)),
+            "The tracked input fixture must carry mine Gold in the pack.");
+        tracked_local.mine_good=CC_GOOD_GOLD;
+        tracked_local.mine_quantity=1;
+        const char *tracked_path="mine-tracked-input.ccsave";
+        (void)remove(tracked_path);
+        CcJournal *tracked_journal=CcJournalStart(tracked_path,&tracked_input,
+            error,sizeof(error));
+        MINE_CHECK(tracked_journal!=NULL,
+            "The tracked transfer input fixture must open its journal.");
+
+        Rectangle unload=MineControl(2);
+        client_test_pointer_active=true;
+        client_test_pointer=(Vector2){unload.x+unload.width/2,
+            unload.y+unload.height/2};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+        HandleMineInput(tracked_journal,&tracked_input,&tracked_local,
+            (RenderTexture2D){0},.2f,message,sizeof(message));
+        client_test_pointer_active=false;
+        ClientInputClearPressed();
+        int32_t player_tracked=0,pack_tracked=0,total_tracked=0;
+        for(int32_t i=0;i<CcCustodyEffectiveCapacity(&tracked_input.custody);++i) {
+            const CcCustodyEntry *entry=&tracked_input.custody.entries[i];
+            if(!entry->active||entry->good!=CC_GOOD_GOLD||
+               !CcSimMineEntryTracked(&tracked_input,entry)) continue;
+            total_tracked+=(int32_t)entry->quantity;
+            if(entry->holder.kind==CC_CUSTODY_PLAYER&&
+               entry->holder.id==tracked_input.player.id)
+                player_tracked+=(int32_t)entry->quantity;
+            if(entry->holder.kind==CC_CUSTODY_MINE_PACK&&
+               entry->holder.id==tracked_input.player.id)
+                pack_tracked+=(int32_t)entry->quantity;
+        }
+        MINE_CHECK(tracked_input.player.cargo[CC_GOOD_GOLD]==1&&
+            CcMinePackGood(&tracked_input,CC_GOOD_GOLD)==2&&
+            player_tracked==1&&pack_tracked==2&&total_tracked==3,
+            "Pointer Unload must move tracked mine Gold from pack custody to the company.");
+
+        queued_key_press[KEY_P]=true;
+        HandleMineInput(tracked_journal,&tracked_input,&tracked_local,
+            (RenderTexture2D){0},.2f,message,sizeof(message));
+        ClientInputClearPressed();
+        player_tracked=0;pack_tracked=0;total_tracked=0;
+        for(int32_t i=0;i<CcCustodyEffectiveCapacity(&tracked_input.custody);++i) {
+            const CcCustodyEntry *entry=&tracked_input.custody.entries[i];
+            if(!entry->active||entry->good!=CC_GOOD_GOLD||
+               !CcSimMineEntryTracked(&tracked_input,entry)) continue;
+            total_tracked+=(int32_t)entry->quantity;
+            if(entry->holder.kind==CC_CUSTODY_PLAYER&&
+               entry->holder.id==tracked_input.player.id)
+                player_tracked+=(int32_t)entry->quantity;
+            if(entry->holder.kind==CC_CUSTODY_MINE_PACK&&
+               entry->holder.id==tracked_input.player.id)
+                pack_tracked+=(int32_t)entry->quantity;
+        }
+        MINE_CHECK(tracked_input.player.cargo[CC_GOOD_GOLD]==0&&
+            CcMinePackGood(&tracked_input,CC_GOOD_GOLD)==3&&
+            player_tracked==0&&pack_tracked==3&&total_tracked==3,
+            "Keyboard Pack must return tracked mine Gold to the pack with conserved custody.");
+        MINE_CHECK(CcJournalClose(&tracked_journal,&tracked_input,error,sizeof(error)),
+            "The tracked transfer input journal must close cleanly.");
+        (void)remove(tracked_path);
+    }
     for(int i=0;i<13;++i) MINE_KEY(KEY_W);
     MINE_CHECK(sim.mine.y==4,"W must walk to the entrance.");
     {

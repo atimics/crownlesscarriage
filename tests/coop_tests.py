@@ -425,6 +425,28 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(rejected.exception.status, 409)
         self.assertIn('company has changed', rejected.exception.message)
 
+    def test_shared_mine_lead_and_report_authority(self):
+        for mode, action, amount in (
+                ('lead', 'mine_learn_lead', 1),
+                ('report', 'mine_report_return', 0)):
+            with self.subTest(action=action):
+                revision = self.stage_shared_mine(mode)
+                body = self.command(self.a, action, target=str(revision), amount=amount)
+                result = self.worlds.command(self.id, self.a, body)
+                self.assertTrue(result['accepted'])
+                repeat = self.worlds.command(self.id, self.a, body)
+                self.assertTrue(repeat['duplicate'])
+                self.assertEqual(repeat['world']['state'], result['world']['state'])
+
+                stale = self.command(self.a, action, target=str(revision), amount=amount)
+                purchase = self.command(self.a, 'trade', good=0, amount=1)
+                self.assertTrue(self.worlds.command(self.id, self.a, purchase)['accepted'])
+                stale['sequence'] += 1
+                with self.assertRaises(ApiError) as rejected:
+                    self.worlds.command(self.id, self.a, stale)
+                self.assertEqual(rejected.exception.status, 409)
+                self.assertIn('company has changed', rejected.exception.message)
+
     def test_shared_mine_bargain_and_break_contact_reach_the_host(self):
         revision = self.stage_shared_mine('bargain')
         before = self.shared_mine_goods()

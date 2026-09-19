@@ -954,8 +954,11 @@ static Rectangle AdventureBookMineStepBounds(Rectangle panel, int32_t step)
 static void DrawAdventureBookHead(Rectangle panel, const char *page_name,
                                   int32_t active_page)
 {
-    AdventurePanelTitle(panel, "Company Book");
-    const char *pages[]={"Ahead  1","People  2","Mine notes  3"};
+    bool compact=AdventureBookCompact(panel);
+    AdventurePanelTitle(panel,compact ? "Book" : "Company Book");
+    const char *pages[]={compact ? "Ahead" : "Ahead  1",
+        compact ? "People" : "People  2",
+        compact ? "Mine" : "Mine notes  3"};
     for (int32_t page=0;page<3;++page)
         AdventureButton(AdventureBookPageBounds(panel,page),pages[page],true,
             page==active_page);
@@ -1074,20 +1077,30 @@ static void DrawAdventureMineNotes(const CcSim *sim, const LocalState *local)
     if (section < 0 || section == 2) {
       if (sim->mine.report_event_id != 0U) {
         const CcCharacter *recipient=CcSimCharacter(sim,sim->mine.report_recipient_id);
-        char kind[80];
-        if (sim->mine.report_kind == CC_MINE_RETURN_HAUL)
-            (void)snprintf(kind,sizeof(kind),"%d %s from the tracked partial haul",
+        const CcEvent *report=CcSimEvent(sim,sim->mine.report_event_id);
+        bool sale_receipt=report != NULL && report->magnitude < 0;
+        char account[160];
+        if (sim->mine.report_kind == CC_MINE_RETURN_HAUL && sale_receipt)
+            (void)snprintf(account,sizeof(account),
+                "Crownless Company told %s about the sale of %d %s",
+                recipient != NULL ? recipient->name : "Jory",
                 sim->mine.report_quantity,CcGoodName((CcGood)sim->mine.report_good));
-        else (void)snprintf(kind,sizeof(kind),"the attributed route account");
+        else if (sim->mine.report_kind == CC_MINE_RETURN_HAUL)
+            (void)snprintf(account,sizeof(account),
+                "Crownless Company showed %s %d %s from the tracked partial haul",
+                recipient != NULL ? recipient->name : "Jory",
+                sim->mine.report_quantity,CcGoodName((CcGood)sim->mine.report_good));
+        else (void)snprintf(account,sizeof(account),
+            "Crownless Company shared the attributed route account with %s",
+            recipient != NULL ? recipient->name : "Jory");
         const char *outcome=sim->mine.reported_encounter_outcome == CC_MINE_ENCOUNTER_BARGAINED ?
             "bargained with haulers" :
             sim->mine.reported_encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED ?
             "defeated haulers" :
             sim->mine.reported_encounter_outcome == CC_MINE_ENCOUNTER_BROKEN_CONTACT ?
             "broke contact" : "hauler encounter unsettled";
-        y+=AdventureWrap(TextFormat("Return, day %d: %s gave %s a %s; perceived outcome: %s.",
-            sim->mine.report_day,"Crownless Company",
-            recipient != NULL ? recipient->name : "Jory",kind,outcome),
+        y+=AdventureWrap(TextFormat("Return, day %d: %s; perceived outcome: %s.",
+            sim->mine.report_day,account,outcome),
             x,y,width,size,CC_GOLD)+12;
         (void)AdventureWrap(sim->mine.report_kind == CC_MINE_RETURN_HAUL ?
             "Jory: 'This proves the turnout can still yield.'" :
