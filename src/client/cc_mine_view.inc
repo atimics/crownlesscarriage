@@ -29,13 +29,6 @@ static int32_t MineGoodsRows(const int32_t goods[CC_GOOD_COUNT])
     }
     return rows>0?rows:1;
 }
-static int32_t MineInventoryBottom(const CcSim *sim,bool carriage_nearby)
-{
-    int32_t rows=MineGoodsRows(sim->mine.pack);
-    if(carriage_nearby && MineGoodsRows(sim->player.cargo)>rows)
-        rows=MineGoodsRows(sim->player.cargo);
-    return 94+rows*11;
-}
 static void MineDrawGoods(const char *title,const int32_t goods[CC_GOOD_COUNT],
                           int32_t x,int32_t y,Color color)
 {

@@ -225,7 +225,10 @@ static int RunMineInputRegression(void)
         CcSim inventory=sim;
         for(int32_t good=0;good<12;++good) inventory.player.cargo[good]=good+1;
         for(int32_t good=0;good<8;++good) inventory.mine.pack[good]=1;
-        MINE_CHECK(MineInventoryBottom(&inventory,true)<=MineViewport().y,
+        int32_t inventory_rows=MineGoodsRows(inventory.mine.pack);
+        if(MineGoodsRows(inventory.player.cargo)>inventory_rows)
+            inventory_rows=MineGoodsRows(inventory.player.cargo);
+        MINE_CHECK(94+inventory_rows*11<=MineViewport().y,
             "Several goods must fit above the mine viewport.");
         for(int32_t good=0;good<CC_GOOD_COUNT;++good) {
             char line[64];
