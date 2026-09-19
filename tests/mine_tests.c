@@ -5,8 +5,6 @@
 #include "metagame/cc_metagame.h"
 #include "test_support.h"
 #include <limits.h>
-#include <inttypes.h>
-#include <sqlite3.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -109,12 +107,436 @@ static void ReadyAtHaulers(CcSim *sim)
     CC_CHECK(!sim->mine.source_released && CcMinePackGood(sim,CC_GOOD_GOLD)==0);
     Walk(sim,26,16);
 }
+
+static void FinishJourney(CcSim *sim)
+{
+    for (int32_t ticks=0;sim->journey.active && ticks<200000;++ticks) {
+        if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING)
+            CcSimAdvanceRuntimeTicks(sim,CC_WORLD_TICKS_PER_SECOND);
+        else
+            Check(CcTestContinueJourneyPause(sim,error,sizeof(error)));
+    }
+    CC_CHECK(!sim->journey.active);
+}
+
+static void ReturnFromMineToSilverwick(CcSim *sim)
+{
+    Walk(sim,5,3); Apply(sim,CC_COMMAND_MINE_USE,0);
+    Walk(sim,15,18); Apply(sim,CC_COMMAND_MINE_USE,0);
+    FinishJourney(sim);
+    CcId silverwick=sim->dungeons[0].settlement_id;
+    if (sim->player.location_id != silverwick) {
+        CcCommand travel={.kind=CC_COMMAND_TRAVEL,.target_id=silverwick};
+        Check(CcSimApply(sim,&travel,error,sizeof(error)));
+        sim->journey.ambush_pending=false;
+        sim->pony_company.encounter=-1;
+        FinishJourney(sim);
+    }
+    CC_CHECK(sim->player.location_id==silverwick);
+}
+
+static int32_t KnowledgeCount(const CcSim *sim,CcId id)
+{
+    const CcCharacter *character=CcSimCharacter(sim,id);
+    return character!=NULL?character->knowledge_count:-1;
+}
+
+static int32_t MineTrackedCustodyQuantity(const CcSim *sim)
+{
+    int32_t quantity=0;
+    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        const CcCustodyEntry *entry=&sim->custody.entries[i];
+        if(entry->active&&entry->kind==CC_CUSTODY_GOODS&&
+           CcSimMineEntryTracked(sim,entry)) quantity+=(int32_t)entry->quantity;
+    }
+    return quantity;
+}
+
+static void TestMinePartyWipeConservation(void)
+{
+    CcSim carried;
+    ReadyAtHaulers(&carried);
+    Apply(&carried,CC_COMMAND_MINE_BARGAIN,0);
+    ReturnFromMineToSilverwick(&carried);
+    int32_t custody_before=MineTrackedCustodyQuantity(&carried);
+    int32_t gold_before=carried.player.cargo[CC_GOOD_GOLD];
+    CC_CHECK(custody_before==15&&gold_before==1&&
+        CcSimMineReturnEvidence(&carried)==CC_MINE_RETURN_HAUL);
+    int32_t day=carried.current_day;
+    CcCommand wipe={.kind=CC_COMMAND_PARTY_WIPE,.target_id=(CcId)day};
+    Check(CcSimApply(&carried,&wipe,error,sizeof(error)));
+    CC_CHECK(carried.current_day==day+CC_PARTY_WIPE_DAYS&&
+        MineTrackedCustodyQuantity(&carried)==custody_before&&
+        carried.player.cargo[CC_GOOD_GOLD]==gold_before&&
+        CcSimMineReturnEvidence(&carried)==CC_MINE_RETURN_HAUL);
+    bool gold_in_carriage=false;
+    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&carried.custody);++i) {
+        const CcCustodyEntry *entry=&carried.custody.entries[i];
+        if(entry->active&&entry->good==CC_GOOD_GOLD&&entry->quantity==1&&
+           entry->holder.kind==CC_CUSTODY_PLAYER&&
+           entry->holder.id==carried.player.id&&CcSimMineEntryTracked(&carried,entry))
+            gold_in_carriage=true;
+    }
+    CC_CHECK(gold_in_carriage);
+}
+
+static void CarryThreeTrackedGold(CcSim *sim)
+{
+    AtBranch(sim,false);
+    sim->player.cargo[CC_GOOD_BREAD]=4;
+    CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=CcMineSite(sim)->id};
+    Check(CcSimApply(sim,&visit,error,sizeof(error)));
+    ApplyGood(sim,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,3);
+    Walk(sim,15,3);Apply(sim,CC_COMMAND_MINE_USE,0);
+    Walk(sim,9,15);Walk(sim,26,16);
+    Apply(sim,CC_COMMAND_MINE_CONTEST,0);
+    Apply(sim,CC_COMMAND_MINE_RESOLVE_CONTEST,1);
+    ApplyGood(sim,CC_COMMAND_MINE_TAKE,CC_GOOD_GOLD,3);
+    ReturnFromMineToSilverwick(sim);
+    CC_CHECK(sim->player.cargo[CC_GOOD_GOLD]==3&&
+        CcSimMineReturnEvidence(sim)==CC_MINE_RETURN_HAUL);
+}
+
+static int32_t CarriedTrackedGood(const CcSim *sim,CcGood good)
+{
+    int32_t quantity=0;
+    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        const CcCustodyEntry *entry=&sim->custody.entries[i];
+        if(entry->active&&entry->good==(int32_t)good&&
+           entry->holder.kind==CC_CUSTODY_PLAYER&&
+           entry->holder.id==sim->player.id&&CcSimMineEntryTracked(sim,entry))
+            quantity+=(int32_t)entry->quantity;
+    }
+    return quantity;
+}
+
+static int32_t TrackedGoodAt(const CcSim *sim,CcGood good,
+                             CcCustodyHolderKind kind,CcId holder_id)
+{
+    int32_t quantity=0;
+    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        const CcCustodyEntry *entry=&sim->custody.entries[i];
+        if(entry->active&&entry->good==(int32_t)good&&entry->holder.kind==kind&&
+           entry->holder.id==holder_id&&CcSimMineEntryTracked(sim,entry))
+            quantity+=(int32_t)entry->quantity;
+    }
+    return quantity;
+}
+
+static void TestMineTrackedRepack(void)
+{
+    CcSim sim,loaded;
+    AtBranch(&sim,false);
+    sim.player.cargo[CC_GOOD_BREAD]=4;
+    CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=CcMineSite(&sim)->id};
+    Check(CcSimApply(&sim,&visit,error,sizeof(error)));
+    ApplyGood(&sim,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,3);
+    Walk(&sim,15,3);Apply(&sim,CC_COMMAND_MINE_USE,0);
+    Walk(&sim,9,15);Walk(&sim,26,16);
+    Apply(&sim,CC_COMMAND_MINE_CONTEST,0);
+    Apply(&sim,CC_COMMAND_MINE_RESOLVE_CONTEST,1);
+    ApplyGood(&sim,CC_COMMAND_MINE_TAKE,CC_GOOD_GOLD,3);
+    int32_t tracked=MineTrackedCustodyQuantity(&sim);
+    Walk(&sim,5,3);Apply(&sim,CC_COMMAND_MINE_USE,0);
+    Walk(&sim,15,18);
+    ApplyGood(&sim,CC_COMMAND_MINE_PACK,CC_GOOD_GOLD,-1);
+    CC_CHECK(sim.player.cargo[CC_GOOD_GOLD]==1&&
+        TrackedGoodAt(&sim,CC_GOOD_GOLD,CC_CUSTODY_PLAYER,sim.player.id)==1&&
+        TrackedGoodAt(&sim,CC_GOOD_GOLD,CC_CUSTODY_MINE_PACK,sim.player.id)==2);
+    ApplyGood(&sim,CC_COMMAND_MINE_PACK,CC_GOOD_GOLD,1);
+    CC_CHECK(sim.player.cargo[CC_GOOD_GOLD]==0&&sim.mine.pack[CC_GOOD_GOLD]==0&&
+        TrackedGoodAt(&sim,CC_GOOD_GOLD,CC_CUSTODY_PLAYER,sim.player.id)==0&&
+        TrackedGoodAt(&sim,CC_GOOD_GOLD,CC_CUSTODY_MINE_PACK,sim.player.id)==3);
+    Walk(&sim,15,3);Apply(&sim,CC_COMMAND_MINE_USE,0);
+    Walk(&sim,5,15);
+    ApplyGood(&sim,CC_COMMAND_MINE_CACHE,CC_GOOD_GOLD,1);
+    CC_CHECK(TrackedGoodAt(&sim,CC_GOOD_GOLD,CC_CUSTODY_SITE,sim.mine.cache_id)==1&&
+        MineTrackedCustodyQuantity(&sim)==tracked);
+    Check(CcSaveWrite("mine-tracked-repack.ccsave",&sim,error,sizeof(error)));
+    Check(CcSaveRead("mine-tracked-repack.ccsave",&loaded,error,sizeof(error)));
+    CC_CHECK(CcSimHash(&loaded)==CcSimHash(&sim)&&
+        TrackedGoodAt(&loaded,CC_GOOD_GOLD,CC_CUSTODY_SITE,loaded.mine.cache_id)==1);
+    ApplyGood(&loaded,CC_COMMAND_MINE_CACHE,CC_GOOD_GOLD,-1);
+    Walk(&loaded,5,3);Apply(&loaded,CC_COMMAND_MINE_USE,0);
+    Walk(&loaded,15,18);
+    ApplyGood(&loaded,CC_COMMAND_MINE_PACK,CC_GOOD_GOLD,-1);
+    CC_CHECK(loaded.player.cargo[CC_GOOD_GOLD]==1&&
+        CarriedTrackedGood(&loaded,CC_GOOD_GOLD)==1&&
+        TrackedGoodAt(&loaded,CC_GOOD_GOLD,CC_CUSTODY_MINE_PACK,loaded.player.id)==2&&
+        TrackedGoodAt(&loaded,CC_GOOD_GOLD,CC_CUSTODY_SITE,loaded.mine.cache_id)==0&&
+        MineTrackedCustodyQuantity(&loaded)==tracked);
+    Apply(&loaded,CC_COMMAND_MINE_USE,0);
+    FinishJourney(&loaded);
+    CcId silverwick=loaded.dungeons[0].settlement_id;
+    if(loaded.player.location_id!=silverwick) {
+        CcCommand travel={.kind=CC_COMMAND_TRAVEL,.target_id=silverwick};
+        Check(CcSimApply(&loaded,&travel,error,sizeof(error)));
+        loaded.journey.ambush_pending=false;
+        loaded.pony_company.encounter=-1;
+        FinishJourney(&loaded);
+    }
+    CcCommand sale={.kind=CC_COMMAND_TRADE,.good=CC_GOOD_GOLD,.amount=-1};
+    Check(CcSimApply(&loaded,&sale,error,sizeof(error)));
+    CC_CHECK(CarriedTrackedGood(&loaded,CC_GOOD_GOLD)==2&&
+        loaded.mine.haul_receipt_quantity==1);
+    CcCommand report={.kind=CC_COMMAND_MINE_REPORT_RETURN,
+        .target_id=(CcId)loaded.mine.return_revision};
+    Check(CcSimApply(&loaded,&report,error,sizeof(error)));
+    CC_CHECK(loaded.mine.report_kind==CC_MINE_RETURN_HAUL&&
+        loaded.mine.report_good==CC_GOOD_GOLD&&loaded.mine.report_quantity==2);
+    (void)remove("mine-tracked-repack.ccsave");
+}
+
+static void TestMineCargoReconciliation(void)
+{
+    CcSim partial,lost;
+    CarryThreeTrackedGold(&partial);
+    CcCommand sale={.kind=CC_COMMAND_TRADE,.good=CC_GOOD_GOLD,.amount=-1};
+    Check(CcSimApply(&partial,&sale,error,sizeof(error)));
+    CC_CHECK(partial.player.cargo[CC_GOOD_GOLD]==2&&
+        CarriedTrackedGood(&partial,CC_GOOD_GOLD)==2&&
+        partial.mine.haul_receipt_quantity==1);
+
+    CarryThreeTrackedGold(&lost);
+    for(int32_t loss=0;loss<3;++loss) {
+        lost.player.cargo[CC_GOOD_BREAD]=18;
+        CcCommand begin={.kind=CC_COMMAND_BEGIN_DUNGEON_EXPEDITION,
+            .target_id=lost.dungeons[0].id};
+        Check(CcSimApply(&lost,&begin,error,sizeof(error)));
+        CcCommand move={.kind=CC_COMMAND_MOVE_DUNGEON,.amount=1};
+        Check(CcSimApply(&lost,&move,error,sizeof(error)));
+        lost.dungeon_expedition.strain=75;
+        CcCommand retreat={.kind=CC_COMMAND_RETREAT_DUNGEON};
+        Check(CcSimApply(&lost,&retreat,error,sizeof(error)));
+        CC_CHECK(lost.player.cargo[CC_GOOD_GOLD]==2-loss&&
+            CarriedTrackedGood(&lost,CC_GOOD_GOLD)==2-loss);
+    }
+    CC_CHECK(CcSimMineReturnEvidence(&lost)==CC_MINE_RETURN_INFORMATION);
+    lost.player.cargo[CC_GOOD_GOLD]=1;
+    CC_CHECK(CcSimMineReturnEvidence(&lost)==CC_MINE_RETURN_INFORMATION);
+}
+
+static void TestMineReturnRecords(void)
+{
+    CcSim lead,fallback,haul,restored,old_gold;
+    CcSimInit(&lead,UINT32_C(0x1061ead));
+    CcId silverwick=lead.dungeons[0].settlement_id;
+    lead.player.location_id=silverwick;lead.carriage.location_id=silverwick;
+    const CcCharacter *jory=CcSimMineEvidenceContact(&lead);
+    CC_CHECK(jory!=NULL && CcSimMineLeadSupported(&lead));
+    uint64_t before=CcSimHash(&lead);
+    CC_CHECK(!CcCoopApply(&lead,"mine_learn_lead",
+        (CcId)(lead.mine.return_revision-1),0,1,error,sizeof(error)) &&
+        CcSimHash(&lead)==before);
+    Check(CcCoopApply(&lead,"mine_learn_lead",
+        (CcId)lead.mine.return_revision,0,1,error,sizeof(error)));
+    CC_CHECK(lead.mine.lead_event_id!=0U && lead.mine.lead_source_id==jory->id &&
+        !lead.mine.lead_document && lead.mine.lead_day==lead.current_day);
+    const CcEvent *lead_event=CcSimEvent(&lead,lead.mine.lead_event_id);
+    CC_CHECK(lead_event!=NULL&&strstr(lead_event->text,"Alderwatch-Silverwick")!=NULL&&
+        strstr(lead_event->text,"workers' records")!=NULL);
+    before=CcSimHash(&lead);
+    CC_CHECK(!CcCoopApply(&lead,"mine_learn_lead",
+        (CcId)lead.mine.return_revision,0,1,error,sizeof(error)) &&
+        CcSimHash(&lead)==before);
+
+    CcSimInit(&fallback,UINT32_C(0x106fa11));
+    silverwick=fallback.dungeons[0].settlement_id;
+    fallback.player.location_id=silverwick;fallback.carriage.location_id=silverwick;
+    jory=CcSimMineEvidenceContact(&fallback);CC_CHECK(jory!=NULL);
+    for(int32_t i=0;i<fallback.character_count;++i)
+        if(fallback.characters[i].id==jory->id)
+            fallback.characters[i].current_settlement_id=fallback.settlements[1].id;
+    CC_CHECK(!CcSimMineLeadSupported(&fallback));
+    CcCommand document={.kind=CC_COMMAND_MINE_LEARN_LEAD,
+        .target_id=(CcId)fallback.mine.return_revision,.amount=2};
+    Check(CcSimApply(&fallback,&document,error,sizeof(error)));
+    CC_CHECK(fallback.mine.lead_document &&
+        fallback.mine.lead_source_id==silverwick && fallback.mine.lead_event_id!=0U);
+
+    ReadyAtHaulers(&haul);
+    Apply(&haul,CC_COMMAND_MINE_BARGAIN,0);
+    CC_CHECK(CcMinePackGood(&haul,CC_GOOD_GOLD)==1);
+    ReturnFromMineToSilverwick(&haul);
+    CC_CHECK(haul.player.cargo[CC_GOOD_GOLD]==1 &&
+        CcSimMineReturnEvidence(&haul)==CC_MINE_RETURN_HAUL);
+    const CcCustodyEntry *carried=NULL;
+    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&haul.custody);++i) {
+        const CcCustodyEntry *entry=&haul.custody.entries[i];
+        if(entry->active&&entry->good==CC_GOOD_GOLD&&
+           entry->holder.kind==CC_CUSTODY_PLAYER&&CcSimMineEntryTracked(&haul,entry)) carried=entry;
+    }
+    CC_CHECK(carried!=NULL && carried->owner_id==haul.goblins.id);
+    CcCommand sale={.kind=CC_COMMAND_TRADE,.good=CC_GOOD_GOLD,.amount=-1};
+    Check(CcSimApply(&haul,&sale,error,sizeof(error)));
+    CC_CHECK(haul.player.cargo[CC_GOOD_GOLD]==0 &&
+        CcSimMineReturnEvidence(&haul)==CC_MINE_RETURN_HAUL&&
+        haul.mine.haul_receipt_event_id!=0U&&
+        haul.mine.haul_receipt_good==CC_GOOD_GOLD&&
+        haul.mine.haul_receipt_quantity==1);
+    bool delivered=false;
+    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&haul.custody);++i) {
+        const CcCustodyEntry *entry=&haul.custody.entries[i];
+        if(!entry->active&&entry->good==CC_GOOD_GOLD&&entry->quantity==0&&
+           entry->holder.kind==CC_CUSTODY_STORE&&entry->holder.id==haul.player.location_id&&
+           entry->owner_id==haul.player.location_id&&entry->last_event_id==haul.mine.haul_receipt_event_id&&
+           CcSimMineEntryTracked(&haul,entry)) delivered=true;
+    }
+    CC_CHECK(delivered);
+    CcSettlement *market=CcSimSettlementMutable(&haul,haul.player.location_id);
+    CC_CHECK(market!=NULL);
+    market->stock[CC_GOOD_GOLD]=0;
+    CC_CHECK(CcSimMineReturnEvidence(&haul)==CC_MINE_RETURN_HAUL);
+    jory=CcSimMineEvidenceContact(&haul);CC_CHECK(jory!=NULL);
+    int32_t jory_before=KnowledgeCount(&haul,jory->id);
+    int32_t others_before=0;
+    for(int32_t i=0;i<haul.character_count;++i)
+        if(haul.characters[i].id!=jory->id) others_before+=haul.characters[i].knowledge_count;
+    before=CcSimHash(&haul);
+    CC_CHECK(!CcCoopApply(&haul,"mine_report_return",
+        (CcId)(haul.mine.return_revision-1),0,0,error,sizeof(error))&&
+        CcSimHash(&haul)==before);
+    Check(CcCoopApply(&haul,"mine_report_return",
+        (CcId)haul.mine.return_revision,0,0,error,sizeof(error)));
+    CC_CHECK(haul.mine.report_kind==CC_MINE_RETURN_HAUL&&
+        haul.mine.report_good==CC_GOOD_GOLD&&haul.mine.report_quantity==1&&
+        haul.mine.report_recipient_id==jory->id&&haul.mine.report_event_id!=0U&&
+        KnowledgeCount(&haul,jory->id)==jory_before+1);
+    const CcEvent *report_event=CcSimEvent(&haul,haul.mine.report_event_id);
+    CC_CHECK(report_event!=NULL&&report_event->magnitude==CC_MINE_RETURN_HAUL&&
+        strstr(report_event->text,"sale of 1 Raw Gold")!=NULL&&
+        strstr(report_event->text,"still yield")!=NULL);
+    int32_t others_after=0;
+    for(int32_t i=0;i<haul.character_count;++i)
+        if(haul.characters[i].id!=jory->id) others_after+=haul.characters[i].knowledge_count;
+    CC_CHECK(others_after==others_before);
+    before=CcSimHash(&haul);
+    CC_CHECK(!CcCoopApply(&haul,"mine_report_return",
+        (CcId)haul.mine.return_revision,0,0,error,sizeof(error))&&
+        CcSimHash(&haul)==before);
+    Check(CcSaveWrite("mine-return-106.ccsave",&haul,error,sizeof(error)));
+    Check(CcSaveRead("mine-return-106.ccsave",&restored,error,sizeof(error)));
+    CC_CHECK(CcSimHash(&haul)==CcSimHash(&restored)&&
+        restored.mine.report_event_id==haul.mine.report_event_id&&
+        CcSimMineReturnEvidence(&restored)==CC_MINE_RETURN_HAUL);
+
+    CcSimInit(&old_gold,UINT32_C(0x104601d));
+    silverwick=old_gold.dungeons[0].settlement_id;
+    old_gold.player.location_id=silverwick;old_gold.carriage.location_id=silverwick;
+    old_gold.player.cargo[CC_GOOD_GOLD]=1;
+    old_gold.mine.encounter_outcome=CC_MINE_ENCOUNTER_BARGAINED;
+    CC_CHECK(CcSimMineReturnEvidence(&old_gold)==CC_MINE_RETURN_NONE);
+    CcCommand report={.kind=CC_COMMAND_MINE_REPORT_RETURN,
+        .target_id=(CcId)old_gold.mine.return_revision};
+    before=CcSimHash(&old_gold);
+    CC_CHECK(!CcSimApply(&old_gold,&report,error,sizeof(error))&&
+        CcSimHash(&old_gold)==before&&strstr(error,"unfinished")!=NULL);
+    (void)remove("mine-return-106.ccsave");
+}
+
+static void EnterMineThroughMiddle(CcSim *sim)
+{
+    AtBranch(sim,false);
+    sim->player.cargo[CC_GOOD_BREAD]=2;
+    CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=CcMineSite(sim)->id};
+    Check(CcSimApply(sim,&visit,error,sizeof(error)));
+    ApplyGood(sim,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,1);
+    Walk(sim,15,3);Apply(sim,CC_COMMAND_MINE_USE,0);
+    Walk(sim,15,9);Apply(sim,CC_COMMAND_MINE_USE,0);
+    CC_CHECK(sim->mine.bar_open && !sim->mine.bypass_route_seen);
+}
+
+static void TestMineSurveyMigrationAndReturns(void)
+{
+    static CcSim restored,reloaded;
+    CcSim information,retreat;
+    const char *fixture=CC_TEST_SOURCE_DIR
+        "/tests/fixtures/shipped/schema-105-generator-25-mine-custody-journal.ccsave";
+    Check(CcSaveRead(fixture,&restored,error,sizeof(error)));
+    Check(CcSimValidate(&restored,error,sizeof(error)));
+    uint64_t migrated_hash=CcSimHash(&restored);
+    CC_CHECK(migrated_hash==UINT64_C(13156381989558921086));
+    Check(CcSaveRead(fixture,&reloaded,error,sizeof(error)));
+    CC_CHECK(CcSimHash(&reloaded)==migrated_hash);
+    const CcCustodyEntry *depleted_gold=NULL;
+    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&restored.custody);++i)
+        if(restored.custody.entries[i].id==restored.mine.gold_source_entry_id)
+            depleted_gold=&restored.custody.entries[i];
+    CC_CHECK(restored.schema_version==106U&&restored.generator_version==25U&&
+        restored.mine.return_revision==1&&restored.mine.surveyed&&
+        restored.mine.survey_event_id==0U&&
+        restored.mine.survey_read_day==0&&restored.mine.survey_observed_day==0&&
+        restored.mine.iron_source_entry_id!=0U&&
+        restored.mine.gold_source_entry_id!=0U&&
+        restored.mine.gems_source_entry_id!=0U&&
+        depleted_gold!=NULL&&!depleted_gold->active&&depleted_gold->quantity==0&&
+        CcMineSourceGood(&restored,CC_GOOD_GOLD)==0&&
+        TrackedGoodAt(&restored,CC_GOOD_IRON,CC_CUSTODY_MINE_PACK,
+            restored.player.id)==1&&
+        TrackedGoodAt(&restored,CC_GOOD_IRON,CC_CUSTODY_SITE,
+            restored.mine.cache_id)==3&&
+        restored.player.cargo[CC_GOOD_GOLD]==3&&
+        restored.player.cargo[CC_GOOD_IRON]==1&&
+        CarriedTrackedGood(&restored,CC_GOOD_GOLD)==0&&
+        CarriedTrackedGood(&restored,CC_GOOD_IRON)==0&&
+        CcSimMineReturnEvidence(&restored)==CC_MINE_RETURN_NONE);
+    restored.player.cargo[CC_GOOD_BREAD]=1;
+    ApplyGood(&restored,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,1);
+    Walk(&restored,15,3);Apply(&restored,CC_COMMAND_MINE_USE,0);
+    Walk(&restored,26,4);
+    int32_t revision=restored.mine.revision;
+    Apply(&restored,CC_COMMAND_MINE_USE,0);
+    CC_CHECK(restored.mine.survey_event_id!=0U&&restored.mine.survey_read_day==restored.current_day&&
+        restored.mine.survey_observed_day==0&&restored.mine.revision==revision+1);
+    const CcEvent *reading=CcSimEvent(&restored,restored.mine.survey_event_id);
+    CC_CHECK(reading!=NULL&&strstr(reading->text,"Earlier observation date unknown")!=NULL);
+    uint64_t reread=CcSimHash(&restored);
+    CcCommand use={.kind=CC_COMMAND_MINE_USE,.target_id=(CcId)restored.mine.revision};
+    Check(CcSimApply(&restored,&use,error,sizeof(error)));
+    CC_CHECK(CcSimHash(&restored)==reread);
+
+    EnterMineThroughMiddle(&information);
+    Walk(&information,26,4);Apply(&information,CC_COMMAND_MINE_USE,0);
+    CC_CHECK(information.mine.survey_event_id!=0U&&
+        information.mine.survey_observed_day==information.current_day);
+    ReturnFromMineToSilverwick(&information);
+    CC_CHECK(CcSimMineReturnEvidence(&information)==CC_MINE_RETURN_INFORMATION);
+    CcCommand report={.kind=CC_COMMAND_MINE_REPORT_RETURN,
+        .target_id=(CcId)information.mine.return_revision};
+    Check(CcSimApply(&information,&report,error,sizeof(error)));
+    CC_CHECK(information.mine.report_kind==CC_MINE_RETURN_INFORMATION);
+
+    EnterMineThroughMiddle(&retreat);
+    Walk(&retreat,26,16);Apply(&retreat,CC_COMMAND_MINE_CONTEST,0);
+    Apply(&retreat,CC_COMMAND_MINE_BREAK_CONTACT,37);
+    CC_CHECK(retreat.mine.encounter_outcome==CC_MINE_ENCOUNTER_BROKEN_CONTACT&&
+        !retreat.mine.bypass_route_seen&&!retreat.mine.surveyed);
+    ReturnFromMineToSilverwick(&retreat);
+    report=(CcCommand){.kind=CC_COMMAND_MINE_REPORT_RETURN,
+        .target_id=(CcId)retreat.mine.return_revision};
+    uint64_t before=CcSimHash(&retreat);
+    CC_CHECK(!CcSimApply(&retreat,&report,error,sizeof(error))&&
+        CcSimHash(&retreat)==before&&retreat.mine.report_event_id==0U);
+}
 static int WriteSharedMineFixture(const char *mode,const char *path)
 {
     static CcSim sim;
-    ReadyAtHaulers(&sim);
-    if(strcmp(mode,"contest")==0) Apply(&sim,CC_COMMAND_MINE_CONTEST,0);
-    else if(strcmp(mode,"bargain")!=0) return 1;
+    bool return_command=false;
+    if(strcmp(mode,"lead")==0) {
+        CcSimInit(&sim,UINT32_C(0x1061ead));
+        CcId silverwick=sim.dungeons[0].settlement_id;
+        sim.player.location_id=silverwick;sim.carriage.location_id=silverwick;
+        if(!CcSimMineLeadSupported(&sim)) return 1;
+        return_command=true;
+    } else {
+        ReadyAtHaulers(&sim);
+        if(strcmp(mode,"contest")==0) Apply(&sim,CC_COMMAND_MINE_CONTEST,0);
+        else if(strcmp(mode,"report")==0) {
+            Apply(&sim,CC_COMMAND_MINE_BARGAIN,0);
+            ReturnFromMineToSilverwick(&sim);
+            return_command=true;
+        } else if(strcmp(mode,"bargain")!=0) return 1;
+    }
     uint8_t *bytes=NULL;
     size_t length=0;
     if(!CcCoopEncode(&sim,&bytes,&length,error,sizeof(error))) return 1;
@@ -123,161 +545,14 @@ static int WriteSharedMineFixture(const char *mode,const char *path)
     if(file!=NULL && fclose(file)!=0) written=false;
     CcCoopFree(bytes);
     if(!written) return 1;
-    printf("%u\n",sim.mine.revision);
+    printf("%u\n",return_command?sim.mine.return_revision:sim.mine.revision);
     return 0;
 }
 
-static bool MakeFixturePortable(const char *path)
-{
-    sqlite3 *database=NULL;
-    if(sqlite3_open_v2(path,&database,SQLITE_OPEN_READWRITE,NULL)!=SQLITE_OK) {
-        if(database!=NULL) sqlite3_close(database);
-        return false;
-    }
-    char *sqlite_error=NULL;
-    bool ok=sqlite3_exec(database,
-        "PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode=DELETE; VACUUM;",
-        NULL,NULL,&sqlite_error)==SQLITE_OK;
-    sqlite3_free(sqlite_error);
-    if(sqlite3_close(database)!=SQLITE_OK) ok=false;
-    return ok;
-}
-
-static void RemoveFixtureSidecars(const char *path)
-{
-    char sidecar[1024];
-    (void)snprintf(sidecar,sizeof(sidecar),"%s-wal",path);
-    (void)remove(sidecar);
-    (void)snprintf(sidecar,sizeof(sidecar),"%s-shm",path);
-    (void)remove(sidecar);
-}
-
-static void ApplyFixtureJournal(CcJournal *journal,CcSim *sim,
-    CcCommandKind kind,CcGood good,int32_t amount)
-{
-    CcCommand command={.kind=kind,.target_id=(CcId)sim->mine.revision,
-        .good=good,.amount=amount};
-    Check(CcJournalApply(journal,sim,&command,error,sizeof(error)));
-    Check(CcSimValidate(sim,error,sizeof(error)));
-}
-
-static void WalkFixtureJournal(CcJournal *journal,CcSim *sim,int32_t tx,int32_t ty)
-{
-    int32_t queue[CC_MINE_WIDTH*CC_MINE_HEIGHT];
-    int32_t prev[CC_MINE_WIDTH*CC_MINE_HEIGHT];
-    int32_t dirs[CC_MINE_WIDTH*CC_MINE_HEIGHT];
-    for(int32_t i=0;i<CC_MINE_WIDTH*CC_MINE_HEIGHT;++i) prev[i]=-1;
-    int32_t root=sim->mine.y*CC_MINE_WIDTH+sim->mine.x,head=0,tail=0;
-    queue[tail++]=root; prev[root]=root;
-    const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
-    while(head<tail) {
-        int32_t cell=queue[head++],x=cell%CC_MINE_WIDTH,y=cell/CC_MINE_WIDTH;
-        for(int32_t d=0;d<4;++d) {
-            int32_t nx=x+dx[d],ny=y+dy[d];
-            if(!CcMineWalkable(sim,sim->mine.phase,nx,ny)) continue;
-            int32_t next=ny*CC_MINE_WIDTH+nx;
-            if(prev[next]>=0) continue;
-            prev[next]=cell; dirs[next]=d; queue[tail++]=next;
-        }
-    }
-    int32_t target=ty*CC_MINE_WIDTH+tx,count=0;
-    CC_CHECK(prev[target]>=0);
-    while(target!=root) {queue[count++]=dirs[target];target=prev[target];}
-    while(count>0)
-        ApplyFixtureJournal(journal,sim,CC_COMMAND_MINE_STEP,CC_GOOD_BREAD,
-            queue[--count]);
-}
-
-static int WriteSchema105MineCustodyFixture(const char *path)
-{
-    static CcSim sim,restored;
-    (void)remove(path);
-    RemoveFixtureSidecars(path);
-    AtBranch(&sim,false);
-    sim.player.cargo[CC_GOOD_BREAD]=1;
-    CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,
-        .target_id=CcMineSite(&sim)->id};
-    Check(CcSimApply(&sim,&visit,error,sizeof(error)));
-    ApplyGood(&sim,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,1);
-    Walk(&sim,15,3); Apply(&sim,CC_COMMAND_MINE_USE,0);
-    Walk(&sim,9,15); Walk(&sim,26,16);
-    Apply(&sim,CC_COMMAND_MINE_CONTEST,0);
-    Apply(&sim,CC_COMMAND_MINE_RESOLVE_CONTEST,17);
-    ApplyGood(&sim,CC_COMMAND_MINE_TAKE,CC_GOOD_GOLD,3);
-    ApplyGood(&sim,CC_COMMAND_MINE_TAKE,CC_GOOD_IRON,5);
-    Walk(&sim,5,15);
-    ApplyGood(&sim,CC_COMMAND_MINE_CACHE,CC_GOOD_IRON,3);
-    Walk(&sim,26,4);
-    CC_CHECK(!sim.mine.surveyed&&CcMinePackGood(&sim,CC_GOOD_GOLD)==3&&
-        CcMinePackGood(&sim,CC_GOOD_IRON)==2&&CcMineCacheGood(&sim,CC_GOOD_IRON)==3);
-    uint64_t base_hash=CcSimHash(&sim);
-    CcJournal *journal=CcJournalStart(path,&sim,error,sizeof(error));
-    Check(journal!=NULL);
-    ApplyFixtureJournal(journal,&sim,CC_COMMAND_MINE_USE,CC_GOOD_BREAD,0);
-    WalkFixtureJournal(journal,&sim,5,3);
-    ApplyFixtureJournal(journal,&sim,CC_COMMAND_MINE_USE,CC_GOOD_BREAD,0);
-    WalkFixtureJournal(journal,&sim,15,18);
-    ApplyFixtureJournal(journal,&sim,CC_COMMAND_MINE_PACK,CC_GOOD_GOLD,-3);
-    ApplyFixtureJournal(journal,&sim,CC_COMMAND_MINE_PACK,CC_GOOD_IRON,-1);
-    uint64_t final_hash=CcSimHash(&sim);
-    CcJournalAbandon(&journal);
-    Check(MakeFixturePortable(path));
-    Check(CcSaveRead(path,&restored,error,sizeof(error)));
-    CC_CHECK(CcSimHash(&restored)==final_hash&&
-        restored.schema_version==105U&&restored.mine.phase==CC_MINE_YARD&&
-        restored.mine.surveyed&&
-        CcMinePackGood(&restored,CC_GOOD_IRON)==1&&
-        CcMineCacheGood(&restored,CC_GOOD_IRON)==3&&
-        restored.player.cargo[CC_GOOD_GOLD]==3&&
-        restored.player.cargo[CC_GOOD_IRON]==1);
-    RemoveFixtureSidecars(path);
-    printf("schema=%u generator=%u base_hash=%" PRIu64
-        " final_hash=%" PRIu64 " inactive_gold_roots=%d pack_iron=%d cache_iron=%d\n",
-        restored.schema_version,restored.generator_version,base_hash,final_hash,
-        1,1,3);
-    return 0;
-}
-
-static int VerifySchema105MineCustodyFixture(const char *path)
-{
-    static CcSim sim;
-    if(!CcSaveRead(path,&sim,error,sizeof(error))) {
-        fprintf(stderr,"Fixture read: %s\n",error);
-        return 1;
-    }
-    int32_t inactive_gold=0,pack_iron=0,cache_iron=0;
-    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&sim.custody);++i) {
-        const CcCustodyEntry *entry=&sim.custody.entries[i];
-        if(entry->kind!=CC_CUSTODY_GOODS||entry->owner_id!=sim.goblins.id) continue;
-        if(!entry->active&&entry->good==CC_GOOD_GOLD&&entry->source_id==0U)
-            inactive_gold+=1;
-        if(entry->active&&entry->good==CC_GOOD_IRON&&
-           entry->holder.kind==CC_CUSTODY_MINE_PACK&&entry->holder.id==sim.player.id)
-            pack_iron+=(int32_t)entry->quantity;
-        if(entry->active&&entry->good==CC_GOOD_IRON&&
-           entry->holder.kind==CC_CUSTODY_SITE&&entry->holder.id==sim.mine.cache_id)
-            cache_iron+=(int32_t)entry->quantity;
-    }
-    if(sim.schema_version!=105U||sim.generator_version!=25U||
-       CcSimHash(&sim)!=UINT64_C(4059271005757223396)||
-       sim.mine.phase!=CC_MINE_YARD||!sim.mine.surveyed||
-       inactive_gold!=1||pack_iron!=1||cache_iron!=3||
-       sim.player.cargo[CC_GOOD_GOLD]!=3||sim.player.cargo[CC_GOOD_IRON]!=1) {
-        fprintf(stderr,"Fixture state does not match the schema 105 receipt.\n");
-        return 1;
-    }
-    printf("schema=105 final_hash=%" PRIu64
-        " inactive_gold_roots=1 pack_iron=1 cache_iron=3\n",CcSimHash(&sim));
-    return 0;
-}
 int main(int argc,char **argv)
 {
     if(argc==4 && strcmp(argv[1],"--write-shared-mine-fixture")==0)
         return WriteSharedMineFixture(argv[2],argv[3]);
-    if(argc==3 && strcmp(argv[1],"--write-schema105-mine-fixture")==0)
-        return WriteSchema105MineCustodyFixture(argv[2]);
-    if(argc==3 && strcmp(argv[1],"--verify-schema105-mine-fixture")==0)
-        return VerifySchema105MineCustodyFixture(argv[2]);
     static CcSim sim,restored,changed,haul,loaded,legacy,capacity,prechange;
     static CcSim bargain,contest,withdrawn,failed;
     (void)remove("mine-load-replay.ccsave");
@@ -646,6 +921,11 @@ int main(int argc,char **argv)
     CC_CHECK(!CcMineWalkable(&sim,CC_MINE_LEVEL,15,10));
     Walk(&sim,26,4);Apply(&sim,CC_COMMAND_MINE_USE,0);
     CC_CHECK(sim.mine.surveyed);
+    uint64_t read_hash=CcSimHash(&sim);
+    CcCommand reread={.kind=CC_COMMAND_MINE_USE,.target_id=(CcId)sim.mine.revision};
+    Check(CcSimApply(&sim,&reread,error,sizeof(error)));
+    CC_CHECK(CcSimHash(&sim)==read_hash &&
+        strcmp(CcMineAction(&sim),"Reread the workers' records")==0);
     Walk(&sim,15,9);Apply(&sim,CC_COMMAND_MINE_USE,0);
     CC_CHECK(sim.mine.bar_open && CcMineWalkable(&sim,CC_MINE_LEVEL,15,10));
     Walk(&sim,26,16);Walk(&sim,5,15);
@@ -728,6 +1008,11 @@ int main(int argc,char **argv)
     Walk(&loaded,5,15);
     CC_CHECK(CcMineCacheGood(&loaded,CC_GOOD_IRON)==5 &&
         CcMineCacheGood(&loaded,CC_GOOD_GOLD)==2);
+    TestMineReturnRecords();
+    TestMineSurveyMigrationAndReturns();
+    TestMinePartyWipeConservation();
+    TestMineCargoReconciliation();
+    TestMineTrackedRepack();
     (void)remove(path);(void)remove("mine-replay.ccsave");
     (void)remove("mine-load-replay.ccsave");
     (void)remove("mine-load-roundtrip-103.ccsave");

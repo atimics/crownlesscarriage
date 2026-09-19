@@ -722,6 +722,36 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
                  "The legacy journey road position could not be mapped.");
         return false;
     }
+    if (legacy_version < 106U) {
+        sim->mine.return_revision=1;
+        /* Mine custody keeps its physical chain after a load is depleted.
+           Remember each root while leaving old aggregate carriage cargo
+           uncertain. */
+        for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+            CcCustodyEntry *entry=&sim->custody.entries[i];
+            if (entry->id == 0U || entry->owner_id != sim->goblins.id ||
+                entry->kind != CC_CUSTODY_GOODS) continue;
+            bool at_source=entry->holder.kind == CC_CUSTODY_SITE &&
+                (entry->holder.id == sim->mine.source_id ||
+                 entry->holder.id == sim->mine.cache_id);
+            bool in_pack=entry->holder.kind == CC_CUSTODY_MINE_PACK &&
+                entry->holder.id == sim->player.id;
+            if (!at_source && !in_pack) continue;
+            const CcCustodyEntry *root=entry;
+            int32_t remaining=CcCustodyEffectiveCapacity(&sim->custody);
+            while (root->source_id != 0U && remaining-- > 0) {
+                const CcCustodyEntry *parent=CcCustodyFind(&sim->custody,root->source_id);
+                if (parent == NULL) break;
+                root=parent;
+            }
+            if (root->source_id != 0U) continue;
+            CcId *remembered=entry->good == CC_GOOD_BREAD ? &sim->mine.bread_source_entry_id :
+                entry->good == CC_GOOD_IRON ? &sim->mine.iron_source_entry_id :
+                entry->good == CC_GOOD_GOLD ? &sim->mine.gold_source_entry_id :
+                entry->good == CC_GOOD_GEMS ? &sim->mine.gems_source_entry_id : NULL;
+            if (remembered != NULL && *remembered == 0U) *remembered=root->id;
+        }
+    }
     /* Legacy upgrades can seed residents and situation casts through
        separate paths; make the final living cast unique before validation. */
     MakeLegacyCharacterNamesUnique(sim);

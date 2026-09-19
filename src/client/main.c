@@ -201,7 +201,10 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_STEP_DOWN,
     CONTEXT_ACTION_BOARD_CARRIAGE,
     CONTEXT_ACTION_MAKE_ROAD_CAMP,
-    CONTEXT_ACTION_INSPECT_CARRIAGE
+    CONTEXT_ACTION_INSPECT_CARRIAGE,
+    CONTEXT_ACTION_MINE_LEAD,
+    CONTEXT_ACTION_MINE_SHIFT_RECORD,
+    CONTEXT_ACTION_MINE_REPORT
 } ContextActionKind;
 
 typedef struct ContextAction {
@@ -4321,8 +4324,28 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (local->adventure_ui && view == VIEW_CHARACTER && local->conversation_situation_id == 0U) {
+        const CcCharacter *contact=CcSimMineEvidenceContact(sim);
+        bool jory=contact != NULL && contact->id == local->conversation_character_id;
+        if (jory && sim->mine.lead_event_id == 0U && CcSimMineLeadSupported(sim))
+            AddDetailedContextAction(&set,CONTEXT_ACTION_MINE_LEAD,
+                "Ask about Low Silver Pit",TextFormat("%d",set.count+1),
+                "TURNOUT + WORKERS' RECORDS",true,false);
+        if (jory && sim->mine.report_event_id == 0U) {
+            CcMineReturnKind evidence=CcSimMineReturnEvidence(sim);
+            CcGood haul_good=CC_GOOD_BREAD;
+            int32_t haul_quantity=0;
+            bool haul=CcSimMineReturnHaul(sim,&haul_good,&haul_quantity);
+            AddDetailedContextAction(&set,CONTEXT_ACTION_MINE_REPORT,
+                "Tell Jory what the company found",TextFormat("%d",set.count+1),
+                evidence == CC_MINE_RETURN_HAUL && haul ?
+                    TextFormat("%d %s FROM MINE",haul_quantity,CcGoodName(haul_good)) :
+                evidence == CC_MINE_RETURN_INFORMATION ? "ATTRIBUTED ROUTE ACCOUNT" :
+                "BRING A LOAD OR ROUTE OBSERVATION",
+                evidence != CC_MINE_RETURN_NONE,false);
+        }
         AddDetailedContextAction(&set, CONTEXT_ACTION_GOSSIP_CHAT,
-            "Chat", "1", "", !core_conversation.pending && core_conversation.round_phase == 0U,
+            "Chat", TextFormat("%d",set.count+1), "",
+            !core_conversation.pending && core_conversation.round_phase == 0U,
             false);
         AddDetailedContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Farewell", "ESC", "", true, false);
         return set;
@@ -4481,6 +4504,13 @@ static ContextActionSet BuildContextActions(
             AddContextAction(&set, CONTEXT_ACTION_NEXT_PROMISE,
                              "Next notice");
         }
+        if (sim->dungeon_count > 0 &&
+            sim->player.location_id == sim->dungeons[0].settlement_id &&
+            sim->mine.lead_event_id == 0U && !CcSimMineLeadSupported(sim)) {
+            AddDetailedContextAction(&set,CONTEXT_ACTION_MINE_SHIFT_RECORD,
+                "Read Low Silver Pit shift record","R",
+                "DATED TURNOUT DOCUMENT",true,false);
+        }
         AddDetailedContextAction(
             &set, CONTEXT_ACTION_CLOSE_VIEW, "Close notices", "ESC",
             "RETURN TO PREVIOUS VIEW", true, false);
@@ -4519,6 +4549,25 @@ static ContextActionSet BuildContextActions(
             sim, local->conversation_situation_id);
         const CcCharacter *character = CcSimCharacter(
             sim, local->conversation_character_id);
+        const CcCharacter *contact=CcSimMineEvidenceContact(sim);
+        bool jory=character != NULL && contact != NULL && character->id == contact->id;
+        if (jory && sim->mine.lead_event_id == 0U && CcSimMineLeadSupported(sim))
+            AddDetailedContextAction(&set,CONTEXT_ACTION_MINE_LEAD,
+                "Ask about Low Silver Pit",TextFormat("%d",set.count+1),
+                "TURNOUT + WORKERS' RECORDS",true,false);
+        if (jory && sim->mine.report_event_id == 0U) {
+            CcMineReturnKind evidence=CcSimMineReturnEvidence(sim);
+            CcGood haul_good=CC_GOOD_BREAD;
+            int32_t haul_quantity=0;
+            bool haul=CcSimMineReturnHaul(sim,&haul_good,&haul_quantity);
+            AddDetailedContextAction(&set,CONTEXT_ACTION_MINE_REPORT,
+                "Tell Jory what the company found",TextFormat("%d",set.count+1),
+                evidence == CC_MINE_RETURN_HAUL && haul ?
+                    TextFormat("%d %s FROM MINE",haul_quantity,CcGoodName(haul_good)) :
+                evidence == CC_MINE_RETURN_INFORMATION ? "ATTRIBUTED ROUTE ACCOUNT" :
+                "BRING A LOAD OR ROUTE OBSERVATION",
+                evidence != CC_MINE_RETURN_NONE,false);
+        }
         if (situation != NULL && character != NULL) {
             bool listened = CcCharacterRemembers(
                 character, CC_CHARACTER_MEMORY_MET_PLAYER, situation->id);
@@ -6817,6 +6866,21 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
             confirmation = command.amount > 0 ? "Supplies received. Building starts today." : "Grain and wages received by the town.";
             break;
         case CC_COMMAND_CHANGE_DUNGEON: confirmation = "Mine updated."; break;
+        case CC_COMMAND_MINE_LEARN_LEAD:
+            confirmation = command.amount == 1 ?
+                "Jory marks the Low Silver Pit turnout and its workers' records in the Company Book." :
+                "The shift record marks the Low Silver Pit turnout and its workers' records in the Company Book.";
+            break;
+        case CC_COMMAND_MINE_REPORT_RETURN:
+            if (sim->mine.report_kind == CC_MINE_RETURN_HAUL)
+                (void)snprintf(message,message_capacity,
+                    "Jory sees %d %s from Low Silver Pit: 'This proves the turnout can still yield.' Oren can handle the sale.",
+                    sim->mine.report_quantity,CcGoodName((CcGood)sim->mine.report_good));
+            else
+                (void)snprintf(message,message_capacity,
+                    "Jory reads the sourced route account: 'This gives the next company a fair path in.'");
+            return true;
+            break;
         case CC_COMMAND_BUY_MAP: confirmation = "Traveller's notes bought."; break;
         case CC_COMMAND_SELL_MAP: confirmation = "Traveller's notes sold."; break;
         case CC_COMMAND_ACCEPT_SITUATION: confirmation = "Quest accepted."; break;
@@ -9182,6 +9246,21 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (*view == VIEW_CHARACTER) {
+        ContextActionSet replies=BuildContextActions(
+            sim,local,VIEW_CHARACTER,*selected,*selected_situation);
+        for (int32_t i=0;i<replies.count;++i)
+            if (replies.items[i].enabled && ClientKeyPressed(KEY_ONE+i))
+                context_action=replies.items[i].kind;
+        if (context_action == CONTEXT_ACTION_MINE_LEAD ||
+            context_action == CONTEXT_ACTION_MINE_REPORT) {
+            CcCommand command={
+                .kind=context_action == CONTEXT_ACTION_MINE_LEAD ?
+                    CC_COMMAND_MINE_LEARN_LEAD : CC_COMMAND_MINE_REPORT_RETURN,
+                .target_id=(CcId)sim->mine.return_revision,
+                .amount=context_action == CONTEXT_ACTION_MINE_LEAD ? 1 : 0};
+            (void)ApplyCommand(*journal,sim,command,message,message_capacity);
+            return;
+        }
         if ((local->adventure_ui && ClientKeyPressed(KEY_ESCAPE)) || ClientKeyPressed(KEY_BACKSPACE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
             CcAudioClearSpeech();
@@ -9195,7 +9274,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         if (local->adventure_ui && local->conversation_situation_id == 0U) {
-            ContextActionSet replies = BuildContextActions(sim, local, VIEW_CHARACTER, *selected, *selected_situation);
+            replies = BuildContextActions(sim, local, VIEW_CHARACTER, *selected, *selected_situation);
             for (int32_t i = 0; i < replies.count; ++i)
                 if (replies.items[i].enabled && ClientKeyPressed(KEY_ONE + i)) context_action = replies.items[i].kind;
             if (context_action == CONTEXT_ACTION_CLOSE_VIEW) {
@@ -9255,14 +9334,14 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
              context_action == CONTEXT_ACTION_PLEDGE_CHARACTER ?
                 CC_CHARACTER_RESPONSE_PLEDGE_HELP : 0);
         if (local->adventure_ui) {
-            ContextActionSet replies = BuildContextActions(sim, local, VIEW_CHARACTER, *selected, *selected_situation);
+            ContextActionSet situation_replies = BuildContextActions(sim, local, VIEW_CHARACTER, *selected, *selected_situation);
             ContextActionKind chosen_reply = context_action;
-            for (int32_t i = 0; i < replies.count; ++i) {
-                if (replies.items[i].enabled && ClientKeyPressed(KEY_ONE + i)) chosen_reply = replies.items[i].kind;
+            for (int32_t i = 0; i < situation_replies.count; ++i) {
+                if (situation_replies.items[i].enabled && ClientKeyPressed(KEY_ONE + i)) chosen_reply = situation_replies.items[i].kind;
             }
             response = 0;
-            for (int32_t i = 0; i < replies.count; ++i) {
-                if (!replies.items[i].enabled || replies.items[i].kind != chosen_reply) continue;
+            for (int32_t i = 0; i < situation_replies.count; ++i) {
+                if (!situation_replies.items[i].enabled || situation_replies.items[i].kind != chosen_reply) continue;
                 switch (chosen_reply) {
                     case CONTEXT_ACTION_LISTEN_CHARACTER: response = CC_CHARACTER_RESPONSE_LISTEN; break;
                     case CONTEXT_ACTION_PLEDGE_CHARACTER: response = CC_CHARACTER_RESPONSE_PLEDGE_HELP; break;
@@ -9426,6 +9505,13 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         const CcSituation *situation = SelectedActiveSituation(
             sim, *selected_situation);
+        if (context_action == CONTEXT_ACTION_MINE_SHIFT_RECORD ||
+            ClientKeyPressed(KEY_R)) {
+            CcCommand record={.kind=CC_COMMAND_MINE_LEARN_LEAD,
+                .target_id=(CcId)sim->mine.return_revision,.amount=2};
+            (void)ApplyCommand(*journal,sim,record,message,message_capacity);
+            return;
+        }
         if (ClientKeyPressed(KEY_ENTER) && situation != NULL &&
             situation->id != sim->player.accepted_situation_id &&
             CcSimSituationCanAccept(sim, situation)) {
@@ -10643,7 +10729,7 @@ static void ReadCompanyPage(const CcSim *sim, const LocalState *local)
         } else {
             ClientReadSpeech(sim, "Nothing promised. Read the board or listen in the tavern.", 0);
         }
-    } else {
+    } else if (local->book_page == 1) {
         int32_t shown = 0;
         for (int32_t i = 0; i < sim->character_count && shown < 5; ++i) {
             const CcCharacter *person = &sim->characters[i];
@@ -10656,6 +10742,34 @@ static void ReadCompanyPage(const CcSim *sim, const LocalState *local)
             ++shown;
         }
         if (shown == 0) ClientReadSpeech(sim, "No one you know has been named yet.", 0);
+    } else {
+        if (sim->mine.lead_event_id != 0U) {
+            (void)snprintf(words,sizeof(words),
+                "Low Silver Pit turnout on the Alderwatch-Silverwick road, day %d, from %s. Workers' records hold route guidance.",sim->mine.lead_day,
+                sim->mine.lead_document ? "Silverwick's shift record" : "Jory Fen");
+            ClientReadSpeech(sim,words,sim->mine.lead_event_id);
+        }
+        if (sim->mine.survey_event_id != 0U) {
+            ClientReadSpeech(sim,
+                "Workers' records say the western store passage goes around the barred middle passage. The stair to Lamp Hall is marked blocked.",
+                sim->mine.survey_event_id);
+        } else if (sim->mine.bypass_event_id != 0U) {
+            ClientReadSpeech(sim,
+                "The company observed that the western store passage goes around the barred middle passage.",
+                sim->mine.bypass_event_id);
+        }
+        if (sim->mine.report_event_id != 0U) {
+            if (sim->mine.report_kind == CC_MINE_RETURN_HAUL)
+                (void)snprintf(words,sizeof(words),
+                    "Jory received %d %s from the tracked mine haul on day %d. He says this proves the turnout can still yield.",
+                    sim->mine.report_quantity,CcGoodName((CcGood)sim->mine.report_good),
+                    sim->mine.report_day);
+            else
+                (void)snprintf(words,sizeof(words),
+                    "Jory received the sourced route account on day %d. He says this gives the next company a fair path in.",
+                    sim->mine.report_day);
+            ClientReadSpeech(sim,words,sim->mine.report_event_id);
+        }
     }
 }
 

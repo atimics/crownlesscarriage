@@ -30,6 +30,21 @@ CcCustodyResult CcSimTransferCustody(CcSim *sim, const CcCustodyTransfer *transf
    entry revisions, capacity, splitting, and conservation. */
 CcCustodyResult CcSimTransferMineGoods(CcSim *sim, CcCustodyHolder source,
     CcCustodyHolder destination, CcGood good, int32_t quantity, uint64_t event_id);
+/* Move the tracked part of carried cargo back into the active mine pack.
+   Ordinary cargo remains in the aggregate pack count. */
+CcCustodyResult CcSimRepackMineGoods(CcSim *sim, CcGood good,
+    int32_t quantity, uint64_t event_id, int32_t *tracked_quantity);
+/* Keep the mine source attached when ordinary market trade moves part or all
+   of a carried load into a settlement store. */
+CcCustodyResult CcSimPlanMineSale(const CcSim *sim, CcId town_id,
+    CcGood good, int32_t quantity);
+CcCustodyResult CcSimApplyMineSale(CcSim *sim, CcId town_id,
+    CcGood good, int32_t quantity, CcId event_id, int32_t *tracked_quantity);
+/* Close mine provenance when ordinary play consumes or loses carried cargo.
+   Later replacement cargo then starts without the old mine identity. */
+void CcSimReconcileMineCarriedGoods(CcSim *sim,
+    const int32_t previous_cargo[CC_GOOD_COUNT], CcId event_id);
+bool CcSimMineEntryTracked(const CcSim *sim, const CcCustodyEntry *entry);
 bool CcSimStoredCustodyValid(const CcSim *sim);
 /* The town is the authority for its bulk store and its owned containers.
    Allocation and container revisions bind packing to the observed state. */

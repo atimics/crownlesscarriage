@@ -1,3 +1,5 @@
+#include "sim/cc_sim_custody.h"
+
 static int RunMineInputRegression(void)
 {
     static CcSim sim, restored;
@@ -11,22 +13,49 @@ static int RunMineInputRegression(void)
     CcSimInit(&sim,0x71a7e5);
     const CcRoadSite *site=CcMineSite(&sim);
     const CcRoute *road=CcSimRoute(&sim,site->route_id);
-    sim.player.location_id=road->from_id;sim.carriage.location_id=road->from_id;
-    CcCommand travel={.kind=CC_COMMAND_TRAVEL,.target_id=road->to_id};
-    if(!CcSimApply(&sim,&travel,error,sizeof(error))) return ClientRegressionFailure(error);
-    sim.pony_company.encounter=-1;
-    sim.journey.elapsed_subticks=CcMineBranchSubtick(&sim);
-    sim.carriage.progress_milli=(int32_t)((int64_t)sim.journey.elapsed_subticks*1000/sim.journey.total_subticks);
+    CcId silverwick=sim.dungeons[0].settlement_id;
+    sim.player.location_id=silverwick;sim.carriage.location_id=silverwick;
+    CcCommand travel={.kind=CC_COMMAND_TRAVEL,
+        .target_id=road->from_id==silverwick?road->to_id:road->from_id};
     sim.player.cargo[CC_GOOD_BREAD]=2;
     sim.player.reputation = 1;
     ResetLocalState(&local);
-    local.adventure_ui=true;local.journey_travel_active=true;
+    local.adventure_ui=true;
     local.opening_step=CC_LOCAL_OPENING_COMPLETE;
     CcJournal *journal=CcJournalStart(path,&sim,error,sizeof(error));
     if(journal==NULL) return ClientRegressionFailure(error);
 #define MINE_CHECK(test,text) do { if(!(test)) { (void)CcJournalClose(&journal,&sim,error,sizeof(error)); (void)remove(path); return ClientRegressionFailure(text); } } while(0)
 #define MINE_INPUT() do { HandleInput(&journal,&sim,&selected,&situation,&view,&back,&local,(RenderTexture2D){0},(Rectangle){0},.2f,path,"",message,sizeof(message),feedback,sizeof(feedback),&feedback_age); ClientInputClearPressed(); } while(0)
 #define MINE_KEY(key) do { queued_key_press[key]=true; MINE_INPUT(); } while(0)
+    const CcCharacter *jory=CcSimMineEvidenceContact(&sim);
+    MINE_CHECK(jory!=NULL&&CcSimMineLeadSupported(&sim),
+        "Silverwick must expose Jory's existing mine concern.");
+    local.conversation_character_id=jory->id;
+    ContextActionSet mine_replies=BuildContextActions(&sim,&local,VIEW_CHARACTER,0,0);
+    MINE_CHECK(mine_replies.count>=4&&
+        mine_replies.items[0].kind==CONTEXT_ACTION_MINE_LEAD&&mine_replies.items[0].enabled&&
+        strstr(mine_replies.items[0].label,"Low Silver Pit")!=NULL,
+        "Jory's visible conversation must offer the mine lead first.");
+    MINE_CHECK(mine_replies.items[1].kind==CONTEXT_ACTION_MINE_REPORT&&
+        !mine_replies.items[1].enabled&&
+        strstr(mine_replies.items[1].detail,"LOAD OR ROUTE")!=NULL,
+        "Jory's return action must explain the missing evidence.");
+    view=VIEW_CHARACTER;
+    MINE_KEY(KEY_ONE);
+    MINE_CHECK(sim.mine.lead_event_id!=0U&&strstr(message,"Company Book")!=NULL,
+        "The ordinary Jory lead action must journal its dated Book entry.");
+    mine_replies=BuildContextActions(&sim,&local,VIEW_CHARACTER,0,0);
+    for(int32_t i=0;i<mine_replies.count;++i)
+        MINE_CHECK(mine_replies.items[i].kind!=CONTEXT_ACTION_MINE_LEAD,
+            "A learned lead must not publish a duplicate action.");
+    local.conversation_character_id=0U;
+    view=VIEW_LOCAL;
+    MINE_CHECK(ApplyCommand(journal,&sim,travel,message,sizeof(message)),
+        "The lead must leave ordinary departure available.");
+    sim.pony_company.encounter=-1;
+    sim.journey.elapsed_subticks=CcMineBranchSubtick(&sim);
+    sim.carriage.progress_milli=(int32_t)((int64_t)sim.journey.elapsed_subticks*1000/sim.journey.total_subticks);
+    local.journey_travel_active=true;
     {
         static CcSim frame;
         frame=sim;
@@ -417,6 +446,87 @@ static int RunMineInputRegression(void)
     queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
     MINE_CHECK(CcMinePackUsed(&sim)==2 && strstr(message,"carriage to pack")!=NULL,
         "Packing must leave a clear transfer receipt.");
+    {
+        static CcSim tracked_input;
+        static LocalState tracked_local;
+        tracked_input=sim;
+        tracked_local=local;
+        tracked_input.mine.source_released=true;
+        tracked_input.mine.encounter_outcome=CC_MINE_ENCOUNTER_CONTESTED;
+        CcCustodyEntry *tracked_gold=NULL;
+        for(int32_t i=0;i<CcCustodyEffectiveCapacity(&tracked_input.custody);++i)
+            if(tracked_input.custody.entries[i].id==
+               tracked_input.mine.gold_source_entry_id)
+                tracked_gold=&tracked_input.custody.entries[i];
+        MINE_CHECK(tracked_gold!=NULL&&tracked_gold->active&&tracked_gold->quantity==3,
+            "The tracked input fixture must find the finite mine Gold root.");
+        tracked_gold->holder=(CcCustodyHolder){CC_CUSTODY_MINE_PACK,
+            tracked_input.player.id};
+        tracked_gold->revision+=1;
+        tracked_gold->last_event_id=(uint64_t)tracked_input.mine.revision+1U;
+        MINE_CHECK(CcSimValidate(&tracked_input,error,sizeof(error)),
+            "The tracked input fixture must carry mine Gold in the pack.");
+        tracked_local.mine_good=CC_GOOD_GOLD;
+        tracked_local.mine_quantity=1;
+        const char *tracked_path="mine-tracked-input.ccsave";
+        (void)remove(tracked_path);
+        CcJournal *tracked_journal=CcJournalStart(tracked_path,&tracked_input,
+            error,sizeof(error));
+        MINE_CHECK(tracked_journal!=NULL,
+            "The tracked transfer input fixture must open its journal.");
+
+        Rectangle unload=MineControl(2);
+        client_test_pointer_active=true;
+        client_test_pointer=(Vector2){unload.x+unload.width/2,
+            unload.y+unload.height/2};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+        HandleMineInput(tracked_journal,&tracked_input,&tracked_local,
+            (RenderTexture2D){0},.2f,message,sizeof(message));
+        client_test_pointer_active=false;
+        ClientInputClearPressed();
+        int32_t player_tracked=0,pack_tracked=0,total_tracked=0;
+        for(int32_t i=0;i<CcCustodyEffectiveCapacity(&tracked_input.custody);++i) {
+            const CcCustodyEntry *entry=&tracked_input.custody.entries[i];
+            if(!entry->active||entry->good!=CC_GOOD_GOLD||
+               !CcSimMineEntryTracked(&tracked_input,entry)) continue;
+            total_tracked+=(int32_t)entry->quantity;
+            if(entry->holder.kind==CC_CUSTODY_PLAYER&&
+               entry->holder.id==tracked_input.player.id)
+                player_tracked+=(int32_t)entry->quantity;
+            if(entry->holder.kind==CC_CUSTODY_MINE_PACK&&
+               entry->holder.id==tracked_input.player.id)
+                pack_tracked+=(int32_t)entry->quantity;
+        }
+        MINE_CHECK(tracked_input.player.cargo[CC_GOOD_GOLD]==1&&
+            CcMinePackGood(&tracked_input,CC_GOOD_GOLD)==2&&
+            player_tracked==1&&pack_tracked==2&&total_tracked==3,
+            "Pointer Unload must move tracked mine Gold from pack custody to the company.");
+
+        queued_key_press[KEY_P]=true;
+        HandleMineInput(tracked_journal,&tracked_input,&tracked_local,
+            (RenderTexture2D){0},.2f,message,sizeof(message));
+        ClientInputClearPressed();
+        player_tracked=0;pack_tracked=0;total_tracked=0;
+        for(int32_t i=0;i<CcCustodyEffectiveCapacity(&tracked_input.custody);++i) {
+            const CcCustodyEntry *entry=&tracked_input.custody.entries[i];
+            if(!entry->active||entry->good!=CC_GOOD_GOLD||
+               !CcSimMineEntryTracked(&tracked_input,entry)) continue;
+            total_tracked+=(int32_t)entry->quantity;
+            if(entry->holder.kind==CC_CUSTODY_PLAYER&&
+               entry->holder.id==tracked_input.player.id)
+                player_tracked+=(int32_t)entry->quantity;
+            if(entry->holder.kind==CC_CUSTODY_MINE_PACK&&
+               entry->holder.id==tracked_input.player.id)
+                pack_tracked+=(int32_t)entry->quantity;
+        }
+        MINE_CHECK(tracked_input.player.cargo[CC_GOOD_GOLD]==0&&
+            CcMinePackGood(&tracked_input,CC_GOOD_GOLD)==3&&
+            player_tracked==0&&pack_tracked==3&&total_tracked==3,
+            "Keyboard Pack must return tracked mine Gold to the pack with conserved custody.");
+        MINE_CHECK(CcJournalClose(&tracked_journal,&tracked_input,error,sizeof(error)),
+            "The tracked transfer input journal must close cleanly.");
+        (void)remove(tracked_path);
+    }
     for(int i=0;i<13;++i) MINE_KEY(KEY_W);
     MINE_CHECK(sim.mine.y==4,"W must walk to the entrance.");
     {
@@ -497,6 +607,17 @@ static int RunMineInputRegression(void)
         MINE_CHECK(input.mine.surveyed,"An explicit survey click must use that survey once.");
         MINE_CHECK(input.mine.revision==survey_revision+2,
             "The survey action must advance its revision once after approach.");
+        uint64_t reread_hash=CcSimHash(&input);
+        BoundingBox reread_box; int32_t reread_x=-1,reread_y=-1;
+        MINE_CHECK(MineTargetBounds(&input,MINE_INTENT_SURVEY,&reread_box,
+            &reread_x,&reread_y)&&reread_x==26&&reread_y==4,
+            "The inspected records must remain a named pointer target.");
+        queued_key_press[KEY_E]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
+        ClientInputClearPressed();
+        MINE_CHECK(CcSimHash(&input)==reread_hash&&
+            strstr(message,"Workers' records")!=NULL,
+            "The inspected records must stay readable without changing their evidence.");
         input_local.mine_facing=3; MineRememberVisible(&input,&input_local);
         INPUT_POINTER(((Vector3){23,0,4}));
         MINE_CHECK(input_local.mine_target_x>=0,"A floor pointer must queue its remaining walk.");

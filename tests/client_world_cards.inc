@@ -131,6 +131,31 @@ static int RunWorldCardRegression(void)
         CARD_INPUT();
         CARD_CHECK(view == VIEW_LEDGER && local.book_page == 1,
             "Key 2 must open the People page.");
+        Rectangle mine_notes=AdventureBookPageBounds(AdventurePanel(),2);
+        client_test_pointer_active=true;
+        client_test_pointer=(Vector2){mine_notes.x+mine_notes.width/2,
+            mine_notes.y+mine_notes.height/2};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+        CARD_INPUT();
+        CARD_CHECK(view == VIEW_LEDGER && local.book_page == 2,
+            "The visible Mine notes tab must open with an ordinary pointer.");
+        CARD_CHECK(AdventureBookCompact((Rectangle){0,0,342,560})&&
+            AdventureBookMineStepBounds((Rectangle){0,0,342,560},1).y+36<=560,
+            "Portrait Mine notes must page inside its visible panel.");
+        CcMineVisit mine_history=sim.mine;
+        sim.mine.report_event_id=UINT64_MAX;
+        sim.mine.report_recipient_id=0U;
+        sim.mine.report_day=sim.current_day;
+        sim.mine.report_kind=CC_MINE_RETURN_HAUL;
+        sim.mine.report_good=CC_GOOD_GOLD;
+        sim.mine.report_quantity=2;
+        sim.mine.reported_encounter_outcome=CC_MINE_ENCOUNTER_BARGAINED;
+        char report_account[160];
+        AdventureMineReportAccount(&sim,report_account,sizeof(report_account));
+        CARD_CHECK(strstr(report_account,"reported 2 Raw Gold")!=NULL&&
+            CcSimEvent(&sim,sim.mine.report_event_id)==NULL,
+            "Mine notes must keep neutral report wording after its event leaves the bounded ledger.");
+        sim.mine=mine_history;
         queued_key_press[KEY_B] = true;
         CARD_INPUT();
         CARD_CHECK(view == VIEW_LOCAL && CcSimHash(&sim) == carriage_hash,

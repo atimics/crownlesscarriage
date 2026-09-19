@@ -47,6 +47,21 @@ static void CheckCommandRoundTrips(void)
     CcCoopDestroy(shared);
 }
 
+static void CheckCurrentSharedCommandNames(void)
+{
+    CC_CHECK(strcmp(CcCoopActionName(CC_COMMAND_CHOOSE_ROAD_LEG),"road_leg")==0);
+    CC_CHECK(strcmp(CcCoopActionName(CC_COMMAND_MINE_LEARN_LEAD),
+                    "mine_learn_lead")==0);
+    CC_CHECK(strcmp(CcCoopActionName(CC_COMMAND_MINE_REPORT_RETURN),
+                    "mine_report_return")==0);
+    for (int32_t kind=1;kind<=(int32_t)CC_COMMAND_MINE_REPORT_RETURN;++kind) {
+        const char *name=CcCoopActionName((CcCommandKind)kind);
+        CC_CHECK(name[0]!='\0');
+        for (int32_t prior=1;prior<kind;++prior)
+            CC_CHECK(strcmp(name,CcCoopActionName((CcCommandKind)prior))!=0);
+    }
+}
+
 static void CheckArchiveRecruitment(void)
 {
     char error[256];
@@ -379,6 +394,7 @@ int main(void)
 {
     CheckTravelHoldClock();
     CheckCommandRoundTrips();
+    CheckCurrentSharedCommandNames();
     CheckArchiveRecruitment();
     CheckJourneyQuestRetirement();
     CheckPartyWipe();

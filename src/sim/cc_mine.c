@@ -153,6 +153,7 @@ void CcMineInitializeLoad(CcSim *sim)
     mine->source_x=26; mine->source_y=16;
     mine->cache_x=5; mine->cache_y=15;
     mine->source_released=false;
+    if (sim->schema_version >= 106U) mine->return_revision=1;
     const CcGood goods[] = {CC_GOOD_IRON,CC_GOOD_GOLD,CC_GOOD_GEMS};
     const int32_t quantities[] = {8,3,2};
     int32_t next=0;
@@ -163,6 +164,9 @@ void CcMineInitializeLoad(CcSim *sim)
             .owner_id=mine->source_owner_id,
             .holder={CC_CUSTODY_SITE,mine->source_id},.kind=CC_CUSTODY_GOODS,
             .quantity=quantities[next],.good=(int32_t)goods[next],.condition=100,.active=true};
+        if (goods[next] == CC_GOOD_IRON) mine->iron_source_entry_id=entry->id;
+        else if (goods[next] == CC_GOOD_GOLD) mine->gold_source_entry_id=entry->id;
+        else if (goods[next] == CC_GOOD_GEMS) mine->gems_source_entry_id=entry->id;
         ++next;
     }
 }
@@ -237,15 +241,19 @@ static bool MineCreditSourceGood(CcSim *sim, CcGood good, int32_t quantity)
         entry->quantity+=quantity;
         entry->revision+=1;
         entry->last_event_id=(uint64_t)mine->revision+1U;
+        if (good == CC_GOOD_BREAD && mine->bread_source_entry_id == 0U)
+            mine->bread_source_entry_id=entry->id;
         return true;
     }
     for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
         CcCustodyEntry *entry=&sim->custody.entries[i];
         if (entry->id != 0) continue;
         *entry=(CcCustodyEntry){.id=sim->custody.next_id++,.revision=1,
-            .owner_id=mine->source_owner_id,.last_event_id=(uint64_t)mine->revision+1U,
+            .owner_id=mine->source_owner_id,
+            .last_event_id=(uint64_t)mine->revision+1U,
             .holder={CC_CUSTODY_SITE,mine->source_id},.kind=CC_CUSTODY_GOODS,
             .quantity=quantity,.good=(int32_t)good,.condition=100,.active=true};
+        if (good == CC_GOOD_BREAD) mine->bread_source_entry_id=entry->id;
         return true;
     }
     return false;
@@ -290,7 +298,12 @@ static bool StowMinePack(CcSim *sim, char *error, size_t capacity)
         CcCustodyEntry *entry=&sim->custody.entries[i];
         if (entry->active && entry->holder.kind == CC_CUSTODY_MINE_PACK &&
             entry->holder.id == sim->player.id) {
-            entry->quantity=0; entry->active=false; entry->revision+=1;
+            if (sim->schema_version >= 106U) {
+                entry->holder=(CcCustodyHolder){CC_CUSTODY_PLAYER,sim->player.id};
+            } else {
+                entry->quantity=0; entry->active=false;
+            }
+            entry->revision+=1;
             entry->last_event_id=(uint64_t)sim->mine.revision+1U;
         }
     }
@@ -304,19 +317,33 @@ static bool UnpackMineGood(CcSim *sim, CcGood good, int32_t quantity,
         return Fail(error,capacity,"Check the carried goods and carriage space.");
     int32_t legacy=sim->mine.pack[good] < quantity ? sim->mine.pack[good] : quantity;
     int32_t remaining=quantity-legacy;
-    CcCustodyState candidate=sim->custody;
-    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody) && remaining>0;++i) {
-        CcCustodyEntry *entry=&candidate.entries[i];
-        if (!entry->active || entry->kind != CC_CUSTODY_GOODS || entry->good != (int32_t)good ||
-            entry->holder.kind != CC_CUSTODY_MINE_PACK || entry->holder.id != sim->player.id) continue;
-        int32_t moved=entry->quantity < remaining ? (int32_t)entry->quantity : remaining;
-        entry->quantity-=moved; entry->revision+=1;
-        entry->last_event_id=(uint64_t)sim->mine.revision+1U;
-        if (entry->quantity == 0) entry->active=false;
-        remaining-=moved;
+    if (remaining > 0) {
+        if (sim->schema_version >= 106U) {
+            CcCustodyResult result=CcSimTransferMineGoods(sim,
+                (CcCustodyHolder){CC_CUSTODY_MINE_PACK,sim->player.id},
+                (CcCustodyHolder){CC_CUSTODY_PLAYER,sim->player.id},
+                good,remaining,(uint64_t)sim->mine.revision+1U);
+            if (result != CC_CUSTODY_READY)
+                return Fail(error,capacity,"The carried mine manifest is invalid.");
+        } else {
+            CcCustodyState candidate=sim->custody;
+            for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody) && remaining>0;++i) {
+                CcCustodyEntry *entry=&candidate.entries[i];
+                if (!entry->active || entry->kind != CC_CUSTODY_GOODS ||
+                    entry->good != (int32_t)good ||
+                    entry->holder.kind != CC_CUSTODY_MINE_PACK ||
+                    entry->holder.id != sim->player.id) continue;
+                int32_t moved=entry->quantity < remaining ? (int32_t)entry->quantity : remaining;
+                entry->quantity-=moved; entry->revision+=1;
+                entry->last_event_id=(uint64_t)sim->mine.revision+1U;
+                if (entry->quantity == 0) entry->active=false;
+                remaining-=moved;
+            }
+            if (remaining != 0)
+                return Fail(error,capacity,"The carried mine manifest is invalid.");
+            sim->custody=candidate;
+        }
     }
-    if (remaining != 0) return Fail(error,capacity,"The carried mine manifest is invalid.");
-    sim->custody=candidate;
     sim->mine.pack[good]-=legacy;
     sim->player.cargo[good]+=quantity;
     return true;
@@ -332,7 +359,8 @@ const char *CcMineAction(const CcSim *sim)
     } else if (m->phase == CC_MINE_LEVEL) {
         if (Near(m,5,3)) return "Step outside to the mine yard";
         if (Near(m,15,10) && !m->bar_open) return "Lift the wooden bar";
-        if (Near(m,26,4) && !m->surveyed) return "Read the workers' survey";
+        if (Near(m,26,4)) return m->surveyed ?
+            "Reread the workers' records" : "Read the workers' records";
         if (Near(m,26,16)) {
             if (m->contest_active) return "Haulers engaged: fight or break contact";
             if (m->encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED)
@@ -356,6 +384,43 @@ static void SpendMinutes(CcSim *sim, int32_t minutes)
         sim->clock.minute_subticks -= CC_WORLD_DAY_SUBTICKS;
         CcSimAdvanceDays(sim,1);
     }
+}
+
+static void RecordMineBypass(CcSim *sim)
+{
+    CcMineVisit *mine=&sim->mine;
+    if (sim->schema_version < 106U || mine->bypass_event_id != 0U) return;
+    const CcRoadSite *site=CcMineSite(sim);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text,sizeof(text),
+        "Day %d: the Crownless Company walks the western store passage around the barred middle passage at Low Silver Pit.",
+        sim->current_day);
+    CcEvent *event=CcSimPushEvent(sim,CC_EVENT_FACT_REVEALED,
+        site != NULL ? site->id : mine->site_id,
+        sim->dungeon_count > 0 ? sim->dungeons[0].settlement_id : mine->site_id,
+        0U,1,text);
+    mine->bypass_event_id=event->id;
+    mine->bypass_day=sim->current_day;
+}
+
+static void RecordMineSurvey(CcSim *sim, bool earlier_survey)
+{
+    CcMineVisit *mine=&sim->mine;
+    if (sim->schema_version < 106U || mine->survey_event_id != 0U) return;
+    const CcRoadSite *site=CcMineSite(sim);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text,sizeof(text), earlier_survey ?
+        "Day %d: the company rereads Low Silver Pit records; they claim the west store route circles the bar. Earlier observation date unknown." :
+        "Day %d: The western store passage goes around the barred middle passage. The stair to Lamp Hall is marked blocked.",
+        sim->current_day);
+    CcEvent *event=CcSimPushEvent(sim,CC_EVENT_LORE_RECORDED,
+        site != NULL ? site->id : mine->site_id,
+        sim->dungeon_count > 0 ? sim->dungeons[0].settlement_id : mine->site_id,
+        0U,1,text);
+    mine->survey_source_id=site != NULL ? site->id : mine->site_id;
+    mine->survey_event_id=event->id;
+    mine->survey_read_day=sim->current_day;
+    mine->survey_observed_day=earlier_survey ? 0 : sim->current_day;
 }
 bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capacity)
 {
@@ -410,7 +475,10 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
                    existing side loop. Passing the central bar cannot create
                    a bypass result; reaching the source-side tile after this
                    loop does. */
-                if (x == 9 && y == 15) m->bypass_route_seen=true;
+                if (x == 9 && y == 15) {
+                    if (!m->bypass_route_seen) RecordMineBypass(sim);
+                    m->bypass_route_seen=true;
+                }
             } else SpendMinutes(sim,1);
         } else if (command->kind == CC_COMMAND_MINE_PACK) {
             if (m->phase != CC_MINE_YARD ||
@@ -427,7 +495,13 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
             if (amount < 0) {
                 if (!UnpackMineGood(sim,(CcGood)good,-amount,error,capacity)) return false;
             } else {
-                m->pack[good]+=amount; sim->player.cargo[good]-=amount;
+                int32_t tracked=0;
+                if (sim->schema_version >= 106U &&
+                    CcSimRepackMineGoods(sim,(CcGood)good,amount,
+                        (uint64_t)m->revision+1U,&tracked) != CC_CUSTODY_READY)
+                    return Fail(error,capacity,"The carried mine manifest changed before packing.");
+                m->pack[good]+=amount-tracked;
+                sim->player.cargo[good]-=amount;
             }
         } else if (command->kind == CC_COMMAND_MINE_INSPECT) {
             if (!MineLocationReachable(m,m->source_x,m->source_y))
@@ -559,7 +633,17 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
                 SpendMinutes(sim,1);
             } else if (m->phase == CC_MINE_LEVEL && Near(m,15,10) && !m->bar_open) {
                 m->bar_open=true; SpendMinutes(sim,1);
-            } else if (m->phase == CC_MINE_LEVEL && Near(m,26,4) && !m->surveyed) {
+            } else if (m->phase == CC_MINE_LEVEL && Near(m,26,4)) {
+                if (m->surveyed) {
+                    if (sim->schema_version >= 106U && m->survey_event_id == 0U) {
+                        RecordMineSurvey(sim,true);
+                        SpendMinutes(sim,5);
+                        m->revision+=1;
+                    }
+                    if (error != NULL && capacity > 0) error[0]='\0';
+                    return true;
+                }
+                RecordMineSurvey(sim,false);
                 m->surveyed=true;
                 sim->dungeons[0].rooms[0].state_flags |= CC_DUNGEON_ROOM_SEARCHED | CC_DUNGEON_ROOM_DISCOVERED;
                 SpendMinutes(sim,5);
@@ -598,6 +682,48 @@ bool CcMineValidate(const CcSim *sim)
              (m->contest_active &&
               (m->encounter_outcome == CC_MINE_ENCOUNTER_BARGAINED ||
                m->encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED)))) return false;
+        if (sim->schema_version >= 106U) {
+            bool lead_empty=m->lead_event_id == 0U;
+            bool survey_empty=m->survey_event_id == 0U;
+            bool bypass_empty=m->bypass_event_id == 0U;
+            bool receipt_empty=m->haul_receipt_event_id == 0U;
+            bool report_empty=m->report_event_id == 0U;
+            if (m->return_revision < 1 ||
+                m->iron_source_entry_id == 0U || m->gold_source_entry_id == 0U ||
+                m->gems_source_entry_id == 0U ||
+                m->iron_source_entry_id >= sim->custody.next_id ||
+                m->gold_source_entry_id >= sim->custody.next_id ||
+                m->gems_source_entry_id >= sim->custody.next_id ||
+                m->bread_source_entry_id >= sim->custody.next_id ||
+                m->iron_source_entry_id == m->gold_source_entry_id ||
+                m->iron_source_entry_id == m->gems_source_entry_id ||
+                m->gold_source_entry_id == m->gems_source_entry_id ||
+                m->report_kind > CC_MINE_RETURN_INFORMATION ||
+                m->reported_encounter_outcome > CC_MINE_ENCOUNTER_BROKEN_CONTACT ||
+                (lead_empty != (m->lead_source_id == 0U && m->lead_day == 0 && !m->lead_document)) ||
+                (survey_empty != (m->survey_source_id == 0U && m->survey_read_day == 0 &&
+                                  m->survey_observed_day == 0)) ||
+                (!survey_empty && (m->survey_read_day <= 0 || m->survey_observed_day < 0 ||
+                                   m->survey_observed_day > m->survey_read_day)) ||
+                (bypass_empty != (m->bypass_day == 0)) ||
+                (receipt_empty != (m->haul_receipt_quantity == 0 &&
+                                   m->haul_receipt_good == 0)) ||
+                (!receipt_empty && (m->haul_receipt_quantity <= 0 ||
+                                    m->haul_receipt_good < 0 ||
+                                    m->haul_receipt_good >= CC_GOOD_COUNT)) ||
+                (report_empty != (m->report_recipient_id == 0U && m->report_day == 0 &&
+                                  m->report_quantity == 0 && m->report_good == 0 &&
+                                  m->report_kind == CC_MINE_RETURN_NONE &&
+                                  m->reported_encounter_outcome == CC_MINE_ENCOUNTER_OPEN)) ||
+                (!report_empty && (m->report_day <= 0 ||
+                                   m->report_kind == CC_MINE_RETURN_NONE ||
+                                   (m->report_kind == CC_MINE_RETURN_HAUL &&
+                                    (m->report_quantity <= 0 || m->report_good < 0 ||
+                                     m->report_good >= CC_GOOD_COUNT)) ||
+                                   (m->report_kind == CC_MINE_RETURN_INFORMATION &&
+                                    (m->report_quantity != 0 || m->report_good != 0)))))
+                return false;
+        }
     }
     if (m->phase == CC_MINE_NONE)
         return m->site_id == 0 && m->x == 0 && m->y == 0 && m->return_speed == 0 &&

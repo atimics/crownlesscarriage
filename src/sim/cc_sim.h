@@ -67,7 +67,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 105
+#define CC_SIM_SCHEMA_VERSION 106
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -660,7 +660,10 @@ typedef enum CcCommandKind {
     CC_COMMAND_MINE_CONTEST = 69,
     CC_COMMAND_MINE_BREAK_CONTACT = 70,
     CC_COMMAND_MINE_RESOLVE_CONTEST = 71,
-    CC_COMMAND_CHOOSE_ROAD_LEG = 72
+    CC_COMMAND_CHOOSE_ROAD_LEG = 72,
+    /* Schema 106: learn and report the durable Silverwick mine record. */
+    CC_COMMAND_MINE_LEARN_LEAD = 73,
+    CC_COMMAND_MINE_REPORT_RETURN = 74
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1946,6 +1949,12 @@ typedef enum CcMineEncounterOutcome {
     CC_MINE_ENCOUNTER_BROKEN_CONTACT
 } CcMineEncounterOutcome;
 
+typedef enum CcMineReturnKind {
+    CC_MINE_RETURN_NONE,
+    CC_MINE_RETURN_HAUL,
+    CC_MINE_RETURN_INFORMATION
+} CcMineReturnKind;
+
 typedef struct CcMineVisit {
     CcMinePhase phase;
     CcId site_id;
@@ -1964,6 +1973,10 @@ typedef struct CcMineVisit {
     CcId source_owner_id;
     CcId cache_id;
     CcId cache_owner_id;
+    CcId bread_source_entry_id;
+    CcId iron_source_entry_id;
+    CcId gold_source_entry_id;
+    CcId gems_source_entry_id;
     int32_t source_x, source_y;
     int32_t cache_x, cache_y;
     bool source_released;
@@ -1971,6 +1984,28 @@ typedef struct CcMineVisit {
     bool contest_active;
     uint8_t encounter_outcome;
     uint8_t player_injury;
+    /* Schema 106: stable sources for the lead, survey, and one return. */
+    int32_t return_revision;
+    CcId lead_source_id;
+    CcId lead_event_id;
+    int32_t lead_day;
+    bool lead_document;
+    CcId survey_source_id;
+    CcId survey_event_id;
+    int32_t survey_read_day;
+    int32_t survey_observed_day;
+    CcId bypass_event_id;
+    int32_t bypass_day;
+    CcId haul_receipt_event_id;
+    int32_t haul_receipt_quantity;
+    int32_t haul_receipt_good;
+    CcId report_recipient_id;
+    CcId report_event_id;
+    int32_t report_day;
+    int32_t report_quantity;
+    int32_t report_good;
+    uint8_t report_kind;
+    uint8_t reported_encounter_outcome;
 } CcMineVisit;
 
 typedef struct CcCommand {
@@ -2167,7 +2202,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 602240,
+_Static_assert(sizeof(CcSim) == 602392,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -2355,6 +2390,10 @@ const CcQuestOutcomeRecord *CcSimLatestQuestOutcomeForCharacter(
     const CcSim *sim, CcId character_id);
 CcFrontStage CcSimFrontStage(const CcFront *front);
 const CcCharacter *CcSimCharacter(const CcSim *sim, CcId id);
+const CcCharacter *CcSimMineEvidenceContact(const CcSim *sim);
+bool CcSimMineLeadSupported(const CcSim *sim);
+CcMineReturnKind CcSimMineReturnEvidence(const CcSim *sim);
+bool CcSimMineReturnHaul(const CcSim *sim, CcGood *good, int32_t *quantity);
 const CcDungeon *CcSimDungeon(const CcSim *sim, CcId id);
 const CcDungeonRoom *CcSimDungeonCurrentRoom(const CcSim *sim);
 int32_t CcSimDungeonVisibleExitCount(const CcSim *sim);
