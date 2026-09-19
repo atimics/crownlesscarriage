@@ -129,7 +129,8 @@ static void CcCapturePrepareJourney(const CcCaptureRequest *request, CcSim *sim)
           request->capture_creature_horse || request->capture_road_arrival)) return;
     PrepareReviewJourney(sim, (CcReviewJourneyOptions){
         .clear_route_knowledge = request->capture_route_sight,
-        .suppress_encounter = request->capture_road_arrival || request->capture_route_sight,
+        .suppress_encounter = request->capture_road_arrival ||
+            request->capture_route_sight || request->capture_storybook,
         .advance_trip = request->capture_travel || request->capture_route_sight ||
             request->capture_creature_horse || request->capture_road_arrival,
         .finish_arrival = request->capture_road_arrival,

@@ -207,6 +207,15 @@ static void RealRouteLengthsDriveBothDirections(void)
     float changed = CcLocalRoadCarriageRouteLengthInternal(&sim);
     Require(fabsf(changed - original) > 0.01f,
             "road-book cache refreshes when route geometry changes");
+    Require(Near(changed, CcWorldRouteLengthForSim(&sim, route->id),
+                 0.0001f),
+            "refreshed road-book distance matches a fresh world route");
+    from->size = from->size == CC_SETTLEMENT_CAPITAL_SIZE ?
+        CC_SETTLEMENT_TOWN : CC_SETTLEMENT_CAPITAL_SIZE;
+    float resized = CcLocalRoadCarriageRouteLengthInternal(&sim);
+    Require(Near(resized, CcWorldRouteLengthForSim(&sim, route->id),
+                 0.0001f),
+            "a settlement size change refreshes the warm route-distance cache");
 }
 
 static void LegsStepAtTheSpeedTheTeamMoves(void)

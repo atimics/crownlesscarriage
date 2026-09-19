@@ -926,6 +926,7 @@ static uint64_t RoadRouteGeometryIdentity(const CcSim *sim)
         ROAD_GEOMETRY_MIX(settlement->id);
         ROAD_GEOMETRY_MIX((uint32_t)settlement->map_x);
         ROAD_GEOMETRY_MIX((uint32_t)settlement->map_y);
+        ROAD_GEOMETRY_MIX(settlement->size);
     }
     for (int32_t index = 0; index < sim->route_count; ++index) {
         const CcRoute *route = &sim->routes[index];
