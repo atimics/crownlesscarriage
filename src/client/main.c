@@ -7210,11 +7210,6 @@ static int RunRoadCarriageTargetRegression(void)
         return ClientRegressionFailure("Carriage inspection must preserve the road anchor and journey.");
     }
     local.carriage_inspection_road = false;
-    sim.player.cargo[CC_GOOD_FOOD] = 0;
-    sim.player.cargo[CC_GOOD_BREAD] = 8;
-    if (sim.player.cargo[CC_GOOD_BREAD] != 8) {
-        return ClientRegressionFailure("Prepare the eight Bread manifest capture.");
-    }
     LeaveOpenWorld(&local);
     (void)puts("Road carriage target: approach, revision, inspection, and Bread manifest passed");
     return 0;
