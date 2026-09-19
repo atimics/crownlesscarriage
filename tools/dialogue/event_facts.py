@@ -169,13 +169,16 @@ def build_facts(participant: Mapping[str, Any]) -> list[EventFact]:
     owner = self_data.get("id") if isinstance(self_data, Mapping) else None
     owner_id = _id(owner, "participant owner_id")
     accounts = participant.get("held_accounts", [])
-    if not isinstance(accounts, list):
-        raise ValueError("held_accounts must be a list")
+    if not isinstance(accounts, list) or len(accounts) > 32:
+        raise ValueError("held_accounts must be a list of at most 32 accounts")
     today = participant.get('day')
     if type(today) is not int or today < 0:
         raise ValueError('participant day must be a non-negative integer')
     knowledge_by_event = {}
-    for item in participant.get("knowledge", []):
+    knowledge = participant.get('knowledge', [])
+    if not isinstance(knowledge, list) or len(knowledge) > 8:
+        raise ValueError('knowledge must be a list of at most 8 records')
+    for item in knowledge:
         if isinstance(item, Mapping) and item.get("event_id") is not None:
             key = str(item['event_id'])
             if key in knowledge_by_event:

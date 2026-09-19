@@ -144,6 +144,8 @@ class EventFactsTests(unittest.TestCase):
                                  ({"confidence": 101}, "0 through 100")):
             with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, message):
                 build_facts(participant(account(**changes)))
+        with self.assertRaisesRegex(ValueError, 'at most 32'):
+            build_facts(participant(*(account(event_id=str(i+1)) for i in range(33))))
 
 
 if __name__ == "__main__":

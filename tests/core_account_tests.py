@@ -29,8 +29,17 @@ for rule in data['rules']:
             assert source.encode()[field['start']:field['end']].decode() == field['text']
             assert field['spoken'] == any('{' + str(field['field']) + '}' in t for t in rule['outputs'])
         # Extra claims and malformed numeric fields require their own rules.
-        assert subprocess.run([*args[:4], source + ' A different event happened.'],
-                              capture_output=True).returncode == 1
+        # Rumor/front messages end with an open detail payload. Extra text is
+        # part of that quoted account; fixed-ended forms must reject it.
+        open_detail = re.search(r'\{(\d)\}$', rule['source'])
+        if open_detail and rule['roles'][int(open_detail[1])] == 'detail':
+            extended = subprocess.check_output(
+                [*args[:4], source + ' A different event happened.'], text=True)
+            if '{' + open_detail[1] + '}' in template:
+                assert 'A different event happened.' in extended
+        else:
+            assert subprocess.run([*args[:4], source + ' A different event happened.'],
+                                  capture_output=True).returncode == 1
         if 'less_than' in rule:
             left, right = rule['less_than']
             for amount in ('8', '9', 'eight', 'nine'):
@@ -109,4 +118,3 @@ assert subprocess.run([sys.argv[1], '--parse', 'nothing here matches a rule.'],
 assert subprocess.run([sys.argv[1], '--parse-kind', '0', 'nothing here matches a rule.'],
                       capture_output=True).returncode == 1
 print(f'{inverse} spoken renderings parsed back to their event, tails and abstention checked')
-

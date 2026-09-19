@@ -2493,8 +2493,8 @@
       ],
       "source": "{0} share gossip: {1}",
       "outputs": [
-        "{0} shared gossip about {1}.",
-        "Gossip from {0} carried the account of {1}."
+        "{0} shared this gossip: \"{1}\"",
+        "This was the gossip from {0}: \"{1}\""
       ],
       "challenge": "The source account states: {0} share gossip: {1}"
     },
@@ -2521,8 +2521,8 @@
       ],
       "source": "{0} begins: {1}",
       "outputs": [
-        "{0} began a story front.",
-        "A story front began with {0}."
+        "{0} began: {1}",
+        "The account of {0} began: {1}"
       ],
       "challenge": "The source account states: {0} begins: {1}"
     },
