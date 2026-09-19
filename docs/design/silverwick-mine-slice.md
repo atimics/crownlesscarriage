@@ -42,6 +42,23 @@ Return through the entrance and walk to the carriage. Transfer the chosen goods,
 
 On a narrow portrait screen, the scene appears above readable action buttons. Open Scene details for the full scene text. The save footer reports the browser save result.
 
+## Information and the town return
+
+In Silverwick, ask Jory Fen about his known mine concern. The shift board offers
+a dated document when that lead needs a source. The lead names the Low Silver
+Pit turnout on the Alderwatch–Silverwick road and points to the workers' records.
+
+Read the workers' records in the eastern room for the document's route claim.
+Walking the western passage records the company's own observation. The Company
+Book keeps the source and date in Mine notes. Its visible page controls also
+work by touch.
+
+Return to Jory and choose to tell him what the company found. A tracked partial
+load and an attributed route account produce their own responses. Oren's store
+handles an optional sale through the ordinary quantity and payment controls.
+The report and sale remain separate choices. The Book keeps the return account
+after a sale or reload.
+
 ## Shared rules and saves
 
 Facing is local camera state. Turning is free. A fresh descent faces east into the level; the yard uses its fixed camera. Reload restores the saved mine tile and resets local facing to the phase default. Submitted movement already names a cardinal direction, so a different client camera cannot reinterpret it.
