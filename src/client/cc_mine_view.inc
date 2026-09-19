@@ -68,7 +68,8 @@ static Rectangle MineNavigationControl(int32_t index)
 static bool MineAtCarriage(const CcSim *sim)
 {
     return sim->mine.phase==CC_MINE_YARD &&
-        abs(sim->mine.x-15)+abs(sim->mine.y-18)<=1;
+        abs(sim->mine.x-CC_MINE_YARD_CARRIAGE_X)+
+        abs(sim->mine.y-CC_MINE_YARD_CARRIAGE_Y)<=1;
 }
 static bool MineAtCache(const CcSim *sim)
 {
@@ -307,10 +308,16 @@ static bool MineTargetBounds(const CcSim *sim,MineIntentTarget target,BoundingBo
     switch(target) {
     case MINE_INTENT_MOUTH:
         if(sim->mine.phase!=CC_MINE_YARD) return false;
-        *out_box=MineBoxBounds(15,1.1f,2.9f,2,2.2f,.2f); *out_x=15;*out_y=3; return true;
+        *out_box=MineBoxBounds(CC_MINE_YARD_MOUTH_X,1.1f,
+            CC_MINE_YARD_MOUTH_Y-.1f,2,2.2f,.2f);
+        *out_x=CC_MINE_YARD_MOUTH_X;*out_y=CC_MINE_YARD_MOUTH_Y;
+        return true;
     case MINE_INTENT_CARRIAGE:
         if(sim->mine.phase!=CC_MINE_YARD) return false;
-        *out_box=MineBoxBounds(18,1,19,3,2,4); *out_x=15;*out_y=18; return true;
+        *out_box=MineBoxBounds(CC_MINE_YARD_CARRIAGE_X,1,
+            CC_MINE_YARD_CARRIAGE_Y,3,2,4);
+        *out_x=CC_MINE_YARD_CARRIAGE_X;*out_y=CC_MINE_YARD_CARRIAGE_Y;
+        return true;
     case MINE_INTENT_EXIT:
         if(sim->mine.phase!=CC_MINE_LEVEL) return false;
         *out_box=MineBoxBounds(5,.25f,3,.85f,.5f,.85f); *out_x=5;*out_y=3; return true;
@@ -455,8 +462,14 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
                 sim->mine.contest_active?"Goblin haulers / engaged":"Goblin haulers / hungry");
         MineLabel(target,sim,local,(Vector3){5,.6f,3},5,3,"Back to the yard");
     } else {
-        MineLabel(target,sim,local,(Vector3){15,3,3},15,3,"Mine Mouth / walk in");
-        MineLabel(target,sim,local,(Vector3){18,1,19},18,19,"Carriage / transfer goods");
+        MineLabel(target,sim,local,
+            (Vector3){CC_MINE_YARD_MOUTH_X,3,CC_MINE_YARD_MOUTH_Y},
+            CC_MINE_YARD_MOUTH_X,CC_MINE_YARD_MOUTH_Y,
+            "Mine Mouth / walk in");
+        MineLabel(target,sim,local,
+            (Vector3){CC_MINE_YARD_CARRIAGE_X,1,CC_MINE_YARD_CARRIAGE_Y},
+            CC_MINE_YARD_CARRIAGE_X,CC_MINE_YARD_CARRIAGE_Y,
+            "Carriage / transfer goods");
     }
     int32_t title_y=short_landscape?12:20;
     int32_t subtitle_y=short_landscape?30:43;
@@ -605,7 +618,11 @@ static bool MineForwardUse(const CcSim *sim,int32_t dir)
 {
     const CcMineVisit *m=&sim->mine;
     if(m->phase==CC_MINE_YARD)
-        return dir==0 && m->x==15 && (m->y==4||m->y==3);
+        return (dir==0 && m->x==CC_MINE_YARD_MOUTH_X &&
+                (m->y==CC_MINE_YARD_MOUTH_Y+1||m->y==CC_MINE_YARD_MOUTH_Y)) ||
+            (dir==2 && m->x==CC_MINE_YARD_CARRIAGE_X &&
+             (m->y==CC_MINE_YARD_CARRIAGE_Y-1||
+              m->y==CC_MINE_YARD_CARRIAGE_Y));
     return dir==0 && m->x==5 && (m->y==4||m->y==3);
 }
 static bool MineIntentCanUse(const CcSim *sim,MineIntentTarget target)
@@ -613,9 +630,11 @@ static bool MineIntentCanUse(const CcSim *sim,MineIntentTarget target)
     const CcMineVisit *mine=&sim->mine;
     switch(target) {
     case MINE_INTENT_MOUTH: return mine->phase==CC_MINE_YARD &&
-        abs(mine->x-15)+abs(mine->y-3)<=1;
+        abs(mine->x-CC_MINE_YARD_MOUTH_X)+
+        abs(mine->y-CC_MINE_YARD_MOUTH_Y)<=1;
     case MINE_INTENT_CARRIAGE: return mine->phase==CC_MINE_YARD &&
-        abs(mine->x-15)+abs(mine->y-18)<=1;
+        abs(mine->x-CC_MINE_YARD_CARRIAGE_X)+
+        abs(mine->y-CC_MINE_YARD_CARRIAGE_Y)<=1;
     case MINE_INTENT_EXIT: return mine->phase==CC_MINE_LEVEL &&
         abs(mine->x-5)+abs(mine->y-3)<=1;
     case MINE_INTENT_BAR: return mine->phase==CC_MINE_LEVEL && !mine->bar_open &&

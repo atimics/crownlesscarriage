@@ -214,10 +214,31 @@ static int RunMineInputRegression(void)
         MINE_CHECK(strstr(message,"Choose the visible hauler action")!=NULL &&
             pick_local.mine_target_x<0,
             "A visible hauler click must select the group at its reachable approach.");
+        picked.mine.phase=CC_MINE_YARD;
+        picked.mine.x=CC_MINE_YARD_CARRIAGE_X;
+        picked.mine.y=CC_MINE_YARD_CARRIAGE_Y-1;
+        BoundingBox carriage_bounds={0};
+        MINE_CHECK(MineTargetBounds(&picked,MINE_INTENT_CARRIAGE,
+                &carriage_bounds,&tx,&ty) &&
+            tx==CC_MINE_YARD_CARRIAGE_X &&
+            ty==CC_MINE_YARD_CARRIAGE_Y &&
+            fabsf((carriage_bounds.min.x+carriage_bounds.max.x)*.5f-
+                (float)CC_MINE_YARD_CARRIAGE_X)<.001f &&
+            fabsf((carriage_bounds.min.z+carriage_bounds.max.z)*.5f-
+                (float)CC_MINE_YARD_CARRIAGE_Y)<.001f &&
+            MineAtCarriage(&picked) && MineIntentCanUse(&picked,MINE_INTENT_CARRIAGE),
+            "The drawn carriage, pick volume and legal approach must share one yard anchor.");
+        Camera3D yard_camera=CcLocalMineCamera(&picked,0);
+        float yard_dx=yard_camera.position.x-yard_camera.target.x;
+        float yard_dy=yard_camera.position.y-yard_camera.target.y;
+        float yard_dz=yard_camera.position.z-yard_camera.target.z;
+        float yard_span=sqrtf(yard_dx*yard_dx+yard_dy*yard_dy+yard_dz*yard_dz);
+        MINE_CHECK(yard_camera.projection==CAMERA_PERSPECTIVE &&
+            yard_span>=12.0f && yard_span<=20.0f && yard_camera.fovy<=48.0f,
+            "The yard camera must keep people, cargo and interaction targets at a readable scale.");
         pick_local.mine_target_x=26; pick_local.mine_target_y=5;
         pick_local.mine_intent_target=MINE_INTENT_SURVEY;
         pick_local.mine_intent_revision=picked.mine.revision;
-        picked.mine.phase=CC_MINE_YARD;
         SyncMineView(&picked,&pick_local);
         MINE_CHECK(pick_local.mine_target_x<0 && pick_local.mine_intent_revision<0,
             "Phase changes and reload-style local resets must cancel queued input.");

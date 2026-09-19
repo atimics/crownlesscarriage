@@ -5,6 +5,10 @@
 #define CC_MINE_HEIGHT 21
 #define CC_MINE_PACK_CAPACITY 8
 #define CC_MINE_CACHE_CAPACITY 7
+#define CC_MINE_YARD_MOUTH_X 15
+#define CC_MINE_YARD_MOUTH_Y 3
+#define CC_MINE_YARD_CARRIAGE_X 15
+#define CC_MINE_YARD_CARRIAGE_Y 18
 int32_t CcMineBranchSubtick(const CcSim *sim);
 const CcRoadSite *CcMineSite(const CcSim *sim);
 bool CcMineWalkable(const CcSim *sim, CcMinePhase phase, int32_t x, int32_t y);

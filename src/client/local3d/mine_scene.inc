@@ -10,7 +10,7 @@ Camera3D CcLocalMineCamera(const CcSim *sim, int32_t facing)
             .target={eye.x+(float)dx[facing],eye.y,eye.z+(float)dy[facing]},
             .up={0,1,0},.fovy=64,.projection=CAMERA_PERSPECTIVE};
     }
-    return PerspectiveCameraComposed((Vector3){15,0,10},(Vector3){-22,16,6},53);
+    return PerspectiveCameraComposed((Vector3){15,0,11},(Vector3){-15,10,5},48);
 }
 static void MineBox(float x,float y,float z,float w,float h,float d,Color color)
 {
@@ -124,7 +124,9 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
         MineBox(13.7f,1.2f,3, .35f,2.4f,.5f,(Color){125,88,53,255});
         MineBox(16.3f,1.2f,3, .35f,2.4f,.5f,(Color){125,88,53,255});
         MineBox(15,2.4f,3,3,.4f,.6f,(Color){125,88,53,255});
-        DrawRoadCarriage((Vector3){18,0,19},sim,0,0,0,PI,true,false,CC_LOCAL_SCENE_ROAD);
+        DrawRoadCarriage((Vector3){CC_MINE_YARD_CARRIAGE_X,0,
+            CC_MINE_YARD_CARRIAGE_Y},sim,0,0,0,PI,true,false,
+            CC_LOCAL_SCENE_ROAD);
         /* The parked team uses the same model as road travel. */
         for(int i=0;i<5;++i) {
             float x=1+(float)i*7;

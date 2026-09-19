@@ -719,6 +719,40 @@ static void DrawOpenWorldRoadSiteBlocker(
     }
 }
 
+static void DrawOpenWorldMineRoadLandmark(
+    const CcWorldManifest *manifest,
+    const CcWorldRoadSitePlacement *placement)
+{
+    if (manifest == NULL || placement == NULL ||
+        placement->kind != CC_ROAD_SITE_MINE) return;
+    float heading = placement->blocker_heading_yaw;
+    float ground = CcWorldTerrainHeight(
+        manifest, placement->destination.x, placement->destination.z);
+    Vector3 base = {placement->destination.x, ground,
+                    placement->destination.z};
+    const Color timber = {83, 62, 44, 255};
+    const Color iron = {72, 78, 80, 255};
+    const Color portal = {24, 30, 33, 255};
+    DrawOrientedBox(base, (Vector3){0.0f, 1.05f, 0.42f},
+                    (Vector3){2.55f, 2.10f, 0.34f}, heading, portal);
+    for (int32_t side = -1; side <= 1; side += 2) {
+        DrawOrientedBox(base,
+            (Vector3){(float)side * 1.55f, 1.35f, 0.0f},
+            (Vector3){0.28f, 2.70f, 0.28f}, heading, timber);
+    }
+    DrawOrientedBox(base, (Vector3){0.0f, 2.63f, 0.0f},
+                    (Vector3){3.45f, 0.28f, 0.32f}, heading, timber);
+    DrawOrientedBox(base, (Vector3){0.0f, 3.42f, 0.52f},
+                    (Vector3){0.24f, 1.75f, 0.24f}, heading, timber);
+    DrawOrientedBox(base, (Vector3){0.0f, 4.24f, 0.52f},
+                    (Vector3){2.20f, 0.22f, 0.22f}, heading, timber);
+    for (int32_t ore = -1; ore <= 1; ++ore) {
+        Vector3 pile = LocalPoint(base, 2.5f + (float)ore * 0.42f,
+                                  0.38f, -0.15f, heading);
+        DrawSmallSphere(pile, 0.52f, ore == 0 ? WORLD_STONE_LIGHT : iron);
+    }
+}
+
 static void DrawOpenWorldRoadSites(
     const CcSim *sim, const CcWorldManifest *manifest,
     const CcLocalWorldCarriageState *carriage, Vector3 focus,
@@ -766,6 +800,7 @@ static void DrawOpenWorldRoadSites(
         DrawOpenWorldRibbonSegment(
             manifest, placement->bend, end,
             4.2f, 0.12f, track, true, true);
+        DrawOpenWorldMineRoadLandmark(manifest, placement);
         if (!site->accessible) DrawOpenWorldRoadSiteBlocker(manifest, placement);
     }
 }
