@@ -1,4 +1,5 @@
 #include "sim/cc_journey_internal.h"
+#include "sim/cc_road_position.h"
 
 #include <stdio.h>
 
@@ -148,6 +149,19 @@ static bool ApplyRoadSiteStop(CcSim *sim, const CcCommand *command,
         sim->player.id, sim->journey.route_id,
         sim->journey.parent_event_id, camping ? 3 : 0, text);
     sim->journey.parent_event_id = event->id;
+    if (sim->journey.road_position_active) {
+        CcRoadLegPreview previews[3];
+        int32_t count = CcRoadNextLegPreviews(sim, previews, 3);
+        const CcRoadLegPreview *onward = NULL;
+        for (int32_t i = 0; i < count; ++i) {
+            if ((int32_t)previews[i].direction ==
+                sim->journey.road_direction) onward = &previews[i];
+        }
+        if (onward == NULL || !CcRoadChooseNextLeg(
+                sim, onward->decision_token, error, error_capacity)) {
+            return false;
+        }
+    }
     SetError(error, error_capacity, "");
     return true;
 }

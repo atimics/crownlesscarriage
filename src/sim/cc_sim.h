@@ -659,7 +659,8 @@ typedef enum CcCommandKind {
     CC_COMMAND_MINE_BARGAIN = 68,
     CC_COMMAND_MINE_CONTEST = 69,
     CC_COMMAND_MINE_BREAK_CONTACT = 70,
-    CC_COMMAND_MINE_RESOLVE_CONTEST = 71
+    CC_COMMAND_MINE_RESOLVE_CONTEST = 71,
+    CC_COMMAND_CHOOSE_ROAD_LEG = 72
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1779,7 +1780,8 @@ typedef enum CcJourneyPhase {
     CC_JOURNEY_PHASE_NONE,
     CC_JOURNEY_PHASE_TRAVELLING,
     CC_JOURNEY_PHASE_BLOCKED,
-    CC_JOURNEY_PHASE_RESTING
+    CC_JOURNEY_PHASE_RESTING,
+    CC_JOURNEY_PHASE_ROAD_CHOICE
 } CcJourneyPhase;
 
 typedef enum CcJourneyStopKind {
@@ -1827,6 +1829,28 @@ typedef struct CcJourneyEncounter {
     bool ambush_resolved;
     uint32_t road_site_stop_mask;
     CcId parent_event_id;
+    bool road_position_active;
+    bool road_waiting_choice;
+    CcId road_journey_id;
+    CcId road_goal_id;
+    CcId road_segment_id;
+    CcId road_anchor_id;
+    CcId road_stop_anchor_id;
+    CcId road_return_anchor_id;
+    int32_t road_direction;
+    int32_t road_coordinate_units;
+    int32_t road_distance_travelled_units;
+    int32_t road_distance_remaining_units;
+    int32_t road_leg_length_units;
+    int32_t road_leg_start_coordinate_units;
+    int32_t road_leg_end_coordinate_units;
+    int32_t road_leg_elapsed_subticks;
+    int32_t road_leg_total_subticks;
+    int32_t road_geometry_length_units;
+    int32_t road_compatibility_milli;
+    uint32_t road_revision;
+    int32_t road_geometry_x_units[33];
+    int32_t road_geometry_z_units[33];
 } CcJourneyEncounter;
 
 typedef struct CcTravelPreview {
@@ -2143,7 +2167,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 601872,
+_Static_assert(sizeof(CcSim) == 602240,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

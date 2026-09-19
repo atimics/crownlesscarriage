@@ -1,5 +1,6 @@
 #include "sim/cc_journey_internal.h"
 #include "sim/cc_mine.h"
+#include "sim/cc_road_position.h"
 
 #include <stdio.h>
 
@@ -108,6 +109,8 @@ static void FinishJourneyArrival(CcSim *sim,
         }
     }
     sim->journey.elapsed_subticks = sim->journey.total_subticks;
+    sim->journey.road_position_active = false;
+    sim->journey.road_waiting_choice = false;
     sim->journey.active = false;
     sim->journey.phase = CC_JOURNEY_PHASE_NONE;
     CcSimPeopleEnterSettlement(sim);
@@ -226,19 +229,33 @@ void CcJourneyAdvanceTicks(CcSim *sim, int32_t ticks,
         int32_t next_limit = MinimumI32(
             sim->journey.total_subticks, next_watch);
         if (mine_stop > sim->journey.elapsed_subticks) next_limit=MinimumI32(next_limit,mine_stop);
+        int32_t previous_elapsed = sim->journey.elapsed_subticks;
         sim->journey.elapsed_subticks = MinimumI32(
             next_limit, sim->journey.elapsed_subticks + journey_rate);
-        sim->carriage.progress_milli = sim->journey.total_subticks > 0 ?
+        if (!sim->journey.road_position_active)
+            sim->carriage.progress_milli = sim->journey.total_subticks > 0 ?
             (int32_t)(((int64_t)sim->journey.elapsed_subticks * 1000) /
                       sim->journey.total_subticks) : 0;
+        if (sim->journey.road_position_active &&
+            CcRoadAdvanceLeg(sim, journey_rate)) {
+            services->reveal_journey_road(sim);
+            if (sim->journey.road_anchor_id ==
+                    sim->journey.road_goal_id &&
+                CcSimSettlement(sim, sim->journey.road_anchor_id) != NULL) {
+                FinishJourneyArrival(sim, services);
+            }
+            continue;
+        }
         services->reveal_journey_road(sim);
         if (mine_stop >= 0 && sim->journey.elapsed_subticks == mine_stop) break;
-        if (sim->journey.elapsed_subticks >= sim->journey.total_subticks) {
+        if (!sim->journey.road_position_active &&
+            sim->journey.elapsed_subticks >= sim->journey.total_subticks) {
             CcJourneyApplyWatchStrain(sim);
             FinishJourneyArrival(sim, services);
             continue;
         }
-        if (sim->journey.elapsed_subticks == next_watch) {
+        if (sim->journey.elapsed_subticks != previous_elapsed &&
+            sim->journey.elapsed_subticks == next_watch) {
             CcJourneyApplyWatchStrain(sim);
             PauseJourneyForWatchStop(sim, services);
             continue;
@@ -264,4 +281,3 @@ void CcJourneyAdvanceTicks(CcSim *sim, int32_t ticks,
         }
     }
 }
-

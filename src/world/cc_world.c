@@ -494,6 +494,9 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
             sim->world_seed ^ (uint32_t)route->id ^
             (uint32_t)(route->id >> 32U));
         const CcRoadGeometry *geometry = &route_geometry[i];
+        bool frozen = sim->journey.road_position_active &&
+            sim->journey.route_id == route->id &&
+            sim->journey.road_geometry_length_units > 0;
         placement->control = (CcWorldPoint){
             (float)geometry->control.x_units /
                 (float)CC_ROAD_GEOMETRY_UNITS_PER_WORLD_UNIT,
@@ -503,9 +506,13 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
         for (int32_t sample = 0;
              sample < CC_WORLD_ROUTE_SAMPLE_COUNT; ++sample) {
             placement->samples[sample] = (CcWorldPoint){
-                (float)geometry->samples[sample].x_units /
+                (float)(frozen ?
+                    sim->journey.road_geometry_x_units[sample] :
+                    geometry->samples[sample].x_units) /
                     (float)CC_ROAD_GEOMETRY_UNITS_PER_WORLD_UNIT,
-                (float)geometry->samples[sample].z_units /
+                (float)(frozen ?
+                    sim->journey.road_geometry_z_units[sample] :
+                    geometry->samples[sample].z_units) /
                     (float)CC_ROAD_GEOMETRY_UNITS_PER_WORLD_UNIT
             };
         }

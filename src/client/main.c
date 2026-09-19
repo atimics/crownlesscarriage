@@ -162,6 +162,7 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_CLEAR_ROAD_SITE,
     CONTEXT_ACTION_TRANSFER_ROAD_SITE,
     CONTEXT_ACTION_REPAIR_ROAD_SITE,
+    CONTEXT_ACTION_CHOOSE_ROAD_LEG,
     CONTEXT_ACTION_JUMP,
     CONTEXT_ACTION_RAISE_ALARM,
     CONTEXT_ACTION_SELECT_TARGET,
@@ -4585,6 +4586,39 @@ static ContextActionSet BuildContextActions(
     }
 
     if (local->journey_travel_active) {
+        if (sim->journey.road_position_active) {
+            CcRoadLegPreview previews[3];
+            int32_t preview_count = CcRoadNextLegPreviews(
+                sim, previews, 3);
+            for (int32_t i = 0; i < preview_count; ++i) {
+                const CcSettlement *town = CcSimSettlement(
+                    sim, previews[i].destination_anchor_id);
+                const CcRoadSite *site = CcSimRoadSite(
+                    sim, previews[i].destination_anchor_id);
+                const char *name = town != NULL ? town->name :
+                    site != NULL ? site->name :
+                    previews[i].destination_anchor_id ==
+                        CC_PILOT_ROAD_JUNCTION_ID ? "Stag's Mill junction" :
+                    previews[i].destination_anchor_id ==
+                        CC_PILOT_ROAD_CHECKPOINT_ID ? "reserved checkpoint" :
+                        "road anchor";
+                AddDetailedContextAction(
+                    &set, CONTEXT_ACTION_CHOOSE_ROAD_LEG,
+                    sim->journey.road_waiting_choice ?
+                        TextFormat("Drive to %s", name) :
+                        TextFormat("Turn back to %s", name),
+                    TextFormat("%d", set.count + 1),
+                    TextFormat("%d UNITS / ABOUT %d MIN",
+                        previews[i].length_units,
+                        previews[i].travel_subticks /
+                            CC_WORLD_MINUTE_SUBTICKS),
+                    true, false);
+                set.items[set.count - 1].target = (CcInteractionKey){
+                    sim->journey.road_anchor_id,
+                    previews[i].decision_token, CC_INTERACTION_ACTION};
+            }
+            if (sim->journey.road_waiting_choice) return set;
+        }
         /* Travel is the company moving; stopping hands the road back to the
            same walk the town uses, so the countryside is not a separate game. */
         if (CcSimJourneyCanCampOnRoad(sim)) {
@@ -8864,6 +8898,14 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             local->travel_fast_forward = false;
             local->travel_attention = true;
         }
+        return;
+    }
+    if (context_action == CONTEXT_ACTION_CHOOSE_ROAD_LEG) {
+        CcCommand choice = {
+            .kind = CC_COMMAND_CHOOSE_ROAD_LEG,
+            .target_id = pressed_action.target.object
+        };
+        (void)ApplyCommand(*journal, sim, choice, message, message_capacity);
         return;
     }
     if (HandleRoadCarriageInteraction(sim, local, view, context_action,

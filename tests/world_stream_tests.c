@@ -629,11 +629,50 @@ static int TestRouteLengthForSimNeedsNoWorldStream(void)
     return 0;
 }
 
+static int TestActiveJourneyKeepsFrozenRouteSamples(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x3235a7ed));
+    CcPilotRoadTopology pilot;
+    CHECK(CcPilotRoadTopologyBuild(&sim, &pilot));
+    sim.journey.active = true;
+    sim.journey.origin_id = pilot.origin_id;
+    sim.journey.destination_id = pilot.destination_id;
+    sim.journey.route_id = pilot.route_id;
+    sim.journey.total_subticks = 10000;
+    CHECK(CcRoadBeginPilotJourney(&sim, UINT64_C(3239100)));
+    CcWorldManifest before;
+    CHECK(CcWorldManifestBuild(&before, &sim));
+    const CcWorldRoutePlacement *before_route =
+        CcWorldRoutePlacementForId(&before, pilot.route_id);
+    CHECK(before_route != NULL);
+
+    sim.settlements[0].size = CC_SETTLEMENT_CAPITAL_SIZE;
+    sim.settlements[0].population = 999999;
+    sim.settlements[1].size = CC_SETTLEMENT_HAMLET;
+    sim.settlements[1].population = 1;
+    CcRoadGeometry current;
+    CHECK(CcRoadGeometryBuild(&sim, pilot.route_id, &current));
+    CHECK(current.journey_length_units !=
+          sim.journey.road_geometry_length_units);
+    CcWorldManifest after;
+    CHECK(CcWorldManifestBuild(&after, &sim));
+    const CcWorldRoutePlacement *after_route =
+        CcWorldRoutePlacementForId(&after, pilot.route_id);
+    CHECK(after_route != NULL);
+    for (int32_t i = 0; i < CC_WORLD_ROUTE_SAMPLE_COUNT; ++i) {
+        CHECK(before_route->samples[i].x == after_route->samples[i].x);
+        CHECK(before_route->samples[i].z == after_route->samples[i].z);
+    }
+    return 0;
+}
+
 int main(void)
 {
     if (TestRoadQueryParity() != 0) return 1;
     if (TestStreamFollowsCarriage() != 0) return 1;
     if (TestRouteLengthForSimNeedsNoWorldStream() != 0) return 1;
+    if (TestActiveJourneyKeepsFrozenRouteSamples() != 0) return 1;
     if (TestCanonicalRoadManifest() != 0) return 1;
     if (TestManifestIsStableAndFinite() != 0) return 1;
     if (TestRoadDistrictSites() != 0) return 1;

@@ -101,5 +101,13 @@ uint64_t CcRoadPreviewToken(CcId journey_id, CcId journey_goal_id,
                             int32_t distance_remaining,
                             uint32_t journey_revision, CcId segment_id,
                             CcRoadDirection direction);
+bool CcRoadBeginPilotJourney(CcSim *sim, CcId journey_id);
+int32_t CcRoadNextLegPreviews(const CcSim *sim,
+                              CcRoadLegPreview *previews,
+                              int32_t capacity);
+bool CcRoadChooseNextLeg(CcSim *sim, uint64_t decision_token,
+                         char *error, size_t error_capacity);
+bool CcRoadAdvanceLeg(CcSim *sim, int32_t journey_subticks);
+bool CcRoadSavedPositionValid(const CcSim *sim);
 
 #endif

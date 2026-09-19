@@ -1,4 +1,5 @@
 #include "sim/cc_journey_internal.h"
+#include "sim/cc_road_position.h"
 #include "sim/cc_route_rules_internal.h"
 
 #include <stdio.h>
@@ -258,6 +259,8 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
         sim, CC_EVENT_JOURNEY_DEPARTED, sim->player.id, route->id,
         parent_event_id, days, text);
     sim->journey.parent_event_id = departure->id;
+    if (sim->schema_version >= 105U)
+        (void)CcRoadBeginPilotJourney(sim, departure->id);
     if (meat_spoiled > 0 || grain_spoiled > 0) {
         if (meat_spoiled > 0 && grain_spoiled > 0) {
             (void)snprintf(
@@ -282,4 +285,3 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
     SetError(error, error_capacity, "");
     return true;
 }
-

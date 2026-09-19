@@ -17,6 +17,7 @@
 #include "sim/cc_trade_path_internal.h"
 #include "sim/cc_mine.h"
 #include "sim/cc_production.h"
+#include "sim/cc_road_position.h"
 
 #include "quest/cc_quest.h"
 
@@ -19150,6 +19151,9 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_MINE_BREAK_CONTACT:
         case CC_COMMAND_MINE_RESOLVE_CONTEST:
             return CcMineApply(sim, command, error, error_capacity);
+        case CC_COMMAND_CHOOSE_ROAD_LEG:
+            return CcRoadChooseNextLeg(sim, command->target_id,
+                                       error, error_capacity);
         case CC_COMMAND_EXCHANGE_GOSSIP:
             return ApplyExchangeGossip(sim, command, error, error_capacity);
         case CC_COMMAND_HEARD_STORY:
@@ -21513,13 +21517,16 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             bool phase_valid =
                 sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ||
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED ||
-                sim->journey.phase == CC_JOURNEY_PHASE_RESTING;
+                sim->journey.phase == CC_JOURNEY_PHASE_RESTING ||
+                sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE;
             bool encounter_valid =
                 sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED ||
                 sim->journey.encounter_triggered;
             bool stop_valid =
-                sim->journey.phase != CC_JOURNEY_PHASE_RESTING ||
-                CcSimJourneyStop(sim) != CC_JOURNEY_STOP_NONE;
+                (sim->journey.phase != CC_JOURNEY_PHASE_RESTING ||
+                 CcSimJourneyStop(sim) != CC_JOURNEY_STOP_NONE) &&
+                (sim->schema_version < 105U ||
+                      CcRoadSavedPositionValid(sim));
             int32_t expected_rate =
                 sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ?
                     CC_TRAVEL_GAME_MINUTES_PER_SECOND :
@@ -21559,9 +21566,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             CcCarriageMode expected_mode =
                 sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING && sim->mine.phase == CC_MINE_NONE ?
                     CC_CARRIAGE_MOVING : CC_CARRIAGE_STOPPED;
-            int32_t expected_progress = (int32_t)(
-                ((int64_t)sim->journey.elapsed_subticks * 1000) /
-                sim->journey.total_subticks);
+            int32_t expected_progress = sim->journey.road_position_active ?
+                sim->journey.road_compatibility_milli : (int32_t)(
+                    ((int64_t)sim->journey.elapsed_subticks * 1000) /
+                    sim->journey.total_subticks);
             if ((sim->mine.phase != CC_MINE_NONE && sim->mine.return_speed != CcJourneyCarriageSpeedForPace(sim->journey.total_subticks,sim->journey.pace)) ||
                 sim->carriage.mode != expected_mode ||
                 sim->carriage.route_id != sim->journey.route_id ||

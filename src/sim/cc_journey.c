@@ -198,8 +198,16 @@ int32_t CcSimJourneyEtaMinutes(const CcSim *sim)
 const CcRoadSite *CcSimJourneyRoadSiteStop(const CcSim *sim)
 {
     if (sim == NULL || sim->schema_version < 39U ||
-        !sim->journey.active ||
-        sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) return NULL;
+        !sim->journey.active) return NULL;
+    if (sim->journey.road_position_active &&
+        sim->journey.road_waiting_choice) {
+        for (int32_t i = 0; i < sim->road_site_count; ++i) {
+            if (sim->road_sites[i].id == sim->journey.road_anchor_id)
+                return &sim->road_sites[i];
+        }
+        return NULL;
+    }
+    if (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) return NULL;
     const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
     if (route == NULL) return NULL;
     for (int32_t i = 0; i < sim->road_site_count; ++i) {
@@ -321,4 +329,3 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
     };
     return true;
 }
-

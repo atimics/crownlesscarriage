@@ -1,5 +1,6 @@
 #include "sim/cc_mine.h"
 #include "sim/cc_road_council.h"
+#include "sim/cc_road_position.h"
 #include "metagame/cc_metagame.h"
 
 #include "persistence/cc_save.h"
@@ -288,6 +289,32 @@ static void DescribeJourney(const CcMetagame *metagame,
            StoryRoadName(sim, route), destination != NULL ? destination->name : "unmarked track",
            sim->current_day, CcSimJourneyWatchNumber(sim),
            CcSimJourneyWatchCount(sim), phase);
+    if (sim->journey.road_position_active) {
+        Append(output, capacity,
+               "Road position: %d units along the route; %d travelled and %d remaining on this leg.\n",
+               sim->journey.road_coordinate_units,
+               sim->journey.road_distance_travelled_units,
+               sim->journey.road_distance_remaining_units);
+        CcRoadLegPreview previews[3];
+        int32_t count = CcRoadNextLegPreviews(sim, previews, 3);
+        for (int32_t i = 0; i < count; ++i) {
+            const CcSettlement *town = CcSimSettlement(
+                sim, previews[i].destination_anchor_id);
+            const CcRoadSite *site = CcSimRoadSite(
+                sim, previews[i].destination_anchor_id);
+            const char *name = town != NULL ? town->name :
+                site != NULL ? site->name :
+                previews[i].destination_anchor_id ==
+                    CC_PILOT_ROAD_JUNCTION_ID ? "Stag's Mill junction" :
+                previews[i].destination_anchor_id ==
+                    CC_PILOT_ROAD_CHECKPOINT_ID ? "reserved checkpoint" :
+                    "road anchor";
+            Append(output, capacity,
+                   "  road choose %d: %s, %d units, about %d travel subticks.\n",
+                   i + 1, name, previews[i].length_units,
+                   previews[i].travel_subticks);
+        }
+    }
     Append(output, capacity, "Journey choices:");
     static const char *actions[] = {
         "continue", "break", "press-on", "camp", "lodge",
@@ -2330,6 +2357,24 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         Append(output, output_capacity, "Use bakery support to give the listed cargo and wages.\n");
         return true;
     } else if (strcmp(command, "road") == 0) {
+        if (metagame->sim.journey.road_position_active && first != NULL &&
+            strcmp(first, "choose") == 0) {
+            CcRoadLegPreview previews[3];
+            int32_t count = CcRoadNextLegPreviews(
+                &metagame->sim, previews, 3);
+            int32_t index = 0;
+            if (!ParseIndex(second, count, &index)) {
+                Append(output, output_capacity,
+                       "Choose a numbered next leg shown by 'look'.\n");
+                return false;
+            }
+            CcCommand choice = {
+                .kind = CC_COMMAND_CHOOSE_ROAD_LEG,
+                .target_id = previews[index].decision_token
+            };
+            return ApplyCommand(
+                metagame, &choice, output, output_capacity);
+        }
         if (first != NULL && (strcmp(first, "load") == 0 || strcmp(first, "unload") == 0)) {
             CcGood good;
             if (!ParseGood(second, &good)) {
