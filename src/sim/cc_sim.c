@@ -12420,17 +12420,30 @@ static void SyncSituationObjectiveDefinition(CcSituation *situation)
         danger_limit, MaximumI32(0, situation->objective.danger.value));
 }
 
-static bool RecordSituationEvidence(CcSituation *situation,
+static bool RecordSituationEvidence(CcSim *sim, CcSituation *situation,
                                     CcId event_id, int32_t amount)
 {
-    if (situation == NULL || situation->status != CC_SITUATION_ACTIVE) {
+    if (sim == NULL || situation == NULL ||
+        situation->status != CC_SITUATION_ACTIVE) {
         return false;
     }
     SyncSituationObjectiveDefinition(situation);
+    int32_t before = situation->objective.progress.value;
     bool recorded = CcQuestRecordEvidence(
         &situation->objective, event_id, amount);
     if (recorded && situation->quantity > 0) {
         situation->progress = situation->objective.progress.value;
+    }
+    if (recorded && situation->objective.progress.value > before) {
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text),
+                       "%s progresses to %d of %d with recorded evidence.",
+                       CcSituationKindName(situation->kind),
+                       situation->objective.progress.value,
+                       situation->objective.progress.limit);
+        (void)PushEvent(sim, CC_EVENT_QUEST_PROGRESS, situation->id,
+                        situation->target_id, event_id,
+                        situation->objective.progress.value, text);
     }
     return recorded;
 }
@@ -12886,7 +12899,7 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
                            situation->cause_event_id;
         int32_t remaining = situation->objective.progress.limit -
                             situation->objective.progress.value;
-        if (!RecordSituationEvidence(situation, evidence_id, remaining)) {
+        if (!RecordSituationEvidence(sim, situation, evidence_id, remaining)) {
             return;
         }
     }
@@ -13015,7 +13028,7 @@ static void ProgressDeliverySituations(CcSim *sim, CcId settlement_id,
         if (sim->resolved_journey_situation_id != situation->id ||
             quantity < situation->quantity - situation->progress) continue;
         if (!RecordSituationEvidence(
-                situation, evidence_event_id, quantity)) continue;
+                sim, situation, evidence_event_id, quantity)) continue;
         if (situation->objective.progress.value >=
             situation->objective.progress.limit) ResolveSituation(sim, situation);
     }
