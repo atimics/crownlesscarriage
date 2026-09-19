@@ -164,6 +164,15 @@ static int RunCapturePresentationRegression(void)
         if (CcCaptureConfigureWindow(&request, 5, ux, &window))
             return ClientRegressionFailure("UX capture must require a supported numeric width.");
     }
+    char *mine[] = {"crownless", "--capture-mine-yard", "mine.png", "844", "390"};
+    if (!CcCaptureRequestParse(5, mine, &request) ||
+        !CcCaptureConfigureWindow(&request, 5, mine, &window) ||
+        window.width != 844 || window.height != 390 ||
+        window.minimum_width != 844 || window.minimum_height != 390)
+        return ClientRegressionFailure("Mine capture must support a phone landscape frame.");
+    mine[4] = "389";
+    if (CcCaptureConfigureWindow(&request, 5, mine, &window))
+        return ClientRegressionFailure("Mine capture must reject an unreadable landscape height.");
     request = (CcCaptureRequest){.capture_gameplay_reel = true};
     state.gameplay_reel.stage = GAMEPLAY_REEL_QUEST_COMPLETE;
     play = CcCapturePresentationFor(&request, &state, false);

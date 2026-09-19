@@ -856,6 +856,19 @@ static bool CcCapturePrepareMessage(const CcCaptureRequest *request, CcCaptureSc
         scene->sim->pony_company.encounter=-1;
         CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=site->id};
         if(!CcSimApply(scene->sim,&visit,mine_error,sizeof(mine_error))) return false;
+        if(request->capture_mine_yard) {
+            scene->sim->mine.pack[CC_GOOD_BREAD]=2;
+            scene->sim->mine.pack[CC_GOOD_IRON]=1;
+            scene->sim->mine.pack[CC_GOOD_TOOLS]=1;
+            scene->sim->mine.pack[CC_GOOD_GOLD]=1;
+            scene->sim->mine.pack[CC_GOOD_GEMS]=1;
+            scene->sim->mine.pack[CC_GOOD_WOOD]=1;
+            scene->sim->player.cargo[CC_GOOD_BREAD]=3;
+            scene->sim->player.cargo[CC_GOOD_MEAT]=2;
+            scene->sim->player.cargo[CC_GOOD_WOOL]=1;
+            scene->sim->player.cargo[CC_GOOD_PAPER]=1;
+            scene->sim->player.cargo[CC_GOOD_WEAPONS]=1;
+        }
         if(request->capture_mine_level) {
             scene->sim->mine.phase=CC_MINE_LEVEL; scene->sim->mine.x=15; scene->sim->mine.y=9;scene->sim->mine.light=18;scene->sim->mine.seen=3;
             scene->local->mine_view_phase=CC_MINE_LEVEL;

@@ -221,10 +221,62 @@ static int RunMineInputRegression(void)
     client_test_pointer_active=true;client_test_pointer=(Vector2){button.x+button.width/2,button.y+button.height/2};
     queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
     MINE_CHECK(sim.mine.phase==CC_MINE_YARD,"Clicking the branch must open the yard.");
-    MINE_KEY(KEY_P);
-    MINE_CHECK(CcMinePackUsed(&sim)==1,"P must pack food from the carriage.");
+    {
+        CcSim inventory=sim;
+        for(int32_t good=0;good<12;++good) inventory.player.cargo[good]=good+1;
+        for(int32_t good=0;good<8;++good) inventory.mine.pack[good]=1;
+        int32_t inventory_rows=MineGoodsRows(inventory.mine.pack);
+        if(MineGoodsRows(inventory.player.cargo)>inventory_rows)
+            inventory_rows=MineGoodsRows(inventory.player.cargo);
+        MINE_CHECK((float)(94+inventory_rows*11)<=MineViewportForSize(1040,620).y,
+            "Several goods must fit above the mine viewport.");
+        MINE_CHECK(MineViewportForSize(844,390).height>0,
+            "The mine view must retain positive height below its inventory.");
+        for(int32_t good=0;good<CC_GOOD_COUNT;++good) {
+            char line[64];
+            (void)snprintf(line,sizeof(line),"%s %d",CcGoodName((CcGood)good),999);
+            MINE_CHECK(CcOverlayMeasureText(line,10)<=390/2-22,
+                "Mine goods must fit inside a narrow portrait inventory column.");
+        }
+    }
+    Rectangle mine_control=MineSelectionControl(1);
+    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
+    MINE_CHECK(local.mine_good==CC_GOOD_IRON,"The next-good button must select the next good.");
+    mine_control=MineSelectionControl(0);
+    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
+    MINE_CHECK(local.mine_good==CC_GOOD_BREAD,"The previous-good button must restore the selected good.");
+    mine_control=MineSelectionControl(3);
+    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
+    MINE_CHECK(local.mine_quantity==2,"The more button must select two goods.");
+    mine_control=MineControl(1);
+    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
+    MINE_CHECK(CcMinePackUsed(&sim)==2 && sim.mine.pack[CC_GOOD_BREAD]==2,
+        "P must pack the selected amount from the carriage.");
+    mine_control=MineSelectionControl(2);
+    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
+    mine_control=MineControl(2);
+    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
+    MINE_CHECK(CcMinePackUsed(&sim)==1 && sim.player.cargo[CC_GOOD_BREAD]==1,
+        "U must unload the selected amount to the nearby carriage.");
+    mine_control=MineControl(1);
+    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
+    MINE_CHECK(CcMinePackUsed(&sim)==2 && strstr(message,"carriage to pack")!=NULL,
+        "Packing must leave a clear transfer receipt.");
     for(int i=0;i<13;++i) MINE_KEY(KEY_W);
     MINE_CHECK(sim.mine.y==4,"W must walk to the entrance.");
+    {
+        uint64_t remote_hash=CcSimHash(&sim);
+        MINE_KEY(KEY_P);
+        MINE_CHECK(CcSimHash(&sim)==remote_hash && strstr(message,"Pack supplies beside the carriage")!=NULL &&
+            strstr(message,"moved") == NULL,"A failed remote transfer must preserve its error instead of a receipt.");
+    }
     MINE_KEY(KEY_W);
     MINE_CHECK(sim.mine.phase==CC_MINE_LEVEL && local.mine_facing==1,
         "Forward at the mouth must enter first person facing into the level.");
