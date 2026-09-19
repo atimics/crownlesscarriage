@@ -899,6 +899,8 @@ static bool CcCapturePrepareMessage(const CcCaptureRequest *request, CcCaptureSc
             scene->sim->player.cargo[CC_GOOD_WOOL]=1;
             scene->sim->player.cargo[CC_GOOD_PAPER]=1;
             scene->sim->player.cargo[CC_GOOD_WEAPONS]=1;
+            scene->local->mine_inventory_expanded=scene->argc>=6&&
+                strcmp(scene->argv[5],"expanded")==0;
         }
         if(request->capture_mine_level) {
             scene->sim->mine.phase=CC_MINE_LEVEL; scene->sim->mine.x=15; scene->sim->mine.y=9;scene->sim->mine.light=18;scene->sim->mine.seen=3;

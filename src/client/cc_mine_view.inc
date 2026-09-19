@@ -10,11 +10,38 @@ static Rectangle MineViewportForSize(int32_t width,int32_t height)
     float bottom=(float)height-176.0f;
     return (Rectangle){0,top,(float)width,bottom-top};
 }
-static Rectangle MineViewport(void)
+static Rectangle MineViewportForInventory(int32_t width,int32_t height,bool expanded)
+{
+    Rectangle view=MineViewportForSize(width,height);
+    if(width>=700&&height<500) {
+        view.y=94.0f;
+        view.height=(float)height-176.0f-view.y;
+        if(expanded) {
+            view.x=170.0f;
+            view.width=(float)width-340.0f;
+        }
+    }
+    return view;
+}
+static Rectangle MineViewport(const LocalState *local)
 {
     int32_t width=GetScreenWidth(),height=GetScreenHeight();
     if(width<=0||height<=0) return (Rectangle){0};
-    return MineViewportForSize(width,height);
+    return MineViewportForInventory(width,height,local!=NULL&&local->mine_inventory_expanded);
+}
+static void MineRenderTargetSizeForInventory(int32_t width,int32_t height,
+                                             bool expanded,int32_t *out_width,
+                                             int32_t *out_height)
+{
+    Rectangle view=MineViewportForInventory(width,height,expanded);
+    *out_width=(int32_t)fmaxf(1.0f,roundf(view.width));
+    *out_height=(int32_t)fmaxf(1.0f,roundf(view.height));
+}
+static void MineRenderTargetSize(const LocalState *local,int32_t *out_width,
+                                 int32_t *out_height)
+{
+    MineRenderTargetSizeForInventory(GetScreenWidth(),GetScreenHeight(),
+        local!=NULL&&local->mine_inventory_expanded,out_width,out_height);
 }
 static Rectangle MineControl(int32_t index)
 {
@@ -27,6 +54,11 @@ static Rectangle MineSelectionControl(int32_t index)
     float button_width=((float)MineScreenWidth()-56.0f)/4.0f;
     return (Rectangle){18.0f+(float)index*(button_width+4.0f),
         (float)MineScreenHeight()-126,button_width,30};
+}
+static Rectangle MineInventoryControl(void)
+{
+    return (Rectangle){18.0f, MineShortLandscape() ? 63.0f : 94.0f,
+        (float)MineScreenWidth() - 36.0f, 24.0f};
 }
 static bool MineAtCarriage(const CcSim *sim)
 {
@@ -279,7 +311,7 @@ static bool MinePick(const CcSim *sim,const LocalState *local,
                      RenderTexture2D target,Vector2 mouse,
                      int32_t *out_x,int32_t *out_y,MineIntentTarget *out_target)
 {
-    Rectangle view=MineViewport();
+    Rectangle view=MineViewport(local);
     if((view.width<=0||view.height<=0) && target.texture.width>0&&target.texture.height>0)
         view=(Rectangle){0,0,(float)target.texture.width,(float)target.texture.height};
     if(!CheckCollisionPointRec(mouse,view) || view.width<=0 || view.height<=0) return false;
@@ -328,7 +360,7 @@ static bool MineLabelPosition(RenderTexture2D target,const CcSim *sim,const Loca
        !MineLineVisibleExcept(sim,camera.position,point,skip_x,skip_y)) return false;
     Vector2 pixel=GetWorldToScreenEx(point,camera,
                                      target.texture.width,target.texture.height);
-    Rectangle view=MineViewport();
+    Rectangle view=MineViewport(local);
     if((view.width<=0||view.height<=0) && target.texture.width>0&&target.texture.height>0)
         view=(Rectangle){0,0,(float)target.texture.width,(float)target.texture.height};
     int x=(int)(view.x+pixel.x*view.width/(float)target.texture.width);
@@ -355,7 +387,7 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
     bool short_landscape=MineShortLandscape();
     bool brief=compact||short_landscape;
     DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),BACKGROUND);
-    CcLocalDrawMine3D(sim,&local->agent,local->mine_facing,target,MineViewport());
+    CcLocalDrawMine3D(sim,&local->agent,local->mine_facing,target,MineViewport(local));
     if(underground) {
         if(!sim->mine.bar_open) MineLabel(target,sim,local,(Vector3){15,1,10},15,10,"Wooden bar / lift it");
         if(!sim->mine.surveyed) MineLabel(target,sim,local,(Vector3){26,.6f,4},26,4,"Workers' survey");
@@ -367,7 +399,7 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
     int32_t title_y=short_landscape?12:20;
     int32_t subtitle_y=short_landscape?30:43;
     int32_t summary_y=short_landscape?50:65;
-    int32_t goods_y=short_landscape?65:80;
+    int32_t goods_y=short_landscape?94:80;
     CcOverlayDrawText(underground?"THE UNDERROAD / 01":brief?"MINE YARD":"LOW SILVER PIT / MINE YARD",22,title_y,11,TEAL);
     CcOverlayDrawText(underground?CcMineChamberName(CcMineChamber(sim->mine.x,sim->mine.y)):
         brief?"Carriage at mine road":"The carriage waits beside the mine road",22,subtitle_y,brief?14:20,INK);
@@ -383,10 +415,28 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
         pack_used,CC_MINE_PACK_CAPACITY-pack_used,carriage_used,sim->player.cargo_capacity,
         sim->player.cargo_capacity-carriage_used,sim->mine.light),22,summary_y,10,INK);
     int32_t pane_width=MineScreenWidth()/2-34;
-    MineDrawGoods("Pack",pack_goods,22,goods_y,pane_width,TEAL);
-    MineDrawGoods(at_carriage?(brief?"Cart":"Carriage"):(brief?"Cart out of reach":"Carriage out of reach"),
-        at_carriage?sim->player.cargo:NULL,MineScreenWidth()/2+12,goods_y,pane_width,
-        at_carriage?TEAL:MUTED);
+    if (short_landscape) AdventureButton(MineInventoryControl(),
+        local->mine_inventory_expanded ? "Hide inventory" : "Show inventory",
+        true, local->mine_inventory_expanded);
+    if (!short_landscape || local->mine_inventory_expanded) {
+        if(short_landscape&&local->mine_inventory_expanded) {
+            Rectangle left={8,90,154,108};
+            Rectangle right={(float)MineScreenWidth()-162,90,154,108};
+            DrawRectangleRounded(left,.12f,4,Fade(BACKGROUND,.91f));
+            DrawRectangleRoundedLinesEx(left,.12f,4,1.0f,Fade(TEAL,.72f));
+            DrawRectangleRounded(right,.12f,4,Fade(BACKGROUND,.91f));
+            DrawRectangleRoundedLinesEx(right,.12f,4,1.0f,Fade(TEAL,.72f));
+            MineDrawGoods("Pack",pack_goods,18,goods_y,136,TEAL);
+            MineDrawGoods(at_carriage?"Cart":"Cart away",
+                at_carriage?sim->player.cargo:NULL,MineScreenWidth()-152,goods_y,136,
+                at_carriage?TEAL:MUTED);
+        } else {
+            MineDrawGoods("Pack",pack_goods,22,goods_y,pane_width,TEAL);
+            MineDrawGoods(at_carriage?(brief?"Cart":"Carriage"):(brief?"Cart out of reach":"Carriage out of reach"),
+                at_carriage?sim->player.cargo:NULL,MineScreenWidth()/2+12,goods_y,pane_width,
+                at_carriage?TEAL:MUTED);
+        }
+    }
     const char *selection=at_carriage?
         TextFormat(brief?"Selected %s x%d | pack %d | cart %d":
             "Selected %s x%d  |  pack %d  carriage %d  |  good [ ]  quantity - +",
@@ -485,13 +535,17 @@ static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
     if(ClientKeyPressed(KEY_E)) control=4;
     if(ClientKeyPressed(KEY_P)) control=5;
     if(ClientKeyPressed(KEY_U)) control=6;
+    if(ClientKeyPressed(KEY_I) && MineShortLandscape())
+        local->mine_inventory_expanded=!local->mine_inventory_expanded;
     if(ClientKeyPressed(KEY_LEFT_BRACKET)) good_change=-1;
     if(ClientKeyPressed(KEY_RIGHT_BRACKET)) good_change=1;
     if(ClientKeyPressed(KEY_MINUS)) quantity_change=-1;
     if(ClientKeyPressed(KEY_EQUAL)) quantity_change=1;
     if(ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mouse=ClientPointerPosition();
-        if(CheckCollisionPointRec(mouse,MineControl(0))) control=4;
+        if(CheckCollisionPointRec(mouse,MineInventoryControl()) && MineShortLandscape())
+            local->mine_inventory_expanded=!local->mine_inventory_expanded;
+        else if(CheckCollisionPointRec(mouse,MineControl(0))) control=4;
         else if(CheckCollisionPointRec(mouse,MineControl(1))) control=5;
         else if(CheckCollisionPointRec(mouse,MineControl(2))) control=6;
         else if(CheckCollisionPointRec(mouse,MineSelectionControl(0))) good_change=-1;

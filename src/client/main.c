@@ -267,6 +267,7 @@ typedef struct LocalState {
     int32_t mine_target_x, mine_target_y;
     CcGood mine_good;
     int32_t mine_quantity;
+    bool mine_inventory_expanded;
     /* Mine routes and named uses are local presentation state.  They are
        rebuilt after loading and never become campaign-facing state. */
     int32_t mine_intent_target;
@@ -1268,6 +1269,7 @@ static void ResetLocalState(LocalState *local)
     local->mine_target_y = -1;
     local->mine_good = CC_GOOD_BREAD;
     local->mine_quantity = 1;
+    local->mine_inventory_expanded = false;
     local->mine_intent_target = 0;
     local->mine_intent_revision = -1;
     memset(local->mine_known, 0, sizeof(local->mine_known));
@@ -11169,6 +11171,16 @@ int main(int argc, char **argv)
         CcLocalRendererSetAtmosphere(
             CcCaptureAtmosphere(&capture_request, &sim),
             2.4f);
+        int32_t local_target_width=CC_LOCAL_ART_WIDTH;
+        int32_t local_target_height=CC_LOCAL_ART_HEIGHT;
+        if(sim.mine.phase!=CC_MINE_NONE)
+            MineRenderTargetSize(&local,&local_target_width,&local_target_height);
+        if(local_target.texture.width!=local_target_width ||
+           local_target.texture.height!=local_target_height) {
+            UnloadRenderTexture(local_target);
+            local_target=LoadRenderTexture(local_target_width,local_target_height);
+            SetTextureFilter(local_target.texture,TEXTURE_FILTER_POINT);
+        }
         CcLocalRendererBeginFrame(frame_delta_time);
         CcLocalBindPlace(&sim);
         BindOpenWorldForLocalState(&local);
