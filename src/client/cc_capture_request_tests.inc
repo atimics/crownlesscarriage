@@ -25,7 +25,12 @@ static int RunCaptureRequestRegression(void)
     ux[2] = "23";
     if (!CcCaptureRequestParse(6, ux, &request))
         return ClientRegressionFailure("Ledger capture must be available.");
-    ux[2] = "24";
+    char *mine_notes[] = {"crownless", "--capture-ux", "24", "mine-notes.png", "390", "844"};
+    if (!CcCaptureRequestParse(6, mine_notes, &request) ||
+        !request.capture_ux || request.capture_ux_view != 24 ||
+        strcmp(request.capture_path, "mine-notes.png") != 0)
+        return ClientRegressionFailure("Mine notes capture must retain its portrait fixture.");
+    ux[2] = "25";
     if (CcCaptureRequestParse(6, ux, &request))
         return ClientRegressionFailure("UX capture must enforce its view range.");
     char *storybook[] = {"crownless", "--capture-storybook", "0.25", "0.75", "story.png"};
@@ -178,6 +183,12 @@ static int RunCapturePresentationRegression(void)
     mine[4] = "389";
     if (CcCaptureConfigureWindow(&request, 5, mine, &window))
         return ClientRegressionFailure("Mine capture must reject an unreadable landscape height.");
+    char *mine_notes[]={"crownless","--capture-ux","24","mine-notes.png","390","844"};
+    if(!CcCaptureRequestParse(6,mine_notes,&request)||
+       !CcCaptureConfigureWindow(&request,6,mine_notes,&window)||
+       window.width!=390||window.height!=844||window.minimum_width!=390||
+       window.minimum_height!=844)
+        return ClientRegressionFailure("Mine notes capture must support a phone portrait frame.");
     char *mine_offer[]={"crownless","--capture-mine-offer","offer.png"};
     if(!CcCaptureRequestParse(3,mine_offer,&request)||
        !request.capture_mine_offer||!request.capture_mine_level||!request.capture)

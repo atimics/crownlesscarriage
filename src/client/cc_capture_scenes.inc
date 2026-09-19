@@ -694,6 +694,26 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
             *scene->view = VIEW_LEDGER;
             scene->local->book_page = 4;
         }
+        if (request->capture_ux_view == 24) {
+            const CcCharacter *jory=CcSimMineEvidenceContact(scene->sim);
+            CcId evidence=scene->sim->event_count > 0 ? scene->sim->events[0].id : 1U;
+            scene->sim->mine.lead_event_id=evidence;
+            scene->sim->mine.lead_source_id=jory != NULL ? jory->id : scene->sim->player.id;
+            scene->sim->mine.lead_day=scene->sim->current_day-2;
+            scene->sim->mine.survey_event_id=evidence;
+            scene->sim->mine.survey_read_day=scene->sim->current_day-1;
+            scene->sim->mine.survey_observed_day=scene->sim->current_day-1;
+            scene->sim->mine.report_event_id=evidence;
+            scene->sim->mine.report_recipient_id=jory != NULL ? jory->id : scene->sim->player.id;
+            scene->sim->mine.report_day=scene->sim->current_day;
+            scene->sim->mine.report_kind=CC_MINE_RETURN_HAUL;
+            scene->sim->mine.report_good=CC_GOOD_GOLD;
+            scene->sim->mine.report_quantity=2;
+            scene->sim->mine.reported_encounter_outcome=CC_MINE_ENCOUNTER_BARGAINED;
+            *scene->view=VIEW_LEDGER;
+            scene->local->book_page=2;
+            scene->local->book_offset=2;
+        }
         return InitializeOpenWorld(scene->sim, scene->local, false);
     }
     if (request->capture_ux) {
