@@ -4,15 +4,15 @@ Runtime source: 4610b158a0dc5bb97b008876beb298c25d8852bc
 World seed: 0x71a7e5
 Generator: mine_tests --write-schema105-mine-fixture PATH
 
-The snapshot hash before journal replay is 16895715207149685522
-(ea79a376ac528b12). The one journal action unloads one Iron from the mine pack
-into player cargo. The replayed hash is 15565720608068038444
-(d8048c6c1cdf6f2c).
+The snapshot hash before journal replay is 11420152778480670799
+(9e7c88720a07d84f). The journal reads the workers' survey, returns through the
+mine, unloads the Gold root, and unloads one Iron from the mine pack into player
+cargo. The replayed hash is 4059271005757223396 (38556d790933b1e4).
 
-The final schema 105 state has one inactive Gold root, one active Iron unit in
-the mine pack, and three active Iron units in the Rope Store cache. The player
-also has the old aggregate cargo produced by the unload action: three Gold and
-one Iron.
+The final schema 105 state has the old surveyed flag, one inactive Gold root,
+one active Iron unit in the mine pack, and three active Iron units in the Rope
+Store cache. The player also has the old aggregate cargo produced by the unload
+actions: three Gold and one Iron.
 
 The database uses SQLite journal_mode=DELETE. Its SHA-256 is
-54a7dd809f57be12f4fd271d08b08a4fbe0d1e45f31cb99e905187060b84b378.
+331fd8045602ef9968ae51c44fb90e0c005f8a7f5fffc5e163f04ee09ba7803d.
