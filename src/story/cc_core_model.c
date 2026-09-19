@@ -584,16 +584,15 @@ bool CcCoreModelBeginSemantic(CcCoreModel *m, const int *ids, int count)
     return true;
 }
 
-bool CcCoreModelBeginPolicy(CcCoreModel *m, const int *path,
-                            const int *ids, int count)
+bool CcCoreModelBeginPolicy(CcCoreModel *m, const int *ids, int count)
 {
     if (m == NULL) return false;
     m->status = -1; m->text[0] = '\0'; m->length = 0U;
     m->semantic = false; m->policy = true;
     m->prefix = 0; m->used = 0; m->actions = 0; m->candidates = 0;
     memset(m->meta, 0, sizeof(m->meta));
-    if (path == NULL || ids == NULL || count < 2 ||
-        count > CONTEXT - MAX_ACTIONS || path[0] != 128 || path[count - 1] != 131)
+    if (ids == NULL || count < 2 || count > CONTEXT - MAX_ACTIONS ||
+        ids[0] != 1280 || ids[count - 1] != 1281)
         return false;
     for (int i = 0; i < count; ++i) {
         if (ids[i] < 9 || ids[i] >= VOCAB) return false;
@@ -665,7 +664,7 @@ int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
                 else m->status = 1;
                 break;
             }
-            if (!m->semantic) {
+            if (!m->semantic && !m->policy) {
                 bytes = CORE_TOKENS[token].bytes; length = (size_t)CORE_TOKENS[token].length;
             }
         }
@@ -703,7 +702,7 @@ int CcCoreModelStep(CcCoreModel *m, unsigned int budget)
 }
 const char *CcCoreModelText(const CcCoreModel *model)
 {
-    return model != NULL && !model->semantic && model->status == 1 ? model->text : NULL;
+    return model != NULL && !model->semantic && !model->policy && model->status == 1 ? model->text : NULL;
 }
 const char *CcCoreModelDraft(const CcCoreModel *model)
 {
