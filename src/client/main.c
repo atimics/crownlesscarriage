@@ -257,6 +257,11 @@ typedef struct LocalState {
     CcMinePhase mine_view_phase;
     float mine_cooldown;
     int32_t mine_target_x, mine_target_y;
+    /* Mine routes and named uses are local presentation state.  They are
+       rebuilt after loading and never become campaign-facing state. */
+    int32_t mine_intent_target;
+    int32_t mine_intent_revision;
+    uint8_t mine_known[CC_MINE_WIDTH * CC_MINE_HEIGHT];
     CcLocalConvoyState convoy;
     CcLocalWorldCarriageState world_carriage;
     CcClientDepartureTransition departure;
@@ -1238,6 +1243,14 @@ static void ResetLocalState(LocalState *local)
     local->world_carriage.storybook_travel = false;
     local->journey_combat_active = false;
     local->journey_parley_active = false;
+    local->mine_facing = 0;
+    local->mine_view_phase = CC_MINE_NONE;
+    local->mine_cooldown = 0.0f;
+    local->mine_target_x = -1;
+    local->mine_target_y = -1;
+    local->mine_intent_target = 0;
+    local->mine_intent_revision = -1;
+    memset(local->mine_known, 0, sizeof(local->mine_known));
     local->departure = (CcClientDepartureTransition){
         .phase = CC_CLIENT_DEPARTURE_READY,
     };
