@@ -60,6 +60,11 @@ static Rectangle MineInventoryControl(void)
     return (Rectangle){18.0f, MineShortLandscape() ? 63.0f : 94.0f,
         (float)MineScreenWidth() - 36.0f, 24.0f};
 }
+static Rectangle MineNavigationControl(int32_t index)
+{
+    return (Rectangle){(float)MineScreenWidth()-166.0f+(float)index*76.0f,
+        12.0f,72.0f,32.0f};
+}
 static bool MineAtCarriage(const CcSim *sim)
 {
     return sim->mine.phase==CC_MINE_YARD &&
@@ -518,8 +523,11 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
         int32_t bread=CcMinePackGood(sim,CC_GOOD_BREAD);
         int32_t gold=CcMineSourceGood(sim,CC_GOOD_GOLD);
         int32_t after=pack_used-2+1;
-        hint=TextFormat("Offer 2 Bread (%d carried) for 1 Gold (%d in load). Pack %d/8 -> %d/8.",
+        hint=TextFormat("Offer 2 Bread (%d carried) for 1 Gold (%d in load). Pack %d/8 -> %d/8. Entry ration spent; 2 Bread must remain.",
             bread,gold,pack_used,after);
+    } else if(!underground && sim->mine.phase==CC_MINE_YARD &&
+              abs(sim->mine.x-15)+abs(sim->mine.y-3)<=1) {
+        hint="Entry spends 1 Bread and starts Light 18. Pack 3 Bread to keep 2 for the hauler offer.";
     } else if(at_haulers &&
         sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_CONTESTED) {
         hint=TextFormat("Hauler load has %d %s. Pack %d/8. Inspect or take the selected amount.",
@@ -559,18 +567,22 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
         AdventureButton(MineControl(2),"Haulers fed",false,false);
     } else if(at_haulers) {
         AdventureButton(MineControl(0),"Bargain / B",true,false);
-        AdventureButton(MineControl(1),"Contest / C",true,false);
+        AdventureButton(MineControl(1),CcCoopClientActive()?"Contest: local play":"Contest / C",
+            !CcCoopClientActive(),false);
         AdventureButton(MineControl(2),"Contact held",false,false);
     } else if(at_cache) {
         AdventureButton(MineControl(0),TextFormat("Cache %d / C",local->mine_quantity),can_cache,false);
         AdventureButton(MineControl(1),TextFormat("Recover %d / R",local->mine_quantity),can_recover,false);
         AdventureButton(MineControl(2),"Rope Store",false,false);
     } else {
-        AdventureButton(MineControl(0),brief?"Use / E":action!=NULL?action:"Use / E",
+        AdventureButton(MineControl(0),at_carriage?(brief?"Board / E":"Board carriage / E"):
+            brief?"Use / E":action!=NULL?action:"Use / E",
             action!=NULL&&can_board,false);
         AdventureButton(MineControl(1),TextFormat(brief?"Pack %d":"Pack %d / P",local->mine_quantity),can_pack,false);
         AdventureButton(MineControl(2),TextFormat(brief?"Unload %d":"Unload %d / U",local->mine_quantity),can_unload,false);
     }
+    AdventureButton(MineNavigationControl(0),"Save F5",true,false);
+    AdventureButton(MineNavigationControl(1),"Menu Esc",true,false);
     CcOverlayDrawText(message,22,GetScreenHeight()-29,10,INK);
     if(!compact) CcOverlayDrawText("Click where to walk  |  [ ] good  - + amount  |  F5 save",GetScreenWidth()-390,23,10,MUTED);
 }
@@ -578,8 +590,7 @@ static bool MineForwardUse(const CcSim *sim,int32_t dir)
 {
     const CcMineVisit *m=&sim->mine;
     if(m->phase==CC_MINE_YARD)
-        return (dir==0 && m->x==15 && (m->y==4||m->y==3)) ||
-            (dir==2 && m->x==15 && (m->y==17||m->y==18));
+        return dir==0 && m->x==15 && (m->y==4||m->y==3);
     return dir==0 && m->x==5 && (m->y==4||m->y==3);
 }
 static bool MineIntentCanUse(const CcSim *sim,MineIntentTarget target)
@@ -742,6 +753,9 @@ static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
             MineClearIntent(local);
             if(intent==MINE_INTENT_HAULERS)
                 (void)snprintf(message,capacity,"Choose the visible hauler action.");
+            else if(intent==MINE_INTENT_CARRIAGE)
+                (void)snprintf(message,capacity,
+                    "Carriage reached. Choose Pack, Unload, or Board.");
             else if(intent!=MINE_INTENT_MOVE && MineIntentCanUse(sim,intent)) control=4;
         } else {
             dir=MinePathStep(sim,local,goal_x,goal_y);
@@ -788,7 +802,14 @@ static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
               sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_BARGAINED &&
               control==4) command.kind=CC_COMMAND_MINE_INSPECT;
     else if(at_haulers && control==4) command.kind=CC_COMMAND_MINE_BARGAIN;
-    else if(at_haulers && control==5) command.kind=CC_COMMAND_MINE_CONTEST;
+    else if(at_haulers && control==5) {
+        if(CcCoopClientActive()) {
+            (void)snprintf(message,capacity,
+                "Contest needs local combat. Bargain remains available here.");
+            return;
+        }
+        command.kind=CC_COMMAND_MINE_CONTEST;
+    }
     else if(at_cache && control==4) {
         command.kind=CC_COMMAND_MINE_CACHE;
         command.good=local->mine_good;
@@ -823,6 +844,10 @@ static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
            step keeps the facing the player set with A and D. */
         if(sim->mine.phase==CC_MINE_LEVEL&&!relative) local->mine_facing=dir;
     }
+    bool entering=command.kind==CC_COMMAND_MINE_USE &&
+        sim->mine.phase==CC_MINE_YARD && abs(sim->mine.x-15)+abs(sim->mine.y-3)<=1;
+    int32_t bread_before=entering?sim->mine.pack[CC_GOOD_BREAD]:0;
+    int32_t meat_before=entering?sim->mine.pack[CC_GOOD_MEAT]:0;
     bool stowing=command.kind==CC_COMMAND_MINE_USE && MineAtCarriage(sim);
     int32_t stowed=stowing?CcMinePackUsed(sim):0;
     if(command.kind!=CC_COMMAND_NONE) {
@@ -852,6 +877,12 @@ static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
                     CcMineSourceGood(sim,CC_GOOD_IRON),
                     CcMineSourceGood(sim,CC_GOOD_GOLD),
                     CcMineSourceGood(sim,CC_GOOD_GEMS));
+            else if(entering) {
+                const char *ration=bread_before>sim->mine.pack[CC_GOOD_BREAD]?"Bread":
+                    meat_before>sim->mine.pack[CC_GOOD_MEAT]?"Meat":"ration";
+                (void)snprintf(message,capacity,
+                    "Entered the mine: 1 %s spent. Light 18.",ration);
+            }
             else if(stowing) (void)snprintf(message,capacity,
                 "Stowed %d goods in the carriage and boarded for the road.",stowed);
         } else MineClearIntent(local);

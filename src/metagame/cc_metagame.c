@@ -2479,7 +2479,9 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         } else if(first != NULL && strcmp(first,"bargain")==0) {
             action.kind=CC_COMMAND_MINE_BARGAIN;
         } else if(first != NULL && strcmp(first,"contest")==0) {
-            action.kind=CC_COMMAND_MINE_CONTEST;
+            Append(output,output_capacity,
+                "Play the Lower Passage contest in the local combat view. Bargain remains available here.\n");
+            return false;
         } else if(first != NULL && strcmp(first,"break")==0) {
             action.kind=CC_COMMAND_MINE_BREAK_CONTACT;
         } else if(first != NULL && strcmp(first,"use")==0) action.kind=CC_COMMAND_MINE_USE;

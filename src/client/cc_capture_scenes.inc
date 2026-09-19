@@ -913,7 +913,7 @@ static bool CcCapturePrepareMessage(const CcCaptureRequest *request, CcCaptureSc
                 scene->sim->mine.pack[CC_GOOD_BREAD]=2;
                 scene->sim->mine.pack[CC_GOOD_IRON]=6;
                 (void)snprintf(message,message_size,
-                    "Two Bread for one Gold. Review the pack before committing.");
+                    "Entry ration spent. Two Bread remain for one Gold.");
             }
             if(request->capture_mine_contest) {
                 scene->sim->mine.contest_active=true;

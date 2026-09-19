@@ -41,19 +41,24 @@ static int RunMineInputRegression(void)
         MineBeginTouchFrame(&frame);
         char offer[256];
         (void)snprintf(offer,sizeof(offer),
-            "Offer 2 Bread (%d carried) for 1 Gold (%d in load). Pack %d/8 -> %d/8.",
+            "Offer 2 Bread (%d carried) for 1 Gold (%d in load). Pack %d/8 -> %d/8. Entry ration spent; 2 Bread must remain.",
             CcMinePackGood(&frame,CC_GOOD_BREAD),
             CcMineSourceGood(&frame,CC_GOOD_GOLD),CcMinePackUsed(&frame),
             CcMinePackUsed(&frame)-1);
         MineSetTouchDetail(&frame,offer);
         ClientTouchAdd((Rectangle){0,0,1,1},"Bargain / B",true,false);
         ClientTouchAdd((Rectangle){0,0,1,1},"Contest / C",true,false);
+        ClientTouchAdd(MineNavigationControl(0),"Save F5",true,false);
+        ClientTouchAdd(MineNavigationControl(1),"Menu Esc",true,false);
         ClientTouchRecordText("Pack 2/8");
-        MINE_CHECK(touch_count==2 && strcmp(touch_title,"The Underroad")==0 &&
+        MINE_CHECK(touch_count==4 && strcmp(touch_title,"The Underroad")==0 &&
             strstr(touch_detail,"Lower passage")!=NULL &&
             strstr(touch_detail,"Offer 2 Bread (2 carried) for 1 Gold (3 in load)")!=NULL &&
+            strstr(touch_detail,"2 Bread must remain")!=NULL &&
             strcmp(touch_buttons[0].label,"Bargain / B")==0 &&
             strcmp(touch_buttons[1].label,"Contest / C")==0 &&
+            strcmp(touch_buttons[2].label,"Save F5")==0 &&
+            strcmp(touch_buttons[3].label,"Menu Esc")==0 &&
             strstr(touch_reading,"Pack 2/8")!=NULL &&
             strstr(touch_reading,"Old town")==NULL,
             "A mine semantic frame must replace stale actions with its current offer, quantities, and controls.");
@@ -323,6 +328,9 @@ static int RunMineInputRegression(void)
     MINE_KEY(KEY_W);
     MINE_CHECK(sim.mine.phase==CC_MINE_LEVEL && local.mine_facing==1,
         "Forward at the mouth must enter first person facing into the level.");
+    MINE_CHECK(strstr(message,"1 Bread spent")!=NULL &&
+        strstr(message,"Light 18")!=NULL,
+        "Mine entry must state its Bread cost and starting light.");
     {
         CcSim input=sim;
         LocalState input_local;
@@ -542,6 +550,28 @@ static int RunMineInputRegression(void)
     MINE_KEY(KEY_B);
     MINE_CHECK(view==VIEW_LOCAL && CcSimHash(&sim)==book_hash,
         "Closing the company book must restore the same mine visit.");
+    Rectangle mine_navigation=MineNavigationControl(0);
+    client_test_pointer_active=true;
+    client_test_pointer=(Vector2){mine_navigation.x+mine_navigation.width/2,
+                                  mine_navigation.y+mine_navigation.height/2};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+    MINE_INPUT();
+    client_test_pointer_active=false;
+    MINE_CHECK(CcSaveRead(path,&restored,error,sizeof(error)) &&
+        CcSimHash(&sim)==CcSimHash(&restored),
+        "The visible mine Save control must preserve the current mine visit.");
+    mine_navigation=MineNavigationControl(1);
+    client_test_pointer_active=true;
+    client_test_pointer=(Vector2){mine_navigation.x+mine_navigation.width/2,
+                                  mine_navigation.y+mine_navigation.height/2};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+    MINE_INPUT();
+    client_test_pointer_active=false;
+    MINE_CHECK(view==VIEW_PAUSE && CcSimHash(&sim)==book_hash,
+        "The visible mine Menu control must open the pause menu without changing the visit.");
+    MINE_KEY(KEY_ESCAPE);
+    MINE_CHECK(view==VIEW_LOCAL && CcSimHash(&sim)==book_hash,
+        "Closing the mine pause menu must restore the same visit.");
     MINE_KEY(KEY_F5);
     MINE_CHECK(CcSaveRead(path,&restored,error,sizeof(error)) && CcSimHash(&sim)==CcSimHash(&restored),"F5 must save the underground position.");
     MINE_KEY(KEY_W);MINE_CHECK(sim.mine.x==6,"Forward must follow east facing.");
@@ -556,7 +586,48 @@ static int RunMineInputRegression(void)
     MINE_CHECK(sim.mine.phase==CC_MINE_YARD && sim.mine.y==4,
         "Forward into the north exit must return outside without re-entering.");
     for(int i=0;i<13;++i) MINE_KEY(KEY_S);
+    uint64_t carriage_approach_hash=CcSimHash(&sim);
+    RenderTexture2D yard_surface={.texture={.width=630,.height=960}};
+    Camera3D yard_camera=CcLocalMineCamera(&sim,local.mine_facing);
+    Vector2 carriage_pixel={0};
+    int32_t carriage_x=-1,carriage_y=-1;
+    MineIntentTarget carriage_target=MINE_INTENT_MOVE;
+    bool carriage_picked=false;
+    for(int32_t sample_z=17;sample_z<=20&&!carriage_picked;++sample_z)
+        for(int32_t sample_x=17;sample_x<=19&&!carriage_picked;++sample_x) {
+            Vector2 sample=GetWorldToScreenEx(
+                (Vector3){(float)sample_x,1.0f,(float)sample_z},yard_camera,630,960);
+            MineIntentTarget sampled_target=MINE_INTENT_MOVE;
+            int32_t sampled_x=-1,sampled_y=-1;
+            if(MinePick(&sim,&local,yard_surface,sample,&sampled_x,&sampled_y,
+                        &sampled_target)&&sampled_target==MINE_INTENT_CARRIAGE) {
+                carriage_pixel=sample;carriage_x=sampled_x;carriage_y=sampled_y;
+                carriage_target=sampled_target;carriage_picked=true;
+            }
+        }
+    MINE_CHECK(carriage_picked && carriage_target==MINE_INTENT_CARRIAGE &&
+        carriage_x==15 && carriage_y==18,
+        "The visible carriage must publish a named pointer target.");
+    Rectangle yard_view=MineViewport(&local);
+    if(yard_view.width<=0||yard_view.height<=0)
+        yard_view=(Rectangle){0,0,630,960};
+    Vector2 carriage_pointer={yard_view.x+carriage_pixel.x*yard_view.width/630.0f,
+        yard_view.y+carriage_pixel.y*yard_view.height/960.0f};
+    client_test_pointer_active=true;
+    client_test_pointer=carriage_pointer;
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+    HandleMineInput(journal,&sim,&local,yard_surface,.2f,message,sizeof(message));
+    client_test_pointer_active=false;
+    ClientInputClearPressed();
+    MINE_CHECK(sim.mine.phase==CC_MINE_YARD &&
+        CcSimHash(&sim)==carriage_approach_hash,
+        "The carriage target must preserve the active visit and road anchor.");
+    MINE_CHECK(strstr(message,"Choose Pack, Unload, or Board")!=NULL,
+        "The carriage target must open its transfer choices.");
     MINE_KEY(KEY_S);
+    MINE_CHECK(sim.mine.phase==CC_MINE_YARD && MineAtCarriage(&sim),
+        "Ordinary movement beside the carriage must retain the mine visit.");
+    MINE_KEY(KEY_E);
     MINE_CHECK(sim.mine.phase==CC_MINE_NONE && sim.carriage.mode==CC_CARRIAGE_MOVING,"Boarding must restore the road journey.");
     MINE_CHECK(local.mine_view_phase==CC_MINE_NONE && local.mine_facing==0,
         "Leaving the mine must clear the cached view so a later visit starts fresh.");

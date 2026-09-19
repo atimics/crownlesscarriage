@@ -582,15 +582,13 @@ bool CcMineValidate(const CcSim *sim)
             (m->source_x == m->cache_x && m->source_y == m->cache_y)) return false;
         if (CcMineCacheUsed(sim) > CC_MINE_CACHE_CAPACITY) return false;
         if (sim->schema_version >= 104U &&
-            (m->encounter_outcome < CC_MINE_ENCOUNTER_OPEN ||
-             m->encounter_outcome > CC_MINE_ENCOUNTER_BROKEN_CONTACT ||
+            (m->encounter_outcome > CC_MINE_ENCOUNTER_BROKEN_CONTACT ||
              m->player_injury > 100 ||
              (m->source_released !=
               (m->encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED)) ||
              (m->contest_active &&
               (m->encounter_outcome == CC_MINE_ENCOUNTER_BARGAINED ||
-               m->encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED ||
-               m->source_owner_id != sim->goblins.id)))) return false;
+               m->encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED)))) return false;
     }
     if (m->phase == CC_MINE_NONE)
         return m->site_id == 0 && m->x == 0 && m->y == 0 && m->return_speed == 0 &&

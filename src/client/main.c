@@ -8732,12 +8732,19 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (sim->mine.phase != CC_MINE_NONE && (*view == VIEW_LOCAL || *view == VIEW_ROADS)) {
-        if (ClientKeyPressed(KEY_F5) || queued_save_shortcut) {
+        bool save_requested=ClientKeyPressed(KEY_F5) || queued_save_shortcut ||
+            AdventureHit(MineNavigationControl(0));
+        bool menu_requested=ClientKeyPressed(KEY_ESCAPE) ||
+            AdventureHit(MineNavigationControl(1));
+        if (save_requested) {
             *save_feedback_age=0.0f;
             (void)SaveClientWorld(*journal,sim,local,save_path,session_path,save_feedback,save_feedback_capacity);
 #if !defined(PLATFORM_WEB)
             (void)snprintf(message,message_capacity,"%s",save_feedback);
 #endif
+        } else if(menu_requested) {
+            local->pause_return_view=*view;
+            *view=VIEW_PAUSE;
         } else HandleMineInput(*journal,sim,local,local_target,delta_time,message,message_capacity);
         return;
     }

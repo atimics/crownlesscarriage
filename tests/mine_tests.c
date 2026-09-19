@@ -198,9 +198,23 @@ int main(void)
         CcSimHash(&bargain)==closed_source_hash);
 
     ReadyAtHaulers(&contest);
+    {
+        uint64_t shared_open_hash=CcSimHash(&contest);
+        CC_CHECK(!CcCoopApply(&contest,"mine_contest",
+            (CcId)contest.mine.revision,0,0,error,sizeof(error)) &&
+            CcSimHash(&contest)==shared_open_hash &&
+            strstr(error,"local company")!=NULL);
+    }
     Apply(&contest,CC_COMMAND_MINE_CONTEST,0);
     CC_CHECK(contest.mine.contest_active &&
         contest.mine.source_owner_id==contest.goblins.id);
+    {
+        uint64_t shared_active_hash=CcSimHash(&contest);
+        CC_CHECK(!CcCoopApply(&contest,"mine_resolve_contest",
+            (CcId)contest.mine.revision,0,23,error,sizeof(error)) &&
+            CcSimHash(&contest)==shared_active_hash &&
+            strstr(error,"local combat course")!=NULL);
+    }
     Check(CcSaveWrite("mine-encounter-active.ccsave",&contest,error,sizeof(error)));
     Check(CcSaveRead("mine-encounter-active.ccsave",&restored,error,sizeof(error)));
     CC_CHECK(CcSimHash(&restored)==CcSimHash(&contest) &&
