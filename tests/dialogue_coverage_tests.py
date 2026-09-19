@@ -28,9 +28,14 @@ class CoverageTests(unittest.TestCase):
         header = self.root / 'src/sim/cc_sim.h'
         header.write_text(header.read_text().replace(
             '    CC_EVENT_KIND_COUNT',
-            '    CC_EVENT_NEW_TEST_EVENT = 999,\n    CC_EVENT_KIND_COUNT', 1))
-        with self.assertRaisesRegex(ValueError, 'CC_EVENT_NEW_TEST_EVENT'):
+            '    CC_EVENT_NEW_TEST_EVENT_2 = 999,\n    CC_EVENT_KIND_COUNT', 1))
+        with self.assertRaisesRegex(ValueError, 'CC_EVENT_NEW_TEST_EVENT_2'):
             check_coverage(inventory(self.root))
+
+    def test_empty_inventory_fails(self):
+        with self.assertRaisesRegex(ValueError, 'inventory is empty'):
+            check_coverage({'event_kinds': [], 'account_missing_events': [],
+                            'unknown_rule_events': []})
 
     def test_removed_rule_fails(self):
         path = self.root / 'tools/data/core_account_rules.json'
