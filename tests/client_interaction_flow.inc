@@ -447,6 +447,10 @@ static bool DispatchDisplayedRoadChoice(
         }
     }
     if (action_index < 0) return false;
+    char expected_hint[8];
+    (void)snprintf(expected_hint, sizeof(expected_hint), "%d", action_index + 1);
+    if (strcmp(actions.items[action_index].key_hint, expected_hint) != 0)
+        return false;
     int32_t expected_coordinate = sim->journey.road_coordinate_units;
     CcPilotRoadTopology pilot;
     if (!CcPilotRoadTopologyBuildWithLength(
