@@ -292,9 +292,10 @@ async function main() {
       await selectMenuItem(10);
       await page.waitForFunction(() => document.fullscreenElement !== null);
       const bounds = await page.locator('#canvas').boundingBox();
+      const frame = await page.locator('#game-frame').boundingBox();
       assert(Math.abs(bounds.width / bounds.height - 16 / 9) < 0.01);
-      assert(Math.abs(bounds.x * 2 + bounds.width - width) < 2);
-      assert(Math.abs(bounds.y * 2 + bounds.height - height) < 2);
+      assert(Math.abs((bounds.x - frame.x) * 2 + bounds.width - frame.width) < 2);
+      assert(Math.abs((bounds.y - frame.y) * 2 + bounds.height - frame.height) < 2);
       await page.evaluate(() => {
         window.lastCanvasPointer = null;
         document.querySelector('#canvas').addEventListener('pointerdown', event => {
