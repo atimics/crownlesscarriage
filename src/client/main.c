@@ -11171,6 +11171,16 @@ int main(int argc, char **argv)
         CcLocalRendererSetAtmosphere(
             CcCaptureAtmosphere(&capture_request, &sim),
             2.4f);
+        int32_t local_target_width=CC_LOCAL_ART_WIDTH;
+        int32_t local_target_height=CC_LOCAL_ART_HEIGHT;
+        if(sim.mine.phase!=CC_MINE_NONE)
+            MineRenderTargetSize(&local,&local_target_width,&local_target_height);
+        if(local_target.texture.width!=local_target_width ||
+           local_target.texture.height!=local_target_height) {
+            UnloadRenderTexture(local_target);
+            local_target=LoadRenderTexture(local_target_width,local_target_height);
+            SetTextureFilter(local_target.texture,TEXTURE_FILTER_POINT);
+        }
         CcLocalRendererBeginFrame(frame_delta_time);
         CcLocalBindPlace(&sim);
         BindOpenWorldForLocalState(&local);

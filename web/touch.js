@@ -21,6 +21,9 @@
   const reading = document.createElement('p');
   const actions = document.createElement('div');
   semantic.append(heading, detail, reading, actions);
+  for (const type of ['keydown', 'keyup', 'keypress']) {
+    semantic.addEventListener(type, event => event.stopPropagation());
+  }
   const actionNodes = [];
   document.querySelector('#stage').append(semantic);
   Module.renderCrownlessTouch = frame => {

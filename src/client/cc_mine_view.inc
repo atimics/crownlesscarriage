@@ -13,18 +13,13 @@ static Rectangle MineViewportForSize(int32_t width,int32_t height)
 static Rectangle MineViewportForInventory(int32_t width,int32_t height,bool expanded)
 {
     Rectangle view=MineViewportForSize(width,height);
-    if(width>=700&&height<500&&!expanded) {
+    if(width>=700&&height<500) {
         view.y=94.0f;
         view.height=(float)height-176.0f-view.y;
-    }
-    float source_aspect=(float)CC_LOCAL_ART_WIDTH/(float)CC_LOCAL_ART_HEIGHT;
-    float view_aspect=view.width/view.height;
-    if(view_aspect>source_aspect) {
-        float fitted=view.height*source_aspect;
-        view.x+=(view.width-fitted)*.5f; view.width=fitted;
-    } else {
-        float fitted=view.width/source_aspect;
-        view.y+=(view.height-fitted)*.5f; view.height=fitted;
+        if(expanded) {
+            view.x=170.0f;
+            view.width=(float)width-340.0f;
+        }
     }
     return view;
 }
@@ -33,6 +28,20 @@ static Rectangle MineViewport(const LocalState *local)
     int32_t width=GetScreenWidth(),height=GetScreenHeight();
     if(width<=0||height<=0) return (Rectangle){0};
     return MineViewportForInventory(width,height,local!=NULL&&local->mine_inventory_expanded);
+}
+static void MineRenderTargetSizeForInventory(int32_t width,int32_t height,
+                                             bool expanded,int32_t *out_width,
+                                             int32_t *out_height)
+{
+    Rectangle view=MineViewportForInventory(width,height,expanded);
+    *out_width=(int32_t)fmaxf(1.0f,roundf(view.width));
+    *out_height=(int32_t)fmaxf(1.0f,roundf(view.height));
+}
+static void MineRenderTargetSize(const LocalState *local,int32_t *out_width,
+                                 int32_t *out_height)
+{
+    MineRenderTargetSizeForInventory(GetScreenWidth(),GetScreenHeight(),
+        local!=NULL&&local->mine_inventory_expanded,out_width,out_height);
 }
 static Rectangle MineControl(int32_t index)
 {
@@ -410,10 +419,23 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
         local->mine_inventory_expanded ? "Hide inventory" : "Show inventory",
         true, local->mine_inventory_expanded);
     if (!short_landscape || local->mine_inventory_expanded) {
-        MineDrawGoods("Pack",pack_goods,22,goods_y,pane_width,TEAL);
-        MineDrawGoods(at_carriage?(brief?"Cart":"Carriage"):(brief?"Cart out of reach":"Carriage out of reach"),
-            at_carriage?sim->player.cargo:NULL,MineScreenWidth()/2+12,goods_y,pane_width,
-            at_carriage?TEAL:MUTED);
+        if(short_landscape&&local->mine_inventory_expanded) {
+            Rectangle left={8,90,154,108};
+            Rectangle right={(float)MineScreenWidth()-162,90,154,108};
+            DrawRectangleRounded(left,.12f,4,Fade(BACKGROUND,.91f));
+            DrawRectangleRoundedLinesEx(left,.12f,4,1.0f,Fade(TEAL,.72f));
+            DrawRectangleRounded(right,.12f,4,Fade(BACKGROUND,.91f));
+            DrawRectangleRoundedLinesEx(right,.12f,4,1.0f,Fade(TEAL,.72f));
+            MineDrawGoods("Pack",pack_goods,18,goods_y,136,TEAL);
+            MineDrawGoods(at_carriage?"Cart":"Cart away",
+                at_carriage?sim->player.cargo:NULL,MineScreenWidth()-152,goods_y,136,
+                at_carriage?TEAL:MUTED);
+        } else {
+            MineDrawGoods("Pack",pack_goods,22,goods_y,pane_width,TEAL);
+            MineDrawGoods(at_carriage?(brief?"Cart":"Carriage"):(brief?"Cart out of reach":"Carriage out of reach"),
+                at_carriage?sim->player.cargo:NULL,MineScreenWidth()/2+12,goods_y,pane_width,
+                at_carriage?TEAL:MUTED);
+        }
     }
     const char *selection=at_carriage?
         TextFormat(brief?"Selected %s x%d | pack %d | cart %d":
