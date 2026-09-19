@@ -2659,6 +2659,34 @@ static void CheckShippedSaveCompatibility(char *error,
     CC_CHECK(CcSimValidate(&replayed, error, error_capacity));
 }
 
+static void ClearSavedRoadPosition(CcJourneyEncounter *journey)
+{
+    journey->road_position_active = false;
+    journey->road_waiting_choice = false;
+    journey->road_journey_id = 0U;
+    journey->road_goal_id = 0U;
+    journey->road_segment_id = 0U;
+    journey->road_anchor_id = 0U;
+    journey->road_stop_anchor_id = 0U;
+    journey->road_return_anchor_id = 0U;
+    journey->road_direction = 0;
+    journey->road_coordinate_units = 0;
+    journey->road_distance_travelled_units = 0;
+    journey->road_distance_remaining_units = 0;
+    journey->road_leg_length_units = 0;
+    journey->road_leg_start_coordinate_units = 0;
+    journey->road_leg_end_coordinate_units = 0;
+    journey->road_leg_elapsed_subticks = 0;
+    journey->road_leg_total_subticks = 0;
+    journey->road_geometry_length_units = 0;
+    journey->road_compatibility_milli = 0;
+    journey->road_revision = 0U;
+    memset(journey->road_geometry_x_units, 0,
+           sizeof(journey->road_geometry_x_units));
+    memset(journey->road_geometry_z_units, 0,
+           sizeof(journey->road_geometry_z_units));
+}
+
 static void CheckSchema104RoadMigration(char *error,
                                         size_t error_capacity)
 {
@@ -2793,6 +2821,58 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(CcRoadSavedPositionValid(&checkpoint));
     CC_CHECK(CcSimValidate(&checkpoint, error, error_capacity));
     CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(8176053365761530070));
+
+    CcSim blocked = checkpoint;
+    ClearSavedRoadPosition(&blocked.journey);
+    blocked.journey.phase = CC_JOURNEY_PHASE_BLOCKED;
+    blocked.journey.encounter_triggered = true;
+    blocked.journey.ambush_pending = false;
+    blocked.journey.ambush_resolved = false;
+    blocked.player.cargo[CC_GOOD_FOOD] = 7;
+    blocked.player.cargo[CC_GOOD_TOOLS] = 3;
+    blocked.clock.minute_subticks = 12345;
+    blocked.carriage.mode = CC_CARRIAGE_STOPPED;
+    blocked.carriage.speed_milli_per_second = 0;
+    int32_t blocked_food = blocked.player.cargo[CC_GOOD_FOOD];
+    int32_t blocked_tools = blocked.player.cargo[CC_GOOD_TOOLS];
+    int32_t blocked_time = blocked.clock.minute_subticks;
+    CcId blocked_situation = blocked.journey.situation_id;
+    CC_CHECK(CcRoadMigrateLegacyJourney(&blocked));
+    CC_CHECK(blocked.journey.phase == CC_JOURNEY_PHASE_BLOCKED);
+    CC_CHECK(blocked.journey.encounter_triggered);
+    CC_CHECK(blocked.journey.situation_id == blocked_situation);
+    CC_CHECK(blocked.player.cargo[CC_GOOD_FOOD] == blocked_food);
+    CC_CHECK(blocked.player.cargo[CC_GOOD_TOOLS] == blocked_tools);
+    CC_CHECK(blocked.clock.minute_subticks == blocked_time);
+    CC_CHECK(blocked.journey.road_position_active);
+    CC_CHECK(!blocked.journey.road_waiting_choice);
+    CC_CHECK(blocked.journey.road_coordinate_units ==
+             topology.checkpoint_distance_units);
+    CC_CHECK(blocked.journey.road_distance_remaining_units > 0);
+    CC_CHECK(CcRoadSavedPositionValid(&blocked));
+    CC_CHECK(CcSimValidate(&blocked, error, error_capacity));
+    CcCommand resolve = {.kind = CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT};
+    CC_CHECK(CcSimApply(&blocked, &resolve, error, error_capacity));
+    CC_CHECK(blocked.journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
+    int32_t resolved_coordinate = blocked.journey.road_coordinate_units;
+    CC_CHECK(!CcRoadAdvanceLeg(&blocked, 1));
+    CC_CHECK(blocked.journey.road_coordinate_units > resolved_coordinate);
+
+    CcSim resting = checkpoint;
+    ClearSavedRoadPosition(&resting.journey);
+    resting.journey.phase = CC_JOURNEY_PHASE_RESTING;
+    resting.journey.elapsed_subticks = CC_WORLD_WATCH_SUBTICKS;
+    resting.clock.minute_subticks = 23456;
+    CC_CHECK(CcRoadMigrateLegacyJourney(&resting));
+    CC_CHECK(resting.journey.phase == CC_JOURNEY_PHASE_RESTING);
+    CC_CHECK(resting.journey.road_waiting_choice);
+    CC_CHECK(resting.journey.road_anchor_id ==
+             CC_PILOT_ROAD_CHECKPOINT_ID);
+    CC_CHECK(resting.journey.road_coordinate_units ==
+             topology.checkpoint_distance_units);
+    CC_CHECK(resting.clock.minute_subticks == 23456);
+    CC_CHECK(CcRoadSavedPositionValid(&resting));
+    CC_CHECK(CcSimValidate(&resting, error, error_capacity));
 
     char mill_stop_file[512];
     (void)snprintf(
