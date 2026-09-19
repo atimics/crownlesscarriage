@@ -352,6 +352,32 @@ async function main() {
             `A fresh campaign stalled on screen '${screen}' after Enter at title.`);
     }
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision + 2);
+    const recovery = await page.evaluate(() => {
+      window.dispatchEvent(new ErrorEvent('error', {message: 'Injected runtime failure'}));
+      const runtime = {
+        visible: !document.querySelector('#loading').hidden,
+        text: document.querySelector('#status').textContent,
+        progressHidden: document.querySelector('#progress').hidden,
+        progressValue: document.querySelector('#progress').value
+      };
+      const event = new Event('webglcontextlost', {cancelable: true});
+      document.querySelector('#canvas').dispatchEvent(event);
+      return {runtime, graphics: {
+        visible: !document.querySelector('#loading').hidden,
+        text: document.querySelector('#status').textContent,
+        prevented: event.defaultPrevented
+      }};
+    });
+    assert.deepEqual(recovery, {
+      runtime: {
+        visible: true,
+        text: 'The game stopped after startup. Your browser state remains open. Check the browser console.',
+        progressHidden: true,
+        progressValue: 0
+      },
+      graphics: {visible: true, text: 'The graphics context was lost. Reload the page to continue.', prevented: true}
+    });
+    await page.screenshot({path: path.join(output, 'graphics-recovery.png')});
     /* Desktop checks are complete. Release its running game before mobile
        startup so the phone fixture has its own browser resource budget. */
     await context.close();
@@ -430,39 +456,6 @@ async function main() {
         await mobile.waitForFunction(() => !document.querySelector('#stage').classList.contains('expanded'));
       }
     } finally { await phone.close(); }
-    const recoveryContext = await browser.newContext({viewport: {width: 1280, height: 900}});
-    const recoveryPage = await recoveryContext.newPage();
-    try {
-      await recoveryPage.goto(`http://127.0.0.1:${server.address().port}/`);
-      await recoveryPage.waitForFunction(() => window.Module?.crownlessRuntimeReady &&
-        document.querySelector('#loading').hidden, undefined, {timeout: 120000});
-      const recovery = await recoveryPage.evaluate(() => {
-        window.dispatchEvent(new ErrorEvent('error', {message: 'Injected runtime failure'}));
-        const runtime = {
-          visible: !document.querySelector('#loading').hidden,
-          text: document.querySelector('#status').textContent,
-          progressHidden: document.querySelector('#progress').hidden,
-          progressValue: document.querySelector('#progress').value
-        };
-        const event = new Event('webglcontextlost', {cancelable: true});
-        document.querySelector('#canvas').dispatchEvent(event);
-        return {runtime, graphics: {
-          visible: !document.querySelector('#loading').hidden,
-          text: document.querySelector('#status').textContent,
-          prevented: event.defaultPrevented
-        }};
-      });
-      assert.deepEqual(recovery, {
-        runtime: {
-          visible: true,
-          text: 'The game stopped after startup. Your browser state remains open. Check the browser console.',
-          progressHidden: true,
-          progressValue: 0
-        },
-        graphics: {visible: true, text: 'The graphics context was lost. Reload the page to continue.', prevented: true}
-      });
-      await recoveryPage.screenshot({path: path.join(output, 'graphics-recovery.png')});
-    } finally { await recoveryContext.close(); }
     assert.deepEqual(errors, []);
     console.log('Browser desktop and mobile layout, touch input, menus, saves, shaders, fullscreen, and reload checks passed');
   } finally {

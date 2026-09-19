@@ -60,8 +60,8 @@
       var Module = {
         preRun: [],
         postRun: [function () {
-          this.crownlessRuntimeReady = true;
-          if (!this.crownlessRecoveryActive) loading.hidden = true;
+          Module.crownlessRuntimeReady = true;
+          if (!Module.crownlessRecoveryActive) loading.hidden = true;
           canvas.focus();
         }],
         canvas,
