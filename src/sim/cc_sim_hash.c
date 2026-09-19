@@ -79,8 +79,12 @@ uint64_t CcSimHash(const CcSim *sim)
                 HASH_VALUE(sim->mine.survey_source_id); HASH_VALUE(sim->mine.survey_event_id);
                 HASH_VALUE(sim->mine.survey_read_day); HASH_VALUE(sim->mine.survey_observed_day);
                 HASH_VALUE(sim->mine.bypass_event_id); HASH_VALUE(sim->mine.bypass_day);
+                HASH_VALUE(sim->mine.haul_receipt_event_id);
+                HASH_VALUE(sim->mine.haul_receipt_quantity);
+                HASH_VALUE(sim->mine.haul_receipt_good);
                 HASH_VALUE(sim->mine.report_recipient_id); HASH_VALUE(sim->mine.report_event_id);
-                HASH_VALUE(sim->mine.report_day); HASH_VALUE(sim->mine.report_kind);
+                HASH_VALUE(sim->mine.report_day); HASH_VALUE(sim->mine.report_quantity);
+                HASH_VALUE(sim->mine.report_good); HASH_VALUE(sim->mine.report_kind);
                 HASH_VALUE(sim->mine.reported_encounter_outcome);
             }
         }

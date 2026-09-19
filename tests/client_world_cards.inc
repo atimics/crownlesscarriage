@@ -131,6 +131,17 @@ static int RunWorldCardRegression(void)
         CARD_INPUT();
         CARD_CHECK(view == VIEW_LEDGER && local.book_page == 1,
             "Key 2 must open the People page.");
+        Rectangle mine_notes=AdventureBookPageBounds(AdventurePanel(),2);
+        client_test_pointer_active=true;
+        client_test_pointer=(Vector2){mine_notes.x+mine_notes.width/2,
+            mine_notes.y+mine_notes.height/2};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+        CARD_INPUT();
+        CARD_CHECK(view == VIEW_LEDGER && local.book_page == 2,
+            "The visible Mine notes tab must open with an ordinary pointer.");
+        CARD_CHECK(AdventureBookCompact((Rectangle){0,0,342,560})&&
+            AdventureBookMineStepBounds((Rectangle){0,0,342,560},1).y+36<=560,
+            "Portrait Mine notes must page inside its visible panel.");
         queued_key_press[KEY_B] = true;
         CARD_INPUT();
         CARD_CHECK(view == VIEW_LOCAL && CcSimHash(&sim) == carriage_hash,

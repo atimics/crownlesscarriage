@@ -4310,12 +4310,16 @@ static ContextActionSet BuildContextActions(
         if (jory && sim->mine.lead_event_id == 0U && CcSimMineLeadSupported(sim))
             AddDetailedContextAction(&set,CONTEXT_ACTION_MINE_LEAD,
                 "Ask about Low Silver Pit",TextFormat("%d",set.count+1),
-                "JORY'S DATED CONCERN",true,false);
+                "TURNOUT + WORKERS' RECORDS",true,false);
         if (jory && sim->mine.report_event_id == 0U) {
             CcMineReturnKind evidence=CcSimMineReturnEvidence(sim);
+            CcGood haul_good=CC_GOOD_BREAD;
+            int32_t haul_quantity=0;
+            bool haul=CcSimMineReturnHaul(sim,&haul_good,&haul_quantity);
             AddDetailedContextAction(&set,CONTEXT_ACTION_MINE_REPORT,
                 "Tell Jory what the company found",TextFormat("%d",set.count+1),
-                evidence == CC_MINE_RETURN_HAUL ? "TRACKED MINE LOAD" :
+                evidence == CC_MINE_RETURN_HAUL && haul ?
+                    TextFormat("%d %s FROM MINE",haul_quantity,CcGoodName(haul_good)) :
                 evidence == CC_MINE_RETURN_INFORMATION ? "ATTRIBUTED ROUTE ACCOUNT" :
                 "BRING A LOAD OR ROUTE OBSERVATION",
                 evidence != CC_MINE_RETURN_NONE,false);
@@ -4486,7 +4490,7 @@ static ContextActionSet BuildContextActions(
             sim->mine.lead_event_id == 0U && !CcSimMineLeadSupported(sim)) {
             AddDetailedContextAction(&set,CONTEXT_ACTION_MINE_SHIFT_RECORD,
                 "Read Low Silver Pit shift record","R",
-                "DATED SILVERWICK DOCUMENT",true,false);
+                "DATED TURNOUT DOCUMENT",true,false);
         }
         AddDetailedContextAction(
             &set, CONTEXT_ACTION_CLOSE_VIEW, "Close notices", "ESC",
@@ -4531,12 +4535,16 @@ static ContextActionSet BuildContextActions(
         if (jory && sim->mine.lead_event_id == 0U && CcSimMineLeadSupported(sim))
             AddDetailedContextAction(&set,CONTEXT_ACTION_MINE_LEAD,
                 "Ask about Low Silver Pit",TextFormat("%d",set.count+1),
-                "JORY'S DATED CONCERN",true,false);
+                "TURNOUT + WORKERS' RECORDS",true,false);
         if (jory && sim->mine.report_event_id == 0U) {
             CcMineReturnKind evidence=CcSimMineReturnEvidence(sim);
+            CcGood haul_good=CC_GOOD_BREAD;
+            int32_t haul_quantity=0;
+            bool haul=CcSimMineReturnHaul(sim,&haul_good,&haul_quantity);
             AddDetailedContextAction(&set,CONTEXT_ACTION_MINE_REPORT,
                 "Tell Jory what the company found",TextFormat("%d",set.count+1),
-                evidence == CC_MINE_RETURN_HAUL ? "TRACKED MINE LOAD" :
+                evidence == CC_MINE_RETURN_HAUL && haul ?
+                    TextFormat("%d %s FROM MINE",haul_quantity,CcGoodName(haul_good)) :
                 evidence == CC_MINE_RETURN_INFORMATION ? "ATTRIBUTED ROUTE ACCOUNT" :
                 "BRING A LOAD OR ROUTE OBSERVATION",
                 evidence != CC_MINE_RETURN_NONE,false);
@@ -6796,13 +6804,18 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
         case CC_COMMAND_CHANGE_DUNGEON: confirmation = "Mine updated."; break;
         case CC_COMMAND_MINE_LEARN_LEAD:
             confirmation = command.amount == 1 ?
-                "Jory's dated concern is now in the Company Book." :
-                "The dated shift record is now in the Company Book.";
+                "Jory marks the Low Silver Pit turnout and its workers' records in the Company Book." :
+                "The shift record marks the Low Silver Pit turnout and its workers' records in the Company Book.";
             break;
         case CC_COMMAND_MINE_REPORT_RETURN:
-            confirmation = sim->mine.report_kind == CC_MINE_RETURN_HAUL ?
-                "Jory records the mine load and its custody in the Company Book." :
-                "Jory records the mine route evidence in the Company Book.";
+            if (sim->mine.report_kind == CC_MINE_RETURN_HAUL)
+                (void)snprintf(message,message_capacity,
+                    "Jory sees %d %s from Low Silver Pit: 'This proves the turnout can still yield.' Oren can handle the sale.",
+                    sim->mine.report_quantity,CcGoodName((CcGood)sim->mine.report_good));
+            else
+                (void)snprintf(message,message_capacity,
+                    "Jory reads the sourced route account: 'This gives the next company a fair path in.'");
+            return true;
             break;
         case CC_COMMAND_BUY_MAP: confirmation = "Traveller's notes bought."; break;
         case CC_COMMAND_SELL_MAP: confirmation = "Traveller's notes sold."; break;
@@ -10668,7 +10681,7 @@ static void ReadCompanyPage(const CcSim *sim, const LocalState *local)
     } else {
         if (sim->mine.lead_event_id != 0U) {
             (void)snprintf(words,sizeof(words),
-                "Low Silver Pit lead, day %d, from %s.",sim->mine.lead_day,
+                "Low Silver Pit turnout on the Alderwatch-Silverwick road, day %d, from %s. Workers' records hold route guidance.",sim->mine.lead_day,
                 sim->mine.lead_document ? "Silverwick's shift record" : "Jory Fen");
             ClientReadSpeech(sim,words,sim->mine.lead_event_id);
         }
@@ -10682,8 +10695,15 @@ static void ReadCompanyPage(const CcSim *sim, const LocalState *local)
                 sim->mine.bypass_event_id);
         }
         if (sim->mine.report_event_id != 0U) {
-            (void)snprintf(words,sizeof(words),"Jory received the mine return on day %d.",
-                sim->mine.report_day);
+            if (sim->mine.report_kind == CC_MINE_RETURN_HAUL)
+                (void)snprintf(words,sizeof(words),
+                    "Jory received %d %s from the tracked mine haul on day %d. He says this proves the turnout can still yield.",
+                    sim->mine.report_quantity,CcGoodName((CcGood)sim->mine.report_good),
+                    sim->mine.report_day);
+            else
+                (void)snprintf(words,sizeof(words),
+                    "Jory received the sourced route account on day %d. He says this gives the next company a fair path in.",
+                    sim->mine.report_day);
             ClientReadSpeech(sim,words,sim->mine.report_event_id);
         }
     }
