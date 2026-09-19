@@ -6,18 +6,24 @@ The branch opens a small mine yard. The carriage stays beside the road. Pack Bre
 
 Both places use shared world lighting and model helpers from the town renderer. The yard has a composed exterior camera. Underground, the camera follows the saved tile at eye height and looks in a local cardinal direction. The company model remains visible in the yard. Ground clicks use the camera for the current view. The [continuous-world contract](outside-city-redesign.md) defines how these views and their interactions connect.
 
-## Controls at the reviewed baseline (`52d2e879`)
+## Controls
 
 - Yard: WASD, arrow keys, or a ground click walk.
-- Underground: W/S or up/down step forward/back; A/D or left/right turn. Ground clicks select a walking destination.
+- Underground: W/S or up/down step forward/back; A/D or left/right turn. Click visible floor to walk through observed space.
+- Click a visible object to approach that object. Use its named action when within reach. A floor click remains a movement choice.
 - E or Use: interact with a nearby doorway, bar, or survey.
-- P or Pack food: move one Bread or Meat from carriage to pack.
+- Beside the carriage, select a good and quantity, then choose Pack or Unload. The panel shows the pack, carriage, and free capacity.
+- Use the displayed Take, Cache, and Recover actions at their reachable holders.
 - F5: save the campaign and current position.
 - Escape: open or close the pause menu.
 
-The pack holds eight goods. Entry consumes one ration. Explore six rooms joined by narrow passages. The western store provides a loop around the barred middle passage. The workers' survey is in the eastern records room. The lower stair marks the future connection to Lamp Hall.
+The pack holds eight goods, including supplies and recovered goods. Entry consumes one ration. Explore six rooms joined by narrow passages. The western store provides a loop around the barred middle passage. The workers' survey is in the eastern records room. The lower stair marks the future connection to Lamp Hall.
 
-Return through the entrance, walk to the carriage, and use it to resume the same road journey. Remaining supplies return to the carriage. The survey and opened bar remain saved for later visits.
+The source in the Lower Passage begins with eight Iron, three Raw Gold, and two Gems. Each transfer changes that finite source. The Rope Store cache holds seven goods and persists between visits. Select the quantity that fits, and inspect the remaining load before choosing another trip.
+
+Return through the entrance and walk to the carriage. Transfer the chosen goods, then choose Board to resume the same road journey. Remaining supplies return to the carriage. The source, cache, survey, and opened bar remain saved for later visits.
+
+On a narrow portrait screen, the scene appears above readable action buttons. Open Scene details for the full scene text. The save footer reports the browser save result.
 
 ## Shared rules and saves
 
@@ -25,7 +31,7 @@ Facing is local camera state. Turning is free. A fresh descent faces east into t
 
 The simulation owns position, collision, carried goods, elapsed time, opened passages, and the road anchor. The screen, text controls, and shared company commands use those rules. Each movement carries the current mine revision so a repeated request cannot take another step.
 
-Save schema 59 adds the mine visit and pack. Schema 57 and 58 saves retain their old hash during verification, then upgrade with an empty visit. Journal replay restores the same position and supplies.
+Schema 59 introduced the mine visit and pack. Schema 103 adds finite source and cache custody. Older saves verify their original hash and replay before migration. Journal replay restores the same position, supplies, goods, and holder identities.
 
 Text controls: `mine visit`, `mine look`, `mine move north`, `mine use`, `mine pack Bread`, `mine unpack Bread`, and `road pass`.
 
