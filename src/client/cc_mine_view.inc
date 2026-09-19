@@ -30,6 +30,8 @@ static void SyncMineView(const CcSim *sim, LocalState *local)
     local->mine_cooldown=.18f;
     MineClearIntent(local);
     memset(local->mine_known,0,sizeof(local->mine_known));
+    local->mine_visibility_x=-1;
+    local->mine_visibility_y=-1;
 }
 static int32_t MineCell(int32_t x,int32_t y)
 {
@@ -38,6 +40,54 @@ static int32_t MineCell(int32_t x,int32_t y)
 static BoundingBox MineBoxBounds(float x,float y,float z,float w,float h,float d)
 {
     return (BoundingBox){{x-w*.5f,y-h*.5f,z-d*.5f},{x+w*.5f,y+h*.5f,z+d*.5f}};
+}
+static BoundingBox MineClosedBarBounds(void)
+{
+    return MineBoxBounds(15,.7f,10,1,1.4f,1);
+}
+static bool MineRayBoxDistance(Ray ray,BoundingBox box,float *out_distance)
+{
+    const float origin[]={ray.position.x,ray.position.y,ray.position.z};
+    const float direction[]={ray.direction.x,ray.direction.y,ray.direction.z};
+    const float minimum[]={box.min.x,box.min.y,box.min.z};
+    const float maximum[]={box.max.x,box.max.y,box.max.z};
+    float near_distance=0.0f,far_distance=INFINITY;
+    for(int32_t axis=0;axis<3;++axis) {
+        if(!isfinite(origin[axis])||!isfinite(direction[axis])) return false;
+        if(fabsf(direction[axis])<=.000001f) {
+            if(origin[axis]<minimum[axis]||origin[axis]>maximum[axis]) return false;
+            continue;
+        }
+        float first=(minimum[axis]-origin[axis])/direction[axis];
+        float last=(maximum[axis]-origin[axis])/direction[axis];
+        if(first>last) {float swap=first;first=last;last=swap;}
+        if(first>near_distance) near_distance=first;
+        if(last<far_distance) far_distance=last;
+        if(near_distance>far_distance) return false;
+    }
+    if(far_distance<0.0f||!isfinite(near_distance)) return false;
+    *out_distance=near_distance;
+    return true;
+}
+static bool MineClosedBarDistance(Ray ray,float *out_distance)
+{
+    const BoundingBox beams[]={
+        MineBoxBounds(14.6f,.7f,10,.16f,1.4f,.16f),
+        MineBoxBounds(15.4f,.7f,10,.16f,1.4f,.16f),
+        MineBoxBounds(15,.35f,10,.95f,.18f,.18f),
+        MineBoxBounds(15,.85f,10,.95f,.18f,.18f),
+        MineBoxBounds(15,1.25f,10,.95f,.18f,.18f)
+    };
+    bool hit=false;
+    float nearest=INFINITY;
+    for(size_t i=0;i<sizeof(beams)/sizeof(beams[0]);++i) {
+        float distance=0.0f;
+        if(MineRayBoxDistance(ray,beams[i],&distance) && distance<nearest) {
+            nearest=distance;hit=true;
+        }
+    }
+    if(hit) *out_distance=nearest;
+    return hit;
 }
 /* These are the same blocking cells drawn in mine_scene.inc.  Input uses
    their bounds before it accepts a floor or object behind them. */
@@ -48,8 +98,9 @@ static float MineOccluderDistanceExcept(const CcSim *sim,Ray ray,float limit,
     if(sim->mine.phase==CC_MINE_YARD) {
         for(int32_t row=0;row<2;++row) for(int32_t col=0;col<2;++col) {
             float x=col==0?5.5f:24.5f,z=row==0?6.5f:12.5f;
-            RayCollision hit=GetRayCollisionBox(ray,MineBoxBounds(x,1.15f,z,6,2.3f,4));
-            if(hit.hit&&hit.distance<nearest) nearest=hit.distance;
+            float distance=0.0f;
+            if(MineRayBoxDistance(ray,MineBoxBounds(x,1.15f,z,6,2.3f,4),&distance) &&
+               distance<nearest) nearest=distance;
         }
         return nearest;
     }
@@ -59,8 +110,11 @@ static float MineOccluderDistanceExcept(const CcSim *sim,Ray ray,float limit,
         bool edge=CcMineWalkable(sim,CC_MINE_LEVEL,x+1,y)||CcMineWalkable(sim,CC_MINE_LEVEL,x-1,y)||
             CcMineWalkable(sim,CC_MINE_LEVEL,x,y+1)||CcMineWalkable(sim,CC_MINE_LEVEL,x,y-1);
         if(!edge) continue;
-        RayCollision hit=GetRayCollisionBox(ray,MineBoxBounds((float)x,.7f,(float)y,1,1.4f,1));
-        if(hit.hit&&hit.distance<nearest) nearest=hit.distance;
+        float distance=0.0f;
+        bool hit=x==15&&y==10&&!sim->mine.bar_open?
+            MineClosedBarDistance(ray,&distance):
+            MineRayBoxDistance(ray,MineBoxBounds((float)x,.7f,(float)y,1,1.4f,1),&distance);
+        if(hit && distance<nearest) nearest=distance;
     }
     return nearest;
 }
@@ -85,37 +139,55 @@ static bool MineLineVisibleExcept(const CcSim *sim,Vector3 from,Vector3 to,
 }
 static void MineRememberVisible(const CcSim *sim,LocalState *local)
 {
+    if(local->mine_visibility_x==sim->mine.x && local->mine_visibility_y==sim->mine.y &&
+       local->mine_visibility_phase==sim->mine.phase &&
+       local->mine_visibility_bar_open==sim->mine.bar_open) return;
     Vector3 eye={(float)sim->mine.x,.55f,(float)sim->mine.y};
     for(int32_t y=1;y<CC_MINE_HEIGHT-1;++y) for(int32_t x=1;x<CC_MINE_WIDTH-1;++x) {
-        if(CcMineWalkable(sim,sim->mine.phase,x,y) &&
-           MineLineVisible(sim,eye,(Vector3){(float)x,0,(float)y}))
+        if(!CcMineWalkable(sim,sim->mine.phase,x,y)) continue;
+        local->mine_visibility_rays+=1;
+        if(MineLineVisibleExcept(sim,eye,(Vector3){(float)x,0,(float)y},-1,-1))
             local->mine_known[MineCell(x,y)]=1;
     }
     local->mine_known[MineCell(sim->mine.x,sim->mine.y)]=1;
+    local->mine_visibility_x=sim->mine.x;
+    local->mine_visibility_y=sim->mine.y;
+    local->mine_visibility_phase=sim->mine.phase;
+    local->mine_visibility_bar_open=sim->mine.bar_open;
+    local->mine_visibility_scans+=1;
 }
 /* A route may use remembered floor, never a cell the player has not observed.
    This keeps a click useful down a known corridor without making it solve a
    hidden loop. */
-static int32_t MinePathStep(const CcSim *sim,const LocalState *local,int32_t tx,int32_t ty)
+static bool MinePath(const CcSim *sim,const LocalState *local,int32_t tx,int32_t ty,
+                     int32_t *out_step,int32_t *out_distance)
 {
-    int32_t queue[CC_MINE_WIDTH*CC_MINE_HEIGHT], first[CC_MINE_WIDTH*CC_MINE_HEIGHT];
-    for(int32_t i=0;i<CC_MINE_WIDTH*CC_MINE_HEIGHT;++i) first[i]=-2;
+    int32_t queue[CC_MINE_WIDTH*CC_MINE_HEIGHT],first[CC_MINE_WIDTH*CC_MINE_HEIGHT],distance[CC_MINE_WIDTH*CC_MINE_HEIGHT];
+    for(int32_t i=0;i<CC_MINE_WIDTH*CC_MINE_HEIGHT;++i) {first[i]=-2;distance[i]=-1;}
     int32_t origin=sim->mine.y*CC_MINE_WIDTH+sim->mine.x,head=0,tail=0;
-    queue[tail++]=origin; first[origin]=-1;
+    queue[tail++]=origin; first[origin]=-1; distance[origin]=0;
     const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
     while(head<tail) {
         int32_t cell=queue[head++],x=cell%CC_MINE_WIDTH,y=cell/CC_MINE_WIDTH;
-        if(x==tx&&y==ty) return first[cell];
+        if(x==tx&&y==ty) {
+            *out_step=first[cell]; *out_distance=distance[cell]; return true;
+        }
         for(int32_t d=0;d<4;++d) {
             int32_t nx=x+dx[d],ny=y+dy[d];
             if(!CcMineWalkable(sim,sim->mine.phase,nx,ny) ||
                !local->mine_known[MineCell(nx,ny)]) continue;
             int32_t next=ny*CC_MINE_WIDTH+nx;
             if(first[next]!=-2) continue;
-            first[next]=cell==origin?d:first[cell]; queue[tail++]=next;
+            first[next]=cell==origin?d:first[cell]; distance[next]=distance[cell]+1;
+            queue[tail++]=next;
         }
     }
-    return -1;
+    return false;
+}
+static int32_t MinePathStep(const CcSim *sim,const LocalState *local,int32_t tx,int32_t ty)
+{
+    int32_t step=-1,distance=-1;
+    return MinePath(sim,local,tx,ty,&step,&distance)?step:-1;
 }
 static bool MineTargetBounds(const CcSim *sim,MineIntentTarget target,BoundingBox *out_box,
                              int32_t *out_x,int32_t *out_y)
@@ -132,7 +204,7 @@ static bool MineTargetBounds(const CcSim *sim,MineIntentTarget target,BoundingBo
         *out_box=MineBoxBounds(5,.25f,3,.85f,.5f,.85f); *out_x=5;*out_y=3; return true;
     case MINE_INTENT_BAR:
         if(sim->mine.phase!=CC_MINE_LEVEL||sim->mine.bar_open) return false;
-        *out_box=MineBoxBounds(15,.85f,10,1.3f,.2f,.3f); *out_x=15;*out_y=10; return true;
+        *out_box=MineClosedBarBounds(); *out_x=15;*out_y=10; return true;
     case MINE_INTENT_SURVEY:
         if(sim->mine.phase!=CC_MINE_LEVEL||sim->mine.surveyed) return false;
         *out_box=MineBoxBounds(26,.37f,4,.6f,.12f,.45f); *out_x=26;*out_y=4; return true;
@@ -161,12 +233,14 @@ static bool MinePick(const CcSim *sim,const LocalState *local,
     for(int32_t candidate=MINE_INTENT_MOUTH;candidate<=MINE_INTENT_SURVEY;++candidate) {
         BoundingBox box; int32_t x,y;
         if(!MineTargetBounds(sim,(MineIntentTarget)candidate,&box,&x,&y)) continue;
-        RayCollision hit=GetRayCollisionBox(ray,box);
+        float hit_distance=0.0f;
         int32_t skip_x=candidate==MINE_INTENT_BAR?15:-1;
         int32_t skip_y=candidate==MINE_INTENT_BAR?10:-1;
-        if(hit.hit&&hit.distance<nearest&&
-           MineOccluderDistanceExcept(sim,ray,hit.distance,skip_x,skip_y)>=hit.distance) {
-            nearest=hit.distance; picked=(MineIntentTarget)candidate; *out_x=x; *out_y=y;
+        bool hit=candidate==MINE_INTENT_BAR?
+            MineClosedBarDistance(ray,&hit_distance):MineRayBoxDistance(ray,box,&hit_distance);
+        if(hit && hit_distance<nearest&&
+           MineOccluderDistanceExcept(sim,ray,hit_distance,skip_x,skip_y)>=hit_distance) {
+            nearest=hit_distance; picked=(MineIntentTarget)candidate; *out_x=x; *out_y=y;
         }
     }
     if(picked!=MINE_INTENT_MOVE) {*out_target=picked;return true;}
@@ -275,9 +349,10 @@ static bool MineIntentGoal(const CcSim *sim,const LocalState *local,MineIntentTa
     for(int32_t cy=1;cy<CC_MINE_HEIGHT-1;++cy) for(int32_t cx=1;cx<CC_MINE_WIDTH-1;++cx) {
         if(!CcMineWalkable(sim,sim->mine.phase,cx,cy) || !local->mine_known[MineCell(cx,cy)] ||
            abs(cx-x)+abs(cy-y)>1) continue;
-        int32_t distance=(cx==sim->mine.x&&cy==sim->mine.y)?0:
-            MinePathStep(sim,local,cx,cy);
-        if(distance>=0 && distance<best_distance) {best=MineCell(cx,cy);best_distance=distance;}
+        int32_t step=-1,distance=-1;
+        if(MinePath(sim,local,cx,cy,&step,&distance) && distance<best_distance) {
+            best=MineCell(cx,cy);best_distance=distance;
+        }
     }
     if(best<0) return false;
     *out_x=best%CC_MINE_WIDTH;*out_y=best/CC_MINE_WIDTH;

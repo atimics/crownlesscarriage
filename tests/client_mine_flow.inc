@@ -38,9 +38,40 @@ static int RunMineInputRegression(void)
         picked.mine.bar_open=false; picked.mine.surveyed=false;
         SyncMineView(&picked,&pick_local);
         MineRememberVisible(&picked,&pick_local);
+        uint32_t initial_visibility_rays=pick_local.mine_visibility_rays;
+        uint32_t initial_visibility_scans=pick_local.mine_visibility_scans;
+        MineRememberVisible(&picked,&pick_local);
+        MINE_CHECK(pick_local.mine_visibility_rays==initial_visibility_rays &&
+            pick_local.mine_visibility_scans==initial_visibility_scans &&
+            initial_visibility_rays<=CC_MINE_WIDTH*CC_MINE_HEIGHT,
+            "Mine visibility must reuse its bounded scan while position and geometry stay fixed.");
+        picked.mine.bar_open=true;
+        MineRememberVisible(&picked,&pick_local);
+        MINE_CHECK(pick_local.mine_visibility_scans==initial_visibility_scans+1 &&
+            pick_local.mine_visibility_rays-initial_visibility_rays<=CC_MINE_WIDTH*CC_MINE_HEIGHT,
+            "Changing the bar must refresh one bounded visibility scan.");
+        picked.mine.bar_open=false;
+        MineRememberVisible(&picked,&pick_local);
+        MINE_CHECK(pick_local.mine_visibility_scans==initial_visibility_scans+2,
+            "Restoring the bar must refresh the visibility geometry once.");
         RenderTexture2D surface={.texture={.width=630,.height=320}};
         int32_t tx=-1,ty=-1;
         MineIntentTarget target=MINE_INTENT_MOVE;
+        BoundingBox slab_box=MineClosedBarBounds();
+        float slab_distance=-1.0f;
+        MINE_CHECK(MineRayBoxDistance((Ray){.position={14,0.7f,10},.direction={1,0,0}},
+                                      slab_box,&slab_distance) &&
+            isfinite(slab_distance) && fabsf(slab_distance-.5f)<.001f,
+            "An axis-parallel ray must produce a finite bar-box distance.");
+        MINE_CHECK(MineRayBoxDistance((Ray){.position={14.5f,.7f,10},.direction={0,1,0}},
+                                      slab_box,&slab_distance) && slab_distance==0.0f,
+            "A ray on a bar-box boundary must begin at a finite zero distance.");
+        MINE_CHECK(!MineRayBoxDistance((Ray){.position={14,0.7f,10},.direction={0,1,0}},
+                                       slab_box,&slab_distance),
+            "An axis-parallel ray outside the bar box must miss cleanly.");
+        MINE_CHECK(!MineRayBoxDistance((Ray){.position={NAN,0.7f,10},.direction={1,0,0}},
+                                       slab_box,&slab_distance),
+            "A non-finite ray must miss without creating a non-finite distance.");
         Camera3D camera=CcLocalMineCamera(&picked,pick_local.mine_facing);
         Vector2 clear_floor=GetWorldToScreenEx((Vector3){9,0,4},camera,630,320);
         MINE_CHECK(clear_floor.x>=0&&clear_floor.x<630&&clear_floor.y>=0&&clear_floor.y<320,
@@ -58,17 +89,39 @@ static int RunMineInputRegression(void)
             "A remembered corridor must keep multi-step pointing useful.");
         MINE_CHECK(!MineLineVisible(&picked,(Vector3){5,.55f,4},(Vector3){15,0,11}),
             "A wall must hide floor beyond it from the pointer route.");
+        memset(pick_local.mine_known,1,sizeof(pick_local.mine_known));
+        picked.mine.x=15; picked.mine.y=12;
+        int32_t goal_x=-1,goal_y=-1,goal_step=-1,goal_distance=-1;
+        MINE_CHECK(MineIntentGoal(&picked,&pick_local,MINE_INTENT_BAR,&goal_x,&goal_y) &&
+            MinePath(&picked,&pick_local,goal_x,goal_y,&goal_step,&goal_distance) &&
+            goal_x==15 && goal_y==11 && goal_distance==1,
+            "A named bar approach must choose the nearest legal side from below.");
+        picked.mine.x=15; picked.mine.y=7;
+        MINE_CHECK(MineIntentGoal(&picked,&pick_local,MINE_INTENT_BAR,&goal_x,&goal_y) &&
+            MinePath(&picked,&pick_local,goal_x,goal_y,&goal_step,&goal_distance) &&
+            goal_x==15 && goal_y==9 && goal_distance==2,
+            "A named bar approach must choose the nearest legal side from above.");
         picked.mine.x=15; picked.mine.y=9; pick_local.mine_facing=2;
         camera=CcLocalMineCamera(&picked,pick_local.mine_facing);
         Vector2 bar=GetWorldToScreenEx((Vector3){15,.85f,10},camera,630,320);
         int label_x=-1,label_y=-1;
+        Ray bar_ray={.position={15,1.15f,9},.direction={0,-.3f,1}};
+        MINE_CHECK(MineClosedBarDistance(bar_ray,&slab_distance) &&
+            fabsf(MineOccluderDistance(&picked,bar_ray,100.0f)-slab_distance)<.001f,
+            "The visible bar beams must use the same occlusion distance as picking.");
         MINE_CHECK(MineLabelPosition(surface,&picked,&pick_local,(Vector3){15,1,10},15,10,
                                       &label_x,&label_y) &&
             label_x>=80 && label_x<=550 && label_y>=12 && label_y<=300,
             "The closed bar must keep a visible label inside the mine view.");
-        MINE_CHECK(!MineLabelPosition(surface,&picked,&pick_local,(Vector3){15,1,12},15,12,
+        picked.mine.x=5; picked.mine.y=4; pick_local.mine_facing=1;
+        MINE_CHECK(!MineLabelPosition(surface,&picked,&pick_local,(Vector3){15,0,11},15,11,
                                        &label_x,&label_y),
             "A wall before a named target must hide its label.");
+        picked.mine.x=15; picked.mine.y=9; pick_local.mine_facing=2;
+        MINE_CHECK(!CcMineWalkable(&picked,CC_MINE_LEVEL,15,10) &&
+            MineTargetBounds(&picked,MINE_INTENT_BAR,(BoundingBox[1]){{0}},&tx,&ty) &&
+            tx==15 && ty==10,
+            "The visible closed bar must retain its blocking tile and matching pick bounds.");
         MINE_CHECK(MinePick(&picked,&pick_local,surface,bar,&tx,&ty,&target) &&
             target==MINE_INTENT_BAR,
             "A visible bar click must name the bar rather than its floor.");

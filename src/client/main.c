@@ -262,6 +262,11 @@ typedef struct LocalState {
     int32_t mine_intent_target;
     int32_t mine_intent_revision;
     uint8_t mine_known[CC_MINE_WIDTH * CC_MINE_HEIGHT];
+    int32_t mine_visibility_x, mine_visibility_y;
+    CcMinePhase mine_visibility_phase;
+    bool mine_visibility_bar_open;
+    uint32_t mine_visibility_scans;
+    uint32_t mine_visibility_rays;
     CcLocalConvoyState convoy;
     CcLocalWorldCarriageState world_carriage;
     CcClientDepartureTransition departure;
@@ -1251,6 +1256,12 @@ static void ResetLocalState(LocalState *local)
     local->mine_intent_target = 0;
     local->mine_intent_revision = -1;
     memset(local->mine_known, 0, sizeof(local->mine_known));
+    local->mine_visibility_x = -1;
+    local->mine_visibility_y = -1;
+    local->mine_visibility_phase = CC_MINE_NONE;
+    local->mine_visibility_bar_open = false;
+    local->mine_visibility_scans = 0;
+    local->mine_visibility_rays = 0;
     local->departure = (CcClientDepartureTransition){
         .phase = CC_CLIENT_DEPARTURE_READY,
     };
