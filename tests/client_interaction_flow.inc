@@ -327,8 +327,78 @@ static int RunConversationFocusRegression(void)
     return 0;
 }
 
+static int RunAdventureMineRoadRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    const char *path = "adventure-mine-road.ccsave";
+    char error[256] = "";
+    char message[256] = "";
+    (void)remove(path);
+    CcSimInit(&sim, UINT32_C(0x3235a7ed));
+    const CcRoadSite *mine = CcMineSite(&sim);
+    if (mine == NULL)
+        return ClientRegressionFailure("Low Silver Pit must have an authored road site.");
+    const CcRoute *route = CcSimRoute(&sim, mine->route_id);
+    if (route == NULL)
+        return ClientRegressionFailure("Low Silver Pit must have an authored route.");
+    CcId silverwick = sim.dungeons[0].settlement_id;
+    if (route->from_id != silverwick && route->to_id != silverwick)
+        return ClientRegressionFailure("Silverwick must be an endpoint of the mine road.");
+    sim.player.location_id = silverwick;
+    sim.carriage.location_id = silverwick;
+    (void)snprintf(sim.dungeons[0].name,
+                   sizeof(sim.dungeons[0].name),
+                   "%s", "The Saintless Vault");
+    CcLocalBindPlace(&sim);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    local.course.automatic_alarm = false;
+    BuildAdventureTargets(
+        &sim, &local, (RenderTexture2D){0}, (Rectangle){0});
+    CcInteractionTarget *mine_card = NULL;
+    for (int32_t i = 0; i < local.interactions.count; ++i) {
+        CcInteractionTarget *candidate = &local.interactions.targets[i];
+        if (candidate->key.kind == CC_INTERACTION_SITE &&
+            candidate->key.object == CC_LOCAL_SITE_DUNGEON) {
+            mine_card = candidate;
+            break;
+        }
+    }
+    if (mine_card == NULL ||
+        strcmp(mine_card->name, "Low Silver Pit road") != 0)
+        return ClientRegressionFailure("The shipped mine card must name the Low Silver Pit road.");
+    RepositionHero(
+        &local, (Vector2){mine_card->approach_x,
+                          mine_card->approach_z}, false);
+    CcJournal *journal = CcJournalStart(
+        path, &sim, error, sizeof(error));
+    if (journal == NULL) return ClientRegressionFailure(error);
+    ClientView view = VIEW_LOCAL;
+    ClientView return_view = VIEW_LOCAL;
+    int32_t selected_situation = 0;
+    for (int32_t frame = 0; frame < 8 && !sim.journey.active; ++frame) {
+        (void)HandleAdventureScene(
+            journal, &sim, &local, &view, &return_view,
+            &selected_situation, frame == 0 ? mine_card : NULL,
+            1.0f / 60.0f, message, sizeof(message));
+    }
+    bool passed = sim.journey.active &&
+        sim.journey.route_id == mine->route_id &&
+        local.site_kind == CC_LOCAL_SITE_NONE &&
+        !sim.dungeon_expedition.active &&
+        local.journey_travel_active;
+    CcJournalAbandon(&journal);
+    (void)remove(path);
+    if (!passed)
+        return ClientRegressionFailure("The adventure mine card must begin the real Silverwick-Alderwatch road journey.");
+    return 0;
+}
+
 static int RunAdventureInputRegression(void)
 {
+    int mine_road_result = RunAdventureMineRoadRegression();
+    if (mine_road_result != 0) return mine_road_result;
     int road_result = RunPresentedRoadRegression();
     if (road_result != 0) return road_result;
     int focus_result = RunConversationFocusRegression();
@@ -714,10 +784,10 @@ static int RunAdventureTownRoutesRegression(void)
         int32_t selected_situation = 0;
         char message[256] = "";
         queued_key_press[KEY_F] = true;
-        (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
+        (void)HandleAdventureScene(NULL, &sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
         ClientInputClearPressed();
         for (int frame = 0; frame < 3000 && !local.market_interior && local.interaction.approaching; ++frame) {
-            (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
+            (void)HandleAdventureScene(NULL, &sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
         }
         if (!local.market_interior) {
             fprintf(stderr, "town type %d at %.2f %.2f: %s / %s\n", type, local.agent.position.x, local.agent.position.z, message, local.interaction.feedback);
@@ -730,10 +800,10 @@ static int RunAdventureTownRoutesRegression(void)
         counter->visible = true;
         local.interaction.focus = counter->key;
         queued_key_press[KEY_F] = true;
-        (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
+        (void)HandleAdventureScene(NULL, &sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
         ClientInputClearPressed();
         for (int frame = 0; frame < 1200 && view == VIEW_LOCAL && local.interaction.approaching; ++frame)
-            (void)HandleAdventureScene(&sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
+            (void)HandleAdventureScene(NULL, &sim, &local, &view, &return_view, &selected_situation, NULL, 1.0f / 60.0f, message, sizeof(message));
         if (view != VIEW_TRADE) return ClientRegressionFailure("Each keeper must be reachable from the shop entrance.");
     }
     puts("six town door and counter routes passed");

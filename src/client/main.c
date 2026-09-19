@@ -4780,9 +4780,13 @@ static ContextActionSet BuildContextActions(
         }
         if (GridDistance(position, entrance) < 2.25f) {
             if (local->site_kind == CC_LOCAL_SITE_DUNGEON) {
+                const CcDungeon *site_dungeon = DungeonAtSettlement(
+                    sim, sim->player.location_id);
                 AddDetailedContextAction(
                     &set, CONTEXT_ACTION_EXPEDITION,
-                    "Enter the Underroad", "E",
+                    TextFormat("Enter %s",
+                               site_dungeon != NULL ? site_dungeon->name :
+                                   "the Underroad"), "E",
                     "NEEDS 1 BREAD OR MEAT ABOARD",
                     CcNutritionAvailable(sim->player.cargo,
                                          CC_NUTRITION_TRAVEL) >=
@@ -9083,7 +9087,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
     if (command_action == COMMAND_ACTION_NONE &&
         (context_action == CONTEXT_ACTION_NONE || context_action == CONTEXT_ACTION_WORLD_TARGET) &&
-        HandleAdventureScene(sim, local, view, return_view, selected_situation,
+        HandleAdventureScene(*journal, sim, local, view, return_view,
+            selected_situation,
             context_action == CONTEXT_ACTION_WORLD_TARGET ?
                 CcInteractionFind(&local->interactions, pressed_action.target) : NULL,
             delta_time, message, message_capacity)) {
