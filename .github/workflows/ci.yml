@@ -20,6 +20,18 @@ env:
   CTEST_PARALLEL_LEVEL: 4
 
 jobs:
+  dialogue-coverage:
+    name: Dialogue event coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check every event has a grammar rule
+        run: python3 tools/dialogue/audit_grammar.py --check
+      - name: Check generated native grammar
+        run: python3 tools/compile_core_accounts.py --check
+      - name: Test the new-event failure guard
+        run: python3 tests/dialogue_coverage_tests.py
+
   static-analysis:
     name: Static analysis
     runs-on: ubuntu-latest

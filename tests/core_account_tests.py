@@ -29,8 +29,17 @@ for rule in data['rules']:
             assert source.encode()[field['start']:field['end']].decode() == field['text']
             assert field['spoken'] == any('{' + str(field['field']) + '}' in t for t in rule['outputs'])
         # Extra claims and malformed numeric fields require their own rules.
-        assert subprocess.run([*args[:4], source + ' A different event happened.'],
-                              capture_output=True).returncode == 1
+        # Rumor/front messages end with an open detail payload. Extra text is
+        # part of that quoted account; fixed-ended forms must reject it.
+        open_detail = re.search(r'\{(\d)\}$', rule['source'])
+        if open_detail and rule['roles'][int(open_detail[1])] == 'detail':
+            extended = subprocess.check_output(
+                [*args[:4], source + ' A different event happened.'], text=True)
+            if '{' + open_detail[1] + '}' in template:
+                assert 'A different event happened.' in extended
+        else:
+            assert subprocess.run([*args[:4], source + ' A different event happened.'],
+                                  capture_output=True).returncode == 1
         if 'less_than' in rule:
             left, right = rule['less_than']
             for amount in ('8', '9', 'eight', 'nine'):
@@ -102,7 +111,9 @@ for rule in data['rules']:
                 parses = subprocess.run(
                     [sys.argv[1], '--parse-kind', str(kinds[rule['kind']]), speech[:-1] + tail],
                     capture_output=True, text=True)
-                assert parses.returncode == 0, (rule['id'], speech[:-1] + tail)
+                # Speech and known hedge tails share the event byte bound.
+                expected_status = 0 if len((speech[:-1] + tail).encode()) < 144 else 1
+                assert parses.returncode == expected_status, (rule['id'], speech[:-1] + tail)
 # The inverse abstains rather than guessing at speech no rule renders.
 assert subprocess.run([sys.argv[1], '--parse', 'nothing here matches a rule.'],
                       capture_output=True).returncode == 1
@@ -110,3 +121,16 @@ assert subprocess.run([sys.argv[1], '--parse-kind', '0', 'nothing here matches a
                       capture_output=True).returncode == 1
 print(f'{inverse} spoken renderings parsed back to their event, tails and abstention checked')
 
+# Names can contain the same separator that precedes a quantity. The parser
+# must find a valid boundary and preserve punctuation within the name.
+for name in ('Willow Republic', 'St. Ilyra'):
+    source = f'Copied monastery books lend {name} 7 crowns for Wood at Thornford.'
+    args = [sys.argv[1], str(kinds['IRON_LEDGER_LOAN']), '80', '0', source]
+    packet = json.loads(subprocess.check_output([*args, '--packet'], text=True))
+    assert packet['fields'][0]['text'] == name
+    assert packet['fields'][1]['text'] == '7'
+    assert subprocess.run([*args[:4], source + ' Someone else was paid.'],
+                          capture_output=True, timeout=2).returncode == 1
+ambiguous = 'Copied monastery books lend ' + 'a ' * 45 + 'crowns for Wood at Thornford.'
+assert subprocess.run([sys.argv[1], str(kinds['IRON_LEDGER_LOAN']), '80', '0', ambiguous],
+                      capture_output=True, timeout=2).returncode == 1

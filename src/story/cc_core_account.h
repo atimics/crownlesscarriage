@@ -5,6 +5,7 @@
 
 #define CC_CORE_FIELDS 8
 #define CC_CORE_MIND_LINES 2
+bool CcCoreAccountGrammarCompatible(const char *hash);
 typedef enum CcCoreRole {
     CC_CORE_NONE, CC_CORE_ACTOR, CC_CORE_RECIPIENT, CC_CORE_PLACE,
     CC_CORE_OBJECT, CC_CORE_GROUP, CC_CORE_MATERIAL, CC_CORE_DETAIL,

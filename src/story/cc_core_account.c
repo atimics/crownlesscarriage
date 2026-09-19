@@ -18,6 +18,16 @@ static const CoreRule Rules[] = {
 
 const char *CcCoreAccountGrammar(void) { return CC_CORE_GRAMMAR_SHA256; }
 
+bool CcCoreAccountGrammarCompatible(const char *hash)
+{
+    static const char *const compatible[] = CC_CORE_COMPATIBLE_GRAMMARS;
+    if (hash == NULL) return false;
+    for (size_t i = 0U; i < sizeof(compatible) / sizeof(compatible[0]); ++i) {
+        if (strcmp(hash, compatible[i]) == 0) return true;
+    }
+    return false;
+}
+
 static bool Quantity(const char *at, size_t length, uint64_t *value)
 {
     static const char *const words[] = {"zero", "one", "two", "three", "four", "five", "six",
@@ -42,52 +52,78 @@ static bool Quantity(const char *at, size_t length, uint64_t *value)
     return false;
 }
 
+typedef struct MatchBudget { unsigned int attempts; } MatchBudget;
+
+static bool MatchField(const CoreRule *rule, CcCoreAccount *account, unsigned int slot,
+                       const char *at, const char *end)
+{
+    CcCoreField *field = &account->fields[slot];
+    field->start = (size_t)(at - account->text);
+    field->length = (size_t)(end - at);
+    field->role = rule->roles[slot];
+    char marker[] = {'{', (char)('0' + slot), '}', '\0'};
+    field->spoken = strstr(rule->outputs[0], marker) != NULL || strstr(rule->outputs[1], marker) != NULL;
+    field->knowledge = account->confidence < 40 ? CC_CORE_UNCERTAIN : CC_CORE_KNOWN;
+    if (rule->allowed[slot] != NULL) {
+        char option[CC_EVENT_TEXT_CAPACITY + 3];
+        option[0] = '|';
+        memcpy(option + 1, at, field->length);
+        option[field->length + 1U] = '|';
+        option[field->length + 2U] = '\0';
+        if (strstr(rule->allowed[slot], option) == NULL) return false;
+    }
+    if (field->length == 0U && field->role != CC_CORE_DETAIL) return false;
+    if (field->role == CC_CORE_QUANTITY) {
+        uint64_t value = 0U;
+        if (!Quantity(at, field->length, &value)) return false;
+        if ((rule->positive & (1U << slot)) != 0U &&
+            (strspn(at, "0") == field->length ||
+             (field->length == 4U && strncmp(at, "zero", 4U) == 0))) return false;
+    }
+    return true;
+}
+
+static bool MatchPattern(const CoreRule *rule, const char *pattern, CcCoreAccount *account,
+                         const char *at, MatchBudget *budget)
+{
+    if (*pattern == '\0') return *at == '\0';
+    if (*pattern != '{') {
+        const char *literal = pattern;
+        while (*pattern != '\0' && *pattern != '{') ++pattern;
+        size_t length = (size_t)(pattern - literal);
+        return strncmp(at, literal, length) == 0 &&
+               MatchPattern(rule, pattern, account, at + length, budget);
+    }
+    if (pattern[1] < '0' || pattern[1] > '7' || pattern[2] != '}') return false;
+    unsigned int slot = (unsigned int)(pattern[1] - '0');
+    if (slot >= rule->field_count) return false;
+    pattern += 3;
+    const char *next = strchr(pattern, '{');
+    size_t separator_length = next == NULL ? strlen(pattern) : (size_t)(next - pattern);
+    const char *limit = account->text + strlen(account->text);
+    if (at > limit || separator_length > (size_t)(limit - at)) return false;
+    const char *last = separator_length == 0U && next == NULL ? limit : limit - separator_length;
+    bool terminal_separator = separator_length != 0U &&
+        (pattern[separator_length - 1U] == '.' || pattern[separator_length - 1U] == '!' ||
+         pattern[separator_length - 1U] == '?');
+    for (const char *end = at; end <= last; ++end) {
+        if (++budget->attempts > 4096U) return false;
+        if (separator_length != 0U && strncmp(end, pattern, separator_length) != 0) continue;
+        CcCoreField saved = account->fields[slot];
+        if (!MatchField(rule, account, slot, at, end)) { account->fields[slot] = saved; continue; }
+        const char *rest = next == NULL ? pattern + separator_length : next;
+        if (MatchPattern(rule, rest, account, end + separator_length, budget)) return true;
+        account->fields[slot] = saved;
+        if (terminal_separator) return false;
+    }
+    return false;
+}
+
 static bool Match(const CoreRule *rule, const char *pattern, CcCoreAccount *account,
                   bool numeric)
 {
-    const char *at = account->text;
-    while (*pattern != '\0') {
-        if (pattern[0] != '{') {
-            if (*pattern++ != *at++) return false;
-            continue;
-        }
-        unsigned int slot = (unsigned int)(pattern[1] - '0');
-        if (slot >= rule->field_count || pattern[2] != '}') return false;
-        pattern += 3;
-        const char *next = strchr(pattern, '{');
-        size_t length = next == NULL ? strlen(pattern) : (size_t)(next - pattern);
-        char separator[CC_EVENT_TEXT_CAPACITY];
-        if (length >= sizeof(separator)) return false;
-        memcpy(separator, pattern, length);
-        separator[length] = '\0';
-        const char *end = length == 0U ? at + strlen(at) : strstr(at, separator);
-        if (end == NULL) return false;
-        CcCoreField *field = &account->fields[slot];
-        field->start = (size_t)(at - account->text);
-        field->length = (size_t)(end - at);
-        field->role = rule->roles[slot];
-        char marker[] = {'{', (char)('0' + slot), '}', '\0'};
-        field->spoken = strstr(rule->outputs[0], marker) != NULL || strstr(rule->outputs[1], marker) != NULL;
-        field->knowledge = account->confidence < 40 ? CC_CORE_UNCERTAIN : CC_CORE_KNOWN;
-        if (rule->allowed[slot] != NULL) {
-            char option[CC_EVENT_TEXT_CAPACITY + 3];
-            option[0] = '|';
-            memcpy(option + 1, at, field->length);
-            option[field->length + 1U] = '|';
-            option[field->length + 2U] = '\0';
-            if (strstr(rule->allowed[slot], option) == NULL) return false;
-        }
-        if (field->length == 0U && field->role != CC_CORE_DETAIL) return false;
-        if (field->role == CC_CORE_QUANTITY) {
-            uint64_t value = 0U;
-            if (!Quantity(at, field->length, &value)) return false;
-            if ((rule->positive & (1U << slot)) != 0U &&
-                (strspn(at, "0") == field->length ||
-                 (field->length == 4U && strncmp(at, "zero", 4U) == 0))) return false;
-        }
-        at = end;
-    }
-    if (*at != '\0') return false;
+    MatchBudget budget = {0U};
+    if (!MatchPattern(rule, pattern, account, account->text, &budget)) return false;
     if (numeric && rule->less_left >= 0) {
         const CcCoreField *left = &account->fields[rule->less_left];
         const CcCoreField *right = &account->fields[rule->less_right];

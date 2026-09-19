@@ -69,7 +69,7 @@ int main(int argc, char **argv)
     if (argc < 5 || argc > 9) return 2;
     char *end = NULL;
     long kind = strtol(argv[1], &end, 10);
-    if (*end != '\0' || kind < 0 || kind > CC_EVENT_PROPHECY_DELIVERED) return 2;
+    if (end == argv[1] || *end != '\0' || kind < 0 || kind >= CC_EVENT_KIND_COUNT) return 2;
     long confidence = strtol(argv[2], &end, 10);
     if (*end != '\0' || confidence < 0 || confidence > 100) return 2;
     long variant = strtol(argv[3], &end, 10);
