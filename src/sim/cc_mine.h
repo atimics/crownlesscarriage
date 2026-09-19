@@ -8,11 +8,14 @@
 int32_t CcMineBranchSubtick(const CcSim *sim);
 const CcRoadSite *CcMineSite(const CcSim *sim);
 bool CcMineWalkable(const CcSim *sim, CcMinePhase phase, int32_t x, int32_t y);
+bool CcMineWalkableState(CcMinePhase phase, int32_t x, int32_t y,
+                         bool bar_open);
 int32_t CcMineChamber(int32_t x, int32_t y);
 const char *CcMineChamberName(int32_t chamber);
 int32_t CcMinePackUsed(const CcSim *sim);
 int32_t CcMinePackGood(const CcSim *sim, CcGood good);
 void CcMineInitializeLoad(CcSim *sim);
+bool CcMineSettleFallenPack(CcSim *sim);
 int32_t CcMineSourceUsed(const CcSim *sim);
 int32_t CcMineCacheUsed(const CcSim *sim);
 int32_t CcMineSourceGood(const CcSim *sim, CcGood good);

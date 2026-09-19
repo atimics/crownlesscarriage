@@ -67,7 +67,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 103
+#define CC_SIM_SCHEMA_VERSION 104
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -654,7 +654,12 @@ typedef enum CcCommandKind {
     /* Schema 103: inspect, take from, and cache the finite mine load (#484). */
     CC_COMMAND_MINE_INSPECT = 65,
     CC_COMMAND_MINE_TAKE = 66,
-    CC_COMMAND_MINE_CACHE = 67
+    CC_COMMAND_MINE_CACHE = 67,
+    /* Schema 104: resolve the staged Silverwick hauler encounter (#763). */
+    CC_COMMAND_MINE_BARGAIN = 68,
+    CC_COMMAND_MINE_CONTEST = 69,
+    CC_COMMAND_MINE_BREAK_CONTACT = 70,
+    CC_COMMAND_MINE_RESOLVE_CONTEST = 71
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1910,6 +1915,13 @@ typedef enum CcMinePhase {
     CC_MINE_NONE, CC_MINE_YARD, CC_MINE_LEVEL
 } CcMinePhase;
 
+typedef enum CcMineEncounterOutcome {
+    CC_MINE_ENCOUNTER_OPEN,
+    CC_MINE_ENCOUNTER_BARGAINED,
+    CC_MINE_ENCOUNTER_CONTESTED,
+    CC_MINE_ENCOUNTER_BROKEN_CONTACT
+} CcMineEncounterOutcome;
+
 typedef struct CcMineVisit {
     CcMinePhase phase;
     CcId site_id;
@@ -1923,7 +1935,7 @@ typedef struct CcMineVisit {
     bool surveyed;
     int32_t pack[CC_GOOD_COUNT];
     /* Schema 103: one goblin-hauler load and player-owned cache in the
-       six-room mine. A later bargain releases the load to this command seam. */
+       six-room mine. Schema 104 adds its one persistent offer and outcomes. */
     CcId source_id;
     CcId source_owner_id;
     CcId cache_id;
@@ -1931,6 +1943,10 @@ typedef struct CcMineVisit {
     int32_t source_x, source_y;
     int32_t cache_x, cache_y;
     bool source_released;
+    bool bypass_route_seen;
+    bool contest_active;
+    uint8_t encounter_outcome;
+    uint8_t player_injury;
 } CcMineVisit;
 
 typedef struct CcCommand {

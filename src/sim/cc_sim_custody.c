@@ -166,7 +166,8 @@ static bool PermitMineTransfer(const void *context, uint64_t actor,
     CcCustodyHolder pack={CC_CUSTODY_MINE_PACK,sim->player.id};
     CcCustodyHolder source={CC_CUSTODY_SITE,sim->mine.source_id};
     CcCustodyHolder cache={CC_CUSTODY_SITE,sim->mine.cache_id};
-    return (SameMineHolder(entry->holder,source.kind,source.id) &&
+    return (sim->mine.source_released &&
+            SameMineHolder(entry->holder,source.kind,source.id) &&
             SameMineHolder(destination,pack.kind,pack.id)) ||
         (SameMineHolder(entry->holder,pack.kind,pack.id) &&
          SameMineHolder(destination,cache.kind,cache.id)) ||

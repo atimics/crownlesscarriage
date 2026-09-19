@@ -112,11 +112,14 @@ static bool RoadEncounterValidate(const CcClientSession *session)
     const CcClientRoadEncounter *encounter = &session->road_encounter;
     if (encounter->mode == CC_CLIENT_ROAD_ENCOUNTER_NONE) return true;
     if (encounter->mode < CC_CLIENT_ROAD_ENCOUNTER_FIGHT ||
-        encounter->mode > CC_CLIENT_ROAD_ENCOUNTER_LOCAL ||
+        encounter->mode > CC_CLIENT_ROAD_ENCOUNTER_MINE ||
         (encounter->mode != CC_CLIENT_ROAD_ENCOUNTER_LOCAL &&
          (session->scene != CC_CLIENT_SESSION_STREET ||
           session->coordinate_space != CC_CLIENT_SESSION_LEGACY_LOCAL ||
           session->route_id != 0U)) ||
+        (encounter->mode == CC_CLIENT_ROAD_ENCOUNTER_MINE &&
+         (encounter->mine_source_id == 0U || encounter->mine_group_id == 0U ||
+          encounter->mine_revision < 0)) ||
         !EncounterActorValidate(&encounter->player) ||
         !SessionFloatInRange(encounter->engagement_time,
                              0.0f, 100000.0f) ||
@@ -265,7 +268,7 @@ bool CcClientSessionWrite(const char *path, const CcClientSession *session,
     const CcClientRoadEncounter *encounter = &session->road_encounter;
     bool ok = written > 0 &&
         WriteAthleticProfile(file, &session->athletics) &&
-        fprintf(file, "ROAD %.9g %.9g %.9g %d %d %d %d %d\n",
+        fprintf(file, "ROAD %.9g %.9g %.9g %d %d %d %d %d %llu %llu %d\n",
                 (double)encounter->engagement_time,
                 (double)encounter->alarm_countdown,
                 (double)encounter->combat_event_seconds,
@@ -273,7 +276,10 @@ bool CcClientSessionWrite(const char *path, const CcClientSession *session,
                 encounter->raider_resolve,
                 encounter->defenses_completed,
                 encounter->alarm_active ? 1 : 0,
-                encounter->raiders_retreating ? 1 : 0) > 0;
+                encounter->raiders_retreating ? 1 : 0,
+                (unsigned long long)encounter->mine_source_id,
+                (unsigned long long)encounter->mine_group_id,
+                encounter->mine_revision) > 0;
     for (int32_t guard = 0;
          ok && guard < CC_CLIENT_SESSION_GUARD_COUNT; ++guard) {
         ok = fprintf(file, "GUARD %.9g %.9g %d %d\n",
@@ -348,25 +354,33 @@ static bool ReadEncounterActor(FILE *file, CcClientEncounterActor *actor)
            (strike_resolved == 0 || strike_resolved == 1);
 }
 
-static bool ReadRoadEncounter(FILE *file, CcClientRoadEncounter *encounter)
+static bool ReadRoadEncounter(FILE *file, CcClientRoadEncounter *encounter,
+                              uint32_t version)
 {
     char marker[16] = "";
     int alarm_active = 0;
     int raiders_retreating = 0;
-    if (fscanf(file, "%15s", marker) != 1 ||
-        strcmp(marker, "ROAD") != 0 ||
-        fscanf(file, "%f %f %f %d %d %d %d %d",
+    unsigned long long mine_source_id=0U,mine_group_id=0U;
+    if (fscanf(file, "%15s", marker) != 1 || strcmp(marker, "ROAD") != 0)
+        return false;
+    int fields=fscanf(file, "%f %f %f %d %d %d %d %d",
                &encounter->engagement_time,
                &encounter->alarm_countdown,
                &encounter->combat_event_seconds,
                &encounter->raider_initial_resolve,
                &encounter->raider_resolve,
                &encounter->defenses_completed,
-               &alarm_active, &raiders_retreating) != 8 ||
+               &alarm_active, &raiders_retreating);
+    if (fields != 8 ||
         (alarm_active != 0 && alarm_active != 1) ||
         (raiders_retreating != 0 && raiders_retreating != 1)) {
         return false;
     }
+    if (version >= 9U &&
+        fscanf(file,"%llu %llu %d",&mine_source_id,&mine_group_id,
+               &encounter->mine_revision) != 3) return false;
+    encounter->mine_source_id=(uint64_t)mine_source_id;
+    encounter->mine_group_id=(uint64_t)mine_group_id;
     encounter->alarm_active = alarm_active != 0;
     encounter->raiders_retreating = raiders_retreating != 0;
     for (int32_t guard = 0;
@@ -449,7 +463,7 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
     int header_fields = fscanf(file, "%31s %u", marker, &version);
     int body_fields = 0;
     if (header_fields == 2 &&
-        (version == CC_CLIENT_SESSION_VERSION || version == 7U || version == 6U || version == 5U)) {
+        (version == CC_CLIENT_SESSION_VERSION || version == 8U || version == 7U || version == 6U || version == 5U)) {
         body_fields = fscanf(file, "%u %llu %d %d %llu %f %f %f %u %d",
                              &world_seed, &location_id, &scene,
                              &coordinate_space, &route_id, &position_x,
@@ -485,10 +499,10 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
         .road_encounter.mode =
             (CcClientRoadEncounterMode)road_encounter_mode
     };
-    bool current_payload = (version == CC_CLIENT_SESSION_VERSION || version == 7U || version == 6U) &&
+    bool current_payload = (version == CC_CLIENT_SESSION_VERSION || version == 8U || version == 7U || version == 6U) &&
                            body_fields == 10 &&
                            ReadAthleticProfile(file, &loaded.athletics) &&
-                           ReadRoadEncounter(file, &loaded.road_encounter);
+                           ReadRoadEncounter(file, &loaded.road_encounter,(uint32_t)version);
     if (current_payload && version >= 7U) {
         char travel_marker[16] = "";
         int active = 0, returning = 0;
@@ -501,7 +515,7 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
     }
     if (current_payload) loaded.version = CC_CLIENT_SESSION_VERSION;
     bool version_five_payload = version == 5U && body_fields == 10 &&
-        ReadRoadEncounter(file, &loaded.road_encounter);
+        ReadRoadEncounter(file, &loaded.road_encounter,(uint32_t)version);
     bool closed = fclose(file) == 0;
     bool version_one = version == 1U && body_fields == 6;
     bool version_two = version == 2U && body_fields == 7;

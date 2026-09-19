@@ -373,6 +373,134 @@ static int RunMineInputRegression(void)
         HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
         MINE_CHECK(input_local.mine_target_x<0&&input.mine.x==stale_x&&input.mine.y==stale_y,
             "A changed revision must cancel queued pointer input before it moves.");
+        input.mine.x=25; input.mine.y=16;
+        input.mine.pack[CC_GOOD_BREAD]=2;
+        input.mine.encounter_outcome=CC_MINE_ENCOUNTER_OPEN;
+        input.mine.contest_active=false;
+        input.mine.source_released=false;
+        MineRememberVisible(&input,&input_local);
+        uint64_t held_contact=CcSimHash(&input);
+        mine_control=MineControl(2);
+        client_test_pointer_active=true;
+        client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,
+                                      mine_control.y+mine_control.height/2};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
+        client_test_pointer_active=false;
+        ClientInputClearPressed();
+        MINE_CHECK(CcSimHash(&input)==held_contact,
+            "Break contact must stay disabled before a contest starts.");
+        queued_key_press[KEY_C]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
+        ClientInputClearPressed();
+        MINE_CHECK(input.mine.contest_active&&input_local.mine_combat_active&&
+            input_local.course.mine_encounter&&
+            input_local.course.raider_company_id==input.goblins.id&&
+            input_local.agent.scene==CC_LOCAL_SCENE_MINE&&
+            fabsf(input_local.agent.position.x-25.0f)<.001f&&
+            fabsf(input_local.agent.position.z-16.0f)<.001f,
+            "C must stage the saved hauler group at the saved mine approach.");
+        queued_key_press[KEY_SPACE]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
+        ClientInputClearPressed();
+        MINE_CHECK(input_local.agent.combat.target_index>=0,
+            "Space must use the selected course combat target.");
+        input_local.agent.combat.health=73.0f;
+        mine_control=MineControl(2);
+        client_test_pointer_active=true;
+        client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,
+                                      mine_control.y+mine_control.height/2};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
+        client_test_pointer_active=false;
+        ClientInputClearPressed();
+        MINE_CHECK(!input.mine.contest_active&&input.mine.player_injury==27&&
+            input.mine.x==25&&input.mine.y==16&&
+            fabsf(input_local.agent.position.x-25.0f)<.001f&&
+            fabsf(input_local.agent.position.z-16.0f)<.001f,
+            "The pointer break action must record injury and keep the mine tile aligned.");
+        queued_key_press[KEY_C]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,0.0f,message,sizeof(message));
+        ClientInputClearPressed();
+        MINE_CHECK(input.mine.contest_active&&
+            fabsf(input_local.agent.combat.health-73.0f)<.001f,
+            "Reengagement must restore the injury recorded at break contact.");
+        mine_control=MineControl(2);
+        client_test_pointer_active=true;
+        client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,
+                                      mine_control.y+mine_control.height/2};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,0.0f,message,sizeof(message));
+        client_test_pointer_active=false;
+        ClientInputClearPressed();
+        MINE_CHECK(!input.mine.contest_active&&input.mine.player_injury==27,
+            "A second physical break must retain the recovered combat state.");
+        mine_control=MineControl(0);
+        client_test_pointer_active=true;
+        client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,
+                                      mine_control.y+mine_control.height/2};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
+        client_test_pointer_active=false;
+        ClientInputClearPressed();
+        BoundingBox ended_bounds; int32_t ended_x=0,ended_y=0;
+        MINE_CHECK(input.mine.encounter_outcome==CC_MINE_ENCOUNTER_BARGAINED&&
+            CcMinePackGood(&input,CC_GOOD_BREAD)==0&&
+            CcMinePackGood(&input,CC_GOOD_GOLD)==1&&
+            !MineTargetBounds(&input,MINE_INTENT_HAULERS,&ended_bounds,
+                              &ended_x,&ended_y),
+            "The bargain pointer must settle the offer and remove the hungry-hauler target.");
+        input.mine.encounter_outcome=CC_MINE_ENCOUNTER_CONTESTED;
+        input.mine.source_released=true;
+        input_local.mine_good=CC_GOOD_GOLD;
+        input_local.mine_quantity=1;
+        mine_control=MineControl(0);
+        client_test_pointer_active=true;
+        client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,
+                                      mine_control.y+mine_control.height/2};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,0.0f,message,sizeof(message));
+        client_test_pointer_active=false;
+        ClientInputClearPressed();
+        MINE_CHECK(strstr(message,"Hauler load")!=NULL,
+            "The settled contest must expose a visible inspect action.");
+        int32_t gold_before_take=CcMinePackGood(&input,CC_GOOD_GOLD);
+        mine_control=MineControl(1);
+        client_test_pointer_active=true;
+        client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,
+                                      mine_control.y+mine_control.height/2};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,0.0f,message,sizeof(message));
+        client_test_pointer_active=false;
+        ClientInputClearPressed();
+        MINE_CHECK(CcMinePackGood(&input,CC_GOOD_GOLD)==gold_before_take+1&&
+            strstr(message,"Took 1 Raw Gold")!=NULL,
+            "The visible take button must transfer the selected finite load.");
+        input.mine.x=input.mine.cache_x;
+        input.mine.y=input.mine.cache_y;
+        int32_t cache_before=CcMineCacheGood(&input,CC_GOOD_GOLD);
+        mine_control=MineControl(0);
+        client_test_pointer_active=true;
+        client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,
+                                      mine_control.y+mine_control.height/2};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,0.0f,message,sizeof(message));
+        client_test_pointer_active=false;
+        ClientInputClearPressed();
+        MINE_CHECK(CcMineCacheGood(&input,CC_GOOD_GOLD)==cache_before+1&&
+            strstr(message,"Cached 1 Raw Gold")!=NULL,
+            "The Rope Store button must cache the selected carried load.");
+        mine_control=MineControl(1);
+        client_test_pointer_active=true;
+        client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,
+                                      mine_control.y+mine_control.height/2};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,0.0f,message,sizeof(message));
+        client_test_pointer_active=false;
+        ClientInputClearPressed();
+        MINE_CHECK(CcMineCacheGood(&input,CC_GOOD_GOLD)==cache_before&&
+            strstr(message,"Recovered 1 Raw Gold")!=NULL,
+            "The Rope Store button must recover the selected finite load.");
         MINE_CHECK(CcJournalClose(&input_journal,&input,error,sizeof(error)),"Pointer mine journal must close.");
         (void)remove(input_path);
 #undef INPUT_POINTER

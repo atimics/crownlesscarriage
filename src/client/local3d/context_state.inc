@@ -880,7 +880,7 @@ static FixedCameraRig street_camera_rig = {0};
 static FixedCameraRig road_camera_rig = {0};
 static CombatCameraRig combat_camera_rig = {0};
 static ConversationCameraRig conversation_camera_rig = {0};
-static PresentedCameraState presented_camera[3] = {0};
+static PresentedCameraState presented_camera[4] = {0};
 static PresentedCameraState scenery_view = {0};
 static CcLocalPresentedPerson presented_people[64];
 static int32_t presented_people_count;
@@ -930,7 +930,7 @@ static void RememberPresentedCamera(CcLocalSceneKind scene, Camera3D camera,
                                     const CcLocalAgent *agent,
                                     int32_t width, int32_t height)
 {
-    if (scene < CC_LOCAL_SCENE_STREET || scene > CC_LOCAL_SCENE_ROAD ||
+    if (scene < CC_LOCAL_SCENE_STREET || scene > CC_LOCAL_SCENE_MINE ||
         width <= 0 || height <= 0) return;
     presented_people_count = 0;
     PresentedCameraState *state = &presented_camera[scene];
@@ -948,7 +948,7 @@ static bool PresentedCameraForInput(CcLocalSceneKind scene,
                                     Camera3D *camera)
 {
     if (camera == NULL || scene < CC_LOCAL_SCENE_STREET ||
-        scene > CC_LOCAL_SCENE_ROAD) return false;
+        scene > CC_LOCAL_SCENE_MINE) return false;
     const PresentedCameraState *state = &presented_camera[scene];
     if (!state->valid || state->width != width || state->height != height) {
         return false;

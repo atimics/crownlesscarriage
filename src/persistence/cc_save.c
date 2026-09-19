@@ -1445,7 +1445,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         "CREATE TABLE IF NOT EXISTS mine_load_state (slot INTEGER PRIMARY KEY CHECK(slot=1),"
         " source_id INTEGER NOT NULL,source_owner_id INTEGER NOT NULL,cache_id INTEGER NOT NULL,"
         " cache_owner_id INTEGER NOT NULL,source_x INTEGER NOT NULL,source_y INTEGER NOT NULL,"
-        " cache_x INTEGER NOT NULL,cache_y INTEGER NOT NULL,source_released INTEGER NOT NULL);";
+        " cache_x INTEGER NOT NULL,cache_y INTEGER NOT NULL,source_released INTEGER NOT NULL,"
+        " bypass_route_seen INTEGER NOT NULL DEFAULT 0,contest_active INTEGER NOT NULL DEFAULT 0,"
+        " encounter_outcome INTEGER NOT NULL DEFAULT 0,player_injury INTEGER NOT NULL DEFAULT 0);";
     return Execute(database, "CREATE TABLE IF NOT EXISTS custody_state (slot INTEGER PRIMARY KEY,next_id INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS custody_entry (slot INTEGER PRIMARY KEY,id INTEGER NOT NULL,revision INTEGER NOT NULL,owner_id INTEGER NOT NULL,source_id INTEGER NOT NULL,last_event_id INTEGER NOT NULL,holder_kind INTEGER NOT NULL,holder_id INTEGER NOT NULL,kind INTEGER NOT NULL,reference_id INTEGER NOT NULL,quantity INTEGER NOT NULL,good INTEGER NOT NULL,condition INTEGER NOT NULL,capacity INTEGER NOT NULL,active INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS notice_state (id INTEGER PRIMARY KEY CHECK(id=1),ready INTEGER NOT NULL);", error, error_capacity) &&
@@ -1461,6 +1463,14 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         Execute(database, "CREATE TABLE IF NOT EXISTS grain_supply (slot INTEGER PRIMARY KEY,organiser_id INTEGER NOT NULL,supplier_id INTEGER NOT NULL,route_id INTEGER NOT NULL,shipment_id INTEGER NOT NULL,purse INTEGER NOT NULL,spent INTEGER NOT NULL,ordered INTEGER NOT NULL,delivered INTEGER NOT NULL,lost INTEGER NOT NULL,redirected INTEGER NOT NULL,last_dispatch_day INTEGER NOT NULL,last_arrival_day INTEGER NOT NULL,enabled INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, goblin_schema, error, error_capacity) &&
         Execute(database, mine_schema, error, error_capacity) &&
+        EnsureColumn(database, "mine_load_state", "bypass_route_seen",
+            "ALTER TABLE mine_load_state ADD COLUMN bypass_route_seen INTEGER NOT NULL DEFAULT 0;", error, error_capacity) &&
+        EnsureColumn(database, "mine_load_state", "contest_active",
+            "ALTER TABLE mine_load_state ADD COLUMN contest_active INTEGER NOT NULL DEFAULT 0;", error, error_capacity) &&
+        EnsureColumn(database, "mine_load_state", "encounter_outcome",
+            "ALTER TABLE mine_load_state ADD COLUMN encounter_outcome INTEGER NOT NULL DEFAULT 0;", error, error_capacity) &&
+        EnsureColumn(database, "mine_load_state", "player_injury",
+            "ALTER TABLE mine_load_state ADD COLUMN player_injury INTEGER NOT NULL DEFAULT 0;", error, error_capacity) &&
            Execute(database, gossip_schema, error, error_capacity) &&
            Execute(database, pony_schema, error, error_capacity) &&
            Execute(database, war_schema, error, error_capacity) &&
