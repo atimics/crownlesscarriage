@@ -550,8 +550,10 @@ bool CcCoreModelBeginParticipant(CcCoreModel *m, const char *prefix)
     memset(m->meta, 0, sizeof(m->meta));
     static const char format[] = "crownless-person-v1\n";
     static const char format2[] = "crownless-person-v2\n";
+    static const char syntax[] = "crownless-dialogue-syntax-v1\n";
     if (prefix == NULL || (strncmp(prefix, format, sizeof(format) - 1U) != 0 &&
-        strncmp(prefix, format2, sizeof(format2) - 1U) != 0)) return false;
+        strncmp(prefix, format2, sizeof(format2) - 1U) != 0 &&
+        strncmp(prefix, syntax, sizeof(syntax) - 1U) != 0)) return false;
     int n = CcCoreModelEncode(prefix, m->tokens, CONTEXT - MAX_ACTIONS);
     if (n <= 0) return false;
     for (int i = 0; i < n; ++i)
