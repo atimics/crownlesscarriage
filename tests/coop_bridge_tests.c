@@ -3,8 +3,23 @@
 #include "test_support.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_archive_recruitment.h"
+#include "sim/cc_road_position.h"
 #include <stdlib.h>
 #include <string.h>
+
+static bool ChooseSharedRoadOnward(CcSim *sim, char *error, size_t capacity)
+{
+    CcRoadLegPreview previews[3];
+    int32_t count = CcRoadNextLegPreviews(sim, previews, 3);
+    for (int32_t i = 0; i < count; ++i) {
+        if (previews[i].direction == sim->journey.road_direction &&
+            previews[i].segment_id != CC_PILOT_ROAD_MILL_SEGMENT_ID) {
+            return CcCoopApply(sim, "road_leg", previews[i].decision_token,
+                               0, 0, error, capacity);
+        }
+    }
+    return false;
+}
 
 static void CheckCommandRoundTrips(void)
 {
@@ -172,22 +187,23 @@ static void CheckSharedDepartureAndRoadStop(void)
     host->player.coins = 0;
     CC_CHECK(CcCoopApply(host, "travel", host->settlements[1].id, 0, 0, error, sizeof(error)));
     CC_CHECK(host->journey.active && host->player.coins == 0);
+    host->journey.ambush_pending = false;
+    host->journey.encounter_triggered = true;
     const CcRoadSite *site = NULL;
-    for (int32_t i = 0; i < host->road_site_count; ++i) {
-        if (host->road_sites[i].route_id == host->journey.route_id) {
-            site = &host->road_sites[i];
-            break;
+    for (int32_t step = 0; step < 10000 && site == NULL; ++step) {
+        site = CcSimJourneyRoadSiteStop(host);
+        if (site != NULL) break;
+        if (host->journey.road_waiting_choice) {
+            CC_CHECK(ChooseSharedRoadOnward(host, error, sizeof(error)));
+        } else {
+            CC_CHECK(CcCoopAdvance(host, 1, error, sizeof(error)));
         }
     }
     CC_CHECK(site != NULL);
-    host->journey.ambush_pending = false;
-    host->journey.encounter_triggered = true;
-    host->carriage.progress_milli = site->progress_milli;
-    host->journey.elapsed_subticks = (int32_t)(
-        ((int64_t)host->journey.total_subticks * site->progress_milli + 999) / 1000);
     CC_CHECK(CcSimJourneyRoadSiteStop(host) == site);
     uint64_t stopped = CcSimHash(host);
-    CC_CHECK(CcCoopApply(host, "skip_watch", 0U, 0, 0, error, sizeof(error)));
+    CC_CHECK(!CcCoopApply(host, "skip_watch", 0U, 0, 0,
+                          error, sizeof(error)));
     CC_CHECK(CcSimHash(host) == stopped);
     unsigned char *bytes = NULL;
     size_t length = 0;
@@ -205,11 +221,15 @@ static void CheckSharedDepartureAndRoadStop(void)
     CC_CHECK(CcSimHash(host) == CcSimHash(guest));
     CC_CHECK(CcSimRoadSite(guest, site->id)->accessible);
     CC_CHECK(CcCoopApply(guest, "pass_road_site", site->id, 0, 0, error, sizeof(error)));
+    CC_CHECK(CcCoopApply(host, "pass_road_site", site->id, 0, 0, error, sizeof(error)));
+    CC_CHECK(CcSimHash(host) == CcSimHash(guest));
     int32_t before = host->carriage.progress_milli;
     CC_CHECK(CcCoopAdvance(host, 60, error, sizeof(error)));
     CC_CHECK(host->carriage.progress_milli > before);
     CC_CHECK(CcCoopAdvance(host, 3600, error, sizeof(error)));
-    CC_CHECK(!host->journey.active || host->journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
+    CC_CHECK(!host->journey.active ||
+        host->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ||
+        host->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE);
     CC_CHECK(CcSimJourneyRoadSiteStop(host) != site);
     CcCoopDestroy(host);
     CcCoopDestroy(guest);
@@ -242,11 +262,13 @@ static void CheckJourneyQuestRetirement(void)
         CC_CHECK(CcCoopApply(sim, "travel", offer->target_id,
                             0, 0, error, sizeof(error)));
         for (int tick = 0; tick < 2000 &&
-             sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING; ++tick) {
+             sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED; ++tick) {
             const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
             if (site != NULL) {
                 CC_CHECK(CcCoopApply(sim, "pass_road_site", site->id,
                                     0, 0, error, sizeof(error)));
+            } else if (sim->journey.road_waiting_choice) {
+                CC_CHECK(ChooseSharedRoadOnward(sim, error, sizeof(error)));
             } else {
                 CC_CHECK(CcCoopAdvance(sim, 1, error, sizeof(error)));
             }
@@ -265,6 +287,9 @@ static void CheckJourneyQuestRetirement(void)
                 if (site != NULL) {
                     CC_CHECK(CcCoopApply(sim, "pass_road_site", site->id,
                                         0, 0, error, sizeof(error)));
+                } else if (sim->journey.road_waiting_choice) {
+                    CC_CHECK(ChooseSharedRoadOnward(
+                        sim, error, sizeof(error)));
                 } else if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
                     const char *action = CcSimJourneyStop(sim) ==
                         CC_JOURNEY_STOP_MIDDAY ? "break" : "camp";
@@ -331,8 +356,15 @@ static void CheckTravelHoldClock(void)
     normal->journey.encounter_triggered = true;
     for (int scenario = 0; scenario < 3; ++scenario) {
         int target = scenario == 0 ? 0 : scenario == 1 ? 250 : 910;
-        while (normal->journey.active && normal->carriage.progress_milli < target)
-            CC_CHECK(CcCoopAdvance(normal, 1, error, sizeof(error)));
+        while (normal->journey.active &&
+               normal->carriage.progress_milli < target) {
+            if (normal->journey.road_waiting_choice) {
+                CC_CHECK(ChooseSharedRoadOnward(
+                    normal, error, sizeof(error)));
+            } else {
+                CC_CHECK(CcCoopAdvance(normal, 1, error, sizeof(error)));
+            }
+        }
         CC_CHECK(normal->journey.active);
         *fast = *normal;
         CC_CHECK(CcCoopAdvanceTravel(fast, 1, 8, error, sizeof(error)));
