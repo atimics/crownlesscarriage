@@ -126,12 +126,22 @@ input, browser emulation, and physical-device observation.
   with build, device, browser, renderer, and sample count. Keep deterministic
   graphics-work budgets and calibrate timing limits for each test environment.
 
-## Baseline gaps to close
+## Delivery and continuing checks
 
-At the reviewed revision, the road carriage's action exposes travel while the
-full carriage panel assumes town/site departure. Roadside boarding relocates the
-avatar immediately. Mine input has its own targeting path. The older road drawing
-path maps every route onto 52 units. General saved junction/reversal travel remains
-work in #323. The pack interface and finite hauling encounter need the work listed
-in #484/#763/#764. These are source findings; closing them requires the connected
-checks above and the relevant merged changes.
+The road carriage now has an inspection action and reachable boarding. Its wheel
+and gait motion use distance along the sampled route. Mine input selects visible
+targets and walks through observed floor. Quantity controls connect the pack,
+finite source, carriage, and cache. The haulers offer a saved bargain and a local
+combat encounter. Portrait controls put readable actions beside the scene.
+
+The [connected journey record](../reviews/silverwick-first-haul-2026-09-19.md)
+lists the ordinary-input observations and the exact builds used. Saved junction
+and reversal travel is tracked in #323; attributed information and the town
+return are tracked in #764. Each delivery needs its own final merged receipt and
+the connected checks above.
+
+Local timing diagnostics record the first actionable screen, input, scene
+transitions, and saves. Ctrl/Cmd+Shift+D exports the bounded local record as JSON.
+The record includes the build and renderer so timings can be compared within the
+same environment. Browser emulation and a physical-phone walkthrough have
+separate evidence requirements.
