@@ -431,6 +431,17 @@ static int RunMineInputRegression(void)
         MINE_CHECK(input.mine.surveyed,"An explicit survey click must use that survey once.");
         MINE_CHECK(input.mine.revision==survey_revision+2,
             "The survey action must advance its revision once after approach.");
+        uint64_t reread_hash=CcSimHash(&input);
+        BoundingBox reread_box; int32_t reread_x=-1,reread_y=-1;
+        MINE_CHECK(MineTargetBounds(&input,MINE_INTENT_SURVEY,&reread_box,
+            &reread_x,&reread_y)&&reread_x==26&&reread_y==4,
+            "The inspected records must remain a named pointer target.");
+        queued_key_press[KEY_E]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
+        ClientInputClearPressed();
+        MINE_CHECK(CcSimHash(&input)==reread_hash&&
+            strstr(message,"Workers' records")!=NULL,
+            "The inspected records must stay readable without changing their evidence.");
         input_local.mine_facing=3; MineRememberVisible(&input,&input_local);
         INPUT_POINTER(((Vector3){23,0,4}));
         MINE_CHECK(input_local.mine_target_x>=0,"A floor pointer must queue its remaining walk.");

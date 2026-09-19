@@ -318,7 +318,7 @@ static bool MineTargetBounds(const CcSim *sim,MineIntentTarget target,BoundingBo
         if(sim->mine.phase!=CC_MINE_LEVEL||sim->mine.bar_open) return false;
         *out_box=MineClosedBarBounds(); *out_x=15;*out_y=10; return true;
     case MINE_INTENT_SURVEY:
-        if(sim->mine.phase!=CC_MINE_LEVEL||sim->mine.surveyed) return false;
+        if(sim->mine.phase!=CC_MINE_LEVEL) return false;
         *out_box=MineBoxBounds(26,.37f,4,.6f,.12f,.45f); *out_x=26;*out_y=4; return true;
     case MINE_INTENT_HAULERS:
         if(sim->mine.phase!=CC_MINE_LEVEL ||
@@ -447,7 +447,8 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
         target,MineViewport(local));
     if(underground) {
         if(!sim->mine.bar_open) MineLabel(target,sim,local,(Vector3){15,1,10},15,10,"Wooden bar / lift it");
-        if(!sim->mine.surveyed) MineLabel(target,sim,local,(Vector3){26,.6f,4},26,4,"Workers' survey");
+        MineLabel(target,sim,local,(Vector3){26,.6f,4},26,4,
+            sim->mine.surveyed?"Workers' records / reread":"Workers' records / read");
         if(sim->mine.source_owner_id==sim->goblins.id &&
            sim->mine.encounter_outcome!=CC_MINE_ENCOUNTER_BARGAINED &&
            sim->mine.encounter_outcome!=CC_MINE_ENCOUNTER_CONTESTED)
@@ -620,7 +621,7 @@ static bool MineIntentCanUse(const CcSim *sim,MineIntentTarget target)
         abs(mine->x-5)+abs(mine->y-3)<=1;
     case MINE_INTENT_BAR: return mine->phase==CC_MINE_LEVEL && !mine->bar_open &&
         abs(mine->x-15)+abs(mine->y-10)<=1;
-    case MINE_INTENT_SURVEY: return mine->phase==CC_MINE_LEVEL && !mine->surveyed &&
+    case MINE_INTENT_SURVEY: return mine->phase==CC_MINE_LEVEL &&
         abs(mine->x-26)+abs(mine->y-4)<=1;
     default: return false;
     }
@@ -861,6 +862,8 @@ static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
     }
     bool entering=command.kind==CC_COMMAND_MINE_USE &&
         sim->mine.phase==CC_MINE_YARD && abs(sim->mine.x-15)+abs(sim->mine.y-3)<=1;
+    bool reading_records=command.kind==CC_COMMAND_MINE_USE &&
+        sim->mine.phase==CC_MINE_LEVEL && abs(sim->mine.x-26)+abs(sim->mine.y-4)<=1;
     int32_t bread_before=entering?sim->mine.pack[CC_GOOD_BREAD]:0;
     int32_t meat_before=entering?sim->mine.pack[CC_GOOD_MEAT]:0;
     bool stowing=command.kind==CC_COMMAND_MINE_USE && MineAtCarriage(sim);
@@ -898,6 +901,8 @@ static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
                 (void)snprintf(message,capacity,
                     "Entered the mine: 1 %s spent. Light 18.",ration);
             }
+            else if(reading_records) (void)snprintf(message,capacity,
+                "Workers' records: the closed bar has a six-room side loop. Lamp Hall is marked blocked.");
             else if(stowing) (void)snprintf(message,capacity,
                 "Stowed %d goods in the carriage and boarded for the road.",stowed);
         } else MineClearIntent(local);
