@@ -38,6 +38,22 @@ Those findings were sent to the implementation workstreams. The survey's
 readable content and the town's response are checked with the later content
 change.
 
+## Timing and build receipts
+
+PR #833 merged the local diagnostic export at
+`b29a7089e58668276d5446a8c322ac0df7d0b8e0`. Each record carries a configured
+build revision and a typed scene name. Runtime readiness and the first actionable
+screen are separate measurements from navigation start. The export holds at most
+96 records and includes action, transition, and save timings.
+
+The local browser check at `d090bf7d` recorded 146 frame samples: median 25 ms,
+p95 34 ms, and p99 57.5 ms. Runtime readiness was 83.8 ms; the first actionable
+screen was 813.3 ms. The final CI check at `f0c65673328fe229d48ffb6e8138196a82914`
+recorded 30 samples: median 133.3 ms, p95 300 ms, and p99 316.6 ms. The browser
+check uses a 100 ms local p95 ceiling and a 400 ms CI ceiling. A prior CI build
+had a 316.7 ms p95 with similar graphics work. These are environment-specific
+measurements; a player-device walkthrough supplies a separate performance check.
+
 ## Evidence boundaries
 
 The ordinary journey demonstrates travel, custody, persistence, bargaining,
