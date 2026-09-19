@@ -484,6 +484,7 @@ async function main() {
           title: panel.querySelector('h2').textContent,
           detail: panel.querySelectorAll('p')[0].textContent,
           reading: panel.querySelectorAll('p')[1].textContent,
+          detailsOpen: panel.querySelector('details').open,
           actionCount: actions.querySelectorAll('button').length,
           actionsNested: [...actions.querySelectorAll('button')].every(button => button.parentElement === actions),
           disabled: actions.querySelectorAll('button')[1].disabled
@@ -504,13 +505,16 @@ async function main() {
         return {...content,
           activation: window.semanticActivations,
           normalVisible: normal.width > 20 && normal.height > 20,
+          normalInView: normal.top >= panel.getBoundingClientRect().top &&
+            normal.bottom <= panel.getBoundingClientRect().bottom,
           retained, removalFocus, expandedVisible, recovery
         };
       });
       assert.deepEqual(semantics, {
         title: 'Mine yard', detail: 'Carriage beside the mine road.',
         reading: 'Pack 2 of 8. Cart 4 of 12.', actionCount: 2, actionsNested: true,
-        disabled: true, activation: [[0, 701]], normalVisible: true,
+        detailsOpen: false, disabled: true, activation: [[0, 701]], normalVisible: true,
+        normalInView: true,
         retained: true, removalFocus: true, expandedVisible: true, recovery: true
       });
       for (const [width, height] of [[320, 740], [390, 844], [667, 375], [844, 390], [1024, 768]]) {
@@ -551,9 +555,23 @@ async function main() {
       const nearby = (await controls.buttons()).filter(button => button.y >= 590);
       assert.equal(nearby.length, 4, JSON.stringify(await controls.buttons()));
       assert((await controls.buttons()).every(button => !/More objects|Previous objects|Fast forward|Press on/.test(button.label)));
+      const firstTownAction = await mobile.evaluate(() => {
+        const panel = document.querySelector('#touch-actions');
+        const action = panel.querySelector('.touch-buttons button');
+        const details = panel.querySelector('.touch-scene-details');
+        const panelBounds = panel.getBoundingClientRect();
+        const actionBounds = action.getBoundingClientRect();
+        return {panelBottom: panelBounds.bottom, actionTop: actionBounds.top,
+          actionBottom: actionBounds.bottom,
+          beforeDetails: actionBounds.bottom <= details.getBoundingClientRect().top};
+      });
+      assert(firstTownAction.actionTop >= 0 &&
+        firstTownAction.actionBottom <= firstTownAction.panelBottom &&
+        firstTownAction.beforeDetails, JSON.stringify(firstTownAction));
       await mobile.screenshot({path: path.join(output, 'mobile-nearby-cards.png')});
       await controls.button('Talk Mara Venn').tap();
       await controls.button(/^1 What do they need\?/).waitFor();
+      assert.equal(await mobile.locator('#touch-actions details').getAttribute('open'), '');
       let visibleChoices = (await controls.buttons()).map(button => button.label);
       assert(visibleChoices.some(label => /^1 What do they need\?/.test(label)), JSON.stringify(visibleChoices));
       assert(visibleChoices.some(label => /^2 Not now\./.test(label)), JSON.stringify(visibleChoices));

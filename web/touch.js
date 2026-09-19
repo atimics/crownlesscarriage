@@ -19,11 +19,16 @@
   heading.tabIndex = -1;
   const detail = document.createElement('p');
   detail.className = 'touch-detail';
-  const reading = document.createElement('p');
-  reading.className = 'touch-reading';
   const actions = document.createElement('div');
   actions.className = 'touch-buttons';
-  semantic.append(heading, detail, reading, actions);
+  const sceneDetails = document.createElement('details');
+  sceneDetails.className = 'touch-scene-details';
+  const sceneSummary = document.createElement('summary');
+  sceneSummary.textContent = 'Scene details';
+  const reading = document.createElement('p');
+  reading.className = 'touch-reading';
+  sceneDetails.append(sceneSummary, reading);
+  semantic.append(heading, detail, actions, sceneDetails);
   for (const type of ['keydown', 'keyup', 'keypress']) {
     semantic.addEventListener(type, event => event.stopPropagation());
   }
@@ -36,6 +41,8 @@
     heading.textContent = frame.title || 'Crownless Carriage';
     detail.textContent = frame.detail || '';
     reading.textContent = frame.reading || '';
+    sceneDetails.open = frame.title === 'Company Book' ||
+      frame.buttons.some(button => /^\d+\s/.test(button.label));
     frame.buttons.forEach((button, index) => {
       let action = actionNodes[index];
       if (!action) { action = document.createElement('button'); actionNodes[index] = action; actions.append(action); }
