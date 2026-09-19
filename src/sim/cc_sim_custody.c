@@ -67,6 +67,11 @@ static bool ResolveStoredCustody(const void *context, CcCustodyHolder holder,
                                 CcCustodyLocation *location, int64_t *capacity)
 {
     const CcSim *sim = context;
+    if (holder.kind == CC_CUSTODY_PLAYER && holder.id == sim->player.id) {
+        *location=(CcCustodyLocation){.place_id=sim->player.location_id};
+        *capacity=INT64_MAX;
+        return true;
+    }
     if (holder.kind == CC_CUSTODY_SITE &&
         (holder.id == sim->mine.source_id || holder.id == sim->mine.cache_id)) {
         *location=(CcCustodyLocation){.place_id=holder.id};
@@ -141,7 +146,9 @@ bool CcSimStoredCustodyValid(const CcSim *sim)
         bool mine_load=entry->owner_id == sim->goblins.id && entry->kind == CC_CUSTODY_GOODS &&
             ((entry->holder.kind == CC_CUSTODY_SITE &&
               (entry->holder.id == sim->mine.source_id || entry->holder.id == sim->mine.cache_id)) ||
-             (entry->holder.kind == CC_CUSTODY_MINE_PACK && entry->holder.id == sim->player.id));
+             (entry->holder.kind == CC_CUSTODY_MINE_PACK && entry->holder.id == sim->player.id) ||
+             (sim->schema_version >= 106U && CcSimMineEntryTracked(sim,entry) &&
+              entry->holder.kind == CC_CUSTODY_PLAYER && entry->holder.id == sim->player.id));
         if (!mine_load && entry->owner_id != sim->player.id &&
             CcSimSettlement(sim, entry->owner_id) == NULL &&
             /* Schema 102: a fallen person's purse is owned by the dead,
@@ -227,6 +234,90 @@ CcCustodyResult CcSimTransferMineGoods(CcSim *sim, CcCustodyHolder source,
     if (CcSimStoredCustodyValid(sim)) return CC_CUSTODY_READY;
     sim->custody=original;
     return CC_CUSTODY_INVALID;
+}
+
+bool CcSimMineEntryTracked(const CcSim *sim, const CcCustodyEntry *entry)
+{
+    if (sim == NULL || entry == NULL || entry->kind != CC_CUSTODY_GOODS) return false;
+    CcId expected=entry->good == CC_GOOD_BREAD ? sim->mine.bread_source_entry_id :
+        entry->good == CC_GOOD_IRON ? sim->mine.iron_source_entry_id :
+        entry->good == CC_GOOD_GOLD ? sim->mine.gold_source_entry_id :
+        entry->good == CC_GOOD_GEMS ? sim->mine.gems_source_entry_id : 0U;
+    if (expected == 0U) return false;
+    const CcCustodyEntry *root=entry;
+    int32_t remaining=CcCustodyEffectiveCapacity(&sim->custody);
+    while (root->source_id != 0U && remaining-- > 0) {
+        const CcCustodyEntry *parent=CcCustodyFind(&sim->custody,root->source_id);
+        if (parent == NULL) return false;
+        root=parent;
+    }
+    return root->source_id == 0U && root->id == expected;
+}
+
+static bool PermitMineSale(const void *context, uint64_t actor,
+                           const CcCustodyEntry *entry, CcCustodyHolder destination)
+{
+    const CcSim *sim=context;
+    return actor == sim->player.id && entry->owner_id == sim->goblins.id &&
+        CcSimMineEntryTracked(sim,entry) &&
+        entry->kind == CC_CUSTODY_GOODS &&
+        entry->holder.kind == CC_CUSTODY_PLAYER &&
+        entry->holder.id == sim->player.id &&
+        destination.kind == CC_CUSTODY_STORE &&
+        CcSimSettlement(sim,destination.id) != NULL;
+}
+
+static CcCustodyResult MineSaleCandidate(const CcSim *sim, CcId town_id,
+    CcGood good, int32_t quantity, CcId event_id, CcCustodyState *result)
+{
+    if (sim == NULL || sim->schema_version < 106U ||
+        CcSimSettlement(sim,town_id) == NULL || sim->player.location_id != town_id ||
+        good < 0 || good >= CC_GOOD_COUNT || quantity <= 0 || event_id == 0U)
+        return CC_CUSTODY_INVALID;
+    CcCustodyState candidate=sim->custody;
+    const CcCustodyRules rules={.context=sim,.good_count=CC_GOOD_COUNT,
+        .load=StoredCustodyLoad,.resolve=ResolveStoredCustody,.permit=PermitMineSale};
+    int32_t remaining=quantity;
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&candidate) && remaining>0;++i) {
+        CcCustodyEntry *entry=&candidate.entries[i];
+        if (!entry->active || entry->kind != CC_CUSTODY_GOODS ||
+            entry->good != (int32_t)good || entry->owner_id != sim->goblins.id ||
+            !CcSimMineEntryTracked(sim,entry) ||
+            entry->holder.kind != CC_CUSTODY_PLAYER ||
+            entry->holder.id != sim->player.id) continue;
+        int32_t moved=entry->quantity < remaining ? (int32_t)entry->quantity : remaining;
+        CcCustodyTransfer transfer={.entry_id=entry->id,.revision=entry->revision,
+            .actor_id=sim->player.id,.event_id=event_id,
+            .destination={CC_CUSTODY_STORE,town_id},.quantity=moved};
+        uint64_t moved_id=0U;
+        CcCustodyResult applied=CcCustodyApplyTransfer(&candidate,&rules,&transfer,&moved_id);
+        if (applied != CC_CUSTODY_READY) return applied;
+        CcCustodyEntry *sold=(CcCustodyEntry *)CcCustodyFind(&candidate,moved_id);
+        if (sold == NULL) return CC_CUSTODY_INVALID;
+        sold->owner_id=town_id;
+        remaining-=moved;
+    }
+    /* Ordinary cargo can make up the rest of a larger sale. */
+    if (!CcCustodyValidate(&candidate,&(CcCustodyRules){.context=sim,
+        .good_count=CC_GOOD_COUNT,.load=StoredCustodyLoad,.resolve=ResolveStoredCustody}))
+        return CC_CUSTODY_INVALID;
+    if (result != NULL) *result=candidate;
+    return CC_CUSTODY_READY;
+}
+
+CcCustodyResult CcSimPlanMineSale(const CcSim *sim, CcId town_id,
+    CcGood good, int32_t quantity)
+{
+    return MineSaleCandidate(sim,town_id,good,quantity,1U,NULL);
+}
+
+CcCustodyResult CcSimApplyMineSale(CcSim *sim, CcId town_id,
+    CcGood good, int32_t quantity, CcId event_id)
+{
+    CcCustodyState candidate;
+    CcCustodyResult result=MineSaleCandidate(sim,town_id,good,quantity,event_id,&candidate);
+    if (result == CC_CUSTODY_READY) sim->custody=candidate;
+    return result;
 }
 
 static bool PermitStoreTransfer(const void *context, uint64_t actor,

@@ -929,7 +929,7 @@ static bool AdventureKnownPerson(const CcSim *sim, const CcCharacter *person)
 static void DrawAdventureBookHead(Rectangle panel, const char *page_name)
 {
     AdventurePanelTitle(panel, "Company Book");
-    CcOverlayDrawText(TextFormat("%s   /   1 or 2 to turn", page_name),
+    CcOverlayDrawText(TextFormat("%s   /   1, 2 or 3 to turn", page_name),
                       (int)panel.x + 96, (int)panel.y + 46,
                       AdventureTextSize(12), MUTED);
 }
@@ -1004,9 +1004,65 @@ static void DrawAdventurePeople(const CcSim *sim, const LocalState *local)
         (void)AdventureWrap("No one you know has been named yet. Follow the stories.", x, y, width, size, MUTED);
 }
 
+static void DrawAdventureMineNotes(const CcSim *sim)
+{
+    Rectangle panel=AdventurePanel();
+    DrawAdventureBookHead(panel,"Mine notes");
+    int x=(int)panel.x+28,y=(int)panel.y+92;
+    int width=(int)panel.width-56,size=AdventureTextSize(15);
+    CcOverlayDrawText("LOW SILVER PIT",x,y,size+2,INK); y+=32;
+    if (sim->mine.lead_event_id != 0U) {
+        const CcCharacter *source=CcSimCharacter(sim,sim->mine.lead_source_id);
+        const CcSettlement *place=CcSimSettlement(sim,sim->mine.lead_source_id);
+        y+=AdventureWrap(TextFormat("Lead, day %d. Source: %s. %s",
+            sim->mine.lead_day,
+            source != NULL ? source->name : place != NULL ? place->name : "dated shift record",
+            sim->mine.lead_document ? "A shift document names work at the pit." :
+                "Jory's known concern points the company to the pit."),
+            x,y,width,size,TEAL)+16;
+    } else {
+        y+=AdventureWrap("Lead: ask Jory about his known concern, or read Silverwick's dated shift record.",
+            x,y,width,size,MUTED)+16;
+    }
+    if (sim->mine.survey_event_id != 0U) {
+        char date[48];
+        if (sim->mine.survey_observed_day > 0)
+            (void)snprintf(date,sizeof(date),"observed day %d",sim->mine.survey_observed_day);
+        else
+            (void)snprintf(date,sizeof(date),"earlier observation date unknown");
+        y+=AdventureWrap(TextFormat("Workers' records, read day %d; %s. Document claim: The western store passage goes around the barred middle passage. The stair to Lamp Hall is marked blocked.",
+            sim->mine.survey_read_day,date),x,y,width,size,INK)+16;
+    } else if (sim->mine.bypass_event_id != 0U) {
+        y+=AdventureWrap(TextFormat("Company observation, day %d: the western store passage goes around the barred middle passage.",
+            sim->mine.bypass_day),x,y,width,size,INK)+16;
+    } else {
+        y+=AdventureWrap("Survey: no attributed document or company route observation recorded.",
+            x,y,width,size,MUTED)+16;
+    }
+    if (sim->mine.report_event_id != 0U) {
+        const CcCharacter *recipient=CcSimCharacter(sim,sim->mine.report_recipient_id);
+        const char *kind=sim->mine.report_kind == CC_MINE_RETURN_HAUL ?
+            "tracked partial haul" : "attributed route account";
+        const char *outcome=sim->mine.reported_encounter_outcome == CC_MINE_ENCOUNTER_BARGAINED ?
+            "bargained with haulers" :
+            sim->mine.reported_encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED ?
+            "defeated haulers" :
+            sim->mine.reported_encounter_outcome == CC_MINE_ENCOUNTER_BROKEN_CONTACT ?
+            "broke contact" : "hauler encounter unsettled";
+        (void)AdventureWrap(TextFormat("Return, day %d: %s gave %s a %s; perceived outcome: %s.",
+            sim->mine.report_day,"Crownless Company",
+            recipient != NULL ? recipient->name : "Jory",kind,outcome),
+            x,y,width,size,CC_GOLD);
+    } else {
+        (void)AdventureWrap("Return: Jory still needs a tracked mine load or an attributed route account.",
+            x,y,width,size,MUTED);
+    }
+}
+
 static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
 {
     if (local->book_page == 1) { DrawAdventurePeople(sim, local); return; }
+    if (local->book_page == 2) { DrawAdventureMineNotes(sim); return; }
     DrawAdventureAhead(sim, local);
 }
 
@@ -1016,10 +1072,16 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
     Rectangle panel = AdventurePanel();
     if (ClientKeyPressed(KEY_ESCAPE) || ClientKeyPressed(KEY_B) || ClientKeyPressed(KEY_TAB) ||
         AdventureHit(AdventureClose(panel))) { *view = SafeOverlayReturnView(*return_view); return true; }
-    if (ClientKeyPressed(KEY_ONE) || ClientKeyPressed(KEY_LEFT)) {
+    if (ClientKeyPressed(KEY_LEFT)) {
+        local->book_page=(local->book_page+2)%3;
+    } else if (ClientKeyPressed(KEY_RIGHT)) {
+        local->book_page=(local->book_page+1)%3;
+    } else if (ClientKeyPressed(KEY_ONE)) {
         local->book_page = 0;
-    } else if (ClientKeyPressed(KEY_TWO) || ClientKeyPressed(KEY_RIGHT)) {
+    } else if (ClientKeyPressed(KEY_TWO)) {
         local->book_page = 1;
+    } else if (ClientKeyPressed(KEY_THREE)) {
+        local->book_page = 2;
     }
     const CcTreasure *book = CcSimDeepWyrmProphecy(sim);
     if (local->book_page == 0 && book != NULL && !book->destroyed &&
