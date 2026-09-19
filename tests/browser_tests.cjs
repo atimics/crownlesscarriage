@@ -295,7 +295,11 @@ async function main() {
       const frame = await page.locator('#game-frame').boundingBox();
       assert(Math.abs(bounds.width / bounds.height - 16 / 9) < 0.01);
       assert(Math.abs((bounds.x - frame.x) * 2 + bounds.width - frame.width) < 2);
-      assert(Math.abs((bounds.y - frame.y) * 2 + bounds.height - frame.height) < 2);
+      if (height > width && width <= 600) {
+        assert(Math.abs(bounds.y - frame.y) < 2);
+      } else {
+        assert(Math.abs((bounds.y - frame.y) * 2 + bounds.height - frame.height) < 2);
+      }
       await page.evaluate(() => {
         window.lastCanvasPointer = null;
         document.querySelector('#canvas').addEventListener('pointerdown', event => {
@@ -304,7 +308,16 @@ async function main() {
           window.lastCanvasPointer = [(event.clientX - bounds.x) * canvas.width / bounds.width, (event.clientY - bounds.y) * canvas.height / bounds.height];
         }, {once: true});
       });
-      await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+      const hit = await page.evaluate(({x, y}) => {
+        const element = document.elementFromPoint(x, y);
+        const panel = document.querySelector('#touch-actions').getBoundingClientRect();
+        return {element: element?.id || element?.className || element?.tagName,
+          panel: {x: panel.x, y: panel.y, width: panel.width, height: panel.height}};
+      }, {x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2});
+      assert.equal(hit.element, 'canvas', JSON.stringify({bounds, frame, hit}));
+      await page.locator('#canvas').click({position: {
+        x: bounds.width / 2, y: bounds.height / 2
+      }});
       const pointer = await page.evaluate(() => window.lastCanvasPointer);
       const intrinsic = await page.locator('#canvas').evaluate(canvas => [canvas.width, canvas.height]);
       assert(Math.abs(intrinsic[0] / intrinsic[1] - 16 / 9) < 0.01, JSON.stringify(intrinsic));
@@ -478,7 +491,8 @@ async function main() {
         stage.classList.add('expanded');
         const expanded = changed.getBoundingClientRect();
         const expandedVisible = expanded.width > 20 && expanded.height > 20 &&
-          Number(getComputedStyle(panel).zIndex) > Number(getComputedStyle(stage).zIndex);
+          stage.contains(panel) && expanded.top >= stage.getBoundingClientRect().top &&
+          expanded.bottom <= stage.getBoundingClientRect().bottom;
         stage.classList.remove('expanded');
         loading.hidden = false;
         Module.renderCrownlessTouch(frame);
@@ -506,6 +520,23 @@ async function main() {
         const canvas = await mobile.locator('#canvas').boundingBox();
         assert(Math.abs(canvas.width / canvas.height - 16 / 9) < 0.01);
         assert(canvas.y + canvas.height <= height + 1);
+        const readable = await mobile.evaluate(() => {
+          const portrait = innerHeight > innerWidth && innerWidth <= 600;
+          const panel = document.querySelector('#touch-actions');
+          const bounds = panel.getBoundingClientRect();
+          const buttons = [...panel.querySelectorAll('button')].map(button => {
+            const box = button.getBoundingClientRect();
+            return {width: box.width, height: box.height};
+          });
+          return {portrait, visible: bounds.width > 100 && bounds.height > 100,
+            fontSize: parseFloat(getComputedStyle(panel).fontSize), buttons};
+        });
+        if (readable.portrait) {
+          assert(readable.visible, JSON.stringify(readable));
+          assert(readable.fontSize >= 16, JSON.stringify(readable));
+          assert(readable.buttons.every(button => button.width >= 44 && button.height >= 44),
+            JSON.stringify(readable));
+        }
         await mobile.screenshot({path: path.join(output, `mobile-${width}x${height}.png`)});
       }
       await mobile.setViewportSize({width: 390, height: 844});
@@ -521,6 +552,25 @@ async function main() {
       assert.equal(nearby.length, 4, JSON.stringify(await controls.buttons()));
       assert((await controls.buttons()).every(button => !/More objects|Previous objects|Fast forward|Press on/.test(button.label)));
       await mobile.screenshot({path: path.join(output, 'mobile-nearby-cards.png')});
+      await controls.button('Talk Mara Venn').tap();
+      await controls.button(/^1 What do they need\?/).waitFor();
+      let visibleChoices = (await controls.buttons()).map(button => button.label);
+      assert(visibleChoices.some(label => /^1 What do they need\?/.test(label)), JSON.stringify(visibleChoices));
+      assert(visibleChoices.some(label => /^2 Not now\./.test(label)), JSON.stringify(visibleChoices));
+      let firstChoice = mobile.locator('#touch-actions button').filter({hasText: /^1 What do they need\?/});
+      await firstChoice.focus();
+      await mobile.keyboard.press('Enter');
+      await controls.button(/^1 I'll take the job\./).waitFor();
+      visibleChoices = (await controls.buttons()).map(button => button.label);
+      assert(visibleChoices.some(label => /^1 I'll take the job\./.test(label)), JSON.stringify(visibleChoices));
+      assert(visibleChoices.some(label => /^2 Not now\./.test(label)), JSON.stringify(visibleChoices));
+      firstChoice = mobile.locator('#touch-actions button').filter({hasText: /^1 I'll take the job\./});
+      await firstChoice.focus();
+      await mobile.keyboard.press('Enter');
+      await controls.button(/^1 Not now\./).waitFor();
+      await mobile.locator('#touch-actions button').filter({hasText: /^1 Not now\./}).focus();
+      await mobile.keyboard.press('Enter');
+      await controls.button('Talk Mara Venn').waitFor();
       const oldControl = await controls.button('Menu').read();
       const bookButton = mobile.locator('#touch-actions button').filter({hasText: /^Book/});
       await bookButton.focus();
@@ -529,7 +579,9 @@ async function main() {
       await mobile.evaluate(({index, revision}) => Module._CrownlessTouchActivate(index, revision), oldControl);
       await mobile.waitForTimeout(150);
       assert.equal(await mobile.locator('#canvas').getAttribute('aria-label'), 'Company Book');
-      assert((await controls.reading()).length > 30);
+      const bookReading = await controls.reading();
+      assert(bookReading.length > 30);
+      assert.match(bookReading, /food boxes are aboard/i);
       await mobile.screenshot({path: path.join(output, 'mobile-book.png')});
 
       const backButton = mobile.locator('#touch-actions button').filter({hasText: /^Back/});

@@ -18,8 +18,11 @@
   const heading = document.createElement('h2');
   heading.tabIndex = -1;
   const detail = document.createElement('p');
+  detail.className = 'touch-detail';
   const reading = document.createElement('p');
+  reading.className = 'touch-reading';
   const actions = document.createElement('div');
+  actions.className = 'touch-buttons';
   semantic.append(heading, detail, reading, actions);
   for (const type of ['keydown', 'keyup', 'keypress']) {
     semantic.addEventListener(type, event => event.stopPropagation());
