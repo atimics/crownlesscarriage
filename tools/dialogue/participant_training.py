@@ -110,7 +110,20 @@ def build_prompt(request, tokenizer, context=CONTEXT, reply_tokens=REPLY_TOKENS)
         raise ValueError('identity, needs and latest observation exceed prefix budget')
 
     options = []
-    # Most recent held account comes first, then heard speech, observed memories,
+    expanded_knowledge = set()
+    # Personal event knowledge carries its original source, date and certainty.
+    # Keep opaque IDs in the source record; render the known account compactly.
+    for i, known in sorted(enumerate(p.get('knowledge', [])),
+                           key=lambda pair: (-pair[1]['day'], -pair[0])):
+        if not known.get('event_text'):
+            continue
+        source = known['source_id']
+        source = 'self' if source == me['id'] else 'other' if source == listener['id'] else source
+        value = [known['kind'], known['day'], known['certainty'], known['private'],
+                 source, known['source_name'], known['event_day'], known['event_text']]
+        options.append((('knowledge', i), 'knowledge:' + wire(value) + '\n'))
+        expanded_knowledge.add(i)
+    # After resolved knowledge, try the newest held account, heard speech, observed memories,
     # personal memory and knowledge. Every optional record stays whole.
     accounts = []
     for i, a in sorted(enumerate(p.get('held_accounts', [])),
@@ -129,6 +142,8 @@ def build_prompt(request, tokenizer, context=CONTEXT, reply_tokens=REPLY_TOKENS)
     options.append((('group', 0), 'group:' + wire([me['band'], me['faction_id']]) + '\n'))
     for key in ('memories', 'knowledge'):
         for i in range(len(p.get(key, [])) - 1, -1, -1):
+            if key == 'knowledge' and i in expanded_knowledge:
+                continue
             options.append(((key, i), key + ':' + wire(p[key][i]) + '\n'))
     for key, line in options:
         sections[key] = line

@@ -23,7 +23,8 @@ The version is `crownless-person-v2`. Array positions are fixed:
 | group | band name, faction ID |
 | heard | source role, optional day, speech or action |
 | remembered_speech | same structure, from a prior observed episode |
-| memories / knowledge | one personal simulation record |
+| memories | one personal simulation record |
+| knowledge | kind, learned day, certainty, private flag, source role or ID, recorded source name, event day, event text; unresolved records keep their original object |
 
 Self and listener IDs route observations and remain in the audit record.
 Account sources use `self` and `other` for the two participants. Third-party
@@ -40,7 +41,8 @@ JSON decoding recovers their original spelling.
 352 input tokens reserve 160 positions for a reply including EOS. Identity,
 current needs, place, relationship, actions and the latest observed turn stay
 whole. An example that exceeds this minimum is rejected. Optional evidence is
-selected in this order: newest held account, earlier current speech from newest
+selected in this order: resolved personal knowledge from newest to oldest,
+newest held account, earlier current speech from newest
 to oldest, remaining accounts by date, past observed speech, group membership,
 personal memories and knowledge. The rendered speech order is chronological.
 Each omitted record appears in `dropped` with its original index. This is a
@@ -110,3 +112,18 @@ requires separate groups for training and validation.
 
 The reviewed pilot and its held-out replies are recorded in
 `docs/reviews/participant-minds-2026-09-19/reviewed-corpus.md`.
+
+
+## Known event details
+
+Participant snapshots resolve the event directly referenced by each own knowledge
+record. `event_text` and `event_day` are present when the event survives and its
+date is at or before the learned date and current day. Unavailable details use
+JSON null. Certainty, source and privacy remain on the owned knowledge record.
+Certainty uses 1 for doubtful, 2 for told and 3 for witnessed. The raw event text
+describes the recorded account at that time. Advice and new
+plans remain separate from completed actions.
+
+The source record preserves subject and event IDs. The compact knowledge array
+keeps source attribution, learned date, event date, certainty, privacy and the
+complete text. Each record fits whole or appears in the omission list.
