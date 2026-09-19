@@ -141,6 +141,14 @@ float CcWorldRouteLength(const CcWorldRoutePlacement *route)
     return length;
 }
 
+float CcWorldRouteLengthForSim(const CcSim *sim, CcId route_id)
+{
+    if (sim == NULL || route_id == 0U) return 0.0f;
+    CcWorldManifest manifest;
+    if (!CcWorldManifestBuild(&manifest, sim)) return 0.0f;
+    return CcWorldRouteLength(CcWorldRoutePlacementForId(&manifest, route_id));
+}
+
 float CcWorldRouteSampleAmount(const CcWorldRoutePlacement *route,
                                int32_t sample_index)
 {

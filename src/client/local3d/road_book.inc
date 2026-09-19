@@ -52,11 +52,7 @@ float CcLocalCarriageWheelAngleInternal(float travelled, float radius)
 /* One turn of the gait cycle carries the team one stride down the road. The
    pony is drawn at 0.96 of a horse rig 1.32 units through the body, so it is
    1.27 units of animal, and a walking horse covers a little over its own
-   length in a stride. 1.40 units also lands the road book's cruise on the
-   cadence that was tuned by eye: 52 units of road in the 64 seconds a
-   four-watch journey takes is 0.81 a second, which at this stride is 3.65
-   radians a second against a walk's 3.6. So cruise still looks like cruise,
-   and every other speed now looks like itself instead of like cruise. */
+   length in a stride. */
 float CcLocalRoadTeamStrideInternal(void)
 {
     return 1.40f;
@@ -896,15 +892,71 @@ static bool DrawBridgeCheckpoint(void)
     return true;
 }
 
-/* The road book lays every journey out along the same 52 units of road, so
-   the ground the carriage has covered is the journey's progress read in world
-   units. The carriage's place on the road and the turn of its wheels come off
-   the one number, and cannot drift apart. */
-float CcLocalRoadCarriageTravelInternal(int32_t progress_milli)
+/* Ground is the sampled open-world route length times saved progress. The
+   road book maps that ground into its own frame below. */
+float CcLocalRoadCarriageTravelInternal(int32_t progress_milli,
+                                        float route_length)
 {
     if (progress_milli < 0) progress_milli = 0;
     if (progress_milli > 1000) progress_milli = 1000;
-    return (float)progress_milli * 0.052f;
+    if (!isfinite(route_length) || route_length <= 0.001f) return 0.0f;
+    return route_length * (float)progress_milli / 1000.0f;
+}
+
+typedef struct RoadRouteDistanceCache {
+    uint64_t geometry_identity;
+    CcId route_id;
+    float length;
+} RoadRouteDistanceCache;
+
+static uint64_t RoadRouteGeometryIdentity(const CcSim *sim)
+{
+    if (sim == NULL) return 0U;
+    uint64_t identity = UINT64_C(1469598103934665603);
+#define ROAD_GEOMETRY_MIX(value) do { \
+    identity ^= (uint64_t)(value); \
+    identity *= UINT64_C(1099511628211); \
+} while (0)
+    ROAD_GEOMETRY_MIX(sim->world_seed);
+    ROAD_GEOMETRY_MIX(sim->generator_version);
+    ROAD_GEOMETRY_MIX(sim->settlement_count);
+    ROAD_GEOMETRY_MIX(sim->route_count);
+    for (int32_t index = 0; index < sim->settlement_count; ++index) {
+        const CcSettlement *settlement = &sim->settlements[index];
+        ROAD_GEOMETRY_MIX(settlement->id);
+        ROAD_GEOMETRY_MIX((uint32_t)settlement->map_x);
+        ROAD_GEOMETRY_MIX((uint32_t)settlement->map_y);
+    }
+    for (int32_t index = 0; index < sim->route_count; ++index) {
+        const CcRoute *route = &sim->routes[index];
+        ROAD_GEOMETRY_MIX(route->id);
+        ROAD_GEOMETRY_MIX(route->from_id);
+        ROAD_GEOMETRY_MIX(route->to_id);
+    }
+#undef ROAD_GEOMETRY_MIX
+    return identity;
+}
+
+/* The book has no world stream when it is entered directly or when open-world
+   setup is unavailable. The first request therefore resolves from the sim.
+   Subsequent frames reuse it until the route geometry identity changes. */
+float CcLocalRoadCarriageRouteLengthInternal(const CcSim *sim)
+{
+    static RoadRouteDistanceCache cache;
+    const CcRoute *route = sim != NULL ?
+        CcSimRoute(sim, sim->journey.route_id) : NULL;
+    if (route == NULL) return 0.0f;
+    uint64_t geometry_identity = RoadRouteGeometryIdentity(sim);
+    if (cache.geometry_identity == geometry_identity &&
+        cache.route_id == route->id) {
+        return cache.length;
+    }
+    cache = (RoadRouteDistanceCache){
+        .geometry_identity = geometry_identity,
+        .route_id = route->id,
+        .length = CcWorldRouteLengthForSim(sim, route->id),
+    };
+    return cache.length;
 }
 
 /* Leave room for the team, the hero, and the west bridge approach. */
@@ -913,9 +965,20 @@ float CcLocalRoadEncounterCarriageXInternal(void)
     return 38.35f;
 }
 
+enum {
+    ROAD_BOOK_CARRIAGE_PRESENTATION_START_MILLI = 20150,
+    ROAD_BOOK_CARRIAGE_PRESENTATION_SPAN_MILLI = 52000
+};
+
 float CcLocalRoadCarriageX(int32_t progress_milli)
 {
-    return 20.15f + CcLocalRoadCarriageTravelInternal(progress_milli);
+    if (progress_milli < 0) progress_milli = 0;
+    if (progress_milli > 1000) progress_milli = 1000;
+    /* This is composition space. It does not measure travel. */
+    return ((float)ROAD_BOOK_CARRIAGE_PRESENTATION_START_MILLI +
+            (float)progress_milli *
+                (float)ROAD_BOOK_CARRIAGE_PRESENTATION_SPAN_MILLI / 1000.0f) /
+        1000.0f;
 }
 
 void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
@@ -944,8 +1007,9 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     float carriage_x = travelling ?
         CcLocalRoadCarriageX(sim->carriage.progress_milli) :
         CcLocalRoadEncounterCarriageXInternal();
+    float route_length = CcLocalRoadCarriageRouteLengthInternal(sim);
     float carriage_travel = CcLocalRoadCarriageTravelInternal(
-        sim->carriage.progress_milli);
+        sim->carriage.progress_milli, route_length);
     float lateral_offset = travelling && convoy != NULL ?
         convoy->lateral_offset : 0.0f;
     float carriage_pace = travelling && convoy != NULL ?
