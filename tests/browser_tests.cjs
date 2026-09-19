@@ -137,6 +137,8 @@ async function main() {
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.waitForFunction(() => window.Module && Module.crownlessCampaignAccess === 0 && document.querySelector('#loading').hidden && window.shaderLinks.some(link => link.skinned), undefined, {timeout: 120000});
     await page.waitForFunction(() => Module.crownlessScreen === 'title');
+    assert.equal(await page.evaluate(() => Module._CrownlessRoadGeometrySelfTest()), 1,
+      'WebAssembly road geometry must match the native known fixtures');
     const startupMemory = await page.evaluate(() => {
       const buffers = new Set();
       const files = [];

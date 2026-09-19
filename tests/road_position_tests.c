@@ -13,6 +13,7 @@
 
 int main(void)
 {
+    CHECK(CcRoadGeometryKnownFixtures());
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0x3235a7ed));
     CcPilotRoadTopology pilot;
@@ -110,6 +111,6 @@ int main(void)
 
     CHECK(token == UINT64_C(16498057034038110418));
 
-    puts("Pilot road identity, fixed distance, and preview tokens passed.");
+    puts("Pilot road identity, physical frozen basis, and preview tokens passed.");
     return EXIT_SUCCESS;
 }

@@ -176,14 +176,13 @@ static void RingPoint(const GeometrySettlement *place, float heading,
     *z = place->z + cosf(heading) * distance;
 }
 
-bool CcRoadGeometryBuild(const CcSim *sim, CcId route_id,
-                         CcRoadGeometry *geometry)
+static bool BuildRoadGeometry(const CcSim *sim, CcId route_id,
+                              const GeometrySettlement *settlements,
+                              CcRoadGeometry *geometry)
 {
-    if (sim == NULL || geometry == NULL) return false;
+    if (sim == NULL || geometry == NULL || settlements == NULL) return false;
     const CcRoute *route = CcSimRoute(sim, route_id);
     if (route == NULL) return false;
-    GeometrySettlement settlements[CC_MAX_SETTLEMENTS];
-    if (!BuildGeometrySettlements(sim, settlements)) return false;
     const GeometrySettlement *from = GeometrySettlementForId(
         settlements, sim->settlement_count, route->from_id);
     const GeometrySettlement *to = GeometrySettlementForId(
@@ -274,6 +273,29 @@ bool CcRoadGeometryBuild(const CcSim *sim, CcId route_id,
     geometry->full_length_units = (int32_t)full;
     geometry->journey_length_units = (int32_t)journey;
     return true;
+}
+
+bool CcRoadGeometryBuild(const CcSim *sim, CcId route_id,
+                         CcRoadGeometry *geometry)
+{
+    GeometrySettlement settlements[CC_MAX_SETTLEMENTS];
+    return BuildGeometrySettlements(sim, settlements) &&
+        BuildRoadGeometry(sim, route_id, settlements, geometry);
+}
+
+int32_t CcRoadGeometryBuildAll(const CcSim *sim,
+                               CcRoadGeometry *geometries,
+                               int32_t capacity)
+{
+    if (sim == NULL || geometries == NULL || capacity < sim->route_count)
+        return 0;
+    GeometrySettlement settlements[CC_MAX_SETTLEMENTS];
+    if (!BuildGeometrySettlements(sim, settlements)) return 0;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        if (!BuildRoadGeometry(sim, sim->routes[i].id, settlements,
+                               &geometries[i])) return 0;
+    }
+    return sim->route_count;
 }
 
 static const CcSettlement *SettlementNamed(const CcSim *sim,
@@ -407,4 +429,53 @@ bool CcPilotRoadTopologyBuild(const CcSim *sim,
     return mill != NULL && CcRoadGeometryBuild(sim, mill->route_id, &geometry) &&
         CcPilotRoadTopologyBuildWithLength(
             sim, geometry.journey_length_units, topology);
+}
+
+bool CcRoadGeometryKnownFixtures(void)
+{
+    typedef struct GeometryFixture {
+        uint32_t seed;
+        int32_t full_length;
+        int32_t journey_length;
+        int32_t control_x;
+        int32_t control_z;
+        int32_t junction;
+        int32_t checkpoint;
+    } GeometryFixture;
+    static const GeometryFixture fixtures[] = {
+        {UINT32_C(0x3235a7ed), 261356, 204556, 147659, 307287,
+         167736, 102278},
+        {UINT32_C(0xc0a7118e), 250440, 193639, 147307, 306921,
+         158784, 96820},
+        {UINT32_C(1), 259110, 202310, 142059, 301501,
+         165894, 101155},
+        {UINT32_C(0xffffffff), 261120, 204319, 147115, 317300,
+         167542, 102160}
+    };
+    for (size_t i = 0; i < sizeof(fixtures) / sizeof(fixtures[0]); ++i) {
+        CcSim sim;
+        CcPilotRoadTopology pilot;
+        CcRoadGeometry geometry;
+        CcSimInit(&sim, fixtures[i].seed);
+        if (!CcPilotRoadTopologyBuild(&sim, &pilot) ||
+            !CcRoadGeometryBuild(&sim, pilot.route_id, &geometry) ||
+            geometry.full_length_units != fixtures[i].full_length ||
+            geometry.journey_length_units != fixtures[i].journey_length ||
+            geometry.control.x_units != fixtures[i].control_x ||
+            geometry.control.z_units != fixtures[i].control_z ||
+            pilot.origin_to_junction_units != fixtures[i].junction ||
+            pilot.checkpoint_distance_units != fixtures[i].checkpoint) {
+            return false;
+        }
+    }
+    CcSim token_sim;
+    CcPilotRoadTopology token_pilot;
+    CcSimInit(&token_sim, fixtures[0].seed);
+    if (!CcPilotRoadTopologyBuild(&token_sim, &token_pilot)) return false;
+    return CcRoadPreviewToken(
+        UINT64_C(323001), token_pilot.destination_id,
+        token_pilot.junction_id, token_pilot.origin_to_junction_units,
+        token_pilot.origin_to_junction_units, 0, 9U,
+        token_pilot.destination_segment_id,
+        CC_ROAD_DIRECTION_FORWARD) == UINT64_C(16498057034038110418);
 }

@@ -476,6 +476,9 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
     }
 
     manifest->route_count = sim->route_count;
+    CcRoadGeometry route_geometry[CC_MAX_ROUTES];
+    if (CcRoadGeometryBuildAll(sim, route_geometry, CC_MAX_ROUTES) !=
+        sim->route_count) return false;
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRoute *route = &sim->routes[i];
         const CcWorldSettlementPlacement *from =
@@ -490,20 +493,19 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
         placement->seed = MixBits(
             sim->world_seed ^ (uint32_t)route->id ^
             (uint32_t)(route->id >> 32U));
-        CcRoadGeometry geometry;
-        if (!CcRoadGeometryBuild(sim, route->id, &geometry)) return false;
+        const CcRoadGeometry *geometry = &route_geometry[i];
         placement->control = (CcWorldPoint){
-            (float)geometry.control.x_units /
+            (float)geometry->control.x_units /
                 (float)CC_ROAD_GEOMETRY_UNITS_PER_WORLD_UNIT,
-            (float)geometry.control.z_units /
+            (float)geometry->control.z_units /
                 (float)CC_ROAD_GEOMETRY_UNITS_PER_WORLD_UNIT
         };
         for (int32_t sample = 0;
              sample < CC_WORLD_ROUTE_SAMPLE_COUNT; ++sample) {
             placement->samples[sample] = (CcWorldPoint){
-                (float)geometry.samples[sample].x_units /
+                (float)geometry->samples[sample].x_units /
                     (float)CC_ROAD_GEOMETRY_UNITS_PER_WORLD_UNIT,
-                (float)geometry.samples[sample].z_units /
+                (float)geometry->samples[sample].z_units /
                     (float)CC_ROAD_GEOMETRY_UNITS_PER_WORLD_UNIT
             };
         }
