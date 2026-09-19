@@ -3,6 +3,7 @@
 #include "sim/cc_sim.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #define CC_CHECK(condition) do { \
     if (!(condition)) { \
@@ -116,8 +117,21 @@ static int TestResolutionEvidenceOutcomesAndEchoQueue(void)
     CC_CHECK(repair->objective.progress.value ==
              repair->objective.progress.limit);
     CC_CHECK(repair->objective.evidence_count == 1);
-    CC_CHECK(CcSimEvent(
-        &sim, repair->objective.evidence_event_ids[0]) != NULL);
+    const CcEvent *evidence = CcSimEvent(
+        &sim, repair->objective.evidence_event_ids[0]);
+    CC_CHECK(evidence != NULL);
+    int32_t progress_events = 0;
+    for (int32_t i = 0; i < sim.event_count; ++i) {
+        const CcEvent *event = &sim.events[i];
+        if (event->kind != CC_EVENT_QUEST_PROGRESS ||
+            event->subject_id != repair_id) continue;
+        progress_events += 1;
+        CC_CHECK(event->location_id == repair->target_id);
+        CC_CHECK(event->parent_id == evidence->id);
+        CC_CHECK(event->magnitude == repair->objective.progress.value);
+        CC_CHECK(strstr(event->text, "Road compact progresses to 2 of 2") != NULL);
+    }
+    CC_CHECK(progress_events == 1);
     const CcFront *supply_front = CcSimFront(&sim, supply_front_id);
     CC_CHECK(supply_front != NULL);
     CC_CHECK(supply_front->status == CC_FRONT_RESOLVED);
