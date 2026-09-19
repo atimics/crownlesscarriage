@@ -2,7 +2,7 @@
 
 The Low Silver Pit branch lies on the Alderwatch–Silverwick road. Travel stops at the branch. Choose the left or right turn shown for the current direction, or continue along the road.
 
-The branch opens a small mine yard. The carriage stays beside the road. Pack Bread or Meat beside it, then walk north to the timber doorway. Walk through the doorway to enter Mine Mouth in first person.
+The branch opens a small mine yard. The carriage stays beside the road. Pack Bread or Meat beside it, then walk north to the timber doorway. Walk through the doorway to enter the Gatehouse in first person.
 
 Both places use shared world lighting and model helpers from the town renderer. The yard has a composed exterior camera. Underground, the camera follows the saved tile at eye height and looks in a local cardinal direction. The company model remains visible in the yard. Ground clicks use the camera for the current view. The [continuous-world contract](outside-city-redesign.md) defines how these views and their interactions connect.
 

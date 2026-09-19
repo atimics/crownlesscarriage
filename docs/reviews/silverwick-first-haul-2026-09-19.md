@@ -70,7 +70,7 @@ This outing continued the saved company through schemas 104, 105, and 106.
 | Return to the road | Walked back to the exit, approached the carriage, saved and reloaded in the yard, then explicitly boarded. The road resumed at the same Silverwick–Alderwatch 16% anchor. Pack 0 and carriage Raw Gold 1 remained stable. |
 | Opposite direction | Reached Alderwatch, chose Silverwick from that endpoint, and passed the same Low Silver Pit hoist. The reverse leg offered the right turn. Continued to Silverwick on day 25 with 57 crowns and Raw Gold 1. Saved and reloaded before reporting. |
 | Information return | Reached Jory from the shift board and explicitly told him the acquired account. The Book recorded the day-25 report, the records read on day 18, the earlier unknown observation date, and his response: “This gives the next company a fair path in.” Purse 57 and Raw Gold 1 stayed the same. Saved the report. |
-| Ordinary sale | Entered the Company store and approached Oren. Selected Sell, Raw Gold 1, then accepted the displayed 60-crown offer. The purse changed from 57 to 117, and Raw Gold fell from 1 to 0. Further sale was disabled with the empty cargo. |
+| Ordinary sale | Entered the Company store and approached Oren. Selected Sell, Raw Gold 1, then accepted the displayed 60-crown offer. The purse changed from 57 to 117, and Raw Gold fell from 1 to 0. Further sale was disabled with the empty cargo. Save/reload preserved 117 crowns, empty cargo, and the dated mine notes. |
 
 The gold predates the new provenance tracking. It stays ordinary saleable cargo;
 the report uses the newly acquired records. The earlier survey observation keeps
@@ -132,6 +132,32 @@ It exposed stale transition attribution: a later Escape action was recorded as
 receipt. Its transition durations require the follow-up attribution repair;
 the reported 70.2 ms startup and 599.2 ms first-actionable values describe this
 particular reload.
+
+## Follow-up repairs from ordinary play
+
+The final outing found three more problems. A generic Scout approach stalled
+behind the raised platform fence. Jory's Book account was correct, while the
+conversation still showed his earlier greeting. The local timing export could
+assign a later keyboard transition to an earlier touch action.
+
+[PR #842](https://github.com/atimics/crownlesscarriage/pull/842) repairs the person
+approach through the street route, keeps a presented figure bound to the same
+resident, and shows Jory's supported reply after reporting.
+[PR #843](https://github.com/atimics/crownlesscarriage/pull/843) expires old timing
+actions before attributing a transition. Keyboard and pointer input clear an
+earlier touch action; the next semantic button starts its own timing record.
+The timing tests use a controlled clock and the shipped touch event handlers.
+
+At PR #843 head `c9503bf5359c9f01d9b67fd3e64b863bd503e65c`, the first
+local browser run overlapped compilation and measured p95 241.7 ms, above the
+100 ms local ceiling. A repeat after build activity settled passed: 155 frames,
+median 25 ms, p95 33.4 ms, p99 42.8 ms. A final run retained its
+[frame receipt](silverwick-first-haul-2026-09-19/diagnostics-fix-frame-budget.json)
+and [timing export](silverwick-first-haul-2026-09-19/diagnostics-fix-local-timings.json):
+154 frames, median 25 ms, p95 33.3 ms, p99 34.2 ms. The PR records the initial
+miss and the final pass.
+The WASM SHA-256 was
+`bdc6d0208583bb3cecad2878e76121ec128eba505db0cc36212b165ee8abd750`.
 
 ## Evidence boundaries
 
