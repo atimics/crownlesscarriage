@@ -98,7 +98,44 @@ int main(void)
     Check(CcSimApply(&sim,&pack,error,sizeof(error)));
     CC_CHECK(sim.player.cargo[CC_GOOD_BREAD]==1 && sim.mine.pack[CC_GOOD_BREAD]==2);
     CC_CHECK(CcSimTrackedGood(&sim,CC_GOOD_BREAD)==bread);
+    {
+        CcCommand unload=pack;
+        unload.target_id=(CcId)sim.mine.revision;
+        unload.amount=-1;
+        Check(CcSimApply(&sim,&unload,error,sizeof(error)));
+        CC_CHECK(sim.player.cargo[CC_GOOD_BREAD]==2 && sim.mine.pack[CC_GOOD_BREAD]==1);
+        pack.target_id=(CcId)sim.mine.revision;
+        pack.amount=1;
+        Check(CcSimApply(&sim,&pack,error,sizeof(error)));
+        CC_CHECK(sim.player.cargo[CC_GOOD_BREAD]==1 && sim.mine.pack[CC_GOOD_BREAD]==2);
+    }
+    {
+        CcCommand remote=pack;
+        uint64_t held;
+        changed=sim; changed.mine.x=15; changed.mine.y=4;
+        remote.target_id=(CcId)changed.mine.revision;
+        held=CcSimHash(&changed);
+        CC_CHECK(!CcSimApply(&changed,&remote,error,sizeof(error)) && CcSimHash(&changed)==held);
+        changed=sim; changed.mine.phase=CC_MINE_LEVEL; changed.mine.x=5; changed.mine.y=4;
+        changed.mine.light=18; changed.mine.steps=0; changed.mine.seen=1U;
+        remote.target_id=(CcId)changed.mine.revision;
+        held=CcSimHash(&changed);
+        CC_CHECK(!CcSimApply(&changed,&remote,error,sizeof(error)) && CcSimHash(&changed)==held);
+        changed=sim; changed.mine.pack[CC_GOOD_BREAD]=CC_MINE_PACK_CAPACITY;
+        changed.player.cargo[CC_GOOD_BREAD]=1;
+        remote.target_id=(CcId)changed.mine.revision;
+        held=CcSimHash(&changed);
+        CC_CHECK(!CcSimApply(&changed,&remote,error,sizeof(error)) && CcSimHash(&changed)==held);
+        changed=sim;
+        changed.player.cargo[CC_GOOD_IRON]+=changed.player.cargo_capacity-
+            CcPlayerCargoUsed(&changed.player);
+        remote.kind=CC_COMMAND_MINE_USE; remote.target_id=(CcId)changed.mine.revision;
+        held=CcSimHash(&changed);
+        CC_CHECK(!CcSimApply(&changed,&remote,error,sizeof(error)) && CcSimHash(&changed)==held);
+    }
     uint64_t before=CcSimHash(&sim);
+    pack.target_id=(CcId)sim.mine.revision;
+    pack.amount=2;
     CC_CHECK(!CcSimApply(&sim,&pack,error,sizeof(error)) && CcSimHash(&sim)==before);
     CcCommand outside={.kind=CC_COMMAND_PASS_ROAD_SITE,.target_id=sim.mine.site_id};
     CC_CHECK(!CcSimApply(&sim,&outside,error,sizeof(error)) && CcSimHash(&sim)==before);
@@ -151,7 +188,11 @@ int main(void)
     Check(CcJournalClose(&journal,&restored,error,sizeof(error)));
     Walk(&restored,5,4);Apply(&restored,CC_COMMAND_MINE_USE,0);
     CC_CHECK(restored.mine.phase==CC_MINE_YARD && restored.mine.x==15 && restored.mine.y==4);
-    Walk(&restored,15,17);Apply(&restored,CC_COMMAND_MINE_USE,0);
+    Walk(&restored,15,17);
+    CcCommand board={.kind=CC_COMMAND_MINE_USE,.target_id=(CcId)restored.mine.revision};
+    Check(CcSimApply(&restored,&board,error,sizeof(error)));
+    CC_CHECK(error[0]=='\0');
+    Check(CcSimValidate(&restored,error,sizeof(error)));
     CC_CHECK(restored.mine.phase==CC_MINE_NONE && restored.mine.surveyed && restored.mine.bar_open);
     CC_CHECK(restored.player.cargo[CC_GOOD_BREAD]==2 && restored.journey.elapsed_subticks==anchor);
     CcSimAdvanceRuntimeTicks(&restored,1);CC_CHECK(restored.journey.elapsed_subticks>anchor);
