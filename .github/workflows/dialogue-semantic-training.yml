@@ -24,6 +24,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: semantic-5m-${{ github.ref }}
   cancel-in-progress: false
@@ -102,12 +106,7 @@ jobs:
         working-directory: zero
         run: git checkout --detach "$ZERO_COMMIT"
       - name: Check dialogue event coverage
-        run: |
-          if python tools/dialogue/audit_grammar.py --help 2>&1 | grep -q -- '--check'; then
-            python tools/dialogue/audit_grammar.py --check
-          else
-            echo 'Coverage check will run after the full event-coverage change is merged.'
-          fi
+        run: python tools/dialogue/audit_grammar.py --check
       - name: Train semantic model
         run: |
           case "$STEPS" in (*[!0-9]*|'') echo 'steps must be an integer from 1 to 2000' >&2; exit 1;; esac

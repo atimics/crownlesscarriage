@@ -16,7 +16,8 @@ class CoverageTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        for name in ('src/sim/cc_sim.h', 'tools/data/core_account_rules.json'):
+        shutil.copytree(ROOT / 'src/sim', self.root / 'src/sim')
+        for name in ('tests/fixtures/legacy_event_formats.c', 'tools/data/core_account_rules.json'):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, target)
@@ -52,6 +53,14 @@ class CoverageTests(unittest.TestCase):
         data['rules'][0]['kind'] = 'SPELLING_ERROR'
         path.write_text(json.dumps(data))
         with self.assertRaisesRegex(ValueError, 'unknown events: CC_EVENT_SPELLING_ERROR'):
+            check_coverage(inventory(self.root))
+
+    def test_invented_source_fails(self):
+        path = self.root / 'tools/data/core_account_rules.json'
+        data = json.loads(path.read_text())
+        data['rules'][0]['source'] = '{0} invents an unsupported event at {1}: {2}.'
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, 'lack simulation source wording'):
             check_coverage(inventory(self.root))
 
 

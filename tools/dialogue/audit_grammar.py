@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 from syntax import PLANS,TERMS
 from semantic_ids import MOVES
+from source_formats import ungrounded_rules
 
 
 def check_coverage(result):
@@ -14,8 +15,9 @@ def check_coverage(result):
     if not result['event_kinds']:
         problems.append('simulation event inventory is empty')
     for key, label in (('account_missing_events', 'events need account rules'),
-                       ('unknown_rule_events', 'rules refer to unknown events')):
-        if result[key]:
+                       ('unknown_rule_events', 'rules refer to unknown events'),
+                       ('ungrounded_rule_sources', 'rules lack simulation source wording')):
+        if result.get(key):
             problems.append(label + ': ' + ', '.join(result[key]))
     if problems:
         raise ValueError('; '.join(problems))
@@ -38,6 +40,7 @@ def inventory(root):
             'event_kinds':events,'account_rules':len(rules),
             'account_covered_events':covered,'account_missing_events':sorted(set(events)-set(covered)),
             'unknown_rule_events':sorted(set(covered)-set(events)),
+            'ungrounded_rule_sources':ungrounded_rules(root, rules),
             'commands':values('CcCommandKind','CC_COMMAND_'),
             'personal_knowledge_kinds':values('CcKnowledgeKind','CC_KNOWLEDGE_'),
             'certainty':values('CcKnowledgeCertainty','CC_KNOWLEDGE_'),

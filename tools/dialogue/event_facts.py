@@ -87,6 +87,8 @@ def _id(value: Any, label: str) -> str:
 
 
 def _source_id(value: Any) -> str:
+    if isinstance(value, bool):
+        raise ValueError('source_id must be an ID')
     if value is None or value == 0 or value == "0":
         return "unknown"
     return _id(value, "source_id")
@@ -128,19 +130,21 @@ def _fact_from_account(owner_id: str, account: Mapping[str, Any], knowledge: Map
     kind = event_kind_value(account.get("kind"))
     text = account.get("account", account.get("text", ""))
     if (not isinstance(text, str) or not text.strip() or
-            any(ord(char) < 32 for char in text) or len(text.encode("utf-8")) >= 144):
+            any(ord(char) < 32 or ord(char) == 127 for char in text) or len(text.encode("utf-8")) >= 144):
         raise ValueError("account text must be printable UTF-8 text under 144 bytes")
     day = account.get("day")
     if isinstance(day, bool) or not isinstance(day, int) or day < 0:
         raise ValueError("day must be a non-negative integer")
-    private = knowledge.get("private", knowledge.get("private_knowledge", False)) if knowledge else account.get("private", account.get("private_knowledge", False))
-    if not isinstance(private, bool):
+    private = account.get("private", account.get("private_knowledge", False))
+    known_private = knowledge.get('private', False) if knowledge else False
+    if not isinstance(private, bool) or not isinstance(known_private, bool):
         raise ValueError("private must be boolean")
+    private = private or known_private
     # A caller supplied parser flag is not evidence. This bridge quotes held
     # text until the native account grammar proves a parse.
     parser_supported = False
     certainty_value = knowledge.get("certainty") if knowledge else None
-    if certainty_value is not None and certainty_value not in KNOWLEDGE_CERTAINTY:
+    if certainty_value is not None and (type(certainty_value) is not int or certainty_value not in KNOWLEDGE_CERTAINTY):
         raise ValueError("certainty must be doubtful, told or witnessed")
     certainty = KNOWLEDGE_CERTAINTY.get(certainty_value)
     confidence = _score(account, "confidence")
@@ -159,19 +163,27 @@ def build_facts(participant: Mapping[str, Any]) -> list[EventFact]:
     if not isinstance(participant, Mapping):
         raise ValueError("participant must be an object")
     self_data = participant.get("self", {})
-    owner = participant.get("owner_id", self_data.get("id")) if isinstance(self_data, Mapping) else participant.get("owner_id")
+    owner = self_data.get("id") if isinstance(self_data, Mapping) else None
     owner_id = _id(owner, "participant owner_id")
     accounts = participant.get("held_accounts", [])
     if not isinstance(accounts, list):
         raise ValueError("held_accounts must be a list")
+    today = participant.get('day')
+    if type(today) is not int or today < 0:
+        raise ValueError('participant day must be a non-negative integer')
     knowledge_by_event = {}
     for item in participant.get("knowledge", []):
         if isinstance(item, Mapping) and item.get("event_id") is not None:
-            knowledge_by_event[str(item["event_id"])] = item
+            key = str(item['event_id'])
+            if key in knowledge_by_event:
+                raise ValueError('duplicate event knowledge needs resolution')
+            knowledge_by_event[key] = item
     facts = [_fact_from_account(owner_id, item, knowledge_by_event.get(str(item.get("event_id")))) for item in accounts
              if isinstance(item, Mapping)]
     if len(facts) != len(accounts):
         raise ValueError("each held account must be an object")
+    if any(fact.day > today for fact in facts):
+        raise ValueError('held account is from a future day')
     if len({fact.account_ref for fact in facts}) != len(facts):
         raise ValueError("held accounts need distinct stable references")
     return facts

@@ -13,7 +13,7 @@ from event_facts import (EVENT_KIND_REGISTRY, build_facts, render_fact_act,
 
 
 def participant(*accounts):
-    return {"self": {"id": "17"}, "held_accounts": list(accounts),
+    return {"self": {"id": "17"}, "day": 8, "held_accounts": list(accounts),
             "knowledge": [{"event_text": "foreign state"}]}
 
 
@@ -87,11 +87,13 @@ class EventFactsTests(unittest.TestCase):
             {"kind": "report", "fact_ref": fact.account_ref}, current))
 
     def test_snapshot_bounds_and_knowledge_certainty(self):
-        current = with_knowledge(participant(account(day=999999, source_id="0")),
+        current = with_knowledge(participant(account(source_id="0")),
                                  certainty=3, private=False)
         fact = build_facts(current)[0]
         self.assertEqual(fact.source_id, "unknown")
         self.assertEqual(fact.certainty, "witnessed")
+        with self.assertRaisesRegex(ValueError, 'future day'):
+            build_facts(participant(account(day=9)))
         with self.assertRaisesRegex(ValueError, "printable"):
             build_facts(participant(account(account="bad\ntext")))
         with self.assertRaisesRegex(ValueError, "under 144"):
@@ -103,6 +105,32 @@ class EventFactsTests(unittest.TestCase):
         current = participant(account(event_id="902"))
         with self.assertRaisesRegex(ValueError, "owned"):
             validate_act({"kind": "report", "fact_ref": ref}, current)
+
+    def test_foreign_owner_and_private_account(self):
+        own = participant(account(private=True))
+        other = copy.deepcopy(own)
+        other['self']['id'] = '18'
+        ref = build_facts(other)[0].account_ref
+        with self.assertRaisesRegex(ValueError, 'owned'):
+            validate_act({'kind': 'report', 'fact_ref': ref}, own)
+        own = with_knowledge(own, certainty=2, private=False)
+        fact = build_facts(own)[0]
+        self.assertTrue(fact.private)
+        with self.assertRaisesRegex(ValueError, 'private'):
+            validate_act({'kind': 'report', 'fact_ref': fact.account_ref}, own)
+
+    def test_saved_raid_account(self):
+        # Exported from world 1201 on day 181, participant Chenric.
+        own = {'self': {'id': '1369094286720630865'}, 'day': 181, 'knowledge': [],
+               'held_accounts': [{'event_id': '648518346341352652', 'source_id': '0',
+                                  'day': 172, 'kind': 51, 'confidence': 93, 'retellings': 1,
+                                  'parser_supported': True,
+                                  'account': 'The Cinder Tithe raids Thornford: 20 Wheat, 16 crowns.'}]}
+        fact = build_facts(own)[0]
+        self.assertEqual(fact.source_id, 'unknown')
+        self.assertIsNone(fact.certainty)
+        self.assertIn('20 Wheat, 16 crowns', render_fact_act(
+            {'kind': 'report', 'fact_ref': fact.account_ref}, own))
 
     def test_malformed_and_foreign_fields_are_rejected(self):
         for changes, message in (({"kind": 139}, "unknown event kind"),

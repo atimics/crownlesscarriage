@@ -37,7 +37,7 @@ def accepts_template(fmt, rule):
         if match.group() == '%%':
             chunks.append('%')
         elif match.group().endswith('s'):
-            chunks.append('.+?')
+            chunks.append('.*?')
         else:
             numeric = [r'\{' + str(i) + r'\}' for i, role in enumerate(rule['roles']) if role == 'quantity']
             chunks.append('(?:[0-9]+|' + '|'.join(numeric) + ')' if numeric else '[0-9]+')
@@ -52,7 +52,8 @@ def accepts_template(fmt, rule):
     # Some emitters contain fixed names and small counts that the account
     # parser captures as fields, such as "one cow" or "14 nights".
     sample = PRINTF.sub(lambda m: '%' if m.group() == '%%' else
-                        'Example' if m.group().endswith('s') else '7', fmt)
+                        ('s' if m.start() and fmt[m.start()-1].isalnum() else 'Example')
+                        if m.group().endswith('s') else '7', fmt)
     parts = []
     end = 0
     for slot in re.finditer(r'\{(\d+)\}', rule['source']):
