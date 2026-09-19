@@ -47,13 +47,12 @@ static bool Append(char *text, size_t capacity, size_t *used,
     return true;
 }
 
-bool CcHrakhorCorrupt(const CcCoreAccount *account, const char *english,
+static bool Transform(const CcCoreAccount *account, const char *english,
                       unsigned int strength, char *text, size_t capacity)
 {
     if (text == NULL || capacity == 0U) return false;
     text[0] = '\0';
-    if (english == NULL || strength > 100U ||
-        CcCoreAccountRule(account)[0] == '\0' || account->field_count > CC_CORE_FIELDS) return false;
+    if (english == NULL || strength > 100U || account->field_count > CC_CORE_FIELDS) return false;
     size_t held = strlen(account->text), length = strlen(english), used = 0U;
     for (size_t f = 0U; f < account->field_count; ++f) {
         const CcCoreField *field = &account->fields[f];
@@ -103,4 +102,20 @@ bool CcHrakhorCorrupt(const CcCoreAccount *account, const char *english,
 fail:
     text[0] = '\0';
     return false;
+}
+
+bool CcHrakhorCorrupt(const CcCoreAccount *account, const char *english,
+                      unsigned int strength, char *text, size_t capacity)
+{
+    if (text == NULL || capacity == 0U) return false;
+    text[0] = '\0';
+    if (CcCoreAccountRule(account)[0] == '\0') return false;
+    return Transform(account, english, strength, text, capacity);
+}
+
+bool CcHrakhorLiteral(const char *english, unsigned int strength,
+                      char *text, size_t capacity)
+{
+    const CcCoreAccount empty = {0};
+    return Transform(&empty, english, strength, text, capacity);
 }
