@@ -9,7 +9,7 @@ copy candidates. A checkpoint trained on this format is the next requirement.
 ## Fixed format
 
 Every line is a label followed by a JSON value. Text inside a value is quoted.
-The version is `crownless-person-v1`. Array positions are fixed:
+The version is `crownless-person-v2`. Array positions are fixed:
 
 | Label | Array positions or value |
 | --- | --- |
@@ -17,16 +17,20 @@ The version is `crownless-person-v1`. Array positions are fixed:
 | needs | stress, courage, hungry days, unsheltered nights, coins, in transit |
 | place | current place name, home name, simulation day |
 | other | listener name |
-| relationship | directed relationship from the simulation, or null |
+| relationship | affinity, trust, obligation, history; or null |
 | actions | available action names |
-| account | event day, confidence, retellings, source ID, held account text |
+| account | event day, confidence, retellings, source role or ID, held account text |
 | group | band name, faction ID |
 | heard | source role, optional day, speech or action |
 | remembered_speech | same structure, from a prior observed episode |
 | memories / knowledge | one personal simulation record |
 
 Self and listener IDs route observations and remain in the audit record.
-Third-party observations keep their source ID. The final `turn:` line cues one
+Account sources use `self` and `other` for the two participants. Third-party
+accounts and observations keep their source ID. The full relationship cause ID
+stays in the source record. Reviews can cite a retained relationship field with
+`["relationship", "history"]`, for example. Native inference accepts v1 and v2
+headers; each checkpoint and its training data should use one explicit version. The final `turn:` line cues one
 JSON object containing speech or an allowed action. The target ends at EOS.
 Literal `[EOS]` and field markers in quoted text use a JSON Unicode escape.
 JSON decoding recovers their original spelling.

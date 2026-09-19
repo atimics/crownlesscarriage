@@ -10,7 +10,7 @@ import subprocess
 
 from paired_participants import validate_turn
 
-FORMAT = 'crownless-person-v1'
+FORMAT = 'crownless-person-v2'
 CONTEXT = 512
 REPLY_TOKENS = 160
 EOS = 0
@@ -88,7 +88,8 @@ def build_prompt(request, tokenizer, context=CONTEXT, reply_tokens=REPLY_TOKENS)
                      'unsheltered_nights', 'coins', 'in_transit')]) + '\n',
             'place:' + wire([p['place']['name'], me['home'], p['day']]) + '\n',
             'other:' + wire(listener['name']) + '\n',
-            'relationship:' + wire(p['relationship']) + '\n',
+            'relationship:' + wire(None if p['relationship'] is None else
+                [p['relationship'][k] for k in ('affinity', 'trust', 'obligation', 'history')]) + '\n',
             'actions:' + wire(p['available_actions']) + '\n']
     turns = request.get('observed_turns', [])
     # This row is always present intact, or the example is rejected. Losing the
@@ -114,7 +115,9 @@ def build_prompt(request, tokenizer, context=CONTEXT, reply_tokens=REPLY_TOKENS)
     accounts = []
     for i, a in sorted(enumerate(p.get('held_accounts', [])),
                        key=lambda pair: (-pair[1]['day'], pair[0])):
-        value = [a[k] for k in ('day', 'confidence', 'retellings', 'source_id', 'account')]
+        source = a['source_id']
+        source = 'self' if source == me['id'] else 'other' if source == listener['id'] else source
+        value = [a['day'], a['confidence'], a['retellings'], source, a['account']]
         accounts.append((('account', i), 'account:' + wire(value) + '\n'))
     options.extend(accounts[:1])
     for i in range(len(turns) - 2, -1, -1):

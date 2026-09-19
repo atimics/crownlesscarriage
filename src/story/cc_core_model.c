@@ -549,7 +549,9 @@ bool CcCoreModelBeginParticipant(CcCoreModel *m, const char *prefix)
     m->prefix = 0; m->used = 0; m->actions = 0; m->candidates = 0;
     memset(m->meta, 0, sizeof(m->meta));
     static const char format[] = "crownless-person-v1\n";
-    if (prefix == NULL || strncmp(prefix, format, sizeof(format) - 1U) != 0) return false;
+    static const char format2[] = "crownless-person-v2\n";
+    if (prefix == NULL || (strncmp(prefix, format, sizeof(format) - 1U) != 0 &&
+        strncmp(prefix, format2, sizeof(format2) - 1U) != 0)) return false;
     int n = CcCoreModelEncode(prefix, m->tokens, CONTEXT - MAX_ACTIONS);
     if (n <= 0) return false;
     for (int i = 0; i < n; ++i)
