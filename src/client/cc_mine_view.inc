@@ -1,5 +1,7 @@
 static int MineScreenWidth(void) { return GetScreenWidth()>0?GetScreenWidth():1040; }
 static int MineScreenHeight(void) { return GetScreenHeight()>0?GetScreenHeight():620; }
+static bool MineAtCarriage(const CcSim *sim);
+static int32_t MineGoodsRows(const int32_t goods[CC_GOOD_COUNT]);
 static bool MineShortLandscape(void)
 {
     return MineScreenWidth()>=700 && MineScreenHeight()<500;
@@ -10,7 +12,8 @@ static Rectangle MineViewportForSize(int32_t width,int32_t height)
     float bottom=(float)height-176.0f;
     return (Rectangle){0,top,(float)width,bottom-top};
 }
-static Rectangle MineViewportForInventory(int32_t width,int32_t height,bool expanded)
+static Rectangle MineViewportForContent(int32_t width,int32_t height,
+                                        bool expanded,int32_t inventory_rows)
 {
     Rectangle view=MineViewportForSize(width,height);
     if(width>=700&&height<500) {
@@ -20,14 +23,35 @@ static Rectangle MineViewportForInventory(int32_t width,int32_t height,bool expa
             view.x=170.0f;
             view.width=(float)width-340.0f;
         }
+    } else {
+        float top=fmaxf(126.0f,104.0f+(float)inventory_rows*11.0f);
+        view.y=top;
+        view.height=(float)height-176.0f-top;
     }
     return view;
 }
-static Rectangle MineViewport(const LocalState *local)
+static Rectangle MineViewportForInventory(int32_t width,int32_t height,bool expanded)
+{
+    return MineViewportForContent(width,height,expanded,12);
+}
+static int32_t MineInventoryRows(const CcSim *sim)
+{
+    int32_t pack_goods[CC_GOOD_COUNT];
+    for(int32_t good=0;good<CC_GOOD_COUNT;++good)
+        pack_goods[good]=CcMinePackGood(sim,(CcGood)good);
+    int32_t rows=MineGoodsRows(pack_goods);
+    if(MineAtCarriage(sim)) {
+        int32_t carriage_rows=MineGoodsRows(sim->player.cargo);
+        if(carriage_rows>rows) rows=carriage_rows;
+    }
+    return rows;
+}
+static Rectangle MineViewport(const CcSim *sim,const LocalState *local)
 {
     int32_t width=GetScreenWidth(),height=GetScreenHeight();
     if(width<=0||height<=0) return (Rectangle){0};
-    return MineViewportForInventory(width,height,local!=NULL&&local->mine_inventory_expanded);
+    return MineViewportForContent(width,height,
+        local!=NULL&&local->mine_inventory_expanded,MineInventoryRows(sim));
 }
 static void MineRenderTargetSizeForInventory(int32_t width,int32_t height,
                                              bool expanded,int32_t *out_width,
@@ -37,11 +61,12 @@ static void MineRenderTargetSizeForInventory(int32_t width,int32_t height,
     *out_width=(int32_t)fmaxf(1.0f,roundf(view.width));
     *out_height=(int32_t)fmaxf(1.0f,roundf(view.height));
 }
-static void MineRenderTargetSize(const LocalState *local,int32_t *out_width,
-                                 int32_t *out_height)
+static void MineRenderTargetSize(const CcSim *sim,const LocalState *local,
+                                 int32_t *out_width,int32_t *out_height)
 {
-    MineRenderTargetSizeForInventory(GetScreenWidth(),GetScreenHeight(),
-        local!=NULL&&local->mine_inventory_expanded,out_width,out_height);
+    Rectangle view=MineViewport(sim,local);
+    *out_width=(int32_t)fmaxf(1.0f,roundf(view.width));
+    *out_height=(int32_t)fmaxf(1.0f,roundf(view.height));
 }
 static Rectangle MineControl(int32_t index)
 {
@@ -352,7 +377,7 @@ static bool MinePick(const CcSim *sim,const LocalState *local,
                      RenderTexture2D target,Vector2 mouse,
                      int32_t *out_x,int32_t *out_y,MineIntentTarget *out_target)
 {
-    Rectangle view=MineViewport(local);
+    Rectangle view=MineViewport(sim,local);
     if((view.width<=0||view.height<=0) && target.texture.width>0&&target.texture.height>0)
         view=(Rectangle){0,0,(float)target.texture.width,(float)target.texture.height};
     if(!CheckCollisionPointRec(mouse,view) || view.width<=0 || view.height<=0) return false;
@@ -404,7 +429,7 @@ static bool MineLabelPosition(RenderTexture2D target,const CcSim *sim,const Loca
        !MineLineVisibleExcept(sim,camera.position,point,skip_x,skip_y)) return false;
     Vector2 pixel=GetWorldToScreenEx(point,camera,
                                      target.texture.width,target.texture.height);
-    Rectangle view=MineViewport(local);
+    Rectangle view=MineViewport(sim,local);
     if((view.width<=0||view.height<=0) && target.texture.width>0&&target.texture.height>0)
         view=(Rectangle){0,0,(float)target.texture.width,(float)target.texture.height};
     int x=(int)(view.x+pixel.x*view.width/(float)target.texture.width);
@@ -451,7 +476,7 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
     bool brief=compact||short_landscape;
     DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),BACKGROUND);
     CcLocalDrawMine3D(sim,&local->agent,&local->course,local->mine_facing,
-        target,MineViewport(local));
+        target,MineViewport(sim,local));
     if(underground) {
         if(!sim->mine.bar_open) MineLabel(target,sim,local,(Vector3){15,1,10},15,10,"Wooden bar / lift it");
         if(!sim->mine.surveyed) MineLabel(target,sim,local,(Vector3){26,.6f,4},26,4,"Workers' survey");
@@ -612,7 +637,7 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
     AdventureButton(MineNavigationControl(0),"Save F5",true,false);
     AdventureButton(MineNavigationControl(1),"Menu Esc",true,false);
     CcOverlayDrawText(message,22,GetScreenHeight()-29,10,INK);
-    if(!compact) CcOverlayDrawText("Click where to walk  |  [ ] good  - + amount  |  F5 save",GetScreenWidth()-390,23,10,MUTED);
+    if(!compact) CcOverlayDrawText("Click where to walk  |  [ ] good  - + amount  |  F5 save",GetScreenWidth()-390,56,10,MUTED);
 }
 static bool MineForwardUse(const CcSim *sim,int32_t dir)
 {

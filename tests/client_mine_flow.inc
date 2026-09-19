@@ -308,6 +308,27 @@ static int RunMineInputRegression(void)
         MINE_CHECK(!camps, "A roadside stop must not offer camping.");
         MINE_CHECK(drives_on, "Every roadside stop must offer the road on.");
     }
+    {
+        static CcSim travel_state;
+        static LocalState travel_local;
+        travel_state=sim;
+        travel_local=local;
+        travel_state.journey.active=true;
+        travel_state.journey.phase=CC_JOURNEY_PHASE_TRAVELLING;
+        travel_local.journey_travel_active=true;
+        travel_local.travel_hold_armed=false;
+        MINE_CHECK(strcmp(TravelActionDetail(&travel_state,&travel_local),
+            "Hold to travel faster")==0,
+            "An active road must describe the current moving state.");
+        travel_state.journey.phase=CC_JOURNEY_PHASE_BLOCKED;
+        MINE_CHECK(strcmp(TravelActionDetail(&travel_state,&travel_local),
+            "Choice ahead")==0,
+            "A blocked road must describe its pending choice.");
+        travel_state.journey.phase=CC_JOURNEY_PHASE_RESTING;
+        MINE_CHECK(strcmp(TravelActionDetail(&travel_state,&travel_local),
+            "Resting until morning")==0,
+            "A resting road must describe its saved phase.");
+    }
     Rectangle button=ContextActionBounds(visit,actions.count,false);
     client_test_pointer_active=true;client_test_pointer=(Vector2){button.x+button.width/2,button.y+button.height/2};
     queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
@@ -319,8 +340,12 @@ static int RunMineInputRegression(void)
         int32_t inventory_rows=MineGoodsRows(inventory.mine.pack);
         if(MineGoodsRows(inventory.player.cargo)>inventory_rows)
             inventory_rows=MineGoodsRows(inventory.player.cargo);
-        MINE_CHECK((float)(94+inventory_rows*11)<=MineViewportForSize(1040,620).y,
+        Rectangle populated=MineViewportForContent(1040,620,false,inventory_rows);
+        Rectangle one_row=MineViewportForContent(1040,620,false,1);
+        MINE_CHECK((float)(104+inventory_rows*11)<=populated.y,
             "Several goods must fit above the mine viewport.");
+        MINE_CHECK(one_row.y<populated.y&&one_row.height>populated.height,
+            "A short manifest must return useful height to the mine scene.");
         MINE_CHECK(MineViewportForSize(844,390).height>0,
             "The mine view must retain positive height below its inventory.");
         Rectangle collapsed=MineViewportForInventory(844,390,false);
@@ -397,7 +422,7 @@ static int RunMineInputRegression(void)
         MINE_CHECK(input_journal!=NULL,"Pointer input needs a separate mine journal.");
         RenderTexture2D surface={.texture={.width=630,.height=960}};
 #define INPUT_STEP(direction) do { CcCommand step={.kind=CC_COMMAND_MINE_STEP,.target_id=(CcId)input.mine.revision,.amount=(direction)}; MINE_CHECK(ApplyCommand(input_journal,&input,step,message,sizeof(message)),"Pointer fixture needs a legal mine step."); } while(0)
-#define INPUT_POINTER(point) do { Camera3D pointer_camera=CcLocalMineCamera(&input,input_local.mine_facing); Vector2 raw_pointer=GetWorldToScreenEx((point),pointer_camera,630,960); Rectangle pointer_view=MineViewport(&input_local); if(pointer_view.width<=0||pointer_view.height<=0) pointer_view=(Rectangle){0,0,630,960}; MINE_CHECK(raw_pointer.x>=0&&raw_pointer.x<630&&raw_pointer.y>=0&&raw_pointer.y<960,"Pointer fixture must stay inside the rendered mine view."); Vector2 pointer={pointer_view.x+raw_pointer.x*pointer_view.width/630.0f,pointer_view.y+raw_pointer.y*pointer_view.height/960.0f}; client_test_pointer_active=true;client_test_pointer=pointer;queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));client_test_pointer_active=false;ClientInputClearPressed(); } while(0)
+#define INPUT_POINTER(point) do { Camera3D pointer_camera=CcLocalMineCamera(&input,input_local.mine_facing); Vector2 raw_pointer=GetWorldToScreenEx((point),pointer_camera,630,960); Rectangle pointer_view=MineViewport(&input,&input_local); if(pointer_view.width<=0||pointer_view.height<=0) pointer_view=(Rectangle){0,0,630,960}; MINE_CHECK(raw_pointer.x>=0&&raw_pointer.x<630&&raw_pointer.y>=0&&raw_pointer.y<960,"Pointer fixture must stay inside the rendered mine view."); Vector2 pointer={pointer_view.x+raw_pointer.x*pointer_view.width/630.0f,pointer_view.y+raw_pointer.y*pointer_view.height/960.0f}; client_test_pointer_active=true;client_test_pointer=pointer;queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));client_test_pointer_active=false;ClientInputClearPressed(); } while(0)
         for(int i=0;i<10;++i) INPUT_STEP(1);
         for(int i=0;i<2;++i) INPUT_STEP(2);
         input_local.mine_facing=2; MineRememberVisible(&input,&input_local);

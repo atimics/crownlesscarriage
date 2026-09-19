@@ -3074,8 +3074,19 @@ static const char *TravelForecastLine(const CcSim *sim)
 static const char *TravelActionDetail(const CcSim *sim, const LocalState *local)
 {
     if (sim == NULL || local == NULL) return "Move on";
+    if (sim->journey.active && sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
+        return "Choice ahead";
+    }
+    if (sim->journey.active && sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+        return "Resting until morning";
+    }
     if (local->travel_hold_armed) {
         return TravelNeedsSlowTime(sim) ? "Choice ahead" : "Moving automatically";
+    }
+    if (sim->journey.active &&
+        sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+        return local->journey_travel_active ?
+            "Hold to travel faster" : "Resume road travel";
     }
     return "Tap to start travel";
 }
@@ -11429,7 +11440,7 @@ int main(int argc, char **argv)
         int32_t local_target_width=CC_LOCAL_ART_WIDTH;
         int32_t local_target_height=CC_LOCAL_ART_HEIGHT;
         if(sim.mine.phase!=CC_MINE_NONE)
-            MineRenderTargetSize(&local,&local_target_width,&local_target_height);
+            MineRenderTargetSize(&sim,&local,&local_target_width,&local_target_height);
         if(local_target.texture.width!=local_target_width ||
            local_target.texture.height!=local_target_height) {
             UnloadRenderTexture(local_target);
