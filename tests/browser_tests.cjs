@@ -24,6 +24,35 @@ async function main() {
   const browser = await chromium.launch({args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
   const context = await browser.newContext({viewport: {width: 1280, height: 900}});
   const page = await context.newPage();
+  async function assertSaveStatusLane(target, width, height) {
+    await target.setViewportSize({width, height});
+    await target.waitForTimeout(100);
+    const layout = await target.evaluate(() => {
+      const canvas = document.querySelector('#canvas').getBoundingClientRect();
+      const status = document.querySelector('#save-status').getBoundingClientRect();
+      const scaleX = canvas.width / document.querySelector('#canvas').width;
+      const scaleY = canvas.height / document.querySelector('#canvas').height;
+      const buttons = (Module.crownlessTouchFrame?.buttons || []).map(button => ({
+        left: canvas.left + button.x * scaleX,
+        top: canvas.top + button.y * scaleY,
+        right: canvas.left + (button.x + button.width) * scaleX,
+        bottom: canvas.top + (button.y + button.height) * scaleY
+      }));
+      return {
+        canvas: {left: canvas.left, top: canvas.top, right: canvas.right, bottom: canvas.bottom},
+        status: {left: status.left, top: status.top, right: status.right, bottom: status.bottom},
+        buttons
+      };
+    });
+    assert(layout.status.top >= layout.canvas.bottom - 1, JSON.stringify(layout));
+    assert(layout.status.left >= -1 && layout.status.right <= width + 1 &&
+      layout.status.top >= -1 && layout.status.bottom <= height + 1, JSON.stringify(layout));
+    for (const button of layout.buttons) {
+      const overlap = button.left < layout.status.right && button.right > layout.status.left &&
+        button.top < layout.status.bottom && button.bottom > layout.status.top;
+      assert(!overlap, JSON.stringify({layout, button}));
+    }
+  }
   async function selectMenuItem(index) {
     await page.locator('#canvas').focus();
     while (await page.evaluate(() => Module.crownlessMenuFocus) !== index) {
@@ -63,7 +92,11 @@ async function main() {
     const upload = prototype.bufferSubData;
     prototype.bufferSubData = function(target, offset, source, sourceOffset, length) {
       budget.uploadCalls++;
-      budget.uploadBytes += arguments.length >= 5 ? length : (source && source.byteLength) || 0;
+      const elementSize = source?.BYTES_PER_ELEMENT || 1;
+      const start = sourceOffset || 0;
+      const count = arguments.length >= 5 && length !== 0
+        ? length : Math.max(0, (source?.length || 0) - start);
+      budget.uploadBytes += count * elementSize;
       return upload.apply(this, arguments);
     };
     const elements = prototype.drawElements;
@@ -139,6 +172,7 @@ async function main() {
       assert.deepEqual(Buffer.from(actual), expected, file.filename);
     }
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), 0);
+    assert.match(await page.locator('#save-status').innerText(), /browser can save this campaign/i);
     await page.screenshot({path: path.join(output, 'title.png')});
     assert.equal(await page.locator('header, footer, iframe').count(), 0);
     await selectMenuItem(3);
@@ -199,6 +233,22 @@ async function main() {
       assert.equal(result.error, 0, `${result.name} must be a valid WebGL operation`);
       assert.deepEqual(result.actual, result.expected, `${result.name} must preserve uploaded bytes`);
     }
+    const uploadOverloads = await page.evaluate(() => {
+      const gl = document.createElement('canvas').getContext('webgl2');
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      const source = new Uint16Array([10, 20, 30, 40]);
+      gl.bufferData(gl.ARRAY_BUFFER, source.byteLength, gl.DYNAMIC_DRAW);
+      const before = window.frameBudget.uploadBytes;
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, source, 1, 0);
+      const zeroLength = window.frameBudget.uploadBytes - before;
+      const afterZero = window.frameBudget.uploadBytes;
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, source, 1);
+      const omittedLength = window.frameBudget.uploadBytes - afterZero;
+      gl.deleteBuffer(buffer);
+      return {zeroLength, omittedLength};
+    });
+    assert.deepEqual(uploadOverloads, {zeroLength: 6, omittedLength: 6});
     const shaders = await page.evaluate(() => window.shaderLinks);
     assert(shaders.every(shader => shader.linked), JSON.stringify(shaders));
     assert(shaders.every(shader => shader.vectors <= 256), JSON.stringify(shaders));
@@ -242,9 +292,10 @@ async function main() {
       await selectMenuItem(10);
       await page.waitForFunction(() => document.fullscreenElement !== null);
       const bounds = await page.locator('#canvas').boundingBox();
+      const frame = await page.locator('#game-frame').boundingBox();
       assert(Math.abs(bounds.width / bounds.height - 16 / 9) < 0.01);
-      assert(Math.abs(bounds.x * 2 + bounds.width - width) < 2);
-      assert(Math.abs(bounds.y * 2 + bounds.height - height) < 2);
+      assert(Math.abs((bounds.x - frame.x) * 2 + bounds.width - frame.width) < 2);
+      assert(Math.abs((bounds.y - frame.y) * 2 + bounds.height - frame.height) < 2);
       await page.evaluate(() => {
         window.lastCanvasPointer = null;
         document.querySelector('#canvas').addEventListener('pointerdown', event => {
@@ -295,6 +346,8 @@ async function main() {
     await page.waitForFunction(() => window.saveRejectionSeen);
     await page.waitForTimeout(250);
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision);
+    assert.match(await page.locator('#save-status').innerText(), /could not save/i);
+    assert.equal(await page.locator('#save-status').getAttribute('data-state'), 'failed');
     await page.screenshot({path: path.join(output, 'rejected-save.png')});
     await page.evaluate(() => { IDBDatabase.prototype.transaction = window.originalSaveTransaction; });
     rejectedWrite = false;
@@ -329,6 +382,43 @@ async function main() {
             `A fresh campaign stalled on screen '${screen}' after Enter at title.`);
     }
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision + 2);
+    await assertSaveStatusLane(page, 1280, 720);
+    await page.screenshot({path: path.join(output, 'save-lane-desktop.png')});
+    const recovery = await page.evaluate(() => {
+      window.dispatchEvent(new ErrorEvent('error', {message: 'Injected runtime failure'}));
+      const loading = document.querySelector('#loading');
+      const runtime = {
+        visible: !document.querySelector('#loading').hidden,
+        text: document.querySelector('#status').textContent,
+        progressHidden: document.querySelector('#progress').hidden,
+        progressValue: document.querySelector('#progress').value,
+        panelRole: loading.getAttribute('role'),
+        statusRole: document.querySelector('#status').getAttribute('role'),
+        panelTabIndex: loading.tabIndex,
+        focused: document.activeElement === loading
+      };
+      const event = new Event('webglcontextlost', {cancelable: true});
+      document.querySelector('#canvas').dispatchEvent(event);
+      return {runtime, graphics: {
+        visible: !document.querySelector('#loading').hidden,
+        text: document.querySelector('#status').textContent,
+        prevented: event.defaultPrevented
+      }};
+    });
+    assert.deepEqual(recovery, {
+      runtime: {
+        visible: true,
+        text: 'The game stopped after startup. Your browser state remains open. Check the browser console.',
+        progressHidden: true,
+        progressValue: 0,
+        panelRole: 'alert',
+        statusRole: 'status',
+        panelTabIndex: -1,
+        focused: true
+      },
+      graphics: {visible: true, text: 'The graphics context was lost. Reload the page to continue.', prevented: true}
+    });
+    await page.screenshot({path: path.join(output, 'graphics-recovery.png')});
     /* Desktop checks are complete. Release its running game before mobile
        startup so the phone fixture has its own browser resource budget. */
     await context.close();
@@ -339,6 +429,10 @@ async function main() {
     try {
       await mobile.goto(`http://127.0.0.1:${server.address().port}/`);
       await mobile.waitForFunction(() => window.Module?.crownlessScreen === 'title' && Module.crownlessTouchFrame?.buttons.length);
+      await mobile.evaluate(() => Module.setCrownlessSaveStatus(
+        'could not save. Your journal and scene remain in this tab. Reload after checking browser storage.', 'failed'));
+      await assertSaveStatusLane(mobile, 390, 844);
+      await mobile.screenshot({path: path.join(output, 'save-lane-portrait.png')});
       const controls = gameControls(mobile, true);
       assert.equal(await mobile.locator('#touch-panel, #touch-actions, #exit-fullscreen').count(), 0);
       for (const [width, height] of [[320, 740], [390, 844], [667, 375], [844, 390], [1024, 768]]) {

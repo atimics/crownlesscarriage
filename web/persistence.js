@@ -44,6 +44,18 @@
   function setCampaignAccess(code, message) {
     Module.crownlessCampaignAccess = code;
     Module.crownlessCampaignAccessMessage = message;
+    if (typeof Module.setCrownlessSaveStatus === "function") {
+      Module.setCrownlessSaveStatus(
+        message || "This browser can save this campaign.",
+        code === 0 ? "ready" :
+          message === "Campaign ownership is still loading." ? "saving" : "failed");
+    }
+  }
+
+  function setSaveStatus(text, state) {
+    if (typeof Module.setCrownlessSaveStatus === "function") {
+      Module.setCrownlessSaveStatus(text, state);
+    }
   }
 
   function currentLease() {
@@ -275,16 +287,37 @@
     const campaign = FS.readFile(campaignFile);
     const hasSession = FS.analyzePath(sessionFile).exists;
     const session = hasSession ? FS.readFile(sessionFile) : null;
-    await persistCampaign(campaign, session, false);
+    setSaveStatus("saving to this browser.", "saving");
+    try {
+      await persistCampaign(campaign, session, false);
+      setSaveStatus("saved in this browser.", "ready");
+    } catch (error) {
+      setSaveStatus("could not save. Your journal and scene remain in this tab.", "failed");
+      throw error;
+    }
   };
 
   Module.persistCrownlessNewCampaign = async function (campaignFile) {
     const campaign = FS.readFile(campaignFile);
-    await persistCampaign(campaign, null, true);
+    setSaveStatus("saving to this browser.", "saving");
+    try {
+      await persistCampaign(campaign, null, true);
+      setSaveStatus("saved in this browser.", "ready");
+    } catch (error) {
+      setSaveStatus("could not save. Your journal and scene remain in this tab.", "failed");
+      throw error;
+    }
   };
 
   Module.deleteCrownlessCampaign = async function () {
-    await persistCampaign(null, null, true);
+    setSaveStatus("removing the saved campaign.", "saving");
+    try {
+      await persistCampaign(null, null, true);
+      setSaveStatus("saved campaign removed from this browser.", "ready");
+    } catch (error) {
+      setSaveStatus("could not remove the saved campaign.", "failed");
+      throw error;
+    }
     Module.crownlessCampaignRestored = false;
   };
 
