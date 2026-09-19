@@ -68,7 +68,8 @@ static bool ResolveStoredCustody(const void *context, CcCustodyHolder holder,
 {
     const CcSim *sim = context;
     if (holder.kind == CC_CUSTODY_PLAYER && holder.id == sim->player.id) {
-        *location=(CcCustodyLocation){.place_id=sim->player.location_id};
+        *location=(CcCustodyLocation){.place_id=sim->mine.phase != CC_MINE_NONE ?
+            sim->player.id : sim->player.location_id};
         *capacity=INT64_MAX;
         return true;
     }
@@ -171,6 +172,7 @@ static bool PermitMineTransfer(const void *context, uint64_t actor,
     if (actor != sim->player.id || entry->owner_id != sim->goblins.id ||
         entry->kind != CC_CUSTODY_GOODS) return false;
     CcCustodyHolder pack={CC_CUSTODY_MINE_PACK,sim->player.id};
+    CcCustodyHolder player={CC_CUSTODY_PLAYER,sim->player.id};
     CcCustodyHolder source={CC_CUSTODY_SITE,sim->mine.source_id};
     CcCustodyHolder cache={CC_CUSTODY_SITE,sim->mine.cache_id};
     return (sim->mine.source_released &&
@@ -179,7 +181,12 @@ static bool PermitMineTransfer(const void *context, uint64_t actor,
         (SameMineHolder(entry->holder,pack.kind,pack.id) &&
          SameMineHolder(destination,cache.kind,cache.id)) ||
         (SameMineHolder(entry->holder,cache.kind,cache.id) &&
-         SameMineHolder(destination,pack.kind,pack.id));
+         SameMineHolder(destination,pack.kind,pack.id)) ||
+        (sim->schema_version >= 106U && CcSimMineEntryTracked(sim,entry) &&
+         ((SameMineHolder(entry->holder,player.kind,player.id) &&
+           SameMineHolder(destination,pack.kind,pack.id)) ||
+          (SameMineHolder(entry->holder,pack.kind,pack.id) &&
+           SameMineHolder(destination,player.kind,player.id))));
 }
 
 static int64_t MineCustodyLoad(const void *context, const CcCustodyEntry *entry,
@@ -206,8 +213,11 @@ CcCustodyResult CcSimTransferMineGoods(CcSim *sim, CcCustodyHolder source,
     int64_t available=0;
     for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
         const CcCustodyEntry *entry=&candidate.entries[i];
-        if (entry->active && entry->kind == CC_CUSTODY_GOODS && entry->good == (int32_t)good &&
-            SameMineHolder(entry->holder,source.kind,source.id)) available+=entry->quantity;
+        if (entry->active && entry->kind == CC_CUSTODY_GOODS &&
+            entry->owner_id == sim->goblins.id && entry->good == (int32_t)good &&
+            SameMineHolder(entry->holder,source.kind,source.id) &&
+            (source.kind != CC_CUSTODY_PLAYER || CcSimMineEntryTracked(sim,entry)))
+            available+=entry->quantity;
     }
     if (available < quantity) return CC_CUSTODY_INVALID;
     int32_t remaining=quantity;
@@ -216,8 +226,11 @@ CcCustodyResult CcSimTransferMineGoods(CcSim *sim, CcCustodyHolder source,
         for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
             const CcCustodyEntry *candidate_entry=&candidate.entries[i];
             if (candidate_entry->active && candidate_entry->kind == CC_CUSTODY_GOODS &&
+                candidate_entry->owner_id == sim->goblins.id &&
                 candidate_entry->good == (int32_t)good &&
-                SameMineHolder(candidate_entry->holder,source.kind,source.id)) {
+                SameMineHolder(candidate_entry->holder,source.kind,source.id) &&
+                (source.kind != CC_CUSTODY_PLAYER ||
+                 CcSimMineEntryTracked(sim,candidate_entry))) {
                 entry=candidate_entry;
                 break;
             }
@@ -236,6 +249,36 @@ CcCustodyResult CcSimTransferMineGoods(CcSim *sim, CcCustodyHolder source,
     return CC_CUSTODY_INVALID;
 }
 
+CcCustodyResult CcSimRepackMineGoods(CcSim *sim, CcGood good,
+    int32_t quantity, uint64_t event_id, int32_t *tracked_quantity)
+{
+    if (tracked_quantity != NULL) *tracked_quantity=0;
+    if (sim == NULL || sim->schema_version < 106U || good < 0 ||
+        good >= CC_GOOD_COUNT || quantity <= 0 || event_id == 0U)
+        return CC_CUSTODY_INVALID;
+    int32_t tracked=0;
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        const CcCustodyEntry *entry=&sim->custody.entries[i];
+        if (!entry->active || entry->kind != CC_CUSTODY_GOODS ||
+            entry->good != (int32_t)good || entry->owner_id != sim->goblins.id ||
+            entry->holder.kind != CC_CUSTODY_PLAYER ||
+            entry->holder.id != sim->player.id || !CcSimMineEntryTracked(sim,entry))
+            continue;
+        int32_t available=entry->quantity > INT32_MAX ? INT32_MAX :
+            (int32_t)entry->quantity;
+        if (available >= quantity-tracked) { tracked=quantity; break; }
+        tracked+=available;
+    }
+    if (tracked == 0) return CC_CUSTODY_READY;
+    CcCustodyResult result=CcSimTransferMineGoods(sim,
+        (CcCustodyHolder){CC_CUSTODY_PLAYER,sim->player.id},
+        (CcCustodyHolder){CC_CUSTODY_MINE_PACK,sim->player.id},
+        good,tracked,event_id);
+    if (result == CC_CUSTODY_READY && tracked_quantity != NULL)
+        *tracked_quantity=tracked;
+    return result;
+}
+
 bool CcSimMineEntryTracked(const CcSim *sim, const CcCustodyEntry *entry)
 {
     if (sim == NULL || entry == NULL || entry->kind != CC_CUSTODY_GOODS) return false;
@@ -247,7 +290,12 @@ bool CcSimMineEntryTracked(const CcSim *sim, const CcCustodyEntry *entry)
     const CcCustodyEntry *root=entry;
     int32_t remaining=CcCustodyEffectiveCapacity(&sim->custody);
     while (root->source_id != 0U && remaining-- > 0) {
-        const CcCustodyEntry *parent=CcCustodyFind(&sim->custody,root->source_id);
+        const CcCustodyEntry *parent=NULL;
+        for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i)
+            if (sim->custody.entries[i].id == root->source_id) {
+                parent=&sim->custody.entries[i];
+                break;
+            }
         if (parent == NULL) return false;
         root=parent;
     }

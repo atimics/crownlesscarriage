@@ -212,6 +212,83 @@ static int32_t CarriedTrackedGood(const CcSim *sim,CcGood good)
     return quantity;
 }
 
+static int32_t TrackedGoodAt(const CcSim *sim,CcGood good,
+                             CcCustodyHolderKind kind,CcId holder_id)
+{
+    int32_t quantity=0;
+    for(int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        const CcCustodyEntry *entry=&sim->custody.entries[i];
+        if(entry->active&&entry->good==(int32_t)good&&entry->holder.kind==kind&&
+           entry->holder.id==holder_id&&CcSimMineEntryTracked(sim,entry))
+            quantity+=(int32_t)entry->quantity;
+    }
+    return quantity;
+}
+
+static void TestMineTrackedRepack(void)
+{
+    CcSim sim,loaded;
+    AtBranch(&sim,false);
+    sim.player.cargo[CC_GOOD_BREAD]=4;
+    CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=CcMineSite(&sim)->id};
+    Check(CcSimApply(&sim,&visit,error,sizeof(error)));
+    ApplyGood(&sim,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,3);
+    Walk(&sim,15,3);Apply(&sim,CC_COMMAND_MINE_USE,0);
+    Walk(&sim,9,15);Walk(&sim,26,16);
+    Apply(&sim,CC_COMMAND_MINE_CONTEST,0);
+    Apply(&sim,CC_COMMAND_MINE_RESOLVE_CONTEST,1);
+    ApplyGood(&sim,CC_COMMAND_MINE_TAKE,CC_GOOD_GOLD,3);
+    int32_t tracked=MineTrackedCustodyQuantity(&sim);
+    Walk(&sim,5,3);Apply(&sim,CC_COMMAND_MINE_USE,0);
+    Walk(&sim,15,18);
+    ApplyGood(&sim,CC_COMMAND_MINE_PACK,CC_GOOD_GOLD,-1);
+    CC_CHECK(sim.player.cargo[CC_GOOD_GOLD]==1&&
+        TrackedGoodAt(&sim,CC_GOOD_GOLD,CC_CUSTODY_PLAYER,sim.player.id)==1&&
+        TrackedGoodAt(&sim,CC_GOOD_GOLD,CC_CUSTODY_MINE_PACK,sim.player.id)==2);
+    ApplyGood(&sim,CC_COMMAND_MINE_PACK,CC_GOOD_GOLD,1);
+    CC_CHECK(sim.player.cargo[CC_GOOD_GOLD]==0&&sim.mine.pack[CC_GOOD_GOLD]==0&&
+        TrackedGoodAt(&sim,CC_GOOD_GOLD,CC_CUSTODY_PLAYER,sim.player.id)==0&&
+        TrackedGoodAt(&sim,CC_GOOD_GOLD,CC_CUSTODY_MINE_PACK,sim.player.id)==3);
+    Walk(&sim,15,3);Apply(&sim,CC_COMMAND_MINE_USE,0);
+    Walk(&sim,5,15);
+    ApplyGood(&sim,CC_COMMAND_MINE_CACHE,CC_GOOD_GOLD,1);
+    CC_CHECK(TrackedGoodAt(&sim,CC_GOOD_GOLD,CC_CUSTODY_SITE,sim.mine.cache_id)==1&&
+        MineTrackedCustodyQuantity(&sim)==tracked);
+    Check(CcSaveWrite("mine-tracked-repack.ccsave",&sim,error,sizeof(error)));
+    Check(CcSaveRead("mine-tracked-repack.ccsave",&loaded,error,sizeof(error)));
+    CC_CHECK(CcSimHash(&loaded)==CcSimHash(&sim)&&
+        TrackedGoodAt(&loaded,CC_GOOD_GOLD,CC_CUSTODY_SITE,loaded.mine.cache_id)==1);
+    ApplyGood(&loaded,CC_COMMAND_MINE_CACHE,CC_GOOD_GOLD,-1);
+    Walk(&loaded,5,3);Apply(&loaded,CC_COMMAND_MINE_USE,0);
+    Walk(&loaded,15,18);
+    ApplyGood(&loaded,CC_COMMAND_MINE_PACK,CC_GOOD_GOLD,-1);
+    CC_CHECK(loaded.player.cargo[CC_GOOD_GOLD]==1&&
+        CarriedTrackedGood(&loaded,CC_GOOD_GOLD)==1&&
+        TrackedGoodAt(&loaded,CC_GOOD_GOLD,CC_CUSTODY_MINE_PACK,loaded.player.id)==2&&
+        TrackedGoodAt(&loaded,CC_GOOD_GOLD,CC_CUSTODY_SITE,loaded.mine.cache_id)==0&&
+        MineTrackedCustodyQuantity(&loaded)==tracked);
+    Apply(&loaded,CC_COMMAND_MINE_USE,0);
+    FinishJourney(&loaded);
+    CcId silverwick=loaded.dungeons[0].settlement_id;
+    if(loaded.player.location_id!=silverwick) {
+        CcCommand travel={.kind=CC_COMMAND_TRAVEL,.target_id=silverwick};
+        Check(CcSimApply(&loaded,&travel,error,sizeof(error)));
+        loaded.journey.ambush_pending=false;
+        loaded.pony_company.encounter=-1;
+        FinishJourney(&loaded);
+    }
+    CcCommand sale={.kind=CC_COMMAND_TRADE,.good=CC_GOOD_GOLD,.amount=-1};
+    Check(CcSimApply(&loaded,&sale,error,sizeof(error)));
+    CC_CHECK(CarriedTrackedGood(&loaded,CC_GOOD_GOLD)==2&&
+        loaded.mine.haul_receipt_quantity==1);
+    CcCommand report={.kind=CC_COMMAND_MINE_REPORT_RETURN,
+        .target_id=(CcId)loaded.mine.return_revision};
+    Check(CcSimApply(&loaded,&report,error,sizeof(error)));
+    CC_CHECK(loaded.mine.report_kind==CC_MINE_RETURN_HAUL&&
+        loaded.mine.report_good==CC_GOOD_GOLD&&loaded.mine.report_quantity==2);
+    (void)remove("mine-tracked-repack.ccsave");
+}
+
 static void TestMineCargoReconciliation(void)
 {
     CcSim partial,lost;
@@ -1064,6 +1141,7 @@ int main(int argc,char **argv)
     TestMineSurveyMigrationAndReturns();
     TestMinePartyWipeConservation();
     TestMineCargoReconciliation();
+    TestMineTrackedRepack();
     (void)remove(path);(void)remove("mine-replay.ccsave");
     (void)remove("mine-load-replay.ccsave");
     (void)remove("mine-load-roundtrip-103.ccsave");

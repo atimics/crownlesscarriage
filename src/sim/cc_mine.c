@@ -317,19 +317,33 @@ static bool UnpackMineGood(CcSim *sim, CcGood good, int32_t quantity,
         return Fail(error,capacity,"Check the carried goods and carriage space.");
     int32_t legacy=sim->mine.pack[good] < quantity ? sim->mine.pack[good] : quantity;
     int32_t remaining=quantity-legacy;
-    CcCustodyState candidate=sim->custody;
-    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody) && remaining>0;++i) {
-        CcCustodyEntry *entry=&candidate.entries[i];
-        if (!entry->active || entry->kind != CC_CUSTODY_GOODS || entry->good != (int32_t)good ||
-            entry->holder.kind != CC_CUSTODY_MINE_PACK || entry->holder.id != sim->player.id) continue;
-        int32_t moved=entry->quantity < remaining ? (int32_t)entry->quantity : remaining;
-        entry->quantity-=moved; entry->revision+=1;
-        entry->last_event_id=(uint64_t)sim->mine.revision+1U;
-        if (entry->quantity == 0) entry->active=false;
-        remaining-=moved;
+    if (remaining > 0) {
+        if (sim->schema_version >= 106U) {
+            CcCustodyResult result=CcSimTransferMineGoods(sim,
+                (CcCustodyHolder){CC_CUSTODY_MINE_PACK,sim->player.id},
+                (CcCustodyHolder){CC_CUSTODY_PLAYER,sim->player.id},
+                good,remaining,(uint64_t)sim->mine.revision+1U);
+            if (result != CC_CUSTODY_READY)
+                return Fail(error,capacity,"The carried mine manifest is invalid.");
+        } else {
+            CcCustodyState candidate=sim->custody;
+            for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody) && remaining>0;++i) {
+                CcCustodyEntry *entry=&candidate.entries[i];
+                if (!entry->active || entry->kind != CC_CUSTODY_GOODS ||
+                    entry->good != (int32_t)good ||
+                    entry->holder.kind != CC_CUSTODY_MINE_PACK ||
+                    entry->holder.id != sim->player.id) continue;
+                int32_t moved=entry->quantity < remaining ? (int32_t)entry->quantity : remaining;
+                entry->quantity-=moved; entry->revision+=1;
+                entry->last_event_id=(uint64_t)sim->mine.revision+1U;
+                if (entry->quantity == 0) entry->active=false;
+                remaining-=moved;
+            }
+            if (remaining != 0)
+                return Fail(error,capacity,"The carried mine manifest is invalid.");
+            sim->custody=candidate;
+        }
     }
-    if (remaining != 0) return Fail(error,capacity,"The carried mine manifest is invalid.");
-    sim->custody=candidate;
     sim->mine.pack[good]-=legacy;
     sim->player.cargo[good]+=quantity;
     return true;
@@ -481,7 +495,13 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
             if (amount < 0) {
                 if (!UnpackMineGood(sim,(CcGood)good,-amount,error,capacity)) return false;
             } else {
-                m->pack[good]+=amount; sim->player.cargo[good]-=amount;
+                int32_t tracked=0;
+                if (sim->schema_version >= 106U &&
+                    CcSimRepackMineGoods(sim,(CcGood)good,amount,
+                        (uint64_t)m->revision+1U,&tracked) != CC_CUSTODY_READY)
+                    return Fail(error,capacity,"The carried mine manifest changed before packing.");
+                m->pack[good]+=amount-tracked;
+                sim->player.cargo[good]-=amount;
             }
         } else if (command->kind == CC_COMMAND_MINE_INSPECT) {
             if (!MineLocationReachable(m,m->source_x,m->source_y))
