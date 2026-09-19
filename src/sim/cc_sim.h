@@ -1996,9 +1996,14 @@ typedef struct CcMineVisit {
     int32_t survey_observed_day;
     CcId bypass_event_id;
     int32_t bypass_day;
+    CcId haul_receipt_event_id;
+    int32_t haul_receipt_quantity;
+    int32_t haul_receipt_good;
     CcId report_recipient_id;
     CcId report_event_id;
     int32_t report_day;
+    int32_t report_quantity;
+    int32_t report_good;
     uint8_t report_kind;
     uint8_t reported_encounter_outcome;
 } CcMineVisit;
@@ -2197,7 +2202,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 602368,
+_Static_assert(sizeof(CcSim) == 602392,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -2388,6 +2393,7 @@ const CcCharacter *CcSimCharacter(const CcSim *sim, CcId id);
 const CcCharacter *CcSimMineEvidenceContact(const CcSim *sim);
 bool CcSimMineLeadSupported(const CcSim *sim);
 CcMineReturnKind CcSimMineReturnEvidence(const CcSim *sim);
+bool CcSimMineReturnHaul(const CcSim *sim, CcGood *good, int32_t *quantity);
 const CcDungeon *CcSimDungeon(const CcSim *sim, CcId id);
 const CcDungeonRoom *CcSimDungeonCurrentRoom(const CcSim *sim);
 int32_t CcSimDungeonVisibleExitCount(const CcSim *sim);

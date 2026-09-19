@@ -666,6 +666,7 @@ bool CcMineValidate(const CcSim *sim)
             bool lead_empty=m->lead_event_id == 0U;
             bool survey_empty=m->survey_event_id == 0U;
             bool bypass_empty=m->bypass_event_id == 0U;
+            bool receipt_empty=m->haul_receipt_event_id == 0U;
             bool report_empty=m->report_event_id == 0U;
             if (m->return_revision < 1 ||
                 m->iron_source_entry_id == 0U || m->gold_source_entry_id == 0U ||
@@ -685,11 +686,23 @@ bool CcMineValidate(const CcSim *sim)
                 (!survey_empty && (m->survey_read_day <= 0 || m->survey_observed_day < 0 ||
                                    m->survey_observed_day > m->survey_read_day)) ||
                 (bypass_empty != (m->bypass_day == 0)) ||
+                (receipt_empty != (m->haul_receipt_quantity == 0 &&
+                                   m->haul_receipt_good == 0)) ||
+                (!receipt_empty && (m->haul_receipt_quantity <= 0 ||
+                                    m->haul_receipt_good < 0 ||
+                                    m->haul_receipt_good >= CC_GOOD_COUNT)) ||
                 (report_empty != (m->report_recipient_id == 0U && m->report_day == 0 &&
+                                  m->report_quantity == 0 && m->report_good == 0 &&
                                   m->report_kind == CC_MINE_RETURN_NONE &&
                                   m->reported_encounter_outcome == CC_MINE_ENCOUNTER_OPEN)) ||
                 (!report_empty && (m->report_day <= 0 ||
-                                   m->report_kind == CC_MINE_RETURN_NONE))) return false;
+                                   m->report_kind == CC_MINE_RETURN_NONE ||
+                                   (m->report_kind == CC_MINE_RETURN_HAUL &&
+                                    (m->report_quantity <= 0 || m->report_good < 0 ||
+                                     m->report_good >= CC_GOOD_COUNT)) ||
+                                   (m->report_kind == CC_MINE_RETURN_INFORMATION &&
+                                    (m->report_quantity != 0 || m->report_good != 0)))))
+                return false;
         }
     }
     if (m->phase == CC_MINE_NONE)

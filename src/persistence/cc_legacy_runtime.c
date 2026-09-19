@@ -724,11 +724,12 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
     }
     if (legacy_version < 106U) {
         sim->mine.return_revision=1;
-        /* Active mine custody already has a physical chain. Remember each
-           root while leaving old, deactivated carriage cargo uncertain. */
+        /* Mine custody keeps its physical chain after a load is depleted.
+           Remember each root while leaving old aggregate carriage cargo
+           uncertain. */
         for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
             CcCustodyEntry *entry=&sim->custody.entries[i];
-            if (!entry->active || entry->owner_id != sim->goblins.id ||
+            if (entry->id == 0U || entry->owner_id != sim->goblins.id ||
                 entry->kind != CC_CUSTODY_GOODS) continue;
             bool at_source=entry->holder.kind == CC_CUSTODY_SITE &&
                 (entry->holder.id == sim->mine.source_id ||

@@ -1470,8 +1470,10 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " return_revision INTEGER NOT NULL,lead_source_id INTEGER NOT NULL,lead_event_id INTEGER NOT NULL,"
         " lead_day INTEGER NOT NULL,lead_document INTEGER NOT NULL,survey_source_id INTEGER NOT NULL,"
         " survey_event_id INTEGER NOT NULL,survey_read_day INTEGER NOT NULL,survey_observed_day INTEGER NOT NULL,"
-        " bypass_event_id INTEGER NOT NULL,bypass_day INTEGER NOT NULL,report_recipient_id INTEGER NOT NULL,"
-        " report_event_id INTEGER NOT NULL,report_day INTEGER NOT NULL,report_kind INTEGER NOT NULL,"
+        " bypass_event_id INTEGER NOT NULL,bypass_day INTEGER NOT NULL,haul_receipt_event_id INTEGER NOT NULL,"
+        " haul_receipt_quantity INTEGER NOT NULL,haul_receipt_good INTEGER NOT NULL,"
+        " report_recipient_id INTEGER NOT NULL,report_event_id INTEGER NOT NULL,report_day INTEGER NOT NULL,"
+        " report_quantity INTEGER NOT NULL,report_good INTEGER NOT NULL,report_kind INTEGER NOT NULL,"
         " reported_encounter_outcome INTEGER NOT NULL);";
     return Execute(database, "CREATE TABLE IF NOT EXISTS custody_state (slot INTEGER PRIMARY KEY,next_id INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS custody_entry (slot INTEGER PRIMARY KEY,id INTEGER NOT NULL,revision INTEGER NOT NULL,owner_id INTEGER NOT NULL,source_id INTEGER NOT NULL,last_event_id INTEGER NOT NULL,holder_kind INTEGER NOT NULL,holder_id INTEGER NOT NULL,kind INTEGER NOT NULL,reference_id INTEGER NOT NULL,quantity INTEGER NOT NULL,good INTEGER NOT NULL,condition INTEGER NOT NULL,capacity INTEGER NOT NULL,active INTEGER NOT NULL);", error, error_capacity) &&

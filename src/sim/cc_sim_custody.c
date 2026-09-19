@@ -268,7 +268,8 @@ static bool PermitMineSale(const void *context, uint64_t actor,
 }
 
 static CcCustodyResult MineSaleCandidate(const CcSim *sim, CcId town_id,
-    CcGood good, int32_t quantity, CcId event_id, CcCustodyState *result)
+    CcGood good, int32_t quantity, CcId event_id, CcCustodyState *result,
+    int32_t *tracked_quantity)
 {
     if (sim == NULL || sim->schema_version < 106U ||
         CcSimSettlement(sim,town_id) == NULL || sim->player.location_id != town_id ||
@@ -278,6 +279,7 @@ static CcCustodyResult MineSaleCandidate(const CcSim *sim, CcId town_id,
     const CcCustodyRules rules={.context=sim,.good_count=CC_GOOD_COUNT,
         .load=StoredCustodyLoad,.resolve=ResolveStoredCustody,.permit=PermitMineSale};
     int32_t remaining=quantity;
+    int32_t tracked=0;
     for (int32_t i=0;i<CcCustodyEffectiveCapacity(&candidate) && remaining>0;++i) {
         CcCustodyEntry *entry=&candidate.entries[i];
         if (!entry->active || entry->kind != CC_CUSTODY_GOODS ||
@@ -295,6 +297,11 @@ static CcCustodyResult MineSaleCandidate(const CcSim *sim, CcId town_id,
         CcCustodyEntry *sold=(CcCustodyEntry *)CcCustodyFind(&candidate,moved_id);
         if (sold == NULL) return CC_CUSTODY_INVALID;
         sold->owner_id=town_id;
+        sold->quantity=0;
+        sold->active=false;
+        sold->revision+=1;
+        sold->last_event_id=event_id;
+        tracked+=moved;
         remaining-=moved;
     }
     /* Ordinary cargo can make up the rest of a larger sale. */
@@ -302,22 +309,50 @@ static CcCustodyResult MineSaleCandidate(const CcSim *sim, CcId town_id,
         .good_count=CC_GOOD_COUNT,.load=StoredCustodyLoad,.resolve=ResolveStoredCustody}))
         return CC_CUSTODY_INVALID;
     if (result != NULL) *result=candidate;
+    if (tracked_quantity != NULL) *tracked_quantity=tracked;
     return CC_CUSTODY_READY;
 }
 
 CcCustodyResult CcSimPlanMineSale(const CcSim *sim, CcId town_id,
     CcGood good, int32_t quantity)
 {
-    return MineSaleCandidate(sim,town_id,good,quantity,1U,NULL);
+    return MineSaleCandidate(sim,town_id,good,quantity,1U,NULL,NULL);
 }
 
 CcCustodyResult CcSimApplyMineSale(CcSim *sim, CcId town_id,
-    CcGood good, int32_t quantity, CcId event_id)
+    CcGood good, int32_t quantity, CcId event_id, int32_t *tracked_quantity)
 {
     CcCustodyState candidate;
-    CcCustodyResult result=MineSaleCandidate(sim,town_id,good,quantity,event_id,&candidate);
+    int32_t tracked=0;
+    CcCustodyResult result=MineSaleCandidate(
+        sim,town_id,good,quantity,event_id,&candidate,&tracked);
     if (result == CC_CUSTODY_READY) sim->custody=candidate;
+    if (tracked_quantity != NULL) *tracked_quantity=tracked;
     return result;
+}
+
+void CcSimReconcileMineCarriedGoods(CcSim *sim,
+    const int32_t previous_cargo[CC_GOOD_COUNT], CcId event_id)
+{
+    if (sim == NULL || previous_cargo == NULL || sim->schema_version < 106U)
+        return;
+    for (int32_t good=0;good<CC_GOOD_COUNT;++good) {
+        int32_t removed=previous_cargo[good]-sim->player.cargo[good];
+        if (removed <= 0) continue;
+        for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody) && removed>0;++i) {
+            CcCustodyEntry *entry=&sim->custody.entries[i];
+            if (!entry->active || entry->kind != CC_CUSTODY_GOODS ||
+                entry->good != good || entry->holder.kind != CC_CUSTODY_PLAYER ||
+                entry->holder.id != sim->player.id || !CcSimMineEntryTracked(sim,entry))
+                continue;
+            int32_t spent=entry->quantity < removed ? (int32_t)entry->quantity : removed;
+            entry->quantity-=spent;
+            entry->revision+=1;
+            if (event_id != 0U) entry->last_event_id=event_id;
+            if (entry->quantity == 0) entry->active=false;
+            removed-=spent;
+        }
+    }
 }
 
 static bool PermitStoreTransfer(const void *context, uint64_t actor,
