@@ -3,6 +3,9 @@
   const canvas = document.querySelector('#canvas');
   if (!canvas) return;
   let gesture = null;
+  const clearPendingAction = () => Module.crownlessDiagnostics?.clearPendingAction();
+  document.addEventListener('keydown', clearPendingAction, true);
+  document.addEventListener('pointerdown', clearPendingAction, true);
   function hold(event, active) {
     if (!Module._CrownlessTouchHold) return;
     const bounds = canvas.getBoundingClientRect();

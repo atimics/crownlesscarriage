@@ -58,6 +58,9 @@
     transitions.push({started, action, scene: currentScene(frame)});
     return token;
   }
+  function clearPendingAction() {
+    transitions.length = 0;
+  }
   function publishFrame(frame) {
     const now = clock.now();
     const scene = currentScene(frame);
@@ -67,10 +70,12 @@
     }
     for (let i = transitions.length - 1; i >= 0; --i) {
       const item = transitions[i];
-      if (scene !== item.scene) {
+      if (now - item.started > 5000) {
+        transitions.splice(i, 1);
+      } else if (scene !== item.scene) {
         append('transition', item.started, {action: item.action, frame});
         transitions.splice(i, 1);
-      } else if (now - item.started > 5000) transitions.splice(i, 1);
+      }
     }
   }
   function snapshot() {
@@ -88,7 +93,9 @@
   }
 
   module.crownlessBuild = module.crownlessBuild || 'unknown-web-build';
-  module.crownlessDiagnostics = {begin, finish, beginAction, publishFrame, snapshot};
+  module.crownlessDiagnostics = {
+    begin, finish, beginAction, clearPendingAction, publishFrame, snapshot
+  };
   module.exportCrownlessDiagnostics = exportJson;
   module.downloadCrownlessDiagnostics = download;
   module.postRun = module.postRun || [];
