@@ -10,6 +10,11 @@ int main(void)
     CcCoreAccount before = account;
     const char *english = "Stone took food to Fire. I do not trust the court, if the rumour is true. Food costs 7; mushrooms help.";
     char text[512], again[512];
+    CC_CHECK(CcHrakhorLiteral("I need food.", 100U, text, sizeof(text)));
+    CC_CHECK(strcmp(text, "Sha need zhek.") == 0);
+    CC_CHECK(!CcHrakhorLiteral("food", 100U, text, 4U));
+    CC_CHECK(text[0] == '\0');
+    CC_CHECK(!CcHrakhorLiteral(NULL, 100U, text, sizeof(text)));
     CC_CHECK(CcHrakhorCorrupt(&account, english, 100U, text, sizeof(text)));
     CC_CHECK(strcmp(text, "Stone rakh'ed food to Fire. Sha do not trust tak drok'khor, if tak rumour is true. Food costs 7; mukuk help.") == 0);
     /* The object called Food also protects the same word in lower case. */

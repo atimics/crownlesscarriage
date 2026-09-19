@@ -21,6 +21,15 @@ static void JsonSpan(const char *text, size_t length)
 
 int main(int argc, char **argv)
 {
+    if (argc == 4 && strcmp(argv[1], "--literal") == 0) {
+        char *end = NULL;
+        long strength = strtol(argv[2], &end, 10);
+        if (end == argv[2] || *end != '\0' || strength < 0 || strength > 100) return 2;
+        char text[1024];
+        if (!CcHrakhorLiteral(argv[3], (unsigned int)strength, text, sizeof(text))) return 1;
+        (void)puts(text);
+        return 0;
+    }
     /* The inverse: recover the event a spoken rendering came from. */
     if (argc == 3 && strcmp(argv[1], "--parse") == 0) {
         CcCoreAccount account;
