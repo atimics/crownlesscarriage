@@ -16,6 +16,7 @@
   semantic.id = 'touch-actions';
   semantic.setAttribute('aria-live', 'off');
   const heading = document.createElement('h2');
+  heading.tabIndex = -1;
   const detail = document.createElement('p');
   const reading = document.createElement('p');
   const actions = document.createElement('div');
@@ -31,7 +32,7 @@
     frame.buttons.forEach((button, index) => {
       let action = actionNodes[index];
       if (!action) { action = document.createElement('button'); actionNodes[index] = action; actions.append(action); }
-      const key = String(index);
+      const key = `${button.label}:${index}`;
       action.dataset.touchKey = key;
       action.textContent = button.label;
       action.disabled = !button.enabled;
@@ -40,6 +41,7 @@
       if (focused === key) action.focus();
     });
     while (actionNodes.length > frame.buttons.length) actionNodes.pop().remove();
+    if (focused && !actionNodes.some(action => action.dataset.touchKey === focused)) heading.focus();
   };
   const fields = new Map();
   Module.renderCrownlessFields = descriptors => {

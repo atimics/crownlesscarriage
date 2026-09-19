@@ -397,9 +397,9 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
         pack_used,CC_MINE_PACK_CAPACITY-pack_used,carriage_used,sim->player.cargo_capacity,
         sim->player.cargo_capacity-carriage_used,sim->mine.light),22,summary_y,10,INK);
     int32_t pane_width=MineScreenWidth()/2-34;
-    AdventureButton(MineInventoryControl(),
-        short_landscape ? (local->mine_inventory_expanded ? "Hide inventory" : "Show inventory") :
-        "Inventory", true, local->mine_inventory_expanded);
+    if (short_landscape) AdventureButton(MineInventoryControl(),
+        local->mine_inventory_expanded ? "Hide inventory" : "Show inventory",
+        true, local->mine_inventory_expanded);
     if (!short_landscape || local->mine_inventory_expanded) {
         MineDrawGoods("Pack",pack_goods,22,goods_y,pane_width,TEAL);
         MineDrawGoods(at_carriage?(brief?"Cart":"Carriage"):(brief?"Cart out of reach":"Carriage out of reach"),
