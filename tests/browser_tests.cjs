@@ -219,6 +219,9 @@ async function main() {
         Math.floor(frameTimes.length * fraction))]]));
     await fs.writeFile(path.join(output, 'frame-budget.json'),
       JSON.stringify({frames: drawn, perFrame, frameMs}, null, 2));
+    assert(frameTimes.length >= 20, `Frame timing needs a useful sample, not ${frameTimes.length} frames`);
+    assert(frameMs.p95 <= 100,
+      `Software-rendered browser p95 should stay within 100ms, not ${frameMs.p95.toFixed(1)}ms`);
     const ceilings = {uploadCalls: 190, uploadBytes: 4 * 1024 * 1024, draws: 450,
       vertices: 720000, textureBinds: 700, programBinds: 900};
     for (const [name, ceiling] of Object.entries(ceilings)) {
@@ -610,6 +613,21 @@ async function main() {
       const revision = await mobile.evaluate(() => Module.crownlessSaveRevision);
       await controls.button('Save world').tap();
       await mobile.waitForFunction(before => Module.crownlessSaveRevision > before, revision);
+      const timings = await mobile.evaluate(() =>
+        JSON.parse(Module.exportCrownlessDiagnostics()));
+      assert(timings.entries.length <= timings.capacity);
+      assert(timings.entries.some(entry => entry.stage === 'startup'));
+      assert(timings.entries.some(entry => entry.stage === 'action'));
+      assert(timings.entries.some(entry => entry.stage === 'transition'));
+      assert(timings.entries.some(entry => entry.stage === 'save'));
+      assert(timings.entries.every(entry =>
+        Number.isFinite(entry.duration_ms) && entry.duration_ms >= 0 &&
+        Number.isSafeInteger(entry.revision) &&
+        /^[A-Za-z0-9._-]+$/.test(entry.build) &&
+        /^(startup|title|avatar|playing|paused|mine|road|book|other)$/.test(entry.scene) &&
+        /^(runtime|campaign|new-campaign|none|other|touch-\d+)$/.test(entry.action)));
+      await fs.writeFile(path.join(output, 'local-timings.json'),
+        JSON.stringify(timings, null, 2));
       await controls.button('Resume').tap();
       await mobile.waitForFunction(() => Module.crownlessScreen === 'playing');
       const tapsBefore = await mobile.evaluate(() => window.touchTaps.length);

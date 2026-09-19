@@ -51,11 +51,17 @@
       action.textContent = button.label;
       action.disabled = !button.enabled;
       action.setAttribute('aria-pressed', button.active ? 'true' : 'false');
-      action.onclick = () => Module._CrownlessTouchActivate(index, frame.revision);
+      action.onclick = () => {
+        const timing = Module.crownlessDiagnostics?.beginAction(index, frame);
+        Module._CrownlessTouchActivate(index, frame.revision);
+        requestAnimationFrame(() => Module.crownlessDiagnostics?.finish(
+          timing, {frame: Module.crownlessTouchFrame}));
+      };
       if (focused === key) action.focus();
     });
     while (actionNodes.length > frame.buttons.length) actionNodes.pop().remove();
     if (focused && !actionNodes.some(action => action.dataset.touchKey === focused)) heading.focus();
+    Module.crownlessDiagnostics?.publishFrame(frame);
   };
   const fields = new Map();
   Module.renderCrownlessFields = descriptors => {
