@@ -931,7 +931,7 @@ static void HandleMineInput(CcJournal *journal,CcSim *sim,LocalState *local,
                     "Entered the mine: 1 %s spent. Light 18.",ration);
             }
             else if(reading_records) (void)snprintf(message,capacity,
-                "Workers' records: the closed bar has a six-room side loop. Lamp Hall is marked blocked.");
+                "Workers' records: The western store passage goes around the barred middle passage. The stair to Lamp Hall is marked blocked.");
             else if(stowing) (void)snprintf(message,capacity,
                 "Stowed %d goods in the carriage and boarded for the road.",stowed);
         } else MineClearIntent(local);
