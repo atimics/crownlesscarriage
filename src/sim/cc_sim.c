@@ -16499,14 +16499,10 @@ static bool ApplyMineLearnLead(CcSim *sim, const CcCommand *command,
         }
     }
     char text[CC_EVENT_TEXT_CAPACITY];
-    const CcRoute *route=CcSimRoute(sim,site->route_id);
-    const CcSettlement *from=route != NULL ? CcSimSettlement(sim,route->from_id) : NULL;
-    const CcSettlement *to=route != NULL ? CcSimSettlement(sim,route->to_id) : NULL;
     (void)snprintf(text,sizeof(text),from_jory ?
-        "Day %d: Jory: Low Silver Pit, %.20s-%.20s road. Workers' records give route guidance." :
-        "Day %d: Shift record: Low Silver Pit, %.20s-%.20s road. Workers' records give route guidance.",
-        sim->current_day,from != NULL ? from->name : "Alderwatch",
-        to != NULL ? to->name : "Silverwick");
+        "Day %d: Jory: Low Silver Pit, Alderwatch-Silverwick road; workers' records guide the route." :
+        "Day %d: Shift record: Low Silver Pit, Alderwatch-Silverwick road; workers' records guide the route.",
+        sim->current_day);
     CcEvent *event=PushEvent(sim,CC_EVENT_LORE_RECORDED,site->id,
         sim->dungeons[0].settlement_id,parent,1,text);
     mine->lead_source_id=from_jory ? jory->id : sim->dungeons[0].settlement_id;
