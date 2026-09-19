@@ -646,6 +646,11 @@ int main(int argc,char **argv)
     CC_CHECK(!CcMineWalkable(&sim,CC_MINE_LEVEL,15,10));
     Walk(&sim,26,4);Apply(&sim,CC_COMMAND_MINE_USE,0);
     CC_CHECK(sim.mine.surveyed);
+    uint64_t read_hash=CcSimHash(&sim);
+    CcCommand reread={.kind=CC_COMMAND_MINE_USE,.target_id=(CcId)sim.mine.revision};
+    Check(CcSimApply(&sim,&reread,error,sizeof(error)));
+    CC_CHECK(CcSimHash(&sim)==read_hash &&
+        strcmp(CcMineAction(&sim),"Reread the workers' records")==0);
     Walk(&sim,15,9);Apply(&sim,CC_COMMAND_MINE_USE,0);
     CC_CHECK(sim.mine.bar_open && CcMineWalkable(&sim,CC_MINE_LEVEL,15,10));
     Walk(&sim,26,16);Walk(&sim,5,15);

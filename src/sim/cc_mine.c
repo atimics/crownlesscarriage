@@ -332,7 +332,8 @@ const char *CcMineAction(const CcSim *sim)
     } else if (m->phase == CC_MINE_LEVEL) {
         if (Near(m,5,3)) return "Step outside to the mine yard";
         if (Near(m,15,10) && !m->bar_open) return "Lift the wooden bar";
-        if (Near(m,26,4) && !m->surveyed) return "Read the workers' survey";
+        if (Near(m,26,4)) return m->surveyed ?
+            "Reread the workers' records" : "Read the workers' records";
         if (Near(m,26,16)) {
             if (m->contest_active) return "Haulers engaged: fight or break contact";
             if (m->encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED)
@@ -559,7 +560,11 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
                 SpendMinutes(sim,1);
             } else if (m->phase == CC_MINE_LEVEL && Near(m,15,10) && !m->bar_open) {
                 m->bar_open=true; SpendMinutes(sim,1);
-            } else if (m->phase == CC_MINE_LEVEL && Near(m,26,4) && !m->surveyed) {
+            } else if (m->phase == CC_MINE_LEVEL && Near(m,26,4)) {
+                if (m->surveyed) {
+                    if (error != NULL && capacity > 0) error[0]='\0';
+                    return true;
+                }
                 m->surveyed=true;
                 sim->dungeons[0].rooms[0].state_flags |= CC_DUNGEON_ROOM_SEARCHED | CC_DUNGEON_ROOM_DISCOVERED;
                 SpendMinutes(sim,5);
