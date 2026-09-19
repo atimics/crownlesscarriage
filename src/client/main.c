@@ -223,6 +223,11 @@ typedef struct LocalState {
     bool adventure_ui;
     CcInteractionPlan interactions;
     CcInteractionState interaction;
+    /* A presented town figure keeps its resident while the renderer rebuilds
+       moving people every frame. */
+    CcId presented_person_binding_place[64];
+    uint64_t presented_person_binding_object[64];
+    CcId presented_person_binding_character[64];
     int32_t card_page;
     ContextAction presented_road_actions[4];
     Rectangle presented_road_bounds[4];
@@ -245,6 +250,7 @@ typedef struct LocalState {
     uint64_t conversation_object;
     char conversation_name[64];
     char conversation_line[192];
+    bool conversation_report_response;
     int32_t conversation_gossip_slot;
     bool conversation_gossip_source;
     CcId introduced_ids[64];
@@ -1224,6 +1230,12 @@ static void ResetLocalState(LocalState *local)
 {
     local->interactions = (CcInteractionPlan){0};
     local->interaction = (CcInteractionState){0};
+    memset(local->presented_person_binding_place, 0,
+           sizeof(local->presented_person_binding_place));
+    memset(local->presented_person_binding_object, 0,
+           sizeof(local->presented_person_binding_object));
+    memset(local->presented_person_binding_character, 0,
+           sizeof(local->presented_person_binding_character));
     local->card_page = 0;
     local->presented_road_count = 0;
     local->world_cards_presented = false;
@@ -1236,6 +1248,7 @@ static void ResetLocalState(LocalState *local)
     local->conversation_position = (Vector3){0};
     local->conversation_name[0] = '\0';
     local->conversation_line[0] = '\0';
+    local->conversation_report_response = false;
     CcCoreConversationReset(&core_conversation);
     core_conversation_speaker = 0U;
     local->trade_quantity = 1;
@@ -6523,6 +6536,13 @@ static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
 {
     const CcSituation *situation = CcSimSituation(sim, local->conversation_situation_id);
     const CcCharacter *person = CcSimCharacter(sim, local->conversation_character_id);
+    if (local->conversation_report_response && person != NULL &&
+        local->conversation_line[0] != '\0') {
+        return CcSpeechCompose(speech, "mine.report.response", person->id,
+            person->name, CcSpeechCharacterVoice(sim, person),
+            local->conversation_line, CC_SPEECH_PLAIN,
+            CC_SPEECH_CONVERSATION, sim->mine.report_event_id);
+    }
     if (CcSpeechCharacter(sim, situation, person, speech)) return true;
     if (core_conversation_speaker != local->conversation_character_id) {
         CcCoreConversationReset(&core_conversation);
@@ -9258,7 +9278,23 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     CC_COMMAND_MINE_LEARN_LEAD : CC_COMMAND_MINE_REPORT_RETURN,
                 .target_id=(CcId)sim->mine.return_revision,
                 .amount=context_action == CONTEXT_ACTION_MINE_LEAD ? 1 : 0};
-            (void)ApplyCommand(*journal,sim,command,message,message_capacity);
+            if (ApplyCommand(*journal,sim,command,message,message_capacity) &&
+                context_action == CONTEXT_ACTION_MINE_REPORT) {
+                local->conversation_report_response = true;
+                if (sim->mine.report_kind == CC_MINE_RETURN_HAUL) {
+                    (void)snprintf(local->conversation_line,
+                        sizeof(local->conversation_line),
+                        "This proves the turnout can still yield. Oren can handle the sale.");
+                } else {
+                    (void)snprintf(local->conversation_line,
+                        sizeof(local->conversation_line),
+                        "This gives the next company a fair path in.");
+                }
+                CcAudioClearSpeech();
+                CcSpeech answer;
+                if (ClientConversationSpeech(sim, local, &answer))
+                    ClientSaySpeech(&answer);
+            }
             return;
         }
         if ((local->adventure_ui && ClientKeyPressed(KEY_ESCAPE)) || ClientKeyPressed(KEY_BACKSPACE) ||
@@ -9284,6 +9320,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
             if (context_action == CONTEXT_ACTION_GOSSIP_CHAT &&
                 !core_conversation.pending && core_conversation.round_phase == 0U) {
+                local->conversation_report_response = false;
                 (void)ApplyCommand(*journal, sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
                     .target_id = local->conversation_character_id}, message, message_capacity);
                 if (local->conversation_gossip_slot < 0)
@@ -9366,6 +9403,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             };
             if (ApplyCommand(*journal, sim, reply,
                              message, message_capacity)) {
+                local->conversation_report_response = false;
                 if (voiced_reply) ClientSaySpeech(&player_reply);
                 const CcSituation *updated = CcSimSituation(
                     sim, local->conversation_situation_id);

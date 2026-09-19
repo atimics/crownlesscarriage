@@ -75,26 +75,129 @@ static void AdventureIntroduce(LocalState *local, CcId id)
     }
 }
 
+static bool AdventurePersonEligible(const CcSim *sim,
+                                    const CcCharacter *person)
+{
+    return sim != NULL && person != NULL &&
+        person->current_settlement_id == sim->player.location_id &&
+        person->activity != CC_CHARACTER_ACTIVITY_TRAVELLING &&
+        CcCharacterAgeYears(sim, person) >= 16;
+}
+
+static bool AdventurePersonMatchesRole(CcNpcRole role,
+                                       const CcCharacter *person)
+{
+    return (role == CC_NPC_ROLE_TRAVELLER &&
+            person->role == CC_CHARACTER_TRAVELLER) ||
+        (role == CC_NPC_ROLE_SCOUT && person->role == CC_CHARACTER_SCOUT) ||
+        (role == CC_NPC_ROLE_REFUGEE && person->role == CC_CHARACTER_REFUGEE) ||
+        (role == CC_NPC_ROLE_LABORER && person->role == CC_CHARACTER_LABORER) ||
+        (role == CC_NPC_ROLE_GUARD && person->role == CC_CHARACTER_OFFICIAL);
+}
+
+static bool AdventureGenericPersonKey(CcInteractionKey key)
+{
+    return key.kind == CC_INTERACTION_PERSON &&
+        key.object >= UINT64_C(0x100000000) &&
+        key.object < UINT64_C(0x200000000);
+}
+
+static bool AdventureCharacterUsed(const LocalState *local, CcId id)
+{
+    for (int32_t i = 0; i < local->interactions.count; ++i)
+        if (local->interactions.targets[i].character_id == id) return true;
+    return false;
+}
+
+static bool AdventureCharacterReserved(const LocalState *local,
+                                       const CcInteractionTarget *target,
+                                       CcId id)
+{
+    for (int32_t i = 0; i < (int32_t)(sizeof(local->presented_person_binding_place) /
+                                       sizeof(local->presented_person_binding_place[0]));
+         ++i)
+        if (local->presented_person_binding_place[i] == target->key.place &&
+            local->presented_person_binding_object[i] != target->key.object &&
+            local->presented_person_binding_character[i] == id) return true;
+    return false;
+}
+
+static void AdventurePrunePresentedPersonBindings(const CcSim *sim,
+                                                   LocalState *local)
+{
+    for (int32_t i = 0; i < (int32_t)(sizeof(local->presented_person_binding_place) /
+                                       sizeof(local->presented_person_binding_place[0]));
+         ++i) {
+        if (local->presented_person_binding_character[i] == 0U) continue;
+        const CcCharacter *person = CcSimCharacter(
+            sim, local->presented_person_binding_character[i]);
+        if (local->presented_person_binding_place[i] != sim->player.location_id ||
+            !AdventurePersonEligible(sim, person)) {
+            local->presented_person_binding_place[i] = 0U;
+            local->presented_person_binding_object[i] = 0U;
+            local->presented_person_binding_character[i] = 0U;
+        }
+    }
+}
+
+static const CcCharacter *AdventureBoundPresentedPerson(const CcSim *sim,
+    const LocalState *local, const CcInteractionTarget *target)
+{
+    if (!AdventureGenericPersonKey(target->key)) return NULL;
+    for (int32_t i = 0; i < (int32_t)(sizeof(local->presented_person_binding_place) /
+                                       sizeof(local->presented_person_binding_place[0]));
+         ++i) {
+        if (local->presented_person_binding_place[i] != target->key.place ||
+            local->presented_person_binding_object[i] != target->key.object) continue;
+        const CcCharacter *person = CcSimCharacter(
+            sim, local->presented_person_binding_character[i]);
+        if (AdventurePersonEligible(sim, person) &&
+            !AdventureCharacterUsed(local, person->id)) return person;
+    }
+    return NULL;
+}
+
+static void AdventureRememberPresentedPerson(LocalState *local,
+                                              const CcInteractionTarget *target)
+{
+    if (!AdventureGenericPersonKey(target->key) || target->character_id == 0U) return;
+    int32_t free_slot = -1;
+    for (int32_t i = 0; i < (int32_t)(sizeof(local->presented_person_binding_place) /
+                                       sizeof(local->presented_person_binding_place[0]));
+         ++i) {
+        if (local->presented_person_binding_place[i] == target->key.place &&
+            local->presented_person_binding_object[i] == target->key.object) {
+            local->presented_person_binding_character[i] = target->character_id;
+            return;
+        }
+        if (free_slot < 0 && local->presented_person_binding_character[i] == 0U)
+            free_slot = i;
+    }
+    if (free_slot < 0) free_slot = 0;
+    local->presented_person_binding_place[free_slot] = target->key.place;
+    local->presented_person_binding_object[free_slot] = target->key.object;
+    local->presented_person_binding_character[free_slot] = target->character_id;
+}
+
 static bool AdventureBindPerson(const CcSim *sim, LocalState *local,
                                  CcInteractionTarget *target, CcNpcRole role)
 {
     if (target == NULL) return false;
+    const CcCharacter *bound = AdventureBoundPresentedPerson(sim, local, target);
+    if (bound != NULL) {
+        target->character_id = bound->id;
+        (void)snprintf(target->name, sizeof(target->name), "%s", bound->name);
+        return true;
+    }
     for (int32_t i = 0; i < sim->character_count; ++i) {
         const CcCharacter *person = &sim->characters[i];
-        if (person->current_settlement_id != sim->player.location_id ||
-            person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING || CcCharacterAgeYears(sim, person) < 16) continue;
-        bool matches = (role == CC_NPC_ROLE_TRAVELLER && person->role == CC_CHARACTER_TRAVELLER) ||
-            (role == CC_NPC_ROLE_SCOUT && person->role == CC_CHARACTER_SCOUT) ||
-            (role == CC_NPC_ROLE_REFUGEE && person->role == CC_CHARACTER_REFUGEE) ||
-            (role == CC_NPC_ROLE_LABORER && person->role == CC_CHARACTER_LABORER) ||
-            (role == CC_NPC_ROLE_GUARD && person->role == CC_CHARACTER_OFFICIAL);
-        if (!matches) continue;
-        bool used = false;
-        for (int32_t j = 0; j < local->interactions.count; ++j)
-            if (local->interactions.targets[j].character_id == person->id) used = true;
-        if (used) continue;
+        if (!AdventurePersonEligible(sim, person) ||
+            !AdventurePersonMatchesRole(role, person) ||
+            AdventureCharacterUsed(local, person->id) ||
+            AdventureCharacterReserved(local, target, person->id)) continue;
         target->character_id = person->id;
         (void)snprintf(target->name, sizeof(target->name), "%s", person->name);
+        AdventureRememberPresentedPerson(local, target);
         return true;
     }
     return false;
@@ -115,9 +218,10 @@ static bool AdventureNamePresented(const CcSim *sim, LocalState *local,
             bool used = false;
             for (int32_t j = 0; j < local->interactions.count; ++j)
                 if (local->interactions.targets[j].character_id == person->id) used = true;
-            if (used) continue;
+            if (used || AdventureCharacterReserved(local, target, person->id)) continue;
             target->character_id = person->id;
             (void)snprintf(target->name, sizeof(target->name), "%s", person->name);
+            AdventureRememberPresentedPerson(local, target);
             return true;
         }
     }
@@ -129,6 +233,7 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
 {
     local->interactions.count = 0;
     if (!AdventureScene(local)) return;
+    AdventurePrunePresentedPersonBindings(sim, local);
     const CcLocalPlaceProfile *place = CcLocalPlaceProfileForSettlement(
         CcSimSettlement(sim, sim->player.location_id));
     const CcSettlement *town = CcSimSettlement(sim, sim->player.location_id);
@@ -283,6 +388,7 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
             local->conversation_object = target->key.object;
             local->conversation_gossip_slot = -1;
             local->conversation_gossip_source = false;
+            local->conversation_report_response = false;
             local->conversation_character_id = target->character_id;
             local->conversation_situation_id = target->situation_id;
             if (target->character_id != 0U) {

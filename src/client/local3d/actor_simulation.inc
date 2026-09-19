@@ -2601,7 +2601,29 @@ static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
                                                agent->position.z);
     bool target_on_platform = target.y > target_land + 0.24f;
     bool agent_on_platform = agent->position.y > agent_land + 0.24f;
-    if (target_on_platform || agent_on_platform) {
+    if (agent_on_platform && agent->interaction_navigation &&
+        !target_on_platform) {
+        /* A conversation target may move while the player stands on a raised
+           course platform.  Step down to the nearest street graph node first;
+           the normal graph path resumes after the physical descent. */
+        int32_t exit_node = StreetPathNearestNode(
+            (Vector2){agent->position.x, agent->position.z}, agent->radius,
+            false, 0.72f);
+        if (exit_node >= 0) {
+            Vector2 exit = StreetPathNodePoint(exit_node);
+            Vector3 descent = {exit.x,
+                                SurfaceHeightAt(CC_LOCAL_SCENE_STREET,
+                                                exit.x, exit.y),
+                                exit.y};
+            if (!SetAgentExactTarget(agent, descent, false)) return false;
+            agent->command_origin = agent->position;
+            agent->command_point = agent->target_point;
+            agent->command_point_valid = true;
+            return true;
+        }
+    }
+    if (target_on_platform ||
+        (agent_on_platform && !agent->interaction_navigation)) {
         if (!SetAgentExactTarget(agent, target, false)) return false;
         agent->command_origin = agent->position;
         agent->command_point = agent->target_point;

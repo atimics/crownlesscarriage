@@ -30,6 +30,40 @@ static int RunMineInputRegression(void)
     const CcCharacter *jory=CcSimMineEvidenceContact(&sim);
     MINE_CHECK(jory!=NULL&&CcSimMineLeadSupported(&sim),
         "Silverwick must expose Jory's existing mine concern.");
+    {
+        CcSim report_sim=sim;
+        LocalState report_local={0};
+        ResetLocalState(&report_local); report_local.adventure_ui=true;
+        CcCommand lead={.kind=CC_COMMAND_MINE_LEARN_LEAD,
+            .target_id=(CcId)report_sim.mine.return_revision,.amount=2};
+        MINE_CHECK(CcSimApply(&report_sim,&lead,error,sizeof(error)),error);
+        CcId evidence=report_sim.mine.lead_event_id;
+        report_sim.mine.survey_event_id=evidence;
+        report_sim.mine.survey_source_id=CcMineSite(&report_sim)->id;
+        report_sim.mine.survey_read_day=report_sim.current_day;
+        report_sim.mine.survey_observed_day=0;
+        const CcCharacter *report_jory=CcSimMineEvidenceContact(&report_sim);
+        CcJournal *report_journal=CcJournalStart("mine-report-input.ccsave",&report_sim,error,sizeof(error));
+        MINE_CHECK(evidence!=0U&&report_jory!=NULL&&report_journal!=NULL&&
+            CcSimMineReturnEvidence(&report_sim)==CC_MINE_RETURN_INFORMATION,
+            "The report fixture needs valid sourced information evidence.");
+        report_local.conversation_character_id=report_jory->id;
+        ClientView report_view=VIEW_CHARACTER,report_back=VIEW_LOCAL;
+        ContextActionSet report_actions=BuildContextActions(&report_sim,&report_local,report_view,0,0);
+        int32_t report_index=-1;
+        for(int32_t i=0;i<report_actions.count;++i)
+            if(report_actions.items[i].kind==CONTEXT_ACTION_MINE_REPORT&&report_actions.items[i].enabled) report_index=i;
+        MINE_CHECK(report_index>=0,"Jory's visible report card must be enabled.");
+        CcMoney coins=report_sim.player.coins; int32_t cargo[CC_GOOD_COUNT]; memcpy(cargo,report_sim.player.cargo,sizeof(cargo));
+        queued_key_press[KEY_ONE+report_index]=true;
+        HandleInput(&report_journal,&report_sim,&selected,&situation,&report_view,&report_back,&report_local,(RenderTexture2D){0},(Rectangle){0},.2f,"mine-report-input.ccsave","",message,sizeof(message),feedback,sizeof(feedback),&feedback_age);
+        ClientInputClearPressed(); CcSpeech reply={0};
+        MINE_CHECK(report_sim.mine.report_event_id!=0U&&report_local.conversation_report_response&&
+            ClientConversationSpeech(&report_sim,&report_local,&reply)&&strstr(reply.text,"fair path in")!=NULL&&
+            report_sim.player.coins==coins&&memcmp(cargo,report_sim.player.cargo,sizeof(cargo))==0,
+            "The visible report card must preserve cargo and publish Jory's reply.");
+        CcJournalAbandon(&report_journal); (void)remove("mine-report-input.ccsave");
+    }
     local.conversation_character_id=jory->id;
     ContextActionSet mine_replies=BuildContextActions(&sim,&local,VIEW_CHARACTER,0,0);
     MINE_CHECK(mine_replies.count>=4&&
