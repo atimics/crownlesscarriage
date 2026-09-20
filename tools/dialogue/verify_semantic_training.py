@@ -27,7 +27,7 @@ def main():
     args = parser.parse_args()
     test = json.loads((args.run / "test-evaluation.json").read_text())
     manifest = json.loads((args.run / "manifest.json").read_text())
-    prefix_flag = "--policy-prefix" if manifest.get('format') == 'crownless-policy-v2' else "--semantic-prefix"
+    prefix_flag = "--policy-prefix" if manifest.get('format') in ('crownless-policy-v2', 'crownless-meaning-v3') else "--semantic-prefix"
     errors = []
     if manifest.get("status") != "complete":
         errors.append(f"training manifest status is {manifest.get('status')!r}")
@@ -39,7 +39,7 @@ def main():
         errors.append("evaluation count does not match records")
     if manifest.get('datasets', {}).get('test', {}).get('rows') != len(records):
         errors.append('evaluation must cover the complete test dataset')
-    if not policy_gate(test, manifest.get('format') == 'crownless-policy-v2'):
+    if not policy_gate(test, manifest.get('format') in ('crownless-policy-v2', 'crownless-meaning-v3')):
         errors.append(f"policy quality gate failed: {test.get('exact')}/{test.get('count')}")
     if errors:
         raise SystemExit("; ".join(errors))

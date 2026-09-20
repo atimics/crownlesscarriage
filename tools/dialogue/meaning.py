@@ -71,6 +71,11 @@ def history_check(person, heard):
     participants = {person['self']['id'], person['listener']['id']}
     for i, event in enumerate(heard):
         a = event['act']
+        if set(a) != {'version','intent','actor','recipient','actor_name','recipient_name','reply','claim','proposal','memory','reason'}:
+            raise ValueError('invalid public act schema')
+        names = {person['self']['id']:person['self']['name'], person['listener']['id']:person['listener']['name']}
+        if a['actor_name'] != names.get(a['actor']) or a['recipient_name'] != names.get(a['recipient']):
+            raise ValueError('public name differs from identity')
         if (event['speaker_id'] != a['actor'] or a['actor'] not in participants or
                 a['recipient'] not in participants or a['actor'] == a['recipient'] or
                 a['version'] != 3 or a['intent'] not in INTENTS or
@@ -82,6 +87,8 @@ def history_check(person, heard):
         if p:
             if {p['payer_id'], p['beneficiary_id']} != participants:
                 raise ValueError('proposal participants differ')
+            if set(p) != {'payer_id','beneficiary_id','place_id','place_name','quantity','unit_price','total_cost','condition'}:
+                raise ValueError('invalid proposal schema')
             identity(p['place_id']); integer(p['quantity'], 1, 3); integer(p['unit_price'], 1)
             if p['total_cost'] != p['quantity'] * p['unit_price'] or p['condition'] not in ('now', 'daylight'):
                 raise ValueError('invalid proposal terms')
@@ -89,8 +96,24 @@ def history_check(person, heard):
             raise ValueError('proposal required')
         if a['intent'] == 'accept' and (i == 0 or p != heard[i-1]['act']['proposal']):
             raise ValueError('acceptance must retain all terms')
-        if a.get('claim') and a['claim']['owner'] != a['actor']:
-            raise ValueError('claim belongs to another participant')
+        if a.get('claim'):
+            context = copy.deepcopy(person)
+            context['self']['id'] = a['actor']; context['listener']['id'] = a['recipient']
+            context['facts'] = [a['claim']]
+            if not facts(context): raise ValueError('private public claim')
+        if a['intent'] == 'offer_food' and p['payer_id'] != a['actor']:
+            raise ValueError('offer must belong to its payer')
+        if a['intent'] in ('counter_offer', 'condition'):
+            if i == 0 or heard[i-1]['act']['intent'] != 'offer_food':
+                raise ValueError('revised terms need an offer')
+            before = heard[i-1]['act']['proposal']
+            retained = ('payer_id','beneficiary_id','place_id','place_name','unit_price')
+            if any(p[key] != before[key] for key in retained) or p['beneficiary_id'] != a['actor']:
+                raise ValueError('revised proposal changed its parties or place')
+            if a['intent'] == 'condition' and (p['quantity'] != before['quantity'] or p['condition'] != 'daylight'):
+                raise ValueError('condition must preserve offered quantity')
+            if a['intent'] == 'counter_offer' and (p['quantity'] >= before['quantity'] or p['condition'] != before['condition']):
+                raise ValueError('counteroffer must retain its condition and reduce quantity')
     if heard and heard[-1]['speaker_id'] == person['self']['id']:
         raise ValueError('await the other participant')
 
@@ -128,14 +151,14 @@ def candidates(person, heard):
                 continue
             for qty in range(1, min(3, f['stock'], own['coins']//f['unit_price'])+1):
                 add('offer_food', 'help', claim=f, terms=proposal(f, own['id'], other['id'], qty))
-        reason = 'empty_store' if known and all(f['stock'] == 0 for f in known) else 'insufficient_money'
+        reason = 'hunger' if own['hungry_days'] > 0 else 'empty_store' if known and all(f['stock'] == 0 for f in known) else 'insufficient_money'
         add('decline', reason); add('decline', 'mistrust'); add('end', 'no_need')
     elif last['intent'] in ('offer_food', 'counter_offer', 'condition'):
         p = last['proposal']
         mine = next((f for f in known if f['place_id'] == p['place_id']), None)
         payable = p['payer_id'] != own['id'] or own['coins'] >= p['total_cost']
         current = (mine and mine['source'] == 'observed' and mine['day'] == person['day'] and
-                   mine['place_id'] == person['place']['id'] and mine['stock'] >= p['quantity'] and
+                   mine['place_id'] == person['place']['id'] and p['place_name'] == mine['place_name'] and mine['stock'] >= p['quantity'] and
                    mine['unit_price'] == p['unit_price'])
         if payable and current:
             add('accept', 'help', terms=p)

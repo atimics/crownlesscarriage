@@ -74,6 +74,12 @@ def validate_act(act: dict[str, Any]) -> None:
         raise LanguagePackError(f"unsupported v3 intent: {intent}")
     for field in ("actor", "recipient", "actor_name", "recipient_name"):
         _required(act, field)
+    if act['actor'] == act['recipient']:
+        raise LanguagePackError('speaker and listener must differ')
+    for key in ('actor','recipient'):
+        value=act[key]
+        if not isinstance(value,str) or not value.isdecimal() or not 0 < int(value) < 2**64:
+            raise LanguagePackError('participant identity must be a uint64 string')
     claim, proposal, memory = _obj(act, "claim"), _obj(act, "proposal"), _obj(act, "memory")
     if claim:
         if claim.get("kind") != "food_store":
@@ -85,6 +91,11 @@ def validate_act(act: dict[str, Any]) -> None:
     if proposal:
         for field in ("quantity", "unit_price", "total_cost", "condition"):
             _required(proposal, field)
+        if {proposal.get('payer_id'),proposal.get('beneficiary_id')} != {act['actor'],act['recipient']}:
+            raise LanguagePackError('proposal participants differ')
+        for key in ('quantity','unit_price','total_cost'): _number(proposal[key])
+        if not 1 <= proposal['quantity'] <= 3 or proposal['unit_price'] <= 0 or proposal['total_cost'] != proposal['quantity']*proposal['unit_price']:
+            raise LanguagePackError('invalid proposal arithmetic')
         if proposal["condition"] not in CONDITIONS:
             raise LanguagePackError("proposal.condition must be now or daylight")
     if memory:
@@ -149,9 +160,11 @@ def _fields(act: dict[str, Any], pack: dict[str, Any]) -> dict[str, Any]:
     return fields
 
 
-def render(act: dict[str, Any], language: str = "human", pack_root: str | Path | None = None) -> str:
+def render(act: dict[str, Any], language: str = "human", pack_root: str | Path | None = None, speaker_id: str | None = None) -> str:
     """Render a version 3 act using a language pack."""
     validate_act(act)
+    if speaker_id is not None and speaker_id != act['actor']:
+        raise LanguagePackError('speech belongs to another speaker')
     pack = _read_pack(language, pack_root)
     template = pack["templates"].get(act["intent"])
     if not isinstance(template, str) or not template:

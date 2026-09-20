@@ -12,9 +12,9 @@ from meaning_language import LanguagePackError, render
 
 def act(intent="offer_food", **extra):
     value = {
-        "version": 3, "intent": intent, "actor": "a1", "recipient": "b1",
+        "version": 3, "intent": intent, "actor": "1", "recipient": "2",
         "actor_name": "Mara 7", "recipient_name": "Kesh-2",
-        "proposal": {"quantity": 2, "unit_price": 3, "total_cost": 6,
+        "proposal": {"payer_id":"1", "beneficiary_id":"2", "quantity": 2, "unit_price": 3, "total_cost": 6,
                      "condition": "daylight", "place_name": "Vault 9"},
     }
     value.update(extra)
@@ -32,7 +32,7 @@ class MeaningLanguageTests(unittest.TestCase):
         self.assertIn("portions of zhek", goblin)
 
     def test_quantity_changes_inflection(self):
-        one = act(proposal={"quantity": 1, "unit_price": 3, "total_cost": 3,
+        one = act(proposal={"payer_id":"1", "beneficiary_id":"2", "quantity": 1, "unit_price": 3, "total_cost": 3,
                             "condition": "now", "place_name": "Vault 9"})
         many = act()
         self.assertIn("zhek", render(one, "hrakhor"))
@@ -40,7 +40,7 @@ class MeaningLanguageTests(unittest.TestCase):
         self.assertIn("portions of zhek", render(many, "hrakhor"))
 
     def test_shared_borrowed_words_and_vault_concept(self):
-        proposal = {"quantity": 1, "unit_price": 1, "total_cost": 1,
+        proposal = {"payer_id":"1", "beneficiary_id":"2", "quantity": 1, "unit_price": 1, "total_cost": 1,
                     "condition": "daylight", "place_name": "Vault 9"}
         line = render(act("condition", proposal=proposal), "hrakhor")
         self.assertIn("daylight", line)

@@ -28,9 +28,9 @@ def person(seed: int, side: int = 0) -> dict:
         facts.append({
             'kind': 'food_store', 'owner': own, 'place_id': _id(900 + seed * 4 + index),
             'place_name': ('Vault ' + str(20 + seed) if index == 0 else 'Ash Hollow ' + str(index)),
-            'stock': rng.randint(0, 12),
-            'target': rng.randint(1, 14),
-            'unit_price': rng.randint(1, 6),
+            'stock': rng.randint(0, 160),
+            'target': rng.randint(1, 200),
+            'unit_price': rng.randint(1, 12),
             'day': max(0, 10 + seed % 5 - (2 if stale else 0)),
             'source': source, 'private': private,
         })
@@ -38,10 +38,10 @@ def person(seed: int, side: int = 0) -> dict:
     facts[0]['place_id'] = place_id
     return {
         'self': {'id': own, 'name': ('Mara ' if side == 0 else 'Kesh-') + str(seed),
-                 'coins': rng.randint(0, 30),
-                 'hungry_days': rng.randint(0, 8),
+                 'coins': rng.randint(0, 80),
+                 'hungry_days': rng.choice((0, 0, 0, 1, 2, 5)),
                  'stress': rng.randint(0, 100)},
-        'listener': {'id': other, 'name': ('Kesh-' if side == 0 else 'Mara ') + str(seed + 1)},
+        'listener': {'id': other, 'name': ('Kesh-' if side == 0 else 'Mara ') + str(seed)},
         'place': {'id': place_id, 'name': facts[0]['place_name']}, 'day': 10 + seed % 5,
         'relationship': {'trust': rng.randint(-100, 100)},
         'facts': facts,
@@ -94,6 +94,10 @@ def dataset(worlds: int = 256) -> dict[str, list[dict]]:
     seen = set()
     for seed in range(worlds):
         people = [person(seed, 0), person(seed, 1)]
+        local = copy.deepcopy(people[0]['facts'][0]);local['owner']=people[1]['self']['id']
+        people[1]['facts'][0]=local
+        if people[0]['outcomes']:
+            people[1]['outcomes']=copy.deepcopy(people[0]['outcomes'])
         world_profile = hashlib.sha256(json.dumps([_profile(p) for p in people], sort_keys=True).encode()).hexdigest()[:16]
         bucket = int(world_profile[:8], 16) % 10
         split = 'test' if bucket == 0 else 'development' if bucket in (1, 2) else 'train'
@@ -108,7 +112,7 @@ def dataset(worlds: int = 256) -> dict[str, list[dict]]:
                     seen.add(key)
                     # A profile includes exact resource numbers and relationship state.
                     row['state_group'] = world_profile
-                    row['world_group'] = f'world-{seed}-{branch}'
+                    row['world_group'] = f'world-{seed}'
                     row['branch'] = branch
                     split_rows[split].append(row)
                 if not heard:

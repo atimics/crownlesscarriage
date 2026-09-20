@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 import random
+import math
 import sys
 import time
 from collections import defaultdict
@@ -96,7 +97,7 @@ def main() -> None:
         with (args.output / 'history.jsonl').open('w') as history:
             for step in range(1, args.steps + 1):
                 selected = [rng.choice(rng.choice(pools)) for _ in range(args.batch_size)]
-                rate = 3e-5 + .5 * (3e-4 - 3e-5) * (1 + __import__('math').cos(__import__('math').pi * (step - 1) / args.steps))
+                rate = 3e-5 + .5 * (3e-4 - 3e-5) * (1 + math.cos(math.pi * (step - 1) / args.steps))
                 for group in optimizer.param_groups:
                     group['lr'] = rate
                 optimizer.zero_grad(set_to_none=True)
@@ -130,6 +131,9 @@ def main() -> None:
                         weights = model.embedding.weight[allowed]
                         token = int(allowed[(weights @ hidden[0, -1]).argmax()])
                         valid = token in allowed
+                        if valid:
+                            request=row['input'];options=meaning_data.candidates(request['person'],request['heard'])
+                            meaning_data.meaning.validate(options[token-1024],request['person'],request['heard'])
                         exact = valid and token == row['target'][0]
                         error = None
                     except (ValueError, IndexError, RuntimeError) as failure:

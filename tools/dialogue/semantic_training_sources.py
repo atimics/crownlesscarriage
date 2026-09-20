@@ -10,6 +10,8 @@ RELEVANT_PREFIXES = (
     "tools/language/",
     "models/dialogue-syntax/",
     "assets/language/",
+    "assets/worldpacks/languages/",
+    ".github/workflows/dialogue-meaning-training.yml",
     "CMakeLists.txt",
     "src/story/",
     "src/sim/",
