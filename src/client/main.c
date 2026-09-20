@@ -8840,17 +8840,24 @@ static int RunMineHaulerVisualRegression(void)
     CcLocalAgent mine_hero = {0};
     CcLocalCourseStageMineEncounter(&mine_course, &mine_hero, &sim);
     for (int32_t raider = 0; raider < CC_LOCAL_RAIDER_COUNT; ++raider) {
-        if (CcLocalAgentVisualFamily(&mine_course.raiders[raider]) !=
-            CC_LOCAL_ACTOR_VISUAL_GOBLIN) return 1;
+        const CcLocalAgent *hauler = &mine_course.raiders[raider];
+        Vector3 ground = CcLocalAgentVisualGroundContact(hauler);
+        if (CcLocalAgentVisualFamily(hauler) != CC_LOCAL_ACTOR_VISUAL_GOBLIN ||
+            CcLocalAgentVisualScale(hauler) != 0.5f ||
+            fabsf(ground.x - hauler->position.x) > 0.0001f ||
+            fabsf(ground.y - hauler->position.y) > 0.0001f ||
+            fabsf(ground.z - hauler->position.z) > 0.0001f) return 1;
     }
     CcLocalCourse road_course = {0};
     CcLocalAgent road_hero = {0};
     CcLocalCourseStageRoadEncounter(&road_course, &road_hero, false);
     for (int32_t raider = 0; raider < CC_LOCAL_RAIDER_COUNT; ++raider) {
-        if (CcLocalAgentVisualFamily(&road_course.raiders[raider]) !=
-            CC_LOCAL_ACTOR_VISUAL_HUMAN) return 1;
+        const CcLocalAgent *road_raider = &road_course.raiders[raider];
+        if (CcLocalAgentVisualFamily(road_raider) !=
+            CC_LOCAL_ACTOR_VISUAL_HUMAN ||
+            CcLocalAgentVisualScale(road_raider) != 1.0f) return 1;
     }
-    (void)puts("Mine haulers use goblin visuals and road raiders use human visuals.");
+    (void)puts("Mine goblins render at half scale on their ground contact; road raiders stay human at full scale.");
     return 0;
 }
 

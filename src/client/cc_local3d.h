@@ -554,6 +554,8 @@ void CcLocalCourseStageMineEncounter(CcLocalCourse *course,
                                      CcLocalAgent *player,
                                      const CcSim *sim);
 CcLocalActorVisualFamily CcLocalAgentVisualFamily(const CcLocalAgent *agent);
+float CcLocalAgentVisualScale(const CcLocalAgent *agent);
+Vector3 CcLocalAgentVisualGroundContact(const CcLocalAgent *agent);
 void CcLocalCourseBindRaiderCompany(CcLocalCourse *course,
                                     const CcSim *sim);
 const char *CcLocalRaiderRoleName(CcLocalRaiderRole role);
