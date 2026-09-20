@@ -34,7 +34,7 @@ static CcCommand Propose(const CcCharacter *payer, const CcCharacter *beneficiar
 
 int main(void)
 {
-    CcSim sim, restored;
+    CcSim sim, restored, failed_sim;
     CcCharacter *payer, *beneficiary;
     char error[256];
     Setup(&sim, &payer, &beneficiary);
@@ -54,12 +54,36 @@ int main(void)
     CC_CHECK(sim.settlements[0].stock[CC_GOOD_FOOD] == 37);
 
     CcCommand forged = propose;
+    uint64_t before_forged_hash = CcSimHash(&sim);
     forged.actor_id = sim.player.id;
     CC_CHECK(!CcSimApply(&sim, &forged, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&sim) == before_forged_hash);
     CcSim public_sim;
     Setup(&public_sim, &payer, &beneficiary);
+    uint64_t before_public_hash = CcSimHash(&public_sim);
     CC_CHECK(!CcCoopApply(&public_sim, "food_relief_propose", beneficiary->id,
                           2, 3, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&public_sim) == before_public_hash);
+
+    /* A failed purchase is a recorded command outcome. */
+    CcCharacter *failed_payer, *failed_beneficiary;
+    Setup(&failed_sim, &failed_payer, &failed_beneficiary);
+    CcCommand failed_propose = Propose(failed_payer, failed_beneficiary,
+                                       &failed_sim.settlements[0]);
+    CC_CHECK(CcSimApply(&failed_sim, &failed_propose, error, sizeof(error)));
+    const CcEvent *failed_agreement = &failed_sim.events[failed_sim.event_count - 1];
+    CcCommand failed_accept = {.kind = CC_COMMAND_FOOD_RELIEF_ACCEPT,
+        .actor_id = failed_beneficiary->id, .target_id = failed_agreement->id};
+    CC_CHECK(CcSimApply(&failed_sim, &failed_accept, error, sizeof(error)));
+    failed_payer->travel_coins = 0;
+    CcCommand failed_execute = {.kind = CC_COMMAND_FOOD_RELIEF_EXECUTE,
+        .actor_id = failed_payer->id, .target_id = failed_agreement->id};
+    CC_CHECK(CcSimApply(&failed_sim, &failed_execute, error, sizeof(error)));
+    CC_CHECK(CcFoodReliefRead(&failed_sim, failed_agreement->id, &outcome));
+    CC_CHECK(outcome.kind == CC_FOOD_RELIEF_OUTCOME_FAILED);
+    uint64_t failed_hash = CcSimHash(&failed_sim);
+    CC_CHECK(CcSimApply(&failed_sim, &failed_execute, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&failed_sim) == failed_hash);
 
     const char *path = "food-relief-command.ccsave";
     Setup(&sim, &payer, &beneficiary);
@@ -78,6 +102,7 @@ int main(void)
     journal = CcJournalResume(path, &restored, error, sizeof(error));
     if (journal == NULL) (void)fprintf(stderr, "journal resume: %s\n", error);
     CC_CHECK(journal != NULL);
+    CC_CHECK(sim.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
     CC_CHECK(CcJournalClose(&journal, &restored, error, sizeof(error)));
     (void)remove(path); (void)remove("food-relief-command.ccsave-wal");
