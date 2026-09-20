@@ -2734,7 +2734,8 @@ static void CheckSchema104RoadMigration(char *error,
              topology.main_length_units);
     CC_CHECK(CcRoadSavedPositionValid(&pilot));
     CC_CHECK(CcSimValidate(&pilot, error, error_capacity));
-    CC_CHECK(CcSimHash(&pilot) == UINT64_C(14564885638044357531));
+    /* Schema 107 includes the typed food agreement table in the state hash. */
+    CC_CHECK(CcSimHash(&pilot) == UINT64_C(9214914555253877868));
 
     char stop_file[512];
     (void)snprintf(
