@@ -1502,6 +1502,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            Execute(database, pony_schema, error, error_capacity) &&
            Execute(database, war_schema, error, error_capacity) &&
            Execute(database, schema, error, error_capacity) &&
+           Execute(database, "CREATE TABLE IF NOT EXISTS food_agreement (slot INTEGER PRIMARY KEY,id INTEGER NOT NULL UNIQUE,payer_id INTEGER NOT NULL,beneficiary_id INTEGER NOT NULL,place_id INTEGER NOT NULL,accepted_event_id INTEGER NOT NULL,outcome_event_id INTEGER NOT NULL,total_cost INTEGER NOT NULL,quantity INTEGER NOT NULL,unit_price INTEGER NOT NULL,created_day INTEGER NOT NULL,accepted_day INTEGER NOT NULL,status INTEGER NOT NULL);", error, error_capacity) &&
            Execute(database, royal_carriage_schema, error, error_capacity) &&
            EnsureColumn(database, "royal_carriage", "archive_contract",
                "ALTER TABLE royal_carriage ADD COLUMN archive_contract INTEGER NOT NULL DEFAULT 0;",
@@ -2740,6 +2741,27 @@ static bool SaveEvents(sqlite3 *database, const CcSim *sim,
     return true;
 }
 
+static bool SaveFoodAgreements(sqlite3 *database, const CcSim *sim,
+                               char *error, size_t capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "INSERT INTO food_agreement VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 &statement, error, capacity)) return false;
+    for (int32_t i = 0; i < sim->food_agreement_count; ++i) {
+        const CcFoodAgreement *a = &sim->food_agreements[i];
+        BindInt(statement, 1, i); BindId(statement, 2, a->id);
+        BindId(statement, 3, a->payer_id); BindId(statement, 4, a->beneficiary_id);
+        BindId(statement, 5, a->place_id); BindId(statement, 6, a->accepted_event_id);
+        BindId(statement, 7, a->outcome_event_id); BindMoney(statement, 8, a->total_cost);
+        BindInt(statement, 9, a->quantity); BindInt(statement, 10, a->unit_price);
+        BindInt(statement, 11, a->created_day); BindInt(statement, 12, a->accepted_day);
+        BindInt(statement, 13, (int32_t)a->status);
+        if (!StepDone(database, statement, error, capacity) ||
+            !ResetStatement(database, statement, error, capacity)) { sqlite3_finalize(statement); return false; }
+    }
+    sqlite3_finalize(statement); return true;
+}
+
 static bool SaveSituations(sqlite3 *database, const CcSim *sim,
                            char *error, size_t error_capacity)
 {
@@ -3522,6 +3544,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM character_knowledge; DELETE FROM character_relationship;"
             "DELETE FROM npc_character; DELETE FROM historic_character;"
             "DELETE FROM causal_event;"
+            "DELETE FROM food_agreement;"
             "DELETE FROM player_company; DELETE FROM player_commitment;"
             "DELETE FROM player_journey; DELETE FROM runtime_state;"
             "DELETE FROM player_road_position; DELETE FROM player_road_geometry;"
@@ -3572,6 +3595,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveCharacters(database, sim, error, error_capacity) &&
         SaveHistoricalCharacters(database, sim, error, error_capacity) &&
         SaveEvents(database, sim, error, error_capacity) &&
+        SaveFoodAgreements(database, sim, error, error_capacity) &&
         SavePlayer(database, sim, error, error_capacity) &&
         SavePlayerCommitment(database, sim, error, error_capacity) &&
         SaveJourneyState(database, sim, error, error_capacity) &&
@@ -5176,6 +5200,27 @@ static bool ReadEvents(sqlite3 *database, CcSim *sim,
     return true;
 }
 
+static bool ReadFoodAgreements(sqlite3 *database, CcSim *sim,
+                               char *error, size_t capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (sim->schema_version < 107U) return true;
+    if (!Prepare(database, "SELECT * FROM food_agreement ORDER BY slot;", &statement, error, capacity)) return false;
+    int32_t rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        if (slot != rows || slot < 0 || slot >= CC_MAX_FOOD_AGREEMENTS) { sqlite3_finalize(statement); SetError(error, capacity, "Food-agreement rows exceed save limits."); return false; }
+        CcFoodAgreement *a = &sim->food_agreements[slot];
+        a->id = (CcId)sqlite3_column_int64(statement, 1); a->payer_id = (CcId)sqlite3_column_int64(statement, 2);
+        a->beneficiary_id = (CcId)sqlite3_column_int64(statement, 3); a->place_id = (CcId)sqlite3_column_int64(statement, 4);
+        a->accepted_event_id = (CcId)sqlite3_column_int64(statement, 5); a->outcome_event_id = (CcId)sqlite3_column_int64(statement, 6);
+        a->total_cost = (CcMoney)sqlite3_column_int64(statement, 7); a->quantity = sqlite3_column_int(statement, 8);
+        a->unit_price = sqlite3_column_int(statement, 9); a->created_day = sqlite3_column_int(statement, 10);
+        a->accepted_day = sqlite3_column_int(statement, 11); a->status = (CcFoodAgreementStatus)sqlite3_column_int(statement, 12); rows++;
+    }
+    sqlite3_finalize(statement); sim->food_agreement_count = rows; return true;
+}
+
 static bool ReadSituations(sqlite3 *database, CcSim *sim,
                            char *error, size_t error_capacity)
 {
@@ -6099,6 +6144,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadHistoricalCharacters(database, sim, error, error_capacity) &&
               ReadQuestArchitecture(database, sim, error, error_capacity) &&
               ReadEvents(database, sim, error, error_capacity) &&
+              ReadFoodAgreements(database, sim, error, error_capacity) &&
               ReadLegends(database, sim, error, error_capacity) &&
               ReadPlayer(database, sim, error, error_capacity) &&
               ReadMapCollection(database, sim, error, error_capacity) &&

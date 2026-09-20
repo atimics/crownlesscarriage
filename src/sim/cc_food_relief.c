@@ -1,4 +1,5 @@
 #include "sim/cc_food_relief.h"
+#include "sim/cc_food_economy_internal.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -16,6 +17,15 @@ static CcEvent *Find(const CcSim *sim, CcId id)
         CcEvent *event = (CcEvent *)&sim->events[i];
         if (event->id == id && event->kind == CC_EVENT_RELIEF &&
             event->subject_id == id) return event;
+    }
+    return NULL;
+}
+
+static CcFoodAgreement *Agreement(CcSim *sim, CcId id)
+{
+    if (sim == NULL) return NULL;
+    for (int32_t i = 0; i < sim->food_agreement_count; ++i) {
+        if (sim->food_agreements[i].id == id) return &sim->food_agreements[i];
     }
     return NULL;
 }
@@ -86,12 +96,12 @@ bool CcFoodReliefObserve(const CcSim *sim, CcId payer_id, CcId beneficiary_id,
         Error(error, capacity, "Payer and beneficiary must be distinct people in one place."); return false;
     }
     place = CcSimSettlement(sim, payer->current_settlement_id);
-    if (place == NULL || place->stock[CC_GOOD_FOOD] <= 0) {
-        Error(error, capacity, "The local food store has no available food."); return false;
-    }
+    if (place == NULL) { Error(error, capacity, "The local food store is unavailable."); return false; }
     *out = (CcFoodReliefObservation){.payer_id = payer_id, .beneficiary_id = beneficiary_id,
         .place_id = place->id, .stock = place->stock[CC_GOOD_FOOD],
-        .unit_price = place->price[CC_GOOD_FOOD], .day = sim->current_day};
+        .reserve_target = CcEconomyEffectiveReserveTarget(sim, place, CC_GOOD_FOOD),
+        .unit_price = place->price[CC_GOOD_FOOD], .day = sim->current_day,
+        .payer_coins = payer->travel_coins, .beneficiary_hungry_days = beneficiary->hungry_days};
     (void)snprintf(out->place_name, sizeof(out->place_name), "%s", place->name);
     Error(error, capacity, ""); return true;
 }
@@ -101,6 +111,9 @@ bool CcFoodReliefPropose(CcSim *sim, const CcFoodReliefProposal *proposal,
 {
     CcFoodReliefObservation observation;
     CcEvent *event;
+    if (sim == NULL || sim->food_agreement_count >= CC_MAX_FOOD_AGREEMENTS) {
+        Error(error, capacity, "The food agreement ledger is full."); return false;
+    }
     if (proposal == NULL || proposal->quantity <= 0 || proposal->quantity > CC_SIM_MAX_UNITS ||
         proposal->unit_price <= 0 || !CcFoodReliefObserve(sim, proposal->payer_id,
         proposal->beneficiary_id, &observation, error, capacity) ||
@@ -120,11 +133,34 @@ bool CcFoodReliefPropose(CcSim *sim, const CcFoodReliefProposal *proposal,
         " qty=%d", proposal->payer_id, proposal->beneficiary_id,
         proposal->place_id, proposal->quantity);
     if (!Parse(event, out)) { Error(error, capacity, "The agreement record is invalid."); return false; }
+    sim->food_agreements[sim->food_agreement_count++] = (CcFoodAgreement){
+        .id = event->id, .payer_id = proposal->payer_id,
+        .beneficiary_id = proposal->beneficiary_id, .place_id = proposal->place_id,
+        .total_cost = (CcMoney)proposal->quantity * proposal->unit_price,
+        .quantity = proposal->quantity, .unit_price = proposal->unit_price,
+        .created_day = sim->current_day, .status = CC_FOOD_AGREEMENT_PROPOSED};
     Error(error, capacity, ""); return true;
 }
 
 bool CcFoodReliefRead(const CcSim *sim, CcId agreement_id, CcFoodReliefOutcome *out)
 {
+    for (int32_t i = 0; sim != NULL && i < sim->food_agreement_count; ++i) {
+        const CcFoodAgreement *record = &sim->food_agreements[i];
+        if (record->id == agreement_id) {
+            if (out == NULL) return false;
+            *out = (CcFoodReliefOutcome){
+                .kind = record->status == CC_FOOD_AGREEMENT_ACCEPTED ? CC_FOOD_RELIEF_OUTCOME_ACCEPTED :
+                    record->status == CC_FOOD_AGREEMENT_FULFILLED ? CC_FOOD_RELIEF_OUTCOME_FULFILLED :
+                    record->status == CC_FOOD_AGREEMENT_FAILED ? CC_FOOD_RELIEF_OUTCOME_FAILED : CC_FOOD_RELIEF_OUTCOME_PROPOSED,
+                .agreement_id = record->id, .payer_id = record->payer_id,
+                .beneficiary_id = record->beneficiary_id, .place_id = record->place_id,
+                .quantity = record->quantity, .unit_price = record->unit_price,
+                .total_cost = record->total_cost, .event_id = record->outcome_event_id != 0U ? record->outcome_event_id : record->id};
+            const CcCharacter *beneficiary = CcSimCharacter(sim, record->beneficiary_id);
+            out->beneficiary_hungry_days = beneficiary != NULL ? beneficiary->hungry_days : 0;
+            return true;
+        }
+    }
     CcEvent *agreement = Find(sim, agreement_id);
     CcEvent *fulfilled = Child(sim, agreement_id, agreement != NULL ? agreement->actor_id : 0U, "Food fulfilled");
     CcEvent *failed = Child(sim, agreement_id, agreement != NULL ? agreement->actor_id : 0U, "Food failed");
@@ -161,7 +197,9 @@ bool CcFoodReliefAccept(CcSim *sim, CcId agreement_id, CcId beneficiary_id,
         agreement->location_id, agreement_id, agreement->magnitude, "Food accepted");
     event->actor_id = beneficiary_id; event->target_id = agreement->actor_id;
     CcCharacter *person = (CcCharacter *)CcSimCharacter(sim, beneficiary_id);
-    Remember(person, CC_CHARACTER_MEMORY_PLAYER_PROMISED, agreement_id, event->id, sim->current_day);
+    CcFoodAgreement *record = Agreement(sim, agreement_id);
+    if (record != NULL) { record->status = CC_FOOD_AGREEMENT_ACCEPTED; record->accepted_event_id = event->id; record->accepted_day = sim->current_day; }
+    Remember(person, CC_CHARACTER_MEMORY_NPC_PROMISED, agreement_id, event->id, sim->current_day);
     if (out != NULL) { current.kind = CC_FOOD_RELIEF_OUTCOME_ACCEPTED; current.event_id = event->id; *out = current; }
     Error(error, capacity, ""); return true;
 }
@@ -173,8 +211,10 @@ bool CcFoodReliefExecute(CcSim *sim, CcId agreement_id, CcId payer_id,
     CcEvent *agreement = Find(sim, agreement_id);
     CcSettlement *place;
     CcCharacter *payer, *beneficiary;
-    if (!CcFoodReliefRead(sim, agreement_id, &current) || agreement == NULL ||
-        agreement->actor_id != payer_id) { Error(error, capacity, "The payer does not match the agreement."); return false; }
+    if (!CcFoodReliefRead(sim, agreement_id, &current) ||
+        current.payer_id != payer_id || (agreement == NULL && Agreement(sim, agreement_id) == NULL)) {
+        Error(error, capacity, "The payer does not match the agreement."); return false;
+    }
     if (current.kind == CC_FOOD_RELIEF_OUTCOME_FULFILLED) { if (out != NULL) *out = current; Error(error, capacity, ""); return true; }
     if (current.kind == CC_FOOD_RELIEF_OUTCOME_FAILED) { if (out != NULL) *out = current; Error(error, capacity, "The agreement already failed."); return false; }
     payer = (CcCharacter *)CcSimCharacter(sim, current.payer_id);
@@ -192,6 +232,8 @@ bool CcFoodReliefExecute(CcSim *sim, CcId agreement_id, CcId payer_id,
         CcEvent *failed = CcSimPushEvent(sim, CC_EVENT_RELIEF, agreement_id,
             current.place_id, agreement_id, -current.quantity, "Food failed");
         failed->actor_id = payer_id; failed->target_id = current.beneficiary_id;
+        CcFoodAgreement *record = Agreement(sim, agreement_id);
+        if (record != NULL) { record->status = CC_FOOD_AGREEMENT_FAILED; record->outcome_event_id = failed->id; }
         Remember(beneficiary, CC_CHARACTER_MEMORY_PROMISE_FAILED, agreement_id, failed->id, sim->current_day);
         if (out != NULL) { current.kind = CC_FOOD_RELIEF_OUTCOME_FAILED; current.event_id = failed->id; *out = current; }
         Error(error, capacity, "The stored food, price, or payer purse changed."); return false;
@@ -199,13 +241,16 @@ bool CcFoodReliefExecute(CcSim *sim, CcId agreement_id, CcId payer_id,
     place->stock[CC_GOOD_FOOD] -= current.quantity;
     payer->travel_coins -= current.total_cost;
     place->market_coins += current.total_cost;
-    beneficiary->hungry_days = beneficiary->hungry_days > current.quantity ?
-        beneficiary->hungry_days - current.quantity : 0;
+    beneficiary->hungry_days = 0;
     CcEvent *fulfilled = CcSimPushEvent(sim, CC_EVENT_RELIEF, agreement_id,
         current.place_id, agreement_id, current.quantity, "Food fulfilled");
     fulfilled->actor_id = payer_id; fulfilled->target_id = current.beneficiary_id;
+    CcFoodAgreement *record = Agreement(sim, agreement_id);
+    if (record != NULL) { record->status = CC_FOOD_AGREEMENT_FULFILLED; record->outcome_event_id = fulfilled->id; }
     Remember(beneficiary, CC_CHARACTER_MEMORY_PROMISE_FULFILLED, agreement_id, fulfilled->id, sim->current_day);
     CcRelationship *relation = Relation(sim, payer_id, current.beneficiary_id, fulfilled->id);
+    if (relation != NULL) { relation->trust = relation->trust < 3 ? relation->trust + 1 : 3; relation->affinity = relation->affinity < 3 ? relation->affinity + 1 : 3; relation->cause_event_id = fulfilled->id; }
+    relation = Relation(sim, current.beneficiary_id, payer_id, fulfilled->id);
     if (relation != NULL) { relation->trust = relation->trust < 3 ? relation->trust + 1 : 3; relation->affinity = relation->affinity < 3 ? relation->affinity + 1 : 3; relation->cause_event_id = fulfilled->id; }
     current.kind = CC_FOOD_RELIEF_OUTCOME_FULFILLED; current.event_id = fulfilled->id;
     current.beneficiary_hungry_days = beneficiary->hungry_days;

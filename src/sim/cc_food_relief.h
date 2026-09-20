@@ -9,8 +9,11 @@ typedef struct CcFoodReliefObservation {
     CcId place_id;
     char place_name[CC_NAME_CAPACITY];
     int32_t stock;
+    int32_t reserve_target;
     int32_t unit_price;
     int32_t day;
+    CcMoney payer_coins;
+    int32_t beneficiary_hungry_days;
 } CcFoodReliefObservation;
 
 typedef struct CcFoodReliefProposal {

@@ -89,7 +89,7 @@ int main(int argc, char **argv)
     } else if (action == ACTION_OBSERVE) {
         CcFoodReliefObservation observation;
         if (!CcFoodReliefObserve(&sim, payer, beneficiary, &observation, error, sizeof(error))) { fputs(error, stderr); return 1; }
-        printf("{\"kind\":\"food_store\",\"payer_id\":\"%" PRIu64 "\",\"beneficiary_id\":\"%" PRIu64 "\",\"place_id\":\"%" PRIu64 "\",\"place_name\":\"%s\",\"stock\":%d,\"unit_price\":%d,\"day\":%d}\n", observation.payer_id, observation.beneficiary_id, observation.place_id, observation.place_name, observation.stock, observation.unit_price, observation.day);
+        printf("{\"kind\":\"food_store\",\"payer_id\":\"%" PRIu64 "\",\"beneficiary_id\":\"%" PRIu64 "\",\"place_id\":\"%" PRIu64 "\",\"place_name\":\"%s\",\"stock\":%d,\"reserve_target\":%d,\"unit_price\":%d,\"payer_coins\":%" PRId64 ",\"beneficiary_hungry_days\":%d,\"day\":%d}\n", observation.payer_id, observation.beneficiary_id, observation.place_id, observation.place_name, observation.stock, observation.reserve_target, observation.unit_price, observation.payer_coins, observation.beneficiary_hungry_days, observation.day);
     } else {
         CcFoodReliefOutcome outcome;
         const CcCharacter *payer_character = CcSimCharacter(&sim, payer);
