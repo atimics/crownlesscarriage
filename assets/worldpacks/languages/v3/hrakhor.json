@@ -12,7 +12,7 @@
     "condition": "Could we wait fo {daylight}? Keep tak {quantity} {food} and {total_cost} crowns as agreed.",
     "recall_success": "{memory_subject} bought {quantity} {food} fo {memory_object}. That help mattered.",
     "recall_failure": "We agreed on {quantity} {food}, but tak purchase fell through.",
-    "thank": "Thank thu. Sha remember that help.",
+    "thank": "Thank thu. Sha remember it too.",
     "end": "We can speak again later."
   },
   "lexicon": {

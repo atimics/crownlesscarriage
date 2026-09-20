@@ -49,9 +49,10 @@ def find_pair(folder, food_probe, participant_probe):
                                 text=True, timeout=120, check=True)
         people = json.loads(result.stdout)['people']
         world = World(path, food_probe, participant_probe)
-        hungry = [person for person in people if person['hungry_days'] > 0]
+        available = [person for person in people if person['alive'] and not person['in_transit']]
+        hungry = [person for person in available if person['hungry_days'] > 0]
         for first in hungry:
-            for second in people:
+            for second in available:
                 if (first['id'] == second['id'] or first['place_id'] != second['place_id'] or
                         second['hungry_days'] > 0):
                     continue
@@ -59,7 +60,7 @@ def find_pair(folder, food_probe, participant_probe):
                     snapshot = world.snapshot(first['id'], second['id'])
                     listener = snapshot['participants'][1]
                     fact = listener['facts'][0]
-                    if listener['self']['coins'] < fact['unit_price'] or listener.get('relationship', {}).get('trust', 0) < 0:
+                    if listener['self']['coins'] < fact['unit_price'] or (listener.get('relationship') or {}).get('trust', 0) < 0:
                         continue
                     if fact['stock'] < 1:
                         continue

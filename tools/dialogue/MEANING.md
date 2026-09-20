@@ -48,7 +48,7 @@ names its effect rather than printing event identifiers.
 
 `world_dialogue.py` loads an existing native save. It refreshes both participant
 snapshots through native probes before each turn. An accepted food proposal is
-recorded, accepted, and executed through the native food agreement API. The
+recorded, accepted, and executed through internal native simulation commands. The
 native layer owns current resource checks, consent, payment, food consumption,
 relationship changes, persistence, and duplicate protection.
 
@@ -89,6 +89,10 @@ The release workflow checks the exported native model against Python, then runs
 quantity and purse counterfactuals, a generated-world purchase, a reunion, and a
 replayed execution. It preserves training and failed-run reports. The world
 proof uses actual generated people and reports their identities and day.
+
+Schema 107 saves up to 32 typed agreements. A full ledger rejects new offers
+without changing the world. Each agreement survives event history trimming.
+Both participants remember accepted promises and their outcomes.
 
 Food agreements are the first executable meaning family. Other policies can
 use the same boundary by adding typed observations, candidate arguments, native

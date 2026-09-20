@@ -252,3 +252,8 @@ add_executable(food_relief_tests tests/food_relief_tests.c)
 target_link_libraries(food_relief_tests PRIVATE crownless_persistence)
 cc_strict_warnings(food_relief_tests)
 add_test(NAME food_relief_outcomes COMMAND food_relief_tests)
+
+add_executable(food_agreement_persistence_tests tests/food_agreement_persistence_tests.c)
+target_link_libraries(food_agreement_persistence_tests PRIVATE crownless_persistence)
+cc_strict_warnings(food_agreement_persistence_tests)
+add_test(NAME food_agreement_persistence COMMAND food_agreement_persistence_tests)
