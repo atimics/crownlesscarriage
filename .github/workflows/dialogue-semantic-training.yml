@@ -159,7 +159,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: semantic-5m-model-${{ github.ref_name }}
+          name: semantic-5m-model-${{ github.run_id }}
           path: |
             artifacts/semantic-5m/run/last.ccv2
             artifacts/semantic-5m/run/manifest.json
