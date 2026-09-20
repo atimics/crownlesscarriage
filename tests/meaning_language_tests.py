@@ -56,6 +56,14 @@ class MeaningLanguageTests(unittest.TestCase):
             self.assertEqual(render(act(), "test-order", root),
                              "6 total: Kesh-2 receives 2 portions of food from Mara 7.")
 
+    def test_first_person_speaker_and_payment_are_checked(self):
+        with self.assertRaises(LanguagePackError):
+            render(act(), speaker_id='2')
+        changed=act();changed['proposal']['total_cost']=99
+        with self.assertRaises(LanguagePackError):render(changed)
+        changed=act();changed['recipient']='1'
+        with self.assertRaises(LanguagePackError):render(changed)
+
     def test_pack_errors_and_schema_errors_are_explicit(self):
         with self.assertRaises(LanguagePackError):
             render(act(), "missing")

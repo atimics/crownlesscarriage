@@ -67,6 +67,16 @@ class MeaningPolicyTests(unittest.TestCase):
         self.assertNotEqual(m.encode_input(p,[]),m.encode_input(q,[]))
         self.assertEqual(m.choose(q,[])['intent'],'recall_failure')
 
+    def test_public_name_and_proposal_terms_are_bound(self):
+        a=person(hunger=2);b=person('2','1');h=heard(m.choose(a,[]))
+        forged=copy.deepcopy(h);forged[0]['act']['actor_name']='Another Person'
+        with self.assertRaises(ValueError):m.candidates(b,forged)
+        offered=m.choose(b,h);h.append({'speaker_id':'2','act':offered})
+        forged=copy.deepcopy(h);forged[-1]['act']['proposal']['place_name']='Foreign Store'
+        self.assertFalse(any(x['intent']=='accept' for x in m.candidates(a,forged)))
+        forged=copy.deepcopy(h);forged[-1]['act']['proposal']['payer_id']='1'
+        with self.assertRaises(ValueError):m.candidates(a,forged)
+
     def test_native_context_and_both_language_packs(self):
         a=person(hunger=2);b=person('2','1');h=[]
         for i in range(8):

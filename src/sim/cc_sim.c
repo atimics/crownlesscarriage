@@ -98,19 +98,8 @@ static bool ApplyFoodReliefCommand(CcSim *sim, const CcCommand *command,
         return true;
     }
     if (command->kind == CC_COMMAND_FOOD_RELIEF_EXECUTE) {
-        CcFoodReliefOutcome before;
-        const bool had_before = CcFoodReliefRead(sim, command->target_id, &before);
-        if (CcFoodReliefExecute(sim, command->target_id, command->actor_id,
-                                &outcome, error, error_capacity)) {
-            SetError(error, error_capacity, "");
-            return true;
-        }
-        /* A current agreement can record a failed purchase as a mutation. */
-        CcFoodReliefOutcome after;
-        if (had_before && CcFoodReliefRead(sim, command->target_id, &after) &&
-            after.kind == CC_FOOD_RELIEF_OUTCOME_FAILED &&
-            after.event_id != before.event_id) return true;
-        return false;
+        return CcFoodReliefExecute(sim, command->target_id, command->actor_id,
+                                   &outcome, error, error_capacity);
     }
     SetError(error, error_capacity, "Unknown food relief command.");
     return false;
@@ -20101,11 +20090,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 (event->beneficiary_id != 0U &&
                  event->beneficiary_id != sim->player.id &&
                  !IsIssuedCharacterId(sim, event->beneficiary_id)) ||
-                (event->witness_id != 0U && event->kind != CC_EVENT_RELIEF &&
+                (event->witness_id != 0U &&
                  event->witness_id != sim->player.id &&
-                 !IsIssuedCharacterId(sim, event->witness_id) &&
-                 !(event->kind == CC_EVENT_RELIEF && event->subject_id == event->id &&
-                   event->witness_id <= INT32_MAX))) {
+                 !IsIssuedCharacterId(sim, event->witness_id))) {
                 if (error != NULL && error_capacity > 0U) {
                     (void)snprintf(
                         error, error_capacity,
@@ -21355,7 +21342,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                  memory < character->memory_count; ++memory) {
                 const CcCharacterMemory *item =
                     &character->memories[memory];
-                bool subject_exists =
+                CcFoodReliefOutcome remembered_food;
+                bool food_memory = sim->schema_version >= 107U &&
+                    item->kind >= CC_CHARACTER_MEMORY_PROMISE_FULFILLED &&
+                    item->kind <= CC_CHARACTER_MEMORY_NPC_PROMISED &&
+                    CcFoodReliefRead(sim, item->subject_id, &remembered_food) &&
+                    (remembered_food.payer_id == character->id ||
+                     remembered_food.beneficiary_id == character->id);
+                bool subject_exists = food_memory ||
                     CcSimSituation(sim, item->subject_id) != NULL ||
                     (sim->schema_version >= 106U &&
                      CcIdKind(item->subject_id) == CC_ENTITY_EVENT &&
@@ -21366,7 +21360,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                     (sim->schema_version >= 19U &&
                      CcSimQuestOutcome(sim, item->subject_id) != NULL);
                 if (item->kind <= CC_CHARACTER_MEMORY_NONE ||
-                    item->kind > CC_CHARACTER_MEMORY_NPC_PROMISED ||
+                    item->kind > (sim->schema_version >= 107U ? CC_CHARACTER_MEMORY_NPC_PROMISED :
+                                  CC_CHARACTER_MEMORY_PLAYER_WITHDREW) ||
                     !subject_exists ||
                     CcSimEvent(sim, item->event_id) == NULL ||
                     item->day < 1 || item->day > sim->current_day) {

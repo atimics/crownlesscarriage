@@ -58,7 +58,7 @@ int main(void)
     forged.actor_id = sim.player.id;
     CC_CHECK(!CcSimApply(&sim, &forged, error, sizeof(error)));
     CC_CHECK(CcSimHash(&sim) == before_forged_hash);
-    CcSim public_sim;
+    static CcSim public_sim;
     Setup(&public_sim, &payer, &beneficiary);
     uint64_t before_public_hash = CcSimHash(&public_sim);
     CC_CHECK(!CcCoopApply(&public_sim, "food_relief_propose", beneficiary->id,

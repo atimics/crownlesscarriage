@@ -247,3 +247,8 @@ add_executable(metagame_tests tests/metagame_tests.c)
 target_link_libraries(metagame_tests PRIVATE crownless_metagame)
 cc_strict_warnings(metagame_tests)
 add_test(NAME text_first_metagame COMMAND metagame_tests)
+
+add_executable(food_relief_tests tests/food_relief_tests.c)
+target_link_libraries(food_relief_tests PRIVATE crownless_persistence)
+cc_strict_warnings(food_relief_tests)
+add_test(NAME food_relief_outcomes COMMAND food_relief_tests)

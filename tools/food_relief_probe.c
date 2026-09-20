@@ -11,11 +11,22 @@
 static bool Id(const char *text, uint64_t *out)
 {
     char *end = NULL;
-    if (text == NULL || text[0] == '\0') return false;
+    if (text == NULL || text[0] < '0' || text[0] > '9') return false;
     errno = 0;
     unsigned long long value = strtoull(text, &end, 10);
-    if (errno != 0 || end == NULL || *end != '\0' || value == 0U) return false;
+    if (errno != 0 || end == NULL || *end != '\0') return false;
     *out = (uint64_t)value; return true;
+}
+
+static void JsonString(const char *text)
+{
+    putchar('"');
+    for (const unsigned char *p = (const unsigned char *)text; *p != 0U; ++p) {
+        if (*p == '"' || *p == '\\') { putchar('\\'); putchar(*p); }
+        else if (*p < 32U) printf("\\u%04x", (unsigned int)*p);
+        else putchar(*p);
+    }
+    putchar('"');
 }
 
 static void Print(const CcFoodReliefOutcome *out)
@@ -55,16 +66,21 @@ int main(int argc, char **argv)
         else if (strcmp(argv[i], "--outcomes") == 0) { if (i + 2 >= argc || !Id(argv[++i], &parsed)) return 2; payer = (CcId)parsed; if (!Id(argv[++i], &parsed)) return 2; other = (CcId)parsed; action = ACTION_OUTCOMES; }
         else return 2;
     }
-    char error[256];
+    char error[256] = {0};
     if (load != NULL) { if (!CcSaveRead(load, &sim, error, sizeof(error))) { fputs(error, stderr); return 1; } }
     else CcSimInit(&sim, seed);
-    if (days > 0 && load == NULL) CcSimAdvanceDays(&sim, days);
+    if (days > 0) CcSimAdvanceDays(&sim, days);
     if (action == ACTION_LIST) {
         printf("{\"day\":%d,\"people\":[", sim.current_day);
         for (int32_t i = 0; i < sim.character_count; ++i) {
             const CcCharacter *person = &sim.characters[i];
-            printf("%s{\"id\":\"%" PRIu64 "\",\"name\":\"%s\",\"place_id\":\"%" PRIu64 "\",\"hungry_days\":%d}",
-                i ? "," : "", person->id, person->name, person->current_settlement_id, person->hungry_days);
+            printf("%s{\"id\":\"%" PRIu64 "\",\"name\":", i ? "," : "", person->id);
+            JsonString(person->name);
+            printf(",\"place_id\":\"%" PRIu64 "\",\"hungry_days\":%d,\"coins\":%" PRId64
+                   ",\"in_transit\":%s,\"alive\":%s}", person->current_settlement_id,
+                person->hungry_days, person->travel_coins,
+                person->travel_destination_id != 0U || person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ? "true" : "false",
+                person->death_day > 0 && person->death_day <= sim.current_day ? "false" : "true");
         }
         puts("]}");
         if (save != NULL && !CcSaveWrite(save, &sim, error, sizeof(error))) { fputs(error, stderr); return 1; }
@@ -73,12 +89,12 @@ int main(int argc, char **argv)
     if (action == ACTION_OUTCOMES) {
         bool first = true;
         putchar('{'); fputs("\"outcomes\":[", stdout);
-        for (int32_t i = 0; i < sim.event_count; ++i) {
-            const CcEvent *event = &sim.events[i];
+        for (int32_t i = 0; i < sim.food_agreement_count; ++i) {
+            const CcFoodAgreement *record = &sim.food_agreements[i];
             CcFoodReliefOutcome outcome;
-            if (event->kind != CC_EVENT_RELIEF || event->subject_id != event->id ||
-                event->actor_id != payer || event->target_id != other ||
-                !CcFoodReliefRead(&sim, event->id, &outcome) ||
+            if (!((record->payer_id == payer && record->beneficiary_id == other) ||
+                  (record->payer_id == other && record->beneficiary_id == payer)) ||
+                !CcFoodReliefRead(&sim, record->id, &outcome) ||
                 (outcome.kind != CC_FOOD_RELIEF_OUTCOME_FULFILLED && outcome.kind != CC_FOOD_RELIEF_OUTCOME_FAILED)) continue;
             printf("%s{\"outcome\":\"%s\",\"quantity\":%d,\"total_cost\":%" PRId64 ",\"event_id\":\"%" PRIu64 "\",\"actor_id\":\"%" PRIu64 "\",\"beneficiary_id\":\"%" PRIu64 "\",\"reason\":\"outcome\"}",
                 first ? "" : ",", outcome.kind == CC_FOOD_RELIEF_OUTCOME_FULFILLED ? "fulfilled" : "failed",
@@ -89,14 +105,32 @@ int main(int argc, char **argv)
     } else if (action == ACTION_OBSERVE) {
         CcFoodReliefObservation observation;
         if (!CcFoodReliefObserve(&sim, payer, beneficiary, &observation, error, sizeof(error))) { fputs(error, stderr); return 1; }
-        printf("{\"kind\":\"food_store\",\"payer_id\":\"%" PRIu64 "\",\"beneficiary_id\":\"%" PRIu64 "\",\"place_id\":\"%" PRIu64 "\",\"place_name\":\"%s\",\"stock\":%d,\"reserve_target\":%d,\"unit_price\":%d,\"payer_coins\":%" PRId64 ",\"beneficiary_hungry_days\":%d,\"day\":%d}\n", observation.payer_id, observation.beneficiary_id, observation.place_id, observation.place_name, observation.stock, observation.reserve_target, observation.unit_price, observation.payer_coins, observation.beneficiary_hungry_days, observation.day);
+        printf("{\"kind\":\"food_store\",\"payer_id\":\"%" PRIu64 "\",\"beneficiary_id\":\"%" PRIu64
+               "\",\"place_id\":\"%" PRIu64 "\",\"place_name\":", observation.payer_id, observation.beneficiary_id, observation.place_id);
+        JsonString(observation.place_name);
+        printf(",\"stock\":%d,\"reserve_target\":%d,\"unit_price\":%d,\"payer_coins\":%" PRId64
+               ",\"beneficiary_hungry_days\":%d,\"day\":%d}\n", observation.stock,
+            observation.reserve_target, observation.unit_price, observation.payer_coins,
+            observation.beneficiary_hungry_days, observation.day);
     } else {
-        CcFoodReliefOutcome outcome;
-        const CcCharacter *payer_character = CcSimCharacter(&sim, payer);
-        bool ok = action == ACTION_PROMISE && payer_character != NULL ? CcFoodReliefPropose(&sim, &(CcFoodReliefProposal){payer, beneficiary, payer_character->current_settlement_id, quantity, price}, &outcome, error, sizeof(error)) :
-            action == ACTION_ACCEPT ? CcFoodReliefAccept(&sim, agreement, beneficiary, &outcome, error, sizeof(error)) :
-            CcFoodReliefExecute(&sim, agreement, payer, &outcome, error, sizeof(error));
-        if (!ok && action != ACTION_EXECUTE) { fputs(error, stderr); return 1; }
+        CcFoodReliefOutcome outcome = {0};
+        CcCommand command = {0};
+        if (action == ACTION_PROMISE) {
+            const CcCharacter *person = CcSimCharacter(&sim, payer);
+            if (person == NULL) { fputs("Unknown payer.\n", stderr); return 1; }
+            command = (CcCommand){.kind = CC_COMMAND_FOOD_RELIEF_PROPOSE,
+                .actor_id = payer, .target_id = beneficiary,
+                .secondary_id = person->current_settlement_id,
+                .amount = quantity, .good = (CcGood)price};
+        } else {
+            command = (CcCommand){.kind = action == ACTION_ACCEPT ?
+                CC_COMMAND_FOOD_RELIEF_ACCEPT : CC_COMMAND_FOOD_RELIEF_EXECUTE,
+                .actor_id = action == ACTION_ACCEPT ? beneficiary : payer,
+                .target_id = agreement};
+        }
+        if (!CcSimApply(&sim, &command, error, sizeof(error))) { fputs(error, stderr); return 1; }
+        if (action == ACTION_PROMISE) agreement = sim.food_agreements[sim.food_agreement_count - 1].id;
+        if (!CcFoodReliefRead(&sim, agreement, &outcome)) { fputs("Missing agreement.\n", stderr); return 1; }
         Print(&outcome);
     }
     if (save != NULL && !CcSaveWrite(save, &sim, error, sizeof(error))) { fputs(error, stderr); return 1; }
