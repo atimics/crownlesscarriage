@@ -1569,6 +1569,45 @@ static void DescribeDebrief(const CcMetagame *metagame,
            sim->current_day, resolved, failed);
 }
 
+static void DescribeUnderroadNetwork(const CcMetagame *metagame,
+                                     char *output, size_t capacity)
+{
+    const CcSim *sim = &metagame->sim;
+    const CcUnderroadNetwork *network = CcSimUnderroadNetwork(sim);
+    if (network == NULL || !network->generated || network->node_count <= 0) {
+        Append(output, capacity, "No Underroad network has been mapped.\n");
+        return;
+    }
+    Append(output, capacity, "UNDERROAD NETWORK — %d nodes, %d roads\n",
+           network->node_count, network->road_count);
+    for (int32_t i = 0; i < network->node_count; ++i) {
+        const CcUnderroadNode *node = &network->nodes[i];
+        const char *kind = node->kind == CC_UNDERROAD_NODE_ENTRANCE
+                               ? "entrance"
+                               : node->kind == CC_UNDERROAD_NODE_LAIR
+                                     ? "lair"
+                                     : node->kind == CC_UNDERROAD_NODE_HOARD
+                                           ? "hoard"
+                                           : "junction";
+        Append(output, capacity, "%2d. %-16s %-8s at (%d,%d), layer %d\n", i,
+               node->name, kind, node->map_x, node->map_y, node->depth);
+    }
+    for (int32_t i = 0; i < network->road_count; ++i) {
+        const CcUnderroadRoad *road = &network->roads[i];
+        const char *kind = road->kind == CC_UNDERROAD_ROAD_SMUGGLER
+                               ? "smuggler way"
+                               : road->kind == CC_UNDERROAD_ROAD_NATURAL
+                                     ? "natural passage"
+                                     : "haul road";
+        Append(output, capacity,
+               "road %2d: %s <-> %s, %s, %d cells, condition %d, toll %d.%03d\n",
+               i, network->nodes[road->from_node].name,
+               network->nodes[road->to_node].name, kind, road->length_cells,
+               road->condition, road->toll_milli / 1000,
+               road->toll_milli % 1000);
+    }
+}
+
 static void DescribeUnderroad(const CcMetagame *metagame,
                               char *output, size_t capacity)
 {
@@ -2561,6 +2600,10 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         CcCommand action = {0};
         if (first == NULL || strcmp(first, "look") == 0) {
             DescribeUnderroad(metagame, output, output_capacity);
+            return true;
+        } else if (strcmp(first, "network") == 0 ||
+                   strcmp(first, "map") == 0) {
+            DescribeUnderroadNetwork(metagame, output, output_capacity);
             return true;
         } else if (strcmp(first, "enter") == 0) {
             if (metagame->sim.dungeon_count < 1) return false;

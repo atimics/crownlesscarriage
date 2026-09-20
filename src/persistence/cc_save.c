@@ -1454,6 +1454,24 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " strain INTEGER NOT NULL, maximum_depth INTEGER NOT NULL,"
         " encounter_kind INTEGER NOT NULL, encounter_reaction INTEGER NOT NULL,"
         " encounter_room INTEGER NOT NULL);";
+    const char *underroad_network_schema =
+        "CREATE TABLE IF NOT EXISTS underroad_network ("
+        " slot INTEGER PRIMARY KEY CHECK(slot=1), generated INTEGER NOT NULL,"
+        " layout_seed INTEGER NOT NULL, revision INTEGER NOT NULL,"
+        " node_count INTEGER NOT NULL, road_count INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS underroad_node ("
+        " node_slot INTEGER PRIMARY KEY, kind INTEGER NOT NULL,"
+        " settlement_id INTEGER NOT NULL, faction_id INTEGER NOT NULL,"
+        " map_x INTEGER NOT NULL, map_y INTEGER NOT NULL, depth INTEGER NOT NULL,"
+        " discovered INTEGER NOT NULL, name TEXT NOT NULL, seed INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS underroad_road ("
+        " road_slot INTEGER PRIMARY KEY, from_node INTEGER NOT NULL,"
+        " to_node INTEGER NOT NULL, kind INTEGER NOT NULL, depth INTEGER NOT NULL,"
+        " length_cells INTEGER NOT NULL, clearance INTEGER NOT NULL,"
+        " condition INTEGER NOT NULL, security INTEGER NOT NULL,"
+        " toll_milli INTEGER NOT NULL, dig_progress_milli INTEGER NOT NULL,"
+        " faction_id INTEGER NOT NULL, traversed INTEGER NOT NULL,"
+        " seed INTEGER NOT NULL);";
     const char *road_site_schema =
         "CREATE TABLE IF NOT EXISTS road_site ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE,"
@@ -1555,6 +1573,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            Execute(database, journal_schema, error, error_capacity) &&
            EnsureJournalCommandColumns(database, error, error_capacity) &&
            Execute(database, underroad_schema, error, error_capacity) &&
+           Execute(database, underroad_network_schema, error, error_capacity) &&
            Execute(database, road_site_schema, error, error_capacity) &&
            EnsurePlayerKnowledgeColumns(database, error, error_capacity) &&
            EnsureJourneyColumns(database, error, error_capacity) &&
@@ -2592,6 +2611,74 @@ static bool SaveDungeons(sqlite3 *database, const CcSim *sim,
     return result;
 }
 
+static bool SaveUnderroadNetwork(sqlite3 *database, const CcSim *sim,
+                                 char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 108U) return true;
+    const CcUnderroadNetwork *network = &sim->underroad;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO underroad_network VALUES(1,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    BindInt(statement, 1, network->generated ? 1 : 0);
+    BindInt(statement, 2, (int32_t)network->layout_seed);
+    BindInt(statement, 3, (int32_t)network->revision);
+    BindInt(statement, 4, network->node_count);
+    BindInt(statement, 5, network->road_count);
+    bool result = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement);
+    if (!result) return false;
+
+    if (!Prepare(database,
+                 "INSERT INTO underroad_node VALUES(?,?,?,?,?,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < network->node_count; ++i) {
+        const CcUnderroadNode *node = &network->nodes[i];
+        BindInt(statement, 1, i);
+        BindInt(statement, 2, (int32_t)node->kind);
+        BindInt(statement, 3, node->settlement_id);
+        BindInt(statement, 4, node->faction_id);
+        BindInt(statement, 5, node->map_x);
+        BindInt(statement, 6, node->map_y);
+        BindInt(statement, 7, node->depth);
+        BindInt(statement, 8, node->discovered);
+        BindText(statement, 9, node->name);
+        BindInt(statement, 10, (int32_t)node->seed);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement); return false;
+        }
+    }
+    sqlite3_finalize(statement);
+
+    if (!Prepare(database,
+                 "INSERT INTO underroad_road VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < network->road_count; ++i) {
+        const CcUnderroadRoad *road = &network->roads[i];
+        BindInt(statement, 1, i);
+        BindInt(statement, 2, road->from_node);
+        BindInt(statement, 3, road->to_node);
+        BindInt(statement, 4, (int32_t)road->kind);
+        BindInt(statement, 5, road->depth);
+        BindInt(statement, 6, road->length_cells);
+        BindInt(statement, 7, road->clearance);
+        BindInt(statement, 8, road->condition);
+        BindInt(statement, 9, road->security);
+        BindInt(statement, 10, road->toll_milli);
+        BindInt(statement, 11, road->dig_progress_milli);
+        BindInt(statement, 12, road->faction_id);
+        BindInt(statement, 13, road->traversed);
+        BindInt(statement, 14, (int32_t)road->seed);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement); return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
 static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                         char *error, size_t error_capacity)
 {
@@ -3570,6 +3657,8 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM dungeon; DELETE FROM dungeon_detail;"
             "DELETE FROM dungeon_room; DELETE FROM dungeon_link;"
             "DELETE FROM dungeon_expedition;"
+            "DELETE FROM underroad_network; DELETE FROM underroad_node;"
+            "DELETE FROM underroad_road;"
             "DELETE FROM situation; DELETE FROM situation_cast;"
             "DELETE FROM situation_quest; DELETE FROM situation_evidence;"
             "DELETE FROM story_front; DELETE FROM front_situation;"
@@ -3622,6 +3711,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveDiplomacyAndCouriers(database, sim, error, error_capacity) &&
         SaveThreats(database, sim, error, error_capacity) &&
         SaveDungeons(database, sim, error, error_capacity) &&
+        SaveUnderroadNetwork(database, sim, error, error_capacity) &&
         SaveLegends(database, sim, error, error_capacity) &&
         SaveSituations(database, sim, error, error_capacity) &&
         SaveSituationCasts(database, sim, error, error_capacity) &&
@@ -4981,6 +5071,108 @@ static bool ReadUnderroad(sqlite3 *database, CcSim *sim,
     return true;
 }
 
+static bool ReadUnderroadNetwork(sqlite3 *database, CcSim *sim,
+                                 char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 108U) return true;
+    CcUnderroadNetwork *network = &sim->underroad;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT generated,layout_seed,revision,node_count,road_count "
+                 "FROM underroad_network WHERE slot=1;",
+                 &statement, error, error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW) {
+        sqlite3_finalize(statement);
+        /* A schema-108 database written before the network existed: the caller
+           generates it after the migration hooks run. */
+        return true;
+    }
+    network->generated = sqlite3_column_int(statement, 0) != 0;
+    network->layout_seed = (uint32_t)sqlite3_column_int(statement, 1);
+    network->revision = (uint32_t)sqlite3_column_int(statement, 2);
+    network->node_count = sqlite3_column_int(statement, 3);
+    network->road_count = sqlite3_column_int(statement, 4);
+    sqlite3_finalize(statement);
+    if (network->node_count < 0 ||
+        network->node_count > CC_MAX_UNDERROAD_NODES ||
+        network->road_count < 0 ||
+        network->road_count > CC_MAX_UNDERROAD_ROADS) {
+        SetError(error, error_capacity, "Underroad network counts are invalid.");
+        return false;
+    }
+
+    if (!Prepare(database,
+                 "SELECT kind,settlement_id,faction_id,map_x,map_y,depth,"
+                 "discovered,name,seed FROM underroad_node "
+                 "ORDER BY node_slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t node_rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        if (node_rows >= network->node_count ||
+            node_rows >= CC_MAX_UNDERROAD_NODES) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity, "Underroad node rows are invalid.");
+            return false;
+        }
+        CcUnderroadNode *node = &network->nodes[node_rows];
+        node->kind = (CcUnderroadNodeKind)sqlite3_column_int(statement, 0);
+        node->settlement_id = sqlite3_column_int(statement, 1);
+        node->faction_id = sqlite3_column_int(statement, 2);
+        node->map_x = sqlite3_column_int(statement, 3);
+        node->map_y = sqlite3_column_int(statement, 4);
+        node->depth = sqlite3_column_int(statement, 5);
+        node->discovered = sqlite3_column_int(statement, 6);
+        if (!ReadTextColumn(statement, 7, node->name, sizeof(node->name),
+                            "underroad node name", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+        node->seed = (uint32_t)sqlite3_column_int(statement, 8);
+        node_rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (node_rows != network->node_count) {
+        SetError(error, error_capacity, "Underroad node rows are incomplete.");
+        return false;
+    }
+
+    if (!Prepare(database,
+                 "SELECT from_node,to_node,kind,depth,length_cells,clearance,"
+                 "condition,security,toll_milli,dig_progress_milli,faction_id,"
+                 "traversed,seed FROM underroad_road ORDER BY road_slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t road_rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        if (road_rows >= network->road_count ||
+            road_rows >= CC_MAX_UNDERROAD_ROADS) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity, "Underroad road rows are invalid.");
+            return false;
+        }
+        CcUnderroadRoad *road = &network->roads[road_rows];
+        road->from_node = sqlite3_column_int(statement, 0);
+        road->to_node = sqlite3_column_int(statement, 1);
+        road->kind = (CcUnderroadRoadKind)sqlite3_column_int(statement, 2);
+        road->depth = sqlite3_column_int(statement, 3);
+        road->length_cells = sqlite3_column_int(statement, 4);
+        road->clearance = sqlite3_column_int(statement, 5);
+        road->condition = sqlite3_column_int(statement, 6);
+        road->security = sqlite3_column_int(statement, 7);
+        road->toll_milli = sqlite3_column_int(statement, 8);
+        road->dig_progress_milli = sqlite3_column_int(statement, 9);
+        road->faction_id = sqlite3_column_int(statement, 10);
+        road->traversed = sqlite3_column_int(statement, 11);
+        road->seed = (uint32_t)sqlite3_column_int(statement, 12);
+        road_rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (road_rows != network->road_count) {
+        SetError(error, error_capacity, "Underroad road rows are incomplete.");
+        return false;
+    }
+    return true;
+}
+
 static bool ReadLegends(sqlite3 *database, CcSim *sim,
                         char *error, size_t error_capacity)
 {
@@ -6190,6 +6382,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadThreats(database, sim, error, error_capacity) &&
               ReadDungeons(database, sim, error, error_capacity) &&
               ReadUnderroad(database, sim, error, error_capacity) &&
+              ReadUnderroadNetwork(database, sim, error, error_capacity) &&
               ReadSituations(database, sim, error, error_capacity) &&
               ReadSituationCasts(database, sim, error, error_capacity) &&
               ReadCharacters(database, sim, error, error_capacity) &&
@@ -6245,6 +6438,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
     if (stored_schema_version < 79U) CcSimInitializeOccupations(sim);
     if (stored_schema_version < 34U) CcSimUpgradePlayerKnowledge(sim);
     if (stored_schema_version < 40U) CcPoniesInit(sim);
+    if (stored_schema_version < 108U) CcSimInitializeUnderroadNetwork(sim);
     if (upgraded != NULL) {
         *upgraded = sim->schema_version != stored_schema_version ||
                     sim->generator_version != stored_generator_version;
