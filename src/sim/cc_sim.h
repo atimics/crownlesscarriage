@@ -663,7 +663,11 @@ typedef enum CcCommandKind {
     CC_COMMAND_CHOOSE_ROAD_LEG = 72,
     /* Schema 106: learn and report the durable Silverwick mine record. */
     CC_COMMAND_MINE_LEARN_LEAD = 73,
-    CC_COMMAND_MINE_REPORT_RETURN = 74
+    CC_COMMAND_MINE_REPORT_RETURN = 74,
+    /* Schema 107: internal participant food agreement lifecycle. */
+    CC_COMMAND_FOOD_RELIEF_PROPOSE = 75,
+    CC_COMMAND_FOOD_RELIEF_ACCEPT = 76,
+    CC_COMMAND_FOOD_RELIEF_EXECUTE = 77
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -2012,7 +2016,9 @@ typedef struct CcMineVisit {
 
 typedef struct CcCommand {
     CcCommandKind kind;
+    CcId actor_id;
     CcId target_id;
+    CcId secondary_id;
     CcGood good;
     int32_t amount;
     CcDungeonState dungeon_state;

@@ -873,6 +873,17 @@ static bool EnsureJournalMetaColumns(sqlite3 *database,
             error, error_capacity);
 }
 
+static bool EnsureJournalCommandColumns(sqlite3 *database,
+                                        char *error, size_t error_capacity)
+{
+    return EnsureColumn(database, "action_journal", "actor_id",
+            "ALTER TABLE action_journal ADD COLUMN actor_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "action_journal", "secondary_id",
+            "ALTER TABLE action_journal ADD COLUMN secondary_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity);
+}
+
 static bool EnsureHistoryOfficeColumns(sqlite3 *database,
                                        char *error,
                                        size_t error_capacity)
@@ -1374,7 +1385,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " sequence INTEGER PRIMARY KEY AUTOINCREMENT,"
         " generation INTEGER NOT NULL, ordinal INTEGER NOT NULL,"
         " record_version INTEGER NOT NULL, operation_kind INTEGER NOT NULL,"
-        " command_kind INTEGER NOT NULL, target_id INTEGER NOT NULL,"
+        " command_kind INTEGER NOT NULL, actor_id INTEGER NOT NULL DEFAULT 0,"
+        " target_id INTEGER NOT NULL, secondary_id INTEGER NOT NULL DEFAULT 0,"
         " good INTEGER NOT NULL, amount INTEGER NOT NULL,"
         " dungeon_state INTEGER NOT NULL, step_count INTEGER NOT NULL,"
         " sim_schema_version INTEGER NOT NULL, generator_version INTEGER NOT NULL,"
@@ -1519,6 +1531,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            Execute(database, material_schema, error, error_capacity) &&
            Execute(database, goods_schema, error, error_capacity) &&
            Execute(database, journal_schema, error, error_capacity) &&
+           EnsureJournalCommandColumns(database, error, error_capacity) &&
            Execute(database, underroad_schema, error, error_capacity) &&
            Execute(database, road_site_schema, error, error_capacity) &&
            EnsurePlayerKnowledgeColumns(database, error, error_capacity) &&
@@ -6562,10 +6575,10 @@ static bool AppendJournalOperation(CcJournal *journal,
         const char *sql =
             "INSERT INTO action_journal "
             "(generation,ordinal,record_version,operation_kind,command_kind,"
-            "target_id,good,amount,dungeon_state,step_count,"
+            "actor_id,target_id,secondary_id,good,amount,dungeon_state,step_count,"
             "sim_schema_version,generator_version,pre_state_hash,"
             "post_state_hash,committed_tick) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
         ok = Prepare(journal->database, sql, &statement,
                      error, error_capacity);
     }
@@ -6584,16 +6597,18 @@ static bool AppendJournalOperation(CcJournal *journal,
         BindInt(statement, 3, CC_JOURNAL_RECORD_VERSION);
         BindInt(statement, 4, (int32_t)operation);
         BindInt(statement, 5, (int32_t)input->kind);
-        BindId(statement, 6, input->target_id);
-        BindInt(statement, 7, (int32_t)input->good);
-        BindInt(statement, 8, input->amount);
-        BindInt(statement, 9, (int32_t)input->dungeon_state);
-        BindInt(statement, 10, step_count);
-        BindInt(statement, 11, (int32_t)after->schema_version);
-        BindInt(statement, 12, (int32_t)after->generator_version);
-        BindText(statement, 13, pre_hash);
-        BindText(statement, 14, post_hash);
-        BindId(statement, 15, after->clock.tick);
+        BindId(statement, 6, input->actor_id);
+        BindId(statement, 7, input->target_id);
+        BindId(statement, 8, input->secondary_id);
+        BindInt(statement, 9, (int32_t)input->good);
+        BindInt(statement, 10, input->amount);
+        BindInt(statement, 11, (int32_t)input->dungeon_state);
+        BindInt(statement, 12, step_count);
+        BindInt(statement, 13, (int32_t)after->schema_version);
+        BindInt(statement, 14, (int32_t)after->generator_version);
+        BindText(statement, 15, pre_hash);
+        BindText(statement, 16, post_hash);
+        BindId(statement, 17, after->clock.tick);
         ok = StepDone(journal->database, statement,
                       error, error_capacity);
     }
