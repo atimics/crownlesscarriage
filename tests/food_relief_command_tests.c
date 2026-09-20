@@ -65,6 +65,13 @@ int main(void)
                           2, 3, error, sizeof(error)));
     CC_CHECK(CcSimHash(&public_sim) == before_public_hash);
 
+    /* A person's agreement remains available while the player is travelling. */
+    Setup(&sim, &payer, &beneficiary);
+    sim.journey.active = true;
+    propose = Propose(payer, beneficiary, &sim.settlements[0]);
+    CC_CHECK(CcSimApply(&sim, &propose, error, sizeof(error)));
+    CC_CHECK(sim.food_agreement_count == 1);
+
     /* A failed purchase is a recorded command outcome. */
     CcCharacter *failed_payer, *failed_beneficiary;
     Setup(&failed_sim, &failed_payer, &failed_beneficiary);

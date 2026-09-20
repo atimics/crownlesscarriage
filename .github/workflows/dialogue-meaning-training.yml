@@ -102,7 +102,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install 'torch==2.8.0' --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install -r tools/dialogue/requirements-meaning-training.txt
+          python -m pip install -r tools/dialogue/requirements-semantic-training.txt
       - name: Checkout pinned ZERO source
         run: git clone --no-checkout https://github.com/atimics/zero.git zero
       - name: Pin ZERO commit

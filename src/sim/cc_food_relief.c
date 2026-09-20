@@ -10,7 +10,8 @@ static void Error(char *error, size_t capacity, const char *text)
 
 static CcFoodAgreement *Agreement(CcSim *sim, CcId id)
 {
-    if (sim == NULL || sim->schema_version < 107U || id == 0U) return NULL;
+    if (sim == NULL || sim->schema_version < 107U || sim->food_agreement_count < 0 ||
+        sim->food_agreement_count > CC_MAX_FOOD_AGREEMENTS || id == 0U) return NULL;
     for (int32_t i = 0; i < sim->food_agreement_count; ++i) {
         if (sim->food_agreements[i].id == id) return &sim->food_agreements[i];
     }
@@ -83,7 +84,8 @@ bool CcFoodReliefObserve(const CcSim *sim, CcId payer_id, CcId beneficiary_id,
 
 bool CcFoodReliefRead(const CcSim *sim, CcId agreement_id, CcFoodReliefOutcome *out)
 {
-    if (sim == NULL || sim->schema_version < 107U || out == NULL) return false;
+    if (sim == NULL || sim->schema_version < 107U || sim->food_agreement_count < 0 ||
+        sim->food_agreement_count > CC_MAX_FOOD_AGREEMENTS || out == NULL) return false;
     for (int32_t i = 0; i < sim->food_agreement_count; ++i) {
         const CcFoodAgreement *record = &sim->food_agreements[i];
         if (record->id != agreement_id) continue;

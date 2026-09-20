@@ -22,8 +22,9 @@ int main(void)
     CcFoodReliefObservation observation;
     CcFoodReliefOutcome outcome;
     char error[256];
-    const char *path = "/tmp/crownless-food-agreement-corrupt.ccsave";
+    const char *path = "food-agreement-corrupt.ccsave";
     CcSimInit(&sim, UINT32_C(1202));
+    sim.characters[0].travel_coins = 100;
     CcId payer = sim.characters[0].id;
     CcId beneficiary = sim.characters[6].id;
     assert(CcFoodReliefObserve(&sim, payer, beneficiary, &observation, error, sizeof(error)));
@@ -31,6 +32,17 @@ int main(void)
         observation.place_id, 1, observation.unit_price}, &outcome, error, sizeof(error)));
     assert(CcSaveWrite(path, &sim, error, sizeof(error)));
     assert(CcSaveRead(path, &loaded, error, sizeof(error)));
+    assert(CcSimHash(&sim) == CcSimHash(&loaded));
+    const CcFoodAgreement original = loaded.food_agreements[0];
+    loaded.food_agreements[0].quantity = CC_SIM_MAX_UNITS + 1;
+    assert(!CcSimValidate(&loaded, error, sizeof(error)));
+    loaded.food_agreements[0] = original;
+    loaded.food_agreements[0].status = CC_FOOD_AGREEMENT_FULFILLED;
+    assert(!CcSimValidate(&loaded, error, sizeof(error)));
+    loaded.food_agreements[0] = original;
+    loaded.food_agreements[1] = original;
+    loaded.food_agreement_count = 2;
+    assert(!CcSimValidate(&loaded, error, sizeof(error)));
     Corrupt(path, "UPDATE food_agreement SET quantity='bad' WHERE slot=0;");
     assert(!CcSaveRead(path, &loaded, error, sizeof(error)));
     remove(path);

@@ -19423,6 +19423,10 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Command target is missing.");
         return false;
     }
+    /* Participant commands use their own presence and consent checks. */
+    if (command->kind >= CC_COMMAND_FOOD_RELIEF_PROPOSE &&
+        command->kind <= CC_COMMAND_FOOD_RELIEF_EXECUTE)
+        return ApplyFoodReliefCommand(sim, command, error, error_capacity);
     bool party_wipe = command->kind == CC_COMMAND_PARTY_WIPE;
     bool mine_action = (command->kind >= CC_COMMAND_VISIT_MINE &&
         command->kind <= CC_COMMAND_MINE_PACK) ||
@@ -19475,10 +19479,7 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_SUPPORT_BAKERY ||
         command->kind == CC_COMMAND_TAKE_BODY_PURSE ||
         command->kind == CC_COMMAND_MINE_LEARN_LEAD ||
-        command->kind == CC_COMMAND_MINE_REPORT_RETURN ||
-        command->kind == CC_COMMAND_FOOD_RELIEF_PROPOSE ||
-        command->kind == CC_COMMAND_FOOD_RELIEF_ACCEPT ||
-        command->kind == CC_COMMAND_FOOD_RELIEF_EXECUTE;
+        command->kind == CC_COMMAND_MINE_REPORT_RETURN;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
                  "Settlement business must wait until the carriage arrives.");
@@ -19503,14 +19504,15 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_CHOOSE_ROAD_LEG:
             return CcRoadChooseNextLeg(sim, command->target_id,
                                        error, error_capacity);
+        case CC_COMMAND_FOOD_RELIEF_PROPOSE:
+        case CC_COMMAND_FOOD_RELIEF_ACCEPT:
+        case CC_COMMAND_FOOD_RELIEF_EXECUTE:
+            /* Handled before the player encounter gates. */
+            return ApplyFoodReliefCommand(sim, command, error, error_capacity);
         case CC_COMMAND_MINE_LEARN_LEAD:
             return ApplyMineLearnLead(sim,command,error,error_capacity);
         case CC_COMMAND_MINE_REPORT_RETURN:
             return ApplyMineReportReturn(sim,command,error,error_capacity);
-        case CC_COMMAND_FOOD_RELIEF_PROPOSE:
-        case CC_COMMAND_FOOD_RELIEF_ACCEPT:
-        case CC_COMMAND_FOOD_RELIEF_EXECUTE:
-            return ApplyFoodReliefCommand(sim, command, error, error_capacity);
         case CC_COMMAND_EXCHANGE_GOSSIP:
             return ApplyExchangeGossip(sim, command, error, error_capacity);
         case CC_COMMAND_HEARD_STORY:
@@ -21351,10 +21353,6 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                      remembered_food.beneficiary_id == character->id);
                 bool subject_exists = food_memory ||
                     CcSimSituation(sim, item->subject_id) != NULL ||
-                    (sim->schema_version >= 106U &&
-                     CcIdKind(item->subject_id) == CC_ENTITY_EVENT &&
-                     CcSimEvent(sim, item->subject_id) != NULL &&
-                     CcSimEvent(sim, item->subject_id)->kind == CC_EVENT_RELIEF) ||
                     (sim->schema_version >= 72U && item->kind == CC_CHARACTER_MEMORY_PLAYER_HELPED &&
                      CcSimSettlement(sim, item->subject_id) != NULL) ||
                     (sim->schema_version >= 19U &&
@@ -21363,6 +21361,11 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                     item->kind > (sim->schema_version >= 107U ? CC_CHARACTER_MEMORY_NPC_PROMISED :
                                   CC_CHARACTER_MEMORY_PLAYER_WITHDREW) ||
                     !subject_exists ||
+                    (item->kind > CC_CHARACTER_MEMORY_PLAYER_WITHDREW && !food_memory) ||
+                    (item->kind == CC_CHARACTER_MEMORY_PROMISE_FULFILLED &&
+                     remembered_food.kind != CC_FOOD_RELIEF_OUTCOME_FULFILLED) ||
+                    (item->kind == CC_CHARACTER_MEMORY_PROMISE_FAILED &&
+                     remembered_food.kind != CC_FOOD_RELIEF_OUTCOME_FAILED) ||
                     CcSimEvent(sim, item->event_id) == NULL ||
                     item->day < 1 || item->day > sim->current_day) {
                     SetError(error, error_capacity,
@@ -22074,6 +22077,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         for (int32_t i = 0; i < sim->food_agreement_count; ++i) {
             const CcFoodAgreement *agreement = &sim->food_agreements[i];
             if (CcIdKind(agreement->id) != CC_ENTITY_EVENT ||
+                (agreement->id & CC_ID_SERIAL_MASK) == 0U ||
+                (agreement->id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial ||
                 CcSimCharacter(sim, agreement->payer_id) == NULL ||
                 CcSimCharacter(sim, agreement->beneficiary_id) == NULL ||
                 CcSimSettlement(sim, agreement->place_id) == NULL ||
