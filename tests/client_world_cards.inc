@@ -165,14 +165,36 @@ static int RunWorldCardRegression(void)
         BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
         ContextActionSet cards = BuildContextActions(&sim, &local, view, selected, 0);
         CARD_CHECK(local.interactions.count > 4 && cards.count == 4,
-            "Town controls show the four closest objects.");
+            "Town controls show four objects.");
         CARD_CHECK(ContextCardsPerPage() == 4, "The tray must show four choices.");
+        const CcInteractionTarget *first_card = CcInteractionFind(
+            &local.interactions, cards.items[0].target);
+        CARD_CHECK(first_card != NULL && local.course.situation_witness_active &&
+            first_card->character_id == local.course.situation_witness_character_id,
+            "The named situation witness must lead the town tray.");
         float last_distance = -1;
         for (int32_t i = 0; i < cards.count; ++i) {
             const CcInteractionTarget *target = CcInteractionFind(&local.interactions, cards.items[i].target);
             CARD_CHECK(target != NULL, "Each card must keep its world identity.");
+            if (target->key.kind == CC_INTERACTION_PERSON &&
+                target->character_id == local.course.situation_witness_character_id) continue;
             float distance = GridDistance(LocalPosition(&local), (Vector2){target->approach_x, target->approach_z});
-            CARD_CHECK(distance >= last_distance, "The closest objects must come first.");
+            CARD_CHECK(distance >= last_distance,
+                "The remaining town cards must keep closest-object order.");
+            last_distance = distance;
+        }
+        local.course.situation_witness_active = false;
+        BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
+        cards = BuildContextActions(&sim, &local, view, selected, 0);
+        last_distance = -1;
+        for (int32_t i = 0; i < cards.count; ++i) {
+            const CcInteractionTarget *target = CcInteractionFind(
+                &local.interactions, cards.items[i].target);
+            CARD_CHECK(target != NULL, "Each ordinary card must keep its world identity.");
+            float distance = GridDistance(LocalPosition(&local),
+                (Vector2){target->approach_x, target->approach_z});
+            CARD_CHECK(distance >= last_distance,
+                "Town cards without a witness must keep closest-object order.");
             last_distance = distance;
         }
         uint64_t before = CcSimHash(&sim);

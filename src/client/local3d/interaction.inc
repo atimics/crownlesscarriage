@@ -105,11 +105,18 @@ bool CcLocalAgentApproachInteraction(CcLocalAgent *agent, Vector2 point, float r
                 candidate.x, candidate.z);
             agent->interaction_navigation = true;
             agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
+            float agent_land = CcLocalTerrainHeightAt(agent->position.x,
+                                                       agent->position.z);
+            bool descending_to_street = !interior &&
+                agent->position.y > agent_land + 0.24f &&
+                candidate.y <= CcLocalTerrainHeightAt(candidate.x,
+                                                       candidate.z) + 0.24f;
             bool started = interior ? CcLocalAgentSetExactTarget(agent, candidate, true) :
                 SetStreetClickTarget(agent, candidate);
             float dx = agent->command_point.x - point.x;
             float dz = agent->command_point.z - point.y;
-            if (started && dx * dx + dz * dz <= radius * radius * 0.95f) {
+            if (started && (descending_to_street ||
+                            dx * dx + dz * dz <= radius * radius * 0.95f)) {
                 agent->interaction_navigation = true;
                 return true;
             }

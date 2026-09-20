@@ -677,6 +677,8 @@ typedef struct CcLocalPresentedPerson {
     float size;
 } CcLocalPresentedPerson;
 int32_t CcLocalPresentedPeople(CcLocalPresentedPerson *people, int32_t capacity);
+void CcLocalRendererTestSetPresentedPeople(const CcLocalPresentedPerson *people,
+                                           int32_t count);
 struct CcInteractionTarget;
 void CcLocalProjectInteraction(const CcLocalAgent *agent,
     RenderTexture2D texture, Rectangle destination,

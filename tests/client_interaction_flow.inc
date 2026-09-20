@@ -233,6 +233,62 @@ static int RunPresentedTargetRegression(void)
     return 0;
 }
 
+static int RunSituationWitnessCardPriorityRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    int32_t opening = OpeningSituationIndex(&sim);
+    const CcSituation *situation = opening >= 0 ? &sim.situations[opening] : NULL;
+    const CcCharacter *mara = situation != NULL ?
+        CcSimSituationConversationCharacter(&sim, situation, sim.player.location_id) : NULL;
+    if (mara == NULL || strcmp(mara->name, "Mara Venn") != 0)
+        return ClientRegressionFailure("The opening fixture needs Mara Venn.");
+    Vector2 origin = LocalPosition(&local);
+    int32_t generic = 0;
+    for (int32_t i = 0; i < sim.character_count && generic < 4; ++i) {
+        if (sim.characters[i].id == mara->id) continue;
+        CcInteractionTarget *target = AdventureTarget(&local, &sim,
+            CC_INTERACTION_PERSON, UINT64_C(0x100000000) + (uint64_t)generic,
+            "Scout", "Talk", (Vector3){0}, 1, 2, 1,
+            (Vector2){origin.x + (float)generic + 1.0f, origin.y}, 1);
+        if (target == NULL) return ClientRegressionFailure("Create retained generic cards.");
+        target->character_id = sim.characters[i].id;
+        local.presented_person_binding_place[generic] = sim.player.location_id;
+        local.presented_person_binding_object[generic] = target->key.object;
+        local.presented_person_binding_character[generic] = target->character_id;
+        ++generic;
+    }
+    if (generic != 4) return ClientRegressionFailure("Seed four generic residents.");
+    ContextActionSet shown = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, opening);
+    RememberPresentedTargets(&local, VIEW_LOCAL, &shown);
+    if (local.presented_target_count != 4)
+        return ClientRegressionFailure("Publish the retained generic cards.");
+    local.course.situation_witness_active = true;
+    local.course.situation_witness_id = situation->id;
+    local.course.situation_witness_character_id = mara->id;
+    CcInteractionTarget *witness = AdventureTarget(&local, &sim,
+        CC_INTERACTION_PERSON, mara->id, mara->name, "Talk",
+        (Vector3){0}, 1, 2, 1, (Vector2){origin.x + 30.0f, origin.y}, 1);
+    if (witness == NULL) return ClientRegressionFailure("Create Mara's named witness target.");
+    witness->character_id = mara->id;
+    witness->situation_id = situation->id;
+    ContextActionSet priority = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, opening);
+    bool mara_shown = false;
+    int32_t retained = 0;
+    for (int32_t i = 0; i < priority.count; ++i) {
+        const CcInteractionTarget *target = CcInteractionFind(&local.interactions,
+            priority.items[i].target);
+        if (target != NULL && target->character_id == mara->id) mara_shown = true;
+        if (AdventureGenericPersonKey(priority.items[i].target)) ++retained;
+    }
+    if (priority.count != 4 || !mara_shown || retained != 3)
+        return ClientRegressionFailure("Mara's named witness card leads retained generic cards.");
+    return 0;
+}
+
 static int RunPresentedRoadRegression(void)
 {
     static CcSim sim;
@@ -319,6 +375,10 @@ static int RunConversationFocusRegression(void)
         return ClientRegressionFailure("Unnamed speakers keep their selected position.");
     if (LocalConversationFocus(&local, back) != NULL)
         return ClientRegressionFailure("Return to the street camera after conversation.");
+    local.conversation_report_response = true;
+    AdventureActivate(&sim, &local, &target, &view, &back, &selected);
+    if (local.conversation_report_response)
+        return ClientRegressionFailure("A new conversation must clear Jory's report reply.");
     local.adventure_ui = false;
     if (LocalConversationFocus(&local, VIEW_CHARACTER) != NULL)
         return ClientRegressionFailure("The classic conversation keeps its witness camera.");
@@ -608,8 +668,226 @@ static int RunDisplayedRoadChoiceRegression(void)
     return 0;
 }
 
+static int RunMovingPresentedPersonRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    char message[256] = "";
+    CcSimInit(&sim, UINT32_C(0x3235a7ed));
+    CcId silverwick = sim.dungeons[0].settlement_id;
+    sim.player.location_id = silverwick;
+    sim.carriage.location_id = silverwick;
+    CcCharacter *scout = NULL;
+    for (int32_t i = 0; i < sim.character_count; ++i) {
+        CcCharacter *candidate = &sim.characters[i];
+        if (CcCharacterAgeYears(&sim, candidate) < 16) continue;
+        scout = candidate;
+        break;
+    }
+    if (scout == NULL)
+        return ClientRegressionFailure("The Silverwick fixture needs an adult scout.");
+    scout->current_settlement_id = silverwick;
+    scout->activity = CC_CHARACTER_ACTIVITY_WORKING;
+    scout->role = CC_CHARACTER_SCOUT;
+    CcCharacter *second_scout = NULL;
+    CcCharacter *third_scout = NULL;
+    for (int32_t i = 0; i < sim.character_count; ++i) {
+        CcCharacter *candidate = &sim.characters[i];
+        if (candidate == scout || CcCharacterAgeYears(&sim, candidate) < 16)
+            continue;
+        candidate->current_settlement_id = silverwick;
+        candidate->activity = CC_CHARACTER_ACTIVITY_WORKING;
+        candidate->role = CC_CHARACTER_SCOUT;
+        if (second_scout == NULL) second_scout = candidate;
+        else { third_scout = candidate; break; }
+    }
+    if (second_scout == NULL || third_scout == NULL)
+        return ClientRegressionFailure("The Scout binding fixture needs three adults.");
+    {
+        CcInteractionState approach = {0};
+        CcInteractionPlan plan = {.count = 1};
+        plan.targets[0] = (CcInteractionTarget){
+            .key = {silverwick, UINT64_C(0x10000b1ce), CC_INTERACTION_PERSON},
+            .character_id = scout->id, .approach_x = 4.0f, .approach_z = 0.0f,
+            .radius = 1.0f, .available = true};
+        if (!CcInteractionStart(&approach, &plan.targets[0], 0.0f, 0.0f) ||
+            CcInteractionAdvance(&approach, &plan, 0.0f, 0.0f, 1.0f / 60.0f) ||
+            !approach.approaching)
+            return ClientRegressionFailure("A moving Scout keeps its pending approach.");
+        plan.targets[0].character_id = second_scout->id;
+        plan.targets[0].approach_x = 0.0f;
+        plan.targets[0].radius = 2.0f;
+        if (CcInteractionAdvance(&approach, &plan, 0.0f, 0.0f, 1.0f / 60.0f) ||
+            approach.approaching || strstr(approach.feedback, "person changed") == NULL)
+            return ClientRegressionFailure("A rebuilt Scout seed with another resident cancels its approach.");
+    }
+    CcLocalBindPlace(&sim);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    {
+        LocalState bindings = {0};
+        ResetLocalState(&bindings);
+        bindings.adventure_ui = true;
+        CcInteractionTarget *first = AdventureTarget(
+            &bindings, &sim, CC_INTERACTION_PERSON, UINT64_C(0x10000b100),
+            "Scout", "Talk", (Vector3){17.2f, 0, 7.2f},
+            0.9f, 2.0f, 0.7f, (Vector2){17.2f, 7.2f}, 1.8f);
+        CcInteractionTarget *second = AdventureTarget(
+            &bindings, &sim, CC_INTERACTION_PERSON, UINT64_C(0x10000b101),
+            "Scout", "Talk", (Vector3){18.2f, 0, 7.2f},
+            0.9f, 2.0f, 0.7f, (Vector2){18.2f, 7.2f}, 1.8f);
+        if (first == NULL || second == NULL ||
+            !AdventureNamePresented(&sim, &bindings, first, CC_NPC_ROLE_SCOUT,
+                                    NULL, 0, 0) ||
+            !AdventureNamePresented(&sim, &bindings, second, CC_NPC_ROLE_SCOUT,
+                                    NULL, 0, 1))
+            return ClientRegressionFailure("Two visible Scouts need distinct resident bindings.");
+        CcId first_id = first->character_id;
+        CcId second_id = second->character_id;
+        bindings.interactions.count = 0;
+        second = AdventureTarget(&bindings, &sim, CC_INTERACTION_PERSON,
+            UINT64_C(0x10000b101), "Scout", "Talk", (Vector3){18.5f, 0, 7.2f},
+            0.9f, 2.0f, 0.7f, (Vector2){18.5f, 7.2f}, 1.8f);
+        first = AdventureTarget(&bindings, &sim, CC_INTERACTION_PERSON,
+            UINT64_C(0x10000b100), "Scout", "Talk", (Vector3){17.5f, 0, 7.2f},
+            0.9f, 2.0f, 0.7f, (Vector2){17.5f, 7.2f}, 1.8f);
+        if (second == NULL || first == NULL ||
+            !AdventureNamePresented(&sim, &bindings, second, CC_NPC_ROLE_SCOUT,
+                                    NULL, 0, 0) ||
+            !AdventureNamePresented(&sim, &bindings, first, CC_NPC_ROLE_SCOUT,
+                                    NULL, 0, 1) ||
+            first->character_id != first_id || second->character_id != second_id)
+            return ClientRegressionFailure("Rebuilding Scouts in reverse must keep each seed's resident.");
+    }
+    {
+        LocalState rendered = {0}; ResetLocalState(&rendered); rendered.adventure_ui = true;
+        Vector2 anchor = {LOCAL_CARRIAGE_BAY.x + 4.0f, LOCAL_CARRIAGE_BAY.y};
+        CcLocalAgentInit(&rendered.agent, (Vector2){anchor.x - 4.0f, anchor.y}, false);
+        ClientView view = VIEW_LOCAL, back = VIEW_LOCAL; int32_t situation = 0; CcId selected_id = 0U; bool saw_competing_frame = false;
+        for (int frame = 0; frame < 600 && view == VIEW_LOCAL; ++frame) {
+            CcLocalPresentedPerson people[2] = {
+                {{anchor.x - 1.8f, 0, anchor.y + 1.4f}, UINT32_C(0xb1cf), CC_NPC_ROLE_SCOUT, 1},
+                {{anchor.x, 0, anchor.y}, UINT32_C(0xb1ce), CC_NPC_ROLE_SCOUT, 1}};
+            if (frame == 0) { CcLocalPresentedPerson swap = people[0]; people[0] = people[1]; people[1] = swap; }
+            CcLocalRendererTestSetPresentedPeople(people, frame == 0 ? 1 : 2);
+            BuildAdventureTargets(&sim, &rendered, (RenderTexture2D){.texture={.width=630,.height=320}}, (Rectangle){0,0,630,320});
+            CcInteractionTarget *card = NULL, *new_card = NULL;
+            for (int i = 0; i < rendered.interactions.count; ++i) {
+                CcInteractionTarget *candidate = &rendered.interactions.targets[i];
+                if (candidate->key.object == UINT64_C(0x10000b1ce)) card = candidate;
+                if (candidate->key.object == UINT64_C(0x10000b1cf)) new_card = candidate;
+            }
+            if (card == NULL) return ClientRegressionFailure("The selected rendered Scout must publish a card.");
+            if (selected_id == 0U) selected_id = card->character_id;
+            if (card->character_id != selected_id || (frame > 0 && (new_card == NULL || new_card->character_id == selected_id)))
+                return ClientRegressionFailure("A new earlier Scout must not replace the selected resident.");
+            if (frame > 0 && new_card != NULL) saw_competing_frame = true;
+            card->visible = true;
+            if (frame == 0) { rendered.interaction.focus = card->key; queued_key_press[KEY_F] = true; }
+            (void)HandleAdventureScene(NULL, &sim, &rendered, &view, &back, &situation, NULL, 1.0f/60.0f, message, sizeof(message));
+            ClientInputClearPressed();
+        }
+        if (!saw_competing_frame || view != VIEW_CHARACTER || rendered.conversation_character_id != selected_id)
+            return ClientRegressionFailure("The selected rendered Scout must keep its conversation identity.");
+        CcLocalRendererTestSetPresentedPeople(NULL, 0);
+    }
+    /* This is the raised, fenced obstacle-course platform beside the crates. */
+    CcLocalAgentInit(&local.agent, (Vector2){11.55f, 3.86f}, false);
+    if (local.agent.position.y <= CcLocalTerrainHeightAt(
+            local.agent.position.x, local.agent.position.z) + 0.24f)
+        return ClientRegressionFailure("The moving-person fixture must start on the raised platform.");
+    ClientView view = VIEW_LOCAL;
+    ClientView return_view = VIEW_LOCAL;
+    int32_t selected_situation = 0;
+    CcId bound_character = 0U;
+    for (int32_t frame = 0; frame < 2700 && view == VIEW_LOCAL; ++frame) {
+        float phase = (float)frame / 60.0f;
+        Vector3 position = {17.20f + sinf(phase * 0.85f) * 1.10f,
+                            0.0f,
+                            7.20f + cosf(phase * 0.55f) * 0.55f};
+        local.interactions.count = 0;
+        CcInteractionTarget *presented = AdventureTarget(
+            &local, &sim, CC_INTERACTION_PERSON,
+            UINT64_C(0x10000b1ce), "Scout", "Talk", position,
+            0.9f, 2.0f, 0.7f, (Vector2){position.x, position.z}, 1.8f);
+        if (presented == NULL || !AdventureNamePresented(
+                &sim, &local, presented, CC_NPC_ROLE_SCOUT, NULL, 0, 0))
+            return ClientRegressionFailure("The visible Scout action needs a resident binding.");
+        presented->visible = true;
+        if (bound_character == 0U) bound_character = presented->character_id;
+        if (presented->character_id != bound_character)
+            return ClientRegressionFailure("A moving Scout action must keep its bound resident.");
+        (void)HandleAdventureScene(
+            NULL, &sim, &local, &view, &return_view, &selected_situation,
+            frame == 0 ? presented : NULL, 1.0f / 60.0f,
+            message, sizeof(message));
+    }
+    if (view != VIEW_CHARACTER || local.conversation_character_id != bound_character)
+        return ClientRegressionFailure("The raised-platform Scout must open the bound conversation within 45 seconds.");
+    if (local.agent.interaction_navigation || local.agent.target_valid)
+        return ClientRegressionFailure("Conversation must finish the moving-person approach.");
+    view = VIEW_LOCAL;
+    Vector3 after_conversation = local.agent.position;
+    if (!CcLocalAgentSetStreetTarget(&local.agent,
+            (Vector3){LOCAL_CARRIAGE_BAY.x, 0.0f,
+                      LOCAL_CARRIAGE_BAY.y}))
+        return ClientRegressionFailure("The actor must accept movement after conversation.");
+    for (int32_t frame = 0; frame < 360; ++frame)
+        (void)CcLocalWorldUpdate(&local.course, &local.agent, &sim,
+                                 1.0f / 60.0f, false, true);
+    float moved_x = after_conversation.x - local.agent.position.x;
+    float moved_z = after_conversation.z - local.agent.position.z;
+    if (moved_x * moved_x + moved_z * moved_z < 0.25f)
+        return ClientRegressionFailure("The actor must move after a moving-person conversation.");
+    local.interactions.count = 0;
+    CcInteractionTarget *cancel_target = AdventureTarget(
+        &local, &sim, CC_INTERACTION_PERSON, UINT64_C(0x10000b1cf),
+        "Scout", "Talk", (Vector3){17.20f, 0.0f, 7.20f},
+        0.9f, 2.0f, 0.7f,
+        (Vector2){17.20f, 7.20f}, 1.8f);
+    if (cancel_target == NULL || !AdventureNamePresented(
+            &sim, &local, cancel_target, CC_NPC_ROLE_SCOUT, NULL, 0, 1))
+        return ClientRegressionFailure("The second visible Scout action needs a resident binding.");
+    cancel_target->visible = true;
+    (void)HandleAdventureScene(NULL, &sim, &local, &view, &return_view,
+                               &selected_situation, cancel_target,
+                               1.0f / 60.0f, message, sizeof(message));
+    if (!local.interaction.approaching || !local.agent.interaction_navigation)
+        return ClientRegressionFailure("The second Scout action must begin an approach.");
+    queued_key_press[KEY_ESCAPE] = true;
+    (void)HandleAdventureScene(NULL, &sim, &local, &view, &return_view,
+                               &selected_situation, NULL,
+                               1.0f / 60.0f, message, sizeof(message));
+    ClientInputClearPressed();
+    if (local.interaction.approaching || local.agent.interaction_navigation ||
+        local.agent.target_valid)
+        return ClientRegressionFailure("Escape must cancel a moving-person approach and its route.");
+    Vector3 after_cancel = local.agent.position;
+    if (!CcLocalAgentSetStreetTarget(&local.agent,
+            (Vector3){LOCAL_CARRIAGE_BAY.x, 0.0f,
+                      LOCAL_CARRIAGE_BAY.y}))
+        return ClientRegressionFailure("The actor must accept movement after cancelling a person approach.");
+    for (int32_t frame = 0; frame < 240; ++frame)
+        (void)CcLocalWorldUpdate(&local.course, &local.agent, &sim,
+                                 1.0f / 60.0f, false, true);
+    moved_x = after_cancel.x - local.agent.position.x;
+    moved_z = after_cancel.z - local.agent.position.z;
+    if (moved_x * moved_x + moved_z * moved_z < 0.25f)
+        return ClientRegressionFailure("The actor must move after cancelling a person approach.");
+    scout->activity = CC_CHARACTER_ACTIVITY_TRAVELLING;
+    AdventurePrunePresentedPersonBindings(&sim, &local);
+    for (int32_t i = 0; i < (int32_t)(sizeof(local.presented_person_binding_character) /
+                                      sizeof(local.presented_person_binding_character[0]));
+         ++i)
+        if (local.presented_person_binding_character[i] == bound_character)
+            return ClientRegressionFailure("An ineligible resident must clear its presented-person binding.");
+    return 0;
+}
+
 static int RunAdventureInputRegression(void)
 {
+    int moving_person_result = RunMovingPresentedPersonRegression();
+    if (moving_person_result != 0) return moving_person_result;
     int mine_road_result = RunAdventureMineRoadRegression();
     if (mine_road_result != 0) return mine_road_result;
     int road_result = RunPresentedRoadRegression();
@@ -622,6 +900,8 @@ static int RunAdventureInputRegression(void)
     if (handoff_result != 0) return handoff_result;
     int presented_result = RunPresentedTargetRegression();
     if (presented_result != 0) return presented_result;
+    int witness_card_result = RunSituationWitnessCardPriorityRegression();
+    if (witness_card_result != 0) return witness_card_result;
     {
         CcSim choice_sim;
         LocalState choice_local = {0};

@@ -926,6 +926,13 @@ int32_t CcLocalPresentedPeople(CcLocalPresentedPerson *people, int32_t capacity)
     return count;
 }
 
+void CcLocalRendererTestSetPresentedPeople(const CcLocalPresentedPerson *people,
+                                           int32_t count)
+{
+    presented_people_count = people == NULL ? 0 : count < 0 ? 0 : count > 64 ? 64 : count;
+    for (int32_t i = 0; i < presented_people_count; ++i) presented_people[i] = people[i];
+}
+
 static void RememberPresentedCamera(CcLocalSceneKind scene, Camera3D camera,
                                     const CcLocalAgent *agent,
                                     int32_t width, int32_t height)
