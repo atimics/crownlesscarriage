@@ -21294,12 +21294,16 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                     &character->memories[memory];
                 bool subject_exists =
                     CcSimSituation(sim, item->subject_id) != NULL ||
+                    (sim->schema_version >= 106U &&
+                     CcIdKind(item->subject_id) == CC_ENTITY_EVENT &&
+                     CcSimEvent(sim, item->subject_id) != NULL &&
+                     CcSimEvent(sim, item->subject_id)->kind == CC_EVENT_RELIEF) ||
                     (sim->schema_version >= 72U && item->kind == CC_CHARACTER_MEMORY_PLAYER_HELPED &&
                      CcSimSettlement(sim, item->subject_id) != NULL) ||
                     (sim->schema_version >= 19U &&
                      CcSimQuestOutcome(sim, item->subject_id) != NULL);
                 if (item->kind <= CC_CHARACTER_MEMORY_NONE ||
-                    item->kind > CC_CHARACTER_MEMORY_PLAYER_WITHDREW ||
+                    item->kind > CC_CHARACTER_MEMORY_PROMISE_FAILED ||
                     !subject_exists ||
                     CcSimEvent(sim, item->event_id) == NULL ||
                     item->day < 1 || item->day > sim->current_day) {
