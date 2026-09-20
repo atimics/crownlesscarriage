@@ -354,6 +354,11 @@ typedef struct CcLocalAgent {
     CcCombatState combat;
 } CcLocalAgent;
 
+typedef enum CcLocalActorVisualFamily {
+    CC_LOCAL_ACTOR_VISUAL_HUMAN,
+    CC_LOCAL_ACTOR_VISUAL_GOBLIN
+} CcLocalActorVisualFamily;
+
 typedef enum CcGuardDuty {
     CC_GUARD_TRAINING,
     CC_GUARD_RESPONDING,
@@ -548,6 +553,7 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
 void CcLocalCourseStageMineEncounter(CcLocalCourse *course,
                                      CcLocalAgent *player,
                                      const CcSim *sim);
+CcLocalActorVisualFamily CcLocalAgentVisualFamily(const CcLocalAgent *agent);
 void CcLocalCourseBindRaiderCompany(CcLocalCourse *course,
                                     const CcSim *sim);
 const char *CcLocalRaiderRoleName(CcLocalRaiderRole role);

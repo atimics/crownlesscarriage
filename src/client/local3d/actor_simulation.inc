@@ -1036,6 +1036,16 @@ Vector2 CcLocalMineHaulerPosition(const CcSim *sim,int32_t index)
                      (float)sim->mine.source_y+side};
 }
 
+CcLocalActorVisualFamily CcLocalAgentVisualFamily(const CcLocalAgent *agent)
+{
+    if (agent != NULL && agent->scene == CC_LOCAL_SCENE_MINE &&
+        agent->combat.team == CC_COMBAT_RAIDER &&
+        agent->appearance.role == CC_NPC_ROLE_RAIDER) {
+        return CC_LOCAL_ACTOR_VISUAL_GOBLIN;
+    }
+    return CC_LOCAL_ACTOR_VISUAL_HUMAN;
+}
+
 static void InitMineHauler(CcLocalAgent *raider,const CcSim *sim,
                            Vector2 approach,int32_t index)
 {

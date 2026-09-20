@@ -5020,8 +5020,17 @@ static void DrawCourseRaider(const CcLocalAgent *raider)
 {
     if (raider == NULL) return;
     DrawCombatFootprint(raider, WORLD_DANGER);
-    DrawRobotShell(raider);
-    DrawCombatSword(raider);
+    if (CcLocalAgentVisualFamily(raider) == CC_LOCAL_ACTOR_VISUAL_GOBLIN) {
+        bool moving = raider->traversal != CC_TRAVERSAL_IDLE;
+        CcCreaturePose pose = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_RAIDER, (float)GetTime() * 3.2f, moving);
+        (void)DrawCreature3D(CC_CREATURE_GOBLIN_RAIDER, pose,
+                             raider->position, raider->facing_yaw, 1.02f,
+                             raider->appearance.skin);
+    } else {
+        DrawRobotShell(raider);
+        DrawCombatSword(raider);
+    }
     DrawCombatSkillTell(raider);
     DrawCombatImpact(raider);
     DrawPaintedOverheadDiamond(
