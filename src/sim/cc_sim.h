@@ -67,7 +67,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 106
+#define CC_SIM_SCHEMA_VERSION 107
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -1586,7 +1586,8 @@ typedef enum CcCharacterMemoryKind {
     CC_CHARACTER_MEMORY_PLAYER_HELPED,
     CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
     CC_CHARACTER_MEMORY_PROMISE_FULFILLED,
-    CC_CHARACTER_MEMORY_PROMISE_FAILED
+    CC_CHARACTER_MEMORY_PROMISE_FAILED,
+    CC_CHARACTER_MEMORY_NPC_PROMISED
 } CcCharacterMemoryKind;
 
 typedef enum CcCharacterResponse {
@@ -1917,6 +1918,21 @@ typedef struct CcEvent {
     char text[CC_EVENT_TEXT_CAPACITY];
 } CcEvent;
 
+#define CC_MAX_FOOD_AGREEMENTS 32
+typedef enum CcFoodAgreementStatus {
+    CC_FOOD_AGREEMENT_PROPOSED,
+    CC_FOOD_AGREEMENT_ACCEPTED,
+    CC_FOOD_AGREEMENT_FULFILLED,
+    CC_FOOD_AGREEMENT_FAILED
+} CcFoodAgreementStatus;
+
+typedef struct CcFoodAgreement {
+    CcId id, payer_id, beneficiary_id, place_id, accepted_event_id, outcome_event_id;
+    CcMoney total_cost;
+    int32_t quantity, unit_price, created_day, accepted_day;
+    CcFoodAgreementStatus status;
+} CcFoodAgreement;
+
 #define CC_FEED_TRAY_CAPACITY 10
 
 typedef struct CcPlayerCompany {
@@ -2136,6 +2152,8 @@ typedef struct CcSim {
     CcRelationship relationships[CC_MAX_RELATIONSHIPS];
     int32_t relationship_count;
     CcEvent events[CC_MAX_EVENTS];
+    CcFoodAgreement food_agreements[CC_MAX_FOOD_AGREEMENTS];
+    int32_t food_agreement_count;
     CcPlayerCompany player;
     CcPonyCompany pony_company;
     CcHorse horse_team[CC_CARRIAGE_HORSE_COUNT];
@@ -2204,7 +2222,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 602392,
+_Static_assert(sizeof(CcSim) == 604960,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

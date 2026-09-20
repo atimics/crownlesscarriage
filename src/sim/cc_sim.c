@@ -20042,7 +20042,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                  !IsIssuedCharacterId(sim, event->beneficiary_id)) ||
                 (event->witness_id != 0U &&
                  event->witness_id != sim->player.id &&
-                 !IsIssuedCharacterId(sim, event->witness_id))) {
+                 !IsIssuedCharacterId(sim, event->witness_id) &&
+                 !(event->kind == CC_EVENT_RELIEF && event->subject_id == event->id &&
+                   event->witness_id <= INT32_MAX))) {
                 if (error != NULL && error_capacity > 0U) {
                     (void)snprintf(
                         error, error_capacity,
@@ -21303,7 +21305,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                     (sim->schema_version >= 19U &&
                      CcSimQuestOutcome(sim, item->subject_id) != NULL);
                 if (item->kind <= CC_CHARACTER_MEMORY_NONE ||
-                    item->kind > CC_CHARACTER_MEMORY_PROMISE_FAILED ||
+                    item->kind > CC_CHARACTER_MEMORY_NPC_PROMISED ||
                     !subject_exists ||
                     CcSimEvent(sim, item->event_id) == NULL ||
                     item->day < 1 || item->day > sim->current_day) {
@@ -22008,6 +22010,27 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     if (sim->schema_version >= 99U && !CcSimStoredCustodyValid(sim)) {
         SetError(error, error_capacity, "Stored custody is invalid.");
         return false;
+    }
+    if (sim->schema_version >= 107U) {
+        if (sim->food_agreement_count < 0 || sim->food_agreement_count > CC_MAX_FOOD_AGREEMENTS) {
+            SetError(error, error_capacity, "Food agreement count is invalid."); return false;
+        }
+        for (int32_t i = 0; i < sim->food_agreement_count; ++i) {
+            const CcFoodAgreement *agreement = &sim->food_agreements[i];
+            if (CcIdKind(agreement->id) != CC_ENTITY_EVENT ||
+                CcSimCharacter(sim, agreement->payer_id) == NULL ||
+                CcSimCharacter(sim, agreement->beneficiary_id) == NULL ||
+                CcSimSettlement(sim, agreement->place_id) == NULL ||
+                agreement->payer_id == agreement->beneficiary_id || agreement->quantity <= 0 ||
+                agreement->unit_price <= 0 || agreement->total_cost != (CcMoney)agreement->quantity * agreement->unit_price ||
+                agreement->created_day < 1 || agreement->created_day > sim->current_day ||
+                agreement->accepted_day < 0 || agreement->accepted_day > sim->current_day ||
+                agreement->status < CC_FOOD_AGREEMENT_PROPOSED || agreement->status > CC_FOOD_AGREEMENT_FAILED ||
+                (agreement->status == CC_FOOD_AGREEMENT_PROPOSED && agreement->accepted_event_id != 0U) ||
+                (agreement->status < CC_FOOD_AGREEMENT_FULFILLED && agreement->outcome_event_id != 0U)) {
+                SetError(error, error_capacity, "Food agreement is invalid."); return false;
+            }
+        }
     }
     return true;
 }
