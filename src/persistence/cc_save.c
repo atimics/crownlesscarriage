@@ -71,6 +71,27 @@ static bool ReadTextColumn(sqlite3_stmt *statement, int column,
     return true;
 }
 
+static bool ReadIntegerColumn(sqlite3_stmt *statement, int column,
+                              int64_t minimum, int64_t maximum,
+                              int64_t *value, const char *field,
+                              char *error, size_t error_capacity)
+{
+    if (statement == NULL || value == NULL ||
+        sqlite3_column_type(statement, column) != SQLITE_INTEGER) {
+        if (error != NULL && error_capacity > 0U)
+            (void)snprintf(error, error_capacity, "Campaign %s integer is invalid.", field);
+        return false;
+    }
+    int64_t parsed = sqlite3_column_int64(statement, column);
+    if (parsed < minimum || parsed > maximum) {
+        if (error != NULL && error_capacity > 0U)
+            (void)snprintf(error, error_capacity, "Campaign %s integer is out of range.", field);
+        return false;
+    }
+    *value = parsed;
+    return true;
+}
+
 static bool Execute(sqlite3 *database, const char *sql,
                     char *error, size_t error_capacity)
 {
@@ -873,6 +894,17 @@ static bool EnsureJournalMetaColumns(sqlite3 *database,
             error, error_capacity);
 }
 
+static bool EnsureJournalCommandColumns(sqlite3 *database,
+                                        char *error, size_t error_capacity)
+{
+    return EnsureColumn(database, "action_journal", "actor_id",
+            "ALTER TABLE action_journal ADD COLUMN actor_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "action_journal", "secondary_id",
+            "ALTER TABLE action_journal ADD COLUMN secondary_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity);
+}
+
 static bool EnsureHistoryOfficeColumns(sqlite3 *database,
                                        char *error,
                                        size_t error_capacity)
@@ -1374,7 +1406,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " sequence INTEGER PRIMARY KEY AUTOINCREMENT,"
         " generation INTEGER NOT NULL, ordinal INTEGER NOT NULL,"
         " record_version INTEGER NOT NULL, operation_kind INTEGER NOT NULL,"
-        " command_kind INTEGER NOT NULL, target_id INTEGER NOT NULL,"
+        " command_kind INTEGER NOT NULL, actor_id INTEGER NOT NULL DEFAULT 0,"
+        " target_id INTEGER NOT NULL, secondary_id INTEGER NOT NULL DEFAULT 0,"
         " good INTEGER NOT NULL, amount INTEGER NOT NULL,"
         " dungeon_state INTEGER NOT NULL, step_count INTEGER NOT NULL,"
         " sim_schema_version INTEGER NOT NULL, generator_version INTEGER NOT NULL,"
@@ -1502,6 +1535,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            Execute(database, pony_schema, error, error_capacity) &&
            Execute(database, war_schema, error, error_capacity) &&
            Execute(database, schema, error, error_capacity) &&
+           Execute(database, "CREATE TABLE IF NOT EXISTS food_agreement (slot INTEGER PRIMARY KEY,id INTEGER NOT NULL UNIQUE,payer_id INTEGER NOT NULL,beneficiary_id INTEGER NOT NULL,place_id INTEGER NOT NULL,accepted_event_id INTEGER NOT NULL,outcome_event_id INTEGER NOT NULL,total_cost INTEGER NOT NULL,quantity INTEGER NOT NULL,unit_price INTEGER NOT NULL,created_day INTEGER NOT NULL,accepted_day INTEGER NOT NULL,status INTEGER NOT NULL);", error, error_capacity) &&
            Execute(database, royal_carriage_schema, error, error_capacity) &&
            EnsureColumn(database, "royal_carriage", "archive_contract",
                "ALTER TABLE royal_carriage ADD COLUMN archive_contract INTEGER NOT NULL DEFAULT 0;",
@@ -1519,6 +1553,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            Execute(database, material_schema, error, error_capacity) &&
            Execute(database, goods_schema, error, error_capacity) &&
            Execute(database, journal_schema, error, error_capacity) &&
+           EnsureJournalCommandColumns(database, error, error_capacity) &&
            Execute(database, underroad_schema, error, error_capacity) &&
            Execute(database, road_site_schema, error, error_capacity) &&
            EnsurePlayerKnowledgeColumns(database, error, error_capacity) &&
@@ -2740,6 +2775,27 @@ static bool SaveEvents(sqlite3 *database, const CcSim *sim,
     return true;
 }
 
+static bool SaveFoodAgreements(sqlite3 *database, const CcSim *sim,
+                               char *error, size_t capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "INSERT INTO food_agreement VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 &statement, error, capacity)) return false;
+    for (int32_t i = 0; i < sim->food_agreement_count; ++i) {
+        const CcFoodAgreement *a = &sim->food_agreements[i];
+        BindInt(statement, 1, i); BindId(statement, 2, a->id);
+        BindId(statement, 3, a->payer_id); BindId(statement, 4, a->beneficiary_id);
+        BindId(statement, 5, a->place_id); BindId(statement, 6, a->accepted_event_id);
+        BindId(statement, 7, a->outcome_event_id); BindMoney(statement, 8, a->total_cost);
+        BindInt(statement, 9, a->quantity); BindInt(statement, 10, a->unit_price);
+        BindInt(statement, 11, a->created_day); BindInt(statement, 12, a->accepted_day);
+        BindInt(statement, 13, (int32_t)a->status);
+        if (!StepDone(database, statement, error, capacity) ||
+            !ResetStatement(database, statement, error, capacity)) { sqlite3_finalize(statement); return false; }
+    }
+    sqlite3_finalize(statement); return true;
+}
+
 static bool SaveSituations(sqlite3 *database, const CcSim *sim,
                            char *error, size_t error_capacity)
 {
@@ -3522,6 +3578,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM character_knowledge; DELETE FROM character_relationship;"
             "DELETE FROM npc_character; DELETE FROM historic_character;"
             "DELETE FROM causal_event;"
+            "DELETE FROM food_agreement;"
             "DELETE FROM player_company; DELETE FROM player_commitment;"
             "DELETE FROM player_journey; DELETE FROM runtime_state;"
             "DELETE FROM player_road_position; DELETE FROM player_road_geometry;"
@@ -3572,6 +3629,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveCharacters(database, sim, error, error_capacity) &&
         SaveHistoricalCharacters(database, sim, error, error_capacity) &&
         SaveEvents(database, sim, error, error_capacity) &&
+        SaveFoodAgreements(database, sim, error, error_capacity) &&
         SavePlayer(database, sim, error, error_capacity) &&
         SavePlayerCommitment(database, sim, error, error_capacity) &&
         SaveJourneyState(database, sim, error, error_capacity) &&
@@ -5176,6 +5234,45 @@ static bool ReadEvents(sqlite3 *database, CcSim *sim,
     return true;
 }
 
+static bool ReadFoodAgreements(sqlite3 *database, CcSim *sim,
+                               char *error, size_t capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (sim->schema_version < 107U) return true;
+    if (!Prepare(database, "SELECT * FROM food_agreement ORDER BY slot;", &statement, error, capacity)) return false;
+    int32_t rows = 0;
+    int result = SQLITE_ROW;
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        int64_t slot_value = 0;
+        if (!ReadIntegerColumn(statement, 0, 0, CC_MAX_FOOD_AGREEMENTS - 1,
+                               &slot_value, "food agreement slot", error, capacity) ||
+            slot_value != rows) { sqlite3_finalize(statement); SetError(error, capacity, "Food-agreement rows exceed save limits."); return false; }
+        CcFoodAgreement *a = &sim->food_agreements[(int32_t)slot_value];
+        int64_t value[12];
+        const int64_t lower[] = {1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0};
+        const int64_t upper[] = {INT64_MAX, INT64_MAX, INT64_MAX, INT64_MAX, INT64_MAX, INT64_MAX,
+                                 CC_SIM_MAX_MONEY, CC_SIM_MAX_UNITS, INT32_MAX, CC_SIM_MAX_DAY, CC_SIM_MAX_DAY, CC_FOOD_AGREEMENT_FAILED};
+        for (int column = 1; column <= 12; ++column) {
+            if (!ReadIntegerColumn(statement, column, lower[column - 1], upper[column - 1],
+                                   &value[column - 1], "food agreement field", error, capacity)) {
+                sqlite3_finalize(statement); return false;
+            }
+        }
+        a->id = (CcId)value[0]; a->payer_id = (CcId)value[1];
+        a->beneficiary_id = (CcId)value[2]; a->place_id = (CcId)value[3];
+        a->accepted_event_id = (CcId)value[4]; a->outcome_event_id = (CcId)value[5];
+        a->total_cost = (CcMoney)value[6]; a->quantity = (int32_t)value[7];
+        a->unit_price = (int32_t)value[8]; a->created_day = (int32_t)value[9];
+        a->accepted_day = (int32_t)value[10]; a->status = (CcFoodAgreementStatus)value[11];
+        rows++;
+    }
+    if (result != SQLITE_DONE) {
+        SetSqlError(error, capacity, database, "Could not read food agreements");
+        sqlite3_finalize(statement); return false;
+    }
+    sqlite3_finalize(statement); sim->food_agreement_count = rows; return true;
+}
+
 static bool ReadSituations(sqlite3 *database, CcSim *sim,
                            char *error, size_t error_capacity)
 {
@@ -6099,6 +6196,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadHistoricalCharacters(database, sim, error, error_capacity) &&
               ReadQuestArchitecture(database, sim, error, error_capacity) &&
               ReadEvents(database, sim, error, error_capacity) &&
+              ReadFoodAgreements(database, sim, error, error_capacity) &&
               ReadLegends(database, sim, error, error_capacity) &&
               ReadPlayer(database, sim, error, error_capacity) &&
               ReadMapCollection(database, sim, error, error_capacity) &&
@@ -6562,10 +6660,10 @@ static bool AppendJournalOperation(CcJournal *journal,
         const char *sql =
             "INSERT INTO action_journal "
             "(generation,ordinal,record_version,operation_kind,command_kind,"
-            "target_id,good,amount,dungeon_state,step_count,"
+            "actor_id,target_id,secondary_id,good,amount,dungeon_state,step_count,"
             "sim_schema_version,generator_version,pre_state_hash,"
             "post_state_hash,committed_tick) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
         ok = Prepare(journal->database, sql, &statement,
                      error, error_capacity);
     }
@@ -6584,16 +6682,18 @@ static bool AppendJournalOperation(CcJournal *journal,
         BindInt(statement, 3, CC_JOURNAL_RECORD_VERSION);
         BindInt(statement, 4, (int32_t)operation);
         BindInt(statement, 5, (int32_t)input->kind);
-        BindId(statement, 6, input->target_id);
-        BindInt(statement, 7, (int32_t)input->good);
-        BindInt(statement, 8, input->amount);
-        BindInt(statement, 9, (int32_t)input->dungeon_state);
-        BindInt(statement, 10, step_count);
-        BindInt(statement, 11, (int32_t)after->schema_version);
-        BindInt(statement, 12, (int32_t)after->generator_version);
-        BindText(statement, 13, pre_hash);
-        BindText(statement, 14, post_hash);
-        BindId(statement, 15, after->clock.tick);
+        BindId(statement, 6, input->actor_id);
+        BindId(statement, 7, input->target_id);
+        BindId(statement, 8, input->secondary_id);
+        BindInt(statement, 9, (int32_t)input->good);
+        BindInt(statement, 10, input->amount);
+        BindInt(statement, 11, (int32_t)input->dungeon_state);
+        BindInt(statement, 12, step_count);
+        BindInt(statement, 13, (int32_t)after->schema_version);
+        BindInt(statement, 14, (int32_t)after->generator_version);
+        BindText(statement, 15, pre_hash);
+        BindText(statement, 16, post_hash);
+        BindId(statement, 17, after->clock.tick);
         ok = StepDone(journal->database, statement,
                       error, error_capacity);
     }

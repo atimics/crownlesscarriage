@@ -79,6 +79,13 @@ bool CcCoopApply(CcSim *sim, const char *action, CcId target,
                     "Finish the Lower Passage fight through the local combat course.");
         return false;
     }
+    if (command.kind >= CC_COMMAND_FOOD_RELIEF_PROPOSE &&
+        command.kind <= CC_COMMAND_FOOD_RELIEF_EXECUTE) {
+        if (error != NULL && capacity > 0U)
+            (void)snprintf(error, capacity,
+                "Food relief is reserved for the local participant policy.");
+        return false;
+    }
     if (sim == NULL || command.kind == CC_COMMAND_NONE ||
         good < 0 || good >= CC_GOOD_COUNT ||
         amount < -CC_SIM_MAX_UNITS || amount > CC_SIM_MAX_UNITS) {

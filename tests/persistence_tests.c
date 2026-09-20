@@ -2692,7 +2692,7 @@ static void CheckSchema104RoadMigration(char *error,
 {
     /* These are gameplay databases from schema-104 runtime d30028cc.
        The state hashes below pin their deterministic upgrade through schema
-       106. They were checkpointed to journal_mode=DELETE for portable use.
+       107. They were checkpointed to journal_mode=DELETE for portable use.
        Package SHA-256 values after that checkpoint are:
        pilot road: 237701f28aef7fcca9e4ed56e9cc324514aa9d51463b2e4fec3ac07efebffa39
        site stop: 4af6e66e1b41c60b97856a7615474d71dc6878ec545d625536fadf1b040c0761
@@ -2734,7 +2734,8 @@ static void CheckSchema104RoadMigration(char *error,
              topology.main_length_units);
     CC_CHECK(CcRoadSavedPositionValid(&pilot));
     CC_CHECK(CcSimValidate(&pilot, error, error_capacity));
-    CC_CHECK(CcSimHash(&pilot) == UINT64_C(14564885638044357531));
+    /* Schema 107 includes the typed food agreement table in the state hash. */
+    CC_CHECK(CcSimHash(&pilot) == UINT64_C(9214914555253877868));
 
     char stop_file[512];
     (void)snprintf(
@@ -2783,7 +2784,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(CcSimJourneyRoadSiteStop(&stopped) == pending);
     CC_CHECK(CcRoadSavedPositionValid(&stopped));
     CC_CHECK(CcSimValidate(&stopped, error, error_capacity));
-    CC_CHECK(CcSimHash(&stopped) == UINT64_C(9068155555530958208));
+    CC_CHECK(CcSimHash(&stopped) == UINT64_C(11964364067619381583));
     CcCommand pass_pending = {
         .kind = CC_COMMAND_PASS_ROAD_SITE,
         .target_id = pending->id
@@ -2829,7 +2830,7 @@ static void CheckSchema104RoadMigration(char *error,
              topology.checkpoint_distance_units);
     CC_CHECK(CcRoadSavedPositionValid(&checkpoint));
     CC_CHECK(CcSimValidate(&checkpoint, error, error_capacity));
-    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(7057640786287662436));
+    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(15778592053877928863));
 
     CcSim blocked = checkpoint;
     ClearSavedRoadPosition(&blocked.journey);
@@ -2921,7 +2922,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mill_choice);
     CC_CHECK(CcRoadSavedPositionValid(&mill_stop));
     CC_CHECK(CcSimValidate(&mill_stop, error, error_capacity));
-    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(15898415174319443807));
+    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(8656673403668878124));
 
     char mine_file[512];
     (void)snprintf(
@@ -2955,7 +2956,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mine.mine.encounter_outcome == CC_MINE_ENCOUNTER_OPEN);
     CC_CHECK(mine.mine.player_injury == 0);
     CC_CHECK(CcSimValidate(&mine, error, error_capacity));
-    CC_CHECK(CcSimHash(&mine) == UINT64_C(4055237753624604498));
+    CC_CHECK(CcSimHash(&mine) == UINT64_C(2923590168688971581));
 }
 
 static void CheckDragonHairPersistence(void)

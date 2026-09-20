@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "id": "hrakhor",
+  "templates": {
+    "report_shortage": "{source} {place_name} has {stock} portions of zhek left; its reserve target is {target}.",
+    "report_stock": "{source} {place_name} has {stock} portions of zhek, with a reserve target of {target}.",
+    "request_food": "Sha am hungry. Could thu help sha get zhek?",
+    "offer_food": "Sha can buy {quantity} {food} fo thu at {place_name}. It will cost sha {total_cost} crowns.",
+    "counter_offer": "Could we take just {quantity} {food}? That costs {total_cost} crowns and leaves more in tak store.",
+    "accept": "Agreed: {quantity} {food} fo {total_cost} crowns, {condition}.",
+    "decline": "{reason_text}",
+    "condition": "Could we wait fo {daylight}? Keep tak {quantity} {food} and {total_cost} crowns as agreed.",
+    "recall_success": "{memory_subject} bought {quantity} {food} fo {memory_object}. That help mattered.",
+    "recall_failure": "We agreed on {quantity} {food}, but tak purchase fell through.",
+    "thank": "Thank thu. Sha remember it too.",
+    "end": "We can speak again later."
+  },
+  "lexicon": {
+    "food": {
+      "singular": "portion of zhek",
+      "plural": "portions of zhek"
+    },
+    "ash": "ash",
+    "ashes": "ashes",
+    "daylight": "daylight",
+    "vault": "grak'rakh"
+  },
+  "sources": {
+    "observed": "Sha saw that",
+    "told": "Sha was told that"
+  },
+  "pronouns": {
+    "self": "Sha",
+    "other": "Thu",
+    "self_object": "sha",
+    "other_object": "thu"
+  },
+  "reasons": {
+    "insufficient_money": "My purse will not cover that.",
+    "empty_store": "The store has run out.",
+    "mistrust": "I need more trust between us before I can agree.",
+    "price": "Those terms need another look.",
+    "hunger": "Sha need to eat too. Sha must keep enough fo my own meal.",
+    "no_need": "We have enough for now.",
+    "help": "Let us find another way."
+  },
+  "condition_forms": {
+    "now": "now",
+    "daylight": "in daylight"
+  }
+}

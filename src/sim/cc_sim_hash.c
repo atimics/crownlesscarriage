@@ -942,6 +942,18 @@ uint64_t CcSimHash(const CcSim *sim)
         }
         HASH_VALUE(item->magnitude); hash = HashString(hash, item->text);
     }
+    if (sim->schema_version >= 107U) {
+        HASH_VALUE(sim->food_agreement_count);
+        for (int32_t i = 0; i < CC_MAX_FOOD_AGREEMENTS; ++i) {
+            const CcFoodAgreement *agreement = &sim->food_agreements[i];
+            HASH_VALUE(agreement->id); HASH_VALUE(agreement->payer_id);
+            HASH_VALUE(agreement->beneficiary_id); HASH_VALUE(agreement->place_id);
+            HASH_VALUE(agreement->accepted_event_id); HASH_VALUE(agreement->outcome_event_id);
+            HASH_VALUE(agreement->total_cost); HASH_VALUE(agreement->quantity);
+            HASH_VALUE(agreement->unit_price); HASH_VALUE(agreement->created_day);
+            HASH_VALUE(agreement->accepted_day); HASH_VALUE(agreement->status);
+        }
+    }
     if (sim->schema_version >= 97U) {
         HASH_VALUE(sim->notice_board.ready);
         for (int i = 0; i < CC_MAX_SITUATIONS; ++i) {

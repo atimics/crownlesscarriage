@@ -17,6 +17,12 @@ endif()
 
 find_program(CC_PYTHON3_EXECUTABLE python3)
 if(CC_PYTHON3_EXECUTABLE)
+    add_test(NAME dialogue_meaning_data
+        COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/meaning_data_tests.py)
+    add_test(NAME dialogue_meaning_policy
+        COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/meaning_policy_tests.py)
+    add_test(NAME dialogue_meaning_language
+        COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/meaning_language_tests.py)
     add_test(NAME dialogue_goal_policies
         COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/dialogue_policy_tests.py)
     add_test(NAME dialogue_owned_event_facts

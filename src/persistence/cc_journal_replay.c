@@ -119,8 +119,8 @@ bool CcJournalReplay(sqlite3 *database, CcSim *sim,
                                    error, error_capacity)) return false;
     sqlite3_stmt *statement = NULL;
     const char *sql =
-        "SELECT ordinal,record_version,operation_kind,command_kind,target_id,"
-        "good,amount,dungeon_state,step_count,sim_schema_version,"
+        "SELECT ordinal,record_version,operation_kind,command_kind,actor_id,target_id,"
+        "secondary_id,good,amount,dungeon_state,step_count,sim_schema_version,"
         "generator_version,pre_state_hash,post_state_hash "
         "FROM action_journal WHERE generation=? AND ordinal>? "
         "ORDER BY ordinal ASC;";
@@ -137,24 +137,26 @@ bool CcJournalReplay(sqlite3 *database, CcSim *sim,
         CcJournalOperationKind operation =
             (CcJournalOperationKind)sqlite3_column_int(statement, 2);
         int32_t stored_command_kind = sqlite3_column_int(statement, 3);
-        int32_t step_count = sqlite3_column_int(statement, 8);
+        int32_t step_count = sqlite3_column_int(statement, 10);
         uint32_t schema_version =
-            (uint32_t)sqlite3_column_int(statement, 9);
+            (uint32_t)sqlite3_column_int(statement, 11);
         uint32_t generator_version =
-            (uint32_t)sqlite3_column_int(statement, 10);
+            (uint32_t)sqlite3_column_int(statement, 12);
         CcCommand command = {
             .kind = ReadCommandKind(schema_version, stored_command_kind),
-            .target_id = (CcId)sqlite3_column_int64(statement, 4),
-            .good = (CcGood)sqlite3_column_int(statement, 5),
-            .amount = sqlite3_column_int(statement, 6),
+            .actor_id = (CcId)sqlite3_column_int64(statement, 4),
+            .target_id = (CcId)sqlite3_column_int64(statement, 5),
+            .secondary_id = (CcId)sqlite3_column_int64(statement, 6),
+            .good = (CcGood)sqlite3_column_int(statement, 7),
+            .amount = sqlite3_column_int(statement, 8),
             .dungeon_state =
-                (CcDungeonState)sqlite3_column_int(statement, 7)
+                (CcDungeonState)sqlite3_column_int(statement, 9)
         };
         uint64_t pre_hash = 0U;
         uint64_t post_hash = 0U;
         bool hashes_valid =
-            CcSaveParseStoredHash(sqlite3_column_text(statement, 11), &pre_hash) &&
-            CcSaveParseStoredHash(sqlite3_column_text(statement, 12), &post_hash);
+            CcSaveParseStoredHash(sqlite3_column_text(statement, 13), &pre_hash) &&
+            CcSaveParseStoredHash(sqlite3_column_text(statement, 14), &post_hash);
         if (ordinal != expected_ordinal ||
             version != CC_JOURNAL_RECORD_VERSION ||
             schema_version != expected_schema_version ||
@@ -210,4 +212,3 @@ bool CcJournalReplay(sqlite3 *database, CcSim *sim,
     *replayed_through = expected_ordinal - 1U;
     return true;
 }
-

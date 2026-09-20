@@ -12,6 +12,8 @@ endif()
 
 project(crownless_carriage VERSION 0.1.0 LANGUAGES C)
 
+include(CTest)
+
 set(CC_BUILD_REVISION "$ENV{GITHUB_SHA}")
 if(NOT CC_BUILD_REVISION)
     execute_process(
@@ -132,6 +134,7 @@ add_library(crownless_sim
     src/sim/cc_journey_runtime.c
     src/sim/cc_production.c
     src/sim/cc_food_economy.c
+    src/sim/cc_food_relief.c
     src/sim/cc_goods.c
     src/sim/cc_journey.c
     src/sim/cc_journey_commands.c
@@ -276,6 +279,10 @@ cc_strict_warnings(crownless_metagame)
 add_executable(crownless_participant_probe tools/participant_probe.c)
 target_link_libraries(crownless_participant_probe PRIVATE crownless_story crownless_persistence)
 cc_strict_warnings(crownless_participant_probe)
+
+add_executable(crownless_food_relief_probe tools/food_relief_probe.c)
+target_link_libraries(crownless_food_relief_probe PRIVATE crownless_persistence)
+cc_strict_warnings(crownless_food_relief_probe)
 
 add_executable(core_model_probe tools/core_model_probe.c)
 target_link_libraries(core_model_probe PRIVATE crownless_story)

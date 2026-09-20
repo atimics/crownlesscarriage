@@ -16,6 +16,7 @@
 #include "sim/cc_route_rules_internal.h"
 #include "sim/cc_trade_path_internal.h"
 #include "sim/cc_mine.h"
+#include "sim/cc_food_relief.h"
 #include "sim/cc_production.h"
 #include "sim/cc_road_position.h"
 
@@ -61,6 +62,48 @@ static CcId LatestLocalCause(const CcSim *sim, CcId location);
 static void AssignHistoryOffices(CcSim *sim, bool announce);
 static void GrowBanditCamp(CcBanditGroup *bandits);
 static void ResolveTargetSituations(CcSim *sim, CcSituationKind kind, CcId target);
+static void SetError(char *error, size_t capacity, const char *message);
+
+static bool ApplyFoodReliefCommand(CcSim *sim, const CcCommand *command,
+                                   char *error, size_t error_capacity)
+{
+    CcFoodReliefOutcome outcome;
+    if (sim == NULL || command == NULL || command->actor_id == 0U ||
+        command->actor_id == sim->player.id ||
+        CcSimCharacter(sim, command->actor_id) == NULL) {
+        SetError(error, error_capacity,
+                 "Food relief commands require an authorised non-player actor.");
+        return false;
+    }
+    if (command->kind == CC_COMMAND_FOOD_RELIEF_PROPOSE) {
+        CcFoodReliefProposal proposal = {
+            .payer_id = command->actor_id,
+            .beneficiary_id = command->target_id,
+            .place_id = command->secondary_id,
+            .quantity = command->amount,
+            .unit_price = (int32_t)command->good,
+        };
+        if (command->target_id == 0U || command->target_id == sim->player.id ||
+            CcSimCharacter(sim, command->target_id) == NULL ||
+            !CcFoodReliefPropose(sim, &proposal, &outcome, error, error_capacity))
+            return false;
+        SetError(error, error_capacity, "");
+        return true;
+    }
+    if (command->kind == CC_COMMAND_FOOD_RELIEF_ACCEPT) {
+        if (command->target_id == 0U ||
+            !CcFoodReliefAccept(sim, command->target_id, command->actor_id,
+                                &outcome, error, error_capacity)) return false;
+        SetError(error, error_capacity, "");
+        return true;
+    }
+    if (command->kind == CC_COMMAND_FOOD_RELIEF_EXECUTE) {
+        return CcFoodReliefExecute(sim, command->target_id, command->actor_id,
+                                   &outcome, error, error_capacity);
+    }
+    SetError(error, error_capacity, "Unknown food relief command.");
+    return false;
+}
 
 static int32_t ClampI32(int32_t value, int32_t minimum, int32_t maximum)
 {
@@ -19380,6 +19423,10 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Command target is missing.");
         return false;
     }
+    /* Participant commands use their own presence and consent checks. */
+    if (command->kind >= CC_COMMAND_FOOD_RELIEF_PROPOSE &&
+        command->kind <= CC_COMMAND_FOOD_RELIEF_EXECUTE)
+        return ApplyFoodReliefCommand(sim, command, error, error_capacity);
     bool party_wipe = command->kind == CC_COMMAND_PARTY_WIPE;
     bool mine_action = (command->kind >= CC_COMMAND_VISIT_MINE &&
         command->kind <= CC_COMMAND_MINE_PACK) ||
@@ -19457,6 +19504,11 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_CHOOSE_ROAD_LEG:
             return CcRoadChooseNextLeg(sim, command->target_id,
                                        error, error_capacity);
+        case CC_COMMAND_FOOD_RELIEF_PROPOSE:
+        case CC_COMMAND_FOOD_RELIEF_ACCEPT:
+        case CC_COMMAND_FOOD_RELIEF_EXECUTE:
+            /* Handled before the player encounter gates. */
+            return ApplyFoodReliefCommand(sim, command, error, error_capacity);
         case CC_COMMAND_MINE_LEARN_LEAD:
             return ApplyMineLearnLead(sim,command,error,error_capacity);
         case CC_COMMAND_MINE_REPORT_RETURN:
@@ -21292,15 +21344,28 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                  memory < character->memory_count; ++memory) {
                 const CcCharacterMemory *item =
                     &character->memories[memory];
-                bool subject_exists =
+                CcFoodReliefOutcome remembered_food;
+                bool food_memory = sim->schema_version >= 107U &&
+                    item->kind >= CC_CHARACTER_MEMORY_PROMISE_FULFILLED &&
+                    item->kind <= CC_CHARACTER_MEMORY_NPC_PROMISED &&
+                    CcFoodReliefRead(sim, item->subject_id, &remembered_food) &&
+                    (remembered_food.payer_id == character->id ||
+                     remembered_food.beneficiary_id == character->id);
+                bool subject_exists = food_memory ||
                     CcSimSituation(sim, item->subject_id) != NULL ||
                     (sim->schema_version >= 72U && item->kind == CC_CHARACTER_MEMORY_PLAYER_HELPED &&
                      CcSimSettlement(sim, item->subject_id) != NULL) ||
                     (sim->schema_version >= 19U &&
                      CcSimQuestOutcome(sim, item->subject_id) != NULL);
                 if (item->kind <= CC_CHARACTER_MEMORY_NONE ||
-                    item->kind > CC_CHARACTER_MEMORY_PLAYER_WITHDREW ||
+                    item->kind > (sim->schema_version >= 107U ? CC_CHARACTER_MEMORY_NPC_PROMISED :
+                                  CC_CHARACTER_MEMORY_PLAYER_WITHDREW) ||
                     !subject_exists ||
+                    (item->kind > CC_CHARACTER_MEMORY_PLAYER_WITHDREW && !food_memory) ||
+                    (item->kind == CC_CHARACTER_MEMORY_PROMISE_FULFILLED &&
+                     remembered_food.kind != CC_FOOD_RELIEF_OUTCOME_FULFILLED) ||
+                    (item->kind == CC_CHARACTER_MEMORY_PROMISE_FAILED &&
+                     remembered_food.kind != CC_FOOD_RELIEF_OUTCOME_FAILED) ||
                     CcSimEvent(sim, item->event_id) == NULL ||
                     item->day < 1 || item->day > sim->current_day) {
                     SetError(error, error_capacity,
@@ -22004,6 +22069,58 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     if (sim->schema_version >= 99U && !CcSimStoredCustodyValid(sim)) {
         SetError(error, error_capacity, "Stored custody is invalid.");
         return false;
+    }
+    if (sim->schema_version >= 107U) {
+        if (sim->food_agreement_count < 0 || sim->food_agreement_count > CC_MAX_FOOD_AGREEMENTS) {
+            SetError(error, error_capacity, "Food agreement count is invalid."); return false;
+        }
+        for (int32_t i = 0; i < sim->food_agreement_count; ++i) {
+            const CcFoodAgreement *agreement = &sim->food_agreements[i];
+            if (CcIdKind(agreement->id) != CC_ENTITY_EVENT ||
+                (agreement->id & CC_ID_SERIAL_MASK) == 0U ||
+                (agreement->id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial ||
+                CcSimCharacter(sim, agreement->payer_id) == NULL ||
+                CcSimCharacter(sim, agreement->beneficiary_id) == NULL ||
+                CcSimSettlement(sim, agreement->place_id) == NULL ||
+                agreement->payer_id == agreement->beneficiary_id || agreement->quantity <= 0 ||
+                agreement->quantity > CC_SIM_MAX_UNITS || agreement->unit_price <= 0 ||
+                agreement->total_cost < 0 || agreement->total_cost > CC_SIM_MAX_MONEY ||
+                agreement->total_cost != (CcMoney)agreement->quantity * agreement->unit_price ||
+                agreement->created_day < 1 || agreement->created_day > sim->current_day ||
+                agreement->accepted_day < 0 || agreement->accepted_day > sim->current_day ||
+                agreement->status < CC_FOOD_AGREEMENT_PROPOSED || agreement->status > CC_FOOD_AGREEMENT_FAILED ||
+                (agreement->status == CC_FOOD_AGREEMENT_PROPOSED &&
+                 (agreement->accepted_event_id != 0U || agreement->accepted_day != 0)) ||
+                (agreement->status == CC_FOOD_AGREEMENT_ACCEPTED &&
+                 (agreement->accepted_event_id == 0U || agreement->accepted_day < agreement->created_day ||
+                  agreement->outcome_event_id != 0U)) ||
+                ((agreement->status == CC_FOOD_AGREEMENT_FULFILLED ||
+                  agreement->status == CC_FOOD_AGREEMENT_FAILED) &&
+                 (agreement->outcome_event_id == 0U || agreement->accepted_event_id == 0U ||
+                  agreement->accepted_day < agreement->created_day)) ||
+                (agreement->status == CC_FOOD_AGREEMENT_PROPOSED && agreement->accepted_event_id != 0U) ||
+                (agreement->status < CC_FOOD_AGREEMENT_FULFILLED && agreement->outcome_event_id != 0U)) {
+                SetError(error, error_capacity, "Food agreement is invalid."); return false;
+            }
+            if ((agreement->accepted_event_id != 0U &&
+                 (CcIdKind(agreement->accepted_event_id) != CC_ENTITY_EVENT ||
+                  (agreement->accepted_event_id & CC_ID_SERIAL_MASK) <= (agreement->id & CC_ID_SERIAL_MASK) ||
+                  (agreement->accepted_event_id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial)) ||
+                (agreement->outcome_event_id != 0U &&
+                 (CcIdKind(agreement->outcome_event_id) != CC_ENTITY_EVENT ||
+                  (agreement->outcome_event_id & CC_ID_SERIAL_MASK) <= (agreement->id & CC_ID_SERIAL_MASK) ||
+                  (agreement->outcome_event_id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial ||
+                  (agreement->accepted_event_id != 0U &&
+                   (agreement->outcome_event_id & CC_ID_SERIAL_MASK) <=
+                   (agreement->accepted_event_id & CC_ID_SERIAL_MASK))))) {
+                SetError(error, error_capacity, "Food agreement event identity is invalid."); return false;
+            }
+            for (int32_t earlier = 0; earlier < i; ++earlier) {
+                if (sim->food_agreements[earlier].id == agreement->id) {
+                    SetError(error, error_capacity, "Food agreement IDs are duplicated."); return false;
+                }
+            }
+        }
     }
     return true;
 }
