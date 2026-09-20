@@ -2,21 +2,50 @@
   "version": 1,
   "id": "human",
   "templates": {
-    "report_shortage": "{actor_name}: {place_name} has {stock} {food}; we need {target}.",
-    "report_stock": "{actor_name}: {place_name} has {stock} {food}; the need is {target}.",
-    "request_food": "{actor_name} asks {recipient_name} for {quantity} {food} at {total_cost} total.",
-    "offer_food": "{actor_name} offers {recipient_name} {quantity} {food} for {total_cost} total.",
-    "counter_offer": "{actor_name} offers {quantity} {food} for {total_cost} total instead.",
-    "accept": "{actor_name} accepts {total_cost} total for {quantity} {food}.",
-    "decline": "{actor_name} declines the offer for {quantity} {food}.",
-    "condition": "{actor_name}: {quantity} {food} can move from {place_name} at {condition}.",
-    "recall_success": "{actor_name} recalls event {event_id}: {quantity} {food} for {total_cost} total succeeded.",
-    "recall_failure": "{actor_name} recalls event {event_id}: {quantity} {food} for {total_cost} total failed.",
-    "thank": "{actor_name} thanks {recipient_name} for the food.",
-    "end": "{actor_name} ends the exchange with {recipient_name}."
+    "report_shortage": "{source} {place_name} has {stock} portions of food left; its reserve target is {target}.",
+    "report_stock": "{source} {place_name} has {stock} portions of food, with a reserve target of {target}.",
+    "request_food": "I am hungry. Could you help me get something to eat?",
+    "offer_food": "I can buy {quantity} {food} for you at {place_name}. It will cost me {total_cost} crowns.",
+    "counter_offer": "Could we take just {quantity} {food}? That would cost {total_cost} crowns and leave more in store.",
+    "accept": "Agreed: {quantity} {food} for {total_cost} crowns, {condition}.",
+    "decline": "{reason_text}",
+    "condition": "Could we wait for {daylight}? Keep the {quantity} {food} and {total_cost} crowns as agreed.",
+    "recall_success": "{memory_subject} bought {quantity} {food} for {memory_object}. That help mattered.",
+    "recall_failure": "We agreed on {quantity} {food}, but the purchase fell through.",
+    "thank": "Thank you. I remember that help.",
+    "end": "We can speak again later."
   },
   "lexicon": {
-    "food": {"singular": "food", "plural": "food"},
-    "ash": "ash", "ashes": "ashes", "daylight": "daylight", "vault": "vault"
+    "food": {
+      "singular": "portion of food",
+      "plural": "portions of food"
+    },
+    "ash": "ash",
+    "ashes": "ashes",
+    "daylight": "daylight",
+    "vault": "vault"
+  },
+  "sources": {
+    "observed": "I saw that",
+    "told": "I was told that"
+  },
+  "pronouns": {
+    "self": "I",
+    "other": "You",
+    "self_object": "me",
+    "other_object": "you"
+  },
+  "reasons": {
+    "insufficient_money": "My purse will not cover that.",
+    "empty_store": "The store has run out.",
+    "mistrust": "I need more trust between us before I can agree.",
+    "price": "Those terms need another look.",
+    "hunger": "I need to eat too. I must keep enough for my own meal.",
+    "no_need": "We have enough for now.",
+    "help": "Let us find another way."
+  },
+  "condition_forms": {
+    "now": "now",
+    "daylight": "in daylight"
   }
 }

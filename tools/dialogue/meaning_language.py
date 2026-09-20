@@ -22,7 +22,7 @@ INTENTS = {
 }
 REASONS = {
     "severe_shortage", "shortage", "hunger", "help", "price",
-    "insufficient_money", "empty_store", "no_need", "outcome",
+    "insufficient_money", "empty_store", "no_need", "outcome", "mistrust",
 }
 CONDITIONS = {"now", "daylight"}
 _NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
@@ -34,6 +34,8 @@ class LanguagePackError(ValueError):
 
 def _read_pack(language: str, pack_root: str | Path | None) -> dict[str, Any]:
     root = Path(pack_root) if pack_root is not None else PACK_ROOT
+    if not re.fullmatch(r"[a-z][a-z0-9_-]{0,40}", language):
+        raise LanguagePackError("invalid language identifier")
     path = root / f"{language}.json"
     if not path.is_file():
         raise LanguagePackError(f"language pack not found: {language}")
@@ -78,8 +80,8 @@ def validate_act(act: dict[str, Any]) -> None:
             raise LanguagePackError("claim.kind must be food_store")
         for field in ("place_name", "stock", "target"):
             _required(claim, field)
-        if claim.get("source") != "observed":
-            raise LanguagePackError("claim.source must be observed")
+        if claim.get("source") not in ("observed", "told"):
+            raise LanguagePackError("claim.source must be observed or told")
     if proposal:
         for field in ("quantity", "unit_price", "total_cost", "condition"):
             _required(proposal, field)
@@ -97,14 +99,14 @@ def validate_act(act: dict[str, Any]) -> None:
         for field in ("claim",):
             if not _obj(act, field):
                 raise LanguagePackError(f"{intent} requires {field}")
-    if intent in {"request_food", "offer_food", "counter_offer", "condition"} and not proposal:
+    if intent in {"offer_food", "counter_offer", "accept", "condition"} and not proposal:
         raise LanguagePackError(f"{intent} requires proposal")
     if intent in {"recall_success", "recall_failure"} and not memory:
         raise LanguagePackError(f"{intent} requires memory")
 
 
 def _number(value: Any) -> str:
-    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+    if type(value) is not int or not 0 <= value < 2**31:
         raise LanguagePackError("quantities and prices must be numeric")
     return str(value)
 
@@ -135,10 +137,14 @@ def _fields(act: dict[str, Any], pack: dict[str, Any]) -> dict[str, Any]:
         "total_cost": _number(proposal.get("total_cost", memory.get("total_cost", 0))),
         "reason": str(act.get("reason", claim.get("reason", memory.get("reason", "")))),
         "event_id": str(memory.get("event_id", "")),
+        "source": pack.get("sources", {}).get(claim.get("source", "observed"), ""),
+        "reason_text": pack.get("reasons", {}).get(act.get("reason", "help"), ""),
+        "memory_subject": pack.get("pronouns", {}).get("self" if memory.get("actor_id") == act["actor"] else "other", ""),
+        "memory_object": pack.get("pronouns", {}).get("other_object" if memory.get("actor_id") == act["actor"] else "self_object", ""),
         "food": _concept(pack, "food", quantity),
         "ash": _concept(pack, "ash"), "ashes": _concept(pack, "ashes"),
         "daylight": _concept(pack, "daylight"), "vault": _concept(pack, "vault"),
-        "condition": _concept(pack, "daylight") if proposal.get("condition") == "daylight" else "now",
+        "condition": (pack.get("condition_forms", {}).get(proposal.get("condition", "now"), "now")),
     }
     return fields
 
@@ -154,6 +160,6 @@ def render(act: dict[str, Any], language: str = "human", pack_root: str | Path |
         text = template.format(**_fields(act, pack))
     except KeyError as exc:
         raise LanguagePackError(f"template uses unknown slot: {exc.args[0]}") from exc
-    if not text.strip() or _NUMBER.findall(text) is None:
+    if not text.strip() or len(text.encode("utf-8")) > 1024 or any(ord(c) < 32 for c in text):
         raise LanguagePackError("template produced empty speech")
     return text
