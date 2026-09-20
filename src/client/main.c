@@ -1906,6 +1906,8 @@ static void UpdateOpenWorldCamera(const CcSim *sim, LocalState *local,
 }
 
 static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local);
+static void PositionOpenWorldJourneyAt(const CcSim *sim, LocalState *local,
+                                       int32_t ticks, float alpha);
 
 static bool InitializeOpenWorld(const CcSim *sim, LocalState *local,
                                 bool preserve_position)
@@ -2005,7 +2007,8 @@ static void PositionOpenWorldAtSettlement(const CcSim *sim,
     SetOpenWorldCarriageAtSettlement(sim, local);
 }
 
-static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local)
+static void PositionOpenWorldJourneyAt(const CcSim *sim, LocalState *local,
+                                       int32_t ticks, float alpha)
 {
     if (sim == NULL || local == NULL || !local->open_world ||
         !sim->journey.active) return;
@@ -2022,6 +2025,10 @@ static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local)
     if (!CcWorldRoutePose(route, sim->journey.origin_id, amount,
                           &point, &heading)) return;
     CcWorldStreamFollowRoute(&local->world_stream, route, sim->journey.origin_id, amount, 4);
+    CcLocalWorldCarriageState *carriage = &local->world_carriage;
+    if (ticks > 0) {
+        carriage->previous_tick_position = carriage->position;
+    }
     local->agent.position.x = point.x;
     local->agent.position.z = point.z;
     local->agent.position.y = CcWorldStreamHeightAt(
@@ -2045,6 +2052,24 @@ static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local)
     local->world_carriage.visible = true;
     local->world_carriage.hero_embarked = true;
     local->world_carriage.storybook_travel = true;
+    if (ticks <= 0 && carriage->previous_tick_position.x == 0.0f &&
+        carriage->previous_tick_position.z == 0.0f) {
+        carriage->previous_tick_position = carriage->position;
+    }
+    float blend = alpha < 0.0f ? 0.0f : (alpha > 1.0f ? 1.0f : alpha);
+    carriage->render_position = (Vector3){
+        carriage->previous_tick_position.x +
+            (carriage->position.x - carriage->previous_tick_position.x) * blend,
+        carriage->previous_tick_position.y +
+            (carriage->position.y - carriage->previous_tick_position.y) * blend,
+        carriage->previous_tick_position.z +
+            (carriage->position.z - carriage->previous_tick_position.z) * blend,
+    };
+}
+
+static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local)
+{
+    PositionOpenWorldJourneyAt(sim, local, 0, 1.0f);
 }
 
 static float OpenWorldSettlementDistance(const CcSim *sim,
@@ -9884,7 +9909,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 return;
             }
             if (local->open_world && sim->journey.active) {
-                PositionOpenWorldJourney(sim, local);
+                PositionOpenWorldJourneyAt(
+                    sim, local, ticks,
+                    local->convoy.runtime_tick_accumulator);
             }
             if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {

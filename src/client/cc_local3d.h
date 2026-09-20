@@ -133,6 +133,11 @@ typedef struct CcLocalConvoyState {
 
 typedef struct CcLocalWorldCarriageState {
     Vector3 position;
+    /* Presentation-only position, interpolated between the last two journey
+       ticks so the carriage and camera do not step at the sim rate. Logic
+       keeps using `position`. */
+    Vector3 render_position;
+    Vector3 previous_tick_position;
     float heading_yaw;
     float route_amount;
     float pace;
