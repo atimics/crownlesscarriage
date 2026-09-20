@@ -18,7 +18,7 @@ static void Corrupt(const char *path, const char *sql)
 
 int main(void)
 {
-    CcSim sim, loaded;
+    static CcSim sim, loaded;
     CcFoodReliefObservation observation;
     CcFoodReliefOutcome outcome;
     char error[256];

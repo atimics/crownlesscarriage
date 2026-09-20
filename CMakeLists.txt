@@ -12,6 +12,8 @@ endif()
 
 project(crownless_carriage VERSION 0.1.0 LANGUAGES C)
 
+include(CTest)
+
 set(CC_BUILD_REVISION "$ENV{GITHUB_SHA}")
 if(NOT CC_BUILD_REVISION)
     execute_process(
@@ -289,6 +291,8 @@ cc_strict_warnings(crownless_food_relief_tests)
 add_executable(crownless_food_agreement_persistence_tests tests/food_agreement_persistence_tests.c)
 target_link_libraries(crownless_food_agreement_persistence_tests PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_food_agreement_persistence_tests)
+add_test(NAME food_agreement_persistence
+         COMMAND crownless_food_agreement_persistence_tests)
 
 add_executable(core_model_probe tools/core_model_probe.c)
 target_link_libraries(core_model_probe PRIVATE crownless_story)

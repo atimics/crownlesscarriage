@@ -22078,7 +22078,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 CcSimCharacter(sim, agreement->beneficiary_id) == NULL ||
                 CcSimSettlement(sim, agreement->place_id) == NULL ||
                 agreement->payer_id == agreement->beneficiary_id || agreement->quantity <= 0 ||
-                agreement->unit_price <= 0 || agreement->total_cost != (CcMoney)agreement->quantity * agreement->unit_price ||
+                agreement->quantity > CC_SIM_MAX_UNITS || agreement->unit_price <= 0 ||
+                agreement->total_cost < 0 || agreement->total_cost > CC_SIM_MAX_MONEY ||
+                agreement->total_cost != (CcMoney)agreement->quantity * agreement->unit_price ||
                 agreement->created_day < 1 || agreement->created_day > sim->current_day ||
                 agreement->accepted_day < 0 || agreement->accepted_day > sim->current_day ||
                 agreement->status < CC_FOOD_AGREEMENT_PROPOSED || agreement->status > CC_FOOD_AGREEMENT_FAILED ||
@@ -22089,10 +22091,24 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                   agreement->outcome_event_id != 0U)) ||
                 ((agreement->status == CC_FOOD_AGREEMENT_FULFILLED ||
                   agreement->status == CC_FOOD_AGREEMENT_FAILED) &&
-                 agreement->outcome_event_id == 0U) ||
+                 (agreement->outcome_event_id == 0U || agreement->accepted_event_id == 0U ||
+                  agreement->accepted_day < agreement->created_day)) ||
                 (agreement->status == CC_FOOD_AGREEMENT_PROPOSED && agreement->accepted_event_id != 0U) ||
                 (agreement->status < CC_FOOD_AGREEMENT_FULFILLED && agreement->outcome_event_id != 0U)) {
                 SetError(error, error_capacity, "Food agreement is invalid."); return false;
+            }
+            if ((agreement->accepted_event_id != 0U &&
+                 (CcIdKind(agreement->accepted_event_id) != CC_ENTITY_EVENT ||
+                  (agreement->accepted_event_id & CC_ID_SERIAL_MASK) <= (agreement->id & CC_ID_SERIAL_MASK) ||
+                  (agreement->accepted_event_id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial)) ||
+                (agreement->outcome_event_id != 0U &&
+                 (CcIdKind(agreement->outcome_event_id) != CC_ENTITY_EVENT ||
+                  (agreement->outcome_event_id & CC_ID_SERIAL_MASK) <= (agreement->id & CC_ID_SERIAL_MASK) ||
+                  (agreement->outcome_event_id & CC_ID_SERIAL_MASK) >= sim->next_entity_serial ||
+                  (agreement->accepted_event_id != 0U &&
+                   (agreement->outcome_event_id & CC_ID_SERIAL_MASK) <=
+                   (agreement->accepted_event_id & CC_ID_SERIAL_MASK))))) {
+                SetError(error, error_capacity, "Food agreement event identity is invalid."); return false;
             }
             for (int32_t earlier = 0; earlier < i; ++earlier) {
                 if (sim->food_agreements[earlier].id == agreement->id) {
