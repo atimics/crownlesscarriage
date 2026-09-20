@@ -303,6 +303,13 @@ add_executable(crownless_sim_runner tools/sim_runner.c)
 target_link_libraries(crownless_sim_runner PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_sim_runner)
 
+add_executable(crownless_underroad tools/underroad_construction.c)
+cc_strict_warnings(crownless_underroad)
+
+add_executable(crownless_underroad_world tools/underroad_world.c)
+target_link_libraries(crownless_underroad_world PRIVATE crownless_persistence)
+cc_strict_warnings(crownless_underroad_world)
+
 add_executable(crownless_save_repair tools/save_repair.c)
 target_link_libraries(crownless_save_repair PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_save_repair)
