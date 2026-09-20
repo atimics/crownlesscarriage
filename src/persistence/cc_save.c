@@ -13,7 +13,12 @@
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
 #define CC_SQLITE_USER_VERSION 32
-#define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
+/* Runtime ticks are journaled in batches. Every flush hashes the whole sim
+   twice and commits with synchronous=FULL, and travel can advance up to eight
+   ticks in one rendered frame, so a small threshold flushed on almost every
+   frame during fast-forward and stalled the render thread. One second of sim
+   time (60 ticks) keeps crash replay cheap without the per-frame fsync. */
+#define CC_JOURNAL_RUNTIME_FLUSH_TICKS 60
 #define CC_JOURNAL_COMPACT_RECORDS UINT64_C(4096)
 
 struct CcJournal {

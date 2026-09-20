@@ -1920,11 +1920,11 @@ static int32_t UnderroadNearestLairFaction(const CcUnderroadNetwork *network,
     return best < 0 ? -1 : network->nodes[best].faction_id;
 }
 
-static void UnderroadAddRoad(CcSim *sim, int32_t a, int32_t b)
+static bool UnderroadAddRoad(CcSim *sim, int32_t a, int32_t b)
 {
     CcUnderroadNetwork *network = &sim->underroad;
-    if (network->road_count >= CC_MAX_UNDERROAD_ROADS || a == b) return;
-    if (UnderroadRoadExists(network, a, b)) return;
+    if (network->road_count >= CC_MAX_UNDERROAD_ROADS || a == b) return false;
+    if (UnderroadRoadExists(network, a, b)) return false;
     uint32_t state = UnderroadMix((uint32_t)a * UINT32_C(0x85ebca6b) ^
                                   (uint32_t)b * UINT32_C(0xc2b2ae35) ^
                                   network->layout_seed);
@@ -1950,6 +1950,7 @@ static void UnderroadAddRoad(CcSim *sim, int32_t a, int32_t b)
     road->dig_progress_milli = UnderroadRange(&state, 1000);
     road->seed = UnderroadMix((uint32_t)a ^ ((uint32_t)b << 8U) ^ state);
     network->road_count++;
+    return true;
 }
 
 static void GenerateUnderroadNetwork(CcSim *sim)
@@ -2039,7 +2040,7 @@ static void GenerateUnderroadNetwork(CcSim *sim)
         while (parent[root_b] != root_b) root_b = parent[root_b];
         if (root_a == root_b) continue;
         parent[root_a] = root_b;
-        UnderroadAddRoad(sim, candidates[i].a, candidates[i].b);
+        (void)UnderroadAddRoad(sim, candidates[i].a, candidates[i].b);
     }
     int32_t degree[CC_MAX_UNDERROAD_NODES] = {0};
     for (int32_t i = 0; i < network->road_count; ++i) {
@@ -2052,9 +2053,7 @@ static void GenerateUnderroadNetwork(CcSim *sim)
         int32_t a = candidates[i].a;
         int32_t b = candidates[i].b;
         if (degree[a] >= 4 || degree[b] >= 4) continue;
-        int32_t before = network->road_count;
-        UnderroadAddRoad(sim, a, b);
-        if (network->road_count > before) {
+        if (UnderroadAddRoad(sim, a, b)) {
             degree[a]++;
             degree[b]++;
         }

@@ -1099,7 +1099,7 @@ static void CheckJournalRecovery(char *error, size_t error_capacity)
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
     CC_CHECK(ReadSqliteInteger(
-                 path, "SELECT COUNT(*) FROM action_journal;") == 4);
+                 path, "SELECT COUNT(*) FROM action_journal;") == 3);
     CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
     CC_CHECK(CcSimHash(&restored) == expected_hash);
@@ -1118,7 +1118,7 @@ static void CheckJournalRecovery(char *error, size_t error_capacity)
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
     CC_CHECK(CcSimHash(&restored) == expected_hash);
     CC_CHECK(ReadSqliteInteger(
-                 path, "SELECT COUNT(*) FROM action_journal;") == 5);
+                 path, "SELECT COUNT(*) FROM action_journal;") == 4);
 
 
     sqlite3 *database = NULL;
