@@ -1,3 +1,21 @@
+static bool ClientLoadReliefFixture(CcSim *sim, const CcSituation *situation,
+                                    char *error, size_t error_capacity)
+{
+    while (CcSimReliefCratesToLoad(situation) > 0) {
+        CcCommand pickup = {
+            .kind = CC_COMMAND_PICKUP_RELIEF_CRATE,
+            .target_id = situation->id
+        };
+        if (!CcSimApply(sim, &pickup, error, error_capacity)) return false;
+        CcCommand stow = {
+            .kind = CC_COMMAND_STOW_RELIEF_CRATE,
+            .target_id = situation->id
+        };
+        if (!CcSimApply(sim, &stow, error, error_capacity)) return false;
+    }
+    return true;
+}
+
 static int RunRoadJourneySaveRegression(void)
 {
     static CcSim sim, loaded;
@@ -106,6 +124,8 @@ static int RunDeliveryHandoffRegression(void)
     if (promise == NULL || !CcSimApply(&sim, &((CcCommand){
         .kind = CC_COMMAND_ACCEPT_SITUATION, .target_id = promise->id}), error, sizeof(error)))
         return ClientRegressionFailure("Accept the delivery fixture.");
+    if (!ClientLoadReliefFixture(&sim, promise, error, sizeof(error)))
+        return ClientRegressionFailure("Load the delivery fixture crate by crate.");
     if (AdventureDeliveryAtHand(&sim) != NULL)
         return ClientRegressionFailure("Departure still needs the road journey.");
     sim.player.location_id = promise->target_id;
@@ -963,9 +983,10 @@ static int RunAdventureInputRegression(void)
         pledge.amount = CC_CHARACTER_RESPONSE_PLEDGE_HELP;
         if (!CcSimApply(&choice_sim, &pledge, error, sizeof(error)) ||
             choice_sim.player.accepted_situation_id != offer->id ||
-            choice_sim.player.cargo[CC_GOOD_FOOD] != 8)
+            choice_sim.player.cargo[CC_GOOD_FOOD] != 0 ||
+            offer->loading_progress != 0 || offer->loading_crate_carried)
             return ClientRegressionFailure(
-                "The announced first promise choice must load Mara's eight Bread.");
+                "The announced first promise choice must leave Mara's eight crates ready to carry.");
     }
     static CcSim sim;
     static LocalState local;
@@ -1339,6 +1360,7 @@ static int RunAdventureTradeTermsRegression(void)
     TERMS_CHECK(promise != NULL, "The fixture needs a delivery offer.");
     CcCommand accept = {.kind = CC_COMMAND_ACCEPT_SITUATION, .target_id = promise->id};
     TERMS_CHECK(CcSimApply(&sim, &accept, error, sizeof(error)), error);
+    TERMS_CHECK(ClientLoadReliefFixture(&sim, promise, error, sizeof(error)), error);
     sim.player.location_id = promise->target_id;
     sim.carriage.location_id = promise->target_id;
     place = CcSimSettlementMutable(&sim, promise->target_id);
