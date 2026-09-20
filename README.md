@@ -20,8 +20,12 @@ contract means that their objects also share clear targeting, approach, reach,
 and state rules. A change of camera preserves the company's location and goods.
 
 The current playable mine is [Low Silver Pit](docs/design/silverwick-mine-slice.md)
-on the Alderwatch–Silverwick road. [Issue #762](https://github.com/atimics/crownlesscarriage/issues/762)
-tracks its first worthwhile haul and connected return.
+on the Alderwatch–Silverwick road. Its first outing includes a finite hauler load,
+a food-for-gold bargain, a cache, useful workers' records, and a report to Jory.
+The [journey record](docs/reviews/silverwick-first-haul-2026-09-19.md) shows the
+ordinary-control return, sale, save checks, and exact builds.
+[Issue #762](https://github.com/atimics/crownlesscarriage/issues/762) collects the
+connected acceptance.
 
 ## Play and controls
 
@@ -36,9 +40,9 @@ Read the current action labels for the choices available at your location.
 - At the mine carriage, use the pack controls to prepare for entry.
 
 The [mine guide](docs/design/silverwick-mine-slice.md) explains its saved state,
-entry cost, and current controls. Road inspection, reachable boarding, branches,
-and returning from the current road position are tracked in the connected
-acceptance checks.
+entry cost, and current controls. The pilot road supports carriage inspection,
+reachable boarding, connected junction choices, and reversal from its saved
+physical position.
 
 ## Build and check
 

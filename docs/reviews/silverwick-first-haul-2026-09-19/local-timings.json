@@ -1,0 +1,118 @@
+{
+  "schema": 1,
+  "capacity": 96,
+  "entries": [
+    {
+      "stage": "runtime-ready",
+      "duration_ms": 79.4,
+      "build": "9df2e966a327",
+      "scene": "startup",
+      "revision": 0,
+      "action": "runtime"
+    },
+    {
+      "stage": "first-actionable",
+      "duration_ms": 815.1,
+      "build": "9df2e966a327",
+      "scene": "menu",
+      "revision": 1,
+      "action": "runtime"
+    },
+    {
+      "stage": "transition",
+      "duration_ms": 0.6,
+      "build": "9df2e966a327",
+      "scene": "menu",
+      "revision": 1,
+      "action": "touch-0"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 5.1,
+      "build": "9df2e966a327",
+      "scene": "menu",
+      "revision": 1,
+      "action": "touch-0"
+    },
+    {
+      "stage": "save",
+      "duration_ms": 5.1,
+      "build": "9df2e966a327",
+      "scene": "menu",
+      "revision": 1,
+      "action": "campaign"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 16.3,
+      "build": "9df2e966a327",
+      "scene": "conversation",
+      "revision": 6,
+      "action": "touch-0"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 1.4,
+      "build": "9df2e966a327",
+      "scene": "conversation",
+      "revision": 7,
+      "action": "touch-0"
+    },
+    {
+      "stage": "transition",
+      "duration_ms": 1.4,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 9,
+      "action": "touch-0"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 4.4,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 9,
+      "action": "touch-0"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 9.6,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 9,
+      "action": "touch-4"
+    },
+    {
+      "stage": "transition",
+      "duration_ms": 32,
+      "build": "9df2e966a327",
+      "scene": "book",
+      "revision": 10,
+      "action": "touch-4"
+    },
+    {
+      "stage": "action",
+      "duration_ms": 11.9,
+      "build": "9df2e966a327",
+      "scene": "book",
+      "revision": 10,
+      "action": "touch-0"
+    },
+    {
+      "stage": "transition",
+      "duration_ms": 17.3,
+      "build": "9df2e966a327",
+      "scene": "town",
+      "revision": 11,
+      "action": "touch-0"
+    },
+    {
+      "stage": "save",
+      "duration_ms": 1.2,
+      "build": "9df2e966a327",
+      "scene": "menu",
+      "revision": 12,
+      "action": "campaign"
+    }
+  ]
+}

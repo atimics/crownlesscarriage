@@ -2,22 +2,62 @@
 
 The Low Silver Pit branch lies on the Alderwatch–Silverwick road. Travel stops at the branch. Choose the left or right turn shown for the current direction, or continue along the road.
 
-The branch opens a small mine yard. The carriage stays beside the road. Pack Bread or Meat beside it, then walk north to the timber doorway. Walk through the doorway to enter Mine Mouth in first person.
+The branch opens a small mine yard. The carriage stays beside the road. Pack Bread or Meat beside it, then walk north to the timber doorway. Walk through the doorway to enter the Gatehouse in first person.
 
 Both places use shared world lighting and model helpers from the town renderer. The yard has a composed exterior camera. Underground, the camera follows the saved tile at eye height and looks in a local cardinal direction. The company model remains visible in the yard. Ground clicks use the camera for the current view. The [continuous-world contract](outside-city-redesign.md) defines how these views and their interactions connect.
 
-## Controls at the reviewed baseline (`52d2e879`)
+## Controls
 
 - Yard: WASD, arrow keys, or a ground click walk.
-- Underground: W/S or up/down step forward/back; A/D or left/right turn. Ground clicks select a walking destination.
+- Underground: W/S or up/down step forward/back; A/D or left/right turn. Click visible floor to walk through observed space.
+- Click a visible object to approach that object. Use its named action when within reach. A floor click remains a movement choice.
 - E or Use: interact with a nearby doorway, bar, or survey.
-- P or Pack food: move one Bread or Meat from carriage to pack.
+- Beside the carriage, select a good and quantity, then choose Pack or Unload. The panel shows the pack, carriage, and free capacity.
+- Use the displayed Take, Cache, and Recover actions at their reachable holders.
 - F5: save the campaign and current position.
 - Escape: open or close the pause menu.
 
-The pack holds eight goods. Entry consumes one ration. Explore six rooms joined by narrow passages. The western store provides a loop around the barred middle passage. The workers' survey is in the eastern records room. The lower stair marks the future connection to Lamp Hall.
+The pack holds eight goods, including supplies and recovered goods. Entry consumes one ration. Explore six rooms joined by narrow passages. The western store provides a loop around the barred middle passage. The workers' survey is in the eastern records room. The lower stair marks the future connection to Lamp Hall.
 
-Return through the entrance, walk to the carriage, and use it to resume the same road journey. Remaining supplies return to the carriage. The survey and opened bar remain saved for later visits.
+The source in the Lower Passage begins with eight Iron, three Raw Gold, and two Gems. Each transfer changes that finite source. The Rope Store cache holds seven goods and persists between visits. Select the quantity that fits, and inspect the remaining load before choosing another trip.
+
+## The Lower Passage haulers
+
+Two haulers guard the source. Their offer is two packed Bread for one Raw Gold.
+Pack at least three Bread before a first descent: entry spends one, leaving two
+for the offer. The bargain spends the Bread and transfers the Gold together. It
+settles once, and the source keeps its remaining goods.
+
+The western passages provide a physical way around the barred route. Exploring
+that route keeps the choice of returning to the haulers. Walking out is also a
+valid end to the visit.
+
+A local company can choose Contest to use the existing combat controls. Target
+selects a hauler, Strike attacks, and Break contact returns to exploration at the
+current mine position with the injury retained. The fight and its result persist
+with the local scene. Shared companies can bargain and explore; the displayed
+contest guidance directs that fight to local play.
+
+Return through the entrance and walk to the carriage. Transfer the chosen goods, then choose Board to resume the same road journey. Remaining supplies return to the carriage. The source, cache, survey, and opened bar remain saved for later visits.
+
+On a narrow portrait screen, the scene appears above readable action buttons. Open Scene details for the full scene text. The save footer reports the browser save result.
+
+## Information and the town return
+
+In Silverwick, ask Jory Fen about his known mine concern. The shift board offers
+a dated document when that lead needs a source. The lead names the Low Silver
+Pit turnout on the Alderwatch–Silverwick road and points to the workers' records.
+
+Read the workers' records in the eastern room for the document's route claim.
+Walking the western passage records the company's own observation. The Company
+Book keeps the source and date in Mine notes. Its visible page controls also
+work by touch.
+
+Return to Jory and choose to tell him what the company found. A tracked partial
+load and an attributed route account produce their own responses. Oren's store
+handles an optional sale through the ordinary quantity and payment controls.
+The report and sale remain separate choices. The Book keeps the return account
+after a sale or reload.
 
 ## Shared rules and saves
 
@@ -25,7 +65,12 @@ Facing is local camera state. Turning is free. A fresh descent faces east into t
 
 The simulation owns position, collision, carried goods, elapsed time, opened passages, and the road anchor. The screen, text controls, and shared company commands use those rules. Each movement carries the current mine revision so a repeated request cannot take another step.
 
-Save schema 59 adds the mine visit and pack. Schema 57 and 58 saves retain their old hash during verification, then upgrade with an empty visit. Journal replay restores the same position and supplies.
+Schema 59 introduced the mine visit and pack. Schema 103 adds finite source and cache custody. Schema 104 adds the hauler encounter, and local scene version 9 preserves its combat state. Schema 105 saves the pilot road's physical position. Schema 106 adds attributed mine notes, return reports, and cargo provenance through repacking and sale. Older saves verify their original hash and replay before migration. Journal replay restores the same position, supplies, goods, and holder identities.
+
+Old aggregate carriage goods retain their saved quantities. Their mine origin
+stays uncertain when the old save lacks a custody chain. An old survey keeps its
+surveyed state; rereading records the current reading date and leaves its earlier
+observation date unknown.
 
 Text controls: `mine visit`, `mine look`, `mine move north`, `mine use`, `mine pack Bread`, `mine unpack Bread`, and `road pass`.
 
@@ -35,7 +80,7 @@ Text controls: `mine visit`, `mine look`, `mine move north`, `mine use`, `mine p
 
 ## Scope
 
-This slice builds the Silverwick road branch, surface yard, and zone 01. The remaining 23 levels, Hollowbarrow entrance, goblin encounters, and route to the dragon cave follow the wider Underroad design. The existing abstract Underroad expedition remains available through its earlier commands while the mapped levels are built.
+This slice builds the Silverwick road branch, surface yard, zone 01, and its hauling encounter. The remaining 23 levels, Hollowbarrow entrance, and route to the dragon cave follow the wider Underroad design. The existing abstract Underroad expedition remains available through its earlier commands while the mapped levels are built.
 
 ## Checks
 
