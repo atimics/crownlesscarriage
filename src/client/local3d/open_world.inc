@@ -1,4 +1,12 @@
 
+/* Presentation-only carriage position: interpolated between journey ticks
+   while travelling, exact otherwise. Logic keeps using `position`. */
+static Vector3 CarriageRenderAnchor(const CcLocalWorldCarriageState *carriage)
+{
+    return carriage->storybook_travel ? carriage->render_position
+                                      : carriage->position;
+}
+
 /* One local landscape, rebuilt on a world-aligned grid as the caravan moves. */
 static Model storybook_ground = {0};
 static uint32_t storybook_seed = 0;
@@ -960,10 +968,12 @@ Camera3D CcLocalStorybookCameraInternal(const CcWorldManifest *manifest,
        held on -right so the direction of travel reads left to right. Leading
        the focus forward puts the company left of centre with the road ahead
        open, and lifts it into the lower third of the frame. */
-    Vector3 focus = Vector3Add(carriage->position,
+    Vector3 anchor = carriage->storybook_travel ? carriage->render_position
+                                                : carriage->position;
+    Vector3 focus = Vector3Add(anchor,
         Vector3Add(Vector3Scale(forward, 7.5f + wide * 9.0f),
                    (Vector3){0.0f, 3.0f + wide * 1.4f, 0.0f}));
-    Vector3 position = Vector3Add(carriage->position,
+    Vector3 position = Vector3Add(anchor,
         Vector3Add(Vector3Scale(right, -(31.0f + wide * 34.0f)),
                    (Vector3){0.0f, 3.6f + wide * 22.0f, 0.0f}));
     position.y = fmaxf(position.y,
@@ -1051,8 +1061,8 @@ static void DrawStorybookRoads(const CcSim *sim,
                                           start.z + (end.z - start.z) * a};
                     CcWorldPoint second = {start.x + (end.x - start.x) * b,
                                            start.z + (end.z - start.z) * b};
-                    if (hypotf(first.x - carriage->position.x,
-                               first.z - carriage->position.z) > 135.0f) continue;
+                    if (hypotf(first.x - CarriageRenderAnchor(carriage).x,
+                               first.z - CarriageRenderAnchor(carriage).z) > 135.0f) continue;
                     float amount_span = spans[span].to_amount - spans[span].from_amount;
                     Vector2 first_side = StorybookRoadSide(route,
                         spans[span].from_amount + amount_span * a, tangent_span);
@@ -1293,11 +1303,11 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         Vector3 forward = {sinf(heading), 0.0f, cosf(heading)};
         Vector3 right = {cosf(heading), 0.0f, -sinf(heading)};
         close_focus = Vector3Add(
-            carriage->position,
+            CarriageRenderAnchor(carriage),
             Vector3Add(Vector3Scale(forward, 5.2f * scale),
                        (Vector3){0.0f, 1.55f * scale, 0.0f}));
         close_position = Vector3Add(
-            carriage->position,
+            CarriageRenderAnchor(carriage),
             Vector3Add(Vector3Scale(forward, -10.5f * scale),
                        Vector3Add(Vector3Scale(right, 3.8f * scale),
                                   (Vector3){0.0f, 5.2f * scale, 0.0f})));
@@ -1339,7 +1349,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         camera = SnapCameraToArtPixels(camera, target.texture.height);
     }
     if (carriage != NULL && carriage->visible) {
-        camera = PonyConversationCamera(camera, carriage->position, carriage->heading_yaw, sim);
+        camera = PonyConversationCamera(camera, CarriageRenderAnchor(carriage), carriage->heading_yaw, sim);
         focus = camera.target;
     }
     RememberPresentedCamera(CC_LOCAL_SCENE_STREET, camera, agent,
@@ -1369,7 +1379,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     BeginMode3D(camera);
     BeginWorldLighting(camera, &art);
     if (storybook) {
-        DrawStorybookGround(&stream->manifest, carriage->position);
+        DrawStorybookGround(&stream->manifest, CarriageRenderAnchor(carriage));
         DrawStorybookRoads(sim, &stream->manifest, carriage);
         /* Finish world-space ribbons before tree models change the transform. */
         rlDrawRenderBatchActive();
@@ -1403,7 +1413,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         DrawCourseRunners(course, focus);
     }
     if (carriage != NULL && carriage->visible) {
-        Vector3 carriage_base = carriage->position;
+        Vector3 carriage_base = CarriageRenderAnchor(carriage);
         if (storybook) carriage_base.y += 0.13f;
         if (carriage->pace > 0.02f) {
             carriage_base.y += 0.025f + sinf(clock * 5.0f) * 0.018f;
@@ -1443,7 +1453,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     }
     CcLocalAgent passenger;
     if (hero_embarked && crew_exchange != NULL) {
-        PrepareCrewPassenger(agent, carriage->position, carriage->heading_yaw, &passenger);
+        PrepareCrewPassenger(agent, CarriageRenderAnchor(carriage), carriage->heading_yaw, &passenger);
         DrawRobotShell(&passenger);
     }
     DrawCrew(hero_embarked && crew_exchange != NULL ? &passenger : agent, 6);
@@ -1459,8 +1469,8 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     int32_t label_count = 0;
     if (hero_embarked && carriage != NULL && !kingdom_view && !storybook) {
         labels[label_count++] = (WorldLabel){
-            {carriage->position.x, carriage->position.y + 3.20f,
-             carriage->position.z}, "YOUR CARRIAGE", WORLD_TEAL};
+            {CarriageRenderAnchor(carriage).x, CarriageRenderAnchor(carriage).y + 3.20f,
+             CarriageRenderAnchor(carriage).z}, "YOUR CARRIAGE", WORLD_TEAL};
     } else if (!hero_embarked) {
         labels[label_count++] = (WorldLabel){
             {agent->position.x, agent->position.y + 2.50f,
