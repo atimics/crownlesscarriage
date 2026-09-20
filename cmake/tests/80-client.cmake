@@ -27,6 +27,8 @@ if(CC_BUILD_CLIENT)
              COMMAND crownless_carriage --test-world-cards)
     add_test(NAME silverwick_mine_input
              COMMAND crownless_carriage --test-mine-input)
+    add_test(NAME mine_hauler_visual_identity
+             COMMAND crownless_carriage --test-mine-hauler-visual)
     add_test(NAME road_journey_save
              COMMAND crownless_carriage --test-road-journey-save)
     add_test(NAME abandoned_town_presence COMMAND crownless_carriage --test-abandoned-town)

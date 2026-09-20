@@ -8827,6 +8827,33 @@ static bool ResolveSoloPartyWipe(CcJournal *journal, CcSim *sim,
 }
 
 #if defined(CC_CLIENT_SELF_TESTS)
+static int RunMineHaulerVisualRegression(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x71a7e5));
+    sim.mine.source_owner_id = sim.goblins.id;
+    sim.mine.source_x = 26;
+    sim.mine.source_y = 16;
+    sim.mine.x = 25;
+    sim.mine.y = 16;
+    CcLocalCourse mine_course = {0};
+    CcLocalAgent mine_hero = {0};
+    CcLocalCourseStageMineEncounter(&mine_course, &mine_hero, &sim);
+    for (int32_t raider = 0; raider < CC_LOCAL_RAIDER_COUNT; ++raider) {
+        if (CcLocalAgentVisualFamily(&mine_course.raiders[raider]) !=
+            CC_LOCAL_ACTOR_VISUAL_GOBLIN) return 1;
+    }
+    CcLocalCourse road_course = {0};
+    CcLocalAgent road_hero = {0};
+    CcLocalCourseStageRoadEncounter(&road_course, &road_hero, false);
+    for (int32_t raider = 0; raider < CC_LOCAL_RAIDER_COUNT; ++raider) {
+        if (CcLocalAgentVisualFamily(&road_course.raiders[raider]) !=
+            CC_LOCAL_ACTOR_VISUAL_HUMAN) return 1;
+    }
+    (void)puts("Mine haulers use goblin visuals and road raiders use human visuals.");
+    return 0;
+}
+
 static int RunSoloPartyWipeRegression(void)
 {
     CcSim sim;
@@ -11060,6 +11087,7 @@ int main(int argc, char **argv)
     if (argc == 2 && strcmp(argv[1], "--test-bridge-scene") == 0) return RunBridgeSceneRegression();
     if (argc == 2 && strcmp(argv[1], "--test-world-cards") == 0) return RunWorldCardRegression();
     if (argc == 2 && strcmp(argv[1], "--test-mine-input") == 0) return RunMineInputRegression();
+    if (argc == 2 && strcmp(argv[1], "--test-mine-hauler-visual") == 0) return RunMineHaulerVisualRegression();
     if (argc == 2 && strcmp(argv[1], "--test-road-journey-save") == 0) return RunRoadJourneySaveRegression();
     if (argc == 2 && strcmp(argv[1], "--test-abandoned-town") == 0) return RunAbandonedTownRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-input") == 0) return RunAdventureInputRegression();
