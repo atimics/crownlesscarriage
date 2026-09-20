@@ -141,6 +141,11 @@ target_include_directories(underroad_network_tests PRIVATE src)
 cc_strict_warnings(underroad_network_tests)
 add_test(NAME generated_underroad_network COMMAND underroad_network_tests)
 
+add_executable(underroad_network_sim_tests tests/underroad_network_sim_tests.c)
+target_link_libraries(underroad_network_sim_tests PRIVATE crownless_persistence crownless_metagame)
+cc_strict_warnings(underroad_network_sim_tests)
+add_test(NAME simulated_underroad_network COMMAND underroad_network_sim_tests)
+
 add_executable(scenario_tests tests/scenario_tests.c)
 target_link_libraries(scenario_tests PRIVATE crownless_sim)
 cc_strict_warnings(scenario_tests)
