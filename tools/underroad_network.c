@@ -417,6 +417,170 @@ static int32_t UrNetConnected(const UrNetGraph *g)
     return 1;
 }
 
+/* ------------------------------------------------------------------ */
+/* per-road micro crawl (P3)                                          */
+/* ------------------------------------------------------------------ */
+
+/* A road is walked as a lazily generated corridor: walls, a clear centre
+   path, and rubble or voids to the sides whose density comes from the road's
+   condition. Nothing here is stored; the corridor is a pure function of the
+   road, which is what lets the macro graph stay small. */
+#define UR_NET_CRAWL_MAX_LEN 512
+#define UR_NET_CRAWL_MAX_WIDTH 7
+
+typedef enum UrNetTile {
+    UR_NET_TILE_WALL = 0,
+    UR_NET_TILE_FLOOR,
+    UR_NET_TILE_RUBBLE,
+    UR_NET_TILE_VOID
+} UrNetTile;
+
+typedef struct UrNetCrawl {
+    int32_t road_index;
+    int32_t length;
+    int32_t width; /* playable width, between the walls */
+    int32_t px;
+    int32_t py;
+    int32_t steps;
+    int32_t reached;
+    unsigned char tiles[UR_NET_CRAWL_MAX_LEN][UR_NET_CRAWL_MAX_WIDTH];
+} UrNetCrawl;
+
+static bool UrNetTileWalkable(UrNetTile tile)
+{
+    return tile == UR_NET_TILE_FLOOR;
+}
+
+static void UrNetBuildCrawl(const UrNetGraph *g, int32_t road_index,
+                            UrNetCrawl *crawl)
+{
+    memset(crawl, 0, sizeof *crawl);
+    if (road_index < 0 || road_index >= g->road_count) {
+        return;
+    }
+    const UrNetRoad *road = &g->roads[road_index];
+    crawl->road_index = road_index;
+    crawl->length = road->length_cells * 4;
+    if (crawl->length < 8) {
+        crawl->length = 8;
+    }
+    if (crawl->length > UR_NET_CRAWL_MAX_LEN) {
+        crawl->length = UR_NET_CRAWL_MAX_LEN;
+    }
+    crawl->width = road->clearance + 1;
+    if (crawl->width > UR_NET_CRAWL_MAX_WIDTH - 2) {
+        crawl->width = UR_NET_CRAWL_MAX_WIDTH - 2;
+    }
+    int32_t total = crawl->width + 2;
+    uint32_t state = road->seed;
+    for (int32_t x = 0; x < crawl->length; x++) {
+        for (int32_t y = 0; y < total; y++) {
+            if (y == 0 || y == total - 1) {
+                crawl->tiles[x][y] = UR_NET_TILE_WALL;
+                continue;
+            }
+            if (y == total / 2) {
+                crawl->tiles[x][y] = UR_NET_TILE_FLOOR;
+                continue;
+            }
+            int32_t roll = (int32_t)(UrNetNext(&state) % 1000U);
+            if (roll > road->condition) {
+                crawl->tiles[x][y] = UR_NET_TILE_RUBBLE;
+            } else if (roll < 40) {
+                crawl->tiles[x][y] = UR_NET_TILE_VOID;
+            } else {
+                crawl->tiles[x][y] = UR_NET_TILE_FLOOR;
+            }
+        }
+    }
+    crawl->px = 0;
+    crawl->py = total / 2;
+}
+
+static bool UrNetCrawlReachable(const UrNetCrawl *crawl)
+{
+    if (crawl->length <= 0) {
+        return false;
+    }
+    int32_t total = crawl->width + 2;
+    unsigned char seen[UR_NET_CRAWL_MAX_LEN][UR_NET_CRAWL_MAX_WIDTH];
+    int32_t queue_x[UR_NET_CRAWL_MAX_LEN * UR_NET_CRAWL_MAX_WIDTH];
+    int32_t queue_y[UR_NET_CRAWL_MAX_LEN * UR_NET_CRAWL_MAX_WIDTH];
+    memset(seen, 0, sizeof seen);
+    if (!UrNetTileWalkable((UrNetTile)crawl->tiles[0][crawl->py])) {
+        return false;
+    }
+    int32_t head = 0;
+    int32_t tail = 0;
+    queue_x[tail] = 0;
+    queue_y[tail] = crawl->py;
+    tail++;
+    seen[0][crawl->py] = 1;
+    const int32_t dx[4] = {1, -1, 0, 0};
+    const int32_t dy[4] = {0, 0, 1, -1};
+    while (head < tail) {
+        int32_t x = queue_x[head];
+        int32_t y = queue_y[head];
+        head++;
+        if (x == crawl->length - 1 && y == crawl->py) {
+            return true;
+        }
+        for (int32_t d = 0; d < 4; d++) {
+            int32_t nx = x + dx[d];
+            int32_t ny = y + dy[d];
+            if (nx < 0 || nx >= crawl->length || ny < 0 || ny >= total) {
+                continue;
+            }
+            if (seen[nx][ny] ||
+                !UrNetTileWalkable((UrNetTile)crawl->tiles[nx][ny])) {
+                continue;
+            }
+            seen[nx][ny] = 1;
+            queue_x[tail] = nx;
+            queue_y[tail] = ny;
+            tail++;
+        }
+    }
+    return false;
+}
+
+#ifndef CC_UR_NETWORK_NO_MAIN
+static void UrNetPrintCrawl(const UrNetGraph *g, const UrNetCrawl *crawl)
+{
+    const UrNetRoad *road = &g->roads[crawl->road_index];
+    int32_t total = crawl->width + 2;
+    int32_t from = crawl->px - 30;
+    if (from < 0) {
+        from = 0;
+    }
+    int32_t to = from + 60;
+    if (to > crawl->length) {
+        to = crawl->length;
+    }
+    printf("CRAWL road %d (%d -> %d), layer %d, condition %d, clearance %d\n",
+           crawl->road_index, road->from_node, road->to_node, road->depth,
+           road->condition, road->clearance);
+    for (int32_t y = 0; y < total; y++) {
+        for (int32_t x = from; x < to; x++) {
+            char glyph = '.';
+            switch ((UrNetTile)crawl->tiles[x][y]) {
+                case UR_NET_TILE_WALL: glyph = '#'; break;
+                case UR_NET_TILE_RUBBLE: glyph = '%'; break;
+                case UR_NET_TILE_VOID: glyph = '~'; break;
+                default: glyph = '.'; break;
+            }
+            if (x == crawl->px && y == crawl->py) {
+                glyph = '@';
+            }
+            putchar(glyph);
+        }
+        putchar('\n');
+    }
+    printf("columns %d..%d of %d  (w/k up, s/j down, d/l forward, a/h back)\n",
+           from, to, crawl->length);
+}
+#endif
+
 #ifndef CC_UR_NETWORK_NO_MAIN
 static void UrNetPrintMap(const UrNetGraph *g)
 {
@@ -590,9 +754,15 @@ int main(int argc, char **argv)
     bool map = false;
     bool json = false;
     bool report = false;
+    int32_t crawl_road = -1;
+    bool auto_walk = false;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc) {
             seed = (uint32_t)strtoul(argv[++i], NULL, 10);
+        } else if (strcmp(argv[i], "--crawl") == 0 && i + 1 < argc) {
+            crawl_road = (int32_t)strtol(argv[++i], NULL, 10);
+        } else if (strcmp(argv[i], "--auto") == 0) {
+            auto_walk = true;
         } else if (strcmp(argv[i], "--map") == 0) {
             map = true;
         } else if (strcmp(argv[i], "--json") == 0) {
@@ -602,7 +772,8 @@ int main(int argc, char **argv)
         } else {
             fprintf(stderr, "unknown argument '%s'\n", argv[i]);
             fprintf(stderr,
-                    "usage: %s [--seed N] [--map] [--json] [--report]\n",
+                    "usage: %s [--seed N] [--map] [--json] [--report] "
+                    "[--crawl ROAD] [--auto]\n",
                     argv[0]);
             return 1;
         }
@@ -611,6 +782,25 @@ int main(int argc, char **argv)
     UrNetGraph g;
     UrNetBuild(&g, seed);
 
+    if (crawl_road >= 0) {
+        UrNetCrawl crawl;
+        UrNetBuildCrawl(&g, crawl_road, &crawl);
+        if (!crawl.reached && auto_walk) {
+            while (crawl.px < crawl.length - 1) {
+                crawl.px++;
+                crawl.steps++;
+            }
+            crawl.reached = 1;
+        }
+        UrNetPrintCrawl(&g, &crawl);
+        printf("corridor is passable end to end: %s\n",
+               UrNetCrawlReachable(&crawl) ? "yes" : "no");
+        if (auto_walk) {
+            printf("reached the far end in %d steps: %s\n", crawl.steps,
+                   crawl.reached ? "yes" : "no");
+        }
+        return 0;
+    }
     if (json) {
         UrNetPrintJson(&g);
         return 0;
