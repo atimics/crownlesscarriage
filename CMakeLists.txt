@@ -282,6 +282,10 @@ add_executable(crownless_food_relief_probe tools/food_relief_probe.c)
 target_link_libraries(crownless_food_relief_probe PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_food_relief_probe)
 
+add_executable(crownless_food_relief_tests tests/food_relief_tests.c)
+target_link_libraries(crownless_food_relief_tests PRIVATE crownless_persistence)
+cc_strict_warnings(crownless_food_relief_tests)
+
 add_executable(core_model_probe tools/core_model_probe.c)
 target_link_libraries(core_model_probe PRIVATE crownless_story)
 cc_strict_warnings(core_model_probe)
