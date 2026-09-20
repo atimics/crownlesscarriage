@@ -5025,7 +5025,8 @@ static void DrawCourseRaider(const CcLocalAgent *raider)
         CcCreaturePose pose = CcCreatureSteppedPose(
             CC_CREATURE_GOBLIN_RAIDER, (float)GetTime() * 3.2f, moving);
         (void)DrawCreature3D(CC_CREATURE_GOBLIN_RAIDER, pose,
-                             raider->position, raider->facing_yaw, 1.02f,
+                             CcLocalAgentVisualGroundContact(raider),
+                             raider->facing_yaw, CcLocalAgentVisualScale(raider),
                              raider->appearance.skin);
     } else {
         DrawRobotShell(raider);
