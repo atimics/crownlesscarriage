@@ -6,6 +6,19 @@ from pathlib import Path
 import subprocess
 
 
+def policy_gate(test, version_two=False):
+    records = test.get('records', [])
+    count = len(records)
+    exact = sum(row.get('exact') is True for row in records)
+    if not count or test.get('count') != count or test.get('exact') != exact:
+        return False
+    if any(not (row.get('valid') and row.get('eos')) for row in records):
+        return False
+    # V2 has several valid social replies. Allow up to 1% preference differences;
+    # every act must remain valid and every native output must still match.
+    return exact * 100 >= count * 99 if version_two else exact == count
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", type=Path, required=True)
@@ -26,10 +39,8 @@ def main():
         errors.append("evaluation count does not match records")
     if manifest.get('datasets', {}).get('test', {}).get('rows') != len(records):
         errors.append('evaluation must cover the complete test dataset')
-    if not records or test.get("exact") != test.get("count") or any(
-        not (row.get("exact") and row.get("valid") and row.get("eos")) for row in records
-    ):
-        errors.append(f"exact policy gate failed: {test.get('exact')}/{test.get('count')}")
+    if not policy_gate(test, manifest.get('format') == 'crownless-policy-v2'):
+        errors.append(f"policy quality gate failed: {test.get('exact')}/{test.get('count')}")
     if errors:
         raise SystemExit("; ".join(errors))
     checked = 0

@@ -3,8 +3,10 @@
 The `Semantic 5M training` workflow runs on `v*.*.*` release tags and on
 manual dispatch. Relevant source changes select release runs; manual runs always train. It compares the dialogue sources with the previous release,
 trains on a CPU runner, and keeps the full run directory and logs for 14 days.
-The model artifact is published only after every test row matches the authored
-policy and the native C probe produces the same semantic IDs as Python.
+The v2 model artifact requires 100% valid acts, at least 99% agreement with the
+reference preferences, and identical Python/native outputs for every test row.
+The nine goal rollouts and three saved-participant rollouts must also finish
+successfully. V1 retains its original exact-reference gate.
 
 The workflow checks out ZERO from the public repository at
 `49e6bfedc6d91196e652d89309b23cafd8fc2ce9`. It pins torch 2.8.0, numpy 2.2.6,
@@ -29,8 +31,8 @@ The helper `verify_semantic_training.py` writes `native-parity.json` and keeps
 failure details in the run artifact. A failed training, build, or gate keeps
 its partial checkpoint and logs through the always-uploaded artifact.
 
-The workflow uses a standard Ubuntu CPU runner, a 30-minute job limit, and an
-18-minute training limit. The normal run has 4,000 steps. Manual requests accept
+The workflow uses a standard Ubuntu CPU runner, a 40-minute job limit, and an
+25-minute training limit. The normal run has 4,000 steps. Manual requests accept
 1 through 6,000 steps; the same full evaluation gate applies. The verified
 model artifact lasts 90 days. It is available for review and later integration
 into the game. The workflow leaves the shipped checkpoint under version control.

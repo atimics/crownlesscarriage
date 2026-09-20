@@ -73,7 +73,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.relevant == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       ZERO_COMMIT: 49e6bfedc6d91196e652d89309b23cafd8fc2ce9
       STEPS: ${{ inputs.steps || '4000' }}
@@ -106,7 +106,9 @@ jobs:
         working-directory: zero
         run: git checkout --detach "$ZERO_COMMIT"
       - name: Check dialogue event coverage
-        run: python tools/dialogue/audit_grammar.py --check
+        run: |
+          python tools/dialogue/audit_grammar.py --check
+          python tests/dialogue_policy_tests.py
       - name: Train semantic model
         run: |
           case "$STEPS" in (*[!0-9]*|'') echo 'steps must be an integer from 1 to 6000' >&2; exit 1;; esac
@@ -115,7 +117,7 @@ jobs:
             exit 1
           fi
           mkdir -p artifacts/semantic-5m
-          timeout 18m python tools/dialogue/train_policy.py \
+          timeout 25m python tools/dialogue/train_policy.py \
             --zero "$GITHUB_WORKSPACE/zero" \
             --reference models/dialogue-syntax/model.ccv2 \
             --tokenizer assets/language/tokenizer.json \
@@ -125,18 +127,24 @@ jobs:
         run: |
           cmake -S . -B out/build/semantic-training -DCMAKE_BUILD_TYPE=Release \
             -DCC_BUILD_CLIENT=OFF -DCC_BUILD_GRAPHICS_PROBES=OFF
-          cmake --build out/build/semantic-training --target crownless_story crownless_sim --parallel 2
+          cmake --build out/build/semantic-training --target crownless_story crownless_sim core_account_probe --parallel 2
       - name: Build native semantic probe
         run: |
           python tools/dialogue/build_syntax_probe.py \
             --model artifacts/semantic-5m/run/last.ccv2 \
             --build out/build/semantic-training \
             --output artifacts/semantic-5m/native
-      - name: Require exact policy and native parity
+      - name: Require policy quality and exact native parity
         run: |
           python tools/dialogue/verify_semantic_training.py \
             --run artifacts/semantic-5m/run \
             --probe artifacts/semantic-5m/native/probe 2>&1 | tee artifacts/semantic-5m/gate.log
+      - name: Verify nine goal conversations and saved participants
+        run: |
+          python tools/dialogue/verify_policy_rollouts.py \
+            --run artifacts/semantic-5m/run \
+            --probe artifacts/semantic-5m/native/probe \
+            --language-probe out/build/semantic-training/core_account_probe
       - name: Upload failed run and logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -157,5 +165,6 @@ jobs:
             artifacts/semantic-5m/run/manifest.json
             artifacts/semantic-5m/run/test-evaluation.json
             artifacts/semantic-5m/run/native-parity.json
+            artifacts/semantic-5m/run/rollouts.json
           if-no-files-found: error
           retention-days: 90

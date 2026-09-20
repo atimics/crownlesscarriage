@@ -73,6 +73,10 @@ targets from branching exchanges, with balanced sampling over all 38 acts.
 Own-state feature profiles stay in one train, development, or test split.
 Exact observable inputs are deduplicated. These are synthetic policy-distillation
 checks; human review and saved-world examples provide separate evidence.
+The release gate requires every act to be valid and every native output to match
+Python. Reference preference agreement must reach 99%; a valid choice can differ
+from the procedural preference. Nine goal conversations and three saved-world
+conversations are also replayed before publishing the model artifact.
 
 ```sh
 python tools/dialogue/train_policy.py --zero /path/to/pinned-zero \
