@@ -279,6 +279,9 @@ add_executable(crownless_underroad_world tools/underroad_world.c)
 target_link_libraries(crownless_underroad_world PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_underroad_world)
 
+add_executable(crownless_underroad_network tools/underroad_network.c)
+cc_strict_warnings(crownless_underroad_network)
+
 add_executable(crownless_save_repair tools/save_repair.c)
 target_link_libraries(crownless_save_repair PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_save_repair)
