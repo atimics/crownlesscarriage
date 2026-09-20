@@ -455,7 +455,8 @@ static void TestMineSurveyMigrationAndReturns(void)
     Check(CcSaveRead(fixture,&restored,error,sizeof(error)));
     Check(CcSimValidate(&restored,error,sizeof(error)));
     uint64_t migrated_hash=CcSimHash(&restored);
-    CC_CHECK(migrated_hash==UINT64_C(13156381989558921086));
+    /* Schema 107 includes the typed food agreement table in the state hash. */
+    CC_CHECK(migrated_hash==UINT64_C(13187613855323144941));
     Check(CcSaveRead(fixture,&reloaded,error,sizeof(error)));
     CC_CHECK(CcSimHash(&reloaded)==migrated_hash);
     const CcCustodyEntry *depleted_gold=NULL;
