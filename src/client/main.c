@@ -4240,6 +4240,15 @@ static bool AdventureHandoffTarget(const CcSim *sim, const LocalState *local,
         target->key.kind == (local->market_interior ? CC_INTERACTION_COUNTER : CC_INTERACTION_DOOR);
 }
 
+static bool AdventurePriorityTarget(const CcSim *sim, const LocalState *local,
+                                    const CcInteractionTarget *target)
+{
+    if (AdventureHandoffTarget(sim, local, target)) return true;
+    return target != NULL && target->key.kind == CC_INTERACTION_PERSON &&
+        local->course.situation_witness_active &&
+        target->character_id == local->course.situation_witness_character_id;
+}
+
 static bool FirstDeliveryComplete(const CcSim *sim)
 {
     return sim != NULL && sim->player.reputation > 0;
@@ -4292,9 +4301,9 @@ static ContextActionSet BuildContextActions(
             while (at > 0) {
                 const CcInteractionTarget *previous = CcInteractionFind(&local->interactions,
                     set.items[at - 1].target);
-                bool handoff = AdventureHandoffTarget(sim, local, target);
-                bool previous_handoff = AdventureHandoffTarget(sim, local, previous);
-                if (previous == NULL || previous_handoff || (!handoff &&
+                bool priority = AdventurePriorityTarget(sim, local, target);
+                bool previous_priority = AdventurePriorityTarget(sim, local, previous);
+                if (previous == NULL || previous_priority || (!priority &&
                     GridDistance(LocalPosition(local),
                         (Vector2){previous->approach_x, previous->approach_z}) <= distance)) break;
                 ContextAction swap = set.items[at - 1];
@@ -4305,7 +4314,7 @@ static ContextActionSet BuildContextActions(
         if (local->world_cards_presented && (local->interaction.approaching ||
             GridDistance(LocalPosition(local), local->presented_card_origin) <= 3.0f)) {
             ContextActionSet steady = {0};
-            /* Delivery first, then the cards already being read, then vacancies. */
+            /* Delivery and named situation witnesses lead, then shown cards, then vacancies. */
             for (int pass = 0; pass < 3; ++pass) {
                 int count = pass == 1 ? local->presented_target_count : set.count;
                 for (int i = 0; i < count && steady.count < 4; ++i) {
@@ -4323,7 +4332,7 @@ static ContextActionSet BuildContextActions(
                     }
                     if (candidate < 0) continue;
                     const ContextAction *action = &set.items[candidate];
-                    if (pass == 0 && !AdventureHandoffTarget(sim, local,
+                    if (pass == 0 && !AdventurePriorityTarget(sim, local,
                         CcInteractionFind(&local->interactions, action->target))) continue;
                     bool included = false;
                     for (int j = 0; j < steady.count; ++j)

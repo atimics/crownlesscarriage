@@ -233,6 +233,62 @@ static int RunPresentedTargetRegression(void)
     return 0;
 }
 
+static int RunSituationWitnessCardPriorityRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    int32_t opening = OpeningSituationIndex(&sim);
+    const CcSituation *situation = opening >= 0 ? &sim.situations[opening] : NULL;
+    const CcCharacter *mara = situation != NULL ?
+        CcSimSituationConversationCharacter(&sim, situation, sim.player.location_id) : NULL;
+    if (mara == NULL || strcmp(mara->name, "Mara Venn") != 0)
+        return ClientRegressionFailure("The opening fixture needs Mara Venn.");
+    Vector2 origin = LocalPosition(&local);
+    int32_t generic = 0;
+    for (int32_t i = 0; i < sim.character_count && generic < 4; ++i) {
+        if (sim.characters[i].id == mara->id) continue;
+        CcInteractionTarget *target = AdventureTarget(&local, &sim,
+            CC_INTERACTION_PERSON, UINT64_C(0x100000000) + (uint64_t)generic,
+            "Scout", "Talk", (Vector3){0}, 1, 2, 1,
+            (Vector2){origin.x + (float)generic + 1.0f, origin.y}, 1);
+        if (target == NULL) return ClientRegressionFailure("Create retained generic cards.");
+        target->character_id = sim.characters[i].id;
+        local.presented_person_binding_place[generic] = sim.player.location_id;
+        local.presented_person_binding_object[generic] = target->key.object;
+        local.presented_person_binding_character[generic] = target->character_id;
+        ++generic;
+    }
+    if (generic != 4) return ClientRegressionFailure("Seed four generic residents.");
+    ContextActionSet shown = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, opening);
+    RememberPresentedTargets(&local, VIEW_LOCAL, &shown);
+    if (local.presented_target_count != 4)
+        return ClientRegressionFailure("Publish the retained generic cards.");
+    local.course.situation_witness_active = true;
+    local.course.situation_witness_id = situation->id;
+    local.course.situation_witness_character_id = mara->id;
+    CcInteractionTarget *witness = AdventureTarget(&local, &sim,
+        CC_INTERACTION_PERSON, mara->id, mara->name, "Talk",
+        (Vector3){0}, 1, 2, 1, (Vector2){origin.x + 30.0f, origin.y}, 1);
+    if (witness == NULL) return ClientRegressionFailure("Create Mara's named witness target.");
+    witness->character_id = mara->id;
+    witness->situation_id = situation->id;
+    ContextActionSet priority = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, opening);
+    bool mara_shown = false;
+    int32_t retained = 0;
+    for (int32_t i = 0; i < priority.count; ++i) {
+        const CcInteractionTarget *target = CcInteractionFind(&local.interactions,
+            priority.items[i].target);
+        if (target != NULL && target->character_id == mara->id) mara_shown = true;
+        if (AdventureGenericPersonKey(priority.items[i].target)) ++retained;
+    }
+    if (priority.count != 4 || !mara_shown || retained != 3)
+        return ClientRegressionFailure("Mara's named witness card leads retained generic cards.");
+    return 0;
+}
+
 static int RunPresentedRoadRegression(void)
 {
     static CcSim sim;
@@ -826,6 +882,8 @@ static int RunAdventureInputRegression(void)
     if (handoff_result != 0) return handoff_result;
     int presented_result = RunPresentedTargetRegression();
     if (presented_result != 0) return presented_result;
+    int witness_card_result = RunSituationWitnessCardPriorityRegression();
+    if (witness_card_result != 0) return witness_card_result;
     {
         CcSim choice_sim;
         LocalState choice_local = {0};
