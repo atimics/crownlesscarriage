@@ -16,6 +16,7 @@
 #include "sim/cc_route_rules_internal.h"
 #include "sim/cc_trade_path_internal.h"
 #include "sim/cc_mine.h"
+#include "sim/cc_food_relief.h"
 #include "sim/cc_production.h"
 #include "sim/cc_road_position.h"
 
@@ -61,6 +62,59 @@ static CcId LatestLocalCause(const CcSim *sim, CcId location);
 static void AssignHistoryOffices(CcSim *sim, bool announce);
 static void GrowBanditCamp(CcBanditGroup *bandits);
 static void ResolveTargetSituations(CcSim *sim, CcSituationKind kind, CcId target);
+static void SetError(char *error, size_t capacity, const char *message);
+
+static bool ApplyFoodReliefCommand(CcSim *sim, const CcCommand *command,
+                                   char *error, size_t error_capacity)
+{
+    CcFoodReliefOutcome outcome;
+    if (sim == NULL || command == NULL || command->actor_id == 0U ||
+        command->actor_id == sim->player.id ||
+        CcSimCharacter(sim, command->actor_id) == NULL) {
+        SetError(error, error_capacity,
+                 "Food relief commands require an authorised non-player actor.");
+        return false;
+    }
+    if (command->kind == CC_COMMAND_FOOD_RELIEF_PROPOSE) {
+        CcFoodReliefProposal proposal = {
+            .payer_id = command->actor_id,
+            .beneficiary_id = command->target_id,
+            .place_id = command->secondary_id,
+            .quantity = command->amount,
+            .unit_price = (int32_t)command->good,
+        };
+        if (command->target_id == 0U || command->target_id == sim->player.id ||
+            CcSimCharacter(sim, command->target_id) == NULL ||
+            !CcFoodReliefPropose(sim, &proposal, &outcome, error, error_capacity))
+            return false;
+        SetError(error, error_capacity, "");
+        return true;
+    }
+    if (command->kind == CC_COMMAND_FOOD_RELIEF_ACCEPT) {
+        if (command->target_id == 0U ||
+            !CcFoodReliefAccept(sim, command->target_id, command->actor_id,
+                                &outcome, error, error_capacity)) return false;
+        SetError(error, error_capacity, "");
+        return true;
+    }
+    if (command->kind == CC_COMMAND_FOOD_RELIEF_EXECUTE) {
+        CcFoodReliefOutcome before;
+        const bool had_before = CcFoodReliefRead(sim, command->target_id, &before);
+        if (CcFoodReliefExecute(sim, command->target_id, command->actor_id,
+                                &outcome, error, error_capacity)) {
+            SetError(error, error_capacity, "");
+            return true;
+        }
+        /* A current agreement can record a failed purchase as a mutation. */
+        CcFoodReliefOutcome after;
+        if (had_before && CcFoodReliefRead(sim, command->target_id, &after) &&
+            after.kind == CC_FOOD_RELIEF_OUTCOME_FAILED &&
+            after.event_id != before.event_id) return true;
+        return false;
+    }
+    SetError(error, error_capacity, "Unknown food relief command.");
+    return false;
+}
 
 static int32_t ClampI32(int32_t value, int32_t minimum, int32_t maximum)
 {
@@ -19432,7 +19486,10 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_SUPPORT_BAKERY ||
         command->kind == CC_COMMAND_TAKE_BODY_PURSE ||
         command->kind == CC_COMMAND_MINE_LEARN_LEAD ||
-        command->kind == CC_COMMAND_MINE_REPORT_RETURN;
+        command->kind == CC_COMMAND_MINE_REPORT_RETURN ||
+        command->kind == CC_COMMAND_FOOD_RELIEF_PROPOSE ||
+        command->kind == CC_COMMAND_FOOD_RELIEF_ACCEPT ||
+        command->kind == CC_COMMAND_FOOD_RELIEF_EXECUTE;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
                  "Settlement business must wait until the carriage arrives.");
@@ -19461,6 +19518,10 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
             return ApplyMineLearnLead(sim,command,error,error_capacity);
         case CC_COMMAND_MINE_REPORT_RETURN:
             return ApplyMineReportReturn(sim,command,error,error_capacity);
+        case CC_COMMAND_FOOD_RELIEF_PROPOSE:
+        case CC_COMMAND_FOOD_RELIEF_ACCEPT:
+        case CC_COMMAND_FOOD_RELIEF_EXECUTE:
+            return ApplyFoodReliefCommand(sim, command, error, error_capacity);
         case CC_COMMAND_EXCHANGE_GOSSIP:
             return ApplyExchangeGossip(sim, command, error, error_capacity);
         case CC_COMMAND_HEARD_STORY:
@@ -20040,7 +20101,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 (event->beneficiary_id != 0U &&
                  event->beneficiary_id != sim->player.id &&
                  !IsIssuedCharacterId(sim, event->beneficiary_id)) ||
-                (event->witness_id != 0U &&
+                (event->witness_id != 0U && event->kind != CC_EVENT_RELIEF &&
                  event->witness_id != sim->player.id &&
                  !IsIssuedCharacterId(sim, event->witness_id) &&
                  !(event->kind == CC_EVENT_RELIEF && event->subject_id == event->id &&
