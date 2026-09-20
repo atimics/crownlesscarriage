@@ -20,6 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Check browser input contracts
+        run: |
+          node tests/web_diagnostics_tests.cjs
+          node tests/travel_touch_tests.cjs
       - uses: emscripten-core/setup-emsdk@v15
         with:
           version: 5.0.4

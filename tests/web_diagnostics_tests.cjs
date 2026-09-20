@@ -26,6 +26,34 @@ diagnostics.publishFrame({title: 'Company Book', scene: 'book', revision: 8,
 assert(diagnostics.finish(token, {frame: {title: 'Company Book', scene: 'book', revision: 8}}));
 assert(diagnostics.snapshot().entries.some(entry => entry.stage === 'first-actionable'));
 
+token = diagnostics.beginAction(3, {scene: 'book', revision: 9});
+now = 5152;
+diagnostics.publishFrame({scene: 'town', revision: 10});
+assert(!diagnostics.snapshot().entries.some(entry =>
+  entry.stage === 'transition' && entry.action === 'touch-3'));
+assert(diagnostics.finish(token, {frame: {scene: 'town', revision: 10}}));
+
+token = diagnostics.beginAction(4, {scene: 'town', revision: 11});
+now = 5153;
+diagnostics.clearPendingAction(); // Captured keyboard input clears a prior touch action.
+now = 5154;
+diagnostics.publishFrame({scene: 'mine', revision: 12});
+assert(!diagnostics.snapshot().entries.some(entry =>
+  entry.stage === 'transition' && entry.action === 'touch-4'));
+assert(diagnostics.finish(token, {frame: {scene: 'mine', revision: 12}}));
+
+token = diagnostics.beginAction(5, {scene: 'mine', revision: 13});
+now = 5155;
+diagnostics.clearPendingAction(); // Captured pointer input clears a prior touch action.
+const replacement = diagnostics.beginAction(6, {scene: 'mine', revision: 13});
+now = 5156;
+diagnostics.publishFrame({scene: 'book', revision: 14});
+const replacements = diagnostics.snapshot().entries.filter(entry => entry.stage === 'transition');
+assert(!replacements.some(entry => entry.action === 'touch-5'));
+assert(replacements.some(entry => entry.action === 'touch-6'));
+assert(diagnostics.finish(token, {frame: {scene: 'book', revision: 14}}));
+assert(diagnostics.finish(replacement, {frame: {scene: 'book', revision: 14}}));
+
 for (let index = 0; index < 110; ++index) {
   token = diagnostics.begin('action', {action: 'private words must stay out'});
   now += 1;
