@@ -2091,7 +2091,14 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawJourneyAftermath3D(sim, place);
     }
 
-    int32_t crates = place->stock[CC_GOOD_FOOD] / 12;
+    const CcSituation *relief=CcSimAcceptedSituation(sim);
+    bool loading_relief=relief != NULL &&
+        relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
+        place->id == CcSimSituationOfferSettlementId(sim,relief) &&
+        !CcSimReliefLoadingComplete(relief);
+    int32_t crates = loading_relief ?
+        CcSimReliefCratesToLoad(relief)-(relief->loading_crate_carried?1:0) :
+        place->stock[CC_GOOD_FOOD] / 12;
     if (crates > 4) crates = 4;
     for (int32_t i = 0; i < crates; ++i) {
         const NavPlatform *crate = &STREET_CRATE_PLATFORMS[i];
@@ -2237,6 +2244,14 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     if (!convoy_visible) {
         DrawAgentPath(agent, false);
         DrawRobotShell(agent);
+        const CcSituation *carried_relief=CcSimAcceptedSituation(sim);
+        if (carried_relief != NULL &&
+            carried_relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
+            carried_relief->loading_crate_carried) {
+            DrawOrientedBox(agent->position,(Vector3){0.0f,0.92f,0.44f},
+                (Vector3){0.66f,0.62f,0.66f},agent->facing_yaw,
+                (Color){166,99,48,255});
+        }
         DrawCombatSword(agent);
         DrawCombatSkillTell(agent);
         DrawCombatImpact(agent);

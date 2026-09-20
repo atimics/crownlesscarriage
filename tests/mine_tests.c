@@ -180,6 +180,62 @@ static void TestMinePartyWipeConservation(void)
     CC_CHECK(gold_in_carriage);
 }
 
+static void TestReliefCratePersistence(void)
+{
+    CcSim sim,restored;
+    CcSimInit(&sim,UINT32_C(0x107ca77e));
+    CcSituation *relief=NULL;
+    for (int32_t i=0;i<sim.situation_count;++i)
+        if (sim.situations[i].kind == CC_SITUATION_RELIEF_DELIVERY) {
+            relief=&sim.situations[i];
+            break;
+        }
+    CC_CHECK(relief!=NULL);
+    CcId relief_id=relief->id;
+    CcId origin=CcSimSituationOfferSettlementId(&sim,relief);
+    sim.player.location_id=origin;
+    sim.carriage.location_id=origin;
+    CcCommand accept={.kind=CC_COMMAND_ACCEPT_SITUATION,
+        .target_id=relief_id};
+    Check(CcSimApply(&sim,&accept,error,sizeof(error)));
+    CcCommand pickup={.kind=CC_COMMAND_PICKUP_RELIEF_CRATE,
+        .target_id=relief_id};
+    Check(CcSimApply(&sim,&pickup,error,sizeof(error)));
+    CC_CHECK(relief->loading_crate_carried&&relief->loading_progress==0);
+    Check(CcSaveWrite("relief-crate-carry.ccsave",&sim,error,sizeof(error)));
+    Check(CcSaveRead("relief-crate-carry.ccsave",&restored,error,sizeof(error)));
+    relief=(CcSituation *)CcSimSituation(&restored,relief_id);
+    CC_CHECK(relief!=NULL&&relief->loading_crate_carried&&
+        relief->loading_progress==0&&CcSimHash(&restored)==CcSimHash(&sim));
+    CcCommand stow={.kind=CC_COMMAND_STOW_RELIEF_CRATE,
+        .target_id=relief_id};
+    Check(CcSimApply(&restored,&stow,error,sizeof(error)));
+    CC_CHECK(!relief->loading_crate_carried&&relief->loading_progress==1&&
+        restored.player.cargo[CC_GOOD_FOOD]==1);
+    (void)remove("relief-crate-carry.ccsave");
+
+    CcSimInit(&sim,UINT32_C(0x106ca77e));
+    relief=NULL;
+    for (int32_t i=0;i<sim.situation_count;++i)
+        if (sim.situations[i].kind == CC_SITUATION_RELIEF_DELIVERY) {
+            relief=&sim.situations[i];
+            break;
+        }
+    CC_CHECK(relief!=NULL);
+    relief_id=relief->id;
+    CcCommand legacy_accept={.kind=CC_COMMAND_ACCEPT_SITUATION,
+        .target_id=relief_id};
+    Check(CcSimApply(&sim,&legacy_accept,error,sizeof(error)));
+    sim.player.cargo[relief->good]=relief->quantity;
+    sim.schema_version=107U;
+    Check(CcSaveWrite("relief-crate-carry.ccsave",&sim,error,sizeof(error)));
+    Check(CcSaveRead("relief-crate-carry.ccsave",&restored,error,sizeof(error)));
+    relief=(CcSituation *)CcSimSituation(&restored,relief_id);
+    CC_CHECK(relief!=NULL&&CcSimReliefLoadingComplete(relief)&&
+        relief->loading_progress==relief->quantity);
+    (void)remove("relief-crate-carry.ccsave");
+}
+
 static void CarryThreeTrackedGold(CcSim *sim)
 {
     AtBranch(sim,false);
@@ -455,15 +511,15 @@ static void TestMineSurveyMigrationAndReturns(void)
     Check(CcSaveRead(fixture,&restored,error,sizeof(error)));
     Check(CcSimValidate(&restored,error,sizeof(error)));
     uint64_t migrated_hash=CcSimHash(&restored);
-    /* Schema 107 includes the typed food agreement table in the state hash. */
-    CC_CHECK(migrated_hash==UINT64_C(13187613855323144941));
+    /* Schema 108 includes food agreements and relief loading in the hash. */
+    CC_CHECK(migrated_hash==UINT64_C(11197658590341376864));
     Check(CcSaveRead(fixture,&reloaded,error,sizeof(error)));
     CC_CHECK(CcSimHash(&reloaded)==migrated_hash);
     const CcCustodyEntry *depleted_gold=NULL;
     for(int32_t i=0;i<CcCustodyEffectiveCapacity(&restored.custody);++i)
         if(restored.custody.entries[i].id==restored.mine.gold_source_entry_id)
             depleted_gold=&restored.custody.entries[i];
-    CC_CHECK(restored.schema_version==107U&&restored.generator_version==25U&&
+    CC_CHECK(restored.schema_version==108U&&restored.generator_version==25U&&
         restored.mine.return_revision==1&&restored.mine.surveyed&&
         restored.mine.survey_event_id==0U&&
         restored.mine.survey_read_day==0&&restored.mine.survey_observed_day==0&&
@@ -1012,6 +1068,7 @@ int main(int argc,char **argv)
     TestMineReturnRecords();
     TestMineSurveyMigrationAndReturns();
     TestMinePartyWipeConservation();
+    TestReliefCratePersistence();
     TestMineCargoReconciliation();
     TestMineTrackedRepack();
     (void)remove(path);(void)remove("mine-replay.ccsave");

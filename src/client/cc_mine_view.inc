@@ -572,10 +572,10 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
         hint="Entry spends 1 Bread and starts Light 18. Pack 3 Bread to keep 2 for the hauler offer.";
     } else if(at_haulers &&
         sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_CONTESTED) {
-        hint=TextFormat("Hauler load has %d %s. Pack %d/8. Inspect or take the selected amount.",
+        hint=TextFormat("Hauler load has %d %s. Fill the carried crate, then walk it to the Rope Store or carriage. Pack %d/8.",
             CcMineSourceGood(sim,local->mine_good),CcGoodName(local->mine_good),pack_used);
     } else if(at_cache) {
-        hint=TextFormat("Rope Store has %d %s. Pack has %d. Cache or recover the selected amount.",
+        hint=TextFormat("Rope Store has %d %s. Carried crate has %d. Set down or recover the selected amount.",
             CcMineCacheGood(sim,local->mine_good),CcGoodName(local->mine_good),
             pack_goods[local->mine_good]);
     } else if(at_carriage && carriage_used+pack_used>sim->player.cargo_capacity) {
@@ -596,7 +596,7 @@ static void DrawMineScene(const CcSim *sim, LocalState *local, RenderTexture2D t
     } else if(at_haulers &&
               sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_CONTESTED) {
         AdventureButton(MineControl(0),"Inspect load / E",true,false);
-        AdventureButton(MineControl(1),TextFormat("Take %d / P",local->mine_quantity),can_take,false);
+        AdventureButton(MineControl(1),TextFormat("Load %d into crate / P",local->mine_quantity),can_take,false);
         AdventureButton(MineControl(2),"Load released",false,false);
     } else if(at_haulers &&
               sim->mine.encounter_outcome==CC_MINE_ENCOUNTER_BARGAINED) {

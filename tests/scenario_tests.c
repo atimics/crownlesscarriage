@@ -207,6 +207,8 @@ int main(void)
         .target_id = relief->id
     };
     CC_CHECK(CcSimApply(&official, &accept_relief, error, sizeof(error)));
+    CC_CHECK(CcTestLoadReliefCrates(
+        &official, relief, error, sizeof(error)));
     CC_CHECK(official.player.cargo[CC_GOOD_FOOD] == relief->quantity);
     TravelAndArrive(&official, official.settlements[1].id,
                     error, sizeof(error));

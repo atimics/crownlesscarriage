@@ -21,7 +21,16 @@ static void RefreshStreetMarketCrates(const CcSim *sim)
     if (sim != NULL) {
         const CcSettlement *place = CcSimSettlement(
             sim, sim->player.location_id);
-        if (place != NULL) crates = place->stock[CC_GOOD_FOOD] / 12;
+        const CcSituation *relief = CcSimAcceptedSituation(sim);
+        if (place != NULL && relief != NULL &&
+            relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
+            place->id == CcSimSituationOfferSettlementId(sim, relief) &&
+            !CcSimReliefLoadingComplete(relief)) {
+            crates = CcSimReliefCratesToLoad(relief) -
+                (relief->loading_crate_carried ? 1 : 0);
+        } else if (place != NULL) {
+            crates = place->stock[CC_GOOD_FOOD] / 12;
+        }
     }
     CcLocalSetStreetMarketCratesInternal(crates);
 }

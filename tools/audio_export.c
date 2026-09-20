@@ -168,10 +168,17 @@ static bool ExportCampaign(FILE *file)
                     character->memory_count = 1;
                     character->memories[0] = (CcCharacterMemory){.kind = CC_CHARACTER_MEMORY_PLAYER_PROMISED,
                         .subject_id = situation->id};
+                    if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
+                        situation->loading_progress = situation->quantity;
+                    }
                 } else if (state >= 1 && state <= 4) {
                     character->memory_count = 1;
                     character->memories[0] = (CcCharacterMemory){.kind = (CcCharacterMemoryKind)state,
                         .subject_id = situation->id};
+                    if (state == CC_CHARACTER_MEMORY_PLAYER_PROMISED &&
+                        situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
+                        situation->loading_progress = situation->quantity;
+                    }
                 } else if (state == 5) situation->status = CC_SITUATION_RESOLVED;
                 else if (state == 6) situation->status = CC_SITUATION_FAILED;
                 else if (state >= 7) situation->discovery_stage = (CcSituationDiscoveryStage)(state - 7);

@@ -1219,6 +1219,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         "CREATE TABLE IF NOT EXISTS situation_cast ("
         " slot INTEGER PRIMARY KEY, situation_id INTEGER NOT NULL UNIQUE,"
         " sponsor_name TEXT NOT NULL, affected_name TEXT NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS situation_loading ("
+        " slot INTEGER PRIMARY KEY, situation_id INTEGER NOT NULL UNIQUE,"
+        " loaded INTEGER NOT NULL, carried INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS player_journey ("
         " id INTEGER PRIMARY KEY CHECK(id=1), active INTEGER NOT NULL,"
         " situation_id INTEGER NOT NULL, origin_id INTEGER NOT NULL,"
@@ -2857,6 +2860,29 @@ static bool SaveSituationCasts(sqlite3 *database, const CcSim *sim,
     return true;
 }
 
+static bool SaveSituationLoading(sqlite3 *database, const CcSim *sim,
+                                 char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement=NULL;
+    if (!Prepare(database,
+        "INSERT INTO situation_loading VALUES(?,?,?,?);",
+        &statement,error,error_capacity)) return false;
+    for (int32_t i=0;i<sim->situation_count;++i) {
+        const CcSituation *situation=&sim->situations[i];
+        BindInt(statement,1,i);
+        BindId(statement,2,situation->id);
+        BindInt(statement,3,situation->loading_progress);
+        BindInt(statement,4,situation->loading_crate_carried?1:0);
+        if (!StepDone(database,statement,error,error_capacity) ||
+            !ResetStatement(database,statement,error,error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
 static bool SaveQuestArchitecture(sqlite3 *database, const CcSim *sim,
                                   char *error, size_t error_capacity)
 {
@@ -3570,7 +3596,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM dungeon; DELETE FROM dungeon_detail;"
             "DELETE FROM dungeon_room; DELETE FROM dungeon_link;"
             "DELETE FROM dungeon_expedition;"
-            "DELETE FROM situation; DELETE FROM situation_cast;"
+            "DELETE FROM situation; DELETE FROM situation_cast; DELETE FROM situation_loading;"
             "DELETE FROM situation_quest; DELETE FROM situation_evidence;"
             "DELETE FROM story_front; DELETE FROM front_situation;"
             "DELETE FROM quest_outcome; DELETE FROM delayed_echo_queue;"
@@ -3625,6 +3651,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveLegends(database, sim, error, error_capacity) &&
         SaveSituations(database, sim, error, error_capacity) &&
         SaveSituationCasts(database, sim, error, error_capacity) &&
+        SaveSituationLoading(database, sim, error, error_capacity) &&
         SaveQuestArchitecture(database, sim, error, error_capacity) &&
         SaveCharacters(database, sim, error, error_capacity) &&
         SaveHistoricalCharacters(database, sim, error, error_capacity) &&
@@ -5350,6 +5377,39 @@ static bool ReadSituationCasts(sqlite3 *database, CcSim *sim,
     return true;
 }
 
+static bool ReadSituationLoading(sqlite3 *database, CcSim *sim,
+                                 char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 108U) return true;
+    sqlite3_stmt *statement=NULL;
+    if (!Prepare(database,
+        "SELECT slot,situation_id,loaded,carried FROM situation_loading ORDER BY slot;",
+        &statement,error,error_capacity)) return false;
+    int32_t rows=0;
+    while (sqlite3_step(statement)==SQLITE_ROW) {
+        int32_t slot=sqlite3_column_int(statement,0);
+        CcId situation_id=(CcId)sqlite3_column_int64(statement,1);
+        if (slot != rows || slot < 0 || slot >= sim->situation_count ||
+            sim->situations[slot].id != situation_id) {
+            SetError(error,error_capacity,
+                "Situation loading state does not match its charter.");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        sim->situations[slot].loading_progress=sqlite3_column_int(statement,2);
+        sim->situations[slot].loading_crate_carried=
+            sqlite3_column_int(statement,3)!=0;
+        rows+=1;
+    }
+    sqlite3_finalize(statement);
+    if (rows != sim->situation_count) {
+        SetError(error,error_capacity,
+            "Situation loading rows are incomplete.");
+        return false;
+    }
+    return true;
+}
+
 static bool ReadQuestArchitecture(sqlite3 *database, CcSim *sim,
                                   char *error, size_t error_capacity)
 {
@@ -6192,6 +6252,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadUnderroad(database, sim, error, error_capacity) &&
               ReadSituations(database, sim, error, error_capacity) &&
               ReadSituationCasts(database, sim, error, error_capacity) &&
+              ReadSituationLoading(database, sim, error, error_capacity) &&
               ReadCharacters(database, sim, error, error_capacity) &&
               ReadHistoricalCharacters(database, sim, error, error_capacity) &&
               ReadQuestArchitecture(database, sim, error, error_capacity) &&

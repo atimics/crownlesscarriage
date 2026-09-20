@@ -18,6 +18,7 @@ int32_t CcMineChamber(int32_t x, int32_t y);
 const char *CcMineChamberName(int32_t chamber);
 int32_t CcMinePackUsed(const CcSim *sim);
 int32_t CcMinePackGood(const CcSim *sim, CcGood good);
+int32_t CcMineCarriedCrates(const CcSim *sim);
 void CcMineInitializeLoad(CcSim *sim);
 bool CcMineSettleFallenPack(CcSim *sim);
 int32_t CcMineSourceUsed(const CcSim *sim);

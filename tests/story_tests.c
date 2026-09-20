@@ -13,6 +13,19 @@ static CcSituation *FindSituation(CcSim *sim, CcSituationKind kind)
     return NULL;
 }
 
+static void LoadReliefCrates(CcSim *sim,CcSituation *relief)
+{
+    char error[192];
+    while (CcSimReliefCratesToLoad(relief)>0) {
+        CcCommand pickup={.kind=CC_COMMAND_PICKUP_RELIEF_CRATE,
+            .target_id=relief->id};
+        CC_CHECK(CcSimApply(sim,&pickup,error,sizeof(error)));
+        CcCommand stow={.kind=CC_COMMAND_STOW_RELIEF_CRATE,
+            .target_id=relief->id};
+        CC_CHECK(CcSimApply(sim,&stow,error,sizeof(error)));
+    }
+}
+
 static void ValidateCatalogue(void)
 {
     static const char *forbidden_phrases[] = {
@@ -327,6 +340,32 @@ static void ValidateConversationBeats(void)
     CC_CHECK(CcSimApply(&sim, &pledge, error, sizeof(error)));
     offer_place = CcSimSettlement(&sim, offer);
     CC_CHECK(offer_place != NULL);
+    CC_CHECK(sim.player.cargo[CC_GOOD_FOOD] == carriage_food_before);
+    CC_CHECK(offer_place->stock[CC_GOOD_FOOD] == offer_food_before);
+    CC_CHECK(relief->loading_progress == 0 &&
+             !relief->loading_crate_carried &&
+             CcSimReliefCratesToLoad(relief) == relief->quantity);
+    CC_CHECK(CcStoryCharacterText(
+        &sim, relief, sponsor, spoken, sizeof(spoken)));
+    CC_CHECK(strstr(spoken, "granary stack") != NULL);
+    CC_CHECK(strstr(spoken, "Jory Fen") != NULL);
+    CC_CHECK(strstr(spoken, "Silverwick") != NULL);
+    for (int32_t crate=0;crate<relief->quantity;++crate) {
+        CcCommand pickup={.kind=CC_COMMAND_PICKUP_RELIEF_CRATE,
+            .target_id=relief->id};
+        CC_CHECK(CcSimApply(&sim,&pickup,error,sizeof(error)));
+        CC_CHECK(relief->loading_crate_carried);
+        CC_CHECK(sim.player.cargo[CC_GOOD_FOOD] ==
+                 carriage_food_before + crate);
+        CC_CHECK(offer_place->stock[CC_GOOD_FOOD] ==
+                 offer_food_before - crate - 1);
+        CcCommand stow={.kind=CC_COMMAND_STOW_RELIEF_CRATE,
+            .target_id=relief->id};
+        CC_CHECK(CcSimApply(&sim,&stow,error,sizeof(error)));
+        CC_CHECK(!relief->loading_crate_carried &&
+                 relief->loading_progress == crate + 1);
+    }
+    CC_CHECK(CcSimReliefLoadingComplete(relief));
     CC_CHECK(sim.player.cargo[CC_GOOD_FOOD] ==
              carriage_food_before + relief->quantity);
     CC_CHECK(offer_place->stock[CC_GOOD_FOOD] ==
@@ -385,6 +424,7 @@ static void ValidateReliefArrivalDialogue(void)
         .amount = CC_CHARACTER_RESPONSE_PLEDGE_HELP
     };
     CC_CHECK(CcSimApply(&sim, &pledge, error, sizeof(error)));
+    LoadReliefCrates(&sim,relief);
     const CcCharacter *affected = CcSimSituationAffectedCharacter(
         &sim, relief);
     const CcSettlement *target = CcSimSettlement(&sim, relief->target_id);

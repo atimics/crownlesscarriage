@@ -197,6 +197,21 @@ static void InitializeExtendedGoods(CcSim *sim)
     CcSimInitializePaperEconomy(sim);
 }
 
+static void UpgradeReliefLoading(CcSim *sim)
+{
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        CcSituation *situation = &sim->situations[i];
+        situation->loading_progress = 0;
+        situation->loading_crate_carried = false;
+        if (situation->kind == CC_SITUATION_RELIEF_DELIVERY &&
+            situation->status == CC_SITUATION_ACTIVE &&
+            sim->player.accepted_situation_id == situation->id) {
+            /* Accepting a relief job loaded its full cargo before schema 107. */
+            situation->loading_progress = situation->quantity;
+        }
+    }
+}
+
 static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
                                        char *error, size_t error_capacity)
 {
@@ -676,6 +691,7 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
 {
     uint32_t legacy_version = sim->schema_version;
     if (!UpgradeLegacyRuntimeSchema(sim, error, error_capacity)) return false;
+    if (legacy_version < 108U) UpgradeReliefLoading(sim);
     if (legacy_version < 99U) CcCustodyInit(&sim->custody);
     if (legacy_version < 101U) {
         for (int32_t i = 0; i < sim->character_count; ++i) {

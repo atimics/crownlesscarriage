@@ -91,7 +91,11 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
             MineBox(15,.85f,10,.95f,.18f,.18f,wood);
             MineBox(15,1.25f,10,.95f,.18f,.18f,wood);
         }
-        for(int i=0;i<3;++i) MineBox(25.4f+(float)i*.6f,.23f,16,.55f,.46f,1.2f,stone);
+        int32_t source_crates=CcMineSourceUsed(sim);
+        if(source_crates>3) source_crates=3;
+        for(int i=0;i<source_crates;++i)
+            MineBox(25.4f+(float)i*.6f,.31f,16,.55f,.62f,.72f,
+                (Color){151,91,47,255});
         /* The offer and combat use the same saved group identity, appearance,
            and source positions. */
         if (!combat && sim->mine.source_owner_id == sim->goblins.id &&
@@ -108,7 +112,11 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
             for (int32_t i=0;i<CC_LOCAL_RAIDER_COUNT;++i)
                 DrawCourseRaider(&course->raiders[i]);
         }
-        for(int i=0;i<4;++i) MineBox(3.5f+(float)i*.6f,.2f,16,.4f,.4f,.7f,(Color){133,111,74,255});
+        int32_t cached_crates=CcMineCacheUsed(sim);
+        if(cached_crates>4) cached_crates=4;
+        for(int i=0;i<cached_crates;++i)
+            MineBox(3.5f+(float)i*.6f,.28f,16,.52f,.56f,.66f,
+                (Color){151,91,47,255});
     } else {
         MineBox(15,-.18f,10,33,.3f,23,(Color){119,144,112,255});
         MineBox(15,.01f,11,5,.05f,19,(Color){183,168,133,255});
@@ -148,6 +156,18 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
         DrawRobotShell(&hero);
         DrawCombatSword(&hero);
         rlPopMatrix();
+    }
+    if (CcMineCarriedCrates(sim)>0) {
+        if (underground) {
+            const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
+            int32_t direction=((facing%4)+4)%4;
+            MineBox((float)sim->mine.x+(float)dx[direction]*.72f,.52f,
+                (float)sim->mine.y+(float)dy[direction]*.72f,
+                .62f,.58f,.62f,(Color){166,99,48,255});
+        } else {
+            MineBox((float)sim->mine.x,.92f,(float)sim->mine.y-.42f,
+                .66f,.62f,.66f,(Color){166,99,48,255});
+        }
     }
     EndWorldLighting();
     EndMode3D();

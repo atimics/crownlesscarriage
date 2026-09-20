@@ -544,6 +544,10 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(item->cause_event_id); HASH_VALUE(item->good);
         HASH_VALUE(item->quantity); HASH_VALUE(item->progress); HASH_VALUE(item->reward);
         HASH_VALUE(item->created_day); HASH_VALUE(item->deadline_day);
+        if (sim->schema_version >= 108U) {
+            HASH_VALUE(item->loading_progress);
+            HASH_VALUE(item->loading_crate_carried);
+        }
         if (sim->schema_version >= 17U) {
             HASH_VALUE(item->sponsor_character_id);
             HASH_VALUE(item->affected_character_id);

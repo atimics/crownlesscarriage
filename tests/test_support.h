@@ -51,4 +51,23 @@ static inline bool CcTestContinueJourneyPause(
     return false;
 }
 
+static inline bool CcTestLoadReliefCrates(
+    CcSim *sim, CcSituation *situation, char *error, size_t error_capacity)
+{
+    if (sim == NULL || situation == NULL) return false;
+    while (CcSimReliefCratesToLoad(situation) > 0) {
+        CcCommand pickup = {
+            .kind = CC_COMMAND_PICKUP_RELIEF_CRATE,
+            .target_id = situation->id
+        };
+        if (!CcSimApply(sim, &pickup, error, error_capacity)) return false;
+        CcCommand stow = {
+            .kind = CC_COMMAND_STOW_RELIEF_CRATE,
+            .target_id = situation->id
+        };
+        if (!CcSimApply(sim, &stow, error, error_capacity)) return false;
+    }
+    return true;
+}
+
 #endif

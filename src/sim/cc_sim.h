@@ -67,7 +67,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 107
+#define CC_SIM_SCHEMA_VERSION 108
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -667,7 +667,11 @@ typedef enum CcCommandKind {
     /* Schema 107: internal participant food agreement lifecycle. */
     CC_COMMAND_FOOD_RELIEF_PROPOSE = 75,
     CC_COMMAND_FOOD_RELIEF_ACCEPT = 76,
-    CC_COMMAND_FOOD_RELIEF_EXECUTE = 77
+    CC_COMMAND_FOOD_RELIEF_EXECUTE = 77,
+    /* Schema 108: relief crates move through the player's hands before the
+       carriage receives them. */
+    CC_COMMAND_PICKUP_RELIEF_CRATE = 78,
+    CC_COMMAND_STOW_RELIEF_CRATE = 79
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1738,6 +1742,10 @@ typedef struct CcSituation {
     CcSituationDiscoveryStage discovery_stage;
     CcSituationLeadPath lead_path;
     CcId lead_event_id;
+    /* Schema 108: loading is separate from delivery progress. One crate can
+       be in the player's hands between the granary stack and the carriage. */
+    int32_t loading_progress;
+    bool loading_crate_carried;
     char sponsor_name[CC_NAME_CAPACITY];
     char affected_name[CC_NAME_CAPACITY];
 } CcSituation;
@@ -2228,7 +2236,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 604960,
+_Static_assert(sizeof(CcSim) == 605056,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -2454,6 +2462,8 @@ const char *CcCharacterRoutineName(CcCharacterRoutine routine);
 CcCharacterRoutine CcSimCharacterRoutine(const CcSim *sim,
                                          const CcCharacter *character);
 const CcSituation *CcSimAcceptedSituation(const CcSim *sim);
+int32_t CcSimReliefCratesToLoad(const CcSituation *situation);
+bool CcSimReliefLoadingComplete(const CcSituation *situation);
 CcId CcSimSituationOfferSettlementId(const CcSim *sim,
                                      const CcSituation *situation);
 bool CcSimSituationTouchesSettlement(const CcSim *sim,

@@ -3401,6 +3401,22 @@ const CcSituation *CcSimAcceptedSituation(const CcSim *sim)
            situation : NULL;
 }
 
+int32_t CcSimReliefCratesToLoad(const CcSituation *situation)
+{
+    if (situation == NULL ||
+        situation->kind != CC_SITUATION_RELIEF_DELIVERY) return 0;
+    int32_t remaining=situation->quantity-situation->loading_progress;
+    return remaining > 0 ? remaining : 0;
+}
+
+bool CcSimReliefLoadingComplete(const CcSituation *situation)
+{
+    return situation != NULL &&
+        situation->kind == CC_SITUATION_RELIEF_DELIVERY &&
+        !situation->loading_crate_carried &&
+        situation->loading_progress >= situation->quantity;
+}
+
 CcId CcSimSituationOfferSettlementId(const CcSim *sim,
                                      const CcSituation *situation)
 {
@@ -17422,17 +17438,6 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
                      "Mara's granary cannot cover the promised food load.");
             return false;
         }
-        int32_t old_slots = CcGoodsPlayerCargoBoxes(
-            CC_GOOD_FOOD, sim->player.cargo[CC_GOOD_FOOD]);
-        int32_t new_slots = CcGoodsPlayerCargoBoxes(
-            CC_GOOD_FOOD,
-            sim->player.cargo[CC_GOOD_FOOD] + relief_load);
-        if (CcPlayerCargoUsed(&sim->player) - old_slots + new_slots >
-            sim->player.cargo_capacity) {
-            SetError(error, error_capacity,
-                     "Clear cargo space so Mara can load the food boxes.");
-            return false;
-        }
     }
     if (situation->kind == CC_SITUATION_COURIER_DELIVERY) {
         CcCourier *courier = CourierMutable(sim, situation->target_id);
@@ -17459,12 +17464,9 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
         situation->target_id, situation->cause_event_id,
         situation->deadline_day - sim->current_day, text);
     if (relief_load > 0 && relief_origin != NULL) {
-        relief_origin->stock[CC_GOOD_FOOD] -= relief_load;
-        sim->player.cargo[CC_GOOD_FOOD] += relief_load;
-        CcEconomyRefreshSettlementGoodPrice(sim, relief_origin, CC_GOOD_FOOD);
         (void)snprintf(
             text, sizeof(text),
-            "%s loads %d food boxes from %s's granary into the Crownless carriage.",
+            "%s sets %d food boxes beside %s's granary for the Crownless company to carry.",
             situation->sponsor_name, relief_load, relief_origin->name);
         (void)PushEvent(
             sim, CC_EVENT_PLAYER_TRADE, sim->player.id,
@@ -17473,6 +17475,72 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
     }
     RefreshSituationCharacterActivities(sim, (CcSituation *)situation);
     SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyReliefCrate(CcSim *sim, const CcCommand *command,
+                             char *error, size_t error_capacity)
+{
+    CcSituation *situation=(CcSituation *)CcSimAcceptedSituation(sim);
+    if (situation == NULL || situation->id != command->target_id ||
+        situation->kind != CC_SITUATION_RELIEF_DELIVERY) {
+        SetError(error,error_capacity,"Accept the Thornford relief charter first.");
+        return false;
+    }
+    CcId origin_id=CcSimSituationOfferSettlementId(sim,situation);
+    CcSettlement *origin=CcSimSettlementMutable(sim,origin_id);
+    if (origin == NULL || sim->player.location_id != origin_id ||
+        sim->carriage.location_id != origin_id || sim->journey.active) {
+        SetError(error,error_capacity,"Carry relief crates between the Thornford granary and its parked carriage.");
+        return false;
+    }
+    char text[CC_EVENT_TEXT_CAPACITY];
+    if (command->kind == CC_COMMAND_PICKUP_RELIEF_CRATE) {
+        if (situation->loading_crate_carried) {
+            SetError(error,error_capacity,"Place the crate in the carriage before lifting another.");
+            return false;
+        }
+        if (CcSimReliefCratesToLoad(situation) <= 0) {
+            SetError(error,error_capacity,"Every promised relief crate is already aboard.");
+            return false;
+        }
+        if (origin->stock[situation->good] <= 0) {
+            SetError(error,error_capacity,"The granary stack has no promised crate ready.");
+            return false;
+        }
+        origin->stock[situation->good]-=1;
+        situation->loading_crate_carried=true;
+        CcEconomyRefreshSettlementGoodPrice(sim,origin,situation->good);
+        (void)snprintf(text,sizeof(text),
+            "The player lifts one relief crate from %s's granary stack.",origin->name);
+    } else if (command->kind == CC_COMMAND_STOW_RELIEF_CRATE) {
+        if (!situation->loading_crate_carried) {
+            SetError(error,error_capacity,"Lift a relief crate from the granary stack first.");
+            return false;
+        }
+        int32_t old_slots=CcGoodsPlayerCargoBoxes(
+            situation->good,sim->player.cargo[situation->good]);
+        int32_t new_slots=CcGoodsPlayerCargoBoxes(
+            situation->good,sim->player.cargo[situation->good]+1);
+        if (CcPlayerCargoUsed(&sim->player)-old_slots+new_slots >
+            sim->player.cargo_capacity) {
+            SetError(error,error_capacity,"Make one cargo slot for the crate in the carriage.");
+            return false;
+        }
+        sim->player.cargo[situation->good]+=1;
+        situation->loading_progress+=1;
+        situation->loading_crate_carried=false;
+        (void)snprintf(text,sizeof(text),
+            "The player places relief crate %d of %d in the Crownless carriage while %s steadies the load.",
+            situation->loading_progress,situation->quantity,
+            situation->sponsor_name);
+    } else {
+        SetError(error,error_capacity,"Choose a relief crate action.");
+        return false;
+    }
+    (void)PushEvent(sim,CC_EVENT_PLAYER_TRADE,situation->id,origin_id,
+        situation->cause_event_id,1,text);
+    SetError(error,error_capacity,"");
     return true;
 }
 
@@ -17549,6 +17617,16 @@ static bool ApplyAbandonSituation(CcSim *sim, const CcCommand *command,
                               command->target_id != situation->id)) {
         SetError(error, error_capacity, "The company has no such accepted charter.");
         return false;
+    }
+    if (situation->kind == CC_SITUATION_RELIEF_DELIVERY &&
+        situation->loading_crate_carried) {
+        CcSettlement *origin=CcSimSettlementMutable(
+            sim,CcSimSituationOfferSettlementId(sim,situation));
+        if (origin != NULL && origin->stock[situation->good] < CC_SIM_MAX_UNITS) {
+            origin->stock[situation->good]+=1;
+            CcEconomyRefreshSettlementGoodPrice(sim,origin,situation->good);
+        }
+        ((CcSituation *)situation)->loading_crate_carried=false;
     }
     if (situation->kind == CC_SITUATION_COURIER_DELIVERY) {
         CcCourier *courier = CourierMutable(sim, situation->target_id);
@@ -19423,6 +19501,16 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Command target is missing.");
         return false;
     }
+    const CcSituation *carried_relief=CcSimAcceptedSituation(sim);
+    if (carried_relief != NULL &&
+        carried_relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
+        carried_relief->loading_crate_carried &&
+        command->kind != CC_COMMAND_STOW_RELIEF_CRATE &&
+        command->kind != CC_COMMAND_ABANDON_SITUATION) {
+        SetError(error,error_capacity,
+            "Carry the relief crate to the carriage before doing other business.");
+        return false;
+    }
     /* Participant commands use their own presence and consent checks. */
     if (command->kind >= CC_COMMAND_FOOD_RELIEF_PROPOSE &&
         command->kind <= CC_COMMAND_FOOD_RELIEF_EXECUTE)
@@ -19479,7 +19567,9 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_SUPPORT_BAKERY ||
         command->kind == CC_COMMAND_TAKE_BODY_PURSE ||
         command->kind == CC_COMMAND_MINE_LEARN_LEAD ||
-        command->kind == CC_COMMAND_MINE_REPORT_RETURN;
+        command->kind == CC_COMMAND_MINE_REPORT_RETURN ||
+        command->kind == CC_COMMAND_PICKUP_RELIEF_CRATE ||
+        command->kind == CC_COMMAND_STOW_RELIEF_CRATE;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
                  "Settlement business must wait until the carriage arrives.");
@@ -19513,6 +19603,9 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
             return ApplyMineLearnLead(sim,command,error,error_capacity);
         case CC_COMMAND_MINE_REPORT_RETURN:
             return ApplyMineReportReturn(sim,command,error,error_capacity);
+        case CC_COMMAND_PICKUP_RELIEF_CRATE:
+        case CC_COMMAND_STOW_RELIEF_CRATE:
+            return ApplyReliefCrate(sim,command,error,error_capacity);
         case CC_COMMAND_EXCHANGE_GOSSIP:
             return ApplyExchangeGossip(sim, command, error, error_capacity);
         case CC_COMMAND_HEARD_STORY:
@@ -21639,6 +21732,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             situation->quantity > CC_SIM_MAX_UNITS ||
             situation->progress < 0 ||
             situation->progress > situation->quantity ||
+            (sim->schema_version >= 108U &&
+             (situation->loading_progress < 0 ||
+              situation->loading_progress > situation->quantity ||
+              (situation->kind != CC_SITUATION_RELIEF_DELIVERY &&
+               (situation->loading_progress != 0 ||
+                situation->loading_crate_carried)) ||
+              (situation->loading_crate_carried &&
+               situation->loading_progress >= situation->quantity))) ||
             situation->reward < 0 ||
             situation->reward > CC_SIM_MAX_MONEY ||
             situation->created_day < 1 ||
