@@ -22087,9 +22087,22 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 agreement->created_day < 1 || agreement->created_day > sim->current_day ||
                 agreement->accepted_day < 0 || agreement->accepted_day > sim->current_day ||
                 agreement->status < CC_FOOD_AGREEMENT_PROPOSED || agreement->status > CC_FOOD_AGREEMENT_FAILED ||
+                (agreement->status == CC_FOOD_AGREEMENT_PROPOSED &&
+                 (agreement->accepted_event_id != 0U || agreement->accepted_day != 0)) ||
+                (agreement->status == CC_FOOD_AGREEMENT_ACCEPTED &&
+                 (agreement->accepted_event_id == 0U || agreement->accepted_day < agreement->created_day ||
+                  agreement->outcome_event_id != 0U)) ||
+                ((agreement->status == CC_FOOD_AGREEMENT_FULFILLED ||
+                  agreement->status == CC_FOOD_AGREEMENT_FAILED) &&
+                 agreement->outcome_event_id == 0U) ||
                 (agreement->status == CC_FOOD_AGREEMENT_PROPOSED && agreement->accepted_event_id != 0U) ||
                 (agreement->status < CC_FOOD_AGREEMENT_FULFILLED && agreement->outcome_event_id != 0U)) {
                 SetError(error, error_capacity, "Food agreement is invalid."); return false;
+            }
+            for (int32_t earlier = 0; earlier < i; ++earlier) {
+                if (sim->food_agreements[earlier].id == agreement->id) {
+                    SetError(error, error_capacity, "Food agreement IDs are duplicated."); return false;
+                }
             }
         }
     }

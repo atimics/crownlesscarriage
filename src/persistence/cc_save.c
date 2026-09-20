@@ -71,6 +71,27 @@ static bool ReadTextColumn(sqlite3_stmt *statement, int column,
     return true;
 }
 
+static bool ReadIntegerColumn(sqlite3_stmt *statement, int column,
+                              int64_t minimum, int64_t maximum,
+                              int64_t *value, const char *field,
+                              char *error, size_t error_capacity)
+{
+    if (statement == NULL || value == NULL ||
+        sqlite3_column_type(statement, column) != SQLITE_INTEGER) {
+        if (error != NULL && error_capacity > 0U)
+            (void)snprintf(error, error_capacity, "Campaign %s integer is invalid.", field);
+        return false;
+    }
+    int64_t parsed = sqlite3_column_int64(statement, column);
+    if (parsed < minimum || parsed > maximum) {
+        if (error != NULL && error_capacity > 0U)
+            (void)snprintf(error, error_capacity, "Campaign %s integer is out of range.", field);
+        return false;
+    }
+    *value = parsed;
+    return true;
+}
+
 static bool Execute(sqlite3 *database, const char *sql,
                     char *error, size_t error_capacity)
 {
@@ -5221,15 +5242,28 @@ static bool ReadFoodAgreements(sqlite3 *database, CcSim *sim,
     if (!Prepare(database, "SELECT * FROM food_agreement ORDER BY slot;", &statement, error, capacity)) return false;
     int32_t rows = 0;
     while (sqlite3_step(statement) == SQLITE_ROW) {
-        int32_t slot = sqlite3_column_int(statement, 0);
-        if (slot != rows || slot < 0 || slot >= CC_MAX_FOOD_AGREEMENTS) { sqlite3_finalize(statement); SetError(error, capacity, "Food-agreement rows exceed save limits."); return false; }
-        CcFoodAgreement *a = &sim->food_agreements[slot];
-        a->id = (CcId)sqlite3_column_int64(statement, 1); a->payer_id = (CcId)sqlite3_column_int64(statement, 2);
-        a->beneficiary_id = (CcId)sqlite3_column_int64(statement, 3); a->place_id = (CcId)sqlite3_column_int64(statement, 4);
-        a->accepted_event_id = (CcId)sqlite3_column_int64(statement, 5); a->outcome_event_id = (CcId)sqlite3_column_int64(statement, 6);
-        a->total_cost = (CcMoney)sqlite3_column_int64(statement, 7); a->quantity = sqlite3_column_int(statement, 8);
-        a->unit_price = sqlite3_column_int(statement, 9); a->created_day = sqlite3_column_int(statement, 10);
-        a->accepted_day = sqlite3_column_int(statement, 11); a->status = (CcFoodAgreementStatus)sqlite3_column_int(statement, 12); rows++;
+        int64_t slot_value = 0;
+        if (!ReadIntegerColumn(statement, 0, 0, CC_MAX_FOOD_AGREEMENTS - 1,
+                               &slot_value, "food agreement slot", error, capacity) ||
+            slot_value != rows) { sqlite3_finalize(statement); SetError(error, capacity, "Food-agreement rows exceed save limits."); return false; }
+        CcFoodAgreement *a = &sim->food_agreements[(int32_t)slot_value];
+        int64_t value[12];
+        const int64_t lower[] = {1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0};
+        const int64_t upper[] = {INT64_MAX, INT64_MAX, INT64_MAX, INT64_MAX, INT64_MAX, INT64_MAX,
+                                 CC_SIM_MAX_MONEY, CC_SIM_MAX_UNITS, INT32_MAX, CC_SIM_MAX_DAY, CC_SIM_MAX_DAY, CC_FOOD_AGREEMENT_FAILED};
+        for (int column = 1; column <= 12; ++column) {
+            if (!ReadIntegerColumn(statement, column, lower[column - 1], upper[column - 1],
+                                   &value[column - 1], "food agreement field", error, capacity)) {
+                sqlite3_finalize(statement); return false;
+            }
+        }
+        a->id = (CcId)value[0]; a->payer_id = (CcId)value[1];
+        a->beneficiary_id = (CcId)value[2]; a->place_id = (CcId)value[3];
+        a->accepted_event_id = (CcId)value[4]; a->outcome_event_id = (CcId)value[5];
+        a->total_cost = (CcMoney)value[6]; a->quantity = (int32_t)value[7];
+        a->unit_price = (int32_t)value[8]; a->created_day = (int32_t)value[9];
+        a->accepted_day = (int32_t)value[10]; a->status = (CcFoodAgreementStatus)value[11];
+        rows++;
     }
     sqlite3_finalize(statement); sim->food_agreement_count = rows; return true;
 }
