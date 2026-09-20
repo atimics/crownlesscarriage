@@ -2734,8 +2734,8 @@ static void CheckSchema104RoadMigration(char *error,
              topology.main_length_units);
     CC_CHECK(CcRoadSavedPositionValid(&pilot));
     CC_CHECK(CcSimValidate(&pilot, error, error_capacity));
-    /* Schema 107 includes the typed food agreement table in the state hash. */
-    CC_CHECK(CcSimHash(&pilot) == UINT64_C(9214914555253877868));
+    /* Schema 108 includes the generated Underroad network in the state hash. */
+    CC_CHECK(CcSimHash(&pilot) == UINT64_C(18110105845800813772));
 
     char stop_file[512];
     (void)snprintf(
@@ -2784,7 +2784,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(CcSimJourneyRoadSiteStop(&stopped) == pending);
     CC_CHECK(CcRoadSavedPositionValid(&stopped));
     CC_CHECK(CcSimValidate(&stopped, error, error_capacity));
-    CC_CHECK(CcSimHash(&stopped) == UINT64_C(11964364067619381583));
+    CC_CHECK(CcSimHash(&stopped) == UINT64_C(3206404198459072751));
     CcCommand pass_pending = {
         .kind = CC_COMMAND_PASS_ROAD_SITE,
         .target_id = pending->id
@@ -2830,7 +2830,7 @@ static void CheckSchema104RoadMigration(char *error,
              topology.checkpoint_distance_units);
     CC_CHECK(CcRoadSavedPositionValid(&checkpoint));
     CC_CHECK(CcSimValidate(&checkpoint, error, error_capacity));
-    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(15778592053877928863));
+    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(10911209645573133119));
 
     CcSim blocked = checkpoint;
     ClearSavedRoadPosition(&blocked.journey);
@@ -2922,7 +2922,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mill_choice);
     CC_CHECK(CcRoadSavedPositionValid(&mill_stop));
     CC_CHECK(CcSimValidate(&mill_stop, error, error_capacity));
-    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(8656673403668878124));
+    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(10237461091671469068));
 
     char mine_file[512];
     (void)snprintf(
@@ -2956,7 +2956,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mine.mine.encounter_outcome == CC_MINE_ENCOUNTER_OPEN);
     CC_CHECK(mine.mine.player_injury == 0);
     CC_CHECK(CcSimValidate(&mine, error, error_capacity));
-    CC_CHECK(CcSimHash(&mine) == UINT64_C(2923590168688971581));
+    CC_CHECK(CcSimHash(&mine) == UINT64_C(1834099014451032488));
 }
 
 static void CheckDragonHairPersistence(void)

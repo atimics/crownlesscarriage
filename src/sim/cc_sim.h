@@ -20,6 +20,9 @@
 #define CC_MAX_DUNGEONS 3
 #define CC_MAX_DUNGEON_ROOMS 24
 #define CC_MAX_DUNGEON_LINKS 36
+#define CC_MAX_UNDERROAD_NODES 16
+#define CC_MAX_UNDERROAD_ROADS 32
+#define CC_UNDERROAD_LAYERS 4
 #define CC_MAX_MAPS 13
 #define CC_MAX_TREASURES 24
 #define CC_MAX_SITUATIONS 12
@@ -67,7 +70,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 107
+#define CC_SIM_SCHEMA_VERSION 108
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -1458,6 +1461,63 @@ typedef struct CcDungeonExpedition {
     int32_t encounter_room;
 } CcDungeonExpedition;
 
+typedef enum CcUnderroadNodeKind {
+    CC_UNDERROAD_NODE_ENTRANCE = 0,
+    CC_UNDERROAD_NODE_LAIR,
+    CC_UNDERROAD_NODE_HOARD,
+    CC_UNDERROAD_NODE_JUNCTION
+} CcUnderroadNodeKind;
+
+typedef enum CcUnderroadRoadKind {
+    CC_UNDERROAD_ROAD_HAUL = 0,
+    CC_UNDERROAD_ROAD_SMUGGLER,
+    CC_UNDERROAD_ROAD_NATURAL
+} CcUnderroadRoadKind;
+
+/* A generated node in the Underroad network: a settlement entrance, a clan
+   lair, the dragon's hoard, or a carved junction. */
+typedef struct CcUnderroadNode {
+    CcUnderroadNodeKind kind;
+    int32_t settlement_id; /* index into settlements; -1 when unanchored */
+    int32_t faction_id;    /* clan index for a lair; -1 otherwise */
+    int32_t map_x;
+    int32_t map_y;
+    int32_t depth;
+    int32_t discovered;
+    char name[CC_MAP_NAME_CAPACITY];
+    uint32_t seed;
+} CcUnderroadNode;
+
+/* A goblin road between two nodes. Condition decays and clearance grows with
+   goblin labour; both are carried so later phases can move them. */
+typedef struct CcUnderroadRoad {
+    int32_t from_node;
+    int32_t to_node;
+    CcUnderroadRoadKind kind;
+    int32_t depth;
+    int32_t length_cells;
+    int32_t clearance;
+    int32_t condition;
+    int32_t security;
+    int32_t toll_milli;
+    int32_t dig_progress_milli;
+    int32_t faction_id;
+    int32_t traversed;
+    uint32_t seed;
+} CcUnderroadRoad;
+
+/* The macro Underroad: the generated graph the goblins use and the player will
+   travel. Generated once from the world seed; deterministic. */
+typedef struct CcUnderroadNetwork {
+    bool generated;
+    uint32_t layout_seed;
+    uint32_t revision;
+    int32_t node_count;
+    int32_t road_count;
+    CcUnderroadNode nodes[CC_MAX_UNDERROAD_NODES];
+    CcUnderroadRoad roads[CC_MAX_UNDERROAD_ROADS];
+} CcUnderroadNetwork;
+
 typedef enum CcSituationKind {
     CC_SITUATION_RELIEF_DELIVERY,
     CC_SITUATION_ROUTE_REPAIR,
@@ -2151,6 +2211,7 @@ typedef struct CcSim {
     CcMonsterPopulation monsters[CC_MAX_MONSTERS];
     CcDungeon dungeons[CC_MAX_DUNGEONS];
     CcDungeonExpedition dungeon_expedition;
+    CcUnderroadNetwork underroad;
     CcSituation situations[CC_MAX_SITUATIONS];
     CcFront fronts[CC_MAX_FRONTS];
     CcQuestOutcomeRecord quest_outcomes[CC_MAX_QUEST_OUTCOMES];
@@ -2228,7 +2289,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 604960,
+_Static_assert(sizeof(CcSim) == 607928,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -2261,6 +2322,8 @@ void CcSimUpgradeHistoryOffices(CcSim *sim);
 void CcSimUpgradeArchivePhysicalLore(CcSim *sim);
 void CcSimUpgradeQuestArchitecture(CcSim *sim);
 void CcSimInitializeUnderroad(CcSim *sim);
+void CcSimInitializeUnderroadNetwork(CcSim *sim);
+const CcUnderroadNetwork *CcSimUnderroadNetwork(const CcSim *sim);
 void CcSimInitializeGoblinPolitics(CcSim *sim);
 int32_t CcSimCultMembers(const CcSim *sim, CcCultSpecies species);
 const char *CcGoblinColorName(int32_t color);
