@@ -17,6 +17,8 @@ endif()
 
 find_program(CC_PYTHON3_EXECUTABLE python3)
 if(CC_PYTHON3_EXECUTABLE)
+    add_test(NAME dialogue_goal_policies
+        COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/dialogue_policy_tests.py)
     add_test(NAME dialogue_owned_event_facts
         COMMAND ${CC_PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/event_facts_tests.py)
     add_test(NAME dialogue_training_release_guard

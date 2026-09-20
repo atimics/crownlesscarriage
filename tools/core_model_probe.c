@@ -78,6 +78,34 @@ int main(int argc, char **argv)
         CcCoreModelFree(model);
         return okay ? 0 : 1;
     }
+    if (argc == 5 && strcmp(argv[2], "--policy-prefix") == 0) {
+        int ids[352], count = 0;
+        const char *at = argv[3];
+        while (*at != '\0') {
+            char *end = NULL;
+            if (*at < '0' || *at > '9' || count == 352) return 2;
+            long value = strtol(at, &end, 10);
+            if (value < 9 || value >= 4096 || (*end != ',' && *end != '\0')) return 2;
+            ids[count++] = (int)value;
+            at = *end == ',' ? end + 1 : end;
+            if (*end == ',' && *at == '\0') return 2;
+        }
+        CcCoreModel *model = CcCoreModelLoad(argv[1]);
+        if (model == NULL) return 3;
+        bool okay = CcCoreModelBeginPolicy(model, ids, count);
+        if (okay && strcmp(argv[4], "--generate") == 0) {
+            okay = CcCoreModelStep(model, 1024U) == 1;
+            int output[8];
+            int n = CcCoreModelSemanticTokens(model, output, 8);
+            for (int i = 0; i < n; ++i) (void)printf("%s%d", i ? " " : "", output[i]);
+            (void)puts("");
+        } else if (okay && strcmp(argv[4], "--dump-prefix") == 0) {
+            for (int i = 0; i < count; ++i) (void)printf("%s%d", i ? " " : "", ids[i]);
+            (void)puts("");
+        } else okay = false;
+        CcCoreModelFree(model);
+        return okay ? 0 : 1;
+    }
     if (argc == 5 && strcmp(argv[2], "--participant-prefix") == 0) {
         CcCoreModel *model = CcCoreModelLoad(argv[1]);
         if (model == NULL) return 3;

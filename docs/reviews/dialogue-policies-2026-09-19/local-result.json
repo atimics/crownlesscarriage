@@ -1,0 +1,53 @@
+{
+  "format": "crownless-policy-v2",
+  "initialization": "fresh",
+  "parameters": 4945153,
+  "steps": 4000,
+  "batch_size": 32,
+  "seed": 19,
+  "test": {
+    "count": 1704,
+    "valid": 1704,
+    "exact": 1702
+  },
+  "development": {
+    "count": 1271,
+    "valid": 1271,
+    "exact": 1271
+  },
+  "seconds": 244.86668533319607,
+  "export_sha256": "889d062a1e5f8cdf6ad2f38bdd0700e40b0f4b734e338f7554e6429153194396",
+  "datasets": {
+    "train": {
+      "rows": 11983,
+      "sha256": "0bfdf86e91306c171e150eeb397f2221be3214db9503b2d050d4896f438c476a"
+    },
+    "development": {
+      "rows": 1271,
+      "sha256": "3f28792cfbf34f838a5130dba5b6979136f53b8f26896a3a82b1f1f3c6971b47"
+    },
+    "test": {
+      "rows": 1704,
+      "sha256": "36f4c1f81f50589065e8f97359d98522afe75fa5ef351baacd32cc8ccb90a33e"
+    }
+  },
+  "sources": {
+    "/private/tmp/crownless-dialogue-all-policies/tools/dialogue/train_policy.py": "764da31823cf0979f721ac64acf82db1c56b2ceb6a29c9f3477f584e477966cd",
+    "/private/tmp/crownless-dialogue-all-policies/tools/dialogue/policy.py": "486669ec1c2e45ec644d58edd092a2bcf0436ab94541e9b6de37851d32bbeaca",
+    "/private/tmp/crownless-dialogue-all-policies/tools/dialogue/policy_data.py": "b23ed9a5827b5fd60477211acb2a248689014833b3e200ac37f2caf222fbbd43",
+    "/private/tmp/crownless-dialogue-all-policies/tools/dialogue/event_facts.py": "55a383224c837b0fcdd96cb300b33a8efbb056c4bece50aa74d52a3af663eec0",
+    "/tmp/crownless-policy-zero/scripts/crownless_v2.py": "f75bdb231ffe9de2f788ad9c80cba1b5e88203de2eb482a1d7d9f9d8e6ce5aca",
+    "/tmp/crownless-policy-zero/scripts/crownless_v2_export.py": "59249330258aff74b7f206a03f85024cad0200e536df3d1a4eab2fde245c0a6a",
+    "/tmp/crownless-policy-zero/scripts/train_crownless_participant.py": "3bab9104fc87d6e6c9c4965f46ee06b634e48d1a6a02c0a0eb067ef6ebacf965"
+  },
+  "native": {
+    "checked": 1704,
+    "failures": 0
+  },
+  "rollouts": {
+    "checked": 12,
+    "completed": 12,
+    "failures": []
+  },
+  "scope": "Synthetic reference-policy preferences; independent valid-act and native parity checks. Nine synthetic goal rollouts and three saved participant snapshots."
+}

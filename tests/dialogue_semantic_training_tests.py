@@ -12,9 +12,21 @@ ROOT = Path(__file__).resolve().parents[1]
 GATE = ROOT / "tools/dialogue/verify_semantic_training.py"
 sys.path.insert(0, str(ROOT / "tools/dialogue"))
 from semantic_training_sources import is_relevant
+from verify_semantic_training import policy_gate
 
 
 class SemanticTrainingGateTests(unittest.TestCase):
+    def test_v2_preference_tolerance_keeps_validity_strict(self):
+        rows = [{'exact': i < 99, 'valid': True, 'eos': True} for i in range(100)]
+        result = {'count': 100, 'exact': 99, 'records': rows}
+        self.assertTrue(policy_gate(result, True))
+        self.assertFalse(policy_gate(result, False))
+        rows[0]['valid'] = False
+        self.assertFalse(policy_gate(result, True))
+        rows[0]['valid'] = True
+        rows[1]['exact'] = False
+        result['exact'] = 98
+        self.assertFalse(policy_gate(result, True))
     def test_source_selector_includes_training_inputs_and_runtime(self):
         self.assertTrue(is_relevant(["tools/data/core_account_rules.json"]))
         self.assertTrue(is_relevant(["src/sim/cc_sim.h"]))
