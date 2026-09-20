@@ -5228,7 +5228,8 @@ static bool ReadFoodAgreements(sqlite3 *database, CcSim *sim,
     if (sim->schema_version < 107U) return true;
     if (!Prepare(database, "SELECT * FROM food_agreement ORDER BY slot;", &statement, error, capacity)) return false;
     int32_t rows = 0;
-    while (sqlite3_step(statement) == SQLITE_ROW) {
+    int result = SQLITE_ROW;
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
         int64_t slot_value = 0;
         if (!ReadIntegerColumn(statement, 0, 0, CC_MAX_FOOD_AGREEMENTS - 1,
                                &slot_value, "food agreement slot", error, capacity) ||
@@ -5251,6 +5252,10 @@ static bool ReadFoodAgreements(sqlite3 *database, CcSim *sim,
         a->unit_price = (int32_t)value[8]; a->created_day = (int32_t)value[9];
         a->accepted_day = (int32_t)value[10]; a->status = (CcFoodAgreementStatus)value[11];
         rows++;
+    }
+    if (result != SQLITE_DONE) {
+        SetSqlError(error, capacity, database, "Could not read food agreements");
+        sqlite3_finalize(statement); return false;
     }
     sqlite3_finalize(statement); sim->food_agreement_count = rows; return true;
 }
