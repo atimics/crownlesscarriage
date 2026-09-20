@@ -463,7 +463,7 @@ static void TestMineSurveyMigrationAndReturns(void)
     for(int32_t i=0;i<CcCustodyEffectiveCapacity(&restored.custody);++i)
         if(restored.custody.entries[i].id==restored.mine.gold_source_entry_id)
             depleted_gold=&restored.custody.entries[i];
-    CC_CHECK(restored.schema_version==106U&&restored.generator_version==25U&&
+    CC_CHECK(restored.schema_version==107U&&restored.generator_version==25U&&
         restored.mine.return_revision==1&&restored.mine.surveyed&&
         restored.mine.survey_event_id==0U&&
         restored.mine.survey_read_day==0&&restored.mine.survey_observed_day==0&&
