@@ -703,6 +703,24 @@ static int RunMovingPresentedPersonRegression(void)
     }
     if (second_scout == NULL || third_scout == NULL)
         return ClientRegressionFailure("The Scout binding fixture needs three adults.");
+    {
+        CcInteractionState approach = {0};
+        CcInteractionPlan plan = {.count = 1};
+        plan.targets[0] = (CcInteractionTarget){
+            .key = {silverwick, UINT64_C(0x10000b1ce), CC_INTERACTION_PERSON},
+            .character_id = scout->id, .approach_x = 4.0f, .approach_z = 0.0f,
+            .radius = 1.0f, .available = true};
+        if (!CcInteractionStart(&approach, &plan.targets[0], 0.0f, 0.0f) ||
+            CcInteractionAdvance(&approach, &plan, 0.0f, 0.0f, 1.0f / 60.0f) ||
+            !approach.approaching)
+            return ClientRegressionFailure("A moving Scout keeps its pending approach.");
+        plan.targets[0].character_id = second_scout->id;
+        plan.targets[0].approach_x = 0.0f;
+        plan.targets[0].radius = 2.0f;
+        if (CcInteractionAdvance(&approach, &plan, 0.0f, 0.0f, 1.0f / 60.0f) ||
+            approach.approaching || strstr(approach.feedback, "person changed") == NULL)
+            return ClientRegressionFailure("A rebuilt Scout seed with another resident cancels its approach.");
+    }
     CcLocalBindPlace(&sim);
     ResetLocalState(&local);
     local.adventure_ui = true;

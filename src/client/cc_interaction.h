@@ -54,6 +54,7 @@ typedef struct CcInteractionPlan {
 typedef struct CcInteractionState {
     CcInteractionKey focus;
     CcInteractionKey pending;
+    uint64_t pending_character_id;
     float repath_seconds;
     float elapsed_seconds;
     float stalled_seconds;

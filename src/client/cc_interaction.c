@@ -117,6 +117,7 @@ void CcInteractionCancel(CcInteractionState *state, const char *reason)
     if (state == NULL) return;
     state->approaching = false;
     state->pending = (CcInteractionKey){0};
+    state->pending_character_id = 0U;
     state->repath_seconds = 0.0f;
     state->elapsed_seconds = 0.0f;
     state->stalled_seconds = 0.0f;
@@ -135,6 +136,7 @@ bool CcInteractionStart(CcInteractionState *state,
         return false;
     }
     state->pending = target->key;
+    state->pending_character_id = target->character_id;
     state->approaching = true;
     state->previous_x = x;
     state->previous_z = z;
@@ -149,6 +151,10 @@ bool CcInteractionAdvance(CcInteractionState *state,
     const CcInteractionTarget *target = CcInteractionFind(plan, state->pending);
     if (target == NULL) {
         CcInteractionCancel(state, "The target moved out of this scene.");
+        return false;
+    }
+    if (target->character_id != state->pending_character_id) {
+        CcInteractionCancel(state, "The person changed. Choose them again.");
         return false;
     }
     if (!target->available) {
