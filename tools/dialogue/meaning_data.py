@@ -5,14 +5,10 @@ import copy
 import hashlib
 import json
 import random
-import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT_MEANING = Path('/tmp/crownless-minds-loop/tools/dialogue')
-if str(ROOT_MEANING) not in sys.path:
-    sys.path.insert(0, str(ROOT_MEANING))
-from meaning import FORMAT, candidates, choose, encode_input, preferred  # noqa: E402
+import meaning  # noqa: E402
+from meaning import FORMAT, candidates, encode_input, preferred  # noqa: E402
 
 
 def _id(value: int) -> str:
@@ -24,7 +20,7 @@ def person(seed: int, side: int = 0) -> dict:
     own, other = _id(seed * 2 + side), _id(seed * 2 + (1 - side))
     place_id = _id(900 + seed)
     facts = []
-    count = 3 if seed % 3 == 0 else 1 + seed % 3
+    count = rng.randint(1, 3)
     for index in range(count):
         stale = index == 1 and seed % 2 == 0
         private = index == 2 and seed % 3 == 0
@@ -32,9 +28,9 @@ def person(seed: int, side: int = 0) -> dict:
         facts.append({
             'kind': 'food_store', 'owner': own, 'place_id': _id(900 + seed * 4 + index),
             'place_name': ('Vault ' + str(20 + seed) if index == 0 else 'Ash Hollow ' + str(index)),
-            'stock': [0, 1, 2, 6, 9][(seed + index) % 5],
-            'target': [2, 3, 5, 8][(seed + index) % 4],
-            'unit_price': [1, 2, 3, 4][(seed + index) % 4],
+            'stock': rng.randint(0, 12),
+            'target': rng.randint(1, 14),
+            'unit_price': rng.randint(1, 6),
             'day': max(0, 10 + seed % 5 - (2 if stale else 0)),
             'source': source, 'private': private,
         })
@@ -42,14 +38,15 @@ def person(seed: int, side: int = 0) -> dict:
     facts[0]['place_id'] = place_id
     return {
         'self': {'id': own, 'name': ('Mara ' if side == 0 else 'Kesh-') + str(seed),
-                 'coins': [0, 2, 4, 8, 13][seed % 5],
-                 'hungry_days': [0, 1, 3, 6][(seed + side) % 4],
-                 'stress': [12, 38, 67, 91][(seed + side) % 4]},
+                 'coins': rng.randint(0, 30),
+                 'hungry_days': rng.randint(0, 8),
+                 'stress': rng.randint(0, 100)},
         'listener': {'id': other, 'name': ('Kesh-' if side == 0 else 'Mara ') + str(seed + 1)},
         'place': {'id': place_id, 'name': facts[0]['place_name']}, 'day': 10 + seed % 5,
-        'relationship': {'trust': [-80, -15, 0, 35, 90][(seed + side) % 5]},
+        'relationship': {'trust': rng.randint(-100, 100)},
         'facts': facts,
-        'outcomes': ([{'outcome': 'fulfilled' if seed % 2 else 'failed', 'quantity': 1 + seed % 3,
+        'conditions': ['daylight'] if rng.randrange(2) else [],
+        'outcomes': ([{'outcome': 'fulfilled' if (seed // 4) % 2 else 'failed', 'quantity': 1 + seed % 3,
                        'total_cost': (1 + seed % 3) * facts[0]['unit_price'],
                        'event_id': _id(7000 + seed), 'actor_id': own,
                        'beneficiary_id': other, 'reason': 'outcome'}] if seed % 4 == 0 else []),
@@ -64,10 +61,29 @@ def _row(p: dict, heard: list[dict], choices: list[dict]) -> dict:
         'input': {'person': copy.deepcopy(p), 'heard': copy.deepcopy(heard)},
         'prompt': {'format': FORMAT, 'tokens': prefix},
         'target_text': json.dumps({'choiceindex': index}, separators=(',', ':')),
-        'target': target, 'tokens': prefix + target + [0],
+        'target': target, 'tokens': prefix + target,
         'labels': [-100] * (len(prefix) - 1) + target + [0],
         'choice_count': len(choices), 'teacher_index': index,
+        'teacher_intent': choices[index]['intent'],
     }
+
+
+def _profile(p: dict) -> dict:
+    """Canonical observable state with identities and display names removed."""
+    facts = []
+    for fact in p.get('facts', []):
+        facts.append({key: fact[key] for key in ('kind', 'stock', 'target',
+                                                  'unit_price', 'source', 'private')}
+                     | {'local': fact['place_id'] == p['place']['id'],
+                        'age': p['day'] - fact['day']})
+    outcomes = []
+    for outcome in p.get('outcomes', []):
+        outcomes.append({key: outcome[key] for key in ('outcome', 'quantity', 'total_cost', 'reason')})
+    return {'self': {key: p['self'][key] for key in ('coins', 'hungry_days', 'stress')},
+            'day': p['day'],
+            'relationship': p.get('relationship', {}).get('trust', 0),
+            'facts': sorted(facts, key=lambda item: (item['local'], item['age'], item['stock'])),
+            'outcomes': outcomes}
 
 
 def dataset(worlds: int = 256) -> dict[str, list[dict]]:
@@ -78,6 +94,9 @@ def dataset(worlds: int = 256) -> dict[str, list[dict]]:
     seen = set()
     for seed in range(worlds):
         people = [person(seed, 0), person(seed, 1)]
+        world_profile = hashlib.sha256(json.dumps([_profile(p) for p in people], sort_keys=True).encode()).hexdigest()[:16]
+        bucket = int(world_profile[:8], 16) % 10
+        split = 'test' if bucket == 0 else 'development' if bucket in (1, 2) else 'train'
         for branch in range(5):
             heard: list[dict] = []
             for turn in range(10):
@@ -88,10 +107,7 @@ def dataset(worlds: int = 256) -> dict[str, list[dict]]:
                 if key not in seen:
                     seen.add(key)
                     # A profile includes exact resource numbers and relationship state.
-                    profile = hashlib.sha256(json.dumps(current, sort_keys=True).encode()).hexdigest()[:16]
-                    bucket = int(profile[:8], 16) % 10
-                    split = 'test' if bucket == 0 else 'development' if bucket in (1, 2) else 'train'
-                    row['state_group'] = profile
+                    row['state_group'] = world_profile
                     row['world_group'] = f'world-{seed}-{branch}'
                     row['branch'] = branch
                     split_rows[split].append(row)

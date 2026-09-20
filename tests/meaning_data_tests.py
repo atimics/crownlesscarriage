@@ -19,7 +19,8 @@ class MeaningDataTests(unittest.TestCase):
         for rows in self.rows.values():
             for row in rows:
                 self.assertEqual(row['prompt']['format'], 'crownless-meaning-v3')
-                self.assertEqual(row['tokens'], row['prompt']['tokens'] + row['target'] + [0])
+                self.assertEqual(row['tokens'], row['prompt']['tokens'] + row['target'])
+                self.assertEqual(len(row['tokens']), len(row['labels']))
                 self.assertEqual(row['target_text'], json.dumps({'choiceindex': row['teacher_index']}, separators=(',', ':')))
 
     def test_exact_inputs_and_profiles_are_held_out(self):
