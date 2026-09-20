@@ -26,21 +26,22 @@ smooth" here means presentation latency and hitching, not missing steering.
    `position`, so arrival and departure checks are untouched. Runtime-untested
    here (the client regression modes need a window server); compile-verified
    against raylib with warnings as errors.
-3. **60 FPS cap against a 60 Hz fixed step.** `SetTargetFPS(60)` with no vsync
-   (`src/client/main.c:11284`) beats: some frames run zero steps, some two.
-   With (2) in place, rendering at vsync using the interpolation alpha would
-   remove it. Next.
-4. **Hover preview pathfinds on an 80 ms timer.** The movement reticle runs a
-   full pick, including a 27,648-node A* with a full array reset
-   (`src/client/main.c:5523-5546`, `src/client/local3d/terrain_navigation.inc:1762`).
-   A terrain-only hit for hover, and pathfinding only on click, would make the
-   reticle cheaper and let it update more often. It also changes the preview UX,
-   so it needs a decision first.
-5. **World streaming and scenery rebuild on the render thread.**
-   `CcWorldStreamFollowRoute` runs per frame during travel
-   (`src/client/main.c:2024`) and storybook cells upload meshes when they enter
-   view (`src/client/local3d/open_world.inc:1100-1138`). Amortizing mesh builds
-   and pre-generating the strip ahead of the camera would smooth it.
+3. **60 FPS cap against a 60 Hz fixed step (fixed here).** `SetTargetFPS(60)`
+   with no vsync (`src/client/main.c:11284`) beat. Normal play now also sets
+   `FLAG_VSYNC_HINT`, so frame times are stable and tear-free while the 60 FPS
+   target still caps high-refresh displays. Captures and benchmarks are
+   unchanged.
+4. **Hover preview pathfound on an 80 ms timer (fixed here).** The movement
+   reticle ran a full pick including the 27,648-node A* with a full array reset
+   (`src/client/local3d/terrain_navigation.inc:1762`). Hover now resolves the
+   point under the cursor without pathfinding (`PickAgentTargetInternal` with
+   `pathfind == false`) and the path is built on click; the reticle cooldown
+   drops from 80 ms to 20 ms. The hover preview no longer draws the route line.
+5. **Storybook scenery built every visible mesh in one frame (fixed here).**
+   `DrawStorybookScenery` now builds at most one new cell mesh per frame, so
+   entering a forest fills in over the next few frames instead of hitching.
+   World chunk streaming (`CcWorldStreamFollowRoute`, up to four chunks per
+   frame) is unchanged; that is the remaining item.
 
 ## What already exists
 
@@ -52,7 +53,7 @@ pixel-snapped orthographic cameras (a deliberate pixel-art choice).
 
 ## Next
 
-1. Interpolate the carriage and camera from the tick pair (removes the largest
-   visible stepping).
-2. Move hover to a terrain-only probe and pathfind on click.
-3. Then revisit vsync once (1) lands.
+1. Amortize world chunk streaming (`CcWorldStreamFollowRoute` still generates
+   up to four chunks per frame on the render thread) or move it off-thread.
+2. Runtime verification of (2)-(5) on a machine with a window server; the
+   client regression modes run on the release tag build.

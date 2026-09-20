@@ -5548,7 +5548,7 @@ static void UpdateMovementPreview(
     local->movement_preview_cooldown = fmaxf(
         0.0f, local->movement_preview_cooldown - delta_time);
     if (local->movement_preview_cooldown > 0.0f) return;
-    local->movement_preview_cooldown = 0.08f;
+    local->movement_preview_cooldown = 0.02f;
 
     if (!LocalCombatActive(local)) {
         CcLocalWorldTargetKind world_target = CcLocalAgentPickWorldTarget(
@@ -10120,7 +10120,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         &local->agent, &click_preview,
                         local->market_interior);
                     local->movement_preview = click_preview;
-                    local->movement_preview_cooldown = 0.08f;
+                    local->movement_preview_cooldown = 0.02f;
                     bool in_local_view = CheckCollisionPointRec(
                         mouse, local_bounds);
                     if (in_local_view) {
@@ -11249,6 +11249,11 @@ int main(int argc, char **argv)
     else if (capture_active) SetTraceLogLevel(LOG_WARNING);
 
     unsigned int window_flags = capture_active ? FLAG_WINDOW_HIDDEN : 0U;
+    /* Stable frame times without tearing; the 60 FPS target below still caps
+       high-refresh displays. */
+#if !defined(PLATFORM_WEB)
+    if (!capture_active && !benchmark.active) window_flags |= FLAG_VSYNC_HINT;
+#endif
 #if defined(__APPLE__)
     if (capture_active) window_flags |= FLAG_WINDOW_HIGHDPI;
 #endif

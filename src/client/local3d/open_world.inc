@@ -1205,6 +1205,10 @@ static void DrawStorybookScenery(const CcWorldManifest *manifest, Camera3D camer
     }
     TreeRegionalStyle style = TreeStyleForKingdom(WORLD_GRASS);
     style.proportions = (Vector3){1.5f, 1.6f, 1.5f};
+    /* Build at most one new cell mesh per frame. A mesh build allocates and
+       uploads geometry, and doing every newly visible cell in one frame
+       hitch during travel; cells fill in over the next few frames instead. */
+    int32_t forest_builds = 0;
     for (int32_t row = -4; row <= 4; ++row) {
         for (int32_t col = -4; col <= 4; ++col) {
             int32_t x = origin_x + col;
@@ -1225,6 +1229,7 @@ static void DrawStorybookScenery(const CcWorldManifest *manifest, Camera3D camer
             if (cell == NULL) cell = free_cell;
             if (cell == NULL) continue;
             if (!cell->occupied) {
+                if (forest_builds >= 1) continue;
                 StorybookTree trees[16];
                 int count = StorybookCellTrees(manifest, x, z, trees,
                     cell->rocks, &cell->rock_count);
@@ -1232,6 +1237,7 @@ static void DrawStorybookScenery(const CcWorldManifest *manifest, Camera3D camer
                     EmitStorybookTrees(trees, count, style);
                     continue;
                 }
+                forest_builds++;
                 cell->occupied = true;
                 cell->x = x;
                 cell->z = z;
