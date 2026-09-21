@@ -3220,8 +3220,10 @@ int main(void)
     Vector3 projected_command = miller_click_agent.command_point;
     if (VectorDistance3(projected_command,
                         miller_preview.resolved_point) > 0.00001f ||
-        miller_click_agent.navigation_point_count !=
-            miller_preview.path_count) {
+        miller_click_agent.navigation_active != miller_preview.navigation ||
+        (miller_preview.navigation && miller_click_agent.navigation_point_count !=
+            miller_preview.path_count) ||
+        (!miller_preview.navigation && miller_click_agent.navigation_point_count != 0)) {
         (void)fprintf(stderr,
                       "movement preview and committed path disagreed\n");
         return 1;

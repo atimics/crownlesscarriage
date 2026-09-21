@@ -696,6 +696,8 @@ static void DrawRoundTower(float center_x, float center_z, float radius,
 }
 
 
+#include "client/local3d/authored_town_architecture.inc"
+
 static void DrawSettlementBuilding(const WorldBuilding *building,
                                    Color wall, Color roof,
                                    const CcLocalPlaceProfile *profile,
@@ -711,158 +713,17 @@ static void DrawSettlementBuilding(const WorldBuilding *building,
 
     switch (profile->function) {
         case CC_SETTLEMENT_FARMING:
-            if (building_index == 6) {
-                DrawBuilding(x, z, width, depth - 0.9f, height,
-                             wall, roof, building->door, 1);
-                break;
-            }
-            if (building->style == CC_LOCAL_BUILDING_WORKSHOP ||
-                building_index < 0) {
-
-                float aisle = width * 0.20f;
-                DrawBuilding(x + aisle, z, width - aisle * 2.0f, depth,
-                             height, wall, roof, building->door,
-                             building->style);
-                DrawOpenRoofBay(x, z + depth * 0.12f, aisle * 1.18f,
-                                depth * 0.78f, height * 0.48f,
-                                WORLD_WOOD_SHADOW, ShadeColor(roof, 0.88f));
-                DrawOpenRoofBay(x + width - aisle * 1.18f,
-                                z + depth * 0.12f, aisle * 1.18f,
-                                depth * 0.78f, height * 0.48f,
-                                WORLD_WOOD_SHADOW, ShadeColor(roof, 0.92f));
-            } else {
-                float main_width = width * 0.70f;
-                float main_x = mirror ? x + width - main_width : x;
-                float annex_width = width * 0.38f;
-                float annex_x = mirror ? x : x + width - annex_width;
-                DrawBuilding(main_x, z, main_width, depth, height,
-                             wall, roof, building->door, building->style);
-                DrawBuilding(annex_x, z + depth * 0.24f,
-                             annex_width, depth * 0.68f, height * 0.60f,
-                             ShadeColor(wall, 0.94f), ShadeColor(roof, 0.90f),
-                             false, building->style);
-            }
+            DrawThornfordArchitecture(building, wall, roof, building_index, burnt);
             break;
-        case CC_SETTLEMENT_MINING: {
-            if (building_index == profile->primary_building) {
-                /* The stopped clock belongs to the company store facade. */
-                DrawBuilding(x, z, width, depth, height * 0.60f,
-                             wall, roof, building->door, 1);
-                float tower_width = width * 0.25f;
-                float tower_x = x + (width - tower_width) * 0.5f;
-                float face_z = z + depth + 0.06f;
-                DrawBox((Vector3){x + width * 0.5f, height * 0.70f,
-                                  z + depth - 1.4f},
-                        (Vector3){tower_width, height * 0.60f, 2.8f}, wall);
-                DrawPitchedRoof(tower_x, z + depth - 2.8f, tower_width,
-                                2.8f, height, wall, roof);
-                Vector3 dial = {x + width * 0.5f, height * 0.83f, face_z};
-                Color face = burnt ? WORLD_STONE_SHADOW :
-                             CC_VISUAL_PALETTE.parchment.light;
-                DrawCylinderEx(dial, Vector3Add(dial, (Vector3){0, 0, 0.10f}),
-                               1.02f, 1.02f, 16, WORLD_METAL_SHADOW);
-                dial.z += 0.12f;
-                DrawCylinderEx(dial, Vector3Add(dial, (Vector3){0, 0, 0.04f}),
-                               0.87f, 0.87f, 16, face);
-                /* Eight o'clock: the minute hand points up, the hour left-down. */
-                DrawBox(Vector3Add(dial, (Vector3){0, 0.34f, 0.08f}),
-                        (Vector3){0.09f, 0.68f, 0.07f}, WORLD_INK);
-                DrawTiltedBox(Vector3Add(dial, (Vector3){-0.22f, -0.13f, 0.08f}),
-                              (Vector3){0.55f, 0.11f, 0.07f},
-                              (Vector3){0, 0, 1}, 30.0f, WORLD_INK);
-            } else if (building->style == CC_LOCAL_BUILDING_WORKER_ROW) {
-                /* Narrow adjoining homes make the working rows legible. */
-                int32_t homes = width >= 9.0f ? 3 : 2;
-                float bay = width / (float)homes;
-                for (int32_t home = 0; home < homes; ++home) {
-                    float home_x = x + (float)home * bay;
-                    float home_height = height * (home % 2 == 0 ? 0.86f : 0.94f);
-                    DrawBuilding(home_x, z, bay, depth, home_height,
-                                 ShadeColor(wall, home % 2 == 0 ? 1.0f : 1.12f),
-                                 roof, building->door, 1);
-                    DrawBox((Vector3){home_x + bay * 0.76f, home_height + 0.6f,
-                                      z + depth * 0.35f},
-                            (Vector3){0.48f, 2.2f, 0.62f}, WORLD_STONE_SHADOW);
-                    DrawBox((Vector3){home_x + bay * 0.76f, home_height + 1.73f,
-                                      z + depth * 0.35f},
-                            (Vector3){0.64f, 0.16f, 0.76f}, WORLD_METAL_SHADOW);
-                }
-            } else {
-                float apron = building_index == 6 ? 0.66f : 0.78f;
-                DrawBuilding(x, z, width, depth * apron, height,
-                             wall, roof, building->door, 1);
-                if (building_index != 6) {
-                    for (int32_t post = 0; post < 2; ++post) {
-                        DrawBox((Vector3){x + 0.3f + (width - 0.6f) * (float)post,
-                                          height * 0.33f, z + depth - 0.25f},
-                                (Vector3){0.22f, height * 0.66f, 0.22f}, WORLD_WOOD);
-                    }
-                    DrawBox((Vector3){x + width * 0.5f, height * 0.67f,
-                                      z + depth * 0.86f},
-                            (Vector3){width, 0.20f, depth * 0.26f}, roof);
-                }
-            }
+        case CC_SETTLEMENT_MINING:
+            DrawSilverwickArchitecture(building, wall, roof, building_index, burnt);
             break;
-        }
-        case CC_SETTLEMENT_MARKET: {
-            if (building_index < 0) {
-                DrawBuilding(x, z, width, depth, height, wall, roof,
-                             building->door, building->style);
-                break;
-            }
-            if (building_index == profile->primary_building) {
-                /* A round guild chamber crowns the broad trading hall. */
-                float plinth = height * 0.48f;
-                float radius = fminf(width * 0.30f, depth * 0.34f);
-                DrawBuilding(x, z, width, depth * 0.72f, plinth,
-                             wall, roof, building->door, building->style);
-                rlPushMatrix();
-                rlTranslatef(0.0f, plinth, 0.0f);
-                DrawRoundTower(x + width * 0.5f, z + depth * 0.36f,
-                               radius, height - plinth,
-                               ShadeColor(wall, 1.08f), roof, false);
-                rlPopMatrix();
-                for (int32_t bay = 0; bay < 5; ++bay) {
-                    float t = ((float)bay - 2.0f) / 2.0f;
-                    float apron_depth = depth * (0.28f - 0.09f * t * t);
-                    DrawOpenRoofBay(x + (float)bay * width / 5.0f + 0.06f,
-                                    z + depth * 0.72f, width / 5.0f - 0.12f,
-                                    apron_depth, 2.55f, WORLD_WOOD_SHADOW,
-                                    burnt ? roof : BlendColor(WORLD_TEAL, wall, 0.16f));
-                }
-                break;
-            }
-            /* Narrow shop fronts share a covered trading apron. */
-            int32_t bays = width >= 9.0f ? 3 : 2;
-            float bay_width = width / (float)bays;
-            for (int32_t bay = 0; bay < bays; ++bay) {
-                float front_x = x + (float)bay * bay_width;
-                float shop_height = height * (bay % 2 == 0 ? 0.90f : 1.0f);
-                DrawBuilding(front_x, z, bay_width, depth * 0.72f,
-                             shop_height, ShadeColor(wall, 0.94f + (float)bay * 0.04f),
-                             roof, building->door && bay == bays / 2,
-                             building->style);
-                Color cloth = burnt ? roof :
-                    BlendColor(WORLD_TEAL, wall, bay % 2 == 0 ? 0.12f : 0.30f);
-                DrawOpenRoofBay(front_x + 0.12f, z + depth * 0.72f,
-                                bay_width - 0.24f, depth * 0.28f,
-                                2.55f, WORLD_WOOD_SHADOW, cloth);
-            }
+        case CC_SETTLEMENT_MARKET:
+            DrawGloamgateArchitecture(building, wall, roof, building_index, burnt);
             break;
-        }
-        case CC_SETTLEMENT_FORTRESS: {
-            float tower_radius = fminf(width * 0.15f, depth * 0.24f);
-            float tower_x = mirror ? x + tower_radius :
-                                     x + width - tower_radius;
-            float block_x = mirror ? x + width * 0.18f : x;
-            DrawBuilding(block_x, z, width * 0.82f, depth,
-                         height * 0.70f, wall, roof, building->door,
-                         building->style);
-            DrawRoundTower(tower_x, z + depth * 0.54f, tower_radius,
-                           height * 1.06f, ShadeColor(wall, 0.88f),
-                           roof, false);
+        case CC_SETTLEMENT_FORTRESS:
+            DrawAlderwatchArchitecture(building, wall, roof, building_index, burnt);
             break;
-        }
         case CC_SETTLEMENT_CAPITAL:
 
             DrawBuilding(x, z + depth * 0.10f, width * 0.31f,
