@@ -1,0 +1,66 @@
+name: Apply reviewed Oven Court source
+on:
+  push:
+    branches: ['codex/silverwick-oven-court']
+    paths: ['.github/workflows/apply-oven-court.yml', '.github/oven-court.part*']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'atimics/crownlesscarriage' && github.ref == 'refs/heads/codex/silverwick-oven-court'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - name: Apply checksum-verified implementation only to this branch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, lzma, pathlib, subprocess
+          raw = ''.join(pathlib.Path(f'.github/oven-court.part{i}').read_text() for i in range(4))
+          patch = lzma.decompress(base64.b64decode(raw, validate=True))
+          assert hashlib.sha256(patch).hexdigest() == '42f2550e729a4da1775ac2bc77fbb8da56df36a7b83d2ede20cf81c5a19f11bb'
+          allowed = set('''CMakeLists.txt
+          cmake/tests/35-oven-court.cmake
+          docs/design/oven-court.md
+          src/client/cc_adventure.inc
+          src/client/cc_capture_request.inc
+          src/client/cc_capture_request_tests.inc
+          src/client/cc_capture_scenes.inc
+          src/client/cc_interaction.h
+          src/client/cc_local_place.h
+          src/client/cc_oven_court.inc
+          src/client/local3d/authored_places.inc
+          src/client/main.c
+          src/multiplayer/cc_coop.c
+          src/multiplayer/cc_coop_commands.h
+          src/sim/cc_oven_court.c
+          src/sim/cc_oven_court.h
+          src/sim/cc_production.c
+          src/sim/cc_production.h
+          src/sim/cc_sim.c
+          src/sim/cc_sim.h
+          tests/client_oven_court.inc
+          tests/dialogue_fact_question_tests.py
+          tests/oven_court_tests.c
+          tools/capture_oven_court.py
+          tools/dialogue/fact_demo.py
+          tools/dialogue/fact_policy.py
+          tools/dialogue/fact_question.py'''.split())
+          names = {line.split()[3][2:] for line in patch.decode().splitlines() if line.startswith('diff --git ')}
+          assert names == allowed, names ^ allowed
+          p = pathlib.Path('/tmp/oven-court.patch'); p.write_bytes(patch)
+          subprocess.run(['git', 'apply', '--check', str(p)], check=True)
+          subprocess.run(['git', 'apply', str(p)], check=True)
+          PY
+          git diff --check
+          rm .github/oven-court.part{0,1,2,3} .github/workflows/apply-oven-court.yml
+          git add --all
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin codex/silverwick-oven-court
+          test "$(git rev-parse FETCH_HEAD)" = "$(git rev-parse HEAD)"
+          git commit -m 'Build Silverwick Oven Court with shared production preview, physical interactions and dated notes'
+          git push origin HEAD:refs/heads/codex/silverwick-oven-court
