@@ -31,10 +31,14 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                                    bool market_interior);
 Vector3 CcLocalStablePonyPositionInternal(int32_t horse);
 void CcLocalCreatureGaitsFixedStepInternal(float delta_time);
-bool CcLocalCreatureGaitPoseInternal(int32_t slot, CcCreatureRigProfile profile,
-    CcCreatureRigGait gait, float clock, float initial_phase,
-    Vector3 ground_position, float yaw, float scale, CcLocalSceneKind scene,
-    CcCreatureRigPose *pose);
+bool CcLocalCreatureGaitTargetInternal(int32_t slot,
+    CcCreatureRigProfile profile, CcCreatureRigGait gait, float clock,
+    float initial_phase, Vector3 ground_position, float yaw, float scale,
+    CcLocalSceneKind scene);
+bool CcLocalCreatureGaitPoseInternal(int32_t slot, Vector3 ground_position,
+    float yaw, CcCreatureRigPose *pose);
+Vector3 CcLocalRoadCarriageSocketInternal(Vector3 base, float yaw,
+    float pitch, float sway, float lateral, float height, float forward);
 void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
                                     CcLocalAgent *player,
                                     const CcSim *sim, float delta_time);

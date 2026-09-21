@@ -245,8 +245,9 @@ static void CapturePonyGait(const char *directory)
         composition.light_profile = ART_LIGHT_CLEAR_MARKET;
         composition.focal_point = focus;
         BeginWorldLighting(camera, &composition);
+        /* This isolated flat-road take has no carriage pitch or sway. */
         DrawRoadHorseTeam(&sim, base, clock, 0.72f, distance, 0.0f,
-                          false, CC_LOCAL_SCENE_ROAD);
+                          0.0f, 0.0f, false, CC_LOCAL_SCENE_ROAD);
         EndWorldLighting();
         EndMode3D();
         DrawText("Trot", 18, 18, 20, RAYWHITE);
