@@ -19,21 +19,33 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'tools/dialogue'))
 import fact_policy as f
-from fact_question import facts_from_fields, person, role_from_question
+from fact_question import (ROLE_BY_NUMBER, facts_from_fields, parse_question,
+                           person, role_from_question)
+from fact_roles import PREDICATE_FIELD_OVERRIDES, resolve_field
 
 FIXTURE = ROOT / 'tools/dialogue/fixtures/fact-dialogue.json'
 
 
 def build(account, question):
     """Return a fact_policy person for one account and natural question."""
-    role = role_from_question(question)
-    if role is None:
-        return None, 'question did not parse to a role'
+    predicate = parse_question(question)
+    if predicate is None:
+        return None, 'question did not parse'
     event_id = str(900000 + int(account['id'].split(':')[-1]) + 1)
+    target = resolve_field(account['rule'], predicate, account['fields'])
+    if target is None:
+        return None, f'account has no {role_from_question(question)} field'
+    # Ask in the resolved field's own role so the selection model can match it.
+    role = ROLE_BY_NUMBER.get(next(field['role'] for field in account['fields'] if field['field'] == target))
     facts = facts_from_fields(account['fields'], '1', event_id, account.get('confidence'), day=10)
     if not facts:
         return None, 'account has no typed facts'
-    return person('1', '2', facts, role, day=10), None
+    # When a predicate override resolves a duplicated spoken role, drop the
+    # other facts of that role so the model is not asked to choose blindly.
+    if (account['rule'], predicate) in PREDICATE_FIELD_OVERRIDES:
+        keep = f'F{event_id}-{target}'
+        facts = [fact for fact in facts if fact['role'] != role or fact['fact_id'] == keep]
+    return person('1', '2', facts, role, day=10), predicate
 
 
 def choose_teacher(p):
@@ -74,13 +86,13 @@ def main():
         print(f"# {account['rule']}")
         print(f"  opening: {account['opening']}")
         for question in account['questions']:
-            p, error = build(account, question)
-            if error:
-                print(f"  Q: {question}\n     -> ({error})")
+            p, predicate = build(account, question)
+            if p is None:
+                print(f"  Q: {question}\n     -> ({predicate})")
                 continue
             act = choose_model(model, torch, p) if model is not None else choose_teacher(p)
             print(f"  Q: {question}")
-            print(f"     parsed role: {p['question']['role']}")
+            print(f"     predicate: {predicate}  role: {p['question']['role']}")
             print(f"     choice: {act['kind']} role={act.get('role')} fact={act.get('fact_id')}")
             print(f"     reply: {f.render(act, p)}")
         print()
