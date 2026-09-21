@@ -267,6 +267,13 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
             (void)snprintf(door->verb, sizeof(door->verb), "Closed");
             (void)snprintf(door->reason, sizeof(door->reason), "The town is abandoned. Its services are closed.");
         }
+        const CcSettlement *oven_town = CcOvenCourtPlace(sim);
+        if (!abandoned && oven_town != NULL && town == oven_town && sim->schema_version >= 107U) {
+            CcLocalLanePoint oven = CcLocalOvenCourtAnchor(place);
+            (void)AdventureTarget(local, sim, CC_INTERACTION_OVEN_COURT, 1U,
+                "Oven Court tally", "Inspect", (Vector3){oven.x, 0, oven.z},
+                2.2f, 2.4f, 0.55f, (Vector2){oven.x, oven.z + 1.1f}, 1.0f);
+        }
         if (!abandoned) (void)AdventureTarget(local, sim, CC_INTERACTION_BOARD, 1U,
             place->notice_board, "Read promises", (Vector3){LOCAL_NOTICE.x, 0, LOCAL_NOTICE.y},
             1.6f, 2.5f, 0.7f, LOCAL_NOTICE, 1.05f);
@@ -389,6 +396,7 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
             local->conversation_gossip_slot = -1;
             local->conversation_gossip_source = false;
             local->conversation_report_response = false;
+            local->conversation_oven_response = false;
             local->conversation_character_id = target->character_id;
             local->conversation_situation_id = target->situation_id;
             if (target->character_id != 0U) {
@@ -520,6 +528,18 @@ static bool HandleAdventureScene(CcJournal *journal, CcSim *sim,
                 (void)snprintf(
                     message, capacity,
                     "The carriage takes the Alderwatch road toward the Low Silver Pit branch.");
+            }
+        } else if (target != NULL && target->key.kind == CC_INTERACTION_OVEN_COURT) {
+            CcLocalAgentStop(&local->agent);
+            if (ApplyCommand(journal, sim,
+                (CcCommand){.kind = CC_COMMAND_OBSERVE_OVEN_COURT,
+                    .target_id = sim->player.location_id}, message, capacity) &&
+                CcOvenCourtRead(sim, &local->oven_observation)) {
+                const CcEvent *note = CcOvenCourtNote(sim, 0);
+                local->oven_note_event = note != NULL ? note->id : 0U;
+                local->oven_page = 0;
+                *return_view = VIEW_LOCAL;
+                *view = VIEW_OVEN_COURT;
             }
         } else if (target != NULL) {
             AdventureActivate(
@@ -1042,7 +1062,7 @@ static bool AdventureKnownPerson(const CcSim *sim, const CcCharacter *person)
 
 static Rectangle AdventureBookPageBounds(Rectangle panel, int32_t page)
 {
-    return AdventureTab(panel,page,3);
+    return AdventureTab(panel,page,4);
 }
 
 static bool AdventureBookCompact(Rectangle panel)
@@ -1064,8 +1084,9 @@ static void DrawAdventureBookHead(Rectangle panel, const char *page_name,
     AdventurePanelTitle(panel,compact ? "Book" : "Company Book");
     const char *pages[]={compact ? "Ahead" : "Ahead  1",
         compact ? "People" : "People  2",
-        compact ? "Mine" : "Mine notes  3"};
-    for (int32_t page=0;page<3;++page)
+        compact ? "Mine" : "Mine notes  3",
+        compact ? "Court" : "Court  4"};
+    for (int32_t page=0;page<4;++page)
         AdventureButton(AdventureBookPageBounds(panel,page),pages[page],true,
             page==active_page);
     ClientTouchRecordText(page_name);
@@ -1226,6 +1247,7 @@ static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
 {
     if (local->book_page == 1) { DrawAdventurePeople(sim, local); return; }
     if (local->book_page == 2) { DrawAdventureMineNotes(sim,local); return; }
+    if (local->book_page == 3) { DrawAdventureCourtNotes(sim, local); return; }
     DrawAdventureAhead(sim, local);
 }
 
@@ -1235,7 +1257,7 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
     Rectangle panel = AdventurePanel();
     if (ClientKeyPressed(KEY_ESCAPE) || ClientKeyPressed(KEY_B) || ClientKeyPressed(KEY_TAB) ||
         AdventureHit(AdventureClose(panel))) { *view = SafeOverlayReturnView(*return_view); return true; }
-    for (int32_t page=0;page<3;++page) {
+    for (int32_t page=0;page<4;++page) {
         if (AdventureHit(AdventureBookPageBounds(panel,page))) {
             local->book_page=page;
             local->book_offset=0;
@@ -1249,10 +1271,10 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
         (ClientKeyPressed(KEY_DOWN) || AdventureHit(AdventureBookMineStepBounds(panel,1)))) {
         if (local->book_offset < 2) local->book_offset+=1;
     } else if (ClientKeyPressed(KEY_LEFT)) {
-        local->book_page=(local->book_page+2)%3;
+        local->book_page=(local->book_page+3)%4;
         local->book_offset=0;
     } else if (ClientKeyPressed(KEY_RIGHT)) {
-        local->book_page=(local->book_page+1)%3;
+        local->book_page=(local->book_page+1)%4;
         local->book_offset=0;
     } else if (ClientKeyPressed(KEY_ONE)) {
         local->book_page = 0;
@@ -1264,6 +1286,11 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
         local->book_page = 2;
         local->book_offset=0;
     }
+    if (ClientKeyPressed(KEY_FOUR)) { local->book_page = 3; local->book_offset = 0; }
+    if (local->book_page == 3 &&
+        (ClientKeyPressed(KEY_UP) || AdventureHit(AdventureBookMineStepBounds(panel, 0)))) local->book_offset = 1;
+    if (local->book_page == 3 &&
+        (ClientKeyPressed(KEY_DOWN) || AdventureHit(AdventureBookMineStepBounds(panel, 1)))) local->book_offset = 0;
     const CcTreasure *book = CcSimDeepWyrmProphecy(sim);
     if (local->book_page == 0 && book != NULL && !book->destroyed &&
         book->owner_id == sim->player.id && CcSimCanDeliverProphecy(sim) &&

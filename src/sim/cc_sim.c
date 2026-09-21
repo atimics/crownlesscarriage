@@ -3,6 +3,7 @@
 #include "sim/cc_prophecy.h"
 #include "sim/cc_archive_relocation.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_oven_court.h"
 #include "sim/cc_occupations.h"
 #include "sim/cc_archive_recruitment.h"
 #include "sim/cc_identity_internal.h"
@@ -682,6 +683,12 @@ static void GatherPinnedEvents(const CcSim *sim, CcId incoming_parent,
                 PinEvent(set, sim->gossip[i].heard_event_id);
             }
         }
+    }
+    /* The Book retains the two latest explicitly acquired court notes, even
+       when the short engine event tape compacts. No remote refresh. */
+    for (int32_t i = 0; i < 2; ++i) {
+        const CcEvent *note = CcOvenCourtNote(sim, i);
+        if (note != NULL) PinEvent(set, note->id);
     }
     PinEvent(set, incoming_parent);
     PinEvent(set, sim->journey.parent_event_id);
@@ -19735,7 +19742,8 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_SUPPORT_BAKERY ||
         command->kind == CC_COMMAND_TAKE_BODY_PURSE ||
         command->kind == CC_COMMAND_MINE_LEARN_LEAD ||
-        command->kind == CC_COMMAND_MINE_REPORT_RETURN;
+        command->kind == CC_COMMAND_MINE_REPORT_RETURN ||
+        command->kind == CC_COMMAND_OBSERVE_OVEN_COURT;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
                  "Settlement business must wait until the carriage arrives.");
@@ -19765,6 +19773,8 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_FOOD_RELIEF_EXECUTE:
             /* Handled before the player encounter gates. */
             return ApplyFoodReliefCommand(sim, command, error, error_capacity);
+        case CC_COMMAND_OBSERVE_OVEN_COURT:
+            return CcOvenCourtRecord(sim, command, error, error_capacity);
         case CC_COMMAND_MINE_LEARN_LEAD:
             return ApplyMineLearnLead(sim,command,error,error_capacity);
         case CC_COMMAND_MINE_REPORT_RETURN:

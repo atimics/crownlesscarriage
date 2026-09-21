@@ -16,6 +16,7 @@
 #include "sim/cc_production.h"
 #include "sim/cc_road_position.h"
 #include "sim/cc_mine.h"
+#include "sim/cc_oven_court.h"
 #include "story/cc_story.h"
 #include "story/cc_core_conversation.h"
 #include "story/cc_core_participant.h"
@@ -76,7 +77,8 @@ typedef enum ClientView {
     VIEW_DUNGEON,
     VIEW_DRAGON_CAVE,
     VIEW_TRADE,
-    VIEW_PAUSE
+    VIEW_PAUSE,
+    VIEW_OVEN_COURT
 } ClientView;
 
 typedef enum CarriageTab {
@@ -204,7 +206,8 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_INSPECT_CARRIAGE,
     CONTEXT_ACTION_MINE_LEAD,
     CONTEXT_ACTION_MINE_SHIFT_RECORD,
-    CONTEXT_ACTION_MINE_REPORT
+    CONTEXT_ACTION_MINE_REPORT,
+    CONTEXT_ACTION_OVEN_QUESTION
 } ContextActionKind;
 
 typedef struct ContextAction {
@@ -251,6 +254,11 @@ typedef struct LocalState {
     char conversation_name[64];
     char conversation_line[192];
     bool conversation_report_response;
+    bool conversation_oven_response;
+    CcId conversation_oven_event;
+    CcOvenCourtObservation oven_observation;
+    CcId oven_note_event;
+    int32_t oven_page;
     int32_t conversation_gossip_slot;
     bool conversation_gossip_source;
     CcId introduced_ids[64];
@@ -1249,6 +1257,7 @@ static void ResetLocalState(LocalState *local)
     local->conversation_name[0] = '\0';
     local->conversation_line[0] = '\0';
     local->conversation_report_response = false;
+    local->conversation_oven_response = false;
     CcCoreConversationReset(&core_conversation);
     core_conversation_speaker = 0U;
     local->trade_quantity = 1;
@@ -4317,7 +4326,7 @@ static ContextActionSet BuildContextActions(
     ContextActionSet set = {0};
     if (sim == NULL || local == NULL) return set;
     if (sim->mine.phase != CC_MINE_NONE) return set;
-    if (local->adventure_ui && (view == VIEW_TRADE || view == VIEW_PAUSE || view == VIEW_LEDGER)) return set;
+    if (local->adventure_ui && (view == VIEW_TRADE || view == VIEW_PAUSE || view == VIEW_LEDGER || view == VIEW_OVEN_COURT)) return set;
     int32_t pony = CcPonyOnRoad(sim);
     if (view == VIEW_LOCAL && pony >= 0 && !LocalCombatActive(local)) {
         if (sim->pony_company.encounter < 0) {
@@ -4402,6 +4411,10 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (local->adventure_ui && view == VIEW_CHARACTER && local->conversation_situation_id == 0U) {
+        if (CcOvenCourtCanDiscuss(sim, local->conversation_character_id))
+            AddDetailedContextAction(&set, CONTEXT_ACTION_OVEN_QUESTION,
+                "What do the ovens need?", TextFormat("%d", set.count + 1),
+                "ASK ABOUT THE LOCAL TALLY", true, false);
         const CcCharacter *contact=CcSimMineEvidenceContact(sim);
         bool jory=contact != NULL && contact->id == local->conversation_character_id;
         if (jory && sim->mine.lead_event_id == 0U && CcSimMineLeadSupported(sim))
@@ -4627,6 +4640,10 @@ static ContextActionSet BuildContextActions(
             sim, local->conversation_situation_id);
         const CcCharacter *character = CcSimCharacter(
             sim, local->conversation_character_id);
+        if (CcOvenCourtCanDiscuss(sim, local->conversation_character_id))
+            AddDetailedContextAction(&set, CONTEXT_ACTION_OVEN_QUESTION,
+                "What do the ovens need?", TextFormat("%d", set.count + 1),
+                "ASK ABOUT THE LOCAL TALLY", true, false);
         const CcCharacter *contact=CcSimMineEvidenceContact(sim);
         bool jory=character != NULL && contact != NULL && character->id == contact->id;
         if (jory && sim->mine.lead_event_id == 0U && CcSimMineLeadSupported(sim))
@@ -6601,6 +6618,13 @@ static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
 {
     const CcSituation *situation = CcSimSituation(sim, local->conversation_situation_id);
     const CcCharacter *person = CcSimCharacter(sim, local->conversation_character_id);
+    if (local->conversation_oven_response && person != NULL &&
+        local->conversation_line[0] != '\0') {
+        return CcSpeechCompose(speech, "oven.court.response", person->id,
+            person->name, CcSpeechCharacterVoice(sim, person),
+            local->conversation_line, CC_SPEECH_PLAIN,
+            CC_SPEECH_CONVERSATION, local->conversation_oven_event);
+    }
     if (local->conversation_report_response && person != NULL &&
         local->conversation_line[0] != '\0') {
         return CcSpeechCompose(speech, "mine.report.response", person->id,
@@ -7022,7 +7046,9 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
     return true;
 }
 
+static void DrawAdventureCourtNotes(const CcSim *sim, const LocalState *local);
 #include "client/cc_adventure.inc"
+#include "client/cc_oven_court.inc"
 #include "client/cc_mine_view.inc"
 #include "client/cc_world_actions.inc"
 static bool StartOnlyOutgoingRoad(CcJournal *journal, CcSim *sim,
@@ -9053,13 +9079,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             CcInteractionCancel(&local->interaction, "");
             CcLocalAgentStop(&local->agent);
         }
-        if ((*view == VIEW_TRADE || *view == VIEW_CHARACTER) &&
+        if ((*view == VIEW_TRADE || *view == VIEW_CHARACTER || *view == VIEW_OVEN_COURT) &&
             (ClientKeyPressed(KEY_B) || ClientKeyPressed(KEY_TAB))) {
+            if (*view == VIEW_OVEN_COURT) { local->book_page = 3; local->book_offset = 0; }
             *return_view = *view;
             *view = VIEW_LEDGER;
             return;
         }
-        if (HandleAdventurePause(local, view, return_view) ||
+        if (HandleOvenCourt(sim, local, view, return_view, message, message_capacity) ||
+            HandleAdventurePause(local, view, return_view) ||
             HandleAdventureTrade(*journal, sim, local, view, message, message_capacity) ||
             HandleAdventureBook(*journal, sim, local, view, return_view, message, message_capacity)) return;
         if (*view == VIEW_SITUATIONS && AdventureHit(AdventureClose(AdventurePromisesPanel()))) {
@@ -9370,6 +9398,26 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         for (int32_t i=0;i<replies.count;++i)
             if (replies.items[i].enabled && ClientKeyPressed(KEY_ONE+i))
                 context_action=replies.items[i].kind;
+        if (context_action == CONTEXT_ACTION_OVEN_QUESTION) {
+            if (ApplyCommand(*journal, sim,
+                (CcCommand){.kind = CC_COMMAND_OBSERVE_OVEN_COURT,
+                    .target_id = local->conversation_character_id, .amount = 1},
+                message, message_capacity)) {
+                CcOvenCourtObservation observation;
+                if (CcOvenCourtRead(sim, &observation)) {
+                    local->conversation_report_response = false;
+                    local->conversation_oven_response = true;
+                    const CcEvent *note = CcOvenCourtNote(sim, 0);
+                    local->conversation_oven_event = note != NULL ? note->id : 0U;
+                    (void)snprintf(local->conversation_line, sizeof(local->conversation_line),
+                        "%s", CcOvenCourtAdvice(&observation));
+                    CcAudioClearSpeech();
+                    CcSpeech answer;
+                    if (ClientConversationSpeech(sim, local, &answer)) ClientSaySpeech(&answer);
+                }
+            }
+            return;
+        }
         if (context_action == CONTEXT_ACTION_MINE_LEAD ||
             context_action == CONTEXT_ACTION_MINE_REPORT) {
             CcCommand command={
@@ -9420,6 +9468,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             if (context_action == CONTEXT_ACTION_GOSSIP_CHAT &&
                 !core_conversation.pending && core_conversation.round_phase == 0U) {
                 local->conversation_report_response = false;
+    local->conversation_oven_response = false;
                 (void)ApplyCommand(*journal, sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
                     .target_id = local->conversation_character_id}, message, message_capacity);
                 if (local->conversation_gossip_slot < 0)
@@ -9503,6 +9552,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             if (ApplyCommand(*journal, sim, reply,
                              message, message_capacity)) {
                 local->conversation_report_response = false;
+    local->conversation_oven_response = false;
                 if (voiced_reply) ClientSaySpeech(&player_reply);
                 const CcSituation *updated = CcSimSituation(
                     sim, local->conversation_situation_id);
@@ -10831,6 +10881,7 @@ static int ClientRegressionFailure(const char *message)
 }
 
 #include "../../tests/client_interaction_flow.inc"
+#include "../../tests/client_oven_court.inc"
 #include "../../tests/client_mine_flow.inc"
 #include "../../tests/client_world_cards.inc"
 #include "../../tests/client_bridge_scene.inc"
@@ -10896,6 +10947,10 @@ static void ReadCompanyPage(const CcSim *sim, const LocalState *local)
             ++shown;
         }
         if (shown == 0) ClientReadSpeech(sim, "No one you know has been named yet.", 0);
+    } else if (local->book_page == 3) {
+        const CcEvent *note = CcOvenCourtNote(sim, local->book_offset);
+        ClientReadSpeech(sim, note != NULL ? note->text :
+            "No court note. Inspect Silverwick's public oven tally.", note != NULL ? note->id : 0U);
     } else {
         if (sim->mine.lead_event_id != 0U) {
             (void)snprintf(words,sizeof(words),
@@ -11170,6 +11225,7 @@ int main(int argc, char **argv)
     if (argc == 2 && strcmp(argv[1], "--test-mine-hauler-visual") == 0) return RunMineHaulerVisualRegression();
     if (argc == 2 && strcmp(argv[1], "--test-road-journey-save") == 0) return RunRoadJourneySaveRegression();
     if (argc == 2 && strcmp(argv[1], "--test-abandoned-town") == 0) return RunAbandonedTownRegression();
+    if (argc == 2 && strcmp(argv[1], "--test-oven-court") == 0) return RunOvenCourtInputRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-input") == 0) return RunAdventureInputRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-trade") == 0) return RunAdventureTradeTermsRegression();
     if (argc == 2 && strcmp(argv[1], "--test-adventure-town-routes") == 0) return RunAdventureTownRoutesRegression();
@@ -12001,6 +12057,7 @@ int main(int argc, char **argv)
             if (local.adventure_ui) DrawAdventureBook(&sim, &local);
             else DrawLedger(&sim);
         }
+        if (view == VIEW_OVEN_COURT) { CcOverlayFlush(); DrawOvenCourt(&sim, &local); }
         if (view == VIEW_TRADE) { CcOverlayFlush(); DrawAdventureTrade(&sim, &local, map_textures.economic_goods); }
         if (view == VIEW_PAUSE) { CcOverlayFlush(); DrawAdventurePause(&local); }
         if (view == VIEW_CARRIAGE) {
@@ -12042,6 +12099,7 @@ int main(int argc, char **argv)
         }
         if (!persistence_blocked && presentation.commands &&
             view != VIEW_DRAGON_CAVE && view != VIEW_TRADE && view != VIEW_PAUSE && view != VIEW_LEDGER &&
+            view != VIEW_OVEN_COURT &&
             view != VIEW_DUNGEON &&
             view != VIEW_CARRIAGE && view != VIEW_CHARACTER) {
             if (!local.adventure_ui) DrawCommandBar(view, &local);
@@ -12117,6 +12175,7 @@ int main(int argc, char **argv)
         ClientTouchScene(frontend.screen != FRONTEND_PLAYING ? "menu" :
             sim.mine.phase != CC_MINE_NONE &&
                 (view == VIEW_LOCAL || view == VIEW_ROADS) ? "mine" :
+            view == VIEW_OVEN_COURT ? "oven-court" :
             view == VIEW_LEDGER || view == VIEW_SITUATIONS ? "book" :
             view == VIEW_DUNGEON || view == VIEW_DRAGON_CAVE ? "dungeon" :
             view == VIEW_CARRIAGE ? "carriage" :

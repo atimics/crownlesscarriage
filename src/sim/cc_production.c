@@ -1,5 +1,7 @@
 #include "sim/cc_production.h"
 #include <limits.h>
+#include <string.h>
+#include "sim/cc_archive_internal.h"
 
 CcProductionReceipt CcProductionPlan(const CcProductionRecipe *recipe,
                                      const CcProductionContext *context)
@@ -205,36 +207,62 @@ static void RecordRecipe(CcRecipeAccounting *accounting,
     if (!recipe->work_only) accounting->output[recipe->output] += (uint64_t)receipt->output;
 }
 
-int32_t CcEconomyRunBakery(CcSim *sim, CcSettlement *place,
-                         CcId scriptorium_id, CcRecipeAccounting *accounting,
-    const CcProductionServices *services)
+static CcProductionReceipt PlanBakeryAct(const CcSim *sim,
+    const CcSettlement *place, CcId scriptorium_id, CcProductionRecipe *recipe)
 {
+    if (sim == NULL || place == NULL) return (CcProductionReceipt){.gate=CC_PRODUCTION_INVALID};
     int32_t capacity = CcEconomyBakeryCapacity(place);
     if (capacity <= 0 || place->stock[CC_GOOD_WHEAT] <= 0) {
-        if (accounting != NULL) accounting->gates[capacity <= 0 ? CC_PRODUCTION_CAPACITY : CC_PRODUCTION_INPUT]++;
-        return 0;
+        return (CcProductionReceipt){.producer_id=place->id, .storage_id=place->id,
+            .location_id=place->id, .gate=capacity <= 0 ? CC_PRODUCTION_CAPACITY : CC_PRODUCTION_INPUT,
+            .blocked_good=capacity <= 0 ? CC_GOOD_COUNT : CC_GOOD_WHEAT};
     }
     int32_t grain_floor = 0;
     if (scriptorium_id != 0U && place->id == scriptorium_id &&
-        place->hunger == 0 &&
-        place->stock[CC_GOOD_TOOLS] > 0 &&
+        place->hunger == 0 && place->stock[CC_GOOD_TOOLS] > 0 &&
         CcSettlementHasService(place, CC_SERVICE_MILL)) {
-        grain_floor = MaximumI32(
-            place->reserve_target[CC_GOOD_WHEAT],
+        grain_floor = MaximumI32(place->reserve_target[CC_GOOD_WHEAT],
             CcEconomyWeeklyFoodUse(sim, place) * 2 + sim->archives.scribes * 2);
     }
-    const CcProductionRecipe recipe = {
+    *recipe = (CcProductionRecipe){
         .output = CC_GOOD_BREAD, .output_units = 1, .input_count = 1,
         .inputs = {{CC_GOOD_WHEAT, 1, grain_floor}}, .work_per_batch = 1,
         .hunger_soft_limit = 35, .hunger_hard_limit = 65,
         .hunger_soft_percent = 86, .hunger_hard_percent = 72
     };
+    /* CcProductionContext also serves the mutating runner. A small stack copy
+       keeps this public preview genuinely const, without casting away const. */
+    int32_t stock[CC_GOOD_COUNT];
+    memcpy(stock, place->stock, sizeof(stock));
     const CcProductionContext context = {
-        .producer_id = place->id, .storage_id = place->id, .location_id = place->id,
-        .stock = place->stock, .capacity = capacity, .output_limit = CC_SIM_MAX_UNITS,
-        .work_available = capacity, .condition = 100, .hunger = place->hunger, .enabled = true
+        .producer_id=place->id, .storage_id=place->id, .location_id=place->id,
+        .stock=stock, .capacity=capacity, .output_limit=CC_SIM_MAX_UNITS,
+        .work_available=capacity, .condition=100, .hunger=place->hunger, .enabled=true
     };
-    CcProductionReceipt receipt = CcProductionRun(&recipe, &context);
+    return CcProductionPlan(recipe, &context);
+}
+
+CcProductionReceipt CcSimPlanBakery(const CcSim *sim, const CcSettlement *place)
+{
+    if (sim == NULL || place == NULL) return (CcProductionReceipt){.gate=CC_PRODUCTION_INVALID};
+    if (CcSettlementIsAbandoned(place)) return (CcProductionReceipt){.gate=CC_PRODUCTION_CLOSED};
+    const CcSettlement *seat = CcArchiveSeat(sim);
+    CcProductionRecipe recipe = {0};
+    return PlanBakeryAct(sim, place, seat != NULL ? seat->id : 0U, &recipe);
+}
+
+int32_t CcEconomyRunBakery(CcSim *sim, CcSettlement *place,
+    CcId scriptorium_id, CcRecipeAccounting *accounting,
+    const CcProductionServices *services)
+{
+    CcProductionRecipe recipe = {0};
+    CcProductionReceipt receipt = PlanBakeryAct(sim, place, scriptorium_id, &recipe);
+    /* Only this scheduled act consumes inputs. Looking at the court never
+       produces bread, spends time, or emits a production event. */
+    if (receipt.gate == CC_PRODUCTION_READY) {
+        place->stock[CC_GOOD_WHEAT] -= receipt.inputs[0];
+        place->stock[CC_GOOD_BREAD] += receipt.output;
+    }
     RecordRecipe(accounting, &recipe, &receipt);
     int32_t baked = receipt.output;
     if (baked <= 0) return 0;

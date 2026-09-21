@@ -30,7 +30,8 @@ def build(account, question):
     if role is None:
         return None, 'question did not parse to a role'
     event_id = str(900000 + int(account['id'].split(':')[-1]) + 1)
-    facts = facts_from_fields(account['fields'], '1', event_id, account.get('confidence'), day=10)
+    facts = facts_from_fields(account['fields'], '1', event_id, account.get('confidence'), day=10,
+                              source=account.get('source', 'told'))
     if not facts:
         return None, 'account has no typed facts'
     return person('1', '2', facts, role, day=10), None

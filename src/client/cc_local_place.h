@@ -176,6 +176,17 @@ typedef struct CcLocalPlaceProfile {
     float building_yaw_degrees[CC_LOCAL_PLACE_BUILDING_CAPACITY];
 } CcLocalPlaceProfile;
 
+/* Same wall-front convention as the existing service door. Silverwick's
+ * primary hall faces the lane; rendering and pointing share this anchor. */
+static inline CcLocalLanePoint CcLocalOvenCourtAnchor(const CcLocalPlaceProfile *profile)
+{
+    if (profile == NULL || profile->primary_building < 0 ||
+        profile->primary_building >= profile->building_count) return (CcLocalLanePoint){0};
+    const CcLocalPlaceBuilding *hall = &profile->building[profile->primary_building];
+    return (CcLocalLanePoint){hall->x + hall->width - 2.2f,
+                             hall->z + hall->depth + 0.15f};
+}
+
 CcLocalLanePoint CcLocalLaneSample(const CcLocalLane *lane, float progress);
 
 /* Read-only town presence shared by scene rendering and interaction. */
