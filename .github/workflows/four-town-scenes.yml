@@ -1,0 +1,88 @@
+name: Four authored towns
+
+on:
+  pull_request:
+    paths:
+      - 'src/client/**'
+      - 'tests/**town**'
+      - 'tools/capture_four_towns.py'
+      - 'docs/design/four-authored-towns.md'
+      - '.github/workflows/four-town-scenes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: four-town-scenes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scenes:
+    name: Town routes and rendered scenes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Record reproducible source
+        run: |
+          mkdir -p "$RUNNER_TEMP/town-source"
+          git rev-parse HEAD > "$RUNNER_TEMP/town-source/revision.txt"
+          git archive --format=tar HEAD -- . ':!assets/audio' ':!assets/blender' ':!docs' | gzip -1 > "$RUNNER_TEMP/town-source/source.tar.gz"
+          sha256sum "$RUNNER_TEMP/town-source/source.tar.gz" > "$RUNNER_TEMP/town-source/source.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: four-town-review-source
+          path: ${{ runner.temp }}/town-source/
+          retention-days: 3
+          if-no-files-found: error
+      - name: Install native client dependencies
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libcurl4-openssl-dev
+          libsqlite3-dev libx11-dev libxcursor-dev libxext-dev
+          libxfixes-dev libxi-dev libxinerama-dev libxrandr-dev xvfb
+      - name: Configure strict native build
+        run: >-
+          cmake -S . -B build-towns -DCMAKE_BUILD_TYPE=Release
+          -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON
+      - name: Record renderer dependency
+        run: tar -czf "$RUNNER_TEMP/raylib-source.tar.gz" -C build-towns/_deps/raylib-src .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: four-town-renderer-source
+          path: ${{ runner.temp }}/raylib-source.tar.gz
+          retention-days: 3
+          if-no-files-found: error
+      - name: Build
+        run: cmake --build build-towns --parallel 4
+      - name: Check town, route, interaction and save regressions
+        run: xvfb-run -a ctest --test-dir build-towns --output-on-failure -R 'town|local|carriage|interaction|save|renderer' --parallel 2
+      - name: Capture towns
+        run: |
+          mkdir -p build-towns/four-town-review
+          git rev-parse HEAD > build-towns/four-town-review/revision.txt
+          if [ -f tools/capture_four_towns.py ]; then
+            xvfb-run -a python3 tools/capture_four_towns.py build-towns/crownless_carriage --output build-towns/four-town-review
+          else
+            for town in 0 1 2 3; do
+              xvfb-run -a ./build-towns/crownless_carriage --capture-town-state "$town" 82 34 "build-towns/four-town-review/town-$town-arrival.png" peaceful
+              xvfb-run -a ./build-towns/crownless_carriage --capture-town-state "$town" 44.25 28.85 "build-towns/four-town-review/town-$town-heart.png" peaceful
+              xvfb-run -a ./build-towns/crownless_carriage --capture-town-state "$town" 42 51.2 "build-towns/four-town-review/town-$town-yard.png" peaceful
+            done
+          fi
+      - name: Upload rendered review and test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: four-town-scene-review
+          path: |
+            build-towns/four-town-review/
+            build-towns/Testing/Temporary/LastTest.log
+          retention-days: 14
+          if-no-files-found: warn
