@@ -1,5 +1,7 @@
 #include "client/cc_local3d.h"
+#include "client/cc_local3d_internal.h"
 #include "client/cc_client_policy.h"
+#include "raymath.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -271,12 +273,66 @@ static void LegsStepAtTheSpeedTheTeamMoves(void)
 
 }
 
+static Vector3 RotateAbout(Vector3 v, Vector3 axis, float radians)
+{
+    return Vector3RotateByQuaternion(v,
+        QuaternionFromAxisAngle(axis, radians));
+}
+
+/* Traces start at the carriage chassis hitch, so the socket has to carry the
+   same pitch and sway the carriage model is drawn with -- and nothing else.
+   Level, still ground leaves it exactly on the plain local offset. */
+static void CarriageSocketsFollowTheChassis(void)
+{
+    Vector3 base = {5.0f, 1.0f, -3.0f};
+    float yaw = 0.7f;
+    float pitch = 0.19f;
+    float sway = -0.38f;
+    float lateral = 0.42f;
+    float height = 0.77f;
+    float forward = 3.05f;
+
+    Vector3 level = CcLocalRoadCarriageSocketInternal(
+        base, yaw, 0.0f, 0.0f, lateral, height, forward);
+    Vector3 plain = {
+        base.x + lateral * cosf(yaw) + forward * sinf(yaw),
+        base.y + height,
+        base.z - lateral * sinf(yaw) + forward * cosf(yaw)};
+    Require(Near(level.x, plain.x, 0.0001f) &&
+                Near(level.y, plain.y, 0.0001f) &&
+                Near(level.z, plain.z, 0.0001f),
+            "a level, still carriage leaves the socket on its local offset");
+
+    Vector3 lean = CcLocalRoadCarriageSocketInternal(
+        base, yaw, pitch, sway, lateral, height, forward);
+    Vector3 pitch_axis = {cosf(yaw), 0.0f, -sinf(yaw)};
+    Vector3 sway_axis = {sinf(yaw), 0.0f, cosf(yaw)};
+    Vector3 expected = Vector3Subtract(plain, base);
+    expected = RotateAbout(expected, pitch_axis, pitch);
+    expected = RotateAbout(expected, sway_axis, sway * DEG2RAD);
+    expected = Vector3Add(base, expected);
+    Require(Near(lean.x, expected.x, 0.0005f) &&
+                Near(lean.y, expected.y, 0.0005f) &&
+                Near(lean.z, expected.z, 0.0005f),
+            "the socket leans with the chassis, pitch then sway");
+
+    Require(Near(Vector3Distance(lean, base),
+                     Vector3Distance(plain, base), 0.0005f),
+            "the lean keeps the hitch at its distance from the base");
+    Vector3 hub = CcLocalRoadCarriageSocketInternal(
+        base, yaw, pitch, sway, 0.0f, 0.0f, 0.0f);
+    Require(Near(hub.x, base.x, 0.0005f) && Near(hub.y, base.y, 0.0005f) &&
+                Near(hub.z, base.z, 0.0005f),
+            "the lean turns about the carriage base");
+}
+
 int main(void)
 {
     WheelsRollWithTheRoad();
     PlaceAndSpinShareOneMeasure();
     RealRouteLengthsDriveBothDirections();
     LegsStepAtTheSpeedTheTeamMoves();
+    CarriageSocketsFollowTheChassis();
     puts("Distance-driven travel animation passed");
     return 0;
 }
