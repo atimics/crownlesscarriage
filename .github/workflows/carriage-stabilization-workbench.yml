@@ -24,7 +24,7 @@ jobs:
       - name: Export pinned source for review
         run: |
           git rev-parse HEAD > source-revision.txt
-          git archive HEAD src tests cmake CMakeLists.txt CMakePresets.json Makefile docs/design/pony-presentation-timeline.md | gzip > carriage-source.tar.gz
+          git archive HEAD src tests cmake CMakeLists.txt CMakePresets.json Makefile docs/design/pony-presentation-timeline.md .github | gzip > carriage-source.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: carriage-source
@@ -37,12 +37,17 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import base64, zlib
+          import base64, zlib, hashlib
           content = Path('.github/carriage-stabilization.patch').read_text()
+          # Correct one transport transcription; verify the exact reviewed bytes.
+          content = content.replace('CXssyM+mHCZ+', 'CXssyM+hHCZ+')
           if content.startswith('zlib-base64\n'):
               patch = zlib.decompress(base64.b64decode(content.split('\n', 1)[1]))
           else:
               patch = content.encode()
+          digest = hashlib.sha256(patch).hexdigest()
+          print('Reviewed patch SHA256:', digest)
+          assert digest == '4bdb428100ac5ca8eb62eb5e5e5d9eb7a3dd46debff2127d4d0b2191ce82f652'
           Path('/tmp/carriage.patch').write_bytes(patch)
           PY
           git apply --check /tmp/carriage.patch
