@@ -40,8 +40,10 @@ smooth" here means presentation latency and hitching, not missing steering.
 5. **Storybook scenery built every visible mesh in one frame (fixed here).**
    `DrawStorybookScenery` now builds at most one new cell mesh per frame, so
    entering a forest fills in over the next few frames instead of hitching.
-   World chunk streaming (`CcWorldStreamFollowRoute`, up to four chunks per
-   frame) is unchanged; that is the remaining item.
+   World chunk streaming now also runs under a CPU-time budget: the client uses
+   `CcWorldStreamFollowRouteTimed` with 1.5 ms per frame, and generation stops
+   once that is spent. The untimed entry points are unchanged, so tests stay
+   deterministic.
 
 ## What already exists
 
@@ -53,7 +55,8 @@ pixel-snapped orthographic cameras (a deliberate pixel-art choice).
 
 ## Next
 
-1. Amortize world chunk streaming (`CcWorldStreamFollowRoute` still generates
-   up to four chunks per frame on the render thread) or move it off-thread.
-2. Runtime verification of (2)-(5) on a machine with a window server; the
+1. Runtime verification of (2)-(5) on a machine with a window server; the
    client regression modes run on the release tag build.
+2. If chunk generation still shows up in profiles, move it to a worker thread;
+   the current budget bounds the per-frame cost but does not overlap it with
+   rendering.
