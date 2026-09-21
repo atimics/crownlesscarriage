@@ -47,6 +47,7 @@ jobs:
           python tests/meaning_data_tests.py
           python tests/dialogue_fact_policy_tests.py
           python tests/dialogue_fact_question_tests.py
+          python tests/dialogue_fact_binding_tests.py
           python tests/dialogue_promotion_pilot_tests.py
 
   detect:
@@ -119,6 +120,7 @@ jobs:
           python tests/meaning_data_tests.py
           python tests/dialogue_fact_policy_tests.py
           python tests/dialogue_fact_question_tests.py
+          python tests/dialogue_fact_binding_tests.py
           python tests/dialogue_promotion_pilot_tests.py
       - name: Train semantic model
         run: |
