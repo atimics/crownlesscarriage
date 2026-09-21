@@ -1,0 +1,115 @@
+{
+  "artifacts": {
+    "grammar_source": {
+      "path": "tools/data/core_account_rules.json",
+      "sha256": "d8630abd6ba13d21fe25d17f3ab6d37626cd5519c6177c56906524b4d7c431e5"
+    },
+    "model": {
+      "path": "assets/language/core.ccv2",
+      "sha256": "7d1c3cd5e46738ba7cd60673e58f05e12535ac46204b07a8449f41a6fcb936c9"
+    },
+    "native_reference": {
+      "path": "tests/data/core-model-reference.json",
+      "sha256": "6ecb33dee150e810dd642ce01b8158c2d4adfea546eb7857925391e8ed176216"
+    },
+    "tokenizer": {
+      "path": "assets/language/tokenizer.json",
+      "sha256": "c572de53eb4e739a8ce941ac03d1d5fb6173623af786787cf786b41fd34e9af4"
+    }
+  },
+  "compilers": [
+    {
+      "path": "tools/language/compile_model.py",
+      "sha256": "782b7a0e5c9534d2c6e9bfec1350b01bde96b657df5e1ebc4ca12075ff3b88ef"
+    },
+    {
+      "path": "tools/compile_core_accounts.py",
+      "sha256": "2b4881383d95b62c482b3c6cff74967bfd027a81a94b8f8339c8c800ae86d7b7"
+    }
+  ],
+  "evaluators": [
+    {
+      "path": "tools/language/measure_field_membership.py",
+      "sha256": "930a06c00b54e2039958011abc990d2b771a143de0e3a53dfe9270df2da522cb"
+    },
+    {
+      "path": "tools/language/measure_memory_membership.py",
+      "sha256": "cdfd2236e7fd5c1d78eff6da9c823ea4345a2e7a88ee608d8ecec91473c9e8f7"
+    },
+    {
+      "path": "tools/language/field_calibration.json",
+      "sha256": "422649b4cebf3212eedd126328514837030a12d38020359effee6f96ba29bf74"
+    },
+    {
+      "path": "tools/language/model_identity.py",
+      "sha256": "4bf6c9518141e82fd69011edc74324f836c85c774eac6d986dcc811c3c462731"
+    },
+    {
+      "path": "tests/language_membership_tests.py",
+      "sha256": "8de1b538874580c5360bca579f35365e6e4eb4aa0bc7261f64c1182645372a78"
+    },
+    {
+      "path": "tests/model_identity_tests.py",
+      "sha256": "0bc2833c5e86e164f0a5d420e80aecfb4a27ad1ff1325e4ba78f0c2f35cc82ed"
+    },
+    {
+      "path": "tools/language/EVALUATION.md",
+      "sha256": "936291777c135456971f1ea50f0ecc9d9c3e921c4a09655fcfee07b1afdfe163"
+    }
+  ],
+  "issue": 809,
+  "model": {
+    "config": {
+      "context": 512,
+      "dim": 192,
+      "ff": 624,
+      "goals": 8,
+      "heads": 6,
+      "kinds": 62,
+      "layers": 8,
+      "levels": 4,
+      "situations": 2,
+      "socials": 4,
+      "vocab": 4096,
+      "voices": 16
+    },
+    "container_version": 1,
+    "event_kinds": 136,
+    "meanings": 61,
+    "mode": "conversation",
+    "parameters": 4945153,
+    "payload_sha256": "5509de8145ff58a66e9ff9e261606a35d21bd08ee88be03622b0d39ad7fcbafe",
+    "rules_sha256": "ad017639e911c482e86e25f063207504769353dcd05e263d31dd9a6ef9409fb6",
+    "tensors": 70,
+    "tokenizer_sha256": "c572de53eb4e739a8ce941ac03d1d5fb6173623af786787cf786b41fd34e9af4"
+  },
+  "model_bytes": 5055187,
+  "native_reference": {
+    "model_sha256": "7d1c3cd5e46738ba7cd60673e58f05e12535ac46204b07a8449f41a6fcb936c9",
+    "sentences": 145,
+    "tokenizer_cases": 302,
+    "vocabulary": 1156,
+    "zero_sources": {
+      "crownless_conversation.py": "5c0bfa7ae7b0474ae73bdbf3b55318b59e0cf4d4c548d6806c09a2471bfb9b78",
+      "crownless_moves.py": "4b9874acfc03d6dc16be72f8a0e0c918bf2922855d2cf29b3d2e9c8a4b55efb7",
+      "crownless_v2.py": "f75bdb231ffe9de2f788ad9c80cba1b5e88203de2eb482a1d7d9f9d8e6ce5aca",
+      "crownless_v2_export.py": "59249330258aff74b7f206a03f85024cad0200e536df3d1a4eab2fde245c0a6a",
+      "speak_crownless_v2.py": "773bf6c008fa364afaf6e059998400b3723013805c9779893b36778f891b5725"
+    }
+  },
+  "runtime": [
+    {
+      "path": "src/story/cc_core_model.c",
+      "sha256": "8a38890012e91173e96a0411ed74fe43330fcc651d2a228e829d7a26701d1546"
+    },
+    {
+      "path": "src/story/cc_core_model.h",
+      "sha256": "dfeba54f68d73efbea1b575ec076d667d197c7f69967017beab2555c21aaf1d0"
+    },
+    {
+      "path": "src/story/cc_core_model_tables.inc",
+      "sha256": "1f09e3f7c72f311924f40ee28307e9fa77dcd41d45832ec4fe5884db4921569b"
+    }
+  ],
+  "version": 1
+}
