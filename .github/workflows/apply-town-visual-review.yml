@@ -1,0 +1,32 @@
+name: Apply reviewed town source edits
+
+on:
+  push:
+    branches: [codex/four-authored-town-scenes]
+    paths:
+      - '.github/workflows/apply-town-visual-review.yml'
+      - 'tools/apply_town_visual_review.py'
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    if: github.repository == 'atimics/crownlesscarriage' && github.ref == 'refs/heads/codex/four-authored-town-scenes'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Apply exact-revision visual review edits to the PR branch
+        run: |
+          python3 tools/apply_town_visual_review.py
+          git diff --check
+          git add -- src/client/cc_local_place.c src/client/local3d/authored_places.inc src/client/local3d/authored_town_architecture.inc tests/local_movement_tests.c tests/local_place_tests.c tools/capture_four_towns.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Refine authored street framing and mine stacks from rendered review'
+          git push origin HEAD:refs/heads/codex/four-authored-town-scenes
