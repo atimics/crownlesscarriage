@@ -5,11 +5,11 @@ quest, fuel recipe, delivery reward, automatic recovery, or a second inventory.
 
 ## Ordinary controls
 
-Approach **Oven Court tally**, on the Company store frontage, and Inspect by
-pointer, object card, or E/F. Inspecting acquires a dated Company Book note.
-Tally shows the local stores and current next-act bottleneck; What helps?
-distinguishes missing Wheat, absent capacity, rebuilding, reserved grain,
-full Bread storage, and a supplied but not-yet-executed batch.
+Approach **Oven Court tally**, on the Company store frontage. Use its pointer
+or object-card action, or cycle focus with E and activate with F. Inspecting
+acquires a dated Company Book note. Tally shows the local stores and current
+next-act bottleneck; What helps? distinguishes missing Wheat, absent capacity,
+rebuilding, reserved grain, full Bread storage, and a supplied but not-yet-executed batch.
 
 Company store starts an ordinary walk to the existing door, not a teleport.
 Use the existing counter and Sell tab for actual quantities and payment, or
@@ -24,6 +24,9 @@ knowledge. This authored reply remains usable without a language model.
 B opens the Court page from inspection. Latest/Earlier retain two acquired
 notes. Reading a saved note, selling supplies, or someone changing a distant
 store never rewrites its date or text. Re-inspect locally to learn a change.
+Consecutive identical same-day acquisitions from the same source are idempotent.
+Switching between the tally and a worker records the source just consulted;
+it cannot silently borrow the other source's event for the current reply.
 A delivery is not proof of baking, exclusive player credit, or full recovery.
 
 ## Boundaries
@@ -60,7 +63,8 @@ Historical demonstration reports are not rewritten as new measurements.
 
 `oven_court_economy_and_memory` checks read-only plans, input versus capacity,
 existing grain reserves, finite sales, unchanged dated evidence, source/presence
-checks, replay, event compaction, and shared/direct command agreement.
+checks, replay, event compaction, alternating sources and shared/direct command
+agreement. Its alternating-source regression fails against the pre-fix code.
 `oven_court_input_flow` starts at a staged Silverwick position and exercises
 ordinary keyboard inspect, Book, walking to door and counter, existing sale
 confirmation and a grounded reply. It is not a human playtest. Existing trade
