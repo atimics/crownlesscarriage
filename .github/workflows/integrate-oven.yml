@@ -23,20 +23,31 @@ jobs:
           python3 - <<'PY'
           import pathlib, subprocess
           conflicts = subprocess.check_output(['git','diff','--name-only','--diff-filter=U'],text=True).splitlines()
-          assert set(conflicts) <= {'tools/dialogue/fact_demo.py'}, conflicts
-          if conflicts:
-              subprocess.run(['git','checkout','--theirs','tools/dialogue/fact_demo.py'], check=True)
-          path = pathlib.Path('tools/dialogue/fact_demo.py')
-          text = path.read_text()
+          allowed = {'tools/dialogue/fact_demo.py', 'tools/dialogue/fact_question.py'}
+          assert set(conflicts) <= allowed, conflicts
+          def version(ref, path):
+              return subprocess.check_output(['git','show',f'{ref}:{path}'], text=True)
+          main = '819a88d94e7a3a09f6470707651345242db68924'
+          question = 'tools/dialogue/fact_question.py'
+          ours = version('HEAD', question)
+          theirs = version(main, question)
+          # Keep main's predicate parser, spoken-field exclusion and role checks.
+          # Keep this PR's confidence validation and explicitly supplied acquisition.
+          prefix = theirs[:theirs.index('def _certainty(')]
+          acquisition = ours[ours.index('def _certainty('):ours.index('    facts = []')]
+          tail = theirs[theirs.index('    facts = []'):]
+          old = "'certainty': certainty, 'day': day, 'private': False"
+          assert old in tail
+          tail = tail.replace(old, "'certainty': certainty, 'confidence': confidence, 'day': day, 'private': False", 1)
+          pathlib.Path(question).write_text(prefix + acquisition + tail)
+          demo = 'tools/dialogue/fact_demo.py'
+          text = version(main, demo)
           old = "facts = facts_from_fields(account['fields'], '1', event_id, account.get('confidence'), day=10)"
           new = "facts = facts_from_fields(account['fields'], '1', event_id, account.get('confidence'), day=10,\n                              source=account.get('source', 'told'))"
-          if old in text:
-              text = text.replace(old, new, 1)
-          assert "source=account.get('source', 'told')" in text
-          assert 'target = resolve_field' in text
-          path.write_text(text)
+          assert text.count(old) == 1
+          pathlib.Path(demo).write_text(text.replace(old, new, 1))
           PY
-          git add tools/dialogue/fact_demo.py
+          git add tools/dialogue/fact_demo.py tools/dialogue/fact_question.py
           test -z "$(git diff --name-only --diff-filter=U)"
           python3 tests/dialogue_fact_question_tests.py
           python3 tests/dialogue_fact_policy_tests.py
