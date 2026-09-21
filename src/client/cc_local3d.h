@@ -139,6 +139,12 @@ typedef struct CcLocalWorldCarriageState {
     Vector3 render_position;
     Vector3 previous_tick_position;
     float heading_yaw;
+    /* Presentation-only heading and distance, interpolated with
+       render_position so wheels and attachments share one sample. */
+    float render_heading_yaw;
+    float previous_heading_yaw;
+    float render_travelled;
+    float previous_travelled;
     float route_amount;
     float pace;
     float camera_weight;
@@ -549,6 +555,9 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
 int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
                            const CcSim *sim, float delta_time,
                            bool market_interior, bool advance_course);
+/* Fraction of a fixed step remaining in the local accumulator: the subframe
+   alpha for presentation interpolation. */
+float CcLocalCourseAlpha(const CcLocalCourse *course);
 void CcLocalCourseRaiseAlarm(CcLocalCourse *course);
 void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
                                  const CcLocalAgent *player);
