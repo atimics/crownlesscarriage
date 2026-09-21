@@ -53,20 +53,34 @@ skips when the ZERO rows are not available.
   Q: Where is the mill?            -> Kelilashmere (place)
 ```
 
+## Policy integration
+
+`policy.make_act`, `validate` and `decide` accept an optional `question` text.
+When `report_fact` or `explain_cause` is chosen with a question, the claim is
+routed to the held account that answers it; otherwise the usual most-recent
+fact is used. The model predicts only the action ID, and the claim is derived
+from context, so **the trained action wire is unchanged** and no retraining is
+needed. Existing callers pass no question and keep the previous behaviour.
+
+```python
+act = policy.make_act('report_fact', person, heard, requested='learn',
+                      question='What was the notice about?')
+# act['claim']['ref'] names the notice account, not the most recent fact
+```
+
 ## Native act protocol
 
-The v2 policy already carries a typed act in an 18-byte record: version, action,
-and a 16-byte digest of the full act (`policy.pack_act`). The claim inside that
-act names an `account_ref`, source, day and certainty. This bridge chooses
-**which** `account_ref` and field to bind; it does not change the record format.
+The v2 policy carries a typed act in an 18-byte record: version, action, and a
+16-byte digest of the full act (`policy.pack_act`). The native probe decodes the
+action ID and checks the candidate mask; the claim is bound from context in
+Python. This bridge chooses **which** `account_ref` and field to bind; it does
+not change the record format.
 
-To carry the field natively, the next step is one of:
-
-1. Add a bounded `field` index to the claim schema (a version bump), or
-2. Move the predicate routing into the native `make_act` path so the C runtime
-   selects the same account and field from the heard act.
-
-Option 2 avoids a schema change but needs the question predicate in C.
+To bind the same routed claim natively, the C runtime needs the question
+predicate at the point it reconstructs the act. That is a separate port: the
+parser keyword set and the `fact_roles` overrides would move to C, or the
+digest would be checked against a Python-bound claim supplied alongside the
+action.
 
 ## Scope
 
@@ -74,5 +88,6 @@ Option 2 avoids a schema change but needs the question predicate in C.
   grammar parses with rules outside these templates need their own rule.
 - Routing is by predicate and role. Rules with a duplicate spoken role need the
   `fact_roles` override or predicate-level routing (17 of 158 rules).
-- The bridge is Python-side. It is not yet called by `policy.make_act`; wiring
-  it in is the next step, behind a flag so the trained v2 wire is unchanged.
+- The claim binds the routed **account**; the renderer still quotes the whole
+  account, so field-level rendering is a follow-up.
+- The routing is Python-side. The native claim binding is a separate port.
