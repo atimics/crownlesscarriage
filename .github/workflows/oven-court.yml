@@ -1,0 +1,34 @@
+name: Oven Court
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/oven-court.yml'
+      - 'src/**'
+      - 'tests/**'
+      - 'tools/dialogue/**'
+      - 'CMakeLists.txt'
+permissions:
+  contents: read
+concurrency:
+  group: oven-court-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    name: Reproducible implementation source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Package exact source without credentials or build output
+        run: |
+          mkdir -p "$RUNNER_TEMP/oven-source"
+          git rev-parse HEAD > "$RUNNER_TEMP/oven-source/revision.txt"
+          git archive --format=tar HEAD -- . ':!assets/audio' ':!assets/blender' ':!docs' | gzip -1 > "$RUNNER_TEMP/oven-source/source.tar.gz"
+          sha256sum "$RUNNER_TEMP/oven-source/source.tar.gz" > "$RUNNER_TEMP/oven-source/source.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oven-court-implementation-source
+          path: ${{ runner.temp }}/oven-source/
+          if-no-files-found: error
+          retention-days: 3
