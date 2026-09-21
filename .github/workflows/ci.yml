@@ -34,6 +34,20 @@ jobs:
       - name: Test the new-event failure guard
         run: python3 tests/dialogue_coverage_tests.py
 
+  evaluation-metrics:
+    name: Evaluation metrics and model identity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the model identity receipt
+        run: python3 tools/language/model_identity.py --check
+      - name: Test the identity receipt and drift detection
+        run: python3 tests/model_identity_tests.py
+      - name: Test the issue 809 membership metrics
+        run: python3 tests/language_membership_tests.py
+      - name: Check the compiled model tables
+        run: python3 tools/language/compile_model.py --check
+
   static-analysis:
     name: Static analysis
     runs-on: ubuntu-latest
