@@ -1429,15 +1429,12 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
             carriage_scale = arrival_place->profile_scale +
                 (1.0f - arrival_place->profile_scale) * camera_weight;
         }
-        rlPushMatrix();
-        rlTranslatef(carriage_base.x, carriage_base.y, carriage_base.z);
-        rlScalef(carriage_scale, carriage_scale, carriage_scale);
-        rlTranslatef(-carriage_base.x, -carriage_base.y, -carriage_base.z);
+        /* Fold the arrival scale into the carriage instead of a graphics-only
+           matrix, so the team is supported where it is drawn. */
         DrawRoadCarriage(carriage_base, sim, clock,
                          carriage->pace, carriage->render_travelled,
                          carriage->render_heading_yaw,
-                         true, false, CC_LOCAL_SCENE_ROAD);
-        rlPopMatrix();
+                         true, false, CC_LOCAL_SCENE_ROAD, carriage_scale);
         if (kingdom_view) {
             float marker_radius = fmaxf(2.8f, kingdom_span * 0.0055f);
             DrawCylinder((Vector3){carriage_base.x,

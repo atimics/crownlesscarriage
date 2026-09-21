@@ -61,7 +61,7 @@ static Image RenderCargoQuantity(RenderTexture2D target, int32_t quantity)
     ClearBackground(BLACK);
     BeginMode3D(camera);
     BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
-    DrawCarriedCargoBoxes(&player, (Vector3){0}, 0.0f);
+    DrawCarriedCargoBoxes(&player, (Vector3){0}, 0.0f, 1.0f);
     EndWorldLighting();
     EndMode3D();
     EndTextureMode();

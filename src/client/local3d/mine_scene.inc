@@ -131,7 +131,7 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
         MineBox(15,2.4f,3,3,.4f,.6f,(Color){125,88,53,255});
         DrawRoadCarriage((Vector3){CC_MINE_YARD_CARRIAGE_X,0,
             CC_MINE_YARD_CARRIAGE_Y},sim,0,0,0,PI,true,false,
-            CC_LOCAL_SCENE_ROAD);
+            CC_LOCAL_SCENE_ROAD, 1.0f);
         /* The parked team uses the same model as road travel. */
         for(int i=0;i<5;++i) {
             float x=1+(float)i*7;
