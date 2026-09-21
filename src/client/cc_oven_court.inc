@@ -15,7 +15,7 @@ static void DrawOvenCourt(const CcSim *sim, const LocalState *local)
     AdventureButton(AdventureTab(panel, 1, 2), "What helps?  2", true, local->oven_page == 1);
     const CcOvenCourtObservation *o = &local->oven_observation;
     int x = (int)panel.x + 28, y = (int)panel.y + 130;
-    int width = (int)panel.width - 56, size = AdventureTextSize(15);
+    int width = (int)panel.width - 56, size = AdventureTextSize(22);
     ClientTouchHeading("Silverwick's Oven Court", "An inspection, not a promise or a completed batch.");
     if (local->oven_page == 0) {
         y += AdventureWrap(TextFormat("PUBLIC TALLY - read on day %d", o->day), x, y, width, size, TEAL) + 12;
@@ -69,7 +69,7 @@ static void DrawAdventureCourtNotes(const CcSim *sim, const LocalState *local)
     Rectangle panel = AdventurePanel();
     DrawAdventureBookHead(panel, "Court notes", 3);
     int x = (int)panel.x + 28, y = (int)panel.y + 128;
-    int width = (int)panel.width - 56, size = AdventureTextSize(15);
+    int width = (int)panel.width - 56, size = AdventureTextSize(22);
     const CcEvent *note = CcOvenCourtNote(sim, local->book_offset);
     y += AdventureWrap("SILVERWICK - field notes", x, y, width, size + 2, CC_GOLD) + 14;
     if (note != NULL) {

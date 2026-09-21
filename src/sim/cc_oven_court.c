@@ -103,10 +103,12 @@ bool CcOvenCourtRecord(CcSim *sim, const CcCommand *command, char *error, size_t
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text), "%s, day %d: %d Bread, %d Wheat. %s",
         speaker != NULL ? speaker->name : "Oven tally", o.day, o.bread, o.wheat, CcOvenCourtStatus(&o));
-    /* Duplicate inspection at unchanged terms does not generate evidence or
-       consume the tape. Do not mutate day/time while reading. */
-    for (int32_t i=0; i<2; ++i) {
-        const CcEvent *old = CcOvenCourtNote(sim, i);
+    /* Consecutive identical inspections are idempotent. Switching between
+       a copied tally and a named explanation is a new acquisition: retain
+       its source as the latest note rather than borrowing another speaker's
+       event for the response. Reading never changes world time or stocks. */
+    {
+        const CcEvent *old = CcOvenCourtNote(sim, 0);
         if (old != NULL && old->day == o.day && old->actor_id == source &&
             strcmp(old->text, text) == 0) {
             if (error != NULL && capacity > 0) error[0]='\0';

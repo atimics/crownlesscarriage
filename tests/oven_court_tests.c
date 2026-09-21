@@ -184,6 +184,27 @@ static void CheckPersistenceAndFiniteTrade(void)
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
+static void CheckAlternatingSources(void)
+{
+    Prepare();
+    CcId source = CcSimBakerySupportPlan(&sim, Town()->id).contact_id;
+    CcCommand inspect = {.kind = CC_COMMAND_OBSERVE_OVEN_COURT, .target_id = Town()->id};
+    CcCommand ask = {.kind = CC_COMMAND_OBSERVE_OVEN_COURT, .target_id = source, .amount = 1};
+    CC_CHECK(source != 0U);
+    for (int32_t i = 0; i < 3; ++i) {
+        CC_CHECK(CcSimApply(&sim, &inspect, error, sizeof(error)));
+        CC_CHECK(CcOvenCourtNote(&sim, 0)->actor_id == sim.player.id);
+        uint64_t hash = CcSimHash(&sim);
+        CC_CHECK(CcSimApply(&sim, &inspect, error, sizeof(error)) && CcSimHash(&sim) == hash);
+        CC_CHECK(CcSimApply(&sim, &ask, error, sizeof(error)));
+        CC_CHECK(CcOvenCourtNote(&sim, 0)->actor_id == source);
+        CC_CHECK(CcOvenCourtNote(&sim, 1)->actor_id == sim.player.id);
+        hash = CcSimHash(&sim);
+        CC_CHECK(CcSimApply(&sim, &ask, error, sizeof(error)) && CcSimHash(&sim) == hash);
+    }
+    CC_CHECK(sim.current_day == 6 && Town()->stock[CC_GOOD_WHEAT] == 0);
+}
+
 static void CheckSharedCommand(void)
 {
     Prepare();
@@ -201,7 +222,7 @@ static void CheckSharedCommand(void)
 
 int main(void)
 {
-    CheckSharedCommand(); CheckReadAndAdvice(); CheckPlannerMatchesWork(); CheckSourcesAndNotes(); CheckPersistenceAndFiniteTrade();
+    CheckAlternatingSources(); CheckSharedCommand(); CheckReadAndAdvice(); CheckPlannerMatchesWork(); CheckSourcesAndNotes(); CheckPersistenceAndFiniteTrade();
     puts("Oven Court: real bottlenecks, local knowledge, finite trade, dated notes and replay.");
     return 0;
 }
