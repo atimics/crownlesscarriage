@@ -83,6 +83,35 @@ by 21 points.
 - `defer` is a single negative class. Absent events, conflicting accounts and
   disclosure rules beyond a private flag are not tested.
 
+## Question parsing and role reconciliation
+
+`fact_question.parse_question` maps natural wording to a question **predicate**
+(finer than a role): `beneficiary`, `joined`, `destination`, and the plain roles.
+`role_from_question` gives the base policy role. The parser is an ordered
+keyword map and returns None rather than guessing.
+
+`fact_roles.py` reconciles predicates with the grammar's field roles. The
+grammar vocabulary is generic (native parse/render uses it), so some rules label
+two spoken fields with the same role or call a settlement a `place` where a
+question calls it a beneficiary. `resolve_field(rule, predicate, fields)` returns
+the concrete field index, using a small override table:
+
+| Rule | Predicate | Field | Why |
+| --- | --- | ---: | --- |
+| `harvest_failed_0` | `beneficiary` | 1 | two `place` fields; the second needed the supplies |
+| `bandit_pressure_1` | `joined` | 1 | the joined band is the `recipient` field |
+| `horse_bred_0` | `actor` | 1 | two horses are `actor` and `recipient` |
+
+`fact_roles.audit(rules)` reports every rule with a duplicate spoken role. Of
+158 grammar rules, **17** have one: `harvest_failed_0` in the core meanings, and
+16 in the newer `*_grounded_*` / `*_source_*` rules. Those need predicate-level
+routing or a grammar revision before they can be routed by role alone.
+
+On the demo fixture, the parser and reconciliation fixed four previously
+mismatched questions: the harvest beneficiary, the joined band, and the war and
+champion recipients. The only remaining miss is a question that names a pair
+("Which horses were bred?"), which returns one of the two named horses.
+
 ## Integration path
 
 `fact_question.py` connects the typed selection to real accounts: it maps parsed

@@ -11,19 +11,22 @@
           "field": 0,
           "role": 1,
           "text": "Yorororholt Kelumeth",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         },
         {
           "field": 1,
           "role": 3,
           "text": "Yororormere",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         },
         {
           "field": 2,
           "role": 4,
           "text": "Yorilashfell Cup",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         }
       ],
       "questions": [
@@ -42,19 +45,22 @@
           "field": 0,
           "role": 1,
           "text": "someone",
-          "knowledge": 3
+          "knowledge": 3,
+          "spoken": true
         },
         {
           "field": 1,
           "role": 8,
           "text": "124",
-          "knowledge": 2
+          "knowledge": 2,
+          "spoken": false
         },
         {
           "field": 2,
           "role": 3,
           "text": "Yoraamere",
-          "knowledge": 2
+          "knowledge": 2,
+          "spoken": true
         }
       ],
       "questions": [
@@ -72,31 +78,36 @@
           "field": 0,
           "role": 3,
           "text": "Kelowaholt",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         },
         {
           "field": 1,
           "role": 4,
           "text": "Kelumenford Book",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         },
         {
           "field": 2,
           "role": 8,
           "text": "190",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": false
         },
         {
           "field": 3,
           "role": 8,
           "text": "6",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": false
         },
         {
           "field": 4,
           "role": 8,
           "text": "108",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": false
         }
       ],
       "questions": [
@@ -114,13 +125,15 @@
           "field": 0,
           "role": 1,
           "text": "Kelenumden Kelowowmo",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         },
         {
           "field": 1,
           "role": 2,
           "text": "Yorenenford Yoraorme",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         }
       ],
       "questions": [
@@ -138,25 +151,29 @@
           "field": 0,
           "role": 3,
           "text": "Kelilashmere",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         },
         {
           "field": 1,
           "role": 8,
           "text": "25",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": false
         },
         {
           "field": 2,
           "role": 6,
           "text": "Rags",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         },
         {
           "field": 3,
           "role": 8,
           "text": "64",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": false
         }
       ],
       "questions": [
@@ -174,13 +191,15 @@
           "field": 0,
           "role": 3,
           "text": "Kelilowden",
-          "knowledge": 2
+          "knowledge": 2,
+          "spoken": true
         },
         {
           "field": 1,
           "role": 3,
           "text": "Yorashormere",
-          "knowledge": 2
+          "knowledge": 2,
+          "spoken": true
         }
       ],
       "questions": [
@@ -198,13 +217,15 @@
           "field": 0,
           "role": 1,
           "text": "Yoraawick Yorethashf",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         },
         {
           "field": 1,
           "role": 2,
           "text": "Yorililfell Kelaenwi",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         }
       ],
       "questions": [
@@ -222,19 +243,22 @@
           "field": 0,
           "role": 3,
           "text": "Kelowowmoor",
-          "knowledge": 2
+          "knowledge": 2,
+          "spoken": true
         },
         {
           "field": 1,
           "role": 1,
           "text": "Yorenethholt Kelethi",
-          "knowledge": 2
+          "knowledge": 2,
+          "spoken": true
         },
         {
           "field": 2,
           "role": 2,
           "text": "Kelilashden Kelashow",
-          "knowledge": 2
+          "knowledge": 2,
+          "spoken": true
         }
       ],
       "questions": [
@@ -252,25 +276,29 @@
           "field": 0,
           "role": 1,
           "text": "Kelumilwick Yorethas",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         },
         {
           "field": 1,
           "role": 2,
           "text": "Kelashorgate Kelenas",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         },
         {
           "field": 2,
           "role": 8,
           "text": "115",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": false
         },
         {
           "field": 3,
           "role": 3,
           "text": "Yorashenfell",
-          "knowledge": 0
+          "knowledge": 0,
+          "spoken": true
         }
       ],
       "questions": [
