@@ -51,11 +51,19 @@ asked for the object or material. Typed selection gets both.
 
 ## Known limitations
 
-These are parser or grammar mismatches, not selection failures:
+After the predicate parser and grammar-role reconciliation
+(`fact_question.parse_question`, `fact_roles.resolve_field`), the earlier
+mismatches are resolved:
 
-- bandit — Q: Which band did they join? parses to `group`, but the joined band is stored in the `recipient` field, so the model defers.
-- harvest — Q: Who needed the supplies? parses to `actor`, but the grammar stores the recipient settlement as a second `place` field, so the model defers.
-- horse breeding — Q: Which horses were bred? returns one of the two named horses; the account holds them in `actor` and `recipient` fields.
+- harvest — "Who needed the supplies?" resolves to the second `place` field and answers *Yorashormere*.
+- bandit — "Which band did they join?" resolves the joined band to the `recipient` field and answers *Kelashorgate Kelenas*.
+- war — "Who did they declare war on?" answers *Yorenenford Yoraorme*.
+- dragon patron — "Who was chosen as champion?" answers *Yorililfell Kelaenwi*.
+
+The remaining limits:
+
+- horse breeding — "Which horses were bred?" names a pair, but the role resolves to one field, so it returns one of the two horses.
+- Of 158 grammar rules, 17 label two spoken fields with the same role (one core meaning, 16 `*_grounded_*`/`*_source_*` rules). Those need predicate-level routing or a grammar revision before role-only routing works.
 
 The parser maps all eight held-out `question-contrasts` questions to the right
 role. The remaining misses are the natural-question parser and the grammar's
