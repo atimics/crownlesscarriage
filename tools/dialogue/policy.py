@@ -4,6 +4,7 @@ import json
 import struct
 import subprocess
 from event_facts import build_facts, render_fact_act
+import fact_binding
 
 FORMAT = 'crownless-policy-v2'
 GOALS = ('help', 'trade', 'safety', 'care', 'grief', 'trust', 'conflict', 'clan', 'learn')
@@ -224,7 +225,7 @@ def choose(person, heard, requested=None):
     return 'end'
 
 
-def make_act(action, person, heard, requested=None):
+def make_act(action, person, heard, requested=None, question=None):
     if action not in allowed(person, heard, requested):
         raise ValueError('act is unavailable in this participant state')
     v = view(person); own, other = person['self']['id'], person['listener']['id']
@@ -244,12 +245,19 @@ def make_act(action, person, heard, requested=None):
     if action == 'accept':
         act['proposal'] = json.loads(wire(heard[-1]['act']['proposal']))
     if action in ('report_fact', 'explain_cause', 'express_grief', 'recall_loss'):
-        facts = [f for f in v['facts'] if action not in ('express_grief', 'recall_loss') or f.kind_name in LOSS_KINDS]
-        f = facts[0]
-        act['claim'] = {'owner': own, 'ref': f.account_ref, 'event_id': f.event_id,
-                        'source_id': f.source_id, 'day': f.day, 'certainty': f.certainty,
-                        'confidence': f.confidence, 'text': f.text}
-        act['subject'] = f.event_id
+        # When a question is supplied, answer it: route to the held account
+        # whose fields match the question predicate, else keep the usual fact.
+        claim = None
+        if question and action in ('report_fact', 'explain_cause'):
+            claim = fact_binding.claim(person, question)
+        if claim is None:
+            facts = [f for f in v['facts'] if action not in ('express_grief', 'recall_loss') or f.kind_name in LOSS_KINDS]
+            f = facts[0]
+            claim = {'owner': own, 'ref': f.account_ref, 'event_id': f.event_id,
+                     'source_id': f.source_id, 'day': f.day, 'certainty': f.certainty,
+                     'confidence': f.confidence, 'text': f.text}
+        act['claim'] = claim
+        act['subject'] = claim['event_id']
     if action in ('share_memory', 'thank', 'apologise'):
         kind = {'thank': 3, 'apologise': 4}.get(action)
         m = next(m for m in v['memories'] if kind is None or m['kind'] == kind)
@@ -257,14 +265,14 @@ def make_act(action, person, heard, requested=None):
     return act
 
 
-def validate(act, person, heard, requested=None):
-    if make_act(act['intent'], person, heard, requested) != act:
+def validate(act, person, heard, requested=None, question=None):
+    if make_act(act['intent'], person, heard, requested, question) != act:
         raise ValueError('act differs from current state, references, or proposal')
     return act
 
 
-def decide(person, heard, requested=None):
-    return make_act(choose(person, heard, requested), person, heard, requested)
+def decide(person, heard, requested=None, question=None):
+    return make_act(choose(person, heard, requested), person, heard, requested, question)
 
 
 def encode_input(person, heard, requested=None):

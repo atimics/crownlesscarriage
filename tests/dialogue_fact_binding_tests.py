@@ -65,6 +65,49 @@ class BindingTests(unittest.TestCase):
         self.assertIsNone(fact_binding.select(person, 'Where was the notice posted?', self.rules))
 
 
+class PolicyRoutingTests(unittest.TestCase):
+    """policy.make_act binds the account that answers a supplied question."""
+
+    def setUp(self):
+        import policy
+        from policy_data import fixture
+        self.policy = policy
+        self.rules = fact_binding.load_rules()
+        self.person = fixture(1, '1', '2')
+        self.person['day'] = 10
+        self.person['memories'] = []
+        self.person['held_accounts'] = [
+            {'event_id': '51', 'source_id': '9', 'day': 1, 'confidence': 80, 'private': False,
+             'kind': event_facts.EVENT_KIND_REGISTRY['NOTICE_POSTED'],
+             'account': 'Yorororholt Kelumeth posts a notice at Yororormere: Yorilashfell Cup.'},
+            {'event_id': '52', 'source_id': '9', 'day': 5, 'confidence': 80, 'private': False,
+             'kind': event_facts.EVENT_KIND_REGISTRY['WAR_DECLARED'],
+             'account': "Kelenumden Kelowowmo's courier reaches Yorenenford Yoraorme: war now binds the two courts."},
+        ]
+
+    def test_routed_claim_is_not_the_default_fact(self):
+        typed = fact_binding.typed_facts(self.person, self.rules)
+        notice = next(a for a in typed if a['kind_name'] == 'NOTICE_POSTED')
+        default_fact = sorted(typed, key=lambda a: (-a['day'], a['account_ref']))[0]
+        self.assertNotEqual(default_fact['account_ref'], notice['account_ref'])
+        act = self.policy.make_act('report_fact', self.person, [], requested='learn',
+                                   question='What was the notice about?')
+        self.assertEqual(act['claim']['ref'], notice['account_ref'])
+
+    def test_unmatched_question_keeps_the_default_fact(self):
+        typed = fact_binding.typed_facts(self.person, self.rules)
+        default_fact = sorted(typed, key=lambda a: (-a['day'], a['account_ref']))[0]
+        act = self.policy.make_act('report_fact', self.person, [], requested='learn',
+                                   question='Tell me more.')
+        self.assertEqual(act['claim']['ref'], default_fact['account_ref'])
+
+    def test_act_validates_with_the_same_question(self):
+        act = self.policy.make_act('report_fact', self.person, [], requested='learn',
+                                   question='Where was the notice posted?')
+        self.assertEqual(self.policy.validate(act, self.person, [], 'learn',
+                                              'Where was the notice posted?'), act)
+
+
 class NativeValidation(unittest.TestCase):
     """The Python parser must recover the native grammar parse exactly."""
 

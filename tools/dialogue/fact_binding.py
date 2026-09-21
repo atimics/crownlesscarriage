@@ -124,3 +124,19 @@ def render(selected):
     certainty = {'witnessed': 'I saw it myself', 'told': 'I was told',
                  'doubtful': 'I have a doubtful account'}.get(selected['certainty'], 'I have heard')
     return f"{certainty}: {selected['value']} ({selected['role']}, from {source}, on day {selected['day']})."
+
+
+def claim(participant, question, rules=None):
+    """A policy-schema claim for the account that answers the question.
+
+    Returns None when no held account matches, so a caller keeps its existing
+    fallback. The claim names the routed account; the caller renders it.
+    """
+    rules = rules or load_rules()
+    selected = select(participant, question, rules)
+    if selected is None:
+        return None
+    return {'owner': participant['self']['id'], 'ref': selected['account_ref'],
+            'event_id': selected['event_id'], 'source_id': selected['source_id'],
+            'day': selected['day'], 'certainty': selected['certainty'],
+            'confidence': selected['confidence'], 'text': selected['text']}
