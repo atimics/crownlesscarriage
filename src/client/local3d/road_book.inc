@@ -261,7 +261,7 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
             if (wheel >= 0) {
                 Vector3 center = carriage_wheel_centers[wheel];
                 float angle = CcLocalCarriageWheelAngleInternal(
-                    travelled, CcLocalCarriageWheelRadiusInternal(wheel));
+                    travelled, CcLocalCarriageWheelWorldRadiusInternal(wheel));
                 Matrix spin = MatrixMultiply(
                     MatrixTranslate(-center.x, -center.y, -center.z),
                     MatrixRotateZ(-angle));
