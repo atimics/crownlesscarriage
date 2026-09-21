@@ -1,0 +1,67 @@
+{
+  "status": "complete",
+  "format": "crownless-fact-selection-v1",
+  "initialization": "fresh",
+  "parameters": 4945153,
+  "seed": 19,
+  "steps": 4000,
+  "batch_size": 32,
+  "worlds": 256,
+  "torch": "2.8.0",
+  "reference_sha256": "321431dc03e6dd6ae7749b6e991004b64f9cc2f83930ddd3c385ab1a4863eb26",
+  "tokenizer_sha256": "c572de53eb4e739a8ce941ac03d1d5fb6173623af786787cf786b41fd34e9af4",
+  "sources": {
+    "/private/tmp/crownless-fact-pilot/tools/dialogue/train_fact_policy.py": "cfda85adaf15c39ea233592a1a47dc95d3d9713dea9de07f10ba6236cf0a311c",
+    "/private/tmp/crownless-fact-pilot/tools/dialogue/fact_data.py": "6bf5835e4532c2959980558271df4c7c8fefc25b61563fa60a17b31f59fcbf2b",
+    "/private/tmp/crownless-fact-pilot/tools/dialogue/fact_policy.py": "ee9f49d1baf0362eb9b43c6eeeedf7d59ac3a1a00f22284a913c4907b2efa029",
+    "/Users/ratimics/develop/zero/scripts/crownless_v2.py": "a7d7114de341eaff5b2d15cf3a34578125fcd1e56f06c0504bd94103bf0c6bf0",
+    "/Users/ratimics/develop/zero/scripts/crownless_v2_export.py": "59249330258aff74b7f206a03f85024cad0200e536df3d1a4eab2fde245c0a6a"
+  },
+  "datasets": {
+    "train": {
+      "rows": 3164,
+      "sha256": "77ea427429baa548fe5b9a8ffb61313b26f1d35c0542a4879fe06c24de7797d6"
+    },
+    "development": {
+      "rows": 1095,
+      "sha256": "81d3119f55b8436bd3aee91e6dbba3eb837031078a3b8931f7e5f69b4190280f"
+    },
+    "test": {
+      "rows": 381,
+      "sha256": "4ee1674cf4b649286a985fca1835bb73ce3de6e66b36c3444be9768b32b02790"
+    }
+  },
+  "development": {
+    "count": 1095,
+    "valid": 1095,
+    "exact": 1068,
+    "different": {
+      "count": 882,
+      "valid": 882,
+      "exact": 858
+    },
+    "defer": {
+      "count": 485,
+      "valid": 485,
+      "exact": 480
+    }
+  },
+  "test": {
+    "count": 381,
+    "valid": 381,
+    "exact": 375,
+    "different": {
+      "count": 307,
+      "valid": 307,
+      "exact": 305
+    },
+    "defer": {
+      "count": 170,
+      "valid": 170,
+      "exact": 170
+    }
+  },
+  "target_tokens": 128000,
+  "seconds": 337.2114302497357,
+  "export_sha256": "5bba76ae50ebd4d155cabfecc89d13ab8bda701fbc513c53cd715845f086dfe7"
+}
