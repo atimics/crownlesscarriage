@@ -172,11 +172,12 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
         CcCreatureRigPose controlled_pose;
         CreatureGaitSlot slot = horse < 0 ? CREATURE_GAIT_ROAD_HORSE_LEFT :
                                             CREATURE_GAIT_ROAD_HORSE_RIGHT;
-        bool controlled = CcLocalCreatureGaitPoseInternal(
+        bool controlled = CcLocalCreatureGaitTargetInternal(
             (int32_t)slot, CC_CREATURE_RIG_HORSE, rig_gait, clock,
             horse < 0 ? 0.0f : 0.5f,
-            horse_base, yaw, 0.96f, scene,
-            &controlled_pose);
+            horse_base, yaw, 0.96f, scene) &&
+            CcLocalCreatureGaitPoseInternal(
+                (int32_t)slot, horse_base, yaw, &controlled_pose);
         (void)DrawCreatureGait3D(
             CC_CREATURE_HORSE, pose, horse_base,
             yaw, 0.96f, coat, gait_phase, moving,
@@ -316,9 +317,12 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
                 CC_CREATURE_RIG_GAIT_TROT : CC_CREATURE_RIG_GAIT_WALK;
             bool moving = gait != CC_CLIENT_CONVOY_GAIT_HALT;
             CcCreatureRigPose controlled_pose;
-            bool controlled = CcLocalCreatureGaitPoseInternal(
+            bool controlled = CcLocalCreatureGaitTargetInternal(
                 CREATURE_GAIT_ROAD_PONY, CC_CREATURE_RIG_HORSE, rig_gait,
-                clock, 0.25f, position, yaw, 0.96f, scene, &controlled_pose);
+                clock, 0.25f, position, yaw, 0.96f, scene) &&
+                CcLocalCreatureGaitPoseInternal(
+                    CREATURE_GAIT_ROAD_PONY, position, yaw,
+                    &controlled_pose);
             float phase = CcLocalRoadTeamGaitPhaseInternal(travelled) + 0.5f * PI;
             (void)DrawCreatureGait3D(CC_CREATURE_HORSE,
                 CcCreatureSteppedPose(CC_CREATURE_HORSE, phase, moving),
@@ -368,11 +372,14 @@ static void DrawStableHorseTeam(const CcSim *sim, float clock)
         CcCreaturePose pose = CcCreatureSteppedPose(
             CC_CREATURE_HORSE, clock * 0.35f + (float)horse * PI, false);
         CcCreatureRigPose controlled_pose;
-        bool controlled = CcLocalCreatureGaitPoseInternal(
-            horse == 0 ? CREATURE_GAIT_STABLE_LEFT : CREATURE_GAIT_STABLE_RIGHT,
-            CC_CREATURE_RIG_HORSE, CC_CREATURE_RIG_GAIT_WALK, clock,
-            (float)horse * 0.5f, base, 0.0f, 0.96f,
-            CC_LOCAL_SCENE_STREET, &controlled_pose);
+        int32_t stable_slot = (int32_t)(horse == 0 ?
+            CREATURE_GAIT_STABLE_LEFT : CREATURE_GAIT_STABLE_RIGHT);
+        bool controlled = CcLocalCreatureGaitTargetInternal(
+            stable_slot, CC_CREATURE_RIG_HORSE, CC_CREATURE_RIG_GAIT_WALK,
+            clock, (float)horse * 0.5f, base, 0.0f, 0.96f,
+            CC_LOCAL_SCENE_STREET) &&
+            CcLocalCreatureGaitPoseInternal(
+                stable_slot, base, 0.0f, &controlled_pose);
         (void)DrawCreatureGait3D(
             CC_CREATURE_HORSE, pose, base, 0.0f, 0.96f, coat,
             clock * 0.35f + (float)horse * PI, false,
@@ -1109,11 +1116,14 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         CcCreaturePose cow_pose = CcCreatureSteppedPose(
             CC_CREATURE_COW, clock * 1.55f, travelling);
         CcCreatureRigPose controlled_cow;
-        bool controlled = CcLocalCreatureGaitPoseInternal(
+        bool controlled = CcLocalCreatureGaitTargetInternal(
             CREATURE_GAIT_ROAD_COW, CC_CREATURE_RIG_COW,
             CC_CREATURE_RIG_GAIT_WALK, clock,
             0.18f, cow_position,
-            -0.72f * PI, 0.88f, CC_LOCAL_SCENE_ROAD, &controlled_cow);
+            -0.72f * PI, 0.88f, CC_LOCAL_SCENE_ROAD) &&
+            CcLocalCreatureGaitPoseInternal(
+                CREATURE_GAIT_ROAD_COW, cow_position, -0.72f * PI,
+                &controlled_cow);
         (void)DrawCreatureGait3D(
             CC_CREATURE_COW, cow_pose, cow_position,
             -0.72f * PI, 0.88f, (Color){184, 169, 139, 255},
@@ -1837,14 +1847,18 @@ static void DrawSettlementCreatures(const CcSim *sim,
         CcCreaturePose cow_pose = CcCreatureSteppedPose(
             CC_CREATURE_COW, clock * 1.25f, true);
         CcCreatureRigPose controlled_cow;
-        bool controlled = CcLocalCreatureGaitPoseInternal(
+        Vector3 street_cow = TerrainWorldPoint(63.0f, 38.3f);
+        bool controlled = CcLocalCreatureGaitTargetInternal(
             CREATURE_GAIT_STREET_COW, CC_CREATURE_RIG_COW,
             CC_CREATURE_RIG_GAIT_WALK, clock,
-            0.34f, TerrainWorldPoint(63.0f, 38.3f),
-            0.72f * PI, 0.84f, CC_LOCAL_SCENE_STREET, &controlled_cow);
+            0.34f, street_cow,
+            0.72f * PI, 0.84f, CC_LOCAL_SCENE_STREET) &&
+            CcLocalCreatureGaitPoseInternal(
+                CREATURE_GAIT_STREET_COW, street_cow, 0.72f * PI,
+                &controlled_cow);
         (void)DrawCreatureGait3D(
             CC_CREATURE_COW, cow_pose,
-            TerrainWorldPoint(63.0f, 38.3f), 0.72f * PI, 0.84f,
+            street_cow, 0.72f * PI, 0.84f,
             (Color){177, 162, 132, 255}, clock * 1.25f, true,
             controlled ? &controlled_cow : NULL);
     }
