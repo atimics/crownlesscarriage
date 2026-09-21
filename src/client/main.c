@@ -1678,6 +1678,10 @@ static bool LegacyVersionThreeGateRestorePose(
     return true;
 }
 
+static void PublishCarriagePose(LocalState *local, Vector3 position,
+                                float heading_yaw, float travelled,
+                                bool advance_sample, float alpha);
+
 static bool SetOpenWorldCarriageOnRoute(
     const CcSim *sim, LocalState *local, CcId route_id, CcId origin_id,
     float distance_from_origin, float pace, bool hero_embarked)
@@ -1695,15 +1699,11 @@ static bool SetOpenWorldCarriageOnRoute(
         return false;
     }
     CcWorldStreamFollowRouteTimed(&local->world_stream, route, origin_id, amount, 4, 0.0015);
-    local->world_carriage.position = (Vector3){
-        point.x,
-        CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
-        point.z
-    };
-    local->world_carriage.heading_yaw = heading;
+    PublishCarriagePose(local, (Vector3){
+        point.x, CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
+        point.z}, heading, amount * length, false, 1.0f);
     local->world_carriage.route_amount =
         route->from_id == origin_id ? amount : 1.0f - amount;
-    local->world_carriage.travelled = amount * length;
     local->world_carriage.pace = pace;
     local->world_carriage.route_id = route_id;
     local->world_carriage.visible = true;
@@ -1733,15 +1733,10 @@ static void SetOpenWorldCarriageAtSettlement(const CcSim *sim,
             0.0f, 0.0f, false)) {
         return;
     }
-    local->world_carriage.position = (Vector3){
-        place->center.x,
-        CcWorldStreamHeightAt(&local->world_stream,
-                              place->center.x, place->center.z),
-        place->center.z
-    };
-    local->world_carriage.heading_yaw = 0.0f;
+    PublishCarriagePose(local, (Vector3){place->center.x,
+        CcWorldStreamHeightAt(&local->world_stream, place->center.x, place->center.z),
+        place->center.z}, 0.0f, 0.0f, false, 1.0f);
     local->world_carriage.route_amount = 0.0f;
-    local->world_carriage.travelled = 0.0f;
     local->world_carriage.route_id = 0U;
     local->world_carriage.visible = true;
 }
@@ -1794,16 +1789,11 @@ static void PositionOpenWorldDeparture(const CcSim *sim, LocalState *local)
         return;
     }
     CcWorldStreamFollowRouteTimed(&local->world_stream, route, sim->player.location_id, journey_amount, 4, 0.0015);
-    local->world_carriage.position = (Vector3){
-        point.x,
-        CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
-        point.z
-    };
-    local->world_carriage.heading_yaw = heading;
+    PublishCarriagePose(local, (Vector3){
+        point.x, CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
+        point.z}, heading, journey_amount * CcWorldRouteLength(route), false, 1.0f);
     local->world_carriage.route_amount = forward ? journey_amount :
                                                   1.0f - journey_amount;
-    local->world_carriage.travelled =
-        journey_amount * CcWorldRouteLength(route);
     local->world_carriage.pace = local->departure.phase ==
             CC_CLIENT_DEPARTURE_READY ? 0.0f : local->convoy.pace;
     local->agent.position = local->world_carriage.position;
@@ -1813,10 +1803,6 @@ static void PositionOpenWorldDeparture(const CcSim *sim, LocalState *local)
         local->convoy.phase = CC_LOCAL_CONVOY_ROAD;
     }
 }
-
-static void PublishCarriagePose(LocalState *local, Vector3 position,
-                                float heading_yaw, float travelled,
-                                bool advance_sample, float alpha);
 
 static bool PositionOpenWorldArrival(const CcSim *sim, LocalState *local)
 {
@@ -1857,7 +1843,7 @@ static bool PositionOpenWorldArrival(const CcSim *sim, LocalState *local)
     };
     float travelled = journey_amount * CcWorldRouteLength(route);
     /* Arrival is frame-driven, so each frame is a fresh sample at full blend. */
-    PublishCarriagePose(local, position, heading, travelled, true, 1.0f);
+    PublishCarriagePose(local, position, heading, travelled, false, 1.0f);
     local->world_carriage.route_amount = origin_id == route->from_id ?
         journey_amount : 1.0f - journey_amount;
     local->world_carriage.pace = local->convoy.pace;
@@ -1910,51 +1896,16 @@ static void UpdateOpenWorldCamera(const CcSim *sim, LocalState *local,
 }
 
 static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local);
-static float CarriageShortestTurn(float from, float to)
-{
-    return remainderf(to - from, 2.0f * PI);
-}
-
-/* Publish one carriage presentation sample. advance_sample rotates the
-   previous/current pair (a simulation tick or an arrival frame); alpha is the
-   subframe blend. The render fields are what the storybook renderer, camera,
-   wheels, attachments and passengers read, so every producer updates them
-   together. */
 static void PublishCarriagePose(LocalState *local, Vector3 position,
                                 float heading_yaw, float travelled,
                                 bool advance_sample, float alpha)
 {
-    CcLocalWorldCarriageState *carriage = &local->world_carriage;
-    if (advance_sample) {
-        carriage->previous_tick_position = carriage->position;
-        carriage->previous_heading_yaw = carriage->heading_yaw;
-        carriage->previous_travelled = carriage->travelled;
-    } else if (!carriage->storybook_travel) {
-        carriage->previous_tick_position = position;
-        carriage->previous_heading_yaw = heading_yaw;
-        carriage->previous_travelled = travelled;
-    }
-    carriage->position = position;
-    carriage->heading_yaw = heading_yaw;
-    carriage->travelled = travelled;
-    float blend = alpha < 0.0f ? 0.0f : (alpha > 1.0f ? 1.0f : alpha);
-    carriage->render_position = (Vector3){
-        carriage->previous_tick_position.x +
-            (position.x - carriage->previous_tick_position.x) * blend,
-        carriage->previous_tick_position.y +
-            (position.y - carriage->previous_tick_position.y) * blend,
-        carriage->previous_tick_position.z +
-            (position.z - carriage->previous_tick_position.z) * blend,
-    };
-    carriage->render_heading_yaw = carriage->previous_heading_yaw +
-        CarriageShortestTurn(carriage->previous_heading_yaw, heading_yaw) *
-            blend;
-    carriage->render_travelled = carriage->previous_travelled +
-        (travelled - carriage->previous_travelled) * blend;
+    CcLocalCarriagePublishPose(&local->world_carriage, position, heading_yaw,
+                              travelled, advance_sample, alpha);
 }
 
 static void PositionOpenWorldJourneyAt(const CcSim *sim, LocalState *local,
-                                       int32_t ticks, float alpha);
+                                       int32_t sample_steps, float alpha);
 
 static bool InitializeOpenWorld(const CcSim *sim, LocalState *local,
                                 bool preserve_position)
@@ -2055,7 +2006,7 @@ static void PositionOpenWorldAtSettlement(const CcSim *sim,
 }
 
 static void PositionOpenWorldJourneyAt(const CcSim *sim, LocalState *local,
-                                       int32_t ticks, float alpha)
+                                       int32_t sample_steps, float alpha)
 {
     if (sim == NULL || local == NULL || !local->open_world ||
         !sim->journey.active) return;
@@ -2080,7 +2031,7 @@ static void PositionOpenWorldJourneyAt(const CcSim *sim, LocalState *local,
     /* Measured from the origin, not from the route's own start, so that a
        route walked the other way still counts up. */
     float travelled = amount * CcWorldRouteLength(route);
-    PublishCarriagePose(local, position, heading, travelled, ticks > 0, alpha);
+    PublishCarriagePose(local, position, heading, travelled, sample_steps > 0, alpha);
     local->agent.position = position;
     local->agent.target_valid = false;
     local->agent.exact_target_valid = false;
@@ -2815,6 +2766,49 @@ static bool AdvanceStorybookTravel(CcJournal *journal, CcSim *sim,
     if (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING &&
         sim->journey.phase != CC_JOURNEY_PHASE_RESTING) {
         local->world_carriage.pace = 0.0f;
+    }
+    return true;
+}
+
+static bool AdvanceCarriagePresentationSteps(CcJournal *journal, CcSim *sim,
+    LocalState *local, int32_t fixed_steps, float road_motion, bool road_stop,
+    char *error, size_t error_capacity)
+{
+    bool warned_before = sim->journey.ambush_warned;
+    bool ambush_resolved_before = sim->journey.ambush_resolved;
+    for (int32_t step = 0; step < fixed_steps; ++step) {
+        local->convoy.runtime_tick_accumulator += road_motion *
+            (local->travel_fast_forward ?
+                CcClientTravelTimeScale(local->travel_time_blend) : 1.0f) *
+            (road_stop ? 0.5f : 1.0f);
+        int32_t ticks = (int32_t)floorf(local->convoy.runtime_tick_accumulator);
+        local->convoy.runtime_tick_accumulator -= (float)ticks;
+        bool advanced = CcCoopClientActive() || AdvanceStorybookTravel(
+            journal, sim, local, ticks, error, error_capacity);
+        if (!advanced) return false;
+        if (local->open_world && sim->journey.active) {
+            /* Publish this local step even when it consumed no journey
+               tick. That unchanged sample prevents replaying an old
+               interval backwards when the local alpha wraps. */
+            PositionOpenWorldJourneyAt(sim, local, 1, 1.0f);
+        }
+        float road_clock = local->world_carriage.storybook_travel ?
+            (float)fmod((double)sim->clock.tick /
+                        (double)CC_WORLD_TICKS_PER_SECOND, 3600.0) :
+            (float)GetTime();
+        if (local->open_world) {
+            CcLocalOpenWorldCarriageTargetsInternal(
+                sim, &local->world_carriage, road_clock, 1.0f / 60.0f);
+        } else {
+            CcLocalRoadTravelHorseTargetsInternal(sim, &local->convoy, road_clock);
+        }
+        CcLocalCreatureGaitsAdvanceInternal(1);
+        if (!sim->journey.active ||
+            (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING &&
+             sim->journey.phase != CC_JOURNEY_PHASE_RESTING) ||
+            sim->pony_company.encounter >= 0 ||
+            sim->journey.ambush_warned != warned_before ||
+            sim->journey.ambush_resolved != ambush_resolved_before) break;
     }
     return true;
 }
@@ -7680,6 +7674,76 @@ static bool FirstJourneyPoseContinuesFromJunction(bool reverse)
                &after, local.world_carriage.route_amount);
 }
 
+static bool CarriagePublishedMatchesPhysical(const CcLocalWorldCarriageState *c)
+{
+    return c->presentation_valid &&
+        fabsf(c->position.x - c->render_position.x) < 0.0001f &&
+        fabsf(c->position.y - c->render_position.y) < 0.0001f &&
+        fabsf(c->position.z - c->render_position.z) < 0.0001f &&
+        fabsf(remainderf(c->heading_yaw - c->render_heading_yaw, 2 * PI)) < 0.0001f &&
+        fabsf(c->travelled - c->render_travelled) < 0.0001f;
+}
+
+static int RunCarriageClientRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcRoute *route = &sim.routes[0];
+    route->closed = false;
+    route->security = 100;
+    sim.player.location_id = route->from_id;
+    sim.carriage.location_id = route->from_id;
+    char error[256] = "";
+    CcCommand travel = {.kind = CC_COMMAND_TRAVEL, .target_id = route->to_id};
+    if (!CcSimApply(&sim, &travel, error, sizeof(error))) return 1;
+    sim.journey.road_position_active = false;
+    sim.journey.road_waiting_choice = false;
+    sim.journey.encounter_triggered = true;
+    sim.journey.ambush_pending = false;
+    /* Retain the generated duration, carriage speed and mandatory site
+       records so the journal validates the same state the client uses. */
+    ResetLocalState(&local);
+    if (!InitializeOpenWorld(&sim, &local, false)) return 1;
+    BeginRoadTravelState(&sim, &local);
+    const char *path = "carriage-client-regression.sqlite";
+    (void)remove(path);
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    if (journal == NULL) {
+        fprintf(stderr, "Carriage fixture journal: %s\n", error);
+        return 1;
+    }
+    bool passed = true;
+    float previous = local.world_carriage.render_travelled;
+    float initial_distance = previous;
+    for (int frame = 0; frame < 360 && passed; ++frame) {
+        const float cadence[] = {1.0f/120, 1.0f/30, 1.0f/120, 1.0f/40};
+        float dt = cadence[frame % 4];
+        int32_t steps = CcLocalWorldUpdateNoGaits(&local.course, NULL, &sim, dt, false, false);
+        passed = AdvanceCarriagePresentationSteps(journal, &sim, &local, steps,
+            frame < 120 ? 0.5f : frame < 240 ? 1.0f : 2.0f, false,
+            error, sizeof(error));
+        float alpha = CcLocalCourseAlpha(&local.course);
+        CcLocalCarriageInterpolate(&local.world_carriage, alpha);
+        CcLocalCarriageGaitInterpolateInternal(alpha);
+        float current = local.world_carriage.render_travelled;
+        passed = passed && current + 0.0001f >= previous;
+        previous = current;
+    }
+    if (previous <= initial_distance + 0.001f) {
+        (void)snprintf(error, sizeof(error), "fixture never moved");
+        passed = false;
+    }
+    if (!CcJournalClose(&journal, &sim, error, sizeof(error))) passed = false;
+    (void)remove(path);
+    (void)remove("carriage-client-regression.sqlite-wal");
+    (void)remove("carriage-client-regression.sqlite-shm");
+    LeaveOpenWorld(&local);
+    if (!passed) fprintf(stderr, "Carriage client-order regression: %s\n", error);
+    else puts("PASS carriage client order: journal, local steps, route publication and pony targets");
+    return passed ? 0 : 1;
+}
+
 static int RunTownDepartureRegression(void)
 {
     CcSim sim;
@@ -7786,6 +7850,10 @@ static int RunTownDepartureRegression(void)
                       "Active travel did not continue from its departure junction.\n");
         return 1;
     }
+    if (!CarriagePublishedMatchesPhysical(&local.world_carriage)) {
+        fprintf(stderr, "Departure did not publish its displayed heading and distance.\n");
+        return 1;
+    }
     (void)puts("Town departure regression passed");
     return 0;
 }
@@ -7842,6 +7910,10 @@ static int RunRoadBookArrivalRegression(void)
             0.01f) {
         (void)fprintf(stderr,
                       "Arrival did not close on the destination gate.\n");
+        return 1;
+    }
+    if (!CarriagePublishedMatchesPhysical(&natural.world_carriage)) {
+        fprintf(stderr, "Arrival left stale presentation fields.\n");
         return 1;
     }
     Vector3 world_gate = natural.world_carriage.position;
@@ -9925,40 +9997,19 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             float road_motion = posture_pace > 0.01f ?
                 fmaxf(0.0f, fminf(1.0f,
                     local->convoy.pace / posture_pace)) : 0.0f;
-            local->convoy.runtime_tick_accumulator +=
-                (float)fixed_steps * road_motion *
-                (local->travel_fast_forward ?
-                    CcClientTravelTimeScale(local->travel_time_blend) : 1.0f) *
-                (road_stop != NULL ? 0.5f : 1.0f);
-            int32_t ticks = (int32_t)floorf(
-                local->convoy.runtime_tick_accumulator);
-            local->convoy.runtime_tick_accumulator -= (float)ticks;
             bool warned_before = sim->journey.ambush_warned;
             bool ambush_resolved_before = sim->journey.ambush_resolved;
             char error[256];
-            bool advanced = CcCoopClientActive() || AdvanceStorybookTravel(
-                *journal, sim, local, ticks, error, sizeof(error));
-            if (!advanced) {
+            if (!AdvanceCarriagePresentationSteps(*journal, sim, local, fixed_steps,
+                    road_motion, road_stop != NULL, error, sizeof(error))) {
                 (void)snprintf(message, message_capacity, "%s", error);
-                CcLocalCreatureGaitsAdvanceInternal(fixed_steps);
                 return;
             }
             if (local->open_world && sim->journey.active) {
-                /* The local fixed-step remainder is the subframe fraction;
-                   the travel-tick remainder stays zero at steady 1x speed. */
-                PositionOpenWorldJourneyAt(
-                    sim, local, ticks,
-                    CcLocalCourseAlpha(&local->course));
+                float alpha = CcLocalCourseAlpha(&local->course);
+                CcLocalCarriageInterpolate(&local->world_carriage, alpha);
+                CcLocalCarriageGaitInterpolateInternal(alpha);
             }
-            /* The wagon is where it will be drawn now, so hand the team that
-               target before walking the rigs toward it. */
-            float road_clock = local->world_carriage.storybook_travel ?
-                (float)fmod((double)sim->clock.tick /
-                            (double)CC_WORLD_TICKS_PER_SECOND, 3600.0) :
-                (float)GetTime();
-            CcLocalRoadTravelHorseTargetsInternal(sim, &local->convoy,
-                                                  road_clock);
-            CcLocalCreatureGaitsAdvanceInternal(fixed_steps);
             if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
                 BeginRoadLocalState(sim, local, false);
@@ -11176,6 +11227,7 @@ int main(int argc, char **argv)
     if (argc == 2 && strcmp(argv[1], "--test-frontend") == 0) {
         return RunFrontendRegression();
     }
+    if (argc == 2 && strcmp(argv[1], "--test-carriage-client") == 0) return RunCarriageClientRegression();
     if (argc == 2 && strcmp(argv[1], "--test-travel-hold") == 0) return RunTravelHoldRegression();
     if (argc == 2 && strcmp(argv[1], "--test-storybook-travel") == 0) {
         return RunStorybookTravelRegression();
@@ -11860,6 +11912,24 @@ int main(int argc, char **argv)
         if (local.world_carriage.storybook_travel) {
             clock = (float)fmod((double)sim.clock.tick /
                                 (double)CC_WORLD_TICKS_PER_SECOND, 3600.0);
+        }
+
+        if (local.open_world && !local.market_interior) {
+            if (!sim.journey.active) {
+                CcLocalOpenWorldCarriageTargetsInternal(&sim, &local.world_carriage, clock,
+                    !menu_frame && presentation.update_convoy ? frame_delta_time : 0.0f);
+                if (!menu_frame && presentation.update_convoy &&
+                    (RoadBookDepartureInProgress(&local) || RoadBookArrivalInProgress(&local))) {
+                    /* These transitions do not run the travel input's world
+                       step. Use its accumulator here, exactly once. */
+                    int32_t steps = CcLocalWorldUpdateNoGaits(&local.course, NULL,
+                        &sim, frame_delta_time, false, false);
+                    CcLocalCreatureGaitsAdvanceInternal(steps);
+                }
+                CcLocalCarriageGaitInterpolateInternal(1.0f);
+            }
+            CcLocalCarriageRoll(&local.world_carriage,
+                CcLocalOpenWorldCarriageScaleInternal(&sim, &local.world_carriage));
         }
 
         bool map_visible = view == VIEW_MAP ||

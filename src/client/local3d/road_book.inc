@@ -262,9 +262,11 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
     RoadHorsePlacement placements[2];
     int32_t count = RoadHorsePlacements(sim, base, yaw, bridge_checkpoint,
                                         scene, vehicle_scale, placements);
-    /* The travel path has already published this frame's targets from the
-       update; for the other road scenes this drawing pass is the publisher. */
-    PublishRoadHorseTargets(placements, count, rig_gait, clock, yaw, scene);
+    /* Open-world targets belong to the update path, in world coordinates.
+       Local-only scenes retain their legacy publisher until migrated. */
+    if (active_world_stream == NULL) {
+        PublishRoadHorseTargets(placements, count, rig_gait, clock, yaw, scene);
+    }
     for (int32_t i = 0; i < count; ++i) {
         int32_t horse = placements[i].horse;
         Vector3 horse_base = placements[i].base;
@@ -359,7 +361,8 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
                              float clock, float pace, float travelled,
                              float yaw,
                              bool horses_hitched, bool bridge_checkpoint,
-                             CcLocalSceneKind scene, float vehicle_scale)
+                             CcLocalSceneKind scene, float vehicle_scale,
+                             float rolling_distance)
 {
     const CcPlayerCompany *player = &sim->player;
     float asset_yaw_degrees = yaw * RAD2DEG - 90.0f;
@@ -387,7 +390,7 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
             if (wheel >= 0) {
                 Vector3 center = carriage_wheel_centers[wheel];
                 float angle = CcLocalCarriageWheelAngleInternal(
-                    travelled, CcLocalCarriageWheelWorldRadiusInternal(wheel));
+                    rolling_distance, CcLocalCarriageWheelWorldRadiusInternal(wheel));
                 Matrix spin = MatrixMultiply(
                     MatrixTranslate(-center.x, -center.y, -center.z),
                     MatrixRotateZ(-angle));
@@ -460,12 +463,13 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
                 CC_CREATURE_RIG_GAIT_TROT : CC_CREATURE_RIG_GAIT_WALK;
             bool moving = gait != CC_CLIENT_CONVOY_GAIT_HALT;
             CcCreatureRigPose controlled_pose;
-            bool controlled = CcLocalCreatureGaitTargetInternal(
-                CREATURE_GAIT_ROAD_PONY, CC_CREATURE_RIG_HORSE, rig_gait,
-                clock, 0.25f, position, yaw, pony_scale, scene) &&
-                CcLocalCreatureGaitPoseInternal(
-                    CREATURE_GAIT_ROAD_PONY, position, yaw,
-                    &controlled_pose);
+            if (active_world_stream == NULL) {
+                (void)CcLocalCreatureGaitTargetInternal(
+                    CREATURE_GAIT_ROAD_PONY, CC_CREATURE_RIG_HORSE, rig_gait,
+                    clock, 0.25f, position, yaw, pony_scale, scene);
+            }
+            bool controlled = CcLocalCreatureGaitPoseInternal(
+                CREATURE_GAIT_ROAD_PONY, position, yaw, &controlled_pose);
             float phase = CcLocalRoadTeamGaitPhaseInternal(travelled) + 0.5f * PI;
             (void)DrawCreatureGait3D(CC_CREATURE_HORSE,
                 CcCreatureSteppedPose(CC_CREATURE_HORSE, phase, moving),
@@ -781,7 +785,7 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
     }
     DrawRoadCarriage(carriage, sim, clock,
                      turn < 1.0f ? 0.72f : 0.0f, carriage_travel,
-                     carriage_heading, true, false, CC_LOCAL_SCENE_ROAD, 1.0f);
+                     carriage_heading, true, false, CC_LOCAL_SCENE_ROAD, 1.0f, carriage_travel);
     DrawVisibleNpcFigure3D(
         (Vector3){33.0f, 0.0f, 35.6f}, 0.90f, 1.42f,
         UINT32_C(0x666f726b), CC_NPC_ROLE_SCOUT, kingdom,
@@ -1246,7 +1250,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     if (!travelling) DrawAgentPath(agent, false);
     DrawRoadCarriage(carriage_base, sim, clock, carriage_pace, carriage_travel,
                      0.5f * PI, true, authored_checkpoint, CC_LOCAL_SCENE_ROAD,
-                     1.0f);
+                     1.0f, carriage_travel);
     int32_t roadside_cattle = 0;
     if (origin != NULL) {
         roadside_cattle += origin->cow_adults + origin->cow_calves;
@@ -1859,7 +1863,7 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawRoadCarriage(carriage, sim, clock,
                          travelling ? 0.72f : 0.0f, carriage_travel,
                          returning ? -0.5f * PI : 0.5f * PI,
-                         true, false, CC_LOCAL_SCENE_ROAD, 1.0f);
+                         true, false, CC_LOCAL_SCENE_ROAD, 1.0f, carriage_travel);
     }
     if (!travelling) {
         DrawAgentPath(agent, false);
@@ -2221,7 +2225,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawRoadCarriage(convoy->town_position, sim, clock,
                          convoy->pace, convoy->travelled,
                          convoy->town_heading_yaw, true, false,
-                         CC_LOCAL_SCENE_STREET, 1.0f);
+                         CC_LOCAL_SCENE_STREET, 1.0f, convoy->travelled);
         if (agent != NULL) DrawRobotShell(&convoy_hero);
     }
     if (SceneryPointVisible(CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z,

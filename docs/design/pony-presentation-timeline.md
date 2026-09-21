@@ -1,93 +1,77 @@
-# Pony presentation timeline (GFX-03)
+# Carriage and pony presentation timeline
 
-This note records the agreed design for the pony update/render split from the
-20 September 2026 graphics report, so the work can continue from a clean state.
-Change 1 of that report (GFX-01/02 and the `TestTravelForestCameraTurn` fixture)
-is merged as #859: `PublishCarriagePose` publishes position, heading, and
-travelled as previous/current samples with render blends, and the storybook
-camera, carriage, crew, and wheels read the render values.
+Follow-up to the 20–21 September graphics review and PRs #859, #861,
+#863, #865, #867, #869 and #870. The integration review is on #870.
 
-## Problem
+## Active world travel
 
-`CcLocalCreatureGaitsFixedStepInternal()` advances each gait controller and
-stores one pose. `CcLocalWorldUpdate()` interpolates the agent and the course,
-but has no creature-pose interpolation.
+`AdvanceCarriagePresentationSteps` is the production journey update, also
+exercised by `--test-carriage-client`. Every local fixed step advances the
+fractional journey accumulator, advances the campaign when a journey tick is
+due, publishes the carriage sample, publishes world-space pony targets, and
+then steps their controllers. An unchanged local step is still a sample.
+A frame with several steps therefore retains the actual penultimate local
+sample, not the preceding rendered frame. Rendering blends that pair using
+the local fixed-step remainder. There is no extrapolation or backwards replay
+of an old interval when a fractional journey rate produces no new tick.
 
-`DrawRoadHorseTeam()` and four other draw sites (`road_book.inc` lines 175,
-319, 371, 1112, and 1840) call `CcLocalCreatureGaitPoseInternal()`
-(`asset_loading.inc:1907`) while drawing. That function is not a getter: it
-writes `cache->command`, `last_clock`, and `requested_gait`, and can step the
-controller. Because local fixed stepping happens before the new journey
-position is published, the controller can step toward the previous rendered
-target.
+Direct placement, departure, arrival and restoration publish position,
+heading and distance together through `CcLocalCarriagePublishPose`. Explicit
+`presentation_valid` state avoids inferring initialization from coordinates.
+The three render accessors use the same physical/presented selection rule.
 
-Moving the draw origin alone is not a fix. `CreaturePosePointForDraw()`
-reconstructs the cached controller-world point and expresses it relative to a
-new draw origin; reapplying that origin during model drawing cancels the
-apparent movement. In a translation-only example,
-`origin + (cached_world - origin) == cached_world`. Interpolating the carriage
-root does not interpolate the pony's cached world pose.
+`CcLocalOpenWorldCarriageTargetsInternal` shares placement, terrain samples,
+base lift and arrival scale with the renderer, but takes the authoritative
+carriage root and heading. It never substitutes the legacy x/40 road layout.
+It includes the encounter pony as well as the hitched team. Controller time
+advances locally; accelerated or wrapped campaign time is cosmetic input and
+cannot by itself reset the controller. World carriage drawing does not
+republish targets. Arrival/departure transitions that bypass the travel input
+step publish and advance their team in the pre-draw update stage.
 
-## Plan
+## Pose and scale continuity
 
-1. Split `CcLocalCreatureGaitPoseInternal()` into a read-only pose function
-   (returns the cached pose transformed for draw, no writes) used by all five
-   draw sites, and a separate command publication function.
-2. Call the publication from the update path *before*
-   `CcLocalCreatureGaitsFixedStepInternal()`, so the controller steps toward
-   the current target instead of the previous frame's.
-3. Carry previous/current creature poses on the same render timeline as the
-   carriage, using the same alpha source as the #859 render blends.
+Creature caches retain previous/current fixed-step poses and their respective
+world origins/yaws. Carriage creatures interpolate points in world space:
+a hoof planted at the same world point in both samples stays there while the
+body/root moves. Teleport and scene resets invalidate the preceding pose;
+ordinary scale changes do not reset it. Other creature users retain their
+current-pose default rather than inheriting the carriage interpolation alpha.
 
-Known blocker: the pony harness targets (ground position plus yaw) are
-currently derived from the carriage pose at draw time. Moving publication into
-the update path means computing those targets in the update path. This is a
-real refactor, not a rename.
+`CcCreatureRigControllerSetScale` replaces anatomical dimensions and muscle
+rest geometry, preserving phase, requested gait, limb state, swing progress,
+health and world contact records. The next physical step resolves the resized
+chains and validates their contacts against terrain. It does not promise that
+an arbitrarily large resize preserves a physically reachable contact.
 
-## Acceptance
+Wheel rolling integrates signed distance increments divided by assembly
+scale. The existing base world radius already includes the 0.92 asset scale.
+Changing scale while stopped does not spin the wheel; a route or explicit
+large heading rebase preserves angular phase. A smoothly varying scale uses
+trapezoidal integration of inverse scale rather than reinterpreting all prior
+distance at the latest radius. Captures without rolling history have an
+explicit one-shot fallback, not draw-time state mutation.
 
-Separate command publication, fixed-step simulation, and read-only rendering.
-Preserve planted world-space contacts; indiscriminately interpolating every
-hoof is not an acceptable cure for foot sliding.
+## Regression coverage and limits
 
-Cover walk, trot, canter, halt, resume, turns, scene reanchor, valid team
-swaps, and arrival. Drawing the same frame twice must not change queued
-controller commands or animation state; this read-only render contract is
-stronger than checking phase alone. Explicitly verify that every transition in
-which the team visibly moves continues to receive animation updates.
+`carriage_presentation_timeline` exercises production sample publication at
+regular/irregular cadences, zero/fractional/normal/accelerated rates, multiple
+steps per frame, heading wrap, direct transitions, invalid alpha, scaled
+rolling/reversal/rebase, a changing radius, and contact-preserving resizing.
+`carriage_client_update_order` exercises the actual journal/route/target step
+path. Existing departure and arrival regressions now check displayed heading
+and distance as well as the physical root.
 
-Keep the existing frame test's determinism check (it submits a target before
-stepping and compares final results across frame rates), and add client-order
-and frame-by-frame relative-motion checks.
+The renderer regressions check world target placement, campaign-clock jumps,
+read-only pose retrieval and a stationary world hoof under moving pose
+origins. `renderer_regression_tests --carriage-graphics <unused-output-path>`
+draws the same open-world carriage twice under a real graphics context and
+checks that its pony controller/command caches do not change.
 
-## GFX-04 (done)
-
-The wheel rotation fix is merged as #861. The helper returns model-space radii
-(0.81 and 0.63) while the model is drawn at `CARRIAGE_ASSET_SCALE == 0.92`;
-rotation now uses a world radius (model radius times the draw scale), so one
-displayed circumference turns the wheel once. The test checks the world radius
-with reverse travel and both axle sizes.
-
-## The split
-
-Both steps are in place. `CcLocalCreatureGaitTargetInternal` records a frame's
-target and owns the stateful work; `CcLocalCreatureGaitPoseInternal` only
-transforms the cached pose for draw. The travel path steps the world with
-`CcLocalWorldUpdateNoGaits`, advances the journey and publishes the carriage
-pose, then publishes the team targets from that pose and walks the rigs with
-`CcLocalCreatureGaitsAdvanceInternal`. The controller now steps toward where the
-wagon is, not where it was last frame.
-
-## Update-path publication
-
-`CcLocalRoadTravelHorseTargetsInternal` computes the travelling carriage anchor
-with `RoadTravelCarriageBase` (the same helper `CcLocalDrawRoad3D` now uses) and
-publishes the team targets through `RoadHorsePlacements`, the shared placement
-both the draw and the update call, so the posed rigs and the drawn wagon cannot
-drift apart. Every early return in the travel block advances the gaits so a
-parked or failed transition never freezes the rigs.
-
-What still needs a display: confirm the relative carriage/team motion on an
-irregular frame cadence and across halt, resume, turns, reanchor, team swaps,
-and arrival. The other road scenes (encounter, fork, remote site, arrival)
-still publish their targets at draw time, which is the remaining cleanup.
+This is not a new renderer or a change to the campaign's travel-rate rules.
+The legacy local-only fork, encounter, remote-site and stable/cow publishers
+still have draw-time publication; migrating those consumers remains separate
+work. Full passenger skeletal tilt/seat fit, an ordinary-control out-and-back
+video, browser/GPU variation and contact quality during the complete arrival
+blend still require visual review. Passing a helper or framebuffer test is
+not that review.

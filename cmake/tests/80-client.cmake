@@ -1,4 +1,9 @@
 if(CC_BUILD_CLIENT)
+    add_executable(carriage_presentation_tests tests/carriage_presentation_tests.c)
+    target_link_libraries(carriage_presentation_tests PRIVATE crownless_local_renderer raylib)
+    cc_strict_warnings(carriage_presentation_tests)
+    add_test(NAME carriage_presentation_timeline COMMAND carriage_presentation_tests)
+    add_test(NAME carriage_client_update_order COMMAND crownless_carriage --test-carriage-client)
     target_compile_definitions(crownless_carriage PRIVATE
         CC_CLIENT_SELF_TESTS=1
     )

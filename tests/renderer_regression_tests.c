@@ -147,6 +147,7 @@ static void WriteViewportFixture(const char *path)
 #include "mesh_memory_tests.inc"
 #include "travel_graphics_tests.inc"
 #include "camera_continuity_tests.inc"
+#include "carriage_graphics_tests.inc"
 
 static void TestBodyText(void)
 {
@@ -187,6 +188,8 @@ int main(int argc, char **argv)
         TestPhysicalGoods();
         return 0;
     }
+    TestCarriageWorldTargets();
+    TestCarriagePlantedInterpolation();
     TestCameraContinuity();
     TestStableVisibility();
     TestBuildingRevealTiming();
@@ -195,6 +198,7 @@ int main(int argc, char **argv)
     if (argc == 3 && (strcmp(argv[1], "--graphics") == 0 ||
                       strcmp(argv[1], "--abandoned-town") == 0 ||
                       strcmp(argv[1], "--travel-graphics") == 0 ||
+                      strcmp(argv[1], "--carriage-graphics") == 0 ||
                       strcmp(argv[1], "--creature-captures") == 0 ||
                       strcmp(argv[1], "--pony-captures") == 0 ||
                       strcmp(argv[1], "--pony-gait-captures") == 0 ||
@@ -205,7 +209,9 @@ int main(int argc, char **argv)
         InitWindow(1280, 760, "Renderer regression checks");
         SetTraceLogLevel(LOG_WARNING);
         CcLocalRendererInit();
-        if (strcmp(argv[1], "--graphics") == 0) {
+        if (strcmp(argv[1], "--carriage-graphics") == 0) {
+            TestCarriageDrawReadOnly();
+        } else if (strcmp(argv[1], "--graphics") == 0) {
             TestBodyText();
             TestTravelForestCameraTurn();
             TestTravelLeafShimmer();
