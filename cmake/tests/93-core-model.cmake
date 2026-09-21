@@ -6,6 +6,10 @@ add_test(NAME core_conversation_world_and_history COMMAND core_conversation_test
 if(CC_PYTHON3_EXECUTABLE)
     add_test(NAME language_membership_metrics COMMAND ${CC_PYTHON3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/language_membership_tests.py)
+    add_test(NAME model_identity_receipt COMMAND ${CC_PYTHON3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tools/language/model_identity.py --check)
+    add_test(NAME model_identity_metrics COMMAND ${CC_PYTHON3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/model_identity_tests.py)
     add_test(NAME core_model_tables_current COMMAND ${CC_PYTHON3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/tools/language/compile_model.py --check)
     add_test(NAME core_model_native_parity COMMAND ${CC_PYTHON3_EXECUTABLE}
