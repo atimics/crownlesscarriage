@@ -68,34 +68,26 @@ rotation now uses a world radius (model radius times the draw scale), so one
 displayed circumference turns the wheel once. The test checks the world radius
 with reverse travel and both axle sizes.
 
-## Progress on the split
+## The split
 
-The first step, separating command publication from read-only rendering, is in
-place: `CcLocalCreatureGaitTargetInternal` records a frame's target and
-`CcLocalCreatureGaitPoseInternal` only transforms the cached pose for draw. The
-step below that remains is moving the publication from the draw sites into the
-update path so the controller walks toward the current carriage pose rather
-than the previous frame's.
+Both steps are in place. `CcLocalCreatureGaitTargetInternal` records a frame's
+target and owns the stateful work; `CcLocalCreatureGaitPoseInternal` only
+transforms the cached pose for draw. The travel path steps the world with
+`CcLocalWorldUpdateNoGaits`, advances the journey and publishes the carriage
+pose, then publishes the team targets from that pose and walks the rigs with
+`CcLocalCreatureGaitsAdvanceInternal`. The controller now steps toward where the
+wagon is, not where it was last frame.
 
-## Current blocker for the ordering fix
+## Update-path publication
 
-`CcLocalCreatureGaitsFixedStepInternal` runs inside `CcLocalWorldUpdate` and
-`CcLocalCourseUpdate`. The road-book travel path calls `CcLocalWorldUpdate`
-before it advances the journey and derives the carriage pose, so the controller
-steps toward the target published at the previous frame's draw. Publishing the
-current target before the step means either moving the step after the carriage
-pose is known, or having the update stop stepping gaits and the travel path
-step them explicitly once the pose is published.
+`CcLocalRoadTravelHorseTargetsInternal` computes the travelling carriage anchor
+with `RoadTravelCarriageBase` (the same helper `CcLocalDrawRoad3D` now uses) and
+publishes the team targets through `RoadHorsePlacements`, the shared placement
+both the draw and the update call, so the posed rigs and the drawn wagon cannot
+drift apart. Every early return in the travel block advances the gaits so a
+parked or failed transition never freezes the rigs.
 
-Two things make that ordering change delicate:
-
-- The travel block returns early when `local->convoy.phase != CC_LOCAL_CONVOY_ROAD`
-  straight after the update, so a deferred gait step has to run before that
-  return or the rigs freeze.
-- The horse target comes from `carriage_base` inside `CcLocalDrawRoad3D`, built
-  from `sim->carriage.progress_milli`, `CcLocalRoadHorseLateralSpacingInternal`,
-  and `CcLocalRoadHorseLongitudinalOffsetInternal`. A publish helper must share
-  that placement math with the draw site or the body will sit off its origin.
-
-This step needs a display to confirm the relative carriage/team motion, which
-is why it is separated from the safe API split above.
+What still needs a display: confirm the relative carriage/team motion on an
+irregular frame cadence and across halt, resume, turns, reanchor, team swaps,
+and arrival. The other road scenes (encounter, fork, remote site, arrival)
+still publish their targets at draw time, which is the remaining cleanup.

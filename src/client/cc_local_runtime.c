@@ -48,9 +48,10 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
         course->world_simulation_accumulator / fixed_step));
 }
 
-int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
-                           const CcSim *sim, float delta_time,
-                           bool market_interior, bool advance_course)
+static int32_t CcLocalWorldUpdateInternal(
+    CcLocalCourse *course, CcLocalAgent *player, const CcSim *sim,
+    float delta_time, bool market_interior, bool advance_course,
+    bool step_gaits)
 {
     RefreshStreetMarketCrates(sim);
     if (course == NULL) {
@@ -72,7 +73,9 @@ int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
                                            (float)fixed_step);
             CcLocalCourseResolveContactsInternal(course, player);
         }
-        CcLocalCreatureGaitsFixedStepInternal((float)fixed_step);
+        if (step_gaits) {
+            CcLocalCreatureGaitsFixedStepInternal((float)fixed_step);
+        }
         course->world_simulation_accumulator -= fixed_step;
     }
     if (course->world_simulation_accumulator < 0.0) {
@@ -82,6 +85,33 @@ int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
     if (player != NULL) CcLocalAgentInterpolateInternal(player, amount);
     if (advance_course) CcLocalCourseInterpolateInternal(course, amount);
     return steps;
+}
+
+int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
+                           const CcSim *sim, float delta_time,
+                           bool market_interior, bool advance_course)
+{
+    return CcLocalWorldUpdateInternal(course, player, sim, delta_time,
+                                      market_interior, advance_course, true);
+}
+
+/* Step the agent and course but leave the creature gaits to the caller, so a
+   travel frame can publish the current carriage target first and then walk the
+   rigs toward it. */
+int32_t CcLocalWorldUpdateNoGaits(CcLocalCourse *course, CcLocalAgent *player,
+                                  const CcSim *sim, float delta_time,
+                                  bool market_interior, bool advance_course)
+{
+    return CcLocalWorldUpdateInternal(course, player, sim, delta_time,
+                                      market_interior, advance_course, false);
+}
+
+void CcLocalCreatureGaitsAdvanceInternal(int32_t steps)
+{
+    const float fixed_step = 1.0f / 60.0f;
+    for (int32_t step = 0; step < steps; ++step) {
+        CcLocalCreatureGaitsFixedStepInternal(fixed_step);
+    }
 }
 
 float CcLocalCourseAlpha(const CcLocalCourse *course)

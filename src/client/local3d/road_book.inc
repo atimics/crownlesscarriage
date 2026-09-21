@@ -148,6 +148,102 @@ Vector3 CcLocalRoadCarriageSocketInternal(Vector3 base, float yaw,
     return Vector3Add(base, rel);
 }
 
+typedef struct RoadHorsePlacement {
+    int32_t horse;
+    int32_t slot;
+    Vector3 base;
+    float initial_phase;
+} RoadHorsePlacement;
+
+/* Where each hitched pony stands for the road carriage. The draw and the
+   update both call this, so the target the controller walks toward is the same
+   spot the team is drawn from. */
+static int32_t RoadHorsePlacements(const CcSim *sim, Vector3 base, float yaw,
+                                   bool bridge_checkpoint,
+                                   CcLocalSceneKind scene,
+                                   RoadHorsePlacement out[2])
+{
+    float lateral_spacing =
+        CcLocalRoadHorseLateralSpacingInternal(bridge_checkpoint);
+    float longitudinal = CcLocalRoadHorseLongitudinalOffsetInternal();
+    bool paired = CcSimHorseTeamCount(sim) > 1;
+    int32_t count = 0;
+    for (int32_t horse = paired ? -1 : 0; horse <= 1; horse += paired ? 2 : 3) {
+        Vector3 horse_base = LocalPoint(
+            base, (float)horse * lateral_spacing, 0.0f, longitudinal, yaw);
+        if (bridge_checkpoint) {
+            float carriage_support =
+                CcLocalRoadCheckpointSurfaceYInternal(base.x, base.z);
+            float horse_support =
+                CcLocalRoadCheckpointSurfaceYInternal(
+                    horse_base.x, horse_base.z);
+            horse_base.y += horse_support - carriage_support;
+        } else if (active_world_stream != NULL ||
+                   scene == CC_LOCAL_SCENE_STREET) {
+            horse_base.y += CcLocalTerrainHeightAt(horse_base.x, horse_base.z) -
+                             CcLocalTerrainHeightAt(base.x, base.z);
+        }
+        out[count++] = (RoadHorsePlacement){
+            .horse = horse,
+            .slot = (int32_t)(horse < 0 ? CREATURE_GAIT_ROAD_HORSE_LEFT
+                                        : CREATURE_GAIT_ROAD_HORSE_RIGHT),
+            .base = horse_base,
+            .initial_phase = horse < 0 ? 0.0f : 0.5f};
+    }
+    return count;
+}
+
+static CcCreatureRigGait RoadHorseRigGait(float pace)
+{
+    CcClientConvoyGait convoy_gait = CcClientConvoyGaitForPace(pace);
+    return convoy_gait == CC_CLIENT_CONVOY_GAIT_CANTER ?
+        CC_CREATURE_RIG_GAIT_CANTER :
+        convoy_gait == CC_CLIENT_CONVOY_GAIT_TROT ?
+        CC_CREATURE_RIG_GAIT_TROT : CC_CREATURE_RIG_GAIT_WALK;
+}
+
+static void PublishRoadHorseTargets(const RoadHorsePlacement *placements,
+                                    int32_t count, CcCreatureRigGait rig_gait,
+                                    float clock, float yaw,
+                                    CcLocalSceneKind scene)
+{
+    for (int32_t i = 0; i < count; ++i) {
+        (void)CcLocalCreatureGaitTargetInternal(placements[i].slot,
+            CC_CREATURE_RIG_HORSE, rig_gait, clock,
+            placements[i].initial_phase, placements[i].base, yaw, 0.96f, scene);
+    }
+}
+
+/* The travelling carriage base: the same anchor the road-book draw uses, so
+   the update can publish targets without a draw-time pose. */
+static Vector3 RoadTravelCarriageBase(const CcSim *sim,
+                                      const CcLocalConvoyState *convoy,
+                                      float clock)
+{
+    float carriage_x = CcLocalRoadCarriageX(sim->carriage.progress_milli);
+    float lateral_offset = convoy != NULL ? convoy->lateral_offset : 0.0f;
+    float pace = convoy != NULL ? convoy->pace : 0.72f;
+    bool moving = pace > 0.02f;
+    return (Vector3){carriage_x,
+        moving ? 0.025f + sinf(clock * 5.0f) * 0.018f : 0.0f,
+        40.0f + lateral_offset};
+}
+
+void CcLocalRoadTravelHorseTargetsInternal(const CcSim *sim,
+                                           const CcLocalConvoyState *convoy,
+                                           float clock)
+{
+    if (sim == NULL) return;
+    const float yaw = 0.5f * PI;
+    Vector3 base = RoadTravelCarriageBase(sim, convoy, clock);
+    float pace = convoy != NULL ? convoy->pace : 0.72f;
+    RoadHorsePlacement placements[2];
+    int32_t count = RoadHorsePlacements(sim, base, yaw, false,
+                                        CC_LOCAL_SCENE_ROAD, placements);
+    PublishRoadHorseTargets(placements, count, RoadHorseRigGait(pace), clock,
+                            yaw, CC_LOCAL_SCENE_ROAD);
+}
+
 /* Pace still says which gait the team is in; the road says how fast it steps.
    A cadence in beats a second is a guess about speed, and it was wrong every
    time the carriage was not doing exactly what the guess assumed -- feet
@@ -158,48 +254,29 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
                               bool bridge_checkpoint, CcLocalSceneKind scene)
 {
     CcClientConvoyGait convoy_gait = CcClientConvoyGaitForPace(pace);
-    CcCreatureRigGait rig_gait =
-        convoy_gait == CC_CLIENT_CONVOY_GAIT_CANTER ?
-            CC_CREATURE_RIG_GAIT_CANTER :
-        convoy_gait == CC_CLIENT_CONVOY_GAIT_TROT ?
-            CC_CREATURE_RIG_GAIT_TROT : CC_CREATURE_RIG_GAIT_WALK;
+    CcCreatureRigGait rig_gait = RoadHorseRigGait(pace);
     bool moving = convoy_gait != CC_CLIENT_CONVOY_GAIT_HALT;
     float stride_phase = CcLocalRoadTeamGaitPhaseInternal(travelled);
     CcCreaturePose left_pose = CcCreatureSteppedPose(
         CC_CREATURE_HORSE, stride_phase, moving);
     CcCreaturePose right_pose = CcCreatureSteppedPose(
         CC_CREATURE_HORSE, stride_phase + PI, moving);
-    float lateral_spacing =
-        CcLocalRoadHorseLateralSpacingInternal(bridge_checkpoint);
-    bool paired = CcSimHorseTeamCount(sim) > 1;
-    for (int32_t horse = paired ? -1 : 0; horse <= 1; horse += paired ? 2 : 3) {
+    RoadHorsePlacement placements[2];
+    int32_t count = RoadHorsePlacements(sim, base, yaw, bridge_checkpoint,
+                                        scene, placements);
+    /* The travel path has already published this frame's targets from the
+       update; for the other road scenes this drawing pass is the publisher. */
+    PublishRoadHorseTargets(placements, count, rig_gait, clock, yaw, scene);
+    for (int32_t i = 0; i < count; ++i) {
+        int32_t horse = placements[i].horse;
+        Vector3 horse_base = placements[i].base;
         int32_t seat = CcSimTeamPony(sim, horse > 0 ? 1 : 0);
         Color coat = PONY_COLORS[seat >= 0 ? seat : 0][0];
-        Vector3 horse_base = LocalPoint(
-            base, (float)horse * lateral_spacing, 0.0f,
-            CcLocalRoadHorseLongitudinalOffsetInternal(), yaw);
-        if (bridge_checkpoint) {
-            float carriage_support =
-                CcLocalRoadCheckpointSurfaceYInternal(base.x, base.z);
-            float horse_support =
-                CcLocalRoadCheckpointSurfaceYInternal(
-                    horse_base.x, horse_base.z);
-            horse_base.y += horse_support - carriage_support;
-        } else if (active_world_stream != NULL || scene == CC_LOCAL_SCENE_STREET) {
-            horse_base.y += CcLocalTerrainHeightAt(horse_base.x, horse_base.z) -
-                             CcLocalTerrainHeightAt(base.x, base.z);
-        }
         CcCreaturePose pose = horse < 0 ? left_pose : right_pose;
         float gait_phase = stride_phase + (horse < 0 ? 0.0f : PI);
         CcCreatureRigPose controlled_pose;
-        CreatureGaitSlot slot = horse < 0 ? CREATURE_GAIT_ROAD_HORSE_LEFT :
-                                            CREATURE_GAIT_ROAD_HORSE_RIGHT;
-        bool controlled = CcLocalCreatureGaitTargetInternal(
-            (int32_t)slot, CC_CREATURE_RIG_HORSE, rig_gait, clock,
-            horse < 0 ? 0.0f : 0.5f,
-            horse_base, yaw, 0.96f, scene) &&
-            CcLocalCreatureGaitPoseInternal(
-                (int32_t)slot, horse_base, yaw, &controlled_pose);
+        bool controlled = CcLocalCreatureGaitPoseInternal(
+            placements[i].slot, horse_base, yaw, &controlled_pose);
         (void)DrawCreatureGait3D(
             CC_CREATURE_HORSE, pose, horse_base,
             yaw, 0.96f, coat, gait_phase, moving,
@@ -1047,12 +1124,11 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         convoy->lateral_offset : 0.0f;
     float carriage_pace = travelling && convoy != NULL ?
         convoy->pace : travelling ? 0.72f : 0.0f;
-    bool carriage_moving = carriage_pace > 0.02f;
-    Vector3 carriage_base = {
-        carriage_x,
-        carriage_moving ? 0.025f + sinf(clock * 5.0f) * 0.018f : 0.0f,
-        40.0f + lateral_offset
-    };
+    /* Same anchor the update publishes the team targets from, so the posed
+       rigs meet the drawn wagon. */
+    Vector3 carriage_base = travelling ?
+        RoadTravelCarriageBase(sim, convoy, clock) :
+        (Vector3){carriage_x, 0.0f, 40.0f};
     if (authored_checkpoint) {
         carriage_base.y += CcLocalRoadCheckpointSurfaceYInternal(
             carriage_base.x, carriage_base.z);
