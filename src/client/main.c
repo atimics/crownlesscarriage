@@ -9908,15 +9908,18 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     sim, local, selected, message, message_capacity);
                 return;
             }
-            /* Step the world before the road-only work below. This is the
-               only caller of the creature gait fixed step, and returning
-               ahead of it during a town arrival or departure left the pony
-               rigs frozen where they last stood while the carriage drove
-               away from them. */
-            int32_t fixed_steps = CcLocalWorldUpdate(
+            /* Step the world before the road-only work below. The creature
+               gaits are deferred to the end of this block so the team can be
+               told where the wagon is now, not where it was last frame; every
+               early return still has to advance them or the rigs freeze where
+               they last stood. */
+            int32_t fixed_steps = CcLocalWorldUpdateNoGaits(
                 &local->course, &local->agent, sim, delta_time,
                 false, false);
-            if (local->convoy.phase != CC_LOCAL_CONVOY_ROAD) return;
+            if (local->convoy.phase != CC_LOCAL_CONVOY_ROAD) {
+                CcLocalCreatureGaitsAdvanceInternal(fixed_steps);
+                return;
+            }
             float posture_pace = CcClientConvoyPosturePace(
                 (int32_t)sim->journey.pace);
             float road_motion = posture_pace > 0.01f ?
@@ -9937,6 +9940,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 *journal, sim, local, ticks, error, sizeof(error));
             if (!advanced) {
                 (void)snprintf(message, message_capacity, "%s", error);
+                CcLocalCreatureGaitsAdvanceInternal(fixed_steps);
                 return;
             }
             if (local->open_world && sim->journey.active) {
@@ -9946,6 +9950,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     sim, local, ticks,
                     CcLocalCourseAlpha(&local->course));
             }
+            /* The wagon is where it will be drawn now, so hand the team that
+               target before walking the rigs toward it. */
+            float road_clock = local->world_carriage.storybook_travel ?
+                (float)fmod((double)sim->clock.tick /
+                            (double)CC_WORLD_TICKS_PER_SECOND, 3600.0) :
+                (float)GetTime();
+            CcLocalRoadTravelHorseTargetsInternal(sim, &local->convoy,
+                                                  road_clock);
+            CcLocalCreatureGaitsAdvanceInternal(fixed_steps);
             if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
                 BeginRoadLocalState(sim, local, false);

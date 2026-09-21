@@ -555,6 +555,17 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
 int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
                            const CcSim *sim, float delta_time,
                            bool market_interior, bool advance_course);
+/* Same world step, but the caller owns the creature gait step. */
+int32_t CcLocalWorldUpdateNoGaits(CcLocalCourse *course, CcLocalAgent *player,
+                                  const CcSim *sim, float delta_time,
+                                  bool market_interior, bool advance_course);
+/* Advance every ready creature gait by that many fixed steps. */
+void CcLocalCreatureGaitsAdvanceInternal(int32_t steps);
+/* Publish the travelling road team's gait targets from the current carriage
+   pose, so the following gait step walks the rigs toward where the wagon is
+   now rather than where it was last frame. */
+void CcLocalRoadTravelHorseTargetsInternal(const CcSim *sim,
+    const CcLocalConvoyState *convoy, float clock);
 /* Fraction of a fixed step remaining in the local accumulator: the subframe
    alpha for presentation interpolation. */
 float CcLocalCourseAlpha(const CcLocalCourse *course);
