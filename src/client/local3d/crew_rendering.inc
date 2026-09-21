@@ -74,10 +74,15 @@ static void DrawCrewLabels(Camera3D camera, Rectangle destination)
     }
     DrawLabels(labels, crew_drawn_count, camera, destination);
 }
+/* A seated passenger rides the chassis, so the seat carries the carriage's
+   pitch, sway and assembly scale instead of a nominal offset. */
 static void PrepareCrewPassenger(const CcLocalAgent *source, Vector3 carriage,
-                                 float heading, CcLocalAgent *display)
+                                 float heading, float pitch, float sway,
+                                 float vehicle_scale, CcLocalAgent *display)
 {
-    Vector3 position = LocalPoint(carriage, -1.6f + (float)(crew_seat % 4) * 0.85f,
-                                  1.15f, -0.65f + (float)(crew_seat / 4) * 1.25f, heading);
+    Vector3 position = CarriageSocketPoint(carriage, heading, pitch, sway,
+        (-1.6f + (float)(crew_seat % 4) * 0.85f) * vehicle_scale,
+        1.15f * vehicle_scale,
+        (-0.65f + (float)(crew_seat / 4) * 1.25f) * vehicle_scale);
     PrepareHeroDisplayAt(source, position, source->scene, heading, display);
 }
